@@ -105,15 +105,6 @@ export function BlendRecipeAccordion({
 
           <CollapsibleContent className="data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
             <div className="px-4 pb-4 space-y-3">
-              {/* Blend name input */}
-              <div className="flex items-center gap-2 p-2 rounded-lg bg-accent/30">
-                <Input
-                  value={blend.name}
-                  onChange={(e) => onUpdateName(e.target.value)}
-                  className="h-8 bg-transparent border-none text-sm font-medium focus-visible:ring-0"
-                  placeholder="Blend Name"
-                />
-              </div>
 
               {/* Items list */}
               {itemCount === 0 ? (

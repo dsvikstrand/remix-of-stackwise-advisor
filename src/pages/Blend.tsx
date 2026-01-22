@@ -8,8 +8,10 @@ import { BlendAnalysisView } from '@/components/blend/BlendAnalysisView';
 import { HistoryDropdown } from '@/components/blend/HistoryDropdown';
 import { MixButton } from '@/components/blend/MixButton';
 import { CocktailLoadingAnimation } from '@/components/blend/CocktailLoadingAnimation';
+import { ThemeToggle } from '@/components/blend/ThemeToggle';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import {
   SupplementCategory,
@@ -299,6 +301,7 @@ const Blend = () => {
 
       {/* Minimal Top Bar */}
       <header className="fixed top-4 right-4 z-40 flex items-center gap-2">
+        <ThemeToggle />
         <Link to="/">
           <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground">
             <ArrowLeft className="h-4 w-4" />
@@ -333,6 +336,24 @@ const Blend = () => {
             Create your perfect supplement cocktail
           </p>
         </div>
+
+        {/* Name Your Blend Section */}
+        <section className="mb-8 animate-fade-in" style={{ animationDelay: '0.05s' }}>
+          <h2 className="text-2xl font-bold tracking-tight mb-4 text-foreground">
+            NAME YOUR BLEND
+          </h2>
+          <div className="bg-card/60 backdrop-blur-glass rounded-2xl p-4 border border-border/50">
+            <Input
+              value={currentBlend?.name || ''}
+              onChange={(e) => {
+                if (!currentBlend) createBlend();
+                updateBlendName(e.target.value);
+              }}
+              placeholder="Enter blend name..."
+              className="text-xl font-bold bg-transparent border-none focus-visible:ring-2 focus-visible:ring-primary/50 h-14"
+            />
+          </div>
+        </section>
 
         {/* Inventory Section */}
         <section className="mb-8 animate-fade-in" style={{ animationDelay: '0.1s' }}>
@@ -405,7 +426,7 @@ const Blend = () => {
         {/* Footer Disclaimer */}
         <footer className="text-center py-8 text-sm text-muted-foreground border-t border-border/30 mt-8">
           <p>
-            ⚠️ Blend Builder is for educational purposes only. Always consult a healthcare
+            Blend Builder is for educational purposes only. Always consult a healthcare
             provider before starting any supplement regimen.
           </p>
         </footer>

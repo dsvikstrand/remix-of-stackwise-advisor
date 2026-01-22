@@ -1,202 +1,388 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion';
 import { BlendAnalysis } from '@/types/stacklab';
-import { Tag, Star, FileText, Clock, Sparkles, AlertTriangle, Lightbulb } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface BlendAnalysisViewProps {
   analysis: BlendAnalysis;
   isStreaming?: boolean;
 }
 
-interface ParsedSection {
-  title: string;
-  content: string;
-  icon: React.ReactNode;
-  type: 'default' | 'warning' | 'success';
+type AnalysisView = 'overview' | 'optimize' | 'safety';
+
+interface ParsedSections {
+  classification: string;
+  score: number;
+  summary: string;
+  timing: string;
+  tweaks: string[];
+  tips: string[];
+  warnings: string[];
+  interactions: string[];
 }
 
-function parseAnalysisMarkdown(markdown: string): ParsedSection[] {
-  const sections: ParsedSection[] = [];
-  const lines = markdown.split('\n');
-  let currentSection: ParsedSection | null = null;
-  let contentLines: string[] = [];
-
-  const iconMap: Record<string, { icon: React.ReactNode; type: 'default' | 'warning' | 'success' }> = {
-    'classification': { icon: <Tag className="h-4 w-4" />, type: 'success' },
-    'effectiveness': { icon: <Star className="h-4 w-4" />, type: 'default' },
-    'score': { icon: <Star className="h-4 w-4" />, type: 'default' },
-    'summary': { icon: <FileText className="h-4 w-4" />, type: 'default' },
-    'when': { icon: <Clock className="h-4 w-4" />, type: 'default' },
-    'timing': { icon: <Clock className="h-4 w-4" />, type: 'default' },
-    'tweak': { icon: <Sparkles className="h-4 w-4" />, type: 'success' },
-    'suggest': { icon: <Sparkles className="h-4 w-4" />, type: 'success' },
-    'warning': { icon: <AlertTriangle className="h-4 w-4" />, type: 'warning' },
-    'interaction': { icon: <AlertTriangle className="h-4 w-4" />, type: 'warning' },
-    'tip': { icon: <Lightbulb className="h-4 w-4" />, type: 'default' },
-    'pro': { icon: <Lightbulb className="h-4 w-4" />, type: 'default' },
+function parseAnalysisMarkdown(markdown: string): ParsedSections {
+  const sections: ParsedSections = {
+    classification: '',
+    score: 0,
+    summary: '',
+    timing: '',
+    tweaks: [],
+    tips: [],
+    warnings: [],
+    interactions: [],
   };
 
-  const getIconInfo = (title: string) => {
-    const lowerTitle = title.toLowerCase();
-    for (const [key, value] of Object.entries(iconMap)) {
-      if (lowerTitle.includes(key)) return value;
+  const lines = markdown.split('\n');
+  let currentSection = '';
+  let contentBuffer: string[] = [];
+
+  const flushBuffer = () => {
+    const content = contentBuffer.join('\n').trim();
+    if (!content) return;
+
+    const lowerSection = currentSection.toLowerCase();
+    
+    if (lowerSection.includes('classification')) {
+      sections.classification = content.replace(/^\*\*|\*\*$/g, '').trim();
+    } else if (lowerSection.includes('score') || lowerSection.includes('effectiveness')) {
+      const match = content.match(/(\d+(?:\.\d+)?)/);
+      if (match) sections.score = parseFloat(match[1]);
+    } else if (lowerSection.includes('summary')) {
+      sections.summary = content;
+    } else if (lowerSection.includes('when') || lowerSection.includes('timing')) {
+      sections.timing = content;
+    } else if (lowerSection.includes('tweak') || lowerSection.includes('suggest')) {
+      sections.tweaks = content.split('\n').filter(l => l.trim().startsWith('-')).map(l => l.replace(/^-\s*/, '').trim());
+    } else if (lowerSection.includes('tip') || lowerSection.includes('pro')) {
+      sections.tips = content.split('\n').filter(l => l.trim().startsWith('-')).map(l => l.replace(/^-\s*/, '').trim());
+    } else if (lowerSection.includes('warning')) {
+      sections.warnings = content.split('\n').filter(l => l.trim().startsWith('-')).map(l => l.replace(/^-\s*/, '').trim());
+    } else if (lowerSection.includes('interaction')) {
+      sections.interactions = content.split('\n').filter(l => l.trim().startsWith('-')).map(l => l.replace(/^-\s*/, '').trim());
     }
-    return { icon: <FileText className="h-4 w-4" />, type: 'default' as const };
+    
+    contentBuffer = [];
   };
 
   for (const line of lines) {
     if (line.startsWith('### ')) {
-      if (currentSection) {
-        currentSection.content = contentLines.join('\n').trim();
-        if (currentSection.content) sections.push(currentSection);
-      }
-      const title = line.replace(/^###\s*/, '').trim();
-      const { icon, type } = getIconInfo(title);
-      currentSection = { title, content: '', icon, type };
-      contentLines = [];
+      flushBuffer();
+      currentSection = line.replace(/^###\s*/, '').trim();
     } else if (currentSection) {
-      contentLines.push(line);
+      contentBuffer.push(line);
     }
   }
-
-  if (currentSection) {
-    currentSection.content = contentLines.join('\n').trim();
-    if (currentSection.content) sections.push(currentSection);
-  }
+  flushBuffer();
 
   return sections;
 }
 
-function formatContent(content: string) {
-  return content.split('\n').map((line, i) => {
-    // Handle bullet points
-    if (line.trim().startsWith('- ')) {
-      return (
-        <li key={i} className="ml-4 list-disc text-sm">
-          {formatInline(line.slice(2))}
-        </li>
-      );
-    }
-    // Handle bold
-    if (line.trim()) {
-      return (
-        <p key={i} className="text-sm">
-          {formatInline(line)}
-        </p>
-      );
-    }
-    return null;
-  });
-}
-
-function formatInline(text: string) {
-  // Bold text
+function formatBoldText(text: string) {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   return parts.map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={i}>{part.slice(2, -2)}</strong>;
+      return <strong key={i} className="font-bold">{part.slice(2, -2)}</strong>;
     }
     return part;
   });
 }
 
-export function BlendAnalysisView({ analysis, isStreaming }: BlendAnalysisViewProps) {
-  const sections = parseAnalysisMarkdown(analysis.rawMarkdown);
+function TabButton({ 
+  active, 
+  onClick, 
+  children,
+  variant = 'default'
+}: { 
+  active: boolean; 
+  onClick: () => void; 
+  children: React.ReactNode;
+  variant?: 'default' | 'warning';
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex-1 py-4 px-4 text-sm font-black uppercase tracking-widest transition-all duration-300 relative",
+        "border-b-4",
+        active && variant === 'default' && "border-primary text-primary bg-primary/10",
+        active && variant === 'warning' && "border-destructive text-destructive bg-destructive/10",
+        !active && "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"
+      )}
+    >
+      {children}
+      {active && (
+        <span className={cn(
+          "absolute inset-x-0 bottom-0 h-1 blur-sm",
+          variant === 'default' ? "bg-primary" : "bg-destructive"
+        )} />
+      )}
+    </button>
+  );
+}
 
-  if (sections.length === 0 && analysis.rawMarkdown) {
-    // Fallback: show raw markdown while streaming
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            Blend Analysis
-            {isStreaming && (
-              <Badge variant="secondary" className="animate-pulse">
-                Analyzing...
-              </Badge>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="prose prose-sm dark:prose-invert max-w-none">
-            <pre className="whitespace-pre-wrap text-sm">{analysis.rawMarkdown}</pre>
+function OverviewContent({ sections }: { sections: ParsedSections }) {
+  return (
+    <div className="space-y-8 animate-fade-in">
+      {/* Classification - Big and bold */}
+      {sections.classification && (
+        <div className="text-center">
+          <p className="text-xs font-bold uppercase tracking-[0.3em] text-muted-foreground mb-2">
+            CLASSIFICATION
+          </p>
+          <Badge className="text-xl md:text-2xl font-black uppercase tracking-wider px-6 py-3 bg-gradient-to-r from-primary to-primary/70">
+            {sections.classification}
+          </Badge>
+        </div>
+      )}
+
+      {/* Score - Massive display */}
+      {sections.score > 0 && (
+        <div className="text-center space-y-4">
+          <p className="text-xs font-bold uppercase tracking-[0.3em] text-muted-foreground">
+            EFFECTIVENESS SCORE
+          </p>
+          <div className="flex items-center justify-center gap-4">
+            <span className="text-6xl md:text-7xl font-black text-primary">
+              {sections.score}
+            </span>
+            <span className="text-3xl md:text-4xl font-bold text-muted-foreground">/10</span>
           </div>
-        </CardContent>
-      </Card>
+          <Progress value={sections.score * 10} className="h-3 max-w-md mx-auto" />
+        </div>
+      )}
+
+      {/* Summary */}
+      {sections.summary && (
+        <div className="space-y-3">
+          <h3 className="text-lg font-black uppercase tracking-wider text-foreground">
+            SUMMARY
+          </h3>
+          <p className="text-base leading-relaxed text-muted-foreground">
+            {formatBoldText(sections.summary)}
+          </p>
+        </div>
+      )}
+
+      {/* Timing */}
+      {sections.timing && (
+        <div className="space-y-3 p-4 rounded-xl bg-muted/30 border border-border/50">
+          <h3 className="text-lg font-black uppercase tracking-wider text-foreground">
+            WHEN TO TAKE
+          </h3>
+          <p className="text-base leading-relaxed text-muted-foreground">
+            {formatBoldText(sections.timing)}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OptimizeContent({ sections }: { sections: ParsedSections }) {
+  const hasTweaks = sections.tweaks.length > 0;
+  const hasTips = sections.tips.length > 0;
+
+  if (!hasTweaks && !hasTips) {
+    return (
+      <div className="text-center py-12 text-muted-foreground animate-fade-in">
+        <p className="text-lg">No optimization suggestions available.</p>
+      </div>
     );
   }
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            Blend Analysis
-          </CardTitle>
-          {analysis.classification && (
-            <Badge className="bg-gradient-to-r from-primary to-primary/70">
-              {analysis.classification}
-            </Badge>
-          )}
+    <div className="space-y-8 animate-fade-in">
+      {/* Tweaks */}
+      {hasTweaks && (
+        <div className="space-y-4">
+          <h3 className="text-xl font-black uppercase tracking-wider text-primary">
+            SUGGESTED TWEAKS
+          </h3>
+          <ul className="space-y-3">
+            {sections.tweaks.map((tweak, i) => (
+              <li 
+                key={i} 
+                className="flex items-start gap-3 p-4 rounded-xl bg-primary/5 border border-primary/20"
+              >
+                <span className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-black text-sm">
+                  {i + 1}
+                </span>
+                <span className="text-base leading-relaxed pt-1">
+                  {formatBoldText(tweak)}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
-        {analysis.score > 0 && (
-          <div className="flex items-center gap-3 mt-2">
-            <span className="text-sm text-muted-foreground">Effectiveness:</span>
-            <Progress value={analysis.score * 10} className="flex-1 h-2" />
-            <span className="font-semibold text-primary">{analysis.score}/10</span>
-          </div>
-        )}
-      </CardHeader>
-      <CardContent>
-        <Accordion type="multiple" defaultValue={sections.map((_, i) => `section-${i}`)} className="space-y-2">
-          {sections.map((section, index) => (
-            <AccordionItem
-              key={index}
-              value={`section-${index}`}
-              className={`border rounded-lg px-3 ${
-                section.type === 'warning'
-                  ? 'border-destructive/30 bg-destructive/5'
-                  : section.type === 'success'
-                  ? 'border-primary/30 bg-primary/5'
-                  : 'border-border'
-              }`}
-            >
-              <AccordionTrigger className="hover:no-underline py-2">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={
-                      section.type === 'warning'
-                        ? 'text-destructive'
-                        : section.type === 'success'
-                        ? 'text-primary'
-                        : 'text-muted-foreground'
-                    }
-                  >
-                    {section.icon}
-                  </span>
-                  <span className="font-medium text-sm">{section.title}</span>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent className="pt-0 pb-3">
-                <div className="space-y-1">{formatContent(section.content)}</div>
-              </AccordionContent>
-            </AccordionItem>
-          ))}
-        </Accordion>
+      )}
 
-        <p className="text-xs text-muted-foreground text-center mt-4">
-          ⚠️ Educational purposes only. Consult a healthcare provider.
-        </p>
+      {/* Pro Tips */}
+      {hasTips && (
+        <div className="space-y-4">
+          <h3 className="text-xl font-black uppercase tracking-wider text-foreground">
+            PRO TIPS
+          </h3>
+          <ul className="space-y-3">
+            {sections.tips.map((tip, i) => (
+              <li 
+                key={i} 
+                className="flex items-start gap-3 p-4 rounded-xl bg-muted/50 border border-border/50"
+              >
+                <span className="flex-shrink-0 text-primary font-black text-lg">→</span>
+                <span className="text-base leading-relaxed">
+                  {formatBoldText(tip)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SafetyContent({ sections }: { sections: ParsedSections }) {
+  const hasWarnings = sections.warnings.length > 0;
+  const hasInteractions = sections.interactions.length > 0;
+
+  if (!hasWarnings && !hasInteractions) {
+    return (
+      <div className="text-center py-12 animate-fade-in">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-success/20 mb-4">
+          <span className="text-success text-2xl font-black">✓</span>
+        </div>
+        <p className="text-lg text-muted-foreground">No safety concerns detected.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8 animate-fade-in">
+      {/* Warnings */}
+      {hasWarnings && (
+        <div className="space-y-4">
+          <h3 className="text-xl font-black uppercase tracking-wider text-destructive">
+            WARNINGS
+          </h3>
+          <ul className="space-y-3">
+            {sections.warnings.map((warning, i) => (
+              <li 
+                key={i} 
+                className="flex items-start gap-3 p-4 rounded-xl bg-destructive/10 border border-destructive/30"
+              >
+                <span className="flex-shrink-0 w-8 h-8 rounded-full bg-destructive/20 flex items-center justify-center text-destructive font-black text-sm">
+                  !
+                </span>
+                <span className="text-base leading-relaxed pt-1">
+                  {formatBoldText(warning)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Interactions */}
+      {hasInteractions && (
+        <div className="space-y-4">
+          <h3 className="text-xl font-black uppercase tracking-wider text-warning">
+            INTERACTIONS
+          </h3>
+          <ul className="space-y-3">
+            {sections.interactions.map((interaction, i) => (
+              <li 
+                key={i} 
+                className="flex items-start gap-3 p-4 rounded-xl bg-warning/10 border border-warning/30"
+              >
+                <span className="flex-shrink-0 text-warning font-black text-lg">⚡</span>
+                <span className="text-base leading-relaxed">
+                  {formatBoldText(interaction)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function BlendAnalysisView({ analysis, isStreaming }: BlendAnalysisViewProps) {
+  const [activeView, setActiveView] = useState<AnalysisView>('overview');
+  const sections = parseAnalysisMarkdown(analysis.rawMarkdown);
+
+  // Show raw markdown while streaming if parsing fails
+  if (!analysis.rawMarkdown) {
+    return null;
+  }
+
+  // Streaming fallback
+  if (isStreaming && !sections.classification && !sections.summary) {
+    return (
+      <Card className="overflow-hidden">
+        <div className="p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <h2 className="text-2xl font-black uppercase tracking-wider">ANALYZING</h2>
+            <Badge variant="secondary" className="animate-pulse">
+              Processing...
+            </Badge>
+          </div>
+          <pre className="whitespace-pre-wrap text-sm text-muted-foreground font-mono">
+            {analysis.rawMarkdown}
+          </pre>
+        </div>
+      </Card>
+    );
+  }
+
+  const hasWarningsOrInteractions = sections.warnings.length > 0 || sections.interactions.length > 0;
+
+  return (
+    <Card className="overflow-hidden">
+      {/* Tab Navigation */}
+      <div className="flex border-b border-border bg-muted/30">
+        <TabButton 
+          active={activeView === 'overview'} 
+          onClick={() => setActiveView('overview')}
+        >
+          Overview
+        </TabButton>
+        <TabButton 
+          active={activeView === 'optimize'} 
+          onClick={() => setActiveView('optimize')}
+        >
+          Optimize
+        </TabButton>
+        <TabButton 
+          active={activeView === 'safety'} 
+          onClick={() => setActiveView('safety')}
+          variant={hasWarningsOrInteractions ? 'warning' : 'default'}
+        >
+          Safety
+          {hasWarningsOrInteractions && (
+            <span className="ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full bg-destructive text-destructive-foreground text-xs font-bold">
+              {sections.warnings.length + sections.interactions.length}
+            </span>
+          )}
+        </TabButton>
+      </div>
+
+      {/* Content Area */}
+      <CardContent className="p-6 md:p-8 min-h-[300px]">
+        {activeView === 'overview' && <OverviewContent sections={sections} />}
+        {activeView === 'optimize' && <OptimizeContent sections={sections} />}
+        {activeView === 'safety' && <SafetyContent sections={sections} />}
       </CardContent>
+
+      {/* Disclaimer */}
+      <div className="px-6 pb-6">
+        <p className="text-xs text-muted-foreground text-center">
+          Educational purposes only. Consult a healthcare provider.
+        </p>
+      </div>
     </Card>
   );
 }

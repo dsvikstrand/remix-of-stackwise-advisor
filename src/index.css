@@ -161,6 +161,77 @@
     --gradient-chrome: linear-gradient(135deg, hsl(200 20% 20%) 0%, hsl(195 25% 25%) 50%, hsl(200 20% 18%) 100%);
     --dot-pattern: radial-gradient(circle, hsl(185 50% 50% / 0.1) 1px, transparent 1px);
   }
+
+  /* Dark Orange Theme - Walkman Y2K Aesthetic */
+  .dark.theme-orange {
+    --background: 20 20% 6%;
+    --foreground: 30 15% 92%;
+
+    --card: 20 15% 10%;
+    --card-foreground: 30 15% 92%;
+
+    --popover: 20 15% 10%;
+    --popover-foreground: 30 15% 92%;
+
+    /* Primary - Vivid Walkman orange */
+    --primary: 28 95% 55%;
+    --primary-foreground: 20 20% 6%;
+
+    /* Secondary - Warm amber/bronze */
+    --secondary: 35 40% 25%;
+    --secondary-foreground: 30 20% 85%;
+
+    /* Muted - Dark warm grey */
+    --muted: 25 15% 15%;
+    --muted-foreground: 30 10% 55%;
+
+    /* Accent - Orange tint */
+    --accent: 28 60% 15%;
+    --accent-foreground: 28 90% 65%;
+
+    /* Destructive - Deep red */
+    --destructive: 0 70% 45%;
+    --destructive-foreground: 0 0% 95%;
+
+    /* Borders and inputs - Dark warm */
+    --border: 25 20% 18%;
+    --input: 25 20% 18%;
+    --ring: 28 95% 55%;
+
+    --sidebar-background: 20 18% 8%;
+    --sidebar-foreground: 30 15% 92%;
+    --sidebar-primary: 28 95% 55%;
+    --sidebar-primary-foreground: 20 20% 6%;
+    --sidebar-accent: 28 60% 15%;
+    --sidebar-accent-foreground: 28 90% 65%;
+    --sidebar-border: 25 20% 18%;
+    --sidebar-ring: 28 95% 55%;
+
+    --chart-1: 28 95% 55%;
+    --chart-2: 35 85% 50%;
+    --chart-3: 20 70% 45%;
+    --chart-4: 15 60% 40%;
+    --chart-5: 10 50% 35%;
+
+    --success: 140 50% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 45 90% 55%;
+    --warning-foreground: 45 90% 10%;
+    --info: 200 60% 50%;
+    --info-foreground: 0 0% 100%;
+
+    /* Orange glows */
+    --glow-primary: 0 0 35px hsl(28 95% 55% / 0.5);
+    --glow-secondary: 0 0 30px hsl(35 80% 50% / 0.4);
+    --glow-soft: 0 0 70px hsl(28 80% 50% / 0.25);
+
+    --glass-bg: hsl(20 15% 10% / 0.85);
+    --glass-border: hsl(28 50% 30% / 0.4);
+    --gradient-sky: linear-gradient(180deg, hsl(20 20% 6%) 0%, hsl(25 18% 10%) 100%);
+    --gradient-dreamy: linear-gradient(135deg, hsl(20 20% 8%) 0%, hsl(25 15% 12%) 50%, hsl(20 18% 6%) 100%);
+    --gradient-chrome: linear-gradient(135deg, hsl(28 30% 20%) 0%, hsl(30 25% 25%) 50%, hsl(28 30% 18%) 100%);
+    --dot-pattern: radial-gradient(circle, hsl(28 60% 50% / 0.1) 1px, transparent 1px);
+  }
 }
 
 @layer base {
@@ -324,6 +395,14 @@
   /* Text gradient for headings */
   .text-gradient-aqua {
     background: linear-gradient(135deg, hsl(185 55% 40%) 0%, hsl(195 60% 50%) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Orange text gradient for dark orange theme */
+  .text-gradient-orange {
+    background: linear-gradient(135deg, hsl(28 95% 55%) 0%, hsl(40 90% 60%) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
