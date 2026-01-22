@@ -318,8 +318,16 @@ const Blend = () => {
       <main className="container mx-auto px-4 py-8 max-w-3xl">
         {/* Hero Header */}
         <div className="text-center mb-12 pt-16 animate-fade-in">
-          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-4 text-gradient-aqua">
-            BLEND
+          <h1 className="text-6xl sm:text-7xl lg:text-8xl font-black tracking-tighter mb-4 relative inline-block">
+            <span className="text-gradient-aqua animate-shimmer bg-[length:200%_auto] bg-clip-text [-webkit-background-clip:text]" 
+                  style={{ 
+                    fontFamily: "'Impact', 'Haettenschweiler', 'Franklin Gothic Bold', 'Charcoal', 'Helvetica Inserat', sans-serif",
+                    letterSpacing: '-0.05em',
+                    textShadow: '0 0 40px hsl(185 55% 50% / 0.4), 0 0 80px hsl(185 55% 50% / 0.2)'
+                  }}>
+              BLEND
+            </span>
+            <span className="absolute -inset-4 bg-primary/5 blur-2xl rounded-full animate-pulse-soft -z-10" />
           </h1>
           <p className="text-lg text-muted-foreground max-w-md mx-auto">
             Create your perfect supplement cocktail
