@@ -322,7 +322,7 @@ const Blend = () => {
             <span className="text-gradient-aqua animate-shimmer bg-[length:200%_auto] bg-clip-text [-webkit-background-clip:text]" 
                   style={{ 
                     fontFamily: "'Impact', 'Haettenschweiler', 'Franklin Gothic Bold', 'Charcoal', 'Helvetica Inserat', sans-serif",
-                    letterSpacing: '-0.05em',
+                    letterSpacing: '0.15em',
                     textShadow: '0 0 40px hsl(185 55% 50% / 0.4), 0 0 80px hsl(185 55% 50% / 0.2)'
                   }}>
               BLEND
