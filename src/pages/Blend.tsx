@@ -3,12 +3,13 @@ import { Link } from 'react-router-dom';
 import { useBlendState } from '@/hooks/useBlendState';
 import { BlendInventoryPicker } from '@/components/blend/BlendInventoryPicker';
 import { BlendDoseModal } from '@/components/blend/BlendDoseModal';
-import { BlendRecipeCard } from '@/components/blend/BlendRecipeCard';
+import { BlendRecipeAccordion } from '@/components/blend/BlendRecipeAccordion';
 import { BlendAnalysisView } from '@/components/blend/BlendAnalysisView';
-import { BlendHistory } from '@/components/blend/BlendHistory';
+import { HistoryDropdown } from '@/components/blend/HistoryDropdown';
+import { MixButton } from '@/components/blend/MixButton';
 import { CocktailLoadingAnimation } from '@/components/blend/CocktailLoadingAnimation';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import {
   SupplementCategory,
@@ -16,7 +17,7 @@ import {
   BlendItem,
   BlendAnalysis,
 } from '@/types/stacklab';
-import { Beaker, FlaskConical, RotateCcw, Sparkles } from 'lucide-react';
+import { Beaker, RotateCcw, Sparkles, ArrowLeft } from 'lucide-react';
 
 const ANALYZE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-blend`;
 
@@ -274,6 +275,9 @@ const Blend = () => {
     createBlend();
   }, [clearCurrentBlend, createBlend]);
 
+  const showAnalysis = currentBlend?.analysis && !isAnalyzing;
+  const showStreaming = streamingAnalysis && !currentBlend?.analysis;
+
   return (
     <div className="min-h-screen relative overflow-hidden">
       {/* Ambient background blobs */}
@@ -281,158 +285,123 @@ const Blend = () => {
         <div className="absolute -top-40 -right-40 w-[500px] h-[500px] bg-primary/8 rounded-full blur-3xl animate-drift" />
         <div className="absolute top-1/2 -left-32 w-96 h-96 bg-accent/15 rounded-full blur-3xl animate-float" />
         <div className="absolute -bottom-20 right-1/4 w-80 h-80 bg-secondary/10 rounded-full blur-3xl animate-pulse-soft" />
-        {/* Water droplet decorations */}
         <div className="absolute top-20 right-20 w-4 h-4 bg-primary/20 rounded-full blur-sm animate-float-delayed" />
         <div className="absolute top-40 right-40 w-2 h-2 bg-accent/30 rounded-full blur-sm animate-float-slow" />
         <div className="absolute bottom-40 left-20 w-3 h-3 bg-primary/15 rounded-full blur-sm animate-drift" />
       </div>
 
-      {/* Header */}
-      <header className="border-b border-border/50 bg-card/40 backdrop-blur-glass sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-glow-aqua animate-pulse-soft">
-                <FlaskConical className="h-5 w-5 text-primary-foreground" />
-              </div>
-              <div>
-                <h1 className="text-xl font-semibold text-foreground tracking-tight">Blend Builder</h1>
-                <p className="text-xs text-muted-foreground">Create Your Cocktail</p>
-              </div>
-            </div>
+      {/* Floating History Button */}
+      <HistoryDropdown
+        history={history}
+        onLoad={loadFromHistory}
+        onDelete={deleteFromHistory}
+      />
 
-            {/* Navigation */}
-            <nav className="hidden sm:flex items-center gap-1 ml-4 p-1 bg-card/50 backdrop-blur-sm rounded-xl border border-border/30">
-              <Link to="/">
-                <Button variant="ghost" size="sm" className="gap-2">
-                  <Beaker className="h-4 w-4" />
-                  StackLab
-                </Button>
-              </Link>
-              <Button variant="glass" size="sm" className="gap-2 bg-accent/50 pointer-events-none">
-                <FlaskConical className="h-4 w-4" />
-                Blend Builder
-              </Button>
-            </nav>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handleNewBlend} className="gap-2">
-              <Sparkles className="h-4 w-4" />
-              New Blend
-            </Button>
-            <Button variant="ghost" size="sm" onClick={resetAll} className="text-muted-foreground">
-              <RotateCcw className="h-4 w-4 mr-2" />
-              Reset All
-            </Button>
-          </div>
-        </div>
+      {/* Minimal Top Bar */}
+      <header className="fixed top-4 right-4 z-40 flex items-center gap-2">
+        <Link to="/">
+          <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="h-4 w-4" />
+            <span className="hidden sm:inline">StackLab</span>
+          </Button>
+        </Link>
+        <Button variant="outline" size="sm" onClick={handleNewBlend} className="gap-2">
+          <Sparkles className="h-4 w-4" />
+          <span className="hidden sm:inline">New</span>
+        </Button>
+        <Button variant="ghost" size="icon" onClick={resetAll} className="text-muted-foreground h-8 w-8" title="Reset All">
+          <RotateCcw className="h-4 w-4" />
+        </Button>
       </header>
 
-      {/* Main Layout */}
-      <main className="container mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[calc(100vh-120px)]">
-          {/* Left Panel - Picker & History */}
-          <div className="lg:col-span-5 xl:col-span-4 space-y-6">
-            <div className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
-              <BlendInventoryPicker
-                selectedIds={selectedIds}
-                onSelect={handleSelectSupplement}
-              />
-            </div>
-
-            <div className="animate-fade-in" style={{ animationDelay: '0.2s' }}>
-              <BlendHistory
-                history={history}
-                onLoad={loadFromHistory}
-                onDelete={deleteFromHistory}
-              />
-            </div>
-          </div>
-
-          {/* Right Panel - Recipe & Analysis */}
-          <div className="lg:col-span-7 xl:col-span-8 space-y-6">
-            {/* Current Blend Card */}
-            <div className="animate-fade-in" style={{ animationDelay: '0.15s' }}>
-              {currentBlend ? (
-                <BlendRecipeCard
-                  blend={currentBlend}
-                  onUpdateName={updateBlendName}
-                  onUpdateItem={handleUpdateItemDose}
-                  onRemoveItem={removeItem}
-                  onClear={clearCurrentBlend}
-                  onAnalyze={handleAnalyze}
-                  isAnalyzing={isAnalyzing}
-                />
-              ) : (
-                <Card className="border-dashed border-border/50 bg-card/40 backdrop-blur-sm">
-                  <CardContent className="flex flex-col items-center justify-center py-16">
-                    <div className="w-20 h-20 rounded-full bg-accent/30 flex items-center justify-center mb-6 animate-float">
-                      <FlaskConical className="h-10 w-10 text-primary/50" />
-                    </div>
-                    <h3 className="text-lg font-medium text-foreground mb-2">
-                      Start Your Blend
-                    </h3>
-                    <p className="text-sm text-muted-foreground text-center mb-6 max-w-sm">
-                      Select supplements from the picker to create your custom cocktail
-                    </p>
-                    <Button onClick={createBlend} variant="glow" className="gap-2">
-                      <Sparkles className="h-4 w-4" />
-                      Create New Blend
-                    </Button>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-
-            {/* Loading Animation */}
-            {isAnalyzing && (
-              <div className="animate-fade-in-scale">
-                <Card className="overflow-hidden bg-card/60 backdrop-blur-glass border-primary/20">
-                  <CardContent className="p-0">
-                    <CocktailLoadingAnimation />
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            {/* Streaming Analysis Preview */}
-            {streamingAnalysis && !currentBlend?.analysis && (
-              <div className="animate-fade-in">
-                <BlendAnalysisView
-                  analysis={{
-                    classification: '',
-                    score: 0,
-                    summary: '',
-                    timing: '',
-                    tweaks: [],
-                    warnings: [],
-                    rawMarkdown: streamingAnalysis,
-                  }}
-                  isStreaming
-                />
-              </div>
-            )}
-
-            {/* Final Analysis */}
-            {currentBlend?.analysis && !isAnalyzing && (
-              <div className="animate-fade-in-up">
-                <BlendAnalysisView analysis={currentBlend.analysis} />
-              </div>
-            )}
-          </div>
+      {/* Main Content */}
+      <main className="container mx-auto px-4 py-8 max-w-3xl">
+        {/* Hero Header */}
+        <div className="text-center mb-12 pt-16 animate-fade-in">
+          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-4 text-gradient-aqua">
+            BLEND
+          </h1>
+          <p className="text-lg text-muted-foreground max-w-md mx-auto">
+            Create your perfect supplement cocktail
+          </p>
         </div>
-      </main>
 
-      {/* Footer */}
-      <footer className="border-t border-border/30 py-4 mt-8 bg-card/30 backdrop-blur-sm">
-        <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
+        {/* Inventory Section */}
+        <section className="mb-8 animate-fade-in" style={{ animationDelay: '0.1s' }}>
+          <h2 className="text-2xl font-bold tracking-tight mb-4 text-foreground">
+            CHOOSE YOUR INGREDIENTS
+          </h2>
+          <BlendInventoryPicker
+            selectedIds={selectedIds}
+            onSelect={handleSelectSupplement}
+          />
+        </section>
+
+        {/* Selected Items Accordion */}
+        <section className="mb-8 animate-fade-in" style={{ animationDelay: '0.15s' }}>
+          <BlendRecipeAccordion
+            blend={currentBlend}
+            onUpdateName={updateBlendName}
+            onUpdateItem={handleUpdateItemDose}
+            onRemoveItem={removeItem}
+            onClear={clearCurrentBlend}
+          />
+        </section>
+
+        {/* Central MIX Button */}
+        <section className="flex justify-center mb-12 animate-fade-in" style={{ animationDelay: '0.2s' }}>
+          <MixButton
+            onClick={handleAnalyze}
+            disabled={!currentBlend || currentBlend.items.length === 0}
+            isLoading={isAnalyzing}
+            itemCount={currentBlend?.items.length || 0}
+          />
+        </section>
+
+        {/* Loading Animation */}
+        {isAnalyzing && (
+          <section className="mb-8 animate-fade-in-scale">
+            <Card className="overflow-hidden bg-card/60 backdrop-blur-glass border-primary/20">
+              <CardContent className="p-0">
+                <CocktailLoadingAnimation />
+              </CardContent>
+            </Card>
+          </section>
+        )}
+
+        {/* Streaming Analysis Preview */}
+        {showStreaming && (
+          <section className="mb-8 animate-fade-in">
+            <BlendAnalysisView
+              analysis={{
+                classification: '',
+                score: 0,
+                summary: '',
+                timing: '',
+                tweaks: [],
+                warnings: [],
+                rawMarkdown: streamingAnalysis,
+              }}
+              isStreaming
+            />
+          </section>
+        )}
+
+        {/* Final Analysis - Conditional Reveal */}
+        {showAnalysis && (
+          <section className="mb-8 animate-fade-in-up">
+            <BlendAnalysisView analysis={currentBlend.analysis!} />
+          </section>
+        )}
+
+        {/* Footer Disclaimer */}
+        <footer className="text-center py-8 text-sm text-muted-foreground border-t border-border/30 mt-8">
           <p>
             ⚠️ Blend Builder is for educational purposes only. Always consult a healthcare
             provider before starting any supplement regimen.
           </p>
-        </div>
-      </footer>
+        </footer>
+      </main>
 
       {/* Dose Modal */}
       {pendingSupplement && (
