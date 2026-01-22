@@ -10,7 +10,7 @@ const LOADING_MESSAGES = [
   'Checking synergies...',
   'Reviewing dosages...',
   'Checking interactions...',
-  'Mixing it up...',
+  'Finding harmony...',
   'Almost ready...',
 ];
 
@@ -38,9 +38,40 @@ export function CocktailLoadingAnimation({ className }: CocktailLoadingAnimation
   }, []);
 
   return (
-    <div className={cn('flex flex-col items-center justify-center py-12', className)}>
+    <div className={cn('flex flex-col items-center justify-center py-16 relative overflow-hidden', className)}>
+      {/* Ambient glow background */}
+      <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-accent/10" />
+      
+      {/* Floating water droplets */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        {[...Array(8)].map((_, i) => (
+          <div
+            key={i}
+            className="absolute rounded-full bg-primary/20 blur-sm animate-float"
+            style={{
+              width: `${4 + Math.random() * 8}px`,
+              height: `${4 + Math.random() * 8}px`,
+              left: `${10 + Math.random() * 80}%`,
+              top: `${10 + Math.random() * 80}%`,
+              animationDelay: `${i * 0.5}s`,
+              animationDuration: `${4 + Math.random() * 4}s`,
+            }}
+          />
+        ))}
+      </div>
+
       {/* Cocktail Animation Container */}
-      <div className="relative w-48 h-48 mb-6">
+      <div className="relative w-48 h-48 mb-8">
+        {/* Glow behind shaker */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className={cn(
+            'w-32 h-32 rounded-full blur-2xl transition-all duration-1000',
+            phase === 'pour' && 'bg-primary/20',
+            phase === 'shake' && 'bg-primary/30 scale-110',
+            phase === 'serve' && 'bg-accent/25 scale-105'
+          )} />
+        </div>
+
         {/* Shaker */}
         <div
           className={cn(
@@ -48,126 +79,161 @@ export function CocktailLoadingAnimation({ className }: CocktailLoadingAnimation
             phase === 'shake' && 'animate-[shake_0.3s_ease-in-out_infinite]'
           )}
         >
-          <svg viewBox="0 0 100 120" className="w-32 h-32">
-            {/* Shaker Body */}
+          <svg viewBox="0 0 100 120" className="w-36 h-36 drop-shadow-lg">
+            {/* Gradients */}
             <defs>
-              <linearGradient id="shakerGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.8" />
-                <stop offset="50%" stopColor="hsl(var(--primary))" stopOpacity="1" />
-                <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0.8" />
+              {/* Chrome/metallic gradient */}
+              <linearGradient id="chromeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="hsl(200, 15%, 70%)" />
+                <stop offset="30%" stopColor="hsl(195, 20%, 85%)" />
+                <stop offset="50%" stopColor="hsl(195, 25%, 92%)" />
+                <stop offset="70%" stopColor="hsl(195, 20%, 85%)" />
+                <stop offset="100%" stopColor="hsl(200, 15%, 70%)" />
               </linearGradient>
+              
+              {/* Aqua liquid gradient */}
               <linearGradient id="liquidGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.6" />
-                <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0.9" />
+                <stop offset="0%" stopColor="hsl(185, 60%, 65%)" stopOpacity="0.8" />
+                <stop offset="50%" stopColor="hsl(185, 55%, 50%)" stopOpacity="0.9" />
+                <stop offset="100%" stopColor="hsl(190, 50%, 45%)" stopOpacity="1" />
               </linearGradient>
+
+              {/* Frosted glass effect */}
+              <filter id="frosted">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="0.5" />
+              </filter>
             </defs>
 
-            {/* Shaker cap */}
+            {/* Shaker cap - chrome */}
             <path
               d="M30 15 L70 15 L65 30 L35 30 Z"
-              fill="url(#shakerGradient)"
-              className="drop-shadow-sm"
+              fill="url(#chromeGradient)"
             />
-            <ellipse cx="50" cy="15" rx="20" ry="5" fill="url(#shakerGradient)" />
+            <ellipse cx="50" cy="15" rx="20" ry="5" fill="url(#chromeGradient)" />
+            <ellipse cx="50" cy="15" rx="20" ry="5" fill="white" fillOpacity="0.3" />
 
-            {/* Shaker body */}
+            {/* Shaker body - frosted silver */}
             <path
               d="M35 30 L30 100 L70 100 L65 30 Z"
-              fill="url(#shakerGradient)"
-              className="drop-shadow-md"
+              fill="url(#chromeGradient)"
+            />
+            
+            {/* Glass highlight */}
+            <path
+              d="M35 30 L30 100 L40 100 L45 30 Z"
+              fill="white"
+              fillOpacity="0.15"
             />
 
-            {/* Liquid inside */}
+            {/* Liquid inside - aqua */}
             <path
               d={
                 phase === 'pour'
                   ? 'M36 85 L69 85 L68 95 L33 95 Z'
                   : phase === 'shake'
-                  ? 'M34 50 L66 50 L68 95 L33 95 Z'
-                  : 'M35 60 L65 60 L68 95 L33 95 Z'
+                  ? 'M34 45 L66 50 L68 95 L33 95 Z'
+                  : 'M35 55 L65 55 L68 95 L33 95 Z'
               }
               fill="url(#liquidGradient)"
-              className="transition-all duration-500"
+              className="transition-all duration-700 ease-out"
             />
 
-            {/* Shine effect */}
-            <path
-              d="M40 35 L42 90 L38 90 L36 35 Z"
-              fill="white"
-              fillOpacity="0.2"
+            {/* Liquid surface shimmer */}
+            <ellipse 
+              cx="50" 
+              cy={phase === 'pour' ? 85 : phase === 'shake' ? 47 : 55}
+              rx="16" 
+              ry="3" 
+              fill="white" 
+              fillOpacity="0.3"
+              className="transition-all duration-700"
             />
 
             {/* Bubbles during shake */}
             {phase === 'shake' && (
               <>
-                <circle cx="45" cy="60" r="3" fill="white" fillOpacity="0.4" className="animate-ping" />
-                <circle cx="55" cy="70" r="2" fill="white" fillOpacity="0.3" className="animate-ping" style={{ animationDelay: '0.2s' }} />
-                <circle cx="50" cy="80" r="2.5" fill="white" fillOpacity="0.35" className="animate-ping" style={{ animationDelay: '0.4s' }} />
+                <circle cx="42" cy="60" r="3" fill="white" fillOpacity="0.5" className="animate-ping" />
+                <circle cx="55" cy="68" r="2" fill="white" fillOpacity="0.4" className="animate-ping" style={{ animationDelay: '0.2s' }} />
+                <circle cx="48" cy="78" r="2.5" fill="white" fillOpacity="0.45" className="animate-ping" style={{ animationDelay: '0.4s' }} />
+                <circle cx="58" cy="85" r="2" fill="white" fillOpacity="0.35" className="animate-ping" style={{ animationDelay: '0.6s' }} />
               </>
             )}
+            
+            {/* Edge highlight */}
+            <path
+              d="M65 30 L70 100"
+              stroke="white"
+              strokeWidth="1"
+              strokeOpacity="0.3"
+            />
           </svg>
         </div>
 
-        {/* Falling ingredients during pour phase */}
+        {/* Falling ingredients during pour phase - water droplet style */}
         {phase === 'pour' && (
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            {[...Array(5)].map((_, i) => (
+            {[...Array(6)].map((_, i) => (
               <div
                 key={i}
-                className="absolute w-3 h-3 rounded-full bg-primary/60 animate-[fall_1s_ease-in_infinite]"
+                className="absolute rounded-full bg-gradient-to-b from-primary/70 to-primary/40 backdrop-blur-sm animate-[fall_1.2s_ease-in_infinite]"
                 style={{
-                  left: `${30 + Math.random() * 40}%`,
+                  width: `${6 + Math.random() * 6}px`,
+                  height: `${8 + Math.random() * 8}px`,
+                  left: `${35 + Math.random() * 30}%`,
                   animationDelay: `${i * 0.2}s`,
+                  borderRadius: '50% 50% 50% 50% / 60% 60% 40% 40%',
                 }}
               />
             ))}
           </div>
         )}
 
-        {/* Sparkles during serve phase */}
+        {/* Sparkles during serve phase - ethereal */}
         {phase === 'serve' && (
           <div className="absolute inset-0 pointer-events-none">
-            {[...Array(6)].map((_, i) => (
+            {[...Array(8)].map((_, i) => (
               <div
                 key={i}
-                className="absolute text-primary animate-pulse"
+                className="absolute w-1 h-1 rounded-full bg-primary shadow-glow-aqua animate-pulse-soft"
                 style={{
-                  left: `${20 + Math.random() * 60}%`,
-                  top: `${20 + Math.random() * 40}%`,
-                  animationDelay: `${i * 0.15}s`,
+                  left: `${15 + Math.random() * 70}%`,
+                  top: `${15 + Math.random() * 50}%`,
+                  animationDelay: `${i * 0.2}s`,
+                  boxShadow: '0 0 8px hsl(185, 55%, 50%)',
                 }}
-              >
-                ✨
-              </div>
+              />
             ))}
           </div>
         )}
 
-        {/* Ice cubes */}
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1">
+        {/* Ice cubes - frosted glass style */}
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-2">
           {[...Array(3)].map((_, i) => (
             <div
               key={i}
               className={cn(
-                'w-4 h-4 rounded-sm bg-gradient-to-br from-white/80 to-white/40 border border-white/20',
+                'w-4 h-4 rounded bg-gradient-to-br from-white/70 to-secondary/50 border border-white/30 backdrop-blur-sm shadow-sm',
                 phase === 'shake' && 'animate-bounce'
               )}
-              style={{ animationDelay: `${i * 0.1}s` }}
+              style={{ 
+                animationDelay: `${i * 0.1}s`,
+                transform: `rotate(${i * 15 - 15}deg)`,
+              }}
             />
           ))}
         </div>
       </div>
 
       {/* Loading Text */}
-      <div className="text-center space-y-2">
-        <p className="text-lg font-medium text-primary animate-pulse">
+      <div className="text-center space-y-3 relative z-10">
+        <p className="text-lg font-medium text-foreground animate-pulse-soft tracking-wide">
           {LOADING_MESSAGES[messageIndex]}
         </p>
-        <div className="flex items-center justify-center gap-1">
+        <div className="flex items-center justify-center gap-2">
           {[...Array(3)].map((_, i) => (
             <div
               key={i}
-              className="w-2 h-2 rounded-full bg-primary animate-bounce"
+              className="w-2 h-2 rounded-full bg-primary/70 animate-bounce shadow-glow-aqua"
               style={{ animationDelay: `${i * 0.15}s` }}
             />
           ))}
@@ -177,13 +243,15 @@ export function CocktailLoadingAnimation({ className }: CocktailLoadingAnimation
       {/* Custom keyframes */}
       <style>{`
         @keyframes fall {
-          0% { transform: translateY(-20px); opacity: 1; }
-          100% { transform: translateY(100px); opacity: 0; }
+          0% { transform: translateY(-20px) scale(0.8); opacity: 0; }
+          10% { opacity: 1; }
+          90% { opacity: 0.6; }
+          100% { transform: translateY(120px) scale(1); opacity: 0; }
         }
         @keyframes shake {
           0%, 100% { transform: translateX(0) rotate(0deg); }
-          25% { transform: translateX(-5px) rotate(-3deg); }
-          75% { transform: translateX(5px) rotate(3deg); }
+          25% { transform: translateX(-4px) rotate(-2deg); }
+          75% { transform: translateX(4px) rotate(2deg); }
         }
       `}</style>
     </div>

@@ -16,7 +16,7 @@ import {
   BlendItem,
   BlendAnalysis,
 } from '@/types/stacklab';
-import { Beaker, FlaskConical, RotateCcw } from 'lucide-react';
+import { Beaker, FlaskConical, RotateCcw, Sparkles } from 'lucide-react';
 
 const ANALYZE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-blend`;
 
@@ -186,7 +186,7 @@ const Blend = () => {
       setStreamingAnalysis('');
 
       toast({
-        title: '🍸 Blend Analyzed!',
+        title: '✨ Blend Analyzed!',
         description: `Your ${currentBlend.name} has been classified as: ${analysis.classification || 'Custom Blend'}`,
       });
     } catch (error) {
@@ -275,30 +275,41 @@ const Blend = () => {
   }, [clearCurrentBlend, createBlend]);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Ambient background blobs */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10">
+        <div className="absolute -top-40 -right-40 w-[500px] h-[500px] bg-primary/8 rounded-full blur-3xl animate-drift" />
+        <div className="absolute top-1/2 -left-32 w-96 h-96 bg-accent/15 rounded-full blur-3xl animate-float" />
+        <div className="absolute -bottom-20 right-1/4 w-80 h-80 bg-secondary/10 rounded-full blur-3xl animate-pulse-soft" />
+        {/* Water droplet decorations */}
+        <div className="absolute top-20 right-20 w-4 h-4 bg-primary/20 rounded-full blur-sm animate-float-delayed" />
+        <div className="absolute top-40 right-40 w-2 h-2 bg-accent/30 rounded-full blur-sm animate-float-slow" />
+        <div className="absolute bottom-40 left-20 w-3 h-3 bg-primary/15 rounded-full blur-sm animate-drift" />
+      </div>
+
       {/* Header */}
-      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
+      <header className="border-b border-border/50 bg-card/40 backdrop-blur-glass sticky top-0 z-50">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-glow-aqua animate-pulse-soft">
                 <FlaskConical className="h-5 w-5 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-foreground">Blend Builder</h1>
+                <h1 className="text-xl font-semibold text-foreground tracking-tight">Blend Builder</h1>
                 <p className="text-xs text-muted-foreground">Create Your Cocktail</p>
               </div>
             </div>
 
             {/* Navigation */}
-            <nav className="hidden sm:flex items-center gap-1 ml-4 p-1 bg-muted rounded-lg">
+            <nav className="hidden sm:flex items-center gap-1 ml-4 p-1 bg-card/50 backdrop-blur-sm rounded-xl border border-border/30">
               <Link to="/">
                 <Button variant="ghost" size="sm" className="gap-2">
                   <Beaker className="h-4 w-4" />
                   StackLab
                 </Button>
               </Link>
-              <Button variant="secondary" size="sm" className="gap-2 pointer-events-none">
+              <Button variant="glass" size="sm" className="gap-2 bg-accent/50 pointer-events-none">
                 <FlaskConical className="h-4 w-4" />
                 Blend Builder
               </Button>
@@ -306,10 +317,11 @@ const Blend = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handleNewBlend}>
+            <Button variant="outline" size="sm" onClick={handleNewBlend} className="gap-2">
+              <Sparkles className="h-4 w-4" />
               New Blend
             </Button>
-            <Button variant="ghost" size="sm" onClick={resetAll}>
+            <Button variant="ghost" size="sm" onClick={resetAll} className="text-muted-foreground">
               <RotateCcw className="h-4 w-4 mr-2" />
               Reset All
             </Button>
@@ -322,83 +334,98 @@ const Blend = () => {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[calc(100vh-120px)]">
           {/* Left Panel - Picker & History */}
           <div className="lg:col-span-5 xl:col-span-4 space-y-6">
-            <BlendInventoryPicker
-              selectedIds={selectedIds}
-              onSelect={handleSelectSupplement}
-            />
+            <div className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
+              <BlendInventoryPicker
+                selectedIds={selectedIds}
+                onSelect={handleSelectSupplement}
+              />
+            </div>
 
-            <BlendHistory
-              history={history}
-              onLoad={loadFromHistory}
-              onDelete={deleteFromHistory}
-            />
+            <div className="animate-fade-in" style={{ animationDelay: '0.2s' }}>
+              <BlendHistory
+                history={history}
+                onLoad={loadFromHistory}
+                onDelete={deleteFromHistory}
+              />
+            </div>
           </div>
 
           {/* Right Panel - Recipe & Analysis */}
           <div className="lg:col-span-7 xl:col-span-8 space-y-6">
             {/* Current Blend Card */}
-            {currentBlend ? (
-              <BlendRecipeCard
-                blend={currentBlend}
-                onUpdateName={updateBlendName}
-                onUpdateItem={handleUpdateItemDose}
-                onRemoveItem={removeItem}
-                onClear={clearCurrentBlend}
-                onAnalyze={handleAnalyze}
-                isAnalyzing={isAnalyzing}
-              />
-            ) : (
-              <Card className="border-dashed">
-                <CardContent className="flex flex-col items-center justify-center py-12">
-                  <FlaskConical className="h-16 w-16 text-muted-foreground/30 mb-4" />
-                  <h3 className="text-lg font-medium text-muted-foreground mb-2">
-                    Start Your Blend
-                  </h3>
-                  <p className="text-sm text-muted-foreground text-center mb-4">
-                    Select supplements from the picker to create your custom cocktail
-                  </p>
-                  <Button onClick={createBlend}>
-                    Create New Blend
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
+            <div className="animate-fade-in" style={{ animationDelay: '0.15s' }}>
+              {currentBlend ? (
+                <BlendRecipeCard
+                  blend={currentBlend}
+                  onUpdateName={updateBlendName}
+                  onUpdateItem={handleUpdateItemDose}
+                  onRemoveItem={removeItem}
+                  onClear={clearCurrentBlend}
+                  onAnalyze={handleAnalyze}
+                  isAnalyzing={isAnalyzing}
+                />
+              ) : (
+                <Card className="border-dashed border-border/50 bg-card/40 backdrop-blur-sm">
+                  <CardContent className="flex flex-col items-center justify-center py-16">
+                    <div className="w-20 h-20 rounded-full bg-accent/30 flex items-center justify-center mb-6 animate-float">
+                      <FlaskConical className="h-10 w-10 text-primary/50" />
+                    </div>
+                    <h3 className="text-lg font-medium text-foreground mb-2">
+                      Start Your Blend
+                    </h3>
+                    <p className="text-sm text-muted-foreground text-center mb-6 max-w-sm">
+                      Select supplements from the picker to create your custom cocktail
+                    </p>
+                    <Button onClick={createBlend} variant="glow" className="gap-2">
+                      <Sparkles className="h-4 w-4" />
+                      Create New Blend
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
 
             {/* Loading Animation */}
             {isAnalyzing && (
-              <Card>
-                <CardContent className="p-0">
-                  <CocktailLoadingAnimation />
-                </CardContent>
-              </Card>
+              <div className="animate-fade-in-scale">
+                <Card className="overflow-hidden bg-card/60 backdrop-blur-glass border-primary/20">
+                  <CardContent className="p-0">
+                    <CocktailLoadingAnimation />
+                  </CardContent>
+                </Card>
+              </div>
             )}
 
             {/* Streaming Analysis Preview */}
             {streamingAnalysis && !currentBlend?.analysis && (
-              <BlendAnalysisView
-                analysis={{
-                  classification: '',
-                  score: 0,
-                  summary: '',
-                  timing: '',
-                  tweaks: [],
-                  warnings: [],
-                  rawMarkdown: streamingAnalysis,
-                }}
-                isStreaming
-              />
+              <div className="animate-fade-in">
+                <BlendAnalysisView
+                  analysis={{
+                    classification: '',
+                    score: 0,
+                    summary: '',
+                    timing: '',
+                    tweaks: [],
+                    warnings: [],
+                    rawMarkdown: streamingAnalysis,
+                  }}
+                  isStreaming
+                />
+              </div>
             )}
 
             {/* Final Analysis */}
             {currentBlend?.analysis && !isAnalyzing && (
-              <BlendAnalysisView analysis={currentBlend.analysis} />
+              <div className="animate-fade-in-up">
+                <BlendAnalysisView analysis={currentBlend.analysis} />
+              </div>
             )}
           </div>
         </div>
       </main>
 
       {/* Footer */}
-      <footer className="border-t py-4 mt-8">
+      <footer className="border-t border-border/30 py-4 mt-8 bg-card/30 backdrop-blur-sm">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
           <p>
             ⚠️ Blend Builder is for educational purposes only. Always consult a healthcare
