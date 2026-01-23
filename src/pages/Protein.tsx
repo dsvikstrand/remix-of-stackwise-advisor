@@ -312,18 +312,34 @@ const Protein = () => {
       <main className="container mx-auto px-4 py-8 max-w-3xl">
         {/* Hero Header */}
         <div className="text-center mb-12 pt-16 animate-fade-in">
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight mb-4 relative inline-block">
+          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight mb-4 relative inline-block">
             <span 
-              className="text-gradient-themed animate-shimmer bg-[length:200%_auto] relative"
+              className="relative inline-block"
               style={{ 
                 fontFamily: "'Impact', 'Haettenschweiler', 'Franklin Gothic Bold', 'Charcoal', 'Helvetica Inserat', sans-serif",
-                letterSpacing: '0.08em',
-                textShadow: '2px 2px 0 hsl(var(--border)), 4px 4px 0 hsl(var(--border)/0.5), 6px 6px 8px hsl(var(--foreground)/0.15)',
-                WebkitTextStroke: '1px hsl(var(--border))',
+                letterSpacing: '0.06em',
               }}>
-              COMPLETE MY PROTEIN
+              {/* 3D shadow layers */}
+              <span 
+                className="absolute inset-0 text-border/40"
+                style={{ transform: 'translate(4px, 4px)' }}
+                aria-hidden="true"
+              >
+                COMPLETE MY PROTEIN
+              </span>
+              <span 
+                className="absolute inset-0 text-border/60"
+                style={{ transform: 'translate(2px, 2px)' }}
+                aria-hidden="true"
+              >
+                COMPLETE MY PROTEIN
+              </span>
+              {/* Main gradient text */}
+              <span className="text-gradient-themed animate-shimmer bg-[length:200%_auto] relative">
+                COMPLETE MY PROTEIN
+              </span>
             </span>
-            <span className="absolute -inset-4 bg-primary/5 blur-2xl rounded-full animate-pulse-soft -z-10" />
+            <span className="absolute -inset-4 bg-primary/10 blur-2xl rounded-full animate-pulse-soft -z-10" />
           </h1>
           <p className="text-lg text-muted-foreground max-w-md mx-auto">
             Complete your amino acid profile
