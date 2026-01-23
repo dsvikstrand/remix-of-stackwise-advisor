@@ -6,7 +6,7 @@ import { PlanSettings } from '@/components/PlanSettings';
 import { SafetyCard } from '@/components/SafetyCard';
 import { ChatPanel } from '@/components/ChatPanel';
 import { Button } from '@/components/ui/button';
-import { RotateCcw, Beaker, FlaskConical } from 'lucide-react';
+import { RotateCcw, Beaker, FlaskConical, Dumbbell } from 'lucide-react';
 
 const Index = () => {
   const {
@@ -55,7 +55,13 @@ const Index = () => {
               <Link to="/blend">
                 <Button variant="ghost" size="sm" className="gap-2">
                   <FlaskConical className="h-4 w-4" />
-                  Blend Builder
+                  Blend
+                </Button>
+              </Link>
+              <Link to="/protein">
+                <Button variant="ghost" size="sm" className="gap-2">
+                  <Dumbbell className="h-4 w-4" />
+                  Protein
                 </Button>
               </Link>
             </nav>
