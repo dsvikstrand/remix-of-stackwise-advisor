@@ -289,3 +289,114 @@ export const DEFAULT_DOSES: Record<string, { amount: number; unit: DoseUnit }> =
   'vitamin-d3': { amount: 5000, unit: 'IU' },
   'omega-3': { amount: 2, unit: 'g' },
 };
+
+// ============================================
+// PROTEIN SHAKE BUILDER TYPES
+// ============================================
+
+export type ProteinCategory = 
+  | 'whey-casein'
+  | 'plant-based'
+  | 'specialty'
+  | 'boosters';
+
+export interface ProteinSource {
+  id: string;
+  name: string;
+  category: ProteinCategory;
+  proteinPerServing: number;
+  servingSize: string;
+  aminoHighlights?: string[];
+}
+
+export interface ShakeItem {
+  id: string;
+  proteinId: string;
+  name: string;
+  category: ProteinCategory;
+  scoops: number;
+  gramsProtein: number;
+}
+
+export interface ProteinAnalysis {
+  completenessScore: number;
+  absorptionProfile: string;
+  timing: string;
+  optimizations: string[];
+  warnings: string[];
+  rawMarkdown: string;
+}
+
+export interface ShakeRecipe {
+  id: string;
+  name: string;
+  items: ShakeItem[];
+  totalProtein: number;
+  createdAt: string;
+  analysis?: ProteinAnalysis;
+}
+
+export interface ProteinState {
+  currentShake: ShakeRecipe | null;
+  history: ShakeRecipe[];
+}
+
+export const DEFAULT_PROTEIN_STATE: ProteinState = {
+  currentShake: null,
+  history: [],
+};
+
+export const PROTEIN_CATEGORY_LABELS: Record<ProteinCategory, string> = {
+  'whey-casein': 'Whey & Casein',
+  'plant-based': 'Plant-Based',
+  'specialty': 'Specialty',
+  'boosters': 'Boosters',
+};
+
+export const PROTEIN_CATALOG: Record<ProteinCategory, ProteinSource[]> = {
+  'whey-casein': [
+    { id: 'whey-isolate', name: 'Whey Isolate', category: 'whey-casein', proteinPerServing: 25, servingSize: '1 scoop (30g)', aminoHighlights: ['High Leucine', 'Fast Absorbing'] },
+    { id: 'whey-concentrate', name: 'Whey Concentrate', category: 'whey-casein', proteinPerServing: 22, servingSize: '1 scoop (33g)', aminoHighlights: ['Complete EAAs'] },
+    { id: 'whey-hydrolysate', name: 'Whey Hydrolysate', category: 'whey-casein', proteinPerServing: 24, servingSize: '1 scoop (30g)', aminoHighlights: ['Pre-Digested', 'Fastest Absorption'] },
+    { id: 'casein-micellar', name: 'Micellar Casein', category: 'whey-casein', proteinPerServing: 24, servingSize: '1 scoop (33g)', aminoHighlights: ['Slow Release', 'Anti-Catabolic'] },
+    { id: 'casein-hydrolysate', name: 'Casein Hydrolysate', category: 'whey-casein', proteinPerServing: 23, servingSize: '1 scoop (32g)', aminoHighlights: ['Fast Casein'] },
+    { id: 'milk-protein-isolate', name: 'Milk Protein Isolate', category: 'whey-casein', proteinPerServing: 26, servingSize: '1 scoop (30g)', aminoHighlights: ['80/20 Casein/Whey'] },
+    { id: 'goat-whey', name: 'Goat Whey Protein', category: 'whey-casein', proteinPerServing: 20, servingSize: '1 scoop (28g)', aminoHighlights: ['A2 Protein', 'Easy Digest'] },
+    { id: 'grass-fed-whey', name: 'Grass-Fed Whey', category: 'whey-casein', proteinPerServing: 24, servingSize: '1 scoop (31g)', aminoHighlights: ['Higher CLA', 'Omega-3s'] },
+    { id: 'native-whey', name: 'Native Whey', category: 'whey-casein', proteinPerServing: 25, servingSize: '1 scoop (30g)', aminoHighlights: ['Undenatured', 'Higher Leucine'] },
+  ],
+  'plant-based': [
+    { id: 'pea-protein', name: 'Pea Protein', category: 'plant-based', proteinPerServing: 21, servingSize: '1 scoop (33g)', aminoHighlights: ['High Arginine', 'High BCAAs'] },
+    { id: 'rice-protein', name: 'Brown Rice Protein', category: 'plant-based', proteinPerServing: 22, servingSize: '1 scoop (30g)', aminoHighlights: ['High Cysteine', 'Hypoallergenic'] },
+    { id: 'hemp-protein', name: 'Hemp Protein', category: 'plant-based', proteinPerServing: 15, servingSize: '1 scoop (30g)', aminoHighlights: ['Omega-3/6', 'Complete EAAs'] },
+    { id: 'soy-isolate', name: 'Soy Protein Isolate', category: 'plant-based', proteinPerServing: 25, servingSize: '1 scoop (28g)', aminoHighlights: ['Complete EAAs', 'High PDCAAS'] },
+    { id: 'pumpkin-seed-protein', name: 'Pumpkin Seed Protein', category: 'plant-based', proteinPerServing: 18, servingSize: '1 scoop (30g)', aminoHighlights: ['High Tryptophan', 'Zinc'] },
+    { id: 'sacha-inchi', name: 'Sacha Inchi Protein', category: 'plant-based', proteinPerServing: 17, servingSize: '1 scoop (28g)', aminoHighlights: ['Complete EAAs', 'Omega-3s'] },
+    { id: 'sunflower-protein', name: 'Sunflower Seed Protein', category: 'plant-based', proteinPerServing: 16, servingSize: '1 scoop (30g)', aminoHighlights: ['Nut-Free', 'High Arginine'] },
+    { id: 'pea-rice-blend', name: 'Pea + Rice Blend', category: 'plant-based', proteinPerServing: 24, servingSize: '1 scoop (32g)', aminoHighlights: ['Complete Profile', 'Synergistic'] },
+    { id: 'fava-bean-protein', name: 'Fava Bean Protein', category: 'plant-based', proteinPerServing: 21, servingSize: '1 scoop (30g)', aminoHighlights: ['High L-Dopa'] },
+    { id: 'watermelon-seed', name: 'Watermelon Seed Protein', category: 'plant-based', proteinPerServing: 19, servingSize: '1 scoop (28g)', aminoHighlights: ['High Arginine'] },
+  ],
+  'specialty': [
+    { id: 'egg-white-protein', name: 'Egg White Protein', category: 'specialty', proteinPerServing: 24, servingSize: '1 scoop (33g)', aminoHighlights: ['Perfect PDCAAS', 'Complete EAAs'] },
+    { id: 'whole-egg-protein', name: 'Whole Egg Protein', category: 'specialty', proteinPerServing: 23, servingSize: '1 scoop (35g)', aminoHighlights: ['With Fats', 'Fat-Soluble Vitamins'] },
+    { id: 'beef-protein-isolate', name: 'Beef Protein Isolate', category: 'specialty', proteinPerServing: 23, servingSize: '1 scoop (28g)', aminoHighlights: ['High Iron', 'Creatine'] },
+    { id: 'collagen-peptides', name: 'Collagen Peptides', category: 'specialty', proteinPerServing: 18, servingSize: '2 scoops (20g)', aminoHighlights: ['High Glycine', 'Proline', 'Skin/Joint'] },
+    { id: 'hydrolyzed-collagen', name: 'Hydrolyzed Collagen', category: 'specialty', proteinPerServing: 11, servingSize: '1 scoop (12g)', aminoHighlights: ['Type I & III', 'Fast Absorbing'] },
+    { id: 'bone-broth-protein', name: 'Bone Broth Protein', category: 'specialty', proteinPerServing: 20, servingSize: '1 scoop (22g)', aminoHighlights: ['Collagen Rich', 'Gut Health'] },
+    { id: 'cricket-protein', name: 'Cricket Protein', category: 'specialty', proteinPerServing: 22, servingSize: '1 scoop (25g)', aminoHighlights: ['B12', 'Iron', 'Sustainable'] },
+    { id: 'salmon-protein', name: 'Salmon Protein', category: 'specialty', proteinPerServing: 21, servingSize: '1 scoop (28g)', aminoHighlights: ['Omega-3s', 'Astaxanthin'] },
+  ],
+  'boosters': [
+    { id: 'leucine', name: 'L-Leucine', category: 'boosters', proteinPerServing: 0, servingSize: '2.5g', aminoHighlights: ['MPS Trigger', 'Anabolic Signal'] },
+    { id: 'bcaa-211', name: 'BCAA 2:1:1', category: 'boosters', proteinPerServing: 0, servingSize: '5g', aminoHighlights: ['Leu/Iso/Val', 'Anti-Catabolic'] },
+    { id: 'eaa-complex', name: 'EAA Complex', category: 'boosters', proteinPerServing: 0, servingSize: '10g', aminoHighlights: ['All 9 EAAs', 'Complete'] },
+    { id: 'glutamine', name: 'L-Glutamine', category: 'boosters', proteinPerServing: 0, servingSize: '5g', aminoHighlights: ['Gut Health', 'Recovery'] },
+    { id: 'glycine', name: 'Glycine', category: 'boosters', proteinPerServing: 0, servingSize: '3g', aminoHighlights: ['Sleep', 'Collagen Synthesis'] },
+    { id: 'creatine', name: 'Creatine Monohydrate', category: 'boosters', proteinPerServing: 0, servingSize: '5g', aminoHighlights: ['ATP', 'Strength'] },
+    { id: 'hmb', name: 'HMB (β-Hydroxy β-Methylbutyrate)', category: 'boosters', proteinPerServing: 0, servingSize: '3g', aminoHighlights: ['Anti-Catabolic', 'Leucine Metabolite'] },
+    { id: 'digestive-enzymes', name: 'Digestive Enzymes', category: 'boosters', proteinPerServing: 0, servingSize: '1 capsule', aminoHighlights: ['Absorption', 'Less Bloating'] },
+    { id: 'betaine', name: 'Betaine Anhydrous', category: 'boosters', proteinPerServing: 0, servingSize: '2.5g', aminoHighlights: ['Power Output', 'Homocysteine'] },
+    { id: 'taurine', name: 'Taurine', category: 'boosters', proteinPerServing: 0, servingSize: '2g', aminoHighlights: ['Cell Volume', 'Performance'] },
+  ],
+};
