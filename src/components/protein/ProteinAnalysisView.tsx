@@ -122,7 +122,13 @@ function parseAnalysisMarkdown(markdown: string): ParsedSections {
 
   const verdictMatch = markdown.match(/verdict[^:]*:[:\s]*([\s\S]*?)(?=###|---|$)/i);
   if (verdictMatch) {
-    sections.verdict = verdictMatch[1].trim().split('\n')[0];
+    // Clean up leading/trailing ** and whitespace
+    sections.verdict = verdictMatch[1]
+      .trim()
+      .split('\n')[0]
+      .replace(/^\*\*\s*/, '')
+      .replace(/\s*\*\*$/, '')
+      .trim();
   }
 
   return sections;
