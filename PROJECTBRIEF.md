@@ -80,6 +80,7 @@ Personal recipe dashboard:
 1. **Community-first**: Wall, sharing, recipe discovery
 2. **Unified platform**: Supplements + protein + (future: skincare, smoothies, workouts)
 3. **AI insights**: Real-time streaming analysis with actionable recommendations
+4. **Fun and lightweight**: Its a fun app meant driven by user curiosity rather than a medical/professional app
 
 ---
 

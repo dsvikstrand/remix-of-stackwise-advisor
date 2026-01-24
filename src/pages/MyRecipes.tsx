@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Beaker, FlaskConical, Dumbbell, Trash2, Share2, ExternalLink } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { ShareToWallDialog } from '@/components/shared/ShareToWallDialog';
 
 const RECIPE_ICONS = {
   blend: FlaskConical,
@@ -45,7 +46,7 @@ const RECIPE_PATHS = {
 export default function MyRecipes() {
   const { user, isLoading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<RecipeType | 'all'>('all');
-  const { recipes, isLoading, deleteRecipe, shareToWall, isSharing } = useRecipes(
+  const { recipes, isLoading, deleteRecipe } = useRecipes(
     activeTab === 'all' ? undefined : activeTab
   );
 
@@ -132,9 +133,14 @@ export default function MyRecipes() {
                               <Icon className="h-3 w-3 mr-1" />
                               {recipe.recipe_type}
                             </Badge>
-                            {recipe.is_public && (
+                            {recipe.visibility === 'public' && (
                               <Badge variant="outline" className="text-xs">
                                 Public
+                              </Badge>
+                            )}
+                            {recipe.visibility === 'unlisted' && (
+                              <Badge variant="outline" className="text-xs">
+                                Unlisted
                               </Badge>
                             )}
                           </div>
@@ -157,17 +163,17 @@ export default function MyRecipes() {
                             </Button>
                           </Link>
                           
-                          {!recipe.is_public && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="gap-1"
-                              onClick={() => shareToWall({ recipeId: recipe.id })}
-                              disabled={isSharing}
-                            >
-                              <Share2 className="h-3 w-3" />
-                              Share
-                            </Button>
+                          {recipe.visibility !== 'public' && (
+                            <ShareToWallDialog
+                              recipeId={recipe.id}
+                              recipeName={recipe.name}
+                              trigger={(
+                                <Button variant="outline" size="sm" className="gap-1">
+                                  <Share2 className="h-3 w-3" />
+                                  Share
+                                </Button>
+                              )}
+                            />
                           )}
 
                           <AlertDialog>

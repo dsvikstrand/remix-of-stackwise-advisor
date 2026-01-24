@@ -3,8 +3,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import type { Json } from '@/integrations/supabase/types';
+import { normalizeTags } from '@/lib/tagging';
 
 export type RecipeType = 'blend' | 'protein' | 'stack';
+export type RecipeVisibility = 'private' | 'unlisted' | 'public';
 
 export interface UserRecipe {
   id: string;
@@ -14,6 +16,7 @@ export interface UserRecipe {
   items: Json;
   analysis: Json | null;
   is_public: boolean;
+  visibility: RecipeVisibility;
   created_at: string;
   updated_at: string;
 }
@@ -53,7 +56,7 @@ export function useRecipes(recipeType?: RecipeType) {
       name: string; 
       items: Json; 
       analysis?: Json | null;
-      is_public?: boolean;
+      visibility?: RecipeVisibility;
     }) => {
       if (!user) throw new Error('Must be logged in');
 
@@ -64,7 +67,7 @@ export function useRecipes(recipeType?: RecipeType) {
           name: recipe.name,
           items: recipe.items,
           analysis: recipe.analysis ?? null,
-          is_public: recipe.is_public ?? false,
+          visibility: recipe.visibility ?? 'private',
           user_id: user.id,
         })
         .select()
@@ -96,7 +99,7 @@ export function useRecipes(recipeType?: RecipeType) {
       name?: string; 
       items?: Json; 
       analysis?: Json | null;
-      is_public?: boolean;
+      visibility?: RecipeVisibility;
     }) => {
       if (!user) throw new Error('Must be logged in');
 
@@ -154,15 +157,75 @@ export function useRecipes(recipeType?: RecipeType) {
 
   // Share to wall mutation
   const shareMutation = useMutation({
-    mutationFn: async ({ recipeId, caption }: { recipeId: string; caption?: string }) => {
+    mutationFn: async ({ recipeId, caption, tags }: { recipeId: string; caption?: string; tags?: string[] }) => {
       if (!user) throw new Error('Must be logged in');
 
-      // First ensure recipe is public
-      await supabase
+      const { data: existingPost } = await supabase
+        .from('wall_posts')
+        .select('id')
+        .eq('recipe_id', recipeId)
+        .maybeSingle();
+
+      if (existingPost) {
+        throw new Error('This recipe is already shared on the Wall.');
+      }
+
+      // Ensure recipe is public before tagging
+      const { error: visibilityError } = await supabase
         .from('user_recipes')
-        .update({ is_public: true })
+        .update({ visibility: 'public' })
         .eq('id', recipeId)
         .eq('user_id', user.id);
+      if (visibilityError) throw visibilityError;
+
+      // Update tags if provided
+      const normalizedTags = normalizeTags(tags || []);
+      if (normalizedTags.length > 0) {
+        const { data: existingTags, error: existingTagsError } = await supabase
+          .from('tags')
+          .select('id, slug')
+          .in('slug', normalizedTags);
+        if (existingTagsError) throw existingTagsError;
+
+        const existingMap = new Map((existingTags || []).map((tag) => [tag.slug, tag.id]));
+        const missingSlugs = normalizedTags.filter((slug) => !existingMap.has(slug));
+
+        let createdTags: { id: string; slug: string }[] = [];
+        if (missingSlugs.length > 0) {
+          const { data: created, error: createError } = await supabase
+            .from('tags')
+            .insert(missingSlugs.map((slug) => ({ slug, created_by: user.id })))
+            .select('id, slug');
+
+          if (createError) throw createError;
+          createdTags = created || [];
+
+          if (createdTags.length > 0) {
+            await supabase.from('tag_follows').upsert(
+              createdTags.map((tag) => ({ tag_id: tag.id, user_id: user.id })),
+              { onConflict: 'user_id,tag_id' }
+            );
+          }
+        }
+
+        const allTagIds = [
+          ...existingMap.values(),
+          ...createdTags.map((tag) => tag.id),
+        ];
+
+        const { error: deleteTagsError } = await supabase
+          .from('recipe_tags')
+          .delete()
+          .eq('recipe_id', recipeId);
+        if (deleteTagsError) throw deleteTagsError;
+
+        if (allTagIds.length > 0) {
+          const { error: insertTagsError } = await supabase.from('recipe_tags').insert(
+            allTagIds.map((tagId) => ({ recipe_id: recipeId, tag_id: tagId }))
+          );
+          if (insertTagsError) throw insertTagsError;
+        }
+      }
 
       // Create wall post
       const { data, error } = await supabase

@@ -11,9 +11,11 @@ import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Heart, MessageCircle, Share2, FlaskConical, Dumbbell, Beaker } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Heart, MessageCircle, Share2, FlaskConical, Dumbbell, Beaker, Tag } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { CommentsThread } from '@/components/wall/CommentsThread';
 
 interface WallPost {
   id: string;
@@ -28,11 +30,13 @@ interface WallPost {
     recipe_type: 'blend' | 'protein' | 'stack';
     items: unknown[];
     analysis: unknown | null;
+    visibility: 'private' | 'unlisted' | 'public';
   };
   profile: {
     display_name: string | null;
     avatar_url: string | null;
   };
+  tags: { id: string; slug: string }[];
   user_liked: boolean;
 }
 
@@ -48,57 +52,124 @@ const RECIPE_COLORS = {
   stack: 'bg-blue-500/10 text-blue-500',
 };
 
+const FEED_TABS = [
+  { value: 'for-you', label: 'For You' },
+  { value: 'latest', label: 'Latest' },
+  { value: 'trending', label: 'Trending' },
+] as const;
+
+type FeedTab = (typeof FEED_TABS)[number]['value'];
+
 export default function Wall() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<FeedTab>('for-you');
+  const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
 
-  // Fetch wall posts
   const { data: posts, isLoading } = useQuery({
-    queryKey: ['wall-posts'],
+    queryKey: ['wall-posts', activeTab, user?.id],
     queryFn: async () => {
-      const { data: postsData, error: postsError } = await supabase
+      const limit = activeTab === 'for-you' ? 120 : 80;
+      let query = supabase
         .from('wall_posts')
-        .select(`
-          id,
-          user_id,
-          recipe_id,
-          caption,
-          likes_count,
-          created_at
-        `)
+        .select('id, user_id, recipe_id, caption, likes_count, created_at')
         .order('created_at', { ascending: false })
-        .limit(50);
+        .limit(limit);
+
+      if (activeTab === 'trending') {
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - 3);
+        query = query
+          .gte('created_at', cutoff.toISOString())
+          .order('likes_count', { ascending: false })
+          .order('created_at', { ascending: false });
+      }
+
+      const { data: postsData, error: postsError } = await query;
 
       if (postsError) throw postsError;
-      if (!postsData || postsData.length === 0) return [];
+      if (!postsData || postsData.length === 0) return [] as WallPost[];
 
-      // Fetch related data
       const recipeIds = postsData.map((p) => p.recipe_id);
       const userIds = [...new Set(postsData.map((p) => p.user_id))];
+      const postIds = postsData.map((p) => p.id);
 
-      const [recipesRes, profilesRes, likesRes] = await Promise.all([
-        supabase.from('user_recipes').select('id, name, recipe_type, items, analysis').in('id', recipeIds),
+      const [recipesRes, profilesRes, likesRes, recipeTagsRes] = await Promise.all([
+        supabase
+          .from('user_recipes')
+          .select('id, name, recipe_type, items, analysis, visibility')
+          .in('id', recipeIds),
         supabase.from('profiles').select('user_id, display_name, avatar_url').in('user_id', userIds),
         user
-          ? supabase.from('post_likes').select('post_id').eq('user_id', user.id).in('post_id', postsData.map((p) => p.id))
+          ? supabase.from('post_likes').select('post_id').eq('user_id', user.id).in('post_id', postIds)
           : Promise.resolve({ data: [] }),
+        supabase.from('recipe_tags').select('recipe_id, tag_id').in('recipe_id', recipeIds),
       ]);
+
+      const recipeTags = recipeTagsRes.data || [];
+      const tagIds = [...new Set(recipeTags.map((row) => row.tag_id))];
+      const { data: tagsRes } = tagIds.length > 0
+        ? await supabase.from('tags').select('id, slug').in('id', tagIds)
+        : { data: [] as { id: string; slug: string }[] };
 
       const recipesMap = new Map((recipesRes.data || []).map((r) => [r.id, r]));
       const profilesMap = new Map((profilesRes.data || []).map((p) => [p.user_id, p]));
       const likedPostIds = new Set((likesRes.data || []).map((l) => l.post_id));
+      const tagsMap = new Map((tagsRes || []).map((t) => [t.id, t]));
 
-      return postsData.map((post) => ({
+      const recipeTagsMap = new Map<string, { id: string; slug: string }[]>();
+      recipeTags.forEach((row) => {
+        const tag = tagsMap.get(row.tag_id);
+        if (!tag) return;
+        const list = recipeTagsMap.get(row.recipe_id) || [];
+        list.push(tag);
+        recipeTagsMap.set(row.recipe_id, list);
+      });
+
+      let followTagIds = new Set<string>();
+      let mutedTagIds = new Set<string>();
+
+      if (activeTab === 'for-you' && user) {
+        const [followsRes, mutesRes] = await Promise.all([
+          supabase.from('tag_follows').select('tag_id').eq('user_id', user.id),
+          supabase.from('tag_mutes').select('tag_id').eq('user_id', user.id),
+        ]);
+        followTagIds = new Set((followsRes.data || []).map((row) => row.tag_id));
+        mutedTagIds = new Set((mutesRes.data || []).map((row) => row.tag_id));
+      }
+
+      const hydrated = postsData.map((post) => ({
         ...post,
-        recipe: recipesMap.get(post.recipe_id) || { id: '', name: 'Unknown', recipe_type: 'blend', items: [], analysis: null },
+        recipe:
+          recipesMap.get(post.recipe_id) ||
+          ({
+            id: '',
+            name: 'Unknown',
+            recipe_type: 'blend',
+            items: [],
+            analysis: null,
+            visibility: 'public',
+          } as WallPost['recipe']),
         profile: profilesMap.get(post.user_id) || { display_name: null, avatar_url: null },
+        tags: recipeTagsMap.get(post.recipe_id) || [],
         user_liked: likedPostIds.has(post.id),
       })) as WallPost[];
+
+      if (activeTab === 'for-you') {
+        if (!user || followTagIds.size === 0) return [] as WallPost[];
+
+        return hydrated.filter((post) => {
+          const postTagIds = (recipeTagsMap.get(post.recipe_id) || []).map((tag) => tag.id);
+          if (postTagIds.some((tagId) => mutedTagIds.has(tagId))) return false;
+          return postTagIds.some((tagId) => followTagIds.has(tagId));
+        });
+      }
+
+      return hydrated;
     },
   });
 
-  // Like mutation
   const likeMutation = useMutation({
     mutationFn: async ({ postId, liked }: { postId: string; liked: boolean }) => {
       if (!user) throw new Error('Must be logged in');
@@ -111,9 +182,9 @@ export default function Wall() {
     },
     onMutate: async ({ postId, liked }) => {
       await queryClient.cancelQueries({ queryKey: ['wall-posts'] });
-      const previousPosts = queryClient.getQueryData(['wall-posts']);
+      const previousPosts = queryClient.getQueryData(['wall-posts', activeTab, user?.id]);
 
-      queryClient.setQueryData(['wall-posts'], (old: WallPost[] | undefined) =>
+      queryClient.setQueryData(['wall-posts', activeTab, user?.id], (old: WallPost[] | undefined) =>
         old?.map((post) =>
           post.id === postId
             ? {
@@ -128,7 +199,7 @@ export default function Wall() {
       return { previousPosts };
     },
     onError: (err, variables, context) => {
-      queryClient.setQueryData(['wall-posts'], context?.previousPosts);
+      queryClient.setQueryData(['wall-posts', activeTab, user?.id], context?.previousPosts);
       toast({
         title: 'Error',
         description: 'Failed to update like. Please try again.',
@@ -148,21 +219,26 @@ export default function Wall() {
     likeMutation.mutate({ postId, liked: currentlyLiked });
   };
 
+  const toggleComments = (postId: string) => {
+    setOpenComments((prev) => ({ ...prev, [postId]: !prev[postId] }));
+  };
+
   return (
     <div className="min-h-screen bg-background">
-      {/* Ambient background */}
       <div className="fixed inset-0 -z-10 overflow-hidden">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
         <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-accent/5 rounded-full blur-3xl" />
       </div>
 
-      {/* Header */}
       <header className="sticky top-0 z-30 backdrop-blur-glass border-b border-border/50 bg-background/80">
-        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link to="/" className="flex items-center gap-2">
               <Beaker className="h-6 w-6 text-primary" />
               <span className="font-semibold">Wall</span>
+            </Link>
+            <Link to="/tags" className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+              <Tag className="h-4 w-4" /> Tags
             </Link>
           </div>
           <div className="flex items-center gap-2">
@@ -172,120 +248,150 @@ export default function Wall() {
         </div>
       </header>
 
-      {/* Navigation */}
-      <div className="max-w-2xl mx-auto px-4 py-4">
+      <div className="max-w-3xl mx-auto px-4 py-4">
         <AppNavigation />
       </div>
 
-      {/* Feed */}
-      <main className="max-w-2xl mx-auto px-4 pb-24">
-        <div className="space-y-4">
-          {isLoading ? (
-            // Loading skeletons
-            Array.from({ length: 3 }).map((_, i) => (
-              <Card key={i}>
-                <CardHeader className="flex flex-row items-center gap-3">
-                  <Skeleton className="h-10 w-10 rounded-full" />
-                  <div className="space-y-2">
-                    <Skeleton className="h-4 w-24" />
-                    <Skeleton className="h-3 w-16" />
-                  </div>
-                </CardHeader>
+      <main className="max-w-3xl mx-auto px-4 pb-24">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as FeedTab)}>
+          <TabsList className="mb-4">
+            {FEED_TABS.map((tab) => (
+              <TabsTrigger key={tab.value} value={tab.value}>
+                {tab.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+
+          <TabsContent value={activeTab} className="mt-0">
+            {isLoading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <Card key={i}>
+                  <CardHeader className="flex flex-row items-center gap-3">
+                    <Skeleton className="h-10 w-10 rounded-full" />
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-3 w-16" />
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <Skeleton className="h-20 w-full" />
+                  </CardContent>
+                </Card>
+              ))
+            ) : posts && posts.length > 0 ? (
+              <div className="space-y-4">
+                {posts.map((post) => {
+                  const Icon = RECIPE_ICONS[post.recipe.recipe_type];
+                  const colorClass = RECIPE_COLORS[post.recipe.recipe_type];
+                  const displayName = post.profile.display_name || 'Anonymous';
+                  const initials = displayName.slice(0, 2).toUpperCase();
+                  const itemCount = Array.isArray(post.recipe.items) ? post.recipe.items.length : 0;
+
+                  return (
+                    <Card key={post.id} className="overflow-hidden">
+                      <CardHeader className="flex flex-row items-center gap-3 pb-2">
+                        <Avatar className="h-10 w-10">
+                          <AvatarImage src={post.profile.avatar_url || undefined} />
+                          <AvatarFallback className="bg-primary/10 text-primary text-sm">
+                            {initials}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1">
+                          <p className="font-medium text-sm">{displayName}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
+                          </p>
+                        </div>
+                        <Badge variant="secondary" className={colorClass}>
+                          <Icon className="h-3 w-3 mr-1" />
+                          {post.recipe.recipe_type}
+                        </Badge>
+                      </CardHeader>
+
+                      <CardContent className="pt-0 space-y-3">
+                        <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                          <h3 className="font-semibold">{post.recipe.name}</h3>
+                          <p className="text-sm text-muted-foreground">
+                            {itemCount} ingredient{itemCount !== 1 ? 's' : ''}
+                          </p>
+                          {post.caption && (
+                            <p className="text-sm pt-2 border-t border-border/50">{post.caption}</p>
+                          )}
+                        </div>
+                        {post.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {post.tags.map((tag) => (
+                              <Badge key={tag.id} variant="outline" className="text-xs">
+                                #{tag.slug}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </CardContent>
+
+                      <CardFooter className="pt-0 flex flex-col gap-4">
+                        <div className="flex items-center gap-4 w-full">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={post.user_liked ? 'text-red-500' : ''}
+                            onClick={() => handleLike(post.id, post.user_liked)}
+                          >
+                            <Heart className={`h-4 w-4 mr-1 ${post.user_liked ? 'fill-current' : ''}`} />
+                            {post.likes_count}
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => toggleComments(post.id)}>
+                            <MessageCircle className="h-4 w-4 mr-1" />
+                            {openComments[post.id] ? 'Hide' : 'Comments'}
+                          </Button>
+                          <Button variant="ghost" size="sm" disabled>
+                            <Share2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+
+                        {openComments[post.id] && (
+                          <div className="w-full">
+                            <CommentsThread postId={post.id} />
+                          </div>
+                        )}
+                      </CardFooter>
+                    </Card>
+                  );
+                })}
+              </div>
+            ) : (
+              <Card className="text-center py-12">
                 <CardContent>
-                  <Skeleton className="h-20 w-full" />
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
+                      <Beaker className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">No posts yet</h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {activeTab === 'for-you'
+                          ? user
+                            ? 'Follow tags to personalize your feed.'
+                            : 'Sign in to follow tags and personalize your feed.'
+                          : 'Be the first to share your blend with the community!'}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Link to="/blend">
+                        <Button>Create a Blend</Button>
+                      </Link>
+                      <Link to="/tags">
+                        <Button variant="outline">Explore Tags</Button>
+                      </Link>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
-            ))
-          ) : posts && posts.length > 0 ? (
-            posts.map((post) => {
-              const Icon = RECIPE_ICONS[post.recipe.recipe_type];
-              const colorClass = RECIPE_COLORS[post.recipe.recipe_type];
-              const displayName = post.profile.display_name || 'Anonymous';
-              const initials = displayName.slice(0, 2).toUpperCase();
-              const itemCount = Array.isArray(post.recipe.items) ? post.recipe.items.length : 0;
-
-              return (
-                <Card key={post.id} className="overflow-hidden">
-                  <CardHeader className="flex flex-row items-center gap-3 pb-2">
-                    <Avatar className="h-10 w-10">
-                      <AvatarImage src={post.profile.avatar_url || undefined} />
-                      <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                        {initials}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <p className="font-medium text-sm">{displayName}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
-                      </p>
-                    </div>
-                    <Badge variant="secondary" className={colorClass}>
-                      <Icon className="h-3 w-3 mr-1" />
-                      {post.recipe.recipe_type}
-                    </Badge>
-                  </CardHeader>
-
-                  <CardContent className="pt-0">
-                    <div className="bg-muted/50 rounded-lg p-4 space-y-2">
-                      <h3 className="font-semibold">{post.recipe.name}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        {itemCount} ingredient{itemCount !== 1 ? 's' : ''}
-                      </p>
-                      {post.caption && (
-                        <p className="text-sm pt-2 border-t border-border/50">{post.caption}</p>
-                      )}
-                    </div>
-                  </CardContent>
-
-                  <CardFooter className="pt-0">
-                    <div className="flex items-center gap-4">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className={post.user_liked ? 'text-red-500' : ''}
-                        onClick={() => handleLike(post.id, post.user_liked)}
-                      >
-                        <Heart
-                          className={`h-4 w-4 mr-1 ${post.user_liked ? 'fill-current' : ''}`}
-                        />
-                        {post.likes_count}
-                      </Button>
-                      <Button variant="ghost" size="sm" disabled>
-                        <MessageCircle className="h-4 w-4 mr-1" />
-                        0
-                      </Button>
-                      <Button variant="ghost" size="sm" disabled>
-                        <Share2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </CardFooter>
-                </Card>
-              );
-            })
-          ) : (
-            <Card className="text-center py-12">
-              <CardContent>
-                <div className="flex flex-col items-center gap-4">
-                  <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
-                    <Beaker className="h-8 w-8 text-muted-foreground" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold">No posts yet</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Be the first to share your blend with the community!
-                    </p>
-                  </div>
-                  <Link to="/blend">
-                    <Button>Create a Blend</Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </main>
 
-      {/* Floating nav */}
       <AppNavigation variant="floating" />
     </div>
   );

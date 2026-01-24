@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRecipes, RecipeType } from '@/hooks/useRecipes';
 import { Button } from '@/components/ui/button';
@@ -14,9 +14,14 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Save, Share2, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Json } from '@/integrations/supabase/types';
+import { TagInput } from '@/components/shared/TagInput';
+import { useTagSuggestions } from '@/hooks/useTags';
+import type { RecipeVisibility } from '@/hooks/useRecipes';
 
 interface SaveRecipeButtonProps {
   recipeName: string;
@@ -42,6 +47,20 @@ export function SaveRecipeButton({
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(recipeName);
   const [shareToWallAfter, setShareToWallAfter] = useState(false);
+  const [visibility, setVisibility] = useState<RecipeVisibility>('private');
+  const [caption, setCaption] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
+  const { data: tagSuggestions } = useTagSuggestions();
+
+  useEffect(() => {
+    if (!open) {
+      setName(recipeName);
+      setShareToWallAfter(false);
+      setVisibility('private');
+      setCaption('');
+      setTags([]);
+    }
+  }, [open, recipeName]);
 
   if (!user) {
     return null;
@@ -57,17 +76,26 @@ export function SaveRecipeButton({
       return;
     }
 
+    if (shareToWallAfter && tags.length === 0) {
+      toast({
+        title: 'Tags required',
+        description: 'Add at least one tag before sharing.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
       const saved = await saveRecipe({
         name: name.trim(),
         recipe_type: recipeType,
         items,
         analysis,
-        is_public: shareToWallAfter,
+        visibility: shareToWallAfter ? 'public' : visibility,
       });
 
       if (shareToWallAfter && saved) {
-        await shareToWall({ recipeId: saved.id });
+        await shareToWall({ recipeId: saved.id, caption: caption.trim() || undefined, tags });
       }
 
       setOpen(false);
@@ -106,6 +134,23 @@ export function SaveRecipeButton({
             />
           </div>
 
+          <div className="space-y-2">
+            <Label>Visibility</Label>
+            <Select
+              value={visibility}
+              onValueChange={(value) => setVisibility(value as RecipeVisibility)}
+              disabled={isLoading || shareToWallAfter}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select visibility" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="private">Private</SelectItem>
+                <SelectItem value="unlisted">Unlisted</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="flex items-center space-x-2">
             <Checkbox
               id="share-wall"
@@ -120,6 +165,31 @@ export function SaveRecipeButton({
               </span>
             </Label>
           </div>
+
+          {shareToWallAfter && (
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label>Tags (max 4)</Label>
+                <TagInput
+                  value={tags}
+                  onChange={setTags}
+                  suggestions={tagSuggestions || []}
+                  disabled={isLoading}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="share-caption">Caption (optional)</Label>
+                <Textarea
+                  id="share-caption"
+                  value={caption}
+                  onChange={(e) => setCaption(e.target.value)}
+                  placeholder="Add a note about this recipe..."
+                  rows={3}
+                  disabled={isLoading}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <DialogFooter>

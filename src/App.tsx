@@ -10,6 +10,8 @@ import Protein from "./pages/Protein";
 import Wall from "./pages/Wall";
 import Auth from "./pages/Auth";
 import MyRecipes from "./pages/MyRecipes";
+import Profile from "./pages/Profile";
+import Tags from "./pages/Tags";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +30,8 @@ const App = () => (
             <Route path="/wall" element={<Wall />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/my-recipes" element={<MyRecipes />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/tags" element={<Tags />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
