@@ -43,35 +43,6 @@ export type Database = {
           },
         ]
       }
-      post_bookmarks: {
-        Row: {
-          created_at: string
-          id: string
-          post_id: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          post_id: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          post_id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "post_bookmarks_post_id_fkey"
-            columns: ["post_id"]
-            isOneToOne: false
-            referencedRelation: "wall_posts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -113,7 +84,6 @@ export type Database = {
           recipe_type: Database["public"]["Enums"]["recipe_type"]
           updated_at: string
           user_id: string
-          visibility: Database["public"]["Enums"]["recipe_visibility"]
         }
         Insert: {
           analysis?: Json | null
@@ -125,7 +95,6 @@ export type Database = {
           recipe_type: Database["public"]["Enums"]["recipe_type"]
           updated_at?: string
           user_id: string
-          visibility?: Database["public"]["Enums"]["recipe_visibility"]
         }
         Update: {
           analysis?: Json | null
@@ -137,201 +106,8 @@ export type Database = {
           recipe_type?: Database["public"]["Enums"]["recipe_type"]
           updated_at?: string
           user_id?: string
-          visibility?: Database["public"]["Enums"]["recipe_visibility"]
         }
         Relationships: []
-      }
-      tags: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          follower_count: number
-          id: string
-          slug: string
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          follower_count?: number
-          id?: string
-          slug: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          follower_count?: number
-          id?: string
-          slug?: string
-        }
-        Relationships: []
-      }
-      recipe_tags: {
-        Row: {
-          created_at: string
-          recipe_id: string
-          tag_id: string
-        }
-        Insert: {
-          created_at?: string
-          recipe_id: string
-          tag_id: string
-        }
-        Update: {
-          created_at?: string
-          recipe_id?: string
-          tag_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "recipe_tags_recipe_id_fkey"
-            columns: ["recipe_id"]
-            isOneToOne: false
-            referencedRelation: "user_recipes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "recipe_tags_tag_id_fkey"
-            columns: ["tag_id"]
-            isOneToOne: false
-            referencedRelation: "tags"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      tag_follows: {
-        Row: {
-          created_at: string
-          id: string
-          tag_id: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          tag_id: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          tag_id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "tag_follows_tag_id_fkey"
-            columns: ["tag_id"]
-            isOneToOne: false
-            referencedRelation: "tags"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      tag_mutes: {
-        Row: {
-          created_at: string
-          id: string
-          tag_id: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          tag_id: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          tag_id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "tag_mutes_tag_id_fkey"
-            columns: ["tag_id"]
-            isOneToOne: false
-            referencedRelation: "tags"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      wall_comments: {
-        Row: {
-          body: string
-          created_at: string
-          id: string
-          likes_count: number
-          parent_id: string | null
-          post_id: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          body: string
-          created_at?: string
-          id?: string
-          likes_count?: number
-          parent_id?: string | null
-          post_id: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          body?: string
-          created_at?: string
-          id?: string
-          likes_count?: number
-          parent_id?: string | null
-          post_id?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "wall_comments_parent_id_fkey"
-            columns: ["parent_id"]
-            isOneToOne: false
-            referencedRelation: "wall_comments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "wall_comments_post_id_fkey"
-            columns: ["post_id"]
-            isOneToOne: false
-            referencedRelation: "wall_posts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      comment_likes: {
-        Row: {
-          comment_id: string
-          created_at: string
-          id: string
-          user_id: string
-        }
-        Insert: {
-          comment_id: string
-          created_at?: string
-          id?: string
-          user_id: string
-        }
-        Update: {
-          comment_id?: string
-          created_at?: string
-          id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "comment_likes_comment_id_fkey"
-            columns: ["comment_id"]
-            isOneToOne: false
-            referencedRelation: "wall_comments"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       user_roles: {
         Row: {
@@ -405,7 +181,6 @@ export type Database = {
     Enums: {
       app_role: "admin" | "moderator" | "user"
       recipe_type: "blend" | "protein" | "stack"
-      recipe_visibility: "private" | "unlisted" | "public"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -535,7 +310,6 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "moderator", "user"],
       recipe_type: ["blend", "protein", "stack"],
-      recipe_visibility: ["private", "unlisted", "public"],
     },
   },
 } as const
