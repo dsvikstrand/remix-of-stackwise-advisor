@@ -14,31 +14,31 @@ export type Database = {
   }
   public: {
     Tables: {
-      post_likes: {
+      comment_likes: {
         Row: {
+          comment_id: string
           created_at: string
           id: string
-          post_id: string
           user_id: string
         }
         Insert: {
+          comment_id: string
           created_at?: string
           id?: string
-          post_id: string
           user_id: string
         }
         Update: {
+          comment_id?: string
           created_at?: string
           id?: string
-          post_id?: string
           user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "post_likes_post_id_fkey"
-            columns: ["post_id"]
+            foreignKeyName: "comment_likes_comment_id_fkey"
+            columns: ["comment_id"]
             isOneToOne: false
-            referencedRelation: "wall_posts"
+            referencedRelation: "wall_comments"
             referencedColumns: ["id"]
           },
         ]
@@ -65,6 +65,35 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "post_bookmarks_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "wall_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      post_likes: {
+        Row: {
+          created_at: string
+          id: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_likes_post_id_fkey"
             columns: ["post_id"]
             isOneToOne: false
             referencedRelation: "wall_posts"
@@ -99,69 +128,6 @@ export type Database = {
           id?: string
           updated_at?: string
           user_id?: string
-        }
-        Relationships: []
-      }
-      user_recipes: {
-        Row: {
-          analysis: Json | null
-          created_at: string
-          id: string
-          is_public: boolean | null
-          items: Json
-          name: string
-          recipe_type: Database["public"]["Enums"]["recipe_type"]
-          updated_at: string
-          user_id: string
-          visibility: Database["public"]["Enums"]["recipe_visibility"]
-        }
-        Insert: {
-          analysis?: Json | null
-          created_at?: string
-          id?: string
-          is_public?: boolean | null
-          items?: Json
-          name: string
-          recipe_type: Database["public"]["Enums"]["recipe_type"]
-          updated_at?: string
-          user_id: string
-          visibility?: Database["public"]["Enums"]["recipe_visibility"]
-        }
-        Update: {
-          analysis?: Json | null
-          created_at?: string
-          id?: string
-          is_public?: boolean | null
-          items?: Json
-          name?: string
-          recipe_type?: Database["public"]["Enums"]["recipe_type"]
-          updated_at?: string
-          user_id?: string
-          visibility?: Database["public"]["Enums"]["recipe_visibility"]
-        }
-        Relationships: []
-      }
-      tags: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          follower_count: number
-          id: string
-          slug: string
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          follower_count?: number
-          id?: string
-          slug: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          follower_count?: number
-          id?: string
-          slug?: string
         }
         Relationships: []
       }
@@ -256,6 +222,90 @@ export type Database = {
           },
         ]
       }
+      tags: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          follower_count: number
+          id: string
+          slug: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          follower_count?: number
+          id?: string
+          slug: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          follower_count?: number
+          id?: string
+          slug?: string
+        }
+        Relationships: []
+      }
+      user_recipes: {
+        Row: {
+          analysis: Json | null
+          created_at: string
+          id: string
+          is_public: boolean | null
+          items: Json
+          name: string
+          recipe_type: Database["public"]["Enums"]["recipe_type"]
+          updated_at: string
+          user_id: string
+          visibility: Database["public"]["Enums"]["recipe_visibility"]
+        }
+        Insert: {
+          analysis?: Json | null
+          created_at?: string
+          id?: string
+          is_public?: boolean | null
+          items?: Json
+          name: string
+          recipe_type: Database["public"]["Enums"]["recipe_type"]
+          updated_at?: string
+          user_id: string
+          visibility?: Database["public"]["Enums"]["recipe_visibility"]
+        }
+        Update: {
+          analysis?: Json | null
+          created_at?: string
+          id?: string
+          is_public?: boolean | null
+          items?: Json
+          name?: string
+          recipe_type?: Database["public"]["Enums"]["recipe_type"]
+          updated_at?: string
+          user_id?: string
+          visibility?: Database["public"]["Enums"]["recipe_visibility"]
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
       wall_comments: {
         Row: {
           body: string
@@ -303,56 +353,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      comment_likes: {
-        Row: {
-          comment_id: string
-          created_at: string
-          id: string
-          user_id: string
-        }
-        Insert: {
-          comment_id: string
-          created_at?: string
-          id?: string
-          user_id: string
-        }
-        Update: {
-          comment_id?: string
-          created_at?: string
-          id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "comment_likes_comment_id_fkey"
-            columns: ["comment_id"]
-            isOneToOne: false
-            referencedRelation: "wall_comments"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      user_roles: {
-        Row: {
-          created_at: string
-          id: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          role?: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          role?: Database["public"]["Enums"]["app_role"]
-          user_id?: string
-        }
-        Relationships: []
       }
       wall_posts: {
         Row: {
