@@ -178,10 +178,10 @@
     --radius: 0rem;
     --shadow-2xs: 1px 1px 0px 0px #ffffff;
     --shadow-xs: 2px 2px 0px 0px #ffffff;
-    --shadow-sm: 3px 3px 0px 0px #ffffff;
-    --shadow: 5px 5px 0px 0px #ffffff;
-    --shadow-md: 8px 8px 0px 0px #ffffff;
-    --shadow-lg: 12px 12px 0px 0px #ffffff;
+    --shadow-sm: 5px 5px 14.5px -3px hsla(0, 0%, 100%, 0.13);
+    --shadow: 5px 5px 29px -3px hsla(0, 0%, 100%, 0.13);
+    --shadow-md: 5px 5px 43.5px -3px hsla(0, 0%, 100%, 0.13);
+    --shadow-lg: 5px 5px 72.5px -3px hsla(0, 0%, 100%, 0.13);
     --shadow-xl: 16px 16px 0px 0px #ffffff;
     --shadow-2xl: 24px 24px 0px 0px #ffffff;
   }
