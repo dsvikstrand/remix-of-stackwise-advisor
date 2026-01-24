@@ -9,6 +9,8 @@ import { MixButton } from '@/components/blend/MixButton';
 import { CocktailLoadingAnimation } from '@/components/blend/CocktailLoadingAnimation';
 import { ThemeToggle } from '@/components/blend/ThemeToggle';
 import { AppNavigation } from '@/components/shared/AppNavigation';
+import { UserMenu } from '@/components/shared/UserMenu';
+import { SaveRecipeButton } from '@/components/shared/SaveRecipeButton';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +22,7 @@ import {
   BlendAnalysis,
 } from '@/types/stacklab';
 import { RotateCcw, Sparkles } from 'lucide-react';
+import type { Json } from '@/integrations/supabase/types';
 
 const ANALYZE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-blend`;
 
@@ -302,6 +305,14 @@ const Blend = () => {
       {/* Minimal Top Bar */}
       <header className="fixed top-4 right-4 z-40 flex items-center gap-2">
         <ThemeToggle />
+        {currentBlend && currentBlend.items.length > 0 && (
+          <SaveRecipeButton
+            recipeName={currentBlend.name}
+            recipeType="blend"
+            items={JSON.parse(JSON.stringify(currentBlend.items))}
+            analysis={currentBlend.analysis ? JSON.parse(JSON.stringify(currentBlend.analysis)) : null}
+          />
+        )}
         <Button variant="outline" size="sm" onClick={handleNewBlend} className="gap-2">
           <Sparkles className="h-4 w-4" />
           <span className="hidden sm:inline">New</span>
@@ -309,6 +320,7 @@ const Blend = () => {
         <Button variant="ghost" size="icon" onClick={resetAll} className="text-muted-foreground h-8 w-8" title="Reset All">
           <RotateCcw className="h-4 w-4" />
         </Button>
+        <UserMenu />
       </header>
 
       {/* Navigation */}
