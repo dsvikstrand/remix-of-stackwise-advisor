@@ -14,6 +14,7 @@ import Profile from "./pages/Profile";
 import Tags from "./pages/Tags";
 import PostDetail from "./pages/PostDetail";
 import NotFound from "./pages/NotFound";
+import { RequireAuth } from "@/components/shared/RequireAuth";
 
 const queryClient = new QueryClient();
 
@@ -28,12 +29,12 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/blend" element={<Blend />} />
             <Route path="/protein" element={<Protein />} />
-            <Route path="/wall" element={<Wall />} />
-            <Route path="/wall/:postId" element={<PostDetail />} />
+            <Route path="/wall" element={<RequireAuth><Wall /></RequireAuth>} />
+            <Route path="/wall/:postId" element={<RequireAuth><PostDetail /></RequireAuth>} />
             <Route path="/auth" element={<Auth />} />
-            <Route path="/my-recipes" element={<MyRecipes />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/tags" element={<Tags />} />
+            <Route path="/my-recipes" element={<RequireAuth><MyRecipes /></RequireAuth>} />
+            <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
+            <Route path="/tags" element={<RequireAuth><Tags /></RequireAuth>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

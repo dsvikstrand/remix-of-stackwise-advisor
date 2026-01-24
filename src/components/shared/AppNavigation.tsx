@@ -5,24 +5,29 @@ import { cn } from '@/lib/utils';
 
 interface AppNavigationProps {
   variant?: 'header' | 'floating';
+  mode?: 'all' | 'public';
 }
 
-export function AppNavigation({ variant = 'header' }: AppNavigationProps) {
+export function AppNavigation({ variant = 'header', mode = 'all' }: AppNavigationProps) {
   const location = useLocation();
   const currentPath = location.pathname;
 
   const navItems = [
-    { path: '/', label: 'StackLab', icon: Beaker },
-    { path: '/blend', label: 'Blend', icon: FlaskConical },
-    { path: '/protein', label: 'Protein', icon: Dumbbell },
-    { path: '/wall', label: 'Wall', icon: Users },
-    { path: '/tags', label: 'Tags', icon: Tag },
+    { path: '/', label: 'StackLab', icon: Beaker, isPublic: true },
+    { path: '/blend', label: 'Blend', icon: FlaskConical, isPublic: true },
+    { path: '/protein', label: 'Protein', icon: Dumbbell, isPublic: true },
+    { path: '/wall', label: 'Wall', icon: Users, isPublic: false },
+    { path: '/tags', label: 'Tags', icon: Tag, isPublic: false },
   ];
+
+  const visibleItems = mode === 'public'
+    ? navItems.filter((item) => item.isPublic)
+    : navItems;
 
   if (variant === 'floating') {
     return (
       <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1 p-1 bg-card/80 backdrop-blur-glass rounded-full border border-border/50 shadow-soft-lg">
-        {navItems.map((item) => {
+        {visibleItems.map((item) => {
           const isActive = currentPath === item.path;
           const Icon = item.icon;
           return (
@@ -47,7 +52,7 @@ export function AppNavigation({ variant = 'header' }: AppNavigationProps) {
 
   return (
     <nav className="flex items-center gap-1 p-1 bg-card/50 backdrop-blur-sm rounded-xl border border-border/30">
-      {navItems.map((item) => {
+      {visibleItems.map((item) => {
         const isActive = currentPath === item.path;
         const Icon = item.icon;
         return (

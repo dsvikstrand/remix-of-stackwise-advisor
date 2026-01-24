@@ -4,6 +4,7 @@ import { Beaker } from 'lucide-react';
 import { AppNavigation } from '@/components/shared/AppNavigation';
 import { ThemeToggle } from '@/components/blend/ThemeToggle';
 import { UserMenu } from '@/components/shared/UserMenu';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface AppHeaderProps {
   actions?: ReactNode;
@@ -11,6 +12,9 @@ interface AppHeaderProps {
 }
 
 export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
+  const { user } = useAuth();
+  const navMode = user ? 'all' : 'public';
+
   return (
     <>
       <header className="sticky top-0 z-50 border-b border-border/50 bg-card/70 backdrop-blur-glass">
@@ -23,7 +27,7 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
               <span className="text-lg font-semibold tracking-tight">StackLab</span>
             </Link>
             <div className="hidden sm:block ml-3">
-              <AppNavigation variant="header" />
+              <AppNavigation variant="header" mode={navMode} />
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -35,7 +39,7 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
       </header>
       {showFloatingNav && (
         <div className="sm:hidden">
-          <AppNavigation variant="floating" />
+          <AppNavigation variant="floating" mode={navMode} />
         </div>
       )}
     </>
