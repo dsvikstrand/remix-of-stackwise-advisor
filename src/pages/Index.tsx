@@ -5,6 +5,7 @@ import { PlanSettings } from '@/components/PlanSettings';
 import { SafetyCard } from '@/components/SafetyCard';
 import { ChatPanel } from '@/components/ChatPanel';
 import { AppNavigation } from '@/components/shared/AppNavigation';
+import { UserMenu } from '@/components/shared/UserMenu';
 import { Button } from '@/components/ui/button';
 import { RotateCcw, Beaker } from 'lucide-react';
 
@@ -51,10 +52,13 @@ const Index = () => {
               <AppNavigation variant="header" />
             </div>
           </div>
-          <Button variant="ghost" size="sm" onClick={resetAll} className="text-muted-foreground">
-            <RotateCcw className="h-4 w-4 mr-2" />
-            Reset All
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={resetAll} className="text-muted-foreground">
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Reset All
+            </Button>
+            <UserMenu />
+          </div>
         </div>
       </header>
 

@@ -9,6 +9,8 @@ import { BlendButton } from '@/components/protein/BlendButton';
 import { BlenderLoadingAnimation } from '@/components/protein/BlenderLoadingAnimation';
 import { ThemeToggle } from '@/components/blend/ThemeToggle';
 import { AppNavigation } from '@/components/shared/AppNavigation';
+import { UserMenu } from '@/components/shared/UserMenu';
+import { SaveRecipeButton } from '@/components/shared/SaveRecipeButton';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -296,6 +298,14 @@ const Protein = () => {
       {/* Minimal Top Bar */}
       <header className="fixed top-4 right-4 z-40 flex items-center gap-2">
         <ThemeToggle />
+        {currentShake && currentShake.items.length > 0 && (
+          <SaveRecipeButton
+            recipeName={currentShake.name}
+            recipeType="protein"
+            items={JSON.parse(JSON.stringify(currentShake.items))}
+            analysis={currentShake.analysis ? JSON.parse(JSON.stringify(currentShake.analysis)) : null}
+          />
+        )}
         <Button variant="outline" size="sm" onClick={handleNewShake} className="gap-2">
           <Sparkles className="h-4 w-4" />
           <span className="hidden sm:inline">New</span>
@@ -303,6 +313,7 @@ const Protein = () => {
         <Button variant="ghost" size="icon" onClick={resetAll} className="text-muted-foreground h-8 w-8" title="Reset All">
           <RotateCcw className="h-4 w-4" />
         </Button>
+        <UserMenu />
       </header>
 
       {/* Navigation */}
