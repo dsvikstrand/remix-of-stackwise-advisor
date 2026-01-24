@@ -14,6 +14,35 @@ export type Database = {
   }
   public: {
     Tables: {
+      comment_likes: {
+        Row: {
+          comment_id: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          comment_id: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          comment_id?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comment_likes_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "wall_comments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       post_bookmarks: {
         Row: {
           created_at: string
@@ -102,6 +131,121 @@ export type Database = {
         }
         Relationships: []
       }
+      recipe_tags: {
+        Row: {
+          created_at: string
+          recipe_id: string
+          tag_id: string
+        }
+        Insert: {
+          created_at?: string
+          recipe_id: string
+          tag_id: string
+        }
+        Update: {
+          created_at?: string
+          recipe_id?: string
+          tag_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_tags_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "user_recipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_tags_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tag_follows: {
+        Row: {
+          created_at: string
+          id: string
+          tag_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          tag_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          tag_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tag_follows_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tag_mutes: {
+        Row: {
+          created_at: string
+          id: string
+          tag_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          tag_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          tag_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tag_mutes_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tags: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          follower_count: number
+          id: string
+          slug: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          follower_count?: number
+          id?: string
+          slug: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          follower_count?: number
+          id?: string
+          slug?: string
+        }
+        Relationships: []
+      }
       user_recipes: {
         Row: {
           analysis: Json | null
@@ -161,6 +305,54 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      wall_comments: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          likes_count: number
+          parent_id: string | null
+          post_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          likes_count?: number
+          parent_id?: string | null
+          post_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          likes_count?: number
+          parent_id?: string | null
+          post_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wall_comments_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "wall_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wall_comments_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "wall_posts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       wall_posts: {
         Row: {
