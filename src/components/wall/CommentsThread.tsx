@@ -162,7 +162,8 @@ function CommentItem({
 
 export function CommentsThread({ postId }: CommentsThreadProps) {
   const { user } = useAuth();
-  const { comments, isLoading, addComment, updateComment, deleteComment, toggleLike } = useComments(postId);
+  const [sortMode, setSortMode] = useState<'top' | 'latest'>('top');
+  const { comments, isLoading, addComment, updateComment, deleteComment, toggleLike } = useComments(postId, sortMode);
   const [newComment, setNewComment] = useState('');
 
   const handleAddComment = async () => {
@@ -173,6 +174,25 @@ export function CommentsThread({ postId }: CommentsThreadProps) {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">Comments</p>
+        <div className="flex items-center gap-2">
+          <Button
+            variant={sortMode === 'top' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setSortMode('top')}
+          >
+            Top
+          </Button>
+          <Button
+            variant={sortMode === 'latest' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setSortMode('latest')}
+          >
+            Latest
+          </Button>
+        </div>
+      </div>
       <div className="space-y-2">
         <Textarea
           value={newComment}

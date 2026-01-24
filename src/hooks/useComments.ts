@@ -42,26 +42,28 @@ function buildCommentTree(
     }
   });
 
-  const sortByLikesThenTime = (a: CommentNode, b: CommentNode) => {
+  return roots;
+}
+
+function sortTree(nodes: CommentNode[], sortMode: 'top' | 'latest') {
+  const sortFn = (a: CommentNode, b: CommentNode) => {
+    if (sortMode === 'latest') {
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    }
     if (b.likes_count !== a.likes_count) return b.likes_count - a.likes_count;
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   };
 
-  const sortTree = (nodes: CommentNode[]) => {
-    nodes.sort(sortByLikesThenTime);
-    nodes.forEach((node) => sortTree(node.children));
-  };
-
-  sortTree(roots);
-  return roots;
+  nodes.sort(sortFn);
+  nodes.forEach((node) => sortTree(node.children, sortMode));
 }
 
-export function useComments(postId: string) {
+export function useComments(postId: string, sortMode: 'top' | 'latest') {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
   const commentsQuery = useQuery({
-    queryKey: ['wall-comments', postId, user?.id],
+    queryKey: ['wall-comments', postId, user?.id, sortMode],
     queryFn: async () => {
       const { data: commentsData, error: commentsError } = await supabase
         .from('wall_comments')
@@ -92,7 +94,9 @@ export function useComments(postId: string) {
         children: [],
       })) as CommentNode[];
 
-      return buildCommentTree(hydrated, likedSet);
+      const tree = buildCommentTree(hydrated, likedSet);
+      sortTree(tree, sortMode);
+      return tree;
     },
   });
 

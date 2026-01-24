@@ -22,6 +22,7 @@ import type { Json } from '@/integrations/supabase/types';
 import { TagInput } from '@/components/shared/TagInput';
 import { useTagSuggestions } from '@/hooks/useTags';
 import type { RecipeVisibility } from '@/hooks/useRecipes';
+import { useRecentTags } from '@/hooks/useRecentTags';
 
 interface SaveRecipeButtonProps {
   recipeName: string;
@@ -51,6 +52,7 @@ export function SaveRecipeButton({
   const [caption, setCaption] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const { data: tagSuggestions } = useTagSuggestions();
+  const { recentTags, addRecentTags } = useRecentTags();
 
   useEffect(() => {
     if (!open) {
@@ -96,6 +98,7 @@ export function SaveRecipeButton({
 
       if (shareToWallAfter && saved) {
         await shareToWall({ recipeId: saved.id, caption: caption.trim() || undefined, tags });
+        addRecentTags(tags);
       }
 
       setOpen(false);
@@ -168,6 +171,25 @@ export function SaveRecipeButton({
 
           {shareToWallAfter && (
             <div className="space-y-3">
+              {recentTags.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Recent tags</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {recentTags.map((tag) => (
+                      <Button
+                        key={tag}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setTags((prev) => (prev.includes(tag) ? prev : [...prev, tag]).slice(0, 4))}
+                        disabled={isLoading}
+                      >
+                        #{tag}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label>Tags (max 4)</Label>
                 <TagInput

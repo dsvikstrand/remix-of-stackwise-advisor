@@ -371,9 +371,11 @@ export default function Wall() {
                         {post.tags.length > 0 && (
                           <div className="flex flex-wrap gap-2">
                             {post.tags.map((tag) => (
-                              <Badge key={tag.id} variant="outline" className="text-xs">
-                                #{tag.slug}
-                              </Badge>
+                              <Link key={tag.id} to={`/tags?q=${tag.slug}`}>
+                                <Badge variant="outline" className="text-xs hover:border-primary hover:text-primary">
+                                  #{tag.slug}
+                                </Badge>
+                              </Link>
                             ))}
                           </div>
                         )}

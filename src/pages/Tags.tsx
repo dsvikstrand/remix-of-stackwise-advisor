@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useTagsDirectory } from '@/hooks/useTags';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,14 @@ export default function Tags() {
 
   const [search, setSearch] = useState('');
   const [newTag, setNewTag] = useState('');
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    const q = searchParams.get('q');
+    if (q) {
+      setSearch(q);
+    }
+  }, [searchParams]);
 
   const filteredTags = useMemo(() => {
     const query = normalizeTag(search);
