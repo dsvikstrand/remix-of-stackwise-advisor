@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Save, Share2, Loader2 } from 'lucide-react';
+import { Share2, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Json } from '@/integrations/supabase/types';
 import { TagInput } from '@/components/shared/TagInput';
@@ -47,8 +47,8 @@ export function SaveRecipeButton({
 
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(recipeName);
-  const [shareToWallAfter, setShareToWallAfter] = useState(false);
-  const [visibility, setVisibility] = useState<RecipeVisibility>('private');
+  const [shareToWallAfter, setShareToWallAfter] = useState(true);
+  const [visibility, setVisibility] = useState<RecipeVisibility>('public');
   const [caption, setCaption] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const { data: tagSuggestions } = useTagSuggestions();
@@ -57,12 +57,20 @@ export function SaveRecipeButton({
   useEffect(() => {
     if (!open) {
       setName(recipeName);
-      setShareToWallAfter(false);
-      setVisibility('private');
+      setShareToWallAfter(true);
+      setVisibility('public');
       setCaption('');
       setTags([]);
     }
   }, [open, recipeName]);
+
+  useEffect(() => {
+    if (shareToWallAfter) {
+      setVisibility('public');
+    } else if (visibility === 'public') {
+      setVisibility('private');
+    }
+  }, [shareToWallAfter, visibility]);
 
   if (!user) {
     return null;
@@ -113,15 +121,15 @@ export function SaveRecipeButton({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant={variant} size="sm" className="gap-2" disabled={disabled}>
-          <Save className="h-4 w-4" />
-          <span className="hidden sm:inline">Save</span>
+          <span className="hidden sm:inline">Post</span>
+          <span className="sm:hidden">Post</span>
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Save Recipe</DialogTitle>
+          <DialogTitle>Create Post</DialogTitle>
           <DialogDescription>
-            Save this recipe to your account for easy access later.
+            Post this recipe to the community. You can still keep it private.
           </DialogDescription>
         </DialogHeader>
 
@@ -137,22 +145,24 @@ export function SaveRecipeButton({
             />
           </div>
 
-          <div className="space-y-2">
-            <Label>Visibility</Label>
-            <Select
-              value={visibility}
-              onValueChange={(value) => setVisibility(value as RecipeVisibility)}
-              disabled={isLoading || shareToWallAfter}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select visibility" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="private">Private</SelectItem>
-                <SelectItem value="unlisted">Unlisted</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {!shareToWallAfter && (
+            <div className="space-y-2">
+              <Label>Visibility</Label>
+              <Select
+                value={visibility}
+                onValueChange={(value) => setVisibility(value as RecipeVisibility)}
+                disabled={isLoading}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select visibility" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="private">Private</SelectItem>
+                  <SelectItem value="unlisted">Unlisted</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="flex items-center space-x-2">
             <Checkbox
@@ -164,7 +174,7 @@ export function SaveRecipeButton({
             <Label htmlFor="share-wall" className="text-sm font-normal cursor-pointer">
               <span className="flex items-center gap-1">
                 <Share2 className="h-3 w-3" />
-                Also share to the Wall
+                Post to the Wall
               </span>
             </Label>
           </div>
@@ -222,10 +232,10 @@ export function SaveRecipeButton({
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
+                Posting...
               </>
             ) : (
-              'Save Recipe'
+              'Post'
             )}
           </Button>
         </DialogFooter>

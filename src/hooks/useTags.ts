@@ -9,7 +9,6 @@ export interface TagRow {
   follower_count: number;
   created_at: string;
   is_following?: boolean;
-  is_muted?: boolean;
 }
 
 export function useTagsDirectory() {
@@ -31,18 +30,12 @@ export function useTagsDirectory() {
         return (tagsData || []) as TagRow[];
       }
 
-      const [followsRes, mutesRes] = await Promise.all([
-        supabase.from('tag_follows').select('tag_id').eq('user_id', user.id),
-        supabase.from('tag_mutes').select('tag_id').eq('user_id', user.id),
-      ]);
-
+      const followsRes = await supabase.from('tag_follows').select('tag_id').eq('user_id', user.id);
       const followed = new Set((followsRes.data || []).map((row) => row.tag_id));
-      const muted = new Set((mutesRes.data || []).map((row) => row.tag_id));
 
       return (tagsData || []).map((tag) => ({
         ...tag,
         is_following: followed.has(tag.id),
-        is_muted: muted.has(tag.id),
       })) as TagRow[];
     },
   });
@@ -64,31 +57,6 @@ export function useTagsDirectory() {
       if (!user) throw new Error('Must be logged in');
       const { error } = await supabase
         .from('tag_follows')
-        .delete()
-        .eq('tag_id', tagId)
-        .eq('user_id', user.id);
-      if (error) throw error;
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tags-directory'] }),
-  });
-
-  const muteMutation = useMutation({
-    mutationFn: async (tagId: string) => {
-      if (!user) throw new Error('Must be logged in');
-      const { error } = await supabase.from('tag_mutes').insert({
-        tag_id: tagId,
-        user_id: user.id,
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tags-directory'] }),
-  });
-
-  const unmuteMutation = useMutation({
-    mutationFn: async (tagId: string) => {
-      if (!user) throw new Error('Must be logged in');
-      const { error } = await supabase
-        .from('tag_mutes')
         .delete()
         .eq('tag_id', tagId)
         .eq('user_id', user.id);
@@ -133,10 +101,8 @@ export function useTagsDirectory() {
     error: tagsQuery.error,
     followTag: followMutation.mutateAsync,
     unfollowTag: unfollowMutation.mutateAsync,
-    muteTag: muteMutation.mutateAsync,
-    unmuteTag: unmuteMutation.mutateAsync,
     createTag: createTagMutation.mutateAsync,
-    isUpdating: followMutation.isPending || unfollowMutation.isPending || muteMutation.isPending || unmuteMutation.isPending,
+    isUpdating: followMutation.isPending || unfollowMutation.isPending,
   };
 }
 

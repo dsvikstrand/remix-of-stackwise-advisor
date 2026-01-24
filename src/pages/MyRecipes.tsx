@@ -149,7 +149,7 @@ export default function MyRecipes() {
                               trigger={(
                                 <Button variant="outline" size="sm" className="gap-1">
                                   <Share2 className="h-3 w-3" />
-                                  Share
+                                  Post
                                 </Button>
                               )}
                             />

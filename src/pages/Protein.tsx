@@ -289,14 +289,6 @@ const Protein = () => {
       <AppHeader
         actions={(
           <>
-            {currentShake && currentShake.items.length > 0 && (
-              <SaveRecipeButton
-                recipeName={currentShake.name}
-                recipeType="protein"
-                items={JSON.parse(JSON.stringify(currentShake.items))}
-                analysis={currentShake.analysis ? JSON.parse(JSON.stringify(currentShake.analysis)) : null}
-              />
-            )}
             <Button variant="outline" size="sm" onClick={handleNewShake} className="gap-2">
               <Sparkles className="h-4 w-4" />
               <span className="hidden sm:inline">New</span>
@@ -401,6 +393,18 @@ const Protein = () => {
             disabled={!currentShake || currentShake.items.length === 0}
             isLoading={isAnalyzing}
             itemCount={currentShake?.items.length || 0}
+          />
+        </section>
+
+        {/* Post Button */}
+        <section className="flex justify-center mb-8 animate-fade-in" style={{ animationDelay: '0.25s' }}>
+          <SaveRecipeButton
+            recipeName={currentShake?.name || 'Untitled Shake'}
+            recipeType="protein"
+            items={JSON.parse(JSON.stringify(currentShake?.items || []))}
+            analysis={currentShake?.analysis ? JSON.parse(JSON.stringify(currentShake.analysis)) : null}
+            disabled={!currentShake || currentShake.items.length === 0}
+            variant="default"
           />
         </section>
 

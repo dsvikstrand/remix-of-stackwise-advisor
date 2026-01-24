@@ -296,14 +296,6 @@ const Blend = () => {
       <AppHeader
         actions={(
           <>
-            {currentBlend && currentBlend.items.length > 0 && (
-              <SaveRecipeButton
-                recipeName={currentBlend.name}
-                recipeType="blend"
-                items={JSON.parse(JSON.stringify(currentBlend.items))}
-                analysis={currentBlend.analysis ? JSON.parse(JSON.stringify(currentBlend.analysis)) : null}
-              />
-            )}
             <Button variant="outline" size="sm" onClick={handleNewBlend} className="gap-2">
               <Sparkles className="h-4 w-4" />
               <span className="hidden sm:inline">New</span>
@@ -390,6 +382,18 @@ const Blend = () => {
             disabled={!currentBlend || currentBlend.items.length === 0}
             isLoading={isAnalyzing}
             itemCount={currentBlend?.items.length || 0}
+          />
+        </section>
+
+        {/* Post Button */}
+        <section className="flex justify-center mb-8 animate-fade-in" style={{ animationDelay: '0.25s' }}>
+          <SaveRecipeButton
+            recipeName={currentBlend?.name || 'Untitled Blend'}
+            recipeType="blend"
+            items={JSON.parse(JSON.stringify(currentBlend?.items || []))}
+            analysis={currentBlend?.analysis ? JSON.parse(JSON.stringify(currentBlend.analysis)) : null}
+            disabled={!currentBlend || currentBlend.items.length === 0}
+            variant="default"
           />
         </section>
 

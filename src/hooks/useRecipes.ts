@@ -79,8 +79,8 @@ export function useRecipes(recipeType?: RecipeType) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-recipes'] });
       toast({
-        title: 'Recipe saved',
-        description: 'Your recipe has been saved to your account.',
+        title: 'Post saved',
+        description: 'Your post has been saved to your account.',
       });
     },
     onError: (error) => {
@@ -244,8 +244,8 @@ export function useRecipes(recipeType?: RecipeType) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wall-posts'] });
       toast({
-        title: 'Shared to Wall',
-        description: 'Your recipe is now visible to the community!',
+        title: 'Posted to Wall',
+        description: 'Your post is now visible to the community!',
       });
     },
     onError: (error) => {

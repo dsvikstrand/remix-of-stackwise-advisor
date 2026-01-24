@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppHeader } from '@/components/shared/AppHeader';
@@ -13,7 +13,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Heart, MessageCircle, Share2, FlaskConical, Dumbbell, Beaker, Bookmark } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
-import { CommentsThread } from '@/components/wall/CommentsThread';
 import { useBookmarks } from '@/hooks/useBookmarks';
 
 interface WallPost {
@@ -62,11 +61,10 @@ const FEED_TABS = [
 type FeedTab = (typeof FEED_TABS)[number]['value'];
 
 export default function Wall() {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<FeedTab>('for-you');
-  const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
   const { bookmarks, isLoading: bookmarksLoading, toggleBookmark, isUpdating: isBookmarking } = useBookmarks();
 
   const bookmarkIds = useMemo(() => bookmarks.map((bookmark) => bookmark.post_id), [bookmarks]);
@@ -76,12 +74,14 @@ export default function Wall() {
     [bookmarks]
   );
 
+  const wallQueryKey = ['wall-posts', activeTab, user?.id, bookmarkIds] as const;
+
   const { data: posts, isLoading } = useQuery({
-    queryKey: ['wall-posts', activeTab, user?.id, bookmarkIds],
+    queryKey: wallQueryKey,
     enabled: activeTab !== 'saved' || (!!user && !bookmarksLoading),
     queryFn: async () => {
+      if (!user) return [] as WallPost[];
       if (activeTab === 'saved') {
-        if (!user) return [] as WallPost[];
         if (bookmarkIds.length === 0) return [] as WallPost[];
       }
       const limit = activeTab === 'for-you' ? 120 : 80;
@@ -146,15 +146,10 @@ export default function Wall() {
       });
 
       let followTagIds = new Set<string>();
-      let mutedTagIds = new Set<string>();
 
       if (activeTab === 'for-you' && user) {
-        const [followsRes, mutesRes] = await Promise.all([
-          supabase.from('tag_follows').select('tag_id').eq('user_id', user.id),
-          supabase.from('tag_mutes').select('tag_id').eq('user_id', user.id),
-        ]);
+        const followsRes = await supabase.from('tag_follows').select('tag_id').eq('user_id', user.id);
         followTagIds = new Set((followsRes.data || []).map((row) => row.tag_id));
-        mutedTagIds = new Set((mutesRes.data || []).map((row) => row.tag_id));
       }
 
       const hydrated = postsData.map((post) => ({
@@ -180,7 +175,6 @@ export default function Wall() {
 
         return hydrated.filter((post) => {
           const postTagIds = (recipeTagsMap.get(post.recipe_id) || []).map((tag) => tag.id);
-          if (postTagIds.some((tagId) => mutedTagIds.has(tagId))) return false;
           return postTagIds.some((tagId) => followTagIds.has(tagId));
         });
       }
@@ -208,10 +202,10 @@ export default function Wall() {
       }
     },
     onMutate: async ({ postId, liked }) => {
-      await queryClient.cancelQueries({ queryKey: ['wall-posts'] });
-      const previousPosts = queryClient.getQueryData(['wall-posts', activeTab, user?.id]);
+      await queryClient.cancelQueries({ queryKey: wallQueryKey });
+      const previousPosts = queryClient.getQueryData(wallQueryKey);
 
-      queryClient.setQueryData(['wall-posts', activeTab, user?.id], (old: WallPost[] | undefined) =>
+      queryClient.setQueryData(wallQueryKey, (old: WallPost[] | undefined) =>
         old?.map((post) =>
           post.id === postId
             ? {
@@ -226,7 +220,7 @@ export default function Wall() {
       return { previousPosts };
     },
     onError: (err, variables, context) => {
-      queryClient.setQueryData(['wall-posts', activeTab, user?.id], context?.previousPosts);
+      queryClient.setQueryData(wallQueryKey, context?.previousPosts);
       toast({
         title: 'Error',
         description: 'Failed to update like. Please try again.',
@@ -265,9 +259,17 @@ export default function Wall() {
     }
   };
 
-  const toggleComments = (postId: string) => {
-    setOpenComments((prev) => ({ ...prev, [postId]: !prev[postId] }));
-  };
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
 
   const showLoading = isLoading || (activeTab === 'saved' && bookmarksLoading);
 
@@ -370,10 +372,12 @@ export default function Wall() {
                             <Heart className={`h-4 w-4 mr-1 ${post.user_liked ? 'fill-current' : ''}`} />
                             {post.likes_count}
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => toggleComments(post.id)}>
-                            <MessageCircle className="h-4 w-4 mr-1" />
-                            {openComments[post.id] ? 'Hide' : 'Comments'}
-                          </Button>
+                          <Link to={`/wall/${post.id}`}>
+                            <Button variant="ghost" size="sm">
+                              <MessageCircle className="h-4 w-4 mr-1" />
+                              View
+                            </Button>
+                          </Link>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -388,12 +392,6 @@ export default function Wall() {
                             <Share2 className="h-4 w-4" />
                           </Button>
                         </div>
-
-                        {openComments[post.id] && (
-                          <div className="w-full">
-                            <CommentsThread postId={post.id} />
-                          </div>
-                        )}
                       </CardFooter>
                     </Card>
                   );
@@ -410,13 +408,9 @@ export default function Wall() {
                       <h3 className="font-semibold">No posts yet</h3>
                       <p className="text-sm text-muted-foreground mt-1">
                         {activeTab === 'saved'
-                          ? user
-                            ? 'No saved posts yet.'
-                            : 'Sign in to view your saved posts.'
+                          ? 'No saved posts yet.'
                           : activeTab === 'for-you'
-                            ? user
-                              ? 'Follow tags to personalize your feed.'
-                              : 'Sign in to follow tags and personalize your feed.'
+                            ? 'Follow tags to personalize your feed.'
                             : 'Be the first to share your blend with the community!'}
                       </p>
                     </div>

@@ -58,9 +58,9 @@ export function ShareToWallDialog({ recipeId, recipeName, trigger }: ShareToWall
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Share to Wall</DialogTitle>
+          <DialogTitle>Create Post</DialogTitle>
           <DialogDescription>
-            Share "{recipeName}" with the community. Add tags to help people discover it.
+            Post "{recipeName}" to the community. Add tags to help people discover it.
           </DialogDescription>
         </DialogHeader>
 
@@ -111,7 +111,7 @@ export function ShareToWallDialog({ recipeId, recipeName, trigger }: ShareToWall
             Cancel
           </Button>
           <Button onClick={handleShare} disabled={isSharing}>
-            {isSharing ? 'Sharing...' : 'Share'}
+            {isSharing ? 'Posting...' : 'Post'}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -13,7 +13,7 @@ import { AppHeader } from '@/components/shared/AppHeader';
 export default function Tags() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { tags, isLoading, followTag, unfollowTag, muteTag, unmuteTag, createTag, isUpdating } = useTagsDirectory();
+  const { tags, isLoading, followTag, unfollowTag, createTag, isUpdating } = useTagsDirectory();
 
   const [search, setSearch] = useState('');
   const [newTag, setNewTag] = useState('');
@@ -177,55 +177,6 @@ export default function Tags() {
                       </Button>
                     )}
 
-                    {tag.is_muted ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          if (!user) {
-                            toast({
-                              title: 'Sign in required',
-                              description: 'Please sign in to manage tags.',
-                            });
-                            return;
-                          }
-                          unmuteTag(tag.id).catch((error) => {
-                            toast({
-                              title: 'Failed to unmute',
-                              description: error instanceof Error ? error.message : 'Please try again',
-                              variant: 'destructive',
-                            });
-                          });
-                        }}
-                        disabled={isUpdating}
-                      >
-                        Unmute
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          if (!user) {
-                            toast({
-                              title: 'Sign in required',
-                              description: 'Please sign in to manage tags.',
-                            });
-                            return;
-                          }
-                          muteTag(tag.id).catch((error) => {
-                            toast({
-                              title: 'Failed to mute',
-                              description: error instanceof Error ? error.message : 'Please try again',
-                              variant: 'destructive',
-                            });
-                          });
-                        }}
-                        disabled={isUpdating}
-                      >
-                        Mute
-                      </Button>
-                    )}
                   </div>
                 </CardContent>
               </Card>
