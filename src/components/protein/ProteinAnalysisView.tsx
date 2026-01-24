@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, CheckCircle, Zap, Target, Shield, TrendingUp } from 'lucide-react';
+import { CheckCircle, Zap, Target } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ProteinAnalysis } from '@/types/stacklab';
 
@@ -10,7 +10,7 @@ interface ProteinAnalysisViewProps {
   isStreaming?: boolean;
 }
 
-type AnalysisView = 'profile' | 'optimize' | 'gains';
+type AnalysisView = 'profile' | 'optimize';
 
 interface ParsedSections {
   completenessScore: number;
@@ -185,8 +185,8 @@ function ProfileContent({ sections }: { sections: ParsedSections }) {
         </p>
       </div>
 
-      {/* Key Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {/* Key Stats - Stack vertically for better readability */}
+      <div className="space-y-4">
         {sections.leucineStatus && (
           <div className="p-4 rounded-xl bg-card/50 border border-border/30">
             <div className="flex items-center gap-2 mb-2">
@@ -227,6 +227,14 @@ function ProfileContent({ sections }: { sections: ParsedSections }) {
         <div className="p-4 rounded-xl bg-primary/5 border border-primary/20">
           <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Optimal Timing</p>
           <p className="text-lg">{formatBoldText(sections.timing)}</p>
+        </div>
+      )}
+
+      {/* Verdict */}
+      {sections.verdict && (
+        <div className="p-5 rounded-xl bg-primary/10 border border-primary/30">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Verdict</p>
+          <p className="text-lg font-semibold">{formatBoldText(sections.verdict)}</p>
         </div>
       )}
     </div>
@@ -285,79 +293,6 @@ function OptimizeContent({ sections }: { sections: ParsedSections }) {
   );
 }
 
-function SafetyContent({ sections }: { sections: ParsedSections }) {
-  return (
-    <div className="space-y-6">
-      {sections.warnings.length > 0 ? (
-        <div className="space-y-3">
-          {sections.warnings.map((warning, i) => (
-            <div
-              key={i}
-              className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20"
-            >
-              <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-              <p className="text-sm leading-relaxed">{formatBoldText(warning)}</p>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-12">
-          <Shield className="h-12 w-12 text-green-500 mx-auto mb-4" />
-          <p className="text-lg font-medium">No Safety Concerns</p>
-          <p className="text-muted-foreground">This combination appears safe at these serving sizes.</p>
-        </div>
-      )}
-
-      <div className="p-4 rounded-xl bg-card/50 border border-border/30">
-        <p className="text-xs text-muted-foreground">
-          Always consult with a healthcare provider before starting any new supplement regimen,
-          especially if you have allergies, medical conditions, or take medications.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function GainsContent({ sections }: { sections: ParsedSections }) {
-  return (
-    <div className="space-y-6">
-      {/* MPS Analysis */}
-      {sections.mpsAnalysis && (
-        <div className="p-4 rounded-xl bg-card/50 border border-border/30">
-          <div className="flex items-center gap-2 mb-2">
-            <TrendingUp className="h-4 w-4 text-primary" />
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">Muscle Protein Synthesis</p>
-          </div>
-          <p className="text-sm leading-relaxed">{formatBoldText(sections.mpsAnalysis)}</p>
-        </div>
-      )}
-
-      {/* Cost Efficiency */}
-      {sections.costEfficiency && (
-        <div className="p-4 rounded-xl bg-card/50 border border-border/30">
-          <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Cost Efficiency</p>
-          <p className="text-sm leading-relaxed">{formatBoldText(sections.costEfficiency)}</p>
-        </div>
-      )}
-
-      {/* Effectiveness */}
-      {sections.effectiveness && (
-        <div className="p-4 rounded-xl bg-card/50 border border-border/30">
-          <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Effectiveness</p>
-          <p className="text-sm leading-relaxed">{formatBoldText(sections.effectiveness)}</p>
-        </div>
-      )}
-
-      {/* Verdict */}
-      {sections.verdict && (
-        <div className="p-5 rounded-xl bg-primary/10 border border-primary/30">
-          <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Verdict</p>
-          <p className="text-lg font-semibold">{formatBoldText(sections.verdict)}</p>
-        </div>
-      )}
-    </div>
-  );
-}
 
 export function ProteinAnalysisView({ analysis, isStreaming }: ProteinAnalysisViewProps) {
   const [activeView, setActiveView] = useState<AnalysisView>('profile');
@@ -391,16 +326,12 @@ export function ProteinAnalysisView({ analysis, isStreaming }: ProteinAnalysisVi
         <TabButton active={activeView === 'optimize'} onClick={() => setActiveView('optimize')}>
           OPTIMIZE
         </TabButton>
-        <TabButton active={activeView === 'gains'} onClick={() => setActiveView('gains')}>
-          GAINS
-        </TabButton>
       </div>
 
       {/* Content */}
       <CardContent className="p-6">
         {activeView === 'profile' && <ProfileContent sections={sections} />}
         {activeView === 'optimize' && <OptimizeContent sections={sections} />}
-        {activeView === 'gains' && <GainsContent sections={sections} />}
       </CardContent>
     </Card>
   );
