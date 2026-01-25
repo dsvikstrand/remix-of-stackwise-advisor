@@ -6,12 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TagInput } from '@/components/shared/TagInput';
-import { ReviewButton } from '@/components/blueprint/ReviewButton';
+import { MixButton } from '@/components/blend/MixButton';
+import { BlueprintItemPicker } from '@/components/blueprint/BlueprintItemPicker';
+import { BlueprintRecipeAccordion } from '@/components/blueprint/BlueprintRecipeAccordion';
 import { BlueprintAnalysisView } from '@/components/blueprint/BlueprintAnalysisView';
 import { BlueprintLoadingAnimation } from '@/components/blueprint/BlueprintLoadingAnimation';
 import { useInventory } from '@/hooks/useInventories';
@@ -19,7 +19,7 @@ import { useCreateBlueprint } from '@/hooks/useBlueprints';
 import { useTagSuggestions } from '@/hooks/useTags';
 import { useRecentTags } from '@/hooks/useRecentTags';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Plus, Sparkles } from 'lucide-react';
+import { ArrowLeft, Sparkles } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 
 const ANALYZE_BLUEPRINT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-blueprint`;
@@ -65,7 +65,6 @@ export default function InventoryBuild() {
 
   // Categories with custom items
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
-  const [customInputs, setCustomInputs] = useState<Record<string, string>>({});
 
   // Initialize categories when inventory loads
   useMemo(() => {
@@ -95,16 +94,14 @@ export default function InventoryBuild() {
     });
   }, []);
 
-  const addCustomItem = useCallback((categoryName: string) => {
-    const value = customInputs[categoryName]?.trim();
-    if (!value) return;
-
+  const addCustomItem = useCallback((categoryName: string, itemName: string) => {
+    // Add to categories if not exists
     setCategories((prev) =>
       prev.map((category) =>
         category.name === categoryName
           ? {
               ...category,
-              items: category.items.includes(value) ? category.items : [...category.items, value],
+              items: category.items.includes(itemName) ? category.items : [...category.items, itemName],
             }
           : category
       )
@@ -113,11 +110,20 @@ export default function InventoryBuild() {
     // Auto-select the newly added item
     setSelectedItems((prev) => ({
       ...prev,
-      [categoryName]: [...(prev[categoryName] || []), value],
+      [categoryName]: [...(prev[categoryName] || []), itemName],
     }));
+  }, []);
 
-    setCustomInputs((prev) => ({ ...prev, [categoryName]: '' }));
-  }, [customInputs]);
+  const removeItem = useCallback((categoryName: string, item: string) => {
+    setSelectedItems((prev) => ({
+      ...prev,
+      [categoryName]: (prev[categoryName] || []).filter((i) => i !== item),
+    }));
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectedItems({});
+  }, []);
 
   const handleAnalyze = useCallback(async () => {
     if (!inventory) return;
@@ -351,78 +357,38 @@ export default function InventoryBuild() {
           </Card>
         ) : inventory ? (
           <div className="space-y-6">
-            {/* Blueprint Title */}
+            {/* Combined Name + Items Section */}
             <section className="animate-fade-in" style={{ animationDelay: '0.05s' }}>
-              <div className="bg-card/60 backdrop-blur-glass rounded-2xl border border-border/50 overflow-hidden p-4">
-                <Input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Name your blueprint..."
-                  className="text-xl font-bold bg-transparent border-none focus-visible:ring-2 focus-visible:ring-primary/50 h-14"
-                />
+              <div className="bg-card/60 backdrop-blur-glass rounded-2xl border border-border/50 overflow-hidden">
+                {/* Blueprint Name Input */}
+                <div className="p-4 border-b border-border/30">
+                  <Input
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Name your blueprint..."
+                    className="text-xl font-bold bg-transparent border-none focus-visible:ring-2 focus-visible:ring-primary/50 h-14"
+                  />
+                </div>
+                {/* Item Picker */}
+                <div className="p-4">
+                  <BlueprintItemPicker
+                    categories={categories}
+                    selectedItems={selectedItems}
+                    onToggleItem={toggleItem}
+                    onAddCustomItem={addCustomItem}
+                  />
+                </div>
               </div>
             </section>
 
-            {/* Inventory Categories */}
+            {/* Selected Items Accordion */}
             <section className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
-              <Card className="bg-card/60 backdrop-blur-glass border-border/50">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle>Select Items</CardTitle>
-                    <Badge variant="secondary" className="text-sm">
-                      {totalSelected} selected
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  {categories.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No items in this inventory yet.</p>
-                  ) : (
-                    categories.map((category) => (
-                      <div key={category.name} className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <h3 className="font-semibold">{category.name}</h3>
-                          <Badge variant="outline" className="text-xs">
-                            {selectedItems[category.name]?.length || 0} / {category.items.length}
-                          </Badge>
-                        </div>
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          {category.items.map((item) => (
-                            <label
-                              key={`${category.name}-${item}`}
-                              className="flex items-center gap-2 rounded-md border border-border/60 px-3 py-2 text-sm cursor-pointer hover:bg-muted/50 transition-colors"
-                            >
-                              <Checkbox
-                                checked={(selectedItems[category.name] || []).includes(item)}
-                                onCheckedChange={() => toggleItem(category.name, item)}
-                              />
-                              <span>{item}</span>
-                            </label>
-                          ))}
-                        </div>
-                        <div className="flex gap-2">
-                          <Input
-                            value={customInputs[category.name] || ''}
-                            onChange={(e) =>
-                              setCustomInputs((prev) => ({ ...prev, [category.name]: e.target.value }))
-                            }
-                            placeholder={`Add custom ${category.name.toLowerCase()} item...`}
-                            onKeyDown={(e) => e.key === 'Enter' && addCustomItem(category.name)}
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            onClick={() => addCustomItem(category.name)}
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </CardContent>
-              </Card>
+              <BlueprintRecipeAccordion
+                title={title || 'Your Selection'}
+                selectedItems={selectedItems}
+                onRemoveItem={removeItem}
+                onClear={clearSelection}
+              />
             </section>
 
             {/* Optional Notes */}
@@ -455,16 +421,13 @@ export default function InventoryBuild() {
               </Card>
             </section>
 
-            {/* Central Review Button */}
+            {/* Central MIX Button */}
             <section className="flex justify-center py-8 animate-fade-in" style={{ animationDelay: '0.2s' }}>
-              <ReviewButton
+              <MixButton
                 onClick={handleAnalyze}
                 disabled={totalSelected === 0}
                 isLoading={isAnalyzing}
                 itemCount={totalSelected}
-                label="REVIEW"
-                loadingLabel="Analyzing your blueprint..."
-                emptyLabel="Select items to review"
               />
             </section>
 
