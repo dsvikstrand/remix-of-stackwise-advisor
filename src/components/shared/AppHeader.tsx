@@ -19,7 +19,7 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
   return (
     <>
       <header className="sticky top-0 z-50 border-b border-border/50 bg-card/70 backdrop-blur-glass">
-        <div className="container mx-auto px-4 py-3 flex items-center justify-between border-4 border-dashed border-primary">
+        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link to="/" className="flex items-center gap-2">
               <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-glow-aqua">
