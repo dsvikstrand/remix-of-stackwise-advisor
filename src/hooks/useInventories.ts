@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { normalizeTag, normalizeTags } from '@/lib/tagging';
 import { DEFAULT_INVENTORY_SEEDS } from '@/lib/inventoryDefaults';
+import { DEFAULT_REVIEW_SECTIONS } from '@/lib/reviewSections';
 import type { Json } from '@/integrations/supabase/types';
 
 export interface InventoryRow {
@@ -11,6 +12,7 @@ export interface InventoryRow {
   prompt_inventory: string;
   prompt_categories: string;
   generated_schema: Json;
+  review_sections: string[];
   creator_user_id: string;
   is_public: boolean;
   likes_count: number;
@@ -34,12 +36,13 @@ interface CreateInventoryInput {
   promptInventory: string;
   promptCategories: string;
   generatedSchema: Json;
+  reviewSections: string[];
   tags: string[];
   isPublic: boolean;
   sourceInventoryId?: string | null;
 }
 
-const INVENTORY_FIELDS = 'id, title, prompt_inventory, prompt_categories, generated_schema, creator_user_id, is_public, likes_count, created_at, updated_at';
+const INVENTORY_FIELDS = 'id, title, prompt_inventory, prompt_categories, generated_schema, review_sections, creator_user_id, is_public, likes_count, created_at, updated_at';
 
 const seededUsers = new Set<string>();
 
@@ -67,6 +70,7 @@ async function ensureDefaultInventories(userId: string) {
         prompt_inventory: seed.promptInventory,
         prompt_categories: seed.promptCategories,
         generated_schema: seed.generatedSchema,
+        review_sections: seed.reviewSections || DEFAULT_REVIEW_SECTIONS,
         creator_user_id: userId,
         is_public: true,
       })
@@ -294,6 +298,7 @@ export function useCreateInventory() {
           prompt_inventory: input.promptInventory,
           prompt_categories: input.promptCategories,
           generated_schema: input.generatedSchema,
+          review_sections: input.reviewSections,
           creator_user_id: user.id,
           is_public: input.isPublic,
         })

@@ -5,7 +5,28 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const BLUEPRINT_SYSTEM_PROMPT = `You are a helpful analyst for user-created blueprints (routines, habits, workflows, protocols).
+const DEFAULT_REVIEW_SECTIONS = ["Overview", "Strengths", "Gaps", "Suggestions"];
+const MAX_REVIEW_SECTIONS = 4;
+
+function normalizeReviewSections(input: unknown) {
+  if (!Array.isArray(input)) return [] as string[];
+  const normalized: string[] = [];
+  for (const value of input) {
+    if (typeof value !== "string") continue;
+    const cleaned = value.trim().replace(/\s+/g, " ");
+    if (!cleaned) continue;
+    const exists = normalized.some((section) => section.toLowerCase() === cleaned.toLowerCase());
+    if (exists) continue;
+    normalized.push(cleaned);
+    if (normalized.length >= MAX_REVIEW_SECTIONS) break;
+  }
+  return normalized;
+}
+
+function buildSystemPrompt(sections: string[]) {
+  const headings = sections.map((section) => `### ${section}`).join("\n");
+
+  return `You are a helpful analyst for user-created blueprints (routines, habits, workflows, protocols).
 
 Your job:
 1) Summarize what this blueprint accomplishes
@@ -17,30 +38,12 @@ Guidelines:
 - Keep it concise and clear
 - Use bullets where helpful
 - Avoid medical claims; be cautious
+- Do not add extra headings
 
-Response format (use these exact headings):
-
-### Overview
-[2-3 sentence overview]
-
-### Strengths
-- [Strength 1]
-- [Strength 2]
-
-### Gaps / Risks
-- [Gap 1]
-- [Gap 2]
-
-### Suggestions
-- [Suggestion 1]
-- [Suggestion 2]
-
-### Quick Verdict
-[One sentence takeaway]
-
----
-*This review is informational only.*
+Response format (use these exact headings in order):
+${headings}
 `;
+}
 
 function formatSelectedItems(selectedItems: Record<string, unknown[]>) {
   const lines: string[] = [];
@@ -70,7 +73,7 @@ serve(async (req) => {
   }
 
   try {
-    const { title, inventoryTitle, selectedItems, mixNotes, reviewPrompt } = await req.json();
+    const { title, inventoryTitle, selectedItems, mixNotes, reviewPrompt, reviewSections } = await req.json();
 
     if (!selectedItems || typeof selectedItems !== 'object') {
       return new Response(
@@ -84,6 +87,9 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
+    const sections = normalizeReviewSections(reviewSections);
+    const resolvedSections = sections.length > 0 ? sections : DEFAULT_REVIEW_SECTIONS;
+
     const itemsBlock = formatSelectedItems(selectedItems);
     const focus = reviewPrompt?.trim() || 'general effectiveness';
 
@@ -91,6 +97,7 @@ serve(async (req) => {
 
 Blueprint title: ${title || 'Untitled'}
 Inventory: ${inventoryTitle || 'N/A'}
+Requested sections: ${resolvedSections.join(', ')}
 
 Selected items:
 ${itemsBlock || '- No items listed'}
@@ -108,7 +115,7 @@ ${mixNotes?.trim() || 'None'}
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
         messages: [
-          { role: "system", content: BLUEPRINT_SYSTEM_PROMPT },
+          { role: "system", content: buildSystemPrompt(resolvedSections) },
           { role: "user", content: userPrompt },
         ],
         stream: true,

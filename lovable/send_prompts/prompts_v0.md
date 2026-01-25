@@ -22,3 +22,20 @@ This is to ensure the frontend parser renders these sections correctly.
 
 Please deploy the updated function and confirm it’s live.
 
+
+## Prompt: inventory review sections (DB + edge function)
+
+Please apply the following changes so inventory-defined review sections work end-to-end:
+
+1) Apply migration:
+- supabase/migrations/20260125170000_add_inventory_review_sections.sql
+
+2) Deploy Edge Function update:
+- supabase/functions/analyze-blueprint/index.ts
+- It now accepts `reviewSections` from the client and uses those headings (fallback to default: Overview, Strengths, Gaps, Suggestions).
+
+3) Regenerate Supabase types after migration.
+
+Please confirm when these are live.
+
+Note: The client now sends `reviewSections` (string array) in the analyze-blueprint request body. Please verify this is accepted and the headings in the response match that order.

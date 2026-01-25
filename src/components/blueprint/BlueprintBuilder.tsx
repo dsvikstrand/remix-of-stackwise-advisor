@@ -14,6 +14,7 @@ import { useTagSuggestions } from '@/hooks/useTags';
 import { useRecentTags } from '@/hooks/useRecentTags';
 import { useCreateBlueprint } from '@/hooks/useBlueprints';
 import { useToast } from '@/hooks/use-toast';
+import { DEFAULT_REVIEW_SECTIONS } from '@/lib/reviewSections';
 import type { InventoryListItem } from '@/hooks/useInventories';
 import type { Json } from '@/integrations/supabase/types';
 
@@ -75,6 +76,12 @@ export function BlueprintBuilder({
 
   const [categories, setCategories] = useState<InventoryCategory[]>(() => parseCategories(inventory.generated_schema));
   const [customInputs, setCustomInputs] = useState<Record<string, string>>({});
+  const reviewSections = useMemo(() => {
+    if (inventory.review_sections && inventory.review_sections.length > 0) {
+      return inventory.review_sections;
+    }
+    return DEFAULT_REVIEW_SECTIONS;
+  }, [inventory]);
 
   const totalSelected = useMemo(
     () => Object.values(selectedItems).reduce((sum, items) => sum + items.length, 0),
@@ -153,6 +160,7 @@ export function BlueprintBuilder({
           selectedItems: payload,
           mixNotes: mixNotes.trim(),
           reviewPrompt: reviewPrompt.trim(),
+          reviewSections,
         }),
       });
 
@@ -322,6 +330,14 @@ export function BlueprintBuilder({
                 placeholder="What should the review focus on?"
                 rows={4}
               />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Review sections</Label>
+              <div className="flex flex-wrap gap-2">
+                {reviewSections.map((section) => (
+                  <Badge key={section} variant="outline">{section}</Badge>
+                ))}
+              </div>
             </div>
           </div>
         </CardContent>

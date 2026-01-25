@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useInventory, useToggleInventoryLike } from '@/hooks/useInventories';
 import { useToast } from '@/hooks/use-toast';
+import { DEFAULT_REVIEW_SECTIONS } from '@/lib/reviewSections';
 import { Heart } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 
@@ -16,6 +17,11 @@ function getCategories(schema: Json) {
   return categories
     .map((category) => (typeof category.name === 'string' ? category.name : ''))
     .filter(Boolean);
+}
+
+function getReviewSections(sections?: string[] | null) {
+  if (Array.isArray(sections) && sections.length > 0) return sections;
+  return DEFAULT_REVIEW_SECTIONS;
 }
 
 export default function InventoryDetail() {
@@ -84,6 +90,14 @@ export default function InventoryDetail() {
                   <div className="flex flex-wrap gap-2 mt-2">
                     {getCategories(inventory.generated_schema).map((category) => (
                       <Badge key={category} variant="secondary">{category}</Badge>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <h3 className="font-semibold">Review sections</h3>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {getReviewSections(inventory.review_sections).map((section) => (
+                      <Badge key={section} variant="outline">{section}</Badge>
                     ))}
                   </div>
                 </div>
