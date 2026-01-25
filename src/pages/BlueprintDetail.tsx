@@ -8,14 +8,27 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
+import { BlueprintAnalysisView } from '@/components/blueprint/BlueprintAnalysisView';
 import { useBlueprint, useBlueprintComments, useCreateBlueprintComment, useToggleBlueprintLike } from '@/hooks/useBlueprints';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, GitBranch, Heart } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 
+type ItemValue = string | { name?: string; context?: string };
+
+function formatItem(item: ItemValue) {
+  if (typeof item === 'string') return item;
+  if (!item || typeof item !== 'object') return String(item);
+  const name = typeof item.name === 'string' ? item.name : 'Untitled';
+  const context = typeof item.context === 'string' && item.context.trim() ? item.context.trim() : '';
+  return context ? `${name} [${context}]` : name;
+}
+
 function parseSelectedItems(selected: Json) {
-  if (!selected || typeof selected !== 'object' || Array.isArray(selected)) return [] as Array<[string, string[]]>;
-  return Object.entries(selected as Record<string, string[]>).filter(([, items]) => Array.isArray(items));
+  if (!selected || typeof selected !== 'object' || Array.isArray(selected)) {
+    return [] as Array<[string, ItemValue[]]>;
+  }
+  return Object.entries(selected as Record<string, ItemValue[]>).filter(([, items]) => Array.isArray(items));
 }
 
 export default function BlueprintDetail() {
@@ -146,16 +159,18 @@ export default function BlueprintDetail() {
                     {parseSelectedItems(blueprint.selected_items).map(([category, items]) => (
                       <div key={category} className="rounded-lg border border-border/60 p-3">
                         <p className="text-sm font-medium">{category}</p>
-                        <p className="text-sm text-muted-foreground">{items.join(', ') || 'No items listed'}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {items.length > 0 ? items.map(formatItem).join(', ') : 'No items listed'}
+                        </p>
                       </div>
                     ))}
                   </div>
                 </div>
                 <div>
                   <h3 className="font-semibold">LLM Review</h3>
-                  <pre className="whitespace-pre-wrap text-sm text-muted-foreground mt-2 bg-muted/40 rounded-lg p-4">
-                    {blueprint.llm_review || 'No review yet.'}
-                  </pre>
+                  <div className="mt-3">
+                    <BlueprintAnalysisView review={blueprint.llm_review || ''} />
+                  </div>
                 </div>
               </CardContent>
             </Card>
