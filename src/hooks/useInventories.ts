@@ -234,4 +234,97 @@ export function useInventory(inventoryId?: string) {
   return useQuery({
     queryKey: ['inventory', inventoryId, user?.id],
     enabled: !!inventoryId,
-    
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('inventories')
+        .select(INVENTORY_FIELDS)
+        .eq('id', inventoryId!)
+        .single();
+
+      if (error) throw error;
+      if (!data) return null;
+
+      const hydrated = await hydrateInventories([data], user?.id);
+      return hydrated[0] ?? null;
+    },
+  });
+}
+
+export function useToggleInventoryLike() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({ inventoryId, liked }: { inventoryId: string; liked: boolean }) => {
+      if (!user?.id) throw new Error('Must be logged in');
+
+      if (liked) {
+        const { error } = await supabase
+          .from('inventory_likes')
+          .delete()
+          .eq('inventory_id', inventoryId)
+          .eq('user_id', user.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('inventory_likes')
+          .insert({ inventory_id: inventoryId, user_id: user.id });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory-search'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+    },
+  });
+}
+
+export function useCreateInventory() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async (input: CreateInventoryInput) => {
+      if (!user?.id) throw new Error('Must be logged in');
+
+      const { data: inventory, error } = await supabase
+        .from('inventories')
+        .insert({
+          title: input.title,
+          prompt_inventory: input.promptInventory,
+          prompt_categories: input.promptCategories,
+          generated_schema: input.generatedSchema,
+          creator_user_id: user.id,
+          is_public: input.isPublic,
+        })
+        .select('id')
+        .single();
+
+      if (error) throw error;
+
+      const tags = await ensureTags(input.tags, user.id);
+      if (tags.length > 0) {
+        const { error: tagError } = await supabase.from('inventory_tags').insert(
+          tags.map((tag) => ({
+            inventory_id: inventory.id,
+            tag_id: tag.id,
+          }))
+        );
+        if (tagError) throw tagError;
+      }
+
+      if (input.sourceInventoryId) {
+        await supabase.from('inventory_remixes').insert({
+          inventory_id: inventory.id,
+          source_inventory_id: input.sourceInventoryId,
+          user_id: user.id,
+        });
+      }
+
+      return inventory;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory-search'] });
+    },
+  });
+}
