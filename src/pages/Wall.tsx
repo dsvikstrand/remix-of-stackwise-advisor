@@ -238,74 +238,82 @@ export default function Wall() {
                   const preview = post.llm_review ? post.llm_review.slice(0, 160) : '';
 
                   return (
-                    <Card key={post.id} className="overflow-hidden">
-                      <CardHeader className="flex flex-row items-center gap-3 pb-2">
-                        <Avatar className="h-10 w-10">
-                          <AvatarImage src={post.profile.avatar_url || undefined} />
-                          <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                            {initials}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1">
-                          <p className="font-medium text-sm">{displayName}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
-                          </p>
-                        </div>
-                        <Badge variant="secondary" className="bg-blue-500/10 text-blue-500">
-                          <Layers className="h-3 w-3 mr-1" />
-                          Blueprint
-                        </Badge>
-                      </CardHeader>
-
-                      <CardContent className="pt-0 space-y-3">
-                        <div className="bg-muted/50 rounded-lg p-4 space-y-2">
-                          <h3 className="font-semibold">{post.title}</h3>
-                          <p className="text-sm text-muted-foreground">
-                            {itemCount} item{itemCount !== 1 ? 's' : ''}
-                          </p>
-                          {preview && (
-                            <p className="text-sm pt-2 border-t border-border/50 text-muted-foreground">
-                              {preview}...
+                    <Link key={post.id} to={`/blueprint/${post.id}`} className="block">
+                      <Card className="overflow-hidden transition hover:border-primary/40 hover:shadow-md">
+                        <CardHeader className="flex flex-row items-center gap-3 pb-2">
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage src={post.profile.avatar_url || undefined} />
+                            <AvatarFallback className="bg-primary/10 text-primary text-sm">
+                              {initials}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1">
+                            <p className="font-medium text-sm">{displayName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
                             </p>
-                          )}
-                        </div>
-                        {post.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-2">
-                            {post.tags.map((tag) => (
-                              <Link key={tag.id} to={`/tags?q=${tag.slug}`}>
-                                <Badge variant="outline" className="text-xs hover:border-primary hover:text-primary">
-                                  #{tag.slug}
-                                </Badge>
-                              </Link>
-                            ))}
                           </div>
-                        )}
-                      </CardContent>
+                          <Badge variant="secondary" className="bg-blue-500/10 text-blue-500">
+                            <Layers className="h-3 w-3 mr-1" />
+                            Blueprint
+                          </Badge>
+                        </CardHeader>
 
-                      <CardFooter className="pt-0 flex flex-col gap-4">
-                        <div className="flex items-center gap-4 w-full">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className={post.user_liked ? 'text-red-500' : ''}
-                            onClick={() => handleLike(post.id, post.user_liked)}
-                          >
-                            <Heart className={`h-4 w-4 mr-1 ${post.user_liked ? 'fill-current' : ''}`} />
-                            {post.likes_count}
-                          </Button>
-                          <Link to={`/blueprint/${post.id}`}>
-                            <Button variant="ghost" size="sm">
-                              <MessageCircle className="h-4 w-4 mr-1" />
-                              View
+                        <CardContent className="pt-0 space-y-3">
+                          <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                            <h3 className="font-semibold">{post.title}</h3>
+                            <p className="text-sm text-muted-foreground">
+                              {itemCount} item{itemCount !== 1 ? 's' : ''}
+                            </p>
+                            {preview && (
+                              <p className="text-sm pt-2 border-t border-border/50 text-muted-foreground">
+                                {preview}...
+                              </p>
+                            )}
+                          </div>
+                          {post.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {post.tags.map((tag) => (
+                                <Link
+                                  key={tag.id}
+                                  to={`/tags?q=${tag.slug}`}
+                                  onClick={(event) => event.stopPropagation()}
+                                >
+                                  <Badge variant="outline" className="text-xs hover:border-primary hover:text-primary">
+                                    #{tag.slug}
+                                  </Badge>
+                                </Link>
+                              ))}
+                            </div>
+                          )}
+                        </CardContent>
+
+                        <CardFooter className="pt-0 flex flex-col gap-4">
+                          <div className="flex items-center gap-4 w-full">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className={post.user_liked ? 'text-red-500' : ''}
+                              onClick={(event) => {
+                                event.preventDefault();
+                                handleLike(post.id, post.user_liked);
+                              }}
+                            >
+                              <Heart className={`h-4 w-4 mr-1 ${post.user_liked ? 'fill-current' : ''}`} />
+                              {post.likes_count}
                             </Button>
-                          </Link>
-                          <Button variant="ghost" size="sm" disabled>
-                            <Share2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </CardFooter>
-                    </Card>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled
+                              onClick={(event) => event.preventDefault()}
+                            >
+                              <Share2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </CardFooter>
+                      </Card>
+                    </Link>
                   );
                 })}
               </div>

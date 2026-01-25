@@ -272,6 +272,15 @@ export default function InventoryBuild() {
       return;
     }
 
+    if (tags.length > 4) {
+      toast({
+        title: 'Too many tags',
+        description: 'Please use 4 tags or fewer.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (tags.length === 0) {
       toast({
         title: 'Tags required',
@@ -333,7 +342,7 @@ export default function InventoryBuild() {
       <main className="container mx-auto px-4 py-8 max-w-3xl">
         {/* Back link */}
         <Link
-          to={inventory ? `/inventory/${inventory.id}` : '/inventory'}
+          to="/inventory"
           className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -504,7 +513,7 @@ export default function InventoryBuild() {
                             type="button"
                             size="sm"
                             variant="outline"
-                            onClick={() => setTags((prev) => (prev.includes(tag) ? prev : [...prev, tag]).slice(0, 4))}
+                            onClick={() => setTags((prev) => (prev.includes(tag) ? prev : [...prev, tag]))}
                           >
                             #{tag}
                           </Button>
@@ -512,8 +521,8 @@ export default function InventoryBuild() {
                       </div>
                     )}
                     <div className="space-y-2">
-                      <Label>Tags (max 4)</Label>
-                      <TagInput value={tags} onChange={setTags} suggestions={tagSuggestions || []} />
+                      <Label>Tags</Label>
+                      <TagInput value={tags} onChange={setTags} suggestions={tagSuggestions || []} maxTags={12} />
                     </div>
                     <div className="flex items-center justify-between rounded-lg border border-border/60 px-4 py-3">
                       <div>

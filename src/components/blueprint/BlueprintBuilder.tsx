@@ -239,6 +239,15 @@ export function BlueprintBuilder({
       return;
     }
 
+    if (tags.length > 4) {
+      toast({
+        title: 'Too many tags',
+        description: 'Please use 4 tags or fewer.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (tags.length === 0) {
       toast({
         title: 'Tags required',
@@ -397,7 +406,7 @@ export function BlueprintBuilder({
                   type="button"
                   size="sm"
                   variant="outline"
-                  onClick={() => setTags((prev) => (prev.includes(tag) ? prev : [...prev, tag]).slice(0, 4))}
+                  onClick={() => setTags((prev) => (prev.includes(tag) ? prev : [...prev, tag]))}
                 >
                   #{tag}
                 </Button>
@@ -405,11 +414,12 @@ export function BlueprintBuilder({
             </div>
           )}
           <div className="space-y-2">
-            <Label>Tags (max 4)</Label>
+            <Label>Tags</Label>
             <TagInput
               value={tags}
               onChange={setTags}
               suggestions={tagSuggestions || []}
+              maxTags={12}
             />
           </div>
           <div className="flex items-center justify-between rounded-lg border border-border/60 px-4 py-3">
