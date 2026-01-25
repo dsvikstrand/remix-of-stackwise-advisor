@@ -14,6 +14,7 @@ interface AppHeaderProps {
 export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
   const { user } = useAuth();
   const navMode = user ? 'all' : 'public';
+  const debugTag = 'dbg7f2c';
 
   return (
     <>
@@ -25,6 +26,9 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
                 <Beaker className="h-4 w-4 text-primary-foreground" />
               </div>
               <span className="text-lg font-semibold tracking-tight">StackLab</span>
+              <span className="rounded-full border border-border/60 bg-muted/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                DEBUG: {debugTag}
+              </span>
             </Link>
             <div className="hidden sm:block ml-3">
               <AppNavigation variant="header" mode={navMode} />
