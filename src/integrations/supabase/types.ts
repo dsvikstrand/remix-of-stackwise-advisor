@@ -213,7 +213,6 @@ export type Database = {
           likes_count: number
           prompt_categories: string
           prompt_inventory: string
-          review_sections: string[]
           title: string
           updated_at: string
         }
@@ -226,7 +225,6 @@ export type Database = {
           likes_count?: number
           prompt_categories: string
           prompt_inventory: string
-          review_sections?: string[]
           title: string
           updated_at?: string
         }
@@ -239,7 +237,6 @@ export type Database = {
           likes_count?: number
           prompt_categories?: string
           prompt_inventory?: string
-          review_sections?: string[]
           title?: string
           updated_at?: string
         }

@@ -36,7 +36,7 @@ Your job:
 
 Guidelines:
 - Keep it concise and clear
-- Use bullets where helpful
+- For Strengths, Gaps, Risks, and Suggestions sections: ALWAYS use bullet points starting with a dash and space (\`- \`). Never use \`+\`, \`*\`, or paragraph-style formatting for these sections.
 - Avoid medical claims; be cautious
 - Do not add extra headings
 
