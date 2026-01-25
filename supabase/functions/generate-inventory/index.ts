@@ -11,9 +11,11 @@ Your job is to generate a structured inventory of items organized into logical c
 
 Guidelines:
 - Create 4-8 relevant categories based on the domain
-- Include 6-12 specific items per category
+- Include 6-12 items per category
+- Default to general item names (e.g., "Gentle Cleanser" instead of "Salicylic Acid Cleanser")
+- Only use highly specific or ingredient-level items if the user explicitly asks for specificity
+- Avoid brand names unless the user explicitly requests them
 - Items should be real, commonly used products/ingredients/tools in that domain
-- Be specific (e.g., "Vitamin C Serum" not just "Serum")
 - Cover a range from beginner-friendly to advanced options
 
 Response format (STRICT JSON - no markdown, no explanation):
@@ -58,7 +60,8 @@ serve(async (req) => {
     const userPrompt = `Generate a comprehensive inventory schema for: "${keywords.trim()}"
 ${title ? `Title hint: ${title}` : ''}
 
-Create practical, real-world items that someone would actually use for this purpose. Be specific with product/item names.`;
+Create practical, real-world items that someone would actually use for this purpose.
+Default to general item names and only get highly specific if the user asks for specificity.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

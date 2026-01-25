@@ -104,11 +104,8 @@ export default function Inventory() {
                   </div>
                 </CardHeader>
                 <CardContent className="flex flex-wrap gap-2">
-                  <Link to={`/inventory/${inventory.id}`}>
-                    <Button variant="outline">View Inventory</Button>
-                  </Link>
                   <Link to={`/inventory/${inventory.id}/build`}>
-                    <Button>Create Blueprint</Button>
+                    <Button>Open Inventory</Button>
                   </Link>
                 </CardContent>
               </Card>
