@@ -42,9 +42,7 @@ Response format (use these exact headings):
 *This review is informational only.*
 `;
 
-type ItemEntry = string | { name: string; context?: string };
-
-function formatSelectedItems(selectedItems: Record<string, ItemEntry[]>) {
+function formatSelectedItems(selectedItems: Record<string, unknown[]>) {
   const lines: string[] = [];
   for (const [category, items] of Object.entries(selectedItems || {})) {
     if (!Array.isArray(items) || items.length === 0) continue;
@@ -52,9 +50,13 @@ function formatSelectedItems(selectedItems: Record<string, ItemEntry[]>) {
     for (const item of items) {
       if (typeof item === 'string') {
         lines.push(`- ${item}`);
+      } else if (item && typeof item === 'object') {
+        const obj = item as { name?: string; context?: string };
+        const name = obj.name || String(item);
+        const context = obj.context?.trim();
+        lines.push(context ? `- ${name} [${context}]` : `- ${name}`);
       } else {
-        const context = item.context?.trim();
-        lines.push(context ? `- ${item.name} [${context}]` : `- ${item.name}`);
+        lines.push(`- ${String(item)}`);
       }
     }
     lines.push('');
