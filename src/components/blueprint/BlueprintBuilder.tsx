@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { BlueprintLoadingAnimation } from '@/components/blueprint/BlueprintLoadingAnimation';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -363,13 +364,21 @@ export function BlueprintBuilder({
         </CardContent>
       </Card>
 
+      {isAnalyzing && (
+        <Card className="overflow-hidden bg-card/60 backdrop-blur-glass border-primary/20">
+          <CardContent className="p-0">
+            <BlueprintLoadingAnimation />
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>LLM Review</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <Button type="button" onClick={handleGenerate} disabled={isAnalyzing || createBlueprint.isPending}>
-            {isAnalyzing ? 'Generating...' : 'Generate Review'}
+            {isAnalyzing ? 'Mixing...' : 'Mix Blueprint'}
           </Button>
           <Textarea value={review} onChange={(event) => setReview(event.target.value)} rows={12} />
         </CardContent>
