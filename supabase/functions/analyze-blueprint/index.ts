@@ -42,12 +42,21 @@ Response format (use these exact headings):
 *This review is informational only.*
 `;
 
-function formatSelectedItems(selectedItems: Record<string, string[]>) {
+type ItemEntry = string | { name: string; context?: string };
+
+function formatSelectedItems(selectedItems: Record<string, ItemEntry[]>) {
   const lines: string[] = [];
   for (const [category, items] of Object.entries(selectedItems || {})) {
     if (!Array.isArray(items) || items.length === 0) continue;
     lines.push(`## ${category}`);
-    lines.push(...items.map((item) => `- ${item}`));
+    for (const item of items) {
+      if (typeof item === 'string') {
+        lines.push(`- ${item}`);
+      } else {
+        const context = item.context?.trim();
+        lines.push(context ? `- ${item.name} [${context}]` : `- ${item.name}`);
+      }
+    }
     lines.push('');
   }
   return lines.join('\n').trim();

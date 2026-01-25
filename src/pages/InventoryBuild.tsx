@@ -56,6 +56,7 @@ export default function InventoryBuild() {
   // Blueprint state
   const [title, setTitle] = useState('');
   const [selectedItems, setSelectedItems] = useState<Record<string, string[]>>({});
+  const [itemContexts, setItemContexts] = useState<Record<string, string>>({}); // key: "category::item"
   const [mixNotes, setMixNotes] = useState('');
   const [reviewPrompt, setReviewPrompt] = useState('');
   const [review, setReview] = useState('');
@@ -119,10 +120,24 @@ export default function InventoryBuild() {
       ...prev,
       [categoryName]: (prev[categoryName] || []).filter((i) => i !== item),
     }));
+    // Also remove context
+    setItemContexts((prev) => {
+      const newContexts = { ...prev };
+      delete newContexts[`${categoryName}::${item}`];
+      return newContexts;
+    });
+  }, []);
+
+  const updateItemContext = useCallback((categoryName: string, item: string, context: string) => {
+    setItemContexts((prev) => ({
+      ...prev,
+      [`${categoryName}::${item}`]: context,
+    }));
   }, []);
 
   const clearSelection = useCallback(() => {
     setSelectedItems({});
+    setItemContexts({});
   }, []);
 
   const handleAnalyze = useCallback(async () => {
@@ -137,9 +152,15 @@ export default function InventoryBuild() {
       return;
     }
 
-    const payload: Record<string, string[]> = {};
+    // Build payload with context
+    const payload: Record<string, Array<{ name: string; context?: string }>> = {};
     Object.entries(selectedItems).forEach(([category, items]) => {
-      if (items.length > 0) payload[category] = items;
+      if (items.length > 0) {
+        payload[category] = items.map((item) => ({
+          name: item,
+          context: itemContexts[`${category}::${item}`] || undefined,
+        }));
+      }
     });
 
     setIsAnalyzing(true);
@@ -261,9 +282,15 @@ export default function InventoryBuild() {
     }
 
     try {
-      const payload: Record<string, string[]> = {};
+      // Build payload with context for storage
+      const payload: Record<string, Array<{ name: string; context?: string }>> = {};
       Object.entries(selectedItems).forEach(([category, items]) => {
-        if (items.length > 0) payload[category] = items;
+        if (items.length > 0) {
+          payload[category] = items.map((item) => ({
+            name: item,
+            context: itemContexts[`${category}::${item}`] || undefined,
+          }));
+        }
       });
 
       const blueprint = await createBlueprint.mutateAsync({
@@ -386,7 +413,9 @@ export default function InventoryBuild() {
               <BlueprintRecipeAccordion
                 title={title || 'Your Selection'}
                 selectedItems={selectedItems}
+                itemContexts={itemContexts}
                 onRemoveItem={removeItem}
+                onUpdateContext={updateItemContext}
                 onClear={clearSelection}
               />
             </section>
