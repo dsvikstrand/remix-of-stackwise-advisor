@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useBlueprint, useBlueprintComments, useCreateBlueprintComment, useToggleBlueprintLike } from '@/hooks/useBlueprints';
 import { useToast } from '@/hooks/use-toast';
-import { Heart } from 'lucide-react';
+import { ArrowLeft, GitBranch, Heart } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 
 function parseSelectedItems(selected: Json) {
@@ -19,6 +19,7 @@ function parseSelectedItems(selected: Json) {
 }
 
 export default function BlueprintDetail() {
+  const navigate = useNavigate();
   const { blueprintId } = useParams();
   const { data: blueprint, isLoading } = useBlueprint(blueprintId);
   const { data: comments, isLoading: commentsLoading } = useBlueprintComments(blueprintId);
@@ -72,7 +73,17 @@ export default function BlueprintDetail() {
         ) : blueprint ? (
           <>
             <section className="space-y-2">
-              <h1 className="text-3xl font-semibold">{blueprint.title}</h1>
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => navigate(-1)}
+                  aria-label="Go back"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <h1 className="text-3xl font-semibold">{blueprint.title}</h1>
+              </div>
               <div className="flex flex-wrap gap-2">
                 {blueprint.tags.map((tag) => (
                   <Badge key={tag.id} variant="outline">#{tag.slug}</Badge>
@@ -99,25 +110,27 @@ export default function BlueprintDetail() {
                       </p>
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={blueprint.user_liked ? 'text-red-500' : 'text-muted-foreground'}
-                    onClick={handleLike}
-                  >
-                    <Heart className={`h-4 w-4 ${blueprint.user_liked ? 'fill-current' : ''}`} />
-                    <span className="ml-1 text-xs">{blueprint.likes_count}</span>
-                  </Button>
-                </div>
-                <div className="flex gap-2">
-                  <Link to={`/blueprint/${blueprint.id}/remix`}>
-                    <Button>Remix Blueprint</Button>
-                  </Link>
-                  {blueprint.inventory_id && (
-                    <Link to={`/inventory/${blueprint.inventory_id}`}>
-                      <Button variant="outline">View Inventory</Button>
-                    </Link>
-                  )}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground"
+                      asChild
+                    >
+                      <Link to={`/blueprint/${blueprint.id}/remix`} aria-label="Remix blueprint">
+                        <GitBranch className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className={blueprint.user_liked ? 'text-red-500' : 'text-muted-foreground'}
+                      onClick={handleLike}
+                    >
+                      <Heart className={`h-4 w-4 ${blueprint.user_liked ? 'fill-current' : ''}`} />
+                      <span className="ml-1 text-xs">{blueprint.likes_count}</span>
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
