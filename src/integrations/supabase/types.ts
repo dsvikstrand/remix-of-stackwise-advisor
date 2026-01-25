@@ -43,306 +43,6 @@ export type Database = {
           },
         ]
       }
-      blueprint_comments: {
-        Row: {
-          blueprint_id: string
-          content: string
-          created_at: string
-          id: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          blueprint_id: string
-          content: string
-          created_at?: string
-          id?: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          blueprint_id?: string
-          content?: string
-          created_at?: string
-          id?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "blueprint_comments_blueprint_id_fkey"
-            columns: ["blueprint_id"]
-            isOneToOne: false
-            referencedRelation: "blueprints"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      blueprint_likes: {
-        Row: {
-          blueprint_id: string
-          created_at: string
-          id: string
-          user_id: string
-        }
-        Insert: {
-          blueprint_id: string
-          created_at?: string
-          id?: string
-          user_id: string
-        }
-        Update: {
-          blueprint_id?: string
-          created_at?: string
-          id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "blueprint_likes_blueprint_id_fkey"
-            columns: ["blueprint_id"]
-            isOneToOne: false
-            referencedRelation: "blueprints"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      blueprint_tags: {
-        Row: {
-          blueprint_id: string
-          created_at: string
-          tag_id: string
-        }
-        Insert: {
-          blueprint_id: string
-          created_at?: string
-          tag_id: string
-        }
-        Update: {
-          blueprint_id?: string
-          created_at?: string
-          tag_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "blueprint_tags_blueprint_id_fkey"
-            columns: ["blueprint_id"]
-            isOneToOne: false
-            referencedRelation: "blueprints"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "blueprint_tags_tag_id_fkey"
-            columns: ["tag_id"]
-            isOneToOne: false
-            referencedRelation: "tags"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      blueprints: {
-        Row: {
-          created_at: string
-          creator_user_id: string
-          id: string
-          inventory_id: string | null
-          is_public: boolean
-          likes_count: number
-          llm_review: string | null
-          mix_notes: string | null
-          review_prompt: string | null
-          selected_items: Json
-          source_blueprint_id: string | null
-          title: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          creator_user_id: string
-          id?: string
-          inventory_id?: string | null
-          is_public?: boolean
-          likes_count?: number
-          llm_review?: string | null
-          mix_notes?: string | null
-          review_prompt?: string | null
-          selected_items?: Json
-          source_blueprint_id?: string | null
-          title: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          creator_user_id?: string
-          id?: string
-          inventory_id?: string | null
-          is_public?: boolean
-          likes_count?: number
-          llm_review?: string | null
-          mix_notes?: string | null
-          review_prompt?: string | null
-          selected_items?: Json
-          source_blueprint_id?: string | null
-          title?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "blueprints_inventory_id_fkey"
-            columns: ["inventory_id"]
-            isOneToOne: false
-            referencedRelation: "inventories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "blueprints_source_blueprint_id_fkey"
-            columns: ["source_blueprint_id"]
-            isOneToOne: false
-            referencedRelation: "blueprints"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      inventories: {
-        Row: {
-          created_at: string
-          creator_user_id: string
-          generated_schema: Json
-          id: string
-          is_public: boolean
-          likes_count: number
-          prompt_categories: string
-          prompt_inventory: string
-          title: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          creator_user_id: string
-          generated_schema?: Json
-          id?: string
-          is_public?: boolean
-          likes_count?: number
-          prompt_categories: string
-          prompt_inventory: string
-          title: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          creator_user_id?: string
-          generated_schema?: Json
-          id?: string
-          is_public?: boolean
-          likes_count?: number
-          prompt_categories?: string
-          prompt_inventory?: string
-          title?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      inventory_likes: {
-        Row: {
-          created_at: string
-          id: string
-          inventory_id: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          inventory_id: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          inventory_id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inventory_likes_inventory_id_fkey"
-            columns: ["inventory_id"]
-            isOneToOne: false
-            referencedRelation: "inventories"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      inventory_remixes: {
-        Row: {
-          created_at: string
-          id: string
-          inventory_id: string
-          source_inventory_id: string | null
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          inventory_id: string
-          source_inventory_id?: string | null
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          inventory_id?: string
-          source_inventory_id?: string | null
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inventory_remixes_inventory_id_fkey"
-            columns: ["inventory_id"]
-            isOneToOne: false
-            referencedRelation: "inventories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inventory_remixes_source_inventory_id_fkey"
-            columns: ["source_inventory_id"]
-            isOneToOne: false
-            referencedRelation: "inventories"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      inventory_tags: {
-        Row: {
-          created_at: string
-          inventory_id: string
-          tag_id: string
-        }
-        Insert: {
-          created_at?: string
-          inventory_id: string
-          tag_id: string
-        }
-        Update: {
-          created_at?: string
-          inventory_id?: string
-          tag_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inventory_tags_inventory_id_fkey"
-            columns: ["inventory_id"]
-            isOneToOne: false
-            referencedRelation: "inventories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inventory_tags_tag_id_fkey"
-            columns: ["tag_id"]
-            isOneToOne: false
-            referencedRelation: "tags"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       post_bookmarks: {
         Row: {
           created_at: string
@@ -486,6 +186,35 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "tag_follows_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tag_mutes: {
+        Row: {
+          created_at: string
+          id: string
+          tag_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          tag_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          tag_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tag_mutes_tag_id_fkey"
             columns: ["tag_id"]
             isOneToOne: false
             referencedRelation: "tags"
