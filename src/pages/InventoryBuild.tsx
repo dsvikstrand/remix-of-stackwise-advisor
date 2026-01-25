@@ -87,7 +87,5 @@ export default function InventoryBuild() {
         )}
       </main>
     </div>
-      </main>
-    </div>
   );
 }
