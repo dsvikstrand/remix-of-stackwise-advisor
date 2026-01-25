@@ -78,37 +78,37 @@ export default function Inventory() {
         ) : inventories && inventories.length > 0 ? (
           <div className="space-y-4">
             {inventories.map((inventory) => (
-              <Card key={inventory.id}>
-                <CardHeader className="space-y-2">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <CardTitle>{inventory.title}</CardTitle>
-                      <p className="text-sm text-muted-foreground">
-                        {inventory.prompt_inventory}
-                      </p>
+              <Link key={inventory.id} to={`/inventory/${inventory.id}/build`} className="block">
+                <Card className="transition hover:border-primary/40 hover:shadow-md">
+                  <CardHeader className="space-y-2">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <CardTitle>{inventory.title}</CardTitle>
+                        <p className="text-sm text-muted-foreground">
+                          {inventory.prompt_inventory}
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={inventory.user_liked ? 'text-red-500' : 'text-muted-foreground'}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          handleLike(inventory.id, inventory.user_liked);
+                        }}
+                      >
+                        <Heart className={`h-4 w-4 ${inventory.user_liked ? 'fill-current' : ''}`} />
+                        <span className="ml-1 text-xs">{inventory.likes_count}</span>
+                      </Button>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className={inventory.user_liked ? 'text-red-500' : 'text-muted-foreground'}
-                      onClick={() => handleLike(inventory.id, inventory.user_liked)}
-                    >
-                      <Heart className={`h-4 w-4 ${inventory.user_liked ? 'fill-current' : ''}`} />
-                      <span className="ml-1 text-xs">{inventory.likes_count}</span>
-                    </Button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {inventory.tags.map((tag) => (
-                      <Badge key={tag.id} variant="outline">#{tag.slug}</Badge>
-                    ))}
-                  </div>
-                </CardHeader>
-                <CardContent className="flex flex-wrap gap-2">
-                  <Link to={`/inventory/${inventory.id}/build`}>
-                    <Button>Open Inventory</Button>
-                  </Link>
-                </CardContent>
-              </Card>
+                    <div className="flex flex-wrap gap-2">
+                      {inventory.tags.map((tag) => (
+                        <Badge key={tag.id} variant="outline">#{tag.slug}</Badge>
+                      ))}
+                    </div>
+                  </CardHeader>
+                </Card>
+              </Link>
             ))}
           </div>
         ) : (
