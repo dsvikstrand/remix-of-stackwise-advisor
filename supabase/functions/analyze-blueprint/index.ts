@@ -5,8 +5,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const DEFAULT_REVIEW_SECTIONS = ["Overview", "Strengths", "Gaps", "Suggestions"];
-const MAX_REVIEW_SECTIONS = 4;
+const DEFAULT_ADDITIONAL_SECTIONS = ["Strengths", "Gaps", "Suggestions"];
+const MAX_ADDITIONAL_SECTIONS = 3;
 
 function normalizeReviewSections(input: unknown) {
   if (!Array.isArray(input)) return [] as string[];
@@ -15,18 +15,22 @@ function normalizeReviewSections(input: unknown) {
     if (typeof value !== "string") continue;
     const cleaned = value.trim().replace(/\s+/g, " ");
     if (!cleaned) continue;
+    // Skip "Overview" as it's always included
+    if (cleaned.toLowerCase() === "overview") continue;
     const exists = normalized.some((section) => section.toLowerCase() === cleaned.toLowerCase());
     if (exists) continue;
     normalized.push(cleaned);
-    if (normalized.length >= MAX_REVIEW_SECTIONS) break;
+    if (normalized.length >= MAX_ADDITIONAL_SECTIONS) break;
   }
   return normalized;
 }
 
-function buildSystemPrompt(sections: string[], includeScore: boolean) {
-  const headings = sections.map((section) => `### ${section}`).join("\n");
-  const scoreLine = includeScore
-    ? "- Include a line `Score: X/100` in the Overview section."
+function buildSystemPrompt(additionalSections: string[], includeScore: boolean) {
+  const allSections = ["Overview", ...additionalSections];
+  const headings = allSections.map((section) => `### ${section}`).join("\n");
+  
+  const scoreInstruction = includeScore
+    ? "\n- In the Overview section, include a line: `Score: X/100` where X is your overall assessment of the blueprint's effectiveness."
     : "";
 
   return `You are a helpful analyst for user-created blueprints (routines, habits, workflows, protocols).
@@ -39,10 +43,9 @@ Your job:
 
 Guidelines:
 - Keep it concise and clear
-- Use bullets where helpful
+- For Strengths, Gaps, Risks, and Suggestions sections: ALWAYS use bullet points starting with a dash and space (\`- \`). Never use \`+\`, \`*\`, or paragraph-style formatting for these sections.${scoreInstruction}
 - Avoid medical claims; be cautious
 - Do not add extra headings
-${scoreLine}
 
 Response format (use these exact headings in order):
 ${headings}
@@ -91,19 +94,20 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    const sections = normalizeReviewSections(reviewSections);
-    const resolvedSections = sections.length > 0 ? sections : DEFAULT_REVIEW_SECTIONS;
-    const shouldIncludeScore = includeScore !== false;
+    const additionalSections = normalizeReviewSections(reviewSections);
+    const resolvedAdditionalSections = additionalSections.length > 0 ? additionalSections : DEFAULT_ADDITIONAL_SECTIONS;
+    const shouldIncludeScore = includeScore === true;
 
     const itemsBlock = formatSelectedItems(selectedItems);
     const focus = reviewPrompt?.trim() || 'general effectiveness';
+    const allSections = ["Overview", ...resolvedAdditionalSections];
 
     const userPrompt = `Review this blueprint and focus on: ${focus}
 
 Blueprint title: ${title || 'Untitled'}
 Inventory: ${inventoryTitle || 'N/A'}
-Requested sections: ${resolvedSections.join(', ')}
-Include score: ${shouldIncludeScore ? 'Yes' : 'No'}
+Requested sections: ${allSections.join(', ')}
+Include score in Overview: ${shouldIncludeScore ? 'Yes' : 'No'}
 
 Selected items:
 ${itemsBlock || '- No items listed'}
@@ -121,7 +125,7 @@ ${mixNotes?.trim() || 'None'}
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
         messages: [
-          { role: "system", content: buildSystemPrompt(resolvedSections, shouldIncludeScore) },
+          { role: "system", content: buildSystemPrompt(resolvedAdditionalSections, shouldIncludeScore) },
           { role: "user", content: userPrompt },
         ],
         stream: true,

@@ -209,6 +209,7 @@ export type Database = {
           creator_user_id: string
           generated_schema: Json
           id: string
+          include_score: boolean
           is_public: boolean
           likes_count: number
           prompt_categories: string
@@ -222,6 +223,7 @@ export type Database = {
           creator_user_id: string
           generated_schema?: Json
           id?: string
+          include_score?: boolean
           is_public?: boolean
           likes_count?: number
           prompt_categories: string
@@ -235,6 +237,7 @@ export type Database = {
           creator_user_id?: string
           generated_schema?: Json
           id?: string
+          include_score?: boolean
           is_public?: boolean
           likes_count?: number
           prompt_categories?: string
