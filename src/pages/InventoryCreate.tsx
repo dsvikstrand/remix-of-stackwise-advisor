@@ -34,6 +34,7 @@ export default function InventoryCreate() {
 
   // Step 1: Keywords input
   const [keywords, setKeywords] = useState('');
+  const [customInstructions, setCustomInstructions] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
 
   // Step 2: Generated/edited inventory
@@ -48,8 +49,13 @@ export default function InventoryCreate() {
 
   const categoryNames = useMemo(() => {
     if (!generatedSchema) return [];
-    return generatedSchema.categories.map((c) => c.name);
+    return generatedSchema.categories
+      .map((c) => c.name.trim())
+      .filter(Boolean);
   }, [generatedSchema]);
+
+  const [categoryItemInputs, setCategoryItemInputs] = useState<Record<number, string>>({});
+  const [newCategoryName, setNewCategoryName] = useState('');
 
   const availableReviewSections = useMemo(() => {
     return DEFAULT_REVIEW_SECTIONS.filter(
@@ -104,6 +110,7 @@ export default function InventoryCreate() {
         body: JSON.stringify({
           keywords: keywords.trim(),
           title: title.trim() || undefined,
+          customInstructions: customInstructions.trim() || undefined,
         }),
       });
 
@@ -116,6 +123,7 @@ export default function InventoryCreate() {
 
       setGeneratedSchema(schema);
       setPromptInventory(schema.summary || '');
+      setCategoryItemInputs({});
 
       // Auto-fill title if empty
       if (!title.trim()) {
@@ -283,9 +291,24 @@ export default function InventoryCreate() {
                   ) : (
                     <Sparkles className="h-4 w-4" />
                   )}
-                  {isGenerating ? 'Generating...' : 'Generate'}
+                  {isGenerating ? 'Generating...' : generatedSchema ? 'Regenerate' : 'Generate'}
                 </Button>
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="custom-instructions">Custom instructions (optional)</Label>
+              <Textarea
+                id="custom-instructions"
+                value={customInstructions}
+                onChange={(e) => setCustomInstructions(e.target.value)}
+                placeholder="e.g., more beginner-friendly, fewer categories, emphasize budget options..."
+                rows={3}
+              />
+              {generatedSchema && (
+                <p className="text-xs text-muted-foreground">
+                  Regenerating will replace the current categories and items.
+                </p>
+              )}
             </div>
 
             {/* Quick suggestions */}
@@ -405,20 +428,123 @@ export default function InventoryCreate() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {generatedSchema.categories.map((category, idx) => (
-                  <div key={idx} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-semibold">{category.name}</h4>
+                  <div key={idx} className="space-y-3 rounded-lg border border-border/60 p-3">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={category.name}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          setGeneratedSchema((prev) => {
+                            if (!prev) return prev;
+                            const nextCategories = prev.categories.map((cat, catIdx) =>
+                              catIdx === idx ? { ...cat, name: value } : cat
+                            );
+                            return { ...prev, categories: nextCategories };
+                          });
+                        }}
+                        className="font-semibold"
+                        placeholder="Category name"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setGeneratedSchema((prev) => {
+                            if (!prev) return prev;
+                            const nextCategories = prev.categories.filter((_, catIdx) => catIdx !== idx);
+                            return { ...prev, categories: nextCategories };
+                          });
+                        }}
+                        aria-label="Remove category"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
                       <Badge variant="secondary">{category.items.length} items</Badge>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {category.items.map((item, itemIdx) => (
-                        <Badge key={itemIdx} variant="outline" className="text-xs">
+                        <Badge key={itemIdx} variant="outline" className="text-xs gap-1">
                           {item}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-3 w-3"
+                            onClick={() => {
+                              setGeneratedSchema((prev) => {
+                                if (!prev) return prev;
+                                const nextCategories = prev.categories.map((cat, catIdx) => {
+                                  if (catIdx !== idx) return cat;
+                                  return {
+                                    ...cat,
+                                    items: cat.items.filter((_, i) => i !== itemIdx),
+                                  };
+                                });
+                                return { ...prev, categories: nextCategories };
+                              });
+                            }}
+                            aria-label="Remove item"
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
                         </Badge>
                       ))}
                     </div>
+                    <div className="flex gap-2">
+                      <Input
+                        value={categoryItemInputs[idx] || ''}
+                        onChange={(event) =>
+                          setCategoryItemInputs((prev) => ({ ...prev, [idx]: event.target.value }))
+                        }
+                        placeholder={`Add item to ${category.name || 'category'}`}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          const value = categoryItemInputs[idx]?.trim();
+                          if (!value) return;
+                          setGeneratedSchema((prev) => {
+                            if (!prev) return prev;
+                            const nextCategories = prev.categories.map((cat, catIdx) =>
+                              catIdx === idx ? { ...cat, items: [...cat.items, value] } : cat
+                            );
+                            return { ...prev, categories: nextCategories };
+                          });
+                          setCategoryItemInputs((prev) => ({ ...prev, [idx]: '' }));
+                        }}
+                      >
+                        Add item
+                      </Button>
+                    </div>
                   </div>
                 ))}
+                <div className="flex gap-2">
+                  <Input
+                    value={newCategoryName}
+                    onChange={(event) => setNewCategoryName(event.target.value)}
+                    placeholder="New category name"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      const value = newCategoryName.trim();
+                      if (!value) return;
+                      setGeneratedSchema((prev) => {
+                        if (!prev) return prev;
+                        return {
+                          ...prev,
+                          categories: [...prev.categories, { name: value, items: [] }],
+                        };
+                      });
+                      setNewCategoryName('');
+                    }}
+                  >
+                    Add category
+                  </Button>
+                </div>
               </CardContent>
             </Card>
 

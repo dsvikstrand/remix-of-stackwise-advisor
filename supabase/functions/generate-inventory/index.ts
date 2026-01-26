@@ -43,7 +43,7 @@ serve(async (req) => {
   }
 
   try {
-    const { keywords, title } = await req.json();
+    const { keywords, title, customInstructions } = await req.json();
 
     if (!keywords || typeof keywords !== 'string' || keywords.trim().length === 0) {
       return new Response(
@@ -57,8 +57,11 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
+    const instructions = typeof customInstructions === "string" ? customInstructions.trim() : "";
+
     const userPrompt = `Generate a comprehensive inventory schema for: "${keywords.trim()}"
 ${title ? `Title hint: ${title}` : ''}
+${instructions ? `Additional instructions: ${instructions}` : ''}
 
 Create practical, real-world items that someone would actually use for this purpose.
 Default to general item names and only get highly specific if the user asks for specificity.`;
