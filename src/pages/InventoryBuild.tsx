@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import { TagInput } from '@/components/shared/TagInput';
 import { MixButton } from '@/components/blend/MixButton';
 import { BlueprintItemPicker } from '@/components/blueprint/BlueprintItemPicker';
@@ -19,8 +20,15 @@ import { useCreateBlueprint } from '@/hooks/useBlueprints';
 import { useTagSuggestions } from '@/hooks/useTags';
 import { useRecentTags } from '@/hooks/useRecentTags';
 import { useToast } from '@/hooks/use-toast';
-import { buildReviewSections } from '@/lib/reviewSections';
-import { ArrowLeft, Sparkles } from 'lucide-react';
+import {
+  MAX_ADDITIONAL_SECTIONS,
+  MAX_REVIEW_SECTIONS,
+  OVERVIEW_SECTION,
+  buildReviewSections,
+  formatReviewSection,
+  normalizeAdditionalSections,
+} from '@/lib/reviewSections';
+import { ArrowLeft, Sparkles, X } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 
 const ANALYZE_BLUEPRINT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-blueprint`;
@@ -64,6 +72,10 @@ export default function InventoryBuild() {
   const [tags, setTags] = useState<string[]>([]);
   const [isPublic, setIsPublic] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [additionalSections, setAdditionalSections] = useState<string[]>([]);
+  const [sectionInput, setSectionInput] = useState('');
+  const [sectionError, setSectionError] = useState('');
+  const [includeScore, setIncludeScore] = useState(true);
 
   // Categories with custom items
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
@@ -73,6 +85,10 @@ export default function InventoryBuild() {
     if (inventory && categories.length === 0) {
       setCategories(parseCategories(inventory.generated_schema));
       setTitle(inventory.title);
+      setAdditionalSections(
+        normalizeAdditionalSections(inventory.review_sections).slice(0, MAX_ADDITIONAL_SECTIONS)
+      );
+      setIncludeScore(inventory.include_score ?? true);
     }
   }, [inventory, categories.length]);
 
@@ -81,7 +97,10 @@ export default function InventoryBuild() {
     [selectedItems]
   );
 
-  const reviewSections = useMemo(() => buildReviewSections(inventory?.review_sections), [inventory]);
+  const reviewSections = useMemo(
+    () => buildReviewSections(additionalSections),
+    [additionalSections]
+  );
 
   const toggleItem = useCallback((categoryName: string, item: string) => {
     setSelectedItems((prev) => {
@@ -183,7 +202,7 @@ export default function InventoryBuild() {
           mixNotes: mixNotes.trim(),
           reviewPrompt: reviewPrompt.trim(),
           reviewSections,
-          includeScore: inventory?.include_score ?? true,
+          includeScore,
         }),
       });
 
@@ -458,6 +477,99 @@ export default function InventoryBuild() {
                         placeholder="What should the AI focus on?"
                         rows={3}
                       />
+                    </div>
+                    <div className="space-y-3 sm:col-span-2">
+                      <div>
+                        <Label>Review sections</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Overview is always included.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge variant="secondary">{OVERVIEW_SECTION}</Badge>
+                        {additionalSections.map((section) => (
+                          <Badge key={section} variant="secondary" className="gap-1">
+                            {section}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-4 w-4"
+                              onClick={() => {
+                                setAdditionalSections((prev) => prev.filter((item) => item !== section));
+                                setSectionError('');
+                              }}
+                              aria-label="Remove section"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </Badge>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <Input
+                          value={sectionInput}
+                          onChange={(event) => setSectionInput(event.target.value)}
+                          placeholder="Add custom section"
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              const formatted = formatReviewSection(sectionInput);
+                              if (!formatted) return;
+                              if (formatted.toLowerCase() === OVERVIEW_SECTION.toLowerCase()) {
+                                setSectionInput('');
+                                return;
+                              }
+                              if (additionalSections.some((item) => item.toLowerCase() === formatted.toLowerCase())) {
+                                setSectionInput('');
+                                return;
+                              }
+                              if (additionalSections.length >= MAX_ADDITIONAL_SECTIONS) {
+                                setSectionError(`You can add up to ${MAX_REVIEW_SECTIONS} sections total.`);
+                                return;
+                              }
+                              setAdditionalSections((prev) => [...prev, formatted]);
+                              setSectionInput('');
+                              setSectionError('');
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            const formatted = formatReviewSection(sectionInput);
+                            if (!formatted) return;
+                            if (formatted.toLowerCase() === OVERVIEW_SECTION.toLowerCase()) {
+                              setSectionInput('');
+                              return;
+                            }
+                            if (additionalSections.some((item) => item.toLowerCase() === formatted.toLowerCase())) {
+                              setSectionInput('');
+                              return;
+                            }
+                            if (additionalSections.length >= MAX_ADDITIONAL_SECTIONS) {
+                              setSectionError(`You can add up to ${MAX_REVIEW_SECTIONS} sections total.`);
+                              return;
+                            }
+                            setAdditionalSections((prev) => [...prev, formatted]);
+                            setSectionInput('');
+                            setSectionError('');
+                          }}
+                        >
+                          Add
+                        </Button>
+                      </div>
+                      {sectionError && (
+                        <p className="text-sm text-destructive">{sectionError}</p>
+                      )}
+                      <div className="flex items-center justify-between rounded-lg border border-border/60 px-4 py-3">
+                        <div>
+                          <p className="font-medium">Include score</p>
+                          <p className="text-sm text-muted-foreground">Adds a 1–100 score in Overview.</p>
+                        </div>
+                        <Switch checked={includeScore} onCheckedChange={setIncludeScore} />
+                      </div>
                     </div>
                   </div>
                 </CardContent>

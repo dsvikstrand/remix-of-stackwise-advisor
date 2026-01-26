@@ -14,7 +14,7 @@ interface AppHeaderProps {
 export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
   const { user } = useAuth();
   const navMode = user ? 'all' : 'public';
-  const debugTag = 'xxx785';
+  const debugTag = 'xxx786';
 
   return (
     <>
