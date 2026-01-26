@@ -1,8 +1,12 @@
-﻿import { Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { ArrowRight, Layers, Sparkles, Users } from 'lucide-react';
+import { CommunityStats } from '@/components/home/CommunityStats';
+import { TopBlueprints } from '@/components/home/TopBlueprints';
+import { FeaturedTags } from '@/components/home/FeaturedTags';
+import { DemoInventory } from '@/components/home/DemoInventory';
+import { HowItWorks } from '@/components/home/HowItWorks';
+import { ArrowRight, Sparkles } from 'lucide-react';
 
 export default function Home() {
   return (
@@ -12,116 +16,74 @@ export default function Home() {
         <div className="absolute -top-40 -right-40 w-[520px] h-[520px] bg-primary/10 rounded-full blur-3xl animate-drift" />
         <div className="absolute top-1/2 -left-32 w-96 h-96 bg-accent/20 rounded-full blur-3xl animate-float" />
         <div className="absolute -bottom-20 right-1/4 w-80 h-80 bg-secondary/10 rounded-full blur-3xl animate-pulse-soft" />
-        <div className="absolute top-24 right-24 w-3 h-3 bg-primary/30 rounded-full blur-sm animate-float-delayed" />
-        <div className="absolute bottom-32 left-12 w-2 h-2 bg-accent/30 rounded-full blur-sm animate-float-slow" />
       </div>
 
       <AppHeader />
 
-      <main className="max-w-5xl mx-auto px-4 py-12 space-y-12">
-        {/* Hero */}
-        <section className="text-center space-y-6 animate-fade-in">
-          <h1 className="text-6xl sm:text-7xl lg:text-8xl font-black tracking-tight relative inline-block">
+      <main className="max-w-4xl mx-auto px-4 py-10 space-y-12">
+        {/* Hero - simplified, community-first */}
+        <section className="text-center space-y-5 animate-fade-in">
+          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight">
             <span
-              className="relative inline-block"
+              className="text-gradient-themed"
               style={{
-                fontFamily: "'Impact', 'Haettenschweiler', 'Franklin Gothic Bold', 'Charcoal', 'Helvetica Inserat', sans-serif",
-                letterSpacing: '0.08em',
+                fontFamily: "'Impact', 'Haettenschweiler', 'Franklin Gothic Bold', 'Charcoal', sans-serif",
+                letterSpacing: '0.06em',
               }}
             >
-              <span className="absolute inset-0 text-border/40" style={{ transform: 'translate(4px, 4px)' }} aria-hidden="true">
-                BLUEPRINTS
-              </span>
-              <span className="absolute inset-0 text-border/60" style={{ transform: 'translate(2px, 2px)' }} aria-hidden="true">
-                BLUEPRINTS
-              </span>
-              <span className="text-gradient-themed animate-shimmer bg-[length:200%_auto] relative">
-                BLUEPRINTS
-              </span>
+              BLUEPRINTS
             </span>
-            <span className="absolute -inset-6 bg-primary/10 blur-2xl rounded-full animate-pulse-soft -z-10" />
           </h1>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            A community pool of shareable blueprints. Follow topics, discover what works, and remix into your own.
+          <p className="text-lg text-muted-foreground max-w-xl mx-auto leading-relaxed">
+            A community pool for sharing what works. Build routines from shared inventories,
+            get AI reviews, and remix what others have made.
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-3">
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
             <Link to="/wall">
               <Button size="lg" className="gap-2">
-                Browse Blueprints
+                Browse the Wall
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
             <Link to="/inventory">
               <Button size="lg" variant="outline" className="gap-2">
-                Create Inventory
+                Explore Inventories
                 <Sparkles className="h-4 w-4" />
               </Button>
             </Link>
           </div>
         </section>
 
-        {/* How it works */}
-        <section className="grid gap-6 md:grid-cols-3">
-          <Card className="bg-card/70 backdrop-blur-glass border-border/50 animate-fade-in">
-            <CardContent className="p-6 space-y-3">
-              <div className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center">
-                <Layers className="h-5 w-5 text-primary" />
-              </div>
-              <h3 className="text-xl font-semibold">1. Inventories</h3>
-              <p className="text-sm text-muted-foreground">
-                Start with a reusable inventory of items and categories. Search by tags or create your own.
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="bg-card/70 backdrop-blur-glass border-border/50 animate-fade-in" style={{ animationDelay: '0.1s' }}>
-            <CardContent className="p-6 space-y-3">
-              <div className="h-11 w-11 rounded-xl bg-accent/15 flex items-center justify-center">
-                <Sparkles className="h-5 w-5 text-accent" />
-              </div>
-              <h3 className="text-xl font-semibold">2. Build</h3>
-              <p className="text-sm text-muted-foreground">
-                Mix a setup from the inventory, add context, and generate a review with AI guidance.
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="bg-card/70 backdrop-blur-glass border-border/50 animate-fade-in" style={{ animationDelay: '0.2s' }}>
-            <CardContent className="p-6 space-y-3">
-              <div className="h-11 w-11 rounded-xl bg-secondary/15 flex items-center justify-center">
-                <Users className="h-5 w-5 text-secondary-foreground" />
-              </div>
-              <h3 className="text-xl font-semibold">3. Blueprint</h3>
-              <p className="text-sm text-muted-foreground">
-                Publish your blueprint, collect feedback, and let others remix your approach.
-              </p>
-            </CardContent>
-          </Card>
-        </section>
+        {/* Community stats bar */}
+        <CommunityStats />
 
-        {/* Community tease */}
-        <section className="grid gap-6 md:grid-cols-2">
-          <Card className="bg-card/60 backdrop-blur-glass border-border/50 animate-fade-in">
-            <CardContent className="p-6 space-y-3">
-              <h3 className="text-2xl font-semibold">Follow what you care about</h3>
-              <p className="text-sm text-muted-foreground">
-                Follow tags like sleep, recovery, or skincare. Your Wall updates with the latest blueprints.
-              </p>
-              <Link to="/tags">
-                <Button variant="outline" size="sm">Explore Tags</Button>
-              </Link>
-            </CardContent>
-          </Card>
-          <Card className="bg-card/60 backdrop-blur-glass border-border/50 animate-fade-in" style={{ animationDelay: '0.1s' }}>
-            <CardContent className="p-6 space-y-3">
-              <h3 className="text-2xl font-semibold">Remix and improve</h3>
-              <p className="text-sm text-muted-foreground">
-                See a blueprint you like? Remix it into your own version and share it back.
-              </p>
-              <Link to="/wall">
-                <Button variant="outline" size="sm">Browse the Wall</Button>
-              </Link>
-            </CardContent>
-          </Card>
-        </section>
+        {/* How it works */}
+        <HowItWorks />
+
+        {/* Demo section */}
+        <DemoInventory />
+
+        {/* Top blueprints */}
+        <TopBlueprints />
+
+        {/* Featured tags */}
+        <FeaturedTags />
+
+        {/* Footer-ish links */}
+        <footer className="pt-8 border-t border-border/40 text-center space-y-4">
+          <nav className="flex flex-wrap items-center justify-center gap-4 text-sm text-muted-foreground">
+            <Link to="/wall" className="hover:text-foreground transition-colors">Wall</Link>
+            <span className="text-border">·</span>
+            <Link to="/inventory" className="hover:text-foreground transition-colors">Inventories</Link>
+            <span className="text-border">·</span>
+            <Link to="/tags" className="hover:text-foreground transition-colors">Tags</Link>
+            <span className="text-border">·</span>
+            <Link to="/auth" className="hover:text-foreground transition-colors">Sign In</Link>
+          </nav>
+          <p className="text-xs text-muted-foreground/70">
+            Built with curiosity. Share what works.
+          </p>
+        </footer>
       </main>
     </div>
   );

@@ -14,8 +14,6 @@ interface AppHeaderProps {
 export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
   const { user } = useAuth();
   const navMode = user ? 'all' : 'public';
-  const debugTag = 'xxx787';
-
   return (
     <>
       <header className="sticky top-0 z-50 border-b border-border/50 bg-card/70 backdrop-blur-glass">
@@ -25,10 +23,7 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
               <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-glow-aqua">
                 <Beaker className="h-4 w-4 text-primary-foreground" />
               </div>
-              <span className="text-lg font-semibold tracking-tight">StackLab</span>
-              <span className="rounded-full border border-border/60 bg-muted/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                DEBUG: {debugTag}
-              </span>
+              <span className="text-lg font-semibold tracking-tight">Blueprints</span>
             </Link>
             <div className="hidden sm:block ml-3">
               <AppNavigation variant="header" mode={navMode} />
