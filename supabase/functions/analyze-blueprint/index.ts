@@ -96,7 +96,7 @@ serve(async (req) => {
 
     const additionalSections = normalizeReviewSections(reviewSections);
     const resolvedAdditionalSections = additionalSections.length > 0 ? additionalSections : DEFAULT_ADDITIONAL_SECTIONS;
-    const shouldIncludeScore = includeScore === true;
+    const shouldIncludeScore = includeScore !== false;
 
     const itemsBlock = formatSelectedItems(selectedItems);
     const focus = reviewPrompt?.trim() || 'general effectiveness';

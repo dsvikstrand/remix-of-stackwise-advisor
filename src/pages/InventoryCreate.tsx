@@ -13,13 +13,7 @@ import { useCreateInventory } from '@/hooks/useInventories';
 import { useToast } from '@/hooks/use-toast';
 import { useTagSuggestions } from '@/hooks/useTags';
 import { useRecentTags } from '@/hooks/useRecentTags';
-import {
-  DEFAULT_ADDITIONAL_SECTIONS,
-  MAX_ADDITIONAL_SECTIONS,
-  MAX_REVIEW_SECTIONS,
-  OVERVIEW_SECTION,
-  formatReviewSection,
-} from '@/lib/reviewSections';
+import { DEFAULT_ADDITIONAL_SECTIONS } from '@/lib/reviewSections';
 import { Loader2, Sparkles, Wand2, X } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 
@@ -49,11 +43,7 @@ export default function InventoryCreate() {
   const [generatedSchema, setGeneratedSchema] = useState<GeneratedSchema | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [isPublic, setIsPublic] = useState(true);
-  const [reviewSections, setReviewSections] = useState<string[]>(DEFAULT_ADDITIONAL_SECTIONS);
-  const [reviewSectionInput, setReviewSectionInput] = useState('');
-  const [reviewSectionsError, setReviewSectionsError] = useState('');
   const maxInventoryTags = 5;
-  const [includeScore, setIncludeScore] = useState(true);
 
   const categoryNames = useMemo(() => {
     if (!generatedSchema) return [];
@@ -65,36 +55,6 @@ export default function InventoryCreate() {
   const [categoryItemInputs, setCategoryItemInputs] = useState<Record<number, string>>({});
   const [newCategoryName, setNewCategoryName] = useState('');
 
-  const availableReviewSections = useMemo(() => {
-    return DEFAULT_ADDITIONAL_SECTIONS.filter(
-      (section) => !reviewSections.some((existing) => existing.toLowerCase() === section.toLowerCase())
-    );
-  }, [reviewSections]);
-
-  const addReviewSection = (raw: string) => {
-    const formatted = formatReviewSection(raw);
-    if (!formatted) return;
-
-    if (reviewSections.some((section) => section.toLowerCase() === formatted.toLowerCase())) {
-      setReviewSectionInput('');
-      setReviewSectionsError('');
-      return;
-    }
-
-    if (reviewSections.length >= MAX_ADDITIONAL_SECTIONS) {
-      setReviewSectionsError(`You can add up to ${MAX_REVIEW_SECTIONS} sections total.`);
-      return;
-    }
-
-    setReviewSections((prev) => [...prev, formatted]);
-    setReviewSectionInput('');
-    setReviewSectionsError('');
-  };
-
-  const removeReviewSection = (section: string) => {
-    setReviewSections((prev) => prev.filter((item) => item !== section));
-    setReviewSectionsError('');
-  };
 
   const handleGenerate = async () => {
     if (!keywords.trim()) {
@@ -198,25 +158,15 @@ export default function InventoryCreate() {
       return;
     }
 
-    if (reviewSections.length > MAX_ADDITIONAL_SECTIONS) {
-      toast({
-        title: 'Too many sections',
-        description: `Please use ${MAX_REVIEW_SECTIONS} sections or fewer.`,
-        variant: 'destructive',
-      });
-      return;
-    }
-
     try {
       const promptCategories = categoryNames.join(', ');
-      const sectionsToSave = reviewSections;
       const inventory = await createInventory.mutateAsync({
         title: title.trim(),
         promptInventory: promptInventory.trim(),
         promptCategories,
         generatedSchema: generatedSchema as unknown as Json,
-        reviewSections: sectionsToSave,
-        includeScore,
+        reviewSections: DEFAULT_ADDITIONAL_SECTIONS,
+        includeScore: true,
         tags,
         isPublic,
       });
@@ -373,72 +323,6 @@ export default function InventoryCreate() {
                     placeholder="What this inventory is for..."
                     rows={3}
                   />
-                </div>
-                <div className="space-y-3">
-                  <div>
-                  <Label>Review sections</Label>
-                  <p className="text-sm text-muted-foreground">
-                      Overview is always included.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="secondary">{OVERVIEW_SECTION}</Badge>
-                  {reviewSections.map((section) => (
-                    <Badge key={section} variant="secondary" className="gap-1">
-                      {section}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-4 w-4"
-                          onClick={() => removeReviewSection(section)}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </Badge>
-                    ))}
-                  </div>
-                  {availableReviewSections.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {availableReviewSections.map((section) => (
-                        <Button
-                          key={section}
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => addReviewSection(section)}
-                        >
-                          {section}
-                        </Button>
-                      ))}
-                    </div>
-                  )}
-                  <div className="flex gap-2">
-                    <Input
-                      value={reviewSectionInput}
-                      onChange={(event) => setReviewSectionInput(event.target.value)}
-                      placeholder="Add custom section"
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault();
-                          addReviewSection(reviewSectionInput);
-                        }
-                      }}
-                    />
-                    <Button type="button" variant="outline" onClick={() => addReviewSection(reviewSectionInput)}>
-                      Add
-                    </Button>
-                  </div>
-                  {reviewSectionsError && (
-                    <p className="text-sm text-destructive">{reviewSectionsError}</p>
-                  )}
-                  <div className="flex items-center justify-between rounded-lg border border-border/60 px-4 py-3">
-                    <div>
-                      <p className="font-medium">Include score</p>
-                      <p className="text-sm text-muted-foreground">Adds a 1–100 score in Overview.</p>
-                    </div>
-                    <Switch checked={includeScore} onCheckedChange={setIncludeScore} />
-                  </div>
                 </div>
               </CardContent>
             </Card>
