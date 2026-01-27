@@ -123,7 +123,6 @@ export type Database = {
           mix_notes: string | null
           review_prompt: string | null
           selected_items: Json
-          steps: Json | null
           source_blueprint_id: string | null
           title: string
           updated_at: string
@@ -139,7 +138,6 @@ export type Database = {
           mix_notes?: string | null
           review_prompt?: string | null
           selected_items?: Json
-          steps?: Json | null
           source_blueprint_id?: string | null
           title: string
           updated_at?: string
@@ -155,7 +153,6 @@ export type Database = {
           mix_notes?: string | null
           review_prompt?: string | null
           selected_items?: Json
-          steps?: Json | null
           source_blueprint_id?: string | null
           title?: string
           updated_at?: string
