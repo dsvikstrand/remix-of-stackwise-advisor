@@ -250,7 +250,7 @@ export default function Wall() {
                               {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
                             </p>
                           </div>
-                          <Badge variant="secondary" className="bg-blue-500/10 text-blue-500">
+                          <Badge variant="secondary" className="bg-primary/10 text-primary">
                             <Layers className="h-3 w-3 mr-1" />
                             Blueprint
                           </Badge>

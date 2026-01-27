@@ -19,30 +19,30 @@
 @layer base {
   :root {
     /* Core palette - Light Orange / Warm Cream */
-    --background: 35 40% 98%;
-    --foreground: 25 30% 12%;
+    --background: 38 35% 97%;
+    --foreground: 25 25% 15%;
 
     /* Cards and surfaces - Warm white */
-    --card: 35 35% 99%;
-    --card-foreground: 25 30% 12%;
+    --card: 38 30% 99%;
+    --card-foreground: 25 25% 15%;
 
-    --popover: 35 35% 99%;
-    --popover-foreground: 25 30% 12%;
+    --popover: 38 30% 99%;
+    --popover-foreground: 25 25% 15%;
 
-    /* Primary - Warm orange */
-    --primary: 28 90% 50%;
-    --primary-foreground: 35 40% 98%;
+    /* Primary - Soft warm orange (toned down) */
+    --primary: 28 75% 48%;
+    --primary-foreground: 38 35% 98%;
 
     /* Secondary - Warm sand */
-    --secondary: 35 30% 93%;
-    --secondary-foreground: 25 30% 20%;
+    --secondary: 35 25% 92%;
+    --secondary-foreground: 25 25% 22%;
 
     /* Muted tones - Soft warm grey */
-    --muted: 30 20% 94%;
-    --muted-foreground: 25 15% 45%;
+    --muted: 32 18% 93%;
+    --muted-foreground: 25 12% 48%;
 
     /* Accent - Light orange tint */
-    --accent: 30 50% 92%;
+    --accent: 32 40% 91%;
     --accent-foreground: 25 40% 25%;
 
     /* Destructive - Warm red */
@@ -435,7 +435,7 @@
 
   /* Auto-switching gradient - orange in light mode, brighter orange in theme-orange */
   .text-gradient-themed {
-    background: linear-gradient(135deg, hsl(28 90% 45%) 0%, hsl(35 85% 50%) 100%);
+    background: linear-gradient(135deg, hsl(28 75% 42%) 0%, hsl(35 70% 48%) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;

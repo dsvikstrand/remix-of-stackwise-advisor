@@ -20,7 +20,7 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link to="/" className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-glow-aqua">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center glow-primary">
                 <Beaker className="h-4 w-4 text-primary-foreground" />
               </div>
               <span className="text-lg font-semibold tracking-tight">Blueprints</span>
