@@ -124,6 +124,7 @@ export type Database = {
           review_prompt: string | null
           selected_items: Json
           source_blueprint_id: string | null
+          steps: Json | null
           title: string
           updated_at: string
         }
@@ -139,6 +140,7 @@ export type Database = {
           review_prompt?: string | null
           selected_items?: Json
           source_blueprint_id?: string | null
+          steps?: Json | null
           title: string
           updated_at?: string
         }
@@ -154,6 +156,7 @@ export type Database = {
           review_prompt?: string | null
           selected_items?: Json
           source_blueprint_id?: string | null
+          steps?: Json | null
           title?: string
           updated_at?: string
         }
