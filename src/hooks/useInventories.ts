@@ -30,6 +30,7 @@ export interface InventoryListItem extends InventoryRow {
   tags: InventoryTag[];
   user_liked: boolean;
   is_owner: boolean;
+  blueprint_count: number;
 }
 
 interface CreateInventoryInput {
@@ -129,11 +130,12 @@ async function hydrateInventories(rows: InventoryRow[], userId?: string | null) 
   if (rows.length === 0) return [] as InventoryListItem[];
 
   const inventoryIds = rows.map((row) => row.id);
-  const [tagsRes, likesRes] = await Promise.all([
+  const [tagsRes, likesRes, blueprintCountsRes] = await Promise.all([
     supabase.from('inventory_tags').select('inventory_id, tag_id').in('inventory_id', inventoryIds),
     userId
       ? supabase.from('inventory_likes').select('inventory_id').eq('user_id', userId).in('inventory_id', inventoryIds)
       : Promise.resolve({ data: [] as { inventory_id: string }[] }),
+    supabase.from('blueprints').select('inventory_id').in('inventory_id', inventoryIds),
   ]);
 
   const tagRows = tagsRes.data || [];
@@ -155,11 +157,20 @@ async function hydrateInventories(rows: InventoryRow[], userId?: string | null) 
 
   const likedIds = new Set((likesRes.data || []).map((row) => row.inventory_id));
 
+  // Count blueprints per inventory
+  const blueprintCounts = new Map<string, number>();
+  (blueprintCountsRes.data || []).forEach((row) => {
+    if (row.inventory_id) {
+      blueprintCounts.set(row.inventory_id, (blueprintCounts.get(row.inventory_id) || 0) + 1);
+    }
+  });
+
   return rows.map((row) => ({
     ...row,
     tags: inventoryTags.get(row.id) || [],
     user_liked: likedIds.has(row.id),
     is_owner: userId === row.creator_user_id,
+    blueprint_count: blueprintCounts.get(row.id) || 0,
   }));
 }
 
