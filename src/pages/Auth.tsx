@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { lovable } from '@/integrations/lovable';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -83,26 +83,22 @@ export default function Auth() {
   const handleGoogleSignIn = async () => {
     setIsGoogleLoading(true);
     
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin,
+      },
     });
     
-    if (result.error) {
+    if (error) {
       toast({
         title: 'Google sign-in failed',
-        description: result.error.message,
+        description: error.message,
         variant: 'destructive',
       });
       setIsGoogleLoading(false);
-    } else if (!result.redirected) {
-      toast({
-        title: 'Welcome!',
-        description: 'You have successfully signed in with Google.',
-      });
-      navigate('/');
-      setIsGoogleLoading(false);
     }
-    // If redirected, the page will navigate away, so no need to reset state
+    // If successful, the page will redirect to Google, so no need to reset state
   };
 
   return (
