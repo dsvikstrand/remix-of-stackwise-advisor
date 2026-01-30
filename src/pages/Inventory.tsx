@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { IntroCallout } from '@/components/shared/IntroCallout';
 import { useInventorySearch, useToggleInventoryLike } from '@/hooks/useInventories';
 import { usePopularInventoryTags } from '@/hooks/usePopularInventoryTags';
 import { useSuggestedInventories } from '@/hooks/useSuggestedInventories';
@@ -86,6 +87,13 @@ export default function Inventory() {
       />
 
       <main className="relative max-w-6xl mx-auto px-4 py-8 space-y-8">
+        {/* Intro Callout for first-time visitors */}
+        <IntroCallout
+          storageKey="blueprints_inventory_intro_dismissed"
+          title="Welcome to Inventories!"
+          description="Inventories are collections of items—like ingredient lists. Pick one and start building your Blueprint!"
+        />
+
         {/* Hero Section */}
         <section className="space-y-2">
           <h1 className="text-3xl font-semibold">Inventory Library</h1>

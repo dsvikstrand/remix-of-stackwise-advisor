@@ -4,7 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ArrowRight, Sparkles } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ArrowRight, ChevronDown, Sparkles } from 'lucide-react';
 
 // Static demo data based on the Blend inventory
 const DEMO_CATEGORIES = [
@@ -22,8 +23,16 @@ const DEMO_CATEGORIES = [
   },
 ];
 
+// Static example AI review (no API calls)
+const EXAMPLE_REVIEW = {
+  overview: `Great foundational stack! Vitamin D3 + Omega-3 provide key anti-inflammatory and immune support. Adding Magnesium covers a common deficiency that affects sleep and muscle function.`,
+  strengths: `This combination addresses multiple health pillars—energy, recovery, and cognitive function. The Caffeine + L-Theanine pairing is a well-researched synergy for focused alertness without jitters.`,
+  suggestion: `Consider timing: take Vitamin D3 with a fat-containing meal for better absorption. Magnesium works best in the evening to support sleep quality.`,
+};
+
 export function DemoInventory() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   const toggleItem = (item: string) => {
     setSelected((prev) => {
@@ -32,6 +41,10 @@ export function DemoInventory() {
         next.delete(item);
       } else {
         next.add(item);
+      }
+      // Auto-expand review when items selected
+      if (next.size >= 2 && !reviewOpen) {
+        setReviewOpen(true);
       }
       return next;
     });
@@ -86,9 +99,47 @@ export function DemoInventory() {
                 ))}
               </div>
               <p className="text-xs text-muted-foreground">
-                {selected.size} item{selected.size !== 1 ? 's' : ''} selected — sign up to generate an AI review!
+                {selected.size} item{selected.size !== 1 ? 's' : ''} selected
               </p>
             </div>
+          )}
+
+          {/* Static AI Review Preview */}
+          {selected.size >= 2 && (
+            <Collapsible open={reviewOpen} onOpenChange={setReviewOpen}>
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-between text-primary hover:text-primary/80"
+                >
+                  <span className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4" />
+                    Example AI Review
+                  </span>
+                  <ChevronDown className={`h-4 w-4 transition-transform ${reviewOpen ? 'rotate-180' : ''}`} />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-2">
+                <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-3">
+                  <div>
+                    <h5 className="text-xs font-semibold text-primary uppercase tracking-wide mb-1">Overview</h5>
+                    <p className="text-sm text-muted-foreground">{EXAMPLE_REVIEW.overview}</p>
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-semibold text-primary uppercase tracking-wide mb-1">Strengths</h5>
+                    <p className="text-sm text-muted-foreground">{EXAMPLE_REVIEW.strengths}</p>
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-semibold text-primary uppercase tracking-wide mb-1">Suggestion</h5>
+                    <p className="text-sm text-muted-foreground">{EXAMPLE_REVIEW.suggestion}</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground/70 italic pt-2 border-t border-border/30">
+                    This is a static preview. Sign up to generate personalized AI reviews!
+                  </p>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
           )}
 
           <div className="flex flex-wrap gap-2 pt-2">
