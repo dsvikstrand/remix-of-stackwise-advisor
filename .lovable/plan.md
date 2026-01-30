@@ -1,126 +1,184 @@
 
-# Inventory Page Redesign
+
+# Usability Improvement Plan for New Users
 
 ## Overview
-Transform the Inventory page from a simple vertical list into a modern, discoverable interface with a card grid layout, personalized suggestions, tag-based filtering, and community engagement stats.
+This plan addresses the key friction points identified for new users, focusing on making core concepts (Inventory vs Blueprint) immediately understandable and providing guided first-use experiences.
 
 ---
 
-## Visual Design
+## Changes Summary
 
-### Layout Structure
-```
-+------------------------------------------+
-|  Header                                   |
-+------------------------------------------+
-|  Title + Subtitle                        |
-+------------------------------------------+
-|  Search Bar                  [+ Create]   |
-+------------------------------------------+
-|  [#fitness] [#nutrition] [#skincare] ... | <- Tag filter chips
-+------------------------------------------+
-|  Suggested for You (if logged in)        |
-|  +--------+  +--------+  +--------+       |
-|  | Card 1 |  | Card 2 |  | Card 3 |       |
-|  +--------+  +--------+  +--------+       |
-+------------------------------------------+
-|  All Inventories                          |
-|  +--------+  +--------+  +--------+       |
-|  |        |  |        |  |        |       |
-|  +--------+  +--------+  +--------+       |
-|  +--------+  +--------+  +--------+       |
-|  ...                                      |
-+------------------------------------------+
+### 1. Enhanced Homepage Explainer Section
+
+**Location**: `src/components/home/HowItWorks.tsx`
+
+**Current Issue**: The 3-step cards are too abstract and don't explain the "why"
+
+**Changes**:
+- Replace generic icons with concept illustrations
+- Add one-line "why this matters" under each step
+- Include a "See an example" link on the third step that opens a sample blueprint
+
+**Copy Updates**:
+```text
+Step 1: "Pick an Inventory"
+→ "Collections of ingredients for any topic—supplements, recipes, routines. Pick one to start building."
+
+Step 2: "Build & Review"  
+→ "Tap items you use, hit Review, and get instant AI feedback on your setup."
+
+Step 3: "Share & Remix"
+→ "Post to the Wall, comment on others, or remix what they've built."
 ```
 
-### Card Design
-Each inventory card will display:
-- Title (prominent)
-- Description (truncated to 2 lines)
-- Tag badges (max 3, then "+N more")
-- Blueprint count (how many blueprints use this inventory)
-- Like count + heart button
-- Subtle hover glow effect
+---
+
+### 2. Interactive Demo with AI Preview
+
+**Location**: `src/components/home/DemoInventory.tsx`
+
+**Current Issue**: Users select items but hit a dead end ("Sign up to see AI review")
+
+**Changes**:
+- Add a static preview of what an AI review looks like below the demo
+- Show a collapsed "Example AI Review" accordion that expands when items are selected
+- The review content is static (pre-written) to avoid API calls
+
+**New Element**:
+```
+[Selected 4 items]
+↓
+📋 Example AI Review (static preview)
+┌──────────────────────────────────────┐
+│ "Great foundational stack! Vitamin   │
+│ D3 + Omega-3 provide key support..." │
+│ [See full review → Sign up]          │
+└──────────────────────────────────────┘
+```
 
 ---
 
-## Features
+### 3. First-Visit Tooltip on Inventory Page
 
-### 1. Card Grid Layout
-- Responsive: 1 column mobile, 2 columns tablet, 3 columns desktop
-- Compact cards with consistent height
-- Warm hover glow matching the orange theme
+**Location**: `src/pages/Inventory.tsx`
 
-### 2. Tag Filter Chips
-- Horizontal scrollable row of popular tags
-- Click to filter inventories by that tag
-- Clear filter button when active
-- Pull from most-used inventory tags
+**Current Issue**: No guidance for first-time visitors
 
-### 3. Suggested Inventories Section
-- Personalized recommendations for logged-in users
-- Based on: tags from user's liked inventories and created blueprints
-- Fallback to "Popular" for guests/new users
-- Horizontal scroll or 3-card row
+**Changes**:
+- Add a dismissible banner/callout for users without session history
+- Text: "Inventories are collections of items. Pick one and start building your Blueprint!"
+- Uses localStorage to track if user has dismissed it
 
-### 4. Community Stats on Cards
-- Blueprint count badge (e.g., "23 blueprints")
-- Shows how active/popular each inventory is
-- Helps users discover well-tested inventories
-
----
-
-## Technical Implementation
-
-### New Hook: `useSuggestedInventories`
+**Implementation**:
 ```typescript
-// src/hooks/useSuggestedInventories.ts
-// Logic:
-// 1. For authenticated users: find tags from their liked inventories
-// 2. Query inventories with those tags that user hasn't interacted with
-// 3. Fallback to most-liked inventories
+// Track in localStorage: 'blueprints_inventory_intro_dismissed'
+// Show callout if not dismissed
 ```
-
-### New Hook: `usePopularInventoryTags`
-```typescript
-// src/hooks/usePopularInventoryTags.ts
-// Query inventory_tags to find most-used tags across inventories
-```
-
-### Database Query Addition
-- Join with `blueprints` table to get blueprint count per inventory
-- Or add a `blueprint_count` aggregation to the hydrate function
-
-### Page Updates (`src/pages/Inventory.tsx`)
-1. Add ambient background effects (matching Tags page)
-2. Replace vertical list with CSS grid
-3. Add tag filter chip row
-4. Add "Suggested for You" section
-5. Update card component with stats and compact design
-6. Add responsive grid classes
-
-### Files to Create/Edit
-| File | Action |
-|------|--------|
-| `src/hooks/useSuggestedInventories.ts` | Create |
-| `src/hooks/usePopularInventoryTags.ts` | Create |
-| `src/hooks/useInventories.ts` | Add blueprint count to hydration |
-| `src/pages/Inventory.tsx` | Rewrite with new layout |
 
 ---
 
-## User Experience Flow
+### 4. Inline Guidance on Build Page
 
-1. **New user lands on page**: Sees popular inventories in a clean grid, tag chips for quick filtering
-2. **Searching**: Type to filter, or click tag chips for instant filtering
-3. **Logged-in user**: Sees personalized "Suggested for You" section at top
-4. **Clicking a card**: Navigates to builder page for that inventory
-5. **Liking**: Heart button works inline without navigation
+**Location**: `src/pages/InventoryBuild.tsx`
+
+**Current Issue**: Complex form with no progressive disclosure
+
+**Changes**:
+- Collapse "Advanced" options (Mix Notes, Review Prompt, Custom Sections) by default
+- Add a small info icon/tooltip next to key fields explaining:
+  - **Title**: "Name your blueprint—e.g., 'Morning Energy Stack'"
+  - **Items**: "Tap any item you use. Add context like dosage or timing."
+  - **Review button**: "AI will analyze your selection and give feedback"
+- First-time users see a quick 3-step visual indicator at the top
+
+**New Component**: `BuildPageGuide.tsx`
+```
+┌─ Step 1 ─┐ ┌─ Step 2 ─┐ ┌─ Step 3 ─┐
+│ Select   │→│ Review   │→│ Publish  │
+│ items    │ │ with AI  │ │ to Wall  │
+└──────────┘ └──────────┘ └──────────┘
+```
 
 ---
 
-## Accessibility
-- Keyboard navigable tag chips
-- ARIA labels on interactive elements
-- Focus-visible states on cards
-- Screen reader friendly badge descriptions
+### 5. Empty State Improvement on Wall
+
+**Location**: `src/pages/Wall.tsx`
+
+**Current Issue**: "For You" tab shows "No blueprints yet. Follow tags to personalize your feed." but doesn't help users act.
+
+**Changes**:
+- Add inline tag suggestions directly in the empty state
+- Show 4-6 popular tags as clickable chips
+- Clicking follows the tag and refreshes the feed
+
+**New Empty State**:
+```
+┌────────────────────────────────────────────┐
+│ 🏷️ Follow tags to personalize your feed   │
+│                                            │
+│ [#supplements] [#skincare] [#fitness]     │
+│ [#nutrition] [#meditation] [#productivity]│
+│                                            │
+│ Or: [Browse Latest instead]                │
+└────────────────────────────────────────────┘
+```
+
+---
+
+### 6. Glossary Tooltip Component (Optional Enhancement)
+
+**New File**: `src/components/shared/GlossaryTip.tsx`
+
+**Purpose**: Reusable tooltip that explains key terms on hover/click
+
+**Usage**:
+```jsx
+<GlossaryTip term="inventory">
+  A collection of items you can choose from—like a recipe ingredient list.
+</GlossaryTip>
+```
+
+**Placement**:
+- Homepage hero subtitle
+- Inventory page header
+- Build page header
+
+---
+
+## Implementation Order
+
+| Priority | Task | Files |
+|----------|------|-------|
+| 1 | Improve HowItWorks copy and add links | `HowItWorks.tsx` |
+| 2 | Add static AI review preview to DemoInventory | `DemoInventory.tsx` |
+| 3 | Add dismissible intro callout on Inventory page | `Inventory.tsx`, new `IntroCallout.tsx` |
+| 4 | Collapse advanced fields on Build page | `InventoryBuild.tsx` |
+| 5 | Improve Wall empty state with inline tag follows | `Wall.tsx` |
+| 6 | Create reusable GlossaryTip component | `GlossaryTip.tsx` |
+| 7 | Add step indicator to Build page | `InventoryBuild.tsx`, new `BuildPageGuide.tsx` |
+
+---
+
+## Technical Notes
+
+- **No database changes required** - all improvements are frontend-only
+- **LocalStorage usage** - track dismissed intro callouts per page
+- **New components**:
+  - `IntroCallout.tsx` - reusable dismissible banner
+  - `GlossaryTip.tsx` - term definition tooltip
+  - `BuildPageGuide.tsx` - step progress indicator
+- **Static demo review** - hardcoded example text, no API calls
+- **Existing hooks reused** - `usePopularInventoryTags` for Wall empty state
+
+---
+
+## Expected Outcomes
+
+1. New users understand **Inventory = template, Blueprint = your creation**
+2. Demo widget shows **what AI review looks like** before sign-up
+3. Build page feels **less overwhelming** with progressive disclosure
+4. Wall **"For You" tab is actionable** even when empty
+5. Consistent **inline help** throughout key pages
+
