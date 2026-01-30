@@ -11,8 +11,9 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Heart, MessageCircle, Share2, Layers } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Layers, Tag } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { usePopularInventoryTags } from '@/hooks/usePopularInventoryTags';
 import type { Json } from '@/integrations/supabase/types';
 
 interface BlueprintPost {
@@ -52,6 +53,21 @@ export default function Wall() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<FeedTab>('for-you');
+  
+  // Popular tags for empty state
+  const { data: popularTags = [] } = usePopularInventoryTags(6);
+  
+  // Follow tag mutation
+  const followTagMutation = useMutation({
+    mutationFn: async (tagId: string) => {
+      if (!user) throw new Error('Must be logged in');
+      const { error } = await supabase.from('tag_follows').insert({
+        tag_id: tagId,
+        user_id: user.id,
+      });
+      if (error) throw error;
+    },
+  });
 
   const wallQueryKey = ['wall-blueprints', activeTab, user?.id] as const;
 
@@ -319,24 +335,78 @@ export default function Wall() {
                 <CardContent>
                   <div className="flex flex-col items-center gap-4">
                     <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
-                      <Layers className="h-8 w-8 text-muted-foreground" />
+                      {activeTab === 'for-you' ? (
+                        <Tag className="h-8 w-8 text-muted-foreground" />
+                      ) : (
+                        <Layers className="h-8 w-8 text-muted-foreground" />
+                      )}
                     </div>
                     <div>
-                      <h3 className="font-semibold">No blueprints yet</h3>
+                      <h3 className="font-semibold">
+                        {activeTab === 'for-you' ? 'Personalize your feed' : 'No blueprints yet'}
+                      </h3>
                       <p className="text-sm text-muted-foreground mt-1">
                         {activeTab === 'for-you'
-                          ? 'Follow tags to personalize your feed.'
+                          ? 'Follow tags to see related blueprints here.'
                           : 'Be the first to share a blueprint.'}
                       </p>
                     </div>
-                    <div className="flex gap-2">
-                      <Link to="/inventory">
-                        <Button>Create Blueprint</Button>
-                      </Link>
-                      <Link to="/tags">
-                        <Button variant="outline">Explore Tags</Button>
-                      </Link>
-                    </div>
+                    
+                    {/* Inline tag suggestions for "For You" tab */}
+                    {activeTab === 'for-you' && popularTags.length > 0 && (
+                      <div className="space-y-3 w-full max-w-md">
+                        <p className="text-xs text-muted-foreground">Popular tags to follow:</p>
+                        <div className="flex flex-wrap justify-center gap-2">
+                          {popularTags.map((tag) => (
+                            <Button
+                              key={tag.id}
+                              variant="outline"
+                              size="sm"
+                              className="gap-1.5"
+                              onClick={() => {
+                                if (!user) {
+                                  toast({
+                                    title: 'Sign in required',
+                                    description: 'Please sign in to follow tags.',
+                                  });
+                                  return;
+                                }
+                                followTagMutation.mutate(tag.id, {
+                                  onSuccess: () => {
+                                    queryClient.invalidateQueries({ queryKey: wallQueryKey });
+                                    toast({
+                                      title: 'Tag followed!',
+                                      description: `You're now following #${tag.slug}`,
+                                    });
+                                  },
+                                });
+                              }}
+                            >
+                              #{tag.slug}
+                            </Button>
+                          ))}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-muted-foreground"
+                          onClick={() => setActiveTab('latest')}
+                        >
+                          Or browse Latest instead →
+                        </Button>
+                      </div>
+                    )}
+                    
+                    {activeTab !== 'for-you' && (
+                      <div className="flex gap-2">
+                        <Link to="/inventory">
+                          <Button>Create Blueprint</Button>
+                        </Link>
+                        <Link to="/tags">
+                          <Button variant="outline">Explore Tags</Button>
+                        </Link>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

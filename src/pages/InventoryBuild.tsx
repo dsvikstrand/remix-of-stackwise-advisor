@@ -9,11 +9,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { TagInput } from '@/components/shared/TagInput';
 import { MixButton } from '@/components/blend/MixButton';
 import { BlueprintItemPicker } from '@/components/blueprint/BlueprintItemPicker';
 import { BlueprintAnalysisView } from '@/components/blueprint/BlueprintAnalysisView';
 import { BlueprintLoadingAnimation } from '@/components/blueprint/BlueprintLoadingAnimation';
+import { BuildPageGuide } from '@/components/blueprint/BuildPageGuide';
 import { useInventory } from '@/hooks/useInventories';
 import { useCreateBlueprint } from '@/hooks/useBlueprints';
 import { useTagSuggestions } from '@/hooks/useTags';
@@ -27,7 +29,7 @@ import {
   formatReviewSection,
   normalizeAdditionalSections,
 } from '@/lib/reviewSections';
-import { ArrowLeft, Check, GripVertical, Pencil, Sparkles, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, GripVertical, Pencil, Settings2, Sparkles, Trash2, X } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 
 const ANALYZE_BLUEPRINT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-blueprint`;
@@ -592,6 +594,9 @@ export default function InventoryBuild() {
           </Card>
         ) : inventory ? (
           <div className="space-y-6">
+            {/* Step Guide */}
+            <BuildPageGuide currentStep={review ? 3 : totalSelected > 0 ? 2 : 1} />
+            
             {/* Combined Name + Items Section */}
             <section className="animate-fade-in" style={{ animationDelay: '0.05s' }}>
               <div className="bg-card/60 backdrop-blur-glass rounded-2xl border border-border/50 overflow-hidden">
@@ -804,129 +809,147 @@ export default function InventoryBuild() {
               </Card>
             </section>
 
-            {/* Optional Notes */}
+            {/* Advanced Options (Collapsed by default) */}
             <section className="animate-fade-in" style={{ animationDelay: '0.15s' }}>
-              <Card className="bg-card/60 backdrop-blur-glass border-border/50">
-                <CardContent className="p-4 space-y-4">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="mix-notes">Mix notes (optional)</Label>
-                      <Textarea
-                        id="mix-notes"
-                        value={mixNotes}
-                        onChange={(e) => setMixNotes(e.target.value)}
-                        placeholder="Any additional context for your mix..."
-                        rows={3}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="review-prompt">Review focus (optional)</Label>
-                      <Textarea
-                        id="review-prompt"
-                        value={reviewPrompt}
-                        onChange={(e) => setReviewPrompt(e.target.value)}
-                        placeholder="What should the AI focus on?"
-                        rows={3}
-                      />
-                    </div>
-                    <div className="space-y-3 sm:col-span-2">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <Label>Review sections</Label>
-                          <p className="text-xs text-muted-foreground">
-                            Overview is always included.
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="text-right">
-                            <p className="text-xs font-medium">Include score</p>
-                            <p className="text-[11px] text-muted-foreground">Adds a 1–100 score in Overview.</p>
-                          </div>
-                          <Switch checked={includeScore} onCheckedChange={setIncludeScore} className="scale-90" />
-                        </div>
+              <Collapsible>
+                <Card className="bg-card/60 backdrop-blur-glass border-border/50">
+                  <CollapsibleTrigger asChild>
+                    <CardHeader className="cursor-pointer hover:bg-muted/20 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Settings2 className="h-4 w-4 text-muted-foreground" />
+                          Advanced Options
+                        </CardTitle>
+                        <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform [[data-state=open]>&]:rotate-180" />
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Badge variant="secondary">{OVERVIEW_SECTION}</Badge>
-                        {additionalSections.map((section) => (
-                          <Badge key={section} variant="secondary" className="gap-1">
-                            {section}
+                      <p className="text-xs text-muted-foreground text-left">
+                        Mix notes, review focus, custom sections
+                      </p>
+                    </CardHeader>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <CardContent className="pt-0 pb-4 px-4 space-y-4">
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="mix-notes">Mix notes (optional)</Label>
+                          <Textarea
+                            id="mix-notes"
+                            value={mixNotes}
+                            onChange={(e) => setMixNotes(e.target.value)}
+                            placeholder="Any additional context for your mix..."
+                            rows={3}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="review-prompt">Review focus (optional)</Label>
+                          <Textarea
+                            id="review-prompt"
+                            value={reviewPrompt}
+                            onChange={(e) => setReviewPrompt(e.target.value)}
+                            placeholder="What should the AI focus on?"
+                            rows={3}
+                          />
+                        </div>
+                        <div className="space-y-3 sm:col-span-2">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                              <Label>Review sections</Label>
+                              <p className="text-xs text-muted-foreground">
+                                Overview is always included.
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="text-right">
+                                <p className="text-xs font-medium">Include score</p>
+                                <p className="text-[11px] text-muted-foreground">Adds a 1–100 score in Overview.</p>
+                              </div>
+                              <Switch checked={includeScore} onCheckedChange={setIncludeScore} className="scale-90" />
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Badge variant="secondary">{OVERVIEW_SECTION}</Badge>
+                            {additionalSections.map((section) => (
+                              <Badge key={section} variant="secondary" className="gap-1">
+                                {section}
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-4 w-4"
+                                  onClick={() => {
+                                    setAdditionalSections((prev) => prev.filter((item) => item !== section));
+                                    setSectionError('');
+                                  }}
+                                  aria-label="Remove section"
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </Badge>
+                            ))}
+                          </div>
+                          <div className="flex gap-2">
+                            <Input
+                              value={sectionInput}
+                              onChange={(event) => setSectionInput(event.target.value)}
+                              placeholder="Add custom section"
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  event.preventDefault();
+                                  const formatted = formatReviewSection(sectionInput);
+                                  if (!formatted) return;
+                                  if (formatted.toLowerCase() === OVERVIEW_SECTION.toLowerCase()) {
+                                    setSectionInput('');
+                                    return;
+                                  }
+                                  if (additionalSections.some((item) => item.toLowerCase() === formatted.toLowerCase())) {
+                                    setSectionInput('');
+                                    return;
+                                  }
+                                  if (additionalSections.length >= MAX_ADDITIONAL_SECTIONS) {
+                                    setSectionError(`You can add up to ${MAX_REVIEW_SECTIONS} sections total.`);
+                                    return;
+                                  }
+                                  setAdditionalSections((prev) => [...prev, formatted]);
+                                  setSectionInput('');
+                                  setSectionError('');
+                                }
+                              }}
+                            />
                             <Button
                               type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-4 w-4"
+                              variant="outline"
                               onClick={() => {
-                                setAdditionalSections((prev) => prev.filter((item) => item !== section));
+                                const formatted = formatReviewSection(sectionInput);
+                                if (!formatted) return;
+                                if (formatted.toLowerCase() === OVERVIEW_SECTION.toLowerCase()) {
+                                  setSectionInput('');
+                                  return;
+                                }
+                                if (additionalSections.some((item) => item.toLowerCase() === formatted.toLowerCase())) {
+                                  setSectionInput('');
+                                  return;
+                                }
+                                if (additionalSections.length >= MAX_ADDITIONAL_SECTIONS) {
+                                  setSectionError(`You can add up to ${MAX_REVIEW_SECTIONS} sections total.`);
+                                  return;
+                                }
+                                setAdditionalSections((prev) => [...prev, formatted]);
+                                setSectionInput('');
                                 setSectionError('');
                               }}
-                              aria-label="Remove section"
                             >
-                              <X className="h-3 w-3" />
+                              Add
                             </Button>
-                          </Badge>
-                        ))}
+                          </div>
+                          {sectionError && (
+                            <p className="text-sm text-destructive">{sectionError}</p>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex gap-2">
-                        <Input
-                          value={sectionInput}
-                          onChange={(event) => setSectionInput(event.target.value)}
-                          placeholder="Add custom section"
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                              event.preventDefault();
-                              const formatted = formatReviewSection(sectionInput);
-                              if (!formatted) return;
-                              if (formatted.toLowerCase() === OVERVIEW_SECTION.toLowerCase()) {
-                                setSectionInput('');
-                                return;
-                              }
-                              if (additionalSections.some((item) => item.toLowerCase() === formatted.toLowerCase())) {
-                                setSectionInput('');
-                                return;
-                              }
-                              if (additionalSections.length >= MAX_ADDITIONAL_SECTIONS) {
-                                setSectionError(`You can add up to ${MAX_REVIEW_SECTIONS} sections total.`);
-                                return;
-                              }
-                              setAdditionalSections((prev) => [...prev, formatted]);
-                              setSectionInput('');
-                              setSectionError('');
-                            }
-                          }}
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => {
-                            const formatted = formatReviewSection(sectionInput);
-                            if (!formatted) return;
-                            if (formatted.toLowerCase() === OVERVIEW_SECTION.toLowerCase()) {
-                              setSectionInput('');
-                              return;
-                            }
-                            if (additionalSections.some((item) => item.toLowerCase() === formatted.toLowerCase())) {
-                              setSectionInput('');
-                              return;
-                            }
-                            if (additionalSections.length >= MAX_ADDITIONAL_SECTIONS) {
-                              setSectionError(`You can add up to ${MAX_REVIEW_SECTIONS} sections total.`);
-                              return;
-                            }
-                            setAdditionalSections((prev) => [...prev, formatted]);
-                            setSectionInput('');
-                            setSectionError('');
-                          }}
-                        >
-                          Add
-                        </Button>
-                      </div>
-                      {sectionError && (
-                        <p className="text-sm text-destructive">{sectionError}</p>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                    </CardContent>
+                  </CollapsibleContent>
+                </Card>
+              </Collapsible>
             </section>
 
             {/* Central MIX Button */}

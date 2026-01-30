@@ -1,24 +1,27 @@
+import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
-import { Layers, Sparkles, Users } from 'lucide-react';
+import { Package, Sparkles, Users } from 'lucide-react';
 
 const STEPS = [
   {
-    icon: Layers,
+    icon: Package,
     title: 'Pick an Inventory',
-    description: 'Start with a shared collection of items—supplements, foods, routines, or create your own.',
+    description: 'Collections of ingredients for any topic—supplements, recipes, routines. Pick one to start building.',
     color: 'bg-primary/10 text-primary',
   },
   {
     icon: Sparkles,
     title: 'Build & Review',
-    description: 'Select what you use, add context, and get an AI-powered analysis of your setup.',
+    description: 'Tap items you use, hit Review, and get instant AI feedback on your setup.',
     color: 'bg-accent/15 text-accent-foreground',
   },
   {
     icon: Users,
     title: 'Share & Remix',
-    description: 'Post your blueprint, get feedback, and remix what others have built.',
+    description: "Post to the Wall, comment on others, or remix what they've built.",
     color: 'bg-secondary/15 text-secondary-foreground',
+    link: '/wall',
+    linkText: 'See the Wall →',
   },
 ];
 
@@ -41,6 +44,14 @@ export function HowItWorks() {
               <p className="text-sm text-muted-foreground leading-relaxed">
                 {step.description}
               </p>
+              {'link' in step && step.link && (
+                <Link
+                  to={step.link}
+                  className="inline-block text-sm text-primary hover:underline font-medium"
+                >
+                  {step.linkText}
+                </Link>
+              )}
             </CardContent>
           </Card>
         ))}
