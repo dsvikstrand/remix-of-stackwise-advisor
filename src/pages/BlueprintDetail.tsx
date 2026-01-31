@@ -122,7 +122,10 @@ export default function BlueprintDetail() {
             <Card>
               <CardHeader className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+                  <Link 
+                    to={`/u/${blueprint.creator_user_id}`}
+                    className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                  >
                     <Avatar className="h-10 w-10">
                       <AvatarImage src={blueprint.creator_profile?.avatar_url || undefined} />
                       <AvatarFallback>
@@ -137,7 +140,7 @@ export default function BlueprintDetail() {
                         {formatDistanceToNow(new Date(blueprint.created_at), { addSuffix: true })}
                       </p>
                     </div>
-                  </div>
+                  </Link>
                   <div className="flex items-center gap-2">
                     <Button
                       variant="ghost"
@@ -252,7 +255,10 @@ export default function BlueprintDetail() {
                   <div className="space-y-3">
                     {comments.map((row) => (
                       <div key={row.id} className="rounded-lg border border-border/60 p-3">
-                        <div className="flex items-center gap-2">
+                        <Link 
+                          to={`/u/${row.user_id}`}
+                          className="flex items-center gap-2 hover:opacity-80 transition-opacity w-fit"
+                        >
                           <Avatar className="h-8 w-8">
                             <AvatarImage src={row.profile?.avatar_url || undefined} />
                             <AvatarFallback>
@@ -267,7 +273,7 @@ export default function BlueprintDetail() {
                               {formatDistanceToNow(new Date(row.created_at), { addSuffix: true })}
                             </p>
                           </div>
-                        </div>
+                        </Link>
                         <p className="text-sm mt-2">{row.content}</p>
                       </div>
                     ))}

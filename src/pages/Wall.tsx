@@ -254,18 +254,25 @@ export default function Wall() {
                     <Link key={post.id} to={`/blueprint/${post.id}`} className="block">
                       <Card className="overflow-hidden transition hover:border-primary/40 hover:shadow-md">
                         <CardHeader className="flex flex-row items-center gap-3 pb-2">
-                          <Avatar className="h-10 w-10">
-                            <AvatarImage src={post.profile.avatar_url || undefined} />
-                            <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                              {initials}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1">
-                            <p className="font-medium text-sm">{displayName}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
-                            </p>
-                          </div>
+                          <Link 
+                            to={`/u/${post.creator_user_id}`} 
+                            onClick={(event) => event.stopPropagation()}
+                            className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                          >
+                            <Avatar className="h-10 w-10">
+                              <AvatarImage src={post.profile.avatar_url || undefined} />
+                              <AvatarFallback className="bg-primary/10 text-primary text-sm">
+                                {initials}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="font-medium text-sm">{displayName}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
+                              </p>
+                            </div>
+                          </Link>
+                          <div className="flex-1" />
                           <Badge variant="secondary" className="bg-primary/10 text-primary">
                             <Layers className="h-3 w-3 mr-1" />
                             Blueprint

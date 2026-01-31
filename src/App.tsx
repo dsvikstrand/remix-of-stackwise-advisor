@@ -11,7 +11,8 @@ import Protein from "./pages/Protein";
 import Wall from "./pages/Wall";
 import Auth from "./pages/Auth";
 import MyRecipes from "./pages/MyRecipes";
-import Profile from "./pages/Profile";
+import Settings from "./pages/Settings";
+import UserProfile from "./pages/UserProfile";
 import Tags from "./pages/Tags";
 import PostDetail from "./pages/PostDetail";
 import Inventory from "./pages/Inventory";
@@ -47,7 +48,8 @@ const App = () => (
             <Route path="/blueprint/:blueprintId" element={<BlueprintDetail />} />
             <Route path="/blueprint/:blueprintId/remix" element={<RequireAuth><BlueprintRemix /></RequireAuth>} />
             <Route path="/my-recipes" element={<RequireAuth><MyRecipes /></RequireAuth>} />
-            <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
+            <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
+            <Route path="/u/:userId" element={<UserProfile />} />
             <Route path="/tags" element={<RequireAuth><Tags /></RequireAuth>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

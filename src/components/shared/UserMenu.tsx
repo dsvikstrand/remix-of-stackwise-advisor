@@ -64,9 +64,15 @@ export function UserMenu() {
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link to="/profile" className="flex items-center cursor-pointer">
+          <Link to={`/u/${user.id}`} className="flex items-center cursor-pointer">
+            <User className="mr-2 h-4 w-4" />
+            My Profile
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link to="/settings" className="flex items-center cursor-pointer">
             <Settings className="mr-2 h-4 w-4" />
-            Profile Settings
+            Settings
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
