@@ -16,6 +16,9 @@ import { BlueprintItemPicker } from '@/components/blueprint/BlueprintItemPicker'
 import { BlueprintAnalysisView } from '@/components/blueprint/BlueprintAnalysisView';
 import { BlueprintLoadingAnimation } from '@/components/blueprint/BlueprintLoadingAnimation';
 import { BuildPageGuide } from '@/components/blueprint/BuildPageGuide';
+import { StepAccordion, type BlueprintStep } from '@/components/blueprint/StepAccordion';
+import { BuildHelpOverlay, HelpButton } from '@/components/blueprint/BuildHelpOverlay';
+import { BuildTour, TourBanner, isTourCompleted } from '@/components/blueprint/BuildTour';
 import { useInventory } from '@/hooks/useInventories';
 import { useCreateBlueprint } from '@/hooks/useBlueprints';
 import { useTagSuggestions } from '@/hooks/useTags';
@@ -29,7 +32,7 @@ import {
   formatReviewSection,
   normalizeAdditionalSections,
 } from '@/lib/reviewSections';
-import { ArrowLeft, Check, ChevronDown, GripVertical, Pencil, Settings2, Sparkles, Trash2, X } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Settings2, Sparkles, X } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 
 const ANALYZE_BLUEPRINT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-blueprint`;
@@ -37,13 +40,6 @@ const ANALYZE_BLUEPRINT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1
 interface InventoryCategory {
   name: string;
   items: string[];
-}
-
-interface BlueprintStep {
-  id: string;
-  title: string;
-  description: string;
-  itemKeys: string[];
 }
 
 function parseCategories(schema: Json): InventoryCategory[] {
@@ -73,7 +69,7 @@ export default function InventoryBuild() {
   // Blueprint state
   const [title, setTitle] = useState('');
   const [selectedItems, setSelectedItems] = useState<Record<string, string[]>>({});
-  const [itemContexts, setItemContexts] = useState<Record<string, string>>({}); // key: "category::item"
+  const [itemContexts, setItemContexts] = useState<Record<string, string>>({});
   const [mixNotes, setMixNotes] = useState('');
   const [reviewPrompt, setReviewPrompt] = useState('');
   const [review, setReview] = useState('');
@@ -85,12 +81,12 @@ export default function InventoryBuild() {
   const [sectionError, setSectionError] = useState('');
   const [includeScore, setIncludeScore] = useState(true);
   const [steps, setSteps] = useState<BlueprintStep[]>([]);
-  const [stepTitle, setStepTitle] = useState('');
-  const [stepDescription, setStepDescription] = useState('');
-  const [stepError, setStepError] = useState('');
-  const [draggedStepIndex, setDraggedStepIndex] = useState<number | null>(null);
-  const [editingStepId, setEditingStepId] = useState<string | null>(null);
-  const [stepTitleDrafts, setStepTitleDrafts] = useState<Record<string, string>>({});
+  const [activeStepId, setActiveStepId] = useState<string | null>(null);
+
+  // Help & Tour state
+  const [showHelp, setShowHelp] = useState(false);
+  const [showTour, setShowTour] = useState(false);
+  const [showTourBanner, setShowTourBanner] = useState(() => !isTourCompleted());
 
   // Categories with custom items
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
@@ -105,9 +101,7 @@ export default function InventoryBuild() {
       );
       setIncludeScore(inventory.include_score ?? true);
       setSteps([]);
-      setStepTitle('');
-      setStepDescription('');
-      setStepError('');
+      setActiveStepId(null);
     }
   }, [inventory, categories.length]);
 
@@ -132,24 +126,30 @@ export default function InventoryBuild() {
     );
   }, []);
 
-  const addItemToLatestStep = useCallback((itemKey: string) => {
+  const addItemToActiveStep = useCallback((itemKey: string) => {
     setSteps((prev) => {
       if (prev.length === 0) {
+        // Create first step automatically
+        const newId = crypto.randomUUID();
+        setActiveStepId(newId);
         return [{
-          id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+          id: newId,
           title: '',
           description: '',
           itemKeys: [itemKey],
         }];
       }
-      const lastIndex = prev.length - 1;
-      return prev.map((step, index) => {
-        if (index !== lastIndex) return step;
+
+      // Find the active step (or use the last one)
+      const targetId = prev.find((s) => s.id === activeStepId)?.id || prev[prev.length - 1].id;
+      
+      return prev.map((step) => {
+        if (step.id !== targetId) return step;
         if (step.itemKeys.includes(itemKey)) return step;
         return { ...step, itemKeys: [...step.itemKeys, itemKey] };
       });
     });
-  }, []);
+  }, [activeStepId]);
 
   const toggleItem = useCallback((categoryName: string, item: string) => {
     const itemKey = getItemKey(categoryName, item);
@@ -164,17 +164,16 @@ export default function InventoryBuild() {
       if (wasSelected) {
         removeItemFromSteps(itemKey);
       } else {
-        addItemToLatestStep(itemKey);
+        addItemToActiveStep(itemKey);
       }
       return {
         ...prev,
         [categoryName]: Array.from(existing),
       };
     });
-  }, [addItemToLatestStep, getItemKey, removeItemFromSteps]);
+  }, [addItemToActiveStep, getItemKey, removeItemFromSteps]);
 
   const addCustomItem = useCallback((categoryName: string, itemName: string) => {
-    // Add to categories if not exists
     setCategories((prev) =>
       prev.map((category) =>
         category.name === categoryName
@@ -186,13 +185,12 @@ export default function InventoryBuild() {
       )
     );
 
-    // Auto-select the newly added item
     setSelectedItems((prev) => ({
       ...prev,
       [categoryName]: [...(prev[categoryName] || []), itemName],
     }));
-    addItemToLatestStep(getItemKey(categoryName, itemName));
-  }, [addItemToLatestStep, getItemKey]);
+    addItemToActiveStep(getItemKey(categoryName, itemName));
+  }, [addItemToActiveStep, getItemKey]);
 
   const removeItem = useCallback((categoryName: string, item: string) => {
     const itemKey = getItemKey(categoryName, item);
@@ -200,10 +198,9 @@ export default function InventoryBuild() {
       ...prev,
       [categoryName]: (prev[categoryName] || []).filter((i) => i !== item),
     }));
-    // Also remove context
     setItemContexts((prev) => {
       const newContexts = { ...prev };
-      delete newContexts[`${categoryName}::${item}`];
+      delete newContexts[itemKey];
       return newContexts;
     });
     removeItemFromSteps(itemKey);
@@ -223,48 +220,27 @@ export default function InventoryBuild() {
   }, []);
 
   const handleAddStep = useCallback(() => {
-    const titleValue = stepTitle.trim();
-    if (!titleValue) {
-      setStepError('Add a step title first.');
-      return;
-    }
     const newStep: BlueprintStep = {
-      id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
-      title: titleValue,
-      description: stepDescription.trim(),
+      id: crypto.randomUUID(),
+      title: '',
+      description: '',
       itemKeys: [],
     };
     setSteps((prev) => [...prev, newStep]);
-    setStepTitle('');
-    setStepDescription('');
-    setStepError('');
-  }, [stepDescription, stepTitle]);
-
-  const moveStep = useCallback((index: number, direction: 'up' | 'down') => {
-    setSteps((prev) => {
-      const next = [...prev];
-      const targetIndex = direction === 'up' ? index - 1 : index + 1;
-      if (targetIndex < 0 || targetIndex >= next.length) return prev;
-      const [moved] = next.splice(index, 1);
-      next.splice(targetIndex, 0, moved);
-      return next;
-    });
+    setActiveStepId(newStep.id);
   }, []);
 
-  const reorderSteps = useCallback((fromIndex: number, toIndex: number) => {
-    setSteps((prev) => {
-      if (fromIndex === toIndex) return prev;
-      const next = [...prev];
-      const [moved] = next.splice(fromIndex, 1);
-      next.splice(toIndex, 0, moved);
-      return next;
-    });
+  const handleUpdateStep = useCallback((stepId: string, updates: Partial<BlueprintStep>) => {
+    setSteps((prev) =>
+      prev.map((step) => (step.id === stepId ? { ...step, ...updates } : step))
+    );
   }, []);
 
-  const removeStep = useCallback((index: number) => {
+  const handleRemoveStep = useCallback((stepId: string) => {
     setSteps((prev) => {
-      const stepToRemove = prev[index];
+      const stepToRemove = prev.find((s) => s.id === stepId);
       if (!stepToRemove) return prev;
+
       const itemKeysToRemove = new Set(stepToRemove.itemKeys);
       if (itemKeysToRemove.size > 0) {
         setSelectedItems((prevSelected) => {
@@ -285,14 +261,28 @@ export default function InventoryBuild() {
           return nextContexts;
         });
       }
-      return prev.filter((_, i) => i !== index);
-    });
-  }, []);
 
-  const updateStep = useCallback((index: number, updates: Partial<BlueprintStep>) => {
-    setSteps((prev) =>
-      prev.map((step, i) => (i === index ? { ...step, ...updates } : step))
-    );
+      const remaining = prev.filter((s) => s.id !== stepId);
+      
+      // Update active step if needed
+      if (activeStepId === stepId && remaining.length > 0) {
+        setActiveStepId(remaining[remaining.length - 1].id);
+      } else if (remaining.length === 0) {
+        setActiveStepId(null);
+      }
+
+      return remaining;
+    });
+  }, [activeStepId, getItemKey]);
+
+  const handleReorderSteps = useCallback((fromIndex: number, toIndex: number) => {
+    setSteps((prev) => {
+      if (fromIndex === toIndex) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
   }, []);
 
   const handleAnalyze = useCallback(async () => {
@@ -307,7 +297,6 @@ export default function InventoryBuild() {
       return;
     }
 
-    // Build payload with context
     const payload: Record<string, Array<{ name: string; context?: string }>> = {};
     Object.entries(selectedItems).forEach(([category, items]) => {
       if (items.length > 0) {
@@ -397,7 +386,7 @@ export default function InventoryBuild() {
     } finally {
       setIsAnalyzing(false);
     }
-  }, [inventory, selectedItems, title, mixNotes, reviewPrompt, reviewSections, totalSelected, toast]);
+  }, [inventory, selectedItems, itemContexts, title, mixNotes, reviewPrompt, reviewSections, includeScore, totalSelected, toast]);
 
   const handlePublish = async () => {
     if (!inventory) return;
@@ -448,7 +437,6 @@ export default function InventoryBuild() {
     }
 
     try {
-      // Build payload with context for storage
       const payload: Record<string, Array<{ name: string; context?: string }>> = {};
       Object.entries(selectedItems).forEach(([category, items]) => {
         if (items.length > 0) {
@@ -550,7 +538,7 @@ export default function InventoryBuild() {
           Back to inventory
         </Link>
 
-        {/* Hero Header with dynamic inventory name */}
+        {/* Hero Header */}
         <div className="text-center mb-12 pt-8 animate-fade-in">
           <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight mb-4 relative inline-block">
             <span
@@ -594,6 +582,17 @@ export default function InventoryBuild() {
           </Card>
         ) : inventory ? (
           <div className="space-y-6">
+            {/* Tour Banner (first-time users) */}
+            {showTourBanner && (
+              <TourBanner
+                onStartTour={() => {
+                  setShowTourBanner(false);
+                  setShowTour(true);
+                }}
+                onDismiss={() => setShowTourBanner(false)}
+              />
+            )}
+
             {/* Step Guide */}
             <BuildPageGuide currentStep={review ? 3 : totalSelected > 0 ? 2 : 1} />
             
@@ -610,7 +609,7 @@ export default function InventoryBuild() {
                   />
                 </div>
                 {/* Item Picker */}
-                <div className="p-4">
+                <div className="p-4" data-help-id="picker">
                   <BlueprintItemPicker
                     categories={categories}
                     selectedItems={selectedItems}
@@ -621,185 +620,31 @@ export default function InventoryBuild() {
               </div>
             </section>
 
-            {/* Steps + Selected Items */}
+            {/* Steps Section - New Accordion */}
             <section className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
               <Card className="bg-card/60 backdrop-blur-glass border-border/50">
                 <CardHeader>
-                  <CardTitle>Steps</CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Steps</CardTitle>
+                    <HelpButton onClick={() => setShowHelp(true)} />
+                  </div>
                 </CardHeader>
-                <CardContent className="space-y-5">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="step-title">Step title</Label>
-                      <Input
-                        id="step-title"
-                        value={stepTitle}
-                        onChange={(event) => setStepTitle(event.target.value)}
-                        placeholder="e.g., Warm-up stretch"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="step-description">Description (optional)</Label>
-                      <Textarea
-                        id="step-description"
-                        value={stepDescription}
-                        onChange={(event) => setStepDescription(event.target.value)}
-                        placeholder="e.g., 5 minutes"
-                        rows={2}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button type="button" variant="outline" onClick={handleAddStep}>
-                      Add step
-                    </Button>
-                    {stepError && <p className="text-xs text-destructive">{stepError}</p>}
-                  </div>
+                <CardContent className="space-y-4">
+                  <StepAccordion
+                    steps={steps}
+                    activeStepId={activeStepId}
+                    onSetActive={setActiveStepId}
+                    onUpdateStep={handleUpdateStep}
+                    onRemoveStep={handleRemoveStep}
+                    onAddStep={handleAddStep}
+                    onReorderSteps={handleReorderSteps}
+                    onRemoveItem={removeItem}
+                    onUpdateItemContext={updateItemContext}
+                    itemContexts={itemContexts}
+                  />
 
-                  {steps.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      No steps yet. Items you select will create a nameless step.
-                    </p>
-                  ) : (
-                    <div className="space-y-4">
-                      {steps.map((step, index) => {
-                        const displayTitle = step.title.trim() ? step.title : `Step ${index + 1}`;
-                        const itemEntries = step.itemKeys
-                          .map((key) => {
-                            const [category, item] = key.split('::');
-                            return { key, category, item };
-                          })
-                          .filter((entry) => entry.item);
-                        const isCurrentStep = index === steps.length - 1;
-                        const isEditing = editingStepId === step.id;
-                        const draftValue = stepTitleDrafts[step.id] ?? step.title;
-                        return (
-                          <div
-                            key={step.id}
-                            className={`rounded-xl border p-4 space-y-3 ${isCurrentStep ? 'border-primary/60 bg-primary/5' : 'border-border/40 bg-background/40'}`}
-                            draggable
-                            onDragStart={() => setDraggedStepIndex(index)}
-                            onDragOver={(event) => event.preventDefault()}
-                            onDrop={() => {
-                              if (draggedStepIndex === null) return;
-                              reorderSteps(draggedStepIndex, index);
-                              setDraggedStepIndex(null);
-                            }}
-                            onDragEnd={() => setDraggedStepIndex(null)}
-                          >
-                            <div className="flex flex-wrap items-center gap-2">
-                              <div className="flex items-center gap-2 flex-1 min-w-[180px]">
-                                <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
-                                {isEditing ? (
-                                  <div className="flex items-center gap-2 flex-1">
-                                    <Input
-                                      value={draftValue}
-                                      onChange={(event) =>
-                                        setStepTitleDrafts((prev) => ({ ...prev, [step.id]: event.target.value }))
-                                      }
-                                      placeholder={displayTitle}
-                                      className="flex-1"
-                                    />
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => {
-                                        updateStep(index, { title: draftValue });
-                                        setEditingStepId(null);
-                                      }}
-                                      aria-label="Save step title"
-                                    >
-                                      <Check className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => {
-                                        setStepTitleDrafts((prev) => ({ ...prev, [step.id]: step.title }));
-                                        setEditingStepId(null);
-                                      }}
-                                      aria-label="Cancel edit"
-                                    >
-                                      <X className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center gap-2 flex-1">
-                                    <p className="font-medium">{displayTitle}</p>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => {
-                                        setEditingStepId(step.id);
-                                        setStepTitleDrafts((prev) => ({ ...prev, [step.id]: step.title }));
-                                      }}
-                                      aria-label="Edit step title"
-                                    >
-                                      <Pencil className="h-3.5 w-3.5" />
-                                    </Button>
-                                  </div>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Badge variant="secondary">{step.itemKeys.length} items</Badge>
-                                {isCurrentStep && <Badge variant="outline">Current</Badge>}
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => removeStep(index)}
-                                  aria-label="Remove step"
-                                >
-                                  <Trash2 className="h-4 w-4 text-destructive" />
-                                </Button>
-                              </div>
-                            </div>
-                            <Textarea
-                              value={step.description}
-                              onChange={(event) => updateStep(index, { description: event.target.value })}
-                              placeholder="Add step notes..."
-                              rows={2}
-                            />
-                            {itemEntries.length === 0 ? (
-                              <p className="text-xs text-muted-foreground">No items selected for this step.</p>
-                            ) : (
-                              <div className="space-y-3">
-                                {itemEntries.map((entry) => (
-                                  <div key={entry.key} className="rounded-lg border border-border/40 p-3 space-y-2">
-                                    <div className="flex items-center justify-between gap-2">
-                                      <div>
-                                        <p className="text-sm font-medium">{entry.item}</p>
-                                        <p className="text-xs text-muted-foreground">{entry.category}</p>
-                                      </div>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => removeItem(entry.category, entry.item)}
-                                        aria-label="Remove item"
-                                      >
-                                        <Trash2 className="h-4 w-4 text-destructive" />
-                                      </Button>
-                                    </div>
-                                    <Input
-                                      value={itemContexts[entry.key] || ''}
-                                      onChange={(event) => updateItemContext(entry.category, entry.item, event.target.value)}
-                                      placeholder="Add context (e.g., 0.5 mg, morning, with food...)"
-                                    />
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
                   {totalSelected > 0 && (
-                    <div className="flex justify-end">
+                    <div className="flex justify-end pt-2">
                       <Button type="button" variant="ghost" onClick={clearSelection}>
                         Clear all selections
                       </Button>
@@ -953,7 +798,7 @@ export default function InventoryBuild() {
             </section>
 
             {/* Central MIX Button */}
-            <section className="flex justify-center py-8 animate-fade-in" style={{ animationDelay: '0.2s' }}>
+            <section className="flex justify-center py-8 animate-fade-in" style={{ animationDelay: '0.2s' }} data-help-id="mix">
               <MixButton
                 onClick={handleAnalyze}
                 disabled={totalSelected === 0}
@@ -1053,6 +898,23 @@ export default function InventoryBuild() {
           </Card>
         )}
       </main>
+
+      {/* Help Overlay */}
+      <BuildHelpOverlay
+        isOpen={showHelp}
+        onClose={() => setShowHelp(false)}
+        onStartTour={() => {
+          setShowHelp(false);
+          setShowTour(true);
+        }}
+      />
+
+      {/* Guided Tour */}
+      <BuildTour
+        isActive={showTour}
+        onComplete={() => setShowTour(false)}
+        onSkip={() => setShowTour(false)}
+      />
     </div>
   );
 }
