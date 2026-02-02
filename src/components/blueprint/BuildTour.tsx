@@ -280,3 +280,24 @@ export function isTourCompleted(): boolean {
 export function resetTour(): void {
   localStorage.removeItem(TOUR_STORAGE_KEY);
 }
+
+// Small icon button to restart the tour (always visible)
+interface TourButtonProps {
+  onClick: () => void;
+}
+
+export function TourButton({ onClick }: TourButtonProps) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      onClick={onClick}
+      className="h-9 w-9 rounded-full"
+      aria-label="Take a tour"
+      title="Take a tour"
+    >
+      <Compass className="h-4 w-4" />
+    </Button>
+  );
+}

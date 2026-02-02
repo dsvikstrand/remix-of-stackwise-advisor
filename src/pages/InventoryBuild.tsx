@@ -18,7 +18,7 @@ import { BlueprintLoadingAnimation } from '@/components/blueprint/BlueprintLoadi
 import { BuildPageGuide } from '@/components/blueprint/BuildPageGuide';
 import { StepAccordion, type BlueprintStep } from '@/components/blueprint/StepAccordion';
 import { BuildHelpOverlay, HelpButton } from '@/components/blueprint/BuildHelpOverlay';
-import { BuildTour, TourBanner, isTourCompleted } from '@/components/blueprint/BuildTour';
+import { BuildTour, TourBanner, TourButton, isTourCompleted } from '@/components/blueprint/BuildTour';
 import { useInventory } from '@/hooks/useInventories';
 import { useCreateBlueprint } from '@/hooks/useBlueprints';
 import { useTagSuggestions } from '@/hooks/useTags';
@@ -626,7 +626,10 @@ export default function InventoryBuild() {
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle>Steps</CardTitle>
-                    <HelpButton onClick={() => setShowHelp(true)} />
+                    <div className="flex items-center gap-1">
+                      <TourButton onClick={() => setShowTour(true)} />
+                      <HelpButton onClick={() => setShowHelp(true)} />
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
