@@ -526,7 +526,14 @@ export default function InventoryBuild() {
         <div className="absolute bottom-40 left-20 w-3 h-3 bg-primary/15 rounded-full blur-sm animate-drift" />
       </div>
 
-      <AppHeader />
+      <AppHeader
+        actions={
+          <div className="flex items-center gap-1">
+            <TourButton onClick={() => setShowTour(true)} />
+            <HelpButton onClick={() => setShowHelp(true)} />
+          </div>
+        }
+      />
 
       <main className="container mx-auto px-4 py-8 max-w-3xl">
         {/* Back link */}
@@ -624,13 +631,7 @@ export default function InventoryBuild() {
             <section className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
               <Card className="bg-card/60 backdrop-blur-glass border-border/50">
                 <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle>Steps</CardTitle>
-                    <div className="flex items-center gap-1">
-                      <TourButton onClick={() => setShowTour(true)} />
-                      <HelpButton onClick={() => setShowHelp(true)} />
-                    </div>
-                  </div>
+                  <CardTitle>Steps</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <StepAccordion
