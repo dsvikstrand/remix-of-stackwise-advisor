@@ -1,221 +1,262 @@
 
-# Blueprint Builder UX Improvement Plan
+# Inventory Create UX Improvement Plan
 
 ## Overview
 
-This plan improves the "Mix" page (InventoryBuild.tsx) to make the step-based flow more intuitive and visually clear. Based on your preferences:
+Add the same guided tour and help system to the Inventory Create page (`/inventory/create`) that was implemented for the Blueprint Builder, with these specific preferences:
 
-- **Steps Layout**: Vertical accordion with one step expanded at a time
-- **Help System**: Floating tooltips + optional guided tour (activated by button)
-- **Item Selection**: Keep current auto-add behavior (items go to latest step)
-- **Add Step Flow**: Quick-add button that creates inline-editable steps
-
----
-
-## Key Changes
-
-### 1. Vertical Accordion for Steps
-
-**Current Issue**: Steps are displayed as flat cards with everything visible, making the page feel cluttered.
-
-**Solution**: Convert to a proper accordion where:
-- Only one step is expanded at a time (the "active" step)
-- Collapsed steps show: Step number, title, item count badge
-- Expanded step shows: Title (inline editable), description, items with context inputs
-- The "current step" (latest) auto-expands by default
-- Visual indicator shows which step receives new items
-
-**Layout Structure**:
-```text
-+------------------------------------------+
-|  [+] Add Step                            |
-+------------------------------------------+
-|  ▼ Step 1: Clean Face         3 items    |  <- Expanded (active)
-|    +--------------------------------------+
-|    | Description: [Start with basics...] |
-|    +--------------------------------------+
-|    | • Cleanser      [gentle, AM/PM]     |
-|    | • Toner         [2 pumps]           |
-|    | • Micellar      [PM only]           |
-|    +--------------------------------------+
-+------------------------------------------+
-|  ▶ Step 2: Treatment          2 items    |  <- Collapsed
-+------------------------------------------+
-|  ▶ Step 3: Moisturize         1 item     |  <- Collapsed
-+------------------------------------------+
-```
-
-### 2. Quick-Add Step Button
-
-**Current Issue**: The add step form (title + description inputs) takes up space and feels disconnected.
-
-**Solution**: 
-- Replace with a single "+ Add Step" button at the top of the steps section
-- Clicking creates a new step with placeholder title "Step N"
-- Step title is inline-editable (click to edit, similar to renaming a file)
-- Description is optional, editable when step is expanded
-- New step auto-expands and becomes the "active" step
-
-### 3. Active Step Indicator
-
-**Current Issue**: Users don't know which step receives new items when they click in the picker.
-
-**Solution**:
-- The expanded step is the "active" step (receives new items)
-- Show a subtle "ACTIVE" or "CURRENT" badge on the expanded step
-- Brief highlight animation when an item is added
-- Optional: "Items you select will be added here" hint inside active step
-
-### 4. Floating Tooltips Help System
-
-**New Component**: `BuildPageHelpOverlay.tsx`
-
-**Behavior**:
-- A small "?" help button floats in the corner of the build section
-- When clicked, displays floating labels next to each major UI element:
-  - Picker: "Select items from inventory categories"
-  - Steps: "Organize items into ordered steps"
-  - Active step: "Selected items appear here automatically"
-  - Add Step: "Create a new step for your routine"
-  - Context input: "Add notes like dosage or timing"
-- Click anywhere or press Escape to dismiss
-- Labels are small, non-modal, and positioned smartly to avoid overlap
-
-### 5. Optional Guided Tour
-
-**New Component**: `BuildPageTour.tsx`
-
-**Behavior**:
-- "Take a tour" button appears in the help tooltip or as a first-time callout
-- When activated, highlights UI elements one at a time with explanatory text:
-  1. "Browse items by category" (highlights picker)
-  2. "Click an item to select it" (highlights item badge)
-  3. "Items flow into your active step" (highlights steps)
-  4. "Add context like dosage or timing" (highlights context input)
-  5. "Create more steps to organize your routine" (highlights Add Step)
-  6. "When ready, hit Mix for AI analysis" (highlights MIX button)
-- User clicks "Next" to advance, "Skip" to close
-- Stores completion in localStorage so it doesn't repeat
+- **Tour activation**: First-time banner + permanent small compass icon
+- **Button placement**: Top of page, under the main header navigation, aligned right
+- **Tour scope**: Skip the quick suggestion chips (keep tour shorter/focused)
+- **Visual style**: Match inventory/orange theme for the banner
 
 ---
 
-## Implementation Details
+## Implementation Summary
 
-### New Files to Create
+### 1. New Tour & Help Components
 
-| File | Purpose |
-|------|---------|
-| `src/components/blueprint/StepAccordion.tsx` | Collapsible step component with inline editing |
-| `src/components/blueprint/BuildHelpOverlay.tsx` | Floating tooltip help system |
-| `src/components/blueprint/BuildTour.tsx` | Step-by-step guided tour |
+Create two new files mirroring the Blueprint Builder pattern:
 
-### Files to Modify
+**`InventoryCreateTour.tsx`**
+- 4-step guided tour (keywords, generate, categories, publish)
+- First-time welcome banner with orange/amber theme
+- Small compass icon button for restart
+- localStorage key: `inventory_create_tour_completed`
 
-| File | Changes |
-|------|---------|
-| `src/pages/InventoryBuild.tsx` | Replace steps card with new accordion, add help button, integrate tour |
-| `src/components/blueprint/BuildPageGuide.tsx` | Minor: ensure it works with new layout |
+**`InventoryCreateHelpOverlay.tsx`**
+- Floating tooltips for major UI elements
+- Portal-based with smart positioning
+- Same "?" button pattern
+
+### 2. Button Placement Change
+
+Move the help and tour buttons from card headers to the **AppHeader actions slot** (appears next to theme toggle). This applies to:
+- **InventoryCreate.tsx** - Add tour/help buttons to header
+- **InventoryBuild.tsx** - Move existing buttons from card header to page header
+
+This creates a consistent placement across both pages: buttons appear in the top header bar, on the right side, under the main navigation.
+
+### 3. Progressive Disclosure
+
+Collapse "Custom instructions" and "Preferred categories" into an **Advanced Options** section to reduce initial visual noise for new users.
 
 ---
 
-## Component Specifications
+## New Files
 
-### StepAccordion Component
+### File 1: `src/components/inventory/InventoryCreateTour.tsx`
 
-**Props**:
 ```typescript
-interface StepAccordionProps {
-  steps: BlueprintStep[];
-  activeStepId: string | null;
-  onSetActive: (stepId: string) => void;
-  onUpdateStep: (stepId: string, updates: Partial<BlueprintStep>) => void;
-  onRemoveStep: (stepId: string) => void;
-  onReorderSteps: (fromIndex: number, toIndex: number) => void;
-  onRemoveItem: (stepId: string, itemKey: string) => void;
-  onUpdateItemContext: (itemKey: string, context: string) => void;
-  itemContexts: Record<string, string>;
-}
-```
-
-**Features**:
-- Renders each step as a collapsible panel
-- Only one step open at a time
-- Drag handle for reordering
-- Inline title editing (double-click or edit icon)
-- Item list with context inputs
-- Remove item and remove step buttons
-- "ACTIVE" badge on expanded step
-- Empty state: "Select items from the inventory above"
-
-### BuildHelpOverlay Component
-
-**Props**:
-```typescript
-interface BuildHelpOverlayProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onStartTour: () => void;
-}
-```
-
-**Positioning Logic**:
-- Uses portal to render at document root
-- Calculates positions based on target element refs
-- Uses fixed positioning with smart offset
-- Backdrop click dismisses
-
-**Tooltip Content**:
-```typescript
-const HELP_TOOLTIPS = [
-  { id: 'picker', text: 'Browse and select items by category' },
-  { id: 'steps', text: 'Organize your items into ordered steps' },
-  { id: 'active-step', text: 'Selected items appear here' },
-  { id: 'add-step', text: 'Create a new step in your routine' },
-  { id: 'context', text: 'Add notes like "2 drops" or "morning"' },
-  { id: 'mix', text: 'Generate AI analysis of your blueprint' },
+// Tour steps (4 total - skipping quick suggestions)
+const INVENTORY_TOUR_STEPS = [
+  {
+    targetId: 'keywords',
+    title: 'Describe Your Inventory',
+    description: 'Enter a few words like "skincare routine" or "smoothie ingredients".',
+  },
+  {
+    targetId: 'generate',
+    title: 'Generate with AI',
+    description: 'Click Generate to create categories and items automatically.',
+  },
+  {
+    targetId: 'edit-categories',
+    title: 'Review & Edit',
+    description: 'Rename categories, add items, or remove what you don\'t need.',
+  },
+  {
+    targetId: 'publish',
+    title: 'Create & Build',
+    description: 'Publish your inventory and start creating blueprints!',
+  },
 ];
 ```
 
-### BuildTour Component
+**Exports:**
+- `InventoryCreateTour` - Main tour overlay component
+- `InventoryTourBanner` - First-time welcome banner (orange/amber themed)
+- `InventoryTourButton` - Small compass icon button
+- `isInventoryTourCompleted()` - Check localStorage
+- `resetInventoryTour()` - Clear localStorage
 
-**Props**:
+**Banner Styling (orange theme):**
+- Border: `border-orange-500/30`
+- Background: `bg-orange-500/5`
+- Icon container: `bg-orange-500/10`
+- Icon color: `text-orange-500`
+
+### File 2: `src/components/inventory/InventoryCreateHelpOverlay.tsx`
+
 ```typescript
-interface BuildTourProps {
-  isActive: boolean;
-  onComplete: () => void;
-  onSkip: () => void;
-}
+const INVENTORY_HELP_DEFINITIONS = [
+  { id: 'keywords', text: 'Describe what kind of inventory you want to create' },
+  { id: 'generate', text: 'AI generates categories and items for you' },
+  { id: 'advanced-options', text: 'Customize how AI generates your inventory' },
+  { id: 'edit-categories', text: 'Rename, add, or remove categories and items' },
+  { id: 'tags', text: 'Help others discover your inventory with tags' },
+  { id: 'publish', text: 'Create your inventory and start building' },
+];
 ```
 
-**Tour Steps**:
-1. Highlight item picker - "Browse items by category. Click to select."
-2. Highlight step accordion - "Items flow into your active step."
-3. Highlight Add Step button - "Create steps to organize your routine."
-4. Highlight context input (if items exist) - "Add context like dosage or timing."
-5. Highlight MIX button - "When ready, hit Mix for AI analysis!"
-
-**State Management**:
-- `localStorage.getItem('blueprint_build_tour_completed')`
-- First-time visitors see a subtle "New here? Take a quick tour" banner
+**Exports:**
+- `InventoryCreateHelpOverlay` - Portal-based tooltip overlay
+- `InventoryHelpButton` - "?" icon button
 
 ---
 
-## Visual Design Notes
+## Modified Files
 
-### Accordion Styling
-- Collapsed: `bg-muted/30 hover:bg-muted/50` 
-- Expanded: `bg-card border-primary/30 shadow-sm`
-- Active badge: Small green/primary badge next to title
+### File 3: `src/pages/InventoryCreate.tsx`
 
-### Help Overlay
-- Tooltips: Dark background with arrow pointing to element
-- "?" button: Fixed position, bottom-right of the steps section
-- Semi-transparent backdrop when active
+**Changes:**
 
-### Tour
-- Spotlight effect: Dim everything except highlighted element
-- Card overlay with title + description + Next/Skip buttons
-- Progress dots showing current step
+1. **Add imports for new components**
+
+2. **Add state for tour and help**
+   ```typescript
+   const [showHelp, setShowHelp] = useState(false);
+   const [showTour, setShowTour] = useState(false);
+   const [showTourBanner, setShowTourBanner] = useState(() => !isInventoryTourCompleted());
+   ```
+
+3. **Pass actions to AppHeader**
+   ```tsx
+   <AppHeader
+     actions={
+       <div className="flex items-center gap-1">
+         <InventoryTourButton onClick={() => setShowTour(true)} />
+         <InventoryHelpButton onClick={() => setShowHelp(true)} />
+       </div>
+     }
+   />
+   ```
+
+4. **Add tour banner after AppHeader**
+   ```tsx
+   {showTourBanner && (
+     <InventoryTourBanner
+       onStartTour={() => {
+         setShowTourBanner(false);
+         setShowTour(true);
+       }}
+       onDismiss={() => setShowTourBanner(false)}
+     />
+   )}
+   ```
+
+5. **Collapse advanced options**
+   - Wrap "Custom instructions" and "Preferred categories" in a Collapsible
+   - Add Settings2 icon and "Advanced Options" label
+   - Place after keywords input and generate button
+
+6. **Add data-help-id attributes**
+   - Keywords input: `data-help-id="keywords"`
+   - Generate button: `data-help-id="generate"`
+   - Advanced section: `data-help-id="advanced-options"`
+   - Categories card: `data-help-id="edit-categories"`
+   - Tags section: `data-help-id="tags"`
+   - Create button: `data-help-id="publish"`
+
+7. **Add tour and help overlays at page bottom**
+   ```tsx
+   <InventoryCreateTour
+     isActive={showTour}
+     onComplete={() => setShowTour(false)}
+     onSkip={() => setShowTour(false)}
+   />
+   <InventoryCreateHelpOverlay
+     isOpen={showHelp}
+     onClose={() => setShowHelp(false)}
+     onStartTour={() => {
+       setShowHelp(false);
+       setShowTour(true);
+     }}
+   />
+   ```
+
+### File 4: `src/pages/InventoryBuild.tsx`
+
+**Changes:**
+
+1. **Move tour/help buttons to AppHeader actions**
+   - Remove TourButton and HelpButton from the Steps card header
+   - Pass them as `actions` prop to AppHeader instead
+
+2. **Update AppHeader call**
+   ```tsx
+   <AppHeader
+     actions={
+       <div className="flex items-center gap-1">
+         <TourButton onClick={() => setShowTour(true)} />
+         <HelpButton onClick={() => setShowHelp(true)} />
+       </div>
+     }
+   />
+   ```
+
+3. **Simplify Steps card header**
+   - Remove the buttons div, just show the title
+
+---
+
+## Visual Layout
+
+### Header with Buttons (Both Pages)
+
+```text
++-------------------------------------------------------------------------+
+| [Logo] Blueprints V_1  | Home | Inventory | Wall | Tags |     [🧭] [?] [🌙] [👤] |
++-------------------------------------------------------------------------+
+```
+
+The compass (tour) and ? (help) buttons appear in the header's right side, next to the theme toggle and user menu.
+
+### First-Time Banner (Orange Theme)
+
+```text
++------------------------------------------+
+| [🧭] New here?                           |
+|      Take a quick tour to learn how to   |
+|      create inventories.                 |
+|                     [Maybe later] [Tour] |
++------------------------------------------+
+```
+
+Styled with orange/amber accents to match the inventory theme.
+
+### Advanced Options (Collapsed)
+
+```text
++------------------------------------------+
+| ⚙️ Advanced Options                    ▼ |
+|    Custom instructions, categories       |
++------------------------------------------+
+```
+
+When expanded, shows the existing custom instructions textarea and preferred categories section.
+
+---
+
+## Technical Notes
+
+### Reusing Patterns
+
+Both new components follow the exact same patterns as `BuildTour.tsx` and `BuildHelpOverlay.tsx`:
+
+- **Tour**: `createPortal`, SVG spotlight mask, keyboard navigation (Escape, Enter), progress dots, localStorage persistence
+- **Help**: Portal rendering, smart tooltip positioning, backdrop click dismiss
+
+### Storage Keys
+
+| Feature | Key |
+|---------|-----|
+| Inventory Create Tour | `inventory_create_tour_completed` |
+| Blueprint Build Tour | `blueprint_build_tour_completed` |
+
+### Data Attributes
+
+Elements are tagged with `data-help-id="..."` to enable both the help overlay (shows tooltips for all) and tour (spotlights one at a time).
 
 ---
 
@@ -223,22 +264,19 @@ interface BuildTourProps {
 
 | Step | Task |
 |------|------|
-| 1 | Create `StepAccordion.tsx` component |
-| 2 | Refactor `InventoryBuild.tsx` to use new accordion |
-| 3 | Add "+ Add Step" quick-add button |
-| 4 | Add inline title editing to steps |
-| 5 | Create `BuildHelpOverlay.tsx` component |
-| 6 | Add "?" help button to the page |
-| 7 | Create `BuildTour.tsx` component |
-| 8 | Add tour trigger (button + first-time callout) |
-| 9 | Test and polish animations/transitions |
+| 1 | Create `InventoryCreateTour.tsx` with tour, banner (orange theme), and button |
+| 2 | Create `InventoryCreateHelpOverlay.tsx` with floating tooltips |
+| 3 | Update `InventoryCreate.tsx`: add state, AppHeader actions, banner, data-help-ids, advanced options collapsible |
+| 4 | Update `InventoryBuild.tsx`: move buttons from card header to AppHeader actions |
+| 5 | Test tour flow and tooltip positioning on both pages |
 
 ---
 
 ## Expected Outcomes
 
-1. **Cleaner visual hierarchy** - One expanded step at a time reduces cognitive load
-2. **Clearer active step** - Users know exactly where items will appear
-3. **Faster step creation** - One-click add, inline editing
-4. **Discoverable help** - "?" button available without cluttering the UI
-5. **Optional onboarding** - Tour for first-timers, skippable for experienced users
+1. **Consistent UX** - Both create and build pages use same header-level button placement
+2. **First-time guidance** - Orange-themed banner welcomes new users on inventory create
+3. **Always-accessible help** - Compass icon in header restarts tour anytime
+4. **Contextual tooltips** - "?" button explains what each section does
+5. **Reduced overwhelm** - Advanced options hidden by default
+6. **Shorter tour** - 4 focused steps (skipping quick suggestions)
