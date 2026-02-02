@@ -8,13 +8,24 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { TagInput } from '@/components/shared/TagInput';
+import { 
+  InventoryCreateTour, 
+  InventoryTourBanner, 
+  InventoryTourButton, 
+  isInventoryTourCompleted 
+} from '@/components/inventory/InventoryCreateTour';
+import { 
+  InventoryCreateHelpOverlay, 
+  InventoryHelpButton 
+} from '@/components/inventory/InventoryCreateHelpOverlay';
 import { useCreateInventory } from '@/hooks/useInventories';
 import { useToast } from '@/hooks/use-toast';
 import { useTagSuggestions } from '@/hooks/useTags';
 import { useRecentTags } from '@/hooks/useRecentTags';
 import { DEFAULT_ADDITIONAL_SECTIONS } from '@/lib/reviewSections';
-import { Loader2, Sparkles, Wand2, X } from 'lucide-react';
+import { ChevronDown, Loader2, Settings2, Sparkles, Wand2, X } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 
 const GENERATE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-inventory`;
@@ -39,6 +50,7 @@ export default function InventoryCreate() {
   const [preferredCategories, setPreferredCategories] = useState<string[]>([]);
   const [preferredCategoryInput, setPreferredCategoryInput] = useState('');
   const [preferredCategoryError, setPreferredCategoryError] = useState('');
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   // Step 2: Generated/edited inventory
   const [title, setTitle] = useState('');
@@ -48,6 +60,11 @@ export default function InventoryCreate() {
   const [isPublic, setIsPublic] = useState(true);
   const maxInventoryTags = 5;
   const maxPreferredCategories = 6;
+
+  // Help & Tour state
+  const [showHelp, setShowHelp] = useState(false);
+  const [showTour, setShowTour] = useState(false);
+  const [showTourBanner, setShowTourBanner] = useState(() => !isInventoryTourCompleted());
 
   const categoryNames = useMemo(() => {
     if (!generatedSchema) return [];
@@ -196,9 +213,27 @@ export default function InventoryCreate() {
         <div className="absolute -bottom-20 right-1/4 w-80 h-80 bg-secondary/10 rounded-full blur-3xl animate-pulse-soft" />
       </div>
 
-      <AppHeader />
+      <AppHeader
+        actions={
+          <div className="flex items-center gap-1">
+            <InventoryTourButton onClick={() => setShowTour(true)} />
+            <InventoryHelpButton onClick={() => setShowHelp(true)} />
+          </div>
+        }
+      />
 
       <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+        {/* Tour Banner (first-time users) */}
+        {showTourBanner && (
+          <InventoryTourBanner
+            onStartTour={() => {
+              setShowTourBanner(false);
+              setShowTour(true);
+            }}
+            onDismiss={() => setShowTourBanner(false)}
+          />
+        )}
+
         {/* Hero Header */}
         <div className="text-center mb-12 pt-8 animate-fade-in">
           <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight mb-4 relative inline-block">
@@ -243,7 +278,7 @@ export default function InventoryCreate() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
+            <div className="space-y-2" data-help-id="keywords">
               <Label htmlFor="keywords">Describe your inventory in a few words</Label>
               <div className="flex gap-2">
                 <Input
@@ -258,6 +293,7 @@ export default function InventoryCreate() {
                   onClick={handleGenerate}
                   disabled={isGenerating || !keywords.trim()}
                   className="gap-2"
+                  data-help-id="generate"
                 >
                   {isGenerating ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -267,90 +303,6 @@ export default function InventoryCreate() {
                   {isGenerating ? 'Generating...' : generatedSchema ? 'Regenerate' : 'Generate'}
                 </Button>
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="custom-instructions">Custom instructions (optional)</Label>
-              <Textarea
-                id="custom-instructions"
-                value={customInstructions}
-                onChange={(e) => setCustomInstructions(e.target.value)}
-                placeholder="e.g., more beginner-friendly, fewer categories, emphasize budget options..."
-                rows={3}
-              />
-              {generatedSchema && (
-                <p className="text-xs text-muted-foreground">
-                  Regenerating will replace the current categories and items.
-                </p>
-              )}
-            </div>
-            <div className="space-y-3">
-              <div>
-                <Label>Preferred categories (optional)</Label>
-                <p className="text-xs text-muted-foreground">
-                  We will always generate 6 categories total.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {preferredCategories.map((category, index) => (
-                  <Badge key={`${category}-${index}`} variant="secondary" className="gap-1">
-                    {category}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-4 w-4"
-                      onClick={() => {
-                        setPreferredCategories((prev) => prev.filter((_, i) => i !== index));
-                        setPreferredCategoryError('');
-                      }}
-                      aria-label="Remove category"
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </Badge>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <Input
-                  value={preferredCategoryInput}
-                  onChange={(event) => setPreferredCategoryInput(event.target.value)}
-                  placeholder="Add category"
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault();
-                      const value = preferredCategoryInput.trim();
-                      if (!value) return;
-                      if (preferredCategories.length >= maxPreferredCategories) {
-                        setPreferredCategoryError('You can only add up to 6 categories.');
-                        return;
-                      }
-                      setPreferredCategories((prev) => [...prev, value]);
-                      setPreferredCategoryInput('');
-                      setPreferredCategoryError('');
-                    }
-                  }}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    const value = preferredCategoryInput.trim();
-                    if (!value) return;
-                    if (preferredCategories.length >= maxPreferredCategories) {
-                      setPreferredCategoryError('You can only add up to 6 categories.');
-                      return;
-                    }
-                    setPreferredCategories((prev) => [...prev, value]);
-                    setPreferredCategoryInput('');
-                    setPreferredCategoryError('');
-                  }}
-                >
-                  Add
-                </Button>
-              </div>
-              {preferredCategoryError && (
-                <p className="text-xs text-destructive">{preferredCategoryError}</p>
-              )}
             </div>
 
             {/* Quick suggestions */}
@@ -368,6 +320,109 @@ export default function InventoryCreate() {
                 </Button>
               ))}
             </div>
+
+            {/* Advanced Options - Collapsed by default */}
+            <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-between text-muted-foreground hover:text-foreground"
+                  data-help-id="advanced-options"
+                >
+                  <span className="flex items-center gap-2">
+                    <Settings2 className="h-4 w-4" />
+                    Advanced Options
+                  </span>
+                  <ChevronDown className={`h-4 w-4 transition-transform ${advancedOpen ? 'rotate-180' : ''}`} />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-4 pt-4">
+                <div className="space-y-2">
+                  <Label htmlFor="custom-instructions">Custom instructions (optional)</Label>
+                  <Textarea
+                    id="custom-instructions"
+                    value={customInstructions}
+                    onChange={(e) => setCustomInstructions(e.target.value)}
+                    placeholder="e.g., more beginner-friendly, fewer categories, emphasize budget options..."
+                    rows={3}
+                  />
+                  {generatedSchema && (
+                    <p className="text-xs text-muted-foreground">
+                      Regenerating will replace the current categories and items.
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <Label>Preferred categories (optional)</Label>
+                    <p className="text-xs text-muted-foreground">
+                      We will always generate 6 categories total.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {preferredCategories.map((category, index) => (
+                      <Badge key={`${category}-${index}`} variant="secondary" className="gap-1">
+                        {category}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-4 w-4"
+                          onClick={() => {
+                            setPreferredCategories((prev) => prev.filter((_, i) => i !== index));
+                            setPreferredCategoryError('');
+                          }}
+                          aria-label="Remove category"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </Badge>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      value={preferredCategoryInput}
+                      onChange={(event) => setPreferredCategoryInput(event.target.value)}
+                      placeholder="Add category"
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          const value = preferredCategoryInput.trim();
+                          if (!value) return;
+                          if (preferredCategories.length >= maxPreferredCategories) {
+                            setPreferredCategoryError('You can only add up to 6 categories.');
+                            return;
+                          }
+                          setPreferredCategories((prev) => [...prev, value]);
+                          setPreferredCategoryInput('');
+                          setPreferredCategoryError('');
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        const value = preferredCategoryInput.trim();
+                        if (!value) return;
+                        if (preferredCategories.length >= maxPreferredCategories) {
+                          setPreferredCategoryError('You can only add up to 6 categories.');
+                          return;
+                        }
+                        setPreferredCategories((prev) => [...prev, value]);
+                        setPreferredCategoryInput('');
+                        setPreferredCategoryError('');
+                      }}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                  {preferredCategoryError && (
+                    <p className="text-xs text-destructive">{preferredCategoryError}</p>
+                  )}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
           </CardContent>
         </Card>
 
@@ -401,7 +456,7 @@ export default function InventoryCreate() {
               </CardContent>
             </Card>
 
-            <Card className="bg-card/60 backdrop-blur-glass border-border/50 animate-fade-in">
+            <Card className="bg-card/60 backdrop-blur-glass border-border/50 animate-fade-in" data-help-id="edit-categories">
               <CardHeader>
                 <CardTitle>Generated Categories</CardTitle>
               </CardHeader>
@@ -527,7 +582,7 @@ export default function InventoryCreate() {
               </CardContent>
             </Card>
 
-            <Card className="bg-card/60 backdrop-blur-glass border-border/50 animate-fade-in">
+            <Card className="bg-card/60 backdrop-blur-glass border-border/50 animate-fade-in" data-help-id="tags">
               <CardHeader>
                 <CardTitle>Discovery</CardTitle>
               </CardHeader>
@@ -566,6 +621,7 @@ export default function InventoryCreate() {
               disabled={createInventory.isPending}
               className="w-full gap-2"
               size="lg"
+              data-help-id="publish"
             >
               {createInventory.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -577,6 +633,21 @@ export default function InventoryCreate() {
           </>
         )}
       </main>
+
+      {/* Tour and Help Overlays */}
+      <InventoryCreateTour
+        isActive={showTour}
+        onComplete={() => setShowTour(false)}
+        onSkip={() => setShowTour(false)}
+      />
+      <InventoryCreateHelpOverlay
+        isOpen={showHelp}
+        onClose={() => setShowHelp(false)}
+        onStartTour={() => {
+          setShowHelp(false);
+          setShowTour(true);
+        }}
+      />
     </div>
   );
 }
