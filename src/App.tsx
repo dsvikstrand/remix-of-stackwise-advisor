@@ -9,6 +9,7 @@ import Index from "./pages/Index";
 import Blend from "./pages/Blend";
 import Protein from "./pages/Protein";
 import Wall from "./pages/Wall";
+import Explore from "./pages/Explore";
 import Auth from "./pages/Auth";
 import MyRecipes from "./pages/MyRecipes";
 import Settings from "./pages/Settings";
@@ -35,6 +36,7 @@ const App = () => (
         <BrowserRouter basename={import.meta.env.BASE_URL}>
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/explore" element={<Explore />} />
             <Route path="/stacklab" element={<Index />} />
             <Route path="/blend" element={<Blend />} />
             <Route path="/protein" element={<Protein />} />
