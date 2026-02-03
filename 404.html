@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Redirecting...</title>
+    <script>
+      (function () {
+        var path = window.location.pathname;
+        var repoBase = '/remix-of-stackwise-advisor';
+        var agenticBase = repoBase + '/agentic-backend';
+        var targetBase = path.startsWith(agenticBase + '/') || path === agenticBase
+          ? agenticBase
+          : repoBase;
+
+        sessionStorage.setItem('redirect', path + window.location.search + window.location.hash);
+        window.location.replace(targetBase + '/');
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>
