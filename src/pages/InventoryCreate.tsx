@@ -28,7 +28,16 @@ import { DEFAULT_ADDITIONAL_SECTIONS } from '@/lib/reviewSections';
 import { ChevronDown, Loader2, Settings2, Sparkles, Wand2, X } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 
-const GENERATE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-inventory`;
+const SUPABASE_GENERATE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-inventory`;
+const AGENTIC_BASE_URL = import.meta.env.VITE_AGENTIC_BACKEND_URL;
+const USE_AGENTIC_BACKEND = import.meta.env.VITE_USE_AGENTIC_BACKEND === 'true';
+const AGENTIC_GENERATE_URL = AGENTIC_BASE_URL
+  ? `${AGENTIC_BASE_URL.replace(/\/$/, '')}/api/generate-inventory`
+  : '';
+
+const GENERATE_URL = USE_AGENTIC_BACKEND && AGENTIC_GENERATE_URL
+  ? AGENTIC_GENERATE_URL
+  : SUPABASE_GENERATE_URL;
 
 interface GeneratedSchema {
   summary: string;
@@ -90,12 +99,16 @@ export default function InventoryCreate() {
     setIsGenerating(true);
 
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (!USE_AGENTIC_BACKEND) {
+        headers.Authorization = `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`;
+      }
+
       const response = await fetch(GENERATE_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
+        headers,
         body: JSON.stringify({
           keywords: keywords.trim(),
           title: title.trim() || undefined,
