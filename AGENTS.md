@@ -30,8 +30,6 @@ I will control whether you write code using these flags:
 If a message includes **(no code)**, wait until I explicitly send **(code ok)** before you start implementing.
 
 ## 3) Plan-first implementation
-Even when I send **(code ok)**, do **not** start coding immediately.
-
 Process:
 - First, provide a **high-level implementation plan** (steps + files/functions to touch).
 - Then wait for my approval/adjustments.
@@ -39,6 +37,7 @@ Process:
 
 ## 4) Plan approved
 if I add PA (plan approved), you can go with code (don't need to wait for code ok here)
+PAP (plan approved -> push to github), push the latest update once you are done (with a simple comment)
 
 ## 5) Lovable tickets workflow
 When we have a new Lovable task, add a new numbered markdown file in `lovable/tickets` (e.g., `1.md`, `2.md`, ...). Do not create templates. When a ticket is solved, admin will add a `_solved` suffix to the filename.
