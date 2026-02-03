@@ -1,262 +1,244 @@
 
-# Inventory Create UX Improvement Plan
+# Explore Page Implementation Plan
 
 ## Overview
 
-Add the same guided tour and help system to the Inventory Create page (`/inventory/create`) that was implemented for the Blueprint Builder, with these specific preferences:
-
-- **Tour activation**: First-time banner + permanent small compass icon
-- **Button placement**: Top of page, under the main header navigation, aligned right
-- **Tour scope**: Skip the quick suggestion chips (keep tour shorter/focused)
-- **Visual style**: Match inventory/orange theme for the banner
+Add a new public **Explore** page (`/explore`) as a search-first discovery hub for Blueprints, Inventories, and Users. The page emphasizes a minimal, search-forward design with unified results across all content types.
 
 ---
 
-## Implementation Summary
+## Key Design Decisions
 
-### 1. New Tour & Help Components
+Based on your preferences:
 
-Create two new files mirroring the Blueprint Builder pattern:
+| Preference | Implementation |
+|------------|----------------|
+| Public access | No login required (like Wall) |
+| All content types | Blueprints, Inventories, Users searchable |
+| Search-first | Large search bar at top, minimal content below until searching |
+| Separate from Wall | Wall = social feed, Explore = cross-content search |
+| Minimal tags | Small inline chips (no tag clouds) |
+| User cards | Compact cards with avatar, name, follower count, follow button |
 
-**`InventoryCreateTour.tsx`**
-- 4-step guided tour (keywords, generate, categories, publish)
-- First-time welcome banner with orange/amber theme
-- Small compass icon button for restart
-- localStorage key: `inventory_create_tour_completed`
+---
 
-**`InventoryCreateHelpOverlay.tsx`**
-- Floating tooltips for major UI elements
-- Portal-based with smart positioning
-- Same "?" button pattern
+## Page Layout
 
-### 2. Button Placement Change
+```text
++----------------------------------------------------------+
+| [Header with AppNavigation - Explore tab highlighted]    |
++----------------------------------------------------------+
+|                                                          |
+|  +----------------------------------------------------+  |
+|  | [Search icon]  Search blueprints, inventories...   |  |
+|  +----------------------------------------------------+  |
+|                                                          |
+|  [Blueprints] [Inventories] [Users]  <- filter pills     |
+|                                                          |
+|  ------------------------------------------------        |
+|                                                          |
+|  [Results grid/list - appears after typing]              |
+|                                                          |
+|  OR (when empty):                                        |
+|                                                          |
+|  Trending Tags: [#tag1] [#tag2] [#tag3] ...              |
+|                                                          |
++----------------------------------------------------------+
+```
 
-Move the help and tour buttons from card headers to the **AppHeader actions slot** (appears next to theme toggle). This applies to:
-- **InventoryCreate.tsx** - Add tour/help buttons to header
-- **InventoryBuild.tsx** - Move existing buttons from card header to page header
+### Empty State (Before Search)
+- Large centered search bar
+- Optional subtle "Trending Tags" row (5-6 small chips, clickable to filter)
+- Minimal visual noise
 
-This creates a consistent placement across both pages: buttons appear in the top header bar, on the right side, under the main navigation.
+### Active Search State
+- Filter pills: "All" | "Blueprints" | "Inventories" | "Users"
+- Results grouped by type (if "All" selected) or filtered to single type
+- Results appear as you type (debounced 300ms)
 
-### 3. Progressive Disclosure
+---
 
-Collapse "Custom instructions" and "Preferred categories" into an **Advanced Options** section to reduce initial visual noise for new users.
+## Navigation Update
+
+Add "Explore" to `AppNavigation.tsx`:
+
+```typescript
+const navItems = [
+  { path: '/', label: 'Home', icon: Home, isPublic: true },
+  { path: '/explore', label: 'Explore', icon: Search, isPublic: true },  // NEW
+  { path: '/inventory', label: 'Inventory', icon: Layers, isPublic: false },
+  { path: '/wall', label: 'Wall', icon: Users, isPublic: true },
+  { path: '/tags', label: 'Tags', icon: Tag, isPublic: false },
+];
+```
 
 ---
 
 ## New Files
 
-### File 1: `src/components/inventory/InventoryCreateTour.tsx`
+### 1. `src/pages/Explore.tsx`
 
-```typescript
-// Tour steps (4 total - skipping quick suggestions)
-const INVENTORY_TOUR_STEPS = [
-  {
-    targetId: 'keywords',
-    title: 'Describe Your Inventory',
-    description: 'Enter a few words like "skincare routine" or "smoothie ingredients".',
-  },
-  {
-    targetId: 'generate',
-    title: 'Generate with AI',
-    description: 'Click Generate to create categories and items automatically.',
-  },
-  {
-    targetId: 'edit-categories',
-    title: 'Review & Edit',
-    description: 'Rename categories, add items, or remove what you don\'t need.',
-  },
-  {
-    targetId: 'publish',
-    title: 'Create & Build',
-    description: 'Publish your inventory and start creating blueprints!',
-  },
-];
-```
+Main page component with:
+- Search input with debounce
+- Filter pills (All | Blueprints | Inventories | Users)
+- Conditional rendering based on search state
+- Empty state with trending tags
 
-**Exports:**
-- `InventoryCreateTour` - Main tour overlay component
-- `InventoryTourBanner` - First-time welcome banner (orange/amber themed)
-- `InventoryTourButton` - Small compass icon button
-- `isInventoryTourCompleted()` - Check localStorage
-- `resetInventoryTour()` - Clear localStorage
+### 2. `src/hooks/useExploreSearch.ts`
 
-**Banner Styling (orange theme):**
-- Border: `border-orange-500/30`
-- Background: `bg-orange-500/5`
-- Icon container: `bg-orange-500/10`
-- Icon color: `text-orange-500`
+Unified search hook that:
+- Accepts query string and filter type
+- Searches across blueprints (title, tags), inventories (title, tags), and profiles (display_name)
+- Returns combined, typed results
+- Handles empty query (returns trending/popular content)
 
-### File 2: `src/components/inventory/InventoryCreateHelpOverlay.tsx`
+### 3. `src/components/explore/ExploreResultCard.tsx`
 
-```typescript
-const INVENTORY_HELP_DEFINITIONS = [
-  { id: 'keywords', text: 'Describe what kind of inventory you want to create' },
-  { id: 'generate', text: 'AI generates categories and items for you' },
-  { id: 'advanced-options', text: 'Customize how AI generates your inventory' },
-  { id: 'edit-categories', text: 'Rename, add, or remove categories and items' },
-  { id: 'tags', text: 'Help others discover your inventory with tags' },
-  { id: 'publish', text: 'Create your inventory and start building' },
-];
-```
+Polymorphic result card that renders differently based on type:
+- **Blueprint**: Title, item count, creator avatar, like count, tags
+- **Inventory**: Title, category count, blueprint count, tags
+- **User**: Avatar, display name, bio snippet, follower count, follow button
 
-**Exports:**
-- `InventoryCreateHelpOverlay` - Portal-based tooltip overlay
-- `InventoryHelpButton` - "?" icon button
+### 4. `src/components/explore/UserMiniCard.tsx`
+
+Compact user card component:
+- Small avatar (32x32)
+- Display name
+- Follower count
+- Follow/Unfollow button (inline)
 
 ---
 
 ## Modified Files
 
-### File 3: `src/pages/InventoryCreate.tsx`
+### 1. `src/components/shared/AppNavigation.tsx`
 
-**Changes:**
+- Add Explore nav item with `Search` icon
+- Mark as `isPublic: true`
 
-1. **Add imports for new components**
+### 2. `src/App.tsx`
 
-2. **Add state for tour and help**
-   ```typescript
-   const [showHelp, setShowHelp] = useState(false);
-   const [showTour, setShowTour] = useState(false);
-   const [showTourBanner, setShowTourBanner] = useState(() => !isInventoryTourCompleted());
-   ```
-
-3. **Pass actions to AppHeader**
-   ```tsx
-   <AppHeader
-     actions={
-       <div className="flex items-center gap-1">
-         <InventoryTourButton onClick={() => setShowTour(true)} />
-         <InventoryHelpButton onClick={() => setShowHelp(true)} />
-       </div>
-     }
-   />
-   ```
-
-4. **Add tour banner after AppHeader**
-   ```tsx
-   {showTourBanner && (
-     <InventoryTourBanner
-       onStartTour={() => {
-         setShowTourBanner(false);
-         setShowTour(true);
-       }}
-       onDismiss={() => setShowTourBanner(false)}
-     />
-   )}
-   ```
-
-5. **Collapse advanced options**
-   - Wrap "Custom instructions" and "Preferred categories" in a Collapsible
-   - Add Settings2 icon and "Advanced Options" label
-   - Place after keywords input and generate button
-
-6. **Add data-help-id attributes**
-   - Keywords input: `data-help-id="keywords"`
-   - Generate button: `data-help-id="generate"`
-   - Advanced section: `data-help-id="advanced-options"`
-   - Categories card: `data-help-id="edit-categories"`
-   - Tags section: `data-help-id="tags"`
-   - Create button: `data-help-id="publish"`
-
-7. **Add tour and help overlays at page bottom**
-   ```tsx
-   <InventoryCreateTour
-     isActive={showTour}
-     onComplete={() => setShowTour(false)}
-     onSkip={() => setShowTour(false)}
-   />
-   <InventoryCreateHelpOverlay
-     isOpen={showHelp}
-     onClose={() => setShowHelp(false)}
-     onStartTour={() => {
-       setShowHelp(false);
-       setShowTour(true);
-     }}
-   />
-   ```
-
-### File 4: `src/pages/InventoryBuild.tsx`
-
-**Changes:**
-
-1. **Move tour/help buttons to AppHeader actions**
-   - Remove TourButton and HelpButton from the Steps card header
-   - Pass them as `actions` prop to AppHeader instead
-
-2. **Update AppHeader call**
-   ```tsx
-   <AppHeader
-     actions={
-       <div className="flex items-center gap-1">
-         <TourButton onClick={() => setShowTour(true)} />
-         <HelpButton onClick={() => setShowHelp(true)} />
-       </div>
-     }
-   />
-   ```
-
-3. **Simplify Steps card header**
-   - Remove the buttons div, just show the title
+- Add route: `<Route path="/explore" element={<Explore />} />`
 
 ---
 
-## Visual Layout
-
-### Header with Buttons (Both Pages)
+## Data Flow
 
 ```text
-+-------------------------------------------------------------------------+
-| [Logo] Blueprints V_1  | Home | Inventory | Wall | Tags |     [🧭] [?] [🌙] [👤] |
-+-------------------------------------------------------------------------+
+User types in search bar
+        |
+        v
+useExploreSearch(query, filter)
+        |
+        +--> Blueprints: .ilike('title', '%query%') + tag match
+        +--> Inventories: .ilike('title', '%query%') + tag match
+        +--> Users: .ilike('display_name', '%query%'), is_public=true
+        |
+        v
+Combined results with type discriminator
+        |
+        v
+ExploreResultCard renders per type
 ```
 
-The compass (tour) and ? (help) buttons appear in the header's right side, next to the theme toggle and user menu.
+---
 
-### First-Time Banner (Orange Theme)
+## Search Logic Details
 
+### Blueprint Search
+```typescript
+// Search by title
+const titleMatches = await supabase
+  .from('blueprints')
+  .select('id, title, selected_items, likes_count, creator_user_id, created_at')
+  .eq('is_public', true)
+  .ilike('title', `%${query}%`)
+  .order('likes_count', { ascending: false })
+  .limit(20);
+
+// Also search by tag slug
+const tagMatches = await supabase
+  .from('tags')
+  .select('id')
+  .ilike('slug', `%${normalizedQuery}%`);
+// Then join via blueprint_tags
+```
+
+### Inventory Search
+Reuse existing `useInventorySearch` pattern with `.ilike('title', ...)` and tag matching.
+
+### User Search
+```typescript
+const users = await supabase
+  .from('profiles')
+  .select('user_id, display_name, avatar_url, bio, follower_count')
+  .eq('is_public', true)
+  .ilike('display_name', `%${query}%`)
+  .order('follower_count', { ascending: false })
+  .limit(15);
+```
+
+---
+
+## Component Specifications
+
+### UserMiniCard Props
+```typescript
+interface UserMiniCardProps {
+  userId: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  followerCount: number;
+}
+```
+
+Renders as:
 ```text
 +------------------------------------------+
-| [🧭] New here?                           |
-|      Take a quick tour to learn how to   |
-|      create inventories.                 |
-|                     [Maybe later] [Tour] |
+| [Avatar] Display Name                    |
+|          12 followers    [Follow]        |
 +------------------------------------------+
 ```
 
-Styled with orange/amber accents to match the inventory theme.
+### Filter Pills
+Simple toggle group using existing `Button` component with `variant="outline"` for inactive and `variant="default"` for active.
 
-### Advanced Options (Collapsed)
+---
 
-```text
-+------------------------------------------+
-| ⚙️ Advanced Options                    ▼ |
-|    Custom instructions, categories       |
-+------------------------------------------+
-```
+## Tag Interaction
 
-When expanded, shows the existing custom instructions textarea and preferred categories section.
+- Tags appear as small `Badge` components on result cards
+- Clicking a tag fills the search bar with `#tag-slug` and filters results
+- Search supports `#tag` syntax: if query starts with `#`, treat as tag-only search
+
+---
+
+## Empty/Default State
+
+When search is empty, show:
+1. Centered search bar with placeholder "Search blueprints, inventories, users..."
+2. Below: "Trending" section with 5-6 most-followed tags as small chips
+3. Optional: 2-3 featured blueprints (most liked this week)
 
 ---
 
 ## Technical Notes
 
-### Reusing Patterns
+### Debouncing
+Use 300ms debounce on search input to reduce API calls.
 
-Both new components follow the exact same patterns as `BuildTour.tsx` and `BuildHelpOverlay.tsx`:
+### Result Limits
+- Blueprints: 20 max
+- Inventories: 20 max
+- Users: 15 max
 
-- **Tour**: `createPortal`, SVG spotlight mask, keyboard navigation (Escape, Enter), progress dots, localStorage persistence
-- **Help**: Portal rendering, smart tooltip positioning, backdrop click dismiss
+### RLS Considerations
+- Blueprints: `is_public = true` filter
+- Inventories: `is_public = true` filter
+- Profiles: RLS policy already restricts to `is_public = true OR auth.uid() = user_id`
 
-### Storage Keys
-
-| Feature | Key |
-|---------|-----|
-| Inventory Create Tour | `inventory_create_tour_completed` |
-| Blueprint Build Tour | `blueprint_build_tour_completed` |
-
-### Data Attributes
-
-Elements are tagged with `data-help-id="..."` to enable both the help overlay (shows tooltips for all) and tour (spotlights one at a time).
+### Following Users
+Reuse existing `useFollowUser` and `useUnfollowUser` mutations from `useUserFollows.ts`.
 
 ---
 
@@ -264,19 +246,21 @@ Elements are tagged with `data-help-id="..."` to enable both the help overlay (s
 
 | Step | Task |
 |------|------|
-| 1 | Create `InventoryCreateTour.tsx` with tour, banner (orange theme), and button |
-| 2 | Create `InventoryCreateHelpOverlay.tsx` with floating tooltips |
-| 3 | Update `InventoryCreate.tsx`: add state, AppHeader actions, banner, data-help-ids, advanced options collapsible |
-| 4 | Update `InventoryBuild.tsx`: move buttons from card header to AppHeader actions |
-| 5 | Test tour flow and tooltip positioning on both pages |
+| 1 | Update `AppNavigation.tsx` to add Explore tab |
+| 2 | Add `/explore` route in `App.tsx` |
+| 3 | Create `useExploreSearch.ts` hook with unified search logic |
+| 4 | Create `UserMiniCard.tsx` component |
+| 5 | Create `ExploreResultCard.tsx` polymorphic component |
+| 6 | Create `Explore.tsx` page with search UI, filters, and results |
+| 7 | Test search across all content types |
 
 ---
 
 ## Expected Outcomes
 
-1. **Consistent UX** - Both create and build pages use same header-level button placement
-2. **First-time guidance** - Orange-themed banner welcomes new users on inventory create
-3. **Always-accessible help** - Compass icon in header restarts tour anytime
-4. **Contextual tooltips** - "?" button explains what each section does
-5. **Reduced overwhelm** - Advanced options hidden by default
-6. **Shorter tour** - 4 focused steps (skipping quick suggestions)
+1. **Unified Discovery**: One place to search all content types
+2. **Search-First UX**: Minimal visual noise, prominent search bar
+3. **User Discovery**: Find and follow creators directly from search
+4. **Tag Integration**: Seamless tag-based filtering with `#tag` syntax
+5. **Public Access**: No login barrier for exploration
+6. **Distinct from Wall**: Wall remains the social feed; Explore is the search hub
