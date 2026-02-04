@@ -113,13 +113,13 @@ export type Database = {
       }
       blueprints: {
         Row: {
+          banner_url: string | null
           created_at: string
           creator_user_id: string
           id: string
           inventory_id: string | null
           is_public: boolean
           likes_count: number
-          banner_url: string | null
           llm_review: string | null
           mix_notes: string | null
           review_prompt: string | null
@@ -130,13 +130,13 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          banner_url?: string | null
           created_at?: string
           creator_user_id: string
           id?: string
           inventory_id?: string | null
           is_public?: boolean
           likes_count?: number
-          banner_url?: string | null
           llm_review?: string | null
           mix_notes?: string | null
           review_prompt?: string | null
@@ -147,13 +147,13 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          banner_url?: string | null
           created_at?: string
           creator_user_id?: string
           id?: string
           inventory_id?: string | null
           is_public?: boolean
           likes_count?: number
-          banner_url?: string | null
           llm_review?: string | null
           mix_notes?: string | null
           review_prompt?: string | null
