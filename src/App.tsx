@@ -5,13 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import Home from "./pages/Home";
-import Index from "./pages/Index";
-import Blend from "./pages/Blend";
-import Protein from "./pages/Protein";
 import Wall from "./pages/Wall";
 import Explore from "./pages/Explore";
 import Auth from "./pages/Auth";
-import MyRecipes from "./pages/MyRecipes";
 import Settings from "./pages/Settings";
 import UserProfile from "./pages/UserProfile";
 import Tags from "./pages/Tags";
@@ -37,9 +33,6 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/explore" element={<Explore />} />
-            <Route path="/stacklab" element={<Index />} />
-            <Route path="/blend" element={<Blend />} />
-            <Route path="/protein" element={<Protein />} />
             <Route path="/wall" element={<Wall />} />
             <Route path="/wall/:postId" element={<RequireAuth><PostDetail /></RequireAuth>} />
             <Route path="/auth" element={<Auth />} />
@@ -49,7 +42,6 @@ const App = () => (
             <Route path="/inventory/:inventoryId/build" element={<RequireAuth><InventoryBuild /></RequireAuth>} />
             <Route path="/blueprint/:blueprintId" element={<BlueprintDetail />} />
             <Route path="/blueprint/:blueprintId/remix" element={<RequireAuth><BlueprintRemix /></RequireAuth>} />
-            <Route path="/my-recipes" element={<RequireAuth><MyRecipes /></RequireAuth>} />
             <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
             <Route path="/u/:userId" element={<UserProfile />} />
             <Route path="/tags" element={<RequireAuth><Tags /></RequireAuth>} />

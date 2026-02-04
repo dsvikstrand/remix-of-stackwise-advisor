@@ -27,7 +27,6 @@ npm run dev:server
 ## Endpoints
 - `POST /api/generate-inventory` → JSON inventory schema
 - `POST /api/analyze-blueprint` → SSE stream of blueprint review markdown
-- `POST /api/generate-stack` → SSE stream of stack recommendation markdown
 - `GET /api/health`
 
 ## Notes

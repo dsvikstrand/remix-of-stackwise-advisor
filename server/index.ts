@@ -8,7 +8,6 @@ import type {
   BlueprintAnalysisRequest,
   BlueprintSelectedItem,
   InventoryRequest,
-  StackGenerationRequest,
 } from './llm/types';
 
 const app = express();
@@ -106,10 +105,6 @@ const BlueprintReviewSchema = z.object({
   includeScore: z.boolean().optional(),
 });
 
-const StackGenerationSchema = z.object({
-  systemPrompt: z.string().min(1),
-  userPrompt: z.string().min(1),
-});
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true });
@@ -182,35 +177,6 @@ app.post('/api/analyze-blueprint', async (req, res) => {
   }
 });
 
-app.post('/api/generate-stack', async (req, res) => {
-  const parsed = StackGenerationSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });
-  }
-
-  const payload: StackGenerationRequest = parsed.data;
-
-  try {
-    const client = createLLMClient();
-    const output = await client.generateStack(payload);
-
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-
-    const chunkSize = 200;
-    for (let i = 0; i < output.length; i += chunkSize) {
-      const chunk = output.slice(i, i + chunkSize);
-      const frame = JSON.stringify({ choices: [{ delta: { content: chunk } }] });
-      res.write(`data: ${frame}\n\n`);
-    }
-    res.write('data: [DONE]\n\n');
-    res.end();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return res.status(500).json({ error: message });
-  }
-});
 
 app.listen(port, () => {
   console.log(`[agentic-backend] listening on :${port}`);

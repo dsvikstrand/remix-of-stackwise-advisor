@@ -5,7 +5,6 @@ import type {
   InventoryRequest,
   InventorySchema,
   LLMClient,
-  StackGenerationRequest,
 } from './types';
 import {
   BLUEPRINT_SYSTEM_PROMPT,
@@ -56,20 +55,6 @@ export function createOpenAIClient(): LLMClient {
         model,
         instructions: BLUEPRINT_SYSTEM_PROMPT,
         input: buildBlueprintUserPrompt(input),
-      });
-
-      const outputText = response.output_text?.trim();
-      if (!outputText) {
-        throw new Error('No output text from OpenAI');
-      }
-
-      return outputText;
-    },
-    async generateStack(input: StackGenerationRequest): Promise<string> {
-      const response = await client.responses.create({
-        model,
-        instructions: input.systemPrompt,
-        input: input.userPrompt,
       });
 
       const outputText = response.output_text?.trim();

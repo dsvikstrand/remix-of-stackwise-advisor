@@ -2,7 +2,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { normalizeTag, normalizeTags } from '@/lib/tagging';
-import { DEFAULT_INVENTORY_SEEDS } from '@/lib/inventoryDefaults';
 import { DEFAULT_ADDITIONAL_SECTIONS } from '@/lib/reviewSections';
 import type { Json } from '@/integrations/supabase/types';
 
@@ -46,56 +45,6 @@ interface CreateInventoryInput {
 }
 
 const INVENTORY_FIELDS = 'id, title, prompt_inventory, prompt_categories, generated_schema, review_sections, include_score, creator_user_id, is_public, likes_count, created_at, updated_at';
-
-const seededUsers = new Set<string>();
-
-async function ensureDefaultInventories(userId: string) {
-  if (seededUsers.has(userId)) return;
-  const titles = DEFAULT_INVENTORY_SEEDS.map((seed) => seed.title);
-  const { data: existing, error } = await supabase
-    .from('inventories')
-    .select('id, title')
-    .in('title', titles);
-
-  if (error) throw error;
-  const existingTitles = new Set((existing || []).map((row) => row.title));
-  const missing = DEFAULT_INVENTORY_SEEDS.filter((seed) => !existingTitles.has(seed.title));
-  if (missing.length === 0) {
-    seededUsers.add(userId);
-    return;
-  }
-
-  for (const seed of missing) {
-    const { data: inventory, error: createError } = await supabase
-      .from('inventories')
-      .insert({
-        title: seed.title,
-        prompt_inventory: seed.promptInventory,
-        prompt_categories: seed.promptCategories,
-        generated_schema: seed.generatedSchema,
-        review_sections: seed.reviewSections || DEFAULT_ADDITIONAL_SECTIONS,
-        include_score: true,
-        creator_user_id: userId,
-        is_public: true,
-      })
-      .select('id')
-      .single();
-
-    if (createError) throw createError;
-    const tags = await ensureTags(seed.tags, userId);
-    if (tags.length > 0) {
-      const { error: tagError } = await supabase.from('inventory_tags').insert(
-        tags.map((tag) => ({
-          inventory_id: inventory.id,
-          tag_id: tag.id,
-        }))
-      );
-      if (tagError) throw tagError;
-    }
-  }
-
-  seededUsers.add(userId);
-}
 
 async function ensureTags(slugs: string[], userId: string): Promise<InventoryTag[]> {
   const normalized = normalizeTags(slugs);
@@ -180,9 +129,6 @@ export function useInventorySearch(search: string) {
   return useQuery({
     queryKey: ['inventory-search', search, user?.id],
     queryFn: async () => {
-      if (user?.id) {
-        await ensureDefaultInventories(user.id);
-      }
       const trimmed = search.trim();
       let inventories: InventoryRow[] = [];
 

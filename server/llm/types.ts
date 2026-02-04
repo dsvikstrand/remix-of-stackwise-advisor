@@ -26,13 +26,7 @@ export interface BlueprintAnalysisRequest {
   includeScore?: boolean;
 }
 
-export interface StackGenerationRequest {
-  systemPrompt: string;
-  userPrompt: string;
-}
-
 export interface LLMClient {
   generateInventory(input: InventoryRequest): Promise<InventorySchema>;
   analyzeBlueprint(input: BlueprintAnalysisRequest): Promise<string>;
-  generateStack(input: StackGenerationRequest): Promise<string>;
 }

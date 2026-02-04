@@ -72,7 +72,7 @@ export default function Auth() {
     } else {
       toast({
         title: 'Account created!',
-        description: 'Welcome to StackLab. Your account is ready.',
+        description: 'Welcome to Blueprints. Your account is ready.',
       });
       navigate('/');
     }
@@ -118,11 +118,11 @@ export default function Auth() {
         <CardHeader className="text-center">
           <div className="flex items-center justify-center gap-2 mb-2">
             <Beaker className="h-8 w-8 text-primary" />
-            <span className="text-2xl font-bold">StackLab</span>
+            <span className="text-2xl font-bold">Blueprints</span>
           </div>
           <CardTitle>Welcome</CardTitle>
           <CardDescription>
-            Sign in to save your blends and share with the community
+            Sign in to save your blueprints and share with the community
           </CardDescription>
         </CardHeader>
         
