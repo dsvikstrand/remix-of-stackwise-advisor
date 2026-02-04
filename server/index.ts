@@ -14,6 +14,21 @@ const corsOrigin = process.env.CORS_ORIGIN
 app.use(cors({ origin: corsOrigin }));
 app.use(express.json({ limit: '1mb' }));
 
+const apiKey = process.env.AGENTIC_API_KEY?.trim();
+
+app.use((req, res, next) => {
+  if (!apiKey) return next();
+  if (req.method === 'OPTIONS') return next();
+  if (req.path === '/api/health') return next();
+
+  const providedKey = req.header('X-API-Key');
+  if (providedKey !== apiKey) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  return next();
+});
+
 const InventoryRequestSchema = z.object({
   keywords: z.string().min(1),
   title: z.string().optional(),

@@ -31,6 +31,7 @@ import type { Json } from '@/integrations/supabase/types';
 const SUPABASE_GENERATE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-inventory`;
 const AGENTIC_BASE_URL = import.meta.env.VITE_AGENTIC_BACKEND_URL;
 const USE_AGENTIC_BACKEND = import.meta.env.VITE_USE_AGENTIC_BACKEND === 'true';
+const AGENTIC_API_KEY = import.meta.env.VITE_AGENTIC_BACKEND_API_KEY;
 const AGENTIC_GENERATE_URL = AGENTIC_BASE_URL
   ? `${AGENTIC_BASE_URL.replace(/\/$/, '')}/api/generate-inventory`
   : '';
@@ -104,6 +105,8 @@ export default function InventoryCreate() {
       };
       if (!USE_AGENTIC_BACKEND) {
         headers.Authorization = `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`;
+      } else if (AGENTIC_API_KEY) {
+        headers['X-API-Key'] = AGENTIC_API_KEY;
       }
 
       const response = await fetch(GENERATE_URL, {
