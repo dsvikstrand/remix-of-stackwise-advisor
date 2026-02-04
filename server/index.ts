@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
-import { jwtVerify } from 'jose';
+import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { createLLMClient } from './llm/client';
 import type { InventoryRequest } from './llm/types';
@@ -18,7 +18,11 @@ const corsOrigin = process.env.CORS_ORIGIN
 app.use(cors({ origin: corsOrigin }));
 app.use(express.json({ limit: '1mb' }));
 
-const jwtSecret = process.env.SUPABASE_JWT_SECRET?.trim();
+const supabaseUrl = process.env.SUPABASE_URL?.trim();
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY?.trim();
+const supabaseClient = supabaseUrl && supabaseAnonKey
+  ? createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false } })
+  : null;
 
 const rateLimitWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS) || 60_000;
 const rateLimitMax = Number(process.env.RATE_LIMIT_MAX) || 60;
@@ -48,33 +52,28 @@ app.use((req, res, next) => {
   next();
 });
 
-const apiKey = process.env.AGENTIC_API_KEY?.trim();
-
 app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return next();
   if (req.path === '/api/health') return next();
 
-  if (jwtSecret) {
-    const authHeader = req.header('Authorization') || '';
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-    if (!token) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    const secretBytes = new TextEncoder().encode(jwtSecret);
-    jwtVerify(token, secretBytes, { algorithms: ['HS256'] })
-      .then(() => next())
-      .catch(() => res.status(401).json({ error: 'Unauthorized' }));
-    return;
+  if (!supabaseClient) {
+    return res.status(500).json({ error: 'Auth not configured' });
   }
 
-  if (!apiKey) return next();
-  const providedKey = req.header('X-API-Key');
-  if (providedKey !== apiKey) {
+  const authHeader = req.header('Authorization') || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  if (!token) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  return next();
+  supabaseClient.auth.getUser(token)
+    .then(({ data, error }) => {
+      if (error || !data.user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      return next();
+    })
+    .catch(() => res.status(401).json({ error: 'Unauthorized' }));
 });
 
 const InventoryRequestSchema = z.object({

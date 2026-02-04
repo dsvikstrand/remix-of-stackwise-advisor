@@ -9,8 +9,8 @@ Provide a thin, swappable backend client that can call OpenAI (or a mock) withou
 - `OPENAI_MODEL` (optional, default `gpt-5`)
 - `PORT` (optional, default `8787`)
 - `CORS_ORIGIN` (optional, comma-separated)
-- `AGENTIC_API_KEY` (optional; used only if `SUPABASE_JWT_SECRET` is not set)
-- `SUPABASE_JWT_SECRET` (required for JWT-only auth in production)
+- `SUPABASE_URL` (required for auth introspection)
+- `SUPABASE_ANON_KEY` (required for auth introspection)
 - `RATE_LIMIT_WINDOW_MS` (optional, default `60000`)
 - `RATE_LIMIT_MAX` (optional, default `60` per IP per window)
 
@@ -22,7 +22,7 @@ npm run dev:server
 3) Point the frontend to it:
 - Set `VITE_USE_AGENTIC_BACKEND=true`
 - Set `VITE_AGENTIC_BACKEND_URL=http://localhost:8787`
-- The frontend will send `Authorization: Bearer <supabase access token>` when using the agentic backend
+- The frontend sends `Authorization: Bearer <supabase access token>` when using the agentic backend
 
 ## Endpoints
 - `POST /api/generate-inventory` → JSON inventory schema
