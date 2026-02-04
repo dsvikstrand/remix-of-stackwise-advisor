@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: ["main", "agentic-backend"]
+    branches: ["main", "lovable-main"]
   workflow_dispatch:
 
 permissions:
@@ -21,10 +21,10 @@ jobs:
 
       - name: Set build base path
         run: |
-          if [ "${{ github.ref_name }}" = "agentic-backend" ]; then
-            echo "VITE_BASE_PATH=/remix-of-stackwise-advisor/" >> $GITHUB_ENV
-          else
+          if [ "${{ github.ref_name }}" = "lovable-main" ]; then
             echo "VITE_BASE_PATH=/remix-of-stackwise-advisor/lovable-backend/" >> $GITHUB_ENV
+          else
+            echo "VITE_BASE_PATH=/remix-of-stackwise-advisor/" >> $GITHUB_ENV
           fi
 
       - name: Setup Node
@@ -43,16 +43,16 @@ jobs:
           VITE_USE_AGENTIC_BACKEND: ${{ github.ref_name == 'agentic-backend' && 'true' || '' }}
           VITE_AGENTIC_BACKEND_URL: ${{ github.ref_name == 'agentic-backend' && 'https://bapi.vdsai.cloud' || '' }}
 
-      - name: Deploy (agentic-backend)
-        if: github.ref_name == 'agentic-backend'
+      - name: Deploy (main)
+        if: github.ref_name == 'main'
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
           keep_files: true
 
-      - name: Deploy (main)
-        if: github.ref_name == 'main'
+      - name: Deploy (lovable-main)
+        if: github.ref_name == 'lovable-main'
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
