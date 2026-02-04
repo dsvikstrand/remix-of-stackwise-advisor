@@ -34,20 +34,22 @@ export default function Home() {
               BLUEPRINTS
             </span>
           </h1>
-          <p className="text-lg text-muted-foreground max-w-xl mx-auto leading-relaxed">
-            A community pool for sharing what works. Build routines from shared inventories,
-            get AI reviews, and remix what others have made.
+          <p className="text-sm uppercase tracking-widest text-primary/80 font-medium">
+            Create & share recipes for life routines
+          </p>
+          <p className="text-base text-muted-foreground max-w-md mx-auto leading-relaxed">
+            Build routines from shared inventories, get AI reviews, and remix what others have made.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-            <Link to="/wall">
+            <Link to="/explore">
               <Button size="lg" className="gap-2">
-                Browse the Wall
+                Start Exploring
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
-            <Link to="/inventory">
+            <Link to="/wall">
               <Button size="lg" variant="outline" className="gap-2">
-                Explore Inventories
+                Browse the Wall
                 <Sparkles className="h-4 w-4" />
               </Button>
             </Link>
@@ -57,11 +59,11 @@ export default function Home() {
         {/* Community stats bar */}
         <CommunityStats />
 
+        {/* Demo section - moved up for immediate interaction */}
+        <DemoInventory />
+
         {/* How it works */}
         <HowItWorks />
-
-        {/* Demo section */}
-        <DemoInventory />
 
         {/* Top blueprints */}
         <TopBlueprints />

@@ -409,15 +409,6 @@ export default function InventoryBuild() {
       return;
     }
 
-    if (!review.trim()) {
-      toast({
-        title: 'Generate review',
-        description: 'Generate the review before publishing.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
     if (tags.length > 4) {
       toast({
         title: 'Too many tags',
@@ -835,8 +826,8 @@ export default function InventoryBuild() {
               </section>
             )}
 
-            {/* Publish Section */}
-            {review && !isAnalyzing && (
+            {/* Publish Section - always visible when items selected */}
+            {totalSelected > 0 && !isAnalyzing && (
               <section className="animate-fade-in" style={{ animationDelay: '0.25s' }}>
                 <Card className="bg-card/60 backdrop-blur-glass border-border/50">
                   <CardHeader>

@@ -23,13 +23,9 @@ export function TopBlueprints() {
     );
   }
 
+  // Hide section entirely when empty - cleaner UX
   if (!blueprints || blueprints.length === 0) {
-    return (
-      <section className="space-y-4">
-        <h2 className="text-xl font-semibold tracking-tight">Top Blueprints</h2>
-        <p className="text-sm text-muted-foreground">No blueprints yet. Be the first to share!</p>
-      </section>
-    );
+    return null;
   }
 
   return (

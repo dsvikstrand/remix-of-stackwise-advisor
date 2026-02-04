@@ -85,22 +85,25 @@ export default function Explore() {
           </div>
         )}
 
-        {/* Empty State - Trending Tags */}
+        {/* Empty State - Enhanced with suggestions */}
         {!hasQuery && (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground mb-4">
-              Start typing to search across blueprints, inventories, and users
-            </p>
+          <div className="space-y-8">
+            <div className="text-center py-8">
+              <h2 className="text-2xl font-semibold mb-2">Discover what works</h2>
+              <p className="text-muted-foreground">
+                Search blueprints, inventories, and creators — or explore trending topics below
+              </p>
+            </div>
             
             {trendingTags && trendingTags.length > 0 && (
-              <div className="mt-6">
-                <p className="text-sm text-muted-foreground mb-3">Trending Tags</p>
-                <div className="flex flex-wrap justify-center gap-2">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-3">Trending Tags</p>
+                <div className="flex flex-wrap gap-2">
                   {trendingTags.map(tag => (
                     <Badge
                       key={tag.id}
                       variant="secondary"
-                      className="cursor-pointer hover:bg-secondary/80 transition-colors"
+                      className="cursor-pointer hover:bg-secondary/80 transition-colors px-3 py-1"
                       onClick={() => handleTagClick(`#${tag.slug}`)}
                     >
                       #{tag.slug}
@@ -109,6 +112,24 @@ export default function Explore() {
                 </div>
               </div>
             )}
+
+            {/* Quick category buttons */}
+            <div>
+              <p className="text-sm font-medium text-muted-foreground mb-3">Popular Categories</p>
+              <div className="flex flex-wrap gap-2">
+                {['skincare', 'nutrition', 'fitness', 'wellness', 'sleep'].map(cat => (
+                  <Button
+                    key={cat}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleTagClick(cat)}
+                    className="capitalize"
+                  >
+                    {cat}
+                  </Button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
