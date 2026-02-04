@@ -4,7 +4,7 @@ import rateLimit from 'express-rate-limit';
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { createLLMClient } from './llm/client';
-import type { InventoryRequest } from './llm/types';
+import type { BlueprintAnalysisRequest, BlueprintSelectedItem, InventoryRequest } from './llm/types';
 
 const app = express();
 const port = Number(process.env.PORT) || 8787;
@@ -83,6 +83,24 @@ const InventoryRequestSchema = z.object({
   preferredCategories: z.array(z.string()).optional(),
 });
 
+const SelectedItemSchema = z.union([
+  z.string(),
+  z.object({
+    name: z.string(),
+    context: z.string().optional(),
+  }),
+]);
+
+const BlueprintReviewSchema = z.object({
+  title: z.string().min(1),
+  inventoryTitle: z.string().min(1),
+  selectedItems: z.record(z.array(SelectedItemSchema)),
+  mixNotes: z.string().optional(),
+  reviewPrompt: z.string().optional(),
+  reviewSections: z.array(z.string()).optional(),
+  includeScore: z.boolean().optional(),
+});
+
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true });
 });
@@ -99,6 +117,55 @@ app.post('/api/generate-inventory', async (req, res) => {
     const client = createLLMClient();
     const schema = await client.generateInventory(payload);
     return res.json(schema);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: message });
+  }
+});
+
+app.post('/api/analyze-blueprint', async (req, res) => {
+  const parsed = BlueprintReviewSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });
+  }
+
+  const normalizedItems: Record<string, BlueprintSelectedItem[]> = {};
+  Object.entries(parsed.data.selectedItems).forEach(([category, items]) => {
+    const normalized = items.map((item) => {
+      if (typeof item === 'string') {
+        return { name: item };
+      }
+      return { name: item.name, context: item.context };
+    });
+    normalizedItems[category] = normalized;
+  });
+
+  const payload: BlueprintAnalysisRequest = {
+    title: parsed.data.title,
+    inventoryTitle: parsed.data.inventoryTitle,
+    selectedItems: normalizedItems,
+    mixNotes: parsed.data.mixNotes,
+    reviewPrompt: parsed.data.reviewPrompt,
+    reviewSections: parsed.data.reviewSections,
+    includeScore: parsed.data.includeScore,
+  };
+
+  try {
+    const client = createLLMClient();
+    const review = await client.analyzeBlueprint(payload);
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    const chunkSize = 200;
+    for (let i = 0; i < review.length; i += chunkSize) {
+      const chunk = review.slice(i, i + chunkSize);
+      const frame = JSON.stringify({ choices: [{ delta: { content: chunk } }] });
+      res.write(`data: ${frame}\n\n`);
+    }
+    res.write('data: [DONE]\n\n');
+    res.end();
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return res.status(500).json({ error: message });

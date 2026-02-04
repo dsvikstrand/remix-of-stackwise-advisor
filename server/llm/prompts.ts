@@ -1,4 +1,4 @@
-import type { InventoryRequest } from './types';
+import type { BlueprintAnalysisRequest, InventoryRequest } from './types';
 
 export const INVENTORY_SYSTEM_PROMPT = `You are an expert curator who creates comprehensive inventory schemas for various domains.
 
@@ -50,6 +50,45 @@ ${preferredBlock}
 Create practical, real-world items that someone would actually use for this purpose.
 Default to general item names and only get highly specific if the user asks for specificity.
 Always return exactly 6 categories total. If preferred categories are provided, include them and generate the remaining categories to reach 6.`;
+}
+
+export const BLUEPRINT_SYSTEM_PROMPT = `You are an expert blueprint reviewer.
+
+Your job is to produce a concise, structured review of a user's blueprint.
+
+Output format rules:
+- Use markdown headings in the exact order provided: "### {Section Title}".
+- Under Strengths, Gaps/Risks, and Suggestions, use list items that begin with "- ".
+- Do not use "*", "+", or paragraph-style items for those sections.
+- For Overview, use 2-4 sentences. If a score is requested, include "Score: X/100" in Overview.
+- Keep the tone constructive and practical.`;
+
+export function buildBlueprintUserPrompt(input: BlueprintAnalysisRequest) {
+  const sections = (input.reviewSections && input.reviewSections.length > 0)
+    ? input.reviewSections
+    : ['Overview', 'Strengths', 'Gaps', 'Suggestions'];
+
+  const items = Object.entries(input.selectedItems)
+    .map(([category, entries]) => {
+      const lines = entries.map((entry) => {
+        if (!entry.context) return `- ${entry.name}`;
+        return `- ${entry.name} (context: ${entry.context})`;
+      });
+      return `${category}:\n${lines.join('\n')}`;
+    })
+    .join('\n\n');
+
+  return `Blueprint title: ${input.title.trim()}
+Inventory title: ${input.inventoryTitle.trim()}
+Sections (in order): ${sections.join(' | ')}
+Include score in Overview: ${input.includeScore ? 'yes' : 'no'}
+${input.reviewPrompt?.trim() ? `Review focus: ${input.reviewPrompt.trim()}` : ''}
+${input.mixNotes?.trim() ? `Mix notes: ${input.mixNotes.trim()}` : ''}
+
+Selected items:
+${items}
+
+Write the review now following the format rules.`;
 }
 
 export function extractJson(text: string) {

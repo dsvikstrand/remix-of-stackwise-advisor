@@ -17,8 +17,16 @@ import { useToast } from '@/hooks/use-toast';
 import { buildReviewSections } from '@/lib/reviewSections';
 import type { InventoryListItem } from '@/hooks/useInventories';
 import type { Json } from '@/integrations/supabase/types';
+import { useAuth } from '@/contexts/AuthContext';
 
-const ANALYZE_BLUEPRINT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-blueprint`;
+const AGENTIC_BASE_URL = import.meta.env.VITE_AGENTIC_BACKEND_URL;
+const USE_AGENTIC_BACKEND = import.meta.env.VITE_USE_AGENTIC_BACKEND === 'true';
+const AGENTIC_ANALYZE_URL = AGENTIC_BASE_URL
+  ? `${AGENTIC_BASE_URL.replace(/\/$/, '')}/api/analyze-blueprint`
+  : '';
+const ANALYZE_BLUEPRINT_URL = USE_AGENTIC_BACKEND && AGENTIC_ANALYZE_URL
+  ? AGENTIC_ANALYZE_URL
+  : `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-blueprint`;
 
 interface InventoryCategory {
   name: string;
@@ -61,6 +69,7 @@ export function BlueprintBuilder({
 }: BlueprintBuilderProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { session } = useAuth();
   const { data: tagSuggestions } = useTagSuggestions();
   const { recentTags, addRecentTags } = useRecentTags();
   const createBlueprint = useCreateBlueprint();
@@ -134,6 +143,15 @@ export function BlueprintBuilder({
       });
       return;
     }
+
+    if (USE_AGENTIC_BACKEND && !session?.access_token) {
+      toast({
+        title: 'Sign in required',
+        description: 'Please sign in to generate a review.',
+        variant: 'destructive',
+      });
+      return;
+    }
     const payload: Record<string, string[]> = {};
     Object.entries(selectedItems).forEach(([category, items]) => {
       if (items.length > 0) payload[category] = items;
@@ -147,7 +165,9 @@ export function BlueprintBuilder({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          Authorization: USE_AGENTIC_BACKEND && session?.access_token
+            ? `Bearer ${session.access_token}`
+            : `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
         body: JSON.stringify({
           title: title.trim(),

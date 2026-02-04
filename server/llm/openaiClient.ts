@@ -1,7 +1,13 @@
 import OpenAI from 'openai';
 import { z } from 'zod';
-import type { InventoryRequest, InventorySchema, LLMClient } from './types';
-import { INVENTORY_SYSTEM_PROMPT, buildInventoryUserPrompt, extractJson } from './prompts';
+import type { BlueprintAnalysisRequest, InventoryRequest, InventorySchema, LLMClient } from './types';
+import {
+  BLUEPRINT_SYSTEM_PROMPT,
+  INVENTORY_SYSTEM_PROMPT,
+  buildBlueprintUserPrompt,
+  buildInventoryUserPrompt,
+  extractJson,
+} from './prompts';
 
 const InventorySchemaValidator = z.object({
   summary: z.string(),
@@ -38,6 +44,20 @@ export function createOpenAIClient(): LLMClient {
 
       const parsed = JSON.parse(extractJson(outputText));
       return InventorySchemaValidator.parse(parsed);
+    },
+    async analyzeBlueprint(input: BlueprintAnalysisRequest): Promise<string> {
+      const response = await client.responses.create({
+        model,
+        instructions: BLUEPRINT_SYSTEM_PROMPT,
+        input: buildBlueprintUserPrompt(input),
+      });
+
+      const outputText = response.output_text?.trim();
+      if (!outputText) {
+        throw new Error('No output text from OpenAI');
+      }
+
+      return outputText;
     },
   };
 }

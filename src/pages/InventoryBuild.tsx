@@ -24,6 +24,7 @@ import { useCreateBlueprint } from '@/hooks/useBlueprints';
 import { useTagSuggestions } from '@/hooks/useTags';
 import { useRecentTags } from '@/hooks/useRecentTags';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   MAX_ADDITIONAL_SECTIONS,
   MAX_REVIEW_SECTIONS,
@@ -35,7 +36,14 @@ import {
 import { ArrowLeft, ChevronDown, Settings2, Sparkles, X } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 
-const ANALYZE_BLUEPRINT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-blueprint`;
+const AGENTIC_BASE_URL = import.meta.env.VITE_AGENTIC_BACKEND_URL;
+const USE_AGENTIC_BACKEND = import.meta.env.VITE_USE_AGENTIC_BACKEND === 'true';
+const AGENTIC_ANALYZE_URL = AGENTIC_BASE_URL
+  ? `${AGENTIC_BASE_URL.replace(/\/$/, '')}/api/analyze-blueprint`
+  : '';
+const ANALYZE_BLUEPRINT_URL = USE_AGENTIC_BACKEND && AGENTIC_ANALYZE_URL
+  ? AGENTIC_ANALYZE_URL
+  : `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-blueprint`;
 
 interface InventoryCategory {
   name: string;
@@ -61,6 +69,7 @@ export default function InventoryBuild() {
   const { inventoryId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { session } = useAuth();
   const { data: inventory, isLoading } = useInventory(inventoryId);
   const { data: tagSuggestions } = useTagSuggestions();
   const { recentTags, addRecentTags } = useRecentTags();
@@ -297,6 +306,15 @@ export default function InventoryBuild() {
       return;
     }
 
+    if (USE_AGENTIC_BACKEND && !session?.access_token) {
+      toast({
+        title: 'Sign in required',
+        description: 'Please sign in to generate a review.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const payload: Record<string, Array<{ name: string; context?: string }>> = {};
     Object.entries(selectedItems).forEach(([category, items]) => {
       if (items.length > 0) {
@@ -315,7 +333,9 @@ export default function InventoryBuild() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          Authorization: USE_AGENTIC_BACKEND && session?.access_token
+            ? `Bearer ${session.access_token}`
+            : `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
         body: JSON.stringify({
           title: title.trim() || inventory.title,

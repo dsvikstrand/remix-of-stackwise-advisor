@@ -1,4 +1,4 @@
-import type { InventoryRequest, InventorySchema, LLMClient } from './types';
+import type { BlueprintAnalysisRequest, InventoryRequest, InventorySchema, LLMClient } from './types';
 
 export function createMockClient(): LLMClient {
   return {
@@ -16,6 +16,18 @@ export function createMockClient(): LLMClient {
         ],
         suggestedTags: ['starter', 'routine', 'blueprint', 'community'],
       };
+    },
+    async analyzeBlueprint(input: BlueprintAnalysisRequest): Promise<string> {
+      const sections = input.reviewSections && input.reviewSections.length > 0
+        ? input.reviewSections
+        : ['Overview', 'Strengths', 'Gaps', 'Suggestions'];
+      const overviewScore = input.includeScore ? 'Score: 72/100' : '';
+      return sections.map((section) => {
+        if (section.toLowerCase().includes('overview')) {
+          return `### ${section}\nA helpful overview for ${input.title}.${overviewScore ? `\n${overviewScore}` : ''}`;
+        }
+        return `### ${section}\n- Example point 1\n- Example point 2`;
+      }).join('\n\n');
     },
   };
 }
