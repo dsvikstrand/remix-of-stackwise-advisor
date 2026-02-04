@@ -874,12 +874,12 @@ export default function InventoryBuild() {
                     <CardContent className="pt-0 pb-4 px-4 space-y-4">
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div className="space-y-2">
-                          <Label htmlFor="mix-notes">Build notes (optional)</Label>
+                          <Label htmlFor="mix-notes">Blueprint Notes</Label>
                           <Textarea
                             id="mix-notes"
                             value={mixNotes}
                             onChange={(e) => setMixNotes(e.target.value)}
-                            placeholder="Any additional context for your build..."
+                            placeholder="Any additional context for your blueprint..."
                             rows={3}
                           />
                         </div>
