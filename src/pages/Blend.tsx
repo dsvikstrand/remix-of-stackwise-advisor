@@ -3,13 +3,10 @@ import { useBlendState } from '@/hooks/useBlendState';
 import { BlendInventoryPicker } from '@/components/blend/BlendInventoryPicker';
 import { BlendDoseModal } from '@/components/blend/BlendDoseModal';
 import { BlendRecipeAccordion } from '@/components/blend/BlendRecipeAccordion';
-import { BlendAnalysisView } from '@/components/blend/BlendAnalysisView';
 import { HistoryDropdown } from '@/components/blend/HistoryDropdown';
 import { MixButton } from '@/components/blend/MixButton';
-import { CocktailLoadingAnimation } from '@/components/blend/CocktailLoadingAnimation';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { SaveRecipeButton } from '@/components/shared/SaveRecipeButton';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -17,12 +14,9 @@ import {
   SupplementCategory,
   DoseUnit,
   BlendItem,
-  BlendAnalysis,
 } from '@/types/stacklab';
 import { RotateCcw, Sparkles } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
-
-const ANALYZE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-blend`;
 
 const Blend = () => {
   const {
@@ -33,7 +27,6 @@ const Blend = () => {
     updateItem,
     removeItem,
     updateBlendName,
-    saveAnalysis,
     clearCurrentBlend,
     loadFromHistory,
     deleteFromHistory,
@@ -41,8 +34,6 @@ const Blend = () => {
   } = useBlendState();
 
   const { toast } = useToast();
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [streamingAnalysis, setStreamingAnalysis] = useState<string>('');
 
   // Modal state for adding items
   const [doseModalOpen, setDoseModalOpen] = useState(false);
@@ -114,172 +105,18 @@ const Blend = () => {
     [updateItem]
   );
 
-  // Analyze the blend
-  const handleAnalyze = useCallback(async () => {
-    if (!currentBlend || currentBlend.items.length === 0) return;
-
-    setIsAnalyzing(true);
-    setStreamingAnalysis('');
-
-    try {
-      const response = await fetch(ANALYZE_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({
-          blendName: currentBlend.name,
-          items: currentBlend.items.map((item) => ({
-            name: item.name,
-            amount: item.amount,
-            unit: item.unit,
-          })),
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to analyze blend');
-      }
-
-      if (!response.body) {
-        throw new Error('No response body');
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let fullContent = '';
-      let textBuffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        textBuffer += decoder.decode(value, { stream: true });
-
-        let newlineIndex: number;
-        while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
-          let line = textBuffer.slice(0, newlineIndex);
-          textBuffer = textBuffer.slice(newlineIndex + 1);
-
-          if (line.endsWith('\r')) line = line.slice(0, -1);
-          if (line.startsWith(':') || line.trim() === '') continue;
-          if (!line.startsWith('data: ')) continue;
-
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr === '[DONE]') break;
-
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
-            if (content) {
-              fullContent += content;
-              setStreamingAnalysis(fullContent);
-            }
-          } catch {
-            textBuffer = line + '\n' + textBuffer;
-            break;
-          }
-        }
-      }
-
-      // Parse and save the analysis
-      const analysis = parseAnalysis(fullContent);
-      saveAnalysis(analysis);
-      setStreamingAnalysis('');
-
-      toast({
-        title: '✨ Blend Analyzed!',
-        description: `Your ${currentBlend.name} has been classified as: ${analysis.classification || 'Custom Blend'}`,
-      });
-    } catch (error) {
-      console.error('Analysis error:', error);
-      toast({
-        title: 'Analysis Failed',
-        description: error instanceof Error ? error.message : 'Please try again',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsAnalyzing(false);
-    }
-  }, [currentBlend, saveAnalysis, toast]);
-
-  // Parse the raw markdown into structured analysis
-  function parseAnalysis(markdown: string): BlendAnalysis {
-    let classification = '';
-    let score = 0;
-    let summary = '';
-    let timing = '';
-    const tweaks: string[] = [];
-    const warnings: string[] = [];
-
-    const lines = markdown.split('\n');
-    let currentSection = '';
-
-    for (const line of lines) {
-      const lowerLine = line.toLowerCase();
-
-      if (line.startsWith('### ')) {
-        if (lowerLine.includes('classification')) currentSection = 'classification';
-        else if (lowerLine.includes('score') || lowerLine.includes('effectiveness'))
-          currentSection = 'score';
-        else if (lowerLine.includes('summary')) currentSection = 'summary';
-        else if (lowerLine.includes('when') || lowerLine.includes('timing'))
-          currentSection = 'timing';
-        else if (lowerLine.includes('tweak') || lowerLine.includes('suggest'))
-          currentSection = 'tweaks';
-        else if (lowerLine.includes('warning') || lowerLine.includes('interaction'))
-          currentSection = 'warnings';
-        else currentSection = '';
-        continue;
-      }
-
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-
-      switch (currentSection) {
-        case 'classification':
-          if (!classification) classification = trimmed.replace(/^\*\*|\*\*$/g, '');
-          break;
-        case 'score':
-          const scoreMatch = trimmed.match(/(\d+)\s*\/\s*10/);
-          if (scoreMatch) score = parseInt(scoreMatch[1], 10);
-          break;
-        case 'summary':
-          summary += (summary ? ' ' : '') + trimmed;
-          break;
-        case 'timing':
-          timing += (timing ? ' ' : '') + trimmed;
-          break;
-        case 'tweaks':
-          if (trimmed.startsWith('- ')) tweaks.push(trimmed.slice(2));
-          break;
-        case 'warnings':
-          if (trimmed.startsWith('- ')) warnings.push(trimmed.slice(2));
-          break;
-      }
-    }
-
-    return {
-      classification,
-      score,
-      summary,
-      timing,
-      tweaks,
-      warnings,
-      rawMarkdown: markdown,
-    };
-  }
+  const handleAnalyze = useCallback(() => {
+    toast({
+      title: 'Analysis deprecated',
+      description: 'This flow is being rebuilt and is unavailable for now.',
+    });
+  }, [toast]);
 
   // Handle starting a new blend
   const handleNewBlend = useCallback(() => {
     clearCurrentBlend();
     createBlend();
   }, [clearCurrentBlend, createBlend]);
-
-  const showAnalysis = currentBlend?.analysis && !isAnalyzing;
-  const showStreaming = streamingAnalysis && !currentBlend?.analysis;
 
   return (
     <div className="min-h-screen relative overflow-hidden">
@@ -380,7 +217,7 @@ const Blend = () => {
           <MixButton
             onClick={handleAnalyze}
             disabled={!currentBlend || currentBlend.items.length === 0}
-            isLoading={isAnalyzing}
+            isLoading={false}
             itemCount={currentBlend?.items.length || 0}
           />
         </section>
@@ -391,47 +228,11 @@ const Blend = () => {
             recipeName={currentBlend?.name || 'Untitled Blend'}
             recipeType="blend"
             items={JSON.parse(JSON.stringify(currentBlend?.items || []))}
-            analysis={currentBlend?.analysis ? JSON.parse(JSON.stringify(currentBlend.analysis)) : null}
+            analysis={null}
             disabled={!currentBlend || currentBlend.items.length === 0}
             variant="default"
           />
         </section>
-
-        {/* Loading Animation */}
-        {isAnalyzing && (
-          <section className="mb-8 animate-fade-in-scale">
-            <Card className="overflow-hidden bg-card/60 backdrop-blur-glass border-primary/20">
-              <CardContent className="p-0">
-                <CocktailLoadingAnimation />
-              </CardContent>
-            </Card>
-          </section>
-        )}
-
-        {/* Streaming Analysis Preview */}
-        {showStreaming && (
-          <section className="mb-8 animate-fade-in">
-            <BlendAnalysisView
-              analysis={{
-                classification: '',
-                score: 0,
-                summary: '',
-                timing: '',
-                tweaks: [],
-                warnings: [],
-                rawMarkdown: streamingAnalysis,
-              }}
-              isStreaming
-            />
-          </section>
-        )}
-
-        {/* Final Analysis - Conditional Reveal */}
-        {showAnalysis && (
-          <section className="mb-8 animate-fade-in-up">
-            <BlendAnalysisView analysis={currentBlend.analysis!} />
-          </section>
-        )}
 
         {/* Footer Disclaimer */}
         <footer className="text-center py-8 text-sm text-muted-foreground border-t border-border/30 mt-8">

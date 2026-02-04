@@ -3,24 +3,18 @@ import { useProteinState } from '@/hooks/useProteinState';
 import { ProteinSourcePicker } from '@/components/protein/ProteinSourcePicker';
 import { ProteinDoseModal } from '@/components/protein/ProteinDoseModal';
 import { ProteinRecipeAccordion } from '@/components/protein/ProteinRecipeAccordion';
-import { ProteinAnalysisView } from '@/components/protein/ProteinAnalysisView';
 import { ProteinHistoryDropdown } from '@/components/protein/ProteinHistoryDropdown';
 import { BlendButton } from '@/components/protein/BlendButton';
-import { BlenderLoadingAnimation } from '@/components/protein/BlenderLoadingAnimation';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { SaveRecipeButton } from '@/components/shared/SaveRecipeButton';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import {
   ProteinCategory,
   ShakeItem,
-  ProteinAnalysis,
 } from '@/types/stacklab';
 import { RotateCcw, Sparkles } from 'lucide-react';
-
-const ANALYZE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-protein`;
 
 const Protein = () => {
   const {
@@ -31,7 +25,6 @@ const Protein = () => {
     updateItem,
     removeItem,
     updateShakeName,
-    saveAnalysis,
     clearCurrentShake,
     loadFromHistory,
     deleteFromHistory,
@@ -39,8 +32,6 @@ const Protein = () => {
   } = useProteinState();
 
   const { toast } = useToast();
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [streamingAnalysis, setStreamingAnalysis] = useState<string>('');
 
   // Modal state for adding items
   const [doseModalOpen, setDoseModalOpen] = useState(false);
@@ -113,166 +104,18 @@ const Protein = () => {
     [updateItem]
   );
 
-  // Analyze the shake
-  const handleAnalyze = useCallback(async () => {
-    if (!currentShake || currentShake.items.length === 0) return;
-
-    setIsAnalyzing(true);
-    setStreamingAnalysis('');
-
-    try {
-      const response = await fetch(ANALYZE_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({
-          shakeName: currentShake.name,
-          items: currentShake.items.map((item) => ({
-            name: item.name,
-            scoops: item.scoops,
-            gramsProtein: item.gramsProtein,
-          })),
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to analyze shake');
-      }
-
-      if (!response.body) {
-        throw new Error('No response body');
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let fullContent = '';
-      let textBuffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        textBuffer += decoder.decode(value, { stream: true });
-
-        let newlineIndex: number;
-        while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
-          let line = textBuffer.slice(0, newlineIndex);
-          textBuffer = textBuffer.slice(newlineIndex + 1);
-
-          if (line.endsWith('\r')) line = line.slice(0, -1);
-          if (line.startsWith(':') || line.trim() === '') continue;
-          if (!line.startsWith('data: ')) continue;
-
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr === '[DONE]') break;
-
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
-            if (content) {
-              fullContent += content;
-              setStreamingAnalysis(fullContent);
-            }
-          } catch {
-            textBuffer = line + '\n' + textBuffer;
-            break;
-          }
-        }
-      }
-
-      // Parse and save the analysis
-      const analysis = parseAnalysis(fullContent);
-      saveAnalysis(analysis);
-      setStreamingAnalysis('');
-
-      toast({
-        title: '🥤 Shake Analyzed!',
-        description: `Your ${currentShake.name} scored ${analysis.completenessScore}/100 for amino profile completeness.`,
-      });
-    } catch (error) {
-      console.error('Analysis error:', error);
-      toast({
-        title: 'Analysis Failed',
-        description: error instanceof Error ? error.message : 'Please try again',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsAnalyzing(false);
-    }
-  }, [currentShake, saveAnalysis, toast]);
-
-  // Parse the raw markdown into structured analysis
-  function parseAnalysis(markdown: string): ProteinAnalysis {
-    let completenessScore = 0;
-    let absorptionProfile = '';
-    let timing = '';
-    const optimizations: string[] = [];
-    const warnings: string[] = [];
-
-    // Parse completeness score
-    const scoreMatch = markdown.match(/(\d+)\s*\/\s*100/);
-    if (scoreMatch) {
-      completenessScore = parseInt(scoreMatch[1], 10);
-    }
-
-    // Parse absorption profile
-    const absorptionMatch = markdown.match(/absorption\s*(?:profile)?[:\s]+([^\n—]+)/i);
-    if (absorptionMatch) {
-      absorptionProfile = absorptionMatch[1].trim();
-    }
-
-    // Parse timing
-    const lines = markdown.split('\n');
-    let currentSection = '';
-
-    for (const line of lines) {
-      const lowerLine = line.toLowerCase();
-
-      if (line.startsWith('### ')) {
-        if (lowerLine.includes('when') || lowerLine.includes('timing')) currentSection = 'timing';
-        else if (lowerLine.includes('optimization') || lowerLine.includes('suggest')) currentSection = 'optimizations';
-        else if (lowerLine.includes('warning')) currentSection = 'warnings';
-        else currentSection = '';
-        continue;
-      }
-
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-
-      switch (currentSection) {
-        case 'timing':
-          if (!timing && !trimmed.startsWith('-')) timing = trimmed;
-          break;
-        case 'optimizations':
-          if (trimmed.startsWith('- ')) optimizations.push(trimmed.slice(2));
-          break;
-        case 'warnings':
-          if (trimmed.startsWith('- ')) warnings.push(trimmed.slice(2));
-          break;
-      }
-    }
-
-    return {
-      completenessScore,
-      absorptionProfile,
-      timing,
-      optimizations,
-      warnings,
-      rawMarkdown: markdown,
-    };
-  }
+  const handleAnalyze = useCallback(() => {
+    toast({
+      title: 'Analysis deprecated',
+      description: 'This flow is being rebuilt and is unavailable for now.',
+    });
+  }, [toast]);
 
   // Handle starting a new shake
   const handleNewShake = useCallback(() => {
     clearCurrentShake();
     createShake();
   }, [clearCurrentShake, createShake]);
-
-  const showAnalysis = currentShake?.analysis && !isAnalyzing;
-  const showStreaming = streamingAnalysis && !currentShake?.analysis;
 
   return (
     <div className="min-h-screen relative overflow-hidden">
@@ -391,7 +234,7 @@ const Protein = () => {
           <BlendButton
             onClick={handleAnalyze}
             disabled={!currentShake || currentShake.items.length === 0}
-            isLoading={isAnalyzing}
+            isLoading={false}
             itemCount={currentShake?.items.length || 0}
           />
         </section>
@@ -402,46 +245,11 @@ const Protein = () => {
             recipeName={currentShake?.name || 'Untitled Shake'}
             recipeType="protein"
             items={JSON.parse(JSON.stringify(currentShake?.items || []))}
-            analysis={currentShake?.analysis ? JSON.parse(JSON.stringify(currentShake.analysis)) : null}
+            analysis={null}
             disabled={!currentShake || currentShake.items.length === 0}
             variant="default"
           />
         </section>
-
-        {/* Loading Animation */}
-        {isAnalyzing && (
-          <section className="mb-8 animate-fade-in-scale">
-            <Card className="overflow-hidden bg-card/60 backdrop-blur-glass border-primary/20">
-              <CardContent className="p-0">
-                <BlenderLoadingAnimation />
-              </CardContent>
-            </Card>
-          </section>
-        )}
-
-        {/* Streaming Analysis Preview */}
-        {showStreaming && (
-          <section className="mb-8 animate-fade-in">
-            <ProteinAnalysisView
-              analysis={{
-                completenessScore: 0,
-                absorptionProfile: '',
-                timing: '',
-                optimizations: [],
-                warnings: [],
-                rawMarkdown: streamingAnalysis,
-              }}
-              isStreaming
-            />
-          </section>
-        )}
-
-        {/* Final Analysis - Conditional Reveal */}
-        {showAnalysis && (
-          <section className="mb-8 animate-fade-in-up">
-            <ProteinAnalysisView analysis={currentShake.analysis!} />
-          </section>
-        )}
 
         {/* Footer Disclaimer */}
         <footer className="text-center py-8 text-sm text-muted-foreground border-t border-border/30 mt-8">
