@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { BlueprintAnalysisView } from '@/components/blueprint/BlueprintAnalysisView';
 import { useBlueprint, useBlueprintComments, useCreateBlueprintComment, useToggleBlueprintLike } from '@/hooks/useBlueprints';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, GitBranch, Heart } from 'lucide-react';
+import { ArrowLeft, Heart } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 
 type ItemValue = string | { name?: string; context?: string };
@@ -142,16 +142,6 @@ export default function BlueprintDetail() {
                     </div>
                   </Link>
                   <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-muted-foreground"
-                      asChild
-                    >
-                      <Link to={`/blueprint/${blueprint.id}/remix`} aria-label="Remix blueprint">
-                        <GitBranch className="h-4 w-4" />
-                      </Link>
-                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"

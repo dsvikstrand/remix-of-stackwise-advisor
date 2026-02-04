@@ -75,16 +75,7 @@ export default function Inventory() {
         <div className="absolute bottom-20 right-1/4 w-40 h-40 bg-primary/3 rounded-full blur-2xl" />
       </div>
 
-      <AppHeader
-        actions={(
-          <Link to="/inventory/create">
-            <Button size="sm" className="gap-2">
-              <Plus className="h-4 w-4" />
-              Create
-            </Button>
-          </Link>
-        )}
-      />
+      <AppHeader />
 
       <main className="relative max-w-6xl mx-auto px-4 py-8 space-y-8">
         {/* Intro Callout for first-time visitors */}
@@ -96,7 +87,15 @@ export default function Inventory() {
 
         {/* Hero Section */}
         <section className="space-y-2">
-          <h1 className="text-3xl font-semibold">Inventory Library</h1>
+          <div className="flex items-center justify-between">
+            <h1 className="text-3xl font-semibold">Inventory Library</h1>
+            <Link to="/inventory/create">
+              <Button size="sm" className="gap-2">
+                <Plus className="h-4 w-4" />
+                Create
+              </Button>
+            </Link>
+          </div>
           <p className="text-muted-foreground">
             Discover recipe inventories to build your perfect blueprint.
           </p>
