@@ -40,6 +40,8 @@ jobs:
         run: npm run build
         env:
           VITE_BASE_PATH: ${{ env.VITE_BASE_PATH }}
+          VITE_USE_AGENTIC_BACKEND: ${{ github.ref_name == 'agentic-backend' && 'true' || '' }}
+          VITE_AGENTIC_BACKEND_URL: ${{ github.ref_name == 'agentic-backend' && 'https://bapi.vdsai.cloud' || '' }}
 
       - name: Deploy (main)
         if: github.ref_name == 'main'
