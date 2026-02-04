@@ -192,6 +192,8 @@ export function useToggleBlueprintLike() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['blueprint'] });
+      queryClient.invalidateQueries({ queryKey: ['blueprint-search'] });
+      queryClient.invalidateQueries({ queryKey: ['suggested-blueprints'] });
     },
   });
 }

@@ -3,10 +3,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { X } from 'lucide-react';
-import type { PopularTag } from '@/hooks/usePopularInventoryTags';
-
 interface TagFilterChipsProps {
-  tags: PopularTag[];
+  tags: Array<{ id: string; slug: string; count: number }>;
   selectedTag: string | null;
   onSelectTag: (slug: string | null) => void;
 }
