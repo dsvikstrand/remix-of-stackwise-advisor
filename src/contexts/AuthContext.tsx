@@ -72,12 +72,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session: existingSession } }) => {
+    supabase.auth.getSession().then(async ({ data: { session: existingSession } }) => {
       setSession(existingSession);
-      setUser(existingSession?.user ?? null);
-      
-      if (existingSession?.user) {
-        fetchProfile(existingSession.user.id).then(setProfile);
+      let resolvedUser = existingSession?.user ?? null;
+
+      // On GitHub Pages, the session may exist but user can be null until hydrated.
+      if (!resolvedUser && existingSession?.access_token) {
+        const { data: userData } = await supabase.auth.getUser(existingSession.access_token);
+        resolvedUser = userData.user ?? null;
+      }
+
+      setUser(resolvedUser);
+
+      if (resolvedUser) {
+        fetchProfile(resolvedUser.id).then(setProfile);
       }
       setIsLoading(false);
     });

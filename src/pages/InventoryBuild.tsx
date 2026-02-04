@@ -117,10 +117,10 @@ export default function InventoryBuild() {
 
   const isOwner = !!(isEditing && blueprint && user && blueprint.creator_user_id === user.id);
   const isLoading = inventoryLoading || (isEditing && blueprintLoading);
-  const canGenerateBanner = USE_AGENTIC_BACKEND && !!user;
+  const canGenerateBanner = USE_AGENTIC_BACKEND && (!!user || !!session?.access_token);
   const bannerHelpText = !USE_AGENTIC_BACKEND
     ? 'Banner generation requires the agentic backend.'
-    : !user
+    : !user && !session?.access_token
       ? 'Sign in to generate a banner.'
       : null;
 
