@@ -85,6 +85,16 @@ export default function Inventory() {
           description="Inventories are collections of items—like ingredient lists. Pick one and start building your Blueprint!"
         />
 
+        <Card className="border-border/50 bg-card/60 backdrop-blur-sm">
+          <CardContent className="pt-6 space-y-2">
+            <p className="text-sm font-semibold text-primary uppercase tracking-wide">Inventory Library</p>
+            <h2 className="text-xl font-semibold">Pick a collection, then build your blueprint</h2>
+            <p className="text-sm text-muted-foreground">
+              Browse inventories, open one, and start adding items into your routine.
+            </p>
+          </CardContent>
+        </Card>
+
         {/* Hero Section */}
         <section className="space-y-2">
           <div className="flex items-center justify-between">
