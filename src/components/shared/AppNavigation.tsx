@@ -14,9 +14,9 @@ export function AppNavigation({ variant = 'header', mode = 'all' }: AppNavigatio
 
   const navItems = [
     { path: '/', label: 'Home', icon: Home, isPublic: true },
-    { path: '/explore', label: 'Explore', icon: Search, isPublic: true },
     { path: '/inventory', label: 'Inventory', icon: Layers, isPublic: false },
     { path: '/wall', label: 'Wall', icon: Users, isPublic: true },
+    { path: '/explore', label: 'Explore', icon: Search, isPublic: true },
     { path: '/tags', label: 'Tags', icon: Tag, isPublic: false },
   ];
 
