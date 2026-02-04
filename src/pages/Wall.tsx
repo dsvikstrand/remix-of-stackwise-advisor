@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -11,9 +11,10 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Heart, MessageCircle, Share2, Layers, Tag } from 'lucide-react';
+import { Heart, Share2, Layers, Tag } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { usePopularInventoryTags } from '@/hooks/usePopularInventoryTags';
+import { useTagFollows } from '@/hooks/useTagFollows';
 import type { Json } from '@/integrations/supabase/types';
 
 interface BlueprintPost {
@@ -56,18 +57,27 @@ export default function Wall() {
   
   // Popular tags for empty state
   const { data: popularTags = [] } = usePopularInventoryTags(6);
+  const { followedIds, toggleFollow } = useTagFollows();
   
-  // Follow tag mutation
-  const followTagMutation = useMutation({
-    mutationFn: async (tagId: string) => {
-      if (!user) throw new Error('Must be logged in');
-      const { error } = await supabase.from('tag_follows').insert({
-        tag_id: tagId,
-        user_id: user.id,
+  const handleTagToggle = async (tag: { id: string; slug: string }) => {
+    if (!user) {
+      toast({
+        title: 'Sign in required',
+        description: 'Please sign in to follow tags.',
       });
-      if (error) throw error;
-    },
-  });
+      return;
+    }
+    try {
+      await toggleFollow(tag);
+      queryClient.invalidateQueries({ queryKey: ['wall-blueprints'] });
+    } catch (error) {
+      toast({
+        title: 'Tag update failed',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const wallQueryKey = ['wall-blueprints', activeTab, user?.id] as const;
 
@@ -304,17 +314,24 @@ export default function Wall() {
                           </div>
                           {post.tags.length > 0 && (
                             <div className="flex flex-wrap gap-2">
-                              {post.tags.map((tag) => (
-                                <Link
-                                  key={tag.id}
-                                  to={`/tags?q=${tag.slug}`}
-                                  onClick={(event) => event.stopPropagation()}
-                                >
-                                  <Badge variant="outline" className="text-xs hover:border-primary hover:text-primary">
-                                    #{tag.slug}
-                                  </Badge>
-                                </Link>
-                              ))}
+                          {post.tags.map((tag) => (
+                            <Badge
+                              key={tag.id}
+                              variant="outline"
+                              className={`text-xs cursor-pointer transition-colors border ${
+                                followedIds.has(tag.id)
+                                  ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
+                                  : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
+                              }`}
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                handleTagToggle(tag);
+                              }}
+                            >
+                              #{tag.slug}
+                            </Badge>
+                          ))}
                             </div>
                           )}
                         </CardContent>
@@ -380,25 +397,12 @@ export default function Wall() {
                               key={tag.id}
                               variant="outline"
                               size="sm"
-                              className="gap-1.5"
-                              onClick={() => {
-                                if (!user) {
-                                  toast({
-                                    title: 'Sign in required',
-                                    description: 'Please sign in to follow tags.',
-                                  });
-                                  return;
-                                }
-                                followTagMutation.mutate(tag.id, {
-                                  onSuccess: () => {
-                                    queryClient.invalidateQueries({ queryKey: wallQueryKey });
-                                    toast({
-                                      title: 'Tag followed!',
-                                      description: `You're now following #${tag.slug}`,
-                                    });
-                                  },
-                                });
-                              }}
+                              className={`gap-1.5 ${
+                                followedIds.has(tag.id)
+                                  ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
+                                  : 'text-muted-foreground'
+                              }`}
+                              onClick={() => handleTagToggle(tag)}
                             >
                               #{tag.slug}
                             </Button>

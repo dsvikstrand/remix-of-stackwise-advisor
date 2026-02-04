@@ -7,9 +7,17 @@ interface SuggestedBlueprintsProps {
   blueprints: BlueprintListItem[];
   isLoading: boolean;
   onLike: (blueprintId: string, liked: boolean) => void;
+  followedTagIds?: Set<string>;
+  onToggleTag?: (tag: { id: string; slug: string }) => void;
 }
 
-export function SuggestedBlueprints({ blueprints, isLoading, onLike }: SuggestedBlueprintsProps) {
+export function SuggestedBlueprints({
+  blueprints,
+  isLoading,
+  onLike,
+  followedTagIds,
+  onToggleTag,
+}: SuggestedBlueprintsProps) {
   if (isLoading) {
     return (
       <section className="space-y-3">
@@ -40,7 +48,13 @@ export function SuggestedBlueprints({ blueprints, isLoading, onLike }: Suggested
       <h2 className="text-lg font-semibold">Suggested for You</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {blueprints.slice(0, 3).map((blueprint) => (
-          <BlueprintCard key={blueprint.id} blueprint={blueprint} onLike={onLike} />
+          <BlueprintCard
+            key={blueprint.id}
+            blueprint={blueprint}
+            onLike={onLike}
+            followedTagIds={followedTagIds}
+            onToggleTag={onToggleTag}
+          />
         ))}
       </div>
     </section>

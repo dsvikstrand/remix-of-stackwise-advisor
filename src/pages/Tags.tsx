@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useTagsDirectory } from '@/hooks/useTags';
 import { useSuggestedTags } from '@/hooks/useSuggestedTags';
 import { useAuth } from '@/contexts/AuthContext';
@@ -272,52 +272,38 @@ interface TagChipProps {
 
 function TagChip({ tag, isFollowing, onToggle, disabled, badge }: TagChipProps) {
   return (
-    <div className="group relative">
-      <Link to={`/wall?tag=${tag.slug}`}>
-        <Badge
-          variant={isFollowing ? 'default' : 'outline'}
-          className={`
-            gap-1.5 px-3 py-2 text-sm cursor-pointer transition-all
-            hover:bg-accent hover:text-accent-foreground
-            ${isFollowing ? 'pr-8' : ''}
-          `}
-        >
-          <Hash className="h-3 w-3" />
-          {tag.slug}
-          {tag.follower_count > 0 && (
-            <span className="flex items-center gap-0.5 text-xs opacity-70 ml-1">
-              <Users className="h-3 w-3" />
-              {tag.follower_count}
-            </span>
-          )}
-          {badge === 'related' && (
-            <span className="text-[10px] uppercase tracking-wider opacity-60 ml-1">
-              related
-            </span>
-          )}
-        </Badge>
-      </Link>
-      <button
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          onToggle();
-        }}
-        disabled={disabled}
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      className="group"
+      title={isFollowing ? 'Unfollow tag' : 'Follow tag'}
+    >
+      <Badge
+        variant={isFollowing ? 'default' : 'outline'}
         className={`
-          absolute right-1 top-1/2 -translate-y-1/2
-          h-6 w-6 rounded-full flex items-center justify-center
-          text-xs font-medium transition-all
+          gap-1.5 px-3 py-2 text-sm cursor-pointer transition-all border
           ${isFollowing
-            ? 'bg-background/80 text-foreground opacity-0 group-hover:opacity-100'
-            : 'bg-primary text-primary-foreground opacity-0 group-hover:opacity-100'
+            ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
+            : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
           }
           disabled:opacity-50
         `}
-        title={isFollowing ? 'Unfollow' : 'Follow'}
       >
-        {isFollowing ? '×' : '+'}
-      </button>
-    </div>
+        <Hash className="h-3 w-3" />
+        {tag.slug}
+        {tag.follower_count > 0 && (
+          <span className="flex items-center gap-0.5 text-xs opacity-70 ml-1">
+            <Users className="h-3 w-3" />
+            {tag.follower_count}
+          </span>
+        )}
+        {badge === 'related' && (
+          <span className="text-[10px] uppercase tracking-wider opacity-60 ml-1">
+            related
+          </span>
+        )}
+      </Badge>
+    </button>
   );
 }

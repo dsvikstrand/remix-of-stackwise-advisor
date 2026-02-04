@@ -9,6 +9,8 @@ import type { Json } from '@/integrations/supabase/types';
 interface BlueprintCardProps {
   blueprint: BlueprintListItem;
   onLike: (blueprintId: string, liked: boolean) => void;
+  followedTagIds?: Set<string>;
+  onToggleTag?: (tag: { id: string; slug: string }) => void;
 }
 
 function countSelectedItems(selected: Json) {
@@ -19,7 +21,7 @@ function countSelectedItems(selected: Json) {
   );
 }
 
-export function BlueprintCard({ blueprint, onLike }: BlueprintCardProps) {
+export function BlueprintCard({ blueprint, onLike, followedTagIds, onToggleTag }: BlueprintCardProps) {
   const displayTags = blueprint.tags.slice(0, 3);
   const extraTagCount = blueprint.tags.length - 3;
   const itemCount = countSelectedItems(blueprint.selected_items);
@@ -40,7 +42,21 @@ export function BlueprintCard({ blueprint, onLike }: BlueprintCardProps) {
           {blueprint.tags.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-3">
               {displayTags.map((tag) => (
-                <Badge key={tag.id} variant="secondary" className="text-xs">
+                <Badge
+                  key={tag.id}
+                  variant="secondary"
+                  className={`text-xs cursor-pointer transition-colors border ${
+                    followedTagIds?.has(tag.id)
+                      ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
+                      : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
+                  }`}
+                  onClick={(event) => {
+                    if (!onToggleTag) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onToggleTag({ id: tag.id, slug: tag.slug });
+                  }}
+                >
                   #{tag.slug}
                 </Badge>
               ))}

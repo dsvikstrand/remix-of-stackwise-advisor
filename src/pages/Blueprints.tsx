@@ -11,6 +11,7 @@ import { useBlueprintSearch, type BlueprintSort } from '@/hooks/useBlueprintSear
 import { usePopularBlueprintTags } from '@/hooks/usePopularBlueprintTags';
 import { useSuggestedBlueprints } from '@/hooks/useSuggestedBlueprints';
 import { useToggleBlueprintLike } from '@/hooks/useBlueprints';
+import { useTagFollows } from '@/hooks/useTagFollows';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { BlueprintCard } from '@/components/blueprint/BlueprintCard';
@@ -31,6 +32,7 @@ export default function Blueprints() {
   const { data: popularTags = [], isLoading: tagsLoading } = usePopularBlueprintTags(12);
   const { data: suggestedBlueprints = [], isLoading: suggestedLoading } = useSuggestedBlueprints(6);
   const toggleLike = useToggleBlueprintLike();
+  const { followedIds, toggleFollow } = useTagFollows();
 
   const suggestedIds = new Set(suggestedBlueprints.map((bp) => bp.id));
   const mainBlueprints = useMemo(() => {
@@ -62,6 +64,25 @@ export default function Blueprints() {
   const handleTagSelect = (slug: string | null) => {
     setSelectedTag(slug);
     if (slug) setQuery('');
+  };
+
+  const handleTagToggle = async (tag: { id: string; slug: string }) => {
+    if (!user) {
+      toast({
+        title: 'Sign in required',
+        description: 'Please sign in to follow tags.',
+      });
+      return;
+    }
+    try {
+      await toggleFollow(tag);
+    } catch (error) {
+      toast({
+        title: 'Tag update failed',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const showSuggestions = !effectiveQuery && user;
@@ -131,6 +152,8 @@ export default function Blueprints() {
             tags={popularTags}
             selectedTag={selectedTag}
             onSelectTag={handleTagSelect}
+            followedTagIds={followedIds}
+            onToggleFollow={handleTagToggle}
           />
         )}
 
@@ -139,6 +162,8 @@ export default function Blueprints() {
             blueprints={suggestedBlueprints}
             isLoading={suggestedLoading}
             onLike={handleLike}
+            followedTagIds={followedIds}
+            onToggleTag={handleTagToggle}
           />
         )}
 
@@ -170,6 +195,8 @@ export default function Blueprints() {
                   key={blueprint.id}
                   blueprint={blueprint}
                   onLike={handleLike}
+                  followedTagIds={followedIds}
+                  onToggleTag={handleTagToggle}
                 />
               ))}
             </div>

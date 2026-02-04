@@ -8,9 +8,18 @@ import type { BlueprintResult, InventoryResult, UserResult, ExploreResult } from
 interface ExploreResultCardProps {
   result: ExploreResult;
   onTagClick?: (tag: string) => void;
+  followedTagSlugs?: Set<string>;
 }
 
-function BlueprintCard({ result, onTagClick }: { result: BlueprintResult; onTagClick?: (tag: string) => void }) {
+function BlueprintCard({
+  result,
+  onTagClick,
+  followedTagSlugs,
+}: {
+  result: BlueprintResult;
+  onTagClick?: (tag: string) => void;
+  followedTagSlugs?: Set<string>;
+}) {
   const itemCount = Array.isArray(result.selectedItems) ? result.selectedItems.length : 0;
 
   return (
@@ -38,7 +47,11 @@ function BlueprintCard({ result, onTagClick }: { result: BlueprintResult; onTagC
               <Badge
                 key={tag}
                 variant="secondary"
-                className="text-xs cursor-pointer hover:bg-secondary/80"
+                className={`text-xs cursor-pointer transition-colors border ${
+                  followedTagSlugs?.has(tag)
+                    ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
+                    : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
+                }`}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -55,7 +68,15 @@ function BlueprintCard({ result, onTagClick }: { result: BlueprintResult; onTagC
   );
 }
 
-function InventoryCard({ result, onTagClick }: { result: InventoryResult; onTagClick?: (tag: string) => void }) {
+function InventoryCard({
+  result,
+  onTagClick,
+  followedTagSlugs,
+}: {
+  result: InventoryResult;
+  onTagClick?: (tag: string) => void;
+  followedTagSlugs?: Set<string>;
+}) {
   return (
     <Link to={`/inventory/${result.id}`}>
       <Card className="p-4 hover:shadow-soft-md transition-all h-full">
@@ -81,7 +102,11 @@ function InventoryCard({ result, onTagClick }: { result: InventoryResult; onTagC
               <Badge
                 key={tag}
                 variant="secondary"
-                className="text-xs cursor-pointer hover:bg-secondary/80"
+                className={`text-xs cursor-pointer transition-colors border ${
+                  followedTagSlugs?.has(tag)
+                    ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
+                    : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
+                }`}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -109,12 +134,12 @@ function UserCard({ result }: { result: UserResult }) {
   );
 }
 
-export function ExploreResultCard({ result, onTagClick }: ExploreResultCardProps) {
+export function ExploreResultCard({ result, onTagClick, followedTagSlugs }: ExploreResultCardProps) {
   switch (result.type) {
     case 'blueprint':
-      return <BlueprintCard result={result} onTagClick={onTagClick} />;
+      return <BlueprintCard result={result} onTagClick={onTagClick} followedTagSlugs={followedTagSlugs} />;
     case 'inventory':
-      return <InventoryCard result={result} onTagClick={onTagClick} />;
+      return <InventoryCard result={result} onTagClick={onTagClick} followedTagSlugs={followedTagSlugs} />;
     case 'user':
       return <UserCard result={result} />;
     default:

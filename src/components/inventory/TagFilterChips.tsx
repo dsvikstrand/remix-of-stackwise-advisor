@@ -7,10 +7,13 @@ interface TagFilterChipsProps {
   tags: Array<{ id: string; slug: string; count: number }>;
   selectedTag: string | null;
   onSelectTag: (slug: string | null) => void;
+  followedTagIds?: Set<string>;
+  onToggleFollow?: (tag: { id: string; slug: string }) => void;
 }
 
-export function TagFilterChips({ tags, selectedTag, onSelectTag }: TagFilterChipsProps) {
+export function TagFilterChips({ tags, selectedTag, onSelectTag, followedTagIds, onToggleFollow }: TagFilterChipsProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const enableFollowState = !!followedTagIds && !!onToggleFollow;
 
   if (tags.length === 0) return null;
 
@@ -29,30 +32,42 @@ export function TagFilterChips({ tags, selectedTag, onSelectTag }: TagFilterChip
               Clear filter
             </Button>
           )}
-          {tags.map((tag) => (
-            <Badge
-              key={tag.id}
-              variant={selectedTag === tag.slug ? 'default' : 'secondary'}
-              className={`cursor-pointer shrink-0 transition-colors ${
-                selectedTag === tag.slug
-                  ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                  : 'hover:bg-secondary/80'
-              }`}
-              onClick={() => onSelectTag(selectedTag === tag.slug ? null : tag.slug)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
+          {tags.map((tag) => {
+            const isFollowed = followedTagIds?.has(tag.id) ?? false;
+
+            return (
+              <Badge
+                key={tag.id}
+                variant={selectedTag === tag.slug ? 'default' : 'secondary'}
+                className={`cursor-pointer shrink-0 transition-colors ${
+                  selectedTag === tag.slug
+                    ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                    : enableFollowState
+                      ? isFollowed
+                        ? 'bg-primary/15 text-primary border border-primary/30 hover:bg-primary/20'
+                        : 'bg-muted/40 text-muted-foreground border border-border/60 hover:bg-muted/60'
+                      : 'hover:bg-secondary/80'
+                }`}
+                onClick={() => {
                   onSelectTag(selectedTag === tag.slug ? null : tag.slug);
-                }
-              }}
-              aria-pressed={selectedTag === tag.slug}
-            >
-              #{tag.slug}
-              <span className="ml-1 text-xs opacity-70">({tag.count})</span>
-            </Badge>
-          ))}
+                  onToggleFollow?.({ id: tag.id, slug: tag.slug });
+                }}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSelectTag(selectedTag === tag.slug ? null : tag.slug);
+                    onToggleFollow?.({ id: tag.id, slug: tag.slug });
+                  }
+                }}
+                aria-pressed={selectedTag === tag.slug}
+              >
+                #{tag.slug}
+                <span className="ml-1 text-xs opacity-70">({tag.count})</span>
+              </Badge>
+            );
+          })}
         </div>
         <ScrollBar orientation="horizontal" />
       </ScrollArea>

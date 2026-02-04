@@ -8,6 +8,9 @@ import { AppHeader } from '@/components/shared/AppHeader';
 import { ExploreResultCard } from '@/components/explore/ExploreResultCard';
 import { useExploreSearch, useTrendingTags, type ExploreFilter, type ExploreResult } from '@/hooks/useExploreSearch';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useTagFollows } from '@/hooks/useTagFollows';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 
 const FILTER_OPTIONS: { value: ExploreFilter; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -19,6 +22,8 @@ const FILTER_OPTIONS: { value: ExploreFilter; label: string }[] = [
 export default function Explore() {
   const [searchInput, setSearchInput] = useState('');
   const [filter, setFilter] = useState<ExploreFilter>('all');
+  const { user } = useAuth();
+  const { toast } = useToast();
   
   const debouncedQuery = useDebounce(searchInput, 300);
   const { data: results, isLoading } = useExploreSearch({
@@ -26,11 +31,28 @@ export default function Explore() {
     filter,
   });
   const { data: trendingTags } = useTrendingTags();
+  const { followedSlugs, toggleFollow } = useTagFollows();
 
   const hasQuery = debouncedQuery.trim().length > 0;
 
-  const handleTagClick = (tag: string) => {
+  const handleTagClick = async (tag: string) => {
     setSearchInput(tag);
+    if (!user) {
+      toast({
+        title: 'Sign in required',
+        description: 'Please sign in to follow tags.',
+      });
+      return;
+    }
+    try {
+      await toggleFollow({ slug: tag });
+    } catch (error) {
+      toast({
+        title: 'Tag update failed',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   // Group results by type when filter is 'all'
@@ -110,7 +132,11 @@ export default function Explore() {
                     <Badge
                       key={tag.id}
                       variant="secondary"
-                      className="cursor-pointer hover:bg-secondary/80 transition-colors px-3 py-1"
+                      className={`cursor-pointer transition-colors px-3 py-1 border ${
+                        followedSlugs.has(tag.slug)
+                          ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
+                          : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
+                      }`}
                       onClick={() => handleTagClick(`#${tag.slug}`)}
                     >
                       #{tag.slug}
@@ -157,7 +183,12 @@ export default function Explore() {
                 <h2 className="text-sm font-medium text-muted-foreground mb-3">Blueprints</h2>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {groupedResults.blueprints.map(r => (
-                    <ExploreResultCard key={r.type === 'blueprint' ? r.id : ''} result={r} onTagClick={handleTagClick} />
+                    <ExploreResultCard
+                      key={r.type === 'blueprint' ? r.id : ''}
+                      result={r}
+                      onTagClick={handleTagClick}
+                      followedTagSlugs={followedSlugs}
+                    />
                   ))}
                 </div>
               </section>
@@ -168,7 +199,12 @@ export default function Explore() {
                 <h2 className="text-sm font-medium text-muted-foreground mb-3">Inventories</h2>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {groupedResults.inventories.map(r => (
-                    <ExploreResultCard key={r.type === 'inventory' ? r.id : ''} result={r} onTagClick={handleTagClick} />
+                    <ExploreResultCard
+                      key={r.type === 'inventory' ? r.id : ''}
+                      result={r}
+                      onTagClick={handleTagClick}
+                      followedTagSlugs={followedSlugs}
+                    />
                   ))}
                 </div>
               </section>
@@ -179,7 +215,7 @@ export default function Explore() {
                 <h2 className="text-sm font-medium text-muted-foreground mb-3">Users</h2>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {groupedResults.users.map(r => (
-                    <ExploreResultCard key={r.type === 'user' ? r.userId : ''} result={r} onTagClick={handleTagClick} />
+                    <ExploreResultCard key={r.type === 'user' ? r.userId : ''} result={r} />
                   ))}
                 </div>
               </section>
@@ -203,6 +239,7 @@ export default function Explore() {
                     key={r.type === 'user' ? r.userId : r.id}
                     result={r}
                     onTagClick={handleTagClick}
+                    followedTagSlugs={followedSlugs}
                   />
                 ))}
               </div>
