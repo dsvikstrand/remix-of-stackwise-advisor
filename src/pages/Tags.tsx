@@ -116,6 +116,16 @@ export default function Tags() {
           </p>
         </div>
 
+        <Card className="border-border/50 bg-card/60 backdrop-blur-sm">
+          <CardContent className="pt-6 space-y-2">
+            <p className="text-sm font-semibold text-primary uppercase tracking-wide">Discover Topics</p>
+            <h2 className="text-xl font-semibold">Find your community signals</h2>
+            <p className="text-sm text-muted-foreground">
+              Follow tags to shape your Wall, or create new ones as you publish.
+            </p>
+          </CardContent>
+        </Card>
+
         {/* Search & Create */}
         <Card>
           <CardContent className="pt-6 space-y-4">

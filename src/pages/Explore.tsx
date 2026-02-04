@@ -57,6 +57,13 @@ export default function Explore() {
       <AppHeader />
       
       <main className="container max-w-4xl mx-auto px-4 py-8">
+        <div className="mb-6 rounded-2xl border border-border/50 bg-card/60 backdrop-blur-sm p-5">
+          <p className="text-sm font-semibold text-primary uppercase tracking-wide">Explore</p>
+          <h1 className="text-2xl font-semibold mt-1">Search blueprints, inventories, and creators</h1>
+          <p className="text-sm text-muted-foreground mt-2">
+            Start with a keyword, then narrow by type or jump into trending tags.
+          </p>
+        </div>
         {/* Search Bar */}
         <div className="relative mb-6">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />

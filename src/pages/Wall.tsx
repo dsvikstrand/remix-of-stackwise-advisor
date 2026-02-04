@@ -217,6 +217,17 @@ export default function Wall() {
       <AppHeader />
 
       <main className="max-w-3xl mx-auto px-4 pb-24">
+        <Card className="mb-6 border-border/50 bg-card/60 backdrop-blur-sm">
+          <CardContent className="pt-6">
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-semibold text-primary uppercase tracking-wide">Community Wall</p>
+              <h1 className="text-2xl font-semibold">See what the community is building</h1>
+              <p className="text-sm text-muted-foreground">
+                Browse public blueprints, follow tags you love, and save ideas for your next routine.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as FeedTab)}>
           <TabsList className="mb-4">
             {FEED_TABS.map((tab) => (
