@@ -16,6 +16,7 @@ type UsageState = {
 const DAILY_CREDITS = Number(process.env.AI_DAILY_CREDITS) || 10;
 const GLOBAL_WINDOW_MS = Number(process.env.AI_GLOBAL_WINDOW_MS) || 10 * 60 * 1000;
 const GLOBAL_MAX = Number(process.env.AI_GLOBAL_MAX) || 20;
+const CREDITS_BYPASS = /^(1|true|yes)$/i.test(process.env.AI_CREDITS_BYPASS ?? '');
 const USAGE_FILE =
   process.env.AI_USAGE_FILE ||
   path.join(process.cwd(), 'server', 'data', 'ai-usage.json');
@@ -72,6 +73,14 @@ function pruneGlobal(nowMs: number) {
 
 export function getCredits(userId: string) {
   const dateKey = todayKey();
+  if (CREDITS_BYPASS) {
+    return {
+      remaining: DAILY_CREDITS,
+      limit: DAILY_CREDITS,
+      resetAt: nextResetAt(dateKey),
+      bypass: true,
+    };
+  }
   const user = state.users[userId];
   const used = user?.date === dateKey ? user.used : 0;
   const remaining = Math.max(0, DAILY_CREDITS - used);
@@ -83,8 +92,17 @@ export function getCredits(userId: string) {
 }
 
 export function consumeCredit(userId: string) {
-  const nowMs = Date.now();
   const dateKey = todayKey();
+  if (CREDITS_BYPASS) {
+    return {
+      ok: true as const,
+      remaining: DAILY_CREDITS,
+      limit: DAILY_CREDITS,
+      resetAt: nextResetAt(dateKey),
+      bypass: true,
+    };
+  }
+  const nowMs = Date.now();
 
   pruneGlobal(nowMs);
   if (state.global.timestamps.length >= GLOBAL_MAX) {

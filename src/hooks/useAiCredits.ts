@@ -7,6 +7,7 @@ type CreditsResponse = {
   remaining: number;
   limit: number;
   resetAt: string;
+  bypass?: boolean;
 };
 
 async function fetchCredits(): Promise<CreditsResponse> {

@@ -37,7 +37,9 @@ export function UserMenu() {
   const displayName = profile?.display_name || user.email?.split('@')[0] || 'User';
   const initials = displayName.slice(0, 2).toUpperCase();
   const credits = creditsQuery.data;
-  const creditsPercent = credits
+  const creditsPercent = credits?.bypass
+    ? 100
+    : credits
     ? Math.min(100, Math.max(0, (credits.remaining / Math.max(1, credits.limit)) * 100))
     : 0;
 
@@ -67,7 +69,11 @@ export function UserMenu() {
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>AI credits</span>
             <span>
-              {credits ? `${credits.remaining}/${credits.limit}` : '—'}
+              {credits
+                ? credits.bypass
+                  ? 'Unlimited'
+                  : `${credits.remaining}/${credits.limit}`
+                : '—'}
             </span>
           </div>
           <div className="mt-2 h-2 w-full rounded-full bg-muted">

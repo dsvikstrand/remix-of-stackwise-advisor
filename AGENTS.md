@@ -52,3 +52,6 @@ If a message ends with `UDO`, treat it as approval to execute the actions you pr
 - `main` is the agentic backend branch and deploys to the root URL.
 - `lovable-main` is the legacy Lovable branch and deploys to `/lovable-backend/`.
 - `main-pre-agentic` keeps a backup pointer to the old main before the swap.
+
+## 9) AI credits bypass (dev only)
+Set `AI_CREDITS_BYPASS=true` in the backend environment to bypass credit limits while building/testing. Keep it off in production.
