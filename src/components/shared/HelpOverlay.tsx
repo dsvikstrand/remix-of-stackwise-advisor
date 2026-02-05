@@ -47,8 +47,8 @@ const FEATURE_CARDS = [
 export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl w-[95vw] h-[88vh] overflow-hidden border border-border/60 bg-background/95 p-0">
-        <div className="relative h-full w-full">
+      <DialogContent className="max-w-5xl w-[95vw] max-h-[88vh] overflow-hidden border border-border/60 bg-background/95 p-0 flex flex-col">
+        <div className="relative flex-1 min-h-0 w-full">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-background to-accent/10" />
           <div className="relative h-full w-full flex flex-col min-h-0">
             <div className="px-8 pt-8 pb-4 border-b border-border/60 bg-background/60 backdrop-blur">
