@@ -105,14 +105,14 @@ export default function Blueprints() {
 
       <AppHeader />
 
-      <main className="relative max-w-6xl mx-auto px-4 py-8 space-y-6">
+      <main className="relative max-w-4xl mx-auto px-4 py-8 space-y-6">
         <section className="space-y-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div className="space-y-1">
               <p className="text-sm font-semibold text-primary uppercase tracking-wide">Blueprints</p>
-              <h1 className="text-3xl font-semibold tracking-tight">Blueprint Library</h1>
+              <h1 className="text-2xl font-semibold tracking-tight">Search and explore community blueprints</h1>
               <p className="text-sm text-muted-foreground">
-                Step-by-step routines built from libraries. Open one to learn, adapt, or publish your own.
+                Start with a keyword, then narrow by tag or sort by what’s popular.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -122,7 +122,7 @@ export default function Blueprints() {
                 </Link>
               )}
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 onClick={() => setShowBlueprintInfo((prev) => !prev)}
               >

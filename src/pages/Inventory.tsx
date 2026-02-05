@@ -97,19 +97,19 @@ export default function Inventory() {
 
       <AppHeader />
 
-      <main className="relative max-w-6xl mx-auto px-4 py-8 space-y-6">
+      <main className="relative max-w-4xl mx-auto px-4 py-8 space-y-6">
         <section className="space-y-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div className="space-y-1">
               <p className="text-sm font-semibold text-primary uppercase tracking-wide">Library</p>
-              <h1 className="text-3xl font-semibold tracking-tight">Libraries</h1>
+              <h1 className="text-2xl font-semibold tracking-tight">Pick a library, then build your blueprint</h1>
               <p className="text-sm text-muted-foreground">
-                Pick a collection, then build your blueprint.
+                Browse collections of items, open one, then start shaping your routine step by step.
               </p>
             </div>
             <div className="flex items-center gap-2">
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 onClick={() => setShowLibraryInfo((prev) => !prev)}
               >
