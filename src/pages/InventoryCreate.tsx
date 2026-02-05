@@ -29,6 +29,7 @@ import { DEFAULT_ADDITIONAL_SECTIONS } from '@/lib/reviewSections';
 import { ChevronDown, Loader2, Settings2, Sparkles, Wand2, X } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
+import { logMvpEvent } from '@/lib/logEvent';
 
 const SUPABASE_GENERATE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-inventory`;
 const AGENTIC_BASE_URL = import.meta.env.VITE_AGENTIC_BACKEND_URL;
@@ -199,6 +200,15 @@ export default function InventoryCreate() {
       toast({
         title: 'Library generated!',
         description: `Created ${schema.categories.length} categories with ${schema.categories.reduce((sum, c) => sum + c.items.length, 0)} items.`,
+      });
+      void logMvpEvent({
+        eventName: 'generate_library',
+        userId: session?.user?.id,
+        path: window.location.pathname,
+        metadata: {
+          categoryCount: schema.categories.length,
+          itemCount: schema.categories.reduce((sum, c) => sum + c.items.length, 0),
+        },
       });
     } catch (error) {
       toast({

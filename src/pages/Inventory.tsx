@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,15 +14,27 @@ import { InventoryCard } from '@/components/inventory/InventoryCard';
 import { TagFilterChips } from '@/components/inventory/TagFilterChips';
 import { SuggestedInventories } from '@/components/inventory/SuggestedInventories';
 import { Search, Plus } from 'lucide-react';
+import { logMvpEvent } from '@/lib/logEvent';
 
 export default function Inventory() {
   const [query, setQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const { user } = useAuth();
   const { toast } = useToast();
+  const hasLoggedView = useRef(false);
 
   // Combine search query with selected tag
   const effectiveQuery = selectedTag || query;
+
+  useEffect(() => {
+    if (hasLoggedView.current) return;
+    hasLoggedView.current = true;
+    void logMvpEvent({
+      eventName: 'view_library',
+      userId: user?.id,
+      path: window.location.pathname,
+    });
+  }, [user?.id]);
 
   const { data: inventories, isLoading } = useInventorySearch(effectiveQuery);
   const { data: popularTags = [], isLoading: tagsLoading } = usePopularInventoryTags(12);

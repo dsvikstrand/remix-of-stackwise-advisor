@@ -277,6 +277,20 @@ export default function InventoryBuild() {
     });
   }, [inventory, totalSelected, user?.id, blueprintId, location.pathname, isEditing]);
 
+  useEffect(() => {
+    if (!inventory) return;
+    if (isEditing) return;
+    void logMvpEvent({
+      eventName: 'start_build',
+      userId: user?.id,
+      blueprintId: blueprintId ?? null,
+      path: location.pathname,
+      metadata: {
+        inventoryId: inventory.id,
+      },
+    });
+  }, [inventory, isEditing, user?.id, blueprintId, location.pathname]);
+
   const reviewSections = useMemo(
     () => buildReviewSections(additionalSections),
     [additionalSections]
