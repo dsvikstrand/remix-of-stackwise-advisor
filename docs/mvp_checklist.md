@@ -21,7 +21,27 @@
 
 ---
 
-## 2) Remove Early Login Friction (public browsing)
+## 2) Core App Remaining (before seeding)
+- [ ] **2.1 Library → Build → Review → Publish works end-to-end**
+- [ ] Generate Library from `/inventory/create`
+- [ ] Build from `/inventory/:id/build` with items + steps
+- [ ] Review returns successfully
+- [ ] Publish shows in `/blueprints` and `/wall`
+- [ ] **2.2 Agentic backend wired**
+- [ ] Frontend requests hit `https://bapi.vdsai.cloud/api/*` (DevTools)
+- [ ] `POST /api/generate-inventory` returns 200
+- [ ] `POST /api/analyze-blueprint` returns 200
+- [ ] `POST /api/generate-banner` returns 200
+- [ ] **2.3 Edge upload for banners**
+- [ ] `POST https://piszvseyaefxekubphhf.supabase.co/functions/v1/upload-banner` returns 200
+- [ ] Banner URL renders on blueprint page
+- [ ] **2.4 Minimal first-win logging**
+- [ ] Log `view_blueprint`, `click_remix`, `save_blueprint`, `generate_ai_review`
+- [ ] Owner: ________  Target date: ________
+
+---
+
+## 3) Remove Early Login Friction (public browsing)
 - [ ] **2.1 Public access**
 - [ ] Wall is viewable without login
 - [ ] Explore/search is viewable without login
@@ -34,7 +54,7 @@
 
 ---
 
-## 3) Core Flow (Library → Build → Review → Publish)
+## 4) Core Flow (Library → Build → Review → Publish)
 - [ ] **3.1 Library generate**
 - [ ] `/inventory/create` generates a Library successfully
 - [ ] AI response appears with categories + items
@@ -49,7 +69,7 @@
 
 ---
 
-## 4) Agentic Backend Wiring (current stack)
+## 5) Agentic Backend Wiring (current stack)
 - [ ] **4.1 Frontend uses agentic backend**
 - [ ] `.env.production` sets `VITE_USE_AGENTIC_BACKEND=true`
 - [ ] `.env.production` sets `VITE_AGENTIC_BACKEND_URL=https://bapi.vdsai.cloud`
@@ -65,7 +85,7 @@
 
 ---
 
-## 5) First Win Definition + Instrumentation
+## 6) First Win Definition + Instrumentation
 - [ ] **5.1 Define first win**
 - [ ] First Win = Remix → edit 1 thing → Save OR AI review
 - [ ] **5.2 Track funnel events**
@@ -83,7 +103,7 @@
 
 ---
 
-## 6) Basic AI Guardrails (before real traffic)
+## 7) Basic AI Guardrails (before real traffic)
 - [ ] **6.1 Rate limiting**
 - [ ] Per-user daily cap on AI review
 - [ ] **6.2 Clear UX**
@@ -95,7 +115,7 @@
 
 ---
 
-## 7) Frictionless First-Win UI Path
+## 8) Frictionless First-Win UI Path
 - [ ] **7.1 Remix is primary CTA**
 - [ ] “Remix this” button prominent on blueprint pages
 - [ ] “Remix” appears on cards in Wall/Explore
@@ -109,7 +129,7 @@
 
 ---
 
-## 8) Feedback Capture (context-aware)
+## 9) Feedback Capture (context-aware)
 - [ ] **8.1 In-app feedback**
 - [ ] Feedback button on Home + Blueprint + Build pages
 - [ ] **8.2 Capture context**
@@ -120,7 +140,7 @@
 
 ---
 
-## 9) Acquisition Test (minimum)
+## 10) Acquisition Test (minimum)
 - [ ] **9.1 Traffic goal**
 - [ ] 300 targeted visits within 2 weeks
 - [ ] **9.2 Channels**
