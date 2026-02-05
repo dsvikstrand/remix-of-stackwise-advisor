@@ -22,7 +22,7 @@ export default function About() {
               <p>
                 Email: <a href="mailto:hi@vdsai.cloud" className="underline">hi@vdsai.cloud</a>
               </p>
-              <p>Location: Gothenburg, Sweden</p>
+              <p>Based in Sweden</p>
             </div>
           </CardContent>
         </Card>
