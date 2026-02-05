@@ -74,6 +74,19 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
 
             <ScrollArea className="flex-1 px-8 py-6">
               <div className="space-y-8">
+                <Card className="border border-border/60 bg-background/80">
+                  <CardContent className="p-6 space-y-2">
+                    <p className="text-sm font-semibold">Let’s get oriented</p>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      Here’s the goal: take a simple idea, break it into parts, and turn it into a
+                      step‑by‑step routine you can actually follow. Inventories are your ingredients,
+                      Blueprints are your instructions, and the community is your feedback loop. As we
+                      go, you’ll refine your routine, learn from others, and end up with something you
+                      can reuse anytime.
+                    </p>
+                  </CardContent>
+                </Card>
+
                 <Card className="border border-border/60 bg-background/70">
                   <CardContent className="p-6 space-y-4">
                     <div className="flex items-center gap-3">
