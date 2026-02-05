@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -86,6 +87,20 @@ export default function Explore() {
             Start with a keyword, then narrow by type or jump into trending tags.
           </p>
         </div>
+
+        {!user && (
+          <div className="mb-6 rounded-2xl border border-border/50 bg-card/60 backdrop-blur-sm p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold">Sign in to personalize</p>
+              <p className="text-xs text-muted-foreground">
+                Follow tags and creators to tune what shows up in Explore.
+              </p>
+            </div>
+            <Link to="/auth">
+              <Button size="sm">Sign in</Button>
+            </Link>
+          </div>
+        )}
         {/* Search Bar */}
         <div className="relative mb-6">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
@@ -222,9 +237,12 @@ export default function Explore() {
             )}
 
             {results?.length === 0 && (
-              <p className="text-center text-muted-foreground py-8">
-                No results found for "{debouncedQuery}"
-              </p>
+              <div className="text-center text-muted-foreground py-8 space-y-3">
+                <p>No results found for "{debouncedQuery}"</p>
+                <Button variant="outline" size="sm" onClick={() => setSearchInput('')}>
+                  Clear search
+                </Button>
+              </div>
             )}
           </div>
         )}
@@ -244,9 +262,12 @@ export default function Explore() {
                 ))}
               </div>
             ) : (
-              <p className="text-center text-muted-foreground py-8">
-                No results found for "{debouncedQuery}"
-              </p>
+              <div className="text-center text-muted-foreground py-8 space-y-3">
+                <p>No results found for "{debouncedQuery}"</p>
+                <Button variant="outline" size="sm" onClick={() => setSearchInput('')}>
+                  Clear search
+                </Button>
+              </div>
             )}
           </div>
         )}

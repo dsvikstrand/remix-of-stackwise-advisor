@@ -14,6 +14,7 @@ import { useTagSuggestions } from '@/hooks/useTags';
 import { useRecentTags } from '@/hooks/useRecentTags';
 import { useCreateBlueprint } from '@/hooks/useBlueprints';
 import { useToast } from '@/hooks/use-toast';
+import { getFriendlyErrorMessage } from '@/lib/errors';
 import { buildReviewSections } from '@/lib/reviewSections';
 import type { InventoryListItem } from '@/hooks/useInventories';
 import type { Json } from '@/integrations/supabase/types';
@@ -227,7 +228,7 @@ export function BlueprintBuilder({
     } catch (error) {
       toast({
         title: 'Analysis failed',
-        description: error instanceof Error ? error.message : 'Please try again.',
+        description: getFriendlyErrorMessage(error, 'Please try again.'),
         variant: 'destructive',
       });
     } finally {
@@ -306,7 +307,7 @@ export function BlueprintBuilder({
     } catch (error) {
       toast({
         title: 'Publish failed',
-        description: error instanceof Error ? error.message : 'Please try again.',
+        description: getFriendlyErrorMessage(error, 'Please try again.'),
         variant: 'destructive',
       });
     }

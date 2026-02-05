@@ -24,6 +24,7 @@ import { useBlueprint, useCreateBlueprint, useUpdateBlueprint } from '@/hooks/us
 import { useTagSuggestions } from '@/hooks/useTags';
 import { useRecentTags } from '@/hooks/useRecentTags';
 import { useToast } from '@/hooks/use-toast';
+import { getFriendlyErrorMessage } from '@/lib/errors';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -545,7 +546,7 @@ export default function InventoryBuild() {
     } catch (error) {
       toast({
         title: 'Analysis failed',
-        description: error instanceof Error ? error.message : 'Please try again.',
+        description: getFriendlyErrorMessage(error, 'Please try again.'),
         variant: 'destructive',
       });
     } finally {
@@ -622,7 +623,7 @@ export default function InventoryBuild() {
     } catch (error) {
       toast({
         title: 'Banner generation failed',
-        description: error instanceof Error ? error.message : 'Please try again.',
+        description: getFriendlyErrorMessage(error, 'Please try again.'),
         variant: 'destructive',
       });
       throw error;

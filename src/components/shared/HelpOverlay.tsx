@@ -26,7 +26,7 @@ const FEATURE_CARDS = [
   },
   {
     title: 'Blueprints',
-    description: 'Blueprints are step-by-step routines. Combine items into steps and publish when ready.',
+    description: 'Blueprints are step-by-step routines. Build, review, and publish when ready.',
     icon: Layers,
     bullets: ['Organize steps visually', 'Add context for each item', 'Publish or keep private'],
   },
@@ -94,7 +94,7 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                       </div>
                       <div>
                         <p className="text-sm font-semibold">The Flow</p>
-                        <p className="text-xs text-muted-foreground">From idea → inventory → blueprint → community</p>
+                        <p className="text-xs text-muted-foreground">From idea → inventory → build → blueprint → community</p>
                       </div>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">

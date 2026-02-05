@@ -22,6 +22,7 @@ import {
 } from '@/components/inventory/InventoryCreateHelpOverlay';
 import { useCreateInventory } from '@/hooks/useInventories';
 import { useToast } from '@/hooks/use-toast';
+import { getFriendlyErrorMessage } from '@/lib/errors';
 import { useTagSuggestions } from '@/hooks/useTags';
 import { useRecentTags } from '@/hooks/useRecentTags';
 import { DEFAULT_ADDITIONAL_SECTIONS } from '@/lib/reviewSections';
@@ -161,7 +162,7 @@ export default function InventoryCreate() {
     } catch (error) {
       toast({
         title: 'Generation failed',
-        description: error instanceof Error ? error.message : 'Please try again.',
+        description: getFriendlyErrorMessage(error, 'Please try again.'),
         variant: 'destructive',
       });
     } finally {

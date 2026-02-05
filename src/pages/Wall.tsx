@@ -390,6 +390,16 @@ export default function Wall() {
                     {/* Inline tag suggestions for "For You" tab */}
                     {activeTab === 'for-you' && popularTags.length > 0 && (
                       <div className="space-y-3 w-full max-w-md">
+                        {!user && (
+                          <div className="flex flex-col items-center gap-2">
+                            <p className="text-xs text-muted-foreground">
+                              Sign in to follow tags and personalize this feed.
+                            </p>
+                            <Link to="/auth">
+                              <Button size="sm">Sign in</Button>
+                            </Link>
+                          </div>
+                        )}
                         <p className="text-xs text-muted-foreground">Popular tags to follow:</p>
                         <div className="flex flex-wrap justify-center gap-2">
                           {popularTags.map((tag) => (

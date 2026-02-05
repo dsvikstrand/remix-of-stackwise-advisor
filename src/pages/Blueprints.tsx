@@ -157,6 +157,22 @@ export default function Blueprints() {
           />
         )}
 
+        {!user && (
+          <Card className="bg-card/60 backdrop-blur-sm">
+            <CardContent className="py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold">Sign in to personalize</p>
+                <p className="text-xs text-muted-foreground">
+                  Follow tags and like blueprints to shape what you see.
+                </p>
+              </div>
+              <Link to="/auth">
+                <Button size="sm">Sign in</Button>
+              </Link>
+            </CardContent>
+          </Card>
+        )}
+
         {showSuggestions && (
           <SuggestedBlueprints
             blueprints={suggestedBlueprints}
@@ -209,11 +225,17 @@ export default function Blueprints() {
                     ? 'Try a different search or clear filters.'
                     : 'Be the first to publish a blueprint!'}
                 </p>
-                {!effectiveQuery && (
-                  <Link to="/inventory">
-                    <Button>Build from Inventory</Button>
-                  </Link>
-                )}
+                <div className="flex flex-wrap justify-center gap-2">
+                  {effectiveQuery ? (
+                    <Button variant="outline" onClick={() => { setQuery(''); setSelectedTag(null); }}>
+                      Clear search
+                    </Button>
+                  ) : (
+                    <Link to="/inventory">
+                      <Button>Build from Inventory</Button>
+                    </Link>
+                  )}
+                </div>
               </CardContent>
             </Card>
           )}

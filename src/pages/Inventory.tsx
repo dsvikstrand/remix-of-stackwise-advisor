@@ -186,11 +186,17 @@ export default function Inventory() {
                     ? 'Try a different search or clear filters.'
                     : 'Be the first to create an inventory!'}
                 </p>
-                {!effectiveQuery && (
-                  <Link to="/inventory/create">
-                    <Button>Create Inventory</Button>
-                  </Link>
-                )}
+                <div className="flex flex-wrap justify-center gap-2">
+                  {effectiveQuery ? (
+                    <Button variant="outline" onClick={() => setQuery('')}>
+                      Clear search
+                    </Button>
+                  ) : (
+                    <Link to="/inventory/create">
+                      <Button>Create Inventory</Button>
+                    </Link>
+                  )}
+                </div>
               </CardContent>
             </Card>
           )}
