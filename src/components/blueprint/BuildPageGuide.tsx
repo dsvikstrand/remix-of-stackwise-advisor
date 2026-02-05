@@ -6,7 +6,7 @@ interface BuildPageGuideProps {
 }
 
 const STEPS = [
-  { number: 1, label: 'Select items' },
+  { number: 1, label: 'Build Blueprint' },
   { number: 2, label: 'Review with AI' },
   { number: 3, label: 'Publish' },
 ];

@@ -1246,7 +1246,7 @@ export default function InventoryBuild() {
                         <Textarea
                           value={autoDescription}
                           onChange={(e) => setAutoDescription(e.target.value)}
-                          placeholder="What should this routine focus on?"
+                          placeholder="What should this routine focus on? (Optional)"
                           rows={2}
                         />
                       </div>
@@ -1255,7 +1255,7 @@ export default function InventoryBuild() {
                         <Textarea
                           value={autoNotes}
                           onChange={(e) => setAutoNotes(e.target.value)}
-                          placeholder="Any constraints or preferences?"
+                          placeholder="Any constraints or preferences? (Optional)"
                           rows={2}
                         />
                       </div>
