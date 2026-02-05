@@ -245,6 +245,24 @@ export default function Wall() {
             </div>
           </CardContent>
         </Card>
+
+        {!user && (
+          <Card className="mb-6 border-border/50 bg-card/60 backdrop-blur-sm">
+            <CardContent className="py-5">
+              <div className="flex flex-col gap-2 text-center">
+                <p className="text-sm font-semibold">Sign in to personalize</p>
+                <p className="text-sm text-muted-foreground">
+                  Follow tags and creators to tune what shows up in Explore.
+                </p>
+                <div className="flex justify-center">
+                  <Link to="/auth">
+                    <Button size="sm">Sign in</Button>
+                  </Link>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as FeedTab)}>
           <TabsList className="mb-4">
             {FEED_TABS.map((tab) => (

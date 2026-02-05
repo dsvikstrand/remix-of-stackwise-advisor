@@ -38,16 +38,16 @@ const App = () => (
             <Route path="/wall" element={<Wall />} />
             <Route path="/wall/:postId" element={<RequireAuth><PostDetail /></RequireAuth>} />
             <Route path="/auth" element={<Auth />} />
-            <Route path="/inventory" element={<RequireAuth><Inventory /></RequireAuth>} />
+            <Route path="/inventory" element={<Inventory />} />
             <Route path="/inventory/create" element={<RequireAuth><InventoryCreate /></RequireAuth>} />
-            <Route path="/inventory/:inventoryId" element={<RequireAuth><InventoryDetail /></RequireAuth>} />
-            <Route path="/inventory/:inventoryId/build" element={<RequireAuth><InventoryBuild /></RequireAuth>} />
+            <Route path="/inventory/:inventoryId" element={<InventoryDetail />} />
+            <Route path="/inventory/:inventoryId/build" element={<InventoryBuild />} />
             <Route path="/blueprint/:blueprintId/edit" element={<RequireAuth><InventoryBuild /></RequireAuth>} />
             <Route path="/blueprint/:blueprintId" element={<BlueprintDetail />} />
             <Route path="/blueprint/:blueprintId/remix" element={<RequireAuth><BlueprintRemix /></RequireAuth>} />
             <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
             <Route path="/u/:userId" element={<UserProfile />} />
-            <Route path="/tags" element={<RequireAuth><Tags /></RequireAuth>} />
+            <Route path="/tags" element={<Tags />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
