@@ -1,6 +1,5 @@
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Card, CardContent } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Compass, Layers, Sparkles, Tag, Users } from 'lucide-react';
@@ -72,7 +71,7 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
               </div>
             </div>
 
-            <ScrollArea className="flex-1 px-8 py-6">
+            <div className="flex-1 overflow-y-auto px-8 py-6">
               <div className="space-y-8">
                 <Card className="border border-border/60 bg-background/80">
                   <CardContent className="p-6 space-y-2">
@@ -155,7 +154,7 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                   </CardContent>
                 </Card>
               </div>
-            </ScrollArea>
+            </div>
           </div>
         </div>
       </DialogContent>
