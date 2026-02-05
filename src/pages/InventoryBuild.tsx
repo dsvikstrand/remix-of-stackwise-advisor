@@ -833,7 +833,7 @@ export default function InventoryBuild() {
             className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />
-            {isEditing ? 'Back to blueprint' : 'Back to inventory'}
+            {isEditing ? 'Back to blueprint' : 'Back to library'}
           </Link>
           <div className="flex items-center gap-1">
             <TourButton onClick={() => setShowTour(true)} />
@@ -874,7 +874,7 @@ export default function InventoryBuild() {
           <p className="text-lg text-muted-foreground max-w-md mx-auto">
             {isEditing
               ? 'Update your blueprint, regenerate the review, and save the changes.'
-              : 'Build your blueprint from this inventory'}
+              : 'Build your blueprint from this library'}
           </p>
         </div>
 
@@ -1251,7 +1251,7 @@ export default function InventoryBuild() {
         ) : (
           <Card className="bg-card/60 backdrop-blur-glass border-border/50">
             <CardContent className="py-12 text-center">
-              Inventory not found.
+              Library not found.
             </CardContent>
           </Card>
         )}

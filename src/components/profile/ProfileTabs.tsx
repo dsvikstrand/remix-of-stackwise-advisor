@@ -35,7 +35,7 @@ export function ProfileTabs({ userId }: ProfileTabsProps) {
         </TabsTrigger>
         <TabsTrigger value="inventories" className="gap-1.5">
           <Package className="h-4 w-4" />
-          Inventories
+          Libraries
         </TabsTrigger>
         <TabsTrigger value="liked" className="gap-1.5">
           <Heart className="h-4 w-4" />

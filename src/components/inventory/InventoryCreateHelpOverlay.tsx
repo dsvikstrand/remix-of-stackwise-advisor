@@ -13,12 +13,12 @@ interface TooltipPosition {
 }
 
 const HELP_DEFINITIONS: Array<{ id: string; text: string }> = [
-  { id: 'keywords', text: 'Describe what kind of inventory you want to create' },
+  { id: 'keywords', text: 'Describe what kind of library you want to create' },
   { id: 'generate', text: 'AI generates categories and items for you' },
-  { id: 'advanced-options', text: 'Customize how AI generates your inventory' },
+  { id: 'advanced-options', text: 'Customize how AI generates your library' },
   { id: 'edit-categories', text: 'Rename, add, or remove categories and items' },
-  { id: 'tags', text: 'Help others discover your inventory with tags' },
-  { id: 'publish', text: 'Create your inventory and start building' },
+  { id: 'tags', text: 'Help others discover your library with tags' },
+  { id: 'publish', text: 'Create your library and start building' },
 ];
 
 interface InventoryCreateHelpOverlayProps {

@@ -113,7 +113,7 @@ export default function Blueprints() {
             <Link to="/inventory">
               <Button size="sm" className="gap-2">
                 <Layers className="h-4 w-4" />
-                Build from Inventory
+                Build from Library
               </Button>
             </Link>
           </div>
@@ -235,7 +235,7 @@ export default function Blueprints() {
                     </Button>
                   ) : (
                     <Link to="/inventory">
-                      <Button>Build from Inventory</Button>
+                      <Button>Build from Library</Button>
                     </Link>
                   )}
                 </div>

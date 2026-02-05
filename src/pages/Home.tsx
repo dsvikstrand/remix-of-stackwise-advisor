@@ -76,7 +76,7 @@ export default function Home() {
           <nav className="flex flex-wrap items-center justify-center gap-4 text-sm text-muted-foreground">
             <Link to="/wall" className="hover:text-foreground transition-colors">Wall</Link>
             <span className="text-border">&middot;</span>
-            <Link to="/inventory" className="hover:text-foreground transition-colors">Inventories</Link>
+            <Link to="/inventory" className="hover:text-foreground transition-colors">Libraries</Link>
             <span className="text-border">&middot;</span>
             <Link to="/tags" className="hover:text-foreground transition-colors">Tags</Link>
             <span className="text-border">&middot;</span>

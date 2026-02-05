@@ -60,7 +60,7 @@ export function DemoInventory() {
         <CardHeader className="pb-2">
           <CardTitle className="text-base font-medium flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-primary" />
-            Sample Supplement Inventory
+            Sample Supplement Library
           </CardTitle>
           <p className="text-sm text-muted-foreground">
             Select items and see how blueprints work. Sign up to build your own!

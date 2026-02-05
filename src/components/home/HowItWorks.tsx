@@ -5,7 +5,7 @@ import { Package, Sparkles, Users } from 'lucide-react';
 const STEPS = [
   {
     icon: Package,
-    title: 'Pick an Inventory',
+    title: 'Pick a Library',
     description: 'Collections of ingredients for any topic—supplements, recipes, routines. Pick one to start building.',
     color: 'bg-primary/10 text-primary',
   },

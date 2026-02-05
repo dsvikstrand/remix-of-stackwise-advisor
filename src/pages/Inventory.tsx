@@ -79,10 +79,10 @@ export default function Inventory() {
       <main className="relative max-w-6xl mx-auto px-4 py-8 space-y-8">
         <Card className="border-border/50 bg-card/60 backdrop-blur-sm">
           <CardContent className="pt-6 space-y-2">
-            <p className="text-sm font-semibold text-primary uppercase tracking-wide">Inventory Library</p>
+            <p className="text-sm font-semibold text-primary uppercase tracking-wide">Library</p>
             <h2 className="text-xl font-semibold">Pick a collection, then build your blueprint</h2>
             <p className="text-sm text-muted-foreground">
-              Browse inventories, open one, and start adding items into your routine.
+              Browse libraries, open one, and start adding items into your routine.
             </p>
           </CardContent>
         </Card>
@@ -90,7 +90,7 @@ export default function Inventory() {
         {/* Hero Section */}
         <section className="space-y-2">
           <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-semibold">Inventory Library</h1>
+            <h1 className="text-3xl font-semibold">Library</h1>
             <Link to="/inventory/create">
               <Button size="sm" className="gap-2">
                 <Plus className="h-4 w-4" />
@@ -99,7 +99,7 @@ export default function Inventory() {
             </Link>
           </div>
           <p className="text-muted-foreground">
-            Discover recipe inventories to build your perfect blueprint.
+            Discover libraries to build your perfect blueprint.
           </p>
         </section>
 
@@ -113,7 +113,7 @@ export default function Inventory() {
                 setQuery(e.target.value);
                 if (e.target.value) setSelectedTag(null); // Clear tag filter when typing
               }}
-              placeholder="Search inventories by title or tag..."
+              placeholder="Search libraries by title or tag..."
               className="border-none shadow-none focus-visible:ring-0 bg-transparent"
             />
           </CardContent>
@@ -137,10 +137,10 @@ export default function Inventory() {
           />
         )}
 
-        {/* All Inventories Section */}
+        {/* All Libraries Section */}
         <section className="space-y-4">
           <h2 className="text-lg font-semibold">
-            {effectiveQuery ? `Results for "${effectiveQuery}"` : 'All Inventories'}
+            {effectiveQuery ? `Results for "${effectiveQuery}"` : 'All Libraries'}
           </h2>
 
           {isLoading ? (
@@ -172,11 +172,11 @@ export default function Inventory() {
           ) : (
             <Card className="bg-card/60 backdrop-blur-sm">
               <CardContent className="py-12 text-center space-y-4">
-                <h3 className="text-lg font-semibold">No inventories found</h3>
+                <h3 className="text-lg font-semibold">No libraries found</h3>
                 <p className="text-sm text-muted-foreground">
                   {effectiveQuery
                     ? 'Try a different search or clear filters.'
-                    : 'Be the first to create an inventory!'}
+                    : 'Be the first to create a library!'}
                 </p>
                 <div className="flex flex-wrap justify-center gap-2">
                   {effectiveQuery ? (
@@ -185,7 +185,7 @@ export default function Inventory() {
                     </Button>
                   ) : (
                     <Link to="/inventory/create">
-                      <Button>Create Inventory</Button>
+                      <Button>Create Library</Button>
                     </Link>
                   )}
                 </div>

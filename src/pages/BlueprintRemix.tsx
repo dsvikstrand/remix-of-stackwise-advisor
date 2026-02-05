@@ -57,7 +57,7 @@ export default function BlueprintRemix() {
           </>
         ) : (
           <Card>
-            <CardContent className="py-12 text-center">Blueprint or inventory not found.</CardContent>
+            <CardContent className="py-12 text-center">Blueprint or library not found.</CardContent>
           </Card>
         )}
       </main>

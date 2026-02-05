@@ -356,11 +356,11 @@ export function BlueprintBuilder({
 
       <Card>
         <CardHeader>
-          <CardTitle>Inventory</CardTitle>
+          <CardTitle>Library</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           {categories.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No inventory items yet. Add categories in the inventory builder.</p>
+            <p className="text-sm text-muted-foreground">No library items yet. Add categories in the library builder.</p>
           ) : (
             categories.map((category) => (
               <div key={category.name} className="space-y-3">

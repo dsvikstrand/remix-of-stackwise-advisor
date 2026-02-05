@@ -46,7 +46,7 @@ export function InventoryCard({ inventory, onLike }: InventoryCardProps) {
           <div className="flex items-center justify-between pt-2 border-t border-border/50">
             <div className="flex items-center gap-3 text-sm text-muted-foreground">
               {/* Blueprint Count */}
-              <span className="flex items-center gap-1" title="Blueprints using this inventory">
+              <span className="flex items-center gap-1" title="Blueprints using this library">
                 <FileStack className="h-3.5 w-3.5" />
                 <span>{inventory.blueprint_count}</span>
               </span>
@@ -62,7 +62,7 @@ export function InventoryCard({ inventory, onLike }: InventoryCardProps) {
                 e.stopPropagation();
                 onLike(inventory.id, inventory.user_liked);
               }}
-              aria-label={inventory.user_liked ? 'Unlike inventory' : 'Like inventory'}
+              aria-label={inventory.user_liked ? 'Unlike library' : 'Like library'}
             >
               <Heart className={`h-4 w-4 ${inventory.user_liked ? 'fill-current' : ''}`} />
               <span className="ml-1 text-xs">{inventory.likes_count}</span>

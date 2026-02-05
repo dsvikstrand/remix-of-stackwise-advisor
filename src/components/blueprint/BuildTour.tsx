@@ -16,7 +16,7 @@ interface TourStep {
 const TOUR_STEPS: TourStep[] = [
   {
     targetId: 'picker',
-    title: 'Browse Your Inventory',
+    title: 'Browse Your Library',
     description: 'Click on categories to explore items. Select the ones you want to include in your blueprint.',
   },
   {

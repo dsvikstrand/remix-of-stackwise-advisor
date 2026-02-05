@@ -6,7 +6,7 @@ export function CommunityStats() {
 
   const items = [
     { label: 'Blueprints', value: stats?.totalBlueprints ?? 0, icon: FileText },
-    { label: 'Inventories', value: stats?.totalInventories ?? 0, icon: Layers },
+    { label: 'Libraries', value: stats?.totalInventories ?? 0, icon: Layers },
     { label: 'Topics', value: stats?.activeTags ?? 0, icon: Hash },
   ];
 

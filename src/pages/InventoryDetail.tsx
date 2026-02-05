@@ -262,7 +262,7 @@ export default function InventoryDetail() {
                     <Button>Create Blueprint</Button>
                   </Link>
                   <Link to="/inventory">
-                    <Button variant="outline">Back to Inventory</Button>
+                    <Button variant="outline">Back to Library</Button>
                   </Link>
                 </div>
               </CardContent>
@@ -270,7 +270,7 @@ export default function InventoryDetail() {
           </>
         ) : (
           <Card>
-            <CardContent className="py-12 text-center">Inventory not found.</CardContent>
+            <CardContent className="py-12 text-center">Library not found.</CardContent>
           </Card>
         )}
       </main>

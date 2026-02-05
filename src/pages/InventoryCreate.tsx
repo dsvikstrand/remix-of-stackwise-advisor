@@ -93,7 +93,7 @@ export default function InventoryCreate() {
     if (!keywords.trim()) {
       toast({
         title: 'Keywords required',
-        description: 'Enter what kind of inventory you want to create.',
+        description: 'Enter what kind of library you want to create.',
         variant: 'destructive',
       });
       return;
@@ -102,7 +102,7 @@ export default function InventoryCreate() {
     if (USE_AGENTIC_BACKEND && !session?.access_token) {
       toast({
         title: 'Sign in required',
-        description: 'Please sign in to generate an inventory.',
+        description: 'Please sign in to generate a library.',
         variant: 'destructive',
       });
       return;
@@ -133,7 +133,7 @@ export default function InventoryCreate() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to generate inventory');
+        throw new Error(errorData.error || 'Failed to generate library');
       }
 
       const schema: GeneratedSchema = await response.json();
@@ -146,7 +146,7 @@ export default function InventoryCreate() {
       if (!title.trim()) {
         const autoTitle = keywords.trim().split(' ').slice(0, 3).map(
           (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-        ).join(' ') + ' Inventory';
+        ).join(' ') + ' Library';
         setTitle(autoTitle);
       }
 
@@ -156,7 +156,7 @@ export default function InventoryCreate() {
       }
 
       toast({
-        title: 'Inventory generated!',
+        title: 'Library generated!',
         description: `Created ${schema.categories.length} categories with ${schema.categories.reduce((sum, c) => sum + c.items.length, 0)} items.`,
       });
     } catch (error) {
@@ -174,7 +174,7 @@ export default function InventoryCreate() {
     if (!title.trim()) {
       toast({
         title: 'Title required',
-        description: 'Add a title before creating the inventory.',
+        description: 'Add a title before creating the library.',
         variant: 'destructive',
       });
       return;
@@ -182,8 +182,8 @@ export default function InventoryCreate() {
 
     if (!generatedSchema) {
       toast({
-        title: 'Generate inventory first',
-        description: 'Use the generate button to create your inventory.',
+        title: 'Generate library first',
+        description: 'Use the generate button to create your library.',
         variant: 'destructive',
       });
       return;
@@ -243,9 +243,9 @@ export default function InventoryCreate() {
       <AppHeader />
 
       <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
-        {/* Sub-header row: Inventory Library + Help buttons */}
+        {/* Sub-header row: Library + Help buttons */}
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Inventory Library</h2>
+          <h2 className="text-lg font-semibold">Library</h2>
           <div className="flex items-center gap-1">
             <InventoryTourButton onClick={() => setShowTour(true)} />
             <InventoryHelpButton onClick={() => setShowHelp(true)} />
@@ -294,7 +294,7 @@ export default function InventoryCreate() {
             <span className="absolute -inset-4 bg-primary/10 blur-2xl rounded-full animate-pulse-soft -z-10" />
           </h1>
           <p className="text-lg text-muted-foreground max-w-md mx-auto">
-            Describe what you want to build, and AI will generate your inventory
+            Describe what you want to build, and AI will generate your library
           </p>
         </div>
 
@@ -303,7 +303,7 @@ export default function InventoryCreate() {
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle className="flex items-center gap-2">
               <Wand2 className="h-5 w-5 text-primary" />
-              What kind of inventory?
+              What kind of library?
             </CardTitle>
             <Button
               onClick={handleGenerate}
@@ -321,7 +321,7 @@ export default function InventoryCreate() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2" data-help-id="keywords">
-              <Label htmlFor="keywords">Describe your inventory in a few words</Label>
+              <Label htmlFor="keywords">Describe your library in a few words</Label>
               <Input
                 id="keywords"
                 value={keywords}
@@ -457,7 +457,7 @@ export default function InventoryCreate() {
           <>
             <Card className="bg-card/60 backdrop-blur-glass border-border/50 animate-fade-in">
               <CardHeader>
-                <CardTitle>Inventory Details</CardTitle>
+                <CardTitle>Library Details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
@@ -466,7 +466,7 @@ export default function InventoryCreate() {
                     id="inventory-title"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="My Custom Inventory"
+                    placeholder="My Custom Library"
                   />
                 </div>
                 <div className="space-y-2">
@@ -475,7 +475,7 @@ export default function InventoryCreate() {
                     id="inventory-description"
                     value={promptInventory}
                     onChange={(e) => setPromptInventory(e.target.value)}
-                    placeholder="What this inventory is for..."
+                    placeholder="What this library is for..."
                     rows={3}
                   />
                 </div>
@@ -619,8 +619,8 @@ export default function InventoryCreate() {
                 </div>
                 <div className="flex items-center justify-between rounded-lg border border-border/60 px-4 py-3">
                   <div>
-                    <p className="font-medium">Public inventory</p>
-                    <p className="text-sm text-muted-foreground">Public inventories appear in search.</p>
+                    <p className="font-medium">Public library</p>
+                    <p className="text-sm text-muted-foreground">Public libraries appear in search.</p>
                   </div>
                   <Switch checked={isPublic} onCheckedChange={setIsPublic} />
                 </div>
@@ -639,7 +639,7 @@ export default function InventoryCreate() {
               ) : (
                 <Sparkles className="h-4 w-4" />
               )}
-              Create Inventory
+              Create Library
             </Button>
           </>
         )}

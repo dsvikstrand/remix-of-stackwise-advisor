@@ -9,8 +9,8 @@ import { HelpCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const GLOSSARY: Record<string, string> = {
-  inventory: 'A collection of items you can choose from—like a recipe ingredient list.',
-  blueprint: 'Your personal selection from an inventory, with AI-powered analysis.',
+  inventory: 'A library is a collection of items you can choose from—like a recipe ingredient list.',
+  blueprint: 'Your personal selection from a library, with AI-powered analysis.',
   wall: 'The community feed where users share and discover blueprints.',
   tag: 'A label that helps organize and discover content.',
   remix: "Create your own version of someone else's blueprint.",

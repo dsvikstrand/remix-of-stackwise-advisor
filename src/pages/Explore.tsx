@@ -16,7 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 const FILTER_OPTIONS: { value: ExploreFilter; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'blueprints', label: 'Blueprints' },
-  { value: 'inventories', label: 'Inventories' },
+  { value: 'inventories', label: 'Libraries' },
   { value: 'users', label: 'Users' },
 ];
 
@@ -211,7 +211,7 @@ export default function Explore() {
 
             {groupedResults.inventories.length > 0 && (
               <section>
-                <h2 className="text-sm font-medium text-muted-foreground mb-3">Inventories</h2>
+                <h2 className="text-sm font-medium text-muted-foreground mb-3">Libraries</h2>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {groupedResults.inventories.map(r => (
                     <ExploreResultCard

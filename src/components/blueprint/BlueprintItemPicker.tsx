@@ -66,7 +66,7 @@ export function BlueprintItemPicker({
   if (categories.length === 0) {
     return (
       <p className="text-sm text-muted-foreground text-center py-4">
-        No categories available in this inventory.
+        No categories available in this library.
       </p>
     );
   }

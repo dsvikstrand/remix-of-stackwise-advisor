@@ -16,7 +16,7 @@ interface TourStep {
 const TOUR_STEPS: TourStep[] = [
   {
     targetId: 'keywords',
-    title: 'Describe Your Inventory',
+    title: 'Describe Your Library',
     description: 'Enter a few words like "skincare routine" or "smoothie ingredients".',
   },
   {
@@ -32,7 +32,7 @@ const TOUR_STEPS: TourStep[] = [
   {
     targetId: 'publish',
     title: 'Create & Build',
-    description: 'Publish your inventory and start creating blueprints!',
+    description: 'Publish your library and start creating blueprints!',
   },
 ];
 

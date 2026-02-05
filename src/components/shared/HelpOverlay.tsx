@@ -10,7 +10,7 @@ interface HelpOverlayProps {
 }
 
 const FLOW_STEPS = [
-  { label: 'Generate an Inventory', hint: 'Describe what you need in a few words.' },
+  { label: 'Generate a Library', hint: 'Describe what you need in a few words.' },
   { label: 'Build Your Blueprint', hint: 'Pick items, add steps, and add context.' },
   { label: 'Review + Publish', hint: 'Get an AI review, then share with the community.' },
   { label: 'Follow Tags', hint: 'Shape your feed and discover similar routines.' },
@@ -19,8 +19,8 @@ const FLOW_STEPS = [
 
 const FEATURE_CARDS = [
   {
-    title: 'Inventories',
-    description: 'Inventories are smart ingredient lists. Generate one, then use it to build a Blueprint.',
+    title: 'Libraries',
+    description: 'Libraries are smart ingredient lists. Generate one, then use it to build a Blueprint.',
     icon: Sparkles,
     bullets: ['Generate from a short prompt', 'Customize categories and items', 'Reuse across blueprints'],
   },
@@ -64,7 +64,7 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                 </div>
               </div>
               <div className="mt-4 flex flex-wrap gap-2 text-xs">
-                <Badge variant="secondary">Inventories</Badge>
+                <Badge variant="secondary">Libraries</Badge>
                 <Badge variant="secondary">Blueprints</Badge>
                 <Badge variant="secondary">Tags</Badge>
                 <Badge variant="secondary">Community</Badge>
@@ -78,7 +78,7 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                     <p className="text-sm font-semibold">Let’s get oriented</p>
                     <p className="text-sm text-muted-foreground leading-relaxed">
                       Here’s the goal: take a simple idea, break it into parts, and turn it into a
-                      step‑by‑step routine you can actually follow. Inventories are your ingredients,
+                      step‑by‑step routine you can actually follow. Libraries are your ingredients,
                       Blueprints are your instructions, and the community is your feedback loop. As we
                       go, you’ll refine your routine, learn from others, and end up with something you
                       can reuse anytime.
@@ -94,7 +94,7 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                       </div>
                       <div>
                         <p className="text-sm font-semibold">The Flow</p>
-                        <p className="text-xs text-muted-foreground">From idea → inventory → build → blueprint → community</p>
+                        <p className="text-xs text-muted-foreground">From idea → library → build → blueprint → community</p>
                       </div>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -141,7 +141,7 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                     <div>
                       <p className="text-sm font-semibold">Tip for first‑time users</p>
                       <p className="text-xs text-muted-foreground">
-                        Start with “Generate Inventory,” then build a blueprint you can refine later.
+                        Start with “Generate Library,” then build a blueprint you can refine later.
                       </p>
                     </div>
                     <Button
