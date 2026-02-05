@@ -1,0 +1,30 @@
+{
+  "run_id": "example-run",
+  "library": {
+    "topic": "Home workout for beginners",
+    "title": "Beginner Home Workout Library",
+    "description": "A simple, safe routine for beginners using minimal equipment.",
+    "notes": "Keep it low impact and time efficient.",
+    "tags": ["beginner", "home-workout", "low-impact"]
+  },
+  "blueprints": [
+    {
+      "title": "15-Min Morning Starter",
+      "description": "A quick daily routine to build consistency.",
+      "notes": "Focus on warm-up and mobility.",
+      "tags": ["morning", "consistency", "mobility"]
+    },
+    {
+      "title": "Strength Focus",
+      "description": "Emphasize bodyweight strength with simple progressions.",
+      "notes": "Include upper + lower body.",
+      "tags": ["strength", "bodyweight"]
+    },
+    {
+      "title": "Recovery Day",
+      "description": "Low intensity routine for recovery and flexibility.",
+      "notes": "Keep it gentle.",
+      "tags": ["recovery", "flexibility"]
+    }
+  ]
+}
