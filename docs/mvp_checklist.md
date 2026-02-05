@@ -22,21 +22,21 @@
 ---
 
 ## 2) Core App Remaining (before seeding)
-- [ ] **2.1 Library → Build → Review → Publish works end-to-end**
-- [ ] Generate Library from `/inventory/create`
-- [ ] Build from `/inventory/:id/build` with items + steps
-- [ ] Review returns successfully
-- [ ] Publish shows in `/blueprints` and `/wall`
-- [ ] **2.2 Agentic backend wired**
-- [ ] Frontend requests hit `https://bapi.vdsai.cloud/api/*` (DevTools)
-- [ ] `POST /api/generate-inventory` returns 200
-- [ ] `POST /api/analyze-blueprint` returns 200
-- [ ] `POST /api/generate-banner` returns 200
-- [ ] **2.3 Edge upload for banners**
-- [ ] `POST https://piszvseyaefxekubphhf.supabase.co/functions/v1/upload-banner` returns 200
-- [ ] Banner URL renders on blueprint page
-- [ ] **2.4 Minimal first-win logging**
-- [ ] Log `view_blueprint`, `save_blueprint`, `generate_ai_review`
+- [x] **2.1 Library → Build → Review → Publish works end-to-end**
+- [x] Generate Library from `/inventory/create`
+- [x] Build from `/inventory/:id/build` with items + steps
+- [x] Review returns successfully
+- [x] Publish shows in `/blueprints` and `/wall`
+- [x] **2.2 Agentic backend wired**
+- [x] Frontend requests hit `https://bapi.vdsai.cloud/api/*` (DevTools)
+- [x] `POST /api/generate-inventory` returns 200
+- [x] `POST /api/analyze-blueprint` returns 200
+- [x] `POST /api/generate-banner` returns 200
+- [x] **2.3 Edge upload for banners**
+- [x] `POST https://piszvseyaefxekubphhf.supabase.co/functions/v1/upload-banner` returns 200
+- [x] Banner URL renders on blueprint page
+- [x] **2.4 Minimal first-win logging**
+- [x] Log `view_blueprint`, `save_blueprint`, `generate_ai_review`
 - [ ] Owner: ________  Target date: ________
 
 ---
@@ -89,10 +89,10 @@
 - [ ] First Win = View Blueprint → Generate AI Review OR Save Blueprint
 - [ ] **5.2 Track funnel events**
 - [ ] `visit_home`
-- [ ] `view_blueprint`
+- [x] `view_blueprint`
 - [ ] `edit_blueprint` (change count >= 1)
-- [ ] `save_blueprint`
-- [ ] `generate_ai_review`
+- [x] `save_blueprint`
+- [x] `generate_ai_review`
 - [ ] `publish_blueprint`
 - [ ] `return_visit_7d`
 - [ ] **5.3 Basic dashboard**
