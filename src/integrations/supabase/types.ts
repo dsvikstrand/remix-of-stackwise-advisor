@@ -355,6 +355,36 @@ export type Database = {
           },
         ]
       }
+      mvp_events: {
+        Row: {
+          blueprint_id: string | null
+          created_at: string
+          event_name: string
+          id: string
+          metadata: Json | null
+          path: string | null
+          user_id: string | null
+        }
+        Insert: {
+          blueprint_id?: string | null
+          created_at?: string
+          event_name: string
+          id?: string
+          metadata?: Json | null
+          path?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          blueprint_id?: string | null
+          created_at?: string
+          event_name?: string
+          id?: string
+          metadata?: Json | null
+          path?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       post_bookmarks: {
         Row: {
           created_at: string
