@@ -81,13 +81,13 @@ export default function Explore() {
       <AppHeader />
       
       <main className="container max-w-4xl mx-auto px-4 py-8">
-        <div className="mb-6 rounded-2xl border border-border/50 bg-card/60 backdrop-blur-sm p-5">
+        <section className="mb-6">
           <p className="text-sm font-semibold text-primary uppercase tracking-wide">Explore</p>
           <h1 className="text-2xl font-semibold mt-1">Search blueprints, inventories, and creators</h1>
           <p className="text-sm text-muted-foreground mt-2">
             Start with a keyword, then narrow by type or jump into trending tags.
           </p>
-        </div>
+        </section>
 
         {!user && (
           <div className="mb-6 rounded-2xl border border-border/50 bg-card/60 backdrop-blur-sm p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
