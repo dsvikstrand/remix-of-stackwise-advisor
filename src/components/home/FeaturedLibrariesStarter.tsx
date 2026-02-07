@@ -370,10 +370,12 @@ export function FeaturedLibrariesStarter() {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1">
           <p className="text-sm font-semibold text-primary uppercase tracking-wide">Interactive demo</p>
-          <h2 className="text-xl font-semibold tracking-tight">Try the Builder</h2>
-          <p className="text-sm text-muted-foreground">
-            Tap items to shape a routine. Load an example, tweak it, and see how Blueprints are built.
-            Sign in only when you want AI review, banners, or publishing.
+          <h2 className="text-3xl font-semibold tracking-tight leading-tight">TRY THE BUILDER</h2>
+          <p className="text-base font-medium text-foreground/90">
+            Build a routine in minutes.
+          </p>
+          <p className="text-sm text-muted-foreground max-w-[60ch]">
+            Pick a library, tap items, and shape a blueprint. Use AI review and banners when you're ready.
           </p>
         </div>
         <Badge variant="secondary" className="w-fit text-xs">Starter</Badge>
