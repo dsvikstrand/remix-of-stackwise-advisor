@@ -1,15 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { BlueprintSimpleBuilder } from '@/components/blueprint/BlueprintSimpleBuilder';
+import { DemoPillPicker } from '@/components/home/DemoPillPicker';
+import { DemoBlueprintPreview } from '@/components/home/DemoBlueprintPreview';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { Sparkles, RotateCcw, Wand2, Lock } from 'lucide-react';
+import { Sparkles, ArrowRight } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 
 type InventoryCategory = { name: string; items: string[] };
@@ -86,7 +86,6 @@ function buildContext(featureKey: (typeof FEATURED)[number]['key'], stepTitle: s
     if (lower.includes('journal') || lower.includes('planner') || lower.includes('calendar')) notes.push('focus');
   }
 
-  // Always include a lightweight grouping hint, but keep it short.
   notes.push(stepTitle);
   return noteify(notes);
 }
@@ -97,7 +96,6 @@ function buildExampleSelection(
   inventoryTitle: string,
   categories: InventoryCategory[]
 ) {
-  // Best-effort: prefer meaningful items, but fall back to "first N items" if nothing matches.
   const allItems = categories.flatMap((c) => c.items.map((item) => ({ category: c.name, item })));
   const fallback = allItems.slice(0, 10);
 
@@ -141,11 +139,58 @@ function buildExampleSelection(
   };
 }
 
+// ─── Auto-play: stagger-select items when section scrolls into view ───
+
+function useAutoPlayDemo(
+  categories: InventoryCategory[],
+  featureKey: string,
+  onSelect: (category: string, item: string) => void,
+  enabled: boolean
+) {
+  const hasPlayed = useRef(false);
+  const [animatingItems, setAnimatingItems] = useState<Set<string>>(new Set());
+
+  const play = useCallback(() => {
+    if (hasPlayed.current || categories.length === 0) return;
+    hasPlayed.current = true;
+
+    // Pick 3 items across different categories
+    const picks: Array<{ category: string; item: string }> = [];
+    for (const cat of categories) {
+      if (picks.length >= 3) break;
+      if (cat.items.length > 0) {
+        picks.push({ category: cat.name, item: cat.items[0] });
+      }
+    }
+
+    picks.forEach(({ category, item }, i) => {
+      setTimeout(() => {
+        const key = `${category}::${item}`;
+        setAnimatingItems((prev) => new Set(prev).add(key));
+        onSelect(category, item);
+
+        // Remove animation class after it plays
+        setTimeout(() => {
+          setAnimatingItems((prev) => {
+            const next = new Set(prev);
+            next.delete(key);
+            return next;
+          });
+        }, 600);
+      }, 400 + i * 350);
+    });
+  }, [categories, onSelect]);
+
+  return { play, animatingItems };
+}
+
 export function FeaturedLibrariesStarter() {
   const navigate = useNavigate();
   const { user, session } = useAuth();
   const { toast } = useToast();
+  const sectionRef = useRef<HTMLElement>(null);
   const [activeKey, setActiveKey] = useState<(typeof FEATURED)[number]['key']>(FEATURED[0].key);
+  const [hasAutoPlayed, setHasAutoPlayed] = useState(false);
   const [stateByInventoryId, setStateByInventoryId] = useState<
     Record<
       string,
@@ -195,43 +240,17 @@ export function FeaturedLibrariesStarter() {
     return parseCategories(activeInventory.generated_schema as Json);
   }, [activeInventory]);
 
+  // Init state for active inventory (start empty for auto-play)
   useEffect(() => {
     if (!activeInventory) return;
     setStateByInventoryId((prev) => {
       if (prev[activeInventory.id]) return prev;
-
-      // Prefill (2-3 items + short notes) to reduce "blank slate" for first-time visitors.
-      // Non-destructive: only applies on first init per inventory id.
-      const prefill = buildExampleSelection(
-        activeInventory.featureKey,
-        activeInventory.id,
-        activeInventory.title,
-        activeInventoryCategories
-      );
-      const trimmedSelected: Record<string, string[]> = {};
-      let remaining = 3;
-      for (const [category, items] of Object.entries(prefill.selectedItems)) {
-        if (remaining <= 0) break;
-        const slice = items.slice(0, remaining);
-        if (slice.length > 0) {
-          trimmedSelected[category] = slice;
-          remaining -= slice.length;
-        }
-      }
-      const trimmedContexts: Record<string, string> = {};
-      Object.entries(trimmedSelected).forEach(([category, items]) => {
-        items.forEach((item) => {
-          const key = `${category}::${item}`;
-          if (prefill.itemContexts?.[key]) trimmedContexts[key] = prefill.itemContexts[key];
-        });
-      });
-
       return {
         ...prev,
         [activeInventory.id]: {
           categories: activeInventoryCategories,
-          selectedItems: trimmedSelected,
-          itemContexts: trimmedContexts,
+          selectedItems: {},
+          itemContexts: {},
           title: activeInventory.title,
         },
       };
@@ -269,78 +288,62 @@ export function FeaturedLibrariesStarter() {
 
   const getItemKey = (categoryName: string, item: string) => `${categoryName}::${item}`;
 
-  const toggleItem = (categoryName: string, item: string) => {
-    const itemKey = getItemKey(categoryName, item);
-    const nextSelected: Record<string, string[]> = { ...selectedItems };
-    const existing = new Set(nextSelected[categoryName] || []);
-    const wasSelected = existing.has(item);
-    if (wasSelected) existing.delete(item);
-    else existing.add(item);
-    nextSelected[categoryName] = Array.from(existing);
-    const nextContexts = { ...itemContexts };
-    if (wasSelected) delete nextContexts[itemKey];
-    setActiveState({ selectedItems: nextSelected, itemContexts: nextContexts });
-  };
+  const toggleItem = useCallback((categoryName: string, item: string) => {
+    setStateByInventoryId((prev) => {
+      if (!activeInventory) return prev;
+      const current = prev[activeInventory.id];
+      if (!current) return prev;
 
-  const addCustomItem = (categoryName: string, itemName: string) => {
-    const nextCategories = categories.map((c) =>
-      c.name === categoryName
-        ? { ...c, items: c.items.includes(itemName) ? c.items : [...c.items, itemName] }
-        : c
-    );
-    const nextSelected: Record<string, string[]> = {
-      ...selectedItems,
-      [categoryName]: [...(selectedItems[categoryName] || []), itemName],
-    };
-    setActiveState({ categories: nextCategories, selectedItems: nextSelected });
-  };
+      const itemKey = `${categoryName}::${item}`;
+      const nextSelected = { ...current.selectedItems };
+      const existing = new Set(nextSelected[categoryName] || []);
+      const wasSelected = existing.has(item);
+      if (wasSelected) existing.delete(item);
+      else existing.add(item);
+      nextSelected[categoryName] = Array.from(existing);
+      const nextContexts = { ...current.itemContexts };
+      if (wasSelected) delete nextContexts[itemKey];
 
-  const removeItem = (categoryName: string, item: string) => {
-    const itemKey = getItemKey(categoryName, item);
-    const nextSelected: Record<string, string[]> = {
-      ...selectedItems,
-      [categoryName]: (selectedItems[categoryName] || []).filter((i) => i !== item),
-    };
-    const nextContexts = { ...itemContexts };
-    delete nextContexts[itemKey];
-    setActiveState({ selectedItems: nextSelected, itemContexts: nextContexts });
-  };
+      return {
+        ...prev,
+        [activeInventory.id]: {
+          ...current,
+          selectedItems: nextSelected,
+          itemContexts: nextContexts,
+        },
+      };
+    });
+  }, [activeInventory]);
 
-  const updateItemContext = (categoryName: string, item: string, context: string) => {
-    setActiveState({
-      itemContexts: {
-        ...itemContexts,
-        [getItemKey(categoryName, item)]: context,
+  // Auto-play
+  const { play: playAutoDemo, animatingItems } = useAutoPlayDemo(
+    categories,
+    activeKey,
+    toggleItem,
+    !hasAutoPlayed && !isLoading && !!activeInventory
+  );
+
+  // IntersectionObserver to trigger auto-play
+  useEffect(() => {
+    if (hasAutoPlayed || isLoading || !activeInventory || categories.length === 0) return;
+
+    const el = sectionRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setHasAutoPlayed(true);
+          playAutoDemo();
+          observer.disconnect();
+        }
       },
-    });
-  };
-
-  const clearSelection = () => {
-    setActiveState({
-      selectedItems: {},
-      itemContexts: {},
-    });
-  };
-
-  const applyExampleToLocal = () => {
-    if (!activeInventory) return;
-    const draft = buildExampleSelection(
-      activeInventory.featureKey,
-      activeInventory.id,
-      activeInventory.title,
-      activeInventoryCategories
+      { threshold: 0.3 }
     );
-    setActiveState({
-      title: draft.title,
-      categories: activeInventoryCategories,
-      selectedItems: draft.selectedItems,
-      itemContexts: draft.itemContexts || {},
-    });
-    toast({
-      title: 'Example loaded',
-      description: 'Your blueprint has been pre-filled with selected items.',
-    });
-  };
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasAutoPlayed, isLoading, activeInventory, categories.length, playAutoDemo]);
 
   const openBuilderWithDraft = (source: HomeDraftV1['source']) => {
     if (!activeInventory) return;
@@ -365,155 +368,124 @@ export function FeaturedLibrariesStarter() {
     navigate(`/inventory/${draft.inventoryId}/build`);
   };
 
+  const blueprintTitle = useMemo(() => {
+    if (activeKey === 'skincare') return 'My Skincare Routine';
+    return 'My Morning Routine';
+  }, [activeKey]);
+
   return (
-    <section className="space-y-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div className="space-y-1">
-          <p className="text-sm font-semibold text-primary uppercase tracking-wide">Start building</p>
-          <h2 className="text-xl font-semibold tracking-tight">Featured libraries</h2>
-          <p className="text-sm text-muted-foreground">
-            Pick a library, select a few items, or load an example blueprint. You will need to sign in to use AI review, banners, and publishing.
-          </p>
+    <section ref={sectionRef} className="space-y-5">
+      {/* Header — invitation, not documentation */}
+      <div className="text-center space-y-2">
+        <div className="flex items-center justify-center gap-2">
+          <Sparkles className="h-5 w-5 text-primary" />
+          <h2 className="text-2xl font-bold tracking-tight">
+            Build a blueprint in 30 seconds
+          </h2>
         </div>
-        <Badge variant="secondary" className="w-fit text-xs">Starter</Badge>
+        <p className="text-sm text-muted-foreground max-w-md mx-auto">
+          Tap items below to build your routine. See your blueprint come together in real time.
+        </p>
       </div>
 
-      <Card className="bg-card/60 backdrop-blur-sm border-border/50">
-        <CardHeader className="pb-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap gap-2">
-              {FEATURED.map((f) => (
+      {/* Library switcher */}
+      <div className="flex items-center justify-center gap-2">
+        {FEATURED.map((f) => (
+          <Button
+            key={f.key}
+            type="button"
+            size="sm"
+            variant={activeKey === f.key ? 'default' : 'outline'}
+            onClick={() => setActiveKey(f.key)}
+            disabled={!data?.some((row) => row.featureKey === f.key)}
+            className="rounded-full"
+          >
+            {f.key === 'morning' ? '🌅 Morning routine' : '✨ Skincare'}
+          </Button>
+        ))}
+      </div>
+
+      {isLoading ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="space-y-2">
+              <Skeleton className="h-4 w-32" />
+              <div className="space-y-2">
+                <Skeleton className="h-8 w-full rounded-full" />
+                <Skeleton className="h-8 w-5/6 rounded-full" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : isError || !activeInventory ? (
+        <div className="text-sm text-muted-foreground text-center py-8">
+          Featured libraries aren't available right now. Try the Library page instead.
+        </div>
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-5">
+          {/* Left: Pill picker */}
+          <div className="lg:col-span-3 rounded-2xl border border-border/50 bg-card/60 backdrop-blur-sm p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-muted-foreground">
+                Tap to select · {selectedCount} chosen
+              </p>
+              {selectedCount > 0 && (
                 <Button
-                  key={f.key}
                   type="button"
+                  variant="ghost"
                   size="sm"
-                  variant={activeKey === f.key ? 'default' : 'outline'}
-                  onClick={() => setActiveKey(f.key)}
-                  disabled={!data?.some((row) => row.featureKey === f.key)}
+                  onClick={() => setActiveState({ selectedItems: {}, itemContexts: {} })}
+                  className="text-xs"
                 >
-                  {f.key === 'morning' ? 'Morning routine' : 'Skincare'}
+                  Clear
                 </Button>
-              ))}
+              )}
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className="gap-2"
-                onClick={clearSelection}
-                disabled={!activeInventory}
-              >
-                <RotateCcw className="h-4 w-4" />
-                Clear all
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="gap-2"
-                onClick={applyExampleToLocal}
-                disabled={!activeInventory}
-              >
-                <Wand2 className="h-4 w-4" />
-                Auto-generate Blueprint
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                className="gap-2"
-                onClick={() => openBuilderWithDraft('home-starter')}
-                disabled={!activeInventory}
-              >
-                <Lock className="h-4 w-4" />
-                Use full builder
-              </Button>
-            </div>
+            <DemoPillPicker
+              categories={categories}
+              selectedItems={selectedItems}
+              onToggleItem={toggleItem}
+              animatingItems={animatingItems}
+            />
           </div>
-          <CardTitle className="text-base font-medium flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" />
-            {activeInventory?.title || 'Loading…'}
-          </CardTitle>
-          <p className="text-xs text-muted-foreground">{selectedCount} item{selectedCount === 1 ? '' : 's'} selected</p>
-          <p className="text-xs text-muted-foreground/80">
-            This loads a prebuilt example (no AI). Sign in to unlock AI review, banners, and publishing.
-          </p>
-        </CardHeader>
 
-        <CardContent className="space-y-4">
-          {isLoading ? (
-            <div className="grid gap-4 sm:grid-cols-2">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="space-y-2">
-                  <Skeleton className="h-4 w-32" />
-                  <div className="space-y-2">
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-4 w-5/6" />
-                    <Skeleton className="h-4 w-4/6" />
-                  </div>
+          {/* Right: Live blueprint preview */}
+          <div className="lg:col-span-2 space-y-3">
+            {selectedCount > 0 ? (
+              <DemoBlueprintPreview
+                title={blueprintTitle}
+                selectedItems={selectedItems}
+                itemContexts={itemContexts}
+                onContinue={() => openBuilderWithDraft('home-starter')}
+                isAuthenticated={!!session?.access_token}
+              />
+            ) : (
+              <div className="rounded-2xl border border-dashed border-border/50 bg-card/30 p-8 text-center space-y-3">
+                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+                  <Sparkles className="h-6 w-6 text-primary/50" />
                 </div>
-              ))}
-            </div>
-          ) : isError || !activeInventory ? (
-            <div className="text-sm text-muted-foreground">
-              Featured libraries are not available right now. Try browsing the Library page instead.
-            </div>
-          ) : (
-            <div className="space-y-6">
-              <div className="bg-card/60 backdrop-blur-glass rounded-2xl border border-border/50 overflow-hidden">
-                <div className="p-4 border-b border-border/30 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="space-y-1">
-                    <p className="text-sm font-semibold text-primary uppercase tracking-wide">
-                      {activeKey === 'morning' ? 'Morning routine' : 'Skincare'}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Search items, tap to add them, and build your selection.
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="gap-2"
-                    onClick={applyExampleToLocal}
-                  >
-                    <Sparkles className="h-4 w-4" />
-                    Auto-generate Blueprint
-                  </Button>
-                </div>
-                <div className="p-4">
-                  <BlueprintSimpleBuilder
-                    categories={categories}
-                    selectedItems={selectedItems}
-                    itemContexts={itemContexts}
-                    onToggleItem={toggleItem}
-                    onAddCustomItem={addCustomItem}
-                    onRemoveItem={removeItem}
-                    onUpdateItemContext={updateItemContext}
-                    onClear={clearSelection}
-                    selectionTitle="Build Blueprint"
-                  />
-                </div>
+                <p className="text-sm text-muted-foreground">
+                  Your blueprint preview will appear here
+                </p>
+                <p className="text-xs text-muted-foreground/60">
+                  Select a few items to see it build in real time
+                </p>
               </div>
+            )}
 
-              <div className="rounded-2xl border border-border/50 bg-card/50 p-4 space-y-3">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Lock className="h-4 w-4" />
-                  <span>Sign in to unlock AI review, banner generation, and publishing.</span>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full gap-2"
-                  onClick={() => openBuilderWithDraft('home-starter')}
-                >
-                  <Lock className="h-4 w-4" />
-                  Use full builder
-                </Button>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            {/* Single CTA */}
+            {selectedCount > 0 && (
+              <Button
+                className="w-full gap-2"
+                onClick={() => openBuilderWithDraft('home-starter')}
+              >
+                Continue in full builder
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
