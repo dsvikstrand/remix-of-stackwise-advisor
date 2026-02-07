@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Package, Sparkles, Users } from 'lucide-react';
 
@@ -47,14 +46,6 @@ export function HowItWorks() {
               <p className="text-sm text-muted-foreground leading-relaxed">
                 {step.description}
               </p>
-              {'link' in step && step.link && (
-                <Link
-                  to={step.link}
-                  className="inline-block text-sm text-primary hover:underline font-medium"
-                >
-                  {step.linkText}
-                </Link>
-              )}
             </CardContent>
           </Card>
         ))}

@@ -5,26 +5,22 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Sparkles, ArrowRight, RotateCcw, Wand2 } from 'lucide-react';
+import { BlueprintItemPicker } from '@/components/blueprint/BlueprintItemPicker';
+import { StepAccordion, type BlueprintStep } from '@/components/blueprint/StepAccordion';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
+import { Sparkles, ArrowRight, RotateCcw, Wand2, Lock } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 
 type InventoryCategory = { name: string; items: string[] };
-
-type BuilderStep = {
-  id: string;
-  title: string;
-  description: string;
-  itemKeys: string[];
-};
 
 type HomeDraftV1 = {
   version: 1;
   inventoryId: string;
   title: string;
   selectedItems: Record<string, string[]>;
-  steps: BuilderStep[];
+  steps: BlueprintStep[];
   source: 'home-starter' | 'home-example';
 };
 
@@ -98,7 +94,7 @@ function buildExampleDraft(featureKey: (typeof FEATURED)[number]['key'], invento
   const spec = featureKey === 'skincare' ? skincareSteps : morningSteps;
 
   const selectedItems: Record<string, string[]> = {};
-  const steps: BuilderStep[] = [];
+  const steps: BlueprintStep[] = [];
 
   spec.forEach((step, index) => {
     const matches = findItemsByNeedle(categories, step.needles);
@@ -127,8 +123,22 @@ function buildExampleDraft(featureKey: (typeof FEATURED)[number]['key'], invento
 
 export function FeaturedLibrariesStarter() {
   const navigate = useNavigate();
+  const { user, session } = useAuth();
+  const { toast } = useToast();
   const [activeKey, setActiveKey] = useState<(typeof FEATURED)[number]['key']>(FEATURED[0].key);
-  const [selectedByInventoryId, setSelectedByInventoryId] = useState<Record<string, Record<string, string[]>>>({});
+  const [stateByInventoryId, setStateByInventoryId] = useState<
+    Record<
+      string,
+      {
+        categories: InventoryCategory[];
+        selectedItems: Record<string, string[]>;
+        itemContexts: Record<string, string>;
+        steps: BlueprintStep[];
+        activeStepId: string | null;
+        title: string;
+      }
+    >
+  >({});
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['home-featured-inventories-v1'],
@@ -162,63 +172,222 @@ export function FeaturedLibrariesStarter() {
     return data.find((row) => row.featureKey === activeKey) ?? data[0];
   }, [data, activeKey]);
 
-  const categories = useMemo(() => {
-    if (!activeInventory) return [];
-    return parseCategories(activeInventory.generated_schema as Json);
-  }, [activeInventory]);
+  const ensureStateForActive = () => {
+    if (!activeInventory) return;
+    setStateByInventoryId((prev) => {
+      if (prev[activeInventory.id]) return prev;
+      const cats = parseCategories(activeInventory.generated_schema as Json);
+      return {
+        ...prev,
+        [activeInventory.id]: {
+          categories: cats,
+          selectedItems: {},
+          itemContexts: {},
+          steps: [],
+          activeStepId: null,
+          title: activeInventory.title,
+        },
+      };
+    });
+  };
 
-  const activeSelected = useMemo(() => {
-    if (!activeInventory) return {};
-    return selectedByInventoryId[activeInventory.id] || {};
-  }, [activeInventory, selectedByInventoryId]);
+  const activeState = useMemo(() => {
+    if (!activeInventory) return null;
+    return stateByInventoryId[activeInventory.id] || null;
+  }, [activeInventory, stateByInventoryId]);
+
+  const categories = activeState?.categories || [];
+  const selectedItems = activeState?.selectedItems || {};
+  const itemContexts = activeState?.itemContexts || {};
+  const steps = activeState?.steps || [];
+  const activeStepId = activeState?.activeStepId || null;
 
   const selectedCount = useMemo(() => {
-    return Object.values(activeSelected).reduce((sum, items) => sum + items.length, 0);
-  }, [activeSelected]);
+    return Object.values(selectedItems).reduce((sum, items) => sum + items.length, 0);
+  }, [selectedItems]);
 
-  const setActiveSelected = (next: Record<string, string[]>) => {
+  const setActiveState = (updates: Partial<NonNullable<typeof activeState>>) => {
     if (!activeInventory) return;
-    setSelectedByInventoryId((prev) => ({
+    setStateByInventoryId((prev) => ({
       ...prev,
-      [activeInventory.id]: next,
+      [activeInventory.id]: {
+        ...(prev[activeInventory.id] || {
+          categories: parseCategories(activeInventory.generated_schema as Json),
+          selectedItems: {},
+          itemContexts: {},
+          steps: [],
+          activeStepId: null,
+          title: activeInventory.title,
+        }),
+        ...updates,
+      },
     }));
   };
 
-  const toggleItem = (category: string, item: string) => {
-    const next: Record<string, string[]> = { ...activeSelected };
-    const list = new Set(next[category] || []);
-    if (list.has(item)) list.delete(item);
-    else list.add(item);
-    next[category] = Array.from(list);
-    setActiveSelected(next);
+  const getItemKey = (categoryName: string, item: string) => `${categoryName}::${item}`;
+
+  const removeItemFromSteps = (itemKey: string) => {
+    setActiveState({
+      steps: steps.map((step) => ({ ...step, itemKeys: step.itemKeys.filter((k) => k !== itemKey) })),
+    });
   };
 
-  const resetSelections = () => {
-    setActiveSelected({});
+  const addItemToActiveStep = (itemKey: string) => {
+    if (steps.length === 0) {
+      const newId = crypto.randomUUID();
+      setActiveState({
+        activeStepId: newId,
+        steps: [{ id: newId, title: '', description: '', itemKeys: [itemKey] }],
+      });
+      return;
+    }
+
+    const targetId = steps.find((s) => s.id === activeStepId)?.id || steps[steps.length - 1].id;
+    setActiveState({
+      steps: steps.map((step) => {
+        if (step.id !== targetId) return step;
+        if (step.itemKeys.includes(itemKey)) return step;
+        return { ...step, itemKeys: [...step.itemKeys, itemKey] };
+      }),
+    });
   };
 
-  const openBuilderWithDraft = (draft: HomeDraftV1) => {
-    sessionStorage.setItem(HOME_DRAFT_KEY, JSON.stringify(draft));
-    navigate(`/inventory/${draft.inventoryId}/build`);
+  const toggleItem = (categoryName: string, item: string) => {
+    const itemKey = getItemKey(categoryName, item);
+    const nextSelected: Record<string, string[]> = { ...selectedItems };
+    const existing = new Set(nextSelected[categoryName] || []);
+    const wasSelected = existing.has(item);
+    if (wasSelected) existing.delete(item);
+    else existing.add(item);
+    nextSelected[categoryName] = Array.from(existing);
+    setActiveState({ selectedItems: nextSelected });
+
+    if (wasSelected) removeItemFromSteps(itemKey);
+    else addItemToActiveStep(itemKey);
   };
 
-  const handleOpenBuilder = () => {
+  const addCustomItem = (categoryName: string, itemName: string) => {
+    const nextCategories = categories.map((c) =>
+      c.name === categoryName
+        ? { ...c, items: c.items.includes(itemName) ? c.items : [...c.items, itemName] }
+        : c
+    );
+    const nextSelected: Record<string, string[]> = {
+      ...selectedItems,
+      [categoryName]: [...(selectedItems[categoryName] || []), itemName],
+    };
+    setActiveState({ categories: nextCategories, selectedItems: nextSelected });
+    addItemToActiveStep(getItemKey(categoryName, itemName));
+  };
+
+  const handleAddStep = () => {
+    const newStep: BlueprintStep = {
+      id: crypto.randomUUID(),
+      title: '',
+      description: '',
+      itemKeys: [],
+    };
+    setActiveState({ steps: [...steps, newStep], activeStepId: newStep.id });
+  };
+
+  const handleUpdateStep = (stepId: string, updates: Partial<BlueprintStep>) => {
+    setActiveState({ steps: steps.map((s) => (s.id === stepId ? { ...s, ...updates } : s)) });
+  };
+
+  const handleRemoveStep = (stepId: string) => {
+    const stepToRemove = steps.find((s) => s.id === stepId);
+    const itemKeysToRemove = new Set(stepToRemove?.itemKeys || []);
+
+    const nextSelected: Record<string, string[]> = {};
+    Object.entries(selectedItems).forEach(([category, items]) => {
+      const filtered = items.filter((it) => !itemKeysToRemove.has(getItemKey(category, it)));
+      if (filtered.length > 0) nextSelected[category] = filtered;
+    });
+
+    const nextContexts = { ...itemContexts };
+    itemKeysToRemove.forEach((key) => delete nextContexts[key]);
+
+    const remaining = steps.filter((s) => s.id !== stepId);
+    const nextActive =
+      activeStepId === stepId
+        ? remaining.length > 0
+          ? remaining[remaining.length - 1].id
+          : null
+        : activeStepId;
+
+    setActiveState({
+      selectedItems: nextSelected,
+      itemContexts: nextContexts,
+      steps: remaining,
+      activeStepId: nextActive,
+    });
+  };
+
+  const handleReorderSteps = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return;
+    const next = [...steps];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    setActiveState({ steps: next });
+  };
+
+  const removeItem = (categoryName: string, item: string) => {
+    const itemKey = getItemKey(categoryName, item);
+    const nextSelected: Record<string, string[]> = {
+      ...selectedItems,
+      [categoryName]: (selectedItems[categoryName] || []).filter((i) => i !== item),
+    };
+    const nextContexts = { ...itemContexts };
+    delete nextContexts[itemKey];
+    setActiveState({ selectedItems: nextSelected, itemContexts: nextContexts });
+    removeItemFromSteps(itemKey);
+  };
+
+  const updateItemContext = (categoryName: string, item: string, context: string) => {
+    setActiveState({
+      itemContexts: {
+        ...itemContexts,
+        [getItemKey(categoryName, item)]: context,
+      },
+    });
+  };
+
+  const clearSelection = () => {
+    setActiveState({
+      selectedItems: {},
+      itemContexts: {},
+      steps: steps.map((s) => ({ ...s, itemKeys: [] })),
+    });
+  };
+
+  const applyExampleToLocal = () => {
+    if (!activeInventory) return;
+    const draft = buildExampleDraft(activeInventory.featureKey, activeInventory.id, activeInventory.title, categories);
+    setActiveState({
+      title: draft.title,
+      selectedItems: draft.selectedItems,
+      itemContexts: {},
+      steps: draft.steps,
+      activeStepId: draft.steps[0]?.id || null,
+    });
+    toast({
+      title: 'Example loaded',
+      description: 'Your blueprint has been pre-filled with steps and items.',
+    });
+  };
+
+  const openBuilderWithDraft = (source: HomeDraftV1['source']) => {
     if (!activeInventory) return;
     const draft: HomeDraftV1 = {
       version: 1,
       inventoryId: activeInventory.id,
-      title: activeInventory.title,
-      selectedItems: activeSelected,
-      steps: [],
-      source: 'home-starter',
+      title: activeState?.title || activeInventory.title,
+      selectedItems,
+      steps,
+      source,
     };
-    openBuilderWithDraft(draft);
-  };
-
-  const handleLoadExample = () => {
-    if (!activeInventory) return;
-    const draft = buildExampleDraft(activeInventory.featureKey, activeInventory.id, activeInventory.title, categories);
-    openBuilderWithDraft(draft);
+    sessionStorage.setItem(HOME_DRAFT_KEY, JSON.stringify(draft));
+    navigate(`/inventory/${draft.inventoryId}/build`);
   };
 
   return (
@@ -252,16 +421,42 @@ export function FeaturedLibrariesStarter() {
               ))}
             </div>
             <div className="flex items-center gap-2">
-              <Button type="button" size="sm" variant="ghost" className="gap-2" onClick={resetSelections} disabled={!activeInventory}>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="gap-2"
+                onClick={clearSelection}
+                disabled={!activeInventory}
+              >
                 <RotateCcw className="h-4 w-4" />
-                Reset
+                Clear all
               </Button>
-              <Button type="button" size="sm" variant="outline" className="gap-2" onClick={handleLoadExample} disabled={!activeInventory}>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="gap-2"
+                onClick={() => {
+                  ensureStateForActive();
+                  applyExampleToLocal();
+                }}
+                disabled={!activeInventory}
+              >
                 <Wand2 className="h-4 w-4" />
-                Load example blueprint
+                Auto-generate Blueprint
               </Button>
-              <Button type="button" size="sm" className="gap-2" onClick={handleOpenBuilder} disabled={!activeInventory}>
-                Open builder
+              <Button
+                type="button"
+                size="sm"
+                className="gap-2"
+                onClick={() => {
+                  ensureStateForActive();
+                  openBuilderWithDraft('home-starter');
+                }}
+                disabled={!activeInventory}
+              >
+                Open Builder
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </div>
@@ -270,8 +465,9 @@ export function FeaturedLibrariesStarter() {
             <Sparkles className="h-4 w-4 text-primary" />
             {activeInventory?.title || 'Loading…'}
           </CardTitle>
-          <p className="text-xs text-muted-foreground">
-            {selectedCount} item{selectedCount === 1 ? '' : 's'} selected
+          <p className="text-xs text-muted-foreground">{selectedCount} item{selectedCount === 1 ? '' : 's'} selected</p>
+          <p className="text-xs text-muted-foreground/80">
+            This loads a prebuilt example (no AI). Sign in to unlock AI review, banners, and publishing.
           </p>
         </CardHeader>
 
@@ -294,26 +490,109 @@ export function FeaturedLibrariesStarter() {
               Featured libraries are not available right now. Try browsing the Library page instead.
             </div>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2">
-              {categories.slice(0, 4).map((cat) => (
-                <div key={cat.name} className="space-y-2">
-                  <h4 className="text-sm font-medium text-muted-foreground">{cat.name}</h4>
-                  <div className="space-y-1.5">
-                    {cat.items.slice(0, 6).map((item) => (
-                      <label
-                        key={item}
-                        className="flex items-center gap-2 text-sm cursor-pointer hover:text-primary transition-colors"
-                      >
-                        <Checkbox
-                          checked={(activeSelected[cat.name] || []).includes(item)}
-                          onCheckedChange={() => toggleItem(cat.name, item)}
-                        />
-                        {item}
-                      </label>
-                    ))}
+            <div className="space-y-6">
+              <div className="bg-card/60 backdrop-blur-glass rounded-2xl border border-border/50 overflow-hidden">
+                <div className="p-4 border-b border-border/30 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-primary uppercase tracking-wide">
+                      {activeKey === 'morning' ? 'Morning routine' : 'Skincare'}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Search items, tap to add them, and build steps automatically.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => {
+                      ensureStateForActive();
+                      applyExampleToLocal();
+                    }}
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    Auto-generate Blueprint
+                  </Button>
+                </div>
+                <div className="p-4">
+                  <BlueprintItemPicker
+                    categories={categories}
+                    selectedItems={selectedItems}
+                    onToggleItem={(cat, item) => {
+                      ensureStateForActive();
+                      toggleItem(cat, item);
+                    }}
+                    onAddCustomItem={(cat, item) => {
+                      ensureStateForActive();
+                      addCustomItem(cat, item);
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="bg-card/60 backdrop-blur-glass rounded-2xl border border-border/50 overflow-hidden">
+                <div className="p-4 border-b border-border/30 flex items-center justify-between">
+                  <p className="text-sm font-semibold tracking-tight">Steps</p>
+                  <Button type="button" variant="ghost" size="sm" className="gap-2" onClick={clearSelection}>
+                    <RotateCcw className="h-4 w-4" />
+                    Clear all selections
+                  </Button>
+                </div>
+                <div className="p-4">
+                  <StepAccordion
+                    steps={steps}
+                    activeStepId={activeStepId}
+                    onSetActive={(id) => setActiveState({ activeStepId: id })}
+                    onUpdateStep={(id, updates) => handleUpdateStep(id, updates)}
+                    onRemoveStep={(id) => handleRemoveStep(id)}
+                    onAddStep={handleAddStep}
+                    onReorderSteps={handleReorderSteps}
+                    onRemoveItem={(cat, item) => removeItem(cat, item)}
+                    onUpdateItemContext={(cat, item, context) => updateItemContext(cat, item, context)}
+                    itemContexts={itemContexts}
+                  />
+                </div>
+                <div className="p-4 border-t border-border/30 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="text-xs text-muted-foreground">
+                    {user || session?.access_token ? (
+                      <span>Continue to unlock AI review, banners, and publishing.</span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5">
+                        <Lock className="h-3.5 w-3.5" />
+                        Sign in to use AI review, banners, and publishing.
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => openBuilderWithDraft('home-starter')}
+                    >
+                      Continue building
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        if (!session?.access_token) {
+                          openBuilderWithDraft('home-starter');
+                          toast({
+                            title: 'Sign in required',
+                            description: 'Please sign in on the build page to generate an AI review.',
+                            variant: 'destructive',
+                          });
+                          return;
+                        }
+                        openBuilderWithDraft('home-starter');
+                      }}
+                      className="gap-2"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      Review with AI
+                    </Button>
                   </div>
                 </div>
-              ))}
+              </div>
             </div>
           )}
         </CardContent>
@@ -321,4 +600,3 @@ export function FeaturedLibrariesStarter() {
     </section>
   );
 }
-
