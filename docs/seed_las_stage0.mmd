@@ -1,13 +1,7 @@
 flowchart TD
   A["ID:A seed/seed_spec_v0.json (Seed Spec) TESTED_OK"] --> B["ID:B seed_stage0.ts (parse args + validate spec) TESTED_OK"]
   B --> C["ID:C Create run folder seed/outputs/RUN_ID/ TESTED_OK"]
-  C --> D{"ID:D no backend NOT_TESTED"}
-
-  D -- Yes --> E["ID:E Offline mode (skip backend calls) NOT_TESTED"]
-  E --> F["ID:F Write run_log.json backendCalls=false NOT_TESTED"]
-  F --> Z
-
-  D -- No --> G["ID:G Read SEED_USER_ACCESS_TOKEN TESTED_OK"]
+  C --> G["ID:G Read SEED_USER_ACCESS_TOKEN TESTED_OK"]
   G --> H["ID:H n1 generate_library POST /api/generate-inventory TESTED_OK"]
   H --> H1["ID:H1 Write library.json TESTED_OK"]
 
@@ -37,3 +31,18 @@ flowchart TD
   N --> Z
 
   Z["ID:Z Done (artifacts only) TESTED_OK"]
+
+  %% Notes (hexagons) - point into nodes with key context
+  NX1{{"NOTE: access token expires, refresh often"}} --> G
+  NX2{{"NOTE: /api/analyze-blueprint is SSE, runner stitches text"}} --> R
+  NX3{{"NOTE: /api/generate-banner dryRun returns base64, no Storage"}} --> S
+  NX4{{"NOTE: image generation can be rate limited or safety rejected"}} --> S
+  NX5{{"NOTE: seed/outputs is ignored, do not commit artifacts"}} --> C
+
+  %% TODO nodes for the complete graph (Stage 1 apply mode, still simple)
+  M1 -.-> T0["ID:T0 Stage 1 apply mode TODO"]
+  T0 --> T1["ID:T1 Insert library/inventory into DB TODO"]
+  T1 --> T2["ID:T2 Insert blueprint drafts into DB TODO"]
+  T2 --> T3["ID:T3 Upload banner to Supabase Storage via upload-banner TODO"]
+  T3 --> T4["ID:T4 Persist review text to blueprint row TODO"]
+  T4 --> T5["ID:T5 Publish public blueprint (finalize) TODO"]
