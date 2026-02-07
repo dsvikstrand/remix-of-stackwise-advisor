@@ -52,6 +52,7 @@ flowchart TD
   %% Notes (hexagons) - point into nodes with key context
   NX1{{NOTE access token expires refresh often}} --> G
   NX1B{{NOTE auth supports SEED_USER_REFRESH_TOKEN and auth store}} --> G
+  NX1C{{NOTE refresh flow verified by clearing access token in auth store}} --> G
   NX2{{NOTE analyze-blueprint is SSE runner stitches text}} --> R
   NX3{{NOTE generate-banner dryRun returns base64 no Storage}} --> S
   NX4{{NOTE image generation can be rate limited or safety rejected}} --> S
@@ -80,7 +81,7 @@ flowchart TD
   class T0,T1,T2,T3,T4,T5 stage_apply;
   class L,L1,M,M1,N,Z stage_inputs;
 
-  class NX1,NX1B,NX2,NX3,NX4,NX5,NX6,NX7,NX8,NX9 note;
+  class NX1,NX1B,NX1C,NX2,NX3,NX4,NX5,NX6,NX7,NX8,NX9 note;
 
   %% Tested status styling
   class A,B,C,G,H,H1,I,I1,J,J1,K,K1,R,R1,S,S1,L,L1,M,M1,N,Z,T0,T1,T2,T3,T4,T5 done;

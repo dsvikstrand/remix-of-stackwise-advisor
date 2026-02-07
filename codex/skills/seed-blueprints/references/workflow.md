@@ -120,6 +120,9 @@ If you store the seed user's refresh token, the runner can mint new access token
 Recommended local store:
 - `seed/seed_auth.local` (JSON; ignored by `*.local`)
 
+Verified:
+- Refresh flow works when the stored access token is missing (forced test by clearing `access_token` in the auth store).
+
 Example:
 ```bash
 TMPDIR=/tmp \
