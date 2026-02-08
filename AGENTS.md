@@ -21,7 +21,7 @@ Rules:
 - Keys only need to be unique **within the current message**.
 - Keys may be reused in later messages.
 
-## 2) Code gating with flags
+## 2) Code gating with flags (Deprecated we use PA/PAP instead, see sec 4)
 I will control whether you write code using these flags:
 
 - **(no code)**: Do not implement or output new code. Only discuss, explain, review, or ask/answer questions.
@@ -36,10 +36,10 @@ Process:
 - Only after I approve the plan should you write or modify code. 
 
 ## 4) Plan approved
-if I add PA (plan approved), you can go with code (don't need to wait for code ok here)
+if I add PA (plan approved), you can go with code (don't need to wait for code ok here).
 PAP (plan approved -> push to github), push the latest update once you are done (with a simple comment)
 
-## 5) Lovable tickets workflow
+## 5) Lovable tickets workflow 
 When we have a new Lovable task, add a new numbered markdown file in `lovable/tickets` (e.g., `1.md`, `2.md`, ...). Do not create templates. When a ticket is solved, admin will add a `_solved` suffix to the filename.
 
 ## 6) Git push access in this environment
@@ -53,7 +53,7 @@ If a message ends with `UDO`, treat it as approval to execute the actions you pr
 - `lovable-main` is the legacy Lovable branch and deploys to `/lovable-backend/`.
 - `main-pre-agentic` keeps a backup pointer to the old main before the swap.
 
-## 9) AI credits bypass (dev only)
+## 9) AI credits bypass (dev only) (Suggestion: move this out of agents and place it somewhere code focused)
 Set `AI_CREDITS_BYPASS=true` in the backend environment to bypass credit limits while building/testing. Keep it off in production.
 
 ## 10) REC (go with your recommendations)

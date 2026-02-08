@@ -22,7 +22,35 @@ Key fields:
 - `run_id`: output folder name
 - `library`: seed topic + title + constraints
 - `blueprints[]`: blueprint variants to generate from the generated library
-- Optional: `asp` (persona stub; recorded for future alignment evals)
+- Optional: `asp` (persona id + optional stub fields; recorded for future alignment evals)
+
+## Gate Contract (Planned)
+When DAS is enabled, each candidate is evaluated by a list of gates.
+
+We want a stable, debuggable contract per gate result, recorded in `logs/decision_log.json`:
+- `gate_id`: string (example: `structural`, `bounds`, `crossref`)
+- `ok`: boolean
+- `severity`: one of `info|warn|hard_fail`
+- `score`: number (0..1 or 0..100, consistent per gate)
+- `reason`: short string (human readable)
+- `data`: optional JSON object for structured details (counts, limits, etc.)
+
+Initial focus (B1): deterministic gates only (`structural`, `bounds`, `crossref`).
+
+## Personas (Repo-Global, Planned)
+Personas are not "seed-only". They are a reusable contract that can be used by:
+- Seeding runs (conditioning + eval target)
+- Future interactive agent runs (agents that act like users)
+
+Schema doc:
+- `docs/persona_schema.md`
+
+Planned storage:
+- `personas/v0/<persona_id>.json`
+
+Runner behavior (planned):
+- Load persona by id from the seed spec.
+- Compute and record `persona_hash` in `logs/run_meta.json` for reproducibility.
 
 ## Stage 0 (LAS) – Artifacts Only (No Writes)
 Stage 0 calls the agentic backend for generation, but does **not** write to Supabase.
@@ -74,3 +102,7 @@ DAS v1 adds **gates + retries + select-best** on generation nodes when enabled.
   - `candidates/<node_id>/attempt-01*.json`...
   - `logs/decision_log.json` (why we retried/selected)
   - `logs/selection.json` (best candidate summary)
+
+Planned regression fixtures (GD):
+- `seed/golden/<persona_id>/case-01.json` ...
+Use these as small, curated baselines for quality/eval.
