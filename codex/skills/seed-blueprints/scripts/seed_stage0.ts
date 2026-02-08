@@ -86,6 +86,7 @@ type DasPolicy = {
   maxAttempts?: number;
   eval?: string[];
   onHardFail?: 'stop_run' | 'continue';
+  params?: Record<string, unknown>;
 };
 
 type DasConfig = {
@@ -100,6 +101,10 @@ type DasConfig = {
       failOnAttempt?: number;
     };
   };
+};
+
+type ResolvedDasPolicy = Required<Pick<DasPolicy, 'enabled' | 'kCandidates' | 'maxAttempts' | 'eval' | 'onHardFail'>> & {
+  params: Record<string, unknown>;
 };
 
 type DasGateResult = {
@@ -124,7 +129,7 @@ type DasCandidateResult = {
 
 type DasNodeDecision = {
   nodeId: DasNodeId;
-  policy: Required<Pick<DasPolicy, 'enabled' | 'kCandidates' | 'maxAttempts' | 'eval' | 'onHardFail'>>;
+  policy: ResolvedDasPolicy;
   attempts: Array<{
     attempt: number;
     candidates: DasCandidateResult[];
@@ -382,12 +387,18 @@ function getDasPolicy(cfg: DasConfig, nodeId: DasNodeId) {
   const onHardFailRaw = node.onHardFail !== undefined ? node.onHardFail : defaults.onHardFail;
   const onHardFail = onHardFailRaw === 'continue' ? 'continue' : 'stop_run';
 
+  const isPlainObject = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
+  const defaultsParams = isPlainObject(defaults.params) ? defaults.params : {};
+  const nodeParams = isPlainObject(node.params) ? node.params : {};
+  const params: Record<string, unknown> = { ...defaultsParams, ...nodeParams };
+
   return {
     enabled,
     kCandidates,
     maxAttempts,
     eval: evalList,
     onHardFail,
+    params,
   };
 }
 
@@ -558,6 +569,94 @@ function evalBoundsPromptPack(pack: PromptPackV0): DasGateResult {
   }
 
   return gate('bounds', true, 'info', 1, 'ok', limits);
+}
+
+function evalPersonaAlignmentPromptPack(persona: PersonaV0 | null, pack: PromptPackV0, params?: Record<string, unknown>): DasGateResult {
+  if (!persona) return gate('persona_alignment_v0', true, 'info', 0, 'no_persona', { skipped: true });
+
+  const minTagOverlapRatioRaw = (params || ({} as any)).minTagOverlapRatio;
+  const minTagOverlapRatio =
+    minTagOverlapRatioRaw === undefined || minTagOverlapRatioRaw === null ? 0.25 : Math.max(0, Number(minTagOverlapRatioRaw) || 0);
+  // In v0 we treat persona "avoid tags" as a hard fail signal, but we do NOT treat
+  // persona.must_avoid phrases as violations at the prompt-pack stage (they are instructions).
+  const hardFailOnMustAvoid = (params || ({} as any)).hardFailOnMustAvoid !== false;
+
+  const personaTags = uniqStrings([
+    ...((persona.interests?.topics || []) as string[]),
+    ...((persona.interests?.tags_prefer || []) as string[]),
+  ])
+    .map(normalizeSlug)
+    .filter(Boolean);
+  const personaTagSet = new Set(personaTags);
+
+  const avoidTags = uniqStrings([...(persona.interests?.tags_avoid || [])]).map(normalizeSlug).filter(Boolean);
+  const mustInclude = uniqStrings([...(persona.constraints?.must_include || [])]).map((s) => String(s).toLowerCase());
+  const mustAvoid = uniqStrings([...(persona.constraints?.must_avoid || [])]).map((s) => String(s).toLowerCase());
+
+  const packTags = uniqStrings([
+    ...((pack.library?.tags || []) as string[]),
+    ...(pack.blueprints || []).flatMap((bp) => (bp?.tags || []) as string[]),
+  ])
+    .map(normalizeSlug)
+    .filter(Boolean);
+  const packTagSet = new Set(packTags);
+
+  let overlapCount = 0;
+  for (const t of packTagSet) if (personaTagSet.has(t)) overlapCount += 1;
+  const overlapRatio = overlapCount / Math.max(1, packTagSet.size);
+
+  const blob = [
+    pack.goal,
+    pack.library?.topic,
+    pack.library?.title,
+    pack.library?.description,
+    pack.library?.notes,
+    ...(pack.blueprints || []).flatMap((bp) => [bp?.title, bp?.description, bp?.notes]),
+    ...packTags,
+  ]
+    .map((x) => String(x || '').trim())
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  const mustIncludeHits = mustInclude.filter((t) => t && blob.includes(t));
+  const avoidTagHits = avoidTags.filter((t) => t && packTagSet.has(t));
+  const mustAvoidInstructionHits = mustAvoid.filter((t) => t && blob.includes(t));
+
+  const data = {
+    persona_id: persona.id,
+    minTagOverlapRatio,
+    hardFailOnMustAvoid,
+    pack_tag_count: packTagSet.size,
+    persona_tag_count: personaTagSet.size,
+    overlap_count: overlapCount,
+    overlap_ratio: overlapRatio,
+    must_include_total: mustInclude.length,
+    must_include_hits: mustIncludeHits.length,
+    avoid_tags_total: avoidTags.length,
+    avoid_tags_hits: avoidTagHits.length,
+    must_avoid_instructions_total: mustAvoid.length,
+    must_avoid_instructions_hits: mustAvoidInstructionHits.length,
+    hit_terms: {
+      must_include: mustIncludeHits.slice(0, 8),
+      avoid_tags: avoidTagHits.slice(0, 8),
+      must_avoid_instructions: mustAvoidInstructionHits.slice(0, 8),
+    },
+  };
+
+  if (hardFailOnMustAvoid && avoidTagHits.length > 0) {
+    return gate('persona_alignment_v0', false, 'hard_fail', 0, 'avoid_tag_hit', data);
+  }
+
+  if (overlapRatio < minTagOverlapRatio) {
+    return gate('persona_alignment_v0', false, 'hard_fail', overlapRatio, 'low_tag_overlap', data);
+  }
+
+  if (mustInclude.length && mustIncludeHits.length < mustInclude.length) {
+    return gate('persona_alignment_v0', true, 'warn', overlapRatio, 'ok_missing_must_include', data);
+  }
+
+  return gate('persona_alignment_v0', true, 'info', overlapRatio, 'ok', data);
 }
 
 function writeJsonFile(filePath: string, data: unknown) {
@@ -1199,9 +1298,14 @@ async function main() {
           const evalList = policy.eval;
           if (evalList.includes('structural')) gates.push(evalStructuralPromptPack(pack));
           if (evalList.includes('bounds')) gates.push(evalBoundsPromptPack(pack));
+          if (evalList.includes('persona_alignment_v0')) {
+            const p = ((policy.params || {}) as any).persona_alignment_v0;
+            gates.push(evalPersonaAlignmentPromptPack(persona, pack, (p && typeof p === 'object' ? (p as any) : {}) as any));
+          }
 
           for (const gName of evalList) {
-            if (gName === 'structural' || gName === 'bounds' || gName === 'testOnly_failOnce') continue;
+            if (gName === 'structural' || gName === 'bounds' || gName === 'persona_alignment_v0' || gName === 'testOnly_failOnce')
+              continue;
             gates.push(gate(gName, false, 'hard_fail', 0, 'not_implemented'));
           }
 

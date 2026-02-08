@@ -28,14 +28,18 @@ Key fields:
 When DAS is enabled (`--das`), each candidate is evaluated by a list of gates and recorded in `logs/decision_log.json`.
 
 Stable per-gate contract:
-- `gate_id`: string (example: `structural`, `bounds`, `crossref`)
+- `gate_id`: string (example: `structural`, `bounds`, `crossref`, `persona_alignment_v0`)
 - `ok`: boolean
 - `severity`: one of `info|warn|hard_fail`
 - `score`: number (0..1 or 0..100, consistent per gate)
 - `reason`: short string (human readable)
 - `data`: optional JSON object for structured details (counts, limits, etc.)
 
-Initial focus (B1): deterministic gates only (`structural`, `bounds`, `crossref`).
+Initial focus (B1): deterministic gates only (`structural`, `bounds`, `crossref`, `persona_alignment_v0`).
+
+Notes:
+- `persona_alignment_v0` is currently wired for `PROMPT_PACK` only (the prompt composer stage) so we can validate eval wiring cheaply.
+- Gate parameters live under `params` in the DAS config, per node (example: `nodes.PROMPT_PACK.params.persona_alignment_v0.minTagOverlapRatio`).
 
 ## Personas (Repo-Global, Current)
 Personas are not "seed-only". They are a reusable contract that can be used by:

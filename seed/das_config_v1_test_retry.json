@@ -16,7 +16,13 @@
     "PROMPT_PACK": {
       "kCandidates": 1,
       "maxAttempts": 2,
-      "eval": ["structural", "bounds", "testOnly_failOnce"]
+      "eval": ["structural", "bounds", "persona_alignment_v0", "testOnly_failOnce"],
+      "params": {
+        "persona_alignment_v0": {
+          "minTagOverlapRatio": 0.25,
+          "hardFailOnMustAvoid": true
+        }
+      }
     },
     "LIB_GEN": {
       "kCandidates": 1,

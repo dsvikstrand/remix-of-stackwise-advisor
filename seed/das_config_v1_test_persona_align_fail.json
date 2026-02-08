@@ -1,9 +1,9 @@
 {
   "version": 1,
   "notes": [
-    "DAS v1 policy file (dynamic gates, retries, select-best).",
-    "Used by codex/skills/seed-blueprints/scripts/seed_stage0.ts when run with --das.",
-    "Policies are per-node (maxAttempts, kCandidates, eval)."
+    "Test config: force PROMPT_PACK persona_alignment_v0 to hard fail.",
+    "Used to validate decision_log + stop_run behavior deterministically.",
+    "Set minTagOverlapRatio > 1 so overlapRatio can never satisfy it."
   ],
   "defaults": {
     "enabled": true,
@@ -13,36 +13,31 @@
     "onHardFail": "stop_run"
   },
   "nodes": {
-    "AUTH_READ": {
-      "enabled": true,
-      "maxAttempts": 1
-    },
     "PROMPT_PACK": {
       "kCandidates": 1,
-      "maxAttempts": 2,
-      "eval": ["structural", "bounds", "persona_alignment_v0", "testOnly_failOnce"],
+      "maxAttempts": 1,
+      "eval": ["structural", "bounds", "persona_alignment_v0"],
       "params": {
         "persona_alignment_v0": {
-          "minTagOverlapRatio": 0.25,
+          "minTagOverlapRatio": 2,
           "hardFailOnMustAvoid": true
         }
       }
     },
     "LIB_GEN": {
       "kCandidates": 1,
-      "maxAttempts": 2,
-      "eval": ["structural", "bounds", "testOnly_failOnce"]
+      "maxAttempts": 1,
+      "eval": ["structural", "bounds"]
     },
     "BP_GEN": {
       "kCandidates": 1,
-      "maxAttempts": 2,
+      "maxAttempts": 1,
       "eval": ["structural", "bounds", "crossref"]
     },
     "VAL": {
       "kCandidates": 1,
       "maxAttempts": 1,
-      "eval": ["crossref"],
-      "onHardFail": "stop_run"
+      "eval": ["crossref"]
     },
     "AI_REVIEW": {
       "enabled": false,
@@ -56,12 +51,6 @@
       "enabled": false,
       "maxAttempts": 1
     }
-  },
-  "testOnly": {
-    "enabled": false,
-    "failOnce": {
-      "nodes": ["LIB_GEN"],
-      "failOnAttempt": 1
-    }
   }
 }
+

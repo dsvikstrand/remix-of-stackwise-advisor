@@ -42,7 +42,7 @@ flowchart TD
   OUT_DIR -.->|--compose-prompts| PROMPT_PACK["PROMPT_PACK compose prompts (template v0) TESTED_OK"]
   DAS_CFG -.-> PP_EVAL
   PROMPT_PACK --> PP_CAND["PP_CAND Write candidates/PROMPT_PACK/attempt-xx-cand-yy.json TESTED_OK"]
-  PP_CAND --> PP_EVAL{"PP_EVAL eval_structural + eval_bounds TESTED_OK"}
+  PP_CAND --> PP_EVAL{"PP_EVAL eval_structural + eval_bounds + persona_alignment_v0 TESTED_OK"}
   PP_EVAL -->|pass| PP_SEL["PP_SEL score + select best candidate TESTED_OK"]
   PP_EVAL -->|fail and attempt lt max| PP_RETRY["PP_RETRY retry (maxAttempts=2) TESTED_OK"]
   PP_RETRY --> PROMPT_PACK
