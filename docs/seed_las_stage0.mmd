@@ -49,7 +49,7 @@ flowchart TD
   LIB_RETRY --> LIB_GEN
   LIB_SEL --> LIB_OUT["LIB_OUT Write library.json TESTED_OK"]
 
-  N_DAS{{NOTE DAS gates run only when DAS is enabled (planned)}} --> LIB_EVAL
+  N_DAS{{NOTE DAS gates run only when DAS is enabled; planned}} --> LIB_EVAL
   N_CFG{{NOTE per-node maxAttempts and kCandidates live in DAS_CFG}} --> DAS_CFG
   N_DAS2{{NOTE safety and PII failures are non-retryable in seeding mode}} --> ABORT
 
