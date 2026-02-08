@@ -65,18 +65,31 @@ for example: if you give me a follow up question:
 
 ## 11) Remote server: Oracle (SSH alias + multiplexing)
 
-We work against an Oracle Ubuntu box via SSH. Use the SSH host alias (no raw IPs / key paths in commands):
+Use the SSH alias (no raw IPs/keys in commands):
 
-- SSH host alias: `oracle-free`
-- Repo dir on server: `/home/ubuntu/remix-of-stackwise-advisor`
+- Host alias: `oracle-free`
+- Repo dir: `/home/ubuntu/remix-of-stackwise-advisor`
 
-### Connection multiplexing (already configured)
-SSH multiplexing is enabled in `~/.ssh/config` for `oracle-free` (ControlMaster/ControlPersist), so multiple sequential `ssh oracle-free "..."`
-calls should be fast (reuses the connection).
-
-### Preferred command patterns
-
-**One-shot remote command**
-```bash
-ssh oracle-free "cd /home/ubuntu/remix-of-stackwise-advisor && git pull"
+SSH config to add (in this Codex env it lives at `/root/.ssh/config`):
 ```
+Host oracle-free
+  HostName 140.238.158.227
+  User ubuntu
+  IdentityFile ~/.ssh/oracle_id_ed25519
+  IdentitiesOnly yes
+  ControlMaster auto
+  ControlPersist 10m
+  ControlPath ~/.ssh/oracle-%r@%h:%p
+```
+
+Sanity checks
+- `ssh oracle-free "echo ok"`
+- `ssh oracle-free "cd /home/ubuntu/remix-of-stackwise-advisor && git status -sb"`
+
+Preferred patterns
+- One-shot: `ssh oracle-free "cd /home/ubuntu/remix-of-stackwise-advisor && git pull"`
+- SCP: `scp -i ~/.ssh/oracle_id_ed25519 localfile oracle-free:/home/ubuntu/remix-of-stackwise-advisor/`
+
+Troubleshooting
+- If you see `Permission denied (publickey)`: confirm the key path and that `oracle_id_ed25519` is present on this machine. Add with `ssh-add ~/.ssh/oracle_id_ed25519` if using an agent, or ensure the `IdentityFile` path above exists.
+- First connect may prompt to accept the host key; answer `yes` once.
