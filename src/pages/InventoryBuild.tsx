@@ -45,14 +45,13 @@ import {
   BLUEPRINT_FOCUS_OPTIONS,
   LENGTH_OPTIONS,
   STRICTNESS_OPTIONS,
-  blueprintControlsToDescription,
-  blueprintControlsToNotes,
-  blueprintControlsToTitle,
+  makeBlueprintGenerationControlsV0,
   type BlueprintFocus,
   type CautionLevel,
   type LengthHint,
   type StrictnessLevel,
   type VarietyLevel,
+  type LibraryDomain,
 } from '@/lib/generationControls';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
@@ -172,6 +171,7 @@ export default function InventoryBuild() {
   const [autoCaution, setAutoCaution] = useState<CautionLevel>('balanced');
   const [isAutoGenerating, setIsAutoGenerating] = useState(false);
   const [showOverwriteDialog, setShowOverwriteDialog] = useState(false);
+  const [autoGenerationControls, setAutoGenerationControls] = useState<Json | null>(null);
 
   // Help & Tour state
   const [showHelp, setShowHelp] = useState(false);
@@ -856,16 +856,27 @@ export default function InventoryBuild() {
                 ? 'productivity'
                 : 'general';
 
-      const inferredTitle = autoTitle.trim() || blueprintControlsToTitle(autoFocus);
-      const inferredDescription = blueprintControlsToDescription(autoFocus, domainHint as any);
-      const inferredNotes = blueprintControlsToNotes({
-        focus: autoFocus,
-        length: autoLength,
-        strictness: autoStrictness,
-        variety: autoVariety,
-        caution: autoCaution,
-        notes: autoNotes,
+      const genControls = makeBlueprintGenerationControlsV0({
+        controls: {
+          focus: autoFocus,
+          length: autoLength,
+          strictness: autoStrictness,
+          variety: autoVariety,
+          caution: autoCaution,
+        },
+        domainHint: domainHint as LibraryDomain,
+        optional: {
+          name: autoTitle.trim() || undefined,
+          notes: autoNotes.trim() || undefined,
+          tags,
+          inventoryTitle: inventory.title,
+        },
       });
+
+      setAutoGenerationControls(genControls as unknown as Json);
+      const inferredTitle = genControls.derived.title;
+      const inferredDescription = genControls.derived.description;
+      const inferredNotes = genControls.derived.notes;
 
       const response = await fetch(AGENTIC_GENERATE_BLUEPRINT_URL, {
         method: 'POST',
@@ -901,21 +912,22 @@ export default function InventoryBuild() {
         title: 'Blueprint generated',
         description: 'Your steps and items have been updated.',
       });
-      void logMvpEvent({
-        eventName: 'auto_generate_blueprint',
-        userId: user?.id,
-        blueprintId: blueprintId ?? null,
-        path: location.pathname,
-        metadata: {
-          inventoryId: inventory.id,
-          stepCount: data.steps.length,
-          focus: autoFocus,
-          length: autoLength,
-          strictness: autoStrictness,
-          variety: autoVariety,
-          caution: autoCaution,
-        },
-      });
+          void logMvpEvent({
+            eventName: 'auto_generate_blueprint',
+            userId: user?.id,
+            blueprintId: blueprintId ?? null,
+            path: location.pathname,
+            metadata: {
+              inventoryId: inventory.id,
+              stepCount: data.steps.length,
+              focus: autoFocus,
+              length: autoLength,
+              strictness: autoStrictness,
+              variety: autoVariety,
+              caution: autoCaution,
+              domainHint,
+            },
+          });
     } catch (error) {
       toast({
         title: 'Auto-generation failed',
@@ -1158,6 +1170,7 @@ export default function InventoryBuild() {
           reviewPrompt: reviewPrompt.trim() ? reviewPrompt.trim() : null,
           bannerUrl: resolvedBannerUrl,
           llmReview: review,
+          generationControls: autoGenerationControls,
           tags,
           isPublic,
         });
@@ -1195,6 +1208,7 @@ export default function InventoryBuild() {
           reviewPrompt: reviewPrompt.trim() ? reviewPrompt.trim() : null,
           bannerUrl: resolvedBannerUrl,
           llmReview: review,
+          generationControls: autoGenerationControls,
           tags,
           isPublic,
           sourceBlueprintId: null,

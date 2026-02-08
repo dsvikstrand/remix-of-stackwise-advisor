@@ -45,6 +45,7 @@ interface CreateBlueprintInput {
   reviewPrompt: string | null;
   bannerUrl: string | null;
   llmReview: string | null;
+  generationControls?: Json | null;
   tags: string[];
   isPublic: boolean;
   sourceBlueprintId?: string | null;
@@ -59,11 +60,18 @@ interface UpdateBlueprintInput {
   reviewPrompt: string | null;
   bannerUrl: string | null;
   llmReview: string | null;
+  generationControls?: Json | null;
   tags: string[];
   isPublic: boolean;
 }
 
 const BLUEPRINT_FIELDS = 'id, inventory_id, creator_user_id, title, selected_items, steps, mix_notes, review_prompt, banner_url, llm_review, is_public, likes_count, source_blueprint_id, created_at, updated_at';
+
+function isMissingColumnError(error: unknown, column: string) {
+  const e = error as any;
+  const hay = `${e?.message || ''} ${e?.details || ''} ${e?.hint || ''}`.toLowerCase();
+  return hay.includes('does not exist') && hay.includes(column.toLowerCase());
+}
 
 async function ensureTags(slugs: string[], userId: string): Promise<BlueprintTag[]> {
   const normalized = normalizeTags(slugs);
@@ -145,23 +153,33 @@ export function useCreateBlueprint() {
     mutationFn: async (input: CreateBlueprintInput) => {
       if (!user) throw new Error('Must be logged in');
 
-      const { data: blueprint, error } = await supabase
-        .from('blueprints')
-        .insert({
-          inventory_id: input.inventoryId,
-          creator_user_id: user.id,
-          title: input.title,
-          selected_items: input.selectedItems,
-          steps: input.steps,
-          mix_notes: input.mixNotes,
-          review_prompt: input.reviewPrompt,
-          banner_url: input.bannerUrl,
-          llm_review: input.llmReview,
-          is_public: input.isPublic,
-          source_blueprint_id: input.sourceBlueprintId || null,
-        })
-        .select(BLUEPRINT_FIELDS)
-        .single();
+      const basePayload = {
+        inventory_id: input.inventoryId,
+        creator_user_id: user.id,
+        title: input.title,
+        selected_items: input.selectedItems,
+        steps: input.steps,
+        mix_notes: input.mixNotes,
+        review_prompt: input.reviewPrompt,
+        banner_url: input.bannerUrl,
+        llm_review: input.llmReview,
+        is_public: input.isPublic,
+        source_blueprint_id: input.sourceBlueprintId || null,
+      };
+
+      const tryInsert = (payload: any) =>
+        supabase.from('blueprints').insert(payload).select(BLUEPRINT_FIELDS).single();
+
+      let insertRes = await tryInsert({
+        ...basePayload,
+        ...(input.generationControls ? { generation_controls: input.generationControls } : {}),
+      });
+
+      if (insertRes.error && input.generationControls && isMissingColumnError(insertRes.error, 'generation_controls')) {
+        insertRes = await tryInsert(basePayload);
+      }
+
+      const { data: blueprint, error } = insertRes;
 
       if (error) throw error;
 
@@ -222,22 +240,36 @@ export function useUpdateBlueprint() {
     mutationFn: async (input: UpdateBlueprintInput) => {
       if (!user) throw new Error('Must be logged in');
 
-      const { data: blueprint, error } = await supabase
-        .from('blueprints')
-        .update({
-          title: input.title,
-          selected_items: input.selectedItems,
-          steps: input.steps,
-          mix_notes: input.mixNotes,
-          review_prompt: input.reviewPrompt,
-          banner_url: input.bannerUrl,
-          llm_review: input.llmReview,
-          is_public: input.isPublic,
-        })
-        .eq('id', input.blueprintId)
-        .eq('creator_user_id', user.id)
-        .select(BLUEPRINT_FIELDS)
-        .single();
+      const basePatch = {
+        title: input.title,
+        selected_items: input.selectedItems,
+        steps: input.steps,
+        mix_notes: input.mixNotes,
+        review_prompt: input.reviewPrompt,
+        banner_url: input.bannerUrl,
+        llm_review: input.llmReview,
+        is_public: input.isPublic,
+      };
+
+      const tryUpdate = (patch: any) =>
+        supabase
+          .from('blueprints')
+          .update(patch)
+          .eq('id', input.blueprintId)
+          .eq('creator_user_id', user.id)
+          .select(BLUEPRINT_FIELDS)
+          .single();
+
+      let updateRes = await tryUpdate({
+        ...basePatch,
+        ...(input.generationControls ? { generation_controls: input.generationControls } : {}),
+      });
+
+      if (updateRes.error && input.generationControls && isMissingColumnError(updateRes.error, 'generation_controls')) {
+        updateRes = await tryUpdate(basePatch);
+      }
+
+      const { data: blueprint, error } = updateRes;
 
       if (error) throw error;
 

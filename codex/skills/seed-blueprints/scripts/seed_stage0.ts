@@ -2281,6 +2281,30 @@ async function main() {
       return data[0]!;
     };
 
+    const isMissingColumnErrorText = (err: unknown, column: string) => {
+      const msg = String((err as any)?.message || '').toLowerCase();
+      return msg.includes('does not exist') && msg.includes(column.toLowerCase());
+    };
+
+    const dropKey = (obj: unknown, key: string) => {
+      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return obj;
+      const out = { ...(obj as any) };
+      delete (out as any)[key];
+      return out;
+    };
+
+    // Lovable Cloud DB schema may lag behind code. For optional columns, retry without them.
+    const restInsertCompat = async <T>(table: string, row: unknown, select: string) => {
+      try {
+        return await restInsert<T>(table, row, select);
+      } catch (e) {
+        if (isMissingColumnErrorText(e, 'generation_controls')) {
+          return await restInsert<T>(table, dropKey(row, 'generation_controls'), select);
+        }
+        throw e;
+      }
+    };
+
     const restUpdate = async <T>(table: string, filter: string, patch: unknown, select: string) => {
       const url = `${restBase}/${table}?${filter}&select=${encodeURIComponent(select)}`;
       const res = await fetch(url, { method: 'PATCH', headers: restHeaders() as any, body: JSON.stringify(patch) });
@@ -2326,11 +2350,18 @@ async function main() {
       bannerUploads: [] as Array<{ blueprintTitle: string; ok: boolean; bannerUrl?: string; error?: string }>,
     };
 
+    // Optional: persist promptless intent (controls) for later eval/debug.
+    const controlPackPath = outPath.requests('control_pack.json');
+    const promptPackPath = outPath.requests('prompt_pack.json');
+    const controlPack = fs.existsSync(controlPackPath) ? readJsonFile<any>(controlPackPath) : null;
+    const promptPack = fs.existsSync(promptPackPath) ? readJsonFile<any>(promptPackPath) : null;
+    const controlPackHashLocal = controlPack ? sha256Hex(JSON.stringify(controlPack)) : null;
+
     const invTags = ensureTags(specRun.library.tags || []);
     const inventoryRow = await step('apply_T1_insert_inventory', async () => {
       const categories = (inventory.categories || []).map((c) => c.name).filter(Boolean);
       const promptCategories = categories.join(', ');
-      const row = await restInsert<{ id: string }>(
+      const row = await restInsertCompat<{ id: string }>(
         'inventories',
         {
           title: specRun.library.title,
@@ -2341,6 +2372,17 @@ async function main() {
           include_score: true,
           creator_user_id: seedUserId,
           is_public: false,
+          ...(controlPack
+            ? {
+                generation_controls: {
+                  version: 0,
+                  source: 'das',
+                  control_pack_hash: controlPackHashLocal,
+                  control_pack: controlPack,
+                  prompt_pack: promptPack,
+                },
+              }
+            : {}),
         },
         'id'
       );
@@ -2366,6 +2408,7 @@ async function main() {
       let idx = 0;
       for (const bp of generatedBlueprints) {
         const variant = specRun.blueprints[idx] || {};
+        const bpIndex = idx;
         idx += 1;
 
         const selectedItems: Record<string, Array<string | { name: string; context?: string }>> = {};
@@ -2381,7 +2424,7 @@ async function main() {
         }
 
         const mixNotes = String(variant.notes || specRun.library.notes || '').trim() || null;
-        const row = await restInsert<{ id: string }>(
+        const row = await restInsertCompat<{ id: string }>(
           'blueprints',
           {
             inventory_id: (inventoryRow as any).id,
@@ -2395,6 +2438,17 @@ async function main() {
             banner_url: null,
             is_public: false,
             source_blueprint_id: null,
+            ...(controlPack
+              ? {
+                  generation_controls: {
+                    version: 0,
+                    source: 'das',
+                    control_pack_hash: controlPackHashLocal,
+                    blueprint_index: bpIndex,
+                    blueprint_controls: (controlPack?.blueprints || [])[bpIndex] || null,
+                  },
+                }
+              : {}),
           },
           'id'
         );

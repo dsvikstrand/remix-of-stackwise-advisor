@@ -39,6 +39,7 @@ import {
   STYLE_OPTIONS,
   libraryControlsToInstructions,
   libraryControlsToTopic,
+  makeLibraryGenerationControlsV0,
 } from '@/lib/generationControls';
 
 const SUPABASE_GENERATE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-inventory`;
@@ -294,6 +295,14 @@ export default function InventoryCreate() {
         includeScore: true,
         tags,
         isPublic,
+        generationControls: makeLibraryGenerationControlsV0({
+          controls: { domain, audience, style, strictness, lengthHint },
+          optional: {
+            name: title.trim() || undefined,
+            notes: notes.trim() || undefined,
+            tags,
+          },
+        }) as unknown as Json,
       });
 
       addRecentTags(tags);

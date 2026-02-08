@@ -26,6 +26,51 @@ export type BlueprintFocus =
 export type VarietyLevel = 'low' | 'medium' | 'high';
 export type CautionLevel = 'conservative' | 'balanced' | 'aggressive';
 
+export type LibraryGenerationControlsV0 = {
+  version: 0;
+  kind: 'library';
+  controls: {
+    domain: LibraryDomain;
+    audience: AudienceLevel;
+    style: WritingStyle;
+    strictness: StrictnessLevel;
+    length_hint: LengthHint;
+  };
+  optional?: {
+    name?: string;
+    notes?: string;
+    tags?: string[];
+  };
+  derived: {
+    keywords: string;
+    title: string;
+    customInstructions: string;
+  };
+};
+
+export type BlueprintGenerationControlsV0 = {
+  version: 0;
+  kind: 'blueprint';
+  controls: {
+    focus: BlueprintFocus;
+    length: LengthHint;
+    strictness: StrictnessLevel;
+    variety: VarietyLevel;
+    caution: CautionLevel;
+  };
+  optional?: {
+    name?: string;
+    notes?: string;
+    tags?: string[];
+    inventoryTitle?: string;
+  };
+  derived: {
+    title: string;
+    description: string;
+    notes: string;
+  };
+};
+
 export const LIBRARY_DOMAIN_OPTIONS: Array<{ value: LibraryDomain; label: string }> = [
   { value: 'skincare', label: 'Skincare' },
   { value: 'fitness', label: 'Fitness' },
@@ -132,6 +177,59 @@ export function libraryControlsToInstructions(controls: {
   return parts.join(' | ');
 }
 
+export function makeLibraryGenerationControlsV0(input: {
+  controls: {
+    domain: LibraryDomain;
+    audience: AudienceLevel;
+    style: WritingStyle;
+    strictness: StrictnessLevel;
+    lengthHint: LengthHint;
+  };
+  optional?: {
+    name?: string;
+    notes?: string;
+    tags?: string[];
+  };
+}) {
+  const keywords = libraryControlsToTopic({
+    domain: input.controls.domain,
+    audience: input.controls.audience,
+    length: input.controls.lengthHint,
+  });
+  const title =
+    String(input.optional?.name || '').trim() ||
+    `${keywords}`
+      .split(' ')
+      .slice(0, 6)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ') +
+    ' Library';
+  const customInstructions = libraryControlsToInstructions({
+    domain: input.controls.domain,
+    audience: input.controls.audience,
+    style: input.controls.style,
+    strictness: input.controls.strictness,
+    length: input.controls.lengthHint,
+    notes: input.optional?.notes,
+  });
+
+  const out: LibraryGenerationControlsV0 = {
+    version: 0,
+    kind: 'library',
+    controls: {
+      domain: input.controls.domain,
+      audience: input.controls.audience,
+      style: input.controls.style,
+      strictness: input.controls.strictness,
+      length_hint: input.controls.lengthHint,
+    },
+    ...(input.optional && Object.keys(input.optional).length > 0 ? { optional: input.optional } : {}),
+    derived: { keywords, title, customInstructions },
+  };
+
+  return out;
+}
+
 export function blueprintControlsToTitle(focus: BlueprintFocus) {
   const map: Record<string, string> = {
     starter: 'Quick Starter',
@@ -183,3 +281,47 @@ export function blueprintControlsToNotes(controls: {
   return parts.join(' | ');
 }
 
+export function makeBlueprintGenerationControlsV0(input: {
+  controls: {
+    focus: BlueprintFocus;
+    length: LengthHint;
+    strictness: StrictnessLevel;
+    variety: VarietyLevel;
+    caution: CautionLevel;
+  };
+  domainHint: LibraryDomain;
+  optional?: {
+    name?: string;
+    notes?: string;
+    tags?: string[];
+    inventoryTitle?: string;
+  };
+}) {
+  const baseTitle = blueprintControlsToTitle(input.controls.focus);
+  const title = String(input.optional?.name || '').trim() || baseTitle;
+  const description = blueprintControlsToDescription(input.controls.focus, input.domainHint);
+  const notes = blueprintControlsToNotes({
+    focus: input.controls.focus,
+    length: input.controls.length,
+    strictness: input.controls.strictness,
+    variety: input.controls.variety,
+    caution: input.controls.caution,
+    notes: input.optional?.notes,
+  });
+
+  const out: BlueprintGenerationControlsV0 = {
+    version: 0,
+    kind: 'blueprint',
+    controls: {
+      focus: input.controls.focus,
+      length: input.controls.length,
+      strictness: input.controls.strictness,
+      variety: input.controls.variety,
+      caution: input.controls.caution,
+    },
+    ...(input.optional && Object.keys(input.optional).length > 0 ? { optional: input.optional } : {}),
+    derived: { title, description, notes },
+  };
+
+  return out;
+}

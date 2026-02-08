@@ -41,10 +41,17 @@ interface CreateInventoryInput {
   includeScore: boolean;
   tags: string[];
   isPublic: boolean;
+  generationControls?: Json | null;
   sourceInventoryId?: string | null;
 }
 
 const INVENTORY_FIELDS = 'id, title, prompt_inventory, prompt_categories, generated_schema, review_sections, include_score, creator_user_id, is_public, likes_count, created_at, updated_at';
+
+function isMissingColumnError(error: unknown, column: string) {
+  const e = error as any;
+  const hay = `${e?.message || ''} ${e?.details || ''} ${e?.hint || ''}`.toLowerCase();
+  return hay.includes('does not exist') && hay.includes(column.toLowerCase());
+}
 
 async function ensureTags(slugs: string[], userId: string): Promise<InventoryTag[]> {
   const normalized = normalizeTags(slugs);
@@ -251,20 +258,30 @@ export function useCreateInventory() {
     mutationFn: async (input: CreateInventoryInput) => {
       if (!user?.id) throw new Error('Must be logged in');
 
-      const { data: inventory, error } = await supabase
-        .from('inventories')
-        .insert({
-          title: input.title,
-          prompt_inventory: input.promptInventory,
-          prompt_categories: input.promptCategories,
-          generated_schema: input.generatedSchema,
-          review_sections: input.reviewSections,
-          include_score: input.includeScore,
-          creator_user_id: user.id,
-          is_public: input.isPublic,
-        })
-        .select('id')
-        .single();
+      const basePayload = {
+        title: input.title,
+        prompt_inventory: input.promptInventory,
+        prompt_categories: input.promptCategories,
+        generated_schema: input.generatedSchema,
+        review_sections: input.reviewSections,
+        include_score: input.includeScore,
+        creator_user_id: user.id,
+        is_public: input.isPublic,
+      };
+
+      const tryInsert = (payload: any) => supabase.from('inventories').insert(payload).select('id').single();
+
+      let insertRes = await tryInsert({
+        ...basePayload,
+        ...(input.generationControls ? { generation_controls: input.generationControls } : {}),
+      });
+
+      // Lovable Cloud DB schema may lag behind code. If the column is missing, retry without it.
+      if (insertRes.error && input.generationControls && isMissingColumnError(insertRes.error, 'generation_controls')) {
+        insertRes = await tryInsert(basePayload);
+      }
+
+      const { data: inventory, error } = insertRes;
 
       if (error) throw error;
 
