@@ -27,15 +27,16 @@ Key fields:
 ## Stage 0 (LAS) – Artifacts Only (No Writes)
 Stage 0 calls the agentic backend for generation, but does **not** write to Supabase.
 
-Outputs under `seed/outputs/<run_id>/`:
-- `run_meta.json` (run context, including optional `asp`)
-- `library.json` (generated categories + items)
-- `blueprints.json` (generated blueprint drafts)
-- `review_requests.json` (payloads only; no network)
-- `banner_requests.json` (payloads only; no network)
-- `validation.json` (cross-reference checks)
-- `publish_payload.json` (payload only; no writes)
-- `run_log.json` (timings + status)
+Outputs under `seed/outputs/<run_id>/` (layout v2):
+- `manifest.json` (paths + dirs map)
+- `logs/run_meta.json` (run context, including optional `asp`)
+- `logs/run_log.json` (timings + status)
+- `artifacts/library.json` (generated categories + items)
+- `artifacts/blueprints.json` (generated blueprint drafts)
+- `requests/review_requests.json` (payloads only; no network)
+- `requests/banner_requests.json` (payloads only; no network)
+- `artifacts/validation.json` (cross-reference checks)
+- `artifacts/publish_payload.json` (payload only; no writes)
 
 ## Stage 0.5 (LAS) – Execute AI (Still No Writes)
 Stage 0.5 optionally runs two expensive calls to validate the happy path end-to-end:
@@ -44,8 +45,8 @@ Stage 0.5 optionally runs two expensive calls to validate the happy path end-to-
 - Banner: `POST /api/generate-banner` with `dryRun: true` (base64; no Storage upload)
 
 Additional outputs:
-- `reviews.json`
-- `banners.json`
+- `ai/reviews.json`
+- `ai/banners.json`
 
 ## Stage 1 – Apply Mode (Writes To Supabase)
 Stage 1 takes the Stage 0/0.5 artifacts and writes to Supabase:
@@ -57,8 +58,8 @@ Stage 1 takes the Stage 0/0.5 artifacts and writes to Supabase:
 - Publish by setting `is_public=true`
 
 Additional outputs:
-- `apply_log.json`
-- `rollback.sql`
+- `logs/apply_log.json`
+- `logs/rollback.sql`
 
 ## Validation (Current)
 Hard checks we already have:
@@ -70,6 +71,6 @@ DAS v1 adds **gates + retries + select-best** on generation nodes when enabled.
 
 - Config: `seed/das_config_v1.json` (per-node `maxAttempts`, `kCandidates`, `eval[]`)
 - New artifacts (when `--das` is enabled):
-  - `candidates/<node_id>/attempt-01.json`...
-  - `decision_log.json` (why we retried/selected)
-  - `selection.json` (best candidate summary)
+  - `candidates/<node_id>/attempt-01*.json`...
+  - `logs/decision_log.json` (why we retried/selected)
+  - `logs/selection.json` (best candidate summary)

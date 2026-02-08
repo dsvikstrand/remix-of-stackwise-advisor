@@ -659,7 +659,7 @@ async function main() {
         'seed_stage0.ts',
         '',
         'Usage:',
-        '  tsx codex/skills/seed-blueprints/scripts/seed_stage0.ts --spec seed/seed_spec_v0.json',
+        '  npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts --spec seed/seed_spec_v0.json',
         '',
         'Flags:',
         '  --spec <path>              Seed spec JSON path (default: seed/seed_spec_v0.json)',
@@ -703,6 +703,26 @@ async function main() {
   const runDir = path.join(outBase, runId);
   ensureDir(runDir);
 
+  // Output layout v2 keeps logs separated from content artifacts.
+  const outputLayoutVersion = 2;
+  const logsDir = path.join(runDir, 'logs');
+  const artifactsDir = path.join(runDir, 'artifacts');
+  const requestsDir = path.join(runDir, 'requests');
+  const aiDir = path.join(runDir, 'ai');
+  ensureDir(logsDir);
+  ensureDir(artifactsDir);
+  ensureDir(requestsDir);
+  ensureDir(aiDir);
+
+  const outPath = {
+    root: (...parts: string[]) => path.join(runDir, ...parts),
+    logs: (...parts: string[]) => path.join(logsDir, ...parts),
+    artifacts: (...parts: string[]) => path.join(artifactsDir, ...parts),
+    requests: (...parts: string[]) => path.join(requestsDir, ...parts),
+    ai: (...parts: string[]) => path.join(aiDir, ...parts),
+  } as const;
+  const relPath = (abs: string) => path.relative(runDir, abs).replace(/\\/g, '/');
+
   const aspId = spec.asp?.id ? String(spec.asp.id).trim() : '';
   const runContextHash = buildRunContextHash(spec);
   let dasConfig: DasConfig | null = null;
@@ -718,9 +738,42 @@ async function main() {
     }
     if (Number((dasConfig as any).version || 0) !== 1) die('DAS config version must be 1');
   }
-  writeJsonFile(path.join(runDir, 'run_meta.json'), {
+  const createdAt = nowIso();
+
+  writeJsonFile(outPath.root('manifest.json'), {
+    version: 1,
+    layoutVersion: outputLayoutVersion,
     runId,
-    createdAt: nowIso(),
+    createdAt,
+    dirs: {
+      logs: 'logs',
+      artifacts: 'artifacts',
+      requests: 'requests',
+      ai: 'ai',
+      candidates: 'candidates',
+    },
+    paths: {
+      runMeta: 'logs/run_meta.json',
+      runLog: 'logs/run_log.json',
+      decisionLog: 'logs/decision_log.json',
+      selection: 'logs/selection.json',
+      applyLog: 'logs/apply_log.json',
+      rollbackSql: 'logs/rollback.sql',
+      library: 'artifacts/library.json',
+      blueprints: 'artifacts/blueprints.json',
+      validation: 'artifacts/validation.json',
+      publishPayload: 'artifacts/publish_payload.json',
+      reviewRequests: 'requests/review_requests.json',
+      bannerRequests: 'requests/banner_requests.json',
+      reviews: 'ai/reviews.json',
+      banners: 'ai/banners.json',
+    },
+  });
+
+  writeJsonFile(outPath.logs('run_meta.json'), {
+    runId,
+    createdAt,
+    layoutVersion: outputLayoutVersion,
     specPath,
     asp: spec.asp || null,
     runContextHash,
@@ -743,6 +796,7 @@ async function main() {
     config: {
       specPath,
       outDir: runDir,
+      outputLayoutVersion,
       agenticBaseUrl,
       backendCalls,
       applyStage1,
@@ -775,8 +829,8 @@ async function main() {
 
   const writeDasLogs = () => {
     if (!dasDecision || !dasSelection) return;
-    writeJsonFile(path.join(runDir, 'decision_log.json'), dasDecision);
-    writeJsonFile(path.join(runDir, 'selection.json'), dasSelection);
+    writeJsonFile(outPath.logs('decision_log.json'), dasDecision);
+    writeJsonFile(outPath.logs('selection.json'), dasSelection);
   };
 
   // Create empty artifacts early so failures still leave a debuggable trail.
@@ -797,7 +851,7 @@ async function main() {
       entry.error = { message: err.message, stack: err.stack };
       throw err;
     } finally {
-      writeJsonFile(path.join(runDir, 'run_log.json'), { ...runLog, finishedAt: nowIso() });
+      writeJsonFile(outPath.logs('run_log.json'), { ...runLog, finishedAt: nowIso() });
     }
   };
 
@@ -878,7 +932,7 @@ async function main() {
       if (!res.ok) {
         throw new Error(`generate-inventory failed (${res.status}): ${res.text.slice(0, 500)}`);
       }
-      writeJsonFile(path.join(runDir, 'library.json'), {
+      writeJsonFile(outPath.artifacts('library.json'), {
         ...spec.library,
         generated: res.data,
       });
@@ -905,7 +959,7 @@ async function main() {
       await ensureValidAccessToken();
       const res = await postJson<InventorySchema>(url, accessToken, body);
       if (!res.ok) throw new Error(`generate-inventory failed (${res.status}): ${res.text.slice(0, 500)}`);
-      writeJsonFile(path.join(runDir, 'library.json'), { ...spec.library, generated: res.data });
+      writeJsonFile(outPath.artifacts('library.json'), { ...spec.library, generated: res.data });
       return res.data;
     }
 
@@ -1020,7 +1074,7 @@ async function main() {
       throw new Error(`DAS failed: no passing library candidate after ${attemptCount} attempt(s)`);
     }
 
-    writeJsonFile(path.join(runDir, 'library.json'), {
+    writeJsonFile(outPath.artifacts('library.json'), {
       ...spec.library,
       generated: selected.inv,
     });
@@ -1068,7 +1122,7 @@ async function main() {
     if (!dasEnabled || !dasConfig || !dasDecision || !dasSelection) {
       await ensureValidAccessToken();
       const { results, list } = await generateOnce();
-      writeJsonFile(path.join(runDir, 'blueprints.json'), {
+      writeJsonFile(outPath.artifacts('blueprints.json'), {
         libraryTitle: spec.library.title,
         blueprints: results,
       });
@@ -1094,7 +1148,7 @@ async function main() {
       writeDasLogs();
       await ensureValidAccessToken();
       const { results, list } = await generateOnce();
-      writeJsonFile(path.join(runDir, 'blueprints.json'), { libraryTitle: spec.library.title, blueprints: results });
+      writeJsonFile(outPath.artifacts('blueprints.json'), { libraryTitle: spec.library.title, blueprints: results });
       return list;
     }
 
@@ -1212,7 +1266,7 @@ async function main() {
     }
 
     // Persist the selected set as the canonical artifact.
-    writeJsonFile(path.join(runDir, 'blueprints.json'), {
+    writeJsonFile(outPath.artifacts('blueprints.json'), {
       libraryTitle: spec.library.title,
       blueprints: blueprintSpecs.map((bp, i) => ({ spec: bp, generated: selected!.list[i]! })),
     });
@@ -1222,14 +1276,14 @@ async function main() {
   const reviewPayloads = await step('generate_review_requests', async () => {
     // Stage 0: do not call review endpoint (cost + credits). Produce payloads only.
     const payloads = generatedBlueprints.map((bp) => buildReviewPayload(spec, bp));
-    writeJsonFile(path.join(runDir, 'review_requests.json'), payloads);
+    writeJsonFile(outPath.requests('review_requests.json'), payloads);
     return payloads;
   });
 
   const bannerPayloads = await step('generate_banner_requests', async () => {
     // Stage 0: do not call banner endpoint (would upload to Storage). Produce payloads only.
     const payloads = generatedBlueprints.map((bp, idx) => buildBannerPayload(spec, bp, idx));
-    writeJsonFile(path.join(runDir, 'banner_requests.json'), payloads);
+    writeJsonFile(outPath.requests('banner_requests.json'), payloads);
     return payloads;
   });
 
@@ -1256,7 +1310,7 @@ async function main() {
         results.push({ title: payload.title, review: res.text });
       }
 
-      writeJsonFile(path.join(runDir, 'reviews.json'), results);
+      writeJsonFile(outPath.ai('reviews.json'), results);
       return { count: results.length };
     });
   }
@@ -1313,7 +1367,7 @@ async function main() {
         }
       }
 
-      writeJsonFile(path.join(runDir, 'banners.json'), results);
+      writeJsonFile(outPath.ai('banners.json'), results);
       const okCount = results.filter((r) => r.ok).length;
       const failCount = results.length - okCount;
       return { okCount, failCount, count: results.length };
@@ -1322,7 +1376,9 @@ async function main() {
 
   const validation = await step('validate', async () => {
     const result = validateBlueprints(inventory, generatedBlueprints);
-    writeJsonFile(path.join(runDir, 'validation.json'), result);
+    const validationFile = outPath.artifacts('validation.json');
+    const validationRel = relPath(validationFile);
+    writeJsonFile(validationFile, result);
 
     if (dasEnabled && dasConfig && dasDecision && dasSelection) {
       const nodeId: DasNodeId = 'VAL';
@@ -1341,16 +1397,16 @@ async function main() {
                 ok: result.ok,
                 score: result.ok ? 1 : 0,
                 gates: [gate('crossref', result.ok, result.ok ? 'pass' : 'hard_fail', result.ok ? 1 : 0)],
-                file: 'validation.json',
+                file: validationRel,
               },
             ],
             selectedCandidate: result.ok ? 1 : undefined,
           },
         ],
-        ...(result.ok ? { selected: { attempt: 1, candidate: 1, score: 1, file: 'validation.json' } } : {}),
+        ...(result.ok ? { selected: { attempt: 1, candidate: 1, score: 1, file: validationRel } } : {}),
       };
       dasDecision.nodes[nodeId] = decision;
-      if (result.ok) dasSelection.selected[nodeId] = { attempt: 1, candidate: 1, score: 1, file: 'validation.json' };
+      if (result.ok) dasSelection.selected[nodeId] = { attempt: 1, candidate: 1, score: 1, file: validationRel };
       writeDasLogs();
     }
 
@@ -1548,7 +1604,7 @@ async function main() {
     });
 
     await step('apply_T4_persist_reviews', async () => {
-      const reviewsPath = path.join(runDir, 'reviews.json');
+      const reviewsPath = outPath.ai('reviews.json');
       if (!fs.existsSync(reviewsPath)) return { skipped: true };
       const reviews = readJsonFile<Array<{ title: string; review: string }>>(reviewsPath);
       for (const r of reviews) {
@@ -1560,7 +1616,7 @@ async function main() {
     });
 
     await step('apply_T3_upload_banners', async () => {
-      const bannersPath = path.join(runDir, 'banners.json');
+      const bannersPath = outPath.ai('banners.json');
       if (!fs.existsSync(bannersPath)) return { skipped: true };
       const banners = readJsonFile<
         Array<{ title: string; ok: true; contentType: string; imageBase64: string } | { title: string; ok: false; error: string }>
@@ -1617,7 +1673,7 @@ async function main() {
     });
 
     applyLog.finishedAt = nowIso();
-    writeJsonFile(path.join(runDir, 'apply_log.json'), applyLog);
+    writeJsonFile(outPath.logs('apply_log.json'), applyLog);
 
     // Best-effort rollback artifacts (user runs manually in SQL console if needed).
     const rollbackSql = [
@@ -1632,7 +1688,7 @@ async function main() {
       'COMMIT;',
       '',
     ].join('\n');
-    writeTextFile(path.join(runDir, 'rollback.sql'), rollbackSql);
+    writeTextFile(outPath.logs('rollback.sql'), rollbackSql);
   }
 
   await step('publish_payload', async () => {
@@ -1643,12 +1699,12 @@ async function main() {
       blueprints: generatedBlueprints,
       notes: 'Stage 0 only: no DB writes. Stage 1 will translate this payload into Supabase inserts.',
     };
-    writeJsonFile(path.join(runDir, 'publish_payload.json'), payload);
+    writeJsonFile(outPath.artifacts('publish_payload.json'), payload);
     return { ok: validation.ok };
   });
 
   runLog.finishedAt = nowIso();
-  writeJsonFile(path.join(runDir, 'run_log.json'), runLog);
+  writeJsonFile(outPath.logs('run_log.json'), runLog);
   process.stdout.write(`Stage 0 complete. Output: ${runDir}\n`);
 }
 

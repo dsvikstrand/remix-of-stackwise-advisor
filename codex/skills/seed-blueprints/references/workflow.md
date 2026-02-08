@@ -37,20 +37,21 @@ TMPDIR=/tmp npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts --s
 
 Oracle note:
 - One-shot `ssh oracle-free "..."` commands may not load `nvm`, so you can silently end up on Node 10.
-- Prefer wrapping with a login shell so Node 20 + `npx` are available:
+- Prefer an explicit Node 20 PATH so `npx` + `tsx` work reliably:
 ```bash
-ssh oracle-free 'bash -lc "cd /home/ubuntu/remix-of-stackwise-advisor && node -v && npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts --spec seed/seed_spec_v0.json"'
+ssh oracle-free 'bash -lc "export PATH=/home/ubuntu/.nvm/versions/node/v20.20.0/bin:$PATH; cd /home/ubuntu/remix-of-stackwise-advisor && node -v && npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts --spec seed/seed_spec_v0.json"'
 ```
 
 Outputs:
-- `seed/outputs/<run_id>/run_meta.json` (run context including optional `asp`)
-- `seed/outputs/<run_id>/library.json`
-- `seed/outputs/<run_id>/blueprints.json`
-- `seed/outputs/<run_id>/review_requests.json` (payloads only)
-- `seed/outputs/<run_id>/banner_requests.json` (payloads only)
-- `seed/outputs/<run_id>/validation.json`
-- `seed/outputs/<run_id>/publish_payload.json` (payload only, no writes)
-- `seed/outputs/<run_id>/run_log.json`
+- `seed/outputs/<run_id>/manifest.json` (paths + dirs map)
+- `seed/outputs/<run_id>/logs/run_meta.json` (run context including optional `asp`)
+- `seed/outputs/<run_id>/logs/run_log.json`
+- `seed/outputs/<run_id>/artifacts/library.json`
+- `seed/outputs/<run_id>/artifacts/blueprints.json`
+- `seed/outputs/<run_id>/requests/review_requests.json` (payloads only)
+- `seed/outputs/<run_id>/requests/banner_requests.json` (payloads only)
+- `seed/outputs/<run_id>/artifacts/validation.json`
+- `seed/outputs/<run_id>/artifacts/publish_payload.json` (payload only, no writes)
 
 ## Run (Stage 0.5: Execute Review + Banner Dry Run)
 
@@ -77,8 +78,8 @@ npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts \
 ```
 
 Additional outputs:
-- `seed/outputs/<run_id>/reviews.json`
-- `seed/outputs/<run_id>/banners.json`
+- `seed/outputs/<run_id>/ai/reviews.json`
+- `seed/outputs/<run_id>/ai/banners.json`
 
 ## Run (Stage 1: Apply Mode - Writes To Supabase)
 
@@ -116,8 +117,8 @@ npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts \
 ```
 
 Stage 1 outputs (additional):
-- `seed/outputs/<run_id>/apply_log.json`
-- `seed/outputs/<run_id>/rollback.sql`
+- `seed/outputs/<run_id>/logs/apply_log.json`
+- `seed/outputs/<run_id>/logs/rollback.sql`
 
 Notes:
 - Stage 1 has been exercised successfully with `--limit-blueprints 1` (happy path).
@@ -159,8 +160,8 @@ Config:
 
 New artifacts (when DAS is enabled):
 - `seed/outputs/<run_id>/candidates/<node_id>/attempt-01.json` ...
-- `seed/outputs/<run_id>/decision_log.json`
-- `seed/outputs/<run_id>/selection.json`
+- `seed/outputs/<run_id>/logs/decision_log.json`
+- `seed/outputs/<run_id>/logs/selection.json`
 
 Command (Stage 0 + DAS):
 ```bash

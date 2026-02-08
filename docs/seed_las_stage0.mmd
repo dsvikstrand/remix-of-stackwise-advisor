@@ -47,7 +47,7 @@ flowchart TD
   LIB_EVAL -->|struct/relevance fail and attempt lt max| LIB_RETRY["LIB_RETRY tighten prompt + retry (maxAttempts=2) NOT_TESTED"]
   LIB_EVAL -->|safety/pii fail| ABORT["ABORT hard fail run (seeding mode) NOT_TESTED"]
   LIB_RETRY --> LIB_GEN
-  LIB_SEL --> LIB_OUT["LIB_OUT Write library.json TESTED_OK"]
+  LIB_SEL --> LIB_OUT["LIB_OUT Write artifacts/library.json TESTED_OK"]
 
   N_DAS{{NOTE DAS gates run only when DAS is enabled}} --> LIB_EVAL
   N_CFG{{NOTE per-node maxAttempts and kCandidates live in DAS_CFG}} --> DAS_CFG
@@ -62,29 +62,29 @@ flowchart TD
   BP_EVAL -->|struct/relevance fail and attempt lt max| BP_RETRY["BP_RETRY tighten prompt + retry (maxAttempts=2) NOT_TESTED"]
   BP_EVAL -->|safety/pii fail| ABORT
   BP_RETRY --> BP_GEN
-  BP_SEL --> BP_OUT["BP_OUT Write blueprints.json TESTED_OK"]
+  BP_SEL --> BP_OUT["BP_OUT Write artifacts/blueprints.json TESTED_OK"]
 
   %% Request payloads (no network)
   BP_OUT --> REQ_REVIEW["REQ_REVIEW build review_requests (no network) TESTED_OK"]
-  REQ_REVIEW --> OUT_REVIEW_REQ["OUT_REVIEW_REQ Write review_requests.json TESTED_OK"]
+  REQ_REVIEW --> OUT_REVIEW_REQ["OUT_REVIEW_REQ Write requests/review_requests.json TESTED_OK"]
   OUT_REVIEW_REQ --> REQ_BANNER["REQ_BANNER build banner_requests (no network) TESTED_OK"]
-  REQ_BANNER --> OUT_BANNER_REQ["OUT_BANNER_REQ Write banner_requests.json TESTED_OK"]
+  REQ_BANNER --> OUT_BANNER_REQ["OUT_BANNER_REQ Write requests/banner_requests.json TESTED_OK"]
 
   %% Stage 0.5 (optional network)
   OUT_BANNER_REQ -.->|--do-review| AI_REVIEW["AI_REVIEW execute_review POST /api/analyze-blueprint TESTED_OK"]
-  AI_REVIEW --> OUT_REVIEWS["OUT_REVIEWS Write reviews.json TESTED_OK"]
+  AI_REVIEW --> OUT_REVIEWS["OUT_REVIEWS Write ai/reviews.json TESTED_OK"]
   OUT_REVIEWS -.->|--do-banner| AI_BANNER["AI_BANNER execute_banner POST /api/generate-banner dryRun TESTED_OK"]
-  AI_BANNER --> OUT_BANNERS["OUT_BANNERS Write banners.json TESTED_OK"]
+  AI_BANNER --> OUT_BANNERS["OUT_BANNERS Write ai/banners.json TESTED_OK"]
   N_SSE{{NOTE analyze-blueprint is SSE; runner stitches to text}} --> AI_REVIEW
   N_DRY{{NOTE generate-banner dryRun returns base64; no Storage write}} --> AI_BANNER
 
   %% Validate + publish payload (no writes)
   OUT_BANNER_REQ --> VAL["VAL validate category+item references TESTED_OK"]
   OUT_BANNERS -.-> VAL
-  VAL --> OUT_VAL["OUT_VAL Write validation.json TESTED_OK"]
+  VAL --> OUT_VAL["OUT_VAL Write artifacts/validation.json TESTED_OK"]
   OUT_VAL --> PAYLOAD["PAYLOAD publish_payload (no writes) TESTED_OK"]
-  PAYLOAD --> OUT_PAYLOAD["OUT_PAYLOAD Write publish_payload.json TESTED_OK"]
-  OUT_PAYLOAD --> RUNLOG["RUNLOG Append run_log.json timings+status TESTED_OK"]
+  PAYLOAD --> OUT_PAYLOAD["OUT_PAYLOAD Write artifacts/publish_payload.json TESTED_OK"]
+  OUT_PAYLOAD --> RUNLOG["RUNLOG Append logs/run_log.json timings+status TESTED_OK"]
   RUNLOG --> DONE["DONE artifacts complete TESTED_OK"]
 
   %% Stage 1 apply mode (optional writes)
@@ -94,7 +94,7 @@ flowchart TD
   APPLY_BP --> APPLY_BANNER["APPLY_BANNER Upload banner via upload-banner edge function TESTED_OK"]
   APPLY_BANNER --> APPLY_REVIEW["APPLY_REVIEW Persist review text to blueprint row TESTED_OK"]
   APPLY_REVIEW --> APPLY_PUB["APPLY_PUB Publish public blueprint finalize TESTED_OK"]
-  N_APPLY{{NOTE apply writes apply_log.json + rollback.sql}} --> APPLY_START
+  N_APPLY{{NOTE apply writes logs/apply_log.json + logs/rollback.sql}} --> APPLY_START
   N_APPLY2{{NOTE publish sets is_public true on created rows}} --> APPLY_PUB
 
   %% TODO (future but expected in full DAS)
