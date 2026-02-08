@@ -1664,6 +1664,14 @@ async function main() {
     });
   }
 
+  // Compose-only mode: validate CONTROL_PACK/PROMPT_PACK generation without backend calls.
+  // This is useful when bootstrapping auth or debugging control pack overrides.
+  if (!backendCalls) {
+    writeJsonFile(outPath.logs('run_log.json'), { ...runLog, finishedAt: nowIso() });
+    process.stdout.write(`Stage 0 complete (compose-only). Output: ${runDir}\n`);
+    return;
+  }
+
   // Auth: prefer explicit access token; optionally refresh via refresh token and persist rotation in authStorePath.
   const supabaseUrlForAuth =
     String(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
@@ -1722,7 +1730,7 @@ async function main() {
   }
 
   const inventory = await step('generate_library', async () => {
-    if (!backendCalls) throw new Error('Backend calls disabled (no-backend not implemented in Stage 0)');
+    if (!backendCalls) throw new Error('Backend calls disabled. Use --compose-controls/--compose-prompts for compose-only runs.');
     const url = `${agenticBaseUrl}/api/generate-inventory`;
     const customInstructions = joinPromptParts([specRun.library.notes || '', personaPromptBlock]);
     const body = {
