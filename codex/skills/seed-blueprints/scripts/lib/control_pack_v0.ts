@@ -3,7 +3,17 @@ import { type PromptPackV0 } from './prompt_pack_v0';
 
 export type ControlPackV0RunType = 'seed' | 'library' | 'blueprint';
 
-export type ControlPackV0Domain = 'skincare' | 'fitness' | 'nutrition' | 'productivity' | 'general';
+export type ControlPackV0Domain =
+  | 'skincare'
+  | 'fitness'
+  | 'nutrition'
+  | 'productivity'
+  | 'sleep'
+  | 'mindfulness'
+  | 'supplements'
+  | 'cooking'
+  | 'general'
+  | 'custom';
 export type ControlPackV0Audience = 'beginner' | 'intermediate' | 'advanced';
 export type ControlPackV0Style = 'friendly' | 'practical' | 'coach' | 'clinical';
 export type ControlPackV0Strictness = 'low' | 'medium' | 'high';
@@ -13,6 +23,7 @@ export type ControlPackV0Caution = 'conservative' | 'balanced' | 'aggressive';
 
 export type ControlPackV0LibraryControls = {
   domain: ControlPackV0Domain;
+  domain_custom?: string;
   audience: ControlPackV0Audience;
   style: ControlPackV0Style;
   strictness: ControlPackV0Strictness;
@@ -21,6 +32,7 @@ export type ControlPackV0LibraryControls = {
 
 export type ControlPackV0BlueprintControls = {
   focus: string;
+  focus_custom?: string;
   length: ControlPackV0Length;
   strictness: ControlPackV0Strictness;
   variety: ControlPackV0Variety;
@@ -68,7 +80,11 @@ function inferDomain(p: PersonaV0 | null, goal: string): ControlPackV0Domain {
     goal || ''
   ).toLowerCase()}`;
   if (t.includes('skincare')) return 'skincare';
+  if (t.includes('sleep')) return 'sleep';
+  if (t.includes('mindfulness') || t.includes('meditation') || t.includes('breath')) return 'mindfulness';
   if (t.includes('nutrition') || t.includes('diet') || t.includes('supplement')) return 'nutrition';
+  if (t.includes('supplement') || t.includes('nootropic')) return 'supplements';
+  if (t.includes('cooking') || t.includes('recipe') || t.includes('meal')) return 'cooking';
   if (t.includes('fitness') || t.includes('workout') || t.includes('strength')) return 'fitness';
   if (t.includes('productivity') || t.includes('planning') || t.includes('focus')) return 'productivity';
   return 'general';
@@ -103,6 +119,10 @@ function focusTemplates(domain: ControlPackV0Domain): string[] {
   if (domain === 'nutrition') return ['balanced-basics', 'protein-focus', 'meal-prep', 'hydration', 'gentle-cut'];
   if (domain === 'fitness') return ['strength-basics', 'hypertrophy', 'conditioning', 'mobility', 'recovery-day'];
   if (domain === 'productivity') return ['morning-focus', 'daily-plan', 'deep-work', 'evening-reset', 'weekly-review'];
+  if (domain === 'sleep') return ['evening-reset', 'weekly-reset', 'starter', 'recovery', 'consistency'];
+  if (domain === 'mindfulness') return ['starter', 'morning-focus', 'evening-reset', 'weekly-reset', 'consistency'];
+  if (domain === 'supplements') return ['balanced-basics', 'protein-focus', 'hydration', 'starter', 'consistency'];
+  if (domain === 'cooking') return ['meal-prep', 'balanced-basics', 'starter', 'weekly', 'consistency'];
   return ['starter', 'consistency', 'weekly', 'recovery', 'upgrade'];
 }
 
@@ -216,6 +236,8 @@ function focusToTitle(focus: string) {
 export function renderControlPackToPromptPackV0(pack: ControlPackV0, persona: PersonaV0 | null): PromptPackV0 {
   const goal = String(pack.goal || '').trim() || 'Seed';
   const domain = pack.library?.controls?.domain || inferDomain(persona, goal);
+  const domainCustom =
+    domain === 'custom' ? String(pack.library?.controls?.domain_custom || '').trim() : '';
   const audience = pack.library?.controls?.audience || pickAudience(persona);
   const style = pack.library?.controls?.style || pickStyle(persona);
 
@@ -233,6 +255,7 @@ export function renderControlPackToPromptPackV0(pack: ControlPackV0, persona: Pe
   const notesParts: string[] = [];
   notesParts.push(`Mode: controls_v0`);
   notesParts.push(`Domain: ${domain}`);
+  if (domain === 'custom' && domainCustom) notesParts.push(`DomainCustom: ${domainCustom}`);
   notesParts.push(`Audience: ${audience}`);
   notesParts.push(`Style: ${style}`);
   if (pack.library?.controls?.strictness) notesParts.push(`Strictness: ${pack.library.controls.strictness}`);
@@ -242,7 +265,7 @@ export function renderControlPackToPromptPackV0(pack: ControlPackV0, persona: Pe
   if (personaMustAvoid.length) notesParts.push(`Avoid: ${personaMustAvoid.join('; ')}`);
 
   const library = {
-    topic: goal,
+    topic: domain === 'custom' && domainCustom ? `${domainCustom} routine` : goal,
     title: libraryTitle,
     description: `A practical library of items to support: ${goal}.`,
     notes: notesParts.filter(Boolean).join(' '),
@@ -251,6 +274,8 @@ export function renderControlPackToPromptPackV0(pack: ControlPackV0, persona: Pe
 
   const blueprints = (pack.blueprints || []).map((bp) => {
     const focus = String(bp?.controls?.focus || 'starter').trim() || 'starter';
+    const focusCustom =
+      focus === 'custom' ? String(bp?.controls?.focus_custom || '').trim() : '';
     const bpTitle = (bp?.name || '').trim() || focusToTitle(focus);
     const bpTags = uniq([...(libTags || []), ...(((bp?.tags || []) as string[]) || []), focus])
       .map(normalizeSlug)
@@ -259,14 +284,16 @@ export function renderControlPackToPromptPackV0(pack: ControlPackV0, persona: Pe
     const bpNotesParts: string[] = [];
     bpNotesParts.push(`Mode: controls_v0`);
     bpNotesParts.push(`Focus: ${focus}`);
+    if (focus === 'custom' && focusCustom) bpNotesParts.push(`FocusCustom: ${focusCustom}`);
     if (bp?.controls?.length) bpNotesParts.push(`Length: ${bp.controls.length}`);
     if (bp?.controls?.strictness) bpNotesParts.push(`Strictness: ${bp.controls.strictness}`);
     if (bp?.controls?.variety) bpNotesParts.push(`Variety: ${bp.controls.variety}`);
     if (bp?.controls?.caution) bpNotesParts.push(`Caution: ${bp.controls.caution}`);
     if (bp?.notes) bpNotesParts.push(`Notes: ${String(bp.notes).trim()}`);
+    const focusForText = focus === 'custom' && focusCustom ? focusCustom : focus;
     return {
       title: bpTitle,
-      description: `A ${focus.replace(/-/g, ' ')} routine aligned with ${goal}.`,
+      description: `A ${focusForText.replace(/-/g, ' ')} routine aligned with ${goal}.`,
       notes: bpNotesParts.filter(Boolean).join(' '),
       tags: bpTags,
     };
@@ -281,4 +308,3 @@ export function renderControlPackToPromptPackV0(pack: ControlPackV0, persona: Pe
     blueprints,
   };
 }
-
