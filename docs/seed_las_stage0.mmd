@@ -32,8 +32,8 @@ flowchart TD
   %% Inputs + runner
   IN_SPEC["IN_SPEC seed/seed_spec_v0.json (Seed Spec) TESTED_OK"] --> IN_RUN["IN_RUN seed_stage0.ts (parse args + validate spec) TESTED_OK"]
   IN_RUN --> OUT_DIR["OUT_DIR Create run folder seed/outputs/RUN_ID/ TESTED_OK"]
-  IN_RUN -.-> DAS_CFG["DAS_CFG seed/das_config_v1.json (DAS policy) NOT_TESTED"]
-  IN_RUN -.-> PERS_SCHEMA["PERS_SCHEMA docs/persona_schema.md (persona contract) TODO"]
+  IN_RUN -.-> DAS_CFG["DAS_CFG seed/das_config_v1.json (DAS policy) TESTED_OK"]
+  IN_RUN -.-> PERS_SCHEMA["PERS_SCHEMA docs/persona_schema.md (persona contract) TESTED_OK"]
 
   %% Auth
   OUT_DIR --> AUTH_READ["AUTH_READ Load auth store + tokens (refresh supported) TESTED_OK"]
@@ -42,17 +42,19 @@ flowchart TD
   N_OUT{{NOTE seed outputs are artifacts; do not commit seed/outputs}} --> OUT_DIR
 
   %% Persona contract (planned)
-  PERS_SCHEMA --> PERS_PROFILE["PERS_PROFILE personas/v0/PERSONA_ID.json (persona profile) TODO"]
+  PERS_SCHEMA --> PERS_PROFILE["PERS_PROFILE personas/v0/PERSONA_ID.json (persona profile) TESTED_OK"]
+  PERS_PROFILE --> PERS_LOG["PERS_LOG Write logs/persona_log.json (applied prompt block) TESTED_OK"]
   PERS_PROFILE -.-> AUTH_READ
   N_PERS{{NOTE persona is repo global, used by seeding and future agents}} --> PERS_SCHEMA
+  N_PERS2{{NOTE persona prompt is appended into LIB_GEN customInstructions and BP_GEN notes}} --> PERS_LOG
 
   %% Library generation (candidate -> eval -> select)
   AUTH_READ --> LIB_GEN["LIB_GEN n1 generate_library POST /api/generate-inventory TESTED_OK"]
   DAS_CFG -.-> LIB_EVAL
-  LIB_GEN --> LIB_CAND["LIB_CAND Write candidates/LIB_GEN/attempt-xx-cand-yy.json NOT_TESTED"]
-  LIB_CAND --> LIB_EVAL{"LIB_EVAL eval_structural + eval_bounds TODO"}
-  LIB_EVAL -->|pass| LIB_SEL["LIB_SEL score + select best candidate NOT_TESTED"]
-  LIB_EVAL -->|struct/bounds fail and attempt lt max| LIB_RETRY["LIB_RETRY tighten prompt + retry (maxAttempts=2) NOT_TESTED"]
+  LIB_GEN --> LIB_CAND["LIB_CAND Write candidates/LIB_GEN/attempt-xx-cand-yy.json TESTED_OK"]
+  LIB_CAND --> LIB_EVAL{"LIB_EVAL eval_structural + eval_bounds TESTED_OK"}
+  LIB_EVAL -->|pass| LIB_SEL["LIB_SEL score + select best candidate TESTED_OK"]
+  LIB_EVAL -->|struct/bounds fail and attempt lt max| LIB_RETRY["LIB_RETRY tighten prompt + retry (maxAttempts=2) TESTED_OK"]
   LIB_EVAL -->|safety/pii fail| ABORT["ABORT hard fail run (seeding mode) NOT_TESTED"]
   LIB_RETRY --> LIB_GEN
   LIB_SEL --> LIB_OUT["LIB_OUT Write artifacts/library.json TESTED_OK"]
@@ -64,10 +66,10 @@ flowchart TD
   %% Blueprint generation (per-variant candidates -> eval -> select)
   LIB_OUT --> BP_GEN["BP_GEN n2 generate_blueprints POST /api/generate-blueprint TESTED_OK"]
   DAS_CFG -.-> BP_EVAL
-  BP_GEN --> BP_CAND["BP_CAND Write candidates/BP_GEN/attempt-xx-cand-yy.json NOT_TESTED"]
-  BP_CAND --> BP_EVAL{"BP_EVAL eval_structural + eval_bounds TODO"}
-  BP_EVAL -->|pass| BP_SEL["BP_SEL score + select best candidate NOT_TESTED"]
-  BP_EVAL -->|struct/bounds fail and attempt lt max| BP_RETRY["BP_RETRY tighten prompt + retry (maxAttempts=2) NOT_TESTED"]
+  BP_GEN --> BP_CAND["BP_CAND Write candidates/BP_GEN/attempt-xx-cand-yy.json TESTED_OK"]
+  BP_CAND --> BP_EVAL{"BP_EVAL eval_structural + eval_bounds TESTED_OK"}
+  BP_EVAL -->|pass| BP_SEL["BP_SEL score + select best candidate TESTED_OK"]
+  BP_EVAL -->|struct/bounds fail and attempt lt max| BP_RETRY["BP_RETRY tighten prompt + retry (maxAttempts=2) TESTED_OK"]
   BP_EVAL -->|safety/pii fail| ABORT
   BP_RETRY --> BP_GEN
   BP_SEL --> BP_OUT["BP_OUT Write artifacts/blueprints.json TESTED_OK"]
@@ -119,12 +121,12 @@ flowchart TD
   class AI_REVIEW,OUT_REVIEWS,AI_BANNER,OUT_BANNERS stage_ai;
   class VAL,OUT_VAL,PAYLOAD,OUT_PAYLOAD,RUNLOG,DONE stage_inputs;
   class APPLY_START,APPLY_INV,APPLY_BP,APPLY_BANNER,APPLY_REVIEW,APPLY_PUB stage_apply;
-  class PERS_SCHEMA,PERS_PROFILE stage_pers;
+  class PERS_SCHEMA,PERS_PROFILE,PERS_LOG stage_pers;
   class LIB_CAND,LIB_EVAL,LIB_SEL,LIB_RETRY,BP_CAND,BP_EVAL,BP_SEL,BP_RETRY,ABORT das_gate;
   class DAS_CFG das_cfg;
   class N_AUTH,N_AUTH2,N_OUT,N_PERS,N_DAS,N_DAS2,N_SSE,N_DRY,N_APPLY,N_APPLY2 note;
   class TODO_ASP_EVAL,TODO_GRADER,TODO_COST todo;
 
   %% Tested status styling
-  class IN_SPEC,IN_RUN,OUT_DIR,AUTH_READ,LIB_GEN,LIB_OUT,BP_GEN,BP_OUT,REQ_REVIEW,OUT_REVIEW_REQ,REQ_BANNER,OUT_BANNER_REQ,AI_REVIEW,OUT_REVIEWS,AI_BANNER,OUT_BANNERS,VAL,OUT_VAL,PAYLOAD,OUT_PAYLOAD,RUNLOG,DONE,APPLY_START,APPLY_INV,APPLY_BP,APPLY_BANNER,APPLY_REVIEW,APPLY_PUB done;
-  class LIB_CAND,LIB_EVAL,LIB_SEL,LIB_RETRY,BP_CAND,BP_EVAL,BP_SEL,BP_RETRY,ABORT,DAS_CFG,TODO_ASP_EVAL,TODO_GRADER,TODO_COST todo;
+  class IN_SPEC,IN_RUN,OUT_DIR,PERS_SCHEMA,PERS_PROFILE,PERS_LOG,AUTH_READ,DAS_CFG,LIB_GEN,LIB_CAND,LIB_EVAL,LIB_SEL,LIB_RETRY,LIB_OUT,BP_GEN,BP_CAND,BP_EVAL,BP_SEL,BP_RETRY,BP_OUT,REQ_REVIEW,OUT_REVIEW_REQ,REQ_BANNER,OUT_BANNER_REQ,AI_REVIEW,OUT_REVIEWS,AI_BANNER,OUT_BANNERS,VAL,OUT_VAL,PAYLOAD,OUT_PAYLOAD,RUNLOG,DONE,APPLY_START,APPLY_INV,APPLY_BP,APPLY_BANNER,APPLY_REVIEW,APPLY_PUB done;
+  class ABORT,TODO_ASP_EVAL,TODO_GRADER,TODO_COST todo;

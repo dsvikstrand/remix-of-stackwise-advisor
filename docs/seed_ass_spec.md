@@ -37,7 +37,7 @@ Stable per-gate contract:
 
 Initial focus (B1): deterministic gates only (`structural`, `bounds`, `crossref`).
 
-## Personas (Repo-Global, Planned)
+## Personas (Repo-Global, Current)
 Personas are not "seed-only". They are a reusable contract that can be used by:
 - Seeding runs (conditioning + eval target)
 - Future interactive agent runs (agents that act like users)
@@ -45,12 +45,13 @@ Personas are not "seed-only". They are a reusable contract that can be used by:
 Schema doc:
 - `docs/persona_schema.md`
 
-Planned storage:
+Storage:
 - `personas/v0/<persona_id>.json`
 
-Runner behavior (planned):
-- Load persona by id from the seed spec.
-- Compute and record `persona_hash` in `logs/run_meta.json` for reproducibility.
+Runner behavior (current):
+- If the seed spec includes `asp.id`, load `personas/v0/<asp.id>.json`.
+- Compute and record `persona_hash` + `prompt_hash` in `logs/run_meta.json` for reproducibility.
+- Write the applied prompt block to `logs/persona_log.json` (debugging).
 
 ## Stage 0 (LAS) – Artifacts Only (No Writes)
 Stage 0 calls the agentic backend for generation, but does **not** write to Supabase.
@@ -59,6 +60,7 @@ Outputs under `seed/outputs/<run_id>/` (layout v2):
 - `manifest.json` (paths + dirs map)
 - `logs/run_meta.json` (run context, including optional `asp`)
 - `logs/run_log.json` (timings + status)
+- `logs/persona_log.json` (optional; applied persona prompt block)
 - `artifacts/library.json` (generated categories + items)
 - `artifacts/blueprints.json` (generated blueprint drafts)
 - `requests/review_requests.json` (payloads only; no network)

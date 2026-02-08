@@ -1,0 +1,20 @@
+{
+  "run_id": "persona-smoke",
+  "asp": { "id": "skincare_diet_female_v0" },
+  "library": {
+    "topic": "Simple home skincare routine for beginners",
+    "title": "Home Skincare Routine Library",
+    "description": "A practical library of items for a beginner friendly skincare routine at home.",
+    "notes": "Keep it gentle and beginner friendly. Avoid medical claims.",
+    "tags": ["skincare", "hydration", "sensitive-skin"]
+  },
+  "blueprints": [
+    {
+      "title": "10-Min Skincare Starter",
+      "description": "A simple AM and PM routine that fits a busy schedule.",
+      "notes": "Prefer fragrance-free options. Keep steps short and safe.",
+      "tags": ["skincare", "beginner", "routine"]
+    }
+  ]
+}
+

@@ -18,6 +18,38 @@ type AspProfile = {
   must_avoid?: string[];
 };
 
+type PersonaV0 = {
+  version: 0;
+  id: string;
+  display_name: string;
+  bio: string;
+  interests?: {
+    topics?: string[];
+    tags_prefer?: string[];
+    tags_avoid?: string[];
+    audience_level?: 'beginner' | 'intermediate' | 'advanced';
+  };
+  style?: {
+    tone?: 'friendly' | 'practical' | 'coach' | 'clinical';
+    verbosity?: 'short' | 'medium' | 'long';
+    formatting?: string[];
+  };
+  constraints?: {
+    must_include?: string[];
+    must_avoid?: string[];
+    time_budget_minutes?: number | null;
+    equipment_level?: 'none' | 'minimal' | 'standard' | null;
+  };
+  safety?: {
+    domain?: 'general' | 'health' | 'fitness' | 'nutrition' | 'skincare';
+    medical_caution_level?: 'low' | 'medium' | 'high';
+    forbidden_claims?: string[];
+    pii_handling?: 'avoid' | 'allow_non_sensitive_only';
+  };
+  agent_policy?: Record<string, unknown>;
+  disclosure?: Record<string, unknown>;
+};
+
 type SeedSpec = {
   run_id: string;
   asp?: AspProfile;
@@ -237,6 +269,7 @@ type RunLog = {
     dasConfigHash?: string;
     limitBlueprints?: number;
     aspId?: string;
+    personaHash?: string;
     runContextHash?: string;
   };
   steps: Array<{
@@ -257,7 +290,10 @@ function sha256Hex(input: string) {
   return crypto.createHash('sha256').update(input).digest('hex');
 }
 
-function buildRunContextHash(spec: SeedSpec) {
+function buildRunContextHash(
+  spec: SeedSpec,
+  personaMeta?: { id: string; persona_hash: string; prompt_hash: string } | null
+) {
   const payload = {
     asp: spec.asp
       ? {
@@ -266,6 +302,13 @@ function buildRunContextHash(spec: SeedSpec) {
           tone: String(spec.asp.tone || '').trim(),
           must_include: (spec.asp.must_include || []).map((s) => String(s || '').trim()).filter(Boolean),
           must_avoid: (spec.asp.must_avoid || []).map((s) => String(s || '').trim()).filter(Boolean),
+        }
+      : null,
+    persona: personaMeta
+      ? {
+          id: String(personaMeta.id || '').trim(),
+          persona_hash: String(personaMeta.persona_hash || '').trim(),
+          prompt_hash: String(personaMeta.prompt_hash || '').trim(),
         }
       : null,
     library: {
@@ -324,6 +367,77 @@ function readJsonFile<T>(filePath: string): T {
 
 function readRawFile(filePath: string) {
   return fs.readFileSync(filePath, 'utf-8');
+}
+
+function normalizeLf(text: string) {
+  return text.replace(/\r\n/g, '\n');
+}
+
+function isSafeId(id: string) {
+  return /^[a-z0-9_-]+$/i.test(id);
+}
+
+function validatePersonaV0(persona: unknown, expectedId: string): string[] {
+  const errors: string[] = [];
+  const p = persona as any;
+  if (!p || typeof p !== 'object') return ['persona must be a JSON object'];
+  if (Number(p.version) !== 0) errors.push('persona.version must be 0');
+  if (!String(p.id || '').trim()) errors.push('persona.id is required');
+  if (String(p.id || '').trim() !== expectedId) errors.push(`persona.id must match expected id: ${expectedId}`);
+  if (!String(p.display_name || '').trim()) errors.push('persona.display_name is required');
+  if (!String(p.bio || '').trim()) errors.push('persona.bio is required');
+  return errors;
+}
+
+function loadPersonaV0(personaId: string): { persona: PersonaV0; personaHash: string; personaPath: string } {
+  const id = String(personaId || '').trim();
+  if (!id) throw new Error('Missing persona id');
+  if (!isSafeId(id)) throw new Error(`Unsafe persona id: ${id}`);
+  const personaPath = path.join(process.cwd(), 'personas', 'v0', `${id}.json`);
+  if (!fs.existsSync(personaPath)) throw new Error(`Persona file not found: ${personaPath}`);
+  const raw = readRawFile(personaPath);
+  const normalized = normalizeLf(raw);
+  const personaHash = sha256Hex(normalized);
+  const parsed = JSON.parse(raw) as PersonaV0;
+  const errs = validatePersonaV0(parsed, id);
+  if (errs.length) throw new Error(`Invalid persona (${id}):\n- ${errs.join('\n- ')}`);
+  return { persona: parsed, personaHash, personaPath };
+}
+
+function joinPromptParts(parts: string[]) {
+  return parts.map((s) => String(s || '').trim()).filter(Boolean).join('\n\n');
+}
+
+function personaToPromptBlock(p: PersonaV0): string {
+  const topics = uniqStrings((p.interests?.topics || []).map(String));
+  const preferTags = uniqStrings((p.interests?.tags_prefer || []).map(String));
+  const avoidTags = uniqStrings((p.interests?.tags_avoid || []).map(String));
+  const mustInclude = uniqStrings((p.constraints?.must_include || []).map(String));
+  const mustAvoid = uniqStrings((p.constraints?.must_avoid || []).map(String));
+  const forbidden = uniqStrings((p.safety?.forbidden_claims || []).map(String));
+
+  const lines: string[] = [];
+  lines.push('Persona profile (apply to generation):');
+  lines.push(`- id: ${p.id}`);
+  lines.push(`- display_name: ${p.display_name}`);
+  lines.push(`- bio: ${String(p.bio || '').trim()}`);
+  if (p.interests?.audience_level) lines.push(`- audience_level: ${p.interests.audience_level}`);
+  if (topics.length) lines.push(`- topics: ${topics.join(', ')}`);
+  if (preferTags.length) lines.push(`- prefer_tags: ${preferTags.join(', ')}`);
+  if (avoidTags.length) lines.push(`- avoid_tags: ${avoidTags.join(', ')}`);
+  if (p.style?.tone) lines.push(`- tone: ${p.style.tone}`);
+  if (p.style?.verbosity) lines.push(`- verbosity: ${p.style.verbosity}`);
+  if (mustInclude.length) lines.push(`- must_include: ${mustInclude.join('; ')}`);
+  if (mustAvoid.length) lines.push(`- must_avoid: ${mustAvoid.join('; ')}`);
+  if (p.constraints?.time_budget_minutes !== undefined && p.constraints.time_budget_minutes !== null) {
+    lines.push(`- time_budget_minutes: ${Number(p.constraints.time_budget_minutes)}`);
+  }
+  if (p.constraints?.equipment_level) lines.push(`- equipment_level: ${p.constraints.equipment_level}`);
+  if (p.safety?.domain) lines.push(`- safety_domain: ${p.safety.domain}`);
+  if (p.safety?.medical_caution_level) lines.push(`- medical_caution_level: ${p.safety.medical_caution_level}`);
+  if (forbidden.length) lines.push(`- forbidden_claims: ${forbidden.join(', ')}`);
+  lines.push('- avoid medical advice and guaranteed claims');
+  return lines.join('\n');
 }
 
 function normalizePolicy(p: DasPolicy | undefined): Required<Pick<DasPolicy, 'enabled' | 'kCandidates' | 'maxAttempts' | 'eval' | 'onHardFail'>> {
@@ -761,6 +875,21 @@ async function main() {
   const specErrors = validateSeedSpec(spec);
   if (specErrors.length) die(`Invalid spec:\n- ${specErrors.join('\n- ')}`);
 
+  const aspId = spec.asp?.id ? String(spec.asp.id).trim() : '';
+  let persona: PersonaV0 | null = null;
+  let personaHash = '';
+  let personaPromptBlock = '';
+  let personaPromptHash = '';
+  let personaPathRel = '';
+  if (aspId) {
+    const loaded = loadPersonaV0(aspId);
+    persona = loaded.persona;
+    personaHash = loaded.personaHash;
+    personaPromptBlock = personaToPromptBlock(loaded.persona);
+    personaPromptHash = sha256Hex(normalizeLf(personaPromptBlock));
+    personaPathRel = path.relative(process.cwd(), loaded.personaPath).replace(/\\/g, '/');
+  }
+
   const runId = sanitizeRunId(String(args.runId || spec.run_id || 'run')) || crypto.randomUUID();
   const runDir = path.join(outBase, runId);
   ensureDir(runDir);
@@ -785,8 +914,10 @@ async function main() {
   } as const;
   const relPath = (abs: string) => path.relative(runDir, abs).replace(/\\/g, '/');
 
-  const aspId = spec.asp?.id ? String(spec.asp.id).trim() : '';
-  const runContextHash = buildRunContextHash(spec);
+  const runContextHash = buildRunContextHash(
+    spec,
+    persona ? { id: aspId, persona_hash: personaHash, prompt_hash: personaPromptHash } : null
+  );
   let dasConfig: DasConfig | null = null;
   let dasConfigHash = '';
   if (dasEnabled) {
@@ -817,6 +948,7 @@ async function main() {
     paths: {
       runMeta: 'logs/run_meta.json',
       runLog: 'logs/run_log.json',
+      personaLog: 'logs/persona_log.json',
       decisionLog: 'logs/decision_log.json',
       selection: 'logs/selection.json',
       applyLog: 'logs/apply_log.json',
@@ -838,6 +970,15 @@ async function main() {
     layoutVersion: outputLayoutVersion,
     specPath,
     asp: spec.asp || null,
+    persona: persona
+      ? {
+          id: aspId,
+          schema_version: 0,
+          persona_path: personaPathRel,
+          persona_hash: personaHash,
+          prompt_hash: personaPromptHash,
+        }
+      : null,
     runContextHash,
     das: dasEnabled
       ? {
@@ -847,6 +988,18 @@ async function main() {
         }
       : { enabled: false },
   });
+
+  if (persona) {
+    writeJsonFile(outPath.logs('persona_log.json'), {
+      version: 1,
+      createdAt: nowIso(),
+      persona_id: aspId,
+      persona_path: personaPathRel,
+      persona_hash: personaHash,
+      prompt_hash: personaPromptHash,
+      prompt_block: personaPromptBlock,
+    });
+  }
 
   const yes = String(args.yes || '').trim();
   const applyStage1 = Boolean(args.apply);
@@ -865,6 +1018,7 @@ async function main() {
       limitBlueprints,
       ...(dasEnabled ? { dasEnabled: true, dasConfigPath, dasConfigHash } : {}),
       ...(aspId ? { aspId } : {}),
+      ...(personaHash ? { personaHash } : {}),
       runContextHash,
     },
     steps: [],
@@ -977,10 +1131,11 @@ async function main() {
   const inventory = await step('generate_library', async () => {
     if (!backendCalls) throw new Error('Backend calls disabled (no-backend not implemented in Stage 0)');
     const url = `${agenticBaseUrl}/api/generate-inventory`;
+    const customInstructions = joinPromptParts([spec.library.notes || '', personaPromptBlock]);
     const body = {
       keywords: spec.library.topic,
       title: spec.library.title,
-      customInstructions: spec.library.notes || '',
+      customInstructions,
     };
 
     // DAS v1: retries + select-best are only enabled when --das/--das-config is used.
@@ -996,6 +1151,7 @@ async function main() {
       }
       writeJsonFile(outPath.artifacts('library.json'), {
         ...spec.library,
+        ...(persona ? { meta: { persona_id: aspId, persona_hash: personaHash } } : {}),
         generated: res.data,
       });
       return res.data;
@@ -1021,7 +1177,11 @@ async function main() {
       await ensureValidAccessToken();
       const res = await postJson<InventorySchema>(url, accessToken, body);
       if (!res.ok) throw new Error(`generate-inventory failed (${res.status}): ${res.text.slice(0, 500)}`);
-      writeJsonFile(outPath.artifacts('library.json'), { ...spec.library, generated: res.data });
+      writeJsonFile(outPath.artifacts('library.json'), {
+        ...spec.library,
+        ...(persona ? { meta: { persona_id: aspId, persona_hash: personaHash } } : {}),
+        generated: res.data,
+      });
       return res.data;
     }
 
@@ -1138,6 +1298,7 @@ async function main() {
 
     writeJsonFile(outPath.artifacts('library.json'), {
       ...spec.library,
+      ...(persona ? { meta: { persona_id: aspId, persona_hash: personaHash } } : {}),
       generated: selected.inv,
     });
     return selected.inv;
@@ -1160,10 +1321,11 @@ async function main() {
       }> = [];
 
       for (const bp of blueprintSpecs) {
+        const notes = joinPromptParts([bp.notes || '', personaPromptBlock]);
         const body = {
           title: bp.title,
           description: bp.description || '',
-          notes: bp.notes || '',
+          notes,
           inventoryTitle: spec.library.title,
           categories,
         };
@@ -1186,6 +1348,7 @@ async function main() {
       const { results, list } = await generateOnce();
       writeJsonFile(outPath.artifacts('blueprints.json'), {
         libraryTitle: spec.library.title,
+        ...(persona ? { meta: { persona_id: aspId, persona_hash: personaHash } } : {}),
         blueprints: results,
       });
       return list;
@@ -1210,7 +1373,11 @@ async function main() {
       writeDasLogs();
       await ensureValidAccessToken();
       const { results, list } = await generateOnce();
-      writeJsonFile(outPath.artifacts('blueprints.json'), { libraryTitle: spec.library.title, blueprints: results });
+      writeJsonFile(outPath.artifacts('blueprints.json'), {
+        libraryTitle: spec.library.title,
+        ...(persona ? { meta: { persona_id: aspId, persona_hash: personaHash } } : {}),
+        blueprints: results,
+      });
       return list;
     }
 
@@ -1347,6 +1514,7 @@ async function main() {
     // Persist the selected set as the canonical artifact.
     writeJsonFile(outPath.artifacts('blueprints.json'), {
       libraryTitle: spec.library.title,
+      ...(persona ? { meta: { persona_id: aspId, persona_hash: personaHash } } : {}),
       blueprints: blueprintSpecs.map((bp, i) => ({ spec: bp, generated: selected!.list[i]! })),
     });
     return selected.list;
