@@ -65,20 +65,15 @@ import {
 import { ArrowLeft, ChevronDown, RefreshCcw, Settings2, Sparkles, X } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 
-const AGENTIC_BASE_URL = import.meta.env.VITE_AGENTIC_BACKEND_URL;
-const USE_AGENTIC_BACKEND = import.meta.env.VITE_USE_AGENTIC_BACKEND === 'true';
-const AGENTIC_ANALYZE_URL = AGENTIC_BASE_URL
-  ? `${AGENTIC_BASE_URL.replace(/\/$/, '')}/api/analyze-blueprint`
+import { config, getFunctionUrl } from '@/config/runtime';
+
+const ANALYZE_BLUEPRINT_URL = getFunctionUrl('analyze-blueprint');
+const AGENTIC_BANNER_URL = config.agenticBackendUrl
+  ? `${config.agenticBackendUrl.replace(/\/$/, '')}/api/generate-banner`
   : '';
-const AGENTIC_BANNER_URL = AGENTIC_BASE_URL
-  ? `${AGENTIC_BASE_URL.replace(/\/$/, '')}/api/generate-banner`
+const AGENTIC_GENERATE_BLUEPRINT_URL = config.agenticBackendUrl
+  ? `${config.agenticBackendUrl.replace(/\/$/, '')}/api/generate-blueprint`
   : '';
-const AGENTIC_GENERATE_BLUEPRINT_URL = AGENTIC_BASE_URL
-  ? `${AGENTIC_BASE_URL.replace(/\/$/, '')}/api/generate-blueprint`
-  : '';
-const ANALYZE_BLUEPRINT_URL = USE_AGENTIC_BACKEND && AGENTIC_ANALYZE_URL
-  ? AGENTIC_ANALYZE_URL
-  : `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-blueprint`;
 
 const HOME_DRAFT_KEY = 'blueprints_home_draft_v1';
 
@@ -185,13 +180,13 @@ export default function InventoryBuild() {
 
   const isOwner = !!(isEditing && blueprint && user && blueprint.creator_user_id === user.id);
   const isLoading = inventoryLoading || (isEditing && blueprintLoading);
-  const canGenerateBanner = USE_AGENTIC_BACKEND && (!!user || !!session?.access_token);
-  const bannerHelpText = !USE_AGENTIC_BACKEND
+  const canGenerateBanner = config.useAgenticBackend && (!!user || !!session?.access_token);
+  const bannerHelpText = !config.useAgenticBackend
     ? 'Banner generation requires the agentic backend.'
     : !user && !session?.access_token
       ? 'Sign in to generate a banner.'
       : null;
-  const autoGenerateHelpText = !USE_AGENTIC_BACKEND
+  const autoGenerateHelpText = !config.useAgenticBackend
     ? 'Auto-generation requires the agentic backend.'
     : !session?.access_token
       ? 'Sign in to auto-generate a blueprint.'
@@ -668,9 +663,9 @@ export default function InventoryBuild() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: USE_AGENTIC_BACKEND && session?.access_token
+          Authorization: config.useAgenticBackend && session?.access_token
             ? `Bearer ${session.access_token}`
-            : `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            : `Bearer ${config.supabaseAnonKey}`,
         },
         body: JSON.stringify({
           title: title.trim() || inventory.title,
@@ -825,7 +820,7 @@ export default function InventoryBuild() {
 
   const executeAutoGenerate = useCallback(async () => {
     if (!inventory) return;
-    if (!USE_AGENTIC_BACKEND || !AGENTIC_GENERATE_BLUEPRINT_URL) {
+    if (!config.useAgenticBackend || !AGENTIC_GENERATE_BLUEPRINT_URL) {
       toast({
         title: 'Auto-generation unavailable',
         description: 'The agentic backend is not configured.',
@@ -969,7 +964,7 @@ export default function InventoryBuild() {
 
   const handleGenerateBanner = useCallback(async () => {
     if (!inventory) return;
-    if (!USE_AGENTIC_BACKEND || !AGENTIC_BANNER_URL) {
+    if (!config.useAgenticBackend || !AGENTIC_BANNER_URL) {
       toast({
         title: 'Banner generation unavailable',
         description: 'The agentic backend is not configured.',
@@ -1380,7 +1375,7 @@ export default function InventoryBuild() {
                         variant="outline"
                         className="gap-2"
                         onClick={() => setShowAutoGenerate((prev) => !prev)}
-                        disabled={!USE_AGENTIC_BACKEND}
+                        disabled={!config.useAgenticBackend}
                       >
                         <Sparkles className="h-4 w-4" />
                         Auto-generate Blueprint

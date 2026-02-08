@@ -19,15 +19,9 @@ import { buildReviewSections } from '@/lib/reviewSections';
 import type { InventoryListItem } from '@/hooks/useInventories';
 import type { Json } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
+import { config, getFunctionUrl } from '@/config/runtime';
 
-const AGENTIC_BASE_URL = import.meta.env.VITE_AGENTIC_BACKEND_URL;
-const USE_AGENTIC_BACKEND = import.meta.env.VITE_USE_AGENTIC_BACKEND === 'true';
-const AGENTIC_ANALYZE_URL = AGENTIC_BASE_URL
-  ? `${AGENTIC_BASE_URL.replace(/\/$/, '')}/api/analyze-blueprint`
-  : '';
-const ANALYZE_BLUEPRINT_URL = USE_AGENTIC_BACKEND && AGENTIC_ANALYZE_URL
-  ? AGENTIC_ANALYZE_URL
-  : `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-blueprint`;
+const ANALYZE_BLUEPRINT_URL = getFunctionUrl('analyze-blueprint');
 
 interface InventoryCategory {
   name: string;
@@ -145,7 +139,7 @@ export function BlueprintBuilder({
       return;
     }
 
-    if (USE_AGENTIC_BACKEND && !session?.access_token) {
+    if (config.useAgenticBackend && !session?.access_token) {
       toast({
         title: 'Sign in required',
         description: 'Please sign in to generate a review.',
@@ -166,9 +160,9 @@ export function BlueprintBuilder({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: USE_AGENTIC_BACKEND && session?.access_token
+          Authorization: config.useAgenticBackend && session?.access_token
             ? `Bearer ${session.access_token}`
-            : `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            : `Bearer ${config.supabaseAnonKey}`,
         },
         body: JSON.stringify({
           title: title.trim(),

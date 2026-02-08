@@ -22,6 +22,7 @@ import BlueprintRemix from "./pages/BlueprintRemix";
 import About from "./pages/About";
 import NotFound from "./pages/NotFound";
 import { RequireAuth } from "@/components/shared/RequireAuth";
+import { config } from "@/config/runtime";
 
 const queryClient = new QueryClient();
 
@@ -31,7 +32,7 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <BrowserRouter basename={import.meta.env.BASE_URL}>
+        <BrowserRouter basename={config.basePath}>
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/explore" element={<Explore />} />

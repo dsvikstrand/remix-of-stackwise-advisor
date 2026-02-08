@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-
-const AGENTIC_BASE_URL = import.meta.env.VITE_AGENTIC_BACKEND_URL;
+import { config } from '@/config/runtime';
 
 type CreditsResponse = {
   remaining: number;
@@ -11,7 +10,7 @@ type CreditsResponse = {
 };
 
 async function fetchCredits(): Promise<CreditsResponse> {
-  if (!AGENTIC_BASE_URL) {
+  if (!config.agenticBackendUrl) {
     throw new Error('Agentic backend not configured');
   }
   const { data: sessionData } = await supabase.auth.getSession();
@@ -20,7 +19,7 @@ async function fetchCredits(): Promise<CreditsResponse> {
     throw new Error('Not authenticated');
   }
 
-  const url = `${AGENTIC_BASE_URL.replace(/\/$/, '')}/api/credits`;
+  const url = `${config.agenticBackendUrl!.replace(/\/$/, '')}/api/credits`;
   const response = await fetch(url, {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -38,7 +37,7 @@ export function useAiCredits(enabled: boolean) {
   return useQuery({
     queryKey: ['ai-credits'],
     queryFn: fetchCredits,
-    enabled: enabled && !!AGENTIC_BASE_URL,
+    enabled: enabled && !!config.agenticBackendUrl,
     staleTime: 60_000,
     refetchInterval: 60_000,
   });

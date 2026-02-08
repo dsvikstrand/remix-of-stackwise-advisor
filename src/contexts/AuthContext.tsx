@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { config } from '@/config/runtime';
 
 interface Profile {
   id: string;
@@ -34,7 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // On GitHub Pages, apps are often hosted under a sub-path.
   // Using BASE_URL ensures auth redirects land back on the SPA path.
-  const appUrl = new URL(import.meta.env.BASE_URL, window.location.origin).toString();
+  const appUrl = new URL(config.basePath, window.location.origin).toString();
 
   // Fetch profile for user
   const fetchProfile = async (userId: string) => {

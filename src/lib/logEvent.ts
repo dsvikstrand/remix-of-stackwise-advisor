@@ -1,6 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
+import { config, getFunctionUrl } from '@/config/runtime';
 
-const LOG_EVENT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/log-event`;
+const LOG_EVENT_URL = getFunctionUrl('log-event');
 
 type LogEventPayload = {
   eventName: string;
@@ -29,7 +30,7 @@ export async function logMvpEvent({
 
   const authHeader = accessToken
     ? `Bearer ${accessToken}`
-    : `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`;
+    : `Bearer ${config.supabaseAnonKey}`;
 
   try {
     await fetch(LOG_EVENT_URL, {
