@@ -67,18 +67,18 @@ for example: if you give me a follow up question:
 
 Use the SSH alias (no raw IPs/keys in commands).
 
-[have] In this Codex environment, `oracle-free` is already configured in `/root/.ssh/config` and uses:
+[have] In this Codex environment, `oracle-free` is configured in `/root/.ssh/config` and uses:
 - `IdentityFile /root/.ssh/id_ed25519_codex_agentic`
-- SSH multiplexing (`ControlMaster auto`, `ControlPersist 10m`)
+- SSH multiplexing (`ControlMaster auto`, `ControlPersist 10m`, `ControlPath ~/.ssh/oracle-%r@%h:%p`)
 
 Server details
 - Host alias: `oracle-free`
 - Repo dir: `/home/ubuntu/remix-of-stackwise-advisor`
 
 Where SSH files live
-- This Codex environment: `/root/.ssh/config` and `/root/.ssh/id_ed25519_codex_agentic`
-- Oracle server (Ubuntu user): `/home/ubuntu/.ssh/authorized_keys`
-- Your Windows machine (PowerShell ssh/scp): `C:\\Users\\Dell\\.ssh\\config` and `C:\\Users\\Dell\\.ssh\\id_ed25519`
+- This Codex environment: `/root/.ssh/`
+- Oracle server (Ubuntu user): `/home/ubuntu/.ssh/` (not `C:\\Users\\Dell\\.ssh`)
+- Your Windows machine (PowerShell ssh/scp): `C:\\Users\\Dell\\.ssh\\` (separate from Codex/server)
 
 Sanity checks
 - `ssh -o BatchMode=yes -o ConnectTimeout=10 oracle-free "echo ok"`
@@ -89,7 +89,7 @@ Node/tsx note (important)
   `export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use 20.20.0 >/dev/null; node -v`
 
 Preferred patterns
-- One-shot: `ssh oracle-free "cd /home/ubuntu/remix-of-stackwise-advisor && git pull"`
+- One-shot: `ssh oracle-free "cd /home/ubuntu/remix-of-stackwise-advisor && git pull --ff-only"`
 - Seed runner: `ssh oracle-free 'export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use 20.20.0 >/dev/null; cd /home/ubuntu/remix-of-stackwise-advisor && TMPDIR=/tmp npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts --help'`
 - SCP: `scp localfile oracle-free:/home/ubuntu/remix-of-stackwise-advisor/`
 
