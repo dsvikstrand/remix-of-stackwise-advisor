@@ -65,25 +65,23 @@ for example: if you give me a follow up question:
 
 ## 11) Remote server: Oracle (SSH alias + multiplexing)
 
-Use the SSH alias (no raw IPs/keys in commands):
+Use the SSH alias (no raw IPs/keys in commands).
 
+[have] In this Codex environment, `oracle-free` is already configured in `/root/.ssh/config` and uses:
+- `IdentityFile /root/.ssh/id_ed25519_codex_agentic`
+- SSH multiplexing (`ControlMaster auto`, `ControlPersist 10m`)
+
+Server details
 - Host alias: `oracle-free`
 - Repo dir: `/home/ubuntu/remix-of-stackwise-advisor`
 
-SSH config to add (in this Codex env it lives at `/root/.ssh/config`):
-```
-Host oracle-free
-  HostName 140.238.158.227
-  User ubuntu
-  IdentityFile /root/.ssh/id_ed25519_codex_agentic
-  IdentitiesOnly yes
-  ControlMaster auto
-  ControlPersist 10m
-  ControlPath ~/.ssh/oracle-%r@%h:%p
-```
+Where SSH files live
+- This Codex environment: `/root/.ssh/config` and `/root/.ssh/id_ed25519_codex_agentic`
+- Oracle server (Ubuntu user): `/home/ubuntu/.ssh/authorized_keys`
+- Your Windows machine (PowerShell ssh/scp): `C:\\Users\\Dell\\.ssh\\config` and `C:\\Users\\Dell\\.ssh\\id_ed25519`
 
 Sanity checks
-- `ssh oracle-free "echo ok"`
+- `ssh -o BatchMode=yes -o ConnectTimeout=10 oracle-free "echo ok"`
 - `ssh oracle-free "cd /home/ubuntu/remix-of-stackwise-advisor && git status -sb"`
 
 Node/tsx note (important)
