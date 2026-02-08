@@ -29,4 +29,4 @@ Use this skill to generate seed content via a **linear, debuggable agentic pipel
 ## Notes
 - This skill is for **learning agentic patterns**: clear inputs, deterministic outputs, debuggable logs.
 - Later stages add eval, retries, cost controls, and dynamic branching.
-- Planned DAS contract: `seed/das_config_v1.json` (per-node retries/select-best; not wired yet).
+- DAS config: `seed/das_config_v1.json` (per-node retries/select-best; enabled with `--das`).

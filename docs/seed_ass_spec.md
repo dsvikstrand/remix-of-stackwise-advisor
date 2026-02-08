@@ -65,11 +65,11 @@ Hard checks we already have:
 - Schema shape checks (runner-side)
 - Cross-reference checks (blueprint item refs must exist in library categories)
 
-## Roadmap: DAS v1 (Planned)
-The first DAS milestone is to add **gates + retries + select-best** on generation nodes.
+## DAS v1 (Dynamic Gates + Retries)
+DAS v1 adds **gates + retries + select-best** on generation nodes when enabled.
 
-- Config (planned): `seed/das_config_v1.json` (per-node `maxAttempts`, `kCandidates`, `eval[]`)
-- New artifacts (planned):
+- Config: `seed/das_config_v1.json` (per-node `maxAttempts`, `kCandidates`, `eval[]`)
+- New artifacts (when `--das` is enabled):
   - `candidates/<node_id>/attempt-01.json`...
   - `decision_log.json` (why we retried/selected)
   - `selection.json` (best candidate summary)

@@ -23,10 +23,10 @@ Use `seed/seed_spec_v0.json` as the input format.
 - `asp.must_include[]`: constraints to bias generation later
 - `asp.must_avoid[]`: constraints to avoid unsafe or off-topic content later
 
-## Planned DAS config (separate file)
-The seed spec defines *what to generate*. The planned DAS config defines *how to run the graph* (retries, select-best, gates).
+## DAS config (separate file)
+The seed spec defines *what to generate*. The DAS config defines *how to run the graph* (retries, select-best, gates).
 
-- Config file (planning-only for now): `seed/das_config_v1.json`
+- Config file: `seed/das_config_v1.json`
 
 ## Example
 See `seed/seed_spec_v0.json`.

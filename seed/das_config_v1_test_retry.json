@@ -1,22 +1,18 @@
 {
   "version": 1,
   "notes": [
-    "DAS v1 policy file (dynamic gates, retries, select-best).",
-    "Used by codex/skills/seed-blueprints/scripts/seed_stage0.ts when run with --das.",
-    "Policies are per-node (maxAttempts, kCandidates, eval)."
+    "Test config to validate DAS retry/select-best wiring without debating eval metrics.",
+    "Forces a single retry on LIB_GEN via testOnly.failOnce.",
+    "Keep this file for local/Oracle validation runs only."
   ],
   "defaults": {
     "enabled": true,
     "kCandidates": 1,
-    "maxAttempts": 1,
+    "maxAttempts": 2,
     "eval": [],
     "onHardFail": "stop_run"
   },
   "nodes": {
-    "AUTH_READ": {
-      "enabled": true,
-      "maxAttempts": 1
-    },
     "LIB_GEN": {
       "kCandidates": 1,
       "maxAttempts": 2,
@@ -24,22 +20,13 @@
     },
     "BP_GEN": {
       "kCandidates": 1,
-      "maxAttempts": 2,
+      "maxAttempts": 1,
       "eval": ["structural", "bounds"]
     },
     "VAL": {
       "kCandidates": 1,
       "maxAttempts": 1,
-      "eval": ["crossref"],
-      "onHardFail": "stop_run"
-    },
-    "AI_REVIEW": {
-      "enabled": false,
-      "maxAttempts": 1
-    },
-    "AI_BANNER": {
-      "enabled": false,
-      "maxAttempts": 1
+      "eval": ["crossref"]
     },
     "APPLY": {
       "enabled": false,
@@ -47,10 +34,11 @@
     }
   },
   "testOnly": {
-    "enabled": false,
+    "enabled": true,
     "failOnce": {
       "nodes": ["LIB_GEN"],
       "failOnAttempt": 1
     }
   }
 }
+

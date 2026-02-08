@@ -142,17 +142,30 @@ tsx codex/skills/seed-blueprints/scripts/seed_stage0.ts \
   --auth-store seed/seed_auth.local
 ```
 
-## Planned: DAS v1 (Dynamic Gates + Retries)
+## Run (DAS v1: Dynamic Gates + Retries)
 
-DAS v1 will add retry loops and "select best out of k candidates" to generation nodes.
+DAS v1 adds retry loops and "select best out of k candidates" to generation nodes.
 
-Config (planning-only file for now):
+Config:
 - `seed/das_config_v1.json` (per-node `maxAttempts`, `kCandidates`, `eval[]`)
+- `seed/das_config_v1_test_retry.json` (forces one retry on `LIB_GEN` for validation)
 
-Expected new artifacts (planned):
+New artifacts (when DAS is enabled):
 - `seed/outputs/<run_id>/candidates/<node_id>/attempt-01.json` ...
 - `seed/outputs/<run_id>/decision_log.json`
 - `seed/outputs/<run_id>/selection.json`
 
-Note:
-- The runner does **not** read `seed/das_config_v1.json` yet. This is a planning contract to keep IDs and artifacts consistent.
+Command (Stage 0 + DAS):
+```bash
+TMPDIR=/tmp \
+SEED_USER_REFRESH_TOKEN="$(cat refresh_tok.local)" \
+SUPABASE_URL="https://piszvseyaefxekubphhf.supabase.co" \
+SUPABASE_ANON_KEY="(paste VITE_SUPABASE_PUBLISHABLE_KEY)" \
+tsx codex/skills/seed-blueprints/scripts/seed_stage0.ts \
+  --spec seed/seed_spec_das_smoke.json \
+  --run-id das-smoke \
+  --limit-blueprints 1 \
+  --auth-store seed/seed_auth.local \
+  --das \
+  --das-config seed/das_config_v1_test_retry.json
+```

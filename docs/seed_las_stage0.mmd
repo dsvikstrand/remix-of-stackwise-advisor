@@ -9,7 +9,7 @@ flowchart TD
   ST_BP([STAGE Generate Blueprints]) -.-> BP_GEN
   ST_AI([STAGE Stage 0.5 Execute AI]) -.-> AI_REVIEW
   ST_APPLY([STAGE Stage 1 Apply Mode]) -.-> APPLY_START
-  ST_DAS([STAGE DAS gates and retries - planned]) -.-> LIB_EVAL
+  ST_DAS([STAGE DAS gates and retries]) -.-> LIB_EVAL
   ST_DAS -.-> BP_EVAL
   ST_DAS -.-> DAS_CFG
 
@@ -30,7 +30,7 @@ flowchart TD
   %% Inputs + runner
   IN_SPEC["IN_SPEC seed/seed_spec_v0.json (Seed Spec) TESTED_OK"] --> IN_RUN["IN_RUN seed_stage0.ts (parse args + validate spec) TESTED_OK"]
   IN_RUN --> OUT_DIR["OUT_DIR Create run folder seed/outputs/RUN_ID/ TESTED_OK"]
-  IN_RUN -.-> DAS_CFG["DAS_CFG seed/das_config_v1.json (DAS policy, planned) NOT_TESTED"]
+  IN_RUN -.-> DAS_CFG["DAS_CFG seed/das_config_v1.json (DAS policy) NOT_TESTED"]
 
   %% Auth
   OUT_DIR --> AUTH_READ["AUTH_READ Load auth store + tokens (refresh supported) TESTED_OK"]
@@ -49,7 +49,7 @@ flowchart TD
   LIB_RETRY --> LIB_GEN
   LIB_SEL --> LIB_OUT["LIB_OUT Write library.json TESTED_OK"]
 
-  N_DAS{{NOTE DAS gates run only when DAS is enabled; planned}} --> LIB_EVAL
+  N_DAS{{NOTE DAS gates run only when DAS is enabled}} --> LIB_EVAL
   N_CFG{{NOTE per-node maxAttempts and kCandidates live in DAS_CFG}} --> DAS_CFG
   N_DAS2{{NOTE safety and PII failures are non-retryable in seeding mode}} --> ABORT
 

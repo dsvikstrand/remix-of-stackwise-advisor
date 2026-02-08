@@ -74,6 +74,82 @@ type BannerPayload = {
   dryRun?: boolean;
 };
 
+type DasNodeId = 'AUTH_READ' | 'LIB_GEN' | 'BP_GEN' | 'VAL' | 'AI_REVIEW' | 'AI_BANNER' | 'APPLY';
+
+type DasGateKind = 'pass' | 'retryable_fail' | 'hard_fail';
+
+type DasPolicy = {
+  enabled?: boolean;
+  kCandidates?: number;
+  maxAttempts?: number;
+  eval?: string[];
+  onHardFail?: 'stop_run' | 'continue';
+};
+
+type DasConfig = {
+  version: number;
+  notes?: string[];
+  defaults?: DasPolicy;
+  nodes?: Record<string, DasPolicy>;
+  testOnly?: {
+    enabled?: boolean;
+    failOnce?: {
+      nodes?: string[];
+      failOnAttempt?: number;
+    };
+  };
+};
+
+type DasGateResult = {
+  gate: string;
+  ok: boolean;
+  kind: DasGateKind;
+  score: number;
+  detail?: string;
+};
+
+type DasCandidateResult = {
+  attempt: number;
+  candidate: number;
+  ok: boolean;
+  score: number;
+  gates: DasGateResult[];
+  file?: string;
+  skipped?: boolean;
+  error?: string;
+};
+
+type DasNodeDecision = {
+  nodeId: DasNodeId;
+  policy: Required<Pick<DasPolicy, 'enabled' | 'kCandidates' | 'maxAttempts' | 'eval' | 'onHardFail'>>;
+  attempts: Array<{
+    attempt: number;
+    candidates: DasCandidateResult[];
+    selectedCandidate?: number;
+    status: 'selected' | 'retry' | 'hard_fail' | 'exhausted' | 'disabled';
+  }>;
+  selected?: { attempt: number; candidate: number; score: number; file: string };
+};
+
+type DasDecisionLog = {
+  version: 1;
+  runId: string;
+  createdAt: string;
+  config: {
+    enabled: boolean;
+    configPath?: string;
+    configHash?: string;
+  };
+  nodes: Record<string, DasNodeDecision>;
+};
+
+type DasSelection = {
+  version: 1;
+  runId: string;
+  createdAt: string;
+  selected: Record<string, { attempt: number; candidate: number; score: number; file: string }>;
+};
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -155,6 +231,9 @@ type RunLog = {
     agenticBaseUrl: string;
     backendCalls: boolean;
     applyStage1?: boolean;
+    dasEnabled?: boolean;
+    dasConfigPath?: string;
+    dasConfigHash?: string;
     limitBlueprints?: number;
     aspId?: string;
     runContextHash?: string;
@@ -224,6 +303,8 @@ function parseArgs(argv: string[]) {
     else if (a === '--review-focus') out.reviewFocus = argv[++i] ?? '';
     else if (a === '--do-banner') out.doBanner = true;
     else if (a === '--apply') out.apply = true;
+    else if (a === '--das') out.das = true;
+    else if (a === '--das-config') out.dasConfig = argv[++i] ?? '';
     else if (a === '--yes') out.yes = argv[++i] ?? '';
     else if (a === '--limit-blueprints') out.limitBlueprints = Number(argv[++i] ?? 0);
     else if (a.startsWith('--')) die(`Unknown flag: ${a}`);
@@ -238,6 +319,106 @@ function ensureDir(dir: string) {
 function readJsonFile<T>(filePath: string): T {
   const raw = fs.readFileSync(filePath, 'utf-8');
   return JSON.parse(raw) as T;
+}
+
+function readRawFile(filePath: string) {
+  return fs.readFileSync(filePath, 'utf-8');
+}
+
+function normalizePolicy(p: DasPolicy | undefined): Required<Pick<DasPolicy, 'enabled' | 'kCandidates' | 'maxAttempts' | 'eval' | 'onHardFail'>> {
+  return {
+    enabled: p?.enabled !== undefined ? !!p.enabled : true,
+    kCandidates: Math.max(1, Number(p?.kCandidates || 1) || 1),
+    maxAttempts: Math.max(1, Number(p?.maxAttempts || 1) || 1),
+    eval: Array.isArray(p?.eval) ? p!.eval!.map((x) => String(x || '').trim()).filter(Boolean) : [],
+    onHardFail: p?.onHardFail === 'continue' ? 'continue' : 'stop_run',
+  };
+}
+
+function readDasConfig(filePath: string): DasConfig {
+  const raw = readRawFile(filePath);
+  const parsed = JSON.parse(raw) as DasConfig;
+  if (!parsed || typeof parsed !== 'object') throw new Error('DAS config must be a JSON object');
+  if (Number((parsed as any).version || 0) !== 1) throw new Error('DAS config version must be 1');
+  return parsed;
+}
+
+function getDasPolicy(cfg: DasConfig, nodeId: DasNodeId) {
+  const defaults = (cfg.defaults || {}) as DasPolicy;
+  const node = ((cfg.nodes || {})[nodeId] || {}) as DasPolicy;
+
+  const enabled =
+    node.enabled !== undefined ? !!node.enabled : defaults.enabled !== undefined ? !!defaults.enabled : true;
+
+  const kCandidatesRaw = node.kCandidates !== undefined ? node.kCandidates : defaults.kCandidates;
+  const maxAttemptsRaw = node.maxAttempts !== undefined ? node.maxAttempts : defaults.maxAttempts;
+  const kCandidates = Math.max(1, Number(kCandidatesRaw || 1) || 1);
+  const maxAttempts = Math.max(1, Number(maxAttemptsRaw || 1) || 1);
+
+  const evalListRaw = Array.isArray(node.eval) ? node.eval : Array.isArray(defaults.eval) ? defaults.eval : [];
+  const evalList = evalListRaw.map((x) => String(x || '').trim()).filter(Boolean);
+
+  const onHardFailRaw = node.onHardFail !== undefined ? node.onHardFail : defaults.onHardFail;
+  const onHardFail = onHardFailRaw === 'continue' ? 'continue' : 'stop_run';
+
+  return {
+    enabled,
+    kCandidates,
+    maxAttempts,
+    eval: evalList,
+    onHardFail,
+  };
+}
+
+function gate(gateName: string, ok: boolean, kind: DasGateKind, score: number, detail?: string): DasGateResult {
+  return { gate: gateName, ok, kind, score, ...(detail ? { detail } : {}) };
+}
+
+function evalStructuralInventory(inv: InventorySchema): DasGateResult {
+  const cats = Array.isArray(inv?.categories) ? inv.categories : [];
+  if (cats.length === 0) return gate('structural', false, 'retryable_fail', 0, 'no categories');
+  const empty = cats.filter((c) => !(c.items || []).length).length;
+  if (empty > 0) return gate('structural', false, 'retryable_fail', 0, 'one or more categories have zero items');
+  return gate('structural', true, 'pass', 1);
+}
+
+function evalBoundsInventory(inv: InventorySchema): DasGateResult {
+  const cats = Array.isArray(inv?.categories) ? inv.categories : [];
+  if (cats.length > 30) return gate('bounds', false, 'retryable_fail', 0, `too many categories (${cats.length})`);
+  for (const c of cats) {
+    const name = String(c?.name || '');
+    if (name.length > 80) return gate('bounds', false, 'retryable_fail', 0, 'category name too long');
+    const items = Array.isArray(c?.items) ? c.items : [];
+    if (items.length > 80) return gate('bounds', false, 'retryable_fail', 0, `too many items in category (${items.length})`);
+    for (const it of items) {
+      if (String(it || '').length > 80) return gate('bounds', false, 'retryable_fail', 0, 'item name too long');
+    }
+  }
+  return gate('bounds', true, 'pass', 1);
+}
+
+function evalStructuralBlueprints(blueprints: GeneratedBlueprint[]): DasGateResult {
+  if (!Array.isArray(blueprints) || blueprints.length === 0) return gate('structural', false, 'retryable_fail', 0, 'no blueprints');
+  for (const bp of blueprints) {
+    if (!String(bp?.title || '').trim()) return gate('structural', false, 'retryable_fail', 0, 'missing blueprint title');
+    if (!Array.isArray(bp?.steps) || bp.steps.length === 0) return gate('structural', false, 'retryable_fail', 0, 'blueprint has no steps');
+    for (const st of bp.steps || []) {
+      if (!Array.isArray(st?.items) || st.items.length === 0) return gate('structural', false, 'retryable_fail', 0, 'step has no items');
+    }
+  }
+  return gate('structural', true, 'pass', 1);
+}
+
+function evalBoundsBlueprints(blueprints: GeneratedBlueprint[]): DasGateResult {
+  for (const bp of blueprints || []) {
+    if ((bp.steps || []).length > 20) return gate('bounds', false, 'retryable_fail', 0, 'too many steps');
+    for (const st of bp.steps || []) {
+      if (String(st?.title || '').length > 120) return gate('bounds', false, 'retryable_fail', 0, 'step title too long');
+      if (String(st?.description || '').length > 800) return gate('bounds', false, 'retryable_fail', 0, 'step description too long');
+      if ((st.items || []).length > 40) return gate('bounds', false, 'retryable_fail', 0, 'too many items in step');
+    }
+  }
+  return gate('bounds', true, 'pass', 1);
 }
 
 function writeJsonFile(filePath: string, data: unknown) {
@@ -491,6 +672,8 @@ async function main() {
         '  --review-focus <text>      Optional reviewPrompt for /api/analyze-blueprint',
         '  --do-banner                Execute /api/generate-banner in dryRun mode (Stage 0.5; no Storage upload)',
         '  --apply                    Stage 1 apply mode (writes to Supabase)',
+        '  --das                      Enable DAS v1 (dynamic gates, retries, select-best; uses das config)',
+        '  --das-config <path>        DAS config JSON path (default: seed/das_config_v1.json)',
         '  --yes <token>              Stage 1 guard token (must be APPLY_STAGE1)',
         '  --limit-blueprints <n>     Limit generated/apply blueprints to N (useful for testing Stage 1)',
       ].join('\n') + '\n'
@@ -507,6 +690,8 @@ async function main() {
   const doReview = !!args.doReview;
   const doBanner = !!args.doBanner;
   const reviewFocus = String(args.reviewFocus || '').trim();
+  const dasEnabled = Boolean(args.das || args.dasConfig);
+  const dasConfigPath = String(args.dasConfig || 'seed/das_config_v1.json');
 
   if (!fs.existsSync(specPath)) die(`Spec not found: ${specPath}`);
 
@@ -520,12 +705,32 @@ async function main() {
 
   const aspId = spec.asp?.id ? String(spec.asp.id).trim() : '';
   const runContextHash = buildRunContextHash(spec);
+  let dasConfig: DasConfig | null = null;
+  let dasConfigHash = '';
+  if (dasEnabled) {
+    if (!fs.existsSync(dasConfigPath)) die(`DAS config not found: ${dasConfigPath}`);
+    const raw = readRawFile(dasConfigPath);
+    dasConfigHash = sha256Hex(raw);
+    try {
+      dasConfig = JSON.parse(raw) as DasConfig;
+    } catch {
+      die(`DAS config is not valid JSON: ${dasConfigPath}`);
+    }
+    if (Number((dasConfig as any).version || 0) !== 1) die('DAS config version must be 1');
+  }
   writeJsonFile(path.join(runDir, 'run_meta.json'), {
     runId,
     createdAt: nowIso(),
     specPath,
     asp: spec.asp || null,
     runContextHash,
+    das: dasEnabled
+      ? {
+          enabled: true,
+          configPath: dasConfigPath,
+          configHash: dasConfigHash,
+        }
+      : { enabled: false },
   });
 
   const yes = String(args.yes || '').trim();
@@ -542,11 +747,40 @@ async function main() {
       backendCalls,
       applyStage1,
       limitBlueprints,
+      ...(dasEnabled ? { dasEnabled: true, dasConfigPath, dasConfigHash } : {}),
       ...(aspId ? { aspId } : {}),
       runContextHash,
     },
     steps: [],
   };
+
+  const dasDecision: DasDecisionLog | null = dasEnabled
+    ? {
+        version: 1,
+        runId,
+        createdAt: nowIso(),
+        config: { enabled: true, configPath: dasConfigPath, configHash: dasConfigHash },
+        nodes: {},
+      }
+    : null;
+
+  const dasSelection: DasSelection | null = dasEnabled
+    ? {
+        version: 1,
+        runId,
+        createdAt: nowIso(),
+        selected: {},
+      }
+    : null;
+
+  const writeDasLogs = () => {
+    if (!dasDecision || !dasSelection) return;
+    writeJsonFile(path.join(runDir, 'decision_log.json'), dasDecision);
+    writeJsonFile(path.join(runDir, 'selection.json'), dasSelection);
+  };
+
+  // Create empty artifacts early so failures still leave a debuggable trail.
+  if (dasEnabled) writeDasLogs();
 
   const step = async <T>(name: string, fn: () => Promise<T>) => {
     const entry = { name, startedAt: nowIso(), ok: false as boolean } as RunLog['steps'][number];
@@ -626,65 +860,363 @@ async function main() {
 
   const inventory = await step('generate_library', async () => {
     if (!backendCalls) throw new Error('Backend calls disabled (no-backend not implemented in Stage 0)');
-    await ensureValidAccessToken();
     const url = `${agenticBaseUrl}/api/generate-inventory`;
     const body = {
       keywords: spec.library.topic,
       title: spec.library.title,
       customInstructions: spec.library.notes || '',
     };
-    let res = await postJson<InventorySchema>(url, accessToken, body);
-    if (!res.ok && res.status === 401 && refreshToken) {
-      await refreshSession();
-      res = await postJson<InventorySchema>(url, accessToken, body);
+
+    // DAS v1: retries + select-best are only enabled when --das/--das-config is used.
+    if (!dasEnabled || !dasConfig || !dasDecision || !dasSelection) {
+      await ensureValidAccessToken();
+      let res = await postJson<InventorySchema>(url, accessToken, body);
+      if (!res.ok && res.status === 401 && refreshToken) {
+        await refreshSession();
+        res = await postJson<InventorySchema>(url, accessToken, body);
+      }
+      if (!res.ok) {
+        throw new Error(`generate-inventory failed (${res.status}): ${res.text.slice(0, 500)}`);
+      }
+      writeJsonFile(path.join(runDir, 'library.json'), {
+        ...spec.library,
+        generated: res.data,
+      });
+      return res.data;
     }
-    if (!res.ok) {
-      throw new Error(`generate-inventory failed (${res.status}): ${res.text.slice(0, 500)}`);
+
+    const nodeId: DasNodeId = 'LIB_GEN';
+    const policy = getDasPolicy(dasConfig, nodeId);
+    const decision: DasNodeDecision = { nodeId, policy, attempts: [] };
+    dasDecision.nodes[nodeId] = decision;
+    ensureDir(path.join(runDir, 'candidates', nodeId));
+
+    const failOnceEnabled =
+      !!dasConfig.testOnly?.enabled &&
+      !!dasConfig.testOnly?.failOnce &&
+      Array.isArray(dasConfig.testOnly.failOnce.nodes) &&
+      dasConfig.testOnly.failOnce.nodes.includes(nodeId) &&
+      Number(dasConfig.testOnly.failOnce.failOnAttempt || 0) > 0;
+    const failOnAttempt = Number(dasConfig.testOnly?.failOnce?.failOnAttempt || 0) || 0;
+
+    if (!policy.enabled) {
+      decision.attempts.push({ attempt: 1, candidates: [], status: 'disabled' });
+      writeDasLogs();
+      await ensureValidAccessToken();
+      const res = await postJson<InventorySchema>(url, accessToken, body);
+      if (!res.ok) throw new Error(`generate-inventory failed (${res.status}): ${res.text.slice(0, 500)}`);
+      writeJsonFile(path.join(runDir, 'library.json'), { ...spec.library, generated: res.data });
+      return res.data;
     }
+
+    const attemptCount = policy.maxAttempts;
+    const k = policy.kCandidates;
+    let selected: { inv: InventorySchema; file: string; attempt: number; candidate: number; score: number } | null =
+      null;
+
+    for (let attempt = 1; attempt <= attemptCount; attempt += 1) {
+      const attemptRec: DasNodeDecision['attempts'][number] = { attempt, candidates: [], status: 'retry' };
+      decision.attempts.push(attemptRec);
+
+      if (failOnceEnabled && attempt === failOnAttempt) {
+        const file = path.join(runDir, 'candidates', nodeId, `attempt-${String(attempt).padStart(2, '0')}-skipped.json`);
+        writeJsonFile(file, {
+          nodeId,
+          attempt,
+          skipped: true,
+          reason: 'testOnly_failOnce',
+          createdAt: nowIso(),
+        });
+        attemptRec.candidates.push({
+          attempt,
+          candidate: 0,
+          ok: false,
+          score: 0,
+          skipped: true,
+          file: path.relative(runDir, file),
+          gates: [gate('testOnly_failOnce', false, 'retryable_fail', 0, 'forced retry for DAS validation')],
+        });
+        attemptRec.status = attempt === attemptCount ? 'exhausted' : 'retry';
+        writeDasLogs();
+        continue;
+      }
+
+      const candidateValues: Array<{ inv: InventorySchema; file: string; score: number; candidate: number }> = [];
+      for (let cand = 1; cand <= k; cand += 1) {
+        await ensureValidAccessToken();
+        let res = await postJson<InventorySchema>(url, accessToken, body);
+        if (!res.ok && res.status === 401 && refreshToken) {
+          await refreshSession();
+          res = await postJson<InventorySchema>(url, accessToken, body);
+        }
+        if (!res.ok) {
+          attemptRec.candidates.push({
+            attempt,
+            candidate: cand,
+            ok: false,
+            score: 0,
+            error: res.text.slice(0, 500),
+            gates: [gate('http', false, 'retryable_fail', 0, `HTTP ${res.status}`)],
+          });
+          continue;
+        }
+
+        const outFile = path.join(
+          runDir,
+          'candidates',
+          nodeId,
+          `attempt-${String(attempt).padStart(2, '0')}-cand-${String(cand).padStart(2, '0')}.json`
+        );
+        writeJsonFile(outFile, {
+          nodeId,
+          attempt,
+          candidate: cand,
+          createdAt: nowIso(),
+          request: body,
+          output: res.data,
+        });
+
+        const gates: DasGateResult[] = [];
+        const evalList = policy.eval;
+        if (evalList.includes('structural')) gates.push(evalStructuralInventory(res.data));
+        if (evalList.includes('bounds')) gates.push(evalBoundsInventory(res.data));
+
+        // Unknown gates are recorded as pass (planning), but are not enforced yet.
+        for (const gName of evalList) {
+          if (gName === 'structural' || gName === 'bounds' || gName === 'testOnly_failOnce') continue;
+          gates.push(gate(gName, true, 'pass', 0, 'not_implemented'));
+        }
+
+        const ok = gates.every((g) => g.ok);
+        const score = gates.reduce((acc, g) => acc + (Number(g.score) || 0), 0);
+        attemptRec.candidates.push({
+          attempt,
+          candidate: cand,
+          ok,
+          score,
+          file: path.relative(runDir, outFile),
+          gates,
+        });
+        if (ok) candidateValues.push({ inv: res.data, file: path.relative(runDir, outFile), score, candidate: cand });
+      }
+
+      if (candidateValues.length) {
+        candidateValues.sort((a, b) => b.score - a.score);
+        const best = candidateValues[0]!;
+        selected = { inv: best.inv, file: best.file, attempt, candidate: best.candidate, score: best.score };
+        attemptRec.selectedCandidate = best.candidate;
+        attemptRec.status = 'selected';
+        decision.selected = { attempt, candidate: best.candidate, score: best.score, file: best.file };
+        dasSelection.selected[nodeId] = { attempt, candidate: best.candidate, score: best.score, file: best.file };
+        writeDasLogs();
+        break;
+      }
+
+      attemptRec.status = attempt === attemptCount ? 'exhausted' : 'retry';
+      writeDasLogs();
+    }
+
+    if (!selected) {
+      throw new Error(`DAS failed: no passing library candidate after ${attemptCount} attempt(s)`);
+    }
+
     writeJsonFile(path.join(runDir, 'library.json'), {
       ...spec.library,
-      generated: res.data,
+      generated: selected.inv,
     });
-    return res.data;
+    return selected.inv;
   });
 
   const generatedBlueprints = await step('generate_blueprints', async () => {
     if (!backendCalls) throw new Error('Backend calls disabled (no-backend not implemented in Stage 0)');
-    await ensureValidAccessToken();
     const url = `${agenticBaseUrl}/api/generate-blueprint`;
     const categories = (inventory.categories || []).map((c) => ({ name: c.name, items: c.items }));
 
-    const results: Array<{
-      spec: SeedSpec['blueprints'][number];
-      generated: GeneratedBlueprint;
-    }> = [];
-
     const blueprintSpecs = limitBlueprints > 0 ? spec.blueprints.slice(0, limitBlueprints) : spec.blueprints;
-    for (const bp of blueprintSpecs) {
-      const body = {
-        title: bp.title,
-        description: bp.description || '',
-        notes: bp.notes || '',
-        inventoryTitle: spec.library.title,
-        categories,
-      };
-      let res = await postJson<GeneratedBlueprint>(url, accessToken, body);
-      if (!res.ok && res.status === 401 && refreshToken) {
-        await refreshSession();
-        res = await postJson<GeneratedBlueprint>(url, accessToken, body);
+
+    const generateOnce = async (): Promise<{
+      results: Array<{ spec: SeedSpec['blueprints'][number]; generated: GeneratedBlueprint }>;
+      list: GeneratedBlueprint[];
+    }> => {
+      const results: Array<{
+        spec: SeedSpec['blueprints'][number];
+        generated: GeneratedBlueprint;
+      }> = [];
+
+      for (const bp of blueprintSpecs) {
+        const body = {
+          title: bp.title,
+          description: bp.description || '',
+          notes: bp.notes || '',
+          inventoryTitle: spec.library.title,
+          categories,
+        };
+        let res = await postJson<GeneratedBlueprint>(url, accessToken, body);
+        if (!res.ok && res.status === 401 && refreshToken) {
+          await refreshSession();
+          res = await postJson<GeneratedBlueprint>(url, accessToken, body);
+        }
+        if (!res.ok) {
+          throw new Error(`generate-blueprint failed (${res.status}): ${res.text.slice(0, 500)}`);
+        }
+        results.push({ spec: bp, generated: res.data });
       }
-      if (!res.ok) {
-        throw new Error(`generate-blueprint failed (${res.status}): ${res.text.slice(0, 500)}`);
-      }
-      results.push({ spec: bp, generated: res.data });
+      return { results, list: results.map((r) => r.generated) };
+    };
+
+    // DAS v1: retries + select-best only when enabled.
+    if (!dasEnabled || !dasConfig || !dasDecision || !dasSelection) {
+      await ensureValidAccessToken();
+      const { results, list } = await generateOnce();
+      writeJsonFile(path.join(runDir, 'blueprints.json'), {
+        libraryTitle: spec.library.title,
+        blueprints: results,
+      });
+      return list;
     }
 
+    const nodeId: DasNodeId = 'BP_GEN';
+    const policy = getDasPolicy(dasConfig, nodeId);
+    const decision: DasNodeDecision = { nodeId, policy, attempts: [] };
+    dasDecision.nodes[nodeId] = decision;
+    ensureDir(path.join(runDir, 'candidates', nodeId));
+
+    const failOnceEnabled =
+      !!dasConfig.testOnly?.enabled &&
+      !!dasConfig.testOnly?.failOnce &&
+      Array.isArray(dasConfig.testOnly.failOnce.nodes) &&
+      dasConfig.testOnly.failOnce.nodes.includes(nodeId) &&
+      Number(dasConfig.testOnly.failOnce.failOnAttempt || 0) > 0;
+    const failOnAttempt = Number(dasConfig.testOnly?.failOnce?.failOnAttempt || 0) || 0;
+
+    if (!policy.enabled) {
+      decision.attempts.push({ attempt: 1, candidates: [], status: 'disabled' });
+      writeDasLogs();
+      await ensureValidAccessToken();
+      const { results, list } = await generateOnce();
+      writeJsonFile(path.join(runDir, 'blueprints.json'), { libraryTitle: spec.library.title, blueprints: results });
+      return list;
+    }
+
+    const attemptCount = policy.maxAttempts;
+    const k = policy.kCandidates;
+    let selected: { list: GeneratedBlueprint[]; file: string; attempt: number; candidate: number; score: number } | null =
+      null;
+
+    for (let attempt = 1; attempt <= attemptCount; attempt += 1) {
+      const attemptRec: DasNodeDecision['attempts'][number] = { attempt, candidates: [], status: 'retry' };
+      decision.attempts.push(attemptRec);
+
+      if (failOnceEnabled && attempt === failOnAttempt) {
+        const file = path.join(runDir, 'candidates', nodeId, `attempt-${String(attempt).padStart(2, '0')}-skipped.json`);
+        writeJsonFile(file, {
+          nodeId,
+          attempt,
+          skipped: true,
+          reason: 'testOnly_failOnce',
+          createdAt: nowIso(),
+        });
+        attemptRec.candidates.push({
+          attempt,
+          candidate: 0,
+          ok: false,
+          score: 0,
+          skipped: true,
+          file: path.relative(runDir, file),
+          gates: [gate('testOnly_failOnce', false, 'retryable_fail', 0, 'forced retry for DAS validation')],
+        });
+        attemptRec.status = attempt === attemptCount ? 'exhausted' : 'retry';
+        writeDasLogs();
+        continue;
+      }
+
+      const candidateValues: Array<{ list: GeneratedBlueprint[]; file: string; score: number; candidate: number }> = [];
+      for (let cand = 1; cand <= k; cand += 1) {
+        await ensureValidAccessToken();
+        let list: GeneratedBlueprint[] = [];
+        let err: Error | null = null;
+        try {
+          const out = await generateOnce();
+          list = out.list;
+        } catch (e) {
+          err = e instanceof Error ? e : new Error(String(e));
+        }
+
+        if (err) {
+          attemptRec.candidates.push({
+            attempt,
+            candidate: cand,
+            ok: false,
+            score: 0,
+            error: err.message.slice(0, 500),
+            gates: [gate('exception', false, 'retryable_fail', 0, 'generate-blueprint threw')],
+          });
+          continue;
+        }
+
+        const outFile = path.join(
+          runDir,
+          'candidates',
+          nodeId,
+          `attempt-${String(attempt).padStart(2, '0')}-cand-${String(cand).padStart(2, '0')}.json`
+        );
+        writeJsonFile(outFile, {
+          nodeId,
+          attempt,
+          candidate: cand,
+          createdAt: nowIso(),
+          blueprintCount: blueprintSpecs.length,
+          output: list,
+        });
+
+        const gates: DasGateResult[] = [];
+        const evalList = policy.eval;
+        if (evalList.includes('structural')) gates.push(evalStructuralBlueprints(list));
+        if (evalList.includes('bounds')) gates.push(evalBoundsBlueprints(list));
+        for (const gName of evalList) {
+          if (gName === 'structural' || gName === 'bounds' || gName === 'testOnly_failOnce') continue;
+          gates.push(gate(gName, true, 'pass', 0, 'not_implemented'));
+        }
+
+        const ok = gates.every((g) => g.ok);
+        const score = gates.reduce((acc, g) => acc + (Number(g.score) || 0), 0);
+        attemptRec.candidates.push({
+          attempt,
+          candidate: cand,
+          ok,
+          score,
+          file: path.relative(runDir, outFile),
+          gates,
+        });
+        if (ok) candidateValues.push({ list, file: path.relative(runDir, outFile), score, candidate: cand });
+      }
+
+      if (candidateValues.length) {
+        candidateValues.sort((a, b) => b.score - a.score);
+        const best = candidateValues[0]!;
+        selected = { list: best.list, file: best.file, attempt, candidate: best.candidate, score: best.score };
+        attemptRec.selectedCandidate = best.candidate;
+        attemptRec.status = 'selected';
+        decision.selected = { attempt, candidate: best.candidate, score: best.score, file: best.file };
+        dasSelection.selected[nodeId] = { attempt, candidate: best.candidate, score: best.score, file: best.file };
+        writeDasLogs();
+        break;
+      }
+
+      attemptRec.status = attempt === attemptCount ? 'exhausted' : 'retry';
+      writeDasLogs();
+    }
+
+    if (!selected) {
+      throw new Error(`DAS failed: no passing blueprint candidate after ${attemptCount} attempt(s)`);
+    }
+
+    // Persist the selected set as the canonical artifact.
     writeJsonFile(path.join(runDir, 'blueprints.json'), {
       libraryTitle: spec.library.title,
-      blueprints: results,
+      blueprints: blueprintSpecs.map((bp, i) => ({ spec: bp, generated: selected!.list[i]! })),
     });
-    const list = results.map((r) => r.generated);
-    return list;
+    return selected.list;
   });
 
   const reviewPayloads = await step('generate_review_requests', async () => {
@@ -791,12 +1323,50 @@ async function main() {
   const validation = await step('validate', async () => {
     const result = validateBlueprints(inventory, generatedBlueprints);
     writeJsonFile(path.join(runDir, 'validation.json'), result);
+
+    if (dasEnabled && dasConfig && dasDecision && dasSelection) {
+      const nodeId: DasNodeId = 'VAL';
+      const policy = getDasPolicy(dasConfig, nodeId);
+      const decision: DasNodeDecision = {
+        nodeId,
+        policy,
+        attempts: [
+          {
+            attempt: 1,
+            status: result.ok ? 'selected' : 'hard_fail',
+            candidates: [
+              {
+                attempt: 1,
+                candidate: 1,
+                ok: result.ok,
+                score: result.ok ? 1 : 0,
+                gates: [gate('crossref', result.ok, result.ok ? 'pass' : 'hard_fail', result.ok ? 1 : 0)],
+                file: 'validation.json',
+              },
+            ],
+            selectedCandidate: result.ok ? 1 : undefined,
+          },
+        ],
+        ...(result.ok ? { selected: { attempt: 1, candidate: 1, score: 1, file: 'validation.json' } } : {}),
+      };
+      dasDecision.nodes[nodeId] = decision;
+      if (result.ok) dasSelection.selected[nodeId] = { attempt: 1, candidate: 1, score: 1, file: 'validation.json' };
+      writeDasLogs();
+    }
+
     return result;
   });
 
   if (applyStage1) {
     if (!validation.ok) {
       throw new Error('Refusing Stage 1 apply: validation.ok is false. Fix generation/selection first.');
+    }
+
+    if (dasEnabled && dasConfig) {
+      const applyPolicy = getDasPolicy(dasConfig, 'APPLY');
+      if (!applyPolicy.enabled) {
+        throw new Error('Refusing Stage 1 apply: disabled by DAS config (nodes.APPLY.enabled=false).');
+      }
     }
 
     await step('apply_stage1_guard', async () => {

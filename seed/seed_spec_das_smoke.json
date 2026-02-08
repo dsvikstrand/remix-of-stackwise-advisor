@@ -1,0 +1,19 @@
+{
+  "run_id": "das-smoke",
+  "library": {
+    "topic": "Morning routine at home",
+    "title": "Home Morning Routine Library",
+    "description": "A practical library of items for building a consistent morning routine.",
+    "notes": "Keep it safe, time efficient, and beginner friendly.",
+    "tags": ["morning", "routine", "self-care"]
+  },
+  "blueprints": [
+    {
+      "title": "15-Min Morning Starter",
+      "description": "A quick routine to start the day with energy and focus.",
+      "notes": "Avoid extreme claims; keep steps simple.",
+      "tags": ["beginner", "consistency"]
+    }
+  ]
+}
+

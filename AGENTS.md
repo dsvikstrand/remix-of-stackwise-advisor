@@ -62,3 +62,21 @@ for example: if you give me a follow up question:
 (codex) - "Would you like option A or B?"/"How should I do X"
 (me) - "REC" -> "Please use/go with your recommendations"
 
+
+## 11) Remote server: Oracle (SSH alias + multiplexing)
+
+We work against an Oracle Ubuntu box via SSH. Use the SSH host alias (no raw IPs / key paths in commands):
+
+- SSH host alias: `oracle-free`
+- Repo dir on server: `/home/ubuntu/remix-of-stackwise-advisor`
+
+### Connection multiplexing (already configured)
+SSH multiplexing is enabled in `~/.ssh/config` for `oracle-free` (ControlMaster/ControlPersist), so multiple sequential `ssh oracle-free "..."`
+calls should be fast (reuses the connection).
+
+### Preferred command patterns
+
+**One-shot remote command**
+```bash
+ssh oracle-free "cd /home/ubuntu/remix-of-stackwise-advisor && git pull"
+```
