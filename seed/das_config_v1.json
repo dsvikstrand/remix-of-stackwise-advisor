@@ -25,7 +25,7 @@
     "BP_GEN": {
       "kCandidates": 1,
       "maxAttempts": 2,
-      "eval": ["structural", "bounds"]
+      "eval": ["structural", "bounds", "crossref"]
     },
     "VAL": {
       "kCandidates": 1,

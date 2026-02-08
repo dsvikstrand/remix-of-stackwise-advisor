@@ -24,10 +24,10 @@ Key fields:
 - `blueprints[]`: blueprint variants to generate from the generated library
 - Optional: `asp` (persona id + optional stub fields; recorded for future alignment evals)
 
-## Gate Contract (Planned)
-When DAS is enabled, each candidate is evaluated by a list of gates.
+## Gate Contract (Current)
+When DAS is enabled (`--das`), each candidate is evaluated by a list of gates and recorded in `logs/decision_log.json`.
 
-We want a stable, debuggable contract per gate result, recorded in `logs/decision_log.json`:
+Stable per-gate contract:
 - `gate_id`: string (example: `structural`, `bounds`, `crossref`)
 - `ok`: boolean
 - `severity`: one of `info|warn|hard_fail`

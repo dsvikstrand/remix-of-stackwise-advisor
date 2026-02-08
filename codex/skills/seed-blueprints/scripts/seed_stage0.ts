@@ -76,7 +76,7 @@ type BannerPayload = {
 
 type DasNodeId = 'AUTH_READ' | 'LIB_GEN' | 'BP_GEN' | 'VAL' | 'AI_REVIEW' | 'AI_BANNER' | 'APPLY';
 
-type DasGateKind = 'pass' | 'retryable_fail' | 'hard_fail';
+type DasGateSeverity = 'info' | 'warn' | 'hard_fail';
 
 type DasPolicy = {
   enabled?: boolean;
@@ -101,11 +101,12 @@ type DasConfig = {
 };
 
 type DasGateResult = {
-  gate: string;
+  gate_id: string;
   ok: boolean;
-  kind: DasGateKind;
+  severity: DasGateSeverity;
   score: number;
-  detail?: string;
+  reason: string;
+  data?: Record<string, unknown>;
 };
 
 type DasCandidateResult = {
@@ -370,55 +371,116 @@ function getDasPolicy(cfg: DasConfig, nodeId: DasNodeId) {
   };
 }
 
-function gate(gateName: string, ok: boolean, kind: DasGateKind, score: number, detail?: string): DasGateResult {
-  return { gate: gateName, ok, kind, score, ...(detail ? { detail } : {}) };
+function gate(
+  gateId: string,
+  ok: boolean,
+  severity: DasGateSeverity,
+  score: number,
+  reason: string,
+  data?: Record<string, unknown>
+): DasGateResult {
+  return { gate_id: gateId, ok, severity, score, reason, ...(data ? { data } : {}) };
 }
 
 function evalStructuralInventory(inv: InventorySchema): DasGateResult {
   const cats = Array.isArray(inv?.categories) ? inv.categories : [];
-  if (cats.length === 0) return gate('structural', false, 'retryable_fail', 0, 'no categories');
+  if (cats.length === 0) return gate('structural', false, 'warn', 0, 'no_categories', { categoryCount: 0 });
   const empty = cats.filter((c) => !(c.items || []).length).length;
-  if (empty > 0) return gate('structural', false, 'retryable_fail', 0, 'one or more categories have zero items');
-  return gate('structural', true, 'pass', 1);
+  if (empty > 0)
+    return gate('structural', false, 'warn', 0, 'empty_categories', { categoryCount: cats.length, emptyCategoryCount: empty });
+  return gate('structural', true, 'info', 1, 'ok', { categoryCount: cats.length });
 }
 
 function evalBoundsInventory(inv: InventorySchema): DasGateResult {
   const cats = Array.isArray(inv?.categories) ? inv.categories : [];
-  if (cats.length > 30) return gate('bounds', false, 'retryable_fail', 0, `too many categories (${cats.length})`);
+  const limits = {
+    maxCategories: 30,
+    maxCategoryNameLen: 80,
+    maxItemsPerCategory: 80,
+    maxItemNameLen: 80,
+  };
+  if (cats.length > limits.maxCategories) {
+    return gate('bounds', false, 'warn', 0, 'too_many_categories', {
+      categoryCount: cats.length,
+      maxCategories: limits.maxCategories,
+    });
+  }
   for (const c of cats) {
     const name = String(c?.name || '');
-    if (name.length > 80) return gate('bounds', false, 'retryable_fail', 0, 'category name too long');
+    if (name.length > limits.maxCategoryNameLen) {
+      return gate('bounds', false, 'warn', 0, 'category_name_too_long', {
+        categoryNameLen: name.length,
+        maxCategoryNameLen: limits.maxCategoryNameLen,
+      });
+    }
     const items = Array.isArray(c?.items) ? c.items : [];
-    if (items.length > 80) return gate('bounds', false, 'retryable_fail', 0, `too many items in category (${items.length})`);
+    if (items.length > limits.maxItemsPerCategory) {
+      return gate('bounds', false, 'warn', 0, 'too_many_items_in_category', {
+        itemCount: items.length,
+        maxItemsPerCategory: limits.maxItemsPerCategory,
+      });
+    }
     for (const it of items) {
-      if (String(it || '').length > 80) return gate('bounds', false, 'retryable_fail', 0, 'item name too long');
+      const itNameLen = String(it || '').length;
+      if (itNameLen > limits.maxItemNameLen) {
+        return gate('bounds', false, 'warn', 0, 'item_name_too_long', {
+          itemNameLen: itNameLen,
+          maxItemNameLen: limits.maxItemNameLen,
+        });
+      }
     }
   }
-  return gate('bounds', true, 'pass', 1);
+  return gate('bounds', true, 'info', 1, 'ok', limits);
 }
 
 function evalStructuralBlueprints(blueprints: GeneratedBlueprint[]): DasGateResult {
-  if (!Array.isArray(blueprints) || blueprints.length === 0) return gate('structural', false, 'retryable_fail', 0, 'no blueprints');
+  if (!Array.isArray(blueprints) || blueprints.length === 0)
+    return gate('structural', false, 'warn', 0, 'no_blueprints', { blueprintCount: 0 });
   for (const bp of blueprints) {
-    if (!String(bp?.title || '').trim()) return gate('structural', false, 'retryable_fail', 0, 'missing blueprint title');
-    if (!Array.isArray(bp?.steps) || bp.steps.length === 0) return gate('structural', false, 'retryable_fail', 0, 'blueprint has no steps');
+    if (!String(bp?.title || '').trim())
+      return gate('structural', false, 'warn', 0, 'missing_blueprint_title');
+    if (!Array.isArray(bp?.steps) || bp.steps.length === 0)
+      return gate('structural', false, 'warn', 0, 'blueprint_has_no_steps', { title: String(bp?.title || '') });
     for (const st of bp.steps || []) {
-      if (!Array.isArray(st?.items) || st.items.length === 0) return gate('structural', false, 'retryable_fail', 0, 'step has no items');
+      if (!Array.isArray(st?.items) || st.items.length === 0)
+        return gate('structural', false, 'warn', 0, 'step_has_no_items', { stepTitle: String(st?.title || '') });
     }
   }
-  return gate('structural', true, 'pass', 1);
+  return gate('structural', true, 'info', 1, 'ok', { blueprintCount: blueprints.length });
 }
 
 function evalBoundsBlueprints(blueprints: GeneratedBlueprint[]): DasGateResult {
+  const limits = {
+    maxSteps: 20,
+    maxStepTitleLen: 120,
+    maxStepDescriptionLen: 800,
+    maxItemsPerStep: 40,
+  };
   for (const bp of blueprints || []) {
-    if ((bp.steps || []).length > 20) return gate('bounds', false, 'retryable_fail', 0, 'too many steps');
+    if ((bp.steps || []).length > limits.maxSteps) {
+      return gate('bounds', false, 'warn', 0, 'too_many_steps', { stepCount: (bp.steps || []).length, maxSteps: limits.maxSteps });
+    }
     for (const st of bp.steps || []) {
-      if (String(st?.title || '').length > 120) return gate('bounds', false, 'retryable_fail', 0, 'step title too long');
-      if (String(st?.description || '').length > 800) return gate('bounds', false, 'retryable_fail', 0, 'step description too long');
-      if ((st.items || []).length > 40) return gate('bounds', false, 'retryable_fail', 0, 'too many items in step');
+      const titleLen = String(st?.title || '').length;
+      if (titleLen > limits.maxStepTitleLen) {
+        return gate('bounds', false, 'warn', 0, 'step_title_too_long', { titleLen, maxStepTitleLen: limits.maxStepTitleLen });
+      }
+      const descLen = String(st?.description || '').length;
+      if (descLen > limits.maxStepDescriptionLen) {
+        return gate('bounds', false, 'warn', 0, 'step_description_too_long', {
+          descLen,
+          maxStepDescriptionLen: limits.maxStepDescriptionLen,
+        });
+      }
+      if ((st.items || []).length > limits.maxItemsPerStep) {
+        return gate('bounds', false, 'warn', 0, 'too_many_items_in_step', {
+          itemCount: (st.items || []).length,
+          maxItemsPerStep: limits.maxItemsPerStep,
+        });
+      }
     }
   }
-  return gate('bounds', true, 'pass', 1);
+  return gate('bounds', true, 'info', 1, 'ok', limits);
 }
 
 function writeJsonFile(filePath: string, data: unknown) {
@@ -988,7 +1050,7 @@ async function main() {
           score: 0,
           skipped: true,
           file: path.relative(runDir, file),
-          gates: [gate('testOnly_failOnce', false, 'retryable_fail', 0, 'forced retry for DAS validation')],
+          gates: [gate('testOnly_failOnce', false, 'warn', 0, 'forced_retry', { attempt })],
         });
         attemptRec.status = attempt === attemptCount ? 'exhausted' : 'retry';
         writeDasLogs();
@@ -1010,7 +1072,7 @@ async function main() {
             ok: false,
             score: 0,
             error: res.text.slice(0, 500),
-            gates: [gate('http', false, 'retryable_fail', 0, `HTTP ${res.status}`)],
+            gates: [gate('http', false, 'warn', 0, 'http_error', { status: res.status })],
           });
           continue;
         }
@@ -1035,10 +1097,10 @@ async function main() {
         if (evalList.includes('structural')) gates.push(evalStructuralInventory(res.data));
         if (evalList.includes('bounds')) gates.push(evalBoundsInventory(res.data));
 
-        // Unknown gates are recorded as pass (planning), but are not enforced yet.
+        // Unknown gates are a hard fail (config mismatch). Add stubs explicitly if needed.
         for (const gName of evalList) {
           if (gName === 'structural' || gName === 'bounds' || gName === 'testOnly_failOnce') continue;
-          gates.push(gate(gName, true, 'pass', 0, 'not_implemented'));
+          gates.push(gate(gName, false, 'hard_fail', 0, 'not_implemented'));
         }
 
         const ok = gates.every((g) => g.ok);
@@ -1177,7 +1239,7 @@ async function main() {
           score: 0,
           skipped: true,
           file: path.relative(runDir, file),
-          gates: [gate('testOnly_failOnce', false, 'retryable_fail', 0, 'forced retry for DAS validation')],
+          gates: [gate('testOnly_failOnce', false, 'warn', 0, 'forced_retry', { attempt })],
         });
         attemptRec.status = attempt === attemptCount ? 'exhausted' : 'retry';
         writeDasLogs();
@@ -1197,16 +1259,16 @@ async function main() {
         }
 
         if (err) {
-          attemptRec.candidates.push({
-            attempt,
-            candidate: cand,
-            ok: false,
-            score: 0,
-            error: err.message.slice(0, 500),
-            gates: [gate('exception', false, 'retryable_fail', 0, 'generate-blueprint threw')],
-          });
-          continue;
-        }
+        attemptRec.candidates.push({
+          attempt,
+          candidate: cand,
+          ok: false,
+          score: 0,
+          error: err.message.slice(0, 500),
+          gates: [gate('exception', false, 'warn', 0, 'generate_blueprint_threw')],
+        });
+        continue;
+      }
 
         const outFile = path.join(
           runDir,
@@ -1227,9 +1289,26 @@ async function main() {
         const evalList = policy.eval;
         if (evalList.includes('structural')) gates.push(evalStructuralBlueprints(list));
         if (evalList.includes('bounds')) gates.push(evalBoundsBlueprints(list));
+        if (evalList.includes('crossref')) {
+          const v = validateBlueprints(inventory, list);
+          gates.push(
+            gate(
+              'crossref',
+              v.ok,
+              v.ok ? 'info' : 'warn',
+              v.ok ? 1 : 0,
+              v.ok ? 'ok' : 'invalid_refs',
+              {
+                errorCount: v.errors.length,
+                warningCount: v.warnings.length,
+                sampleError: v.errors[0] ? String(v.errors[0]).slice(0, 200) : '',
+              }
+            )
+          );
+        }
         for (const gName of evalList) {
-          if (gName === 'structural' || gName === 'bounds' || gName === 'testOnly_failOnce') continue;
-          gates.push(gate(gName, true, 'pass', 0, 'not_implemented'));
+          if (gName === 'structural' || gName === 'bounds' || gName === 'crossref' || gName === 'testOnly_failOnce') continue;
+          gates.push(gate(gName, false, 'hard_fail', 0, 'not_implemented'));
         }
 
         const ok = gates.every((g) => g.ok);
@@ -1396,7 +1475,12 @@ async function main() {
                 candidate: 1,
                 ok: result.ok,
                 score: result.ok ? 1 : 0,
-                gates: [gate('crossref', result.ok, result.ok ? 'pass' : 'hard_fail', result.ok ? 1 : 0)],
+                gates: [
+                  gate('crossref', result.ok, result.ok ? 'info' : 'hard_fail', result.ok ? 1 : 0, result.ok ? 'ok' : 'invalid_refs', {
+                    errorCount: result.errors.length,
+                    warningCount: result.warnings.length,
+                  }),
+                ],
                 file: validationRel,
               },
             ],
