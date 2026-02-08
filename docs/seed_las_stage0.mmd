@@ -41,7 +41,7 @@ flowchart TD
   %% Library generation (candidate -> eval -> select)
   AUTH_READ --> LIB_GEN["LIB_GEN n1 generate_library POST /api/generate-inventory TESTED_OK"]
   DAS_CFG -.-> LIB_EVAL
-  LIB_GEN --> LIB_CAND["LIB_CAND Write candidates/LIB/ATTEMPT.json NOT_TESTED"]
+  LIB_GEN --> LIB_CAND["LIB_CAND Write candidates/LIB_GEN/attempt-xx-cand-yy.json NOT_TESTED"]
   LIB_CAND --> LIB_EVAL{"LIB_EVAL eval_structural + eval_relevance + eval_safety + eval_pii NOT_TESTED"}
   LIB_EVAL -->|pass| LIB_SEL["LIB_SEL score + select best candidate NOT_TESTED"]
   LIB_EVAL -->|struct/relevance fail and attempt lt max| LIB_RETRY["LIB_RETRY tighten prompt + retry (maxAttempts=2) NOT_TESTED"]
@@ -56,7 +56,7 @@ flowchart TD
   %% Blueprint generation (per-variant candidates -> eval -> select)
   LIB_OUT --> BP_GEN["BP_GEN n2 generate_blueprints POST /api/generate-blueprint TESTED_OK"]
   DAS_CFG -.-> BP_EVAL
-  BP_GEN --> BP_CAND["BP_CAND Write candidates/BP/ATTEMPT.json NOT_TESTED"]
+  BP_GEN --> BP_CAND["BP_CAND Write candidates/BP_GEN/attempt-xx-cand-yy.json NOT_TESTED"]
   BP_CAND --> BP_EVAL{"BP_EVAL eval_structural + eval_relevance + eval_safety + eval_pii NOT_TESTED"}
   BP_EVAL -->|pass| BP_SEL["BP_SEL score + select best candidate NOT_TESTED"]
   BP_EVAL -->|struct/relevance fail and attempt lt max| BP_RETRY["BP_RETRY tighten prompt + retry (maxAttempts=2) NOT_TESTED"]

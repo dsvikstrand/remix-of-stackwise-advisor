@@ -25,14 +25,21 @@ Environment:
 
 Command:
 ```bash
-tsx codex/skills/seed-blueprints/scripts/seed_stage0.ts --spec seed/seed_spec_v0.json
+npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts --spec seed/seed_spec_v0.json
 ```
 
 WSL note:
 - If your repo is under `/mnt/c/...`, `tsx` may fail creating IPC sockets on that filesystem.
 - Fix by running with `TMPDIR=/tmp`:
 ```bash
-TMPDIR=/tmp tsx codex/skills/seed-blueprints/scripts/seed_stage0.ts --spec seed/seed_spec_v0.json
+TMPDIR=/tmp npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts --spec seed/seed_spec_v0.json
+```
+
+Oracle note:
+- One-shot `ssh oracle-free "..."` commands may not load `nvm`, so you can silently end up on Node 10.
+- Prefer wrapping with a login shell so Node 20 + `npx` are available:
+```bash
+ssh oracle-free 'bash -lc "cd /home/ubuntu/remix-of-stackwise-advisor && node -v && npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts --spec seed/seed_spec_v0.json"'
 ```
 
 Outputs:
@@ -54,7 +61,7 @@ Stage 0.5 is still "no writes", but it *does* execute two expensive calls so you
 
 Command:
 ```bash
-tsx codex/skills/seed-blueprints/scripts/seed_stage0.ts \
+npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts \
   --spec seed/seed_spec_v0.json \
   --do-review \
   --do-banner
@@ -62,7 +69,7 @@ tsx codex/skills/seed-blueprints/scripts/seed_stage0.ts \
 
 Optional (nudge the review):
 ```bash
-tsx codex/skills/seed-blueprints/scripts/seed_stage0.ts \
+npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts \
   --spec seed/seed_spec_v0.json \
   --do-review \
   --review-focus "Keep it short, practical, and safety-minded." \
@@ -99,7 +106,7 @@ TMPDIR=/tmp \
 SEED_USER_ACCESS_TOKEN="$(cat access_tok.txt)" \
 SUPABASE_URL="https://piszvseyaefxekubphhf.supabase.co" \
 SUPABASE_ANON_KEY="(paste VITE_SUPABASE_PUBLISHABLE_KEY)" \
-tsx codex/skills/seed-blueprints/scripts/seed_stage0.ts \
+npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts \
   --spec seed/seed_spec_v0.json \
   --limit-blueprints 1 \
   --do-review \
@@ -135,7 +142,7 @@ TMPDIR=/tmp \
 SEED_USER_REFRESH_TOKEN="$(cat refresh_tok.local)" \
 SUPABASE_URL="https://piszvseyaefxekubphhf.supabase.co" \
 SUPABASE_ANON_KEY="(paste VITE_SUPABASE_PUBLISHABLE_KEY)" \
-tsx codex/skills/seed-blueprints/scripts/seed_stage0.ts \
+npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts \
   --spec seed/seed_spec_v0.json \
   --run-id refresh-token-test \
   --limit-blueprints 1 \
@@ -161,7 +168,7 @@ TMPDIR=/tmp \
 SEED_USER_REFRESH_TOKEN="$(cat refresh_tok.local)" \
 SUPABASE_URL="https://piszvseyaefxekubphhf.supabase.co" \
 SUPABASE_ANON_KEY="(paste VITE_SUPABASE_PUBLISHABLE_KEY)" \
-tsx codex/skills/seed-blueprints/scripts/seed_stage0.ts \
+npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts \
   --spec seed/seed_spec_das_smoke.json \
   --run-id das-smoke \
   --limit-blueprints 1 \
