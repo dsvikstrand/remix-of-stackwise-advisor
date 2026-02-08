@@ -1,7 +1,10 @@
 # Stage 0 Workflow (Linear)
 
 1. Read `seed/seed_spec_v0.json`.
-   - Optional: `asp` block (persona stub). It is recorded in `run_meta.json` for future alignment gates, but does not change generation yet.
+   - Optional: `asp.id` loads a repo-global persona from `personas/v0/<asp.id>.json`.
+   - The runner appends the persona prompt block into:
+     - `LIB_GEN` request `customInstructions`
+     - `BP_GEN` request `notes`
 2. Call `generate-inventory` using `library.topic` + `library.title` + `library.notes`.
 3. For each blueprint variant:
    - Call `generate-blueprint` with variant title/description/notes and the library categories.
@@ -13,7 +16,33 @@
 ## Planning docs
 - Mermaid graph: `docs/seed_las_stage0.mmd`
 - ASS baseline + DAS roadmap: `docs/seed_ass_spec.md`
-- Persona contract (planned): `docs/persona_schema.md`
+- Persona contract (current): `docs/persona_schema.md`
+
+## Persona utilities
+
+List personas:
+```bash
+TMPDIR=/tmp npx -y tsx ./codex/skills/seed-blueprints/scripts/persona_registry.ts --list
+```
+
+Validate personas:
+```bash
+TMPDIR=/tmp npx -y tsx ./codex/skills/seed-blueprints/scripts/persona_registry.ts --validate
+```
+
+Show a persona (hashes + prompt block):
+```bash
+TMPDIR=/tmp npx -y tsx ./codex/skills/seed-blueprints/scripts/persona_registry.ts --show skincare_diet_female_v0
+```
+
+Generate a seed spec deterministically (no LLM):
+```bash
+TMPDIR=/tmp npx -y tsx ./codex/skills/seed-blueprints/scripts/gen_seed_spec.ts \
+  --goal "Simple home skincare routine for beginners" \
+  --persona skincare_diet_female_v0 \
+  --blueprints 2 \
+  --out seed/seed_spec_generated.local
+```
 
 ## Run (Stage 0)
 

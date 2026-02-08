@@ -53,6 +53,10 @@ Runner behavior (current):
 - Compute and record `persona_hash` + `prompt_hash` in `logs/run_meta.json` for reproducibility.
 - Write the applied prompt block to `logs/persona_log.json` (debugging).
 
+Utilities (repo-local):
+- `codex/skills/seed-blueprints/scripts/persona_registry.ts` (list/validate/show personas)
+- `codex/skills/seed-blueprints/scripts/gen_seed_spec.ts` (deterministic seed spec generator)
+
 ## Stage 0 (LAS) – Artifacts Only (No Writes)
 Stage 0 calls the agentic backend for generation, but does **not** write to Supabase.
 
