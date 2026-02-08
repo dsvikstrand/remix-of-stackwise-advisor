@@ -39,15 +39,15 @@ flowchart TD
   IN_RUN -.-> PERS_SCHEMA["PERS_SCHEMA docs/persona_schema.md (persona contract) TESTED_OK"]
 
   %% Prompt pack (optional, template v0)
-  OUT_DIR -.->|--compose-prompts| PROMPT_PACK["PROMPT_PACK compose prompts (template v0) NOT_TESTED"]
+  OUT_DIR -.->|--compose-prompts| PROMPT_PACK["PROMPT_PACK compose prompts (template v0) TESTED_OK"]
   DAS_CFG -.-> PP_EVAL
-  PROMPT_PACK --> PP_CAND["PP_CAND Write candidates/PROMPT_PACK/attempt-xx-cand-yy.json NOT_TESTED"]
-  PP_CAND --> PP_EVAL{"PP_EVAL eval_structural + eval_bounds NOT_TESTED"}
-  PP_EVAL -->|pass| PP_SEL["PP_SEL score + select best candidate NOT_TESTED"]
-  PP_EVAL -->|fail and attempt lt max| PP_RETRY["PP_RETRY retry (maxAttempts=2) NOT_TESTED"]
+  PROMPT_PACK --> PP_CAND["PP_CAND Write candidates/PROMPT_PACK/attempt-xx-cand-yy.json TESTED_OK"]
+  PP_CAND --> PP_EVAL{"PP_EVAL eval_structural + eval_bounds TESTED_OK"}
+  PP_EVAL -->|pass| PP_SEL["PP_SEL score + select best candidate TESTED_OK"]
+  PP_EVAL -->|fail and attempt lt max| PP_RETRY["PP_RETRY retry (maxAttempts=2) TESTED_OK"]
   PP_RETRY --> PROMPT_PACK
-  PP_SEL --> PP_OUT["PP_OUT Write requests/prompt_pack.json NOT_TESTED"]
-  PROMPT_PACK --> PP_LOG["PP_LOG Write logs/prompt_pack_log.json NOT_TESTED"]
+  PP_SEL --> PP_OUT["PP_OUT Write requests/prompt_pack.json TESTED_OK"]
+  PROMPT_PACK --> PP_LOG["PP_LOG Write logs/prompt_pack_log.json TESTED_OK"]
   PP_OUT --> AUTH_READ
   N_PP{{NOTE composed prompts override specRun library + blueprints}} --> PROMPT_PACK
   N_PP2{{NOTE v0 is template; LLM composer is TODO}} --> PROMPT_PACK
@@ -147,6 +147,5 @@ flowchart TD
   class TODO_ASP_EVAL,TODO_GRADER,TODO_COST todo;
 
   %% Tested status styling
-  class IN_SPEC,IN_RUN,OUT_DIR,PERS_SCHEMA,PERS_PROFILE,PERS_LOG,AUTH_READ,DAS_CFG,LIB_GEN,LIB_CAND,LIB_EVAL,LIB_SEL,LIB_RETRY,LIB_OUT,BP_GEN,BP_CAND,BP_EVAL,BP_SEL,BP_RETRY,BP_OUT,REQ_REVIEW,OUT_REVIEW_REQ,REQ_BANNER,OUT_BANNER_REQ,AI_REVIEW,OUT_REVIEWS,AI_BANNER,OUT_BANNERS,VAL,OUT_VAL,PAYLOAD,OUT_PAYLOAD,RUNLOG,DONE,APPLY_START,APPLY_INV,APPLY_BP,APPLY_BANNER,APPLY_REVIEW,APPLY_PUB done;
+  class IN_SPEC,IN_RUN,OUT_DIR,PERS_SCHEMA,PERS_PROFILE,PERS_LOG,PROMPT_PACK,PP_CAND,PP_EVAL,PP_SEL,PP_RETRY,PP_OUT,PP_LOG,AUTH_READ,DAS_CFG,LIB_GEN,LIB_CAND,LIB_EVAL,LIB_SEL,LIB_RETRY,LIB_OUT,BP_GEN,BP_CAND,BP_EVAL,BP_SEL,BP_RETRY,BP_OUT,REQ_REVIEW,OUT_REVIEW_REQ,REQ_BANNER,OUT_BANNER_REQ,AI_REVIEW,OUT_REVIEWS,AI_BANNER,OUT_BANNERS,VAL,OUT_VAL,PAYLOAD,OUT_PAYLOAD,RUNLOG,DONE,APPLY_START,APPLY_INV,APPLY_BP,APPLY_BANNER,APPLY_REVIEW,APPLY_PUB done;
   class ABORT,TODO_ASP_EVAL,TODO_GRADER,TODO_COST todo;
-  class PROMPT_PACK,PP_CAND,PP_EVAL,PP_SEL,PP_RETRY,PP_OUT,PP_LOG todo;
