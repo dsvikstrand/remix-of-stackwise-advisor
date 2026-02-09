@@ -36,6 +36,10 @@ flowchart TD
   %% Inputs + runner
   IN_SPEC["IN_SPEC seed/seed_spec_v0.json (Seed Spec) TESTED_OK"] --> IN_RUN["IN_RUN seed_stage0.ts (parse args + validate spec) TESTED_OK"]
   IN_RUN --> OUT_DIR["OUT_DIR Create run folder seed/outputs/RUN_ID/ TESTED_OK"]
+  IN_RUN --> RTYPE{"RTYPE run_type seed/library_only/blueprint_only TESTED_OK"}
+  N_RTYPE{{NOTE run_type can be set by --run-type or spec.run_type}} --> RTYPE
+  class RTYPE das_gate;
+  class N_RTYPE note;
   IN_RUN -.-> DAS_CFG["DAS_CFG seed/das_config_v1.json (DAS policy) TESTED_OK"]
   IN_RUN -.-> PERS_SCHEMA["PERS_SCHEMA docs/persona_schema.md (persona contract) TESTED_OK"]
 
@@ -69,6 +73,7 @@ flowchart TD
   OUT_DIR --> AUTH_READ["AUTH_READ Load auth store + tokens (refresh supported) TESTED_OK"]
   N_AUTH{{NOTE access token expires; refresh supported via auth store}} --> AUTH_READ
   N_AUTH2{{NOTE refresh flow verified by forcing access token rotation}} --> AUTH_READ
+  N_AUTH3{{NOTE password grant fallback supported for headless persona accounts}} --> AUTH_READ
   N_OUT{{NOTE seed outputs are artifacts; do not commit seed/outputs}} --> OUT_DIR
 
   %% Persona contract (planned)
@@ -80,6 +85,8 @@ flowchart TD
 
   %% Library generation (candidate -> eval -> select)
   AUTH_READ --> LIB_GEN["LIB_GEN n1 generate_library POST /api/generate-inventory TESTED_OK"]
+  RTYPE -->|blueprint_only| LIB_JSON["LIB_JSON load inventory from --library-json TESTED_OK"]
+  LIB_JSON --> LIB_OUT
   DAS_CFG -.-> LIB_EVAL
   LIB_GEN --> LIB_CAND["LIB_CAND Write candidates/LIB_GEN/attempt-xx-cand-yy.json TESTED_OK"]
   LIB_CAND --> LIB_EVAL{"LIB_EVAL eval_structural + eval_bounds TESTED_OK"}
@@ -94,6 +101,7 @@ flowchart TD
   N_DAS2{{NOTE safety and PII failures are non-retryable in seeding mode}} --> ABORT
 
   %% Blueprint generation (per-variant candidates -> eval -> select)
+  RTYPE -->|library_only| BP_SKIP["BP_SKIP write empty artifacts/blueprints.json TESTED_OK"]
   LIB_OUT --> BP_GEN["BP_GEN n2 generate_blueprints POST /api/generate-blueprint TESTED_OK"]
   DAS_CFG -.-> BP_EVAL
   BP_GEN --> BP_CAND["BP_CAND Write candidates/BP_GEN/attempt-xx-cand-yy.json TESTED_OK"]
@@ -105,6 +113,7 @@ flowchart TD
   BP_SEL --> BP_OUT["BP_OUT Write artifacts/blueprints.json TESTED_OK"]
 
   %% Request payloads (no network)
+  BP_SKIP --> REQ_REVIEW
   BP_OUT --> REQ_REVIEW["REQ_REVIEW build review_requests (no network) TESTED_OK"]
   REQ_REVIEW --> OUT_REVIEW_REQ["OUT_REVIEW_REQ Write requests/review_requests.json TESTED_OK"]
   OUT_REVIEW_REQ --> REQ_BANNER["REQ_BANNER build banner_requests (no network) TESTED_OK"]
@@ -154,9 +163,9 @@ flowchart TD
   class VAL,OUT_VAL,PAYLOAD,OUT_PAYLOAD,RUNLOG,DONE stage_inputs;
   class APPLY_START,APPLY_INV,APPLY_BP,APPLY_BANNER,APPLY_REVIEW,APPLY_PUB stage_apply;
   class PERS_SCHEMA,PERS_PROFILE,PERS_LOG stage_pers;
-  class CP_CAND,CP_EVAL,CP_SEL,CP_RETRY,PP_CAND,PP_EVAL,PP_SEL,PP_RETRY,LIB_CAND,LIB_EVAL,LIB_SEL,LIB_RETRY,BP_CAND,BP_EVAL,BP_SEL,BP_RETRY,ABORT das_gate;
+  class CP_CAND,CP_EVAL,CP_SEL,CP_RETRY,PP_CAND,PP_EVAL,PP_SEL,PP_RETRY,LIB_CAND,LIB_EVAL,LIB_SEL,LIB_RETRY,BP_CAND,BP_EVAL,BP_SEL,BP_RETRY,ABORT,RTYPE,LIB_JSON,BP_SKIP das_gate;
   class DAS_CFG das_cfg;
-  class N_AUTH,N_AUTH2,N_OUT,N_PERS,N_DAS,N_DAS2,N_SSE,N_DRY,N_APPLY,N_APPLY2,N_PP,N_PP2,N_CP note;
+  class N_AUTH,N_AUTH2,N_AUTH3,N_OUT,N_PERS,N_DAS,N_DAS2,N_SSE,N_DRY,N_APPLY,N_APPLY2,N_PP,N_PP2,N_CP,N_RTYPE note;
   class TODO_ASP_EVAL,TODO_GRADER,TODO_COST todo;
 
   %% Tested status styling

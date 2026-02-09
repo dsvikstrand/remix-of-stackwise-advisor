@@ -71,6 +71,40 @@ Command:
 npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts --spec seed/seed_spec_v0.json
 ```
 
+Run types:
+- `seed` (default): full flow
+- `library_only`: only generate library (writes empty `artifacts/blueprints.json`)
+- `blueprint_only`: only generate blueprints from an input library (`--library-json` required)
+
+Notes:
+- Stage 1 apply mode (`--apply`) requires at least one generated blueprint, so it is not compatible with `library_only`.
+
+Examples:
+```bash
+# library_only (fastest end-to-end auth + library smoke)
+TMPDIR=/tmp npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts \\
+  --spec seed/seed_spec_persona_smoke.json \\
+  --run-type library_only \\
+  --das --das-config seed/das_config_v1_test_custom_overrides.json
+```
+
+```bash
+# blueprint_only (use a prior run's library.json)
+TMPDIR=/tmp npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts \\
+  --spec seed/seed_spec_persona_smoke.json \\
+  --run-type blueprint_only \\
+  --library-json seed/outputs/<run_id>/artifacts/library.json \\
+  --limit-blueprints 1 \\
+  --das --das-config seed/das_config_v1_test_custom_overrides.json
+```
+
+Persona override (no spec edits):
+```bash
+TMPDIR=/tmp npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts \\
+  --spec seed/seed_spec_persona_smoke.json \\
+  --asp skincare_diet_female_v0
+```
+
 WSL note:
 - If your repo is under `/mnt/c/...`, `tsx` may fail creating IPC sockets on that filesystem.
 - Fix by running with `TMPDIR=/tmp`:

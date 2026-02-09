@@ -24,6 +24,7 @@ type AspProfile = {
 type SeedSpec = {
   run_id: string;
   asp?: AspProfile;
+  run_type?: 'seed' | 'library_only' | 'blueprint_only';
   library: {
     topic: string;
     title: string;
@@ -335,6 +336,9 @@ function parseArgs(argv: string[]) {
     else if (a === '--out') out.out = argv[++i] ?? '';
     else if (a === '--agentic-base-url') out.agenticBaseUrl = argv[++i] ?? '';
     else if (a === '--run-id') out.runId = argv[++i] ?? '';
+    else if (a === '--run-type') out.runType = argv[++i] ?? '';
+    else if (a === '--asp') out.asp = argv[++i] ?? '';
+    else if (a === '--library-json') out.libraryJson = argv[++i] ?? '';
     else if (a === '--auth-store') out.authStore = argv[++i] ?? '';
     else if (a === '--auth-env') out.authEnv = argv[++i] ?? '';
     else if (a === '--no-backend') out.noBackend = true;
@@ -1012,6 +1016,9 @@ async function main() {
         '  --out <dir>                Output base dir (default: seed/outputs)',
         '  --agentic-base-url <url>   Agentic backend base URL (default: env VITE_AGENTIC_BACKEND_URL or https://bapi.vdsai.cloud)',
         '  --run-id <id>              Override run_id folder name',
+        '  --run-type <type>          Run type: seed | library_only | blueprint_only (default: seed; can also be set in spec.run_type)',
+        '  --asp <id>                 Override persona id (sets asp.id) without editing the spec JSON',
+        '  --library-json <path>      Input library.json (required for run-type blueprint_only)',
         '  --auth-store <path>        Optional local JSON store for rotating tokens (recommended: seed/seed_auth.local)',
         '  --auth-env <path>          Optional env file that sets SEED_USER_EMAIL/SEED_USER_PASSWORD (recommended: seed/auth/<asp_id>.env.local)',
         '  --no-backend               Do not call backend (future use)',
@@ -1054,7 +1061,16 @@ async function main() {
   // specRun is the "effective" spec for this run. It may be overridden by prompt composition.
   let specRun: SeedSpec = spec;
 
-  const aspId = spec.asp?.id ? String(spec.asp.id).trim() : '';
+  // Effective persona id can be overridden via --asp without editing the spec JSON.
+  const aspId = String((args as any).asp || spec.asp?.id || '').trim();
+  if (aspId && (!specRun.asp || String(specRun.asp.id || '').trim() !== aspId)) {
+    specRun = { ...specRun, asp: { ...(specRun.asp || ({} as any)), id: aspId } };
+  }
+
+  const runTypeRaw = String((args as any).runType || specRun.run_type || 'seed').trim();
+  const runType = (runTypeRaw === 'library_only' || runTypeRaw === 'blueprint_only' || runTypeRaw === 'seed'
+    ? runTypeRaw
+    : 'seed') as 'seed' | 'library_only' | 'blueprint_only';
   if (!authStorePath) {
     authStorePath = aspId ? path.join('seed', 'auth', `${aspId}.local`) : path.join('seed', 'seed_auth.local');
   }
@@ -1165,7 +1181,8 @@ async function main() {
     createdAt,
     layoutVersion: outputLayoutVersion,
     specPath,
-    asp: spec.asp || null,
+    runType,
+    asp: specRun.asp || null,
     persona: persona
       ? {
           id: aspId,
@@ -1344,7 +1361,7 @@ async function main() {
 
       if (!dasEnabled || !dasConfig || !dasDecision || !dasSelection) {
         const pack = composeControlPackV0({
-          runType: 'seed',
+          runType,
           goal,
           persona,
           blueprintCount,
@@ -1376,7 +1393,7 @@ async function main() {
         decision.attempts.push({ attempt: 1, candidates: [], status: 'disabled' });
         writeDasLogs();
         const pack = composeControlPackV0({
-          runType: 'seed',
+          runType,
           goal,
           persona,
           blueprintCount,
@@ -1450,7 +1467,7 @@ async function main() {
           let pack: ControlPackV0 | null = null;
           try {
             pack = composeControlPackV0({
-              runType: 'seed',
+              runType,
               goal,
               persona,
               blueprintCount,
@@ -1567,7 +1584,7 @@ async function main() {
 
       if (!dasEnabled || !dasConfig || !dasDecision || !dasSelection) {
         const pack = composePromptPackV0({
-          runType: 'seed',
+          runType,
           goal,
           persona,
           blueprintCount,
@@ -1599,7 +1616,7 @@ async function main() {
         decision.attempts.push({ attempt: 1, candidates: [], status: 'disabled' });
         writeDasLogs();
         const pack = composePromptPackV0({
-          runType: 'seed',
+          runType,
           goal,
           persona,
           blueprintCount,
@@ -1641,7 +1658,7 @@ async function main() {
           let pack: PromptPackV0 | null = null;
           try {
             pack = composePromptPackV0({
-              runType: 'seed',
+              runType,
               goal,
               persona,
               blueprintCount,
@@ -1850,6 +1867,20 @@ async function main() {
 
   const inventory = await step('generate_library', async () => {
     if (!backendCalls) throw new Error('Backend calls disabled. Use --compose-controls/--compose-prompts for compose-only runs.');
+    if (runType === 'blueprint_only') {
+      const libPath = String((args as any).libraryJson || '').trim();
+      if (!libPath) throw new Error('run_type blueprint_only requires --library-json <path>');
+      if (!fs.existsSync(libPath)) throw new Error(`library json not found: ${libPath}`);
+      const raw = readJsonFile<any>(libPath);
+      const inv = (raw && raw.generated && raw.generated.categories) ? (raw.generated as InventorySchema) : (raw as InventorySchema);
+      writeJsonFile(outPath.artifacts('library.json'), {
+        source: 'library_json',
+        libraryJsonPath: libPath,
+        ...(persona ? { meta: { persona_id: aspId, persona_hash: personaHash } } : {}),
+        generated: inv,
+      });
+      return inv;
+    }
     const url = `${agenticBaseUrl}/api/generate-inventory`;
     const customInstructions = joinPromptParts([specRun.library.notes || '', personaPromptBlock]);
     const body = {
@@ -2026,6 +2057,16 @@ async function main() {
 
   const generatedBlueprints = await step('generate_blueprints', async () => {
     if (!backendCalls) throw new Error('Backend calls disabled (no-backend not implemented in Stage 0)');
+    if (runType === 'library_only') {
+      writeJsonFile(outPath.artifacts('blueprints.json'), {
+        libraryTitle: specRun.library.title,
+        ...(persona ? { meta: { persona_id: aspId, persona_hash: personaHash } } : {}),
+        blueprints: [],
+        skipped: true,
+        reason: 'run_type_library_only',
+      });
+      return [] as GeneratedBlueprint[];
+    }
     const url = `${agenticBaseUrl}/api/generate-blueprint`;
     const categories = (inventory.categories || []).map((c) => ({ name: c.name, items: c.items }));
 
@@ -2392,6 +2433,12 @@ async function main() {
   });
 
   if (applyStage1) {
+    if (runType === 'library_only') {
+      throw new Error('Refusing Stage 1 apply: run_type=library_only produces no blueprints to publish.');
+    }
+    if (!generatedBlueprints || generatedBlueprints.length === 0) {
+      throw new Error('Refusing Stage 1 apply: no generated blueprints. Run with seed/blueprint_only first.');
+    }
     if (!validation.ok) {
       throw new Error('Refusing Stage 1 apply: validation.ok is false. Fix generation/selection first.');
     }

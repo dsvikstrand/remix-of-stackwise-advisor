@@ -28,3 +28,4 @@ access_tok.txt
 seed/outputs/
 seed/*.local
 seed/*.bak.*
+seed/auth/*.bak.*

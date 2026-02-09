@@ -20,9 +20,22 @@ The baseline is a **linear agentic system (LAS)**. We will evolve it into a **dy
 
 Key fields:
 - `run_id`: output folder name
+- Optional: `run_type`: one of `seed|library_only|blueprint_only` (can also be set via `--run-type`)
 - `library`: seed topic + title + constraints
 - `blueprints[]`: blueprint variants to generate from the generated library
 - Optional: `asp` (persona id + optional stub fields; recorded for future alignment evals)
+
+## Run Types (Current)
+
+We support three task-specific flows so you can test parts of the pipeline without editing code:
+
+- `seed` (default): generate library -> generate blueprints -> validate -> optional review/banner -> optional apply
+- `library_only`: generate library -> validate minimal structure -> skip blueprints (writes empty `artifacts/blueprints.json`)
+- `blueprint_only`: load a library from `--library-json` -> generate blueprints -> validate -> optional review/banner -> optional apply
+
+Notes:
+- `--library-json` is required for `blueprint_only`.
+- `run_type` is recorded in `logs/run_meta.json` for reproducibility.
 
 ## Gate Contract (Current)
 When DAS is enabled (`--das`), each candidate is evaluated by a list of gates and recorded in `logs/decision_log.json`.
@@ -63,6 +76,20 @@ Runner behavior (current):
 - If the seed spec includes `asp.id`, load `personas/v0/<asp.id>.json`.
 - Compute and record `persona_hash` + `prompt_hash` in `logs/run_meta.json` for reproducibility.
 - Write the applied prompt block to `logs/persona_log.json` (debugging).
+
+## Persona Accounts (Headless, Current)
+
+If you want each persona to publish as a distinct user, treat each persona as an auth identity:
+
+- Auth store (rotating tokens): `seed/auth/<asp_id>.local` (JSON written by the runner)
+- Optional creds env (password-grant fallback): `seed/auth/<asp_id>.env.local` with:
+  - `SEED_USER_EMAIL=...`
+  - `SEED_USER_PASSWORD=...`
+
+The runner will:
+- Default `--auth-store` to `seed/auth/<asp_id>.local` when `asp.id` exists.
+- Auto-load `seed/auth/<asp_id>.env.local` if present (or use `--auth-env <path>`).
+- Use refresh token rotation when possible; if refresh breaks (example: refresh token already used) and email/password is available, fall back to Supabase password grant to self-heal.
 
 Utilities (repo-local):
 - `codex/skills/seed-blueprints/scripts/persona_registry.ts` (list/validate/show personas)
