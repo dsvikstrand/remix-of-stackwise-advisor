@@ -1,9 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
-import { config } from '@/config/runtime';
-
-// MVP analytics should be stable regardless of which backend powers AI features.
-// Keep `log-event` pinned to the Supabase Edge Function (agentic backend may not implement it).
-const LOG_EVENT_URL = `${config.supabaseUrl.replace(/\/$/, '')}/functions/v1/log-event`;
+import { apiFetch } from '@/lib/api';
 
 type LogEventPayload = {
   eventName: string;
@@ -20,35 +15,20 @@ export async function logMvpEvent({
   path,
   metadata,
 }: LogEventPayload) {
-  if (!LOG_EVENT_URL || !eventName) return;
-
-  let accessToken: string | null = null;
-  try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    accessToken = sessionData.session?.access_token ?? null;
-  } catch {
-    accessToken = null;
-  }
-
-  const authHeader = accessToken
-    ? `Bearer ${accessToken}`
-    : `Bearer ${config.supabaseAnonKey}`;
+  if (!eventName) return;
 
   try {
-    await fetch(LOG_EVENT_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: authHeader,
-      },
-      body: JSON.stringify({
+    await apiFetch('log-event', {
+      body: {
         event_name: eventName,
         user_id: userId ?? null,
         blueprint_id: blueprintId ?? null,
         path: path ?? window.location.pathname,
         metadata: metadata ?? {},
-      }),
+      },
       keepalive: true,
+      pinnedToEdge: true,
+      stream: true,
     });
   } catch {
     // Fire-and-forget: logging should never block UX.
