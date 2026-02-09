@@ -15,6 +15,26 @@ Lovable should not commit to `main`.
 
 Reason: `main` is our integration branch that deploys to GitHub Pages. We want to keep it stable and only merge/cherry-pick Lovable changes intentionally.
 
+## Patch-Only Workflow + Daily Batching (Important)
+
+Lovable cannot select a target branch in this project, so we will use a patch-only workflow.
+
+Rules:
+- Lovable must output a unified diff (patch) in chat. Do not push commits.
+- Keep patches small and mechanical (refactors, wrappers, config centralization). Avoid behavior changes unless explicitly requested.
+- We will batch patches once per day (so we don't interrupt ongoing work constantly).
+
+Daily batching rules:
+- Max 3 patches per day (or 1 day's worth of credits), whichever is smaller.
+- Each patch should be scoped to 1-3 files where possible.
+- If a patch touches many files, treat it as the only patch for that day.
+
+How we integrate patches daily (handled outside Lovable):
+- Apply patches to `lovable-updates` in order.
+- After each patch: run `npm run build` as a fast gate.
+- After the batch: run a short manual smoke on the site.
+- Only then merge into `main`.
+
 Copy/paste to Lovable:
 
 ```
