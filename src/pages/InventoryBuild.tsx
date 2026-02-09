@@ -66,12 +66,8 @@ import type { Json } from '@/integrations/supabase/types';
 import { config, getFunctionUrl } from '@/config/runtime';
 
 const ANALYZE_BLUEPRINT_URL = getFunctionUrl('analyze-blueprint');
-const AGENTIC_BANNER_URL = config.agenticBackendUrl
-  ? `${config.agenticBackendUrl.replace(/\/$/, '')}/api/generate-banner`
-  : '';
-const AGENTIC_GENERATE_BLUEPRINT_URL = config.agenticBackendUrl
-  ? `${config.agenticBackendUrl.replace(/\/$/, '')}/api/generate-blueprint`
-  : '';
+const BANNER_URL = config.agenticBackendUrl ? getFunctionUrl('generate-banner') : '';
+const GENERATE_BLUEPRINT_URL = config.agenticBackendUrl ? getFunctionUrl('generate-blueprint') : '';
 
 const HOME_DRAFT_KEY = 'blueprints_home_draft_v1';
 
@@ -817,7 +813,7 @@ export default function InventoryBuild() {
 
   const executeAutoGenerate = useCallback(async () => {
     if (!inventory) return;
-    if (!config.useAgenticBackend || !AGENTIC_GENERATE_BLUEPRINT_URL) {
+    if (!config.useAgenticBackend || !GENERATE_BLUEPRINT_URL) {
       toast({
         title: 'Auto-generation unavailable',
         description: 'The agentic backend is not configured.',
@@ -873,7 +869,7 @@ export default function InventoryBuild() {
       const inferredDescription = genControls.derived.description;
       const inferredNotes = genControls.derived.notes;
 
-      const response = await fetch(AGENTIC_GENERATE_BLUEPRINT_URL, {
+      const response = await fetch(GENERATE_BLUEPRINT_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -960,7 +956,7 @@ export default function InventoryBuild() {
 
   const handleGenerateBanner = useCallback(async () => {
     if (!inventory) return;
-    if (!config.useAgenticBackend || !AGENTIC_BANNER_URL) {
+    if (!config.useAgenticBackend || !BANNER_URL) {
       toast({
         title: 'Banner generation unavailable',
         description: 'The agentic backend is not configured.',
@@ -991,7 +987,7 @@ export default function InventoryBuild() {
     setIsGeneratingBanner(true);
 
     try {
-      const response = await fetch(AGENTIC_BANNER_URL, {
+      const response = await fetch(BANNER_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
