@@ -341,6 +341,7 @@ function parseArgs(argv: string[]) {
     else if (a === '--library-json') out.libraryJson = argv[++i] ?? '';
     else if (a === '--auth-store') out.authStore = argv[++i] ?? '';
     else if (a === '--auth-env') out.authEnv = argv[++i] ?? '';
+    else if (a === '--persona-registry') out.personaRegistry = argv[++i] ?? '';
     else if (a === '--no-backend') out.noBackend = true;
     else if (a === '--do-review') out.doReview = true;
     else if (a === '--review-focus') out.reviewFocus = argv[++i] ?? '';
@@ -355,6 +356,50 @@ function parseArgs(argv: string[]) {
     else if (a.startsWith('--')) die(`Unknown flag: ${a}`);
   }
   return out;
+}
+
+type PersonaRegistryV0 = {
+  version: 0;
+  description?: string;
+  personas: Array<{
+    id: string;
+    auth_env_path?: string;
+    auth_store_path?: string;
+  }>;
+};
+
+function loadPersonaRegistryV0(registryPath: string): PersonaRegistryV0 | null {
+  const p = String(registryPath || '').trim();
+  if (!p) return null;
+  if (!fs.existsSync(p)) return null;
+  try {
+    const data = readJsonFile<PersonaRegistryV0>(p);
+    if (!data || (data as any).version !== 0 || !Array.isArray((data as any).personas)) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function resolvePersonaAuthDefaults(params: {
+  aspId: string;
+  personaRegistryPath: string;
+}): { authEnvPath: string; authStorePath: string; source: 'registry' | 'default' } {
+  const aspId = String(params.aspId || '').trim();
+  const defaultAuthEnv = aspId ? path.join('seed', 'auth', `${aspId}.env.local`) : '';
+  const defaultAuthStore = aspId ? path.join('seed', 'auth', `${aspId}.local`) : path.join('seed', 'seed_auth.local');
+
+  const reg = loadPersonaRegistryV0(params.personaRegistryPath);
+  if (aspId && reg) {
+    const entry = reg.personas.find((p) => String(p.id || '').trim() === aspId);
+    if (entry) {
+      const envPath = String(entry.auth_env_path || '').trim() || defaultAuthEnv;
+      const storePath = String(entry.auth_store_path || '').trim() || defaultAuthStore;
+      return { authEnvPath: envPath, authStorePath: storePath, source: 'registry' };
+    }
+  }
+
+  return { authEnvPath: defaultAuthEnv, authStorePath: defaultAuthStore, source: 'default' };
 }
 
 function ensureDir(dir: string) {
@@ -1021,6 +1066,7 @@ async function main() {
         '  --library-json <path>      Input library.json (required for run-type blueprint_only)',
         '  --auth-store <path>        Optional local JSON store for rotating tokens (recommended: seed/seed_auth.local)',
         '  --auth-env <path>          Optional env file that sets SEED_USER_EMAIL/SEED_USER_PASSWORD (recommended: seed/auth/<asp_id>.env.local)',
+        '  --persona-registry <path>  Optional persona registry JSON (default: seed/persona_registry_v0.json)',
         '  --no-backend               Do not call backend (future use)',
         '  --do-review                Execute /api/analyze-blueprint (Stage 0.5)',
         '  --review-focus <text>      Optional reviewPrompt for /api/analyze-blueprint',
@@ -1041,6 +1087,7 @@ async function main() {
   const outBase = String(args.out || 'seed/outputs');
   let authStorePath = String(args.authStore || '').trim();
   const authEnvPathArg = String((args as any).authEnv || '').trim();
+  const personaRegistryPath = String((args as any).personaRegistry || 'seed/persona_registry_v0.json').trim();
   const agenticBaseUrl =
     String(args.agenticBaseUrl || process.env.VITE_AGENTIC_BACKEND_URL || 'https://bapi.vdsai.cloud').replace(/\/$/, '');
   const backendCalls = !args.noBackend;
@@ -1067,20 +1114,20 @@ async function main() {
     specRun = { ...specRun, asp: { ...(specRun.asp || ({} as any)), id: aspId } };
   }
 
+  const resolvedAuthDefaults = resolvePersonaAuthDefaults({ aspId, personaRegistryPath });
+
   const runTypeRaw = String((args as any).runType || specRun.run_type || 'seed').trim();
   const runType = (runTypeRaw === 'library_only' || runTypeRaw === 'blueprint_only' || runTypeRaw === 'seed'
     ? runTypeRaw
     : 'seed') as 'seed' | 'library_only' | 'blueprint_only';
   if (!authStorePath) {
-    authStorePath = aspId ? path.join('seed', 'auth', `${aspId}.local`) : path.join('seed', 'seed_auth.local');
+    authStorePath = resolvedAuthDefaults.authStorePath;
   }
   // Load per-persona credentials for password-grant fallback (headless persona accounts).
   // Priority: --auth-env, else seed/auth/<asp_id>.env.local.
   const authEnvPath = authEnvPathArg
     ? authEnvPathArg
-    : aspId
-      ? path.join('seed', 'auth', `${aspId}.env.local`)
-      : '';
+    : resolvedAuthDefaults.authEnvPath;
   if (authEnvPath && fs.existsSync(authEnvPath)) {
     loadSeedCredsFromEnvFile(authEnvPath);
   }
@@ -1196,7 +1243,7 @@ async function main() {
       ? {
           enabled: true,
           mode: 'controls_v0',
-          run_type: 'seed',
+          run_type: runType,
           control_pack_path: 'requests/control_pack.json',
           prompt_pack_path: 'requests/prompt_pack.json',
         }
@@ -1204,7 +1251,7 @@ async function main() {
         ? {
             enabled: true,
             mode: 'template',
-            run_type: 'seed',
+            run_type: runType,
             prompt_pack_path: 'requests/prompt_pack.json',
           }
         : { enabled: false },
@@ -1219,6 +1266,14 @@ async function main() {
     auth: {
       storePath: path.relative(process.cwd(), authStorePath).replace(/\\/g, '/'),
       envPath: authEnvPath && fs.existsSync(authEnvPath) ? path.relative(process.cwd(), authEnvPath).replace(/\\/g, '/') : null,
+      personaRegistryPath:
+        personaRegistryPath && fs.existsSync(personaRegistryPath)
+          ? path.relative(process.cwd(), personaRegistryPath).replace(/\\/g, '/')
+          : null,
+      resolvedFrom: {
+        store: String(args.authStore || '').trim() ? 'cli' : resolvedAuthDefaults.source,
+        env: authEnvPathArg ? 'cli' : resolvedAuthDefaults.source,
+      },
       passwordGrantAvailable: Boolean(getSeedCredsFromEnv()),
     },
   };

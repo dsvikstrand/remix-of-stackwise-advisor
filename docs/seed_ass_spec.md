@@ -86,6 +86,10 @@ If you want each persona to publish as a distinct user, treat each persona as an
   - `SEED_USER_EMAIL=...`
   - `SEED_USER_PASSWORD=...`
 
+Optional persona registry:
+- `seed/persona_registry_v0.json` maps persona ids to default `auth_env_path` and `auth_store_path`.
+- When you run with `--asp <persona_id>`, the runner will use the registry defaults unless you override with `--auth-env/--auth-store`.
+
 The runner will:
 - Default `--auth-store` to `seed/auth/<asp_id>.local` when `asp.id` exists.
 - Auto-load `seed/auth/<asp_id>.env.local` if present (or use `--auth-env <path>`).

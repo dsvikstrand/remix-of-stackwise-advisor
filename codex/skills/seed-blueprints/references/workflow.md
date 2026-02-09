@@ -206,6 +206,23 @@ Notes:
 
 If you store the seed user's refresh token, the runner can mint new access tokens automatically and persist token rotation.
 
+## Persona Account Convention (No Manual Tokens, Oracle Friendly)
+
+Recommended convention:
+- Each persona has its own Supabase account (email+password).
+- On Oracle, store that persona's credentials in `seed/auth/<persona_id>.env.local`:
+  - `SEED_USER_EMAIL="..."`
+  - `SEED_USER_PASSWORD="..."`
+- The runner writes rotating tokens to `seed/auth/<persona_id>.local` (auth store).
+
+Why:
+- refresh tokens rotate and can become "already used" when copied from browser sessions.
+- password grant fallback self-heals when refresh rotation fails.
+
+Persona registry (recommended):
+- `seed/persona_registry_v0.json` maps persona ids to default auth env/store paths.
+- When you run with `--asp <persona_id>`, the runner uses the registry paths unless you override with `--auth-env/--auth-store`.
+
 Recommended local store:
 - `seed/seed_auth.local` (JSON; ignored by `*.local`)
 
