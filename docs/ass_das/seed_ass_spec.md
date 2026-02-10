@@ -81,8 +81,8 @@ Runner behavior (current):
 
 If you want each persona to publish as a distinct user, treat each persona as an auth identity:
 
-- Auth store (rotating tokens): `seed/auth/<asp_id>.local` (JSON written by the runner)
-- Optional creds env (password-grant fallback): `seed/auth/<asp_id>.env.local` with:
+- Auth store (rotating tokens): `personas/auth_local/<asp_id>.local` (JSON written by the runner)
+- Optional creds env (password-grant fallback): `personas/auth_local/<asp_id>.env.local` with:
   - `SEED_USER_EMAIL=...`
   - `SEED_USER_PASSWORD=...`
 

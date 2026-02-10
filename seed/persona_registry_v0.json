@@ -4,8 +4,8 @@
   "personas": [
     {
       "id": "skincare_diet_female_v0",
-      "auth_env_path": "seed/auth/skincare_diet_female_v0.env.local",
-      "auth_store_path": "seed/auth/skincare_diet_female_v0.local",
+      "auth_env_path": "personas/auth_local/skincare_diet_female_v0.env.local",
+      "auth_store_path": "personas/auth_local/skincare_diet_female_v0.local",
       "controls_defaults": {
         "library": {
           "domain": "skincare",
@@ -24,8 +24,8 @@
     },
     {
       "id": "strength_training_male_v0",
-      "auth_env_path": "seed/auth/strength_training_male_v0.env.local",
-      "auth_store_path": "seed/auth/strength_training_male_v0.local",
+      "auth_env_path": "personas/auth_local/strength_training_male_v0.env.local",
+      "auth_store_path": "personas/auth_local/strength_training_male_v0.local",
       "controls_defaults": {
         "library": {
           "domain": "fitness",
