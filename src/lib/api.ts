@@ -9,7 +9,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
-import { config, getFunctionUrl } from "@/config/runtime";
+import { config, getEdgeFunctionUrl, getFunctionUrl } from "@/config/runtime";
 
 export type ApiOptions = {
   method?: "GET" | "POST" | "PUT" | "DELETE";
@@ -19,6 +19,8 @@ export type ApiOptions = {
   stream?: boolean;
   /** If true, uses keepalive (fire-and-forget requests like logging). */
   keepalive?: boolean;
+  /** If true, always routes to Supabase Edge Function, ignoring agentic backend toggle. */
+  pinnedToEdge?: boolean;
 };
 
 /**
@@ -53,7 +55,9 @@ export async function apiFetch<T = unknown>(
   fnName: string,
   opts: ApiOptions = {},
 ): Promise<T> {
-  const url = getFunctionUrl(fnName);
+  const url = opts.pinnedToEdge
+    ? getEdgeFunctionUrl(fnName)
+    : getFunctionUrl(fnName);
   const authHeader = await getAuthHeader();
 
   const res = await fetch(url, {
@@ -73,5 +77,13 @@ export async function apiFetch<T = unknown>(
   }
 
   if (opts.stream) return res as unknown as T;
-  return res.json() as Promise<T>;
+
+  if (res.status === 204) return undefined as T;
+
+  const ct = res.headers.get("content-type") ?? "";
+  if (ct.includes("application/json")) {
+    return res.json() as Promise<T>;
+  }
+
+  return undefined as T;
 }
