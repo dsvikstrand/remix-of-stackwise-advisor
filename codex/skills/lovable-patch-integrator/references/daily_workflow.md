@@ -16,6 +16,13 @@ git fetch upstream
 git pull --ff-only upstream lovable-updates
 ```
 
+Hard guardrail (do this every time):
+
+```bash
+cd /mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu-lovable
+test "$(git branch --show-current)" = "lovable-updates" || (echo "ERROR: not on lovable-updates" && exit 1)
+```
+
 If you want to see whether the skill docs changed on `upstream/main`:
 
 ```bash
