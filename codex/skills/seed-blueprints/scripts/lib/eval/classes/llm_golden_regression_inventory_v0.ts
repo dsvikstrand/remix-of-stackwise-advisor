@@ -80,7 +80,7 @@ function defaultMethodPaths(evalId: string, domainId: string) {
 }
 
 function defaultScorecardPath(methodScorecardDir: string, goldenFixtureId: string) {
-  return path.join(methodScorecardDir, `${goldenFixtureId.replace(/\\.json$/i, '')}.score_v0.json`);
+  return path.join(methodScorecardDir, `${goldenFixtureId.replace(/\.json$/i, '')}.score_v0.json`);
 }
 
 function buildJudgeInput(args: {
