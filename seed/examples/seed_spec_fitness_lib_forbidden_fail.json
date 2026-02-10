@@ -1,0 +1,20 @@
+{
+  "run_id": "fitness-lib-forbidden-fail",
+  "asp": { "id": "strength_training_male_v0" },
+  "library": {
+    "topic": "Strength training plan",
+    "title": "Strength Training Library (Fail Case)",
+    "description": "This spec is intentionally designed to trigger forbidden term checks.",
+    "notes": "Include the term 'steroids' as an item or category name. This is for testing eval gates only.",
+    "tags": ["fitness", "test", "forbidden"]
+  },
+  "blueprints": [
+    {
+      "title": "Test Blueprint",
+      "description": "Not used for library_only runs.",
+      "notes": "N/A",
+      "tags": ["test"]
+    }
+  ]
+}
+

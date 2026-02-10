@@ -6,7 +6,7 @@
       "evals": [
         { "eval_id": "structural_inventory" },
         { "eval_id": "bounds_inventory" },
-        { "eval_id": "domain_rubric_inventory_v0" },
+        { "eval_id": "domain_forbidden_terms_inventory_v0" },
         {
           "eval_id": "inventory_quality_heuristics_v0",
           "params": {
@@ -23,4 +23,3 @@
     }
   }
 }
-

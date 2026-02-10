@@ -90,6 +90,38 @@ The runner resolves one active domain per run and passes it into evals as `ctx.d
 
 Eval classes that require domain assets should hard-fail with a clear `expected_path` when missing.
 
+### Fitness: Forbidden Terms Gate (Current)
+
+We keep the lightest domain-specific deterministic guardrail as "forbidden terms":
+
+- Eval class id: `domain_forbidden_terms_inventory_v0`
+- Source list: `eval/domains/v0/<domain_id>/rubric_v0.json` at `inventory.forbidden_terms[]`
+
+This is intended to be shared by:
+- ASS seeding runs (strict, blocks publish)
+- Future user generation runs (same class, but UX policy can soften later)
+
+Smoke specs (library_only runs):
+- Pass: `seed/examples/seed_spec_fitness_lib_pass.json`
+- Fail (intentional): `seed/examples/seed_spec_fitness_lib_forbidden_fail.json`
+
+Example commands:
+```bash
+TMPDIR=/tmp npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts \
+  --spec seed/examples/seed_spec_fitness_lib_pass.json \
+  --run-type library_only \
+  --domain fitness \
+  --das --das-config seed/ass_gen_policy_v1.json \
+  --ass-eval-config seed/ass_eval_policy_v2_fitness_lib.json
+
+TMPDIR=/tmp npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts \
+  --spec seed/examples/seed_spec_fitness_lib_forbidden_fail.json \
+  --run-type library_only \
+  --domain fitness \
+  --das --das-config seed/ass_gen_policy_v1.json \
+  --ass-eval-config seed/ass_eval_policy_v2_fitness_lib.json
+```
+
 ## Eval Taxonomy (Global, Planned)
 
 Some controls are shared across all domains (for example `style`, `audience`, `strictness`, `length_hint`). To keep evals stable across:

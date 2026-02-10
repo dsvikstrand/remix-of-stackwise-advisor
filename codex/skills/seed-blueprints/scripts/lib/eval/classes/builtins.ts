@@ -770,6 +770,98 @@ export const builtinEvalClasses: Array<EvalClass<any, any>> = [
     },
   },
   {
+    // Domain-scoped deterministic check for "forbidden terms" only.
+    // This is intended as the lightest domain-specific content guardrail.
+    id: 'domain_forbidden_terms_inventory_v0',
+    run: (inv: InventorySchema, params: Record<string, unknown>, ctx) => {
+      const domainId = String(ctx.domain_id || '').trim();
+      if (!domainId) {
+        return mkEvalResult('domain_forbidden_terms_inventory_v0', false, 'hard_fail', 0, 'missing_domain_id', {
+          expected: 'set --domain or provide persona default_domain/safety.domain',
+        });
+      }
+
+      let rubricPath: { absPath: string; relPath: string };
+      try {
+        rubricPath = resolveDomainAsset(domainId, 'rubric_v0.json');
+      } catch (e) {
+        const err = e instanceof Error ? e : new Error(String(e));
+        return mkEvalResult('domain_forbidden_terms_inventory_v0', false, 'hard_fail', 0, 'invalid_domain_asset_path', {
+          domain_id: domainId,
+          error: err.message.slice(0, 200),
+        });
+      }
+
+      if (!fs.existsSync(rubricPath.absPath)) {
+        return mkEvalResult('domain_forbidden_terms_inventory_v0', false, 'hard_fail', 0, 'missing_domain_asset', {
+          domain_id: domainId,
+          expected_path: rubricPath.relPath,
+        });
+      }
+
+      let rubric: DomainRubricV0;
+      try {
+        rubric = readJsonFileStrict<DomainRubricV0>(rubricPath.absPath);
+      } catch (e) {
+        const err = e instanceof Error ? e : new Error(String(e));
+        return mkEvalResult('domain_forbidden_terms_inventory_v0', false, 'hard_fail', 0, 'invalid_rubric_json', {
+          domain_id: domainId,
+          expected_path: rubricPath.relPath,
+          error: err.message.slice(0, 200),
+        });
+      }
+
+      const rules = rubric?.inventory || {};
+      const forbiddenBase = Array.isArray(rules.forbidden_terms)
+        ? rules.forbidden_terms.map(normalizeText).filter(Boolean)
+        : [];
+      const extra = Array.isArray((params as any)?.extra_forbidden_terms)
+        ? ((params as any).extra_forbidden_terms as unknown[]).map(normalizeText).filter(Boolean)
+        : [];
+      const forbidden = uniqStrings([...forbiddenBase, ...extra]);
+
+      // If a domain has no forbidden list yet, treat as pass (keep it non-blocking).
+      if (!forbidden.length) {
+        return mkEvalResult('domain_forbidden_terms_inventory_v0', true, 'info', 1, 'ok', {
+          domain_id: domainId,
+          rubric_path: rubricPath.relPath,
+          forbidden_count: 0,
+        });
+      }
+
+      const cats = Array.isArray(inv?.categories) ? inv.categories : [];
+      const texts: string[] = [];
+      const summary = normalizeText((inv as any)?.summary || (inv as any)?.overview || '');
+      if (summary) texts.push(summary);
+      for (const c of cats) {
+        const catName = normalizeText((c as any)?.name || '');
+        if (catName) texts.push(catName);
+        const items = Array.isArray((c as any)?.items) ? ((c as any).items as unknown[]) : [];
+        for (const it of items) {
+          const v = normalizeText(it);
+          if (v) texts.push(v);
+        }
+      }
+
+      const joined = texts.join(' ');
+      const hits = forbidden.filter((t) => t && joined.includes(t));
+      const ok = hits.length === 0;
+      return mkEvalResult(
+        'domain_forbidden_terms_inventory_v0',
+        ok,
+        ok ? 'info' : 'hard_fail',
+        ok ? 1 : 0,
+        ok ? 'ok' : 'forbidden_terms_present',
+        {
+          domain_id: domainId,
+          rubric_path: rubricPath.relPath,
+          forbidden_count: forbidden.length,
+          forbidden_hits: hits.slice(0, 20),
+        }
+      );
+    },
+  },
+  {
     id: 'golden_regression_inventory_v0',
     run: (inv: InventorySchema, params: Record<string, unknown>, ctx) => {
       const domainId = String(ctx.domain_id || '').trim();

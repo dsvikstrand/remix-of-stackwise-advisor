@@ -1,0 +1,20 @@
+{
+  "run_id": "fitness-lib-pass",
+  "asp": { "id": "strength_training_male_v0" },
+  "library": {
+    "topic": "Home workout library for strength beginners",
+    "title": "Beginner Strength Training Library",
+    "description": "A practical library of safe items and equipment for strength training at home.",
+    "notes": "Keep it safe and realistic. Avoid medical claims. No drug or steroid advice.",
+    "tags": ["fitness", "strength", "beginner"]
+  },
+  "blueprints": [
+    {
+      "title": "3-Day Strength Split (Beginner)",
+      "description": "A simple routine you can repeat weekly.",
+      "notes": "Use basic bodyweight and minimal equipment.",
+      "tags": ["fitness", "strength", "routine"]
+    }
+  ]
+}
+
