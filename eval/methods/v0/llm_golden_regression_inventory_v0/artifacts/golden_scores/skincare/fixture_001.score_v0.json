@@ -1,0 +1,65 @@
+{
+  "version": 0,
+  "eval_id": "llm_golden_regression_inventory_v0",
+  "domain_id": "skincare",
+  "golden_fixture_id": "fixture_001.json",
+  "golden_fixture_path": "eval/domain_assets/v0/skincare/golden/libraries/fixture_001.json",
+  "golden_fixture_hash": "e77bb571fce12c2fed78a6605c1643d83b527db078539ec6e504957904039e2f",
+  "judge_model": "o4-mini",
+  "prompt_version": "v0",
+  "scale": {
+    "min": 0,
+    "max": 10
+  },
+  "criteria": [
+    {
+      "id": "facts",
+      "text": "Factual and non-hallucinated claims",
+      "max_drop": 5
+    },
+    {
+      "id": "actionable",
+      "text": "Clear, actionable items (not vague)",
+      "max_drop": 5
+    },
+    {
+      "id": "controls",
+      "text": "Consistent with selected controls (audience/style/length)",
+      "max_drop": 5
+    },
+    {
+      "id": "routine_safety",
+      "text": "Avoid medical claims and unsafe advice",
+      "max_drop": 5
+    },
+    {
+      "id": "product_realism",
+      "text": "Products are realistic, common, and coherent as a routine",
+      "max_drop": 5
+    }
+  ],
+  "scores": [
+    {
+      "id": "facts",
+      "score": 10
+    },
+    {
+      "id": "actionable",
+      "score": 9
+    },
+    {
+      "id": "controls",
+      "score": 10
+    },
+    {
+      "id": "routine_safety",
+      "score": 10
+    },
+    {
+      "id": "product_realism",
+      "score": 10
+    }
+  ],
+  "overall": 10,
+  "createdAt": "2026-02-10T19:31:37.280Z"
+}
