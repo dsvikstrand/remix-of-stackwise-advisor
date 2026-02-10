@@ -160,3 +160,6 @@ Meaning (soft limits, not hard stops)
 
 Important
 - These flags do not change which GUI/model tier you are using. They only change my behavior and how much I explore.
+
+## 14) FInal GUI reasoning effort recommendation
+When you give me a full implementation plan (effort flags included). Also give me a finial REC for the GUI/MODEL REASONING to use. one of-> |Low,Med,High,xHigh|

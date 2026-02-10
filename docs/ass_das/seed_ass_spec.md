@@ -75,12 +75,12 @@ This config is independent from the DAS generation policy config:
 
 Some eval classes require "assets" (golden drafts, rubrics, fixtures). Those assets live under a domain namespace:
 
-- Root: `domains/v0/<domain_id>/`
-- Example: `domains/v0/fitness/golden/...`
+- Root: `eval/domains/v0/<domain_id>/`
+- Example: `eval/domains/v0/fitness/golden/...`
 
 Domain asset conventions (v0):
-- `domains/v0/<domain_id>/rubric_v0.json` (deterministic thresholds and forbidden terms)
-- `domains/v0/<domain_id>/golden/libraries/*.json` (golden library fixtures for regression-style evals)
+- `eval/domains/v0/<domain_id>/rubric_v0.json` (deterministic thresholds and forbidden terms)
+- `eval/domains/v0/<domain_id>/golden/libraries/*.json` (golden library fixtures for regression-style evals)
 
 The runner resolves one active domain per run and passes it into evals as `ctx.domain_id`:
 
@@ -227,5 +227,5 @@ DAS v1 adds **gates + retries + select-best** on generation nodes when enabled.
   - `logs/selection.json` (best candidate summary)
 
 Planned regression fixtures:
-- Prefer domain-scoped fixtures under `domains/v0/<domain_id>/golden/...` so eval assets stay organized by topic.
+- Prefer domain-scoped fixtures under `eval/domains/v0/<domain_id>/golden/...` so eval assets stay organized by topic.
 - Persona-specific fixtures can be added later as an extra layer (only when needed).

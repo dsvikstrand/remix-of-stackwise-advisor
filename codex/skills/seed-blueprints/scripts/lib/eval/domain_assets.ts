@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const DOMAIN_ROOT_REL = path.join('domains', 'v0');
+const DOMAIN_ROOT_REL = path.join('eval', 'domains', 'v0');
 
 function normalizeDomainId(raw: unknown): string {
   return String(raw || '').trim().toLowerCase();
@@ -45,4 +45,3 @@ export function resolveDomainAsset(domainIdRaw: unknown, relPathRaw: unknown): {
   const relPath = path.relative(process.cwd(), absPath).replace(/\\/g, '/');
   return { absPath, relPath };
 }
-
