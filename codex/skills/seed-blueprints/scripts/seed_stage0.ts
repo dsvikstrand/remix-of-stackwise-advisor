@@ -10,6 +10,12 @@ import crypto from 'node:crypto';
 import { loadPersonaV0, type PersonaV0 } from './lib/persona_v0';
 import { composePromptPackV0, type PromptPackV0 } from './lib/prompt_pack_v0';
 import { composeControlPackV0, renderControlPackToPromptPackV0, type ControlPackV0 } from './lib/control_pack_v0';
+import { type GeneratedBlueprint, type InventorySchema } from './lib/seed_types';
+import { validateBlueprints, type BlueprintValidationResult } from './lib/validate_blueprints';
+import { readAssEvalConfigV2 } from './lib/eval/config_v2';
+import { getEvalClass } from './lib/eval/registry';
+import { mkEvalResult } from './lib/eval/utils';
+import type { AssEvalConfigV2, EvalContext, EvalInstance, EvalResult, EvalSeverity, UnknownEvalPolicy } from './lib/eval/types';
 
 type AspProfile = {
   id: string;
@@ -37,27 +43,6 @@ type SeedSpec = {
     description?: string;
     notes?: string;
     tags?: string[];
-  }>;
-};
-
-type InventorySchema = {
-  summary?: string;
-  categories: Array<{
-    name: string;
-    items: string[];
-  }>;
-};
-
-type GeneratedBlueprint = {
-  title: string;
-  steps: Array<{
-    title: string;
-    description: string;
-    items: Array<{
-      category: string;
-      name: string;
-      context?: string;
-    }>;
   }>;
 };
 
@@ -89,7 +74,7 @@ type DasNodeId =
   | 'AI_BANNER'
   | 'APPLY';
 
-type DasGateSeverity = 'info' | 'warn' | 'hard_fail';
+type DasGateSeverity = EvalSeverity;
 
 type DasPolicy = {
   enabled?: boolean;
@@ -118,14 +103,7 @@ type ResolvedDasPolicy = Required<Pick<DasPolicy, 'enabled' | 'kCandidates' | 'm
   params: Record<string, unknown>;
 };
 
-type DasGateResult = {
-  gate_id: string;
-  ok: boolean;
-  severity: DasGateSeverity;
-  score: number;
-  reason: string;
-  data?: Record<string, unknown>;
-};
+type DasGateResult = EvalResult;
 
 type DasCandidateResult = {
   attempt: number;
@@ -234,16 +212,7 @@ function uniqStrings(list: string[]) {
   return Array.from(new Set(list.map((s) => String(s || '').trim()).filter(Boolean)));
 }
 
-type ValidationResult = {
-  ok: boolean;
-  errors: string[];
-  warnings: string[];
-  stats: {
-    blueprintCount: number;
-    stepCountTotal: number;
-    itemRefsTotal: number;
-  };
-};
+type ValidationResult = BlueprintValidationResult;
 
 type RunLog = {
   runId: string;
@@ -352,6 +321,7 @@ function parseArgs(argv: string[]) {
     else if (a === '--apply') out.apply = true;
     else if (a === '--das') out.das = true;
     else if (a === '--das-config') out.dasConfig = argv[++i] ?? '';
+    else if (a === '--ass-eval-config') out.assEvalConfig = argv[++i] ?? '';
     else if (a === '--yes') out.yes = argv[++i] ?? '';
     else if (a === '--limit-blueprints') out.limitBlueprints = Number(argv[++i] ?? 0);
     else if (a.startsWith('--')) die(`Unknown flag: ${a}`);
@@ -563,252 +533,6 @@ function gate(
   return { gate_id: gateId, ok, severity, score, reason, ...(data ? { data } : {}) };
 }
 
-function evalStructuralInventory(inv: InventorySchema): DasGateResult {
-  const cats = Array.isArray(inv?.categories) ? inv.categories : [];
-  if (cats.length === 0) return gate('structural', false, 'warn', 0, 'no_categories', { categoryCount: 0 });
-  const empty = cats.filter((c) => !(c.items || []).length).length;
-  if (empty > 0)
-    return gate('structural', false, 'warn', 0, 'empty_categories', { categoryCount: cats.length, emptyCategoryCount: empty });
-  return gate('structural', true, 'info', 1, 'ok', { categoryCount: cats.length });
-}
-
-function evalBoundsInventory(inv: InventorySchema): DasGateResult {
-  const cats = Array.isArray(inv?.categories) ? inv.categories : [];
-  const limits = {
-    maxCategories: 30,
-    maxCategoryNameLen: 80,
-    maxItemsPerCategory: 80,
-    maxItemNameLen: 80,
-  };
-  if (cats.length > limits.maxCategories) {
-    return gate('bounds', false, 'warn', 0, 'too_many_categories', {
-      categoryCount: cats.length,
-      maxCategories: limits.maxCategories,
-    });
-  }
-  for (const c of cats) {
-    const name = String(c?.name || '');
-    if (name.length > limits.maxCategoryNameLen) {
-      return gate('bounds', false, 'warn', 0, 'category_name_too_long', {
-        categoryNameLen: name.length,
-        maxCategoryNameLen: limits.maxCategoryNameLen,
-      });
-    }
-    const items = Array.isArray(c?.items) ? c.items : [];
-    if (items.length > limits.maxItemsPerCategory) {
-      return gate('bounds', false, 'warn', 0, 'too_many_items_in_category', {
-        itemCount: items.length,
-        maxItemsPerCategory: limits.maxItemsPerCategory,
-      });
-    }
-    for (const it of items) {
-      const itNameLen = String(it || '').length;
-      if (itNameLen > limits.maxItemNameLen) {
-        return gate('bounds', false, 'warn', 0, 'item_name_too_long', {
-          itemNameLen: itNameLen,
-          maxItemNameLen: limits.maxItemNameLen,
-        });
-      }
-    }
-  }
-  return gate('bounds', true, 'info', 1, 'ok', limits);
-}
-
-function evalStructuralBlueprints(blueprints: GeneratedBlueprint[]): DasGateResult {
-  if (!Array.isArray(blueprints) || blueprints.length === 0)
-    return gate('structural', false, 'warn', 0, 'no_blueprints', { blueprintCount: 0 });
-  for (const bp of blueprints) {
-    if (!String(bp?.title || '').trim())
-      return gate('structural', false, 'warn', 0, 'missing_blueprint_title');
-    if (!Array.isArray(bp?.steps) || bp.steps.length === 0)
-      return gate('structural', false, 'warn', 0, 'blueprint_has_no_steps', { title: String(bp?.title || '') });
-    for (const st of bp.steps || []) {
-      if (!Array.isArray(st?.items) || st.items.length === 0)
-        return gate('structural', false, 'warn', 0, 'step_has_no_items', { stepTitle: String(st?.title || '') });
-    }
-  }
-  return gate('structural', true, 'info', 1, 'ok', { blueprintCount: blueprints.length });
-}
-
-function evalBoundsBlueprints(blueprints: GeneratedBlueprint[]): DasGateResult {
-  const limits = {
-    maxSteps: 20,
-    maxStepTitleLen: 120,
-    maxStepDescriptionLen: 800,
-    maxItemsPerStep: 40,
-  };
-  for (const bp of blueprints || []) {
-    if ((bp.steps || []).length > limits.maxSteps) {
-      return gate('bounds', false, 'warn', 0, 'too_many_steps', { stepCount: (bp.steps || []).length, maxSteps: limits.maxSteps });
-    }
-    for (const st of bp.steps || []) {
-      const titleLen = String(st?.title || '').length;
-      if (titleLen > limits.maxStepTitleLen) {
-        return gate('bounds', false, 'warn', 0, 'step_title_too_long', { titleLen, maxStepTitleLen: limits.maxStepTitleLen });
-      }
-      const descLen = String(st?.description || '').length;
-      if (descLen > limits.maxStepDescriptionLen) {
-        return gate('bounds', false, 'warn', 0, 'step_description_too_long', {
-          descLen,
-          maxStepDescriptionLen: limits.maxStepDescriptionLen,
-        });
-      }
-      if ((st.items || []).length > limits.maxItemsPerStep) {
-        return gate('bounds', false, 'warn', 0, 'too_many_items_in_step', {
-          itemCount: (st.items || []).length,
-          maxItemsPerStep: limits.maxItemsPerStep,
-        });
-      }
-    }
-  }
-  return gate('bounds', true, 'info', 1, 'ok', limits);
-}
-
-function evalStructuralPromptPack(pack: PromptPackV0): DasGateResult {
-  const goal = String(pack?.goal || '').trim();
-  if (!goal) return gate('structural', false, 'warn', 0, 'missing_goal');
-
-  const lib = pack?.library as any;
-  if (!lib || !String(lib.topic || '').trim()) return gate('structural', false, 'warn', 0, 'missing_library_topic');
-  if (!String(lib.title || '').trim()) return gate('structural', false, 'warn', 0, 'missing_library_title');
-
-  const bps = Array.isArray(pack?.blueprints) ? pack.blueprints : [];
-  if (bps.length === 0) return gate('structural', false, 'warn', 0, 'no_blueprints', { blueprintCount: 0 });
-  for (const bp of bps) {
-    if (!String(bp?.title || '').trim()) return gate('structural', false, 'warn', 0, 'missing_blueprint_title');
-  }
-  return gate('structural', true, 'info', 1, 'ok', { blueprintCount: bps.length });
-}
-
-function evalBoundsPromptPack(pack: PromptPackV0): DasGateResult {
-  const limits = {
-    maxGoalLen: 200,
-    maxTitleLen: 80,
-    maxDescriptionLen: 240,
-    maxNotesLen: 1200,
-    maxTags: 12,
-    maxTagLen: 40,
-    maxBlueprints: 8,
-  };
-
-  const goal = String(pack?.goal || '');
-  if (goal.length > limits.maxGoalLen) return gate('bounds', false, 'warn', 0, 'goal_too_long', limits);
-
-  const lib = pack?.library;
-  const libTitleLen = String(lib?.title || '').length;
-  if (libTitleLen > limits.maxTitleLen) return gate('bounds', false, 'warn', 0, 'library_title_too_long', limits);
-  const libDescLen = String(lib?.description || '').length;
-  if (libDescLen > limits.maxDescriptionLen) return gate('bounds', false, 'warn', 0, 'library_description_too_long', limits);
-  const libNotesLen = String(lib?.notes || '').length;
-  if (libNotesLen > limits.maxNotesLen) return gate('bounds', false, 'warn', 0, 'library_notes_too_long', limits);
-
-  const bps = Array.isArray(pack?.blueprints) ? pack.blueprints : [];
-  if (bps.length > limits.maxBlueprints) return gate('bounds', false, 'warn', 0, 'too_many_blueprints', limits);
-  for (const bp of bps) {
-    const tLen = String(bp?.title || '').length;
-    if (tLen > limits.maxTitleLen) return gate('bounds', false, 'warn', 0, 'blueprint_title_too_long', limits);
-    const dLen = String(bp?.description || '').length;
-    if (dLen > limits.maxDescriptionLen) return gate('bounds', false, 'warn', 0, 'blueprint_description_too_long', limits);
-    const nLen = String(bp?.notes || '').length;
-    if (nLen > limits.maxNotesLen) return gate('bounds', false, 'warn', 0, 'blueprint_notes_too_long', limits);
-    const tags = (bp?.tags || []).map((x) => String(x || '')).filter(Boolean);
-    if (tags.length > limits.maxTags) return gate('bounds', false, 'warn', 0, 'too_many_tags', limits);
-    for (const tag of tags) {
-      if (String(tag).length > limits.maxTagLen) return gate('bounds', false, 'warn', 0, 'tag_too_long', limits);
-    }
-  }
-
-  return gate('bounds', true, 'info', 1, 'ok', limits);
-}
-
-function evalPersonaAlignmentPromptPack(persona: PersonaV0 | null, pack: PromptPackV0, params?: Record<string, unknown>): DasGateResult {
-  if (!persona) return gate('persona_alignment_v0', true, 'info', 0, 'no_persona', { skipped: true });
-
-  const minTagOverlapRatioRaw = (params || ({} as any)).minTagOverlapRatio;
-  const minTagOverlapRatio =
-    minTagOverlapRatioRaw === undefined || minTagOverlapRatioRaw === null ? 0.25 : Math.max(0, Number(minTagOverlapRatioRaw) || 0);
-  // In v0 we treat persona "avoid tags" as a hard fail signal, but we do NOT treat
-  // persona.must_avoid phrases as violations at the prompt-pack stage (they are instructions).
-  const hardFailOnMustAvoid = (params || ({} as any)).hardFailOnMustAvoid !== false;
-
-  const personaTags = uniqStrings([
-    ...((persona.interests?.topics || []) as string[]),
-    ...((persona.interests?.tags_prefer || []) as string[]),
-  ])
-    .map(normalizeSlug)
-    .filter(Boolean);
-  const personaTagSet = new Set(personaTags);
-
-  const avoidTags = uniqStrings([...(persona.interests?.tags_avoid || [])]).map(normalizeSlug).filter(Boolean);
-  const mustInclude = uniqStrings([...(persona.constraints?.must_include || [])]).map((s) => String(s).toLowerCase());
-  const mustAvoid = uniqStrings([...(persona.constraints?.must_avoid || [])]).map((s) => String(s).toLowerCase());
-
-  const packTags = uniqStrings([
-    ...((pack.library?.tags || []) as string[]),
-    ...(pack.blueprints || []).flatMap((bp) => (bp?.tags || []) as string[]),
-  ])
-    .map(normalizeSlug)
-    .filter(Boolean);
-  const packTagSet = new Set(packTags);
-
-  let overlapCount = 0;
-  for (const t of packTagSet) if (personaTagSet.has(t)) overlapCount += 1;
-  const overlapRatio = overlapCount / Math.max(1, packTagSet.size);
-
-  const blob = [
-    pack.goal,
-    pack.library?.topic,
-    pack.library?.title,
-    pack.library?.description,
-    pack.library?.notes,
-    ...(pack.blueprints || []).flatMap((bp) => [bp?.title, bp?.description, bp?.notes]),
-    ...packTags,
-  ]
-    .map((x) => String(x || '').trim())
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
-
-  const mustIncludeHits = mustInclude.filter((t) => t && blob.includes(t));
-  const avoidTagHits = avoidTags.filter((t) => t && packTagSet.has(t));
-  const mustAvoidInstructionHits = mustAvoid.filter((t) => t && blob.includes(t));
-
-  const data = {
-    persona_id: persona.id,
-    minTagOverlapRatio,
-    hardFailOnMustAvoid,
-    pack_tag_count: packTagSet.size,
-    persona_tag_count: personaTagSet.size,
-    overlap_count: overlapCount,
-    overlap_ratio: overlapRatio,
-    must_include_total: mustInclude.length,
-    must_include_hits: mustIncludeHits.length,
-    avoid_tags_total: avoidTags.length,
-    avoid_tags_hits: avoidTagHits.length,
-    must_avoid_instructions_total: mustAvoid.length,
-    must_avoid_instructions_hits: mustAvoidInstructionHits.length,
-    hit_terms: {
-      must_include: mustIncludeHits.slice(0, 8),
-      avoid_tags: avoidTagHits.slice(0, 8),
-      must_avoid_instructions: mustAvoidInstructionHits.slice(0, 8),
-    },
-  };
-
-  if (hardFailOnMustAvoid && avoidTagHits.length > 0) {
-    return gate('persona_alignment_v0', false, 'hard_fail', 0, 'avoid_tag_hit', data);
-  }
-
-  if (overlapRatio < minTagOverlapRatio) {
-    return gate('persona_alignment_v0', false, 'hard_fail', overlapRatio, 'low_tag_overlap', data);
-  }
-
-  if (mustInclude.length && mustIncludeHits.length < mustInclude.length) {
-    return gate('persona_alignment_v0', true, 'warn', overlapRatio, 'ok_missing_must_include', data);
-  }
-
-  return gate('persona_alignment_v0', true, 'info', overlapRatio, 'ok', data);
-}
-
 function writeJsonFile(filePath: string, data: unknown) {
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n', 'utf-8');
 }
@@ -890,85 +614,6 @@ function sanitizeRunId(input: string) {
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 60);
-}
-
-function evalStructuralControlPack(pack: ControlPackV0): DasGateResult {
-  if (Number(pack?.version) !== 0) return gate('structural', false, 'warn', 0, 'bad_version');
-  const goal = String(pack?.goal || '').trim();
-  if (!goal) return gate('structural', false, 'warn', 0, 'missing_goal');
-  const lib = pack?.library as any;
-  if (!lib || !lib.controls) return gate('structural', false, 'warn', 0, 'missing_library_controls');
-  const bps = Array.isArray(pack?.blueprints) ? pack.blueprints : [];
-  if (!bps.length) return gate('structural', false, 'warn', 0, 'no_blueprints', { blueprintCount: 0 });
-  for (const bp of bps) {
-    if (!bp || !bp.controls || !String(bp.controls.focus || '').trim()) return gate('structural', false, 'warn', 0, 'missing_blueprint_focus');
-  }
-  return gate('structural', true, 'info', 1, 'ok', { blueprintCount: bps.length });
-}
-
-function evalBoundsControlPack(pack: ControlPackV0): DasGateResult {
-  const limits = {
-    maxGoalLen: 200,
-    maxNameLen: 80,
-    maxNotesLen: 1200,
-    maxTags: 12,
-    maxTagLen: 40,
-    maxBlueprints: 8,
-  };
-  const goal = String(pack?.goal || '');
-  if (goal.length > limits.maxGoalLen) return gate('bounds', false, 'warn', 0, 'goal_too_long', limits);
-  const libNameLen = String(pack?.library?.name || '').length;
-  if (libNameLen > limits.maxNameLen) return gate('bounds', false, 'warn', 0, 'library_name_too_long', limits);
-  const libNotesLen = String(pack?.library?.notes || '').length;
-  if (libNotesLen > limits.maxNotesLen) return gate('bounds', false, 'warn', 0, 'library_notes_too_long', limits);
-  const libTags = ((pack?.library?.tags || []) as any[]).map((x) => String(x || '')).filter(Boolean);
-  if (libTags.length > limits.maxTags) return gate('bounds', false, 'warn', 0, 'too_many_library_tags', limits);
-  for (const tag of libTags) if (String(tag).length > limits.maxTagLen) return gate('bounds', false, 'warn', 0, 'library_tag_too_long', limits);
-
-  const bps = Array.isArray(pack?.blueprints) ? pack.blueprints : [];
-  if (bps.length > limits.maxBlueprints) return gate('bounds', false, 'warn', 0, 'too_many_blueprints', limits);
-  for (const bp of bps) {
-    const nameLen = String(bp?.name || '').length;
-    if (nameLen > limits.maxNameLen) return gate('bounds', false, 'warn', 0, 'blueprint_name_too_long', limits);
-    const notesLen = String(bp?.notes || '').length;
-    if (notesLen > limits.maxNotesLen) return gate('bounds', false, 'warn', 0, 'blueprint_notes_too_long', limits);
-    const tags = ((bp?.tags || []) as any[]).map((x) => String(x || '')).filter(Boolean);
-    if (tags.length > limits.maxTags) return gate('bounds', false, 'warn', 0, 'too_many_blueprint_tags', limits);
-    for (const tag of tags) if (String(tag).length > limits.maxTagLen) return gate('bounds', false, 'warn', 0, 'blueprint_tag_too_long', limits);
-  }
-  return gate('bounds', true, 'info', 1, 'ok', limits);
-}
-
-function evalPersonaAlignmentControlPack(
-  persona: PersonaV0 | null,
-  pack: ControlPackV0,
-  params?: Record<string, unknown>
-): DasGateResult {
-  if (!persona) return gate('persona_alignment_v0', true, 'info', 0, 'no_persona', { skipped: true });
-
-  const expectedDomain = String(persona?.safety?.domain || '').trim();
-  const domain = String((pack as any)?.library?.controls?.domain || '').trim();
-  const domainCustom = String((pack as any)?.library?.controls?.domain_custom || '').trim();
-  const allowCustomDomain = (params || ({} as any)).allowCustomDomain === true;
-
-  const data = {
-    persona_id: persona.id,
-    expected_domain: expectedDomain || null,
-    domain: domain || null,
-    domain_custom: domainCustom || null,
-    allowCustomDomain,
-  };
-
-  // v0: domain mismatch is a hard fail. This is deterministic and cheap, and
-  // gives us a stable retry demo before we add richer quality evaluation.
-  if (expectedDomain) {
-    if (domain === expectedDomain) return gate('persona_alignment_v0', true, 'info', 1, 'ok', data);
-    if (domain === 'custom' && allowCustomDomain) return gate('persona_alignment_v0', true, 'warn', 0.5, 'ok_custom_domain', data);
-    return gate('persona_alignment_v0', false, 'hard_fail', 0, 'domain_mismatch', data);
-  }
-
-  // Missing expected domain should not block v0 runs.
-  return gate('persona_alignment_v0', true, 'warn', 0.25, 'missing_expected_domain', data);
 }
 
 async function postJson<T>(
@@ -1054,76 +699,6 @@ function validateSeedSpec(spec: SeedSpec): string[] {
   return errors;
 }
 
-function buildLibraryIndex(inventory: InventorySchema) {
-  const map = new Map<string, Set<string>>();
-  for (const c of inventory.categories || []) {
-    const name = (c.name || '').trim();
-    if (!name) continue;
-    const set = new Set((c.items || []).map((x) => (x || '').trim()).filter(Boolean));
-    map.set(name, set);
-  }
-  return map;
-}
-
-function validateBlueprints(inventory: InventorySchema, blueprints: GeneratedBlueprint[]): ValidationResult {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-
-  const index = buildLibraryIndex(inventory);
-  let stepCountTotal = 0;
-  let itemRefsTotal = 0;
-
-  if (!inventory.categories || inventory.categories.length === 0) {
-    errors.push('Inventory has no categories');
-  }
-
-  blueprints.forEach((bp, bpi) => {
-    if (!bp.title?.trim()) errors.push(`blueprints[${bpi}] missing title`);
-    if (!bp.steps || bp.steps.length === 0) errors.push(`blueprints[${bpi}] has no steps`);
-    if ((bp.steps || []).length > 0 && bp.steps.length < 3) {
-      warnings.push(`blueprints[${bpi}] has only ${bp.steps.length} steps (min recommended is 5)`);
-    }
-
-    (bp.steps || []).forEach((s, si) => {
-      stepCountTotal += 1;
-      if (!s.title?.trim()) warnings.push(`blueprints[${bpi}].steps[${si}] missing title`);
-      if (!s.description?.trim()) warnings.push(`blueprints[${bpi}].steps[${si}] missing description`);
-      if (!s.items || s.items.length === 0) errors.push(`blueprints[${bpi}].steps[${si}] has no items`);
-
-      (s.items || []).forEach((it, ii) => {
-        itemRefsTotal += 1;
-        const cat = (it.category || '').trim();
-        const name = (it.name || '').trim();
-        if (!cat || !name) {
-          errors.push(`blueprints[${bpi}].steps[${si}].items[${ii}] missing category or name`);
-          return;
-        }
-        const allowed = index.get(cat);
-        if (!allowed) {
-          errors.push(`blueprints[${bpi}].steps[${si}].items[${ii}] category not in library: "${cat}"`);
-          return;
-        }
-        if (!allowed.has(name)) {
-          errors.push(
-            `blueprints[${bpi}].steps[${si}].items[${ii}] item not in library: "${cat}" -> "${name}"`
-          );
-        }
-      });
-    });
-  });
-
-  return {
-    ok: errors.length === 0,
-    errors,
-    warnings,
-    stats: {
-      blueprintCount: blueprints.length,
-      stepCountTotal,
-      itemRefsTotal,
-    },
-  };
-}
-
 function buildReviewPayload(spec: SeedSpec, bp: GeneratedBlueprint): ReviewPayload {
   const selectedItems: Record<string, Array<string | { name: string; context?: string }>> = {};
   for (const step of bp.steps || []) {
@@ -1193,6 +768,7 @@ async function main() {
         '  --apply                    Stage 1 apply mode (writes to Supabase)',
         '  --das                      Enable DAS v1 (dynamic gates, retries, select-best; uses das config)',
         '  --das-config <path>        DAS config JSON path (default: seed/das_config_v1.json)',
+        '  --ass-eval-config <path>   ASS eval config v2 JSON path (config-driven eval instances per node)',
         '  --yes <token>              Stage 1 guard token (must be APPLY_STAGE1)',
         '  --limit-blueprints <n>     Limit generated/apply blueprints to N (useful for testing Stage 1)',
       ].join('\n') + '\n'
@@ -1215,6 +791,7 @@ async function main() {
   const reviewFocus = String(args.reviewFocus || '').trim();
   const dasEnabled = Boolean(args.das || args.dasConfig);
   const dasConfigPath = String(args.dasConfig || 'seed/das_config_v1.json');
+  const assEvalConfigPath = String((args as any).assEvalConfig || '').trim();
   const authOnly = Boolean((args as any).authOnly);
 
   if (!fs.existsSync(specPath)) die(`Spec not found: ${specPath}`);
@@ -1304,6 +881,20 @@ async function main() {
       die(`DAS config is not valid JSON: ${dasConfigPath}`);
     }
     if (Number((dasConfig as any).version || 0) !== 1) die('DAS config version must be 1');
+  }
+
+  let assEvalConfig: AssEvalConfigV2 | null = null;
+  let assEvalConfigHash = '';
+  if (assEvalConfigPath) {
+    if (!fs.existsSync(assEvalConfigPath)) die(`ASS eval config not found: ${assEvalConfigPath}`);
+    try {
+      const out = readAssEvalConfigV2(assEvalConfigPath);
+      assEvalConfig = out.config;
+      assEvalConfigHash = out.hash;
+    } catch (e) {
+      const err = e instanceof Error ? e : new Error(String(e));
+      die(`ASS eval config invalid: ${err.message}`);
+    }
   }
   const createdAt = nowIso();
 
@@ -1428,12 +1019,23 @@ async function main() {
       applyStage1,
       limitBlueprints,
       ...(dasEnabled ? { dasEnabled: true, dasConfigPath, dasConfigHash } : {}),
+      ...(assEvalConfigPath ? { assEvalConfigPath, assEvalConfigHash } : {}),
       ...(aspId ? { aspId } : {}),
       ...(personaHash ? { personaHash } : {}),
       runContextHash,
     },
     steps: [],
   };
+
+  if (assEvalConfig) {
+    writeJsonFile(outPath.logs('ass_eval_config_resolved.json'), {
+      version: 2,
+      createdAt: nowIso(),
+      path: assEvalConfigPath,
+      hash: assEvalConfigHash,
+      config: assEvalConfig,
+    });
+  }
 
   if (composeControls && composePrompts) {
     die('Invalid flags: use either --compose-controls or --compose-prompts (controls already render to prompt pack).');
@@ -1466,6 +1068,144 @@ async function main() {
 
   // Create empty artifacts early so failures still leave a debuggable trail.
   if (dasEnabled) writeDasLogs();
+
+  const unknownEvalPolicy: UnknownEvalPolicy = assEvalConfig?.unknown_eval_policy || 'hard_fail';
+
+  const resolveEvalInstancesForNode = (nodeId: DasNodeId, policy: ResolvedDasPolicy): EvalInstance[] => {
+    const fromConfig = assEvalConfig?.nodes?.[nodeId]?.evals;
+    if (Array.isArray(fromConfig) && fromConfig.length > 0) return fromConfig;
+
+    const evals: EvalInstance[] = [];
+    for (const nameRaw of policy.eval || []) {
+      const name = String(nameRaw || '').trim();
+      if (!name) continue;
+
+      if (name === 'structural') {
+        const eval_id =
+          nodeId === 'CONTROL_PACK'
+            ? 'structural_control_pack'
+            : nodeId === 'PROMPT_PACK'
+              ? 'structural_prompt_pack'
+              : nodeId === 'LIB_GEN'
+                ? 'structural_inventory'
+                : nodeId === 'BP_GEN'
+                  ? 'structural_blueprints'
+                  : '';
+        if (eval_id) evals.push({ eval_id });
+        continue;
+      }
+
+      if (name === 'bounds') {
+        const eval_id =
+          nodeId === 'CONTROL_PACK'
+            ? 'bounds_control_pack'
+            : nodeId === 'PROMPT_PACK'
+              ? 'bounds_prompt_pack'
+              : nodeId === 'LIB_GEN'
+                ? 'bounds_inventory'
+                : nodeId === 'BP_GEN'
+                  ? 'bounds_blueprints'
+                  : '';
+        if (eval_id) evals.push({ eval_id });
+        continue;
+      }
+
+      if (name === 'crossref' && nodeId === 'BP_GEN') {
+        evals.push({ eval_id: 'crossref_blueprints_to_inventory' });
+        continue;
+      }
+
+      if (name === 'persona_alignment_v0') {
+        const params = ((policy.params || {}) as any).persona_alignment_v0;
+        const instanceParams =
+          params && typeof params === 'object' && !Array.isArray(params) ? (params as Record<string, unknown>) : undefined;
+        const eval_id =
+          nodeId === 'CONTROL_PACK'
+            ? 'persona_alignment_controls_v0'
+            : nodeId === 'PROMPT_PACK'
+              ? 'persona_alignment_prompts_v0'
+              : '';
+        if (eval_id) evals.push({ eval_id, ...(instanceParams ? { params: instanceParams } : {}) });
+        continue;
+      }
+
+      // Unknown gates from legacy policy: keep them visible and fail hard by default.
+      evals.push({ eval_id: name });
+    }
+
+    return evals;
+  };
+
+  const runEvalInstancesForNode = (args: {
+    nodeId: DasNodeId;
+    attempt: number;
+    candidate: number;
+    evals: EvalInstance[];
+    input: unknown;
+    inventoryForCrossref?: InventorySchema;
+  }): { gates: DasGateResult[]; ok: boolean; score: number } => {
+    const gates: DasGateResult[] = [];
+    let totalScore = 0;
+
+    const ctx: EvalContext = {
+      run_id: runId,
+      node_id: args.nodeId,
+      run_type: runType,
+      attempt: args.attempt,
+      candidate: args.candidate,
+      persona,
+      mode: 'seed',
+    };
+
+    for (const inst of args.evals || []) {
+      const evalId = String(inst?.eval_id || '').trim();
+      if (!evalId) continue;
+
+      const cls = getEvalClass(evalId);
+      if (!cls) {
+        if (unknownEvalPolicy === 'skip') continue;
+        const ok = unknownEvalPolicy === 'warn';
+        const sev: EvalSeverity = ok ? 'warn' : 'hard_fail';
+        const g = mkEvalResult(evalId, ok, sev, 0, 'unknown_eval_id', { eval_id: evalId });
+        gates.push(g);
+        continue;
+      }
+
+      const params = inst?.params && typeof inst.params === 'object' && !Array.isArray(inst.params) ? inst.params : {};
+
+      let input: unknown = args.input;
+      if (evalId === 'persona_alignment_controls_v0') input = { persona, pack: args.input };
+      else if (evalId === 'persona_alignment_prompts_v0') input = { persona, pack: args.input };
+      else if (evalId === 'crossref_blueprints_to_inventory') {
+        if (!args.inventoryForCrossref) {
+          gates.push(mkEvalResult(evalId, false, 'hard_fail', 0, 'missing_inventory_for_crossref'));
+          continue;
+        }
+        input = { inventory: args.inventoryForCrossref, blueprints: args.input };
+      }
+
+      let res: EvalResult;
+      try {
+        res = cls.run(input as any, params as any, ctx);
+      } catch (e) {
+        const err = e instanceof Error ? e : new Error(String(e));
+        res = mkEvalResult(evalId, false, 'hard_fail', 0, 'eval_threw', { message: err.message.slice(0, 300) });
+      }
+
+      if (inst?.severity && !res.ok) {
+        const sev = inst.severity;
+        if (sev === 'info' || sev === 'warn' || sev === 'hard_fail') res = { ...res, severity: sev };
+      }
+
+      const weightRaw = inst?.score_weight;
+      const weight = weightRaw === undefined ? 1 : Number(weightRaw) || 0;
+      totalScore += (Number(res.score) || 0) * (Number.isFinite(weight) ? weight : 1);
+      gates.push(res);
+    }
+
+    const ok = gates.every((g) => g.ok);
+    return { gates, ok, score: totalScore };
+  };
 
   const step = async <T>(name: string, fn: () => Promise<T>) => {
     const entry = { name, startedAt: nowIso(), ok: false as boolean } as RunLog['steps'][number];
@@ -1541,12 +1281,13 @@ async function main() {
           blueprintCount,
         });
         applyControlDefaultsFromRegistry(pack, personaRegistryEntry);
-        const gates: DasGateResult[] = [evalStructuralControlPack(pack), evalBoundsControlPack(pack)];
-        if (!gates.every((g) => g.ok)) {
-          throw new Error(`CONTROL_PACK gates failed: ${gates.filter((g) => !g.ok).map((g) => g.reason).join(', ')}`);
+        const evals: EvalInstance[] = [{ eval_id: 'structural_control_pack' }, { eval_id: 'bounds_control_pack' }];
+        const evalOut = runEvalInstancesForNode({ nodeId, attempt: 1, candidate: 1, evals, input: pack });
+        if (!evalOut.ok) {
+          throw new Error(`CONTROL_PACK gates failed: ${evalOut.gates.filter((g) => !g.ok).map((g) => g.reason).join(', ')}`);
         }
         controlPack = pack;
-        writePack(pack, { dasEnabled: false, selected: { attempt: 1, candidate: 1 }, gates });
+        writePack(pack, { dasEnabled: false, selected: { attempt: 1, candidate: 1 }, gates: evalOut.gates });
         renderAndApply(pack);
         return { ok: true };
       }
@@ -1680,28 +1421,24 @@ async function main() {
             output: pack,
           });
 
-          const gates: DasGateResult[] = [];
-          const evalList = policy.eval;
-          if (evalList.includes('structural')) gates.push(evalStructuralControlPack(pack));
-          if (evalList.includes('bounds')) gates.push(evalBoundsControlPack(pack));
-          if (evalList.includes('persona_alignment_v0')) {
-            const p = ((policy.params || {}) as any).persona_alignment_v0;
-            gates.push(evalPersonaAlignmentControlPack(persona, pack, (p && typeof p === 'object' ? (p as any) : {}) as any));
-          }
-          for (const gName of evalList) {
-            if (gName === 'structural' || gName === 'bounds' || gName === 'persona_alignment_v0' || gName === 'testOnly_failOnce') continue;
-            gates.push(gate(gName, false, 'hard_fail', 0, 'not_implemented'));
-          }
+          const evals = resolveEvalInstancesForNode(nodeId, policy);
+          const evalOut = runEvalInstancesForNode({
+            nodeId,
+            attempt,
+            candidate: cand,
+            evals,
+            input: pack,
+          });
 
-          const ok = gates.every((g) => g.ok);
-          const score = gates.reduce((acc, g) => acc + (Number(g.score) || 0), 0);
+          const ok = evalOut.ok;
+          const score = evalOut.score;
           attemptRec.candidates.push({
             attempt,
             candidate: cand,
             ok,
             score,
             file: path.relative(runDir, outFile),
-            gates,
+            gates: evalOut.gates,
           });
           if (ok) candidateValues.push({ pack, file: path.relative(runDir, outFile), score, candidate: cand });
         }
@@ -1769,13 +1506,14 @@ async function main() {
           persona,
           blueprintCount,
         });
-        const gates: DasGateResult[] = [evalStructuralPromptPack(pack), evalBoundsPromptPack(pack)];
-        if (!gates.every((g) => g.ok)) {
-          throw new Error(`PROMPT_PACK gates failed: ${gates.filter((g) => !g.ok).map((g) => g.reason).join(', ')}`);
+        const evals: EvalInstance[] = [{ eval_id: 'structural_prompt_pack' }, { eval_id: 'bounds_prompt_pack' }];
+        const evalOut = runEvalInstancesForNode({ nodeId, attempt: 1, candidate: 1, evals, input: pack });
+        if (!evalOut.ok) {
+          throw new Error(`PROMPT_PACK gates failed: ${evalOut.gates.filter((g) => !g.ok).map((g) => g.reason).join(', ')}`);
         }
         promptPack = pack;
         specRun = { ...specRun, library: pack.library as any, blueprints: pack.blueprints as any };
-        writePack(pack, { dasEnabled: false, selected: { attempt: 1, candidate: 1 }, gates });
+        writePack(pack, { dasEnabled: false, selected: { attempt: 1, candidate: 1 }, gates: evalOut.gates });
         return { ok: true };
       }
 
@@ -1874,30 +1612,23 @@ async function main() {
             output: pack,
           });
 
-          const gates: DasGateResult[] = [];
-          const evalList = policy.eval;
-          if (evalList.includes('structural')) gates.push(evalStructuralPromptPack(pack));
-          if (evalList.includes('bounds')) gates.push(evalBoundsPromptPack(pack));
-          if (evalList.includes('persona_alignment_v0')) {
-            const p = ((policy.params || {}) as any).persona_alignment_v0;
-            gates.push(evalPersonaAlignmentPromptPack(persona, pack, (p && typeof p === 'object' ? (p as any) : {}) as any));
-          }
-
-          for (const gName of evalList) {
-            if (gName === 'structural' || gName === 'bounds' || gName === 'persona_alignment_v0' || gName === 'testOnly_failOnce')
-              continue;
-            gates.push(gate(gName, false, 'hard_fail', 0, 'not_implemented'));
-          }
-
-          const ok = gates.every((g) => g.ok);
-          const score = gates.reduce((acc, g) => acc + (Number(g.score) || 0), 0);
+          const evals = resolveEvalInstancesForNode(nodeId, policy);
+          const evalOut = runEvalInstancesForNode({
+            nodeId,
+            attempt,
+            candidate: cand,
+            evals,
+            input: pack,
+          });
+          const ok = evalOut.ok;
+          const score = evalOut.score;
           attemptRec.candidates.push({
             attempt,
             candidate: cand,
             ok,
             score,
             file: path.relative(runDir, outFile),
-            gates,
+            gates: evalOut.gates,
           });
           if (ok) candidateValues.push({ pack, file: path.relative(runDir, outFile), score, candidate: cand });
         }
@@ -2208,26 +1939,23 @@ async function main() {
           output: res.data,
         });
 
-        const gates: DasGateResult[] = [];
-        const evalList = policy.eval;
-        if (evalList.includes('structural')) gates.push(evalStructuralInventory(res.data));
-        if (evalList.includes('bounds')) gates.push(evalBoundsInventory(res.data));
-
-        // Unknown gates are a hard fail (config mismatch). Add stubs explicitly if needed.
-        for (const gName of evalList) {
-          if (gName === 'structural' || gName === 'bounds' || gName === 'testOnly_failOnce') continue;
-          gates.push(gate(gName, false, 'hard_fail', 0, 'not_implemented'));
-        }
-
-        const ok = gates.every((g) => g.ok);
-        const score = gates.reduce((acc, g) => acc + (Number(g.score) || 0), 0);
+        const evals = resolveEvalInstancesForNode(nodeId, policy);
+        const evalOut = runEvalInstancesForNode({
+          nodeId,
+          attempt,
+          candidate: cand,
+          evals,
+          input: res.data,
+        });
+        const ok = evalOut.ok;
+        const score = evalOut.score;
         attemptRec.candidates.push({
           attempt,
           candidate: cand,
           ok,
           score,
           file: path.relative(runDir, outFile),
-          gates,
+          gates: evalOut.gates,
         });
         if (ok) candidateValues.push({ inv: res.data, file: path.relative(runDir, outFile), score, candidate: cand });
       }
@@ -2424,41 +2152,24 @@ async function main() {
           output: list,
         });
 
-        const gates: DasGateResult[] = [];
-        const evalList = policy.eval;
-        if (evalList.includes('structural')) gates.push(evalStructuralBlueprints(list));
-        if (evalList.includes('bounds')) gates.push(evalBoundsBlueprints(list));
-        if (evalList.includes('crossref')) {
-          const v = validateBlueprints(inventory, list);
-          gates.push(
-            gate(
-              'crossref',
-              v.ok,
-              v.ok ? 'info' : 'warn',
-              v.ok ? 1 : 0,
-              v.ok ? 'ok' : 'invalid_refs',
-              {
-                errorCount: v.errors.length,
-                warningCount: v.warnings.length,
-                sampleError: v.errors[0] ? String(v.errors[0]).slice(0, 200) : '',
-              }
-            )
-          );
-        }
-        for (const gName of evalList) {
-          if (gName === 'structural' || gName === 'bounds' || gName === 'crossref' || gName === 'testOnly_failOnce') continue;
-          gates.push(gate(gName, false, 'hard_fail', 0, 'not_implemented'));
-        }
-
-        const ok = gates.every((g) => g.ok);
-        const score = gates.reduce((acc, g) => acc + (Number(g.score) || 0), 0);
+        const evals = resolveEvalInstancesForNode(nodeId, policy);
+        const evalOut = runEvalInstancesForNode({
+          nodeId,
+          attempt,
+          candidate: cand,
+          evals,
+          input: list,
+          inventoryForCrossref: inventory,
+        });
+        const ok = evalOut.ok;
+        const score = evalOut.score;
         attemptRec.candidates.push({
           attempt,
           candidate: cand,
           ok,
           score,
           file: path.relative(runDir, outFile),
-          gates,
+          gates: evalOut.gates,
         });
         if (ok) candidateValues.push({ list, file: path.relative(runDir, outFile), score, candidate: cand });
       }

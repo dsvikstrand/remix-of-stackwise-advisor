@@ -48,11 +48,27 @@ Stable per-gate contract:
 - `reason`: short string (human readable)
 - `data`: optional JSON object for structured details (counts, limits, etc.)
 
-Initial focus (B1): deterministic gates only (`structural`, `bounds`, `crossref`, `persona_alignment_v0`).
+Initial focus (B1): deterministic eval classes only (examples):
+- `structural_inventory`, `bounds_inventory`
+- `structural_blueprints`, `bounds_blueprints`, `crossref_blueprints_to_inventory`
+- `structural_control_pack`, `bounds_control_pack`, `persona_alignment_controls_v0`
+- `structural_prompt_pack`, `bounds_prompt_pack`, `persona_alignment_prompts_v0`
 
 Notes:
-- `persona_alignment_v0` is wired for `PROMPT_PACK` (prompt composer) and `CONTROL_PACK` (promptless controls) so we can validate eval wiring cheaply.
-- Gate parameters live under `params` in the DAS config, per node (example: `nodes.PROMPT_PACK.params.persona_alignment_v0.minTagOverlapRatio`).
+- Persona alignment is wired for `PROMPT_PACK` (prompt composer) and `CONTROL_PACK` (promptless controls) so we can validate eval wiring cheaply.
+- When using legacy DAS config `eval[]` lists, the runner maps them to the node-specific eval class ids above.
+
+## ASS Eval Config v2 (Current)
+ASS eval config v2 describes **eval instances per node** (which eval classes run, and with what params).
+
+- Example: `seed/ass_eval_config_v2.example.json`
+- Schema: `docs/schemas/ass_eval_config_schema.md`
+- Runner flag: `--ass-eval-config <path>`
+- Resolved config log: `logs/ass_eval_config_resolved.json`
+
+This config is independent from the DAS generation policy config:
+- DAS config controls retries and selection (`maxAttempts`, `kCandidates`, etc.)
+- ASS eval config controls which evals run on each node
 
 ## Promptless Controls (Current)
 We support a promptless intent layer (`ControlPackV0`) that is rendered into a `PromptPackV0` for backend compatibility.
@@ -160,7 +176,7 @@ Hard checks we already have:
 ## DAS v1 (Dynamic Gates + Retries)
 DAS v1 adds **gates + retries + select-best** on generation nodes when enabled.
 
-- Config: `seed/das_config_v1.json` (per-node `maxAttempts`, `kCandidates`, `eval[]`)
+- Config: `seed/das_config_v1.json` (per-node `maxAttempts`, `kCandidates`, legacy `eval[]`)
 - Test configs:
   - `seed/das_config_v1_test_controls_persona_align_pass.json` (CONTROL_PACK persona_alignment_v0 pass)
   - `seed/das_config_v1_test_controls_persona_align_retry.json` (CONTROL_PACK forced retry via testOnly_failOnce)

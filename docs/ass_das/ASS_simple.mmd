@@ -3,56 +3,48 @@ flowchart TD
   %% Focus: personas (AP) and eval-driven DAS loop
   %% Source of truth: codex/skills/seed-blueprints/scripts/seed_stage0.ts
   %% Mermaid: keep labels ASCII, single-line, and short.
-  %% Stage markers
-  ST_PERS([Persona AP]) --> ST_BOOT([Identity bootstrap])
-  ST_BOOT --> ST_INTENT([Intent layer])
-  ST_INTENT --> ST_GEN([Generate content])
-  ST_GEN --> ST_EVAL([Eval gates])
-  ST_EVAL -->|pass| ST_ENRICH([Optional AI enrich])
-  ST_EVAL -->|fail and attempts left| ST_RETRY([Retry or select best])
-  ST_EVAL -->|hard fail| ST_STOP([Stop run])
-  ST_RETRY --> ST_GEN
-  ST_ENRICH --> ST_APPLY([Optional apply/publish])
-  ST_APPLY --> ST_DONE([Done])
 
-  %% Persona
-  AP_FILE["personas/v0/PERSONA_ID.json"] --> ST_PERS
-  AP_REG["seed/persona_registry_v0.json"] --> ST_PERS
+  %% Core stages (minimal)
+  AP_CFG{{AP config}} --> AP([Persona AP])
+  AUTH_CFG{{Auth config}} --> AUTH([Auth bootstrap + store])
+  INTENT_CFG{{Intent config}} --> INTENT([Intent: controls or prompts])
+  GEN_CFG{{DAS gen policy config}} --> POLICY([DAS policy])
+  EVAL_CFG{{ASS eval config v2}} --> EVALS([Eval instances per node])
 
-  %% Auth + stores (no manual tokens)
-  SECRETS["seed/secrets.local.json (gitignored)"] --> ST_BOOT
-  ENV_OUT["personas/auth_local/PERSONA_ID.env.local (generated)"] --> ST_BOOT
-  STORE["personas/auth_local/PERSONA_ID.local (rotating store)"] --> ST_BOOT
+  AP --> AUTH --> INTENT
 
-  %% Intent (promptless controls or prompts)
-  CP["ControlPack (promptless controls)"] --> ST_INTENT
-  PP["PromptPack (rendered prompts)"] --> ST_INTENT
-  NOTE_INTENT{{"NOTE: UI is promptless; runner renders controls into prompts for backend"}} --> ST_INTENT
+  %% DAS policy (drives retries + select-best)
+  POLICY -.-> LIB_EVAL
+  POLICY -.-> BP_EVAL
+  EVALS -.-> LIB_EVAL
+  EVALS -.-> BP_EVAL
 
-  %% Generation nodes (conceptual)
-  LIB["LIB_GEN (library/inventory)"] --> ST_GEN
-  BP["BP_GEN (blueprints)"] --> ST_GEN
-  NOTE_RUN{{"NOTE: run_type can be seed / library_only / blueprint_only"}} --> ST_GEN
+  %% Two eval lanes (faithful, but compact)
+  INTENT --> LIB_GEN([LIB_GEN generate library])
+  LIB_GEN --> LIB_EVAL([LIB_EVAL gates + retry/select])
+  LIB_EVAL -->|pass| LIB_OK([LIB_OK])
+  LIB_EVAL -->|retry| LIB_GEN
+  LIB_EVAL -->|hard fail| STOP([Stop run])
 
-  %% Eval center (DAS loop)
-  CFG["DAS config (per-node attempts/candidates/gates)"] --> ST_EVAL
-  WIRE["Cheap wiring gates (structural/bounds/persona_align_v0)"] --> ST_EVAL
-  REAL["Real content gates (planned): inventory + blueprint quality"] --> ST_EVAL
-  LOGS["logs/decision_log.json (why retry/select)"] --> ST_EVAL
+  LIB_OK --> BP_GEN([BP_GEN generate blueprints])
+  BP_GEN --> BP_EVAL([BP_EVAL gates + retry/select])
+  BP_EVAL -->|pass| BP_OK([BP_OK])
+  BP_EVAL -->|retry| BP_GEN
+  BP_EVAL -->|hard fail| STOP
 
-  %% Outputs
-  ART["artifacts/ (library.json, blueprints.json, validation.json)"] --> ST_DONE
-  RUNLOG["logs/run_log.json + logs/run_meta.json"] --> ST_DONE
+  %% Shared tail
+  BP_OK --> AI([Optional AI review + banner])
+  AI --> APPLY([Optional apply/publish])
+  APPLY --> OUT([Outputs + logs])
 
   %% Styling
   classDef stage fill:#0b1220,stroke:#253047,color:#e7eefc,stroke-width:1px;
-  classDef inputs fill:#102a43,stroke:#1e4e8c,color:#e7f0ff;
+  classDef cfg fill:#102a43,stroke:#1e4e8c,color:#e7f0ff,stroke-dasharray: 3 3;
   classDef eval fill:#0b2a2f,stroke:#0ea5b7,color:#e6feff,stroke-width:2px;
-  classDef note fill:#111827,stroke:#374151,color:#e5e7eb,stroke-dasharray: 3 3;
   classDef out fill:#0f3d2e,stroke:#1b6b4b,color:#e7fff2;
 
-  class ST_PERS,ST_BOOT,ST_INTENT,ST_GEN,ST_ENRICH,ST_APPLY,ST_DONE,ST_RETRY,ST_STOP stage;
-  class AP_FILE,AP_REG,SECRETS,ENV_OUT,STORE,CP,PP,LIB,BP inputs;
-  class ST_EVAL eval;
-  class NOTE_INTENT,NOTE_RUN note;
-  class ART,RUNLOG,LOGS out;
+  class AP,AUTH,INTENT,POLICY,LIB_GEN,BP_GEN,AI,APPLY,STOP stage;
+  class LIB_EVAL,BP_EVAL eval;
+  class OUT,LIB_OK,BP_OK out;
+  class AP_CFG,AUTH_CFG,INTENT_CFG,GEN_CFG,EVAL_CFG cfg;
+  class EVALS stage;

@@ -1,0 +1,34 @@
+{
+  "version": 2,
+  "unknown_eval_policy": "hard_fail",
+  "nodes": {
+    "CONTROL_PACK": {
+      "evals": [
+        { "eval_id": "structural_control_pack" },
+        { "eval_id": "bounds_control_pack" },
+        { "eval_id": "persona_alignment_controls_v0", "params": { "allowCustomDomain": true } }
+      ]
+    },
+    "PROMPT_PACK": {
+      "evals": [
+        { "eval_id": "structural_prompt_pack" },
+        { "eval_id": "bounds_prompt_pack" },
+        { "eval_id": "persona_alignment_prompts_v0", "params": { "minTagOverlapRatio": 0.25 } }
+      ]
+    },
+    "LIB_GEN": {
+      "evals": [
+        { "eval_id": "structural_inventory" },
+        { "eval_id": "bounds_inventory" }
+      ]
+    },
+    "BP_GEN": {
+      "evals": [
+        { "eval_id": "structural_blueprints" },
+        { "eval_id": "bounds_blueprints" },
+        { "eval_id": "crossref_blueprints_to_inventory" }
+      ]
+    }
+  }
+}
+

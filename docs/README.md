@@ -19,6 +19,7 @@ Core docs (keep these in sync)
 Schemas (stable reference)
 - `[SCHEMA] [AG]` `docs/schemas/persona_schema.md`
 - `[SCHEMA] [ASS]` `docs/schemas/control_pack_schema.md`
+- `[SCHEMA] [ASS]` `docs/schemas/ass_eval_config_schema.md`
 - `[SCHEMA] [ASS] [AG]` `docs/schemas/seed_secrets_schema.md`
 
 Lovable (reference)
