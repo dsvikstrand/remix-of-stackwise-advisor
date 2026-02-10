@@ -21,13 +21,20 @@ Rules:
 - Keys only need to be unique **within the current message**.
 - Keys may be reused in later messages.
 
-## 2) Code gating with flags (Deprecated we use PA/PAP instead, see sec 4)
-I will control whether you write code using these flags:
+## 2) Budgets (Soft) + Escalation
 
-- **(no code)**: Do not implement or output new code. Only discuss, explain, review, or ask/answer questions.
-- **(code ok)**: Code is allowed.
+Goal: keep weekly rate-limit spend low by default, without blocking task completion.
 
-If a message includes **(no code)**, wait until I explicitly send **(code ok)** before you start implementing.
+Defaults
+- Operate in `cheap` mode unless I explicitly ask for `deep`/`full audit`/`investigate`.
+- Use minimal exploration and minimal commands needed to make measurable progress.
+- Budgets are **soft**, not hard limits. If a task needs more work than the budget, finish the task after doing the escalation step below.
+
+Soft budgets Recommendation (Soft Limit per task)
+- `commands`: ~10
+- `file reads/greps`: ~10
+- `smoke tests`: ~2
+
 
 ## 3) Plan-first implementation
 Process:
