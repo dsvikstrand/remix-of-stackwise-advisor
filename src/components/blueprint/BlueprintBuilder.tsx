@@ -16,6 +16,7 @@ import { useCreateBlueprint } from '@/hooks/useBlueprints';
 import { useToast } from '@/hooks/use-toast';
 import { getFriendlyErrorMessage } from '@/lib/errors';
 import { buildReviewSections } from '@/lib/reviewSections';
+import { getAuthHeader } from '@/lib/api';
 import type { InventoryListItem } from '@/hooks/useInventories';
 import type { Json } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
@@ -156,13 +157,12 @@ export function BlueprintBuilder({
     setReview('');
 
     try {
+      const authHeader = await getAuthHeader();
       const response = await fetch(ANALYZE_BLUEPRINT_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: config.useAgenticBackend && session?.access_token
-            ? `Bearer ${session.access_token}`
-            : `Bearer ${config.supabaseAnonKey}`,
+          Authorization: authHeader,
         },
         body: JSON.stringify({
           title: title.trim(),
