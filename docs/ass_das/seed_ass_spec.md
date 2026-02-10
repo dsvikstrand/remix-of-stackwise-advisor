@@ -78,6 +78,10 @@ Some eval classes require "assets" (golden drafts, rubrics, fixtures). Those ass
 - Root: `domains/v0/<domain_id>/`
 - Example: `domains/v0/fitness/golden/...`
 
+Domain asset conventions (v0):
+- `domains/v0/<domain_id>/rubric_v0.json` (deterministic thresholds and forbidden terms)
+- `domains/v0/<domain_id>/golden/libraries/*.json` (golden library fixtures for regression-style evals)
+
 The runner resolves one active domain per run and passes it into evals as `ctx.domain_id`:
 
 - CLI override: `--domain <id>`
@@ -198,9 +202,9 @@ DAS v1 adds **gates + retries + select-best** on generation nodes when enabled.
   - `seed/das_config_v1_test_controls_persona_align_retry.json` (CONTROL_PACK forced retry via testOnly_failOnce)
 - New artifacts (when `--das` is enabled):
   - `candidates/<node_id>/attempt-01*.json`...
-  - `logs/decision_log.json` (why we retried/selected)
+- `logs/decision_log.json` (why we retried/selected)
   - `logs/selection.json` (best candidate summary)
 
-Planned regression fixtures (GD):
-- `seed/golden/<persona_id>/case-01.json` ...
-Use these as small, curated baselines for quality/eval.
+Planned regression fixtures:
+- Prefer domain-scoped fixtures under `domains/v0/<domain_id>/golden/...` so eval assets stay organized by topic.
+- Persona-specific fixtures can be added later as an extra layer (only when needed).

@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import type { ControlPackV0 } from '../../control_pack_v0';
 import type { PromptPackV0 } from '../../prompt_pack_v0';
 import type { PersonaV0 } from '../../persona_v0';
@@ -26,6 +27,38 @@ function uniqStrings(input: string[]) {
     if (!out.some((x) => x.toLowerCase() === s.toLowerCase())) out.push(s);
   }
   return out;
+}
+
+type DomainRubricV0 = {
+  version: number;
+  id?: string;
+  inventory?: {
+    minCategories?: number;
+    minItemsTotal?: number;
+    minItemsPerCategory?: number;
+    maxDupRatio?: number;
+    maxDominantCategoryRatio?: number;
+    minItemLen?: number;
+    maxShortItemRatio?: number;
+    forbidden_terms?: string[];
+  };
+};
+
+function readJsonFileStrict<T>(absPath: string): T {
+  const raw = fs.readFileSync(absPath, 'utf8');
+  return JSON.parse(raw) as T;
+}
+
+function normalizeText(input: unknown): string {
+  return String(input || '').trim().toLowerCase();
+}
+
+function jaccard(a: Set<string>, b: Set<string>): number {
+  if (!a.size && !b.size) return 1;
+  let inter = 0;
+  for (const x of a) if (b.has(x)) inter += 1;
+  const uni = a.size + b.size - inter;
+  return uni > 0 ? inter / uni : 0;
 }
 
 export const builtinEvalClasses: Array<EvalClass<any, any>> = [
@@ -550,6 +583,209 @@ export const builtinEvalClasses: Array<EvalClass<any, any>> = [
           expected_path: asset.relPath,
         }
       );
+    },
+  },
+  {
+    id: 'domain_rubric_inventory_v0',
+    run: (inv: InventorySchema, _params: Record<string, unknown>, ctx) => {
+      const domainId = String(ctx.domain_id || '').trim();
+      if (!domainId) {
+        return mkEvalResult('domain_rubric_inventory_v0', false, 'hard_fail', 0, 'missing_domain_id', {
+          expected: 'set --domain or provide persona default_domain/safety.domain',
+        });
+      }
+
+      let rubricPath: { absPath: string; relPath: string };
+      try {
+        rubricPath = resolveDomainAsset(domainId, 'rubric_v0.json');
+      } catch (e) {
+        const err = e instanceof Error ? e : new Error(String(e));
+        return mkEvalResult('domain_rubric_inventory_v0', false, 'hard_fail', 0, 'invalid_domain_asset_path', {
+          domain_id: domainId,
+          error: err.message.slice(0, 200),
+        });
+      }
+
+      if (!fs.existsSync(rubricPath.absPath)) {
+        return mkEvalResult('domain_rubric_inventory_v0', false, 'hard_fail', 0, 'missing_domain_asset', {
+          domain_id: domainId,
+          expected_path: rubricPath.relPath,
+        });
+      }
+
+      let rubric: DomainRubricV0;
+      try {
+        rubric = readJsonFileStrict<DomainRubricV0>(rubricPath.absPath);
+      } catch (e) {
+        const err = e instanceof Error ? e : new Error(String(e));
+        return mkEvalResult('domain_rubric_inventory_v0', false, 'hard_fail', 0, 'invalid_rubric_json', {
+          domain_id: domainId,
+          expected_path: rubricPath.relPath,
+          error: err.message.slice(0, 200),
+        });
+      }
+
+      const rules = rubric?.inventory || {};
+      const cats = Array.isArray(inv?.categories) ? inv.categories : [];
+      const minCategories = Math.max(0, Number(rules.minCategories ?? 0) || 0);
+      const minItemsTotal = Math.max(0, Number(rules.minItemsTotal ?? 0) || 0);
+      const minItemsPerCategory = Math.max(0, Number(rules.minItemsPerCategory ?? 0) || 0);
+      const maxDupRatio = rules.maxDupRatio === undefined ? null : Math.max(0, Number(rules.maxDupRatio) || 0);
+      const maxDominantCategoryRatio =
+        rules.maxDominantCategoryRatio === undefined ? null : Math.max(0, Number(rules.maxDominantCategoryRatio) || 0);
+      const minItemLen = Math.max(1, Number(rules.minItemLen ?? 1) || 1);
+      const maxShortItemRatio = rules.maxShortItemRatio === undefined ? null : Math.max(0, Number(rules.maxShortItemRatio) || 0);
+      const forbidden = Array.isArray(rules.forbidden_terms) ? rules.forbidden_terms.map(normalizeText).filter(Boolean) : [];
+
+      let totalItems = 0;
+      let dominantCategoryCount = 0;
+      let minItemsInAnyCategory = Number.POSITIVE_INFINITY;
+      let shortItems = 0;
+      const allItemsNorm: string[] = [];
+      const allText: string[] = [];
+
+      for (const c of cats) {
+        const catName = normalizeText((c as any)?.name || '');
+        if (catName) allText.push(catName);
+        const items = Array.isArray((c as any)?.items) ? ((c as any).items as unknown[]) : [];
+        totalItems += items.length;
+        dominantCategoryCount = Math.max(dominantCategoryCount, items.length);
+        minItemsInAnyCategory = Math.min(minItemsInAnyCategory, items.length);
+        for (const it of items) {
+          const v = normalizeText(it);
+          if (!v) continue;
+          allItemsNorm.push(v);
+          allText.push(v);
+          if (v.length < minItemLen) shortItems += 1;
+        }
+      }
+
+      const uniq = new Set(allItemsNorm);
+      const dupCount = Math.max(0, allItemsNorm.length - uniq.size);
+      const dupRatio = allItemsNorm.length > 0 ? dupCount / allItemsNorm.length : 0;
+      const dominantCategoryRatio = totalItems > 0 ? dominantCategoryCount / totalItems : 0;
+      const shortItemRatio = allItemsNorm.length > 0 ? shortItems / allItemsNorm.length : 0;
+
+      const failures: string[] = [];
+      if (minCategories > 0 && cats.length < minCategories) failures.push('too_few_categories');
+      if (minItemsTotal > 0 && totalItems < minItemsTotal) failures.push('too_few_items_total');
+      if (minItemsPerCategory > 0 && (Number.isFinite(minItemsInAnyCategory) ? minItemsInAnyCategory : 0) < minItemsPerCategory)
+        failures.push('too_few_items_in_a_category');
+      if (maxDupRatio !== null && dupRatio > maxDupRatio) failures.push('too_many_duplicates');
+      if (maxDominantCategoryRatio !== null && dominantCategoryRatio > maxDominantCategoryRatio) failures.push('category_dominance_too_high');
+      if (maxShortItemRatio !== null && shortItemRatio > maxShortItemRatio) failures.push('too_many_short_items');
+
+      const textJoined = allText.join(' ');
+      const forbiddenHits = forbidden.filter((t) => t && textJoined.includes(t));
+      if (forbiddenHits.length) failures.push('forbidden_terms_present');
+
+      const ok = failures.length === 0;
+      const data = {
+        domain_id: domainId,
+        rubric_path: rubricPath.relPath,
+        stats: {
+          categoryCount: cats.length,
+          totalItems,
+          minItemsInAnyCategory: Number.isFinite(minItemsInAnyCategory) ? minItemsInAnyCategory : 0,
+          dominantCategoryRatio,
+          dupRatio,
+          shortItemRatio,
+        },
+        forbidden_hits: forbiddenHits.slice(0, 10),
+        failures,
+      };
+      const score = ok ? 1 : 0;
+      return mkEvalResult('domain_rubric_inventory_v0', ok, ok ? 'info' : 'warn', score, ok ? 'ok' : 'rubric_violations', data);
+    },
+  },
+  {
+    id: 'golden_regression_inventory_v0',
+    run: (inv: InventorySchema, params: Record<string, unknown>, ctx) => {
+      const domainId = String(ctx.domain_id || '').trim();
+      if (!domainId) {
+        return mkEvalResult('golden_regression_inventory_v0', false, 'hard_fail', 0, 'missing_domain_id', {
+          expected: 'set --domain or provide persona default_domain/safety.domain',
+        });
+      }
+
+      const minScoreRaw = (params || ({} as any)).minScore;
+      const minScore = minScoreRaw === undefined || minScoreRaw === null ? 0.08 : Math.max(0, Number(minScoreRaw) || 0);
+
+      let dir: { absPath: string; relPath: string };
+      try {
+        dir = resolveDomainAsset(domainId, 'golden/libraries');
+      } catch (e) {
+        const err = e instanceof Error ? e : new Error(String(e));
+        return mkEvalResult('golden_regression_inventory_v0', false, 'hard_fail', 0, 'invalid_domain_asset_path', {
+          domain_id: domainId,
+          error: err.message.slice(0, 200),
+        });
+      }
+
+      if (!fs.existsSync(dir.absPath) || !fs.statSync(dir.absPath).isDirectory()) {
+        return mkEvalResult('golden_regression_inventory_v0', false, 'hard_fail', 0, 'missing_domain_asset', {
+          domain_id: domainId,
+          expected_path: dir.relPath,
+        });
+      }
+
+      const files = fs
+        .readdirSync(dir.absPath)
+        .filter((f) => f.toLowerCase().endsWith('.json'))
+        .slice(0, 50);
+      if (!files.length) {
+        return mkEvalResult('golden_regression_inventory_v0', false, 'hard_fail', 0, 'no_golden_fixtures', {
+          domain_id: domainId,
+          expected_path: dir.relPath + '/*.json',
+        });
+      }
+
+      const invCats = new Set((Array.isArray(inv?.categories) ? inv.categories : []).map((c) => normalizeText((c as any)?.name || '')).filter(Boolean));
+      const invItems = new Set(
+        (Array.isArray(inv?.categories) ? inv.categories : [])
+          .flatMap((c) => (Array.isArray((c as any)?.items) ? (c as any).items : []))
+          .map((x) => normalizeText(x))
+          .filter(Boolean)
+      );
+
+      let best = 0;
+      let bestFile = '';
+      for (const f of files) {
+        const abs = path.join(dir.absPath, f);
+        let g: any;
+        try {
+          g = readJsonFileStrict<any>(abs);
+        } catch {
+          continue;
+        }
+        const gInv = (g && g.generated && g.generated.categories) ? (g.generated as InventorySchema) : (g as InventorySchema);
+        const gCats = new Set(
+          (Array.isArray(gInv?.categories) ? gInv.categories : []).map((c) => normalizeText((c as any)?.name || '')).filter(Boolean)
+        );
+        const gItems = new Set(
+          (Array.isArray(gInv?.categories) ? gInv.categories : [])
+            .flatMap((c) => (Array.isArray((c as any)?.items) ? (c as any).items : []))
+            .map((x) => normalizeText(x))
+            .filter(Boolean)
+        );
+        const catScore = jaccard(invCats, gCats);
+        const itemScore = jaccard(invItems, gItems);
+        const score = 0.35 * catScore + 0.65 * itemScore;
+        if (score > best) {
+          best = score;
+          bestFile = f;
+        }
+      }
+
+      const ok = best >= minScore;
+      return mkEvalResult('golden_regression_inventory_v0', ok, ok ? 'info' : 'warn', best, ok ? 'ok' : 'below_min_score', {
+        domain_id: domainId,
+        golden_dir: dir.relPath,
+        best_file: bestFile || null,
+        best_score: best,
+        minScore,
+        fileCount: files.length,
+      });
     },
   },
 ];

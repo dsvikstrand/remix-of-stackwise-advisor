@@ -1,0 +1,105 @@
+{
+  "topic": "Home workout for beginners",
+  "title": "Beginner Home Workout Library",
+  "description": "A simple, safe routine for beginners using minimal equipment.",
+  "notes": "Keep it low impact and time efficient.",
+  "tags": [
+    "beginner",
+    "home-workout",
+    "low-impact"
+  ],
+  "meta": {
+    "persona_id": "strength_training_male_v0",
+    "persona_hash": "60955142c9bf4d9546f7d1177de0893e7b2d49a2533a3cee624d34b9ab14c2b0"
+  },
+  "generated": {
+    "summary": "This inventory provides a structured and practical collection of low-impact, time-efficient home workout items tailored for beginner to intermediate strength training with emphasis on safety, progression, and recovery.",
+    "categories": [
+      {
+        "name": "Warm-up Exercises",
+        "items": [
+          "Dynamic Arm Circles",
+          "Leg Swings",
+          "Hip Openers",
+          "Cat-Cow Stretch",
+          "Wall Shoulder Taps",
+          "Marching in Place",
+          "Ankle Rolls",
+          "Neck Mobility Movements"
+        ]
+      },
+      {
+        "name": "Bodyweight Strength Movements",
+        "items": [
+          "Wall Push-ups",
+          "Glute Bridges",
+          "Bird Dogs",
+          "Chair Squats",
+          "Incline Plank",
+          "Step-back Lunges",
+          "Dead Bug",
+          "Superman Holds",
+          "Incline Rows (using sturdy furniture)",
+          "Side-lying Leg Lifts"
+        ]
+      },
+      {
+        "name": "Resistance Tools",
+        "items": [
+          "Resistance Bands (Light to Medium)",
+          "Dumbbells (5-15 lbs)",
+          "Sliders for Floor",
+          "Suspension Trainer (Optional)",
+          "Stability Ball",
+          "Ankle Weights",
+          "Foam Roller (for warm-up and recovery)"
+        ]
+      },
+      {
+        "name": "Mobility and Flexibility",
+        "items": [
+          "Seated Hamstring Stretch",
+          "Standing Quadriceps Stretch",
+          "Child’s Pose",
+          "Thoracic Spine Rotations",
+          "Calf Stretch Against Wall",
+          "Chest Opener Stretch",
+          "Hip Flexor Stretch",
+          "Wrist Flexibility Exercises"
+        ]
+      },
+      {
+        "name": "Recovery Tools & Practices",
+        "items": [
+          "Foam Rolling",
+          "Gentle Yoga Flow",
+          "Breath Work and Diaphragmatic Breathing",
+          "Ice Pack",
+          "Heat Pack",
+          "Hydration Reminder",
+          "Sleep Hygiene Tips",
+          "Light Walking"
+        ]
+      },
+      {
+        "name": "Progression & Safety Guidelines",
+        "items": [
+          "Proper Form Checklists",
+          "Rep and Set Progression Plans",
+          "Rest Interval Suggestions",
+          "Breathing Technique Guidance",
+          "Joint Alignment Tips",
+          "Cueing for Muscle Engagement",
+          "Tracking Sheet Templates",
+          "Low-impact Modifications"
+        ]
+      }
+    ],
+    "suggestedTags": [
+      "strength-training",
+      "progressive-overload",
+      "recovery",
+      "safety-first"
+    ]
+  }
+}
