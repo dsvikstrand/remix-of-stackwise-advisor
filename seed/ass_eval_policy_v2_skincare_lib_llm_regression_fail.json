@@ -1,0 +1,34 @@
+{
+  "version": 2,
+  "unknown_eval_policy": "hard_fail",
+  "nodes": {
+    "LIB_GEN": {
+      "evals": [
+        { "eval_id": "structural_inventory" },
+        { "eval_id": "bounds_inventory" },
+        { "eval_id": "domain_forbidden_terms_inventory_v0" },
+        {
+          "eval_id": "inventory_quality_heuristics_v0",
+          "params": {
+            "minCategories": 4,
+            "minItemsTotal": 20,
+            "minItemsPerCategory": 3,
+            "maxDupRatio": 0.15,
+            "maxDominantCategoryRatio": 0.55,
+            "minItemLen": 4,
+            "maxShortItemRatio": 0.3
+          }
+        },
+        {
+          "eval_id": "llm_golden_regression_inventory_v0",
+          "params": {
+            "golden_fixture_id": "fixture_001",
+            "min_overall": 11,
+            "on_missing_api_key": "skip"
+          }
+        }
+      ]
+    }
+  }
+}
+

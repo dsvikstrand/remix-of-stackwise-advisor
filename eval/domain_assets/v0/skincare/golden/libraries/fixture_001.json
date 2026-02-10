@@ -1,0 +1,69 @@
+{
+  "topic": "Simple home skincare routine",
+  "title": "Simple Home Skincare Library",
+  "description": "A practical, beginner-friendly skincare routine with common products.",
+  "notes": "Keep it gentle and realistic. Avoid medical claims.",
+  "tags": ["skincare", "beginner", "simple"],
+  "meta": {
+    "persona_id": "skincare_diet_female_v0"
+  },
+  "generated": {
+    "summary": "A simple skincare inventory focused on gentle cleansing, moisturizing, and daily sun protection. Items are practical, widely available, and suitable for building a consistent routine.",
+    "categories": [
+      {
+        "name": "Cleansers",
+        "items": [
+          "Gentle Foaming Cleanser",
+          "Cream Cleanser",
+          "Oil Cleanser",
+          "Micellar Water"
+        ]
+      },
+      {
+        "name": "Moisturizers",
+        "items": [
+          "Lightweight Moisturizer",
+          "Rich Night Cream",
+          "Ceramide Moisturizer",
+          "Gel Moisturizer"
+        ]
+      },
+      {
+        "name": "Sun Protection",
+        "items": [
+          "Broad Spectrum SPF 30+ Sunscreen",
+          "Mineral Sunscreen",
+          "Sunscreen Stick",
+          "Lip Balm with SPF"
+        ]
+      },
+      {
+        "name": "Treatment Actives",
+        "items": [
+          "Niacinamide Serum",
+          "Vitamin C Serum",
+          "Gentle Exfoliant (AHA/BHA)",
+          "Retinoid (Beginner Strength)"
+        ]
+      },
+      {
+        "name": "Hydration and Soothing",
+        "items": [
+          "Hydrating Toner",
+          "Hyaluronic Acid Serum",
+          "Soothing Mist",
+          "Aloe Gel"
+        ]
+      },
+      {
+        "name": "Tools and Hygiene",
+        "items": [
+          "Soft Face Towel",
+          "Reusable Cotton Pads",
+          "Clean Pillowcase",
+          "Hand Sanitizer"
+        ]
+      }
+    ]
+  }
+}

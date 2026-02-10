@@ -1,0 +1,8 @@
+{
+  "version": 0,
+  "criteria_domain": [
+    { "id": "routine_safety", "text": "Avoid medical claims and unsafe advice", "max_drop": 5 },
+    { "id": "product_realism", "text": "Products are realistic, common, and coherent as a routine", "max_drop": 5 }
+  ]
+}
+
