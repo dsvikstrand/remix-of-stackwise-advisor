@@ -29,6 +29,16 @@ export const config = {
 } as const;
 
 /**
+ * Return the Supabase Edge Function URL for a given function name.
+ *
+ * This always points at the Supabase project, regardless of whether the
+ * agentic backend toggle is enabled.
+ */
+export function getEdgeFunctionUrl(fnName: string): string {
+  return `${config.supabaseUrl.replace(/\/$/, "")}/functions/v1/${fnName}`;
+}
+
+/**
  * Resolve the full URL for a backend function by name.
  *
  * When the agentic backend is enabled it routes to
@@ -39,5 +49,5 @@ export function getFunctionUrl(fnName: string): string {
   if (config.useAgenticBackend && config.agenticBackendUrl) {
     return `${config.agenticBackendUrl.replace(/\/$/, "")}/api/${fnName}`;
   }
-  return `${config.supabaseUrl}/functions/v1/${fnName}`;
+  return getEdgeFunctionUrl(fnName);
 }

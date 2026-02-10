@@ -9,7 +9,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
-import { config, getFunctionUrl } from "@/config/runtime";
+import { config, getEdgeFunctionUrl, getFunctionUrl } from "@/config/runtime";
 
 export type ApiOptions = {
   method?: "GET" | "POST" | "PUT" | "DELETE";
@@ -56,7 +56,7 @@ export async function apiFetch<T = unknown>(
   opts: ApiOptions = {},
 ): Promise<T> {
   const url = opts.pinnedToEdge
-    ? `${config.supabaseUrl.replace(/\/$/, "")}/functions/v1/${fnName}`
+    ? getEdgeFunctionUrl(fnName)
     : getFunctionUrl(fnName);
   const authHeader = await getAuthHeader();
 
