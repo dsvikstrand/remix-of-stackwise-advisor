@@ -343,6 +343,7 @@ function parseArgs(argv: string[]) {
     else if (a === '--auth-env') out.authEnv = argv[++i] ?? '';
     else if (a === '--persona-registry') out.personaRegistry = argv[++i] ?? '';
     else if (a === '--no-backend') out.noBackend = true;
+    else if (a === '--auth-only') out.authOnly = true;
     else if (a === '--do-review') out.doReview = true;
     else if (a === '--review-focus') out.reviewFocus = argv[++i] ?? '';
     else if (a === '--do-banner') out.doBanner = true;
@@ -363,6 +364,7 @@ type PersonaRegistryV0 = {
   description?: string;
   personas: Array<{
     id: string;
+    auth_creds_slot?: number;
     auth_env_path?: string;
     auth_store_path?: string;
     controls_defaults?: {
@@ -863,8 +865,10 @@ function readEnvFile(filePath: string): Record<string, string> {
 
 function loadSeedCredsFromEnvFile(filePath: string) {
   const vars = readEnvFile(filePath);
-  if (!process.env.SEED_USER_EMAIL && vars.SEED_USER_EMAIL) process.env.SEED_USER_EMAIL = vars.SEED_USER_EMAIL;
-  if (!process.env.SEED_USER_PASSWORD && vars.SEED_USER_PASSWORD) process.env.SEED_USER_PASSWORD = vars.SEED_USER_PASSWORD;
+  // Per-persona auth env files must override any existing process env values,
+  // otherwise sequential runs (skincare then strength) will accidentally share creds.
+  if (vars.SEED_USER_EMAIL) process.env.SEED_USER_EMAIL = vars.SEED_USER_EMAIL;
+  if (vars.SEED_USER_PASSWORD) process.env.SEED_USER_PASSWORD = vars.SEED_USER_PASSWORD;
 }
 
 function getSeedCredsFromEnv(): SeedCreds | null {
@@ -934,6 +938,38 @@ function evalBoundsControlPack(pack: ControlPackV0): DasGateResult {
     for (const tag of tags) if (String(tag).length > limits.maxTagLen) return gate('bounds', false, 'warn', 0, 'blueprint_tag_too_long', limits);
   }
   return gate('bounds', true, 'info', 1, 'ok', limits);
+}
+
+function evalPersonaAlignmentControlPack(
+  persona: PersonaV0 | null,
+  pack: ControlPackV0,
+  params?: Record<string, unknown>
+): DasGateResult {
+  if (!persona) return gate('persona_alignment_v0', true, 'info', 0, 'no_persona', { skipped: true });
+
+  const expectedDomain = String(persona?.safety?.domain || '').trim();
+  const domain = String((pack as any)?.library?.controls?.domain || '').trim();
+  const domainCustom = String((pack as any)?.library?.controls?.domain_custom || '').trim();
+  const allowCustomDomain = (params || ({} as any)).allowCustomDomain === true;
+
+  const data = {
+    persona_id: persona.id,
+    expected_domain: expectedDomain || null,
+    domain: domain || null,
+    domain_custom: domainCustom || null,
+    allowCustomDomain,
+  };
+
+  // v0: domain mismatch is a hard fail. This is deterministic and cheap, and
+  // gives us a stable retry demo before we add richer quality evaluation.
+  if (expectedDomain) {
+    if (domain === expectedDomain) return gate('persona_alignment_v0', true, 'info', 1, 'ok', data);
+    if (domain === 'custom' && allowCustomDomain) return gate('persona_alignment_v0', true, 'warn', 0.5, 'ok_custom_domain', data);
+    return gate('persona_alignment_v0', false, 'hard_fail', 0, 'domain_mismatch', data);
+  }
+
+  // Missing expected domain should not block v0 runs.
+  return gate('persona_alignment_v0', true, 'warn', 0.25, 'missing_expected_domain', data);
 }
 
 async function postJson<T>(
@@ -1149,6 +1185,7 @@ async function main() {
         '  --auth-env <path>          Optional env file that sets SEED_USER_EMAIL/SEED_USER_PASSWORD (recommended: seed/auth/<asp_id>.env.local)',
         '  --persona-registry <path>  Optional persona registry JSON (default: seed/persona_registry_v0.json)',
         '  --no-backend               Do not call backend (future use)',
+        '  --auth-only                Only authenticate and write auth metadata (no agentic backend calls)',
         '  --do-review                Execute /api/analyze-blueprint (Stage 0.5)',
         '  --review-focus <text>      Optional reviewPrompt for /api/analyze-blueprint',
         '  --do-banner                Execute /api/generate-banner in dryRun mode (Stage 0.5; no Storage upload)',
@@ -1179,6 +1216,7 @@ async function main() {
   const reviewFocus = String(args.reviewFocus || '').trim();
   const dasEnabled = Boolean(args.das || args.dasConfig);
   const dasConfigPath = String(args.dasConfig || 'seed/das_config_v1.json');
+  const authOnly = Boolean((args as any).authOnly);
 
   if (!fs.existsSync(specPath)) die(`Spec not found: ${specPath}`);
 
@@ -1647,8 +1685,12 @@ async function main() {
           const evalList = policy.eval;
           if (evalList.includes('structural')) gates.push(evalStructuralControlPack(pack));
           if (evalList.includes('bounds')) gates.push(evalBoundsControlPack(pack));
+          if (evalList.includes('persona_alignment_v0')) {
+            const p = ((policy.params || {}) as any).persona_alignment_v0;
+            gates.push(evalPersonaAlignmentControlPack(persona, pack, (p && typeof p === 'object' ? (p as any) : {}) as any));
+          }
           for (const gName of evalList) {
-            if (gName === 'structural' || gName === 'bounds' || gName === 'testOnly_failOnce') continue;
+            if (gName === 'structural' || gName === 'bounds' || gName === 'persona_alignment_v0' || gName === 'testOnly_failOnce') continue;
             gates.push(gate(gName, false, 'hard_fail', 0, 'not_implemented'));
           }
 
@@ -1890,7 +1932,7 @@ async function main() {
 
   // Compose-only mode: validate CONTROL_PACK/PROMPT_PACK generation without backend calls.
   // This is useful when bootstrapping auth or debugging control pack overrides.
-  if (!backendCalls) {
+  if (!backendCalls && !authOnly) {
     writeJsonFile(outPath.logs('run_log.json'), { ...runLog, finishedAt: nowIso() });
     process.stdout.write(`Stage 0 complete (compose-only). Output: ${runDir}\n`);
     return;
@@ -1992,7 +2034,7 @@ async function main() {
     throw new Error('SEED_USER_ACCESS_TOKEN is expired and no refresh token or password grant is available.');
   };
 
-  if (backendCalls) {
+  if (backendCalls || authOnly) {
     await step('auth', async () => {
       await ensureValidAccessToken();
       return { ok: true };
@@ -2000,6 +2042,15 @@ async function main() {
   }
 
   const seedUserId = accessToken ? getJwtSub(accessToken) : '';
+  runMeta.auth.user_id = seedUserId || null;
+  runMeta.auth.derived_from = seedUserId ? 'jwt_sub' : null;
+  writeJsonFile(outPath.logs('run_meta.json'), runMeta);
+
+  if (authOnly) {
+    writeJsonFile(outPath.logs('run_log.json'), { ...runLog, finishedAt: nowIso() });
+    process.stdout.write(`Stage 0 complete (auth-only). Output: ${runDir}\n`);
+    return;
+  }
   if (applyStage1 && !seedUserId) {
     die('Could not derive seed user id from SEED_USER_ACCESS_TOKEN (JWT sub missing).');
   }
