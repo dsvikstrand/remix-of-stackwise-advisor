@@ -42,17 +42,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { logMvpEvent } from '@/lib/logEvent';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import {
-  BLUEPRINT_FOCUS_OPTIONS,
-  LENGTH_OPTIONS,
-  STRICTNESS_OPTIONS,
-  makeBlueprintGenerationControlsV0,
-  type BlueprintFocus,
-  type CautionLevel,
-  type LengthHint,
-  type StrictnessLevel,
-  type VarietyLevel,
-  type LibraryDomain,
-} from '@/lib/generationControls';
+	  BLUEPRINT_FOCUS_OPTIONS,
+	  LENGTH_OPTIONS,
+	  makeBlueprintGenerationControlsV0,
+	  type BlueprintFocus,
+	  type CautionLevel,
+	  type LengthHint,
+	  type VarietyLevel,
+	  type LibraryDomain,
+	} from '@/lib/generationControls';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   MAX_ADDITIONAL_SECTIONS,
@@ -159,13 +157,12 @@ export default function InventoryBuild() {
   const [showAutoGenerate, setShowAutoGenerate] = useState(false);
   const [autoTitle, setAutoTitle] = useState('');
   const [autoNotes, setAutoNotes] = useState('');
-  const [autoFocus, setAutoFocus] = useState<BlueprintFocus>('starter');
-  const [autoFocusCustom, setAutoFocusCustom] = useState('');
-  const [autoLength, setAutoLength] = useState<LengthHint>('medium');
-  const [autoStrictness, setAutoStrictness] = useState<StrictnessLevel>('medium');
-  const [autoVariety, setAutoVariety] = useState<VarietyLevel>('medium');
-  const [autoCaution, setAutoCaution] = useState<CautionLevel>('balanced');
-  const [isAutoGenerating, setIsAutoGenerating] = useState(false);
+	  const [autoFocus, setAutoFocus] = useState<BlueprintFocus>('starter');
+	  const [autoFocusCustom, setAutoFocusCustom] = useState('');
+	  const [autoLength, setAutoLength] = useState<LengthHint>('medium');
+	  const [autoVariety, setAutoVariety] = useState<VarietyLevel>('medium');
+	  const [autoCaution, setAutoCaution] = useState<CautionLevel>('balanced');
+	  const [isAutoGenerating, setIsAutoGenerating] = useState(false);
   const [showOverwriteDialog, setShowOverwriteDialog] = useState(false);
   const [autoGenerationControls, setAutoGenerationControls] = useState<Json | null>(null);
 
@@ -852,16 +849,17 @@ export default function InventoryBuild() {
                 ? 'productivity'
                 : 'general';
 
-      const genControls = makeBlueprintGenerationControlsV0({
-        controls: {
-          focus: autoFocus,
-          focusCustom: autoFocus === 'custom' ? autoFocusCustom : undefined,
-          length: autoLength,
-          strictness: autoStrictness,
-          variety: autoVariety,
-          caution: autoCaution,
-        },
-        domainHint: domainHint as LibraryDomain,
+	      const genControls = makeBlueprintGenerationControlsV0({
+	        controls: {
+	          focus: autoFocus,
+	          focusCustom: autoFocus === 'custom' ? autoFocusCustom : undefined,
+	          length: autoLength,
+	          // Developer-only tuning knob. Keep payload shape stable while hiding from UI.
+	          strictness: 'medium',
+	          variety: autoVariety,
+	          caution: autoCaution,
+	        },
+	        domainHint: domainHint as LibraryDomain,
         optional: {
           name: autoTitle.trim() || undefined,
           notes: autoNotes.trim() || undefined,
@@ -909,23 +907,22 @@ export default function InventoryBuild() {
         title: 'Blueprint generated',
         description: 'Your steps and items have been updated.',
       });
-          void logMvpEvent({
-            eventName: 'auto_generate_blueprint',
-            userId: user?.id,
-            blueprintId: blueprintId ?? null,
-            path: location.pathname,
-            metadata: {
-              inventoryId: inventory.id,
-              stepCount: data.steps.length,
-              focus: autoFocus,
-              focusCustom: autoFocus === 'custom' ? autoFocusCustom : undefined,
-              length: autoLength,
-              strictness: autoStrictness,
-              variety: autoVariety,
-              caution: autoCaution,
-              domainHint,
-            },
-          });
+	          void logMvpEvent({
+	            eventName: 'auto_generate_blueprint',
+	            userId: user?.id,
+	            blueprintId: blueprintId ?? null,
+	            path: location.pathname,
+	            metadata: {
+	              inventoryId: inventory.id,
+	              stepCount: data.steps.length,
+	              focus: autoFocus,
+	              focusCustom: autoFocus === 'custom' ? autoFocusCustom : undefined,
+	              length: autoLength,
+	              variety: autoVariety,
+	              caution: autoCaution,
+	              domainHint,
+	            },
+	          });
     } catch (error) {
       toast({
         title: 'Auto-generation failed',
@@ -940,14 +937,13 @@ export default function InventoryBuild() {
     categories,
     autoTitle,
     autoNotes,
-    autoFocus,
-    autoFocusCustom,
-    autoLength,
-    autoStrictness,
-    autoVariety,
-    autoCaution,
-    applyGeneratedBlueprint,
-    toast,
+	    autoFocus,
+	    autoFocusCustom,
+	    autoLength,
+	    autoVariety,
+	    autoCaution,
+	    applyGeneratedBlueprint,
+	    toast,
     session?.access_token,
     user?.id,
     blueprintId,
@@ -1439,26 +1435,10 @@ export default function InventoryBuild() {
                           </ToggleGroup>
                         </div>
 
-                        <div className="grid gap-2">
-                          <Label>Strictness</Label>
-                          <ToggleGroup
-                            type="single"
-                            value={autoStrictness}
-                            onValueChange={(v) => v && setAutoStrictness(v as StrictnessLevel)}
-                            className="flex flex-wrap justify-start gap-2"
-                          >
-                            {STRICTNESS_OPTIONS.map((o) => (
-                              <ToggleGroupItem key={o.value} value={o.value} variant="outline" className="rounded-full px-3">
-                                {o.label}
-                              </ToggleGroupItem>
-                            ))}
-                          </ToggleGroup>
-                        </div>
-
-                        <div className="grid gap-2">
-                          <Label>Variety</Label>
-                          <ToggleGroup
-                            type="single"
+	                        <div className="grid gap-2">
+	                          <Label>Variety</Label>
+	                          <ToggleGroup
+	                            type="single"
                             value={autoVariety}
                             onValueChange={(v) => v && setAutoVariety(v as VarietyLevel)}
                             className="flex flex-wrap justify-start gap-2"

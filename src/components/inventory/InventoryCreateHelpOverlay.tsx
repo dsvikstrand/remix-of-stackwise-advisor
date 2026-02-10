@@ -16,7 +16,6 @@ const HELP_DEFINITIONS: Array<{ id: string; text: string }> = [
   { id: 'domain', text: 'Pick a domain (skincare, fitness, nutrition, etc.)' },
   { id: 'audience', text: 'Choose who this library is for (beginner to advanced)' },
   { id: 'style', text: 'Pick the writing style for how the library is described' },
-  { id: 'strictness', text: 'How strict should the generation be about constraints' },
   { id: 'length', text: 'How detailed should the library be' },
   { id: 'notes', text: 'Optional preferences or constraints (kept short)' },
   { id: 'generate', text: 'AI generates categories and items for you' },

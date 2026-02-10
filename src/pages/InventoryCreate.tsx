@@ -33,15 +33,15 @@ import { logMvpEvent } from '@/lib/logEvent';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  AUDIENCE_OPTIONS,
-  LIBRARY_DOMAIN_OPTIONS,
-  LENGTH_OPTIONS,
-  STRICTNESS_OPTIONS,
-  STYLE_OPTIONS,
-  libraryControlsToInstructions,
-  libraryControlsToTopic,
-  makeLibraryGenerationControlsV0,
-} from '@/lib/generationControls';
+	  AUDIENCE_OPTIONS,
+	  LIBRARY_DOMAIN_OPTIONS,
+	  LENGTH_OPTIONS,
+	  STYLE_OPTIONS,
+	  libraryControlsToInstructions,
+	  libraryControlsToTopic,
+	  makeLibraryGenerationControlsV0,
+	  type StrictnessLevel,
+	} from '@/lib/generationControls';
 import { config, getFunctionUrl } from '@/config/runtime';
 
 const GENERATE_URL = getFunctionUrl('generate-inventory');
@@ -61,17 +61,18 @@ export default function InventoryCreate() {
   const { recentTags, addRecentTags } = useRecentTags();
 
   // Step 1: Promptless controls (click/press) + optional name/notes
-  const [domain, setDomain] = useState<(typeof LIBRARY_DOMAIN_OPTIONS)[number]['value']>('skincare');
-  const [domainCustom, setDomainCustom] = useState('');
-  const [audience, setAudience] = useState<(typeof AUDIENCE_OPTIONS)[number]['value']>('beginner');
-  const [style, setStyle] = useState<(typeof STYLE_OPTIONS)[number]['value']>('friendly');
-  const [strictness, setStrictness] = useState<(typeof STRICTNESS_OPTIONS)[number]['value']>('medium');
-  const [lengthHint, setLengthHint] = useState<(typeof LENGTH_OPTIONS)[number]['value']>('medium');
-  const [notes, setNotes] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [preferredCategories, setPreferredCategories] = useState<string[]>([]);
-  const [preferredCategoryInput, setPreferredCategoryInput] = useState('');
-  const [preferredCategoryError, setPreferredCategoryError] = useState('');
+	  const [domain, setDomain] = useState<(typeof LIBRARY_DOMAIN_OPTIONS)[number]['value']>('skincare');
+	  const [domainCustom, setDomainCustom] = useState('');
+	  const [audience, setAudience] = useState<(typeof AUDIENCE_OPTIONS)[number]['value']>('beginner');
+	  const [style, setStyle] = useState<(typeof STYLE_OPTIONS)[number]['value']>('friendly');
+	  const [lengthHint, setLengthHint] = useState<(typeof LENGTH_OPTIONS)[number]['value']>('medium');
+	  const [notes, setNotes] = useState('');
+	  // Developer-only tuning knob. Keep payload shape stable while hiding from UI.
+	  const strictness: StrictnessLevel = 'medium';
+	  const [isGenerating, setIsGenerating] = useState(false);
+	  const [preferredCategories, setPreferredCategories] = useState<string[]>([]);
+	  const [preferredCategoryInput, setPreferredCategoryInput] = useState('');
+	  const [preferredCategoryError, setPreferredCategoryError] = useState('');
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   // Step 2: Generated/edited inventory
@@ -222,21 +223,20 @@ export default function InventoryCreate() {
         title: 'Library generated!',
         description: `Created ${schema.categories.length} categories with ${schema.categories.reduce((sum, c) => sum + c.items.length, 0)} items.`,
       });
-      void logMvpEvent({
-        eventName: 'generate_library',
-        userId: session?.user?.id,
-        path: window.location.pathname,
-        metadata: {
-          categoryCount: schema.categories.length,
-          itemCount: schema.categories.reduce((sum, c) => sum + c.items.length, 0),
-          domain,
-          audience,
-          style,
-          strictness,
-          lengthHint,
-          domainCustom: domain === 'custom' ? domainCustom : undefined,
-        },
-      });
+	      void logMvpEvent({
+	        eventName: 'generate_library',
+	        userId: session?.user?.id,
+	        path: window.location.pathname,
+	        metadata: {
+	          categoryCount: schema.categories.length,
+	          itemCount: schema.categories.reduce((sum, c) => sum + c.items.length, 0),
+	          domain,
+	          audience,
+	          style,
+	          lengthHint,
+	          domainCustom: domain === 'custom' ? domainCustom : undefined,
+	        },
+	      });
     } catch (error) {
       toast({
         title: 'Generation failed',
@@ -450,41 +450,26 @@ export default function InventoryCreate() {
                   ))}
                 </ToggleGroup>
               </div>
-              <div className="space-y-2" data-help-id="style">
-                <Label>Style</Label>
-                <ToggleGroup
-                  type="single"
-                  value={style}
-                  onValueChange={(v) => v && setStyle(v as any)}
-                  className="flex flex-wrap justify-start gap-2"
-                >
-                  {STYLE_OPTIONS.map((o) => (
-                    <ToggleGroupItem key={o.value} value={o.value} variant="outline" className="rounded-full px-3">
-                      {o.label}
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
-              </div>
-              <div className="space-y-2" data-help-id="strictness">
-                <Label>Strictness</Label>
-                <ToggleGroup
-                  type="single"
-                  value={strictness}
-                  onValueChange={(v) => v && setStrictness(v as any)}
-                  className="flex flex-wrap justify-start gap-2"
-                >
-                  {STRICTNESS_OPTIONS.map((o) => (
-                    <ToggleGroupItem key={o.value} value={o.value} variant="outline" className="rounded-full px-3">
-                      {o.label}
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
-              </div>
-              <div className="space-y-2 sm:col-span-2" data-help-id="length">
-                <Label>Length</Label>
-                <ToggleGroup
-                  type="single"
-                  value={lengthHint}
+	              <div className="space-y-2" data-help-id="style">
+	                <Label>Style</Label>
+	                <ToggleGroup
+	                  type="single"
+	                  value={style}
+	                  onValueChange={(v) => v && setStyle(v as any)}
+	                  className="flex flex-wrap justify-start gap-2"
+	                >
+	                  {STYLE_OPTIONS.map((o) => (
+	                    <ToggleGroupItem key={o.value} value={o.value} variant="outline" className="rounded-full px-3">
+	                      {o.label}
+	                    </ToggleGroupItem>
+	                  ))}
+	                </ToggleGroup>
+	              </div>
+	              <div className="space-y-2 sm:col-span-2" data-help-id="length">
+	                <Label>Length</Label>
+	                <ToggleGroup
+	                  type="single"
+	                  value={lengthHint}
                   onValueChange={(v) => v && setLengthHint(v as any)}
                   className="flex flex-wrap justify-start gap-2"
                 >
