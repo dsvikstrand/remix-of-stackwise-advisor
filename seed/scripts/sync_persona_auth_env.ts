@@ -5,23 +5,18 @@ type PersonaRegistryV0 = {
   version: 0;
   personas: Array<{
     id: string;
-    auth_creds_slot?: number;
     auth_env_path?: string;
   }>;
+};
+
+type SeedSecretsV0 = {
+  version: 0;
+  personas: Record<string, { email: string; password: string }>;
 };
 
 function die(msg: string): never {
   process.stderr.write(msg.endsWith("\n") ? msg : msg + "\n");
   process.exit(1);
-}
-
-function readLines(filePath: string): string[] {
-  if (!fs.existsSync(filePath)) return [];
-  const raw = fs.readFileSync(filePath, "utf8");
-  return raw
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l && !l.startsWith("#"));
 }
 
 function ensureDir(dirPath: string) {
@@ -43,38 +38,53 @@ function writeEnvFile(envPath: string, email: string, password: string) {
 function main() {
   const cwd = process.cwd();
   const registryPath = process.argv[2] || path.join("seed", "persona_registry_v0.json");
-  const secretsPath = process.argv[3] || ".secrets.local";
+  const secretsPath = process.argv[3] || path.join("seed", "secrets.local.json");
 
   if (!fs.existsSync(registryPath)) die(`persona registry not found: ${registryPath}`);
   const reg = JSON.parse(fs.readFileSync(registryPath, "utf8")) as PersonaRegistryV0;
   if (!reg || reg.version !== 0 || !Array.isArray(reg.personas)) die("persona registry must be version 0 with personas[]");
 
-  const lines = readLines(secretsPath);
-  if (lines.length < 2) die(`secrets file must contain at least 2 non-empty lines: ${secretsPath}`);
-
-  const pairCount = Math.floor(lines.length / 2);
-  const getPair = (slot: number) => {
-    const s = Number(slot);
-    if (!Number.isFinite(s) || s < 0 || s >= pairCount) return null;
-    const email = String(lines[s * 2] || "").trim();
-    const password = String(lines[s * 2 + 1] || "").trim();
-    if (!email || !password) return null;
-    return { email, password };
-  };
+  if (!fs.existsSync(secretsPath)) {
+    die(
+      [
+        `secrets json not found: ${secretsPath}`,
+        "Create seed/secrets.local.json (gitignored) with:",
+        '{ "version": 0, "personas": { "persona_id": { "email": "...", "password": "..." } } }',
+      ].join("\n")
+    );
+  }
+  const secrets = JSON.parse(fs.readFileSync(secretsPath, "utf8")) as SeedSecretsV0;
+  if (!secrets || secrets.version !== 0 || !secrets.personas || typeof secrets.personas !== "object") {
+    die("secrets json must be version 0 with personas{persona_id:{email,password}}");
+  }
 
   const written: string[] = [];
+  const missing: string[] = [];
   for (const p of reg.personas) {
     const envPath = String(p.auth_env_path || "").trim();
-    const slot = p.auth_creds_slot;
-    if (!envPath || slot === undefined || slot === null) continue;
-    const pair = getPair(slot);
-    if (!pair) die(`missing creds for persona ${p.id}: auth_creds_slot=${String(slot)}`);
-    writeEnvFile(envPath, pair.email, pair.password);
+    if (!envPath) continue;
+    const rec = (secrets.personas as any)[p.id];
+    const email = String(rec?.email || "").trim();
+    const password = String(rec?.password || "").trim();
+    if (!email || !password) {
+      missing.push(p.id);
+      continue;
+    }
+    writeEnvFile(envPath, email, password);
     written.push(path.relative(cwd, envPath).replace(/\\/g, "/"));
   }
 
+  if (missing.length) {
+    die(
+      [
+        "missing persona credentials in seed/secrets.local.json for:",
+        ...missing.map((id) => `- ${id}`),
+      ].join("\n")
+    );
+  }
+
   if (!written.length) {
-    process.stdout.write("No env files written (no personas had auth_env_path + auth_creds_slot).\n");
+    process.stdout.write("No env files written (no personas had auth_env_path).\n");
     return;
   }
 
@@ -83,4 +93,3 @@ function main() {
 }
 
 main();
-

@@ -29,3 +29,5 @@ seed/outputs/
 seed/*.local
 seed/*.bak.*
 seed/auth/*.bak.*
+seed/secrets.local.json
+seed/secrets.local.json.*

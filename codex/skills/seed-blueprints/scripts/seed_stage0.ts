@@ -364,7 +364,6 @@ type PersonaRegistryV0 = {
   description?: string;
   personas: Array<{
     id: string;
-    auth_creds_slot?: number;
     auth_env_path?: string;
     auth_store_path?: string;
     controls_defaults?: {

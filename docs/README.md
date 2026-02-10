@@ -7,7 +7,7 @@ Tags
 - `[LAS]`: Linear Agentic System (baseline sequential pipeline)
 - `[DAS]`: Dynamic Agentic System (gates, retries, select-best)
 - `[AG]`: Agentic Persona (persona profiles + persona-run wiring)
-- `[GRAPH]`: system graphs (Mermaid, architecture maps)
+- `[GRAPH]`: system graphs (Mermaid, architecture maps) (includes ASS w AG)
 - `[SCHEMA]`: schemas (stable data contracts)
 - `[LOVABLE]`: Lovable-specific notes/workflows
 
@@ -20,6 +20,7 @@ Core docs (keep these in sync)
 Schemas (stable reference)
 - `[SCHEMA] [AG]` `docs/schemas/persona_schema.md`
 - `[SCHEMA] [ASS]` `docs/schemas/control_pack_schema.md`
+- `[SCHEMA] [ASS] [AG]` `docs/schemas/seed_secrets_schema.md`
 
 Lovable (reference)
 - `[LOVABLE]` `docs/lovable/lovable_sql_add_generation_controls.md`
