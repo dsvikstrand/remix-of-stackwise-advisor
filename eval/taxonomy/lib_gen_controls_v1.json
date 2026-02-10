@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "notes": [
+    "LIB_GEN control taxonomy shared by seeding (ASS) and user generation evals.",
+    "This is not a prompt pack. It defines what each GUI option means and what outputs should look like."
+  ],
+  "domain": {
+    "allowCustom": true,
+    "values": [
+      { "id": "fitness", "label": "Fitness" },
+      { "id": "skincare", "label": "Skincare" },
+      { "id": "nutrition", "label": "Nutrition" },
+      { "id": "productivity", "label": "Productivity" },
+      { "id": "general", "label": "General" }
+    ]
+  },
+  "audience": {
+    "values": [
+      { "id": "beginner", "label": "Beginner", "expects": ["simple terms", "low injury risk", "clear steps"] },
+      { "id": "intermediate", "label": "Intermediate", "expects": ["some progression", "reasonable variety", "assumes basics"] },
+      { "id": "advanced", "label": "Advanced", "expects": ["specificity", "progression rules", "higher complexity"] }
+    ]
+  },
+  "style": {
+    "values": [
+      { "id": "friendly", "label": "Friendly", "expects": ["encouraging tone", "plain language"] },
+      { "id": "practical", "label": "Practical", "expects": ["actionable items", "minimal fluff"] },
+      { "id": "coach", "label": "Coach", "expects": ["direct cues", "progression hints", "form reminders"] },
+      { "id": "clinical", "label": "Clinical", "expects": ["neutral tone", "no hype", "avoid medical claims"] }
+    ]
+  },
+  "strictness": {
+    "values": [
+      { "id": "low", "label": "Low", "expects": ["more variety allowed", "lighter constraints"] },
+      { "id": "medium", "label": "Medium", "expects": ["balanced constraints", "reasonable bounds"] },
+      { "id": "high", "label": "High", "expects": ["tight constraints", "avoid duplicates", "consistent structure"] }
+    ]
+  },
+  "length_hint": {
+    "values": [
+      { "id": "short", "label": "Short", "expects": ["few categories", "smaller item set"] },
+      { "id": "medium", "label": "Medium", "expects": ["balanced coverage", "moderate item set"] },
+      { "id": "long", "label": "Long", "expects": ["more coverage", "larger item set"] }
+    ]
+  }
+}
+

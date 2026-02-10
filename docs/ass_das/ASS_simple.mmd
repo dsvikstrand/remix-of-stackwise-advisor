@@ -8,7 +8,7 @@ flowchart TD
   AP_CFG{{AP config}} --> AP([Persona AP])
   AUTH_CFG{{Auth config}} --> AUTH([Auth bootstrap + store])
   INTENT_CFG{{Intent config}} --> INTENT([Intent: controls or prompts])
-  TAX_CFG{{Eval taxonomy}} --> TAX([Control taxonomy])
+  TAX_CFG{{Eval taxonomy (per node)}} --> TAX([Control taxonomy])
   METHOD_CFG{{Eval methods assets}} --> METHOD([Eval methods: criteria packs + judge cfg])
   GEN_CFG{{ASS gen policy config v1}} --> POLICY([Gen policy])
   EVAL_CFG{{ASS eval policy config v2}} --> EVALS([Eval instances per node])

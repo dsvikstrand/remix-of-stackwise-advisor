@@ -951,21 +951,96 @@ async function main() {
     }
   }
 
-  const defaultEvalTaxonomyPath = path.join('eval', 'taxonomy', 'inventory_controls_v1.json');
+  const defaultEvalTaxonomyPath = path.join('eval', 'taxonomy');
   const evalTaxonomyPath = evalTaxonomyPathArg || defaultEvalTaxonomyPath;
-  let evalTaxonomy: EvalControlsTaxonomyV1 | null = null;
   let evalTaxonomyHash = '';
+  const evalTaxonomyByNode: Partial<Record<DasNodeId, EvalControlsTaxonomyV1>> = {};
+  let evalTaxonomyMeta: any = null;
+  let evalTaxonomyResolvedLog: any = null;
+
+  const loadTaxonomyFile = (p: string): { taxonomy: EvalControlsTaxonomyV1; raw: string; hash: string; version: number } => {
+    const raw = readRawFile(p);
+    const hash = sha256Hex(raw);
+    let taxonomy: EvalControlsTaxonomyV1;
+    try {
+      taxonomy = JSON.parse(raw) as EvalControlsTaxonomyV1;
+    } catch {
+      die(`Eval taxonomy is not valid JSON: ${p}`);
+    }
+    const version = Number((taxonomy as any)?.version || 0) || 0;
+    if (version !== 1) die('Eval taxonomy version must be 1');
+    return { taxonomy, raw, hash, version };
+  };
+
   if (evalTaxonomyPath) {
     if (!fs.existsSync(evalTaxonomyPath)) die(`Eval taxonomy not found: ${evalTaxonomyPath}`);
-    const raw = readRawFile(evalTaxonomyPath);
-    evalTaxonomyHash = sha256Hex(raw);
-    try {
-      evalTaxonomy = JSON.parse(raw) as EvalControlsTaxonomyV1;
-    } catch {
-      die(`Eval taxonomy is not valid JSON: ${evalTaxonomyPath}`);
+
+    const stat = fs.statSync(evalTaxonomyPath);
+    if (stat.isDirectory()) {
+      const libPath = path.join(evalTaxonomyPath, 'lib_gen_controls_v1.json');
+      const bpPath = path.join(evalTaxonomyPath, 'bp_gen_controls_v1.json');
+      if (!fs.existsSync(libPath)) die(`Eval taxonomy missing file: ${libPath}`);
+      if (!fs.existsSync(bpPath)) die(`Eval taxonomy missing file: ${bpPath}`);
+
+      const lib = loadTaxonomyFile(libPath);
+      const bp = loadTaxonomyFile(bpPath);
+
+      const files = {
+        lib_gen: { path: path.relative(process.cwd(), libPath).replace(/\\/g, '/'), hash: lib.hash, version: lib.version },
+        bp_gen: { path: path.relative(process.cwd(), bpPath).replace(/\\/g, '/'), hash: bp.hash, version: bp.version },
+      };
+      evalTaxonomyHash = sha256Hex(JSON.stringify(files));
+
+      // CONTROL_PACK currently validates the promptless control selections that drive LIB_GEN/BP_GEN,
+      // so we pin it to the LIB_GEN taxonomy until BP-specific controls diverge.
+      evalTaxonomyByNode.LIB_GEN = lib.taxonomy;
+      evalTaxonomyByNode.BP_GEN = bp.taxonomy;
+      evalTaxonomyByNode.CONTROL_PACK = lib.taxonomy;
+      evalTaxonomyByNode.PROMPT_PACK = lib.taxonomy;
+
+      evalTaxonomyMeta = {
+        kind: 'dir',
+        baseDir: path.relative(process.cwd(), evalTaxonomyPath).replace(/\\/g, '/'),
+        hash: evalTaxonomyHash,
+        files,
+      };
+      evalTaxonomyResolvedLog = {
+        version: 2,
+        createdAt: nowIso(),
+        kind: 'dir',
+        baseDir: path.relative(process.cwd(), evalTaxonomyPath).replace(/\\/g, '/'),
+        hash: evalTaxonomyHash,
+        files,
+        taxonomies: { lib_gen: lib.taxonomy, bp_gen: bp.taxonomy },
+      };
+    } else {
+      const loaded = loadTaxonomyFile(evalTaxonomyPath);
+      evalTaxonomyHash = loaded.hash;
+      evalTaxonomyByNode.LIB_GEN = loaded.taxonomy;
+      evalTaxonomyByNode.BP_GEN = loaded.taxonomy;
+      evalTaxonomyByNode.CONTROL_PACK = loaded.taxonomy;
+      evalTaxonomyByNode.PROMPT_PACK = loaded.taxonomy;
+
+      evalTaxonomyMeta = {
+        kind: 'file',
+        path: path.relative(process.cwd(), evalTaxonomyPath).replace(/\\/g, '/'),
+        hash: evalTaxonomyHash,
+        version: loaded.version,
+      };
+      evalTaxonomyResolvedLog = {
+        version: 1,
+        createdAt: nowIso(),
+        kind: 'file',
+        path: path.relative(process.cwd(), evalTaxonomyPath).replace(/\\/g, '/'),
+        hash: evalTaxonomyHash,
+        taxonomy: loaded.taxonomy,
+      };
     }
-    if (Number((evalTaxonomy as any)?.version || 0) !== 1) die('Eval taxonomy version must be 1');
   }
+
+  const resolveTaxonomyForNode = (nodeId: DasNodeId): EvalControlsTaxonomyV1 | null => {
+    return (evalTaxonomyByNode as any)[nodeId] || null;
+  };
 
   const defaultEvalBoundsBaseDir = path.join('eval', 'bounds', 'v0');
   const evalBoundsBaseDir = evalBoundsPathArg || defaultEvalBoundsBaseDir;
@@ -1057,13 +1132,7 @@ async function main() {
       active_domain_id: activeDomainId,
       source: activeDomainSource,
     },
-    eval_taxonomy: evalTaxonomyPath
-      ? {
-          path: path.relative(process.cwd(), evalTaxonomyPath).replace(/\\/g, '/'),
-          hash: evalTaxonomyHash,
-          version: Number((evalTaxonomy as any)?.version || 0) || 0,
-        }
-      : null,
+    eval_taxonomy: evalTaxonomyPath ? evalTaxonomyMeta : null,
     eval_bounds: evalBoundsBaseDir
       ? {
           baseDir: path.relative(process.cwd(), evalBoundsBaseDir).replace(/\\/g, '/'),
@@ -1154,14 +1223,8 @@ async function main() {
       config: assEvalConfig,
     });
   }
-  if (evalTaxonomyPath) {
-    writeJsonFile(outPath.logs('eval_taxonomy_resolved.json'), {
-      version: 1,
-      createdAt: nowIso(),
-      path: path.relative(process.cwd(), evalTaxonomyPath).replace(/\\/g, '/'),
-      hash: evalTaxonomyHash,
-      taxonomy: evalTaxonomy,
-    });
+  if (evalTaxonomyPath && evalTaxonomyResolvedLog) {
+    writeJsonFile(outPath.logs('eval_taxonomy_resolved.json'), evalTaxonomyResolvedLog);
   }
   if (evalBoundsBaseDir) {
     writeJsonFile(outPath.logs('eval_bounds_resolved.json'), {
@@ -1317,7 +1380,7 @@ async function main() {
       persona,
       mode,
       domain_id: activeDomainId,
-      controls_taxonomy: evalTaxonomy,
+      controls_taxonomy: resolveTaxonomyForNode(args.nodeId),
       bounds: evalBounds,
     };
 

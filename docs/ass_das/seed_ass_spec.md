@@ -158,14 +158,19 @@ TMPDIR=/tmp npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts \
   --ass-eval-config seed/ass_eval_policy_v2_fitness_lib.json
 ```
 
-## Eval Taxonomy (Global, Planned)
+## Eval Taxonomy (Node-Scoped, Current)
 
 Some controls are shared across all domains (for example `style`, `audience`, `strictness`, `length_hint`). To keep evals stable across:
 - seeding runs (ASS)
 - future user generation runs
 
-we define a global, machine-readable taxonomy:
-- `eval/taxonomy/inventory_controls_v1.json`
+we define node-scoped, machine-readable taxonomies:
+- `eval/taxonomy/lib_gen_controls_v1.json` (LIB_GEN and CONTROL_PACK validation)
+- `eval/taxonomy/bp_gen_controls_v1.json` (BP_GEN; currently same shape, split for future divergence)
+
+The runner accepts `--eval-taxonomy` as either:
+- a file path (legacy, applies to all nodes), or
+- a directory path (recommended; loads the node-scoped files above).
 - Schema doc: `docs/schemas/eval_controls_taxonomy_schema.md`
 
 Eval classes can use the taxonomy for deterministic validation (example: `controls_taxonomy_alignment_v0`).
