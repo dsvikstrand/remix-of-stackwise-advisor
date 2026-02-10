@@ -74,7 +74,7 @@ function defaultMethodPaths(evalId: string, domainId: string) {
   const base = path.join('eval', 'methods', 'v0', evalId);
   return {
     globalPackPath: path.join(base, 'global_pack_v0.json'),
-    domainPackPath: path.join(base, 'domains', domainId, 'pack_v0.json'),
+    domainPackPath: path.join(base, 'packs_domains', domainId, 'pack_v0.json'),
     scorecardDir: path.join(base, 'artifacts', 'golden_scores', domainId),
   };
 }
