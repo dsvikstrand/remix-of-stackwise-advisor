@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "notes": [
+    "Test-only DAS config: forces one retry at LIB_GEN by skipping attempt 1.",
+    "Use with --das-config seed/das_config_v1_test_lib_gen_failonce.json."
+  ],
+  "defaults": {
+    "enabled": true,
+    "kCandidates": 1,
+    "maxAttempts": 1,
+    "eval": [],
+    "onHardFail": "stop_run"
+  },
+  "nodes": {
+    "AUTH_READ": { "enabled": true, "maxAttempts": 1 },
+    "CONTROL_PACK": { "kCandidates": 1, "maxAttempts": 2, "eval": ["structural", "bounds", "testOnly_failOnce"] },
+    "PROMPT_PACK": {
+      "kCandidates": 1,
+      "maxAttempts": 2,
+      "eval": ["structural", "bounds", "persona_alignment_v0", "testOnly_failOnce"],
+      "params": {
+        "persona_alignment_v0": { "minTagOverlapRatio": 0.25, "hardFailOnMustAvoid": true }
+      }
+    },
+    "LIB_GEN": { "kCandidates": 1, "maxAttempts": 2, "eval": ["structural", "bounds", "testOnly_failOnce"] },
+    "BP_GEN": { "kCandidates": 1, "maxAttempts": 2, "eval": ["structural", "bounds", "crossref"] },
+    "VAL": { "kCandidates": 1, "maxAttempts": 1, "eval": ["crossref"], "onHardFail": "stop_run" },
+    "AI_REVIEW": { "enabled": false, "maxAttempts": 1 },
+    "AI_BANNER": { "enabled": false, "maxAttempts": 1 },
+    "APPLY": { "enabled": false, "maxAttempts": 1 }
+  },
+  "testOnly": {
+    "enabled": true,
+    "failOnce": {
+      "nodes": ["LIB_GEN"],
+      "failOnAttempt": 1
+    }
+  }
+}
+
