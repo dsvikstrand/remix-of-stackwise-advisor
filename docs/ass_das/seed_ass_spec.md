@@ -79,7 +79,7 @@ Some eval classes require "assets" (golden drafts, rubrics, fixtures). Those ass
 - Example: `eval/domains/v0/fitness/golden/...`
 
 Domain asset conventions (v0):
-- `eval/domains/v0/<domain_id>/rubric_v0.json` (deterministic thresholds and forbidden terms)
+- `eval/domains/v0/<domain_id>/rubric_v0.json` (domain-specific rules, including forbidden terms)
 - `eval/domains/v0/<domain_id>/golden/libraries/*.json` (golden library fixtures for regression-style evals)
 
 The runner resolves one active domain per run and passes it into evals as `ctx.domain_id`:

@@ -1,0 +1,13 @@
+{
+  "version": 0,
+  "id": "skincare",
+  "label": "Skincare rubric v0",
+  "notes": [
+    "Domain-specific rules for skincare libraries.",
+    "Generic quality heuristics live outside the domain rubric (inventory_quality_heuristics_v0)."
+  ],
+  "inventory": {
+    "forbidden_terms": ["cure", "guaranteed", "no risk", "miracle"]
+  }
+}
+

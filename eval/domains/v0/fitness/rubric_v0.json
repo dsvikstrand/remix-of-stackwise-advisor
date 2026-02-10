@@ -3,18 +3,10 @@
   "id": "fitness",
   "label": "Fitness rubric v0",
   "notes": [
-    "Deterministic baseline quality rules for fitness libraries.",
-    "Used by domain_rubric_inventory_v0."
+    "Domain-specific rules for fitness libraries.",
+    "Generic quality heuristics live outside the domain rubric (inventory_quality_heuristics_v0)."
   ],
   "inventory": {
-    "minCategories": 4,
-    "minItemsTotal": 24,
-    "minItemsPerCategory": 3,
-    "maxDupRatio": 0.15,
-    "maxDominantCategoryRatio": 0.55,
-    "minItemLen": 4,
-    "maxShortItemRatio": 0.3,
     "forbidden_terms": ["steroids", "miracle", "guaranteed", "cure", "no risk", "unsafe"]
   }
 }
-
