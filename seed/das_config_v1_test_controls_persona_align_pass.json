@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "notes": [
+    "Test config: validate persona_alignment_v0 gate passes on CONTROL_PACK (promptless controls).",
+    "Use with --compose-controls --das --das-config seed/das_config_v1_test_controls_persona_align_pass.json.",
+    "Keeps retries off to reduce noise."
+  ],
+  "defaults": {
+    "enabled": true,
+    "kCandidates": 1,
+    "maxAttempts": 1,
+    "eval": [],
+    "onHardFail": "stop_run"
+  },
+  "nodes": {
+    "CONTROL_PACK": {
+      "kCandidates": 1,
+      "maxAttempts": 1,
+      "eval": ["structural", "bounds", "persona_alignment_v0"],
+      "params": {
+        "persona_alignment_v0": {
+          "allowCustomDomain": false
+        }
+      }
+    },
+    "LIB_GEN": {
+      "kCandidates": 1,
+      "maxAttempts": 1,
+      "eval": ["structural", "bounds"]
+    },
+    "BP_GEN": {
+      "kCandidates": 1,
+      "maxAttempts": 1,
+      "eval": ["structural", "bounds", "crossref"]
+    },
+    "VAL": {
+      "kCandidates": 1,
+      "maxAttempts": 1,
+      "eval": ["crossref"]
+    },
+    "AI_REVIEW": {
+      "enabled": false,
+      "maxAttempts": 1
+    },
+    "AI_BANNER": {
+      "enabled": false,
+      "maxAttempts": 1
+    },
+    "APPLY": {
+      "enabled": false,
+      "maxAttempts": 1
+    }
+  }
+}
+

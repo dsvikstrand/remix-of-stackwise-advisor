@@ -21,12 +21,11 @@ Rules:
 - Keys only need to be unique **within the current message**.
 - Keys may be reused in later messages.
 
-## 2) Budgets (Soft) + Escalation
+## 2) Budgets (Soft)
 
 Goal: keep weekly rate-limit spend low by default, without blocking task completion.
 
-Defaults
-- Operate in `cheap` mode unless I explicitly ask for `deep`/`full audit`/`investigate`.
+Defaults: see section 13 (Effort Flags (Soft)) for details.
 - Use minimal exploration and minimal commands needed to make measurable progress.
 - Budgets are **soft**, not hard limits. If a task needs more work than the budget, finish the task after doing the escalation step below.
 
@@ -55,10 +54,18 @@ Push access depends on the SSH key stored in this environment. Any Codex session
 ## 7) UDO shortcut for execution
 If a message ends with `UDO`, treat it as approval to execute the actions you propose without waiting for a separate confirmation. Always summarize what you did afterward. (Not for code, only for commands : PA/PAP is for code)
 
-## 8) Branch + Pages mapping (Deprecated, we only use main now)
-- `main` is the agentic backend branch and deploys to the root URL.
-- `lovable-main` is the legacy Lovable branch and deploys to `/lovable-backend/`.
-- `main-pre-agentic` keeps a backup pointer to the old main before the swap.
+## 8) Document Tag Updates
+
+Use document tags from `docs/README.md` to keep planning docs in sync.
+
+How it works
+- If you say: `update documents [TAG]`
+- I will update only the planning docs that are labeled with that `[TAG]` in `docs/README.md`.
+
+Rules
+- `docs/README.md` is the source of truth for valid tags and which files carry each tag.
+- I can suggest updates and new documents to add.
+- I will use the documents to keep the work well structured and focused.
 
 ## 9) REC (go with your recommendations)
 If I type REC -> "use/go with your recommendations"
@@ -137,3 +144,19 @@ m7) Debug method: if rendering breaks, remove or comment the last edits until it
 
 How to use this in msgs
 m8) If you hit a Mermaid parse error, paste the error line number and snippet. I will rewrite the offending labels to the safe subset above.
+
+## 13) Effort Flags (Soft)
+
+Use effort flags to control how much exploration/tooling depth I use during planning and implementation.
+
+How to use
+- Add one flag to your request: `[low]`, `[med]`, or `[high]`.
+- Example: `Plan [low]`, `Review [high]`, `Implement [med]`.
+
+Meaning (soft limits, not hard stops)
+- `[low]`: minimal exploration; smallest viable change; prefer 1-2 smoke tests.
+- `[med]`: normal; enough exploration to be confident; a couple of focused smoke tests.
+- `[high]`: deeper investigation; more file reads and cross-checks; broader smoke tests as needed.
+
+Important
+- These flags do not change which GUI/model tier you are using. They only change my behavior and how much I explore.

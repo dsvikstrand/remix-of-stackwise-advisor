@@ -47,13 +47,14 @@ flowchart TD
   OUT_DIR -.->|--compose-controls| CONTROL_PACK["CONTROL_PACK compose controls (controls_v0) TESTED_OK"]
   DAS_CFG -.-> CP_EVAL
   CONTROL_PACK --> CP_CAND["CP_CAND Write candidates/CONTROL_PACK/attempt-xx-cand-yy.json TESTED_OK"]
-  CP_CAND --> CP_EVAL{"CP_EVAL eval_structural + eval_bounds TESTED_OK"}
+  CP_CAND --> CP_EVAL{"CP_EVAL eval_structural + eval_bounds + persona_alignment_v0 TESTED_OK"}
   CP_EVAL -->|pass| CP_SEL["CP_SEL score + select best candidate TESTED_OK"]
   CP_EVAL -->|fail and attempt lt max| CP_RETRY["CP_RETRY retry (maxAttempts=2) TESTED_OK"]
   CP_RETRY --> CONTROL_PACK
   CP_SEL --> CP_OUT["CP_OUT Write requests/control_pack.json TESTED_OK"]
   CP_OUT --> CP_RENDER["CP_RENDER render to requests/prompt_pack.json TESTED_OK"]
   N_CP{{NOTE controls_v0 is promptless intent; rendered prompt pack is backend compatible}} --> CONTROL_PACK
+  N_CP_EVAL{{NOTE persona_alignment_v0 for CONTROL_PACK is v0 domain match; mismatch is hard_fail}} --> CP_EVAL
 
   OUT_DIR -.->|--compose-prompts| PROMPT_PACK["PROMPT_PACK compose prompts (template v0) TESTED_OK"]
   DAS_CFG -.-> PP_EVAL

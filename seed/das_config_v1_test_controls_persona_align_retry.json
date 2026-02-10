@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "notes": [
+    "Test config: CONTROL_PACK persona_alignment_v0 + retry wiring demo.",
+    "Use with --compose-controls --das --das-config seed/das_config_v1_test_controls_persona_align_retry.json.",
+    "Forces attempt-1 to retry via testOnly_failOnce so attempt-2 can pass."
+  ],
+  "defaults": {
+    "enabled": true,
+    "kCandidates": 1,
+    "maxAttempts": 2,
+    "eval": [],
+    "onHardFail": "stop_run"
+  },
+  "nodes": {
+    "CONTROL_PACK": {
+      "kCandidates": 1,
+      "maxAttempts": 2,
+      "eval": ["structural", "bounds", "persona_alignment_v0", "testOnly_failOnce"],
+      "params": {
+        "persona_alignment_v0": {
+          "allowCustomDomain": false
+        }
+      }
+    },
+    "LIB_GEN": {
+      "kCandidates": 1,
+      "maxAttempts": 1,
+      "eval": ["structural", "bounds"]
+    },
+    "BP_GEN": {
+      "kCandidates": 1,
+      "maxAttempts": 1,
+      "eval": ["structural", "bounds", "crossref"]
+    },
+    "VAL": {
+      "kCandidates": 1,
+      "maxAttempts": 1,
+      "eval": ["crossref"]
+    },
+    "APPLY": {
+      "enabled": false,
+      "maxAttempts": 1
+    }
+  },
+  "testOnly": {
+    "enabled": true,
+    "failOnce": {
+      "nodes": ["CONTROL_PACK"],
+      "failOnAttempt": 1
+    }
+  }
+}
+

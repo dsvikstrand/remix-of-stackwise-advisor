@@ -4,6 +4,7 @@
   "personas": [
     {
       "id": "skincare_diet_female_v0",
+      "auth_creds_slot": 0,
       "auth_env_path": "seed/auth/skincare_diet_female_v0.env.local",
       "auth_store_path": "seed/auth/skincare_diet_female_v0.local",
       "controls_defaults": {
@@ -24,6 +25,7 @@
     },
     {
       "id": "strength_training_male_v0",
+      "auth_creds_slot": 1,
       "auth_env_path": "seed/auth/strength_training_male_v0.env.local",
       "auth_store_path": "seed/auth/strength_training_male_v0.local",
       "controls_defaults": {

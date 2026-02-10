@@ -51,7 +51,7 @@ Stable per-gate contract:
 Initial focus (B1): deterministic gates only (`structural`, `bounds`, `crossref`, `persona_alignment_v0`).
 
 Notes:
-- `persona_alignment_v0` is currently wired for `PROMPT_PACK` only (the prompt composer stage) so we can validate eval wiring cheaply.
+- `persona_alignment_v0` is wired for `PROMPT_PACK` (prompt composer) and `CONTROL_PACK` (promptless controls) so we can validate eval wiring cheaply.
 - Gate parameters live under `params` in the DAS config, per node (example: `nodes.PROMPT_PACK.params.persona_alignment_v0.minTagOverlapRatio`).
 
 ## Promptless Controls (Current)
@@ -89,11 +89,16 @@ If you want each persona to publish as a distinct user, treat each persona as an
 Optional persona registry:
 - `seed/persona_registry_v0.json` maps persona ids to default `auth_env_path` and `auth_store_path`.
 - When you run with `--asp <persona_id>`, the runner will use the registry defaults unless you override with `--auth-env/--auth-store`.
+ - Optional: `auth_creds_slot` can map a persona to a pair of `(email,password)` lines in `.secrets.local` for local generation of env files.
 
 The runner will:
 - Default `--auth-store` to `seed/auth/<asp_id>.local` when `asp.id` exists.
 - Auto-load `seed/auth/<asp_id>.env.local` if present (or use `--auth-env <path>`).
 - Use refresh token rotation when possible; if refresh breaks (example: refresh token already used) and email/password is available, fall back to Supabase password grant to self-heal.
+- Support `--auth-only` to test/refresh persona auth without calling the agentic backend.
+
+Local helper (optional):
+- `seed/scripts/sync_persona_auth_env.ts` can write `seed/auth/<asp_id>.env.local` files from `.secrets.local` using `auth_creds_slot`.
 
 Utilities (repo-local):
 - `codex/skills/seed-blueprints/scripts/persona_registry.ts` (list/validate/show personas)
@@ -154,6 +159,9 @@ Hard checks we already have:
 DAS v1 adds **gates + retries + select-best** on generation nodes when enabled.
 
 - Config: `seed/das_config_v1.json` (per-node `maxAttempts`, `kCandidates`, `eval[]`)
+- Test configs:
+  - `seed/das_config_v1_test_controls_persona_align_pass.json` (CONTROL_PACK persona_alignment_v0 pass)
+  - `seed/das_config_v1_test_controls_persona_align_retry.json` (CONTROL_PACK forced retry via testOnly_failOnce)
 - New artifacts (when `--das` is enabled):
   - `candidates/<node_id>/attempt-01*.json`...
   - `logs/decision_log.json` (why we retried/selected)
