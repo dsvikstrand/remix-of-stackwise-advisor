@@ -3,7 +3,7 @@
   "eval_id": "llm_golden_regression_inventory_v0",
   "domain_id": "fitness",
   "golden_fixture_id": "fixture_001.json",
-  "golden_fixture_path": "eval/domains/v0/fitness/golden/libraries/fixture_001.json",
+  "golden_fixture_path": "eval/domain_assets/v0/fitness/golden/libraries/fixture_001.json",
   "golden_fixture_hash": "50dc7ba91804c91b5660bd30cb08d39b80ac5d0774b8fcb7f33fb89838db1901",
   "judge_model": "o4-mini",
   "prompt_version": "v0",

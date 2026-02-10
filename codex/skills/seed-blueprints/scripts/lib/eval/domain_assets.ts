@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const DOMAIN_ROOT_REL = path.join('eval', 'domains', 'v0');
+const DOMAIN_ROOT_REL = path.join('eval', 'domain_assets', 'v0');
 
 function normalizeDomainId(raw: unknown): string {
   return String(raw || '').trim().toLowerCase();

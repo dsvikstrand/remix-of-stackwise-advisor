@@ -111,12 +111,12 @@ Scorecard schema:
 
 Some eval classes require "assets" (golden drafts, rubrics, fixtures). Those assets live under a domain namespace:
 
-- Root: `eval/domains/v0/<domain_id>/`
-- Example: `eval/domains/v0/fitness/golden/...`
+- Root: `eval/domain_assets/v0/<domain_id>/`
+- Example: `eval/domain_assets/v0/fitness/golden/...`
 
 Domain asset conventions (v0):
-- `eval/domains/v0/<domain_id>/rubric_v0.json` (domain-specific rules, including forbidden terms)
-- `eval/domains/v0/<domain_id>/golden/libraries/*.json` (golden library fixtures for regression-style evals)
+- `eval/domain_assets/v0/<domain_id>/rubric_v0.json` (domain-specific rules, including forbidden terms)
+- `eval/domain_assets/v0/<domain_id>/golden/libraries/*.json` (golden library fixtures for regression-style evals)
 
 The runner resolves one active domain per run and passes it into evals as `ctx.domain_id`:
 
@@ -131,7 +131,7 @@ Eval classes that require domain assets should hard-fail with a clear `expected_
 We keep the lightest domain-specific deterministic guardrail as "forbidden terms":
 
 - Eval class id: `domain_forbidden_terms_inventory_v0`
-- Source list: `eval/domains/v0/<domain_id>/rubric_v0.json` at `inventory.forbidden_terms[]`
+- Source list: `eval/domain_assets/v0/<domain_id>/rubric_v0.json` at `inventory.forbidden_terms[]`
 
 This is intended to be shared by:
 - ASS seeding runs (strict, blocks publish)
@@ -295,5 +295,5 @@ DAS v1 adds **gates + retries + select-best** on generation nodes when enabled.
   - `logs/selection.json` (best candidate summary)
 
 Planned regression fixtures:
-- Prefer domain-scoped fixtures under `eval/domains/v0/<domain_id>/golden/...` so eval assets stay organized by topic.
+- Prefer domain-scoped fixtures under `eval/domain_assets/v0/<domain_id>/golden/...` so eval assets stay organized by topic.
 - Persona-specific fixtures can be added later as an extra layer (only when needed).
