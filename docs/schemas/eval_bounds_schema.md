@@ -3,10 +3,10 @@
 Purpose: keep deterministic "bounds" limits out of code, so the ASS/agentic runner and future user flows can share the same guardrails.
 
 Files (all required)
-- `eval/bounds/v0/inventory/bounds_v0.json`
-- `eval/bounds/v0/blueprints/bounds_v0.json`
-- `eval/bounds/v0/prompt_pack/bounds_v0.json`
-- `eval/bounds/v0/control_pack/bounds_v0.json`
+- `eval/policy/bounds/v0/inventory/bounds_v0.json`
+- `eval/policy/bounds/v0/blueprints/bounds_v0.json`
+- `eval/policy/bounds/v0/prompt_pack/bounds_v0.json`
+- `eval/policy/bounds/v0/control_pack/bounds_v0.json`
 
 Common rules
 - Each file must be valid JSON.
@@ -41,4 +41,3 @@ Control pack bounds (`control_pack/bounds_v0.json`)
 - `maxTags`
 - `maxTagLen`
 - `maxBlueprints`
-

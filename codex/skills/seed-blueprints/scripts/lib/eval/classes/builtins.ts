@@ -85,7 +85,7 @@ export const builtinEvalClasses: Array<EvalClass<any, any>> = [
       const taxonomy = (ctx as any).controls_taxonomy as any;
       if (!taxonomy || typeof taxonomy !== 'object') {
         return mkEvalResult('controls_taxonomy_alignment_v0', false, 'hard_fail', 0, 'missing_taxonomy', {
-          expected: 'provide --eval-taxonomy (default eval/taxonomy/inventory_controls_v1.json)',
+          expected: 'provide --eval-taxonomy (default eval/policy/taxonomy)',
         });
       }
 

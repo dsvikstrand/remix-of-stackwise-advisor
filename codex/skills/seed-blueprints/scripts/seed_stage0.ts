@@ -786,8 +786,8 @@ async function main() {
         '  --das                      Enable DAS v1 (dynamic gates, retries, select-best; uses das config)',
         '  --das-config <path>        DAS config JSON path (default: seed/ass_gen_policy_v1.json)',
         '  --ass-eval-config <path>   ASS eval config v2 JSON path (config-driven eval instances per node)',
-        '  --eval-taxonomy <path>     Controls taxonomy v1 path (file or dir; default: eval/taxonomy)',
-        '  --eval-bounds <dir>        Eval bounds base dir (default: eval/bounds/v0)',
+        '  --eval-taxonomy <path>     Controls taxonomy v1 path (file or dir; default: eval/policy/taxonomy)',
+        '  --eval-bounds <dir>        Eval bounds base dir (default: eval/policy/bounds/v0)',
         '  --bootstrap-llm-golden-scores  Write method-owned golden scorecards for LLM golden regression evals (requires OPENAI_API_KEY)',
         '  --yes <token>              Stage 1 guard token (must be APPLY_STAGE1)',
         '  --limit-blueprints <n>     Limit generated/apply blueprints to N (useful for testing Stage 1)',
@@ -951,7 +951,7 @@ async function main() {
     }
   }
 
-  const defaultEvalTaxonomyPath = path.join('eval', 'taxonomy');
+  const defaultEvalTaxonomyPath = path.join('eval', 'policy', 'taxonomy');
   const evalTaxonomyPath = evalTaxonomyPathArg || defaultEvalTaxonomyPath;
   let evalTaxonomyHash = '';
   const evalTaxonomyByNode: Partial<Record<DasNodeId, EvalControlsTaxonomyV1>> = {};
@@ -1042,7 +1042,7 @@ async function main() {
     return (evalTaxonomyByNode as any)[nodeId] || null;
   };
 
-  const defaultEvalBoundsBaseDir = path.join('eval', 'bounds', 'v0');
+  const defaultEvalBoundsBaseDir = path.join('eval', 'policy', 'bounds', 'v0');
   const evalBoundsBaseDir = evalBoundsPathArg || defaultEvalBoundsBaseDir;
   let evalBounds: EvalBoundsV0 | null = null;
   let evalBoundsHash = '';

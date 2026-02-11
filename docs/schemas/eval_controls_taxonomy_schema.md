@@ -6,7 +6,8 @@ Purpose:
 - Deterministic and machine-readable.
 
 File:
-- `eval/taxonomy/inventory_controls_v1.json`
+- `eval/policy/taxonomy/lib_gen_controls_v1.json`
+- `eval/policy/taxonomy/bp_gen_controls_v1.json`
 
 Top-level fields:
 - `version`: number, must be `1`

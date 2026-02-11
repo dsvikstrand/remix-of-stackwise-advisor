@@ -75,19 +75,19 @@ This config is independent from the DAS generation policy config:
 
 Some eval classes use generic "bounds" limits (length/count ceilings). Those live under:
 
-- Root: `eval/bounds/v0/`
+- Root: `eval/policy/bounds/v0/`
 
 Files (v0):
-- `eval/bounds/v0/inventory/bounds_v0.json`
-- `eval/bounds/v0/blueprints/bounds_v0.json`
-- `eval/bounds/v0/prompt_pack/bounds_v0.json`
-- `eval/bounds/v0/control_pack/bounds_v0.json`
+- `eval/policy/bounds/v0/inventory/bounds_v0.json`
+- `eval/policy/bounds/v0/blueprints/bounds_v0.json`
+- `eval/policy/bounds/v0/prompt_pack/bounds_v0.json`
+- `eval/policy/bounds/v0/control_pack/bounds_v0.json`
 
 Schema doc:
 - `docs/schemas/eval_bounds_schema.md`
 
 Runner flag:
-- `--eval-bounds <dir>` (default: `eval/bounds/v0`)
+- `--eval-bounds <dir>` (default: `eval/policy/bounds/v0`)
 
 All `bounds_*` eval classes should prefer `ctx.bounds` and only fall back to hardcoded defaults if bounds assets are missing.
 
@@ -165,8 +165,8 @@ Some controls are shared across all domains (for example `style`, `audience`, `s
 - future user generation runs
 
 we define node-scoped, machine-readable taxonomies:
-- `eval/taxonomy/lib_gen_controls_v1.json` (LIB_GEN and CONTROL_PACK validation)
-- `eval/taxonomy/bp_gen_controls_v1.json` (BP_GEN; currently same shape, split for future divergence)
+- `eval/policy/taxonomy/lib_gen_controls_v1.json` (LIB_GEN and CONTROL_PACK validation)
+- `eval/policy/taxonomy/bp_gen_controls_v1.json` (BP_GEN; currently same shape, split for future divergence)
 
 The runner accepts `--eval-taxonomy` as either:
 - a file path (legacy, applies to all nodes), or
