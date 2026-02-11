@@ -11,6 +11,7 @@ import { mkEvalResult } from '../utils';
 import { llmGoldenRegressionInventoryV0 } from './llm_golden_regression_inventory_v0';
 import { llmGoldenRegressionBlueprintsV0 } from './llm_golden_regression_blueprints_v0';
 import { piiLeakageV0 } from './pii_leakage_v0';
+import { safetyModerationV0 } from './safety_moderation_v0';
 
 function normalizeSlug(input: string) {
   return String(input || '')
@@ -972,6 +973,7 @@ export const builtinEvalClasses: Array<EvalClass<any, any>> = [
       });
     },
   },
+  safetyModerationV0,
   piiLeakageV0,
   llmGoldenRegressionInventoryV0,
   llmGoldenRegressionBlueprintsV0,

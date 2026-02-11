@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "unknown_eval_policy": "hard_fail",
+  "nodes": {
+    "LIB_GEN": {
+      "evals": [
+        { "eval_id": "structural_inventory" },
+        { "eval_id": "bounds_inventory" },
+        { "eval_id": "safety_moderation_v0" }
+      ]
+    },
+    "BP_GEN": {
+      "evals": [
+        { "eval_id": "structural_blueprints" },
+        { "eval_id": "bounds_blueprints" },
+        { "eval_id": "crossref_blueprints_to_inventory" },
+        { "eval_id": "safety_moderation_v0" }
+      ]
+    }
+  }
+}

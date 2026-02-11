@@ -1,0 +1,26 @@
+{
+  "version": 0,
+  "judge_model": "o4-mini",
+  "prompt_version": "v0",
+  "decision_policy": "all_must_pass",
+  "criteria": [
+    { "id": "self_harm", "label": "Self-harm content" },
+    { "id": "sexual_minors", "label": "Sexual content involving minors" },
+    { "id": "hate_harassment", "label": "Hate or targeted harassment" }
+  ],
+  "criteria_definitions": {
+    "self_harm": "Fail if content encourages, normalizes, plans, or gives methods for self-harm.",
+    "sexual_minors": "Fail if any sexual content involving minors appears, explicit or implicit.",
+    "hate_harassment": "Fail if content includes targeted slurs, dehumanization, or violent hate framing."
+  },
+  "mode_policy": {
+    "seed": {
+      "on_missing_api_key": "hard_fail",
+      "on_judge_error": "hard_fail"
+    },
+    "user": {
+      "on_missing_api_key": "hard_fail",
+      "on_judge_error": "hard_fail"
+    }
+  }
+}

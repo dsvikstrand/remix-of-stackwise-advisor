@@ -13,7 +13,7 @@ flowchart TD
   GEN_CFG{{ASS gen policy config v1}} --> POLICY([Gen policy])
   EVAL_CFG{{ASS eval policy config v2}} --> EVALS([Eval instances per node])
   ESTACK([Eval stack: eval classes per gate])
-  SAFE([Safety and PII gate])
+  SAFE([Safety and PII gates])
   DOMAIN_CFG{{Domain assets}} --> DOMAIN["Domain assets: rubric + golden"]
   METHOD -.-> LIB_EVAL
   METHOD -.-> BP_EVAL

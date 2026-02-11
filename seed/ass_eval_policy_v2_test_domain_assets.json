@@ -4,11 +4,19 @@
   "nodes": {
     "LIB_GEN": {
       "evals": [
-        { "eval_id": "structural_inventory" },
-        { "eval_id": "bounds_inventory" },
-        { "eval_id": "requires_domain_golden_stub_v0" }
+        {
+          "eval_id": "structural_inventory"
+        },
+        {
+          "eval_id": "bounds_inventory"
+        },
+        {
+          "eval_id": "safety_moderation_v0"
+        },
+        {
+          "eval_id": "requires_domain_golden_stub_v0"
+        }
       ]
     }
   }
 }
-

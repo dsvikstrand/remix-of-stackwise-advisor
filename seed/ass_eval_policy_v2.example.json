@@ -4,23 +4,50 @@
   "nodes": {
     "CONTROL_PACK": {
       "evals": [
-        { "eval_id": "structural_control_pack" },
-        { "eval_id": "bounds_control_pack" },
-        { "eval_id": "persona_alignment_controls_v0", "params": { "allowCustomDomain": true } }
+        {
+          "eval_id": "structural_control_pack"
+        },
+        {
+          "eval_id": "bounds_control_pack"
+        },
+        {
+          "eval_id": "persona_alignment_controls_v0",
+          "params": {
+            "allowCustomDomain": true
+          }
+        }
       ]
     },
     "PROMPT_PACK": {
       "evals": [
-        { "eval_id": "structural_prompt_pack" },
-        { "eval_id": "bounds_prompt_pack" },
-        { "eval_id": "persona_alignment_prompts_v0", "params": { "minTagOverlapRatio": 0.25 } }
+        {
+          "eval_id": "structural_prompt_pack"
+        },
+        {
+          "eval_id": "bounds_prompt_pack"
+        },
+        {
+          "eval_id": "persona_alignment_prompts_v0",
+          "params": {
+            "minTagOverlapRatio": 0.25
+          }
+        }
       ]
     },
     "LIB_GEN": {
       "evals": [
-        { "eval_id": "structural_inventory" },
-        { "eval_id": "bounds_inventory" },
-        { "eval_id": "pii_leakage_v0" },
+        {
+          "eval_id": "structural_inventory"
+        },
+        {
+          "eval_id": "bounds_inventory"
+        },
+        {
+          "eval_id": "safety_moderation_v0"
+        },
+        {
+          "eval_id": "pii_leakage_v0"
+        },
         {
           "eval_id": "inventory_quality_heuristics_v0",
           "params": {
@@ -37,10 +64,21 @@
     },
     "BP_GEN": {
       "evals": [
-        { "eval_id": "structural_blueprints" },
-        { "eval_id": "bounds_blueprints" },
-        { "eval_id": "pii_leakage_v0" },
-        { "eval_id": "crossref_blueprints_to_inventory" }
+        {
+          "eval_id": "structural_blueprints"
+        },
+        {
+          "eval_id": "bounds_blueprints"
+        },
+        {
+          "eval_id": "safety_moderation_v0"
+        },
+        {
+          "eval_id": "pii_leakage_v0"
+        },
+        {
+          "eval_id": "crossref_blueprints_to_inventory"
+        }
       ]
     }
   }

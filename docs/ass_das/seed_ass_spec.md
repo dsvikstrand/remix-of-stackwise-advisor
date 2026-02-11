@@ -142,6 +142,24 @@ Default action policy:
 
 This keeps seeding strict for publish safety while allowing softer UX behavior in user mode.
 
+## Safety Moderation Eval (Current)
+
+We run a dedicated LLM moderation gate on generated outputs:
+
+- Eval class id: `safety_moderation_v0`
+- Method policy: `eval/methods/v0/safety_moderation_v0/global_pack_v0.json`
+- Scope: generated output text only (`LIB_GEN`, `BP_GEN`)
+- Decision policy: `all_must_pass`
+
+Active v0 criteria (zero tolerance):
+- `self_harm`
+- `sexual_minors`
+- `hate_harassment`
+
+Fail behavior:
+- If any criterion fails: `hard_fail` with reason `forbidden_topics_detected`
+- If judge output is malformed or API key is missing: mode policy applies (current default is `hard_fail` for both `seed` and `user`)
+
 ### Fitness: Forbidden Terms Gate (Current)
 
 We keep the lightest domain-specific deterministic guardrail as "forbidden terms":

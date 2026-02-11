@@ -4,10 +4,21 @@
   "nodes": {
     "LIB_GEN": {
       "evals": [
-        { "eval_id": "structural_inventory" },
-        { "eval_id": "bounds_inventory" },
-        { "eval_id": "pii_leakage_v0" },
-        { "eval_id": "domain_forbidden_terms_inventory_v0" },
+        {
+          "eval_id": "structural_inventory"
+        },
+        {
+          "eval_id": "bounds_inventory"
+        },
+        {
+          "eval_id": "safety_moderation_v0"
+        },
+        {
+          "eval_id": "pii_leakage_v0"
+        },
+        {
+          "eval_id": "domain_forbidden_terms_inventory_v0"
+        },
         {
           "eval_id": "golden_regression_inventory_v0",
           "params": {
