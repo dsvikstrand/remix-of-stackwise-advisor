@@ -20,6 +20,7 @@
       "evals": [
         { "eval_id": "structural_inventory" },
         { "eval_id": "bounds_inventory" },
+        { "eval_id": "pii_leakage_v0" },
         {
           "eval_id": "inventory_quality_heuristics_v0",
           "params": {
@@ -38,6 +39,7 @@
       "evals": [
         { "eval_id": "structural_blueprints" },
         { "eval_id": "bounds_blueprints" },
+        { "eval_id": "pii_leakage_v0" },
         { "eval_id": "crossref_blueprints_to_inventory" }
       ]
     }

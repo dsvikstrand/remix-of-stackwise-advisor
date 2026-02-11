@@ -54,6 +54,7 @@ Initial focus (B1): deterministic eval classes only (examples):
 - `structural_blueprints`, `bounds_blueprints`, `crossref_blueprints_to_inventory`
 - `structural_control_pack`, `bounds_control_pack`, `persona_alignment_controls_v0`
 - `structural_prompt_pack`, `bounds_prompt_pack`, `persona_alignment_prompts_v0`
+- `pii_leakage_v0` (regex-based PII detector for generated content)
 
 Notes:
 - Persona alignment is wired for `PROMPT_PACK` (prompt composer) and `CONTROL_PACK` (promptless controls) so we can validate eval wiring cheaply.
@@ -125,6 +126,21 @@ The runner resolves one active domain per run and passes it into evals as `ctx.d
 - Else: if using promptless controls, the chosen `control_pack.library.controls.domain` (when not `custom`)
 
 Eval classes that require domain assets should hard-fail with a clear `expected_path` when missing.
+
+## PII Leakage Eval (Current)
+
+We run a dedicated PII leakage gate on generated outputs (library + blueprints):
+
+- Eval class id: `pii_leakage_v0`
+- Method policy: `eval/methods/v0/pii_leakage_v0/global_pack_v0.json`
+- Scope: generated output text only (`LIB_GEN`, `BP_GEN`)
+- Logging: redacted snippets only (never raw sensitive values)
+
+Default action policy:
+- `seed` mode: `high/medium -> hard_fail`, `low -> warn`
+- `user` mode: `high -> hard_fail`, `medium/low -> warn`
+
+This keeps seeding strict for publish safety while allowing softer UX behavior in user mode.
 
 ### Fitness: Forbidden Terms Gate (Current)
 

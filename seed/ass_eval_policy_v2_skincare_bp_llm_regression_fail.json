@@ -11,6 +11,9 @@
           "eval_id": "bounds_blueprints"
         },
         {
+          "eval_id": "pii_leakage_v0"
+        },
+        {
           "eval_id": "crossref_blueprints_to_inventory"
         },
         {

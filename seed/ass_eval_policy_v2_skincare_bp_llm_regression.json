@@ -6,6 +6,7 @@
       "evals": [
         { "eval_id": "structural_blueprints" },
         { "eval_id": "bounds_blueprints" },
+        { "eval_id": "pii_leakage_v0" },
         { "eval_id": "crossref_blueprints_to_inventory" },
         {
           "eval_id": "llm_golden_regression_blueprints_v0",

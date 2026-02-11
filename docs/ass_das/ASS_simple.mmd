@@ -13,6 +13,7 @@ flowchart TD
   GEN_CFG{{ASS gen policy config v1}} --> POLICY([Gen policy])
   EVAL_CFG{{ASS eval policy config v2}} --> EVALS([Eval instances per node])
   ESTACK([Eval stack: eval classes per gate])
+  SAFE([Safety and PII gate])
   DOMAIN_CFG{{Domain assets}} --> DOMAIN["Domain assets: rubric + golden"]
   METHOD -.-> LIB_EVAL
   METHOD -.-> BP_EVAL
@@ -25,6 +26,7 @@ flowchart TD
   TAX -.-> LIB_EVAL
   TAX -.-> BP_EVAL
   EVALS -.-> ESTACK
+  ESTACK -.-> SAFE
   ESTACK -.-> LIB_EVAL
   ESTACK -.-> BP_EVAL
   DOMAIN -.-> LIB_EVAL
@@ -32,13 +34,13 @@ flowchart TD
 
   %% Two eval lanes (faithful, but compact)
   INTENT --> LIB_GEN([LIB_GEN generate library])
-  LIB_GEN --> LIB_EVAL([LIB_EVAL gates + retry/select])
+  LIB_GEN --> SAFE --> LIB_EVAL([LIB_EVAL gates + retry/select])
   LIB_EVAL -->|pass| LIB_OK([LIB_OK])
   LIB_EVAL -->|retry| LIB_GEN
   LIB_EVAL -->|hard fail| STOP([Stop run])
 
   LIB_OK --> BP_GEN([BP_GEN generate blueprints])
-  BP_GEN --> BP_EVAL([BP_EVAL gates + retry/select])
+  BP_GEN --> SAFE --> BP_EVAL([BP_EVAL gates + retry/select])
   BP_EVAL -->|pass| BP_OK([BP_OK])
   BP_EVAL -->|retry| BP_GEN
   BP_EVAL -->|hard fail| STOP
@@ -54,7 +56,7 @@ flowchart TD
   classDef eval fill:#0b2a2f,stroke:#0ea5b7,color:#e6feff,stroke-width:2px;
   classDef out fill:#0f3d2e,stroke:#1b6b4b,color:#e7fff2;
 
-  class AP,AUTH,INTENT,TAX,POLICY,LIB_GEN,BP_GEN,AI,APPLY,STOP stage;
+  class AP,AUTH,INTENT,TAX,POLICY,LIB_GEN,BP_GEN,AI,APPLY,STOP,SAFE stage;
   class LIB_EVAL,BP_EVAL eval;
   class OUT,LIB_OK,BP_OK out;
   class AP_CFG,AUTH_CFG,INTENT_CFG,TAX_CFG,GEN_CFG,EVAL_CFG,DOMAIN_CFG cfg;
