@@ -36,22 +36,12 @@ jobs:
       - name: Install
         run: npm ci
 
-      - name: Validate required frontend env
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-        run: |
-          test -n "$VITE_SUPABASE_URL" || (echo "Missing secret: VITE_SUPABASE_URL" && exit 1)
-          test -n "$VITE_SUPABASE_PUBLISHABLE_KEY" || (echo "Missing secret: VITE_SUPABASE_PUBLISHABLE_KEY" && exit 1)
-
       - name: Build
         run: npm run build
         env:
           VITE_BASE_PATH: ${{ env.VITE_BASE_PATH }}
           VITE_USE_AGENTIC_BACKEND: ${{ github.ref_name == 'main' && 'true' || '' }}
           VITE_AGENTIC_BACKEND_URL: ${{ github.ref_name == 'main' && 'https://bapi.vdsai.cloud' || '' }}
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
 
       - name: Deploy (main)
         if: github.ref_name == 'main'
