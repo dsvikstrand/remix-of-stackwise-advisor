@@ -86,7 +86,8 @@ export default function Blueprints() {
     }
   };
 
-  const showSuggestions = !effectiveQuery && user;
+  // Keep newest sorting strict: suggestions should not preempt latest ordering.
+  const showSuggestions = !effectiveQuery && user && sort === 'popular';
 
   const displayBlueprints = useMemo(() => {
     if (!showSuggestions) return mainBlueprints;
