@@ -25,11 +25,10 @@
             "golden_fixture_id": "fixture_001",
             "min_overall": 0,
             "on_missing_api_key": "skip",
-            "global_pack_path": "eval/methods/v0/llm_golden_regression_inventory_v0/global_pack_v0_test_prompt_bump.json"
+            "global_pack_path": "eval/methods/v0/llm_golden_regression_library_v0/global_pack_v0_test_prompt_bump.json"
           }
         }
       ]
     }
   }
 }
-

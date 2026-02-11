@@ -1,4 +1,0 @@
-I also have a need for a review of how we might keep eval focused and structured. when introducing a "new node." Basically, inside eval, we have a bunch of folders that are all connected to LIB_GEN. Even if BP_GEN will use a lot of the same folders, it can still quickly become messy if we keep on adding more and more content. Thus, we might want to introduce some type of "node level" abstraction, for example. We might add a new folder to eval cal lib_gen and put all our current subdirs and files in here (methods, domain_assets). And we also create a new eval/bp_gen and keep a similar structure for it (where all its content is only eval for gen_bp).
-
-
-review this please (no code)

@@ -1,0 +1,40 @@
+{
+  "title": "Simple AM/PM Skincare Routine (Beginner)",
+  "steps": [
+    {
+      "title": "AM Cleanse and Prep",
+      "description": "Start with a gentle cleanse and light hydration before daytime protection.",
+      "items": [
+        { "category": "Cleansers", "name": "Gentle Foaming Cleanser", "context": "Use lukewarm water and avoid over-scrubbing." },
+        { "category": "Hydration and Soothing", "name": "Hydrating Toner", "context": "Pat into skin, do not rub aggressively." }
+      ]
+    },
+    {
+      "title": "AM Protect",
+      "description": "Apply moisturizer and sun protection as the core daytime baseline.",
+      "items": [
+        { "category": "Moisturizers", "name": "Lightweight Moisturizer", "context": "Apply a thin, even layer." },
+        { "category": "Sun Protection", "name": "Broad Spectrum SPF 30+ Sunscreen", "context": "Use enough product and reapply when needed." },
+        { "category": "Sun Protection", "name": "Lip Balm with SPF", "context": "Include lips in daily UV protection." }
+      ]
+    },
+    {
+      "title": "PM Cleanse and Treat",
+      "description": "Cleanse again in the evening, then add one gentle treatment based on tolerance.",
+      "items": [
+        { "category": "Cleansers", "name": "Cream Cleanser", "context": "Remove sunscreen and daily buildup." },
+        { "category": "Treatment Actives", "name": "Niacinamide Serum", "context": "Begin with low frequency and monitor skin response." },
+        { "category": "Hydration and Soothing", "name": "Hyaluronic Acid Serum", "context": "Apply on slightly damp skin." }
+      ]
+    },
+    {
+      "title": "PM Moisturize and Recover",
+      "description": "Seal in hydration and support overnight recovery with barrier-friendly products.",
+      "items": [
+        { "category": "Moisturizers", "name": "Ceramide Moisturizer", "context": "Focus on dry-prone areas." },
+        { "category": "Hydration and Soothing", "name": "Aloe Gel", "context": "Use as a calming layer if skin feels irritated." },
+        { "category": "Tools and Hygiene", "name": "Clean Pillowcase", "context": "Replace regularly to reduce friction and residue." }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "version": 0,
+  "criteria_domain": [
+    {
+      "id": "step_order_safety",
+      "text": "Steps follow a safe skincare order (gentle cleanse before active treatment, moisturizer before daytime SPF)",
+      "max_drop": 5
+    },
+    {
+      "id": "beginner_friendliness",
+      "text": "Routine remains practical and beginner-friendly with low-friction actions and no extreme claims",
+      "max_drop": 5
+    }
+  ]
+}

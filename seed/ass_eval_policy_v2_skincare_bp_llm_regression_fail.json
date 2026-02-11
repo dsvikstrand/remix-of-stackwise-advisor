@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "unknown_eval_policy": "hard_fail",
+  "nodes": {
+    "BP_GEN": {
+      "evals": [
+        { "eval_id": "structural_blueprints" },
+        { "eval_id": "bounds_blueprints" },
+        { "eval_id": "crossref_blueprints_to_inventory" },
+        {
+          "eval_id": "llm_golden_regression_blueprints_v0",
+          "params": {
+            "golden_fixture_id": "fixture_001",
+            "min_overall": 11,
+            "on_missing_api_key": "skip"
+          }
+        }
+      ]
+    }
+  }
+}

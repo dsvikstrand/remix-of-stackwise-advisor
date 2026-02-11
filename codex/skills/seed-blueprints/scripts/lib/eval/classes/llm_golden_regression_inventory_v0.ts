@@ -71,7 +71,9 @@ function normalizeFixtureId(input: string) {
 }
 
 function defaultMethodPaths(evalId: string, domainId: string) {
-  const base = path.join('eval', 'methods', 'v0', evalId);
+  // Method assets use "library" naming even while the legacy eval id remains "inventory".
+  const methodDirId = evalId === 'llm_golden_regression_inventory_v0' ? 'llm_golden_regression_library_v0' : evalId;
+  const base = path.join('eval', 'methods', 'v0', methodDirId);
   return {
     globalPackPath: path.join(base, 'global_pack_v0.json'),
     domainPackPath: path.join(base, 'packs_domains', domainId, 'pack_v0.json'),
