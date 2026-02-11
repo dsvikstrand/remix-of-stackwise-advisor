@@ -25,7 +25,9 @@ export function loadBoundsAssetsV0(opts: {
   if (!baseDir) throw new Error('bounds baseDir is empty');
   if (!fs.existsSync(baseDir)) throw new Error(`bounds baseDir not found: ${baseDir}`);
 
-  const pInv = path.join(baseDir, 'inventory', 'bounds_v0.json');
+  // Prefer "library" naming; keep legacy "inventory" fallback for compatibility.
+  const pLib = path.join(baseDir, 'library', 'bounds_v0.json');
+  const pInvLegacy = path.join(baseDir, 'inventory', 'bounds_v0.json');
   const pBp = path.join(baseDir, 'blueprints', 'bounds_v0.json');
   const pPrompt = path.join(baseDir, 'prompt_pack', 'bounds_v0.json');
   const pCtrl = path.join(baseDir, 'control_pack', 'bounds_v0.json');
@@ -45,7 +47,8 @@ export function loadBoundsAssetsV0(opts: {
     return { json, info: { path: p, hash, version } as FileInfo };
   };
 
-  const inv = readJson(pInv);
+  const invPath = fs.existsSync(pLib) ? pLib : pInvLegacy;
+  const inv = readJson(invPath);
   const bp = readJson(pBp);
   const prompt = readJson(pPrompt);
   const ctrl = readJson(pCtrl);
@@ -73,4 +76,3 @@ export function loadBoundsAssetsV0(opts: {
     hash: aggHash,
   };
 }
-

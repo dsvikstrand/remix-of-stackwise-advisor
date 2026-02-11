@@ -78,7 +78,7 @@ Some eval classes use generic "bounds" limits (length/count ceilings). Those liv
 - Root: `eval/policy/bounds/v0/`
 
 Files (v0):
-- `eval/policy/bounds/v0/inventory/bounds_v0.json`
+- `eval/policy/bounds/v0/library/bounds_v0.json`
 - `eval/policy/bounds/v0/blueprints/bounds_v0.json`
 - `eval/policy/bounds/v0/prompt_pack/bounds_v0.json`
 - `eval/policy/bounds/v0/control_pack/bounds_v0.json`
