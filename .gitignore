@@ -38,3 +38,6 @@ personas/auth_local/
 .env
 .env.*
 !.env.example
+
+# Eval method run artifacts (local/runtime outputs)
+eval/methods/**/artifacts/
