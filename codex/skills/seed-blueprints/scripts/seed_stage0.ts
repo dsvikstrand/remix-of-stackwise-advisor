@@ -337,6 +337,7 @@ function parseArgs(argv: string[]) {
     else if (a === '--eval-taxonomy') out.evalTaxonomy = argv[++i] ?? '';
     else if (a === '--eval-bounds') out.evalBounds = argv[++i] ?? '';
     else if (a === '--bootstrap-llm-golden-scores') out.bootstrapLlmGoldenScores = true;
+    else if (a === '--no-preflight') out.noPreflight = true;
     else if (a === '--yes') out.yes = argv[++i] ?? '';
     else if (a === '--limit-blueprints') out.limitBlueprints = Number(argv[++i] ?? 0);
     else if (a.startsWith('--')) die(`Unknown flag: ${a}`);
@@ -789,6 +790,7 @@ async function main() {
         '  --eval-taxonomy <path>     Controls taxonomy v1 path (file or dir; default: eval/policy/taxonomy)',
         '  --eval-bounds <dir>        Eval bounds base dir (default: eval/policy/bounds/v0)',
         '  --bootstrap-llm-golden-scores  Write method-owned golden scorecards for LLM golden regression evals (requires OPENAI_API_KEY)',
+        '  --no-preflight             Skip preflight checks (use only for debugging)',
         '  --yes <token>              Stage 1 guard token (must be APPLY_STAGE1)',
         '  --limit-blueprints <n>     Limit generated/apply blueprints to N (useful for testing Stage 1)',
       ].join('\n') + '\n'
@@ -819,6 +821,7 @@ async function main() {
   const bootstrapLlmGoldenScores = Boolean((args as any).bootstrapLlmGoldenScores);
   const modeRaw = String((args as any).mode || '').trim().toLowerCase();
   const mode: 'seed' | 'user' = modeRaw === 'user' ? 'user' : 'seed';
+  const noPreflight = Boolean((args as any).noPreflight);
 
   if (!fs.existsSync(specPath)) die(`Spec not found: ${specPath}`);
 
@@ -1207,6 +1210,7 @@ async function main() {
       ...(evalTaxonomyPath ? { evalTaxonomyPath, evalTaxonomyHash } : {}),
       ...(evalBoundsBaseDir ? { evalBoundsBaseDir, evalBoundsHash } : {}),
       ...(bootstrapLlmGoldenScores ? { bootstrapLlmGoldenScores: true } : {}),
+      ...(noPreflight ? { noPreflight: true } : {}),
       ...(aspId ? { aspId } : {}),
       ...(personaHash ? { personaHash } : {}),
       runContextHash,
@@ -1477,6 +1481,147 @@ async function main() {
       writeJsonFile(outPath.logs('run_log.json'), { ...runLog, finishedAt: nowIso() });
     }
   };
+
+  type PreflightCheck = {
+    id: string;
+    ok: boolean;
+    severity: 'error' | 'warn';
+    message: string;
+    data?: Record<string, unknown>;
+  };
+
+  const runPreflightChecks = async () => {
+    const checks: PreflightCheck[] = [];
+    const push = (check: PreflightCheck) => checks.push(check);
+
+    const hasBackendAuthPath = backendCalls || authOnly || applyStage1;
+
+    const authStoreDir = path.dirname(authStorePath || path.join('seed', 'seed_auth.local'));
+    try {
+      ensureDir(authStoreDir);
+      fs.accessSync(authStoreDir, fs.constants.W_OK);
+      push({ id: 'auth_store_dir_writable', ok: true, severity: 'error', message: 'Auth store directory is writable.', data: { dir: authStoreDir } });
+    } catch {
+      push({ id: 'auth_store_dir_writable', ok: false, severity: 'error', message: 'Auth store directory is not writable.', data: { dir: authStoreDir } });
+    }
+
+    if (authEnvPath) {
+      const exists = fs.existsSync(authEnvPath);
+      push({
+        id: 'auth_env_exists',
+        ok: exists,
+        severity: exists || !hasBackendAuthPath ? 'warn' : 'error',
+        message: exists ? 'Persona auth env file found.' : 'Persona auth env file not found.',
+        data: { path: authEnvPath },
+      });
+    }
+
+    const authStore = readAuthStore(authStorePath);
+    const envAccess = String(process.env.SEED_USER_ACCESS_TOKEN || '').trim();
+    const envRefresh = String(process.env.SEED_USER_REFRESH_TOKEN || '').trim();
+    const storeAccess = String(authStore.access_token || '').trim();
+    const storeRefresh = String(authStore.refresh_token || '').trim();
+    const creds = getSeedCredsFromEnv();
+    const hasAuthMaterial = Boolean(envAccess || envRefresh || storeAccess || storeRefresh || creds);
+    push({
+      id: 'auth_material_present',
+      ok: hasBackendAuthPath ? hasAuthMaterial : true,
+      severity: 'error',
+      message: hasAuthMaterial ? 'Auth material is available.' : 'No auth material found (tokens or SEED_USER_EMAIL/SEED_USER_PASSWORD).',
+      data: {
+        backend_or_apply: hasBackendAuthPath,
+        has_store_access: Boolean(storeAccess),
+        has_store_refresh: Boolean(storeRefresh),
+        has_env_access: Boolean(envAccess),
+        has_env_refresh: Boolean(envRefresh),
+        has_password_grant_creds: Boolean(creds),
+      },
+    });
+
+    let supabaseUrl = String(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
+    let supabaseAnon = String(process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '').trim();
+    if (!supabaseUrl || !supabaseAnon) {
+      const fromDotEnv = readEnvFile(path.join(process.cwd(), '.env'));
+      if (!supabaseUrl) supabaseUrl = String(fromDotEnv.SUPABASE_URL || fromDotEnv.VITE_SUPABASE_URL || '').trim();
+      if (!supabaseAnon) supabaseAnon = String(fromDotEnv.SUPABASE_ANON_KEY || fromDotEnv.VITE_SUPABASE_PUBLISHABLE_KEY || '').trim();
+    }
+    push({
+      id: 'supabase_auth_env',
+      ok: hasBackendAuthPath ? Boolean(supabaseUrl && supabaseAnon) : true,
+      severity: 'error',
+      message: supabaseUrl && supabaseAnon ? 'Supabase URL/key available for auth flows.' : 'Missing SUPABASE_URL/VITE_SUPABASE_URL or SUPABASE_ANON_KEY/VITE_SUPABASE_PUBLISHABLE_KEY.',
+      data: { backend_or_apply: hasBackendAuthPath, has_supabase_url: Boolean(supabaseUrl), has_supabase_anon_key: Boolean(supabaseAnon) },
+    });
+
+    if (activeDomainId) {
+      const domainDir = path.join('eval', 'domain_assets', 'v0', activeDomainId);
+      const hasDomainJson = fs.existsSync(path.join(domainDir, 'domain.json'));
+      const hasRubricJson = fs.existsSync(path.join(domainDir, 'rubric_v0.json'));
+      push({
+        id: 'domain_assets_present',
+        ok: hasDomainJson && hasRubricJson,
+        severity: 'error',
+        message: hasDomainJson && hasRubricJson ? 'Domain assets found.' : 'Missing domain assets for active domain.',
+        data: { domain_id: activeDomainId, has_domain_json: hasDomainJson, has_rubric_json: hasRubricJson, base_dir: domainDir },
+      });
+    }
+
+    const evalNodes = Object.entries(assEvalConfig?.nodes || {});
+    for (const [nodeId, nodeCfg] of evalNodes) {
+      const evals = Array.isArray((nodeCfg as any)?.evals) ? (nodeCfg as any).evals : [];
+      for (const e of evals) {
+        const evalId = String((e as any)?.eval_id || '').trim();
+        if (!evalId) continue;
+        const cls = getEvalClass(evalId);
+        push({
+          id: `eval_class_registered:${nodeId}:${evalId}`,
+          ok: Boolean(cls),
+          severity: 'error',
+          message: cls ? `Eval class is registered (${evalId}).` : `Eval class is not registered (${evalId}).`,
+          data: { node_id: nodeId, eval_id: evalId },
+        });
+      }
+    }
+
+    if (bootstrapLlmGoldenScores) {
+      const hasOpenAiKey = Boolean(String(process.env.OPENAI_API_KEY || '').trim());
+      push({
+        id: 'openai_key_for_bootstrap',
+        ok: hasOpenAiKey,
+        severity: 'error',
+        message: hasOpenAiKey ? 'OPENAI_API_KEY found for golden score bootstrap.' : 'Missing OPENAI_API_KEY for --bootstrap-llm-golden-scores.',
+      });
+    }
+
+    const report = {
+      version: 1,
+      createdAt: nowIso(),
+      mode,
+      runType,
+      backendCalls,
+      authOnly,
+      applyStage1,
+      activeDomainId,
+      checks,
+      summary: {
+        total: checks.length,
+        ok: checks.filter((c) => c.ok).length,
+        failed: checks.filter((c) => !c.ok).length,
+        hard_failures: checks.filter((c) => !c.ok && c.severity === 'error').length,
+      },
+    };
+    writeJsonFile(outPath.logs('preflight.json'), report);
+    const blocking = checks.filter((c) => !c.ok && c.severity === 'error');
+    if (blocking.length) {
+      const lines = blocking.map((c) => `- ${c.id}: ${c.message}`).join('\n');
+      throw new Error(`Preflight failed with ${blocking.length} blocking issue(s):\n${lines}\nSee logs/preflight.json`);
+    }
+    return report;
+  };
+
+  if (!noPreflight) {
+    await step('preflight', async () => runPreflightChecks());
+  }
 
   // Control composition: optional, promptless controls derived from (persona + goal),
   // then rendered into a PromptPack so downstream nodes remain unchanged.

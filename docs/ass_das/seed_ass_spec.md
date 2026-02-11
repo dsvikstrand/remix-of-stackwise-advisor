@@ -15,6 +15,22 @@ The baseline is a **linear agentic system (LAS)**. We will evolve it into a **dy
 - Outputs: `seed/outputs/<run_id>/...`
 - Mermaid graph: `docs/ass_das/ASS_simple.mmd`
 
+## Preflight (Current)
+Before generation, the runner performs a fail-fast preflight step and writes:
+
+- `logs/preflight.json`
+
+Blocking checks include:
+- active domain assets exist when a domain is selected (`eval/domain_assets/v0/<domain_id>/domain.json`, `rubric_v0.json`)
+- required auth material exists when backend/auth/apply paths are enabled
+- Supabase auth URL/key are available for auth flows
+- eval class ids in `--ass-eval-config` are registered
+- `OPENAI_API_KEY` is present when `--bootstrap-llm-golden-scores` is used
+
+Notes:
+- Compose-only runs (`--no-backend`) are allowed to proceed without auth creds.
+- Use `--no-preflight` only for debugging.
+
 ## Inputs
 `seed/seed_spec_v0.json`
 

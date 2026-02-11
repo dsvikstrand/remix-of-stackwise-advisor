@@ -1,64 +1,37 @@
 flowchart TD
-  %% ASS (Agentic Seed System) - Conceptual Flow (simplified)
-  %% Focus: personas (AP) and eval-driven DAS loop
-  %% Source of truth: codex/skills/seed-blueprints/scripts/seed_stage0.ts
-  %% Mermaid: keep labels ASCII, single-line, and short.
+  %% ASS simple conceptual map
+  %% Major stages only + eval gates
 
-  %% Core stages (minimal)
-  AP_CFG["AP config"] --> AP["Persona AP"]
-  AUTH_CFG["Auth config"] --> AUTH["Auth bootstrap and store"]
-  INTENT_CFG["Intent config"] --> INTENT["Intent controls or prompts"]
-  TAX_CFG["Eval taxonomy per node"] --> TAX["Control taxonomy"]
-  METHOD_CFG["Eval methods assets"] --> METHOD["Eval methods criteria packs and judge cfg"]
-  GEN_CFG["ASS gen policy config v1"] --> POLICY["Gen policy"]
-  EVAL_CFG["ASS eval policy config v2"] --> EVALS["Eval instances per node"]
-  ESTACK["Eval stack classes per gate"]
-  SAFE["Safety and PII gates"]
-  DOMAIN_CFG["Domain assets"] --> DOMAIN["Domain assets rubric and golden"]
-  METHOD -.-> LIB_EVAL
-  METHOD -.-> BP_EVAL
+  START([Start Run]) --> PREFLIGHT[Preflight Checks]
+  PREFLIGHT --> AP[AP Persona]
+  AP --> AUTH[Auth]
+  AUTH --> INTENT[Build Intent]
 
-  AP --> AUTH --> INTENT --> TAX
+  INTENT --> LIB_GEN[Generate Library]
+  LIB_GEN --> LIB_EVAL["LIB Eval: structural, bounds, safety, pii, llm regression"]
 
-  %% DAS policy (drives retries + select-best)
-  POLICY -.-> LIB_EVAL
-  POLICY -.-> BP_EVAL
-  TAX -.-> LIB_EVAL
-  TAX -.-> BP_EVAL
-  EVALS -.-> ESTACK
-  ESTACK -.-> SAFE
-  ESTACK -.-> LIB_EVAL
-  ESTACK -.-> BP_EVAL
-  DOMAIN -.-> LIB_EVAL
-  DOMAIN -.-> BP_EVAL
-
-  %% Two eval lanes (faithful, but compact)
-  INTENT --> LIB_GEN["LIB_GEN generate library"]
-  LIB_GEN --> SAFE --> LIB_EVAL["LIB_EVAL gates and retry select"]
-  LIB_EVAL -->|pass| LIB_OK["LIB_OK"]
+  LIB_EVAL -->|pass| LIB_OK[Library Accepted]
   LIB_EVAL -->|retry| LIB_GEN
-  LIB_EVAL -->|hard fail| STOP["Stop run"]
+  LIB_EVAL -->|hard fail| STOP[Stop Run]
 
-  LIB_OK --> BP_GEN["BP_GEN generate blueprints"]
-  BP_GEN --> SAFE --> BP_EVAL["BP_EVAL gates and retry select"]
-  BP_EVAL -->|pass| BP_OK["BP_OK"]
+  LIB_OK --> BP_GEN[Generate Blueprints]
+  BP_GEN --> BP_EVAL["BP Eval: structural, bounds, crossref, safety, pii, llm regression"]
+
+  BP_EVAL -->|pass| BP_OK[Blueprints Accepted]
   BP_EVAL -->|retry| BP_GEN
   BP_EVAL -->|hard fail| STOP
 
-  %% Shared tail
-  BP_OK --> AI["Optional AI review and banner"]
-  AI --> APPLY["Optional apply publish"]
-  APPLY --> OUT["Outputs and logs"]
+  BP_OK --> REVIEW[Optional Review and Banner]
+  REVIEW --> APPLY[Optional Apply Publish]
+  APPLY --> DONE([Done])
 
-  %% Styling
-  classDef stage fill:#0b1220,stroke:#253047,color:#e7eefc,stroke-width:1px;
-  classDef cfg fill:#102a43,stroke:#1e4e8c,color:#e7f0ff,stroke-dasharray: 3 3;
-  classDef eval fill:#0b2a2f,stroke:#0ea5b7,color:#e6feff,stroke-width:2px;
-  classDef out fill:#0f3d2e,stroke:#1b6b4b,color:#e7fff2;
+  %% Visual grouping
+  classDef stage fill:#0f172a,stroke:#334155,color:#e2e8f0,stroke-width:1px;
+  classDef eval fill:#083344,stroke:#06b6d4,color:#ecfeff,stroke-width:2px;
+  classDef ok fill:#14532d,stroke:#22c55e,color:#ecfdf5,stroke-width:1px;
+  classDef stop fill:#4c0519,stroke:#f43f5e,color:#ffe4e6,stroke-width:1px;
 
-  class AP,AUTH,INTENT,TAX,POLICY,LIB_GEN,BP_GEN,AI,APPLY,STOP,SAFE stage;
+  class START,AP,AUTH,INTENT,LIB_GEN,BP_GEN,REVIEW,APPLY stage;
   class LIB_EVAL,BP_EVAL eval;
-  class OUT,LIB_OK,BP_OK out;
-  class AP_CFG,AUTH_CFG,INTENT_CFG,TAX_CFG,GEN_CFG,EVAL_CFG,DOMAIN_CFG cfg;
-  class EVALS stage;
-  class DOMAIN cfg;
+  class LIB_OK,BP_OK,DONE ok;
+  class STOP stop;
