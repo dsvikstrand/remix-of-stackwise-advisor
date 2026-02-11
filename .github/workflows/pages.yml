@@ -42,6 +42,8 @@ jobs:
           VITE_BASE_PATH: ${{ env.VITE_BASE_PATH }}
           VITE_USE_AGENTIC_BACKEND: ${{ github.ref_name == 'main' && 'true' || '' }}
           VITE_AGENTIC_BACKEND_URL: ${{ github.ref_name == 'main' && 'https://bapi.vdsai.cloud' || '' }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
 
       - name: Deploy (main)
         if: github.ref_name == 'main'
