@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCreateBlueprint, useUpdateBlueprint } from '@/hooks/useBlueprints';
@@ -112,13 +113,31 @@ export default function YouTubeToBlueprint() {
   const [generateBanner, setGenerateBanner] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [stageText, setStageText] = useState('');
+  const [progressValue, setProgressValue] = useState(0);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [result, setResult] = useState<YouTubeToBlueprintSuccessResponse | null>(null);
   const [savedBlueprintId, setSavedBlueprintId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const progressResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const urlValidation = useMemo(() => validateYouTubeInput(videoUrl), [videoUrl]);
+  useEffect(() => {
+    if (!isGenerating) return;
+    setProgressValue(8);
+    const timer = setInterval(() => {
+      setProgressValue((current) => Math.min(90, current + Math.max(1, (90 - current) * 0.08)));
+    }, 450);
+    return () => clearInterval(timer);
+  }, [isGenerating]);
+
+  useEffect(() => {
+    return () => {
+      if (progressResetTimerRef.current) {
+        clearTimeout(progressResetTimerRef.current);
+      }
+    };
+  }, []);
 
   const canSubmit = !isGenerating && videoUrl.trim().length > 0 && urlValidation.ok;
 
@@ -201,6 +220,13 @@ export default function YouTubeToBlueprint() {
       setErrorText(GENERIC_FAILURE_TEXT);
     } finally {
       setIsGenerating(false);
+      setProgressValue(100);
+      if (progressResetTimerRef.current) {
+        clearTimeout(progressResetTimerRef.current);
+      }
+      progressResetTimerRef.current = setTimeout(() => {
+        setProgressValue(0);
+      }, 650);
     }
   }
 
@@ -308,6 +334,7 @@ export default function YouTubeToBlueprint() {
               {isGenerating ? 'Generating...' : 'Generate Blueprint'}
             </Button>
 
+            {progressValue > 0 && <Progress value={progressValue} className="h-2" />}
             {stageText && <p className="text-sm text-muted-foreground">{stageText}</p>}
             {errorText && <p className="text-sm text-destructive">{errorText}</p>}
           </CardContent>

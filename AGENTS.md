@@ -73,6 +73,12 @@ for example: if you give me a follow up question:
 (codex) - "Would you like option A or B?"/"How should I do X"
 (me) - "REC" -> "Please use/go with your recommendations"
 
+some other "shortcuts" are (these are not commands but simple placeholder for specific words):
+IMP -> Implement
+SUCC -> successful
+FQ -> Follow-Up questions
+ST -> Smoke test
+
 
 ## 10) Remote server: Oracle (SSH alias + multiplexing)
 
@@ -163,3 +169,16 @@ Important
 
 ## 14) FInal GUI reasoning effort recommendation
 When you give me a full implementation plan (effort flags included). Also give me a finial REC for the GUI/MODEL REASONING to use. one of-> |Low,Med,High,xHigh|
+
+## 15) VS Code Plan Mode approval mapping
+
+When using VS Code Plan Mode:
+- I can include multiple follow-up questions (as many as needed) before implementation.
+- If you press the VS Code button `Implement the plan`, treat it as full execution approval equivalent to:
+  - `follow this plan please. PAP/UDO (respect effort flags and some test if needed UDO)`
+
+Execution behavior after `Implement the plan`:
+- Code changes are approved.
+- Command execution is approved.
+- Run focused smoke tests as needed (respecting effort flags).
+- Push to GitHub when appropriate for `PAP` behavior.
