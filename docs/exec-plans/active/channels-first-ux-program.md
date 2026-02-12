@@ -115,3 +115,4 @@ Rule: each project requires ST pass + acceptance criteria pass before next proje
 - D-009: Project 2 Step 1 locks text hygiene first (markdown cleanup, 3-line compact summaries, and chip visibility constant) on Wall and Explore cards.
 - D-010: Project 2 Step 2 locks flatter row shell on Wall+Explore, uses `b/channels` interim context label, and removes author block from list rows.
 - D-011: Project 2 Step 2.1 tightens Wall further toward wall-to-wall rhythm (remove outer list frame, tighten padding, slight `b/channels` emphasis bump).
+- D-012: Feed tags use a single-row full-tag rule (no wrapped second row, no `+N more` collapse badge) on Wall and Explore cards.

@@ -8,7 +8,6 @@ import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Heart, Share2, Layers, Tag } from 'lucide-react';
@@ -16,7 +15,8 @@ import { useToast } from '@/hooks/use-toast';
 import { usePopularInventoryTags } from '@/hooks/usePopularInventoryTags';
 import { useTagFollows } from '@/hooks/useTagFollows';
 import type { Json } from '@/integrations/supabase/types';
-import { buildFeedSummary, VISIBLE_CHIPS_COUNT } from '@/lib/feedPreview';
+import { buildFeedSummary } from '@/lib/feedPreview';
+import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 
 interface BlueprintPost {
   id: string;
@@ -296,8 +296,6 @@ export default function Wall() {
                     fallback: 'Open to view the full step-by-step guide.',
                     maxChars: 220,
                   });
-                  const displayTags = post.tags.slice(0, VISIBLE_CHIPS_COUNT);
-                  const extraTagCount = post.tags.length - displayTags.length;
                   const createdLabel = formatDistanceToNow(new Date(post.created_at), { addSuffix: true });
 
                   return (
@@ -312,31 +310,24 @@ export default function Wall() {
                         <p className="text-sm text-muted-foreground line-clamp-3">{preview}</p>
 
                         {post.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5">
-                            {displayTags.map((tag) => (
-                              <Badge
-                                key={tag.id}
-                                variant="outline"
-                                className={`text-xs cursor-pointer transition-colors border ${
-                                  followedIds.has(tag.id)
-                                    ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
-                                    : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
-                                }`}
-                                onClick={(event) => {
-                                  event.preventDefault();
-                                  event.stopPropagation();
-                                  handleTagToggle(tag);
-                                }}
-                              >
-                                #{tag.slug}
-                              </Badge>
-                            ))}
-                            {extraTagCount > 0 && (
-                              <Badge variant="outline" className="text-xs text-muted-foreground">
-                                +{extraTagCount} more
-                              </Badge>
-                            )}
-                          </div>
+                          <OneRowTagChips
+                            className="flex flex-nowrap gap-1.5 overflow-hidden"
+                            items={post.tags.map((tag) => ({
+                              key: tag.id,
+                              label: `#${tag.slug}`,
+                              variant: 'outline',
+                              className: `text-xs cursor-pointer transition-colors border ${
+                                followedIds.has(tag.id)
+                                  ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
+                                  : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
+                              }`,
+                              onClick: (event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                handleTagToggle(tag);
+                              },
+                            }))}
+                          />
                         )}
 
                         <div className="flex items-center gap-3 pt-1 text-xs text-muted-foreground">

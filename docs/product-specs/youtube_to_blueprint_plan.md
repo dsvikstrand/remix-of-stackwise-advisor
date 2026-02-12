@@ -11,6 +11,7 @@ a7) [have] YT2BP content safety gate (LLM grading + one retry) is wired server-s
 a8) [todo] `instruction_security` gate is documented but not runtime-wired.
 a9) [have] 2026-02-12 UI note: feed text hygiene updates in Project 2 Step 1 are frontend-only and do not change YT2BP API/runtime contract.
 a10) [have] 2026-02-12 UI note: feed row-shell updates in Project 2 Step 2 are frontend-only and do not change YT2BP API/runtime contract.
+a11) [have] 2026-02-12 UI note: one-row full-tag rendering updates in Wall/Explore are frontend-only and do not change YT2BP API/runtime contract.
 
 ## 4-Step Plan
 b1) [todo] Lock MVP contract

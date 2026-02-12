@@ -89,6 +89,7 @@ Step 2.1 tightening pass:
 - Remove residual outer feed frame feel on Wall (no rounded outer list shell).
 - Slightly tighter row padding and smaller outer page gutters on mobile.
 - Increase `b/channels` salience slightly (uppercase + stronger contrast), while keeping it lightweight.
+- Tag display rule: render only one non-wrapping row of full tags; no `+N more` badge and no wrapped second row.
 
 ### Step 3 - Channel-First Metadata and Author De-Emphasis
 Objective: reduce user/author prominence in list view and reinforce channel/content focus.

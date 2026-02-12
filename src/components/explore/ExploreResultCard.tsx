@@ -1,10 +1,10 @@
 import { Link } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Heart, Layers, FileText } from 'lucide-react';
 import { UserMiniCard } from './UserMiniCard';
 import type { BlueprintResult, InventoryResult, UserResult, ExploreResult } from '@/hooks/useExploreSearch';
-import { buildFeedSummary, VISIBLE_CHIPS_COUNT } from '@/lib/feedPreview';
+import { buildFeedSummary } from '@/lib/feedPreview';
+import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 
 interface ExploreResultCardProps {
   result: ExploreResult;
@@ -28,7 +28,6 @@ function BlueprintCard({
     fallback: 'Open to view the full step-by-step guide.',
     maxChars: 190,
   });
-  const visibleTags = result.tags.slice(0, VISIBLE_CHIPS_COUNT);
 
   return (
     <Link to={`/blueprint/${result.id}`}>
@@ -54,26 +53,24 @@ function BlueprintCard({
         </div>
 
         {result.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {visibleTags.map(tag => (
-              <Badge
-                key={tag}
-                variant="secondary"
-                className={`text-xs cursor-pointer transition-colors border ${
-                  followedTagSlugs?.has(tag)
-                    ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
-                    : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
-                }`}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onTagClick?.(`#${tag}`);
-                }}
-              >
-                #{tag}
-              </Badge>
-            ))}
-          </div>
+          <OneRowTagChips
+            className="flex flex-nowrap gap-1 overflow-hidden"
+            items={result.tags.map((tag) => ({
+              key: tag,
+              label: `#${tag}`,
+              variant: 'secondary',
+              className: `text-xs cursor-pointer transition-colors border ${
+                followedTagSlugs?.has(tag)
+                  ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
+                  : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
+              }`,
+              onClick: (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onTagClick?.(`#${tag}`);
+              },
+            }))}
+          />
         )}
       </Card>
     </Link>
@@ -94,7 +91,6 @@ function InventoryCard({
     fallback: 'Open to view the full step-by-step guide.',
     maxChars: 190,
   });
-  const visibleTags = result.tags.slice(0, VISIBLE_CHIPS_COUNT);
 
   return (
     <Link to={`/inventory/${result.id}`}>
@@ -117,26 +113,24 @@ function InventoryCard({
         </div>
 
         {result.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {visibleTags.map(tag => (
-              <Badge
-                key={tag}
-                variant="secondary"
-                className={`text-xs cursor-pointer transition-colors border ${
-                  followedTagSlugs?.has(tag)
-                    ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
-                    : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
-                }`}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onTagClick?.(`#${tag}`);
-                }}
-              >
-                #{tag}
-              </Badge>
-            ))}
-          </div>
+          <OneRowTagChips
+            className="flex flex-nowrap gap-1 overflow-hidden"
+            items={result.tags.map((tag) => ({
+              key: tag,
+              label: `#${tag}`,
+              variant: 'secondary',
+              className: `text-xs cursor-pointer transition-colors border ${
+                followedTagSlugs?.has(tag)
+                  ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
+                  : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
+              }`,
+              onClick: (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onTagClick?.(`#${tag}`);
+              },
+            }))}
+          />
         )}
       </Card>
     </Link>
