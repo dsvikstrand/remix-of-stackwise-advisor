@@ -352,7 +352,9 @@ function readYt2bpQualityConfig(): Yt2bpQualityConfig {
     prompt_version: String(loaded.prompt_version || fallback.prompt_version),
     scale: { min, max },
     retry_policy: {
-      max_retries: Math.max(0, Math.min(5, Math.floor(maxRetries))),
+      // Keep YT2BP quality retries tight for public endpoint latency budget.
+      // External requests often traverse a ~60s proxy boundary.
+      max_retries: Math.max(0, Math.min(1, Math.floor(maxRetries))),
       selection: 'best_overall',
     },
     criteria: criteriaWithOverride.length ? criteriaWithOverride : fallback.criteria,
