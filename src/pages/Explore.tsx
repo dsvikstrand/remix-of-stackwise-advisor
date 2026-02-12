@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -24,9 +24,10 @@ const FILTER_OPTIONS: { value: ExploreFilter; label: string }[] = [
 export default function Explore() {
   const [searchInput, setSearchInput] = useState('');
   const [filter, setFilter] = useState<ExploreFilter>('all');
+  const trendingSectionRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
   const { toast } = useToast();
-  
+
   const debouncedQuery = useDebounce(searchInput, 300);
   const { data: results, isLoading } = useExploreSearch({
     query: debouncedQuery,
@@ -36,6 +37,12 @@ export default function Explore() {
   const { followedSlugs, toggleFollow } = useTagFollows();
 
   const hasQuery = debouncedQuery.trim().length > 0;
+  const showNoFollowOnboarding = !!user && followedSlugs.size === 0 && !hasQuery;
+
+  const followedTrendingChannels = useMemo(() => {
+    if (!trendingTags || !user || followedSlugs.size === 0) return [];
+    return trendingTags.filter((tag) => followedSlugs.has(tag.slug));
+  }, [trendingTags, followedSlugs, user]);
 
   const handleTagClick = async (tag: string) => {
     setSearchInput(tag);
@@ -57,6 +64,10 @@ export default function Explore() {
     }
   };
 
+  const scrollToTrendingChannels = () => {
+    trendingSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   // Group results by type when filter is 'all'
   const groupedResults = useMemo(() => {
     if (!results || filter !== 'all') return null;
@@ -67,7 +78,7 @@ export default function Explore() {
       users: [],
     };
 
-    results.forEach(r => {
+    results.forEach((r) => {
       if (r.type === 'blueprint') groups.blueprints.push(r);
       else if (r.type === 'inventory') groups.inventories.push(r);
       else if (r.type === 'user') groups.users.push(r);
@@ -79,7 +90,7 @@ export default function Explore() {
   return (
     <div className="min-h-screen bg-gradient-soft">
       <AppHeader />
-      
+
       <main className="container max-w-4xl mx-auto px-4 py-8">
         <section className="mb-6">
           <p className="text-sm font-semibold text-primary uppercase tracking-wide">Explore</p>
@@ -94,7 +105,7 @@ export default function Explore() {
             <div>
               <p className="text-sm font-semibold">Sign in to personalize</p>
               <p className="text-xs text-muted-foreground">
-                Join channels and follow creators to tune what shows up in Explore.
+                Join channels to shape your feed, then follow creators you trust.
               </p>
             </div>
             <Link to="/auth">
@@ -102,6 +113,7 @@ export default function Explore() {
             </Link>
           </div>
         )}
+
         {/* Search Bar */}
         <div className="relative mb-6">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
@@ -117,7 +129,7 @@ export default function Explore() {
         {/* Filter Pills */}
         {hasQuery && (
           <div className="flex gap-2 mb-6 flex-wrap">
-            {FILTER_OPTIONS.map(opt => (
+            {FILTER_OPTIONS.map((opt) => (
               <Button
                 key={opt.value}
                 variant={filter === opt.value ? 'default' : 'outline'}
@@ -130,7 +142,7 @@ export default function Explore() {
           </div>
         )}
 
-        {/* Empty State - Enhanced with suggestions */}
+        {/* No-query state */}
         {!hasQuery && (
           <div className="space-y-8">
             <div className="text-center py-8">
@@ -139,12 +151,50 @@ export default function Explore() {
                 Search blueprints, inventories, and creators — or explore trending channels below
               </p>
             </div>
-            
+
+            {!!user && followedSlugs.size > 0 && (
+              <section>
+                <p className="text-sm font-medium text-muted-foreground mb-3">Your Channels</p>
+                {followedTrendingChannels.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {followedTrendingChannels.map((tag) => (
+                      <Badge
+                        key={tag.id}
+                        variant="secondary"
+                        className="cursor-pointer transition-colors px-3 py-1 border bg-primary/15 text-primary border-primary/30 hover:bg-primary/20"
+                        onClick={() => handleTagClick(`#${tag.slug}`)}
+                      >
+                        #{tag.slug}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Your channels will appear here as activity updates.
+                  </p>
+                )}
+              </section>
+            )}
+
+            {showNoFollowOnboarding && (
+              <section className="rounded-xl border border-border/50 bg-card/60 p-4 space-y-3">
+                <div>
+                  <p className="text-sm font-semibold">Join channels to shape your feed</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Start with a few channels and Explore will adapt to what you care about.
+                  </p>
+                </div>
+                <Button size="sm" onClick={scrollToTrendingChannels}>
+                  Explore Channels
+                </Button>
+              </section>
+            )}
+
             {trendingTags && trendingTags.length > 0 && (
-              <div>
+              <section ref={trendingSectionRef}>
                 <p className="text-sm font-medium text-muted-foreground mb-3">Trending Channels</p>
                 <div className="flex flex-wrap gap-2">
-                  {trendingTags.map(tag => (
+                  {trendingTags.map((tag) => (
                     <Badge
                       key={tag.id}
                       variant="secondary"
@@ -159,14 +209,13 @@ export default function Explore() {
                     </Badge>
                   ))}
                 </div>
-              </div>
+              </section>
             )}
 
-            {/* Quick category buttons */}
-            <div>
-              <p className="text-sm font-medium text-muted-foreground mb-3">Popular Categories</p>
+            <section>
+              <p className="text-sm font-medium text-muted-foreground mb-3">Topic Search</p>
               <div className="flex flex-wrap gap-2">
-                {['skincare', 'nutrition', 'fitness', 'wellness', 'sleep'].map(cat => (
+                {['skincare', 'nutrition', 'fitness', 'wellness', 'sleep'].map((cat) => (
                   <Button
                     key={cat}
                     variant="outline"
@@ -178,7 +227,7 @@ export default function Explore() {
                   </Button>
                 ))}
               </div>
-            </div>
+            </section>
           </div>
         )}
 
@@ -198,7 +247,7 @@ export default function Explore() {
               <section>
                 <h2 className="text-sm font-medium text-muted-foreground mb-3">Blueprints</h2>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {groupedResults.blueprints.map(r => (
+                  {groupedResults.blueprints.map((r) => (
                     <ExploreResultCard
                       key={r.type === 'blueprint' ? r.id : ''}
                       result={r}
@@ -214,7 +263,7 @@ export default function Explore() {
               <section>
                 <h2 className="text-sm font-medium text-muted-foreground mb-3">Libraries</h2>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {groupedResults.inventories.map(r => (
+                  {groupedResults.inventories.map((r) => (
                     <ExploreResultCard
                       key={r.type === 'inventory' ? r.id : ''}
                       result={r}
@@ -230,7 +279,7 @@ export default function Explore() {
               <section>
                 <h2 className="text-sm font-medium text-muted-foreground mb-3">Users</h2>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {groupedResults.users.map(r => (
+                  {groupedResults.users.map((r) => (
                     <ExploreResultCard key={r.type === 'user' ? r.userId : ''} result={r} />
                   ))}
                 </div>
@@ -253,7 +302,7 @@ export default function Explore() {
           <div>
             {results.length > 0 ? (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {results.map(r => (
+                {results.map((r) => (
                   <ExploreResultCard
                     key={r.type === 'user' ? r.userId : r.id}
                     result={r}

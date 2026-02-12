@@ -251,7 +251,7 @@ export default function Wall() {
               <div className="flex flex-col gap-2 text-center">
                 <p className="text-sm font-semibold">Sign in to personalize</p>
                 <p className="text-sm text-muted-foreground">
-                  Join channels and follow creators to tune what shows up in Explore.
+                  Join channels to shape your feed, then follow creators you trust.
                 </p>
                 <div className="flex justify-center">
                   <Link to="/auth">

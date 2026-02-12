@@ -110,3 +110,4 @@ Rule: each project requires ST pass + acceptance criteria pass before next proje
 - D-004: v0 channels are curated-only.
 - D-005: both mobile and desktop are in scope (mobile-first execution).
 - D-006: Step 1 copy convention uses `Join Channel` / `Leave Channel`; keep `/tags` route for compatibility.
+- D-007: Step 2 Explore IA is channels-first (`Your Channels` -> onboarding -> trending -> topic search), with lightweight Wall copy alignment only.

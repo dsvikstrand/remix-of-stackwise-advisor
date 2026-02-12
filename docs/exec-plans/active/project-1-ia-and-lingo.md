@@ -60,6 +60,18 @@ Establish consistent information architecture and naming so cold users understan
 4. define channel seed list and mapping criteria.
 5. review all copy for consistency and ambiguity.
 
+## Step 2 Decisions (Explore IA Pass)
+- Scope: lightweight IA/copy pass only for `Explore` + small `Wall` wording alignment.
+- Explore no-query order:
+  1. `Your Channels` (signed-in users with joined channels)
+  2. no-follow onboarding (signed-in users with zero joined channels)
+  3. `Trending Channels`
+  4. `Topic Search` helper
+- No-follow onboarding CTA: `Explore Channels` (same-page scroll to trending section).
+- Fallback copy when follows exist but no current trending overlap:
+  - `Your channels will appear here as activity updates.`
+- Compatibility: `/tags` route/data model remain unchanged.
+
 ## Edge Cases / Failure Modes
 - tags-only content with no channel mapping
 - over-broad channels causing overlap confusion
