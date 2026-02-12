@@ -1,37 +1,4 @@
+%% Moved
+%% This graph moved to docs/design-docs/ASS_simple.mmd
 flowchart TD
-  %% ASS simple conceptual map
-  %% Major stages only + eval gates
-
-  START([Start Run]) --> PREFLIGHT[Preflight Checks]
-  PREFLIGHT --> AP[AP Persona]
-  AP --> AUTH[Auth]
-  AUTH --> INTENT[Build Intent]
-
-  INTENT --> LIB_GEN[Generate Library]
-  LIB_GEN --> LIB_EVAL["LIB Eval: structural, bounds, safety, pii, heuristics"]
-
-  LIB_EVAL -->|pass| LIB_OK[Library Accepted]
-  LIB_EVAL -->|retry| LIB_GEN
-  LIB_EVAL -->|hard fail| STOP[Stop Run]
-
-  LIB_OK --> BP_GEN[Generate Blueprints]
-  BP_GEN --> BP_EVAL["BP Eval: structural, bounds, crossref, content_safety, pii, llm_quality"]
-
-  BP_EVAL -->|pass| BP_OK[Blueprints Accepted]
-  BP_EVAL -->|retry| BP_GEN
-  BP_EVAL -->|hard fail| STOP
-
-  BP_OK --> REVIEW[Optional Review and Banner]
-  REVIEW --> APPLY[Optional Apply Publish]
-  APPLY --> DONE([Done])
-
-  %% Visual grouping
-  classDef stage fill:#0f172a,stroke:#334155,color:#e2e8f0,stroke-width:1px;
-  classDef eval fill:#083344,stroke:#06b6d4,color:#ecfeff,stroke-width:2px;
-  classDef ok fill:#14532d,stroke:#22c55e,color:#ecfdf5,stroke-width:1px;
-  classDef stop fill:#4c0519,stroke:#f43f5e,color:#ffe4e6,stroke-width:1px;
-
-  class START,AP,AUTH,INTENT,LIB_GEN,BP_GEN,REVIEW,APPLY stage;
-  class LIB_EVAL,BP_EVAL eval;
-  class LIB_OK,BP_OK,DONE ok;
-  class STOP stop;
+  A[Moved] --> B[See docs/design-docs/ASS_simple.mmd]

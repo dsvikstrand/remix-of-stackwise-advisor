@@ -1,0 +1,65 @@
+{
+  "version": 2,
+  "doc_aliases": {
+    "docs/app/youtube_to_blueprint_plan.md": "docs/product-specs/youtube_to_blueprint_plan.md",
+    "docs/app/yt2bp_v0_contract.md": "docs/product-specs/yt2bp_v0_contract.md",
+    "docs/ass_das/seed_ass_spec.md": "docs/design-docs/seed_ass_spec.md",
+    "docs/ass_das/ASS_simple.mmd": "docs/design-docs/ASS_simple.mmd"
+  },
+  "allow_legacy_only": [],
+  "rules": [
+    {
+      "id": "frontend-youtube",
+      "paths": ["src/pages/YouTubeToBlueprint.tsx", "src/components/**", "src/lib/**"],
+      "required_docs": [
+        "docs/product-specs/youtube_to_blueprint_plan.md",
+        "docs/product-specs/yt2bp_v0_contract.md"
+      ],
+      "suggested_sections": [
+        "User flow",
+        "Error buckets",
+        "UI behavior"
+      ]
+    },
+    {
+      "id": "backend-yt2bp",
+      "paths": ["server/**"],
+      "required_docs": [
+        "docs/product-specs/yt2bp_v0_contract.md",
+        "docs/ops/yt2bp_runbook.md"
+      ],
+      "suggested_sections": [
+        "API contract",
+        "Operational runbook",
+        "Failure modes"
+      ]
+    },
+    {
+      "id": "eval-pipeline",
+      "paths": ["eval/**", "seed/**", "codex/skills/seed-blueprints/scripts/**"],
+      "required_docs": [
+        "docs/design-docs/seed_ass_spec.md",
+        "docs/design-docs/ASS_simple.mmd"
+      ],
+      "suggested_sections": [
+        "Eval classes",
+        "Policy config",
+        "Gate order"
+      ]
+    },
+    {
+      "id": "schema-changes",
+      "paths": ["docs/schemas/**", "supabase/**"],
+      "required_docs": [
+        "docs/schemas/ass_eval_config_schema.md",
+        "docs/schemas/eval_scorecard_schema.md",
+        "docs/app/product-spec.md"
+      ],
+      "suggested_sections": [
+        "Schema contract",
+        "Compatibility",
+        "Migration notes"
+      ]
+    }
+  ]
+}

@@ -54,18 +54,21 @@ Push access depends on the SSH key stored in this environment. Any Codex session
 ## 7) UDO shortcut for execution
 If a message ends with `UDO`, treat it as approval to execute the actions you propose without waiting for a separate confirmation. Always summarize what you did afterward. (Not for code, only for commands : PA/PAP is for code)
 
-## 8) Document Tag Updates
+## 7b) UDD shortcut for docs freshness
+If a message ends with `UDD`, run a docs freshness pass based on changed files and update affected docs as needed.
 
-Use document tags from `docs/README.md` to keep planning docs in sync.
+Behavior:
+- Run `npm run docs:refresh-check` (optionally with `--base <ref>` when requested).
+- Use `docs/_freshness_map.json` as source of truth for affected-doc mapping.
+- Report:
+  - `affected_docs`
+  - `missing_updates`
+  - `suggested_sections`
+  - `status`
+- If `status=needs_update`, update affected docs before closing the task.
 
-How it works
-- If you say: `update documents [TAG]`
-- I will update only the planning docs that are labeled with that `[TAG]` in `docs/README.md`.
+## 8) Document Tag Updates (deprecated, we have a new system for the documents)
 
-Rules
-- `docs/README.md` is the source of truth for valid tags and which files carry each tag.
-- I can suggest updates and new documents to add.
-- I will use the documents to keep the work well structured and focused.
 
 ## 9) REC (go with your recommendations)
 If I type REC -> "use/go with your recommendations"
@@ -169,7 +172,7 @@ Meaning (soft limits, not hard stops)
 Important
 - These flags do not change which GUI/model tier you are using. They only change my behavior and how much I explore.
 
-## 14) FInal GUI reasoning effort recommendation
+## 14) Final GUI reasoning effort recommendation
 When you give me a full implementation plan (effort flags included). Also give me a finial REC for the GUI/MODEL REASONING to use. one of-> |Low,Med,High,xHigh|
 
 ## 15) VS Code Plan Mode approval mapping
