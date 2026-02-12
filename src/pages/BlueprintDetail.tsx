@@ -13,7 +13,7 @@ import { BlueprintAnalysisView } from '@/components/blueprint/BlueprintAnalysisV
 import { useBlueprint, useBlueprintComments, useCreateBlueprintComment, useToggleBlueprintLike } from '@/hooks/useBlueprints';
 import { useToast } from '@/hooks/use-toast';
 import { useTagFollows } from '@/hooks/useTagFollows';
-import { ArrowLeft, Heart } from 'lucide-react';
+import { ArrowLeft, Heart, Maximize2, Minimize2 } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { logMvpEvent } from '@/lib/logEvent';
@@ -60,7 +60,7 @@ export default function BlueprintDetail() {
   const { user } = useAuth();
   const { followedIds, toggleFollow } = useTagFollows();
   const [comment, setComment] = useState('');
-  const [isBannerExpanded, setIsBannerExpanded] = useState(false);
+  const [isBannerExpanded, setIsBannerExpanded] = useState(true);
   const location = useLocation();
   const loggedBlueprintId = useRef<string | null>(null);
   const steps = blueprint ? parseSteps(blueprint.steps) : [];
@@ -171,37 +171,6 @@ export default function BlueprintDetail() {
               </div>
             </section>
 
-            {blueprint.banner_url && (
-              <div className="overflow-hidden rounded-xl border border-border/60 bg-muted/30 p-2">
-                {isBannerExpanded ? (
-                  <img
-                    src={blueprint.banner_url}
-                    alt="Blueprint banner"
-                    className="w-full h-auto max-h-[560px] object-contain rounded-lg"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="aspect-[3/1] w-full">
-                    <img
-                      src={blueprint.banner_url}
-                      alt="Blueprint banner"
-                      className="h-full w-full object-contain rounded-lg"
-                      loading="lazy"
-                    />
-                  </div>
-                )}
-                <div className="mt-2 flex justify-end">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsBannerExpanded((current) => !current)}
-                  >
-                    {isBannerExpanded ? 'Collapse banner' : 'Expand banner'}
-                  </Button>
-                </div>
-              </div>
-            )}
-
             <Card>
               <CardHeader className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -250,6 +219,35 @@ export default function BlueprintDetail() {
                     <h3 className="font-semibold">Build notes</h3>
                     <p className="text-sm text-muted-foreground mt-1">{blueprint.mix_notes}</p>
                   </div>
+                )}
+                {blueprint.banner_url && (
+                  <button
+                    type="button"
+                    className="relative w-full overflow-hidden rounded-xl border border-border/60 bg-muted/30 p-2 text-left"
+                    onClick={() => setIsBannerExpanded((current) => !current)}
+                    title={isBannerExpanded ? 'Collapse banner' : 'Expand banner'}
+                  >
+                    {isBannerExpanded ? (
+                      <img
+                        src={blueprint.banner_url}
+                        alt="Blueprint banner"
+                        className="w-full h-auto max-h-[560px] object-contain rounded-lg"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="aspect-[3/1] w-full">
+                        <img
+                          src={blueprint.banner_url}
+                          alt="Blueprint banner"
+                          className="h-full w-full object-cover object-center rounded-lg"
+                          loading="lazy"
+                        />
+                      </div>
+                    )}
+                    <span className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm">
+                      {isBannerExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                    </span>
+                  </button>
                 )}
                 <div>
                   {steps.length > 0 ? (
