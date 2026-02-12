@@ -10,7 +10,7 @@ Runner flag:
 
 ## Core Idea
 
-- **Eval class**: a reusable implementation (example: `structural_inventory`).
+- **Eval class**: a reusable implementation (example: legacy id `structural_inventory`, library-scoped behavior).
 - **Eval instance**: a configured use of an eval class on a specific node (example: run `structural_inventory` on `LIB_GEN`).
 
 ## Top-Level Shape

@@ -6,7 +6,7 @@ Suggested location (method-owned)
 - `eval/methods/v0/<eval_id>/artifacts/golden_scores/<domain_id>/<fixture_id>.score_v0.json`
 
 Linkage fields (required to prevent stale baselines)
-- `eval_id`: string (example: `llm_golden_regression_inventory_v0`)
+- `eval_id`: string (example: `llm_golden_regression_library_v0`)
 - `golden_fixture_path`: string (repo-relative path to the golden fixture JSON)
 
 Required fields

@@ -3,7 +3,7 @@
 ## Goal
 Build a **debuggable agentic seeding pipeline** that can:
 
-- Generate a library (inventory) and blueprint drafts from a topic
+- Generate a library and blueprint drafts from a topic
 - Optionally execute AI review + banner generation
 - Optionally apply results to Supabase (DB + banner upload)
 
@@ -64,9 +64,9 @@ Stable per-gate contract:
 - `reason`: short string (human readable)
 - `data`: optional JSON object for structured details (counts, limits, etc.)
 
-Initial focus (B1): deterministic eval classes only (examples):
-- `structural_inventory`, `bounds_inventory`
-- `inventory_quality_heuristics_v0`
+Initial focus (B1): deterministic eval classes only (examples, legacy ids kept for compatibility):
+- `structural_inventory`, `bounds_inventory` (library-structure checks)
+- `inventory_quality_heuristics_v0` (library quality floor)
 - `structural_blueprints`, `bounds_blueprints`, `crossref_blueprints_to_inventory`
 - `structural_control_pack`, `bounds_control_pack`, `persona_alignment_controls_v0`
 - `structural_prompt_pack`, `bounds_prompt_pack`, `persona_alignment_prompts_v0`
@@ -180,8 +180,8 @@ Fail behavior:
 
 We keep the lightest domain-specific deterministic guardrail as "forbidden terms":
 
-- Eval class id: `domain_forbidden_terms_inventory_v0`
-- Source list: `eval/domain_assets/v0/<domain_id>/rubric_v0.json` at `inventory.forbidden_terms[]`
+- Eval class id: `domain_forbidden_terms_inventory_v0` (legacy id; library-scoped check)
+- Source list: `eval/domain_assets/v0/<domain_id>/rubric_v0.json` at `library.forbidden_terms[]` (with `inventory.*` accepted as compatibility alias)
 
 This is intended to be shared by:
 - ASS seeding runs (strict, blocks publish)
