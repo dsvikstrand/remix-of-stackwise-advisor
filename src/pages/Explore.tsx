@@ -42,7 +42,7 @@ export default function Explore() {
     if (!user) {
       toast({
         title: 'Sign in required',
-        description: 'Please sign in to follow tags.',
+        description: 'Please sign in to join channels.',
       });
       return;
     }
@@ -50,7 +50,7 @@ export default function Explore() {
       await toggleFollow({ slug: tag });
     } catch (error) {
       toast({
-        title: 'Tag update failed',
+        title: 'Channel update failed',
         description: error instanceof Error ? error.message : 'Please try again.',
         variant: 'destructive',
       });
@@ -85,7 +85,7 @@ export default function Explore() {
           <p className="text-sm font-semibold text-primary uppercase tracking-wide">Explore</p>
           <h1 className="text-2xl font-semibold mt-1">Search blueprints, inventories, and creators</h1>
           <p className="text-sm text-muted-foreground mt-2">
-            Start with a keyword, then narrow by type or jump into trending tags.
+            Start with a keyword, then narrow by type or jump into trending channels.
           </p>
         </section>
 
@@ -94,7 +94,7 @@ export default function Explore() {
             <div>
               <p className="text-sm font-semibold">Sign in to personalize</p>
               <p className="text-xs text-muted-foreground">
-                Follow tags and creators to tune what shows up in Explore.
+                Join channels and follow creators to tune what shows up in Explore.
               </p>
             </div>
             <Link to="/auth">
@@ -136,13 +136,13 @@ export default function Explore() {
             <div className="text-center py-8">
               <h2 className="text-2xl font-semibold mb-2">Discover what works</h2>
               <p className="text-muted-foreground">
-                Search blueprints, inventories, and creators — or explore trending topics below
+                Search blueprints, inventories, and creators — or explore trending channels below
               </p>
             </div>
             
             {trendingTags && trendingTags.length > 0 && (
               <div>
-                <p className="text-sm font-medium text-muted-foreground mb-3">Trending Tags</p>
+                <p className="text-sm font-medium text-muted-foreground mb-3">Trending Channels</p>
                 <div className="flex flex-wrap gap-2">
                   {trendingTags.map(tag => (
                     <Badge

@@ -63,7 +63,7 @@ export default function Wall() {
     }
   }, [authLoading, user, activeTab]);
   
-  // Popular tags for empty state
+  // Popular channels (tag-backed) for empty state
   const { data: popularTags = [] } = usePopularInventoryTags(6);
   const { followedIds, toggleFollow } = useTagFollows();
   
@@ -71,7 +71,7 @@ export default function Wall() {
     if (!user) {
       toast({
         title: 'Sign in required',
-        description: 'Please sign in to follow tags.',
+        description: 'Please sign in to join channels.',
       });
       return;
     }
@@ -80,7 +80,7 @@ export default function Wall() {
       queryClient.invalidateQueries({ queryKey: ['wall-blueprints'] });
     } catch (error) {
       toast({
-        title: 'Tag update failed',
+        title: 'Channel update failed',
         description: error instanceof Error ? error.message : 'Please try again.',
         variant: 'destructive',
       });
@@ -240,7 +240,7 @@ export default function Wall() {
             <p className="text-sm font-semibold text-primary uppercase tracking-wide">Community Wall</p>
             <h1 className="text-2xl font-semibold">See what the community is building</h1>
             <p className="text-sm text-muted-foreground">
-              Browse public blueprints, follow tags you love, and save ideas for your next routine.
+              Browse public blueprints, join channels you care about, and save ideas for your next routine.
             </p>
           </div>
         </section>
@@ -251,7 +251,7 @@ export default function Wall() {
               <div className="flex flex-col gap-2 text-center">
                 <p className="text-sm font-semibold">Sign in to personalize</p>
                 <p className="text-sm text-muted-foreground">
-                  Follow tags and creators to tune what shows up in Explore.
+                  Join channels and follow creators to tune what shows up in Explore.
                 </p>
                 <div className="flex justify-center">
                   <Link to="/auth">
@@ -406,7 +406,7 @@ export default function Wall() {
                       </h3>
                       <p className="text-sm text-muted-foreground mt-1">
                         {activeTab === 'for-you'
-                          ? 'Follow tags to see related blueprints here.'
+                          ? 'Join channels to see related blueprints here.'
                           : 'Be the first to share a blueprint.'}
                       </p>
                     </div>
@@ -417,14 +417,14 @@ export default function Wall() {
                         {!user && (
                           <div className="flex flex-col items-center gap-2">
                             <p className="text-xs text-muted-foreground">
-                              Sign in to follow tags and personalize this feed.
+                              Sign in to join channels and personalize this feed.
                             </p>
                             <Link to="/auth">
                               <Button size="sm">Sign in</Button>
                             </Link>
                           </div>
                         )}
-                        <p className="text-xs text-muted-foreground">Popular tags to follow:</p>
+                        <p className="text-xs text-muted-foreground">Popular channels to join:</p>
                         <div className="flex flex-wrap justify-center gap-2">
                           {popularTags.map((tag) => (
                             <Button
@@ -459,7 +459,7 @@ export default function Wall() {
                           <Button>Create Blueprint</Button>
                         </Link>
                         <Link to="/tags">
-                          <Button variant="outline">Explore Tags</Button>
+                          <Button variant="outline">Explore Channels</Button>
                         </Link>
                       </div>
                     )}

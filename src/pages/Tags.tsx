@@ -44,7 +44,7 @@ export default function Tags() {
     if (!user) {
       toast({
         title: 'Sign in required',
-        description: 'Please sign in to create or follow tags.',
+        description: 'Please sign in to create or join channels.',
       });
       return;
     }
@@ -52,7 +52,7 @@ export default function Tags() {
     const slug = normalizeTag(newTag);
     if (!slug) {
       toast({
-        title: 'Invalid tag',
+        title: 'Invalid channel topic',
         description: 'Use letters, numbers, and dashes only.',
         variant: 'destructive',
       });
@@ -63,12 +63,12 @@ export default function Tags() {
       await createTag(slug);
       setNewTag('');
       toast({
-        title: 'Tag created',
-        description: `#${slug} is ready to follow.`,
+        title: 'Channel topic created',
+        description: `#${slug} is ready to join.`,
       });
     } catch (error) {
       toast({
-        title: 'Failed to create tag',
+        title: 'Failed to create channel topic',
         description: error instanceof Error ? error.message : 'Please try again',
         variant: 'destructive',
       });
@@ -79,7 +79,7 @@ export default function Tags() {
     if (!user) {
       toast({
         title: 'Sign in required',
-        description: 'Please sign in to manage tags.',
+        description: 'Please sign in to manage channels.',
       });
       return;
     }
@@ -92,7 +92,7 @@ export default function Tags() {
       }
     } catch (error) {
       toast({
-        title: isFollowing ? 'Failed to unfollow' : 'Failed to follow',
+        title: isFollowing ? 'Failed to leave channel' : 'Failed to join channel',
         description: error instanceof Error ? error.message : 'Please try again',
         variant: 'destructive',
       });
@@ -111,18 +111,18 @@ export default function Tags() {
       <main className="max-w-4xl mx-auto px-4 py-8 space-y-8">
         {/* Header */}
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight">Tags</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Channels</h1>
           <p className="text-muted-foreground">
-            Follow topics to personalize your feed. Create new tags to categorize your work.
+            Join channels to personalize your feed. Create channel topics to organize your work.
           </p>
         </div>
 
         <Card className="border-border/50 bg-card/60 backdrop-blur-sm">
           <CardContent className="pt-6 space-y-2">
-            <p className="text-sm font-semibold text-primary uppercase tracking-wide">Discover Topics</p>
+            <p className="text-sm font-semibold text-primary uppercase tracking-wide">Discover Channels</p>
             <h2 className="text-xl font-semibold">Find your community signals</h2>
             <p className="text-sm text-muted-foreground">
-              Follow tags to shape your Wall, or create new ones as you publish.
+              Join channels to shape your Wall, or create new topics as you publish.
             </p>
           </CardContent>
         </Card>
@@ -134,7 +134,7 @@ export default function Tags() {
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search tags..."
+                  placeholder="Search channels..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="pl-9"
@@ -151,7 +151,7 @@ export default function Tags() {
               <div className="relative flex-1">
                 <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Create a new tag..."
+                  placeholder="Create a new channel topic..."
                   value={newTag}
                   onChange={(e) => setNewTag(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
@@ -167,12 +167,12 @@ export default function Tags() {
           </CardContent>
         </Card>
 
-        {/* Your Tags (if logged in and following any) */}
+        {/* Your Channels (if logged in and joined any) */}
         {user && followedTags.length > 0 && !search && (
           <section className="space-y-3 animate-fade-in">
             <div className="flex items-center gap-2">
               <Check className="h-4 w-4 text-primary" />
-              <h2 className="text-lg font-semibold">Your Tags</h2>
+              <h2 className="text-lg font-semibold">Your Channels</h2>
               <span className="text-sm text-muted-foreground">({followedTags.length})</span>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -222,11 +222,11 @@ export default function Tags() {
           </section>
         )}
 
-        {/* All Tags */}
+        {/* All Channels */}
         <section className="space-y-3">
           <div className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-lg font-semibold">{search ? 'Search Results' : 'All Tags'}</h2>
+            <h2 className="text-lg font-semibold">{search ? 'Search Results' : 'All Channels'}</h2>
             <span className="text-sm text-muted-foreground">({allTags.length})</span>
           </div>
 
@@ -240,7 +240,7 @@ export default function Tags() {
             <Card>
               <CardContent className="py-10 text-center">
                 <p className="text-muted-foreground">
-                  {search ? 'No tags match your search.' : 'No tags yet. Create the first one!'}
+                  {search ? 'No channels match your search.' : 'No channels yet. Create the first one!'}
                 </p>
               </CardContent>
             </Card>
@@ -279,7 +279,7 @@ function TagChip({ tag, isFollowing, onToggle, disabled, badge }: TagChipProps) 
       onClick={onToggle}
       disabled={disabled}
       className="group"
-      title={isFollowing ? 'Unfollow tag' : 'Follow tag'}
+      title={isFollowing ? 'Leave Channel' : 'Join Channel'}
     >
       <Badge
         variant={isFollowing ? 'default' : 'outline'}
