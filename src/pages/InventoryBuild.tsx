@@ -64,6 +64,7 @@ import { ArrowLeft, ChevronDown, RefreshCcw, Settings2, Sparkles, X } from 'luci
 import type { Json } from '@/integrations/supabase/types';
 
 import { config, getFunctionUrl } from '@/config/runtime';
+import { apiFetch } from '@/lib/api';
 
 const ANALYZE_BLUEPRINT_URL = getFunctionUrl('analyze-blueprint');
 const BANNER_URL = config.agenticBackendUrl ? getFunctionUrl('generate-banner') : '';
@@ -869,13 +870,8 @@ export default function InventoryBuild() {
       const inferredDescription = genControls.derived.description;
       const inferredNotes = genControls.derived.notes;
 
-      const response = await fetch(GENERATE_BLUEPRINT_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
+      const data = await apiFetch<GeneratedBlueprint>('generate-blueprint', {
+        body: {
           title: inferredTitle,
           description: inferredDescription,
           notes: inferredNotes,
@@ -884,15 +880,8 @@ export default function InventoryBuild() {
             name: category.name,
             items: category.items,
           })),
-        }),
+        },
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to auto-generate blueprint');
-      }
-
-      const data = await response.json() as GeneratedBlueprint;
       if (!data?.steps || data.steps.length === 0) {
         throw new Error('No steps were generated');
       }
