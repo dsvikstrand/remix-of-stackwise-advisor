@@ -8,14 +8,14 @@ flowchart TD
   AUTH --> INTENT[Build Intent]
 
   INTENT --> LIB_GEN[Generate Library]
-  LIB_GEN --> LIB_EVAL["LIB Eval: structural, bounds, safety, pii, llm regression"]
+  LIB_GEN --> LIB_EVAL["LIB Eval: structural, bounds, safety, pii, heuristics"]
 
   LIB_EVAL -->|pass| LIB_OK[Library Accepted]
   LIB_EVAL -->|retry| LIB_GEN
   LIB_EVAL -->|hard fail| STOP[Stop Run]
 
   LIB_OK --> BP_GEN[Generate Blueprints]
-  BP_GEN --> BP_EVAL["BP Eval: structural, bounds, crossref, safety, pii, llm regression"]
+  BP_GEN --> BP_EVAL["BP Eval: structural, bounds, crossref, content_safety, pii, llm_quality"]
 
   BP_EVAL -->|pass| BP_OK[Blueprints Accepted]
   BP_EVAL -->|retry| BP_GEN

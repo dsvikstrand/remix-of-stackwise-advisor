@@ -114,12 +114,10 @@ Some eval classes have method-specific tunables (criteria packs, judge model, pr
 
 - Root: `eval/methods/v0/<eval_id>/`
 
-Example (LLM golden regression for LIB_GEN):
-- `eval/methods/v0/llm_golden_regression_library_v0/global_pack_v0.json`
-- `eval/methods/v0/llm_golden_regression_library_v0/packs_domains/<domain_id>/pack_v0.json`
-
-Method-owned scorecards (optional, committed golden baselines):
-- `eval/methods/v0/llm_golden_regression_library_v0/artifacts/golden_scores/<domain_id>/<fixture_id>.score_v0.json`
+Example (active global methods):
+- `eval/methods/v0/llm_blueprint_quality_v0/global_pack_v0.json`
+- `eval/methods/v0/llm_content_safety_grading_v0/global_pack_v0.json`
+- `eval/methods/v0/pii_leakage_v0/global_pack_v0.json`
 
 Scorecard schema:
 - `docs/schemas/eval_scorecard_schema.md`
@@ -133,7 +131,6 @@ Some eval classes require "assets" (golden drafts, rubrics, fixtures). Those ass
 
 Domain asset conventions (v0):
 - `eval/domain_assets/v0/<domain_id>/rubric_v0.json` (domain-specific rules, including forbidden terms)
-- `eval/domain_assets/v0/<domain_id>/golden/libraries/*.json` (golden library fixtures for regression-style evals)
 
 The runner resolves one active domain per run and passes it into evals as `ctx.domain_id`:
 
@@ -142,6 +139,10 @@ The runner resolves one active domain per run and passes it into evals as `ctx.d
 - Else: if using promptless controls, the chosen `control_pack.library.controls.domain` (when not `custom`)
 
 Eval classes that require domain assets should hard-fail with a clear `expected_path` when missing.
+
+Global-only runtime note (current)
+- Active runtime has no dependency on golden scorecards or golden draft packs.
+- Legacy golden-regression methods are retired from active policies.
 
 ## PII Leakage Eval (Current)
 

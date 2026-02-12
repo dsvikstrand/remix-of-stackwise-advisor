@@ -17,9 +17,6 @@
           "eval_id": "pii_leakage_v0"
         },
         {
-          "eval_id": "domain_forbidden_terms_inventory_v0"
-        },
-        {
           "eval_id": "inventory_quality_heuristics_v0",
           "params": {
             "minCategories": 4,

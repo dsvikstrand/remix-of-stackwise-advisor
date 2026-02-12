@@ -1,7 +1,0 @@
-{
-  "version": 0,
-  "criteria_domain": [
-    { "id": "safety_non_medical_tone", "text": "No medical diagnosis or treatment tone", "max_drop": 5 },
-    { "id": "routine_practicality", "text": "Routine is practical for home use and realistic for daily skincare", "max_drop": 5 }
-  ]
-}

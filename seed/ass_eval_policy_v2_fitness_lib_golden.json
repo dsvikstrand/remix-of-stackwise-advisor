@@ -17,15 +17,6 @@
           "eval_id": "pii_leakage_v0"
         },
         {
-          "eval_id": "domain_forbidden_terms_inventory_v0"
-        },
-        {
-          "eval_id": "golden_regression_inventory_v0",
-          "params": {
-            "minScore": 0.03
-          }
-        },
-        {
           "eval_id": "inventory_quality_heuristics_v0",
           "params": {
             "minCategories": 4,
@@ -35,14 +26,6 @@
             "maxDominantCategoryRatio": 0.55,
             "minItemLen": 4,
             "maxShortItemRatio": 0.3
-          }
-        },
-        {
-          "eval_id": "llm_golden_regression_inventory_v0",
-          "params": {
-            "golden_fixture_id": "fixture_001",
-            "min_overall": 0,
-            "on_missing_api_key": "skip"
           }
         }
       ]

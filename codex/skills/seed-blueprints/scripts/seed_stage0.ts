@@ -1356,9 +1356,8 @@ async function main() {
     if (!bootstrapLlmGoldenScores) return evals;
     return (evals || []).map((e) => {
       const id = String(e?.eval_id || '').trim();
-      if (id !== 'llm_golden_regression_inventory_v0' && id !== 'llm_golden_regression_blueprints_v0') return e;
+      if (id !== 'llm_blueprint_quality_v0' && id !== 'llm_content_safety_grading_v0') return e;
       const p = { ...(e.params || {}) } as Record<string, unknown>;
-      p.write_scorecard = true;
       p.on_missing_api_key = 'hard_fail';
       return { ...e, params: p };
     });

@@ -8,8 +8,8 @@ import { validateBlueprints } from '../../validate_blueprints';
 import { resolveDomainAsset } from '../domain_assets';
 import type { EvalClass } from '../types';
 import { mkEvalResult } from '../utils';
-import { llmGoldenRegressionInventoryV0 } from './llm_golden_regression_inventory_v0';
-import { llmGoldenRegressionBlueprintsV0 } from './llm_golden_regression_blueprints_v0';
+import { llmBlueprintQualityV0 } from './llm_blueprint_quality_v0';
+import { llmContentSafetyGradingV0 } from './llm_content_safety_grading_v0';
 import { piiLeakageV0 } from './pii_leakage_v0';
 import { safetyModerationV0 } from './safety_moderation_v0';
 
@@ -985,7 +985,7 @@ export const builtinEvalClasses: Array<EvalClass<any, any>> = [
     },
   },
   safetyModerationV0,
+  llmContentSafetyGradingV0,
   piiLeakageV0,
-  llmGoldenRegressionInventoryV0,
-  llmGoldenRegressionBlueprintsV0,
+  llmBlueprintQualityV0,
 ];

@@ -17,13 +17,14 @@
           "eval_id": "pii_leakage_v0"
         },
         {
+          "eval_id": "llm_content_safety_grading_v0"
+        },
+        {
           "eval_id": "crossref_blueprints_to_inventory"
         },
         {
-          "eval_id": "llm_golden_regression_blueprints_v0",
+          "eval_id": "llm_blueprint_quality_v0",
           "params": {
-            "golden_fixture_id": "fixture_001",
-            "min_overall": 11,
             "on_missing_api_key": "skip"
           }
         }

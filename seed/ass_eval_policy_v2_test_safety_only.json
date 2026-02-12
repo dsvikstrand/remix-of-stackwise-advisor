@@ -4,17 +4,40 @@
   "nodes": {
     "LIB_GEN": {
       "evals": [
-        { "eval_id": "structural_inventory" },
-        { "eval_id": "bounds_inventory" },
-        { "eval_id": "safety_moderation_v0" }
+        {
+          "eval_id": "structural_inventory"
+        },
+        {
+          "eval_id": "bounds_inventory"
+        },
+        {
+          "eval_id": "safety_moderation_v0"
+        }
       ]
     },
     "BP_GEN": {
       "evals": [
-        { "eval_id": "structural_blueprints" },
-        { "eval_id": "bounds_blueprints" },
-        { "eval_id": "crossref_blueprints_to_inventory" },
-        { "eval_id": "safety_moderation_v0" }
+        {
+          "eval_id": "structural_blueprints"
+        },
+        {
+          "eval_id": "bounds_blueprints"
+        },
+        {
+          "eval_id": "crossref_blueprints_to_inventory"
+        },
+        {
+          "eval_id": "safety_moderation_v0"
+        },
+        {
+          "eval_id": "llm_content_safety_grading_v0"
+        },
+        {
+          "eval_id": "llm_blueprint_quality_v0",
+          "params": {
+            "on_missing_api_key": "skip"
+          }
+        }
       ]
     }
   }
