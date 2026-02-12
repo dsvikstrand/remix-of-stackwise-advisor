@@ -1103,6 +1103,9 @@ async function runYouTubePipeline(input: {
           break;
         }
       } catch (error) {
+        if (error instanceof PipelineError) {
+          throw error;
+        }
         const message = error instanceof Error ? error.message : String(error);
         const phase = message.toLowerCase().includes('safety') ? 'yt2bp-content-safety' : 'yt2bp-quality';
         console.log(

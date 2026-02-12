@@ -4,8 +4,11 @@
   "label": "Fitness rubric v0",
   "notes": [
     "Domain-specific rules for fitness libraries.",
-    "Generic quality heuristics live outside the domain rubric (inventory_quality_heuristics_v0)."
+    "Generic quality heuristics live outside the domain rubric (legacy eval id: inventory_quality_heuristics_v0)."
   ],
+  "library": {
+    "forbidden_terms": ["steroids", "miracle", "guaranteed", "cure", "no risk", "unsafe"]
+  },
   "inventory": {
     "forbidden_terms": ["steroids", "miracle", "guaranteed", "cure", "no risk", "unsafe"]
   }

@@ -36,6 +36,17 @@ function uniqStrings(input: string[]) {
 type DomainRubricV0 = {
   version: number;
   id?: string;
+  // Canonical key is `library`; legacy key `inventory` is still accepted.
+  library?: {
+    minCategories?: number;
+    minItemsTotal?: number;
+    minItemsPerCategory?: number;
+    maxDupRatio?: number;
+    maxDominantCategoryRatio?: number;
+    minItemLen?: number;
+    maxShortItemRatio?: number;
+    forbidden_terms?: string[];
+  };
   inventory?: {
     minCategories?: number;
     minItemsTotal?: number;
@@ -718,7 +729,7 @@ export const builtinEvalClasses: Array<EvalClass<any, any>> = [
         });
       }
 
-      const rules = rubric?.inventory || {};
+      const rules = rubric?.library || rubric?.inventory || {};
       const cats = Array.isArray(inv?.categories) ? inv.categories : [];
       const minCategories = Math.max(0, Number(rules.minCategories ?? 0) || 0);
       const minItemsTotal = Math.max(0, Number(rules.minItemsTotal ?? 0) || 0);
@@ -833,7 +844,7 @@ export const builtinEvalClasses: Array<EvalClass<any, any>> = [
         });
       }
 
-      const rules = rubric?.inventory || {};
+      const rules = rubric?.library || rubric?.inventory || {};
       const forbiddenBase = Array.isArray(rules.forbidden_terms)
         ? rules.forbidden_terms.map(normalizeText).filter(Boolean)
         : [];
