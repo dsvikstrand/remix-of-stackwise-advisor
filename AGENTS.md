@@ -75,9 +75,11 @@ for example: if you give me a follow up question:
 
 some other "shortcuts" are (these are not commands but simple placeholder for specific words):
 IMP -> Implement
-SUCC -> successful
+SUCC -> Successful
+SPC -> Specific
 FQ -> Follow-Up questions
 ST -> Smoke test
+
 
 
 ## 10) Remote server: Oracle (SSH alias + multiplexing)
@@ -177,7 +179,7 @@ When using VS Code Plan Mode:
 - If you press the VS Code button `Implement the plan`, treat it as full execution approval equivalent to:
   - `follow this plan please. PAP/UDO (respect effort flags and some test if needed UDO)`
 
-Execution behavior after `Implement the plan`:
+Execution behavior after `Implement plan` using plan mode:
 - Code changes are approved.
 - Command execution is approved.
 - Run focused smoke tests as needed (respecting effort flags).

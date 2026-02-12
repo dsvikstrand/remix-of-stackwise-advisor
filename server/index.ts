@@ -52,6 +52,8 @@ app.use(limiter);
 const yt2bpAnonLimitPerMin = Number(process.env.YT2BP_ANON_LIMIT_PER_MIN) || 6;
 const yt2bpAuthLimitPerMin = Number(process.env.YT2BP_AUTH_LIMIT_PER_MIN) || 20;
 const yt2bpIpLimitPerHour = Number(process.env.YT2BP_IP_LIMIT_PER_HOUR) || 30;
+const yt2bpEnabledRaw = String(process.env.YT2BP_ENABLED ?? 'true').trim().toLowerCase();
+const yt2bpEnabled = !(yt2bpEnabledRaw === 'false' || yt2bpEnabledRaw === '0' || yt2bpEnabledRaw === 'off');
 
 function getRetryAfterSeconds(req: express.Request) {
   const resetTime = (req as express.Request & { rateLimit?: { resetTime?: Date } }).rateLimit?.resetTime;
@@ -745,6 +747,16 @@ app.post('/api/generate-blueprint', async (req, res) => {
 });
 
 app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt2bpAuthLimiter, async (req, res) => {
+  if (!yt2bpEnabled) {
+    res.locals.bucketErrorCode = 'SERVICE_DISABLED';
+    return res.status(503).json({
+      ok: false,
+      error_code: 'SERVICE_DISABLED',
+      message: 'YouTube to Blueprint is temporarily unavailable. Please try again later.',
+      run_id: null,
+    });
+  }
+
   const parsed = YouTubeToBlueprintRequestSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -863,6 +875,7 @@ function normalizeGeneratedBlueprint(
 }
 
 type PipelineErrorCode =
+  | 'SERVICE_DISABLED'
   | 'INVALID_URL'
   | 'NO_CAPTIONS'
   | 'PROVIDER_FAIL'

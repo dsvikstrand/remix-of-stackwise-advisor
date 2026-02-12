@@ -198,3 +198,16 @@ i3) Decision
 
 i4) Immediate next action
 - Run a small UI-inclusive publish-path pilot to measure true `publish_rate` and `edit-before-publish` behavior (not captured by API-only pilot calls).
+
+## v0 Operational Lock-In (2026-02-12)
+j1) [have] Reproducible post-deploy smoke added:
+- `npm run smoke:yt2bp -- --base-url https://bapi.vdsai.cloud`
+- source list: `docs/app/yt2bp_smoke_urls.txt`
+j2) [have] Logs-first metrics parser added:
+- `npm run metrics:yt2bp -- --source journalctl --json`
+j3) [have] Runbook added:
+- `docs/ops/yt2bp_runbook.md`
+j4) [have] Frozen API contract added:
+- `docs/app/yt2bp_v0_contract.md`
+j5) [have] Endpoint kill switch added:
+- `YT2BP_ENABLED=true|false`

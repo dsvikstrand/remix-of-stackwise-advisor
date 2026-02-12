@@ -53,6 +53,7 @@ type YouTubeToBlueprintErrorResponse = {
     | 'TRANSCRIPT_FETCH_FAIL'
     | 'TRANSCRIPT_EMPTY'
     | 'PROVIDER_FAIL'
+    | 'SERVICE_DISABLED'
     | 'GENERATION_FAIL'
     | 'SAFETY_BLOCKED'
     | 'PII_BLOCKED'
@@ -114,6 +115,8 @@ function toYouTubeErrorMessage(errorCode: YouTubeToBlueprintErrorResponse['error
     case 'PROVIDER_FAIL':
     case 'TRANSCRIPT_FETCH_FAIL':
       return 'Transcript provider is currently unavailable. Please try another video.';
+    case 'SERVICE_DISABLED':
+      return 'YouTube to Blueprint is temporarily unavailable. Please try again later.';
     case 'TIMEOUT':
       return 'This video took too long to process. Please try another video.';
     case 'RATE_LIMITED':

@@ -1,0 +1,5 @@
+# kind|url
+# kind: success | expected_fail | edge
+success|https://www.youtube.com/watch?v=ojAjUKcx7p4
+expected_fail|https://www.youtube.com/watch?v=4q_b6Otq3aU
+edge|https://www.youtube.com/watch?v=CSgjaC6y6Mk

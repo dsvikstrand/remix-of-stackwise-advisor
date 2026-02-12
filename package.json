@@ -12,7 +12,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check:normalization": "node scripts/check-normalization.mjs"
+    "check:normalization": "node scripts/check-normalization.mjs",
+    "smoke:yt2bp": "node scripts/yt2bp_smoke.mjs",
+    "metrics:yt2bp": "node scripts/yt2bp_metrics_from_logs.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

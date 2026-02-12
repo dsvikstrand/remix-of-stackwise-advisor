@@ -13,8 +13,12 @@ Tags
 
 Core docs (keep these in sync)
 - `[APP]` `docs/app/product-spec.md` (product + concepts + user flows)
+- `[APP]` `docs/app/youtube_to_blueprint_plan.md` (YT2BP product plan and status)
+- `[APP]` `docs/app/yt2bp_v0_contract.md` (YT2BP request/response/error buckets)
 - `[ASS] [LAS] [DAS] [AG]` `docs/ass_das/seed_ass_spec.md` (ASS spec: stages, auth, artifacts, eval)
 - `[ASS] [GRAPH]` `docs/ass_das/ASS_simple.mmd` (conceptual flow, eval-centered)
+- `[ASS] [AG]` `docs/ass_das/persona_onboarding.md` (new persona process, gotchas, smoke matrix)
+- `[APP]` `docs/ops/yt2bp_runbook.md` (YT2BP operational runbook and recovery commands)
 
 Schemas (stable reference)
 - `[SCHEMA] [AG]` `docs/schemas/persona_schema.md`
