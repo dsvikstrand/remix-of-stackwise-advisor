@@ -16,13 +16,11 @@ import { useCreateBlueprint } from '@/hooks/useBlueprints';
 import { useToast } from '@/hooks/use-toast';
 import { getFriendlyErrorMessage } from '@/lib/errors';
 import { buildReviewSections } from '@/lib/reviewSections';
-import { getAuthHeader } from '@/lib/api';
+import { apiFetch } from '@/lib/api';
 import type { InventoryListItem } from '@/hooks/useInventories';
 import type { Json } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
-import { config, getFunctionUrl } from '@/config/runtime';
-
-const ANALYZE_BLUEPRINT_URL = getFunctionUrl('analyze-blueprint');
+import { config } from '@/config/runtime';
 
 interface InventoryCategory {
   name: string;
@@ -157,14 +155,9 @@ export function BlueprintBuilder({
     setReview('');
 
     try {
-      const authHeader = await getAuthHeader();
-      const response = await fetch(ANALYZE_BLUEPRINT_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: authHeader,
-        },
-        body: JSON.stringify({
+      const response = await apiFetch<Response>('analyze-blueprint', {
+        stream: true,
+        body: {
           title: title.trim(),
           inventoryTitle: inventory.title,
           selectedItems: payload,
@@ -172,13 +165,8 @@ export function BlueprintBuilder({
           reviewPrompt: reviewPrompt.trim(),
           reviewSections,
           includeScore: inventory.include_score ?? true,
-        }),
+        },
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to analyze blueprint');
-      }
 
       if (!response.body) {
         throw new Error('No response body');
