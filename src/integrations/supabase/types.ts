@@ -214,6 +214,7 @@ export type Database = {
           created_at: string
           creator_user_id: string
           generated_schema: Json
+          generation_controls: Json | null
           id: string
           include_score: boolean
           is_public: boolean
@@ -228,6 +229,7 @@ export type Database = {
           created_at?: string
           creator_user_id: string
           generated_schema?: Json
+          generation_controls?: Json | null
           id?: string
           include_score?: boolean
           is_public?: boolean
@@ -242,6 +244,7 @@ export type Database = {
           created_at?: string
           creator_user_id?: string
           generated_schema?: Json
+          generation_controls?: Json | null
           id?: string
           include_score?: boolean
           is_public?: boolean
