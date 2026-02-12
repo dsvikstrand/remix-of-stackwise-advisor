@@ -72,6 +72,21 @@ Establish consistent information architecture and naming so cold users understan
   - `Your channels will appear here as activity updates.`
 - Compatibility: `/tags` route/data model remain unchanged.
 
+## Step 3 Decisions (Taxonomy and Mapping Spec)
+- Canonical taxonomy source: `docs/references/channel-taxonomy-v0.md`.
+- Seed size locked to `20` curated channels with broad MVP coverage.
+- Mapping model is conservative:
+  1. exact tag match
+  2. approved synonym
+  3. weighted keyword
+- Fallback terms:
+  - user-facing: `Other`
+  - internal: `unlabeled`
+  - review queue: `needs-review`
+- Governance model: `admin-owner` only in MVP.
+- LLM role: advisory only (suggest + rationale), no auto-approval.
+- Runtime/API/schema remain unchanged in Step 3.
+
 ## Edge Cases / Failure Modes
 - tags-only content with no channel mapping
 - over-broad channels causing overlap confusion
@@ -86,6 +101,7 @@ Establish consistent information architecture and naming so cold users understan
 - all target screens use `Channels` for followable entities
 - users can identify where to follow channels in <=2 taps from Explore
 - no major terminology conflict remains in P1 scope
+- channel taxonomy and mapping policy are decision-complete for future implementation
 
 ## Done Definition
 - exact UI states defined: explore default, no-follow state, followed state entry copy

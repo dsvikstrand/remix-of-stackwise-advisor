@@ -1,5 +1,8 @@
 # References Index
 
+- Internal references:
+  - `docs/references/channel-taxonomy-v0.md` (v0 channel seed + tag mapping policy)
+
 - Harness engineering:
   - https://openai.com/index/harness-engineering/
 - Architecture writing style:

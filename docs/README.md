@@ -22,6 +22,7 @@
 - `docs/generated/index.md`
 - `docs/product-specs/index.md`
 - `docs/references/index.md`
+- `docs/references/channel-taxonomy-v0.md` (v0 curated channel taxonomy + mapping policy)
 
 Note:
 - Existing folders (`docs/app`, `docs/ass_das`, `docs/ops`, `docs/schemas`, `docs/lovable`) remain active during migration.
