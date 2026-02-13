@@ -66,7 +66,6 @@ import type { Json } from '@/integrations/supabase/types';
 import { config, getFunctionUrl } from '@/config/runtime';
 import { apiFetch } from '@/lib/api';
 
-const ANALYZE_BLUEPRINT_URL = getFunctionUrl('analyze-blueprint');
 const BANNER_URL = config.agenticBackendUrl ? getFunctionUrl('generate-banner') : '';
 const GENERATE_BLUEPRINT_URL = config.agenticBackendUrl ? getFunctionUrl('generate-blueprint') : '';
 
@@ -653,15 +652,9 @@ export default function InventoryBuild() {
     setReview('');
 
     try {
-      const response = await fetch(ANALYZE_BLUEPRINT_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: config.useAgenticBackend && session?.access_token
-            ? `Bearer ${session.access_token}`
-            : `Bearer ${config.supabaseAnonKey}`,
-        },
-        body: JSON.stringify({
+      const response = await apiFetch<Response>('analyze-blueprint', {
+        stream: true,
+        body: {
           title: title.trim() || inventory.title,
           inventoryTitle: inventory.title,
           selectedItems: payload,
@@ -669,13 +662,8 @@ export default function InventoryBuild() {
           reviewPrompt: reviewPrompt.trim(),
           reviewSections,
           includeScore,
-        }),
+        },
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to analyze blueprint');
-      }
 
       if (!response.body) {
         throw new Error('No response body');
