@@ -1160,7 +1160,7 @@ async function runYouTubePipeline(input: {
       mixNotes: draft.notes || undefined,
       reviewPrompt: 'Summarize quality and clarity in a concise way.',
       reviewSections: ['Overview', 'Strengths', 'Suggestions'],
-      includeScore: false,
+      includeScore: true,
     });
   }
 
