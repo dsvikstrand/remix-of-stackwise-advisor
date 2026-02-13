@@ -14,6 +14,7 @@ import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
 import { getChannelIcon } from '@/lib/channelIcons';
 import { resolvePrimaryChannelFromTags } from '@/lib/channelMapping';
 import { supabase } from '@/integrations/supabase/client';
+import { bucketJoinError, logOncePerSession, logP3Event } from '@/lib/telemetry';
 
 const MAX_JOINED_CHANNELS_DISPLAY = 6;
 const SUGGESTED_CHANNELS_COUNT = 4;
@@ -46,6 +47,7 @@ export default function Channels() {
   const [showSigninPrompt, setShowSigninPrompt] = useState(false);
   const [showAllJoined, setShowAllJoined] = useState(false);
   const hasRunCleanupRef = useRef(false);
+  const hasLoggedViewRef = useRef(false);
 
   useEffect(() => {
     if (!user || followsLoading || hasRunCleanupRef.current) return;
@@ -160,8 +162,63 @@ export default function Channels() {
     },
   });
 
+  useEffect(() => {
+    if (tagsLoading || followsLoading) return;
+    if (hasLoggedViewRef.current) return;
+    hasLoggedViewRef.current = true;
+    logP3Event({
+      eventName: 'channels_index_view',
+      surface: 'channels_index',
+      user,
+      metadata: {
+        joined_channels_count: joinedChannels.length,
+        suggested_channels_count: suggestedChannels.length,
+      },
+    });
+  }, [followsLoading, joinedChannels.length, suggestedChannels.length, tagsLoading, user]);
+
+  useEffect(() => {
+    if (tagsLoading || followsLoading) return;
+    if (suggestedChannels.length === 0) return;
+    logOncePerSession('p3_channel_suggested_impression', () => {
+      logP3Event({
+        eventName: 'channel_suggested_impression',
+        surface: 'channels_index',
+        user,
+        metadata: {
+          suggested_slugs: suggestedChannels.map((c) => c.slug).slice(0, 4),
+        },
+      });
+    });
+  }, [followsLoading, suggestedChannels, tagsLoading, user]);
+
   const handleJoinLeave = async (channel: ChannelViewModel) => {
+    const state = channel.tagId ? getFollowState({ id: channel.tagId }) : 'not_joined';
+    const isJoinIntent = state !== 'joined' && state !== 'leaving';
+
     if (!user) {
+      if (isJoinIntent) {
+        logP3Event({
+          eventName: 'channel_join_click',
+          surface: 'channels_index',
+          user,
+          metadata: {
+            channel_slug: channel.slug,
+            join_available: channel.joinAvailable,
+            source: 'channels_index',
+          },
+        });
+        logP3Event({
+          eventName: 'channel_join_fail',
+          surface: 'channels_index',
+          user,
+          metadata: {
+            channel_slug: channel.slug,
+            source: 'channels_index',
+            error_bucket: 'auth_required',
+          },
+        });
+      }
       setShowSigninPrompt(true);
       toast({
         title: 'Sign in required',
@@ -170,17 +227,55 @@ export default function Channels() {
       return;
     }
     if (!channel.joinAvailable || !channel.tagId) return;
-
-    const state = getFollowState({ id: channel.tagId });
     if (state === 'joining' || state === 'leaving') return;
 
     try {
       if (state === 'joined') {
         await leaveChannel({ id: channel.tagId, slug: channel.tagSlug });
+        logP3Event({
+          eventName: 'channel_leave_success',
+          surface: 'channels_index',
+          user,
+          metadata: {
+            channel_slug: channel.slug,
+            source: 'channels_index',
+          },
+        });
       } else {
+        logP3Event({
+          eventName: 'channel_join_click',
+          surface: 'channels_index',
+          user,
+          metadata: {
+            channel_slug: channel.slug,
+            join_available: channel.joinAvailable,
+            source: 'channels_index',
+          },
+        });
         await joinChannel({ id: channel.tagId, slug: channel.tagSlug });
+        logP3Event({
+          eventName: 'channel_join_success',
+          surface: 'channels_index',
+          user,
+          metadata: {
+            channel_slug: channel.slug,
+            source: 'channels_index',
+          },
+        });
       }
     } catch (error) {
+      if (isJoinIntent) {
+        logP3Event({
+          eventName: 'channel_join_fail',
+          surface: 'channels_index',
+          user,
+          metadata: {
+            channel_slug: channel.slug,
+            source: 'channels_index',
+            error_bucket: bucketJoinError(error),
+          },
+        });
+      }
       toast({
         title: 'Channel update failed',
         description: error instanceof Error ? error.message : 'Please try again.',
@@ -368,12 +463,24 @@ export default function Channels() {
                         <div className="pl-11 space-y-1">
                           <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Explore</p>
                           <ul className="space-y-1">
-                            {previews.slice(0, 3).map((preview) => (
+                            {previews.slice(0, 3).map((preview, index) => (
                               <li key={preview.id}>
                                 <Link
                                   to={`/blueprint/${preview.id}`}
                                   className="text-xs text-foreground/85 hover:text-primary line-clamp-1"
-                                  onClick={(event) => event.stopPropagation()}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    logP3Event({
+                                      eventName: 'channel_suggested_preview_click',
+                                      surface: 'channels_index',
+                                      user,
+                                      blueprintId: preview.id,
+                                      metadata: {
+                                        channel_slug: channel.slug,
+                                        position: index,
+                                      },
+                                    });
+                                  }}
                                 >
                                   {preview.title}
                                 </Link>

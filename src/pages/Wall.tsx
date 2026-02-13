@@ -19,6 +19,9 @@ import { buildFeedSummary } from '@/lib/feedPreview';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
+import { normalizeTag } from '@/lib/tagging';
+import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
+import { logOncePerSession, logP3Event } from '@/lib/telemetry';
 
 interface BlueprintPost {
   id: string;
@@ -60,10 +63,38 @@ export default function Wall() {
   
   // Popular channels (tag-backed) for empty state
   const { data: popularTags = [] } = usePopularInventoryTags(6);
-  const { followedIds } = useTagFollows();
+  const { followedIds, followedTags } = useTagFollows();
+
+  const curatedJoinableSlugs = useMemo(
+    () =>
+      new Set(
+        CHANNELS_CATALOG
+          .filter((channel) => channel.isJoinEnabled && channel.status === 'active')
+          .map((channel) => channel.tagSlug),
+      ),
+    [],
+  );
+
+  const joinedCuratedCount = useMemo(() => {
+    return followedTags.filter((tag) => curatedJoinableSlugs.has(normalizeTag(tag.slug))).length;
+  }, [curatedJoinableSlugs, followedTags]);
 
   const handleTagFilter = (tagSlug: string) => {
-    setSelectedTagSlug((current) => (current === tagSlug ? null : tagSlug));
+    setSelectedTagSlug((current) => {
+      const next = current === tagSlug ? null : tagSlug;
+      if (next) {
+        logP3Event({
+          eventName: 'wall_tag_filter_used',
+          surface: 'wall',
+          user,
+          metadata: {
+            tab: activeTab,
+            tag_slug: normalizeTag(next),
+          },
+        });
+      }
+      return next;
+    });
   };
 
   const wallQueryKey = ['wall-blueprints', activeTab, user?.id] as const;
@@ -230,7 +261,22 @@ export default function Wall() {
     likeMutation.mutate({ blueprintId, liked: currentlyLiked });
   };
 
-  const showZeroJoinForYouCta = !!user && activeTab === 'for-you' && followedIds.size === 0;
+  const showZeroJoinForYouCta = !!user && activeTab === 'for-you' && joinedCuratedCount === 0;
+
+  useEffect(() => {
+    if (!showZeroJoinForYouCta) return;
+    logOncePerSession('p3_wall_zero_join_cta_impression', () => {
+      logP3Event({
+        eventName: 'wall_zero_join_cta_impression',
+        surface: 'wall',
+        user,
+        metadata: {
+          tab: activeTab,
+          joined_channels_count: 0,
+        },
+      });
+    });
+  }, [activeTab, showZeroJoinForYouCta, user]);
   const visiblePosts = useMemo(() => {
     if (!posts) return [];
     if (!selectedTagSlug) return posts;
@@ -312,7 +358,21 @@ export default function Wall() {
                     </p>
                   </div>
                   <Button asChild size="sm">
-                    <Link to="/channels">Explore Channels</Link>
+                    <Link
+                      to="/channels"
+                      onClick={() => {
+                        logP3Event({
+                          eventName: 'wall_zero_join_cta_click',
+                          surface: 'wall',
+                          user,
+                          metadata: {
+                            tab: activeTab,
+                          },
+                        });
+                      }}
+                    >
+                      Explore Channels
+                    </Link>
                   </Button>
                 </CardContent>
               </Card>

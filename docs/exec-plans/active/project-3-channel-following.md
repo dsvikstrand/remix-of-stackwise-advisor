@@ -137,19 +137,65 @@ Step 2 Phase 2 implementation lock (2026-02-13):
 Objective: verify behavior impact and protect rollout quality.
 
 Tasks:
-1. emit events:
-- `channel_join_clicked`
-- `channel_join_succeeded`
-- `channel_leave_succeeded`
-- `feed_ranked_with_channel_boost`
-- `zero_follow_cta_clicked`
-2. compute and review SUCC metrics for pilot window.
-3. apply GO/HOLD/PIVOT decision with rollback triggers.
+1. Emit v0 event set into `mvp_events` for channel loop measurement.
+2. Compute and review SUCC metrics for a fixed pilot window using a logs-first script.
+3. Apply GO/HOLD/PIVOT decision with minimum-sample guardrails.
 
 Acceptance:
 - event coverage is complete for loop tracking
 - SUCC thresholds are measurable and reported
 - fallback trigger is documented and testable
+
+Step 3 telemetry lock (2026-02-13):
+- Event sink: `src/lib/logEvent.ts` -> Supabase Edge Function `log-event` -> `public.mvp_events`.
+- Event version: `p3_step3_v0` in `metadata.event_version`.
+- Session model: `metadata.session_id` is per-tab via `sessionStorage` (`bleu_session_id`).
+- Impression events are once-per-session to prevent spam.
+
+Event list (v0):
+- `channels_index_view`
+- `channel_page_view`
+- `channel_join_click`
+- `channel_join_success`
+- `channel_join_fail` (bucketed)
+- `channel_leave_success`
+- `channel_suggested_impression`
+- `channel_suggested_preview_click`
+- `wall_zero_join_cta_impression`
+- `wall_zero_join_cta_click`
+- `wall_tag_filter_used` (normalized slug only)
+
+Join error buckets (v0):
+- `auth_required`
+- `network`
+- `constraint`
+- `unknown`
+
+Metrics reporting (v0):
+- Command: `npm run metrics:channels -- --days 7 --json`
+- Source: Supabase REST `mvp_events` using `SUPABASE_SERVICE_ROLE_KEY`.
+
+Metric formulas (v0):
+- Signed-in sessions: unique `session_id` where any event has `user_id != null`.
+- `join_channel_rate` = signed-in sessions with >=1 `channel_join_success` / signed-in sessions.
+- `time_to_first_join_sec` per session = earliest `channel_join_success` - earliest event in that session; report median + p95.
+- `channel_page_visit_rate` = signed-in sessions with >=1 `channel_page_view` / signed-in sessions.
+- `suggested_click_through_rate` = sessions with >=1 `channel_suggested_preview_click` / sessions with `channel_suggested_impression`.
+- `zero_join_cta_click_rate` = sessions with `wall_zero_join_cta_click` / sessions with `wall_zero_join_cta_impression`.
+- `join_fail_bucket_distribution` = counts of `channel_join_fail` grouped by `metadata.error_bucket`.
+
+Decision gate (pilot v0):
+- Window: 7 days.
+- Minimum sample: >= 100 signed-in sessions before making GO/HOLD/PIVOT call.
+- GO targets:
+  - `join_channel_rate >= 25%`
+  - `median time_to_first_join_sec <= 45`
+  - `suggested_click_through_rate >= 15%` (starter target)
+  - `join_fail_bucket_distribution` not dominated by `constraint` or `unknown`
+- HOLD:
+  - sample < 100 signed-in sessions or results noisy/inconclusive
+- PIVOT:
+  - `join_channel_rate < 10%` after >= 100 signed-in sessions, or `median time_to_first_join_sec > 120`
 
 ## SUCC Criteria (Numeric)
 - `join_channel_rate >= 25%` (first-session signed-in users)

@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 import { Heart, Loader2, MessageCircle, Share2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
@@ -17,6 +17,7 @@ import { useChannelFeed, type ChannelFeedTab } from '@/hooks/useChannelFeed';
 import { buildFeedSummary } from '@/lib/feedPreview';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
+import { bucketJoinError, logP3Event } from '@/lib/telemetry';
 
 export default function ChannelPage() {
   const { channelSlug } = useParams<{ channelSlug: string }>();
@@ -28,6 +29,7 @@ export default function ChannelPage() {
   const { getFollowState, joinChannel, leaveChannel } = useTagFollows();
   const [showSigninPrompt, setShowSigninPrompt] = useState(false);
   const [tab, setTab] = useState<ChannelFeedTab>('top');
+  const hasLoggedViewRef = useRef(false);
 
   if (!channel) {
     return (
@@ -61,8 +63,47 @@ export default function ChannelPage() {
   const joinAvailable = channel.isJoinEnabled && channel.status === 'active' && !!tagRow?.id;
   const ChannelIcon = getChannelIcon(channel.icon);
 
+  useEffect(() => {
+    if (hasLoggedViewRef.current) return;
+    hasLoggedViewRef.current = true;
+    logP3Event({
+      eventName: 'channel_page_view',
+      surface: 'channel_page',
+      user,
+      metadata: {
+        channel_slug: channel.slug,
+        tab,
+      },
+    });
+  }, [channel.slug, tab, user]);
+
   const handleJoinLeave = async () => {
+    const state = tagRow?.id ? getFollowState({ id: tagRow.id }) : 'not_joined';
+    const isJoinIntent = state !== 'joined' && state !== 'leaving';
+
     if (!user) {
+      if (isJoinIntent) {
+        logP3Event({
+          eventName: 'channel_join_click',
+          surface: 'channel_page',
+          user,
+          metadata: {
+            channel_slug: channel.slug,
+            join_available: joinAvailable,
+            source: 'channel_page',
+          },
+        });
+        logP3Event({
+          eventName: 'channel_join_fail',
+          surface: 'channel_page',
+          user,
+          metadata: {
+            channel_slug: channel.slug,
+            source: 'channel_page',
+            error_bucket: 'auth_required',
+          },
+        });
+      }
       setShowSigninPrompt(true);
       toast({
         title: 'Sign in required',
@@ -71,17 +112,55 @@ export default function ChannelPage() {
       return;
     }
     if (!tagRow?.id || !joinAvailable) return;
-
-    const state = getFollowState({ id: tagRow.id });
     if (state === 'joining' || state === 'leaving') return;
 
     try {
       if (state === 'joined') {
         await leaveChannel({ id: tagRow.id, slug: channel.slug });
+        logP3Event({
+          eventName: 'channel_leave_success',
+          surface: 'channel_page',
+          user,
+          metadata: {
+            channel_slug: channel.slug,
+            source: 'channel_page',
+          },
+        });
       } else {
+        logP3Event({
+          eventName: 'channel_join_click',
+          surface: 'channel_page',
+          user,
+          metadata: {
+            channel_slug: channel.slug,
+            join_available: joinAvailable,
+            source: 'channel_page',
+          },
+        });
         await joinChannel({ id: tagRow.id, slug: channel.slug });
+        logP3Event({
+          eventName: 'channel_join_success',
+          surface: 'channel_page',
+          user,
+          metadata: {
+            channel_slug: channel.slug,
+            source: 'channel_page',
+          },
+        });
       }
     } catch (error) {
+      if (isJoinIntent) {
+        logP3Event({
+          eventName: 'channel_join_fail',
+          surface: 'channel_page',
+          user,
+          metadata: {
+            channel_slug: channel.slug,
+            source: 'channel_page',
+            error_bucket: bucketJoinError(error),
+          },
+        });
+      }
       toast({
         title: 'Channel update failed',
         description: error instanceof Error ? error.message : 'Please try again.',
