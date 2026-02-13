@@ -118,6 +118,12 @@ Phase 3 channels-only MVP lock (2026-02-13):
 - Suggested channels include up to two lightweight blueprint previews for channel feel.
 - Legacy non-curated follows are auto-cleaned on `/channels` load for signed-in users.
 
+Phase 3 polish lock (2026-02-13):
+- `Suggested Channels` preview label is shortened to `Explore`.
+- Suggested preview cap is `3` titles max per channel.
+- `b/<slug>` row label remains in joined `Channels` and is hidden in `Suggested`/`More` rows to reduce redundancy.
+- Suggested rows hide the preview block when no preview items are available.
+
 Step 2 Phase 2 implementation lock (2026-02-13):
 - Channel pages are now real feed surfaces on `/b/:channelSlug` with `Top` and `Recent` tabs.
 - `Top` uses likes-first ordering with deterministic recency tie-break.

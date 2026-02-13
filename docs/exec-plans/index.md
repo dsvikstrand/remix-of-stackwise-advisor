@@ -28,3 +28,4 @@
 - P3 Phase 2: completed (real channel feeds on `/b/:channelSlug`, deterministic `b/<channel-slug>` resolver labels on Wall/Explore, and `b/general` fallback lane).
 - P3 Step 2/3: completed for ranking/cold-start policy on Wall (`For You` joined-first + global fill; `Latest`/`Trending` unchanged; zero-join CTA inline).
 - P3 Phase 3: completed (channels-only follow UX, `/channels` section restructuring, legacy non-curated follow cleanup, and tag follow controls removed from Explore/Wall).
+- P3 Phase 3 polish: completed (minimal row copy/layout pass on `/channels`: `Explore` preview label, 3-item preview cap, and slug label hidden in `Suggested`/`More` rows).

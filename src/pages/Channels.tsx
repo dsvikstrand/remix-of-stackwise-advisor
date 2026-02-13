@@ -237,8 +237,9 @@ export default function Channels() {
     );
   };
 
-  const renderChannelRow = (channel: ChannelViewModel) => {
+  const renderChannelRow = (channel: ChannelViewModel, options?: { showSlug?: boolean }) => {
     const ChannelIcon = getChannelIcon(channel.icon);
+    const showSlug = options?.showSlug ?? false;
 
     return (
       <Link key={channel.slug} to={`/b/${channel.slug}`} className="block">
@@ -248,7 +249,7 @@ export default function Channels() {
               <ChannelIcon className="h-4 w-4" />
             </div>
             <div className="space-y-1 min-w-0">
-              <p className="text-sm font-semibold text-primary">b/{channel.slug}</p>
+              {showSlug && <p className="text-sm font-semibold text-primary">b/{channel.slug}</p>}
               <p className="text-sm font-medium">{channel.name}</p>
               <p className="text-xs text-muted-foreground line-clamp-2">{channel.description}</p>
             </div>
@@ -302,7 +303,7 @@ export default function Channels() {
             </Card>
           ) : (
             <div className="divide-y divide-border/40 border-y border-border/40">
-              {visibleJoinedChannels.map((channel) => renderChannelRow(channel))}
+              {visibleJoinedChannels.map((channel) => renderChannelRow(channel, { showSlug: true }))}
               {joinedChannels.length > MAX_JOINED_CHANNELS_DISPLAY && (
                 <div className="flex items-center justify-between px-1 py-2">
                   <p className="text-xs text-muted-foreground">
@@ -349,7 +350,6 @@ export default function Channels() {
                             <ChannelIcon className="h-4 w-4" />
                           </div>
                           <div className="space-y-1 min-w-0">
-                            <p className="text-sm font-semibold text-primary">b/{channel.slug}</p>
                             <p className="text-sm font-medium">{channel.name}</p>
                             <p className="text-xs text-muted-foreground line-clamp-2">{channel.description}</p>
                           </div>
@@ -364,9 +364,9 @@ export default function Channels() {
                         </div>
                       </div>
 
-                      <div className="pl-11 space-y-1">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Explore Blueprints</p>
-                        {previews.length > 0 ? (
+                      {previews.length > 0 && (
+                        <div className="pl-11 space-y-1">
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Explore</p>
                           <ul className="space-y-1">
                             {previews.slice(0, 3).map((preview) => (
                               <li key={preview.id}>
@@ -380,10 +380,8 @@ export default function Channels() {
                               </li>
                             ))}
                           </ul>
-                        ) : (
-                          <p className="text-xs text-muted-foreground">No previews yet.</p>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   </Link>
                 );
@@ -404,7 +402,7 @@ export default function Channels() {
             </Card>
           ) : (
             <div className="divide-y divide-border/40 border-y border-border/40">
-              {moreChannels.map((channel) => renderChannelRow(channel))}
+              {moreChannels.map((channel) => renderChannelRow(channel, { showSlug: false }))}
             </div>
           )}
         </section>
