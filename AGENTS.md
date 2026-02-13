@@ -89,6 +89,10 @@ LL -> "Last Line" of Your message (usually a follow-up Question, where "LL yep" 
 
 Use the SSH alias (no raw IPs/keys in commands).
 
+[have] Node version baseline
+- This repo expects Node 20+ (Supabase JS v2 requires Node >= 20).
+- `.nvmrc` pins `20.20.0`.
+
 [have] In this Codex environment, `oracle-free` is configured in `/root/.ssh/config` and uses:
 - `IdentityFile /root/.ssh/id_ed25519_codex_agentic`
 - SSH multiplexing (`ControlMaster auto`, `ControlPersist 10m`, `ControlPath ~/.ssh/oracle-%r@%h:%p`)
