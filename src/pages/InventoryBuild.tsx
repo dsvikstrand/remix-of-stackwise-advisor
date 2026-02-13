@@ -964,25 +964,13 @@ export default function InventoryBuild() {
     setIsGeneratingBanner(true);
 
     try {
-      const response = await fetch(BANNER_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
+      const data = await apiFetch<{ bannerUrl?: string }>('generate-banner', {
+        body: {
           title: title.trim(),
           inventoryTitle: inventory.title,
           tags,
-        }),
+        },
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to generate banner');
-      }
-
-      const data = await response.json();
       if (!data?.bannerUrl) {
         throw new Error('No banner URL returned');
       }
