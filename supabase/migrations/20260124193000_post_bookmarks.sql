@@ -9,6 +9,10 @@ CREATE TABLE IF NOT EXISTS public.post_bookmarks (
 
 ALTER TABLE public.post_bookmarks ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view their own bookmarks" ON public.post_bookmarks;
+DROP POLICY IF EXISTS "Users can create their own bookmarks" ON public.post_bookmarks;
+DROP POLICY IF EXISTS "Users can delete their own bookmarks" ON public.post_bookmarks;
+
 CREATE POLICY "Users can view their own bookmarks"
   ON public.post_bookmarks FOR SELECT
   USING (auth.uid() = user_id);

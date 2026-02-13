@@ -12,7 +12,10 @@ ALTER TABLE public.user_recipes
   ADD COLUMN IF NOT EXISTS visibility public.recipe_visibility NOT NULL DEFAULT 'private';
 
 UPDATE public.user_recipes
-SET visibility = CASE WHEN is_public THEN 'public' ELSE 'private' END
+SET visibility = CASE
+  WHEN is_public THEN 'public'::recipe_visibility
+  ELSE 'private'::recipe_visibility
+END
 WHERE visibility IS NULL OR visibility = 'private';
 
 CREATE OR REPLACE FUNCTION public.sync_user_recipes_visibility()
@@ -92,6 +95,26 @@ ALTER TABLE public.tag_follows ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tag_mutes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.wall_comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.comment_likes ENABLE ROW LEVEL SECURITY;
+
+-- Idempotency guard for repeated pushes.
+DROP POLICY IF EXISTS "Anyone can view tags" ON public.tags;
+DROP POLICY IF EXISTS "Users can create tags" ON public.tags;
+DROP POLICY IF EXISTS "Users can view tags for public recipes" ON public.recipe_tags;
+DROP POLICY IF EXISTS "Users can tag their public recipes" ON public.recipe_tags;
+DROP POLICY IF EXISTS "Users can remove tags from their recipes" ON public.recipe_tags;
+DROP POLICY IF EXISTS "Users can view their tag follows" ON public.tag_follows;
+DROP POLICY IF EXISTS "Users can follow tags" ON public.tag_follows;
+DROP POLICY IF EXISTS "Users can unfollow tags" ON public.tag_follows;
+DROP POLICY IF EXISTS "Users can view their muted tags" ON public.tag_mutes;
+DROP POLICY IF EXISTS "Users can mute tags" ON public.tag_mutes;
+DROP POLICY IF EXISTS "Users can unmute tags" ON public.tag_mutes;
+DROP POLICY IF EXISTS "Anyone can view wall comments" ON public.wall_comments;
+DROP POLICY IF EXISTS "Users can create their own comments" ON public.wall_comments;
+DROP POLICY IF EXISTS "Users can update their own comments" ON public.wall_comments;
+DROP POLICY IF EXISTS "Users can delete their own comments" ON public.wall_comments;
+DROP POLICY IF EXISTS "Anyone can view comment likes" ON public.comment_likes;
+DROP POLICY IF EXISTS "Users can create their own comment likes" ON public.comment_likes;
+DROP POLICY IF EXISTS "Users can delete their own comment likes" ON public.comment_likes;
 
 -- RLS Policies: tags
 CREATE POLICY "Anyone can view tags"
@@ -191,6 +214,7 @@ CREATE POLICY "Users can delete their own comment likes"
   USING (auth.uid() = user_id);
 
 -- Triggers
+DROP TRIGGER IF EXISTS update_wall_comments_updated_at ON public.wall_comments;
 CREATE TRIGGER update_wall_comments_updated_at
   BEFORE UPDATE ON public.wall_comments
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();

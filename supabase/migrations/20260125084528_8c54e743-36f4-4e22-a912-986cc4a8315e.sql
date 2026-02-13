@@ -88,6 +88,34 @@ ALTER TABLE public.blueprint_tags ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.blueprint_likes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.blueprint_comments ENABLE ROW LEVEL SECURITY;
 
+-- Idempotency guards for repeated pushes.
+DROP POLICY IF EXISTS "Anyone can view public inventories" ON public.inventories;
+DROP POLICY IF EXISTS "Users can create inventories" ON public.inventories;
+DROP POLICY IF EXISTS "Users can update their inventories" ON public.inventories;
+DROP POLICY IF EXISTS "Users can delete their inventories" ON public.inventories;
+DROP POLICY IF EXISTS "Users can view inventory tags" ON public.inventory_tags;
+DROP POLICY IF EXISTS "Users can tag their inventories" ON public.inventory_tags;
+DROP POLICY IF EXISTS "Users can remove tags from their inventories" ON public.inventory_tags;
+DROP POLICY IF EXISTS "Anyone can view inventory likes" ON public.inventory_likes;
+DROP POLICY IF EXISTS "Users can create inventory likes" ON public.inventory_likes;
+DROP POLICY IF EXISTS "Users can delete inventory likes" ON public.inventory_likes;
+DROP POLICY IF EXISTS "Anyone can view inventory remixes" ON public.inventory_remixes;
+DROP POLICY IF EXISTS "Users can create inventory remixes" ON public.inventory_remixes;
+DROP POLICY IF EXISTS "Anyone can view public blueprints" ON public.blueprints;
+DROP POLICY IF EXISTS "Users can create blueprints" ON public.blueprints;
+DROP POLICY IF EXISTS "Users can update their blueprints" ON public.blueprints;
+DROP POLICY IF EXISTS "Users can delete their blueprints" ON public.blueprints;
+DROP POLICY IF EXISTS "Users can view blueprint tags" ON public.blueprint_tags;
+DROP POLICY IF EXISTS "Users can tag their blueprints" ON public.blueprint_tags;
+DROP POLICY IF EXISTS "Users can remove tags from their blueprints" ON public.blueprint_tags;
+DROP POLICY IF EXISTS "Anyone can view blueprint likes" ON public.blueprint_likes;
+DROP POLICY IF EXISTS "Users can create blueprint likes" ON public.blueprint_likes;
+DROP POLICY IF EXISTS "Users can delete blueprint likes" ON public.blueprint_likes;
+DROP POLICY IF EXISTS "Anyone can view blueprint comments" ON public.blueprint_comments;
+DROP POLICY IF EXISTS "Users can create blueprint comments" ON public.blueprint_comments;
+DROP POLICY IF EXISTS "Users can update their blueprint comments" ON public.blueprint_comments;
+DROP POLICY IF EXISTS "Users can delete their blueprint comments" ON public.blueprint_comments;
+
 -- RLS Policies: inventories
 CREATE POLICY "Anyone can view public inventories"
   ON public.inventories FOR SELECT
@@ -237,14 +265,17 @@ CREATE POLICY "Users can delete their blueprint comments"
   USING (auth.uid() = user_id);
 
 -- Triggers
+DROP TRIGGER IF EXISTS update_inventories_updated_at ON public.inventories;
 CREATE TRIGGER update_inventories_updated_at
   BEFORE UPDATE ON public.inventories
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_blueprints_updated_at ON public.blueprints;
 CREATE TRIGGER update_blueprints_updated_at
   BEFORE UPDATE ON public.blueprints
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_blueprint_comments_updated_at ON public.blueprint_comments;
 CREATE TRIGGER update_blueprint_comments_updated_at
   BEFORE UPDATE ON public.blueprint_comments
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
