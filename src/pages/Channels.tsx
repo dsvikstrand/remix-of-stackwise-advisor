@@ -9,7 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTagFollows } from '@/hooks/useTagFollows';
-import { useTagsDirectory } from '@/hooks/useTags';
+import { useTagsBySlugs } from '@/hooks/useTags';
 import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
 import { getChannelIcon } from '@/lib/channelIcons';
 import { resolvePrimaryChannelFromTags } from '@/lib/channelMapping';
@@ -35,7 +35,11 @@ interface ChannelViewModel {
 export default function Channels() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { tags, isLoading: tagsLoading } = useTagsDirectory();
+  const catalogTagSlugs = useMemo(
+    () => Array.from(new Set(CHANNELS_CATALOG.map((channel) => channel.tagSlug))),
+    [],
+  );
+  const { data: tags = [], isLoading: tagsLoading } = useTagsBySlugs(catalogTagSlugs);
   const {
     followedTags,
     getFollowState,
@@ -285,6 +289,19 @@ export default function Channels() {
   };
 
   const renderJoinButton = (channel: ChannelViewModel) => {
+    if (tagsLoading) {
+      return (
+        <div className="flex flex-col items-end gap-1">
+          <Button size="sm" variant="outline" disabled className="h-8 px-2 text-xs">
+            <span className="inline-flex items-center gap-1.5">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Loading...
+            </span>
+          </Button>
+        </div>
+      );
+    }
+
     if (!channel.isJoinEnabled) {
       return (
         <div className="flex flex-col items-end gap-1">

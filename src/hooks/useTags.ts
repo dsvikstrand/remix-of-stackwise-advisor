@@ -11,6 +11,25 @@ export interface TagRow {
   is_following?: boolean;
 }
 
+export function useTagsBySlugs(slugs: string[]) {
+  const uniqueSlugs = Array.from(new Set(slugs.filter(Boolean)));
+
+  return useQuery({
+    queryKey: ['tags-by-slugs', uniqueSlugs],
+    enabled: uniqueSlugs.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('tags')
+        .select('id, slug, follower_count, created_at')
+        .in('slug', uniqueSlugs);
+
+      if (error) throw error;
+      return (data || []) as TagRow[];
+    },
+    staleTime: 30_000,
+  });
+}
+
 export function useTagsDirectory() {
   const { user } = useAuth();
   const queryClient = useQueryClient();

@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTagFollows } from '@/hooks/useTagFollows';
-import { useTagsDirectory } from '@/hooks/useTags';
+import { useTagsBySlugs } from '@/hooks/useTags';
 import { getChannelBySlug } from '@/lib/channelsCatalog';
 import { getChannelIcon } from '@/lib/channelIcons';
 import { useChannelFeed, type ChannelFeedTab } from '@/hooks/useChannelFeed';
@@ -25,7 +25,8 @@ export default function ChannelPage() {
   const channel = getChannelBySlug(slug);
   const { user } = useAuth();
   const { toast } = useToast();
-  const { tags } = useTagsDirectory();
+  const tagSlug = channel?.tagSlug ?? '';
+  const { data: tags = [], isLoading: tagsLoading } = useTagsBySlugs(tagSlug ? [tagSlug] : []);
   const { getFollowState, joinChannel, leaveChannel } = useTagFollows();
   const [showSigninPrompt, setShowSigninPrompt] = useState(false);
   const [tab, setTab] = useState<ChannelFeedTab>('top');
@@ -111,6 +112,7 @@ export default function ChannelPage() {
       });
       return;
     }
+    if (tagsLoading) return;
     if (!tagRow?.id || !joinAvailable) return;
     if (state === 'joining' || state === 'leaving') return;
 
@@ -209,10 +211,11 @@ export default function ChannelPage() {
               <Button
                 size="sm"
                 variant={isJoined ? 'outline' : 'default'}
-                disabled={isPending || !joinAvailable}
+                disabled={tagsLoading || isPending || !joinAvailable}
                 onClick={handleJoinLeave}
               >
-                {isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+                {tagsLoading && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+                {!tagsLoading && isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
                 {joinLabel}
               </Button>
             )}
@@ -221,7 +224,7 @@ export default function ChannelPage() {
           {!channel.isJoinEnabled && (
             <p className="text-xs text-muted-foreground">General lane is read-only.</p>
           )}
-          {channel.isJoinEnabled && !joinAvailable && (
+          {channel.isJoinEnabled && !tagsLoading && !joinAvailable && (
             <p className="text-xs text-muted-foreground">Channel activation pending.</p>
           )}
         </section>
