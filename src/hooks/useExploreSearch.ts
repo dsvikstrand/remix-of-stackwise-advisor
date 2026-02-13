@@ -134,7 +134,7 @@ async function searchBlueprints(query: string, isTagSearch: boolean): Promise<Bl
     tagsByBlueprint.set(bt.blueprint_id, existing);
   });
 
-  return blueprints.map(b => ({
+  const titleResults = blueprints.map(b => ({
     type: 'blueprint' as const,
     id: b.id,
     title: b.title,
@@ -146,6 +146,15 @@ async function searchBlueprints(query: string, isTagSearch: boolean): Promise<Bl
     createdAt: b.created_at,
     tags: tagsByBlueprint.get(b.id) || [],
   }));
+
+  if (!normalizedQuery) return titleResults;
+
+  const tagResults = await searchBlueprints(`#${normalizedQuery}`, true);
+  if (tagResults.length === 0) return titleResults;
+
+  const seenIds = new Set(titleResults.map((row) => row.id));
+  const tagOnlyResults = tagResults.filter((row) => !seenIds.has(row.id));
+  return [...titleResults, ...tagOnlyResults];
 }
 
 async function searchInventories(query: string, isTagSearch: boolean): Promise<InventoryResult[]> {
@@ -231,7 +240,7 @@ async function searchInventories(query: string, isTagSearch: boolean): Promise<I
     tagsByInventory.set(it.inventory_id, existing);
   });
 
-  return inventories.map(i => ({
+  const titleResults = inventories.map(i => ({
     type: 'inventory' as const,
     id: i.id,
     title: i.title,
@@ -241,6 +250,15 @@ async function searchInventories(query: string, isTagSearch: boolean): Promise<I
     createdAt: i.created_at,
     tags: tagsByInventory.get(i.id) || [],
   }));
+
+  if (!normalizedQuery) return titleResults;
+
+  const tagResults = await searchInventories(`#${normalizedQuery}`, true);
+  if (tagResults.length === 0) return titleResults;
+
+  const seenIds = new Set(titleResults.map((row) => row.id));
+  const tagOnlyResults = tagResults.filter((row) => !seenIds.has(row.id));
+  return [...titleResults, ...tagOnlyResults];
 }
 
 async function searchUsers(query: string): Promise<UserResult[]> {
