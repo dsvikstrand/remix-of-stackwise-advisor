@@ -1,17 +1,10 @@
 /**
  * Centralized runtime configuration.
  *
- * Every env-var read in the frontend should flow through this module
- * so that switching from Lovable Cloud to a self-hosted backend is a
- * one-line change (`VITE_BACKEND_TARGET=self`).
+ * Every env-var read in the frontend should flow through this module.
  */
 
-export type BackendTarget = "lovable" | "self";
-
 export const config = {
-  /** Which backend stack is active. Defaults to "lovable". */
-  backendTarget: (import.meta.env.VITE_BACKEND_TARGET ?? "lovable") as BackendTarget,
-
   /** Supabase project URL (always available, even in "self" mode for auth). */
   supabaseUrl: import.meta.env.VITE_SUPABASE_URL as string,
 
