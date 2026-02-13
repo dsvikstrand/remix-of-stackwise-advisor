@@ -105,6 +105,15 @@ Acceptance:
 - duplicates do not appear
 - zero-join users always get actionable onboarding
 
+Step 2 Phase 2 implementation lock (2026-02-13):
+- Channel pages are now real feed surfaces on `/b/:channelSlug` with `Top` and `Recent` tabs.
+- `Top` uses likes-first ordering with deterministic recency tie-break.
+- `Recent` uses created time descending.
+- Paging is deterministic with `Load more` increments of 20 (full infinite deferred to Phase 2.1).
+- Feed row context labels now resolve to real `b/<channel-slug>` values via exact+alias channel mapping.
+- `b/general` is active as fallback lane and is read-only (non-joinable).
+- Channel catalog includes icon metadata and priority for deterministic label resolution.
+
 ### Step 3 - Telemetry + Validation Gate
 Objective: verify behavior impact and protect rollout quality.
 

@@ -7,6 +7,7 @@ import { buildFeedSummary } from '@/lib/feedPreview';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { Button } from '@/components/ui/button';
+import { resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
 
 interface ExploreResultCardProps {
   result: ExploreResult;
@@ -32,6 +33,7 @@ function BlueprintCard({
     fallback: 'Open to view the full step-by-step guide.',
     maxChars: 190,
   });
+  const channelLabel = resolveChannelLabelForBlueprint(result.tags);
   const createdLabel = formatRelativeShort(result.createdAt);
   const commentsCount = commentCountByBlueprintId?.[result.id] || 0;
 
@@ -39,7 +41,7 @@ function BlueprintCard({
     <Link to={`/blueprint/${result.id}`}>
       <Card className="p-3 border-border/40 bg-transparent rounded-sm hover:bg-muted/10 transition-colors h-full shadow-none">
         <div className="flex items-center justify-between gap-2 mb-1">
-          <p className="text-[11px] font-semibold tracking-wide text-foreground/75">b/channels</p>
+          <p className="text-[11px] font-semibold tracking-wide text-foreground/75">{channelLabel}</p>
           <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
         </div>
         <h3 className="font-semibold text-base leading-tight line-clamp-2 mb-1">{result.title}</h3>
@@ -100,13 +102,14 @@ function InventoryCard({
     fallback: 'Open to view the full step-by-step guide.',
     maxChars: 190,
   });
+  const channelLabel = resolveChannelLabelForBlueprint(result.tags);
   const createdLabel = formatRelativeShort(result.createdAt);
 
   return (
     <Link to={`/inventory/${result.id}`}>
       <Card className="p-3 border-border/40 bg-transparent rounded-sm hover:bg-muted/10 transition-colors h-full shadow-none">
         <div className="flex items-center justify-between gap-2 mb-1">
-          <p className="text-[11px] font-semibold tracking-wide text-foreground/75">b/channels</p>
+          <p className="text-[11px] font-semibold tracking-wide text-foreground/75">{channelLabel}</p>
           <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
         </div>
         <div className="flex items-start justify-between gap-2 mb-1">

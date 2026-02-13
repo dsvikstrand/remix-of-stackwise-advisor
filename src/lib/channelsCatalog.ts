@@ -5,9 +5,23 @@ export interface ChannelCatalogEntry {
   status: 'active' | 'paused';
   tagSlug: string;
   isJoinEnabled: boolean;
+  aliases: string[];
+  icon: string;
+  priority: number;
 }
 
 export const CHANNELS_CATALOG: ChannelCatalogEntry[] = [
+  {
+    slug: 'general',
+    name: 'General Blueprints',
+    description: 'Fallback lane for public blueprints that are not mapped to a curated channel yet.',
+    status: 'active',
+    tagSlug: 'general',
+    isJoinEnabled: false,
+    aliases: ['other', 'misc', 'unlabeled'],
+    icon: 'globe',
+    priority: 999,
+  },
   {
     slug: 'fitness-training',
     name: 'Fitness Training',
@@ -15,6 +29,9 @@ export const CHANNELS_CATALOG: ChannelCatalogEntry[] = [
     status: 'active',
     tagSlug: 'fitness-training',
     isJoinEnabled: true,
+    aliases: ['strength-training', 'hypertrophy', 'bodybuilding', 'workout'],
+    icon: 'dumbbell',
+    priority: 10,
   },
   {
     slug: 'nutrition-meal-planning',
@@ -23,6 +40,9 @@ export const CHANNELS_CATALOG: ChannelCatalogEntry[] = [
     status: 'active',
     tagSlug: 'nutrition-meal-planning',
     isJoinEnabled: true,
+    aliases: ['nutrition', 'meal-prep', 'healthy-diet', 'protein', 'shake'],
+    icon: 'utensils',
+    priority: 20,
   },
   {
     slug: 'sleep-recovery',
@@ -31,6 +51,9 @@ export const CHANNELS_CATALOG: ChannelCatalogEntry[] = [
     status: 'active',
     tagSlug: 'sleep-recovery',
     isJoinEnabled: true,
+    aliases: ['sleep', 'circadian', 'recovery', 'evening-routine'],
+    icon: 'moon',
+    priority: 30,
   },
   {
     slug: 'mindfulness-mental-wellness',
@@ -39,6 +62,9 @@ export const CHANNELS_CATALOG: ChannelCatalogEntry[] = [
     status: 'active',
     tagSlug: 'mindfulness-mental-wellness',
     isJoinEnabled: true,
+    aliases: ['mindfulness', 'mental-wellness', 'stress-management', 'meditation'],
+    icon: 'brain',
+    priority: 40,
   },
   {
     slug: 'skincare-personal-care',
@@ -47,6 +73,9 @@ export const CHANNELS_CATALOG: ChannelCatalogEntry[] = [
     status: 'active',
     tagSlug: 'skincare-personal-care',
     isJoinEnabled: true,
+    aliases: ['skincare', 'hydration', 'grooming', 'self-care'],
+    icon: 'sparkles',
+    priority: 50,
   },
   {
     slug: 'cooking-home-kitchen',
@@ -55,6 +84,9 @@ export const CHANNELS_CATALOG: ChannelCatalogEntry[] = [
     status: 'active',
     tagSlug: 'cooking-home-kitchen',
     isJoinEnabled: true,
+    aliases: ['cooking', 'recipe', 'kitchen', 'meal-assembly', 'pasta-dishes'],
+    icon: 'chef-hat',
+    priority: 60,
   },
   {
     slug: 'biohacking-supplements',
@@ -63,6 +95,9 @@ export const CHANNELS_CATALOG: ChannelCatalogEntry[] = [
     status: 'active',
     tagSlug: 'biohacking-supplements',
     isJoinEnabled: true,
+    aliases: ['biohacking', 'nootropics', 'longevity', 'supplements'],
+    icon: 'flask-conical',
+    priority: 70,
   },
   {
     slug: 'productivity-systems',
@@ -71,6 +106,9 @@ export const CHANNELS_CATALOG: ChannelCatalogEntry[] = [
     status: 'active',
     tagSlug: 'productivity-systems',
     isJoinEnabled: true,
+    aliases: ['productivity', 'planning', 'routine', 'focus'],
+    icon: 'check-check',
+    priority: 80,
   },
   {
     slug: 'study-learning-systems',
@@ -79,6 +117,9 @@ export const CHANNELS_CATALOG: ChannelCatalogEntry[] = [
     status: 'active',
     tagSlug: 'study-learning-systems',
     isJoinEnabled: true,
+    aliases: ['studying', 'note-taking', 'memory', 'spaced-repetition'],
+    icon: 'graduation-cap',
+    priority: 90,
   },
   {
     slug: 'writing-content-creation',
@@ -87,6 +128,9 @@ export const CHANNELS_CATALOG: ChannelCatalogEntry[] = [
     status: 'active',
     tagSlug: 'writing-content-creation',
     isJoinEnabled: true,
+    aliases: ['writing', 'content-creation', 'publishing', 'copywriting'],
+    icon: 'pen-square',
+    priority: 100,
   },
   {
     slug: 'creator-growth-marketing',
@@ -95,6 +139,9 @@ export const CHANNELS_CATALOG: ChannelCatalogEntry[] = [
     status: 'active',
     tagSlug: 'creator-growth-marketing',
     isJoinEnabled: true,
+    aliases: ['marketing', 'seo', 'audience-growth', 'social-media'],
+    icon: 'megaphone',
+    priority: 110,
   },
   {
     slug: 'business-ops-freelance',
@@ -103,6 +150,9 @@ export const CHANNELS_CATALOG: ChannelCatalogEntry[] = [
     status: 'active',
     tagSlug: 'business-ops-freelance',
     isJoinEnabled: true,
+    aliases: ['freelance', 'consulting', 'operations', 'pricing'],
+    icon: 'briefcase-business',
+    priority: 120,
   },
   {
     slug: 'career-job-search',
@@ -111,6 +161,9 @@ export const CHANNELS_CATALOG: ChannelCatalogEntry[] = [
     status: 'active',
     tagSlug: 'career-job-search',
     isJoinEnabled: true,
+    aliases: ['job-search', 'resume', 'interview', 'networking'],
+    icon: 'search-check',
+    priority: 130,
   },
   {
     slug: 'personal-finance-budgeting',
@@ -119,6 +172,9 @@ export const CHANNELS_CATALOG: ChannelCatalogEntry[] = [
     status: 'active',
     tagSlug: 'personal-finance-budgeting',
     isJoinEnabled: true,
+    aliases: ['budgeting', 'savings', 'debt-payoff', 'personal-finance'],
+    icon: 'wallet',
+    priority: 140,
   },
   {
     slug: 'investing-basics',
@@ -127,6 +183,9 @@ export const CHANNELS_CATALOG: ChannelCatalogEntry[] = [
     status: 'active',
     tagSlug: 'investing-basics',
     isJoinEnabled: true,
+    aliases: ['investing', 'index-funds', 'portfolio-basics'],
+    icon: 'line-chart',
+    priority: 150,
   },
   {
     slug: 'home-organization-cleaning',
@@ -135,6 +194,9 @@ export const CHANNELS_CATALOG: ChannelCatalogEntry[] = [
     status: 'active',
     tagSlug: 'home-organization-cleaning',
     isJoinEnabled: true,
+    aliases: ['organization', 'declutter', 'home-maintenance', 'cleaning'],
+    icon: 'house',
+    priority: 160,
   },
   {
     slug: 'parenting-family-routines',
@@ -143,6 +205,9 @@ export const CHANNELS_CATALOG: ChannelCatalogEntry[] = [
     status: 'active',
     tagSlug: 'parenting-family-routines',
     isJoinEnabled: true,
+    aliases: ['parenting', 'family-routine', 'kids-activities'],
+    icon: 'baby',
+    priority: 170,
   },
   {
     slug: 'travel-planning',
@@ -151,6 +216,9 @@ export const CHANNELS_CATALOG: ChannelCatalogEntry[] = [
     status: 'active',
     tagSlug: 'travel-planning',
     isJoinEnabled: true,
+    aliases: ['travel', 'itinerary', 'packing', 'trip-prep'],
+    icon: 'plane',
+    priority: 180,
   },
   {
     slug: 'developer-workflows',
@@ -159,6 +227,9 @@ export const CHANNELS_CATALOG: ChannelCatalogEntry[] = [
     status: 'active',
     tagSlug: 'developer-workflows',
     isJoinEnabled: true,
+    aliases: ['coding', 'developer-tools', 'git', 'testing'],
+    icon: 'code',
+    priority: 190,
   },
   {
     slug: 'ai-tools-automation',
@@ -167,6 +238,9 @@ export const CHANNELS_CATALOG: ChannelCatalogEntry[] = [
     status: 'active',
     tagSlug: 'ai-tools-automation',
     isJoinEnabled: true,
+    aliases: ['ai-tools', 'automation', 'llm', 'prompts'],
+    icon: 'bot',
+    priority: 200,
   },
 ];
 
@@ -181,4 +255,8 @@ export function isCuratedChannelSlug(slug: string) {
 export function resolveChannelTagSlug(slug: string) {
   const channel = getChannelBySlug(slug);
   return channel?.tagSlug || null;
+}
+
+export function getChannelByTagSlug(tagSlug: string) {
+  return CHANNELS_CATALOG.find((channel) => channel.tagSlug === tagSlug) || null;
 }

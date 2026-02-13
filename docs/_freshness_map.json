@@ -10,7 +10,11 @@
   "rules": [
     {
       "id": "frontend-youtube",
-      "paths": ["src/pages/YouTubeToBlueprint.tsx", "src/components/**", "src/lib/**"],
+      "paths": [
+        "src/pages/YouTubeToBlueprint.tsx",
+        "src/lib/errors.ts",
+        "src/lib/generationControls.ts"
+      ],
       "required_docs": [
         "docs/product-specs/youtube_to_blueprint_plan.md",
         "docs/product-specs/yt2bp_v0_contract.md"
@@ -19,6 +23,30 @@
         "User flow",
         "Error buckets",
         "UI behavior"
+      ]
+    },
+    {
+      "id": "frontend-channels",
+      "paths": [
+        "src/pages/Channels.tsx",
+        "src/pages/ChannelPage.tsx",
+        "src/pages/Wall.tsx",
+        "src/pages/Explore.tsx",
+        "src/components/explore/**",
+        "src/lib/channel*.ts",
+        "src/lib/channelsCatalog.ts",
+        "src/hooks/useChannelFeed.ts",
+        "src/hooks/useTagFollows.ts"
+      ],
+      "required_docs": [
+        "docs/exec-plans/active/project-3-channel-following.md",
+        "docs/exec-plans/active/channels-first-ux-program.md",
+        "docs/exec-plans/index.md"
+      ],
+      "suggested_sections": [
+        "Routing and IA",
+        "Channel mapping",
+        "Feed behavior"
       ]
     },
     {

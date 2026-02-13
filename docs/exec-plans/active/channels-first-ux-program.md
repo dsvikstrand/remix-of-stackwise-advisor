@@ -122,3 +122,5 @@ Rule: each project requires ST pass + acceptance criteria pass before next proje
 - D-016: Project 3 Step 1 lock: explicit state-machine join controls on core surfaces, search/follow interaction split in Explore, and `TagFilterChips` converted to filter-only.
 - D-017: Channel page URL shape is locked to `b/<channel-slug>` for MVP; slugs resolve only to curated admin-owned channels, unknown slugs 404, and legacy unlabeled items use `b/general`.
 - D-018: Phase 1 IA/routing is active with `Channels` nav entry, `/channels` index, `/b/:channelSlug` skeleton page, and `/tags` deprecation redirect to `/channels`.
+- D-019: Project 3 Phase 2 locks deterministic channel mapping to `exact + curated alias`, with fallback lane `b/general` and no fuzzy runtime keyword matching.
+- D-020: Project 3 Phase 2 replaces interim `b/channels` labels with resolved `b/<channel-slug>` labels on Wall and Explore, and enables real channel-page feeds (`Top`, `Recent`, `Load more`) on `/b/:channelSlug`.

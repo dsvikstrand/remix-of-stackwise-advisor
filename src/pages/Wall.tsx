@@ -18,6 +18,7 @@ import type { Json } from '@/integrations/supabase/types';
 import { buildFeedSummary } from '@/lib/feedPreview';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { formatRelativeShort } from '@/lib/timeFormat';
+import { resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
 
 interface BlueprintPost {
   id: string;
@@ -316,6 +317,7 @@ export default function Wall() {
                     fallback: 'Open to view the full step-by-step guide.',
                     maxChars: 220,
                   });
+                  const channelLabel = resolveChannelLabelForBlueprint(post.tags.map((tag) => tag.slug));
                   const createdLabel = formatRelativeShort(post.created_at);
                   const commentsCount = commentCountsByBlueprintId[post.id] || 0;
 
@@ -327,7 +329,7 @@ export default function Wall() {
                     >
                       <div className="space-y-2">
                         <div className="flex items-center justify-between gap-2">
-                          <p className="text-[11px] font-semibold tracking-wide text-foreground/75">b/channels</p>
+                          <p className="text-[11px] font-semibold tracking-wide text-foreground/75">{channelLabel}</p>
                           <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
                         </div>
                         <h3 className="text-base font-semibold leading-tight">{post.title}</h3>

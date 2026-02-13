@@ -10,11 +10,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTagFollows } from '@/hooks/useTagFollows';
 import { useTagsDirectory } from '@/hooks/useTags';
 import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
+import { getChannelIcon } from '@/lib/channelIcons';
 
 interface ChannelViewModel {
   slug: string;
   name: string;
   description: string;
+  icon: string;
+  isJoinEnabled: boolean;
   tagId: string | null;
   joinAvailable: boolean;
 }
@@ -34,6 +37,8 @@ export default function Channels() {
         slug: channel.slug,
         name: channel.name,
         description: channel.description,
+        icon: channel.icon,
+        isJoinEnabled: channel.isJoinEnabled,
         tagId,
         joinAvailable: channel.isJoinEnabled && channel.status === 'active' && !!tagId,
       };
@@ -73,6 +78,17 @@ export default function Channels() {
   };
 
   const renderJoinButton = (channel: ChannelViewModel) => {
+    if (!channel.isJoinEnabled) {
+      return (
+        <div className="flex flex-col items-end gap-1">
+          <Button size="sm" variant="outline" disabled className="h-8 px-2 text-xs">
+            Read only
+          </Button>
+          <span className="text-[11px] text-muted-foreground">General lane is read-only</span>
+        </div>
+      );
+    }
+
     if (!channel.joinAvailable) {
       return (
         <div className="flex flex-col items-end gap-1">
@@ -149,10 +165,20 @@ export default function Channels() {
                 <Card key={channel.slug}>
                   <Link to={`/b/${channel.slug}`} className="block">
                     <CardContent className="py-4 flex items-center justify-between gap-4">
-                      <div className="space-y-1 min-w-0">
-                        <p className="text-sm font-semibold text-primary">b/{channel.slug}</p>
-                        <p className="text-sm font-medium">{channel.name}</p>
-                        <p className="text-xs text-muted-foreground line-clamp-2">{channel.description}</p>
+                      <div className="flex items-start gap-3 min-w-0">
+                        {(() => {
+                          const ChannelIcon = getChannelIcon(channel.icon);
+                          return (
+                            <div className="h-8 w-8 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
+                              <ChannelIcon className="h-4 w-4" />
+                            </div>
+                          );
+                        })()}
+                        <div className="space-y-1 min-w-0">
+                          <p className="text-sm font-semibold text-primary">b/{channel.slug}</p>
+                          <p className="text-sm font-medium">{channel.name}</p>
+                          <p className="text-xs text-muted-foreground line-clamp-2">{channel.description}</p>
+                        </div>
                       </div>
                       <div
                         onClick={(event) => {
@@ -182,10 +208,20 @@ export default function Channels() {
                 <Card key={channel.slug}>
                   <Link to={`/b/${channel.slug}`} className="block">
                     <CardContent className="py-4 flex items-center justify-between gap-4">
-                      <div className="space-y-1 min-w-0">
-                        <p className="text-sm font-semibold text-primary">b/{channel.slug}</p>
-                        <p className="text-sm font-medium">{channel.name}</p>
-                        <p className="text-xs text-muted-foreground line-clamp-2">{channel.description}</p>
+                      <div className="flex items-start gap-3 min-w-0">
+                        {(() => {
+                          const ChannelIcon = getChannelIcon(channel.icon);
+                          return (
+                            <div className="h-8 w-8 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
+                              <ChannelIcon className="h-4 w-4" />
+                            </div>
+                          );
+                        })()}
+                        <div className="space-y-1 min-w-0">
+                          <p className="text-sm font-semibold text-primary">b/{channel.slug}</p>
+                          <p className="text-sm font-medium">{channel.name}</p>
+                          <p className="text-xs text-muted-foreground line-clamp-2">{channel.description}</p>
+                        </div>
                       </div>
                       <div
                         onClick={(event) => {
