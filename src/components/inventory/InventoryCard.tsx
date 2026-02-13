@@ -8,14 +8,15 @@ import type { InventoryListItem } from '@/hooks/useInventories';
 interface InventoryCardProps {
   inventory: InventoryListItem;
   onLike: (inventoryId: string, liked: boolean) => void;
+  linkSearch?: string;
 }
 
-export function InventoryCard({ inventory, onLike }: InventoryCardProps) {
+export function InventoryCard({ inventory, onLike, linkSearch }: InventoryCardProps) {
   const displayTags = inventory.tags.slice(0, 3);
   const extraTagCount = inventory.tags.length - 3;
 
   return (
-    <Link to={`/inventory/${inventory.id}/build`} className="block group">
+    <Link to={`/inventory/${inventory.id}/build${linkSearch || ''}`} className="block group">
       <Card className="h-full bg-card/60 backdrop-blur-sm border-border/50 transition-all duration-300 hover:border-border/80 hover:shadow-md hover:shadow-black/5 group-focus-visible:ring-2 group-focus-visible:ring-primary">
         <CardContent className="p-5 flex flex-col h-full">
           {/* Title */}

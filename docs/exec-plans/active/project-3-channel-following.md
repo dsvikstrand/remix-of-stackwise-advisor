@@ -223,6 +223,20 @@ Pilot kickoff (2026-02-13):
   - `suggested_click_through_rate = 0.0`
   - `time_to_first_join_sec.median = 1558` (likely idle-tab inflation; see note above)
 
+### Channel-Scoped Posting (MVP)
+
+Goal: match the Reddit mental model: users post into channels they have joined.
+
+Rules (MVP):
+- Public publishing is channel-scoped:
+  - a valid curated `channel` context must be present
+  - user must be joined to that channel to publish publicly
+- Creation flow is channel-first:
+  - `+ Create` opens a "Where to post" channel picker with auto-join, then a source picker (`Library`, `YouTube`).
+  - Channel context is carried via URL query: `?channel=<slug>&intent=post`.
+- Channel assignment is tag-backed in v0:
+  - On publish, the channel backing `tagSlug` is injected into the blueprint tags so it appears in `/b/<slug>` feeds.
+
 ## SUCC Criteria (Numeric)
 - `join_channel_rate >= 25%` (first-session signed-in users)
 - `time_to_first_join <= 45s` median

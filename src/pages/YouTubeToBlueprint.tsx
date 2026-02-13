@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,6 +14,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCreateBlueprint } from '@/hooks/useBlueprints';
 import { getFunctionUrl } from '@/config/runtime';
 import { logMvpEvent } from '@/lib/logEvent';
+import { useTagFollows } from '@/hooks/useTagFollows';
+import { useTagsBySlugs } from '@/hooks/useTags';
+import { getPostableChannel } from '@/lib/channelPostContext';
 
 const YOUTUBE_ENDPOINT = getFunctionUrl('youtube-to-blueprint');
 const GENERIC_FAILURE_TEXT = 'Could not complete the blueprint. Please test another video.';
@@ -130,9 +133,18 @@ function toYouTubeErrorMessage(errorCode: YouTubeToBlueprintErrorResponse['error
 
 export default function YouTubeToBlueprint() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { session, user } = useAuth();
   const { toast } = useToast();
   const createBlueprint = useCreateBlueprint();
+  const { getFollowState } = useTagFollows();
+
+  const postChannelSlug = (searchParams.get('channel') || '').trim();
+  const postChannel = postChannelSlug ? getPostableChannel(postChannelSlug) : null;
+  const { data: postChannelTagRows = [] } = useTagsBySlugs(postChannel ? [postChannel.tagSlug] : []);
+  const postChannelTagId = postChannelTagRows.find((row) => row.slug === postChannel?.tagSlug)?.id || null;
+  const postChannelFollowState = postChannelTagId ? getFollowState({ id: postChannelTagId }) : 'not_joined';
+  const isPostChannelJoined = postChannelFollowState === 'joined' || postChannelFollowState === 'leaving';
 
   const [videoUrl, setVideoUrl] = useState('');
   const [generateReview, setGenerateReview] = useState(true);
@@ -282,8 +294,25 @@ export default function YouTubeToBlueprint() {
 
   async function publishGeneratedBlueprint() {
     if (!result || !user || isPublishing) return;
+    if (!postChannel) {
+      toast({
+        title: 'Choose a channel to post',
+        description: 'Public blueprints must be posted to a channel. Start from a channel page or use + Create.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (!isPostChannelJoined) {
+      toast({
+        title: `Join b/${postChannel.slug} to post`,
+        description: 'Join the channel first, then publish your blueprint.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setIsPublishing(true);
     try {
+      const tagsForSave = Array.from(new Set([...(result.draft.tags || []), postChannel.tagSlug]));
       const created = await createBlueprint.mutateAsync({
         inventoryId: null,
         title: result.draft.title,
@@ -293,7 +322,7 @@ export default function YouTubeToBlueprint() {
         reviewPrompt: 'youtube_mvp',
         bannerUrl: result.banner.url,
         llmReview: result.review.summary,
-        tags: result.draft.tags,
+        tags: tagsForSave,
         isPublic: true,
       });
       await logMvpEvent({
@@ -318,6 +347,40 @@ export default function YouTubeToBlueprint() {
     <div className="min-h-screen bg-background">
       <AppHeader />
       <main className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+        {postChannel ? (
+          <Card className="border-border/60 bg-card/60">
+            <CardContent className="py-3 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">Posting to b/{postChannel.slug}</p>
+                <p className="text-xs text-muted-foreground line-clamp-2">
+                  {isPostChannelJoined ? 'Publish will post into this channel.' : 'Join this channel to publish publicly.'}
+                </p>
+              </div>
+              <div className="shrink-0">
+                <Button asChild size="sm" variant="outline">
+                  <Link to={`/b/${postChannel.slug}`}>{isPostChannelJoined ? 'View' : 'Join'}</Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="border-border/60 bg-card/60">
+            <CardContent className="py-3 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">Choose a channel to post</p>
+                <p className="text-xs text-muted-foreground line-clamp-2">
+                  Public blueprints must be posted to a channel. Start from a channel page or use + Create.
+                </p>
+              </div>
+              <div className="shrink-0">
+                <Button asChild size="sm" variant="outline">
+                  <Link to="/channels?create=1">Pick channel</Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle>YouTube to Blueprint</CardTitle>
@@ -403,6 +466,20 @@ export default function YouTubeToBlueprint() {
                   <p className="text-sm text-muted-foreground">Log in to publish this blueprint.</p>
                   <Button asChild size="sm">
                     <Link to="/auth">Log in to publish</Link>
+                  </Button>
+                </div>
+              ) : !postChannel ? (
+                <div className="rounded-lg border border-border/60 p-3 flex items-center justify-between gap-3">
+                  <p className="text-sm text-muted-foreground">Choose a channel before publishing.</p>
+                  <Button asChild size="sm" variant="outline">
+                    <Link to="/channels?create=1">Pick channel</Link>
+                  </Button>
+                </div>
+              ) : !isPostChannelJoined ? (
+                <div className="rounded-lg border border-border/60 p-3 flex items-center justify-between gap-3">
+                  <p className="text-sm text-muted-foreground">Join b/{postChannel.slug} to publish publicly.</p>
+                  <Button asChild size="sm" variant="outline">
+                    <Link to={`/b/${postChannel.slug}`}>Join</Link>
                   </Button>
                 </div>
               ) : (

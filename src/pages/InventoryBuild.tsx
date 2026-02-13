@@ -33,11 +33,13 @@ import { BuildHelpOverlay, HelpButton } from '@/components/blueprint/BuildHelpOv
 import { BuildTour, TourBanner, TourButton, isTourCompleted } from '@/components/blueprint/BuildTour';
 import { useInventory } from '@/hooks/useInventories';
 import { useBlueprint, useCreateBlueprint, useUpdateBlueprint } from '@/hooks/useBlueprints';
-import { useTagSuggestions } from '@/hooks/useTags';
+import { useTagSuggestions, useTagsBySlugs } from '@/hooks/useTags';
 import { useRecentTags } from '@/hooks/useRecentTags';
 import { useToast } from '@/hooks/use-toast';
 import { getFriendlyErrorMessage } from '@/lib/errors';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTagFollows } from '@/hooks/useTagFollows';
+import { buildUrlWithChannel, getPostableChannel } from '@/lib/channelPostContext';
 import { supabase } from '@/integrations/supabase/client';
 import { logMvpEvent } from '@/lib/logEvent';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -128,6 +130,18 @@ export default function InventoryBuild() {
   const { recentTags, addRecentTags } = useRecentTags();
   const createBlueprint = useCreateBlueprint();
   const updateBlueprint = useUpdateBlueprint();
+  const { getFollowState } = useTagFollows();
+
+  const postChannelSlug = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return (params.get('channel') || '').trim();
+  }, [location.search]);
+
+  const postChannel = postChannelSlug ? getPostableChannel(postChannelSlug) : null;
+  const { data: postChannelTagRows = [] } = useTagsBySlugs(postChannel ? [postChannel.tagSlug] : []);
+  const postChannelTagId = postChannelTagRows.find((row) => row.slug === postChannel?.tagSlug)?.id || null;
+  const postChannelFollowState = postChannelTagId ? getFollowState({ id: postChannelTagId }) : 'not_joined';
+  const isPostChannelJoined = postChannelFollowState === 'joined' || postChannelFollowState === 'leaving';
 
   // Blueprint state
   const [title, setTitle] = useState('');
@@ -1006,6 +1020,25 @@ export default function InventoryBuild() {
 
     if (!inventory) return;
 
+    if (isPublic) {
+      if (!postChannel) {
+        toast({
+          title: 'Choose a channel to post',
+          description: 'Public blueprints must be posted to a channel. Start from a channel page or use + Create.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      if (!isPostChannelJoined) {
+        toast({
+          title: `Join b/${postChannel.slug} to post`,
+          description: 'Join the channel first, then publish your blueprint.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
     if (!title.trim()) {
       toast({
         title: 'Title required',
@@ -1112,6 +1145,10 @@ export default function InventoryBuild() {
         throw new Error('Banner generation is required before publishing.');
       }
 
+      const tagsForSave = postChannel
+        ? Array.from(new Set([...tags, postChannel.tagSlug]))
+        : tags;
+
       if (isEditing && blueprintId) {
         const updated = await updateBlueprint.mutateAsync({
           blueprintId,
@@ -1123,7 +1160,7 @@ export default function InventoryBuild() {
           bannerUrl: resolvedBannerUrl,
           llmReview: review,
           generationControls: autoGenerationControls,
-          tags,
+          tags: tagsForSave,
           isPublic,
         });
 
@@ -1136,7 +1173,7 @@ export default function InventoryBuild() {
           metadata: {
             isEditing: true,
             hasReview: !!review,
-            tagCount: tags.length,
+            tagCount: tagsForSave.length,
           },
         });
         void logMvpEvent({
@@ -1161,7 +1198,7 @@ export default function InventoryBuild() {
           bannerUrl: resolvedBannerUrl,
           llmReview: review,
           generationControls: autoGenerationControls,
-          tags,
+          tags: tagsForSave,
           isPublic,
           sourceBlueprintId: null,
         });
@@ -1175,7 +1212,7 @@ export default function InventoryBuild() {
           metadata: {
             isEditing: false,
             hasReview: !!review,
-            tagCount: tags.length,
+            tagCount: tagsForSave.length,
           },
         });
         void logMvpEvent({
@@ -1238,7 +1275,13 @@ export default function InventoryBuild() {
         {/* Sub-header row: Back link + Help buttons */}
         <div className="flex items-center justify-between mb-6">
           <Link
-            to={isEditing && blueprintId ? `/blueprint/${blueprintId}` : '/inventory'}
+            to={
+              isEditing && blueprintId
+                ? `/blueprint/${blueprintId}`
+                : postChannel
+                  ? buildUrlWithChannel('/inventory', postChannel.slug, { intent: 'post' })
+                  : '/inventory'
+            }
             className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -1286,6 +1329,48 @@ export default function InventoryBuild() {
               : 'Build your blueprint from this library'}
           </p>
         </div>
+
+        {postChannel ? (
+          <Card className="bg-card/60 backdrop-blur-glass border-border/50 mb-6">
+            <CardContent className="p-4 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">Posting to b/{postChannel.slug}</p>
+                <p className="text-xs text-muted-foreground line-clamp-2">
+                  {isPostChannelJoined
+                    ? 'Publish will post into this channel.'
+                    : 'Join this channel to publish publicly.'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {!isPostChannelJoined ? (
+                  <Button asChild size="sm" variant="outline">
+                    <Link to={`/b/${postChannel.slug}`}>Join</Link>
+                  </Button>
+                ) : (
+                  <Button asChild size="sm" variant="outline">
+                    <Link to={`/b/${postChannel.slug}`}>View</Link>
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="bg-card/60 backdrop-blur-glass border-border/50 mb-6">
+            <CardContent className="p-4 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">Choose a channel to post</p>
+                <p className="text-xs text-muted-foreground line-clamp-2">
+                  Public blueprints must be posted to a channel. Use + Create to pick where to post first.
+                </p>
+              </div>
+              <div className="shrink-0">
+                <Button asChild size="sm" variant="outline">
+                  <Link to="/channels?create=1">Pick channel</Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {isLoading ? (
           <Card className="bg-card/60 backdrop-blur-glass border-border/50">

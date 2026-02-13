@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,6 +21,7 @@ import {
 } from '@/lib/reviewSections';
 import { Heart, X } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
+import { buildUrlWithChannel, getPostableChannel } from '@/lib/channelPostContext';
 
 function getCategories(schema: Json) {
   if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return [] as string[];
@@ -33,6 +34,8 @@ function getCategories(schema: Json) {
 
 export default function InventoryDetail() {
   const { inventoryId } = useParams();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { data: inventory, isLoading } = useInventory(inventoryId);
   const toggleLike = useToggleInventoryLike();
   const updateInventory = useUpdateInventory();
@@ -41,6 +44,8 @@ export default function InventoryDetail() {
   const [sectionInput, setSectionInput] = useState('');
   const [sectionError, setSectionError] = useState('');
   const [includeScore, setIncludeScore] = useState(true);
+  const postChannelSlug = searchParams.get('channel') || '';
+  const postChannel = postChannelSlug ? getPostableChannel(postChannelSlug) : null;
 
   useEffect(() => {
     if (!inventory) return;
@@ -259,10 +264,16 @@ export default function InventoryDetail() {
                   )}
                 </div>
                 <div className="flex gap-2">
-                  <Link to={`/inventory/${inventory.id}/build`}>
+                  <Link
+                    to={
+                      postChannel
+                        ? buildUrlWithChannel(`/inventory/${inventory.id}/build`, postChannel.slug, { intent: 'post' })
+                        : `/inventory/${inventory.id}/build${location.search || ''}`
+                    }
+                  >
                     <Button>Create Blueprint</Button>
                   </Link>
-                  <Link to="/inventory">
+                  <Link to={postChannel ? buildUrlWithChannel('/inventory', postChannel.slug, { intent: 'post' }) : '/inventory'}>
                     <Button variant="outline">Back to Library</Button>
                   </Link>
                 </div>

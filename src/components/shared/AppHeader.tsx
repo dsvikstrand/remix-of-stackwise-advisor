@@ -1,12 +1,13 @@
-import { ReactNode, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Beaker, HelpCircle } from 'lucide-react';
+import { ReactNode, useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Beaker, HelpCircle, Plus } from 'lucide-react';
 import { AppNavigation } from '@/components/shared/AppNavigation';
 import { ThemeToggle } from '@/components/blend/ThemeToggle';
 import { UserMenu } from '@/components/shared/UserMenu';
 import { useAuth } from '@/contexts/AuthContext';
 import { HelpOverlay } from '@/components/shared/HelpOverlay';
 import { Button } from '@/components/ui/button';
+import { CreateBlueprintFlowModal } from '@/components/create/CreateBlueprintFlowModal';
 
 interface AppHeaderProps {
   actions?: ReactNode;
@@ -15,8 +16,35 @@ interface AppHeaderProps {
 
 export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
   const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [showHelp, setShowHelp] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+
+  const createParam = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('create');
+  }, [location.search]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (createParam !== '1') return;
+    setShowCreate(true);
+  }, [createParam, user]);
+
+  const handleCreateOpenChange = (open: boolean) => {
+    setShowCreate(open);
+    if (!open && createParam === '1') {
+      const params = new URLSearchParams(location.search);
+      params.delete('create');
+      const next = params.toString();
+      navigate({ pathname: location.pathname, search: next ? `?${next}` : '' }, { replace: true });
+    }
+  };
+
   const navMode = user ? 'all' : 'public';
+  const hideCreate = location.pathname.startsWith('/auth');
+
   return (
     <>
       <header className="sticky top-0 z-50 border-b border-border/50 bg-card/70 backdrop-blur-glass">
@@ -34,6 +62,18 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
           </div>
           <div className="flex items-center gap-2">
             {actions}
+            {user && !hideCreate && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => setShowCreate(true)}
+              >
+                <Plus className="h-4 w-4" />
+                + Create
+              </Button>
+            )}
             <Button
               type="button"
               variant="ghost"
@@ -55,6 +95,7 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
         </div>
       )}
       <HelpOverlay open={showHelp} onOpenChange={setShowHelp} />
+      <CreateBlueprintFlowModal open={showCreate} onOpenChange={handleCreateOpenChange} presetChannelSlug={null} />
     </>
   );
 }

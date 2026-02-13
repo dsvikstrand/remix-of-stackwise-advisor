@@ -4,7 +4,7 @@
 a1) [have] Clear wedge: `YouTube URL -> editable blueprint draft`.
 a2) [have] Strict MVP path is implemented for single-video YouTube flows.
 a3) [have] Real endpoint is live: `POST /api/youtube-to-blueprint`.
-a4) [have] Public route and nav entry are live at `/youtube`.
+a4) [have] Public route is live at `/youtube` and is reachable via channel-scoped `+ Create` flow (nav entry may be hidden).
 a5) [have] Focused YT2BP pilot completed and reviewed.
 a6) [have] YT2BP quality gate (LLM grading, min-score, retry) is wired server-side.
 a7) [have] YT2BP content safety gate (LLM grading + one retry) is wired server-side.
@@ -17,6 +17,7 @@ a13) [have] 2026-02-13 UI note: Project 2 Step 3 wall-to-wall row tightening + c
 a14) [have] 2026-02-13 UI hotfix: Explore card tag clicks now trigger tag search reliably (without forcing channel join); frontend-only and does not change YT2BP API/runtime contract.
 a15) [have] 2026-02-13 UI note: Project 3 Step 1 join-state wiring (Explore/Channels/Wall) and filter-only `TagFilterChips` are frontend-only and do not change YT2BP API/runtime contract.
 a16) [have] 2026-02-13 UI note: Channels IA routing foundation (`/channels`, `/b/:channelSlug`, `/tags` deprecation redirect, curated catalog guards) is frontend-only and does not change YT2BP API/runtime contract.
+a17) [have] 2026-02-13 UI note: Channel-scoped `+ Create` flow gates public publishing behind joined channels and routes to `/youtube?channel=<slug>&intent=post`; frontend-only and does not change YT2BP API/runtime contract.
 
 ## 4-Step Plan
 b1) [todo] Lock MVP contract
@@ -126,7 +127,7 @@ c5) [todo] Implement runtime `llm_instruction_security_v0` (prompt injection / j
 ## Full Implementation Plan (4-Steps)
 
 ### Step 1 - Ship the Simple YT2BP Entry
-d1) [have] Add nav entry: `YouTube`.
+d1) [have] `/youtube` is live and reachable via channel-scoped `+ Create` flow (nav entry optional/hidden).
 d2) [have] Keep the page minimal:
 - One URL input.
 - One primary action: `Generate Blueprint`.
@@ -136,6 +137,7 @@ d2) [have] Keep the page minimal:
 d3) [have] No source customization and no edit-mode branch in v1.
 d4) [have] Same-page preview is implemented.
 d5) [have] Logged-out users can preview and are prompted to log in to publish.
+d6) [have] Channel-scoped posting rule: public publish is blocked unless a valid `channel` context is present and joined.
 
 ### Step 2 - Build the Core Pipeline (URL -> Blueprint)
 e1) [have] Transcript ingestion is behind one adapter:

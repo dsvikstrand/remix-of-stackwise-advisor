@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Card, CardContent } from '@/components/ui/card';
@@ -17,15 +17,21 @@ import { TagFilterChips } from '@/components/inventory/TagFilterChips';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Filter, Search, Plus } from 'lucide-react';
 import { logMvpEvent } from '@/lib/logEvent';
+import { getPostableChannel, buildUrlWithChannel } from '@/lib/channelPostContext';
 
 export default function Inventory() {
   const [query, setQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [sort, setSort] = useState<InventorySort>('popular');
   const [showLibraryInfo, setShowLibraryInfo] = useState(false);
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const { toast } = useToast();
   const hasLoggedView = useRef(false);
+
+  const postChannelSlug = searchParams.get('channel') || '';
+  const postChannel = postChannelSlug ? getPostableChannel(postChannelSlug) : null;
 
   // Combine search query with selected tag
   const effectiveQuery = selectedTag || query;
@@ -118,7 +124,7 @@ export default function Inventory() {
               >
                 What is a Library?
               </Button>
-              <Link to="/inventory/create">
+              <Link to={postChannel ? buildUrlWithChannel('/inventory/create', postChannel.slug, { intent: 'post' }) : '/inventory/create'}>
                 <Button size="sm" className="gap-2">
                   <Plus className="h-4 w-4" />
                   Create
@@ -126,6 +132,22 @@ export default function Inventory() {
               </Link>
             </div>
           </div>
+
+          {postChannel && (
+            <Card className="border-border/60 bg-card/60">
+              <CardContent className="py-3 text-sm flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-semibold">Posting to b/{postChannel.slug}</p>
+                  <p className="text-xs text-muted-foreground line-clamp-1">
+                    Choose a library, then publish your blueprint into this channel.
+                  </p>
+                </div>
+                <Button asChild size="sm" variant="outline">
+                  <Link to={`/b/${postChannel.slug}`}>View channel</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          )}
 
           {showLibraryInfo && (
             <div className="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm p-4 text-sm text-muted-foreground leading-relaxed">
@@ -251,6 +273,7 @@ export default function Inventory() {
                   key={inventory.id}
                   inventory={inventory}
                   onLike={handleLike}
+                  linkSearch={postChannel ? location.search : ''}
                 />
               ))}
             </div>

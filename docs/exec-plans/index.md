@@ -30,6 +30,7 @@
 - P3 Step 2/3: completed for ranking/cold-start policy on Wall (`For You` joined-first + global fill; `Latest`/`Trending` unchanged; zero-join CTA inline).
 - P3 Phase 3: completed (channels-only follow UX, `/channels` section restructuring, legacy non-curated follow cleanup, and tag follow controls removed from Explore/Wall).
 - P3 Phase 3 polish: completed (minimal row copy/layout pass on `/channels`: `Explore` preview label, 3-item preview cap, and slug label hidden in `Suggested`/`More` rows).
+- P3 Posting flow: implemented (channel-scoped `+ Create` flow: where-to-post -> source picker; public publish requires valid joined channel; Library/YouTube removed from top nav).
 - P3 Step 3/3: implemented + pilot started (telemetry + validation gate: `p3_step3_v0` events + `metrics:channels` script + pilot thresholds; kickoff 2026-02-13).
 - Supabase migration closeout: completed and documented:
   - `docs/exec-plans/completed/supabase-migration-closure-2026-02-13.md`

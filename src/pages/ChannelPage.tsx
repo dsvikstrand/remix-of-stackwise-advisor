@@ -1,5 +1,5 @@
 import { Link, useParams } from 'react-router-dom';
-import { Heart, Loader2, MessageCircle, Share2 } from 'lucide-react';
+import { Heart, Loader2, MessageCircle, Plus, Share2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AppHeader } from '@/components/shared/AppHeader';
@@ -18,6 +18,8 @@ import { buildFeedSummary } from '@/lib/feedPreview';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { bucketJoinError, logP3Event } from '@/lib/telemetry';
+import { CreateBlueprintFlowModal } from '@/components/create/CreateBlueprintFlowModal';
+import { isPostableChannelSlug } from '@/lib/channelPostContext';
 
 export default function ChannelPage() {
   const { channelSlug } = useParams<{ channelSlug: string }>();
@@ -30,6 +32,7 @@ export default function ChannelPage() {
   const { getFollowState, joinChannel, leaveChannel } = useTagFollows();
   const [showSigninPrompt, setShowSigninPrompt] = useState(false);
   const [tab, setTab] = useState<ChannelFeedTab>('top');
+  const [showCreate, setShowCreate] = useState(false);
   const hasLoggedViewRef = useRef(false);
 
   if (!channel) {
@@ -207,18 +210,30 @@ export default function ChannelPage() {
                 <h1 className="text-2xl font-semibold leading-tight">{channel.name}</h1>
               </div>
             </div>
-            {channel.isJoinEnabled && (
+            <div className="flex items-center gap-2">
               <Button
                 size="sm"
-                variant={isJoined ? 'outline' : 'default'}
-                disabled={tagsLoading || isPending || !joinAvailable}
-                onClick={handleJoinLeave}
+                variant="outline"
+                className="gap-2"
+                disabled={!isPostableChannelSlug(channel.slug) || (!!user && !isJoined)}
+                onClick={() => setShowCreate(true)}
               >
-                {tagsLoading && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
-                {!tagsLoading && isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
-                {joinLabel}
+                <Plus className="h-4 w-4" />
+                + Create
               </Button>
-            )}
+              {channel.isJoinEnabled && (
+                <Button
+                  size="sm"
+                  variant={isJoined ? 'outline' : 'default'}
+                  disabled={tagsLoading || isPending || !joinAvailable}
+                  onClick={handleJoinLeave}
+                >
+                  {tagsLoading && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+                  {!tagsLoading && isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+                  {joinLabel}
+                </Button>
+              )}
+            </div>
           </div>
           <p className="text-sm text-muted-foreground line-clamp-3">{channel.description}</p>
           {!channel.isJoinEnabled && (
@@ -226,6 +241,9 @@ export default function ChannelPage() {
           )}
           {channel.isJoinEnabled && !tagsLoading && !joinAvailable && (
             <p className="text-xs text-muted-foreground">Channel activation pending.</p>
+          )}
+          {isPostableChannelSlug(channel.slug) && user && !isJoined && (
+            <p className="text-xs text-muted-foreground">Join this channel to post here.</p>
           )}
         </section>
 
@@ -354,6 +372,11 @@ export default function ChannelPage() {
         </section>
         <AppFooter />
       </main>
+      <CreateBlueprintFlowModal
+        open={showCreate}
+        onOpenChange={setShowCreate}
+        presetChannelSlug={channel.slug}
+      />
     </div>
   );
 }

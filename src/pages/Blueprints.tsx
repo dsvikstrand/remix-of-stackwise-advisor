@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Card, CardContent } from '@/components/ui/card';
@@ -17,9 +17,10 @@ import { useToast } from '@/hooks/use-toast';
 import { BlueprintCard } from '@/components/blueprint/BlueprintCard';
 import { TagFilterChips } from '@/components/inventory/TagFilterChips';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { Filter, Layers, Search } from 'lucide-react';
+import { Filter, Plus, Search } from 'lucide-react';
 
 export default function Blueprints() {
+  const location = useLocation();
   const [query, setQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [sort, setSort] = useState<BlueprintSort>('popular');
@@ -131,10 +132,10 @@ export default function Blueprints() {
               >
                 What is a Blueprint?
               </Button>
-              <Link to="/inventory">
+              <Link to={`${location.pathname}?create=1`}>
                 <Button size="sm" className="gap-2">
-                  <Layers className="h-4 w-4" />
-                  Build from Library
+                  <Plus className="h-4 w-4" />
+                  + Create
                 </Button>
               </Link>
             </div>
@@ -284,8 +285,8 @@ export default function Blueprints() {
                       Clear search
                     </Button>
                   ) : (
-                    <Link to="/inventory">
-                      <Button>Build from Library</Button>
+                    <Link to={`${location.pathname}?create=1`}>
+                      <Button>+ Create</Button>
                     </Link>
                   )}
                 </div>

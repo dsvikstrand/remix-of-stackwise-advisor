@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -30,6 +30,7 @@ import { ChevronDown, Loader2, Settings2, Sparkles, Wand2, X } from 'lucide-reac
 import type { Json } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { logMvpEvent } from '@/lib/logEvent';
+import { buildUrlWithChannel, getPostableChannel } from '@/lib/channelPostContext';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
@@ -54,11 +55,14 @@ interface GeneratedSchema {
 
 export default function InventoryCreate() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const { session, isLoading } = useAuth();
   const createInventory = useCreateInventory();
   const { data: tagSuggestions } = useTagSuggestions();
   const { recentTags, addRecentTags } = useRecentTags();
+  const postChannelSlug = searchParams.get('channel') || '';
+  const postChannel = postChannelSlug ? getPostableChannel(postChannelSlug) : null;
 
   // Step 1: Promptless controls (click/press) + optional name/notes
 	  const [domain, setDomain] = useState<(typeof LIBRARY_DOMAIN_OPTIONS)[number]['value']>('skincare');
@@ -129,7 +133,12 @@ export default function InventoryCreate() {
               </p>
               <div className="flex flex-wrap justify-center gap-2">
                 <Button onClick={() => navigate('/auth')}>Sign in</Button>
-                <Button variant="outline" onClick={() => navigate('/inventory')}>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    navigate(postChannel ? buildUrlWithChannel('/inventory', postChannel.slug, { intent: 'post' }) : '/inventory')
+                  }
+                >
                   Back to Library
                 </Button>
               </div>
