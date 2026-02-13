@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Search } from 'lucide-react';
+import { Loader2, Search } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -36,7 +36,8 @@ export default function Explore() {
     filter,
   });
   const { data: trendingTags } = useTrendingTags();
-  const { followedSlugs, toggleFollow } = useTagFollows();
+  const { followedSlugs, getFollowState, joinChannel, leaveChannel } = useTagFollows();
+  const [showJoinSigninPrompt, setShowJoinSigninPrompt] = useState(false);
 
   const hasQuery = debouncedQuery.trim().length > 0;
   const showNoFollowOnboarding = !!user && followedSlugs.size === 0 && !hasQuery;
@@ -46,21 +47,31 @@ export default function Explore() {
     return trendingTags.filter((tag) => followedSlugs.has(tag.slug));
   }, [trendingTags, followedSlugs, user]);
 
-  const handleTagClick = async (tag: string, options?: { toggleJoin?: boolean }) => {
+  const handleTagClick = async (tag: string) => {
     const normalizedTag = tag.replace(/^#/, '');
     setSearchInput(`#${normalizedTag}`);
     setFilter('all');
+  };
 
-    if (options?.toggleJoin === false) return;
+  const handleJoinLeave = async (tag: { id: string; slug: string }) => {
     if (!user) {
+      setShowJoinSigninPrompt(true);
       toast({
         title: 'Sign in required',
         description: 'Please sign in to join channels.',
       });
       return;
     }
+
+    const state = getFollowState({ id: tag.id });
+    if (state === 'joining' || state === 'leaving') return;
+
     try {
-      await toggleFollow({ slug: normalizedTag });
+      if (state === 'joined') {
+        await leaveChannel({ id: tag.id, slug: tag.slug });
+      } else {
+        await joinChannel({ id: tag.id, slug: tag.slug });
+      }
     } catch (error) {
       toast({
         title: 'Channel update failed',
@@ -146,6 +157,18 @@ export default function Explore() {
           </div>
         )}
 
+        {!user && showJoinSigninPrompt && (
+          <section className="mb-6 rounded-xl border border-border/60 bg-card/60 p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold">Sign in to join channels</p>
+              <p className="text-xs text-muted-foreground">Join channels to personalize what appears in your feed.</p>
+            </div>
+            <Link to="/auth">
+              <Button size="sm">Sign in</Button>
+            </Link>
+          </section>
+        )}
+
         {/* Search Bar */}
         <div className="relative mb-6">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
@@ -188,16 +211,25 @@ export default function Explore() {
               <section>
                 <p className="text-sm font-medium text-muted-foreground mb-3">Your Channels</p>
                 {followedTrendingChannels.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
+                  <div className="space-y-2">
                     {followedTrendingChannels.map((tag) => (
-                      <Badge
-                        key={tag.id}
-                        variant="secondary"
-                        className="cursor-pointer transition-colors px-3 py-1 border bg-primary/15 text-primary border-primary/30 hover:bg-primary/20"
-                        onClick={() => handleTagClick(`#${tag.slug}`)}
-                      >
-                        #{tag.slug}
-                      </Badge>
+                      <div key={tag.id} className="inline-flex items-center gap-2 mr-2">
+                        <Badge
+                          variant="secondary"
+                          className="cursor-pointer transition-colors px-3 py-1 border bg-primary/15 text-primary border-primary/30 hover:bg-primary/20"
+                          onClick={() => handleTagClick(`#${tag.slug}`)}
+                        >
+                          #{tag.slug}
+                        </Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => handleJoinLeave({ id: tag.id, slug: tag.slug })}
+                        >
+                          Joined
+                        </Button>
+                      </div>
                     ))}
                   </div>
                 ) : (
@@ -227,18 +259,42 @@ export default function Explore() {
                 <p className="text-sm font-medium text-muted-foreground mb-3">Trending Channels</p>
                 <div className="flex flex-wrap gap-2">
                   {trendingTags.map((tag) => (
-                    <Badge
-                      key={tag.id}
-                      variant="secondary"
-                      className={`cursor-pointer transition-colors px-3 py-1 border ${
-                        followedSlugs.has(tag.slug)
-                          ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
-                          : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
-                      }`}
-                      onClick={() => handleTagClick(`#${tag.slug}`)}
-                    >
-                      #{tag.slug}
-                    </Badge>
+                    <div key={tag.id} className="inline-flex items-center gap-2">
+                      <Badge
+                        variant="secondary"
+                        className={`cursor-pointer transition-colors px-3 py-1 border ${
+                          followedSlugs.has(tag.slug)
+                            ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
+                            : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
+                        }`}
+                        onClick={() => handleTagClick(`#${tag.slug}`)}
+                      >
+                        #{tag.slug}
+                      </Badge>
+                      {(() => {
+                        const state = getFollowState({ id: tag.id });
+                        const isPending = state === 'joining' || state === 'leaving';
+                        const label = state === 'joined'
+                          ? 'Joined'
+                          : state === 'joining'
+                            ? 'Joining...'
+                            : state === 'leaving'
+                              ? 'Leaving...'
+                              : 'Join';
+                        return (
+                          <Button
+                            size="sm"
+                            variant={state === 'joined' ? 'outline' : 'default'}
+                            className="h-7 px-2 text-xs"
+                            disabled={isPending}
+                            onClick={() => handleJoinLeave({ id: tag.id, slug: tag.slug })}
+                          >
+                            {isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+                            {label}
+                          </Button>
+                        );
+                      })()}
+                    </div>
                   ))}
                 </div>
               </section>
@@ -252,7 +308,7 @@ export default function Explore() {
                     key={cat}
                     variant="outline"
                     size="sm"
-                    onClick={() => handleTagClick(cat, { toggleJoin: false })}
+                    onClick={() => handleTagClick(cat)}
                     className="capitalize"
                   >
                     {cat}

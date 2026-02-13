@@ -1,68 +1,156 @@
 # Project 3 - Channel Following
 
-Status: `draft`
+Status: `active`
+
+## Summary
+Project 3 adds runtime channel-follow behavior and feed personalization while preserving existing tag-based discovery.
+
+This is the behavior layer after:
+- P1: IA + lingo (`channels` language)
+- P2: feed density + channel-first row hierarchy
 
 ## Goal
-Introduce follow/unfollow channel behavior and channel-prioritized feed logic for personalization.
+Introduce `Join/Leave Channel` behavior and channel-prioritized feed ranking that creates a clear loop:
+`discover -> join -> feed changes -> reinforce join`.
 
 ## In Scope
-- channel follow/unfollow UX states
-- channel feed anatomy
-- cold-start behavior for users with zero follows
-- following-priority ranking policy (design-level)
+- follow/unfollow UX states on Explore and channel-like surfaces
+- channel-prioritized feed ranking policy for Wall
+- cold-start behavior for users with zero joined channels
+- telemetry needed to validate behavior impact
 
 ## Out Of Scope
 - user-created channels
-- advanced moderation workflow
+- moderation systems beyond admin-owner model
 - full recommendation engine
+- backend schema redesign for channels in this phase
 
 ## Dependencies
 - P1 terminology and taxonomy
-- P2 feed row structure
+- P2 feed row structure and compact list behavior
 
-## Future Model Lock (from P2 planning)
-- Blueprint publishing will support up to `3` curated channels per blueprint.
-- Tags remain freeform and user-entered for explore/discovery.
-- Feed rows should later show primary channel + overflow indicator (`+N`) when multiple channels are assigned.
+## Model Lock (Conceptual)
+- Each blueprint can later map to up to `3` curated channels.
+- Tags remain freeform for discovery/search.
+- List rows later show primary channel + overflow indicator (`+N`) when multi-channel assignment is runtime-wired.
 
-## Channel Feed Behavior (v0)
-1. user with follows: show followed-channel content first.
-2. user with zero follows: show curated starter channels and prompt follow.
-3. fallback when channel data sparse: blend with global feed.
+## Runtime Contract (v0)
+### Follow state machine
+1. `not_joined`
+2. `joining` (optimistic UI allowed)
+3. `joined`
+4. `leaving` (optimistic UI allowed)
+5. `error` (rollback to prior stable state + toast)
 
-## Channel Page Anatomy (v0)
-- channel header (name + short purpose)
-- follow/unfollow control
-- top posts section
-- recent posts section
+### Feed ranking policy
+1. If user has joined channels:
+- apply joined-channel boost first
+- dedupe by blueprint id across overlapping channels
+- tie-break by recency
+2. If joined-channel content is sparse:
+- blend with global feed at fixed ratio (`joined-first`, then global fill)
+3. If user has zero joined channels:
+- keep global feed + clear join CTA path
 
-## Step-by-Step Implementation Plan (for later execution)
-1. define follow state machine and UI transitions.
-2. define ranking precedence rules.
-3. define channel page sections and order.
-4. define cold-start prompts and defaults.
-5. validate follow loop end-to-end (discover -> follow -> feed impact).
+### Cold-start policy
+- show curated starter channels
+- show one clear primary CTA: `Explore Channels`
+- no dead-end state: always one action available
+
+## 3-Step Implementation Plan
+### Step 1 - Follow State + UI Wiring
+Objective: make Join/Leave state consistent and reliable on core surfaces.
+
+Tasks:
+1. define and wire `not_joined/joining/joined/leaving/error` transitions.
+2. apply state to Explore channel chips and relevant Wall prompts.
+3. ensure optimistic transitions rollback correctly on errors.
+
+Acceptance:
+- state transitions are deterministic
+- no stale visual state after action completes/fails
+- join/leave reachable in <=2 taps from Explore
+
+Step 1 implementation lock (2026-02-13):
+- Core surfaces in scope: `Explore`, `Tags`, `Wall` empty-state channel suggestions.
+- Explore interaction split is enforced:
+  - channel chip click = search intent
+  - separate `Join/Joined/Joining.../Leaving...` button = follow intent
+- `TagFilterChips` is strict filter-only (no follow side effects).
+- Logged-out join attempts show toast + inline sign-in CTA.
+- `useTagFollows` exposes explicit `joinChannel`, `leaveChannel`, `getFollowState`, while `toggleFollow` is kept for compatibility in non-core surfaces.
+
+### Step 2 - Feed Ranking + Cold-Start Behavior
+Objective: make joins materially affect feed order while preserving stability.
+
+Tasks:
+1. implement joined-channel boost policy in feed selection.
+2. implement dedupe for overlapping channel content.
+3. implement sparse-data blend fallback with fixed policy.
+4. lock cold-start branch for zero-join users.
+
+Acceptance:
+- joined-channel content is visibly prioritized in feed
+- duplicates do not appear
+- zero-join users always get actionable onboarding
+
+### Step 3 - Telemetry + Validation Gate
+Objective: verify behavior impact and protect rollout quality.
+
+Tasks:
+1. emit events:
+- `channel_join_clicked`
+- `channel_join_succeeded`
+- `channel_leave_succeeded`
+- `feed_ranked_with_channel_boost`
+- `zero_follow_cta_clicked`
+2. compute and review SUCC metrics for pilot window.
+3. apply GO/HOLD/PIVOT decision with rollback triggers.
+
+Acceptance:
+- event coverage is complete for loop tracking
+- SUCC thresholds are measurable and reported
+- fallback trigger is documented and testable
+
+## SUCC Criteria (Numeric)
+- `join_channel_rate >= 25%` (first-session signed-in users)
+- `time_to_first_join <= 45s` median
+- `followed_channel_posts_in_top10 >= 50%` for users with >=1 join
+- `day7_users_with_joined_channel >= 20%`
+- `zero_join_dead_end_rate = 0%`
+- `follow_state_mismatch_rate < 1%`
+
+## Rollout Guardrails
+- gate behind feature flag
+- if mismatch/error rates exceed threshold, disable ranking boost and keep join UX
+- if feed quality degrades, fallback to global blend mode
 
 ## Edge Cases / Failure Modes
-- channel has no content
-- user follows channels with overlapping content causing duplicates
-- stale follow state in UI
+- channel has no recent content
+- overlapping channel assignments cause potential duplicates
+- follow state race between tabs/sessions
+- temporary provider/query failures during ranking
 
 ## ST Checklist
-- follow and unfollow state updates correctly on all relevant surfaces
-- feed reflects follow state change after action
-- zero-follow state always shows actionable next step
+- join/leave transitions work across all states (`not_joined/joining/joined/leaving/error`)
+- feed order changes after join action
+- no duplicate blueprints in prioritized feed
+- zero-join state always has one actionable CTA
+- fallback mode can be enabled without breaking feed
 
 ## Acceptance Criteria
-- users can follow channel in <=2 taps from Explore
-- followed channels visibly affect home feed ordering
-- no dead-end states for zero-follow users
+- users can join channel in <=2 taps from Explore
+- joined channels visibly influence top feed positions
+- no dead-end zero-join experience
+- state sync errors remain below threshold
 
 ## Done Definition
-- exact states complete: unfollowed, followed, loading, empty-channel
-- exact metrics events listed for P5
-- exact regression checks for state sync defined
+- state machine implemented and documented
+- ranking policy implemented and validated
+- telemetry events emitted and reviewed in pilot window
+- rollback/fallback procedures validated
 
 ## Rollback Notes
-- if ranking causes major noise, fallback to global feed with follow prompts preserved
-- feature flag-friendly sequencing recommended in implementation
+- if ranking causes noise, disable boost and keep global blend
+- keep join UI active even if ranking boost is off
+- preserve telemetry during rollback to diagnose issues

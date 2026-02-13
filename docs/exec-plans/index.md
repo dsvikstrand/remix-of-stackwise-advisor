@@ -22,3 +22,5 @@
 - P2 Step 2/4: completed (flatter row shell + wall-to-wall tightening).
 - P2 Step 3/4: completed (channel-first metadata, comments meta on blueprint rows).
 - P2 Step 4/4: completed (polish + regression closure + focused YT2BP/ASS smoke checks).
+- P3: spec lock completed (3-step execution plan + SUCC metrics), implementation not started yet.
+- P3 Step 1/3: implemented on core surfaces (Explore + Channels page + Wall) with explicit join-state model and filter-only chip cleanup.

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTagsDirectory } from '@/hooks/useTags';
 import { useSuggestedTags } from '@/hooks/useSuggestedTags';
+import { useTagFollows } from '@/hooks/useTagFollows';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,16 +12,18 @@ import { useToast } from '@/hooks/use-toast';
 import { normalizeTag } from '@/lib/tagging';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
-import { Hash, Plus, Search, Sparkles, TrendingUp, Users, Check } from 'lucide-react';
+import { Hash, Plus, Search, Sparkles, TrendingUp, Users, Check, Loader2 } from 'lucide-react';
 
 export default function Tags() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { tags, isLoading, followTag, unfollowTag, createTag, isUpdating } = useTagsDirectory();
+  const { tags, isLoading, createTag, isUpdating } = useTagsDirectory();
+  const { getFollowState, joinChannel, leaveChannel } = useTagFollows();
   const { data: suggestedTags, isLoading: suggestionsLoading } = useSuggestedTags(12);
 
   const [search, setSearch] = useState('');
   const [newTag, setNewTag] = useState('');
+  const [showSigninPrompt, setShowSigninPrompt] = useState(false);
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
@@ -77,6 +80,7 @@ export default function Tags() {
 
   const handleToggleFollow = async (tagId: string, isFollowing: boolean) => {
     if (!user) {
+      setShowSigninPrompt(true);
       toast({
         title: 'Sign in required',
         description: 'Please sign in to manage channels.',
@@ -86,9 +90,9 @@ export default function Tags() {
 
     try {
       if (isFollowing) {
-        await unfollowTag(tagId);
+        await leaveChannel({ id: tagId });
       } else {
-        await followTag(tagId);
+        await joinChannel({ id: tagId });
       }
     } catch (error) {
       toast({
@@ -126,6 +130,20 @@ export default function Tags() {
             </p>
           </CardContent>
         </Card>
+
+        {!user && showSigninPrompt && (
+          <Card className="border-border/60 bg-card/60">
+            <CardContent className="pt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold">Sign in to join channels</p>
+                <p className="text-xs text-muted-foreground">Join channels to shape your feed and recommendations.</p>
+              </div>
+              <Button asChild size="sm">
+                <a href="/auth">Sign in</a>
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Search & Create */}
         <Card>
@@ -177,13 +195,20 @@ export default function Tags() {
             </div>
             <div className="flex flex-wrap gap-2">
               {followedTags.map((tag) => (
-                <TagChip
-                  key={tag.id}
-                  tag={tag}
-                  isFollowing={true}
-                  onToggle={() => handleToggleFollow(tag.id, true)}
-                  disabled={isUpdating}
-                />
+                (() => {
+                  const state = getFollowState({ id: tag.id });
+                  const isFollowing = state === 'joined' || state === 'leaving';
+                  const isPending = state === 'joining' || state === 'leaving';
+                  return (
+                    <TagChip
+                      key={tag.id}
+                      tag={tag}
+                      isFollowing={isFollowing}
+                      onToggle={() => handleToggleFollow(tag.id, isFollowing)}
+                      disabled={isPending}
+                    />
+                  );
+                })()
               ))}
             </div>
           </section>
@@ -199,14 +224,16 @@ export default function Tags() {
             <div className="flex flex-wrap gap-2">
               {suggestedTags.map((tag) => {
                 const existingTag = tags.find((t) => t.id === tag.id);
-                const isFollowing = existingTag?.is_following ?? false;
+                const state = getFollowState({ id: tag.id });
+                const isFollowing = state === 'joined' || state === 'leaving' || existingTag?.is_following === true;
+                const isPending = state === 'joining' || state === 'leaving';
                 return (
                   <TagChip
                     key={tag.id}
                     tag={tag}
                     isFollowing={isFollowing}
                     onToggle={() => handleToggleFollow(tag.id, isFollowing)}
-                    disabled={isUpdating}
+                    disabled={isPending}
                     badge={tag.reason === 'related' ? 'related' : undefined}
                   />
                 );
@@ -247,13 +274,20 @@ export default function Tags() {
           ) : (
             <div className="flex flex-wrap gap-2">
               {allTags.map((tag) => (
-                <TagChip
-                  key={tag.id}
-                  tag={tag}
-                  isFollowing={tag.is_following ?? false}
-                  onToggle={() => handleToggleFollow(tag.id, tag.is_following ?? false)}
-                  disabled={isUpdating}
-                />
+                (() => {
+                  const state = getFollowState({ id: tag.id });
+                  const isFollowing = state === 'joined' || state === 'leaving' || tag.is_following === true;
+                  const isPending = state === 'joining' || state === 'leaving';
+                  return (
+                    <TagChip
+                      key={tag.id}
+                      tag={tag}
+                      isFollowing={isFollowing}
+                      onToggle={() => handleToggleFollow(tag.id, isFollowing)}
+                      disabled={isPending}
+                    />
+                  );
+                })()
               ))}
             </div>
           )}
@@ -273,23 +307,20 @@ interface TagChipProps {
 }
 
 function TagChip({ tag, isFollowing, onToggle, disabled, badge }: TagChipProps) {
+  const label = disabled
+    ? (isFollowing ? 'Leaving...' : 'Joining...')
+    : (isFollowing ? 'Joined' : 'Join');
+
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      disabled={disabled}
-      className="group"
-      title={isFollowing ? 'Leave Channel' : 'Join Channel'}
-    >
+    <div className="inline-flex items-center gap-2">
       <Badge
         variant={isFollowing ? 'default' : 'outline'}
         className={`
-          gap-1.5 px-3 py-2 text-sm cursor-pointer transition-all border
+          gap-1.5 px-3 py-2 text-sm transition-all border
           ${isFollowing
-            ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
-            : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
+            ? 'bg-primary/15 text-primary border-primary/30'
+            : 'bg-muted/40 text-muted-foreground border-border/60'
           }
-          disabled:opacity-50
         `}
       >
         <Hash className="h-3 w-3" />
@@ -306,6 +337,18 @@ function TagChip({ tag, isFollowing, onToggle, disabled, badge }: TagChipProps) 
           </span>
         )}
       </Badge>
-    </button>
+      <Button
+        type="button"
+        variant={isFollowing ? 'outline' : 'default'}
+        size="sm"
+        className="h-8 px-2 text-xs"
+        onClick={onToggle}
+        disabled={disabled}
+        title={isFollowing ? 'Leave Channel' : 'Join Channel'}
+      >
+        {disabled && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+        {label}
+      </Button>
+    </div>
   );
 }

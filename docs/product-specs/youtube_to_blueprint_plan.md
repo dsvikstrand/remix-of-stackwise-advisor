@@ -15,6 +15,7 @@ a11) [have] 2026-02-12 UI note: one-row full-tag rendering updates in Wall/Explo
 a12) [have] 2026-02-12 UI hotfix: one-row tag width measurement fix (mobile visibility) is frontend-only and does not change YT2BP API/runtime contract.
 a13) [have] 2026-02-13 UI note: Project 2 Step 3 wall-to-wall row tightening + comments counter in Wall/Explore are frontend-only and do not change YT2BP API/runtime contract.
 a14) [have] 2026-02-13 UI hotfix: Explore card tag clicks now trigger tag search reliably (without forcing channel join); frontend-only and does not change YT2BP API/runtime contract.
+a15) [have] 2026-02-13 UI note: Project 3 Step 1 join-state wiring (Explore/Channels/Wall) and filter-only `TagFilterChips` are frontend-only and do not change YT2BP API/runtime contract.
 
 ## 4-Step Plan
 b1) [todo] Lock MVP contract

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -14,9 +14,14 @@ interface ToggleTagInput {
   slug?: string;
 }
 
+type FollowState = 'not_joined' | 'joining' | 'joined' | 'leaving' | 'error';
+type PendingAction = 'joining' | 'leaving';
+
 export function useTagFollows() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [pendingByTagId, setPendingByTagId] = useState<Record<string, PendingAction | undefined>>({});
+  const [errorByTagId, setErrorByTagId] = useState<Record<string, boolean | undefined>>({});
 
   const followedQuery = useQuery({
     queryKey: ['followed-tags', user?.id],
@@ -95,25 +100,80 @@ export function useTagFollows() {
     return data?.id ?? null;
   };
 
+  const resolveInputTagId = async (tag: ToggleTagInput) => {
+    const tagId = tag.id ?? (tag.slug ? await resolveTagId(tag.slug) : null);
+    return tagId;
+  };
+
+  const joinChannel = async (tag: ToggleTagInput) => {
+    if (!user) throw new Error('Must be logged in');
+    const tagId = await resolveInputTagId(tag);
+    if (!tagId) throw new Error('Tag not found');
+    if (followedIds.has(tagId) || pendingByTagId[tagId]) return;
+
+    setPendingByTagId((prev) => ({ ...prev, [tagId]: 'joining' }));
+    setErrorByTagId((prev) => ({ ...prev, [tagId]: undefined }));
+
+    try {
+      await followMutation.mutateAsync(tagId);
+    } catch (error) {
+      setErrorByTagId((prev) => ({ ...prev, [tagId]: true }));
+      throw error;
+    } finally {
+      setPendingByTagId((prev) => ({ ...prev, [tagId]: undefined }));
+    }
+  };
+
+  const leaveChannel = async (tag: ToggleTagInput) => {
+    if (!user) throw new Error('Must be logged in');
+    const tagId = await resolveInputTagId(tag);
+    if (!tagId) throw new Error('Tag not found');
+    if (!followedIds.has(tagId) || pendingByTagId[tagId]) return;
+
+    setPendingByTagId((prev) => ({ ...prev, [tagId]: 'leaving' }));
+    setErrorByTagId((prev) => ({ ...prev, [tagId]: undefined }));
+
+    try {
+      await unfollowMutation.mutateAsync(tagId);
+    } catch (error) {
+      setErrorByTagId((prev) => ({ ...prev, [tagId]: true }));
+      throw error;
+    } finally {
+      setPendingByTagId((prev) => ({ ...prev, [tagId]: undefined }));
+    }
+  };
+
   const toggleFollow = async (tag: ToggleTagInput) => {
     if (!user) throw new Error('Must be logged in');
 
-    const tagId = tag.id ?? (tag.slug ? await resolveTagId(tag.slug) : null);
+    const tagId = await resolveInputTagId(tag);
     if (!tagId) throw new Error('Tag not found');
 
     const isFollowing = followedIds.has(tagId);
     if (isFollowing) {
-      await unfollowMutation.mutateAsync(tagId);
+      await leaveChannel({ id: tagId });
     } else {
-      await followMutation.mutateAsync(tagId);
+      await joinChannel({ id: tagId });
     }
+  };
+
+  const getFollowState = (tag: ToggleTagInput): FollowState => {
+    const tagId = tag.id;
+    if (!tagId) return 'not_joined';
+    if (pendingByTagId[tagId] === 'joining') return 'joining';
+    if (pendingByTagId[tagId] === 'leaving') return 'leaving';
+    if (errorByTagId[tagId]) return 'error';
+    return followedIds.has(tagId) ? 'joined' : 'not_joined';
   };
 
   return {
     followedTags,
     followedIds,
     followedSlugs,
+    joinChannel,
+    leaveChannel,
     toggleFollow,
+    getFollowState,
     isLoading: followedQuery.isLoading,
     isUpdating: followMutation.isPending || unfollowMutation.isPending,
     hasUser: !!user,

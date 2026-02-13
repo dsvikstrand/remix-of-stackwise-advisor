@@ -6,10 +6,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Heart, Share2, Tag, MessageCircle } from 'lucide-react';
+import { Heart, Share2, Tag, MessageCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { usePopularInventoryTags } from '@/hooks/usePopularInventoryTags';
 import { useTagFollows } from '@/hooks/useTagFollows';
@@ -47,6 +48,7 @@ export default function Wall() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<FeedTab>('for-you');
+  const [showJoinSigninPrompt, setShowJoinSigninPrompt] = useState(false);
 
   useEffect(() => {
     if (authLoading) return;
@@ -57,10 +59,11 @@ export default function Wall() {
   
   // Popular channels (tag-backed) for empty state
   const { data: popularTags = [] } = usePopularInventoryTags(6);
-  const { followedIds, toggleFollow } = useTagFollows();
+  const { getFollowState, joinChannel, leaveChannel } = useTagFollows();
   
   const handleTagToggle = async (tag: { id: string; slug: string }) => {
     if (!user) {
+      setShowJoinSigninPrompt(true);
       toast({
         title: 'Sign in required',
         description: 'Please sign in to join channels.',
@@ -68,8 +71,13 @@ export default function Wall() {
       return;
     }
     try {
-      await toggleFollow(tag);
-      queryClient.invalidateQueries({ queryKey: ['wall-blueprints'] });
+      const state = getFollowState({ id: tag.id });
+      if (state === 'joining' || state === 'leaving') return;
+      if (state === 'joined') {
+        await leaveChannel(tag);
+      } else {
+        await joinChannel(tag);
+      }
     } catch (error) {
       toast({
         title: 'Channel update failed',
@@ -413,23 +421,53 @@ export default function Wall() {
                             </Link>
                           </div>
                         )}
+                        {!user && showJoinSigninPrompt && (
+                          <div className="rounded-lg border border-border/60 bg-card/60 p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <p className="text-xs text-muted-foreground">Sign in to join channels and personalize this feed.</p>
+                            <Link to="/auth">
+                              <Button size="sm">Sign in</Button>
+                            </Link>
+                          </div>
+                        )}
                         <p className="text-xs text-muted-foreground">Popular channels to join:</p>
                         <div className="flex flex-wrap justify-center gap-2">
-                          {popularTags.map((tag) => (
-                            <Button
-                              key={tag.id}
-                              variant="outline"
-                              size="sm"
-                              className={`gap-1.5 ${
-                                followedIds.has(tag.id)
-                                  ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
-                                  : 'text-muted-foreground'
-                              }`}
-                              onClick={() => handleTagToggle(tag)}
-                            >
-                              #{tag.slug}
-                            </Button>
-                          ))}
+                          {popularTags.map((tag) => {
+                            const state = getFollowState({ id: tag.id });
+                            const isJoined = state === 'joined' || state === 'leaving';
+                            const isPending = state === 'joining' || state === 'leaving';
+                            const label = state === 'joining'
+                              ? 'Joining...'
+                              : state === 'leaving'
+                                ? 'Leaving...'
+                                : state === 'joined'
+                                  ? 'Joined'
+                                  : 'Join';
+
+                            return (
+                              <div key={tag.id} className="inline-flex items-center gap-2">
+                                <Badge
+                                  variant="secondary"
+                                  className={`gap-1.5 ${
+                                    isJoined
+                                      ? 'bg-primary/15 text-primary border border-primary/30'
+                                      : 'bg-muted/40 text-muted-foreground border border-border/60'
+                                  }`}
+                                >
+                                  #{tag.slug}
+                                </Badge>
+                                <Button
+                                  size="sm"
+                                  variant={isJoined ? 'outline' : 'default'}
+                                  className="h-8 px-2 text-xs"
+                                  disabled={isPending}
+                                  onClick={() => handleTagToggle(tag)}
+                                >
+                                  {isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+                                  {label}
+                                </Button>
+                              </div>
+                            );
+                          })}
                         </div>
                         <Button
                           variant="ghost"
