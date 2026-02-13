@@ -18,3 +18,7 @@
 - P1 Step 2/3: completed (Explore IA pass, lightweight scope).
 - P1 Step 3/3: docs-level taxonomy and mapping spec completed:
   - `docs/references/channel-taxonomy-v0.md`
+- P2 Step 1/4: completed (summary hygiene + compact text rules).
+- P2 Step 2/4: completed (flatter row shell + wall-to-wall tightening).
+- P2 Step 3/4: completed (channel-first metadata, comments meta on blueprint rows).
+- P2 Step 4/4: completed (polish + regression closure + focused YT2BP/ASS smoke checks).

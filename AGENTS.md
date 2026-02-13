@@ -82,7 +82,7 @@ SUCC -> Successful
 SPC -> Specific
 FQ -> Follow-Up questions
 ST -> Smoke test
-
+LL -> "Last Line" of Your message (usually a follow-up Question, where "LL yep" -> "Yes to your follow up" )
 
 
 ## 10) Remote server: Oracle (SSH alias + multiplexing)

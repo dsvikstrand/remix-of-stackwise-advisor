@@ -1,6 +1,6 @@
 # Project 2 - Feed Density (Step Plan)
 
-Status: `active`
+Status: `completed`
 
 ## Summary
 Project 2 implements a near-clone Reddit feed rhythm for core blueprint feed surfaces while preserving current runtime contracts.
@@ -128,6 +128,20 @@ Acceptance:
 - compact layout is stable across target feed states
 - readability remains acceptable with higher density
 - docs reflect final P2 decisions and deferments
+
+Step 4 closure (2026-02-13):
+- Wall and Explore list rows were polished to remove residual nested-card feel and keep a wall-to-wall rhythm.
+- Metadata hierarchy was finalized:
+  - top row: `b/channels` + relative time
+  - bottom row (blueprints): likes + comments + share
+  - bottom row (inventories): likes + share
+- Regressions resolved:
+  - Explore card tag-click now performs search reliably.
+  - Plain search terms now include tag-matched results even without `#` prefix.
+- Smoke checks passed:
+  - `npm run build`
+  - `npm run smoke:yt2bp -- --base-url https://bapi.vdsai.cloud`
+  - `TMPDIR=/tmp npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts --spec seed/seed_spec_v0.json --asp strength_training_male_v0 --auth-only`
 
 ## Test Matrix (P2)
 
