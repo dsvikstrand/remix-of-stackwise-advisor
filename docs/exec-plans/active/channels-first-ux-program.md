@@ -116,3 +116,4 @@ Rule: each project requires ST pass + acceptance criteria pass before next proje
 - D-010: Project 2 Step 2 locks flatter row shell on Wall+Explore, uses `b/channels` interim context label, and removes author block from list rows.
 - D-011: Project 2 Step 2.1 tightens Wall further toward wall-to-wall rhythm (remove outer list frame, tighten padding, slight `b/channels` emphasis bump).
 - D-012: Feed tags use a single-row full-tag rule (no wrapped second row, no `+N more` collapse badge) on Wall and Explore cards.
+- D-013: Project 2 Step 3 locks Reddit-style compact meta rows (`likes/comments/share` for blueprints, `likes/share` for inventories), with top-right relative time and no item counts in list rows.

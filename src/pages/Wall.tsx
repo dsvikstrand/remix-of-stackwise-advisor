@@ -1,22 +1,22 @@
 import { useMemo, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { formatDistanceToNow } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Heart, Share2, Layers, Tag } from 'lucide-react';
+import { Heart, Share2, Tag, MessageCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { usePopularInventoryTags } from '@/hooks/usePopularInventoryTags';
 import { useTagFollows } from '@/hooks/useTagFollows';
 import type { Json } from '@/integrations/supabase/types';
 import { buildFeedSummary } from '@/lib/feedPreview';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
+import { formatRelativeShort } from '@/lib/timeFormat';
 
 interface BlueprintPost {
   id: string;
@@ -41,14 +41,6 @@ const FEED_TABS = [
 ] as const;
 
 type FeedTab = (typeof FEED_TABS)[number]['value'];
-
-function countSelectedItems(selected: Json) {
-  if (!selected || typeof selected !== 'object' || Array.isArray(selected)) return 0;
-  return Object.values(selected as Record<string, string[]>).reduce(
-    (sum, items) => sum + (Array.isArray(items) ? items.length : 0),
-    0
-  );
-}
 
 export default function Wall() {
   const { user, isLoading: authLoading } = useAuth();
@@ -168,6 +160,27 @@ export default function Wall() {
     },
   });
 
+  const postIds = useMemo(() => (posts || []).map((post) => post.id), [posts]);
+
+  const { data: commentCountsByBlueprintId = {} } = useQuery({
+    queryKey: ['wall-blueprint-comment-counts', postIds],
+    enabled: postIds.length > 0,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('blueprint_comments')
+        .select('blueprint_id')
+        .in('blueprint_id', postIds);
+
+      if (error) throw error;
+
+      return (data || []).reduce<Record<string, number>>((acc, row) => {
+        acc[row.blueprint_id] = (acc[row.blueprint_id] || 0) + 1;
+        return acc;
+      }, {});
+    },
+  });
+
   const likeMutation = useMutation({
     mutationFn: async ({ blueprintId, liked }: { blueprintId: string; liked: boolean }) => {
       if (!user) throw new Error('Must be logged in');
@@ -234,8 +247,8 @@ export default function Wall() {
 
       <AppHeader />
 
-      <main className="max-w-3xl mx-auto px-2 sm:px-4 pb-24">
-        <section className="mb-6">
+      <main className="max-w-3xl mx-auto px-0 pb-24">
+        <section className="mb-6 px-3 sm:px-4">
           <div className="flex flex-col gap-2">
             <p className="text-sm font-semibold text-primary uppercase tracking-wide">Community Wall</p>
             <h1 className="text-2xl font-semibold">See what the community is building</h1>
@@ -246,7 +259,7 @@ export default function Wall() {
         </section>
 
         {!user && (
-          <Card className="mb-6 border-border/50 bg-card/60 backdrop-blur-sm">
+          <Card className="mb-6 mx-3 sm:mx-4 border-border/50 bg-card/60 backdrop-blur-sm">
             <CardContent className="py-5">
               <div className="flex flex-col gap-2 text-center">
                 <p className="text-sm font-semibold">Sign in to personalize</p>
@@ -263,7 +276,7 @@ export default function Wall() {
           </Card>
         )}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as FeedTab)}>
-          <TabsList className="mb-3 h-9 rounded-md bg-muted/40 p-0.5">
+          <TabsList className="mb-3 ml-3 sm:ml-4 h-9 rounded-md bg-muted/40 p-0.5">
             {FEED_TABS.map((tab) => (
               <TabsTrigger key={tab.value} value={tab.value}>
                 {tab.label}
@@ -290,13 +303,13 @@ export default function Wall() {
             ) : posts && posts.length > 0 ? (
               <div className="divide-y divide-border/40">
                 {posts.map((post) => {
-                  const itemCount = countSelectedItems(post.selected_items);
                   const preview = buildFeedSummary({
                     primary: post.llm_review,
                     fallback: 'Open to view the full step-by-step guide.',
                     maxChars: 220,
                   });
-                  const createdLabel = formatDistanceToNow(new Date(post.created_at), { addSuffix: true });
+                  const createdLabel = formatRelativeShort(post.created_at);
+                  const commentsCount = commentCountsByBlueprintId[post.id] || 0;
 
                   return (
                     <Link
@@ -305,7 +318,10 @@ export default function Wall() {
                       className="block px-3 py-2.5 transition-colors hover:bg-muted/20"
                     >
                       <div className="space-y-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-wider text-foreground/70">b/channels</p>
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[11px] font-semibold tracking-wide text-foreground/75">b/channels</p>
+                          <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
+                        </div>
                         <h3 className="text-base font-semibold leading-tight">{post.title}</h3>
                         <p className="text-sm text-muted-foreground line-clamp-3">{preview}</p>
 
@@ -330,12 +346,7 @@ export default function Wall() {
                           />
                         )}
 
-                        <div className="flex items-center gap-3 pt-1 text-xs text-muted-foreground">
-                          <span>{createdLabel}</span>
-                          <span className="inline-flex items-center gap-1">
-                            <Layers className="h-3.5 w-3.5" />
-                            {itemCount} item{itemCount !== 1 ? 's' : ''}
-                          </span>
+                        <div className="flex items-center gap-1.5 pt-1 text-xs text-muted-foreground">
                           <Button
                             variant="ghost"
                             size="sm"
@@ -348,6 +359,10 @@ export default function Wall() {
                             <Heart className={`h-4 w-4 mr-1 ${post.user_liked ? 'fill-current' : ''}`} />
                             {post.likes_count}
                           </Button>
+                          <span className="inline-flex h-7 items-center gap-1 px-2">
+                            <MessageCircle className="h-4 w-4" />
+                            {commentsCount}
+                          </span>
                           <Button
                             variant="ghost"
                             size="sm"

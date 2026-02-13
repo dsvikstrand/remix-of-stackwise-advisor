@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Search } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -13,6 +14,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { useTagFollows } from '@/hooks/useTagFollows';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 const FILTER_OPTIONS: { value: ExploreFilter; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -86,6 +88,32 @@ export default function Explore() {
 
     return groups;
   }, [results, filter]);
+
+  const visibleBlueprintIds = useMemo(() => {
+    if (!results) return [] as string[];
+    return results
+      .filter((row): row is Extract<ExploreResult, { type: 'blueprint' }> => row.type === 'blueprint')
+      .map((row) => row.id);
+  }, [results]);
+
+  const { data: commentCountByBlueprintId = {} } = useQuery({
+    queryKey: ['explore-blueprint-comment-counts', visibleBlueprintIds],
+    enabled: visibleBlueprintIds.length > 0,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('blueprint_comments')
+        .select('blueprint_id')
+        .in('blueprint_id', visibleBlueprintIds);
+
+      if (error) throw error;
+
+      return (data || []).reduce<Record<string, number>>((acc, row) => {
+        acc[row.blueprint_id] = (acc[row.blueprint_id] || 0) + 1;
+        return acc;
+      }, {});
+    },
+  });
 
   return (
     <div className="min-h-screen bg-gradient-soft">
@@ -253,6 +281,7 @@ export default function Explore() {
                       result={r}
                       onTagClick={handleTagClick}
                       followedTagSlugs={followedSlugs}
+                      commentCountByBlueprintId={commentCountByBlueprintId}
                     />
                   ))}
                 </div>
@@ -269,6 +298,7 @@ export default function Explore() {
                       result={r}
                       onTagClick={handleTagClick}
                       followedTagSlugs={followedSlugs}
+                      commentCountByBlueprintId={commentCountByBlueprintId}
                     />
                   ))}
                 </div>
@@ -308,6 +338,7 @@ export default function Explore() {
                     result={r}
                     onTagClick={handleTagClick}
                     followedTagSlugs={followedSlugs}
+                    commentCountByBlueprintId={commentCountByBlueprintId}
                   />
                 ))}
               </div>

@@ -8,6 +8,7 @@
 - 2026-02-12 note: Project 2 Step 2 feed-row shell changes are UI-only and do not alter this contract.
 - 2026-02-12 note: Project 2 one-row full-tag rendering changes are UI-only and do not alter this contract.
 - 2026-02-12 note: Project 2 one-row tag measurement hotfix is UI-only and does not alter this contract.
+- 2026-02-13 note: Project 2 Step 3 wall-to-wall shell tightening and Wall/Explore comment counters are UI-only and do not alter this contract.
 
 ## Request
 ```json

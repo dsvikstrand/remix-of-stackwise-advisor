@@ -45,7 +45,7 @@ Tasks:
 1. strip markdown symbols from summary previews (e.g., `###`, list markers, stray formatting tokens)
 2. normalize summary fallback text and empty handling
 3. enforce summary clamp for compact feed (`3` lines on mobile; desktop may show one extra line if clean)
-4. lock channel label format in feed rows as `r/channel-slug`
+4. lock channel label format in feed rows as `b/channels` (interim)
 5. implement chip visibility config (default `3-4`, quick fallback to `0`)
 
 Acceptance:
@@ -104,6 +104,15 @@ Acceptance:
 - list rows are channel/content-first
 - author metadata remains available where needed (detail)
 - no confusion about where content comes from
+
+Step 3 implementation lock:
+- Wall + Explore list rows move to tighter wall-to-wall rhythm with minimal chrome.
+- `b/channels` uses semi-bold micro-label styling; time moves to the top-right as lightweight relative text.
+- Bottom row switches to Reddit-style compact actions:
+  - blueprint rows: likes + comments + share
+  - inventory rows: likes + share (comments omitted for correctness)
+- Item counts are removed from list rows.
+- Blueprint comment counts are live, fetched via additive client query against `blueprint_comments`.
 
 ### Step 4 - Polish, Regression Pass, and Docs Closure
 Objective: stabilize visual behavior and document final standards.
