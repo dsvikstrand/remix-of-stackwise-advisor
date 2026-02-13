@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { normalizeTag } from '@/lib/tagging';
+import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
 
 interface FollowedTag {
   id: string;
@@ -45,6 +46,15 @@ export function useTagFollows() {
   });
 
   const followedTags = followedQuery.data || [];
+  const curatedFollowableTagSlugs = useMemo(
+    () =>
+      new Set(
+        CHANNELS_CATALOG
+          .filter((channel) => channel.isJoinEnabled && channel.status === 'active')
+          .map((channel) => channel.tagSlug),
+      ),
+    [],
+  );
 
   const followedIds = useMemo(
     () => new Set(followedTags.map((tag) => tag.id)),
@@ -105,8 +115,16 @@ export function useTagFollows() {
     return tagId;
   };
 
+  const isCuratedFollowableTagSlug = (slug: string) => {
+    const normalized = normalizeTag(slug.replace(/^#/, ''));
+    return curatedFollowableTagSlugs.has(normalized);
+  };
+
   const joinChannel = async (tag: ToggleTagInput) => {
     if (!user) throw new Error('Must be logged in');
+    if (tag.slug && !isCuratedFollowableTagSlug(tag.slug)) {
+      throw new Error('Only curated channels can be joined in MVP');
+    }
     const tagId = await resolveInputTagId(tag);
     if (!tagId) throw new Error('Tag not found');
     if (followedIds.has(tagId) || pendingByTagId[tagId]) return;
@@ -126,6 +144,9 @@ export function useTagFollows() {
 
   const leaveChannel = async (tag: ToggleTagInput) => {
     if (!user) throw new Error('Must be logged in');
+    if (tag.slug && !isCuratedFollowableTagSlug(tag.slug)) {
+      throw new Error('Only curated channels can be followed in MVP');
+    }
     const tagId = await resolveInputTagId(tag);
     if (!tagId) throw new Error('Tag not found');
     if (!followedIds.has(tagId) || pendingByTagId[tagId]) return;
@@ -145,6 +166,10 @@ export function useTagFollows() {
 
   const toggleFollow = async (tag: ToggleTagInput) => {
     if (!user) throw new Error('Must be logged in');
+
+    if (tag.slug && !isCuratedFollowableTagSlug(tag.slug)) {
+      throw new Error('Only curated channels can be joined in MVP');
+    }
 
     const tagId = await resolveInputTagId(tag);
     if (!tagId) throw new Error('Tag not found');
@@ -166,6 +191,27 @@ export function useTagFollows() {
     return followedIds.has(tagId) ? 'joined' : 'not_joined';
   };
 
+  const removeNonCuratedFollows = async () => {
+    if (!user) return 0;
+    const nonCuratedTagIds = followedTags
+      .filter((tag) => !isCuratedFollowableTagSlug(tag.slug))
+      .map((tag) => tag.id);
+
+    if (nonCuratedTagIds.length === 0) return 0;
+
+    const { error } = await supabase
+      .from('tag_follows')
+      .delete()
+      .eq('user_id', user.id)
+      .in('tag_id', nonCuratedTagIds);
+
+    if (error) throw error;
+
+    await queryClient.invalidateQueries({ queryKey: ['followed-tags'] });
+    await queryClient.invalidateQueries({ queryKey: ['tags-directory'] });
+    return nonCuratedTagIds.length;
+  };
+
   return {
     followedTags,
     followedIds,
@@ -174,6 +220,8 @@ export function useTagFollows() {
     leaveChannel,
     toggleFollow,
     getFollowState,
+    isCuratedFollowableTagSlug,
+    removeNonCuratedFollows,
     isLoading: followedQuery.isLoading,
     isUpdating: followMutation.isPending || unfollowMutation.isPending,
     hasUser: !!user,

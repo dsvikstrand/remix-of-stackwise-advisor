@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Loader2, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,6 @@ import { useExploreSearch, useTrendingTags, type ExploreFilter, type ExploreResu
 import { useDebounce } from '@/hooks/useDebounce';
 import { useTagFollows } from '@/hooks/useTagFollows';
 import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
 const FILTER_OPTIONS: { value: ExploreFilter; label: string }[] = [
@@ -28,7 +27,6 @@ export default function Explore() {
   const [filter, setFilter] = useState<ExploreFilter>('all');
   const trendingSectionRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
-  const { toast } = useToast();
 
   const debouncedQuery = useDebounce(searchInput, 300);
   const { data: results, isLoading } = useExploreSearch({
@@ -36,8 +34,7 @@ export default function Explore() {
     filter,
   });
   const { data: trendingTags } = useTrendingTags();
-  const { followedSlugs, getFollowState, joinChannel, leaveChannel } = useTagFollows();
-  const [showJoinSigninPrompt, setShowJoinSigninPrompt] = useState(false);
+  const { followedSlugs } = useTagFollows();
 
   const hasQuery = debouncedQuery.trim().length > 0;
   const showNoFollowOnboarding = !!user && followedSlugs.size === 0 && !hasQuery;
@@ -47,45 +44,16 @@ export default function Explore() {
     return trendingTags.filter((tag) => followedSlugs.has(tag.slug));
   }, [trendingTags, followedSlugs, user]);
 
-  const handleTagClick = async (tag: string) => {
+  const handleTagClick = (tag: string) => {
     const normalizedTag = tag.replace(/^#/, '');
     setSearchInput(`#${normalizedTag}`);
     setFilter('all');
-  };
-
-  const handleJoinLeave = async (tag: { id: string; slug: string }) => {
-    if (!user) {
-      setShowJoinSigninPrompt(true);
-      toast({
-        title: 'Sign in required',
-        description: 'Please sign in to join channels.',
-      });
-      return;
-    }
-
-    const state = getFollowState({ id: tag.id });
-    if (state === 'joining' || state === 'leaving') return;
-
-    try {
-      if (state === 'joined') {
-        await leaveChannel({ id: tag.id, slug: tag.slug });
-      } else {
-        await joinChannel({ id: tag.id, slug: tag.slug });
-      }
-    } catch (error) {
-      toast({
-        title: 'Channel update failed',
-        description: error instanceof Error ? error.message : 'Please try again.',
-        variant: 'destructive',
-      });
-    }
   };
 
   const scrollToTrendingChannels = () => {
     trendingSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  // Group results by type when filter is 'all'
   const groupedResults = useMemo(() => {
     if (!results || filter !== 'all') return null;
 
@@ -139,7 +107,7 @@ export default function Explore() {
           <p className="text-sm font-semibold text-primary uppercase tracking-wide">Explore</p>
           <h1 className="text-2xl font-semibold mt-1">Search blueprints, inventories, and creators</h1>
           <p className="text-sm text-muted-foreground mt-2">
-            Start with a keyword, then narrow by type or jump into trending channels.
+            Start with a keyword, then narrow by type or jump into trending channels below.
           </p>
         </section>
 
@@ -147,9 +115,7 @@ export default function Explore() {
           <div className="mb-6 rounded-2xl border border-border/50 bg-card/60 backdrop-blur-sm p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-semibold">Sign in to personalize</p>
-              <p className="text-xs text-muted-foreground">
-                Join channels to shape your feed, then follow creators you trust.
-              </p>
+              <p className="text-xs text-muted-foreground">Join channels to shape your feed from the Channels page.</p>
             </div>
             <Link to="/auth">
               <Button size="sm">Sign in</Button>
@@ -157,19 +123,6 @@ export default function Explore() {
           </div>
         )}
 
-        {!user && showJoinSigninPrompt && (
-          <section className="mb-6 rounded-xl border border-border/60 bg-card/60 p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold">Sign in to join channels</p>
-              <p className="text-xs text-muted-foreground">Join channels to personalize what appears in your feed.</p>
-            </div>
-            <Link to="/auth">
-              <Button size="sm">Sign in</Button>
-            </Link>
-          </section>
-        )}
-
-        {/* Search Bar */}
         <div className="relative mb-6">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
           <Input
@@ -181,7 +134,6 @@ export default function Explore() {
           />
         </div>
 
-        {/* Filter Pills */}
         {hasQuery && (
           <div className="flex gap-2 mb-6 flex-wrap">
             {FILTER_OPTIONS.map((opt) => (
@@ -197,13 +149,12 @@ export default function Explore() {
           </div>
         )}
 
-        {/* No-query state */}
         {!hasQuery && (
           <div className="space-y-8">
             <div className="text-center py-8">
               <h2 className="text-2xl font-semibold mb-2">Discover what works</h2>
               <p className="text-muted-foreground">
-                Search blueprints, inventories, and creators — or explore trending channels below
+                Search blueprints, inventories, and creators - or explore trending topics below.
               </p>
             </div>
 
@@ -211,31 +162,20 @@ export default function Explore() {
               <section>
                 <p className="text-sm font-medium text-muted-foreground mb-3">Your Channels</p>
                 {followedTrendingChannels.length > 0 ? (
-                  <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
                     {followedTrendingChannels.map((tag) => (
-                      <div key={tag.id} className="inline-flex items-center gap-2 mr-2">
-                        <Badge
-                          variant="secondary"
-                          className="cursor-pointer transition-colors px-3 py-1 border bg-primary/15 text-primary border-primary/30 hover:bg-primary/20"
-                          onClick={() => handleTagClick(`#${tag.slug}`)}
-                        >
-                          #{tag.slug}
-                        </Badge>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 px-2 text-xs"
-                          onClick={() => handleJoinLeave({ id: tag.id, slug: tag.slug })}
-                        >
-                          Joined
-                        </Button>
-                      </div>
+                      <Badge
+                        key={tag.id}
+                        variant="secondary"
+                        className="cursor-pointer transition-colors px-3 py-1 border bg-primary/15 text-primary border-primary/30 hover:bg-primary/20"
+                        onClick={() => handleTagClick(`#${tag.slug}`)}
+                      >
+                        #{tag.slug}
+                      </Badge>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Your channels will appear here as activity updates.
-                  </p>
+                  <p className="text-sm text-muted-foreground">Your channels will appear here as activity updates.</p>
                 )}
               </section>
             )}
@@ -248,54 +188,40 @@ export default function Explore() {
                     Start with a few channels and Explore will adapt to what you care about.
                   </p>
                 </div>
-                <Button size="sm" onClick={scrollToTrendingChannels}>
-                  Explore Channels
-                </Button>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={scrollToTrendingChannels}>
+                    Explore Topics
+                  </Button>
+                  <Button asChild size="sm" variant="outline">
+                    <Link to="/channels">Manage Channels</Link>
+                  </Button>
+                </div>
               </section>
             )}
 
             {trendingTags && trendingTags.length > 0 && (
               <section ref={trendingSectionRef}>
-                <p className="text-sm font-medium text-muted-foreground mb-3">Trending Channels</p>
+                <p className="text-sm font-medium text-muted-foreground mb-3">Trending Topics</p>
                 <div className="flex flex-wrap gap-2">
                   {trendingTags.map((tag) => (
-                    <div key={tag.id} className="inline-flex items-center gap-2">
-                      <Badge
-                        variant="secondary"
-                        className={`cursor-pointer transition-colors px-3 py-1 border ${
-                          followedSlugs.has(tag.slug)
-                            ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
-                            : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
-                        }`}
-                        onClick={() => handleTagClick(`#${tag.slug}`)}
-                      >
-                        #{tag.slug}
-                      </Badge>
-                      {(() => {
-                        const state = getFollowState({ id: tag.id });
-                        const isPending = state === 'joining' || state === 'leaving';
-                        const label = state === 'joined'
-                          ? 'Joined'
-                          : state === 'joining'
-                            ? 'Joining...'
-                            : state === 'leaving'
-                              ? 'Leaving...'
-                              : 'Join';
-                        return (
-                          <Button
-                            size="sm"
-                            variant={state === 'joined' ? 'outline' : 'default'}
-                            className="h-7 px-2 text-xs"
-                            disabled={isPending}
-                            onClick={() => handleJoinLeave({ id: tag.id, slug: tag.slug })}
-                          >
-                            {isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
-                            {label}
-                          </Button>
-                        );
-                      })()}
-                    </div>
+                    <Badge
+                      key={tag.id}
+                      variant="secondary"
+                      className={`cursor-pointer transition-colors px-3 py-1 border ${
+                        followedSlugs.has(tag.slug)
+                          ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
+                          : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
+                      }`}
+                      onClick={() => handleTagClick(`#${tag.slug}`)}
+                    >
+                      #{tag.slug}
+                    </Badge>
                   ))}
+                </div>
+                <div className="mt-3">
+                  <Button asChild size="sm" variant="outline">
+                    <Link to="/channels">Join Channels</Link>
+                  </Button>
                 </div>
               </section>
             )}
@@ -319,7 +245,6 @@ export default function Explore() {
           </div>
         )}
 
-        {/* Loading State */}
         {hasQuery && isLoading && (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 6 }).map((_, i) => (
@@ -328,7 +253,6 @@ export default function Explore() {
           </div>
         )}
 
-        {/* Results - Grouped by type */}
         {hasQuery && !isLoading && groupedResults && (
           <div className="space-y-8">
             {groupedResults.blueprints.length > 0 && (
@@ -387,7 +311,6 @@ export default function Explore() {
           </div>
         )}
 
-        {/* Results - Filtered by single type */}
         {hasQuery && !isLoading && !groupedResults && results && (
           <div>
             {results.length > 0 ? (

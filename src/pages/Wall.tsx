@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Heart, Share2, Tag, MessageCircle, Loader2 } from 'lucide-react';
+import { Heart, Share2, Tag, MessageCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { usePopularInventoryTags } from '@/hooks/usePopularInventoryTags';
 import { useTagFollows } from '@/hooks/useTagFollows';
@@ -49,7 +49,7 @@ export default function Wall() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<FeedTab>('for-you');
-  const [showJoinSigninPrompt, setShowJoinSigninPrompt] = useState(false);
+  const [selectedTagSlug, setSelectedTagSlug] = useState<string | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
@@ -60,32 +60,10 @@ export default function Wall() {
   
   // Popular channels (tag-backed) for empty state
   const { data: popularTags = [] } = usePopularInventoryTags(6);
-  const { followedIds, getFollowState, joinChannel, leaveChannel } = useTagFollows();
-  
-  const handleTagToggle = async (tag: { id: string; slug: string }) => {
-    if (!user) {
-      setShowJoinSigninPrompt(true);
-      toast({
-        title: 'Sign in required',
-        description: 'Please sign in to join channels.',
-      });
-      return;
-    }
-    try {
-      const state = getFollowState({ id: tag.id });
-      if (state === 'joining' || state === 'leaving') return;
-      if (state === 'joined') {
-        await leaveChannel(tag);
-      } else {
-        await joinChannel(tag);
-      }
-    } catch (error) {
-      toast({
-        title: 'Channel update failed',
-        description: error instanceof Error ? error.message : 'Please try again.',
-        variant: 'destructive',
-      });
-    }
+  const { followedIds } = useTagFollows();
+
+  const handleTagFilter = (tagSlug: string) => {
+    setSelectedTagSlug((current) => (current === tagSlug ? null : tagSlug));
   };
 
   const wallQueryKey = ['wall-blueprints', activeTab, user?.id] as const;
@@ -253,6 +231,11 @@ export default function Wall() {
   };
 
   const showZeroJoinForYouCta = !!user && activeTab === 'for-you' && followedIds.size === 0;
+  const visiblePosts = useMemo(() => {
+    if (!posts) return [];
+    if (!selectedTagSlug) return posts;
+    return posts.filter((post) => post.tags.some((tag) => tag.slug === selectedTagSlug));
+  }, [posts, selectedTagSlug]);
 
   if (authLoading) {
     return (
@@ -309,6 +292,16 @@ export default function Wall() {
           </TabsList>
 
           <TabsContent value={activeTab} className="mt-0">
+            {selectedTagSlug && (
+              <div className="mb-3 mx-3 sm:mx-4 rounded-md border border-border/50 bg-card/60 px-3 py-2 flex items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">
+                  Filtered by <span className="font-semibold text-foreground">#{selectedTagSlug}</span>
+                </p>
+                <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setSelectedTagSlug(null)}>
+                  Clear
+                </Button>
+              </div>
+            )}
             {showZeroJoinForYouCta && (
               <Card className="mb-3 mx-3 sm:mx-4 border-border/50 bg-card/60 backdrop-blur-sm">
                 <CardContent className="py-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -339,9 +332,9 @@ export default function Wall() {
                   </CardContent>
                 </Card>
               ))
-            ) : posts && posts.length > 0 ? (
+            ) : visiblePosts.length > 0 ? (
               <div className="divide-y divide-border/40">
-                {posts.map((post) => {
+                {visiblePosts.map((post) => {
                   const preview = buildFeedSummary({
                     primary: post.llm_review,
                     fallback: 'Open to view the full step-by-step guide.',
@@ -380,7 +373,7 @@ export default function Wall() {
                               onClick: (event) => {
                                 event.preventDefault();
                                 event.stopPropagation();
-                                handleTagToggle(tag);
+                                handleTagFilter(tag.slug);
                               },
                             }))}
                           />
@@ -440,7 +433,7 @@ export default function Wall() {
                       </p>
                     </div>
                     
-                    {/* Inline tag suggestions for "For You" tab */}
+                    {/* Inline topic suggestions for "For You" tab */}
                     {activeTab === 'for-you' && popularTags.length > 0 && (
                       <div className="space-y-3 w-full max-w-md">
                         {!user && (
@@ -453,61 +446,21 @@ export default function Wall() {
                             </Link>
                           </div>
                         )}
-                        {!user && showJoinSigninPrompt && (
-                          <div className="rounded-lg border border-border/60 bg-card/60 p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                            <p className="text-xs text-muted-foreground">Sign in to join channels and personalize this feed.</p>
-                            <Link to="/auth">
-                              <Button size="sm">Sign in</Button>
-                            </Link>
-                          </div>
-                        )}
-                        <p className="text-xs text-muted-foreground">Popular channels to join:</p>
+                        <p className="text-xs text-muted-foreground">Popular topics:</p>
                         <div className="flex flex-wrap justify-center gap-2">
-                          {popularTags.map((tag) => {
-                            const state = getFollowState({ id: tag.id });
-                            const isJoined = state === 'joined' || state === 'leaving';
-                            const isPending = state === 'joining' || state === 'leaving';
-                            const label = state === 'joining'
-                              ? 'Joining...'
-                              : state === 'leaving'
-                                ? 'Leaving...'
-                                : state === 'joined'
-                                  ? 'Joined'
-                                  : 'Join';
-
-                            return (
-                              <div key={tag.id} className="inline-flex items-center gap-2">
-                                <Badge
-                                  variant="secondary"
-                                  className={`gap-1.5 ${
-                                    isJoined
-                                      ? 'bg-primary/15 text-primary border border-primary/30'
-                                      : 'bg-muted/40 text-muted-foreground border border-border/60'
-                                  }`}
-                                >
-                                  #{tag.slug}
-                                </Badge>
-                                <Button
-                                  size="sm"
-                                  variant={isJoined ? 'outline' : 'default'}
-                                  className="h-8 px-2 text-xs"
-                                  disabled={isPending}
-                                  onClick={() => handleTagToggle(tag)}
-                                >
-                                  {isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
-                                  {label}
-                                </Button>
-                              </div>
-                            );
-                          })}
+                          {popularTags.map((tag) => (
+                            <Badge
+                              key={tag.id}
+                              variant="secondary"
+                              className="gap-1.5 bg-muted/40 text-muted-foreground border border-border/60 cursor-pointer hover:bg-muted/60"
+                              onClick={() => handleTagFilter(tag.slug)}
+                            >
+                              #{tag.slug}
+                            </Badge>
+                          ))}
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-muted-foreground"
-                          onClick={() => setActiveTab('latest')}
-                        >
-                          Or browse Latest instead →
+                        <Button asChild variant="outline" size="sm">
+                          <Link to="/channels">Join Channels</Link>
                         </Button>
                       </div>
                     )}
@@ -517,7 +470,7 @@ export default function Wall() {
                         <Link to="/inventory">
                           <Button>Create Blueprint</Button>
                         </Link>
-                        <Link to="/tags">
+                        <Link to="/channels">
                           <Button variant="outline">Explore Channels</Button>
                         </Link>
                       </div>

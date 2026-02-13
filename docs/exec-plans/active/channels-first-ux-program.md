@@ -125,3 +125,4 @@ Rule: each project requires ST pass + acceptance criteria pass before next proje
 - D-019: Project 3 Phase 2 locks deterministic channel mapping to `exact + curated alias`, with fallback lane `b/general` and no fuzzy runtime keyword matching.
 - D-020: Project 3 Phase 2 replaces interim `b/channels` labels with resolved `b/<channel-slug>` labels on Wall and Explore, and enables real channel-page feeds (`Top`, `Recent`, `Load more`) on `/b/:channelSlug`.
 - D-021: Project 3 Step 2 ranking lock keeps `Latest` and `Trending` global semantics while `For You` applies joined-first ordering with deterministic global fill and a zero-join inline CTA.
+- D-022: Project 3 Phase 3 locks channels-only follow UX for MVP: follow actions live on curated channel surfaces, tags are search/filter-only metadata, and `/channels` is restructured into `Channels`, `Suggested Channels`, and `More Channels`.

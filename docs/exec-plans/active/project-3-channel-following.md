@@ -111,6 +111,13 @@ Step 2 ranking/cold-start lock (2026-02-13):
 - `Trending` remains likes-first global (no channel personalization).
 - Zero-join users still get a usable `For You` feed plus a clear inline CTA to `/channels`.
 
+Phase 3 channels-only MVP lock (2026-02-13):
+- Follow UX is curated-channels-only on user-facing surfaces.
+- Tags are lookup/filter metadata only (no tag-level join/leave actions in Explore or Wall).
+- `/channels` IA is now `Channels` (joined, capped with inline expand), `Suggested Channels` (always visible, popularity-ranked), and `More Channels`.
+- Suggested channels include up to two lightweight blueprint previews for channel feel.
+- Legacy non-curated follows are auto-cleaned on `/channels` load for signed-in users.
+
 Step 2 Phase 2 implementation lock (2026-02-13):
 - Channel pages are now real feed surfaces on `/b/:channelSlug` with `Top` and `Recent` tabs.
 - `Top` uses likes-first ordering with deterministic recency tie-break.
