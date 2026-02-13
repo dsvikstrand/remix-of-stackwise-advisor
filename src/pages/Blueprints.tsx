@@ -39,8 +39,10 @@ export default function Blueprints() {
   const mainBlueprints = useMemo(() => {
     if (!blueprints) return [];
     if (effectiveQuery) return blueprints;
+    const shouldExcludeSuggested = !!user && sort === 'popular';
+    if (!shouldExcludeSuggested) return blueprints;
     return blueprints.filter((bp) => !suggestedIds.has(bp.id));
-  }, [blueprints, suggestedIds, effectiveQuery]);
+  }, [blueprints, suggestedIds, effectiveQuery, user, sort]);
 
   const handleLike = async (blueprintId: string, liked: boolean) => {
     if (!user) {
