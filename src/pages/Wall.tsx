@@ -497,7 +497,10 @@ export default function Wall() {
                     fallback: 'Open to view the full step-by-step guide.',
                     maxChars: 220,
                   });
-                  const channelLabel = resolveChannelLabelForBlueprint(post.tags.map((tag) => tag.slug));
+                  const channelSlug = resolveChannelLabelForBlueprint(post.tags.map((tag) => tag.slug)).replace(/^b\//, '');
+                  const channelLabel = `b/${channelSlug}`;
+                  const channelConfig = CHANNELS_CATALOG.find((channel) => channel.slug === channelSlug);
+                  const ChannelIcon = getChannelIcon(channelConfig?.icon || 'sparkles');
                   const createdLabel = formatRelativeShort(post.created_at);
                   const commentsCount = commentCountsByBlueprintId[post.id] || 0;
 
@@ -521,7 +524,10 @@ export default function Wall() {
                         )}
                         <div className="relative space-y-2">
                           <div className="flex items-center justify-between gap-2">
-                            <p className="text-[11px] font-semibold tracking-wide text-foreground/75">{channelLabel}</p>
+                            <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-foreground/75">
+                              <ChannelIcon className="h-3.5 w-3.5" />
+                              {channelLabel}
+                            </p>
                             <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
                           </div>
                           <h3 className="text-base font-semibold leading-tight">{post.title}</h3>

@@ -183,7 +183,7 @@ export default function BlueprintDetail() {
                       className="text-xs cursor-pointer transition-colors border bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60"
                       onClick={() => handleTagClick(tag.slug)}
                     >
-                      #{tag.slug}
+                      {tag.slug}
                     </Badge>
                   ))}
                 </div>
@@ -247,11 +247,6 @@ export default function BlueprintDetail() {
                             <p className="text-sm font-medium">
                               {step.title?.trim() ? step.title : `Step ${index + 1}`}
                             </p>
-                            {step.items && step.items.length > 0 ? (
-                              <Badge variant="secondary" className="text-xs">
-                                {step.items.length} items
-                              </Badge>
-                            ) : null}
                           </div>
                           {step.description && (
                             <p className="text-xs text-muted-foreground mt-1">{step.description}</p>
