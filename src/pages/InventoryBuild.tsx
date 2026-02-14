@@ -25,7 +25,6 @@ import { TagInput } from '@/components/shared/TagInput';
 import { MixButton } from '@/components/blend/MixButton';
 import { BlueprintItemPicker } from '@/components/blueprint/BlueprintItemPicker';
 import { BlueprintAnalysisView } from '@/components/blueprint/BlueprintAnalysisView';
-import { BuildPageGuide } from '@/components/blueprint/BuildPageGuide';
 import { StepAccordion, type BlueprintStep } from '@/components/blueprint/StepAccordion';
 import { BlueprintRecipeAccordion } from '@/components/blueprint/BlueprintRecipeAccordion';
 import { BuildHelpOverlay, HelpButton } from '@/components/blueprint/BuildHelpOverlay';
@@ -1341,9 +1340,6 @@ export default function InventoryBuild() {
               />
             )}
 
-            {/* Step Guide */}
-            <BuildPageGuide currentStep={review ? 3 : totalSelected > 0 ? 2 : 1} />
-            
             {/* Combined Name + Items Section */}
             <section className="animate-fade-in" style={{ animationDelay: '0.05s' }}>
               <div className="bg-card/60 backdrop-blur-glass rounded-2xl border border-border/50 overflow-hidden">
@@ -1830,12 +1826,22 @@ export default function InventoryBuild() {
                       {generateBanner && (
                         <div className="space-y-3">
                           <div className="space-y-2">
-                            <div className="aspect-[4/1] w-full overflow-hidden rounded-lg border border-border/60 bg-muted/40">
+                            <div
+                              className={
+                                isBannerExpanded
+                                  ? 'w-full overflow-hidden rounded-lg border border-border/60 bg-muted/20'
+                                  : 'aspect-[4/1] w-full overflow-hidden rounded-lg border border-border/60 bg-muted/40'
+                              }
+                            >
                               {bannerUrl ? (
                                 <img
                                   src={bannerUrl}
                                   alt="Blueprint banner"
-                                  className="h-full w-full object-cover"
+                                  className={
+                                    isBannerExpanded
+                                      ? 'w-full max-h-[60vh] object-contain'
+                                      : 'h-full w-full object-cover'
+                                  }
                                   loading="lazy"
                                 />
                               ) : (
@@ -1845,23 +1851,15 @@ export default function InventoryBuild() {
                               )}
                             </div>
                             {bannerUrl && (
-                              <Collapsible open={isBannerExpanded} onOpenChange={setIsBannerExpanded}>
-                                <CollapsibleTrigger asChild>
-                                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground">
-                                    {isBannerExpanded ? 'Collapse preview' : 'Expand preview'}
-                                  </Button>
-                                </CollapsibleTrigger>
-                                <CollapsibleContent>
-                                  <div className="mt-2 w-full overflow-hidden rounded-lg border border-border/60 bg-muted/20">
-                                    <img
-                                      src={bannerUrl}
-                                      alt="Blueprint banner (expanded)"
-                                      className="w-full max-h-[60vh] object-contain"
-                                      loading="lazy"
-                                    />
-                                  </div>
-                                </CollapsibleContent>
-                              </Collapsible>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-xs text-muted-foreground"
+                                onClick={() => setIsBannerExpanded((v) => !v)}
+                              >
+                                {isBannerExpanded ? 'Collapse preview' : 'Expand preview'}
+                              </Button>
                             )}
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
