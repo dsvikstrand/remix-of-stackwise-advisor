@@ -72,7 +72,7 @@ export function BlueprintItemPicker({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Search + Add Custom */}
       <div className="flex gap-2">
         <div className="relative flex-1">
@@ -135,7 +135,7 @@ export function BlueprintItemPicker({
             <TabsTrigger
               key={cat.name}
               value={cat.name}
-              className="text-xs px-2 py-1 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-normal"
+              className="text-xs px-2 py-0.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-normal"
             >
               {cat.name}
             </TabsTrigger>

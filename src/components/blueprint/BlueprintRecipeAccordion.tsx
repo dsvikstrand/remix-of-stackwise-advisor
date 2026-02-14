@@ -43,7 +43,7 @@ export function BlueprintRecipeAccordion({
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <CollapsibleTrigger asChild>
-        <div className="flex items-center justify-between p-4 rounded-xl bg-card/60 backdrop-blur-sm border border-border/50 cursor-pointer hover:bg-card/80 transition-colors">
+        <div className="flex items-center justify-between px-3 py-2.5 rounded-md border border-border/40 cursor-pointer hover:bg-muted/20 transition-colors">
           <div className="flex items-center gap-3">
             <span className="text-sm font-medium text-foreground">{title || 'Your Selection'}</span>
             <Badge variant="secondary" className="text-xs">
@@ -60,8 +60,8 @@ export function BlueprintRecipeAccordion({
       </CollapsibleTrigger>
 
       <CollapsibleContent className="mt-2">
-        <div className="bg-card/40 backdrop-blur-sm rounded-xl border border-border/30 overflow-hidden">
-          <div className="divide-y divide-border/20">
+        <div className="rounded-md border border-border/40 overflow-hidden">
+          <div className="divide-y divide-border/40">
             {flatItems.map(({ category, item }) => {
               const contextKey = `${category}::${item}`;
               const contextValue = itemContexts[contextKey] || '';
@@ -92,14 +92,14 @@ export function BlueprintRecipeAccordion({
                     value={contextValue}
                     onChange={(e) => onUpdateContext(category, item, e.target.value)}
                     placeholder="Add context (e.g. 0.5mg, morning, with food...)"
-                    className="h-8 text-xs bg-background/50"
+                    className="h-8 text-xs"
                   />
                 </div>
               );
             })}
           </div>
 
-          <div className="p-3 border-t border-border/30 flex justify-end bg-card/30">
+          <div className="p-3 border-t border-border/40 flex justify-end">
             <Button
               variant="ghost"
               size="sm"

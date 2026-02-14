@@ -2,7 +2,6 @@ import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -1321,14 +1320,12 @@ export default function InventoryBuild() {
         </div>
 
         {isLoading ? (
-          <Card className="bg-card/60 backdrop-blur-glass border-border/50">
-            <CardContent className="p-6">
-              <Skeleton className="h-6 w-48" />
-              <Skeleton className="h-24 w-full mt-4" />
-            </CardContent>
-          </Card>
+          <div className="border border-border/40 px-3 py-3 space-y-3">
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-24 w-full" />
+          </div>
         ) : inventory ? (
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* Tour Banner (first-time users) */}
             {showTourBanner && (
               <TourBanner
@@ -1342,9 +1339,9 @@ export default function InventoryBuild() {
 
             {/* Combined Name + Items Section */}
             <section className="animate-fade-in" style={{ animationDelay: '0.05s' }}>
-              <div className="bg-card/60 backdrop-blur-glass rounded-2xl border border-border/50 overflow-hidden">
+              <div className="rounded-md border border-border/40 overflow-hidden divide-y divide-border/40">
                 {/* Blueprint Name Input */}
-                <div className="p-4 border-b border-border/30 space-y-3">
+                <div className="p-3 space-y-3">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                     <Input
                       value={title}
@@ -1483,7 +1480,7 @@ export default function InventoryBuild() {
                   )}
                 </div>
                 {/* Item Picker */}
-                <div className="p-4" data-help-id="picker">
+                <div className="p-3" data-help-id="picker">
                   <BlueprintItemPicker
                     categories={categories}
                     selectedItems={selectedItems}
@@ -1517,10 +1514,10 @@ export default function InventoryBuild() {
 
             {/* Steps Section - New Accordion */}
             <section className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
-              <Card className="bg-card/60 backdrop-blur-glass border-border/50">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <div className="border border-border/40 rounded-md overflow-hidden">
+                <div className="flex items-center justify-between gap-3 px-3 py-3 border-b border-border/40">
                   <div className="space-y-1">
-                    <CardTitle>{builderMode === 'simple' ? 'Selected items' : 'Steps'}</CardTitle>
+                    <h2 className="text-sm font-semibold">{builderMode === 'simple' ? 'Selected items' : 'Steps'}</h2>
                     {builderMode === 'simple' && (
                       <p className="text-xs text-muted-foreground">
                         Simple mode hides steps. If you publish in simple mode, your blueprint will be published without steps.
@@ -1579,8 +1576,8 @@ export default function InventoryBuild() {
                       Simple
                     </span>
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
+                </div>
+                <div className="p-3 space-y-3">
                   {builderMode === 'simple' ? (
                     totalSelected > 0 ? (
                       <BlueprintRecipeAccordion
@@ -1630,12 +1627,12 @@ export default function InventoryBuild() {
                       )}
                     </>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </section>
 
             {/* Review Button */}
-            <section className="flex justify-center py-8 animate-fade-in" style={{ animationDelay: '0.2s' }} data-help-id="mix">
+            <section className="flex justify-center py-4 animate-fade-in" style={{ animationDelay: '0.2s' }} data-help-id="mix">
               <MixButton
                 onClick={handleAnalyze}
                 disabled={totalSelected === 0}
@@ -1647,23 +1644,23 @@ export default function InventoryBuild() {
             {/* Review Options (Collapsed by default) */}
             <section className="animate-fade-in" style={{ animationDelay: '0.15s' }}>
               <Collapsible>
-                <Card className="bg-card/60 backdrop-blur-glass border-border/50">
+                <div className="border border-border/40 rounded-md overflow-hidden">
                   <CollapsibleTrigger asChild>
-                    <CardHeader className="cursor-pointer hover:bg-muted/20 transition-colors">
+                    <div className="cursor-pointer hover:bg-muted/20 transition-colors px-3 py-3">
                       <div className="flex items-center justify-between">
-                        <CardTitle className="text-base flex items-center gap-2">
+                        <div className="text-sm font-semibold flex items-center gap-2">
                           <Settings2 className="h-4 w-4 text-muted-foreground" />
                           Review Options
-                        </CardTitle>
+                        </div>
                         <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform [[data-state=open]>&]:rotate-180" />
                       </div>
                       <p className="text-xs text-muted-foreground text-left">
                         Build notes, review focus, custom sections
                       </p>
-                    </CardHeader>
+                    </div>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
-                    <CardContent className="pt-0 pb-4 px-4 space-y-4">
+                    <div className="pt-0 pb-3 px-3 space-y-4">
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div className="space-y-2">
                           <Label htmlFor="mix-notes">Blueprint Notes</Label>
@@ -1781,9 +1778,9 @@ export default function InventoryBuild() {
                           )}
                         </div>
                       </div>
-                    </CardContent>
+                    </div>
                   </CollapsibleContent>
-                </Card>
+                </div>
               </Collapsible>
             </section>
 
@@ -1806,18 +1803,18 @@ export default function InventoryBuild() {
             {/* Publish Section - always visible when items selected */}
             {totalSelected > 0 && !isAnalyzing && (
               <section className="animate-fade-in" style={{ animationDelay: '0.25s' }}>
-                <Card className="bg-card/60 backdrop-blur-glass border-border/50">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+                <div className="border border-border/40 rounded-md overflow-hidden">
+                  <div className="px-3 py-3 border-b border-border/40">
+                    <div className="flex items-center gap-2 text-sm font-semibold">
                       <Sparkles className="h-5 w-5 text-primary" />
                       {isEditing ? 'Save changes' : 'Publish Blueprint'}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="rounded-lg border border-border/60 px-4 py-3 space-y-3">
+                    </div>
+                  </div>
+                  <div className="p-3 space-y-3">
+                    <div className="rounded-md border border-border/40 px-3 py-2.5 space-y-3">
                       <div className="flex items-center justify-between gap-4">
                         <div>
-                          <p className="font-medium">Generate banner</p>
+                          <p className="text-sm font-semibold">Generate banner</p>
                           <p className="text-sm text-muted-foreground">Create a banner for this blueprint.</p>
                         </div>
                         <Switch checked={generateBanner} onCheckedChange={handleToggleGenerateBanner} />
@@ -1912,7 +1909,7 @@ export default function InventoryBuild() {
                       <Label>Tags (optional)</Label>
                       <TagInput value={tags} onChange={setTags} suggestions={tagSuggestions || []} maxTags={12} />
                     </div>
-                    <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
+                    <div className="flex items-center justify-between rounded-md border border-border/40 px-3 py-2">
                       <div>
                         <p className="text-xs font-semibold">Public blueprint</p>
                         <p className="text-[11px] text-muted-foreground">Appears on the feed.</p>
@@ -1953,8 +1950,8 @@ export default function InventoryBuild() {
                         </AlertDialogContent>
                       </AlertDialog>
                     )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               </section>
             )}
 
@@ -1967,11 +1964,9 @@ export default function InventoryBuild() {
             <AppFooter />
           </div>
         ) : (
-          <Card className="bg-card/60 backdrop-blur-glass border-border/50">
-            <CardContent className="py-12 text-center">
-              Library not found.
-            </CardContent>
-          </Card>
+          <div className="border border-border/40 px-3 py-10 text-center text-sm text-muted-foreground">
+            Library not found.
+          </div>
         )}
       </main>
 
