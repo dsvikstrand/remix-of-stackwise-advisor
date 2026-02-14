@@ -7,10 +7,10 @@ import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Heart, Share2, Tag, MessageCircle } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Heart, Share2, Tag, MessageCircle, Layers, ChevronsUpDown, Check, Sparkles, Grid3X3 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { usePopularInventoryTags } from '@/hooks/usePopularInventoryTags';
 import { useTagFollows } from '@/hooks/useTagFollows';
@@ -22,6 +22,10 @@ import { resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
 import { normalizeTag } from '@/lib/tagging';
 import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
 import { logOncePerSession, logP3Event } from '@/lib/telemetry';
+import { getChannelIcon } from '@/lib/channelIcons';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { cn } from '@/lib/utils';
 
 interface BlueprintPost {
   id: string;
@@ -40,27 +44,35 @@ interface BlueprintPost {
   user_liked: boolean;
 }
 
-const FEED_TABS = [
-  { value: 'for-you', label: 'For You' },
+const SORT_TABS = [
   { value: 'latest', label: 'Latest' },
   { value: 'trending', label: 'Trending' },
 ] as const;
 
-type FeedTab = (typeof FEED_TABS)[number]['value'];
+type FeedSort = (typeof SORT_TABS)[number]['value'];
+
+const SCOPE_FOR_YOU = 'for-you';
+const SCOPE_ALL = 'all';
 
 export default function Wall() {
   const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<FeedTab>('for-you');
+  const [scopeOpen, setScopeOpen] = useState(false);
+  const [feedScope, setFeedScope] = useState<string>(SCOPE_ALL);
+  const [feedSort, setFeedSort] = useState<FeedSort>('latest');
   const [selectedTagSlug, setSelectedTagSlug] = useState<string | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user && activeTab === 'for-you') {
-      setActiveTab('trending');
-    }
-  }, [authLoading, user, activeTab]);
+    setFeedScope((current) => {
+      if (!user) {
+        return current === SCOPE_FOR_YOU ? SCOPE_ALL : current;
+      }
+      if (current === SCOPE_ALL) return SCOPE_FOR_YOU;
+      return current;
+    });
+  }, [authLoading, user]);
   
   // Popular channels (tag-backed) for empty state
   const { data: popularTags = [] } = usePopularInventoryTags(6);
@@ -80,6 +92,9 @@ export default function Wall() {
     return followedTags.filter((tag) => curatedJoinableSlugs.has(normalizeTag(tag.slug))).length;
   }, [curatedJoinableSlugs, followedTags]);
 
+  const effectiveScope = !user && feedScope === SCOPE_FOR_YOU ? SCOPE_ALL : feedScope;
+  const isForYouScope = effectiveScope === SCOPE_FOR_YOU && !!user;
+
   const handleTagFilter = (tagSlug: string) => {
     setSelectedTagSlug((current) => {
       const next = current === tagSlug ? null : tagSlug;
@@ -89,7 +104,7 @@ export default function Wall() {
           surface: 'wall',
           user,
           metadata: {
-            tab: activeTab,
+            tab: effectiveScope,
             tag_slug: normalizeTag(next),
           },
         });
@@ -98,21 +113,25 @@ export default function Wall() {
     });
   };
 
-  const wallQueryKey = ['wall-blueprints', activeTab, user?.id] as const;
+  const wallQueryKey = ['wall-blueprints', effectiveScope, feedSort, user?.id] as const;
 
   const { data: posts, isLoading } = useQuery({
     queryKey: wallQueryKey,
     queryFn: async () => {
-      const isForYou = activeTab === 'for-you' && !!user;
+      const scopedChannel =
+        effectiveScope !== SCOPE_ALL && effectiveScope !== SCOPE_FOR_YOU
+          ? CHANNELS_CATALOG.find((channel) => channel.slug === effectiveScope)
+          : null;
+      const isSpecificChannelScope = !!scopedChannel;
 
-      const limit = activeTab === 'for-you' ? 120 : 80;
+      const limit = isForYouScope || isSpecificChannelScope ? 140 : 90;
       let query = supabase
         .from('blueprints')
         .select('id, creator_user_id, title, selected_items, llm_review, banner_url, likes_count, created_at')
         .eq('is_public', true)
         .limit(limit);
 
-      if (activeTab === 'trending') {
+      if (feedSort === 'trending') {
         const cutoff = new Date();
         cutoff.setDate(cutoff.getDate() - 3);
         query = query
@@ -159,7 +178,7 @@ export default function Wall() {
       const profilesMap = new Map((profilesRes.data || []).map((profile) => [profile.user_id, profile]));
 
       let followTagIds = new Set<string>();
-      if (isForYou) {
+      if (isForYouScope) {
         const followsRes = await supabase.from('tag_follows').select('tag_id').eq('user_id', user.id);
         followTagIds = new Set((followsRes.data || []).map((row) => row.tag_id));
       }
@@ -171,7 +190,14 @@ export default function Wall() {
         user_liked: likedIds.has(blueprint.id),
       })) as BlueprintPost[];
 
-      if (isForYou) {
+      if (isSpecificChannelScope && scopedChannel) {
+        return hydrated.filter((post) => {
+          const primaryChannelSlug = resolvePrimaryChannelFromTags(post.tags.map((tag) => tag.slug));
+          return primaryChannelSlug === scopedChannel.slug;
+        });
+      }
+
+      if (isForYouScope) {
         if (followTagIds.size === 0) return hydrated;
 
         const joinedChannelPosts: BlueprintPost[] = [];
@@ -262,7 +288,7 @@ export default function Wall() {
     likeMutation.mutate({ blueprintId, liked: currentlyLiked });
   };
 
-  const showZeroJoinForYouCta = !!user && activeTab === 'for-you' && joinedCuratedCount === 0;
+  const showZeroJoinForYouCta = !!user && isForYouScope && joinedCuratedCount === 0;
 
   useEffect(() => {
     if (!showZeroJoinForYouCta) return;
@@ -272,17 +298,51 @@ export default function Wall() {
         surface: 'wall',
         user,
         metadata: {
-          tab: activeTab,
+          tab: effectiveScope,
           joined_channels_count: 0,
         },
       });
     });
-  }, [activeTab, showZeroJoinForYouCta, user]);
+  }, [effectiveScope, showZeroJoinForYouCta, user]);
   const visiblePosts = useMemo(() => {
     if (!posts) return [];
     if (!selectedTagSlug) return posts;
     return posts.filter((post) => post.tags.some((tag) => tag.slug === selectedTagSlug));
   }, [posts, selectedTagSlug]);
+
+  const scopeOptions = useMemo(() => {
+    const base = user
+      ? [
+          {
+            value: SCOPE_FOR_YOU,
+            label: 'For You',
+            icon: Sparkles,
+          },
+        ]
+      : [];
+
+    const allOption = {
+      value: SCOPE_ALL,
+      label: 'All Channels',
+      icon: Grid3X3,
+    };
+
+    const channelOptions = CHANNELS_CATALOG
+      .filter((channel) => channel.status === 'active')
+      .sort((a, b) => a.priority - b.priority)
+      .map((channel) => ({
+        value: channel.slug,
+        label: `b/${channel.slug}`,
+        icon: getChannelIcon(channel.icon),
+        channel,
+      }));
+
+    return [...base, allOption, ...channelOptions];
+  }, [user]);
+
+  const selectedScope = useMemo(() => {
+    return scopeOptions.find((option) => option.value === effectiveScope) || scopeOptions[0];
+  }, [effectiveScope, scopeOptions]);
 
   if (authLoading) {
     return (
@@ -323,18 +383,62 @@ export default function Wall() {
             </div>
           </div>
         )}
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as FeedTab)}>
-          <div className="mb-3 flex justify-center">
-            <TabsList className="h-9 w-fit rounded-md bg-muted/40 p-0.5">
-              {FEED_TABS.map((tab) => (
-                <TabsTrigger key={tab.value} value={tab.value}>
-                  {tab.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+        <div className="space-y-3">
+          <div className="px-3 sm:px-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <Popover open={scopeOpen} onOpenChange={setScopeOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" role="combobox" className="w-full sm:w-72 justify-between">
+                  <span className="inline-flex items-center gap-2 truncate">
+                    {selectedScope?.icon && <selectedScope.icon className="h-4 w-4 shrink-0" />}
+                    <span className="truncate">{selectedScope?.label || 'Select scope'}</span>
+                  </span>
+                  <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-60" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[320px] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Search channels..." />
+                  <CommandList>
+                    <CommandEmpty>No channels found.</CommandEmpty>
+                    <CommandGroup>
+                      {scopeOptions.map((option) => (
+                        <CommandItem
+                          key={option.value}
+                          value={`${option.label} ${option.value}`}
+                          onSelect={() => {
+                            setFeedScope(option.value);
+                            setScopeOpen(false);
+                          }}
+                          className="flex items-center gap-2"
+                        >
+                          <option.icon className="h-4 w-4 text-muted-foreground" />
+                          <span className="truncate">{option.label}</span>
+                          <Check
+                            className={cn(
+                              'ml-auto h-4 w-4',
+                              effectiveScope === option.value ? 'opacity-100' : 'opacity-0',
+                            )}
+                          />
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+
+            <Tabs value={feedSort} onValueChange={(v) => setFeedSort(v as FeedSort)}>
+              <TabsList className="h-9 w-full sm:w-fit rounded-md bg-muted/40 p-0.5">
+                {SORT_TABS.map((tab) => (
+                  <TabsTrigger key={tab.value} value={tab.value} className="flex-1 sm:flex-none">
+                    {tab.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
           </div>
 
-          <TabsContent value={activeTab} className="mt-0">
+          <div className="mt-0">
             {selectedTagSlug && (
               <div className="mb-3 mx-3 sm:mx-4 border border-border/40 px-3 py-2 flex items-center justify-between gap-2">
                 <p className="text-xs text-muted-foreground">
@@ -362,7 +466,7 @@ export default function Wall() {
                         surface: 'wall',
                         user,
                         metadata: {
-                          tab: activeTab,
+                          tab: effectiveScope,
                         },
                       });
                     }}
@@ -473,8 +577,8 @@ export default function Wall() {
               <Card className="text-center py-12">
                 <CardContent>
                   <div className="flex flex-col items-center gap-4">
-                    <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
-                      {activeTab === 'for-you' ? (
+                      <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
+                      {isForYouScope ? (
                         <Tag className="h-8 w-8 text-muted-foreground" />
                       ) : (
                         <Layers className="h-8 w-8 text-muted-foreground" />
@@ -482,17 +586,17 @@ export default function Wall() {
                     </div>
                     <div>
                       <h3 className="font-semibold">
-                        {activeTab === 'for-you' ? 'Personalize your feed' : 'No blueprints yet'}
+                        {isForYouScope ? 'Personalize your feed' : 'No blueprints yet'}
                       </h3>
                       <p className="text-sm text-muted-foreground mt-1">
-                        {activeTab === 'for-you'
+                        {isForYouScope
                           ? 'Join channels to see related blueprints here.'
                           : 'Be the first to share a blueprint.'}
                       </p>
                     </div>
                     
                     {/* Inline topic suggestions for "For You" tab */}
-                    {activeTab === 'for-you' && popularTags.length > 0 && (
+                    {isForYouScope && popularTags.length > 0 && (
                       <div className="space-y-3 w-full max-w-md">
                         {!user && (
                           <div className="flex flex-col items-center gap-2">
@@ -523,7 +627,7 @@ export default function Wall() {
                       </div>
                     )}
                     
-                    {activeTab !== 'for-you' && (
+                    {!isForYouScope && (
                       <div className="flex gap-2">
                         <Link to="/inventory">
                           <Button>Create Blueprint</Button>
@@ -537,8 +641,8 @@ export default function Wall() {
                 </CardContent>
               </Card>
             )}
-          </TabsContent>
-        </Tabs>
+          </div>
+        </div>
         <AppFooter />
       </main>
     </div>

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -10,12 +11,46 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, LogOut, Settings, LifeBuoy } from 'lucide-react';
+import { User, LogOut, Settings, LifeBuoy, HelpCircle, Moon, Sun } from 'lucide-react';
 import { useAiCredits } from '@/hooks/useAiCredits';
 
-export function UserMenu() {
+interface UserMenuProps {
+  onOpenHelp?: () => void;
+}
+
+type ThemeMode = 'light' | 'dark';
+
+export function UserMenu({ onOpenHelp }: UserMenuProps) {
   const { user, profile, signOut, isLoading } = useAuth();
   const creditsQuery = useAiCredits(!!user);
+  const [theme, setTheme] = useState<ThemeMode>('light');
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('blend-theme');
+    const normalizedTheme: ThemeMode =
+      savedTheme === 'dark' || savedTheme === 'light'
+        ? (savedTheme as ThemeMode)
+        : savedTheme === 'dark-aqua' || savedTheme === 'dark-orange'
+          ? 'dark'
+          : 'light';
+
+    setTheme(normalizedTheme);
+  }, []);
+
+  const applyTheme = (newTheme: ThemeMode) => {
+    const root = document.documentElement;
+    root.classList.remove('dark', 'theme-orange');
+    if (newTheme === 'dark') {
+      root.classList.add('dark', 'theme-orange');
+    }
+  };
+
+  const handleThemeToggle = () => {
+    const nextTheme: ThemeMode = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    applyTheme(nextTheme);
+    localStorage.setItem('blend-theme', nextTheme);
+  };
 
   if (isLoading) {
     return (
@@ -102,6 +137,20 @@ export function UserMenu() {
             <Settings className="mr-2 h-4 w-4" />
             Settings
           </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="cursor-pointer"
+          onClick={handleThemeToggle}
+        >
+          {theme === 'dark' ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
+          Toggle theme
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="cursor-pointer"
+          onClick={() => onOpenHelp?.()}
+        >
+          <HelpCircle className="mr-2 h-4 w-4" />
+          Help
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <a href="mailto:hi@vdsai.cloud" className="flex items-center cursor-pointer">

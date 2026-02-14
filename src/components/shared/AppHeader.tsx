@@ -1,8 +1,7 @@
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Beaker, HelpCircle, Plus } from 'lucide-react';
+import { Beaker, Plus } from 'lucide-react';
 import { AppNavigation } from '@/components/shared/AppNavigation';
-import { ThemeToggle } from '@/components/blend/ThemeToggle';
 import { UserMenu } from '@/components/shared/UserMenu';
 import { useAuth } from '@/contexts/AuthContext';
 import { HelpOverlay } from '@/components/shared/HelpOverlay';
@@ -100,18 +99,7 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
                 <span className="hidden lg:inline">Create</span>
               </Button>
             )}
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => setShowHelp(true)}
-              className="h-9 w-9 rounded-full border border-border/60 bg-background/60 text-muted-foreground hover:text-foreground"
-              aria-label="Open help"
-            >
-              <HelpCircle className="h-4 w-4" />
-            </Button>
-            <ThemeToggle />
-            <UserMenu />
+            <UserMenu onOpenHelp={() => setShowHelp(true)} />
           </div>
         </div>
       </header>

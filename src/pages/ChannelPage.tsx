@@ -217,7 +217,7 @@ export default function ChannelPage() {
                 onClick={() => setShowCreate(true)}
               >
                 <Plus className="h-4 w-4" />
-                + Create
+                Create
               </Button>
               {channel.isJoinEnabled && (
                 <Button
