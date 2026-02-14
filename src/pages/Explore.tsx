@@ -272,8 +272,6 @@ export default function Explore() {
                     <ExploreResultCard
                       key={r.type === 'blueprint' ? r.id : ''}
                       result={r}
-                      onTagClick={handleTagClick}
-                      followedTagSlugs={followedSlugs}
                       commentCountByBlueprintId={commentCountByBlueprintId}
                     />
                   ))}
@@ -289,8 +287,6 @@ export default function Explore() {
                     <ExploreResultCard
                       key={r.type === 'inventory' ? r.id : ''}
                       result={r}
-                      onTagClick={handleTagClick}
-                      followedTagSlugs={followedSlugs}
                       commentCountByBlueprintId={commentCountByBlueprintId}
                     />
                   ))}
@@ -328,8 +324,6 @@ export default function Explore() {
                   <ExploreResultCard
                     key={r.type === 'user' ? r.userId : r.id}
                     result={r}
-                    onTagClick={handleTagClick}
-                    followedTagSlugs={followedSlugs}
                     commentCountByBlueprintId={commentCountByBlueprintId}
                   />
                 ))}

@@ -8,23 +8,19 @@ import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { Button } from '@/components/ui/button';
 import { resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
+import { getCatalogChannelTagSlugs } from '@/lib/channelPostContext';
+import { normalizeTag } from '@/lib/tagging';
 
 interface ExploreResultCardProps {
   result: ExploreResult;
-  onTagClick?: (tag: string, options?: { toggleJoin?: boolean }) => void;
-  followedTagSlugs?: Set<string>;
   commentCountByBlueprintId?: Record<string, number>;
 }
 
 function BlueprintCard({
   result,
-  onTagClick,
-  followedTagSlugs,
   commentCountByBlueprintId,
 }: {
   result: BlueprintResult;
-  onTagClick?: (tag: string, options?: { toggleJoin?: boolean }) => void;
-  followedTagSlugs?: Set<string>;
   commentCountByBlueprintId?: Record<string, number>;
 }) {
   const summary = buildFeedSummary({
@@ -34,55 +30,64 @@ function BlueprintCard({
     maxChars: 190,
   });
   const channelLabel = resolveChannelLabelForBlueprint(result.tags);
+  const channelTagSlugs = new Set(getCatalogChannelTagSlugs().map(normalizeTag));
+  const displayTags = result.tags.filter((tag) => !channelTagSlugs.has(normalizeTag(tag)));
   const createdLabel = formatRelativeShort(result.createdAt);
   const commentsCount = commentCountByBlueprintId?.[result.id] || 0;
+  const hasBanner = !!result.bannerUrl;
 
   return (
     <Link to={`/blueprint/${result.id}`}>
-      <Card className="p-3 border-border/40 bg-transparent rounded-sm hover:bg-muted/10 transition-colors h-full shadow-none">
-        <div className="flex items-center justify-between gap-2 mb-1">
-          <p className="text-[11px] font-semibold tracking-wide text-foreground/75">{channelLabel}</p>
-          <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
-        </div>
-        <h3 className="font-semibold text-base leading-tight line-clamp-2 mb-1">{result.title}</h3>
-        <p className="text-xs text-muted-foreground line-clamp-3 mb-2">
-          {summary}
-        </p>
+      <Card className="p-3 border-border/40 bg-transparent rounded-sm hover:bg-muted/10 transition-colors shadow-none">
+        <div className="relative">
+          {hasBanner && (
+            <>
+              <img
+                src={result.bannerUrl!}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover opacity-35"
+                loading="lazy"
+              />
+              <div className="absolute inset-0 bg-gradient-to-b from-background/35 via-background/60 to-background/80" />
+            </>
+          )}
+          <div className="relative">
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <p className="text-[11px] font-semibold tracking-wide text-foreground/75">{channelLabel}</p>
+              <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
+            </div>
+            <h3 className="font-semibold text-base leading-tight line-clamp-2 mb-1">{result.title}</h3>
+            <p className="text-xs text-muted-foreground line-clamp-3 mb-2">
+              {summary}
+            </p>
 
-        <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
-          <span className="inline-flex h-7 items-center gap-1 px-2">
-            <Heart className="h-3.5 w-3.5" />
-            {result.likesCount}
-          </span>
-          <span className="inline-flex h-7 items-center gap-1 px-2">
-            <MessageCircle className="h-3.5 w-3.5" />
-            {commentsCount}
-          </span>
-          <Button variant="ghost" size="sm" className="h-7 px-2" disabled>
-            <Share2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
+            <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
+              <span className="inline-flex h-7 items-center gap-1 px-2">
+                <Heart className="h-3.5 w-3.5" />
+                {result.likesCount}
+              </span>
+              <span className="inline-flex h-7 items-center gap-1 px-2">
+                <MessageCircle className="h-3.5 w-3.5" />
+                {commentsCount}
+              </span>
+              <Button variant="ghost" size="sm" className="h-7 px-2" disabled>
+                <Share2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
 
-        {result.tags.length > 0 && (
-          <OneRowTagChips
-            className="flex flex-nowrap gap-1 overflow-hidden"
-            items={result.tags.map((tag) => ({
-              key: tag,
-              label: `#${tag}`,
-              variant: 'secondary',
-              className: `text-xs cursor-pointer transition-colors border ${
-                followedTagSlugs?.has(tag)
-                  ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
-                  : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
-              }`,
-              onClick: (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onTagClick?.(tag, { toggleJoin: false });
-              },
-            }))}
-          />
-        )}
+            {displayTags.length > 0 && (
+              <OneRowTagChips
+                className="flex flex-nowrap gap-1 overflow-hidden"
+                items={displayTags.map((tag) => ({
+                  key: tag,
+                  label: tag,
+                  variant: 'secondary',
+                  className: 'text-xs transition-colors border bg-muted/40 text-muted-foreground border-border/60',
+                }))}
+              />
+            )}
+          </div>
+        </div>
       </Card>
     </Link>
   );
@@ -90,12 +95,8 @@ function BlueprintCard({
 
 function InventoryCard({
   result,
-  onTagClick,
-  followedTagSlugs,
 }: {
   result: InventoryResult;
-  onTagClick?: (tag: string, options?: { toggleJoin?: boolean }) => void;
-  followedTagSlugs?: Set<string>;
 }) {
   const summary = buildFeedSummary({
     primary: result.promptCategories,
@@ -103,11 +104,13 @@ function InventoryCard({
     maxChars: 190,
   });
   const channelLabel = resolveChannelLabelForBlueprint(result.tags);
+  const channelTagSlugs = new Set(getCatalogChannelTagSlugs().map(normalizeTag));
+  const displayTags = result.tags.filter((tag) => !channelTagSlugs.has(normalizeTag(tag)));
   const createdLabel = formatRelativeShort(result.createdAt);
 
   return (
     <Link to={`/inventory/${result.id}`}>
-      <Card className="p-3 border-border/40 bg-transparent rounded-sm hover:bg-muted/10 transition-colors h-full shadow-none">
+      <Card className="p-3 border-border/40 bg-transparent rounded-sm hover:bg-muted/10 transition-colors shadow-none">
         <div className="flex items-center justify-between gap-2 mb-1">
           <p className="text-[11px] font-semibold tracking-wide text-foreground/75">{channelLabel}</p>
           <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
@@ -131,23 +134,14 @@ function InventoryCard({
           </Button>
         </div>
 
-        {result.tags.length > 0 && (
+        {displayTags.length > 0 && (
           <OneRowTagChips
             className="flex flex-nowrap gap-1 overflow-hidden"
-            items={result.tags.map((tag) => ({
+            items={displayTags.map((tag) => ({
               key: tag,
-              label: `#${tag}`,
+              label: tag,
               variant: 'secondary',
-              className: `text-xs cursor-pointer transition-colors border ${
-                followedTagSlugs?.has(tag)
-                  ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
-                  : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
-              }`,
-              onClick: (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onTagClick?.(tag, { toggleJoin: false });
-              },
+              className: 'text-xs transition-colors border bg-muted/40 text-muted-foreground border-border/60',
             }))}
           />
         )}
@@ -167,19 +161,17 @@ function UserCard({ result }: { result: UserResult }) {
   );
 }
 
-export function ExploreResultCard({ result, onTagClick, followedTagSlugs, commentCountByBlueprintId }: ExploreResultCardProps) {
+export function ExploreResultCard({ result, commentCountByBlueprintId }: ExploreResultCardProps) {
   switch (result.type) {
     case 'blueprint':
       return (
         <BlueprintCard
           result={result}
-          onTagClick={onTagClick}
-          followedTagSlugs={followedTagSlugs}
           commentCountByBlueprintId={commentCountByBlueprintId}
         />
       );
     case 'inventory':
-      return <InventoryCard result={result} onTagClick={onTagClick} followedTagSlugs={followedTagSlugs} />;
+      return <InventoryCard result={result} />;
     case 'user':
       return <UserCard result={result} />;
     default:

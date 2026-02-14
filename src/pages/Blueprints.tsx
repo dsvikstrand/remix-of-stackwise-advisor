@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
@@ -25,6 +25,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export default function Blueprints() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [selectedChannel, setSelectedChannel] = useState<string>('any');
@@ -290,7 +291,7 @@ export default function Blueprints() {
                 <BlueprintCard
                   blueprint={blueprint}
                   onLike={handleLike}
-                  onTagClick={(tagSlug) => handleTagSelect(tagSlug)}
+                  onTagClick={(tagSlug) => navigate(`/explore?q=${encodeURIComponent(tagSlug)}`)}
                   commentCount={commentCountsByBlueprintId[blueprint.id] || 0}
                   variant="grid_flat"
                 />

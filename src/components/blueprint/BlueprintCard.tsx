@@ -40,17 +40,17 @@ export function BlueprintCard({
   return (
     <Link
       to={`/blueprint/${blueprint.id}`}
-      className={cn('block group', variant === 'grid_flat' && 'h-full')}
+      className="block group"
     >
       <div
         className={cn(
-          'h-full bg-transparent',
+          'bg-transparent',
           'group-focus-visible:ring-2 group-focus-visible:ring-primary',
         )}
       >
         <div
           className={cn(
-            'relative flex flex-col h-full',
+            'relative flex flex-col',
             variant === 'grid_flat' && hasBanner && '-m-3 p-3',
           )}
         >
@@ -66,26 +66,26 @@ export function BlueprintCard({
             </>
           )}
 
-          <div className="relative flex flex-col h-full">
+          <div className="relative flex flex-col">
             <div className="flex items-start justify-between gap-2 mb-2">
               <h3 className="font-semibold text-base leading-tight line-clamp-2">{blueprint.title}</h3>
             </div>
 
-            <p className="text-sm text-muted-foreground line-clamp-2 mb-3 flex-grow">
+            <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
               {summary}
             </p>
 
-            {displayTags.length > 0 && (
-              <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center justify-between gap-2">
+              {displayTags.length > 0 ? (
                 <div className="min-w-0 flex-1">
                   <OneRowTagChips
                     className="flex flex-nowrap gap-1.5 overflow-hidden min-w-0"
                     items={displayTags.map((tag) => ({
                       key: tag.id,
-                      label: `#${tag.slug}`,
+                      label: tag.slug,
                       variant: 'secondary',
                       className:
-                        'text-xs cursor-pointer transition-colors border bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60',
+                        'text-xs transition-colors border bg-muted/40 text-muted-foreground border-border/60 cursor-pointer hover:bg-muted/60',
                       onClick: (event) => {
                         if (!onTagClick) return;
                         event.preventDefault();
@@ -95,33 +95,35 @@ export function BlueprintCard({
                     }))}
                   />
                 </div>
+              ) : (
+                <div />
+              )}
 
-                <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={`h-7 px-2 ${
-                      blueprint.user_liked
-                        ? 'text-red-500 hover:text-red-600'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      onLike(blueprint.id, blueprint.user_liked);
-                    }}
-                    aria-label={blueprint.user_liked ? 'Unlike blueprint' : 'Like blueprint'}
-                  >
-                    <Heart className={`h-3.5 w-3.5 ${blueprint.user_liked ? 'fill-current' : ''}`} />
-                    <span className="ml-1">{blueprint.likes_count}</span>
-                  </Button>
-                  <span className="inline-flex items-center gap-1">
-                    <MessageCircle className="h-3.5 w-3.5" />
-                    {commentCount}
-                  </span>
-                </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={`h-7 px-2 ${
+                    blueprint.user_liked
+                      ? 'text-red-500 hover:text-red-600'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onLike(blueprint.id, blueprint.user_liked);
+                  }}
+                  aria-label={blueprint.user_liked ? 'Unlike blueprint' : 'Like blueprint'}
+                >
+                  <Heart className={`h-3.5 w-3.5 ${blueprint.user_liked ? 'fill-current' : ''}`} />
+                  <span className="ml-1">{blueprint.likes_count}</span>
+                </Button>
+                <span className="inline-flex items-center gap-1">
+                  <MessageCircle className="h-3.5 w-3.5" />
+                  {commentCount}
+                </span>
               </div>
-            )}
+            </div>
           </div>
         </div>
       </div>

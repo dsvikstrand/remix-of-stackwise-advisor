@@ -29,6 +29,7 @@ interface BlueprintPost {
   title: string;
   selected_items: Json;
   llm_review: string | null;
+  banner_url: string | null;
   likes_count: number;
   created_at: string;
   profile: {
@@ -63,7 +64,7 @@ export default function Wall() {
   
   // Popular channels (tag-backed) for empty state
   const { data: popularTags = [] } = usePopularInventoryTags(6);
-  const { followedIds, followedTags } = useTagFollows();
+  const { followedTags } = useTagFollows();
 
   const curatedJoinableSlugs = useMemo(
     () =>
@@ -107,7 +108,7 @@ export default function Wall() {
       const limit = activeTab === 'for-you' ? 120 : 80;
       let query = supabase
         .from('blueprints')
-        .select('id, creator_user_id, title, selected_items, llm_review, likes_count, created_at')
+        .select('id, creator_user_id, title, selected_items, llm_review, banner_url, likes_count, created_at')
         .eq('is_public', true)
         .limit(limit);
 
@@ -337,7 +338,7 @@ export default function Wall() {
             {selectedTagSlug && (
               <div className="mb-3 mx-3 sm:mx-4 border border-border/40 px-3 py-2 flex items-center justify-between gap-2">
                 <p className="text-xs text-muted-foreground">
-                  Filtered by <span className="font-semibold text-foreground">#{selectedTagSlug}</span>
+                  Filtered by <span className="font-semibold text-foreground">{selectedTagSlug}</span>
                 </p>
                 <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setSelectedTagSlug(null)}>
                   Clear
@@ -402,61 +403,66 @@ export default function Wall() {
                       to={`/blueprint/${post.id}`}
                       className="block px-3 py-2.5 transition-colors hover:bg-muted/20"
                     >
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-[11px] font-semibold tracking-wide text-foreground/75">{channelLabel}</p>
-                          <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
-                        </div>
-                        <h3 className="text-base font-semibold leading-tight">{post.title}</h3>
-                        <p className="text-sm text-muted-foreground line-clamp-3">{preview}</p>
-
-                        {post.tags.length > 0 && (
-                          <OneRowTagChips
-                            className="flex flex-nowrap gap-1.5 overflow-hidden"
-                            items={post.tags.map((tag) => ({
-                              key: tag.id,
-                              label: `#${tag.slug}`,
-                              variant: 'outline',
-                              className: `text-xs cursor-pointer transition-colors border ${
-                                followedIds.has(tag.id)
-                                  ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
-                                  : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
-                              }`,
-                              onClick: (event) => {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                handleTagFilter(tag.slug);
-                              },
-                            }))}
-                          />
+                      <div className="relative overflow-hidden">
+                        {!!post.banner_url && (
+                          <>
+                            <img
+                              src={post.banner_url}
+                              alt=""
+                              className="absolute inset-0 h-full w-full object-cover opacity-35"
+                              loading="lazy"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-b from-background/35 via-background/60 to-background/80" />
+                          </>
                         )}
+                        <div className="relative space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-[11px] font-semibold tracking-wide text-foreground/75">{channelLabel}</p>
+                            <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
+                          </div>
+                          <h3 className="text-base font-semibold leading-tight">{post.title}</h3>
+                          <p className="text-sm text-muted-foreground line-clamp-3">{preview}</p>
 
-                        <div className="flex items-center gap-1.5 pt-1 text-xs text-muted-foreground">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className={`h-7 px-2 ${post.user_liked ? 'text-red-500' : ''}`}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              handleLike(post.id, post.user_liked);
-                            }}
-                          >
-                            <Heart className={`h-4 w-4 mr-1 ${post.user_liked ? 'fill-current' : ''}`} />
-                            {post.likes_count}
-                          </Button>
-                          <span className="inline-flex h-7 items-center gap-1 px-2">
-                            <MessageCircle className="h-4 w-4" />
-                            {commentsCount}
-                          </span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 px-2"
-                            disabled
-                            onClick={(event) => event.preventDefault()}
-                          >
-                            <Share2 className="h-4 w-4" />
-                          </Button>
+                          {post.tags.length > 0 && (
+                            <OneRowTagChips
+                              className="flex flex-nowrap gap-1.5 overflow-hidden"
+                              items={post.tags.map((tag) => ({
+                                key: tag.id,
+                                label: tag.slug,
+                                variant: 'outline',
+                                className:
+                                  'text-xs transition-colors border bg-muted/40 text-muted-foreground border-border/60',
+                              }))}
+                            />
+                          )}
+
+                          <div className="flex items-center gap-1.5 pt-1 text-xs text-muted-foreground">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className={`h-7 px-2 ${post.user_liked ? 'text-red-500' : ''}`}
+                              onClick={(event) => {
+                                event.preventDefault();
+                                handleLike(post.id, post.user_liked);
+                              }}
+                            >
+                              <Heart className={`h-4 w-4 mr-1 ${post.user_liked ? 'fill-current' : ''}`} />
+                              {post.likes_count}
+                            </Button>
+                            <span className="inline-flex h-7 items-center gap-1 px-2">
+                              <MessageCircle className="h-4 w-4" />
+                              {commentsCount}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2"
+                              disabled
+                              onClick={(event) => event.preventDefault()}
+                            >
+                              <Share2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     </Link>
@@ -507,7 +513,7 @@ export default function Wall() {
                               className="gap-1.5 bg-muted/40 text-muted-foreground border border-border/60 cursor-pointer hover:bg-muted/60"
                               onClick={() => handleTagFilter(tag.slug)}
                             >
-                              #{tag.slug}
+                              {tag.slug}
                             </Badge>
                           ))}
                         </div>
