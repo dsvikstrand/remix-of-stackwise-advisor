@@ -1,37 +1,37 @@
-# Execution Plans Index
+# Execution Plans Registry
 
-- Active plans:
-  - `docs/exec-plans/active/`
-  - `docs/exec-plans/active/channels-first-ux-program.md`
-  - `docs/exec-plans/active/project-1-ia-and-lingo.md`
-  - `docs/exec-plans/active/project-2-feed-density.md`
-  - `docs/exec-plans/active/project-3-channel-following.md`
-  - `docs/exec-plans/active/project-4-blueprint-detail-priority.md`
-  - `docs/exec-plans/active/project-5-metrics-validation.md`
-- Completed plans:
-  - `docs/exec-plans/completed/`
-  - `docs/exec-plans/completed/supabase-migration-closure-2026-02-13.md`
-- Deferred work:
-  - `docs/exec-plans/tech-debt-tracker.md`
+This file is the authoritative active/completed registry for execution plans.
 
-## Current Program Progress
-- P1 Step 1/3: completed (channels terminology pass).
-- P1 Step 2/3: completed (Explore IA pass, lightweight scope).
-- P1 Step 3/3: docs-level taxonomy and mapping spec completed:
-  - `docs/references/channel-taxonomy-v0.md`
-- P2 Step 1/4: completed (summary hygiene + compact text rules).
-- P2 Step 2/4: completed (flatter row shell + wall-to-wall tightening).
-- P2 Step 3/4: completed (channel-first metadata, comments meta on blueprint rows).
-- P2 Step 4/4: completed (polish + regression closure + focused YT2BP/ASS smoke checks).
-- P3: spec lock completed (3-step execution plan + SUCC metrics), implementation is in progress.
-- P3 Step 1/3: implemented on core surfaces (Explore + Channels page + Wall) with explicit join-state model and filter-only chip cleanup.
-- P3 Phase 1 IA/routing: completed (`/channels` + `/b/:channelSlug` + `/tags` deprecation redirect).
-- P3 Phase 2: completed (real channel feeds on `/b/:channelSlug`, deterministic `b/<channel-slug>` resolver labels on Wall/Explore, and `b/general` fallback lane).
-- P3 Step 2/3: completed for ranking/cold-start policy on Wall (`For You` joined-first + global fill; `Latest`/`Trending` unchanged; zero-join CTA inline).
-- P3 Phase 3: completed (channels-only follow UX, `/channels` section restructuring, legacy non-curated follow cleanup, and tag follow controls removed from Explore/Wall).
-- P3 Phase 3 polish: completed (minimal row copy/layout pass on `/channels`: `Explore` preview label, 3-item preview cap, and slug label hidden in `Suggested`/`More` rows).
-- P3 Posting flow: implemented (channel-scoped `+ Create` flow: where-to-post -> source picker; public publish requires valid joined channel; Library/YouTube removed from top nav).
-- P3 Step 3/3: implemented + pilot started (telemetry + validation gate: `p3_step3_v0` events + `metrics:channels` script + pilot thresholds; kickoff 2026-02-13).
-- App-wide wall-to-wall layout migration: Run 1 completed (major surfaces baseline). Run 2 in progress (detail pages + global primitives + remaining Home flattening + `/tags` deep-link cleanup).
-- Supabase migration closeout: completed and documented:
-  - `docs/exec-plans/completed/supabase-migration-closure-2026-02-13.md`
+## Active
+- `docs/exec-plans/active/channels-first-ux-program.md`  
+  Program-level umbrella for channels-first UX decisions and sequencing.
+- `docs/exec-plans/active/project-3-channel-following.md`  
+  Active project: channel-following runtime + feed behavior + telemetry validation loop.
+- `docs/exec-plans/active/project-4-blueprint-detail-priority.md`  
+  Planned next: blueprint detail hierarchy/content-priority refinement.
+- `docs/exec-plans/active/project-5-metrics-validation.md`  
+  Planned next: metrics/reporting deepening after telemetry baseline.
+- `docs/exec-plans/tech-debt-tracker.md`  
+  Deferred work backlog and non-blocking engineering debt.
+
+## Completed
+- `docs/exec-plans/completed/project-1-ia-and-lingo.md`  
+  Completed: channels-first terminology + IA baseline.
+- `docs/exec-plans/completed/project-2-feed-density.md`  
+  Completed: feed density + wall-to-wall UI baseline.
+- `docs/exec-plans/completed/supabase-migration-closure-2026-02-13.md`  
+  Completed: Supabase migration closure and validation notes.
+- `docs/exec-plans/completed/docs-consolidation-audit-2026-02-14.md`  
+  Completed: full docs inventory/classification and deprecated-stub removal.
+
+## Current Program Snapshot
+- P1: completed.
+- P2: completed.
+- P3: active (runtime behavior + telemetry loop in operation).
+- P4: planned.
+- P5: planned.
+
+## Rules
+- Keep only truly active docs in `active/`.
+- Move finished project plans into `completed/`.
+- Update this index whenever status changes.

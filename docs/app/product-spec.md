@@ -1,46 +1,75 @@
-# Product Spec (Code-Based)
+# Product Spec (Current Runtime)
 
 ## Overview
-Blueprints is a community app for sharing step-by-step routines. Users generate or select a library (stored in legacy `inventories` tables), build a blueprint by choosing items and adding steps/context, receive an LLM review, and publish to the community for discovery and feedback.
+Blueprints is a channels-first community app for creating and discovering step-based blueprint content.
 
-## Primary User Flow
-f1) Discover blueprints on the Wall or via Tags.
-f2) Explore Libraries and pick one to build from.
-f3) Generate a new Library with the LLM, then edit items/tags.
-f4) Build a Blueprint by selecting items and assigning them to steps with context.
-f5) Generate an LLM review for the Blueprint.
-f6) Publish the Blueprint to the community.
+Core model:
+- Channels: curated followable lanes for feed personalization
+- Tags: blueprint metadata for search/discovery
+- Blueprints: public or private routines built from library items and/or YouTube generation
 
-## Key Pages and Routes
-p1) Home: `src/pages/Home.tsx` (community-first landing)
-p2) Library List (legacy route/file name): `src/pages/Inventory.tsx`
-p3) Library Create (legacy route/file name): `src/pages/InventoryCreate.tsx`
-p4) Library Build (legacy route/file name): `src/pages/InventoryBuild.tsx`
-p5) Blueprint Detail: `src/pages/BlueprintDetail.tsx`
-p6) Blueprint Remix: `src/pages/BlueprintRemix.tsx`
-p7) Wall: `src/pages/Wall.tsx`
-p8) Tags: `src/pages/Tags.tsx`
-p9) User Profile: `src/pages/UserProfile.tsx`
+## Primary User Flows
+f1) Discover blueprints on `Feed` (`/wall`) with scope + sort controls.
+f2) Join channels on `/channels` or `/b/:channelSlug`.
+f3) Start create flow (`Create`) -> choose channel -> choose source (Library or YouTube).
+f4) Build/refine blueprint, run AI review, publish publicly.
+f5) Open blueprint detail, like/comment, and navigate via tags to Explore.
 
-## Core Data Model (Supabase)
-d1) `inventories` (legacy table name): LLM-generated library schema + metadata
-d2) `inventory_tags`, `inventory_likes`, `inventory_remixes` (legacy table names)
-d3) `blueprints`: selected items, steps, review, metadata
-d4) `blueprint_tags`, `blueprint_likes`, `blueprint_comments`
-d5) `user_follows`, `post_bookmarks`, `profiles`
+## Routes and IA
+p1) Home: `/`
+p2) Feed: `/wall`
+p3) Explore: `/explore`
+p4) Channels index: `/channels`
+p5) Channel page: `/b/:channelSlug`
+p6) Inventory list: `/inventory`
+p7) Inventory create: `/inventory/create`
+p8) Inventory detail: `/inventory/:inventoryId`
+p9) Inventory build/editor: `/inventory/:inventoryId/build`
+p10) Blueprint detail: `/blueprint/:blueprintId`
+p11) Blueprint remix: `/blueprint/:blueprintId/remix`
+p12) YouTube to Blueprint: `/youtube`
+p13) Auth: `/auth`
+p14) Settings: `/settings`
+p15) Profile: `/u/:userId`
 
-## LLM Edge Functions
-e1) Generate library (legacy function name): `supabase/functions/generate-inventory/index.ts`
-e2) Analyze blueprint (review): `supabase/functions/analyze-blueprint/index.ts`
+Compatibility redirects:
+- `/tags` -> `/channels`
+- `/blueprints` -> `/wall`
 
-## Current Scope vs. Future
-s1) Current: community discovery focused on Blueprints.
-s2) Future: optional discovery of Libraries alongside Blueprints.
+## Feed Behavior (Wall)
+- Scope selector:
+  - `For You` (signed-in personalized lane)
+  - `All Channels`
+  - specific channel lanes (`b/<slug>`)
+- Sort selector:
+  - `Latest`
+  - `Trending`
+- Personalized behavior:
+  - `For You` prioritizes joined-channel content with global fill fallback.
 
-## Repo Pointers for Reviewers
-r1) Routes: `src/App.tsx`
-r2) Library UX (legacy folder/hook names): `src/components/inventory/*`, `src/hooks/useInventories.ts`
-r3) Blueprint UX: `src/components/blueprint/*`, `src/hooks/useBlueprints.ts`
-r4) Community UX: `src/components/wall/*`, `src/components/profile/*`, `src/hooks/useComments.ts`
-r5) Supabase client/types: `src/integrations/supabase/*`
-r6) Migrations: `supabase/migrations/*`
+## Channel Model (MVP)
+- Curated admin-owned channel catalog (no user-created channels in MVP).
+- Runtime join state remains tag-backed (`tag_follows`) for compatibility.
+- Canonical channel URL label shape: `b/<channel-slug>`.
+- `b/general` is fallback/read-only lane.
+
+## Create and Publish Model
+- Create is channel-scoped.
+- Public publish requires valid channel context and joined state.
+- Channel assignment is applied by injecting channel backing tag slug at publish time.
+
+## Data Model (Supabase, Current)
+d1) `blueprints`, `blueprint_tags`, `blueprint_likes`, `blueprint_comments`
+d2) `inventories` and related legacy inventory tables (still active runtime tables)
+d3) `tag_follows`, `tags`, `profiles`, `post_bookmarks`
+d4) telemetry sink table: `mvp_events`
+
+## Backend Surfaces
+- App API server endpoints under `/api/*` (including `/api/youtube-to-blueprint`).
+- Supabase Edge functions include `log-event` and generation-related functions.
+
+## Key References
+- Architecture: `docs/architecture.md`
+- Program + project status: `docs/exec-plans/index.md`
+- Channels taxonomy: `docs/references/channel-taxonomy-v0.md`
+- YT2BP contract: `docs/product-specs/yt2bp_v0_contract.md`

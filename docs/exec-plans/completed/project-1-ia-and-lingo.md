@@ -1,6 +1,6 @@
 # Project 1 - IA And Lingo
 
-Status: `draft`
+Status: `completed`
 
 ## Goal
 Establish consistent information architecture and naming so cold users understand the app as blueprint-first with followable Channels.

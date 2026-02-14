@@ -1,6 +1,6 @@
 # Collaboration Guidelines
 
-## 1) Bullet keys for clarity
+## Bullet keys for clarity
 When you provide **Findings**, **Questions**, **Lists**, or any multi-item bullets, prefix **each item** with a **unique key**. (OBS you can use any "keys" as bullets (*, -, ints. etc), not limited to
 "
 a1)... 
@@ -21,62 +21,30 @@ Rules:
 - Keys only need to be unique **within the current message**.
 - Keys may be reused in later messages.
 
-## 2) Budgets (Soft)
 
-Goal: keep weekly rate-limit spend low by default, without blocking task completion.
-
-Defaults: see section 13 (Effort Flags (Soft)) for details.
-- Use minimal exploration and minimal commands needed to make measurable progress.
-- Budgets are **soft**, not hard limits. If a task needs more work than the budget, finish the task after doing the escalation step below.
-
-Soft budgets Recommendation (Soft Limit per task)
-- `commands`: ~10
-- `file reads/greps`: ~10
-- `smoke tests`: ~2
-
-
-## 3) Plan-first implementation
+## Plan-first implementation
 Process:
 - First, provide a **high-level implementation plan** (steps + files/functions to touch).
 - Then wait for my approval/adjustments.
 - Only after I approve the plan should you write or modify code. 
 
-## 4) Plan approved
+## Plan approved
 if I add PA (plan approved), you can go with code (don't need to wait for code ok here).
 PAP (plan approved -> push to github), push the latest update once you are done (with a simple comment)
 
-## 5) Lovable tickets workflow 
-When we have a new Lovable task, add a new numbered markdown file in `lovable/tickets` (e.g., `1.md`, `2.md`, ...). Do not create templates. When a ticket is solved, admin will add a `_solved` suffix to the filename.
-
-## 6) Git push access in this environment
+## Git push access in this environment
 Push access depends on the SSH key stored in this environment. Any Codex session can push only if it runs in the same environment where the key and SSH config exist. This applies to any repo path opened in this environment (for example `/mnt/c/Users/Dell/Documents/VSC/App/newApp`). Removing the key disables push until a new key is added.
 
-## 7) UDO shortcut for execution
+## UDO shortcut for execution
 If a message ends with `UDO`, treat it as approval to execute the actions you propose without waiting for a separate confirmation. Always summarize what you did afterward. (Not for code, only for commands : PA/PAP is for code)
 
-## 7b) UDD shortcut for docs freshness
-If a message ends with `UDD`, run a docs freshness pass based on changed files and update affected docs as needed.
-
-Behavior:
-- Run `npm run docs:refresh-check` (optionally with `--base <ref>` when requested).
-- Use `docs/_freshness_map.json` as source of truth for affected-doc mapping.
-- Report:
-  - `affected_docs`
-  - `missing_updates`
-  - `suggested_sections`
-  - `status`
-- If `status=needs_update`, update affected docs before closing the task.
-
-## 8) Document Tag Updates (deprecated, we have a new system for the documents)
-
-
-## 9) REC (go with your recommendations)
+## Shortcuts
 If I type REC -> "use/go with your recommendations"
 for example: if you give me a follow up question:
 (codex) - "Would you like option A or B?"/"How should I do X"
 (me) - "REC" -> "Please use/go with your recommendations"
 
-some other "shortcuts" are (these are not commands but simple placeholder for specific words):
+some other "shortcuts" are (these are not commands):
 IMP -> Implement
 SUCC -> Successful
 SPC -> Specific
@@ -85,7 +53,7 @@ ST -> Smoke test
 LL -> "Last Line" of Your message (usually a follow-up Question, where "LL yep" -> "Yes to your follow up" )
 
 
-## 10) Remote server: Oracle (SSH alias + multiplexing)
+## Remote server: Oracle (SSH alias + multiplexing)
 
 Use the SSH alias (no raw IPs/keys in commands).
 
@@ -123,7 +91,7 @@ Troubleshooting
 - If you see `Permission denied (publickey)`: confirm the key path and that `/root/.ssh/id_ed25519_codex_agentic` exists in this environment, and that the public key is in `~/.ssh/authorized_keys` on the server.
 - First connect may prompt to accept the host key; answer `yes` once.
 
-## 11) [have]/[todo] status tags
+## [have]/[todo] status tags
 
 Use `[have]` and `[todo]` at the start of bullet items when describing project state, plans, and reviews (especially for ASS/DAS work).
 
@@ -147,20 +115,7 @@ b1) [todo] Implement the LIB_GEN eval gate + retry wiring
 b2) [todo] Run a DAS smoke test and link the run_log.json
 ```
 
-## 12) Mermaid (.mmd) rendering gotchas
-
-m1) Keep node and edge labels ASCII-only. Avoid unicode symbols (example: `✔`) and emojis.
-m2) Avoid `<` and `>` in labels (example: use `PERSONA_ID` instead of `<id>`).
-m3) Avoid multiline labels and escape tricks. Keep labels single-line.
-m4) Prefer quoted labels for punctuation: `NODE_ID["text here"]` instead of `NODE_ID[text here]`.
-m5) Keep node ids simple: letters/numbers/underscores only (put extra info in the label).
-m6) For note nodes (`NOTE{{...}}`), keep note text short and ASCII.
-m7) Debug method: if rendering breaks, remove or comment the last edits until it renders, then add text back incrementally.
-
-How to use this in msgs
-m8) If you hit a Mermaid parse error, paste the error line number and snippet. I will rewrite the offending labels to the safe subset above.
-
-## 13) Effort Flags (Soft)
+## Effort Flags (Soft)
 
 Use effort flags to control how much exploration/tooling depth I use during planning and implementation.
 
@@ -176,18 +131,43 @@ Meaning (soft limits, not hard stops)
 Important
 - These flags do not change which GUI/model tier you are using. They only change my behavior and how much I explore.
 
-## 14) Final GUI reasoning effort recommendation
+## Final GUI reasoning effort recommendation
 When you give me a full implementation plan (effort flags included). Also give me a finial REC for the GUI/MODEL REASONING to use. one of-> |Low,Med,High,xHigh|
 
-## 15) VS Code Plan Mode approval mapping
+## Build Check Policy (Credit-Saving)
 
-When using VS Code Plan Mode:
-- I can include multiple follow-up questions (as many as needed) before implementation.
-- If you press the VS Code button `Implement the plan`, treat it as full execution approval equivalent to:
-  - `follow this plan please. PAP/UDO (respect effort flags and some test if needed UDO)`
+Default intent
+- Keep command usage low for small tasks.
+- Do not run full build automatically for every tiny edit.
 
-Execution behavior after `Implement plan` using plan mode:
-- Code changes are approved.
-- Command execution is approved.
-- Run focused smoke tests as needed (respecting effort flags).
-- Push to GitHub when appropriate for `PAP` behavior.
+Recommended behavior
+- For `PA`: skip `npm run build` by default unless change-risk is medium/high.
+- For `PAP`: run `npm run build` before push by default.
+- For small copy/style/localized edits: prefer no build (or a lighter check if needed).
+- Run full build when changes touch:
+  - routing/navigation
+  - shared components/layout primitives
+  - type-heavy refactors
+  - publish/auth/data flow paths
+
+## Docs Governance (Canonical + Status Registry)
+
+Canonical entrypoints
+- Root onboarding: `README.md`
+- Docs entrypoint: `docs/README.md`
+- System architecture: `docs/architecture.md`
+- Product behavior: `docs/app/product-spec.md`
+- Plan registry: `docs/exec-plans/index.md`
+
+Rules
+- Do not reintroduce moved/deprecated stub docs.
+- Keep active/completed status index-driven in `docs/exec-plans/index.md`.
+- Keep only active work in `docs/exec-plans/active/`; move finished plans to `docs/exec-plans/completed/`.
+- When relevant code changes land, run docs freshness/link checks and update mapped docs.
+
+Docs maintenance shortcut
+- `UDOC` -> run docs consolidation pass:
+  - sync canonical docs with recent repo changes
+  - update active/completed registry in `docs/exec-plans/index.md`
+  - remove deprecated docs/stubs if found
+  - run `npm run docs:refresh-check -- --json` and `npm run docs:link-check`

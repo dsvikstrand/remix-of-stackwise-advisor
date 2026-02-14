@@ -97,11 +97,11 @@ Rule: each project requires ST pass + acceptance criteria pass before next proje
 | Document | Owner Area | Status |
 |---|---|---|
 | channels-first-ux-program.md | Product/UX | active |
-| project-1-ia-and-lingo.md | Product + Frontend | draft |
-| project-2-feed-density.md | UX + Frontend | draft |
-| project-3-channel-following.md | Product + Backend + Frontend | draft |
-| project-4-blueprint-detail-priority.md | UX + Frontend | draft |
-| project-5-metrics-validation.md | Product + Analytics + Backend | draft |
+| completed/project-1-ia-and-lingo.md | Product + Frontend | completed |
+| completed/project-2-feed-density.md | UX + Frontend | completed |
+| project-3-channel-following.md | Product + Backend + Frontend | active |
+| project-4-blueprint-detail-priority.md | UX + Frontend | planned |
+| project-5-metrics-validation.md | Product + Analytics + Backend | planned |
 
 ## 13) Decision Log
 - D-001: UI term = `Channels` for followable content lanes.

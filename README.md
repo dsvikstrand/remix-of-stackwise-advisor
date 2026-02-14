@@ -1,73 +1,52 @@
-# Welcome to your Lovable project
+# Blueprints (Channels-First)
 
-## Project info
+A React + Supabase app for creating, publishing, and discovering blueprints in curated channels.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Current Product Shape
+- Primary discovery surface: `Feed` (`/wall`)
+- Channels IA: `/channels` and `/b/:channelSlug`
+- Explore search: `/explore`
+- Blueprint detail: `/blueprint/:blueprintId`
+- Legacy compatibility routes:
+  - `/tags` -> redirects to `/channels`
+  - `/blueprints` -> redirects to `/wall`
 
-## How can I edit this code?
+## Core UX Model
+- Channels are curated and followable lanes.
+- Tags are blueprint metadata/search terms (not follow lanes).
+- Public posting is channel-scoped via the create flow.
 
-There are several ways of editing your application.
+## Tech Stack
+- Vite + React + TypeScript
+- Tailwind + shadcn/ui
+- Supabase (auth, data, edge functions)
+- Agentic backend for YouTube-to-Blueprint generation
 
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+## Local Development
+```bash
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+## Key Commands
+```bash
+npm run build
+npm run test
+npm run docs:refresh-check -- --json
+npm run docs:link-check
+npm run metrics:channels -- --days 7 --json
+```
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Documentation Entry Point
+Start here: `docs/README.md`
 
-**Use GitHub Codespaces**
+Recommended first read order:
+1. `docs/README.md`
+2. `docs/architecture.md`
+3. `docs/app/product-spec.md`
+4. `docs/exec-plans/index.md`
+5. `docs/ops/yt2bp_runbook.md`
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+## Operations
+- YT2BP production runbook: `docs/ops/yt2bp_runbook.md`
+- Supabase migration closure notes: `docs/exec-plans/completed/supabase-migration-closure-2026-02-13.md`

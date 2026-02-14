@@ -7,7 +7,6 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import Home from "./pages/Home";
 import Wall from "./pages/Wall";
 import Explore from "./pages/Explore";
-import Blueprints from "./pages/Blueprints";
 import Auth from "./pages/Auth";
 import Settings from "./pages/Settings";
 import UserProfile from "./pages/UserProfile";
@@ -38,7 +37,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/explore" element={<Explore />} />
-            <Route path="/blueprints" element={<Blueprints />} />
+            <Route path="/blueprints" element={<Navigate to="/wall" replace />} />
             <Route path="/youtube" element={<YouTubeToBlueprint />} />
             <Route path="/channels" element={<Channels />} />
             <Route path="/b/:channelSlug" element={<ChannelPage />} />

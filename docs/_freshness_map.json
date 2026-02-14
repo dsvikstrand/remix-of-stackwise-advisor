@@ -1,11 +1,6 @@
 {
   "version": 2,
-  "doc_aliases": {
-    "docs/app/youtube_to_blueprint_plan.md": "docs/product-specs/youtube_to_blueprint_plan.md",
-    "docs/app/yt2bp_v0_contract.md": "docs/product-specs/yt2bp_v0_contract.md",
-    "docs/ass_das/seed_ass_spec.md": "docs/design-docs/seed_ass_spec.md",
-    "docs/ass_das/ASS_simple.mmd": "docs/design-docs/ASS_simple.mmd"
-  },
+  "doc_aliases": {},
   "allow_legacy_only": [],
   "rules": [
     {
