@@ -126,7 +126,7 @@ export default function Blueprints() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div className="space-y-1">
               <p className="text-sm font-semibold text-primary uppercase tracking-wide">Blueprints</p>
-              <h1 className="text-xl font-semibold tracking-tight">Search and explore community blueprints</h1>
+              <h1 className="text-xl font-semibold tracking-tight">Search and explore blueprints</h1>
             </div>
             <div className="flex items-center gap-2">
               {!user && (
@@ -263,7 +263,7 @@ export default function Blueprints() {
               </Button>
             </div>
           ) : (
-            <h2 className="text-sm font-semibold text-muted-foreground">Popular blueprints</h2>
+            <div />
           )}
 
           {isLoading ? (

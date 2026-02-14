@@ -323,13 +323,15 @@ export default function Wall() {
           </div>
         )}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as FeedTab)}>
-          <TabsList className="mb-3 mx-auto h-9 w-fit rounded-md bg-muted/40 p-0.5">
-            {FEED_TABS.map((tab) => (
-              <TabsTrigger key={tab.value} value={tab.value}>
-                {tab.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+          <div className="mb-3 flex justify-center">
+            <TabsList className="h-9 w-fit rounded-md bg-muted/40 p-0.5">
+              {FEED_TABS.map((tab) => (
+                <TabsTrigger key={tab.value} value={tab.value}>
+                  {tab.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
 
           <TabsContent value={activeTab} className="mt-0">
             {selectedTagSlug && (
