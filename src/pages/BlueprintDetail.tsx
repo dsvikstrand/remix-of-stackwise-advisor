@@ -309,7 +309,7 @@ export default function BlueprintDetail() {
               <div>
                 <h3 className="font-semibold">AI Review</h3>
                 <div className="mt-2">
-                  <BlueprintAnalysisView review={blueprint.llm_review || ''} />
+                  <BlueprintAnalysisView review={blueprint.llm_review || ''} density="compact" />
                 </div>
               </div>
             </section>

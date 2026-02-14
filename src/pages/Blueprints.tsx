@@ -171,7 +171,7 @@ export default function Blueprints() {
           )}
         </PageSection>
 
-        <div className="border border-border/40 px-3 py-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="border border-transparent px-3 py-3 flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="flex items-center gap-2 flex-1">
             <Search className="h-4 w-4 text-muted-foreground shrink-0" />
             <Input

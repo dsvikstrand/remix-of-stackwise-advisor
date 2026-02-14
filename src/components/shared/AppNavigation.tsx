@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Home, Users, Search, FileText, Hash } from 'lucide-react';
+import { Home, Users, Search, FileText, Radio } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface AppNavigationProps {
@@ -15,8 +15,8 @@ export function AppNavigation({ variant = 'header', mode = 'all' }: AppNavigatio
   const allNavItems = [
     { path: '/', label: 'Home', icon: Home, showWhen: 'public-only' as const },
     { path: '/wall', label: 'Feed', icon: Users, showWhen: 'auth-only' as const },
+    { path: '/channels', label: 'Channels', icon: Radio, showWhen: 'always' as const },
     { path: '/blueprints', label: 'Blueprints', icon: FileText, showWhen: 'always' as const },
-    { path: '/channels', label: 'Channels', icon: Hash, showWhen: 'always' as const },
     { path: '/explore', label: 'Explore', icon: Search, showWhen: 'always' as const },
   ];
 

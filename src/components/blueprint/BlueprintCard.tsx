@@ -4,6 +4,7 @@ import { FileText, Heart, MessageCircle } from 'lucide-react';
 import type { BlueprintListItem } from '@/hooks/useBlueprintSearch';
 import { cn } from '@/lib/utils';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
+import { buildFeedSummary } from '@/lib/feedPreview';
 
 interface BlueprintCardProps {
   blueprint: BlueprintListItem;
@@ -21,6 +22,12 @@ export function BlueprintCard({
   variant = 'grid_flat',
 }: BlueprintCardProps) {
   const hasBanner = !!blueprint.banner_url;
+  const summary = buildFeedSummary({
+    primary: blueprint.llm_review,
+    secondary: blueprint.mix_notes,
+    fallback: blueprint.inventory_title ? `From ${blueprint.inventory_title}` : 'Community blueprint',
+    maxChars: 170,
+  });
 
   return (
     <Link
@@ -44,7 +51,7 @@ export function BlueprintCard({
               <img
                 src={blueprint.banner_url!}
                 alt=""
-                className="absolute inset-0 h-full w-full object-cover opacity-25"
+                className="absolute inset-0 h-full w-full object-cover opacity-30"
                 loading="lazy"
               />
               <div className="absolute inset-0 bg-gradient-to-b from-background/55 via-background/80 to-background/95" />
@@ -58,7 +65,7 @@ export function BlueprintCard({
             </div>
 
             <p className="text-sm text-muted-foreground line-clamp-2 mb-3 flex-grow">
-              {blueprint.inventory_title ? `From ${blueprint.inventory_title}` : 'Community blueprint'}
+              {summary}
             </p>
 
             {blueprint.tags.length > 0 && (

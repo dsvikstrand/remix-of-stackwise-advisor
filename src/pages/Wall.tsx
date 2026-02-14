@@ -299,7 +299,7 @@ export default function Wall() {
       <main className="max-w-3xl mx-auto px-0 pb-24">
         <section className="mb-6 px-3 sm:px-4">
           <div className="flex flex-col gap-2">
-            <p className="text-sm font-semibold text-primary uppercase tracking-wide">Community Wall</p>
+            <p className="text-sm font-semibold text-primary uppercase tracking-wide">Community Feed</p>
             <h1 className="text-2xl font-semibold">See what the community is building</h1>
             <p className="text-sm text-muted-foreground">
               Browse public blueprints, join channels you care about, and save ideas for your next routine.
@@ -323,7 +323,7 @@ export default function Wall() {
           </div>
         )}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as FeedTab)}>
-          <TabsList className="mb-3 ml-3 sm:ml-4 h-9 rounded-md bg-muted/40 p-0.5">
+          <TabsList className="mb-3 mx-auto h-9 w-fit rounded-md bg-muted/40 p-0.5">
             {FEED_TABS.map((tab) => (
               <TabsTrigger key={tab.value} value={tab.value}>
                 {tab.label}

@@ -6,6 +6,7 @@ interface BlueprintAnalysisViewProps {
   review: string;
   isStreaming?: boolean;
   sectionOrder?: string[];
+  density?: 'default' | 'compact';
 }
 
 interface ParsedSection {
@@ -122,27 +123,37 @@ function extractScore(section: ParsedSection) {
   return { score, text: cleanedText, bullets: filteredBullets };
 }
 
-export function BlueprintAnalysisView({ review, isStreaming, sectionOrder }: BlueprintAnalysisViewProps) {
+export function BlueprintAnalysisView({ review, isStreaming, sectionOrder, density = 'default' }: BlueprintAnalysisViewProps) {
   const parsedSections = parseReviewSections(review);
   const orderedSections = applySectionOrder(parsedSections, sectionOrder);
+  const isCompact = density === 'compact';
 
   return (
-    <Card className="bg-card/80 backdrop-blur-glass border-border/50 overflow-hidden">
+    <Card className="bg-transparent border-border/40 overflow-hidden shadow-none">
       <CardContent className="p-0">
         <Tabs defaultValue={orderedSections[0]?.key || 'overview'} className="w-full">
-          <TabsList className="w-full justify-start rounded-none border-b border-border/50 bg-muted/30 px-4 pt-4">
+          <TabsList
+            className={cn(
+              'w-full justify-start rounded-none border-b border-border/40 bg-muted/20',
+              'flex-nowrap overflow-x-auto',
+              isCompact ? 'px-3 py-2' : 'px-4 pt-4',
+            )}
+          >
             {orderedSections.map((section) => (
               <TabsTrigger
                 key={section.key}
                 value={section.key}
-                className="data-[state=active]:bg-background"
+                className={cn(
+                  'shrink-0 data-[state=active]:bg-background uppercase tracking-wide',
+                  isCompact ? 'text-[11px] px-2 py-1' : '',
+                )}
               >
-                {section.title.toUpperCase()}
+                {section.title}
               </TabsTrigger>
             ))}
           </TabsList>
 
-          <div className="p-6">
+          <div className={cn(isCompact ? 'p-3 sm:p-4' : 'p-6')}>
             {orderedSections.map((section) => {
               const isOverview = section.key === 'overview' || section.title.toLowerCase().includes('overview');
               const { score, text, bullets } = isOverview ? extractScore(section) : {
@@ -159,27 +170,35 @@ export function BlueprintAnalysisView({ review, isStreaming, sectionOrder }: Blu
                   : 'text-red-500';
 
               return (
-                <TabsContent key={section.key} value={section.key} className="mt-0 space-y-4">
-                  <h3 className="text-2xl font-bold tracking-tight">{section.title}</h3>
+                <TabsContent
+                  key={section.key}
+                  value={section.key}
+                  className={cn('mt-0', isCompact ? 'space-y-2.5' : 'space-y-4')}
+                >
+                  <h3 className={cn(isCompact ? 'text-base font-semibold' : 'text-2xl font-bold tracking-tight')}>
+                    {section.title}
+                  </h3>
 
                   {isOverview && score !== null && (
-                    <div className="text-center py-4">
+                    <div className={cn('text-center', isCompact ? 'py-2' : 'py-4')}>
                       <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Blueprint score</p>
-                      <p className={cn('text-6xl font-black', scoreColor)}>
+                      <p className={cn(isCompact ? 'text-4xl font-black' : 'text-6xl font-black', scoreColor)}>
                         {score}
-                        <span className="text-2xl text-muted-foreground">/100</span>
+                        <span className={cn(isCompact ? 'text-lg' : 'text-2xl', 'text-muted-foreground')}>/100</span>
                       </p>
                     </div>
                   )}
 
                   {text ? (
-                    <p className="text-muted-foreground leading-relaxed">{text}</p>
+                    <p className={cn('text-muted-foreground', isCompact ? 'text-sm leading-snug' : 'leading-relaxed')}>
+                      {text}
+                    </p>
                   ) : null}
 
                   {bullets.length > 0 ? (
-                    <ul className="space-y-3">
+                    <ul className={cn(isCompact ? 'space-y-2' : 'space-y-3')}>
                       {bullets.map((item, index) => (
-                        <li key={index} className="flex gap-3">
+                        <li key={index} className={cn('flex', isCompact ? 'gap-2 text-sm' : 'gap-3')}>
                           <span className="text-primary font-bold">{getSectionMarker(section.title)}</span>
                           <span>{item}</span>
                         </li>
@@ -199,7 +218,7 @@ export function BlueprintAnalysisView({ review, isStreaming, sectionOrder }: Blu
         </Tabs>
 
         {isStreaming && (
-          <div className="px-6 pb-4">
+          <div className={cn(isCompact ? 'px-3 pb-3' : 'px-6 pb-4')}>
             <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
               <div className="h-full bg-primary animate-pulse" style={{ width: '60%' }} />
             </div>

@@ -4,7 +4,6 @@ import { Filter, Plus, Search } from 'lucide-react';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -149,7 +148,7 @@ export default function Inventory() {
 
         <PageDivider />
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="border border-transparent px-3 py-3 flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="flex items-center gap-2 flex-1">
             <Search className="h-4 w-4 text-muted-foreground shrink-0" />
             <Input
@@ -159,7 +158,7 @@ export default function Inventory() {
                 if (e.target.value) setSelectedTag(null);
               }}
               placeholder="Search libraries by title or tag..."
-              className="border border-border/40 bg-transparent"
+              className="border-none shadow-none focus-visible:ring-0 bg-transparent"
             />
           </div>
 
@@ -226,27 +225,24 @@ export default function Inventory() {
           )}
 
           {isLoading ? (
-            <div className="border border-border/40">
-              <div className="grid grid-cols-1 md:grid-cols-2">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="px-3 py-3 border-b border-border/40 md:border-b-0 md:border-r md:border-border/40">
-                    <Card className="bg-transparent border-0 shadow-none">
-                      <CardContent className="p-1 space-y-3">
-                        <Skeleton className="h-5 w-3/4" />
-                        <Skeleton className="h-10 w-full" />
-                        <div className="flex gap-2">
-                          <Skeleton className="h-5 w-16" />
-                          <Skeleton className="h-5 w-20" />
-                        </div>
-                        <Skeleton className="h-4 w-full" />
-                      </CardContent>
-                    </Card>
+            <WallToWallGrid
+              variant="tiles"
+              items={Array.from({ length: 6 })}
+              renderItem={(_, { index }) => (
+                <div className="space-y-3">
+                  <Skeleton className="h-5 w-3/4" />
+                  <Skeleton className="h-10 w-full" />
+                  <div className="flex gap-2">
+                    <Skeleton className="h-5 w-16" />
+                    <Skeleton className="h-5 w-20" />
                   </div>
-                ))}
-              </div>
-            </div>
+                  <Skeleton className="h-4 w-full" />
+                </div>
+              )}
+            />
           ) : displayInventories.length > 0 ? (
             <WallToWallGrid
+              variant="tiles"
               items={displayInventories}
               renderItem={(inventory) => (
                 <InventoryCard

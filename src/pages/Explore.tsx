@@ -228,12 +228,7 @@ export default function Explore() {
                     >
                       #{tag.slug}
                     </Badge>
-                  ))}
-                </div>
-                <div className="mt-3">
-                  <Button asChild size="sm" variant="outline">
-                    <Link to="/channels">Join Channels</Link>
-                  </Button>
+                    ))}
                 </div>
               </section>
             )}

@@ -17,6 +17,7 @@ import { useTagFollows } from '@/hooks/useTagFollows';
 import { useTagsBySlugs } from '@/hooks/useTags';
 import { getPostableChannel } from '@/lib/channelPostContext';
 import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
+import { BlueprintAnalysisView } from '@/components/blueprint/BlueprintAnalysisView';
 
 const YOUTUBE_ENDPOINT = getFunctionUrl('youtube-to-blueprint');
 const GENERIC_FAILURE_TEXT = 'Could not complete the blueprint. Please test another video.';
@@ -262,7 +263,7 @@ export default function YouTubeToBlueprint() {
       }
 
       setResult(json);
-      setStageText('Blueprint ready. Review and publish if you want.');
+      setStageText('');
       await logMvpEvent({
         eventName: 'youtube_success',
         userId: user?.id,
@@ -449,9 +450,9 @@ export default function YouTubeToBlueprint() {
               </div>
 
               {result.review.available && result.review.summary && (
-                <div className="rounded-md border border-border/40 p-3">
-                  <p className="font-medium mb-1">AI Review</p>
-                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{result.review.summary}</p>
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold">AI Review</p>
+                  <BlueprintAnalysisView review={result.review.summary} density="compact" />
                 </div>
               )}
 
