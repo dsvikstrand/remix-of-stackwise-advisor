@@ -304,7 +304,8 @@ export default function InventoryBuild() {
       setActiveStepId(initialSteps[0]?.id || null);
       setBuilderMode('full');
     } else {
-      setTitle(inventory.title);
+      // Default to an empty blueprint name; title should be user-authored.
+      setTitle('');
       setSteps([]);
       setActiveStepId(null);
       setBannerUrl(null);
@@ -325,7 +326,7 @@ export default function InventoryBuild() {
             typeof parsed.inventoryId === 'string' &&
             parsed.inventoryId === inventory.id
           ) {
-            setTitle(typeof parsed.title === 'string' && parsed.title.trim() ? parsed.title : inventory.title);
+            setTitle(typeof parsed.title === 'string' && parsed.title.trim() ? parsed.title : '');
             const draftSelected =
               parsed.selectedItems && typeof parsed.selectedItems === 'object' ? parsed.selectedItems : {};
             setSelectedItems(draftSelected);
@@ -1289,19 +1290,6 @@ export default function InventoryBuild() {
           </div>
         </div>
 
-        {postChannel && (
-          <div className="mb-4 text-[11px] text-muted-foreground flex items-center justify-between gap-3 animate-fade-in">
-            <span className="truncate">
-              Posting to b/{postChannel.slug}. {isPostChannelJoined ? 'Ready to publish.' : 'Join required to publish.'}
-            </span>
-            <div className="shrink-0">
-              <Button asChild size="sm" variant="ghost" className="h-7 px-2 text-xs">
-                <Link to={`/b/${postChannel.slug}`}>{isPostChannelJoined ? 'View' : 'Join'}</Link>
-              </Button>
-            </div>
-          </div>
-        )}
-
         {isLoading ? (
           <div className="border border-border/40 px-3 py-3 space-y-3">
             <Skeleton className="h-6 w-48" />
@@ -1895,7 +1883,21 @@ export default function InventoryBuild() {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-xs font-semibold">Public blueprint</p>
-                          <p className="text-[11px] text-muted-foreground">Appears on the feed.</p>
+                          {isPublic ? (
+                            postChannel ? (
+                              <p className="text-[11px] text-muted-foreground">
+                                Posting to b/{postChannel.slug}. {isPostChannelJoined ? 'Ready to publish.' : 'Join required to publish.'}
+                              </p>
+                            ) : (
+                              <p className="text-[11px] text-muted-foreground">
+                                Choose a channel to publish publicly.
+                              </p>
+                            )
+                          ) : (
+                            <p className="text-[11px] text-muted-foreground">
+                              Private (not shown on the feed).
+                            </p>
+                          )}
                         </div>
                         <Switch checked={isPublic} onCheckedChange={setIsPublic} className="scale-90" />
                       </div>
