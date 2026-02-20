@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Beaker, Plus } from 'lucide-react';
+import { BookOpen, Plus } from 'lucide-react';
 import { AppNavigation } from '@/components/shared/AppNavigation';
 import { UserMenu } from '@/components/shared/UserMenu';
 import { useAuth } from '@/contexts/AuthContext';
@@ -19,6 +19,7 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
   const [hideFloatingNav, setHideFloatingNav] = useState(false);
 
   const navMode = user ? 'all' : 'public';
+  const brandTarget = user ? '/wall' : '/';
   const hideCreate = location.pathname.startsWith('/auth');
 
   useEffect(() => {
@@ -50,9 +51,9 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
       <header className="sticky top-0 z-50 border-b border-border/40 bg-background">
         <div className="w-full px-3 sm:px-4 py-3 grid grid-cols-[auto,1fr,auto] items-center gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <Link to="/" className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center glow-primary">
-                <Beaker className="h-4 w-4 text-primary-foreground" />
+            <Link to={brandTarget} className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-xl border border-primary/25 bg-gradient-to-br from-primary/90 to-primary/60 flex items-center justify-center">
+                <BookOpen className="h-4 w-4 text-primary-foreground" />
               </div>
               <span className="text-lg font-semibold tracking-tight">Blueprints</span>
             </Link>
