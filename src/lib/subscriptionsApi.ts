@@ -13,6 +13,7 @@ export type SourceSubscription = {
   source_page_id?: string | null;
   source_page_path?: string | null;
   mode: SubscriptionMode;
+  auto_unlock_enabled: boolean;
   is_active: boolean;
   last_polled_at: string | null;
   last_seen_published_at: string | null;
@@ -163,12 +164,18 @@ export async function createSourceSubscription(input: { channelInput: string; mo
   return response.data;
 }
 
-export async function updateSourceSubscription(input: { id: string; mode?: SubscriptionMode; isActive?: boolean }) {
+export async function updateSourceSubscription(input: {
+  id: string;
+  mode?: SubscriptionMode;
+  isActive?: boolean;
+  autoUnlockEnabled?: boolean;
+}) {
   const response = await apiRequest<SourceSubscription>(`/source-subscriptions/${input.id}`, {
     method: 'PATCH',
     body: JSON.stringify({
       mode: input.mode,
       is_active: input.isActive,
+      auto_unlock_enabled: input.autoUnlockEnabled,
     }),
   });
   return response.data;

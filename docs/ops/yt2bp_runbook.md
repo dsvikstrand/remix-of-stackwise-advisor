@@ -40,6 +40,10 @@
   - Frontend trust status now resumes unlock jobs via `GET /api/ingestion/jobs/latest-mine?scope=source_item_unlock_generation` after reload.
 - Profile feed read endpoint:
   - `GET /api/profile/:userId/feed` (optional auth; public profiles readable, private profiles owner-only)
+- Subscription auto-unlock policy:
+  - `user_source_subscriptions.auto_unlock_enabled` defaults to `true` for existing and new rows.
+  - new subscription uploads can auto-attempt shared unlock generation by sampling up to 3 eligible subscribers (`is_active=true`, `auto_unlock_enabled=true`) and stopping on first successful hold + enqueue.
+  - if sampled users cannot reserve credits, item remains `my_feed_unlockable` for manual unlock.
 
 ## Health checks
 - Local service health:

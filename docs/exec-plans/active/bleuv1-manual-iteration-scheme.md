@@ -61,6 +61,7 @@ Execution mode:
 42. [have] Step 41 - Explore sources search (`Sources` filter + app source-page search results + source cards)
 43. [have] Step 42 - Unlock trust pass (shared unlock job activity + credit transparency + Home scope helper clarity)
 44. [have] Step 43 - Backend unlock hardening (reliability sweeps + trace IDs + idempotency/race tests)
+45. [have] Step 44 - Subscription auto-unlock v1 (new videos only, credit-guarded shared unlock with per-subscription toggle)
 
 Interpretation note
 - Step entries capture execution timeline.
@@ -950,6 +951,26 @@ Definition of done
 Evaluation
 - manual smoke: connect -> preview -> select -> import summary -> subscriptions list updated
 - manual smoke: disconnect removes OAuth status but keeps subscription rows
+- `npm run test`
+- `npm run build`
+- `npm run docs:refresh-check -- --json`
+- `npm run docs:link-check`
+
+### Step 44 - Subscription auto-unlock v1
+Scope
+- add per-subscription `auto_unlock_enabled` toggle (default enabled) to control auto-attempt participation.
+- auto-attempt only on newly ingested subscription uploads (no backlog pass).
+- sample up to 3 eligible subscribers and stop on first successful reserve + enqueue.
+
+Definition of done
+- `user_source_subscriptions` carries `auto_unlock_enabled` and patch/list APIs expose it.
+- subscription sync can auto-attempt shared unlock generation for new videos when credits allow.
+- if sampled users cannot reserve credits, item remains locked for manual unlock.
+
+Evaluation
+- manual smoke: toggle persists true/false via `/subscriptions` row switch
+- manual smoke: new upload auto-enqueues unlock when at least one eligible subscriber has credits
+- manual smoke: no-credit sampled users leave item locked (`my_feed_unlockable`)
 - `npm run test`
 - `npm run build`
 - `npm run docs:refresh-check -- --json`

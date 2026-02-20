@@ -50,6 +50,7 @@
     - `My Feed` header includes both `Add Subscription` and `Manage subscriptions` entrypoints.
   - Blueprint detail in `src/pages/BlueprintDetail.tsx` now prefers source-channel attribution for imported YouTube blueprints and hides edit CTA in default MVP UI.
   - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: popup channel search + subscribe + active-list `Unsubscribe`; aggregate health summary hidden for user clarity; row avatars shown when available).
+    - per-row `Auto unlock` toggle (`auto_unlock_enabled`) controls whether that subscription participates in new-video auto unlock attempts.
   - Source page surface in `src/pages/SourcePage.tsx` at `/s/:platform/:externalId`:
     - public-readable source header (avatar/title/follower count + source link)
     - authenticated subscribe/unsubscribe actions
@@ -75,6 +76,7 @@
     - `POST|GET|PATCH|DELETE /api/source-subscriptions`
       - `GET` enriches rows with optional `source_channel_avatar_url` from YouTube API (no DB write path required)
       - rows now carry `source_page_id` and `source_page_path` when resolvable.
+      - rows now include `auto_unlock_enabled` (default `true`) and `PATCH` accepts `auto_unlock_enabled` updates.
       - `POST` notice insertion stores channel avatar + optional banner metadata for My Feed notice-card rendering
       - `POST` ensures a platform-agnostic source-page row and dual-writes `source_page_id`.
       - `DELETE` deactivates subscription and removes user-scoped `subscription_notice` feed row for that channel
@@ -159,6 +161,7 @@
    - unsubscribe removes that user-scoped notice card while preserving other My Feed blueprint items.
 4. Subscription sync after checkpoint:
    - new uploads create unlockable feed rows (`my_feed_unlockable`) instead of immediate generation.
+   - new uploads can auto-attempt unlock generation when eligible subscribers are available (`auto_unlock_enabled=true`), sampling up to 3 users and stopping on first successful credit hold.
    - unlock cards can be activated by one user; successful generation fans out shared blueprint linkage to subscribed users for that source item.
    - source unlock pricing uses `1 / active_subscribers` (clamped and rounded), with hold -> settle/refund ledger flow.
    - auto-ingest path enables review generation by default.

@@ -229,6 +229,10 @@ Rules:
   - unlock/manual/service generation now runs enqueue-only with durable DB lease claim + heartbeat worker semantics.
   - `ingestion_jobs` now carries retry/lease metadata (`attempts`, `max_attempts`, `next_run_at`, `lease_expires_at`, `worker_id`, `trace_id`, `payload`).
   - queue backpressure (`QUEUE_BACKPRESSURE`) and intake pause (`QUEUE_INTAKE_DISABLED`) are enforced, and service ops now expose `/api/ops/queue/health`.
+- Subscription auto-unlock v1 (2026-02-20):
+  - `user_source_subscriptions` now includes `auto_unlock_enabled` (default `true`) for existing and new subscriptions.
+  - new subscription uploads can auto-attempt unlock generation by sampling up to 3 eligible subscribers (`is_active=true`, `auto_unlock_enabled=true`) and stopping on first successful reserve+enqueue.
+  - if no sampled subscriber can reserve credits, item remains locked (`my_feed_unlockable`) for manual unlock.
 
 ## 12) Next Milestone
 1. Validate Oracle cron reliability and alerting around ingestion failures.

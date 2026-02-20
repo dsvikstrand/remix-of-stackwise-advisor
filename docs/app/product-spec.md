@@ -75,6 +75,7 @@ a63) [have] Home now includes a first-time dismissible scope helper clarifying `
 a64) [have] Unlock backend now runs reliability sweeps (expired/stale/orphan recovery) with structured traceable logs, and unlock/generate responses include additive `trace_id`.
 a65) [have] Unlock/manual/service ingestion execution is now enqueue-first with durable DB lease claiming (no in-request `setImmediate` worker path).
 a66) [have] Service operations now include `GET /api/ops/queue/health` for queue depth, stale leases, and provider circuit snapshots.
+a67) [have] Subscription rows now support `auto_unlock_enabled` (default `true`) so new uploads can auto-attempt shared unlock generation when eligible subscribers have credits.
 
 ## Core Model
 b1) `Source Item`
@@ -102,6 +103,8 @@ b5) Subscription behavior (MVP simplified)
 - Future uploads after checkpoint ingest to unlockable rows (`my_feed_unlockable`) with shared unlock metadata.
 - Shared unlock pricing for source videos is subscriber-based: `cost = clamp(round(1 / active_subscribers, 3), 0.050..1.000)`.
 - Unlock debit policy is hold-first, settle-on-success, refund-on-failure/expiry.
+- Auto-unlock toggle defaults to enabled (`auto_unlock_enabled=true`) for existing and new subscriptions.
+- New subscription uploads can auto-attempt unlock generation by sampling up to 3 eligible subscribers (`is_active=true`, `auto_unlock_enabled=true`) and stopping on first successful hold+enqueue.
 - Auto-ingested subscription items run review generation by default.
 - Banner generation for auto-ingest is controlled by `SUBSCRIPTION_AUTO_BANNER_MODE`:
   - `off` (default): no auto banner worker activity.
@@ -209,7 +212,7 @@ d9) [have] Refill-credit + unlock tables (`user_credit_wallets`, `credit_ledger`
 ## Subscription Interfaces (MVP)
 si1) `POST /api/source-subscriptions` with `{ channel_input, mode? }` (`mode` accepted but ignored/coerced to `auto` in MVP path)
 si2) `GET /api/source-subscriptions`
-si3) `PATCH /api/source-subscriptions/:id` with `{ mode?, is_active? }` (`mode` accepted for compatibility and coerced to `auto`)
+si3) `PATCH /api/source-subscriptions/:id` with `{ mode?, is_active?, auto_unlock_enabled? }` (`mode` accepted for compatibility and coerced to `auto`)
 si4) `DELETE /api/source-subscriptions/:id` (soft deactivate)
 si5) `POST /api/source-subscriptions/:id/sync` (user sync)
 si6) `POST /api/ingestion/jobs/trigger` (service auth for cron)

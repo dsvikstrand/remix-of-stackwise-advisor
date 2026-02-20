@@ -2001,7 +2001,7 @@ app.post('/api/youtube/subscriptions/import', youtubeImportLimiter, async (req, 
   const channelIds = requested.map((row) => row.channelId);
   const { data: existingRows, error: existingError } = await db
     .from('user_source_subscriptions')
-    .select('id, source_channel_id, source_page_id, is_active')
+    .select('id, source_channel_id, source_page_id, is_active, auto_unlock_enabled')
     .eq('user_id', userId)
     .eq('source_type', 'youtube')
     .in('source_channel_id', channelIds);
@@ -2076,12 +2076,13 @@ app.post('/api/youtube/subscriptions/import', youtubeImportLimiter, async (req, 
           source_channel_title: row.channelTitle,
           source_page_id: sourcePage.id,
           mode: 'auto',
+          auto_unlock_enabled: existing?.auto_unlock_enabled ?? true,
           is_active: true,
           last_sync_error: null,
         },
         { onConflict: 'user_id,source_type,source_channel_id' },
       )
-      .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, source_page_id, mode, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
+      .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, source_page_id, mode, auto_unlock_enabled, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
       .single();
     if (upsertError || !upserted) {
       failures.push({
@@ -3784,6 +3785,251 @@ function toUnlockSnapshot(input: {
   };
 }
 
+function sampleRandomWithoutReplacement(values: string[], maxCount: number) {
+  const unique = Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)));
+  for (let i = unique.length - 1; i > 0; i -= 1) {
+    const swapIndex = Math.floor(Math.random() * (i + 1));
+    [unique[i], unique[swapIndex]] = [unique[swapIndex], unique[i]];
+  }
+  return unique.slice(0, Math.max(0, Math.min(maxCount, unique.length)));
+}
+
+async function listEligibleAutoUnlockUsers(
+  db: ReturnType<typeof createClient>,
+  input: {
+    sourcePageId: string | null;
+    sourceChannelId: string | null;
+  },
+) {
+  const userIds = new Set<string>();
+  const sourcePageId = String(input.sourcePageId || '').trim();
+  const sourceChannelId = String(input.sourceChannelId || '').trim();
+
+  if (sourcePageId) {
+    const { data, error } = await db
+      .from('user_source_subscriptions')
+      .select('user_id')
+      .eq('is_active', true)
+      .eq('auto_unlock_enabled', true)
+      .eq('source_page_id', sourcePageId);
+    if (error) throw error;
+    for (const row of data || []) {
+      const userId = String(row.user_id || '').trim();
+      if (userId) userIds.add(userId);
+    }
+  }
+
+  if (sourceChannelId) {
+    const { data, error } = await db
+      .from('user_source_subscriptions')
+      .select('user_id')
+      .eq('source_type', 'youtube')
+      .eq('is_active', true)
+      .eq('auto_unlock_enabled', true)
+      .eq('source_channel_id', sourceChannelId);
+    if (error) throw error;
+    for (const row of data || []) {
+      const userId = String(row.user_id || '').trim();
+      if (userId) userIds.add(userId);
+    }
+  }
+
+  return Array.from(userIds);
+}
+
+async function attemptAutoUnlockForSourceItem(input: {
+  sourceItemId: string;
+  sourcePageId: string | null;
+  sourceChannelId: string;
+  sourceChannelTitle: string | null;
+  video: YouTubeFeedVideo;
+  unlock: SourceItemUnlockRow;
+  estimatedUnlockCost: number;
+  trigger: 'user_sync' | 'service_cron' | 'subscription_create' | 'debug_simulation' | 'youtube_import';
+}) {
+  const db = getServiceSupabaseClient();
+  if (!db) return { queued: false as const, reason: 'SERVICE_DB_MISSING' as const };
+
+  const sourceItemId = String(input.sourceItemId || '').trim();
+  const sourceChannelId = String(input.sourceChannelId || '').trim();
+  if (!sourceItemId || !sourceChannelId) {
+    return { queued: false as const, reason: 'INVALID_SOURCE' as const };
+  }
+
+  if (input.unlock.status !== 'available') {
+    return { queued: false as const, reason: 'UNLOCK_NOT_AVAILABLE' as const };
+  }
+
+  const eligibleUsers = await listEligibleAutoUnlockUsers(db, {
+    sourcePageId: input.sourcePageId,
+    sourceChannelId,
+  });
+  const sampledUsers = sampleRandomWithoutReplacement(eligibleUsers, 3);
+  if (sampledUsers.length === 0) {
+    return { queued: false as const, reason: 'NO_ELIGIBLE_USERS' as const };
+  }
+
+  let currentUnlock = input.unlock;
+  for (const payerUserId of sampledUsers) {
+    const reserveResult = await reserveUnlock(db, {
+      unlock: currentUnlock,
+      userId: payerUserId,
+      estimatedCost: input.estimatedUnlockCost,
+      reservationSeconds: sourceUnlockReservationSeconds,
+    });
+
+    if (reserveResult.state === 'ready') {
+      return { queued: false as const, reason: 'ALREADY_READY' as const };
+    }
+    if (reserveResult.state === 'in_progress') {
+      return { queued: false as const, reason: 'ALREADY_IN_PROGRESS' as const };
+    }
+
+    let reservedUnlock = reserveResult.unlock;
+    const reservedCost = Math.max(0.001, Number(reservedUnlock.estimated_cost || input.estimatedUnlockCost));
+    const hold = await reserveCredits(db, {
+      userId: payerUserId,
+      amount: reservedCost,
+      idempotencyKey: `unlock:${reservedUnlock.id}:hold`,
+      reasonCode: 'UNLOCK_HOLD',
+      context: {
+        source_item_id: sourceItemId,
+        source_page_id: input.sourcePageId,
+        unlock_id: reservedUnlock.id,
+        metadata: {
+          source: 'subscription_auto_unlock',
+          video_id: input.video.videoId,
+        },
+      },
+    });
+
+    if (!hold.ok) {
+      await failUnlock(db, {
+        unlockId: reservedUnlock.id,
+        errorCode: 'INSUFFICIENT_CREDITS',
+        errorMessage: 'Auto-unlock payer has insufficient credits.',
+      });
+      const reloaded = await getSourceItemUnlockBySourceItemId(db, sourceItemId);
+      if (!reloaded || reloaded.status !== 'available') {
+        return { queued: false as const, reason: 'UNLOCK_NOT_AVAILABLE' as const };
+      }
+      currentUnlock = reloaded;
+      continue;
+    }
+
+    reservedUnlock = await attachReservationLedger(db, {
+      unlockId: reservedUnlock.id,
+      userId: payerUserId,
+      ledgerId: hold.ledger_id || null,
+      amount: hold.reserved_amount,
+    });
+
+    const queueDepth = await countQueueDepth(db, {
+      scope: 'source_item_unlock_generation',
+      includeRunning: true,
+    });
+    const userQueueDepth = await countQueueDepth(db, {
+      scope: 'source_item_unlock_generation',
+      userId: payerUserId,
+      includeRunning: true,
+    });
+    if (!unlockIntakeEnabled || queueDepth >= queueDepthHardLimit || userQueueDepth >= queueDepthPerUserLimit) {
+      await refundReservation(db, {
+        userId: payerUserId,
+        amount: reservedCost,
+        idempotencyKey: `unlock:${reservedUnlock.id}:refund`,
+        reasonCode: 'UNLOCK_REFUND',
+        context: {
+          source_item_id: sourceItemId,
+          source_page_id: input.sourcePageId,
+          unlock_id: reservedUnlock.id,
+          metadata: {
+            source: 'subscription_auto_unlock',
+            error_code: !unlockIntakeEnabled ? 'QUEUE_INTAKE_DISABLED' : 'QUEUE_BACKPRESSURE',
+          },
+        },
+      });
+      await failUnlock(db, {
+        unlockId: reservedUnlock.id,
+        errorCode: !unlockIntakeEnabled ? 'QUEUE_INTAKE_DISABLED' : 'QUEUE_BACKPRESSURE',
+        errorMessage: !unlockIntakeEnabled
+          ? 'Unlock intake is temporarily paused.'
+          : 'Unlock queue is currently busy.',
+      });
+      return { queued: false as const, reason: !unlockIntakeEnabled ? 'QUEUE_DISABLED' as const : 'QUEUE_BACKPRESSURE' as const };
+    }
+
+    const traceId = createUnlockTraceId();
+    const { data: job, error: jobError } = await db
+      .from('ingestion_jobs')
+      .insert({
+        trigger: input.trigger === 'service_cron' ? 'service_cron' : 'user_sync',
+        scope: 'source_item_unlock_generation',
+        status: 'queued',
+        requested_by_user_id: payerUserId,
+        trace_id: traceId,
+        payload: {
+          user_id: payerUserId,
+          trace_id: traceId,
+          items: [{
+            unlock_id: reservedUnlock.id,
+            source_item_id: sourceItemId,
+            source_page_id: input.sourcePageId,
+            source_channel_id: sourceChannelId,
+            source_channel_title: input.sourceChannelTitle,
+            video_id: input.video.videoId,
+            video_url: input.video.url,
+            title: input.video.title,
+            reserved_cost: reservedCost,
+            reserved_by_user_id: payerUserId,
+          } satisfies SourceUnlockQueueItem],
+        },
+        next_run_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single();
+
+    if (jobError || !job?.id) {
+      await refundReservation(db, {
+        userId: payerUserId,
+        amount: reservedCost,
+        idempotencyKey: `unlock:${reservedUnlock.id}:refund`,
+        reasonCode: 'UNLOCK_REFUND',
+        context: {
+          source_item_id: sourceItemId,
+          source_page_id: input.sourcePageId,
+          unlock_id: reservedUnlock.id,
+          metadata: {
+            source: 'subscription_auto_unlock',
+            error_code: 'QUEUE_INSERT_FAILED',
+          },
+        },
+      });
+      await failUnlock(db, {
+        unlockId: reservedUnlock.id,
+        errorCode: 'SOURCE_VIDEO_GENERATE_FAILED',
+        errorMessage: jobError?.message || 'Could not enqueue auto-unlock job.',
+      });
+      const reloaded = await getSourceItemUnlockBySourceItemId(db, sourceItemId);
+      if (!reloaded || reloaded.status !== 'available') {
+        return { queued: false as const, reason: 'UNLOCK_NOT_AVAILABLE' as const };
+      }
+      currentUnlock = reloaded;
+      continue;
+    }
+
+    scheduleQueuedIngestionProcessing();
+    return {
+      queued: true as const,
+      payer_user_id: payerUserId,
+      job_id: job.id,
+      trace_id: traceId,
+    };
+  }
+
+  return { queued: false as const, reason: 'NO_ELIGIBLE_CREDITS' as const };
+}
+
 type RefreshVideoAttemptRow = {
   subscription_id: string;
   video_id: string;
@@ -5050,7 +5296,7 @@ async function syncSingleSubscription(db: ReturnType<typeof createClient>, subsc
   last_seen_published_at: string | null;
   last_seen_video_id: string | null;
 }, options: {
-  trigger: 'user_sync' | 'service_cron' | 'subscription_create' | 'debug_simulation';
+  trigger: 'user_sync' | 'service_cron' | 'subscription_create' | 'debug_simulation' | 'youtube_import';
 }) {
   const feed = await fetchYouTubeFeed(subscription.source_channel_id, 20);
   const newest = feed.videos[0] || null;
@@ -5111,11 +5357,35 @@ async function syncSingleSubscription(db: ReturnType<typeof createClient>, subsc
       continue;
     }
 
-    await ensureSourceItemUnlock(db, {
+    const unlock = await ensureSourceItemUnlock(db, {
       sourceItemId: source.id,
       sourcePageId: subscription.source_page_id || source.source_page_id || null,
       estimatedCost: estimatedUnlockCost,
     });
+
+    if (unlock.status === 'available') {
+      try {
+        await attemptAutoUnlockForSourceItem({
+          sourceItemId: source.id,
+          sourcePageId: subscription.source_page_id || source.source_page_id || null,
+          sourceChannelId: subscription.source_channel_id || source.source_channel_id || '',
+          sourceChannelTitle: feed.channelTitle || source.source_channel_title || null,
+          video,
+          unlock,
+          estimatedUnlockCost,
+          trigger: options.trigger,
+        });
+      } catch (autoUnlockError) {
+        console.log('[subscription_auto_unlock_attempt_failed]', JSON.stringify({
+          subscription_id: subscription.id,
+          user_id: subscription.user_id,
+          source_item_id: source.id,
+          source_channel_id: subscription.source_channel_id,
+          trigger: options.trigger,
+          error: autoUnlockError instanceof Error ? autoUnlockError.message : String(autoUnlockError),
+        }));
+      }
+    }
 
     const insertedItem = await insertFeedItem(db, {
       userId: subscription.user_id,
@@ -5269,7 +5539,7 @@ app.post('/api/source-subscriptions', async (req, res) => {
 
   const { data: existingSub } = await db
     .from('user_source_subscriptions')
-    .select('id, is_active')
+    .select('id, is_active, auto_unlock_enabled')
     .eq('user_id', userId)
     .eq('source_type', 'youtube')
     .eq('source_channel_id', resolved.channelId)
@@ -5287,12 +5557,13 @@ app.post('/api/source-subscriptions', async (req, res) => {
         source_channel_title: resolved.channelTitle,
         source_page_id: sourcePage.id,
         mode: 'auto',
+        auto_unlock_enabled: existingSub?.auto_unlock_enabled ?? true,
         is_active: true,
         last_sync_error: null,
       },
       { onConflict: 'user_id,source_type,source_channel_id' },
     )
-    .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, source_page_id, mode, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
+    .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, source_page_id, mode, auto_unlock_enabled, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
     .single();
   if (upsertError) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: upsertError.message, data: null });
 
@@ -6715,7 +6986,7 @@ app.post('/api/source-pages/:platform/:externalId/subscribe', async (req, res) =
 
   const { data: existingSub } = await db
     .from('user_source_subscriptions')
-    .select('id, is_active')
+    .select('id, is_active, auto_unlock_enabled')
     .eq('user_id', userId)
     .eq('source_type', 'youtube')
     .eq('source_channel_id', resolved.channelId)
@@ -6733,12 +7004,13 @@ app.post('/api/source-pages/:platform/:externalId/subscribe', async (req, res) =
         source_channel_title: resolved.channelTitle,
         source_page_id: sourcePage.id,
         mode: 'auto',
+        auto_unlock_enabled: existingSub?.auto_unlock_enabled ?? true,
         is_active: true,
         last_sync_error: null,
       },
       { onConflict: 'user_id,source_type,source_channel_id' },
     )
-    .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, source_page_id, mode, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
+    .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, source_page_id, mode, auto_unlock_enabled, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
     .single();
   if (upsertError) {
     return res.status(400).json({ ok: false, error_code: 'SOURCE_PAGE_SUBSCRIBE_FAILED', message: upsertError.message, data: null });
@@ -6891,7 +7163,7 @@ app.get('/api/source-subscriptions', async (_req, res) => {
 
   const { data, error } = await db
     .from('user_source_subscriptions')
-    .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, source_page_id, mode, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
+    .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, source_page_id, mode, auto_unlock_enabled, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
     .eq('user_id', userId)
     .order('updated_at', { ascending: false });
   if (error) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error.message, data: null });
@@ -7122,6 +7394,7 @@ app.patch('/api/source-subscriptions/:id', async (req, res) => {
 
   const modeRaw = req.body?.mode;
   const isActiveRaw = req.body?.is_active;
+  const autoUnlockEnabledRaw = req.body?.auto_unlock_enabled;
   const updates: Record<string, unknown> = {};
   if (typeof modeRaw === 'string') {
     const mode = modeRaw.trim().toLowerCase();
@@ -7133,6 +7406,9 @@ app.patch('/api/source-subscriptions/:id', async (req, res) => {
   }
   if (typeof isActiveRaw === 'boolean') {
     updates.is_active = isActiveRaw;
+  }
+  if (typeof autoUnlockEnabledRaw === 'boolean') {
+    updates.auto_unlock_enabled = autoUnlockEnabledRaw;
   }
   if (Object.keys(updates).length === 0) {
     return res.status(400).json({ ok: false, error_code: 'INVALID_INPUT', message: 'No valid fields to update', data: null });
@@ -7146,7 +7422,7 @@ app.patch('/api/source-subscriptions/:id', async (req, res) => {
     .update(updates)
     .eq('id', req.params.id)
     .eq('user_id', userId)
-    .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, source_page_id, mode, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
+    .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, source_page_id, mode, auto_unlock_enabled, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
     .maybeSingle();
   if (error) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: error.message, data: null });
   if (!data) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Subscription not found', data: null });

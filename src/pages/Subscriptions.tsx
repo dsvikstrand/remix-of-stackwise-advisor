@@ -10,6 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -24,6 +25,7 @@ import {
   type IngestionJobStatus,
   type SubscriptionRefreshCandidate,
   type SourceSubscription,
+  updateSourceSubscription,
 } from '@/lib/subscriptionsApi';
 import { PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 import { config } from '@/config/runtime';
@@ -412,6 +414,20 @@ export default function Subscriptions() {
     },
   });
 
+  const updateSubscriptionMutation = useMutation({
+    mutationFn: (input: { id: string; autoUnlockEnabled?: boolean }) => updateSourceSubscription(input),
+    onSuccess: () => {
+      invalidateSubscriptionViews();
+    },
+    onError: (error) => {
+      toast({
+        title: 'Update failed',
+        description: getActionErrorMessage(error, 'Could not update subscription settings.'),
+        variant: 'destructive',
+      });
+    },
+  });
+
   const refreshScanMutation = useMutation({
     mutationFn: async () => {
       if (!subscriptionsEnabled) throw new Error('Backend API is not configured.');
@@ -519,6 +535,17 @@ export default function Subscriptions() {
 
   const handleUnsubscribe = (subscription: SourceSubscription) => {
     void withRowPending(subscription.id, () => deactivateMutation.mutateAsync(subscription.id));
+  };
+
+  const handleAutoUnlockToggle = (subscription: SourceSubscription, nextChecked: boolean) => {
+    void withRowPending(subscription.id, async () => {
+      const current = Boolean(subscription.auto_unlock_enabled);
+      if (current === nextChecked) return;
+      await updateSubscriptionMutation.mutateAsync({
+        id: subscription.id,
+        autoUnlockEnabled: nextChecked,
+      });
+    });
   };
 
   const handleOpenYouTubeImport = () => {
@@ -1335,14 +1362,24 @@ export default function Subscriptions() {
                               </a>
                             </div>
                           </div>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => handleUnsubscribe(subscription)}
-                            disabled={!subscriptionsEnabled || isRowPending(subscription.id)}
-                          >
-                            {isRowPending(subscription.id) ? 'Unsubscribing...' : 'Unsubscribe'}
-                          </Button>
+                          <div className="flex flex-col items-end gap-2">
+                            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <span>Auto unlock</span>
+                              <Switch
+                                checked={Boolean(subscription.auto_unlock_enabled)}
+                                onCheckedChange={(checked) => handleAutoUnlockToggle(subscription, checked)}
+                                disabled={!subscriptionsEnabled || isRowPending(subscription.id)}
+                              />
+                            </label>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => handleUnsubscribe(subscription)}
+                              disabled={!subscriptionsEnabled || isRowPending(subscription.id)}
+                            >
+                              {isRowPending(subscription.id) ? 'Unsubscribing...' : 'Unsubscribe'}
+                            </Button>
+                          </div>
                         </div>
                         {subscription.last_sync_error ? (
                           <p className="text-xs text-red-600/90">Sync issue: {subscription.last_sync_error}</p>
