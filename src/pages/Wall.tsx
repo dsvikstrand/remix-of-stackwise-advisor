@@ -343,12 +343,13 @@ export default function Wall() {
       const { data: sourceItemsData, error: sourceItemsError } = sourceItemIds.length > 0
         ? await supabase
           .from('source_items')
-          .select('id, source_page_id, source_channel_title, metadata')
+          .select('id, source_page_id, source_channel_id, source_channel_title, metadata')
           .in('id', sourceItemIds)
         : { data: [], error: null };
       if (sourceItemsError) throw sourceItemsError;
 
       const sourcePageIds = [...new Set((sourceItemsData || []).map((row) => String(row.source_page_id || '').trim()).filter(Boolean))];
+      const sourceChannelIds = [...new Set((sourceItemsData || []).map((row) => String(row.source_channel_id || '').trim()).filter(Boolean))];
       const { data: sourcePagesData, error: sourcePagesError } = sourcePageIds.length > 0
         ? await supabase
           .from('source_pages')
@@ -356,7 +357,16 @@ export default function Wall() {
           .in('id', sourcePageIds)
         : { data: [], error: null };
       if (sourcePagesError) throw sourcePagesError;
+      const { data: sourcePagesByExternalData, error: sourcePagesByExternalError } = sourceChannelIds.length > 0
+        ? await supabase
+          .from('source_pages')
+          .select('external_id, avatar_url')
+          .eq('platform', 'youtube')
+          .in('external_id', sourceChannelIds)
+        : { data: [], error: null };
+      if (sourcePagesByExternalError) throw sourcePagesByExternalError;
       const sourcePageAvatarById = new Map((sourcePagesData || []).map((row) => [row.id, row.avatar_url || null]));
+      const sourcePageAvatarByExternalId = new Map((sourcePagesByExternalData || []).map((row) => [row.external_id, row.avatar_url || null]));
 
       const sourceItemsMap = new Map(
         (sourceItemsData || []).map((row) => {
@@ -382,7 +392,11 @@ export default function Wall() {
               );
           return [row.id, {
             title: row.source_channel_title || metadataSourceTitle || null,
-            avatarUrl: metadataSourceAvatarUrl || sourcePageAvatarById.get(String(row.source_page_id || '').trim()) || null,
+            avatarUrl:
+              metadataSourceAvatarUrl
+              || sourcePageAvatarById.get(String(row.source_page_id || '').trim())
+              || sourcePageAvatarByExternalId.get(String(row.source_channel_id || '').trim())
+              || null,
           }] as const;
         }),
       );

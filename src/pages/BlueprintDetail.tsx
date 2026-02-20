@@ -110,7 +110,7 @@ export default function BlueprintDetail() {
       }
       const { data: source, error: sourceError } = await supabase
         .from('source_items')
-        .select('title, source_url, source_page_id, source_channel_title, thumbnail_url, metadata')
+        .select('title, source_url, source_page_id, source_channel_id, source_channel_title, thumbnail_url, metadata')
         .eq('id', feedRow.source_item_id)
         .maybeSingle();
       if (sourceError || !source) {
@@ -148,11 +148,22 @@ export default function BlueprintDetail() {
           .maybeSingle();
         sourcePageAvatarUrl = sourcePage?.avatar_url || null;
       }
+      const sourceChannelId = String(source.source_channel_id || '').trim();
+      let sourceExternalAvatarUrl: string | null = null;
+      if (!sourcePageAvatarUrl && sourceChannelId) {
+        const { data: sourcePageByExternal } = await supabase
+          .from('source_pages')
+          .select('avatar_url')
+          .eq('platform', 'youtube')
+          .eq('external_id', sourceChannelId)
+          .maybeSingle();
+        sourceExternalAvatarUrl = sourcePageByExternal?.avatar_url || null;
+      }
       if (!cancelled) {
         setSourceChannel({
           title: channelTitle || source.title || 'Source channel',
           url: source.source_url || null,
-          avatarUrl: sourcePageAvatarUrl || metadataChannelAvatarUrl || null,
+          avatarUrl: sourcePageAvatarUrl || metadataChannelAvatarUrl || sourceExternalAvatarUrl || null,
         });
       }
     }

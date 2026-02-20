@@ -113,13 +113,22 @@ export function useMyFeed(options?: { enabled?: boolean }) {
 
       const sourceMap = new Map((sources || []).map((row) => [row.id, row]));
       const sourcePageIds = [...new Set((sources || []).map((row) => String(row.source_page_id || '').trim()).filter(Boolean))];
+      const sourceChannelIds = [...new Set((sources || []).map((row) => String(row.source_channel_id || '').trim()).filter(Boolean))];
       const { data: sourcePagesData } = sourcePageIds.length
         ? await supabase
           .from('source_pages')
           .select('id, avatar_url')
           .in('id', sourcePageIds)
         : { data: [] as Array<{ id: string; avatar_url: string | null }> };
+      const { data: sourcePagesByExternalData } = sourceChannelIds.length
+        ? await supabase
+          .from('source_pages')
+          .select('external_id, avatar_url')
+          .eq('platform', 'youtube')
+          .in('external_id', sourceChannelIds)
+        : { data: [] as Array<{ external_id: string; avatar_url: string | null }> };
       const sourcePageAvatarById = new Map((sourcePagesData || []).map((row) => [row.id, row.avatar_url || null]));
+      const sourcePageAvatarByExternalId = new Map((sourcePagesByExternalData || []).map((row) => [row.external_id, row.avatar_url || null]));
       const unlockMap = new Map((unlocks || []).map((row) => [row.source_item_id, row]));
       const blueprintMap = new Map((blueprints || []).map((row) => [row.id, row]));
       const candidateMap = new Map<string, { id: string; channelSlug: string; status: string }>();
@@ -175,6 +184,7 @@ export function useMyFeed(options?: { enabled?: boolean }) {
                 sourceChannelAvatarUrl:
                   metadataSourceChannelAvatarUrl
                   || sourcePageAvatarById.get(String(source.source_page_id || '').trim())
+                  || sourcePageAvatarByExternalId.get(String(source.source_channel_id || '').trim())
                   || null,
                 thumbnailUrl: source.thumbnail_url || null,
                 channelBannerUrl:
