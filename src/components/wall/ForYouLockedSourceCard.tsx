@@ -9,6 +9,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { formatRelativeShort } from '@/lib/timeFormat';
 
@@ -38,6 +39,13 @@ export function ForYouLockedSourceCard({
   onUnlock,
 }: ForYouLockedSourceCardProps) {
   const [showUnlockConfirm, setShowUnlockConfirm] = useState(false);
+  const sourceLabel = sourceChannelTitle || 'Subscribed source';
+  const sourceInitials = sourceLabel
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('') || 'S';
 
   const handleCardActivate = () => {
     if (isUnlocking) return;
@@ -73,18 +81,12 @@ export function ForYouLockedSourceCard({
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 space-y-1.5">
               <div className="flex items-center gap-1.5 min-w-0">
-                {sourceChannelAvatarUrl ? (
-                  <img
-                    src={sourceChannelAvatarUrl}
-                    alt={sourceChannelTitle || 'Source avatar'}
-                    className="h-4 w-4 rounded-full object-cover border border-border/50 shrink-0"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="h-4 w-4 rounded-full border border-border/60 bg-muted/50 shrink-0" aria-hidden />
-                )}
+                <Avatar className="h-4 w-4 shrink-0 border border-border/60">
+                  <AvatarImage src={sourceChannelAvatarUrl || undefined} alt={sourceLabel} />
+                  <AvatarFallback className="text-[8px]">{sourceInitials}</AvatarFallback>
+                </Avatar>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-foreground/70 truncate">
-                  {sourceChannelTitle || 'Subscribed source'}
+                  {sourceLabel}
                 </p>
               </div>
               <h3 className="text-sm font-semibold leading-snug line-clamp-2">{title}</h3>

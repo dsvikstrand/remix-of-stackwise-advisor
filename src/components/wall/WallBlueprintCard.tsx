@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Heart, MessageCircle, Share2 } from 'lucide-react';
 import type { MouseEvent } from 'react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
@@ -45,6 +46,13 @@ export function WallBlueprintCard({
   const channelLabel = `b/${channelSlug}`;
   const channelConfig = CHANNELS_CATALOG.find((channel) => channel.slug === channelSlug);
   const ChannelIcon = getChannelIcon(channelConfig?.icon || 'sparkles');
+  const sourceLabel = sourceName || 'Source';
+  const sourceInitials = sourceLabel
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('') || 'S';
 
   return (
     <Link to={to} className="block px-3 py-2.5 transition-colors hover:bg-muted/20">
@@ -72,16 +80,10 @@ export function WallBlueprintCard({
 
           {sourceName ? (
             <div className="flex items-center gap-1.5 min-w-0">
-              {sourceAvatarUrl ? (
-                <img
-                  src={sourceAvatarUrl}
-                  alt={sourceName}
-                  className="h-4 w-4 rounded-full object-cover border border-border/50 shrink-0"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="h-4 w-4 rounded-full border border-border/60 bg-muted/50 shrink-0" aria-hidden />
-              )}
+              <Avatar className="h-4 w-4 shrink-0 border border-border/60">
+                <AvatarImage src={sourceAvatarUrl || undefined} alt={sourceLabel} />
+                <AvatarFallback className="text-[8px]">{sourceInitials}</AvatarFallback>
+              </Avatar>
               <p className="text-xs text-muted-foreground line-clamp-1">{sourceName}</p>
             </div>
           ) : null}
