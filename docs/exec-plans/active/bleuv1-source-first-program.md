@@ -231,8 +231,8 @@ Rules:
   - queue backpressure (`QUEUE_BACKPRESSURE`) and intake pause (`QUEUE_INTAKE_DISABLED`) are enforced, and service ops now expose `/api/ops/queue/health`.
 - Subscription auto-unlock v1 (2026-02-20):
   - `user_source_subscriptions` now includes `auto_unlock_enabled` (default `true`) for existing and new subscriptions.
-  - new subscription uploads can auto-attempt unlock generation by sampling up to 3 eligible subscribers (`is_active=true`, `auto_unlock_enabled=true`) and stopping on first successful reserve+enqueue.
-  - if no sampled subscriber can reserve credits, item remains locked (`my_feed_unlockable`) for manual unlock.
+  - new subscription uploads prioritize the current subscriber, then sample up to 3 eligible subscribers (`is_active=true`, `auto_unlock_enabled=true`) and stop on first successful reserve+enqueue.
+  - if no sampled subscriber can reserve credits, bounded `source_auto_unlock_retry` jobs re-attempt before item remains locked (`my_feed_unlockable`) for manual unlock.
 
 ## 12) Next Milestone
 1. Validate Oracle cron reliability and alerting around ingestion failures.

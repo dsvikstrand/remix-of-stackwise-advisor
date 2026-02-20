@@ -167,6 +167,9 @@ const unlockIntakeEnabledRaw = String(process.env.UNLOCK_INTAKE_ENABLED || 'true
 const unlockIntakeEnabled = !(unlockIntakeEnabledRaw === 'false' || unlockIntakeEnabledRaw === '0' || unlockIntakeEnabledRaw === 'off');
 const sourceUnlockReservationSeconds = clampInt(process.env.SOURCE_UNLOCK_RESERVATION_SECONDS, 300, 60, 3600);
 const sourceUnlockGenerateMaxItems = clampInt(process.env.SOURCE_UNLOCK_GENERATE_MAX_ITEMS, 100, 1, 500);
+const sourceAutoUnlockSampleSize = clampInt(process.env.SOURCE_AUTO_UNLOCK_SAMPLE_SIZE, 3, 1, 10);
+const sourceAutoUnlockRetryDelaySeconds = clampInt(process.env.SOURCE_AUTO_UNLOCK_RETRY_DELAY_SECONDS, 90, 10, 3600);
+const sourceAutoUnlockRetryMaxAttempts = clampInt(process.env.SOURCE_AUTO_UNLOCK_RETRY_MAX_ATTEMPTS, 3, 1, 10);
 const sourceUnlockExpiredSweepBatch = clampInt(process.env.SOURCE_UNLOCK_EXPIRED_SWEEP_BATCH, 100, 10, 1000);
 const sourceUnlockSweepsEnabledRaw = String(process.env.SOURCE_UNLOCK_SWEEPS_ENABLED || 'true').trim().toLowerCase();
 const sourceUnlockSweepsEnabled = !(sourceUnlockSweepsEnabledRaw === 'false' || sourceUnlockSweepsEnabledRaw === '0' || sourceUnlockSweepsEnabledRaw === 'off');
@@ -241,6 +244,7 @@ if (autoBannerMode !== 'off' && !String(process.env.SUPABASE_SERVICE_ROLE_KEY ||
 
 const QUEUED_INGESTION_SCOPES = [
   'source_item_unlock_generation',
+  'source_auto_unlock_retry',
   'manual_refresh_selection',
   'all_active_subscriptions',
 ] as const;
@@ -2892,6 +2896,7 @@ async function upsertFeedItemWithBlueprint(db: ReturnType<typeof createClient>, 
 async function attachBlueprintToSubscribedUsers(db: ReturnType<typeof createClient>, input: {
   sourceItemId: string;
   sourcePageId: string | null;
+  sourceChannelId: string | null;
   blueprintId: string;
   unlockingUserId: string;
 }) {
@@ -2902,6 +2907,21 @@ async function attachBlueprintToSubscribedUsers(db: ReturnType<typeof createClie
       .from('user_source_subscriptions')
       .select('user_id')
       .eq('source_page_id', input.sourcePageId)
+      .eq('is_active', true);
+    if (subscriptionsError) throw subscriptionsError;
+    for (const row of subscriptions || []) {
+      const userId = String(row.user_id || '').trim();
+      if (userId) targetUsers.add(userId);
+    }
+  }
+
+  const sourceChannelId = String(input.sourceChannelId || '').trim();
+  if (sourceChannelId) {
+    const { data: subscriptions, error: subscriptionsError } = await db
+      .from('user_source_subscriptions')
+      .select('user_id')
+      .eq('source_type', 'youtube')
+      .eq('source_channel_id', sourceChannelId)
       .eq('is_active', true);
     if (subscriptionsError) throw subscriptionsError;
     for (const row of subscriptions || []) {
@@ -3596,6 +3616,18 @@ type SourceUnlockQueueItem = {
   reserved_by_user_id: string;
 };
 
+type SourceAutoUnlockRetryPayload = {
+  source_item_id: string;
+  source_page_id: string | null;
+  source_channel_id: string;
+  source_channel_title: string | null;
+  video_id: string;
+  video_url: string;
+  title: string;
+  trigger: 'user_sync' | 'service_cron' | 'subscription_create' | 'debug_simulation' | 'youtube_import';
+  preferred_payer_user_id: string | null;
+};
+
 const YOUTUBE_VIDEO_ID_REGEX = /^[a-zA-Z0-9_-]{8,15}$/;
 
 function extractYouTubeVideoIdFromUrl(rawUrl: string) {
@@ -3794,6 +3826,55 @@ function sampleRandomWithoutReplacement(values: string[], maxCount: number) {
   return unique.slice(0, Math.max(0, Math.min(maxCount, unique.length)));
 }
 
+function prioritizeAutoUnlockCandidates(input: {
+  values: string[];
+  preferredUserId?: string | null;
+  maxCount: number;
+}) {
+  const preferredUserId = String(input.preferredUserId || '').trim();
+  const sampled = sampleRandomWithoutReplacement(input.values, input.values.length);
+  if (!preferredUserId) {
+    return sampled.slice(0, Math.max(0, Math.min(input.maxCount, sampled.length)));
+  }
+
+  const preferredIncluded = sampled.includes(preferredUserId);
+  const ordered = preferredIncluded
+    ? [preferredUserId, ...sampled.filter((value) => value !== preferredUserId)]
+    : sampled;
+  return ordered.slice(0, Math.max(0, Math.min(input.maxCount, ordered.length)));
+}
+
+function buildUnlockLedgerIdempotencyKey(input: {
+  unlockId: string;
+  userId: string;
+  action: 'hold' | 'settle' | 'refund';
+}) {
+  return `unlock:${input.unlockId}:user:${input.userId}:${input.action}`;
+}
+
+type AutoUnlockAttemptReason =
+  | 'SERVICE_DB_MISSING'
+  | 'INVALID_SOURCE'
+  | 'UNLOCK_NOT_AVAILABLE'
+  | 'NO_ELIGIBLE_USERS'
+  | 'ALREADY_READY'
+  | 'ALREADY_IN_PROGRESS'
+  | 'QUEUE_DISABLED'
+  | 'QUEUE_BACKPRESSURE'
+  | 'NO_ELIGIBLE_CREDITS';
+
+type AutoUnlockAttemptResult =
+  | {
+    queued: true;
+    payer_user_id: string;
+    job_id: string;
+    trace_id: string;
+  }
+  | {
+    queued: false;
+    reason: AutoUnlockAttemptReason;
+  };
+
 async function listEligibleAutoUnlockUsers(
   db: ReturnType<typeof createClient>,
   input: {
@@ -3845,8 +3926,9 @@ async function attemptAutoUnlockForSourceItem(input: {
   video: YouTubeFeedVideo;
   unlock: SourceItemUnlockRow;
   estimatedUnlockCost: number;
+  preferredPayerUserId?: string | null;
   trigger: 'user_sync' | 'service_cron' | 'subscription_create' | 'debug_simulation' | 'youtube_import';
-}) {
+}): Promise<AutoUnlockAttemptResult> {
   const db = getServiceSupabaseClient();
   if (!db) return { queued: false as const, reason: 'SERVICE_DB_MISSING' as const };
 
@@ -3864,12 +3946,17 @@ async function attemptAutoUnlockForSourceItem(input: {
     sourcePageId: input.sourcePageId,
     sourceChannelId,
   });
-  const sampledUsers = sampleRandomWithoutReplacement(eligibleUsers, 3);
+  const sampledUsers = prioritizeAutoUnlockCandidates({
+    values: eligibleUsers,
+    preferredUserId: input.preferredPayerUserId,
+    maxCount: sourceAutoUnlockSampleSize,
+  });
   if (sampledUsers.length === 0) {
     return { queued: false as const, reason: 'NO_ELIGIBLE_USERS' as const };
   }
 
   let currentUnlock = input.unlock;
+  let sawInsufficientCredits = false;
   for (const payerUserId of sampledUsers) {
     const reserveResult = await reserveUnlock(db, {
       unlock: currentUnlock,
@@ -3890,7 +3977,11 @@ async function attemptAutoUnlockForSourceItem(input: {
     const hold = await reserveCredits(db, {
       userId: payerUserId,
       amount: reservedCost,
-      idempotencyKey: `unlock:${reservedUnlock.id}:hold`,
+      idempotencyKey: buildUnlockLedgerIdempotencyKey({
+        unlockId: reservedUnlock.id,
+        userId: payerUserId,
+        action: 'hold',
+      }),
       reasonCode: 'UNLOCK_HOLD',
       context: {
         source_item_id: sourceItemId,
@@ -3904,6 +3995,7 @@ async function attemptAutoUnlockForSourceItem(input: {
     });
 
     if (!hold.ok) {
+      sawInsufficientCredits = true;
       await failUnlock(db, {
         unlockId: reservedUnlock.id,
         errorCode: 'INSUFFICIENT_CREDITS',
@@ -3937,7 +4029,11 @@ async function attemptAutoUnlockForSourceItem(input: {
       await refundReservation(db, {
         userId: payerUserId,
         amount: reservedCost,
-        idempotencyKey: `unlock:${reservedUnlock.id}:refund`,
+        idempotencyKey: buildUnlockLedgerIdempotencyKey({
+          unlockId: reservedUnlock.id,
+          userId: payerUserId,
+          action: 'refund',
+        }),
         reasonCode: 'UNLOCK_REFUND',
         context: {
           source_item_id: sourceItemId,
@@ -3993,7 +4089,11 @@ async function attemptAutoUnlockForSourceItem(input: {
       await refundReservation(db, {
         userId: payerUserId,
         amount: reservedCost,
-        idempotencyKey: `unlock:${reservedUnlock.id}:refund`,
+        idempotencyKey: buildUnlockLedgerIdempotencyKey({
+          unlockId: reservedUnlock.id,
+          userId: payerUserId,
+          action: 'refund',
+        }),
         reasonCode: 'UNLOCK_REFUND',
         context: {
           source_item_id: sourceItemId,
@@ -4027,7 +4127,62 @@ async function attemptAutoUnlockForSourceItem(input: {
     };
   }
 
-  return { queued: false as const, reason: 'NO_ELIGIBLE_CREDITS' as const };
+  if (sawInsufficientCredits) {
+    return { queued: false as const, reason: 'NO_ELIGIBLE_CREDITS' as const };
+  }
+  return { queued: false as const, reason: 'UNLOCK_NOT_AVAILABLE' as const };
+}
+
+async function hasPendingSourceAutoUnlockRetryJob(
+  db: ReturnType<typeof createClient>,
+  sourceItemId: string,
+) {
+  const normalizedSourceItemId = String(sourceItemId || '').trim();
+  if (!normalizedSourceItemId) return false;
+
+  const { data, error } = await db
+    .from('ingestion_jobs')
+    .select('id')
+    .eq('scope', 'source_auto_unlock_retry')
+    .in('status', ['queued', 'running'])
+    .filter('payload->>source_item_id', 'eq', normalizedSourceItemId)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data?.id);
+}
+
+async function enqueueSourceAutoUnlockRetryJob(
+  db: ReturnType<typeof createClient>,
+  input: SourceAutoUnlockRetryPayload,
+) {
+  if (await hasPendingSourceAutoUnlockRetryJob(db, input.source_item_id)) {
+    return { enqueued: false as const, reason: 'ALREADY_PENDING' as const };
+  }
+
+  const nextRunAt = new Date(Date.now() + sourceAutoUnlockRetryDelaySeconds * 1000).toISOString();
+  const { data: job, error: jobError } = await db
+    .from('ingestion_jobs')
+    .insert({
+      trigger: input.trigger === 'service_cron' ? 'service_cron' : 'user_sync',
+      scope: 'source_auto_unlock_retry',
+      status: 'queued',
+      requested_by_user_id: input.preferred_payer_user_id || null,
+      max_attempts: sourceAutoUnlockRetryMaxAttempts,
+      payload: input,
+      next_run_at: nextRunAt,
+    })
+    .select('id')
+    .single();
+  if (jobError || !job?.id) {
+    throw new Error(jobError?.message || 'Could not enqueue auto-unlock retry job.');
+  }
+  scheduleQueuedIngestionProcessing(sourceAutoUnlockRetryDelaySeconds * 1000);
+  return {
+    enqueued: true as const,
+    job_id: job.id,
+    next_run_at: nextRunAt,
+  };
 }
 
 type RefreshVideoAttemptRow = {
@@ -4727,6 +4882,7 @@ async function processSourceItemUnlockGenerationJob(input: {
       const feedRows = await attachBlueprintToSubscribedUsers(db, {
         sourceItemId: sourceRow.id,
         sourcePageId: sourceRow.source_page_id || item.source_page_id || null,
+        sourceChannelId: sourceRow.source_channel_id || item.source_channel_id || null,
         blueprintId: generated.blueprintId,
         unlockingUserId: input.userId,
       });
@@ -4770,7 +4926,11 @@ async function processSourceItemUnlockGenerationJob(input: {
       await settleReservation(db, {
         userId: item.reserved_by_user_id,
         amount: item.reserved_cost,
-        idempotencyKey: `unlock:${item.unlock_id}:settle`,
+        idempotencyKey: buildUnlockLedgerIdempotencyKey({
+          unlockId: item.unlock_id,
+          userId: item.reserved_by_user_id,
+          action: 'settle',
+        }),
         reasonCode: 'UNLOCK_SETTLE',
         context: {
           source_item_id: item.source_item_id,
@@ -4817,7 +4977,11 @@ async function processSourceItemUnlockGenerationJob(input: {
         await refundReservation(db, {
           userId: item.reserved_by_user_id,
           amount: item.reserved_cost,
-          idempotencyKey: `unlock:${item.unlock_id}:refund`,
+          idempotencyKey: buildUnlockLedgerIdempotencyKey({
+            unlockId: item.unlock_id,
+            userId: item.reserved_by_user_id,
+            action: 'refund',
+          }),
           reasonCode: 'UNLOCK_REFUND',
           context: {
             source_item_id: item.source_item_id,
@@ -4904,6 +5068,155 @@ async function processSourceItemUnlockGenerationJob(input: {
   );
 }
 
+class AutoUnlockRetryableError extends Error {
+  code: 'AUTO_UNLOCK_RETRYABLE';
+  errorCode: 'NO_ELIGIBLE_USERS' | 'NO_ELIGIBLE_CREDITS' | 'QUEUE_BACKPRESSURE' | 'QUEUE_INTAKE_DISABLED';
+  retryDelaySeconds: number;
+
+  constructor(input: {
+    errorCode: 'NO_ELIGIBLE_USERS' | 'NO_ELIGIBLE_CREDITS' | 'QUEUE_BACKPRESSURE' | 'QUEUE_INTAKE_DISABLED';
+    message: string;
+    retryDelaySeconds: number;
+  }) {
+    super(input.message);
+    this.code = 'AUTO_UNLOCK_RETRYABLE';
+    this.errorCode = input.errorCode;
+    this.retryDelaySeconds = Math.max(5, Math.floor(input.retryDelaySeconds));
+  }
+}
+
+async function processSourceAutoUnlockRetryJob(input: {
+  jobId: string;
+  payload: SourceAutoUnlockRetryPayload;
+  traceId: string;
+}) {
+  const db = getServiceSupabaseClient();
+  if (!db) {
+    throw new Error('Service role client not configured');
+  }
+
+  const sourceItemId = String(input.payload.source_item_id || '').trim();
+  const sourceChannelId = String(input.payload.source_channel_id || '').trim();
+  if (!sourceItemId || !sourceChannelId) {
+    throw new Error('INVALID_AUTO_UNLOCK_RETRY_PAYLOAD');
+  }
+
+  const activeSubscriberCount = await countActiveSubscribersForSourcePage(db, input.payload.source_page_id || null);
+  const estimatedUnlockCost = computeUnlockCost(activeSubscriberCount);
+  const unlock = await ensureSourceItemUnlock(db, {
+    sourceItemId,
+    sourcePageId: input.payload.source_page_id || null,
+    estimatedCost: estimatedUnlockCost,
+  });
+
+  if (unlock.status !== 'available') {
+    await db.from('ingestion_jobs').update({
+      status: 'succeeded',
+      finished_at: new Date().toISOString(),
+      processed_count: 1,
+      inserted_count: 0,
+      skipped_count: 1,
+      lease_expires_at: null,
+      worker_id: null,
+      last_heartbeat_at: new Date().toISOString(),
+      error_code: null,
+      error_message: null,
+    }).eq('id', input.jobId);
+
+    logUnlockEvent(
+      'subscription_auto_unlock_retry_skipped',
+      { trace_id: input.traceId, job_id: input.jobId, source_item_id: sourceItemId },
+      {
+        reason: 'UNLOCK_NOT_AVAILABLE',
+        unlock_status: unlock.status,
+      },
+    );
+    return;
+  }
+
+  const attempt = await attemptAutoUnlockForSourceItem({
+    sourceItemId,
+    sourcePageId: input.payload.source_page_id || null,
+    sourceChannelId,
+    sourceChannelTitle: input.payload.source_channel_title || null,
+    video: {
+      videoId: input.payload.video_id,
+      title: input.payload.title,
+      url: input.payload.video_url,
+      publishedAt: null,
+      thumbnailUrl: null,
+    },
+    unlock,
+    estimatedUnlockCost,
+    preferredPayerUserId: input.payload.preferred_payer_user_id || null,
+    trigger: input.payload.trigger,
+  });
+
+  if (!attempt.queued) {
+    if (attempt.reason === 'NO_ELIGIBLE_USERS' || attempt.reason === 'NO_ELIGIBLE_CREDITS') {
+      throw new AutoUnlockRetryableError({
+        errorCode: attempt.reason,
+        message: `Auto-unlock retry pending: ${attempt.reason}.`,
+        retryDelaySeconds: sourceAutoUnlockRetryDelaySeconds,
+      });
+    }
+    if (attempt.reason === 'QUEUE_BACKPRESSURE' || attempt.reason === 'QUEUE_DISABLED') {
+      throw new AutoUnlockRetryableError({
+        errorCode: attempt.reason === 'QUEUE_DISABLED' ? 'QUEUE_INTAKE_DISABLED' : 'QUEUE_BACKPRESSURE',
+        message: `Auto-unlock retry delayed: ${attempt.reason}.`,
+        retryDelaySeconds: sourceAutoUnlockRetryDelaySeconds,
+      });
+    }
+
+    await db.from('ingestion_jobs').update({
+      status: 'succeeded',
+      finished_at: new Date().toISOString(),
+      processed_count: 1,
+      inserted_count: 0,
+      skipped_count: 1,
+      lease_expires_at: null,
+      worker_id: null,
+      last_heartbeat_at: new Date().toISOString(),
+      error_code: null,
+      error_message: null,
+    }).eq('id', input.jobId);
+
+    logUnlockEvent(
+      'subscription_auto_unlock_retry_terminal',
+      { trace_id: input.traceId, job_id: input.jobId, source_item_id: sourceItemId },
+      {
+        queued: false,
+        reason: attempt.reason,
+      },
+    );
+    return;
+  }
+
+  await db.from('ingestion_jobs').update({
+    status: 'succeeded',
+    finished_at: new Date().toISOString(),
+    processed_count: 1,
+    inserted_count: 1,
+    skipped_count: 0,
+    lease_expires_at: null,
+    worker_id: null,
+    last_heartbeat_at: new Date().toISOString(),
+    error_code: null,
+    error_message: null,
+  }).eq('id', input.jobId);
+
+  logUnlockEvent(
+    'subscription_auto_unlock_retry_queued',
+    { trace_id: input.traceId, job_id: input.jobId, source_item_id: sourceItemId },
+    {
+      queued: true,
+      unlock_job_id: attempt.job_id,
+      payer_user_id: attempt.payer_user_id,
+      unlock_trace_id: attempt.trace_id,
+    },
+  );
+}
+
 class WorkerTimeoutError extends Error {
   code: 'WORKER_TIMEOUT';
 
@@ -4951,6 +5264,42 @@ function normalizeSourceUnlockQueueItems(value: unknown): SourceUnlockQueueItem[
   return rows;
 }
 
+function normalizeSourceAutoUnlockRetryPayload(value: unknown): SourceAutoUnlockRetryPayload | null {
+  if (!value || typeof value !== 'object') return null;
+  const row = value as Record<string, unknown>;
+  const sourceItemId = String(row.source_item_id || '').trim();
+  const sourceChannelId = String(row.source_channel_id || '').trim();
+  const videoId = String(row.video_id || '').trim();
+  const videoUrl = String(row.video_url || '').trim();
+  const title = String(row.title || '').trim();
+  const triggerRaw = String(row.trigger || '').trim();
+  const preferredPayerUserId = String(row.preferred_payer_user_id || '').trim() || null;
+  if (!sourceItemId || !sourceChannelId || !videoId || !videoUrl || !title) return null;
+
+  let trigger: SourceAutoUnlockRetryPayload['trigger'] = 'user_sync';
+  if (
+    triggerRaw === 'service_cron'
+    || triggerRaw === 'subscription_create'
+    || triggerRaw === 'debug_simulation'
+    || triggerRaw === 'youtube_import'
+    || triggerRaw === 'user_sync'
+  ) {
+    trigger = triggerRaw;
+  }
+
+  return {
+    source_item_id: sourceItemId,
+    source_page_id: row.source_page_id == null ? null : String(row.source_page_id || '').trim() || null,
+    source_channel_id: sourceChannelId,
+    source_channel_title: row.source_channel_title == null ? null : String(row.source_channel_title || '').trim() || null,
+    video_id: videoId,
+    video_url: videoUrl,
+    title,
+    trigger,
+    preferred_payer_user_id: preferredPayerUserId,
+  };
+}
+
 function normalizeRefreshScanCandidates(value: unknown): RefreshScanCandidate[] {
   if (!Array.isArray(value)) return [];
   const rows: RefreshScanCandidate[] = [];
@@ -4993,6 +5342,13 @@ function getRetryDelayForErrorCode(errorCode: string) {
 }
 
 function classifyQueuedJobError(error: unknown) {
+  if (error instanceof AutoUnlockRetryableError) {
+    return {
+      errorCode: error.errorCode,
+      message: error.message,
+      retryDelaySeconds: error.retryDelaySeconds,
+    };
+  }
   if (error instanceof WorkerTimeoutError) {
     return {
       errorCode: 'WORKER_TIMEOUT',
@@ -5147,6 +5503,19 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
             jobId: job.id,
             userId,
             items,
+            traceId,
+          });
+          return;
+        }
+
+        if (scope === 'source_auto_unlock_retry') {
+          const retryPayload = normalizeSourceAutoUnlockRetryPayload(payload);
+          if (!retryPayload) {
+            throw new Error('INVALID_AUTO_UNLOCK_RETRY_PAYLOAD');
+          }
+          await processSourceAutoUnlockRetryJob({
+            jobId: job.id,
+            payload: retryPayload,
             traceId,
           });
           return;
@@ -5365,7 +5734,7 @@ async function syncSingleSubscription(db: ReturnType<typeof createClient>, subsc
 
     if (unlock.status === 'available') {
       try {
-        await attemptAutoUnlockForSourceItem({
+        const attempt = await attemptAutoUnlockForSourceItem({
           sourceItemId: source.id,
           sourcePageId: subscription.source_page_id || source.source_page_id || null,
           sourceChannelId: subscription.source_channel_id || source.source_channel_id || '',
@@ -5373,8 +5742,69 @@ async function syncSingleSubscription(db: ReturnType<typeof createClient>, subsc
           video,
           unlock,
           estimatedUnlockCost,
+          preferredPayerUserId: subscription.user_id,
           trigger: options.trigger,
         });
+
+        if (!attempt.queued && (attempt.reason === 'NO_ELIGIBLE_USERS' || attempt.reason === 'NO_ELIGIBLE_CREDITS')) {
+          try {
+            const retryDb = getServiceSupabaseClient();
+            if (!retryDb) throw new Error('Service role client not configured');
+            const retry = await enqueueSourceAutoUnlockRetryJob(retryDb, {
+              source_item_id: source.id,
+              source_page_id: subscription.source_page_id || source.source_page_id || null,
+              source_channel_id: subscription.source_channel_id || source.source_channel_id || '',
+              source_channel_title: feed.channelTitle || source.source_channel_title || null,
+              video_id: video.videoId,
+              video_url: video.url,
+              title: video.title,
+              trigger: options.trigger,
+              preferred_payer_user_id: subscription.user_id,
+            });
+
+            console.log('[subscription_auto_unlock_retry_scheduled]', JSON.stringify({
+              subscription_id: subscription.id,
+              user_id: subscription.user_id,
+              source_item_id: source.id,
+              source_channel_id: subscription.source_channel_id,
+              reason: attempt.reason,
+              retry_enqueued: retry.enqueued,
+              retry_job_id: retry.enqueued ? retry.job_id : null,
+              retry_next_run_at: retry.enqueued ? retry.next_run_at : null,
+              trigger: options.trigger,
+            }));
+          } catch (retryError) {
+            console.log('[subscription_auto_unlock_retry_schedule_failed]', JSON.stringify({
+              subscription_id: subscription.id,
+              user_id: subscription.user_id,
+              source_item_id: source.id,
+              source_channel_id: subscription.source_channel_id,
+              reason: attempt.reason,
+              trigger: options.trigger,
+              error: retryError instanceof Error ? retryError.message : String(retryError),
+            }));
+          }
+        } else if (!attempt.queued) {
+          console.log('[subscription_auto_unlock_not_queued]', JSON.stringify({
+            subscription_id: subscription.id,
+            user_id: subscription.user_id,
+            source_item_id: source.id,
+            source_channel_id: subscription.source_channel_id,
+            reason: attempt.reason,
+            trigger: options.trigger,
+          }));
+        } else {
+          console.log('[subscription_auto_unlock_queued]', JSON.stringify({
+            subscription_id: subscription.id,
+            user_id: subscription.user_id,
+            source_item_id: source.id,
+            source_channel_id: subscription.source_channel_id,
+            payer_user_id: attempt.payer_user_id,
+            job_id: attempt.job_id,
+            trace_id: attempt.trace_id,
+            trigger: options.trigger,
+          }));
+        }
       } catch (autoUnlockError) {
         console.log('[subscription_auto_unlock_attempt_failed]', JSON.stringify({
           subscription_id: subscription.id,
@@ -6329,7 +6759,11 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         const hold = await reserveCredits(sourcePageDb, {
           userId,
           amount: Math.max(0.001, Number(reservedUnlock.estimated_cost || estimatedUnlockCost)),
-          idempotencyKey: `unlock:${reservedUnlock.id}:hold`,
+          idempotencyKey: buildUnlockLedgerIdempotencyKey({
+            unlockId: reservedUnlock.id,
+            userId,
+            action: 'hold',
+          }),
           reasonCode: 'UNLOCK_HOLD',
           context: {
             source_item_id: source.id,

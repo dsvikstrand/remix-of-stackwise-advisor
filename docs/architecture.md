@@ -161,7 +161,8 @@
    - unsubscribe removes that user-scoped notice card while preserving other My Feed blueprint items.
 4. Subscription sync after checkpoint:
    - new uploads create unlockable feed rows (`my_feed_unlockable`) instead of immediate generation.
-   - new uploads can auto-attempt unlock generation when eligible subscribers are available (`auto_unlock_enabled=true`), sampling up to 3 users and stopping on first successful credit hold.
+   - new uploads can auto-attempt unlock generation when eligible subscribers are available (`auto_unlock_enabled=true`), prioritizing the current subscriber first, then sampling up to 3 users and stopping on first successful credit hold.
+   - if auto-attempt fails due temporary credit availability, backend enqueues bounded retry jobs (`source_auto_unlock_retry`) before falling back to manual unlock-only state.
    - unlock cards can be activated by one user; successful generation fans out shared blueprint linkage to subscribed users for that source item.
    - source unlock pricing uses `1 / active_subscribers` (clamped and rounded), with hold -> settle/refund ledger flow.
    - auto-ingest path enables review generation by default.

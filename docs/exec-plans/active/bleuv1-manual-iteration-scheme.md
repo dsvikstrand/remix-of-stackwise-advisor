@@ -960,12 +960,12 @@ Evaluation
 Scope
 - add per-subscription `auto_unlock_enabled` toggle (default enabled) to control auto-attempt participation.
 - auto-attempt only on newly ingested subscription uploads (no backlog pass).
-- sample up to 3 eligible subscribers and stop on first successful reserve + enqueue.
+- prioritize current subscriber first, then sample up to 3 eligible subscribers and stop on first successful reserve + enqueue.
 
 Definition of done
 - `user_source_subscriptions` carries `auto_unlock_enabled` and patch/list APIs expose it.
 - subscription sync can auto-attempt shared unlock generation for new videos when credits allow.
-- if sampled users cannot reserve credits, item remains locked for manual unlock.
+- if sampled users cannot reserve credits, a bounded `source_auto_unlock_retry` queue retries before item stays manual unlock-only.
 
 Evaluation
 - manual smoke: toggle persists true/false via `/subscriptions` row switch

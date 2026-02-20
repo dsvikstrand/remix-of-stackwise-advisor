@@ -104,7 +104,8 @@ b5) Subscription behavior (MVP simplified)
 - Shared unlock pricing for source videos is subscriber-based: `cost = clamp(round(1 / active_subscribers, 3), 0.050..1.000)`.
 - Unlock debit policy is hold-first, settle-on-success, refund-on-failure/expiry.
 - Auto-unlock toggle defaults to enabled (`auto_unlock_enabled=true`) for existing and new subscriptions.
-- New subscription uploads can auto-attempt unlock generation by sampling up to 3 eligible subscribers (`is_active=true`, `auto_unlock_enabled=true`) and stopping on first successful hold+enqueue.
+- New subscription uploads can auto-attempt unlock generation by prioritizing the current subscriber first, then sampling up to 3 eligible subscribers (`is_active=true`, `auto_unlock_enabled=true`) and stopping on first successful hold+enqueue.
+- If no eligible user can pay at that moment, backend schedules bounded auto-retries so cards can still unlock without manual action when credits refill.
 - Auto-ingested subscription items run review generation by default.
 - Banner generation for auto-ingest is controlled by `SUBSCRIPTION_AUTO_BANNER_MODE`:
   - `off` (default): no auto banner worker activity.

@@ -42,7 +42,8 @@
   - `GET /api/profile/:userId/feed` (optional auth; public profiles readable, private profiles owner-only)
 - Subscription auto-unlock policy:
   - `user_source_subscriptions.auto_unlock_enabled` defaults to `true` for existing and new rows.
-  - new subscription uploads can auto-attempt shared unlock generation by sampling up to 3 eligible subscribers (`is_active=true`, `auto_unlock_enabled=true`) and stopping on first successful hold + enqueue.
+  - new subscription uploads auto-attempt shared unlock generation by prioritizing the current subscriber first, then sampling up to 3 eligible subscribers (`is_active=true`, `auto_unlock_enabled=true`) and stopping on first successful hold + enqueue.
+  - if all sampled users fail credit reserve, backend enqueues bounded `source_auto_unlock_retry` jobs so unlock can complete after credit refill.
   - if sampled users cannot reserve credits, item remains `my_feed_unlockable` for manual unlock.
 
 ## Health checks
@@ -141,6 +142,9 @@ Required runtime variables:
 - `CREDIT_REFILL_SECONDS_PER_CREDIT` (default `360`)
 - `SOURCE_UNLOCK_RESERVATION_SECONDS` (default `300`)
 - `SOURCE_UNLOCK_GENERATE_MAX_ITEMS` (default `100`)
+- `SOURCE_AUTO_UNLOCK_SAMPLE_SIZE` (default `3`)
+- `SOURCE_AUTO_UNLOCK_RETRY_DELAY_SECONDS` (default `90`)
+- `SOURCE_AUTO_UNLOCK_RETRY_MAX_ATTEMPTS` (default `3`)
 - `SOURCE_UNLOCK_EXPIRED_SWEEP_BATCH` (default `100`)
 - `SOURCE_UNLOCK_SWEEPS_ENABLED` (default `true`)
 - `SOURCE_UNLOCK_SWEEP_BATCH` (default `100`)
@@ -201,6 +205,9 @@ Safe defaults:
 - `CREDIT_REFILL_SECONDS_PER_CREDIT=360`
 - `SOURCE_UNLOCK_RESERVATION_SECONDS=300`
 - `SOURCE_UNLOCK_GENERATE_MAX_ITEMS=100`
+- `SOURCE_AUTO_UNLOCK_SAMPLE_SIZE=3`
+- `SOURCE_AUTO_UNLOCK_RETRY_DELAY_SECONDS=90`
+- `SOURCE_AUTO_UNLOCK_RETRY_MAX_ATTEMPTS=3`
 - `SOURCE_UNLOCK_EXPIRED_SWEEP_BATCH=100`
 - `SOURCE_UNLOCK_SWEEPS_ENABLED=true`
 - `SOURCE_UNLOCK_SWEEP_BATCH=100`
