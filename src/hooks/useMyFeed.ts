@@ -15,6 +15,7 @@ export interface MyFeedItemView {
     sourceUrl: string;
     title: string;
     sourceChannelTitle: string | null;
+    sourceChannelAvatarUrl: string | null;
     thumbnailUrl: string | null;
     channelBannerUrl: string | null;
     unlockStatus: 'available' | 'reserved' | 'processing' | 'ready' | null;
@@ -141,6 +142,14 @@ export function useMyFeed(options?: { enabled?: boolean }) {
                 ? String(sourceMetadata.channel_title || '').trim() || null
                 : null
             );
+        const metadataSourceChannelAvatarUrl =
+          sourceMetadata && typeof sourceMetadata.source_channel_avatar_url === 'string'
+            ? String(sourceMetadata.source_channel_avatar_url || '').trim() || null
+            : (
+              sourceMetadata && typeof sourceMetadata.channel_avatar_url === 'string'
+                ? String(sourceMetadata.channel_avatar_url || '').trim() || null
+                : null
+            );
 
         return {
           id: row.id,
@@ -155,6 +164,7 @@ export function useMyFeed(options?: { enabled?: boolean }) {
                 sourceUrl: source.source_url,
                 title: source.title,
                 sourceChannelTitle: source.source_channel_title || metadataSourceChannelTitle || null,
+                sourceChannelAvatarUrl: metadataSourceChannelAvatarUrl || null,
                 thumbnailUrl: source.thumbnail_url || null,
                 channelBannerUrl:
                   source.metadata

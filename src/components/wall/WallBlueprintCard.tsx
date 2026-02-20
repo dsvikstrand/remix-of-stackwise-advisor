@@ -16,6 +16,7 @@ type WallBlueprintCardProps = {
   title: string;
   summary: string;
   sourceName?: string | null;
+  sourceAvatarUrl?: string | null;
   bannerUrl?: string | null;
   createdLabel: string;
   channelSlug: string;
@@ -31,6 +32,7 @@ export function WallBlueprintCard({
   title,
   summary,
   sourceName,
+  sourceAvatarUrl,
   bannerUrl,
   createdLabel,
   channelSlug,
@@ -69,7 +71,19 @@ export function WallBlueprintCard({
           </div>
 
           {sourceName ? (
-            <p className="text-xs text-muted-foreground line-clamp-1">{sourceName}</p>
+            <div className="flex items-center gap-1.5 min-w-0">
+              {sourceAvatarUrl ? (
+                <img
+                  src={sourceAvatarUrl}
+                  alt={sourceName}
+                  className="h-4 w-4 rounded-full object-cover border border-border/50 shrink-0"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="h-4 w-4 rounded-full border border-border/60 bg-muted/50 shrink-0" aria-hidden />
+              )}
+              <p className="text-xs text-muted-foreground line-clamp-1">{sourceName}</p>
+            </div>
           ) : null}
 
           <h3 className="text-base font-semibold leading-tight">{title}</h3>

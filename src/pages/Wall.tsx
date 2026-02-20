@@ -52,6 +52,7 @@ interface BlueprintPost {
   user_liked: boolean;
   published_channel_slug?: string | null;
   source_channel_title?: string | null;
+  source_channel_avatar_url?: string | null;
 }
 
 type ForYouLockedItem = {
@@ -61,6 +62,7 @@ type ForYouLockedItem = {
   createdAt: string;
   title: string;
   sourceChannelTitle: string | null;
+  sourceChannelAvatarUrl: string | null;
   sourceUrl: string;
   unlockCost: number;
   sourcePageId: string | null;
@@ -76,6 +78,7 @@ type ForYouBlueprintItem = {
   blueprintId: string;
   title: string;
   sourceChannelTitle: string | null;
+  sourceChannelAvatarUrl: string | null;
   llmReview: string | null;
   bannerUrl: string | null;
   tags: string[];
@@ -331,6 +334,7 @@ export default function Wall() {
 
       const publishedChannelByBlueprint = new Map<string, { slug: string; createdAtMs: number }>();
       const sourceChannelTitleByBlueprint = new Map<string, { title: string | null; createdAtMs: number }>();
+      const sourceChannelAvatarByBlueprint = new Map<string, { avatarUrl: string | null; createdAtMs: number }>();
       const feedItems = (feedItemsRes.data || []) as Array<{ id: string; blueprint_id: string; source_item_id: string; created_at: string }>;
       const feedItemIds = feedItems.map((row) => row.id);
       const blueprintIdByFeedItemId = new Map(feedItems.map((row) => [row.id, row.blueprint_id]));
@@ -358,7 +362,18 @@ export default function Wall() {
                   ? String(metadata.channel_title || '').trim() || null
                   : null
               );
-          return [row.id, row.source_channel_title || metadataSourceTitle || null] as const;
+          const metadataSourceAvatarUrl =
+            metadata && typeof metadata.source_channel_avatar_url === 'string'
+              ? String(metadata.source_channel_avatar_url || '').trim() || null
+              : (
+                metadata && typeof metadata.channel_avatar_url === 'string'
+                  ? String(metadata.channel_avatar_url || '').trim() || null
+                  : null
+              );
+          return [row.id, {
+            title: row.source_channel_title || metadataSourceTitle || null,
+            avatarUrl: metadataSourceAvatarUrl || null,
+          }] as const;
         }),
       );
       let publishedCandidateRows: Array<{
@@ -395,11 +410,15 @@ export default function Wall() {
 
       for (const row of feedItems) {
         const blueprintId = row.blueprint_id;
-        const sourceTitle = sourceItemsMap.get(row.source_item_id) || null;
+        const sourceInfo = sourceItemsMap.get(row.source_item_id) || { title: null, avatarUrl: null };
         const createdAtMs = Number.isFinite(Date.parse(row.created_at)) ? Date.parse(row.created_at) : 0;
-        const existing = sourceChannelTitleByBlueprint.get(blueprintId);
-        if (!existing || createdAtMs > existing.createdAtMs) {
-          sourceChannelTitleByBlueprint.set(blueprintId, { title: sourceTitle, createdAtMs });
+        const existingTitle = sourceChannelTitleByBlueprint.get(blueprintId);
+        if (!existingTitle || createdAtMs > existingTitle.createdAtMs) {
+          sourceChannelTitleByBlueprint.set(blueprintId, { title: sourceInfo.title, createdAtMs });
+        }
+        const existingAvatar = sourceChannelAvatarByBlueprint.get(blueprintId);
+        if (!existingAvatar || createdAtMs > existingAvatar.createdAtMs) {
+          sourceChannelAvatarByBlueprint.set(blueprintId, { avatarUrl: sourceInfo.avatarUrl, createdAtMs });
         }
       }
 
@@ -416,6 +435,7 @@ export default function Wall() {
         user_liked: likedIds.has(blueprint.id),
         published_channel_slug: publishedChannelByBlueprint.get(blueprint.id)?.slug || null,
         source_channel_title: sourceChannelTitleByBlueprint.get(blueprint.id)?.title || null,
+        source_channel_avatar_url: sourceChannelAvatarByBlueprint.get(blueprint.id)?.avatarUrl || null,
       })) as BlueprintPost[];
 
       if (isSpecificChannelScope && scopedChannel) {
@@ -523,6 +543,7 @@ export default function Wall() {
           blueprintId: item.blueprint.id,
           title: item.blueprint.title,
           sourceChannelTitle: item.source.sourceChannelTitle || null,
+          sourceChannelAvatarUrl: item.source.sourceChannelAvatarUrl || null,
           llmReview: item.blueprint.llmReview,
           bannerUrl: item.blueprint.bannerUrl,
           tags: item.blueprint.tags,
@@ -538,6 +559,7 @@ export default function Wall() {
         createdAt: item.createdAt,
         title: item.source.title,
         sourceChannelTitle: item.source.sourceChannelTitle,
+        sourceChannelAvatarUrl: item.source.sourceChannelAvatarUrl || null,
         sourceUrl: item.source.sourceUrl,
         unlockCost: Number(item.source.unlockCost || 0),
         sourcePageId: item.source.sourcePageId,
@@ -1023,6 +1045,7 @@ export default function Wall() {
                           key={item.sourceItemId}
                           title={item.title}
                           sourceChannelTitle={item.sourceChannelTitle}
+                          sourceChannelAvatarUrl={item.sourceChannelAvatarUrl}
                           createdAt={item.createdAt}
                           sourceUrl={item.sourceUrl}
                           unlockCost={item.unlockCost}
@@ -1050,6 +1073,7 @@ export default function Wall() {
                         title={item.title}
                         summary={summary}
                         sourceName={item.sourceChannelTitle}
+                        sourceAvatarUrl={item.sourceChannelAvatarUrl}
                         bannerUrl={item.bannerUrl}
                         createdLabel={formatRelativeShort(item.createdAt)}
                         channelSlug={channelSlug}
@@ -1128,6 +1152,7 @@ export default function Wall() {
                       title={post.title}
                       summary={preview}
                       sourceName={post.source_channel_title || null}
+                      sourceAvatarUrl={post.source_channel_avatar_url || null}
                       bannerUrl={post.banner_url}
                       createdLabel={formatRelativeShort(post.created_at)}
                       channelSlug={channelSlug}

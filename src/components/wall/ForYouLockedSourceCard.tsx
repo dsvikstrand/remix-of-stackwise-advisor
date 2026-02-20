@@ -19,6 +19,7 @@ const unlockCostFormatter = new Intl.NumberFormat(undefined, {
 type ForYouLockedSourceCardProps = {
   title: string;
   sourceChannelTitle: string | null;
+  sourceChannelAvatarUrl?: string | null;
   createdAt: string;
   sourceUrl: string | null;
   unlockCost: number;
@@ -29,6 +30,7 @@ type ForYouLockedSourceCardProps = {
 export function ForYouLockedSourceCard({
   title,
   sourceChannelTitle,
+  sourceChannelAvatarUrl,
   createdAt,
   sourceUrl,
   unlockCost,
@@ -70,9 +72,21 @@ export function ForYouLockedSourceCard({
         <div className="relative p-3.5 space-y-3">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 space-y-1.5">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-foreground/70">
-                {sourceChannelTitle || 'Subscribed source'}
-              </p>
+              <div className="flex items-center gap-1.5 min-w-0">
+                {sourceChannelAvatarUrl ? (
+                  <img
+                    src={sourceChannelAvatarUrl}
+                    alt={sourceChannelTitle || 'Source avatar'}
+                    className="h-4 w-4 rounded-full object-cover border border-border/50 shrink-0"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="h-4 w-4 rounded-full border border-border/60 bg-muted/50 shrink-0" aria-hidden />
+                )}
+                <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-foreground/70 truncate">
+                  {sourceChannelTitle || 'Subscribed source'}
+                </p>
+              </div>
               <h3 className="text-sm font-semibold leading-snug line-clamp-2">{title}</h3>
             </div>
             <span className="text-[11px] text-muted-foreground shrink-0">{formatRelativeShort(createdAt)}</span>
