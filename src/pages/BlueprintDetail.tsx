@@ -69,7 +69,7 @@ export default function BlueprintDetail() {
   const [sourceChannel, setSourceChannel] = useState<{
     title: string;
     url: string | null;
-    thumbnailUrl: string | null;
+    avatarUrl: string | null;
   } | null>(null);
   const curatedChannelTagSlugs = useMemo(() => new Set(getCatalogChannelTagSlugs().map(normalizeTag)), []);
   const displayTags = useMemo(() => {
@@ -110,7 +110,7 @@ export default function BlueprintDetail() {
       }
       const { data: source, error: sourceError } = await supabase
         .from('source_items')
-        .select('title, source_url, source_channel_title, thumbnail_url, metadata')
+        .select('title, source_url, source_page_id, source_channel_title, thumbnail_url, metadata')
         .eq('id', feedRow.source_item_id)
         .maybeSingle();
       if (sourceError || !source) {
@@ -130,11 +130,29 @@ export default function BlueprintDetail() {
                 : null
             );
       const channelTitle = source.source_channel_title || metadataChannelTitle || null;
+      const metadataChannelAvatarUrl =
+        sourceMetadata && typeof sourceMetadata.source_channel_avatar_url === 'string'
+          ? String(sourceMetadata.source_channel_avatar_url || '').trim() || null
+          : (
+            sourceMetadata && typeof sourceMetadata.channel_avatar_url === 'string'
+              ? String(sourceMetadata.channel_avatar_url || '').trim() || null
+              : null
+          );
+      let sourcePageAvatarUrl: string | null = null;
+      const sourcePageId = String(source.source_page_id || '').trim();
+      if (sourcePageId) {
+        const { data: sourcePage } = await supabase
+          .from('source_pages')
+          .select('avatar_url')
+          .eq('id', sourcePageId)
+          .maybeSingle();
+        sourcePageAvatarUrl = sourcePage?.avatar_url || null;
+      }
       if (!cancelled) {
         setSourceChannel({
           title: channelTitle || source.title || 'Source channel',
           url: source.source_url || null,
-          thumbnailUrl: source.thumbnail_url || null,
+          avatarUrl: sourcePageAvatarUrl || metadataChannelAvatarUrl || null,
         });
       }
     }
@@ -210,7 +228,7 @@ export default function BlueprintDetail() {
                 <div className="flex items-center gap-2 min-w-0">
                   <Avatar className="h-6 w-6">
                     <AvatarImage
-                      src={sourceChannel?.thumbnailUrl || blueprint.creator_profile?.avatar_url || undefined}
+                      src={sourceChannel?.avatarUrl || undefined}
                     />
                     <AvatarFallback className="text-[10px]">
                       {(sourceChannel?.title || blueprint.creator_profile?.display_name || 'U')

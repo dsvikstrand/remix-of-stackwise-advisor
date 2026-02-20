@@ -112,6 +112,14 @@ export function useMyFeed(options?: { enabled?: boolean }) {
       });
 
       const sourceMap = new Map((sources || []).map((row) => [row.id, row]));
+      const sourcePageIds = [...new Set((sources || []).map((row) => String(row.source_page_id || '').trim()).filter(Boolean))];
+      const { data: sourcePagesData } = sourcePageIds.length
+        ? await supabase
+          .from('source_pages')
+          .select('id, avatar_url')
+          .in('id', sourcePageIds)
+        : { data: [] as Array<{ id: string; avatar_url: string | null }> };
+      const sourcePageAvatarById = new Map((sourcePagesData || []).map((row) => [row.id, row.avatar_url || null]));
       const unlockMap = new Map((unlocks || []).map((row) => [row.source_item_id, row]));
       const blueprintMap = new Map((blueprints || []).map((row) => [row.id, row]));
       const candidateMap = new Map<string, { id: string; channelSlug: string; status: string }>();
@@ -164,7 +172,10 @@ export function useMyFeed(options?: { enabled?: boolean }) {
                 sourceUrl: source.source_url,
                 title: source.title,
                 sourceChannelTitle: source.source_channel_title || metadataSourceChannelTitle || null,
-                sourceChannelAvatarUrl: metadataSourceChannelAvatarUrl || null,
+                sourceChannelAvatarUrl:
+                  metadataSourceChannelAvatarUrl
+                  || sourcePageAvatarById.get(String(source.source_page_id || '').trim())
+                  || null,
                 thumbnailUrl: source.thumbnail_url || null,
                 channelBannerUrl:
                   source.metadata
