@@ -25,6 +25,7 @@ type ForYouLockedSourceCardProps = {
   sourceUrl: string | null;
   unlockCost: number;
   isUnlocking: boolean;
+  canUnlock?: boolean;
   onUnlock: () => void;
 };
 
@@ -36,6 +37,7 @@ export function ForYouLockedSourceCard({
   sourceUrl,
   unlockCost,
   isUnlocking,
+  canUnlock = true,
   onUnlock,
 }: ForYouLockedSourceCardProps) {
   const [showUnlockConfirm, setShowUnlockConfirm] = useState(false);
@@ -48,7 +50,7 @@ export function ForYouLockedSourceCard({
     .join('') || 'S';
 
   const handleCardActivate = () => {
-    if (isUnlocking) return;
+    if (isUnlocking || !canUnlock) return;
     setShowUnlockConfirm(true);
   };
 
@@ -61,13 +63,13 @@ export function ForYouLockedSourceCard({
     <>
       <div className="px-3 py-2 transition-colors hover:bg-muted/20">
       <div
-        className={`relative overflow-hidden rounded-lg border border-border/50 bg-background/80 ${isUnlocking ? 'cursor-default' : 'cursor-pointer'}`}
-        role="button"
-        tabIndex={isUnlocking ? -1 : 0}
-        aria-disabled={isUnlocking}
+        className={`relative overflow-hidden rounded-lg border border-border/50 bg-background/80 ${(isUnlocking || !canUnlock) ? 'cursor-default' : 'cursor-pointer'}`}
+        role={canUnlock ? 'button' : undefined}
+        tabIndex={(isUnlocking || !canUnlock) ? -1 : 0}
+        aria-disabled={isUnlocking || !canUnlock}
         onClick={handleCardActivate}
         onKeyDown={(event) => {
-          if (isUnlocking) return;
+          if (isUnlocking || !canUnlock) return;
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
             handleCardActivate();
@@ -125,7 +127,7 @@ export function ForYouLockedSourceCard({
       </div>
       </div>
 
-      <AlertDialog open={showUnlockConfirm} onOpenChange={setShowUnlockConfirm}>
+      <AlertDialog open={showUnlockConfirm && canUnlock} onOpenChange={setShowUnlockConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Unlock this blueprint?</AlertDialogTitle>

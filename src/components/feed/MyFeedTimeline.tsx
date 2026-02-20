@@ -24,6 +24,7 @@ import { resolvePrimaryChannelFromTags } from '@/lib/channelMapping';
 import { buildFeedSummary } from '@/lib/feedPreview';
 import { getMyFeedStateLabel, type MyFeedItemState } from '@/lib/myFeedState';
 import { publishCandidate, rejectCandidate, submitCandidateAndEvaluate } from '@/lib/myFeedApi';
+import { ForYouLockedSourceCard } from '@/components/wall/ForYouLockedSourceCard';
 import {
   ApiRequestError,
   acceptMyFeedPendingItem,
@@ -42,9 +43,6 @@ import { UnlockActivityCard } from '@/components/shared/UnlockActivityCard';
 
 const CHANNEL_OPTIONS = CHANNELS_CATALOG.filter((channel) => channel.status === 'active' && channel.isJoinEnabled);
 const CHANNEL_NAME_BY_SLUG = new Map(CHANNELS_CATALOG.map((channel) => [channel.slug, channel.name]));
-const unlockCostFormatter = new Intl.NumberFormat(undefined, {
-  maximumFractionDigits: 1,
-});
 
 function getUnlockActionErrorMessage(error: unknown, fallback: string) {
   if (error instanceof ApiRequestError) {
@@ -520,6 +518,23 @@ export function MyFeedTimeline({
         });
         const createdLabel = formatRelativeShort(item.createdAt);
 
+        if (!isSubscriptionNotice && isUnlockable) {
+          return (
+            <ForYouLockedSourceCard
+              key={item.id}
+              title={title}
+              sourceChannelTitle={source?.sourceChannelTitle || null}
+              sourceChannelAvatarUrl={source?.thumbnailUrl || null}
+              createdAt={item.createdAt}
+              sourceUrl={source?.sourceUrl || null}
+              unlockCost={Number(source?.unlockCost || 0)}
+              isUnlocking={isUnlocking}
+              canUnlock={canMutate}
+              onUnlock={() => unlockMutation.mutate(item)}
+            />
+          );
+        }
+
         return (
           <Card
             key={item.id}
@@ -609,32 +624,6 @@ export function MyFeedTimeline({
                   )}
                   {canMutate ? (
                     <div className="flex flex-wrap gap-2">
-                      {isUnlockable ? (
-                        <>
-                          <Button
-                            size="sm"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              unlockMutation.mutate(item);
-                            }}
-                            disabled={unlockMutation.isPending || isUnlocking}
-                          >
-                            {isUnlocking ? 'Unlocking...' : 'Unlock Blueprint'}
-                          </Button>
-                          <span className="inline-flex items-center text-xs text-muted-foreground">
-                            Cost {unlockCostFormatter.format(Number(item.source?.unlockCost || 0))} cr
-                          </span>
-                          {item.source?.readyBlueprintId ? (
-                            <Link
-                              className="inline-flex items-center text-xs underline"
-                              to={`/blueprint/${item.source.readyBlueprintId}`}
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              Open blueprint
-                            </Link>
-                          ) : null}
-                        </>
-                      ) : null}
                       {canAccept ? (
                         <>
                           <Button
@@ -682,7 +671,7 @@ export function MyFeedTimeline({
                 </>
               )}
 
-              {!isSubscriptionNotice && !blueprint && (
+              {!isSubscriptionNotice && !blueprint && !isUnlockable && (
                 <div className="flex justify-end">
                   {source?.sourceUrl ? (
                     <a href={source.sourceUrl} target="_blank" rel="noreferrer" className="underline text-xs text-muted-foreground">
@@ -696,7 +685,7 @@ export function MyFeedTimeline({
                 <p className="text-xs text-muted-foreground">Reason: {item.lastDecisionCode}</p>
               )}
 
-              {!isSubscriptionNotice && (
+              {!isSubscriptionNotice && !isUnlockable && (
                 <div className="flex justify-between items-center text-xs text-muted-foreground">
                   <span>
                     {item.state === 'channel_published' ? (
