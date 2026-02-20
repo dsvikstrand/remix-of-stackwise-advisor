@@ -61,7 +61,7 @@ export function ForYouLockedSourceCard({
     <>
       <div className="px-3 py-2 transition-colors hover:bg-muted/20">
       <div
-        className={`relative overflow-hidden rounded-lg border border-border/50 bg-background/80 shadow-sm ${isUnlocking ? 'cursor-default' : 'cursor-pointer'}`}
+        className={`relative overflow-hidden rounded-lg border border-border/50 bg-background/80 ${isUnlocking ? 'cursor-default' : 'cursor-pointer'}`}
         role="button"
         tabIndex={isUnlocking ? -1 : 0}
         aria-disabled={isUnlocking}
