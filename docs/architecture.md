@@ -245,10 +245,12 @@ Current production behavior note:
   - `CHANNEL_FIT_BLOCKED`, `QUALITY_BLOCKED`, `DUPLICATE_INGEST`.
   - `EVAL_BYPASSED` (expected in bypass mode).
   - `JOB_ALREADY_RUNNING`, `MAX_ITEMS_EXCEEDED`, `STALE_RUNNING_RECOVERY`.
-  - `INSUFFICIENT_CREDITS`, `UNLOCK_RESERVATION_EXPIRED`, `UNLOCK_GENERATION_FAILED`.
+  - `INSUFFICIENT_CREDITS`, `UNLOCK_RESERVATION_EXPIRED`, `UNLOCK_GENERATION_FAILED`, `TRANSCRIPT_UNAVAILABLE`.
 - Recovery authority:
   - Logs-first triage in `docs/ops/yt2bp_runbook.md`.
   - Feature/env toggles for fast rollback.
+  - Transcript-unavailable path uses retry cooldown for auto-unlock and non-charging deterministic user response for manual unlock.
+  - Read-path polling endpoints (`/api/credits`, `/api/ingestion/jobs/latest-mine`) use dedicated limiter buckets, separated from global API limiter.
 
 ## 7) Extension Model
 - New adapters:

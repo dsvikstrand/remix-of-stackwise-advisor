@@ -102,6 +102,8 @@ export type SourcePageVideoGenerateSummary = {
   in_progress: Array<{ video_id: string; title: string }>;
   insufficient_count: number;
   insufficient: Array<{ video_id: string; title: string; required: number; balance: number }>;
+  transcript_unavailable_count?: number;
+  transcript_unavailable?: Array<{ video_id: string; title: string; retry_after_seconds: number }>;
 };
 
 function getApiBase() {

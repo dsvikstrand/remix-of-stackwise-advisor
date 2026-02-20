@@ -80,6 +80,8 @@ function getSourceVideoLibraryErrorMessage(error: unknown, fallback: string) {
         return 'Not enough credits right now.';
       case 'SOURCE_PAGE_NOT_FOUND':
         return 'Source page not found.';
+      case 'TRANSCRIPT_UNAVAILABLE':
+        return 'No transcript available for this video yet. Try again later.';
       default:
         return error.message || fallback;
     }
@@ -220,7 +222,6 @@ export default function SourcePage() {
         queryClient.invalidateQueries({ queryKey: ['source-page-blueprints', platform, externalId] }),
         queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] }),
         queryClient.invalidateQueries({ queryKey: ['ai-credits'] }),
-        queryClient.refetchQueries({ queryKey: ['ai-credits'], exact: false }),
       ]);
 
       if (job.status === 'succeeded') {
@@ -292,7 +293,6 @@ export default function SourcePage() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-credits'] });
-      queryClient.refetchQueries({ queryKey: ['ai-credits'], exact: false });
     },
   });
   const videoLibraryJobRunning = videoLibraryUnlockTracker.activity.isActive;

@@ -156,8 +156,10 @@
 - Source-page read-time asset hydration behavior is intentionally outside this endpoint contract.
 - Source-page public feed retrieval (`GET /api/source-pages/:platform/:externalId/blueprints`) is intentionally outside this endpoint contract.
 - Source-page video-library listing/queue flow (`GET /api/source-pages/:platform/:externalId/videos`, `POST /api/source-pages/:platform/:externalId/videos/unlock`, compatibility alias `/videos/generate`) is intentionally outside this endpoint contract.
+- Transcript-unavailable cooldown/retry behavior in source unlock flows is intentionally outside this endpoint contract.
 - Service queue operations (`POST /api/ingestion/jobs/trigger`, `GET /api/ingestion/jobs/latest`, `GET /api/ops/queue/health`) are intentionally outside this endpoint contract.
 - Refill-credit wallet and source-unlock persistence (`user_credit_wallets`, `credit_ledger`, `source_item_unlocks`, `/api/credits`) are intentionally outside this endpoint contract.
+- Read limiter policy for `/api/credits` and `/api/ingestion/jobs/latest-mine` is intentionally outside this endpoint contract.
 - Subscription `auto_unlock_enabled` toggle and prioritized/sampled auto-attempt behavior (with bounded retries) for new-upload shared unlock are intentionally outside this endpoint contract.
 - Unlock reliability sweep behavior and unlock trace correlation (`trace_id`) are intentionally outside this endpoint contract.
 

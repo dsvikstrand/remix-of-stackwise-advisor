@@ -132,7 +132,11 @@ const limiter = rateLimit({
   max: rateLimitMax,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => req.path === '/api/health',
+  skip: (req) => (
+    req.path === '/api/health'
+    || req.path === '/api/credits'
+    || req.path === '/api/ingestion/jobs/latest-mine'
+  ),
 });
 
 app.use(limiter);
@@ -156,6 +160,10 @@ const sourceVideoUnlockBurstWindowMs = clampInt(process.env.SOURCE_VIDEO_UNLOCK_
 const sourceVideoUnlockBurstMax = clampInt(process.env.SOURCE_VIDEO_UNLOCK_BURST_MAX, 8, 1, 100);
 const sourceVideoUnlockSustainedWindowMs = clampInt(process.env.SOURCE_VIDEO_UNLOCK_SUSTAINED_WINDOW_MS, 10 * 60_000, 60_000, 60 * 60_000);
 const sourceVideoUnlockSustainedMax = clampInt(process.env.SOURCE_VIDEO_UNLOCK_SUSTAINED_MAX, 120, 10, 2_000);
+const creditsReadWindowMs = clampInt(process.env.CREDITS_READ_WINDOW_MS, 60_000, 10_000, 10 * 60_000);
+const creditsReadMaxPerWindow = clampInt(process.env.CREDITS_READ_MAX_PER_WINDOW, 180, 30, 2_000);
+const ingestionLatestMineWindowMs = clampInt(process.env.INGESTION_LATEST_MINE_WINDOW_MS, 60_000, 10_000, 10 * 60_000);
+const ingestionLatestMineMaxPerWindow = clampInt(process.env.INGESTION_LATEST_MINE_MAX_PER_WINDOW, 180, 30, 2_000);
 const queueDepthHardLimit = clampInt(process.env.QUEUE_DEPTH_HARD_LIMIT, 1000, 10, 200_000);
 const queueDepthPerUserLimit = clampInt(process.env.QUEUE_DEPTH_PER_USER_LIMIT, 50, 1, 10_000);
 const workerConcurrency = clampInt(process.env.WORKER_CONCURRENCY, 2, 1, 16);
@@ -170,6 +178,8 @@ const sourceUnlockGenerateMaxItems = clampInt(process.env.SOURCE_UNLOCK_GENERATE
 const sourceAutoUnlockSampleSize = clampInt(process.env.SOURCE_AUTO_UNLOCK_SAMPLE_SIZE, 3, 1, 10);
 const sourceAutoUnlockRetryDelaySeconds = clampInt(process.env.SOURCE_AUTO_UNLOCK_RETRY_DELAY_SECONDS, 90, 10, 3600);
 const sourceAutoUnlockRetryMaxAttempts = clampInt(process.env.SOURCE_AUTO_UNLOCK_RETRY_MAX_ATTEMPTS, 3, 1, 10);
+const sourceAutoUnlockTranscriptRetryDelaySeconds = clampInt(process.env.SOURCE_AUTO_UNLOCK_TRANSCRIPT_RETRY_DELAY_SECONDS, 3600, 60, 24 * 3600);
+const sourceUnlockTranscriptCooldownHours = clampInt(process.env.SOURCE_UNLOCK_TRANSCRIPT_COOLDOWN_HOURS, 6, 1, 72);
 const sourceUnlockExpiredSweepBatch = clampInt(process.env.SOURCE_UNLOCK_EXPIRED_SWEEP_BATCH, 100, 10, 1000);
 const sourceUnlockSweepsEnabledRaw = String(process.env.SOURCE_UNLOCK_SWEEPS_ENABLED || 'true').trim().toLowerCase();
 const sourceUnlockSweepsEnabled = !(sourceUnlockSweepsEnabledRaw === 'false' || sourceUnlockSweepsEnabledRaw === '0' || sourceUnlockSweepsEnabledRaw === 'off');
@@ -412,6 +422,38 @@ const sourceVideoUnlockSustainedLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req, res) => getUserOrIpRateLimitKey(req, res),
   handler: (req, res) => sourceVideoRateLimitHandler('unlock_sustained', req, res),
+});
+
+function readEndpointRateLimitHandler(kind: 'credits' | 'ingestion_latest_mine', req: express.Request, res: express.Response) {
+  const retryAfter = getRetryAfterSeconds(req);
+  const message = kind === 'credits'
+    ? 'Credits are refreshing too frequently. Please retry shortly.'
+    : 'Job status is refreshing too frequently. Please retry shortly.';
+  return res.status(429).json({
+    ok: false,
+    error_code: 'RATE_LIMITED',
+    message,
+    retry_after_seconds: retryAfter,
+    data: null,
+  });
+}
+
+const creditsReadLimiter = rateLimit({
+  windowMs: creditsReadWindowMs,
+  max: creditsReadMaxPerWindow,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req, res) => getUserOrIpRateLimitKey(req, res),
+  handler: (req, res) => readEndpointRateLimitHandler('credits', req, res),
+});
+
+const ingestionLatestMineLimiter = rateLimit({
+  windowMs: ingestionLatestMineWindowMs,
+  max: ingestionLatestMineMaxPerWindow,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req, res) => getUserOrIpRateLimitKey(req, res),
+  handler: (req, res) => readEndpointRateLimitHandler('ingestion_latest_mine', req, res),
 });
 
 function youtubeConnectionRateLimitHandler(kind: 'start' | 'preview' | 'import' | 'disconnect', req: express.Request, res: express.Response) {
@@ -1224,7 +1266,7 @@ app.get('/api/profile/:userId/feed', async (req, res) => {
   });
 });
 
-app.get('/api/credits', async (_req, res) => {
+app.get('/api/credits', creditsReadLimiter, async (_req, res) => {
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
   if (!userId) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -3603,6 +3645,11 @@ type SourcePageVideoUnlockSnapshot = {
   unlock_id: string | null;
 };
 
+type TranscriptCooldownState = {
+  active: boolean;
+  retryAfterSeconds: number;
+};
+
 type SourceUnlockQueueItem = {
   unlock_id: string;
   source_item_id: string;
@@ -3614,6 +3661,7 @@ type SourceUnlockQueueItem = {
   title: string;
   reserved_cost: number;
   reserved_by_user_id: string;
+  unlock_origin: 'manual_unlock' | 'subscription_auto_unlock' | 'source_auto_unlock_retry';
 };
 
 type SourceAutoUnlockRetryPayload = {
@@ -3817,6 +3865,31 @@ function toUnlockSnapshot(input: {
   };
 }
 
+function isTranscriptUnavailableCode(code: string | null | undefined) {
+  const normalized = String(code || '').trim().toUpperCase();
+  return normalized === 'NO_CAPTIONS' || normalized === 'TRANSCRIPT_EMPTY' || normalized === 'TRANSCRIPT_UNAVAILABLE';
+}
+
+function getTranscriptCooldownState(unlock: SourceItemUnlockRow | null): TranscriptCooldownState {
+  if (!unlock || !isTranscriptUnavailableCode(unlock.last_error_code)) {
+    return { active: false, retryAfterSeconds: 0 };
+  }
+
+  const updatedAtMs = Date.parse(String(unlock.updated_at || ''));
+  if (!Number.isFinite(updatedAtMs)) {
+    return { active: false, retryAfterSeconds: 0 };
+  }
+
+  const cooldownMs = sourceUnlockTranscriptCooldownHours * 60 * 60 * 1000;
+  const expiresAtMs = updatedAtMs + cooldownMs;
+  const retryAfterMs = expiresAtMs - Date.now();
+  if (retryAfterMs <= 0) return { active: false, retryAfterSeconds: 0 };
+  return {
+    active: true,
+    retryAfterSeconds: Math.max(1, Math.ceil(retryAfterMs / 1000)),
+  };
+}
+
 function sampleRandomWithoutReplacement(values: string[], maxCount: number) {
   const unique = Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)));
   for (let i = unique.length - 1; i > 0; i -= 1) {
@@ -3857,6 +3930,7 @@ type AutoUnlockAttemptReason =
   | 'INVALID_SOURCE'
   | 'UNLOCK_NOT_AVAILABLE'
   | 'NO_ELIGIBLE_USERS'
+  | 'TRANSCRIPT_COOLDOWN'
   | 'ALREADY_READY'
   | 'ALREADY_IN_PROGRESS'
   | 'QUEUE_DISABLED'
@@ -3940,6 +4014,11 @@ async function attemptAutoUnlockForSourceItem(input: {
 
   if (input.unlock.status !== 'available') {
     return { queued: false as const, reason: 'UNLOCK_NOT_AVAILABLE' as const };
+  }
+
+  const transcriptCooldown = getTranscriptCooldownState(input.unlock);
+  if (transcriptCooldown.active) {
+    return { queued: false as const, reason: 'TRANSCRIPT_COOLDOWN' as const };
   }
 
   const eligibleUsers = await listEligibleAutoUnlockUsers(db, {
@@ -4078,6 +4157,7 @@ async function attemptAutoUnlockForSourceItem(input: {
             title: input.video.title,
             reserved_cost: reservedCost,
             reserved_by_user_id: payerUserId,
+            unlock_origin: 'subscription_auto_unlock',
           } satisfies SourceUnlockQueueItem],
         },
         next_run_at: new Date().toISOString(),
@@ -5025,6 +5105,56 @@ async function processSourceItemUnlockGenerationJob(input: {
         );
       }
 
+      if (
+        item.unlock_origin === 'subscription_auto_unlock'
+        && (errorCode === 'NO_CAPTIONS' || errorCode === 'TRANSCRIPT_EMPTY' || errorCode === 'TRANSCRIPT_UNAVAILABLE')
+      ) {
+        try {
+          const retry = await enqueueSourceAutoUnlockRetryJob(db, {
+            source_item_id: item.source_item_id,
+            source_page_id: item.source_page_id,
+            source_channel_id: item.source_channel_id,
+            source_channel_title: item.source_channel_title,
+            video_id: item.video_id,
+            video_url: item.video_url,
+            title: item.title,
+            trigger: 'service_cron',
+            preferred_payer_user_id: item.reserved_by_user_id,
+          });
+          logUnlockEvent(
+            'subscription_auto_unlock_retry_scheduled',
+            {
+              trace_id: input.traceId,
+              job_id: input.jobId,
+              source_item_id: item.source_item_id,
+              unlock_id: item.unlock_id,
+              video_id: item.video_id,
+            },
+            {
+              reason: errorCode,
+              retry_enqueued: retry.enqueued,
+              retry_job_id: retry.enqueued ? retry.job_id : null,
+              retry_next_run_at: retry.enqueued ? retry.next_run_at : null,
+            },
+          );
+        } catch (retryError) {
+          logUnlockEvent(
+            'subscription_auto_unlock_retry_schedule_failed',
+            {
+              trace_id: input.traceId,
+              job_id: input.jobId,
+              source_item_id: item.source_item_id,
+              unlock_id: item.unlock_id,
+              video_id: item.video_id,
+            },
+            {
+              reason: errorCode,
+              error: retryError instanceof Error ? retryError.message : String(retryError),
+            },
+          );
+        }
+      }
+
       logUnlockEvent(
         'unlock_item_failed',
         {
@@ -5070,11 +5200,11 @@ async function processSourceItemUnlockGenerationJob(input: {
 
 class AutoUnlockRetryableError extends Error {
   code: 'AUTO_UNLOCK_RETRYABLE';
-  errorCode: 'NO_ELIGIBLE_USERS' | 'NO_ELIGIBLE_CREDITS' | 'QUEUE_BACKPRESSURE' | 'QUEUE_INTAKE_DISABLED';
+  errorCode: 'NO_ELIGIBLE_USERS' | 'NO_ELIGIBLE_CREDITS' | 'QUEUE_BACKPRESSURE' | 'QUEUE_INTAKE_DISABLED' | 'TRANSCRIPT_UNAVAILABLE';
   retryDelaySeconds: number;
 
   constructor(input: {
-    errorCode: 'NO_ELIGIBLE_USERS' | 'NO_ELIGIBLE_CREDITS' | 'QUEUE_BACKPRESSURE' | 'QUEUE_INTAKE_DISABLED';
+    errorCode: 'NO_ELIGIBLE_USERS' | 'NO_ELIGIBLE_CREDITS' | 'QUEUE_BACKPRESSURE' | 'QUEUE_INTAKE_DISABLED' | 'TRANSCRIPT_UNAVAILABLE';
     message: string;
     retryDelaySeconds: number;
   }) {
@@ -5153,6 +5283,13 @@ async function processSourceAutoUnlockRetryJob(input: {
   });
 
   if (!attempt.queued) {
+    if (attempt.reason === 'TRANSCRIPT_COOLDOWN') {
+      throw new AutoUnlockRetryableError({
+        errorCode: 'TRANSCRIPT_UNAVAILABLE',
+        message: 'Auto-unlock retry delayed: transcript unavailable cooldown active.',
+        retryDelaySeconds: sourceAutoUnlockTranscriptRetryDelaySeconds,
+      });
+    }
     if (attempt.reason === 'NO_ELIGIBLE_USERS' || attempt.reason === 'NO_ELIGIBLE_CREDITS') {
       throw new AutoUnlockRetryableError({
         errorCode: attempt.reason,
@@ -5248,6 +5385,11 @@ function normalizeSourceUnlockQueueItems(value: unknown): SourceUnlockQueueItem[
     const title = String(row.title || '').trim();
     const reservedByUserId = String(row.reserved_by_user_id || '').trim();
     if (!unlockId || !sourceItemId || !sourceChannelId || !videoId || !videoUrl || !title || !reservedByUserId) continue;
+    const unlockOriginRaw = String(row.unlock_origin || '').trim();
+    const unlockOrigin: SourceUnlockQueueItem['unlock_origin'] =
+      unlockOriginRaw === 'subscription_auto_unlock' || unlockOriginRaw === 'source_auto_unlock_retry'
+        ? unlockOriginRaw
+        : 'manual_unlock';
     rows.push({
       unlock_id: unlockId,
       source_item_id: sourceItemId,
@@ -5259,6 +5401,7 @@ function normalizeSourceUnlockQueueItems(value: unknown): SourceUnlockQueueItem[
       title,
       reserved_cost: Math.max(0, Number(row.reserved_cost || 0)),
       reserved_by_user_id: reservedByUserId,
+      unlock_origin: unlockOrigin,
     });
   }
   return rows;
@@ -5746,7 +5889,10 @@ async function syncSingleSubscription(db: ReturnType<typeof createClient>, subsc
           trigger: options.trigger,
         });
 
-        if (!attempt.queued && (attempt.reason === 'NO_ELIGIBLE_USERS' || attempt.reason === 'NO_ELIGIBLE_CREDITS')) {
+        if (
+          !attempt.queued
+          && (attempt.reason === 'NO_ELIGIBLE_USERS' || attempt.reason === 'NO_ELIGIBLE_CREDITS' || attempt.reason === 'TRANSCRIPT_COOLDOWN')
+        ) {
           try {
             const retryDb = getServiceSupabaseClient();
             if (!retryDb) throw new Error('Service role client not configured');
@@ -6706,6 +6852,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
   const inProgressRows: Array<{ video_id: string; title: string }> = [];
   const readyRows: Array<{ video_id: string; title: string; blueprint_id: string | null }> = [];
   const insufficientRows: Array<{ video_id: string; title: string; required: number; balance: number }> = [];
+  const transcriptUnavailableRows: Array<{ video_id: string; title: string; retry_after_seconds: number }> = [];
 
   const candidateRows = normalizedItems.filter((item) => !existingByVideoId.get(item.video_id)?.already_exists_for_user);
 
@@ -6729,6 +6876,15 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         sourcePageId: sourcePage.id,
         estimatedCost: estimatedUnlockCost,
       });
+      const transcriptCooldown = getTranscriptCooldownState(unlockSeed);
+      if (transcriptCooldown.active) {
+        transcriptUnavailableRows.push({
+          video_id: item.video_id,
+          title: item.title,
+          retry_after_seconds: transcriptCooldown.retryAfterSeconds,
+        });
+        continue;
+      }
 
       const reserveResult = await reserveUnlock(sourcePageDb, {
         unlock: unlockSeed,
@@ -6811,6 +6967,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         title: item.title,
         reserved_cost: Math.max(0.001, Number(reservedUnlock.estimated_cost || estimatedUnlockCost)),
         reserved_by_user_id: userId,
+        unlock_origin: 'manual_unlock',
       });
       logUnlockEvent(
         'unlock_item_queued',
@@ -6844,6 +7001,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
   if (
     queueItems.length === 0
     && insufficientRows.length > 0
+    && transcriptUnavailableRows.length === 0
     && readyRows.length === 0
     && inProgressRows.length === 0
     && duplicateRows.length === 0
@@ -6857,6 +7015,28 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         required: insufficientRows[0]?.required || 0,
         balance: insufficientRows[0]?.balance || 0,
         insufficient: insufficientRows,
+      },
+    });
+  }
+
+  if (
+    queueItems.length === 0
+    && transcriptUnavailableRows.length > 0
+    && insufficientRows.length === 0
+    && readyRows.length === 0
+    && inProgressRows.length === 0
+    && duplicateRows.length === 0
+  ) {
+    const retryAfterSeconds = Math.max(...transcriptUnavailableRows.map((row) => row.retry_after_seconds));
+    return res.status(422).json({
+      ok: false,
+      error_code: 'TRANSCRIPT_UNAVAILABLE',
+      message: 'Transcript unavailable for this video right now. Try again later.',
+      retry_after_seconds: retryAfterSeconds,
+      data: {
+        ...traceData,
+        transcript_unavailable_count: transcriptUnavailableRows.length,
+        transcript_unavailable: transcriptUnavailableRows,
       },
     });
   }
@@ -6883,6 +7063,8 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         in_progress: inProgressRows,
         insufficient_count: insufficientRows.length,
         insufficient: insufficientRows,
+        transcript_unavailable_count: transcriptUnavailableRows.length,
+        transcript_unavailable: transcriptUnavailableRows,
       },
     });
   }
@@ -6972,6 +7154,8 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       in_progress: inProgressRows,
       insufficient_count: insufficientRows.length,
       insufficient: insufficientRows,
+      transcript_unavailable_count: transcriptUnavailableRows.length,
+      transcript_unavailable: transcriptUnavailableRows,
     },
   });
 }
@@ -8022,7 +8206,7 @@ app.get('/api/ingestion/jobs/:id([0-9a-fA-F-]{36})', async (req, res) => {
   });
 });
 
-app.get('/api/ingestion/jobs/latest-mine', async (req, res) => {
+app.get('/api/ingestion/jobs/latest-mine', ingestionLatestMineLimiter, async (req, res) => {
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
   const authToken = (res.locals.authToken as string | undefined) ?? '';
   if (!userId || !authToken) {

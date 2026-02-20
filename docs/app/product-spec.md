@@ -263,6 +263,9 @@ si47) source-page video-library unlock/generate rate policy: burst `8/10s` plus 
 si48) public/auth endpoint: `GET /api/source-pages/search?q=<query>&limit=<1..25>` (Explore source lookup against app `source_pages`; returns minimal source cards and source-page paths).
 si49) unlock reliability sweeps run opportunistically on source-page video list/unlock routes and force-run on service cron trigger path.
 si50) unlock trace propagation contract: `trace_id` is emitted in unlock responses and threaded through unlock queue/job logs and credit-ledger metadata (`hold|settle|refund`).
+si51) transcript-unavailable unlock handling is deterministic: manual unlock returns `TRANSCRIPT_UNAVAILABLE` + `retry_after_seconds`, no credit hold is created, and auto-unlock retries are deferred via `source_auto_unlock_retry`.
+si52) source-page unlock queue payload now includes additive `unlock_origin` (`manual_unlock|subscription_auto_unlock|source_auto_unlock_retry`) for durable worker/retry semantics.
+si53) read endpoints `GET /api/credits` and `GET /api/ingestion/jobs/latest-mine` are protected by dedicated high-ceiling read limiters and are excluded from generic global limiter handling to prevent UI polling collisions.
 
 ## Next Milestone (Hardening)
 n1) Keep legacy manual gate behavior stable with `CHANNEL_GATES_MODE=bypass` while auto-channel path uses `AUTO_CHANNEL_GATE_MODE`.

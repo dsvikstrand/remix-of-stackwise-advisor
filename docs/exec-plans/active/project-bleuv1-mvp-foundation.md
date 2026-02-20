@@ -122,6 +122,10 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
   - additive endpoint `GET /api/source-pages/search`
   - `Sources` filter + grouped `Sources` results on `/explore`
   - source cards deep-link to `/s/:platform/:externalId`.
+- Source unlock stability hardening:
+  - transcript-unavailable unlocks are deterministic and non-charging (`TRANSCRIPT_UNAVAILABLE` + retry guidance).
+  - auto-unlock retries transcript-missing videos through bounded `source_auto_unlock_retry` jobs.
+  - credits/latest-mine polling reads use dedicated limiter buckets to avoid normal unlock UX 429 collisions.
 
 ## Acceptance Baseline Per Iteration
 1. Scope and behavior align with `docs/app/product-spec.md`.

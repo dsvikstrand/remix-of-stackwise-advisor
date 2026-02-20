@@ -233,6 +233,10 @@ Rules:
   - `user_source_subscriptions` now includes `auto_unlock_enabled` (default `true`) for existing and new subscriptions.
   - new subscription uploads prioritize the current subscriber, then sample up to 3 eligible subscribers (`is_active=true`, `auto_unlock_enabled=true`) and stop on first successful reserve+enqueue.
   - if no sampled subscriber can reserve credits, bounded `source_auto_unlock_retry` jobs re-attempt before item remains locked (`my_feed_unlockable`) for manual unlock.
+- Transcript guard + polling stability (2026-02-20):
+  - transcript-unavailable source videos now return deterministic manual unlock response (`TRANSCRIPT_UNAVAILABLE`) and auto-unlock defers to bounded retry with cooldown.
+  - read-heavy polling endpoints (`/api/credits`, `/api/ingestion/jobs/latest-mine`) moved to dedicated read limiter buckets to reduce normal-flow 429 noise.
+  - source unlock queue items include `unlock_origin` metadata so worker/retry flows keep stable attribution (`manual_unlock`, `subscription_auto_unlock`, `source_auto_unlock_retry`).
 
 ## 12) Next Milestone
 1. Validate Oracle cron reliability and alerting around ingestion failures.

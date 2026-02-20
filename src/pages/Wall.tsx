@@ -110,6 +110,9 @@ function getForYouErrorMessage(error: unknown, fallback: string) {
     if (error.errorCode === 'SOURCE_PAGE_NOT_FOUND') {
       return 'Source page missing for this item. Try opening the source first.';
     }
+    if (error.errorCode === 'TRANSCRIPT_UNAVAILABLE') {
+      return 'No transcript available for this video yet. Try again later.';
+    }
     return error.message || fallback;
   }
   if (error instanceof Error && /source video id/i.test(error.message)) {
@@ -679,7 +682,6 @@ export default function Wall() {
         queryClient.invalidateQueries({ queryKey: ['wall-blueprints'] }),
         queryClient.invalidateQueries({ queryKey: ['wall-for-you-blueprint-stats'] }),
         queryClient.invalidateQueries({ queryKey: ['ai-credits'] }),
-        queryClient.refetchQueries({ queryKey: ['ai-credits'], exact: false }),
       ]);
 
       if (job.status === 'succeeded') {
@@ -800,10 +802,7 @@ export default function Wall() {
       });
     },
     onSettled: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['ai-credits'] }),
-        queryClient.refetchQueries({ queryKey: ['ai-credits'], exact: false }),
-      ]);
+      await queryClient.invalidateQueries({ queryKey: ['ai-credits'] });
     },
   });
 

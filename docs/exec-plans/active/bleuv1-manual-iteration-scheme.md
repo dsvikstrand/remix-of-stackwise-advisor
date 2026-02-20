@@ -976,6 +976,26 @@ Evaluation
 - `npm run docs:refresh-check -- --json`
 - `npm run docs:link-check`
 
+### Step 45 - Unlock transcript guard + read-limit smoothing
+Scope
+- add deterministic transcript-unavailable behavior to source unlock flow (manual + auto retry path).
+- prevent unlock UX polling 429 spikes by splitting read-path limiter policy for credits/latest-mine.
+- keep contract additive (no endpoint removals, no schema rewrite).
+
+Definition of done
+- manual unlock can return `TRANSCRIPT_UNAVAILABLE` with retry guidance and without credit debit.
+- auto-unlock path schedules bounded retry jobs for transcript-unavailable videos.
+- `GET /api/credits` and `GET /api/ingestion/jobs/latest-mine` are excluded from generic global limiter and guarded by dedicated read limiters.
+
+Evaluation
+- manual smoke: unlock on no-transcript video yields clean transcript-unavailable response and no wallet debit.
+- manual smoke: auto-unlock transcript fail schedules retry (not silent dead-end).
+- manual smoke: rapid unlock + polling does not 429 on credits/latest-mine under normal usage.
+- `npm run test`
+- `npm run build`
+- `npm run docs:refresh-check -- --json`
+- `npm run docs:link-check`
+
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary
 2. Plan with touched files and acceptance checks

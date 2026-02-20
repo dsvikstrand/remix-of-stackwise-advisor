@@ -55,6 +55,9 @@ function getUnlockActionErrorMessage(error: unknown, fallback: string) {
     if (error.errorCode === 'SOURCE_PAGE_NOT_FOUND') {
       return 'Source page missing for this item. Try opening it from source page first.';
     }
+    if (error.errorCode === 'TRANSCRIPT_UNAVAILABLE') {
+      return 'No transcript available for this video yet. Try again later.';
+    }
     return error.message || fallback;
   }
   if (error instanceof Error && /source video id/i.test(error.message)) {
@@ -108,7 +111,6 @@ export function MyFeedTimeline({
         queryClient.invalidateQueries({ queryKey: ['source-page-blueprints'] }),
         queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] }),
         queryClient.invalidateQueries({ queryKey: ['ai-credits'] }),
-        queryClient.refetchQueries({ queryKey: ['ai-credits'], exact: false }),
       ]);
 
       setOptimisticUnlockingItemIds({});
@@ -433,7 +435,6 @@ export function MyFeedTimeline({
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-credits'] });
-      queryClient.refetchQueries({ queryKey: ['ai-credits'], exact: false });
     },
   });
 
