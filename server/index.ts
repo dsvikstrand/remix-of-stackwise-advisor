@@ -175,6 +175,10 @@ const sourceUnlockProcessingStaleMs = clampInt(process.env.SOURCE_UNLOCK_PROCESS
 const sourceUnlockSweepMinIntervalMs = clampInt(process.env.SOURCE_UNLOCK_SWEEP_MIN_INTERVAL_MS, 30_000, 1_000, 10 * 60_000);
 const sourceUnlockSweepDryLogsRaw = String(process.env.SOURCE_UNLOCK_SWEEP_DRY_LOGS || 'true').trim().toLowerCase();
 const sourceUnlockSweepDryLogs = !(sourceUnlockSweepDryLogsRaw === 'false' || sourceUnlockSweepDryLogsRaw === '0' || sourceUnlockSweepDryLogsRaw === 'off');
+const sourcePageAssetSweepEnabledRaw = String(process.env.SOURCE_PAGE_ASSET_SWEEP_ENABLED || 'true').trim().toLowerCase();
+const sourcePageAssetSweepEnabled = !(sourcePageAssetSweepEnabledRaw === 'false' || sourcePageAssetSweepEnabledRaw === '0' || sourcePageAssetSweepEnabledRaw === 'off');
+const sourcePageAssetSweepBatch = clampInt(process.env.SOURCE_PAGE_ASSET_SWEEP_BATCH, 100, 10, 1000);
+const sourcePageAssetSweepMinIntervalMs = clampInt(process.env.SOURCE_PAGE_ASSET_SWEEP_MIN_INTERVAL_MS, 60_000, 5_000, 10 * 60_000);
 const refreshFailureCooldownHours = clampInt(process.env.REFRESH_FAILURE_COOLDOWN_HOURS, 6, 1, 168);
 const ingestionStaleRunningMs = clampInt(process.env.INGESTION_STALE_RUNNING_MS, 30 * 60 * 1000, 60_000, 24 * 60 * 60 * 1000);
 const autoBannerMode = normalizeAutoBannerMode(process.env.SUBSCRIPTION_AUTO_BANNER_MODE);
@@ -246,6 +250,7 @@ const queuedWorkerId = `ingestion-worker-${process.pid}`;
 let queuedWorkerTimer: ReturnType<typeof setTimeout> | null = null;
 let queuedWorkerRunning = false;
 let queuedWorkerRequested = false;
+let sourcePageAssetSweepLastRunMs = 0;
 
 function normalizeGateMode(raw: unknown, fallback: GateMode): GateMode {
   const normalized = String(raw || '').trim().toLowerCase();
@@ -495,6 +500,7 @@ app.use((req, res, next) => {
     || req.path === '/api/ingestion/jobs/trigger'
     || req.path === '/api/ingestion/jobs/latest'
     || req.path === '/api/ops/queue/health'
+    || req.path === '/api/source-pages/assets/sweep'
     || req.path === '/api/auto-banner/jobs/trigger'
     || req.path === '/api/auto-banner/jobs/latest'
     || isPublicProfileFeedRoute
@@ -2306,6 +2312,171 @@ async function fetchYouTubeChannelAssetMap(input: {
   }
 
   return assetMap;
+}
+
+type SourcePageAssetRecord = {
+  id: string;
+  platform: string;
+  external_id: string;
+  external_url: string;
+  title: string;
+  avatar_url: string | null;
+  banner_url: string | null;
+  metadata: Record<string, unknown> | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+function needsSourcePageAssetHydration(sourcePage: {
+  platform: string;
+  avatar_url: string | null;
+  banner_url: string | null;
+}) {
+  return sourcePage.platform === 'youtube' && (!sourcePage.avatar_url || !sourcePage.banner_url);
+}
+
+async function hydrateSourcePageAssetsForRow(
+  db: ReturnType<typeof createClient>,
+  sourcePage: SourcePageAssetRecord,
+  input?: {
+    assetMap?: Map<string, { avatarUrl: string | null; bannerUrl: string | null }>;
+  },
+) {
+  if (!needsSourcePageAssetHydration(sourcePage) || !youtubeDataApiKey) {
+    return { sourcePage, updated: false, hadAssets: false };
+  }
+
+  let assetMap = input?.assetMap;
+  if (!assetMap) {
+    assetMap = await fetchYouTubeChannelAssetMap({
+      apiKey: youtubeDataApiKey,
+      channelIds: [sourcePage.external_id],
+    });
+  }
+
+  const assets = assetMap.get(sourcePage.external_id);
+  if (!assets?.avatarUrl && !assets?.bannerUrl) {
+    return { sourcePage, updated: false, hadAssets: false };
+  }
+
+  const nextAvatarUrl = sourcePage.avatar_url || assets.avatarUrl || null;
+  const nextBannerUrl = sourcePage.banner_url || assets.bannerUrl || null;
+  const needsUpdate = nextAvatarUrl !== sourcePage.avatar_url || nextBannerUrl !== sourcePage.banner_url;
+  if (!needsUpdate) {
+    return { sourcePage, updated: false, hadAssets: true };
+  }
+
+  const { data: updatedSourcePage, error: updateError } = await db
+    .from('source_pages')
+    .update({
+      avatar_url: nextAvatarUrl,
+      banner_url: nextBannerUrl,
+    })
+    .eq('id', sourcePage.id)
+    .select('id, platform, external_id, external_url, title, avatar_url, banner_url, metadata, is_active, created_at, updated_at')
+    .single();
+
+  if (updateError || !updatedSourcePage) {
+    throw updateError || new Error('Could not update source page assets');
+  }
+
+  return {
+    sourcePage: updatedSourcePage as SourcePageAssetRecord,
+    updated: true,
+    hadAssets: true,
+  };
+}
+
+async function runSourcePageAssetSweep(
+  db: ReturnType<typeof createClient>,
+  input?: {
+    mode?: 'opportunistic' | 'cron' | 'manual';
+    force?: boolean;
+    traceId?: string;
+  },
+) {
+  if (!sourcePageAssetSweepEnabled || !youtubeDataApiKey) return null;
+
+  const mode = input?.mode || 'opportunistic';
+  const nowMs = Date.now();
+  if (!input?.force && nowMs - sourcePageAssetSweepLastRunMs < sourcePageAssetSweepMinIntervalMs) {
+    return null;
+  }
+  sourcePageAssetSweepLastRunMs = nowMs;
+
+  const summary = {
+    mode,
+    trace_id: String(input?.traceId || '').trim() || null,
+    scanned_count: 0,
+    hydrated_count: 0,
+    unchanged_count: 0,
+    missing_assets_count: 0,
+    error_count: 0,
+    batch_size: sourcePageAssetSweepBatch,
+  };
+
+  const { data: sourcePagesData, error: sourcePagesError } = await db
+    .from('source_pages')
+    .select('id, platform, external_id, external_url, title, avatar_url, banner_url, metadata, is_active, created_at, updated_at')
+    .eq('platform', 'youtube')
+    .eq('is_active', true)
+    .or('avatar_url.is.null,banner_url.is.null')
+    .order('updated_at', { ascending: true })
+    .limit(sourcePageAssetSweepBatch);
+  if (sourcePagesError) {
+    console.log('[source_page_asset_sweep_failed]', JSON.stringify({
+      mode,
+      trace_id: summary.trace_id,
+      error: sourcePagesError.message,
+    }));
+    return null;
+  }
+
+  const sourcePages = (sourcePagesData || []) as SourcePageAssetRecord[];
+  summary.scanned_count = sourcePages.length;
+  if (!sourcePages.length) {
+    return summary;
+  }
+
+  let assetMap = new Map<string, { avatarUrl: string | null; bannerUrl: string | null }>();
+  try {
+    assetMap = await fetchYouTubeChannelAssetMap({
+      apiKey: youtubeDataApiKey,
+      channelIds: sourcePages.map((row) => row.external_id),
+    });
+  } catch (assetError) {
+    console.log('[source_page_asset_sweep_failed]', JSON.stringify({
+      mode,
+      trace_id: summary.trace_id,
+      error: assetError instanceof Error ? assetError.message : String(assetError),
+    }));
+    return null;
+  }
+
+  for (const sourcePage of sourcePages) {
+    try {
+      const hydration = await hydrateSourcePageAssetsForRow(db, sourcePage, { assetMap });
+      if (hydration.updated) {
+        summary.hydrated_count += 1;
+      } else if (hydration.hadAssets) {
+        summary.unchanged_count += 1;
+      } else {
+        summary.missing_assets_count += 1;
+      }
+    } catch (error) {
+      summary.error_count += 1;
+      console.log('[source_page_asset_row_hydration_failed]', JSON.stringify({
+        source_page_id: sourcePage.id,
+        source_channel_id: sourcePage.external_id,
+        trace_id: summary.trace_id,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+
+  console.log('[source_page_asset_sweep_summary]', JSON.stringify(summary));
+  return summary;
 }
 
 function getAuthedSupabaseClient(authToken: string) {
@@ -5304,6 +5475,7 @@ app.get('/api/source-pages/search', async (req, res) => {
   const scanLimit = clampInt(limit * 4, 48, 20, 100);
   const db = getServiceSupabaseClient();
   if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+  void runSourcePageAssetSweep(db, { mode: 'opportunistic' });
 
   const likePattern = `%${rawQuery}%`;
   const [titleResult, externalResult] = await Promise.all([
@@ -5413,36 +5585,10 @@ app.get('/api/source-pages/:platform/:externalId', async (req, res) => {
 
   // Opportunistic lazy hydration: older backfilled rows can miss avatar/banner
   // until a subscribe/import rewrite occurs. Fill once on read when possible.
-  if (
-    platform === 'youtube'
-    && youtubeDataApiKey
-    && (!sourcePage.avatar_url || !sourcePage.banner_url)
-  ) {
+  if (needsSourcePageAssetHydration(sourcePage) && youtubeDataApiKey) {
     try {
-      const assetMap = await fetchYouTubeChannelAssetMap({
-        apiKey: youtubeDataApiKey,
-        channelIds: [sourcePage.external_id],
-      });
-      const assets = assetMap.get(sourcePage.external_id);
-      const nextAvatarUrl = sourcePage.avatar_url || assets?.avatarUrl || null;
-      const nextBannerUrl = sourcePage.banner_url || assets?.bannerUrl || null;
-      const needsUpdate = nextAvatarUrl !== sourcePage.avatar_url || nextBannerUrl !== sourcePage.banner_url;
-
-      if (needsUpdate) {
-        const { data: updatedSourcePage, error: updateError } = await db
-          .from('source_pages')
-          .update({
-            avatar_url: nextAvatarUrl,
-            banner_url: nextBannerUrl,
-          })
-          .eq('id', sourcePage.id)
-          .select('id, platform, external_id, external_url, title, avatar_url, banner_url, metadata, is_active, created_at, updated_at')
-          .single();
-
-        if (!updateError && updatedSourcePage) {
-          sourcePage = updatedSourcePage as typeof sourcePage;
-        }
-      }
+      const hydration = await hydrateSourcePageAssetsForRow(db, sourcePage as SourcePageAssetRecord);
+      sourcePage = hydration.sourcePage as typeof sourcePage;
     } catch (assetError) {
       console.log('[source_page_assets_lookup_failed]', JSON.stringify({
         source_page_id: sourcePage.id,
@@ -7256,6 +7402,7 @@ app.post('/api/ingestion/jobs/trigger', async (req, res) => {
     }));
   }
   await runUnlockSweeps(db, { mode: 'cron', force: true });
+  await runSourcePageAssetSweep(db, { mode: 'cron' });
 
   const { data: existingJob, error: runningJobError } = await db
     .from('ingestion_jobs')
@@ -7442,6 +7589,29 @@ app.get('/api/ops/queue/health', async (req, res) => {
       },
       by_scope: byScope,
       provider_circuit_state: providerCircuitState,
+    },
+  });
+});
+
+app.post('/api/source-pages/assets/sweep', async (req, res) => {
+  if (!isServiceRequestAuthorized(req)) {
+    return res.status(401).json({ ok: false, error_code: 'SERVICE_AUTH_REQUIRED', message: 'Missing or invalid service token', data: null });
+  }
+  const db = getServiceSupabaseClient();
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+
+  const forceRaw = String((req.body as { force?: unknown } | undefined)?.force ?? '').trim().toLowerCase();
+  const force = forceRaw === 'true' || forceRaw === '1' || forceRaw === 'on';
+  const traceId = createUnlockTraceId();
+  const summary = await runSourcePageAssetSweep(db, { mode: 'manual', force, traceId });
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: summary ? 'source page asset sweep complete' : 'source page asset sweep skipped',
+    data: {
+      trace_id: traceId,
+      summary,
     },
   });
 });
