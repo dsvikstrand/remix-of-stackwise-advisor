@@ -184,7 +184,7 @@ export default function YouTubeToBlueprint() {
   const createBlueprint = useCreateBlueprint();
 
   const [videoUrl, setVideoUrl] = useState('');
-  const [generateReview, setGenerateReview] = useState(true);
+  const [generateReview, setGenerateReview] = useState(false);
   const [generateBanner] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratingReview, setIsGeneratingReview] = useState(false);
@@ -222,7 +222,6 @@ export default function YouTubeToBlueprint() {
 
     const reviewQuery = searchParams.get('generate_review');
     if (reviewQuery === '0') setGenerateReview(false);
-    if (reviewQuery === '1') setGenerateReview(true);
 
     hasHydratedFromParamsRef.current = true;
   }, [searchParams]);

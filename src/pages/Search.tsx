@@ -167,7 +167,7 @@ export default function SearchPage() {
       const params = new URLSearchParams({
         video_url: result.video_url,
         autostart: '1',
-        generate_review: '1',
+        generate_review: '0',
         generate_banner: '1',
         source: 'youtube_search',
         channel_id: result.channel_id,

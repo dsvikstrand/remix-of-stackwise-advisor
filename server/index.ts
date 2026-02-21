@@ -1545,7 +1545,7 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
         runId,
         videoId: validatedUrl.sourceNativeId,
         videoUrl: parsed.data.video_url,
-        generateReview: parsed.data.generate_review,
+        generateReview: false,
         generateBanner: parsed.data.generate_banner,
         authToken,
       }),
@@ -3645,7 +3645,7 @@ async function createBlueprintFromVideo(db: ReturnType<typeof createClient>, inp
     runId,
     videoId: input.videoId,
     videoUrl: input.videoUrl,
-    generateReview: true,
+    generateReview: false,
     generateBanner: false,
     authToken: '',
   });
