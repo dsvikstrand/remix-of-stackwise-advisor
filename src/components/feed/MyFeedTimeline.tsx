@@ -40,6 +40,7 @@ import type { MyFeedItemView } from '@/hooks/useMyFeed';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { useSourceUnlockJobTracker } from '@/hooks/useSourceUnlockJobTracker';
 import { UnlockActivityCard } from '@/components/shared/UnlockActivityCard';
+import { resolveEffectiveBanner } from '@/lib/bannerResolver';
 
 const CHANNEL_OPTIONS = CHANNELS_CATALOG.filter((channel) => channel.status === 'active' && channel.isJoinEnabled);
 const CHANNEL_NAME_BY_SLUG = new Map(CHANNELS_CATALOG.map((channel) => [channel.slug, channel.name]));
@@ -504,7 +505,11 @@ export function MyFeedTimeline({
         const blueprint = item.blueprint;
         const source = item.source;
         const isSubscriptionNotice = item.state === 'subscription_notice';
-        const hasBlueprintBanner = !isSubscriptionNotice && !!blueprint?.bannerUrl;
+        const effectiveBlueprintBannerUrl = resolveEffectiveBanner({
+          bannerUrl: blueprint?.bannerUrl || null,
+          sourceThumbnailUrl: source?.thumbnailUrl || null,
+        });
+        const hasBlueprintBanner = !isSubscriptionNotice && !!effectiveBlueprintBannerUrl;
         const title = isSubscriptionNotice
           ? (source?.title || 'You are now subscribed')
           : (blueprint?.title || source?.title || 'Pending source import');
@@ -582,7 +587,7 @@ export function MyFeedTimeline({
             {hasBlueprintBanner && (
               <>
                 <img
-                  src={blueprint.bannerUrl || ''}
+                  src={effectiveBlueprintBannerUrl || ''}
                   alt=""
                   className="absolute inset-0 h-full w-full object-cover opacity-35"
                   loading="lazy"

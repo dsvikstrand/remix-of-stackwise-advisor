@@ -11,6 +11,7 @@ import { getCatalogChannelTagSlugs } from '@/lib/channelPostContext';
 import { normalizeTag } from '@/lib/tagging';
 import { buildSourcePagePath } from '@/lib/sourcePagesApi';
 import { Badge } from '@/components/ui/badge';
+import { resolveEffectiveBanner } from '@/lib/bannerResolver';
 
 interface ExploreResultCardProps {
   result: ExploreResult;
@@ -35,7 +36,11 @@ function BlueprintCard({
   const displayTags = result.tags.filter((tag) => !channelTagSlugs.has(normalizeTag(tag)));
   const createdLabel = formatRelativeShort(result.createdAt);
   const commentsCount = commentCountByBlueprintId?.[result.id] || 0;
-  const hasBanner = !!result.bannerUrl;
+  const effectiveBannerUrl = resolveEffectiveBanner({
+    bannerUrl: result.bannerUrl,
+    sourceThumbnailUrl: result.sourceThumbnailUrl,
+  });
+  const hasBanner = !!effectiveBannerUrl;
 
   return (
     <Link to={`/blueprint/${result.id}`}>
@@ -44,7 +49,7 @@ function BlueprintCard({
           {hasBanner && (
             <>
               <img
-                src={result.bannerUrl!}
+                src={effectiveBannerUrl || ''}
                 alt=""
                 className="absolute inset-0 h-full w-full object-cover opacity-35"
                 loading="lazy"

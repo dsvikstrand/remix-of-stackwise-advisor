@@ -48,6 +48,7 @@ export type SourcePageBlueprintFeedItem = {
   title: string;
   summary: string;
   banner_url: string | null;
+  source_thumbnail_url: string | null;
   created_at: string;
   published_channel_slug: string | null;
   tags: Array<{ id: string; slug: string }>;

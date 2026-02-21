@@ -56,9 +56,10 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 ### W3 - YouTube Pull And Caching
 - Keep YouTube-first ingestion flow stable.
 - Reuse generated artifacts for duplicate pulls when canonical source id matches.
-- Keep optional review/banner enhancement as separate post-generation steps to reduce core latency bottlenecks.
-- `/youtube` now forces core-first endpoint payload (`generate_review=false`, `generate_banner=false`) and runs optional enhancement attach asynchronously.
-- `Save to My Feed` is non-blocking during optional post-steps; late review/banner can attach to already-saved blueprints.
+- Keep optional review enhancement as a separate post-generation step to reduce core latency bottlenecks.
+- `/youtube` now forces core-first endpoint payload (`generate_review=false`, `generate_banner=false`) and runs optional review attach asynchronously.
+- `Save to My Feed` is non-blocking during optional post-steps; late review can attach to already-saved blueprints.
+- Source YouTube blueprints are thumbnail-first for banners (stored thumbnail or deterministic `ytimg` fallback), including old source-linked rows via backfill.
 - Backend timeout budget for core endpoint is configurable via `YT2BP_CORE_TIMEOUT_MS` (default `120000`).
 - Banner prompt path is hardened for visual-only output so generated backgrounds avoid readable text overlays.
 - Async auto-banner queue path is now available for subscription auto-ingest, preserving ingestion speed and applying banners later.
@@ -102,6 +103,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Step 24 backend hardening adds unlock reliability sweeps (expired/stale/orphan recovery), additive unlock `trace_id` response contract, and service-level idempotency/race tests.
 - Step 24 scale follow-up shifts unlock/manual/service generation to enqueue-only worker execution with DB claim+lease heartbeat semantics, queue backpressure controls, provider retry/circuit guards, and service queue health endpoint (`GET /api/ops/queue/health`).
 - Step 25 subscription auto-unlock v1 adds per-subscription `auto_unlock_enabled` (default `true`), prioritizes the current subscriber, then samples up to 3 eligible subscribers for new-video auto-attempts, and runs bounded `source_auto_unlock_retry` attempts when credits are temporarily unavailable.
+- Step 26 thumbnail-first banner cutover sets source YouTube banner rendering to thumbnails across Wall/Feed/Explore/Detail/Source Page, backfills old source-linked blueprints, and bypasses source auto-banner enqueue paths.
 - Added service-ops endpoint `GET /api/ingestion/jobs/latest` for latest ingestion status checks.
 - Added user endpoint `GET /api/ingestion/jobs/:id` for owner-scoped manual refresh progress.
 - Added user endpoint `GET /api/ingestion/jobs/latest-mine` for owner-scoped latest refresh-job restore after page reload.

@@ -245,12 +245,17 @@ Rules:
   - profile tabs are streamlined to `Feed / Comments / Liked`; subscriptions stay on dedicated `/subscriptions`.
   - profile refresh launcher uses return path flow so `/subscriptions?refresh=1` returns user to profile after terminal status.
   - share icon action removed from wall/channel/explore blueprint list cards.
+- Thumbnail-first banner cutover (2026-02-21):
+  - source YouTube generation now writes `blueprints.banner_url` from source thumbnail context (stored thumbnail or deterministic `ytimg` fallback).
+  - source generation flows bypass auto-banner enqueue; auto-banner worker remains compatibility-only.
+  - legacy source-linked blueprints are backfilled to thumbnail banners and generated-banner policy fields are neutralized.
+  - source-page feed payload now includes additive `source_thumbnail_url` for defensive frontend fallback rendering.
 
 ## 12) Next Milestone
 1. Validate Oracle cron reliability and alerting around ingestion failures.
 2. Decide on `/subscriptions` discoverability upgrade (nav item timing) after URL-only validation period.
 3. Design future “sync specific videos” flow before exposing sync controls in UI.
-4. Seed per-channel default banners before enabling async mode in production.
+4. Keep source-first launch on thumbnail banners (`SUBSCRIPTION_AUTO_BANNER_MODE=off` for source flows); revisit async banner workers only for compatibility/non-source paths if needed.
 5. Add richer ingestion observability dashboards from `ingestion_jobs` + `mvp_events`.
 6. Keep legacy manual gate behavior in `bypass` until dedicated enforcement cycle approval.
 7. Add pagination and quota guardrails iteration for `/api/youtube-search` based on production usage.

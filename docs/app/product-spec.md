@@ -22,7 +22,7 @@ a10) [have] Auth-only `Search` route (`/search`) now supports YouTube query disc
 a11) [have] `/subscriptions` now supports auth-only YouTube channel search with popup-based subscribe flow (manual paste fallback removed in UI).
 a12) [have] Subscription rows now render channel avatar thumbnails (when available) and hide technical status/mode badges from row UI.
 a13) [have] `My Feed` blueprint rows now use channel-feed-style visual cards with status-driven auto-channel outcomes.
-a14) [have] Manual/search YouTube generation defaults to review+banner enabled for My Feed-bound content.
+a14) [have] Manual/search YouTube generation defaults to AI review enabled while banner generation stays off in the current thumbnail-first flow.
 a15) [have] `My Feed` subscription notice cards now support channel avatar rendering and optional profile-banner background (when available from YouTube).
 a16) [have] `My Feed` subscription notice cards open a detailed popup with `Unsubscribe` confirmation; successful unsubscribe removes the notice card.
 a17) [have] Manual `Post to Channel` UI is feature-flagged for rollback and removed from normal auto-channel mode surfaces.
@@ -33,7 +33,7 @@ a21) [have] Banner-cap policy contract is now available globally with generated 
 a22) [have] `My Feed` card footer now shows read-only auto-channel status (`Posted to <Channel>`, `Publishing...`, or `In My Feed`) and uses a unified `Blueprint` badge for blueprint cards.
 a23) [have] Search-generated saves now carry source channel context so `My Feed` subtitle row can show channel name instead of duplicated post title.
 a24) [have] `My Feed` source subtitle resolution now falls back to source metadata channel title when `source_channel_title` is missing, preventing title duplication for search-generated content.
-a25) [have] `/youtube` now runs core generation first and performs review/banner as async post-steps; `Save to My Feed` is non-blocking while enhancements continue.
+a25) [have] `/youtube` now runs core generation first and performs optional AI review as an async post-step; banner generation is intentionally off and `Save to My Feed` remains non-blocking.
 a26) [have] Banner generation prompt is now explicitly visual-only (no readable text/typography/logos/watermarks) to keep card backgrounds clean.
 a27) [have] `/subscriptions` now includes `Refresh` popup flow: scan new videos from active subscriptions, select videos, and start background blueprint generation async.
 a28) [have] Manual refresh endpoints now enforce per-user cooldown limits and background-job concurrency guards to prevent duplicate/overlapping runs.
@@ -76,6 +76,7 @@ a64) [have] Unlock backend now runs reliability sweeps (expired/stale/orphan rec
 a65) [have] Unlock/manual/service ingestion execution is now enqueue-first with durable DB lease claiming (no in-request `setImmediate` worker path).
 a66) [have] Service operations now include `GET /api/ops/queue/health` for queue depth, stale leases, and provider circuit snapshots.
 a67) [have] Subscription rows now support `auto_unlock_enabled` (default `true`) so new uploads can auto-attempt shared unlock generation when eligible subscribers have credits.
+a68) [have] YouTube-source blueprints now use thumbnail-first banners across cards and detail views; legacy source-linked rows are backfilled to thumbnails and source flows bypass auto-banner enqueue.
 
 ## Core Model
 b1) `Source Item`
@@ -107,10 +108,10 @@ b5) Subscription behavior (MVP simplified)
 - New subscription uploads can auto-attempt unlock generation by prioritizing the current subscriber first, then sampling up to 3 eligible subscribers (`is_active=true`, `auto_unlock_enabled=true`) and stopping on first successful hold+enqueue.
 - If no eligible user can pay at that moment, backend schedules bounded auto-retries so cards can still unlock without manual action when credits refill.
 - Auto-ingested subscription items run review generation by default.
-- Banner generation for auto-ingest is controlled by `SUBSCRIPTION_AUTO_BANNER_MODE`:
-  - `off` (default): no auto banner worker activity.
-  - `async` (target): queue background banner jobs with no ingestion blocking.
-  - `sync` (ops/debug): generate in-line (higher latency).
+- YouTube-source generation is thumbnail-first:
+  - source flows write `blueprints.banner_url` from source thumbnail (stored or deterministic `ytimg` fallback).
+  - source flows bypass auto-banner enqueue by default.
+  - `SUBSCRIPTION_AUTO_BANNER_MODE` remains as compatibility control for non-source/legacy banner worker paths.
 - A persistent notice card is inserted into `My Feed` with state `subscription_notice`.
 - Notice cards are visualized with channel avatar and optional banner background when metadata is available.
 - API compatibility note: `mode` is accepted on subscription endpoints but coerced/treated as `auto`.
@@ -251,7 +252,7 @@ si35) public/auth endpoint: `GET /api/source-pages/:platform/:externalId` (sourc
 si36) auth endpoint: `POST /api/source-pages/:platform/:externalId/subscribe` (idempotent subscribe, source-page auto-create for YouTube).
 si37) auth endpoint: `DELETE /api/source-pages/:platform/:externalId/subscribe` (unsubscribe parity + subscription notice cleanup).
 si38) compatibility note: legacy `POST/GET/PATCH/DELETE /api/source-subscriptions*` remains live while Source Pages rollout expands.
-si39) public/auth endpoint: `GET /api/source-pages/:platform/:externalId/blueprints?limit=<1..24>&cursor=<opaque?>` (public channel-published feed for the source page, deduped by `source_item_id` with `next_cursor` pagination).
+si39) public/auth endpoint: `GET /api/source-pages/:platform/:externalId/blueprints?limit=<1..24>&cursor=<opaque?>` (public channel-published feed for the source page, deduped by `source_item_id` with `next_cursor` pagination; includes additive `source_thumbnail_url` fallback per item).
 si40) auth endpoint: `GET /api/source-pages/:platform/:externalId/videos?page_token=<optional>&limit=<1..25>&kind=<full|shorts>` (source-page video-library listing for signed-in users, includes duplicate flags per row; shorts threshold is `<=60s`).
 si41) auth endpoint: `POST /api/source-pages/:platform/:externalId/videos/unlock` (reserves credits, starts shared unlock generation queue, returns `job_id` + ready/in-progress/insufficient summary buckets + additive `trace_id`).
 si42) compatibility alias: `POST /api/source-pages/:platform/:externalId/videos/generate` routes to unlock flow in this phase and mirrors additive `trace_id`.
@@ -280,7 +281,7 @@ si62) feed surfaces now hide locked rows tied to source unlocks marked permanent
 n1) Keep legacy manual gate behavior stable with `CHANNEL_GATES_MODE=bypass` while auto-channel path uses `AUTO_CHANNEL_GATE_MODE`.
 n2) Iterate YouTube search discovery flow before introducing multi-adapter search.
 n3) Harden ingestion reliability visibility (polling freshness + latest job checks) before adding more subscription features.
-n4) Roll out `SUBSCRIPTION_AUTO_BANNER_MODE=async` in production after channel defaults are seeded.
+n4) Keep `SUBSCRIPTION_AUTO_BANNER_MODE=off` for source-first YouTube launch; only revisit async banner workers for non-source/legacy flows if needed.
 n5) Reserve `enforce` mode for non-prod verification until dedicated rollout approval.
 
 ## Key References

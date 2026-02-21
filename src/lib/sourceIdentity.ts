@@ -40,3 +40,9 @@ export function toYouTubeIdentity(videoId: string): SourceIdentity {
     canonicalKey: `youtube:${videoId}`,
   };
 }
+
+export function buildYouTubeThumbnailUrl(videoId: string) {
+  const normalized = String(videoId || '').trim();
+  if (!/^[a-zA-Z0-9_-]{8,15}$/.test(normalized)) return null;
+  return `https://i.ytimg.com/vi/${normalized}/hqdefault.jpg`;
+}

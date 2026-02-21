@@ -3,7 +3,7 @@ import { config } from '@/config/runtime';
 import { normalizeTag } from '@/lib/tagging';
 import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
 import { evaluateCandidateGates } from '@/lib/candidateGates';
-import { extractYouTubeVideoId, toYouTubeIdentity } from '@/lib/sourceIdentity';
+import { buildYouTubeThumbnailUrl, extractYouTubeVideoId, toYouTubeIdentity } from '@/lib/sourceIdentity';
 
 export async function ensureSourceItemForYouTube(input: {
   videoUrl: string;
@@ -19,7 +19,7 @@ export async function ensureSourceItemForYouTube(input: {
   const identity = toYouTubeIdentity(videoId);
   const { data: existingSource } = await supabase
     .from('source_items')
-    .select('id, source_channel_id, source_channel_title, metadata')
+    .select('id, source_channel_id, source_channel_title, thumbnail_url, metadata')
     .eq('canonical_key', identity.canonicalKey)
     .maybeSingle();
 
@@ -31,6 +31,7 @@ export async function ensureSourceItemForYouTube(input: {
       : {};
   const effectiveSourceChannelId = input.sourceChannelId || existingSource?.source_channel_id || null;
   const effectiveSourceChannelTitle = input.sourceChannelTitle || existingSource?.source_channel_title || null;
+  const effectiveThumbnailUrl = String(existingSource?.thumbnail_url || '').trim() || buildYouTubeThumbnailUrl(identity.sourceNativeId);
   const metadata: Record<string, unknown> = {
     ...existingMetadata,
     ...(input.metadata || {}),
@@ -50,12 +51,13 @@ export async function ensureSourceItemForYouTube(input: {
         title: input.title,
         source_channel_id: effectiveSourceChannelId,
         source_channel_title: effectiveSourceChannelTitle,
+        thumbnail_url: effectiveThumbnailUrl,
         metadata,
         ingest_status: 'ready',
       },
       { onConflict: 'canonical_key' },
     )
-    .select('id, canonical_key')
+    .select('id, canonical_key, thumbnail_url')
     .single();
 
   if (error) throw error;

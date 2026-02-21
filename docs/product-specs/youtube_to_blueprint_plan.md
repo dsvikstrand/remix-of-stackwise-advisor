@@ -32,17 +32,18 @@ a19) [have] 2026-02-17 flow update: generated YouTube drafts are saved to `My Fe
 a20) [have] 2026-02-18 backend update: auto-channel pipeline can publish saved My Feed items through deterministic channel assignment (`general`) and deterministic gate checks.
 a21) [have] 2026-02-17 UX update: optional AI review and banner run as separate post-generation steps (core draft completes first).
 a22) [have] 2026-02-17 gating note: production channel-gate runtime is currently bypass-first (`EVAL_BYPASSED`) pending enforcement rollout.
-a23) [have] 2026-02-18 default update: `/youtube` keeps `Generate AI review` and `Generate banner` toggles on by default for UX, but core endpoint calls remain forced-off (`generate_review=false`, `generate_banner=false`) to keep core generation fast.
-a24) [have] 2026-02-18 search handoff update: `Generate Blueprint` on `/search` opens `/youtube` with a prefilled video URL and review/banner defaults on, so users get staged progress feedback in one place.
+a23) [have] 2026-02-18+ default update: `/youtube` keeps core endpoint calls forced-off (`generate_review=false`, `generate_banner=false`) for fast generation and currently exposes AI review-only optional post-processing.
+a24) [have] 2026-02-18+ search handoff update: `Generate Blueprint` on `/search` opens `/youtube` with a prefilled video URL and review-focused staged progress in one place.
 a25) [have] 2026-02-18 ingestion default update: subscription auto-ingestion enables review by default and keeps banner generation off by default for throughput.
 a26) [have] 2026-02-18 search handoff now also carries channel context (`channel_id`, `channel_title`, `channel_url`) so saved source rows can show channel name in `My Feed`.
 a27) [have] 2026-02-18 save-path hardening now preserves and reuses channel-title metadata on source upsert, preventing subtitle fallback to duplicated post title.
-a28) [have] 2026-02-18 save-path update: optional review/banner now continue asynchronously after core generation and can attach to a saved blueprint without blocking `Save to My Feed`.
+a28) [have] 2026-02-18 save-path update: optional AI review continues asynchronously after core generation and can attach to a saved blueprint without blocking `Save to My Feed`.
 a29) [have] 2026-02-18 backend timeout update: core endpoint timeout is now configurable via `YT2BP_CORE_TIMEOUT_MS` (default `120000`).
 a30) [have] 2026-02-18 save-path update: `POST /api/my-feed/items/:id/auto-publish` is used to auto-publish URL/search saves after `Save to My Feed`.
 a31) [have] 2026-02-18 terminology update: high-traffic UI copy now uses `Home`/`Create`/auto-publish wording consistently; this is UI-only and does not change YT2BP API/runtime contract.
 a32) [have] 2026-02-20 source unlock update: source-page video-library generation now defaults to shared unlock flow (`POST /api/source-pages/:platform/:externalId/videos/unlock`, legacy `/videos/generate` alias), with refill-credit accounting outside YT2BP contract scope.
 a33) [have] 2026-02-20 subscription sync update: new subscription uploads create unlockable feed rows first (`my_feed_unlockable`) and no longer force immediate per-user blueprint generation.
+a34) [have] 2026-02-21 banner update: source-linked YouTube blueprints now use thumbnail-first banners (stored source thumbnail or deterministic `ytimg` fallback), and legacy source-linked rows are backfilled to thumbnail URLs.
 
 ## 4-Step Plan
 b1) [todo] Lock MVP contract
@@ -158,9 +159,8 @@ d1b) [have] Post-generation action now defaults to `Save to My Feed` with route 
 d2) [have] Keep the page minimal:
 - One URL input.
 - One primary action: `Generate Blueprint`.
-- Two optional toggles:
+- One optional toggle:
 - `Generate AI review`
-- `Generate banner`
 d2b) [have] Toggle behavior is now respected as async post-step controls in UI; core endpoint payload is intentionally hardcoded off for review/banner to reduce timeout risk.
 d3) [have] No source customization and no edit-mode branch in v1.
 d4) [have] Same-page preview is implemented.

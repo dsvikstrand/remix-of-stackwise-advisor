@@ -3556,6 +3556,20 @@ async function createBlueprintFromVideo(db: ReturnType<typeof createClient>, inp
   sourceItemId?: string | null;
   subscriptionId?: string | null;
 }) {
+  let sourceThumbnailUrl: string | null = null;
+  const normalizedSourceItemId = String(input.sourceItemId || '').trim();
+  if (normalizedSourceItemId) {
+    const { data: sourceRow } = await db
+      .from('source_items')
+      .select('thumbnail_url')
+      .eq('id', normalizedSourceItemId)
+      .maybeSingle();
+    sourceThumbnailUrl = String(sourceRow?.thumbnail_url || '').trim() || null;
+  }
+  if (!sourceThumbnailUrl && YOUTUBE_VIDEO_ID_REGEX.test(String(input.videoId || '').trim())) {
+    sourceThumbnailUrl = `https://i.ytimg.com/vi/${String(input.videoId || '').trim()}/hqdefault.jpg`;
+  }
+
   const runId = `sub-${input.sourceTag}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const result = await runYouTubePipeline({
     runId,
@@ -3578,6 +3592,7 @@ async function createBlueprintFromVideo(db: ReturnType<typeof createClient>, inp
         run_id: result.run_id,
         video_url: input.videoUrl,
       },
+      banner_url: sourceThumbnailUrl,
       mix_notes: result.draft.notes || null,
       llm_review: result.review.summary || null,
     })
@@ -3592,25 +3607,6 @@ async function createBlueprintFromVideo(db: ReturnType<typeof createClient>, inp
     await db
       .from('blueprint_tags')
       .upsert({ blueprint_id: blueprint.id, tag_id: tagId }, { onConflict: 'blueprint_id,tag_id' });
-  }
-
-  if (input.sourceTag === 'subscription_auto' || input.sourceTag === 'source_page_video_library') {
-    try {
-      await maybeApplyAutoBannerPolicyAfterCreate({
-        blueprintId: blueprint.id,
-        sourceItemId: input.sourceItemId || null,
-        subscriptionId: input.subscriptionId || null,
-        runId: result.run_id,
-      });
-    } catch (bannerError) {
-      console.log('[auto_banner_enqueue_failed]', JSON.stringify({
-        blueprint_id: blueprint.id,
-        source_item_id: input.sourceItemId || null,
-        subscription_id: input.subscriptionId || null,
-        run_id: result.run_id,
-        error: bannerError instanceof Error ? bannerError.message : String(bannerError),
-      }));
-    }
   }
 
   return {
@@ -6290,6 +6286,7 @@ type SourcePageFeedSourceRow = {
   source_page_id: string | null;
   source_channel_id: string | null;
   source_url: string;
+  thumbnail_url: string | null;
 };
 
 function normalizeSourcePageBlueprintCursor(input: SourcePageBlueprintCursor) {
@@ -7356,6 +7353,7 @@ app.get('/api/source-pages/:platform/:externalId/blueprints', async (req, res) =
     blueprintId: string;
     createdAt: string;
     sourceUrl: string;
+    sourceThumbnailUrl: string | null;
   }> = [];
 
   let scanRows = 0;
@@ -7415,7 +7413,7 @@ app.get('/api/source-pages/:platform/:externalId/blueprints', async (req, res) =
     const [{ data: sourceRowsData, error: sourceRowsError }, { data: blueprintVisibilityData, error: blueprintVisibilityError }] = await Promise.all([
       db
         .from('source_items')
-        .select('id, source_page_id, source_channel_id, source_url')
+        .select('id, source_page_id, source_channel_id, source_url, thumbnail_url')
         .in('id', sourceItemIds),
       db
         .from('blueprints')
@@ -7472,6 +7470,7 @@ app.get('/api/source-pages/:platform/:externalId/blueprints', async (req, res) =
         blueprintId,
         createdAt: normalizedAcceptedCursor?.createdAt || row.created_at,
         sourceUrl: String(source.source_url || '').trim(),
+        sourceThumbnailUrl: String(source.thumbnail_url || '').trim() || null,
       });
 
       if (selectedRows.length >= limit) {
@@ -7620,6 +7619,7 @@ app.get('/api/source-pages/:platform/:externalId/blueprints', async (req, res) =
         published_channel_slug: publishedChannelByBlueprint.get(row.blueprintId)?.slug || null,
         tags: tagsByBlueprint.get(row.blueprintId) || [],
         source_url: row.sourceUrl || '',
+        source_thumbnail_url: row.sourceThumbnailUrl,
       };
     })
     .filter(Boolean);
@@ -8928,12 +8928,13 @@ app.post('/api/my-feed/items/:id/accept', async (req, res) => {
   }
 
   try {
-    const generated = await createBlueprintFromVideo(db, {
-      userId,
-      videoUrl: sourceRow.source_url,
-      videoId: sourceRow.source_native_id,
-      sourceTag: 'subscription_accept',
-    });
+      const generated = await createBlueprintFromVideo(db, {
+        userId,
+        videoUrl: sourceRow.source_url,
+        videoId: sourceRow.source_native_id,
+        sourceTag: 'subscription_accept',
+        sourceItemId: sourceRow.id,
+      });
 
     await db.from('user_feed_items').update({
       blueprint_id: generated.blueprintId,

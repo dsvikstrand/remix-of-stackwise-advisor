@@ -28,6 +28,7 @@ import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
 import { getChannelIcon } from '@/lib/channelIcons';
 import { UnlockActivityCard } from '@/components/shared/UnlockActivityCard';
 import { useSourceUnlockJobTracker } from '@/hooks/useSourceUnlockJobTracker';
+import { resolveEffectiveBanner } from '@/lib/bannerResolver';
 
 function getInitials(title: string, fallback: string) {
   const raw = title.trim() || fallback.trim();
@@ -697,6 +698,10 @@ export default function SourcePage() {
                         const channelConfig = CHANNELS_CATALOG.find((channel) => channel.slug === channelSlug);
                         const ChannelIcon = getChannelIcon(channelConfig?.icon || 'sparkles');
                         const createdLabel = formatRelativeShort(item.created_at);
+                        const effectiveBannerUrl = resolveEffectiveBanner({
+                          bannerUrl: item.banner_url,
+                          sourceThumbnailUrl: item.source_thumbnail_url,
+                        });
 
                         return (
                           <Link
@@ -705,10 +710,10 @@ export default function SourcePage() {
                             className="block rounded-md border border-border/40 px-3 py-3 transition-colors hover:bg-muted/20"
                           >
                             <div className="relative overflow-hidden rounded-sm">
-                              {item.banner_url ? (
+                              {effectiveBannerUrl ? (
                                 <>
                                   <img
-                                    src={item.banner_url}
+                                    src={effectiveBannerUrl}
                                     alt=""
                                     className="absolute inset-0 h-full w-full object-cover opacity-35"
                                     loading="lazy"

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
 import { getChannelIcon } from '@/lib/channelIcons';
+import { resolveEffectiveBanner } from '@/lib/bannerResolver';
 
 type WallBlueprintCardTag = {
   key: string;
@@ -19,6 +20,7 @@ type WallBlueprintCardProps = {
   sourceName?: string | null;
   sourceAvatarUrl?: string | null;
   bannerUrl?: string | null;
+  sourceThumbnailUrl?: string | null;
   createdLabel: string;
   channelSlug: string;
   likesCount: number;
@@ -35,6 +37,7 @@ export function WallBlueprintCard({
   sourceName,
   sourceAvatarUrl,
   bannerUrl,
+  sourceThumbnailUrl,
   createdLabel,
   channelSlug,
   likesCount,
@@ -53,14 +56,18 @@ export function WallBlueprintCard({
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() || '')
     .join('') || 'S';
+  const effectiveBannerUrl = resolveEffectiveBanner({
+    bannerUrl,
+    sourceThumbnailUrl,
+  });
 
   return (
     <Link to={to} className="block px-3 py-2.5 transition-colors hover:bg-muted/20">
       <div className="relative overflow-hidden">
-        {!!bannerUrl && (
+        {!!effectiveBannerUrl && (
           <>
             <img
-              src={bannerUrl}
+              src={effectiveBannerUrl}
               alt=""
               className="absolute inset-0 h-full w-full object-cover opacity-35"
               loading="lazy"

@@ -53,6 +53,7 @@ interface BlueprintPost {
   published_channel_slug?: string | null;
   source_channel_title?: string | null;
   source_channel_avatar_url?: string | null;
+  source_thumbnail_url?: string | null;
 }
 
 type ForYouLockedItem = {
@@ -79,6 +80,7 @@ type ForYouBlueprintItem = {
   title: string;
   sourceChannelTitle: string | null;
   sourceChannelAvatarUrl: string | null;
+  sourceThumbnailUrl: string | null;
   llmReview: string | null;
   bannerUrl: string | null;
   tags: string[];
@@ -341,6 +343,7 @@ export default function Wall() {
       const publishedChannelByBlueprint = new Map<string, { slug: string; createdAtMs: number }>();
       const sourceChannelTitleByBlueprint = new Map<string, { title: string | null; createdAtMs: number }>();
       const sourceChannelAvatarByBlueprint = new Map<string, { avatarUrl: string | null; createdAtMs: number }>();
+      const sourceThumbnailByBlueprint = new Map<string, { thumbnailUrl: string | null; createdAtMs: number }>();
       const feedItems = (feedItemsRes.data || []) as Array<{ id: string; blueprint_id: string; source_item_id: string; created_at: string }>;
       const feedItemIds = feedItems.map((row) => row.id);
       const blueprintIdByFeedItemId = new Map(feedItems.map((row) => [row.id, row.blueprint_id]));
@@ -349,7 +352,7 @@ export default function Wall() {
       const { data: sourceItemsData, error: sourceItemsError } = sourceItemIds.length > 0
         ? await supabase
           .from('source_items')
-          .select('id, source_page_id, source_channel_id, source_channel_title, metadata')
+          .select('id, source_page_id, source_channel_id, source_channel_title, thumbnail_url, metadata')
           .in('id', sourceItemIds)
         : { data: [], error: null };
       if (sourceItemsError) throw sourceItemsError;
@@ -403,6 +406,7 @@ export default function Wall() {
               || sourcePageAvatarById.get(String(row.source_page_id || '').trim())
               || sourcePageAvatarByExternalId.get(String(row.source_channel_id || '').trim())
               || null,
+            thumbnailUrl: String(row.thumbnail_url || '').trim() || null,
           }] as const;
         }),
       );
@@ -440,7 +444,7 @@ export default function Wall() {
 
       for (const row of feedItems) {
         const blueprintId = row.blueprint_id;
-        const sourceInfo = sourceItemsMap.get(row.source_item_id) || { title: null, avatarUrl: null };
+        const sourceInfo = sourceItemsMap.get(row.source_item_id) || { title: null, avatarUrl: null, thumbnailUrl: null };
         const createdAtMs = Number.isFinite(Date.parse(row.created_at)) ? Date.parse(row.created_at) : 0;
         const existingTitle = sourceChannelTitleByBlueprint.get(blueprintId);
         if (!existingTitle || createdAtMs > existingTitle.createdAtMs) {
@@ -449,6 +453,10 @@ export default function Wall() {
         const existingAvatar = sourceChannelAvatarByBlueprint.get(blueprintId);
         if (!existingAvatar || createdAtMs > existingAvatar.createdAtMs) {
           sourceChannelAvatarByBlueprint.set(blueprintId, { avatarUrl: sourceInfo.avatarUrl, createdAtMs });
+        }
+        const existingThumbnail = sourceThumbnailByBlueprint.get(blueprintId);
+        if (!existingThumbnail || createdAtMs > existingThumbnail.createdAtMs) {
+          sourceThumbnailByBlueprint.set(blueprintId, { thumbnailUrl: sourceInfo.thumbnailUrl, createdAtMs });
         }
       }
 
@@ -466,6 +474,7 @@ export default function Wall() {
         published_channel_slug: publishedChannelByBlueprint.get(blueprint.id)?.slug || null,
         source_channel_title: sourceChannelTitleByBlueprint.get(blueprint.id)?.title || null,
         source_channel_avatar_url: sourceChannelAvatarByBlueprint.get(blueprint.id)?.avatarUrl || null,
+        source_thumbnail_url: sourceThumbnailByBlueprint.get(blueprint.id)?.thumbnailUrl || null,
       })) as BlueprintPost[];
 
       if (isSpecificChannelScope && scopedChannel) {
@@ -574,6 +583,7 @@ export default function Wall() {
           title: item.blueprint.title,
           sourceChannelTitle: item.source.sourceChannelTitle || null,
           sourceChannelAvatarUrl: item.source.sourceChannelAvatarUrl || null,
+          sourceThumbnailUrl: item.source.thumbnailUrl || null,
           llmReview: item.blueprint.llmReview,
           bannerUrl: item.blueprint.bannerUrl,
           tags: item.blueprint.tags,
@@ -1100,6 +1110,7 @@ export default function Wall() {
                         sourceName={item.sourceChannelTitle}
                         sourceAvatarUrl={item.sourceChannelAvatarUrl}
                         bannerUrl={item.bannerUrl}
+                        sourceThumbnailUrl={item.sourceThumbnailUrl}
                         createdLabel={formatRelativeShort(item.createdAt)}
                         channelSlug={channelSlug}
                         likesCount={likesCount}
@@ -1179,6 +1190,7 @@ export default function Wall() {
                       sourceName={post.source_channel_title || null}
                       sourceAvatarUrl={post.source_channel_avatar_url || null}
                       bannerUrl={post.banner_url}
+                      sourceThumbnailUrl={post.source_thumbnail_url || null}
                       createdLabel={formatRelativeShort(post.created_at)}
                       channelSlug={channelSlug}
                       likesCount={post.likes_count}

@@ -20,6 +20,7 @@ import { resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
 import { getCatalogChannelTagSlugs } from '@/lib/channelPostContext';
 import { normalizeTag } from '@/lib/tagging';
 import { supabase } from '@/integrations/supabase/client';
+import { resolveEffectiveBanner } from '@/lib/bannerResolver';
 
 type ItemValue = string | { name?: string; context?: string };
 type StepItem = { category?: string; name?: string; context?: string };
@@ -70,6 +71,7 @@ export default function BlueprintDetail() {
     title: string;
     url: string | null;
     avatarUrl: string | null;
+    thumbnailUrl: string | null;
   } | null>(null);
   const curatedChannelTagSlugs = useMemo(() => new Set(getCatalogChannelTagSlugs().map(normalizeTag)), []);
   const displayTags = useMemo(() => {
@@ -164,6 +166,7 @@ export default function BlueprintDetail() {
           title: channelTitle || source.title || 'Source channel',
           url: source.source_url || null,
           avatarUrl: sourcePageAvatarUrl || metadataChannelAvatarUrl || sourceExternalAvatarUrl || null,
+          thumbnailUrl: String(source.thumbnail_url || '').trim() || null,
         });
       }
     }
@@ -204,6 +207,11 @@ export default function BlueprintDetail() {
   const handleTagClick = (slug: string) => {
     navigate(`/explore?q=${encodeURIComponent(slug)}`);
   };
+
+  const effectiveBannerUrl = resolveEffectiveBanner({
+    bannerUrl: blueprint?.banner_url || null,
+    sourceThumbnailUrl: sourceChannel?.thumbnailUrl || null,
+  });
 
   return (
     <PageRoot>
@@ -288,7 +296,7 @@ export default function BlueprintDetail() {
                 <p className="text-sm text-muted-foreground">{blueprint.mix_notes}</p>
               )}
 
-              {blueprint.banner_url && (
+              {effectiveBannerUrl && (
                 <button
                   type="button"
                   className="relative w-full overflow-hidden rounded-md border border-border/40 bg-muted/30 p-2 text-left"
@@ -297,7 +305,7 @@ export default function BlueprintDetail() {
                 >
                   {isBannerExpanded ? (
                     <img
-                      src={blueprint.banner_url}
+                      src={effectiveBannerUrl}
                       alt="Blueprint banner"
                       className="w-full h-auto max-h-[560px] object-contain rounded-md"
                       loading="lazy"
@@ -305,7 +313,7 @@ export default function BlueprintDetail() {
                   ) : (
                     <div className="aspect-[3/1] w-full">
                       <img
-                        src={blueprint.banner_url}
+                        src={effectiveBannerUrl}
                         alt="Blueprint banner"
                         className="h-full w-full object-cover object-center rounded-md"
                         loading="lazy"

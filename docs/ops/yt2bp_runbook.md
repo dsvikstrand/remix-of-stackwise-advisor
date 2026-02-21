@@ -11,8 +11,9 @@
 - Personal-first routing is now expected:
   - generated draft is saved to `My Feed` (`user_feed_items.state = my_feed_published` for direct/manual paths, `my_feed_unlockable` for new subscription uploads).
   - channel visibility is handled by auto-channel pipeline when enabled.
-  - `/youtube` runs core generation first and executes optional review/banner asynchronously after core success.
-  - `Save to My Feed` is non-blocking while optional review/banner complete and attach later.
+  - `/youtube` runs core generation first and executes optional AI review asynchronously after core success.
+  - `Save to My Feed` is non-blocking while optional review completes and attaches later.
+  - YouTube-source banners are thumbnail-first (`source_items.thumbnail_url` or deterministic `ytimg` fallback).
   - banner prompts are visual-only by policy (no readable text/typography/logos/watermarks).
 - Gate runtime mode:
   - legacy manual candidate flow uses `CHANNEL_GATES_MODE` (`bypass|shadow|enforce`).
@@ -27,7 +28,7 @@
   - `POST /api/my-feed/items/:id/auto-publish`
 - Source-page endpoints:
   - `GET /api/source-pages/:platform/:externalId` (public read)
-  - `GET /api/source-pages/:platform/:externalId/blueprints` (public source-page feed, deduped by source video, cursor-paginated)
+  - `GET /api/source-pages/:platform/:externalId/blueprints` (public source-page feed, deduped by source video, cursor-paginated, includes additive `source_thumbnail_url`)
   - `GET /api/source-pages/:platform/:externalId/videos` (auth source-page video-library list, supports `kind=full|shorts`)
     - rate policy: burst `4/15s` + sustained `40/10m` per user/IP.
   - `POST /api/source-pages/:platform/:externalId/videos/unlock` (auth shared unlock + async generation queue for selected source videos)
@@ -130,7 +131,7 @@ Required runtime variables:
 - `REFRESH_GENERATE_MAX_ITEMS` (default `20`)
 - `REFRESH_FAILURE_COOLDOWN_HOURS` (default `6`)
 - `INGESTION_STALE_RUNNING_MS` (default `1800000`)
-- `SUBSCRIPTION_AUTO_BANNER_MODE` (`off|async|sync`)
+- `SUBSCRIPTION_AUTO_BANNER_MODE` (`off|async|sync`, compatibility/non-source paths)
 - `SUBSCRIPTION_AUTO_BANNER_CAP` (default `1000`)
 - `SUBSCRIPTION_AUTO_BANNER_MAX_ATTEMPTS` (default `3`)
 - `SUBSCRIPTION_AUTO_BANNER_TIMEOUT_MS` (default `12000`)
@@ -559,7 +560,7 @@ Notes:
 - endpoint uses service-token auth only; do not send/require a user bearer token.
 - endpoint rewinds checkpoint for one subscription, then runs one sync cycle.
 - this can generate blueprints and consume tokens/credits.
-- if `SUBSCRIPTION_AUTO_BANNER_MODE=async`, generated blueprints will enqueue banner jobs for background processing.
+- source YouTube generation paths are thumbnail-first and bypass auto-banner enqueue; async auto-banner jobs only apply to compatibility/non-source paths when enabled.
 
 Auto-banner worker trigger (service auth):
 ```bash

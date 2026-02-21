@@ -15,7 +15,7 @@
 - 2026-02-13 note: Channel-scoped `+ Create` flow routes to `/youtube?channel=<slug>&intent=post` and blocks public publish unless channel is valid and joined; this is UI/product behavior and does not alter this endpoint contract.
 - 2026-02-13 note: App-wide wall-to-wall layout migration (Run 1) updates YouTube page framing to a minimal document-like layout; UI-only and does not alter this contract.
 - 2026-02-17 note: dual-feed rollout moved post-generation behavior to personal-first (`/my-feed`); this does not alter the YT2BP request/response envelope.
-- 2026-02-17 note: optional AI review/banner are now executed as separate post-generation steps in UI (`/api/analyze-blueprint` and `/api/generate-banner`) so core YT2BP latency is lower; this does not alter the YT2BP envelope.
+- 2026-02-17 note: optional AI review is executed as a separate post-generation step in UI (`/api/analyze-blueprint`) so core YT2BP latency is lower; banner generation remains outside the core YT2BP envelope.
 - 2026-02-18 note: subscription ingestion (`/api/source-subscriptions*`, `/api/ingestion/jobs/trigger`) and pending-card accept/skip (`/api/my-feed/items/:id/accept|skip`) are separate flows and do not alter this endpoint envelope.
 - 2026-02-18 note: subscription create path now uses auto-only behavior (incoming `mode` is compatibility-only and treated as `auto`); first subscribe sets checkpoint and inserts a `subscription_notice` feed card. This remains outside this endpoint envelope.
 - 2026-02-18 note: debug simulation endpoint (`/api/debug/subscriptions/:id/simulate-new-uploads`) is env-gated (`ENABLE_DEBUG_ENDPOINTS`) and service-auth only (`x-service-token`, no user bearer required); this also remains outside the YT2BP envelope.
@@ -29,7 +29,7 @@
 - 2026-02-18 note: async auto-banner queue endpoints (`/api/auto-banner/jobs/trigger`, `/api/auto-banner/jobs/latest`) and cap fallback policy are additive ops paths and remain outside the YT2BP endpoint envelope.
 - 2026-02-18 note: Search->YouTube route handoff now includes channel context (`channel_id`, `channel_title`, `channel_url`) so save-to-feed can persist source channel metadata; YT2BP endpoint envelope remains unchanged.
 - 2026-02-18 note: save-to-feed now preserves channel-title metadata across source upserts so My Feed subtitle mapping stays stable; YT2BP endpoint envelope remains unchanged.
-- 2026-02-18 note: `/youtube` UI now forces core endpoint calls with `generate_review=false` and `generate_banner=false`; toggles run async post-steps and attach results after save when available.
+- 2026-02-18 note: `/youtube` UI forces core endpoint calls with `generate_review=false` and `generate_banner=false`; optional review runs as async post-step and can attach after save when available.
 - 2026-02-18 note: endpoint timeout is now env-configurable via `YT2BP_CORE_TIMEOUT_MS` (default `120000`, bounded server-side).
 - 2026-02-18 note: banner prompt hardening now enforces visual-only imagery and explicitly blocks readable text/typography/logos/watermarks in generated backgrounds.
 - 2026-02-18 note: subscription manual-refresh endpoints (`/api/source-subscriptions/refresh-scan`, `/api/source-subscriptions/refresh-generate`) are additive and do not alter the YT2BP endpoint envelope.
@@ -50,6 +50,7 @@
 - 2026-02-19 note: source-page video-library listing now supports `kind=full|shorts` with shorts threshold `<=60s`; additive and outside the YT2BP envelope.
 - 2026-02-19 note: source-page video-library list now uses dual rate-limit guards (burst+sustained) and frontend cache/focus-refetch tuning; additive and outside the YT2BP envelope.
 - 2026-02-20 note: source-page unlock endpoint (`POST /api/source-pages/:platform/:externalId/videos/unlock`) is additive; legacy `/videos/generate` remains compatibility alias; both are outside this endpoint envelope.
+- 2026-02-21 note: source-linked YouTube banners now use thumbnail-first assignment/backfill and source-generation paths bypass auto-banner enqueue; additive and outside this endpoint envelope.
 - 2026-02-20 note: source-page unlock route guard is soft-limited (`8/10s` burst + `120/10m` sustained) and no longer uses hard unlock cooldown; additive and outside this endpoint envelope.
 - 2026-02-20 note: refill-credit wallet model (`user_credit_wallets`, `credit_ledger`, `/api/credits` refill fields) is additive and outside this endpoint envelope.
 - 2026-02-20 note: subscription new-upload ingest now writes unlockable feed rows (`my_feed_unlockable`) before generation; this lifecycle change is outside this endpoint envelope.

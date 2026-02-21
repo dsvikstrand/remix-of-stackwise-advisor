@@ -8,6 +8,7 @@ import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { buildFeedSummary } from '@/lib/feedPreview';
 import { getCatalogChannelTagSlugs } from '@/lib/channelPostContext';
 import { normalizeTag } from '@/lib/tagging';
+import { resolveEffectiveBanner } from '@/lib/bannerResolver';
 
 interface BlueprintCardProps {
   blueprint: BlueprintListItem;
@@ -15,6 +16,7 @@ interface BlueprintCardProps {
   onTagClick?: (tagSlug: string) => void;
   commentCount?: number;
   variant?: 'grid_flat' | 'list_row';
+  sourceThumbnailUrl?: string | null;
 }
 
 export function BlueprintCard({
@@ -23,8 +25,13 @@ export function BlueprintCard({
   onTagClick,
   commentCount = 0,
   variant = 'grid_flat',
+  sourceThumbnailUrl = null,
 }: BlueprintCardProps) {
-  const hasBanner = !!blueprint.banner_url;
+  const effectiveBannerUrl = resolveEffectiveBanner({
+    bannerUrl: blueprint.banner_url,
+    sourceThumbnailUrl,
+  });
+  const hasBanner = !!effectiveBannerUrl;
   const curatedChannelTagSlugs = useMemo(() => new Set(getCatalogChannelTagSlugs().map(normalizeTag)), []);
   const displayTags = useMemo(
     () => blueprint.tags.filter((tag) => !curatedChannelTagSlugs.has(normalizeTag(tag.slug))),
@@ -57,7 +64,7 @@ export function BlueprintCard({
           {hasBanner && (
             <>
               <img
-                src={blueprint.banner_url!}
+                src={effectiveBannerUrl || ''}
                 alt=""
                 className="absolute inset-0 h-full w-full object-cover opacity-40"
                 loading="lazy"

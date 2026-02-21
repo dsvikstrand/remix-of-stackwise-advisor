@@ -66,6 +66,7 @@ Execution mode:
 47. [have] Step 46 - UI polish pass (profile/sub cards/card actions)
 48. [have] Step 47 - Subscription sync pre-premiere guard (skip unreleased upcoming uploads + hold checkpoint)
 49. [have] Step 48 - Permanent no-transcript lock-card suppression (normalize permanent code + hide non-retryable unlock cards)
+50. [have] Step 49 - Thumbnail-first banners for source YouTube flows (old-source backfill + source auto-banner bypass + thumbnail fallback hardening)
 
 Interpretation note
 - Step entries capture execution timeline.

@@ -185,7 +185,7 @@ export default function YouTubeToBlueprint() {
 
   const [videoUrl, setVideoUrl] = useState('');
   const [generateReview, setGenerateReview] = useState(true);
-  const [generateBanner, setGenerateBanner] = useState(true);
+  const [generateBanner] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratingReview, setIsGeneratingReview] = useState(false);
   const [isGeneratingBanner, setIsGeneratingBanner] = useState(false);
@@ -223,10 +223,6 @@ export default function YouTubeToBlueprint() {
     const reviewQuery = searchParams.get('generate_review');
     if (reviewQuery === '0') setGenerateReview(false);
     if (reviewQuery === '1') setGenerateReview(true);
-
-    const bannerQuery = searchParams.get('generate_banner');
-    if (bannerQuery === '0') setGenerateBanner(false);
-    if (bannerQuery === '1') setGenerateBanner(true);
 
     hasHydratedFromParamsRef.current = true;
   }, [searchParams]);
@@ -482,7 +478,7 @@ export default function YouTubeToBlueprint() {
 
     const optionalToggles = {
       generateReview,
-      generateBanner,
+      generateBanner: false,
     };
 
     const payload: YouTubeToBlueprintRequest = {
@@ -632,7 +628,7 @@ export default function YouTubeToBlueprint() {
         steps: toBlueprintStepsForSave(result.draft.steps),
         mixNotes: result.draft.notes,
         reviewPrompt: 'youtube_mvp',
-        bannerUrl: result.banner.url,
+        bannerUrl: result.banner.url || sourceItem.thumbnail_url || null,
         llmReview: result.review.summary,
         tags: result.draft.tags || [],
         isPublic: false,
@@ -735,15 +731,9 @@ export default function YouTubeToBlueprint() {
             />
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="flex items-center justify-between rounded-md border border-border/40 px-3 py-2">
-              <Label htmlFor="yt-review" className="text-sm">Generate AI review</Label>
-              <Switch id="yt-review" checked={generateReview} onCheckedChange={setGenerateReview} />
-            </div>
-            <div className="flex items-center justify-between rounded-md border border-border/40 px-3 py-2">
-              <Label htmlFor="yt-banner" className="text-sm">Generate banner</Label>
-              <Switch id="yt-banner" checked={generateBanner} onCheckedChange={setGenerateBanner} />
-            </div>
+          <div className="flex items-center justify-between rounded-md border border-border/40 px-3 py-2">
+            <Label htmlFor="yt-review" className="text-sm">Generate AI review</Label>
+            <Switch id="yt-review" checked={generateReview} onCheckedChange={setGenerateReview} />
           </div>
 
           <Button onClick={submit} disabled={!canSubmit}>

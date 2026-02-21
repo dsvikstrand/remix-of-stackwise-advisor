@@ -38,8 +38,9 @@
   - Personal workspace is profile-first at `/u/:userId` with tabs `Feed / Comments / Liked / Subscriptions` (subscriptions tab owner-only); `/my-feed` remains direct-access compatible.
   - Profile visibility default is public for new accounts (`profiles.is_public=true` by default).
   - Live adapter UI in `src/pages/YouTubeToBlueprint.tsx`.
-    - `/youtube` runs a core-first request (`generate_review=false`, `generate_banner=false`) and executes optional review/banner as async post-steps.
-    - `Save to My Feed` is intentionally non-blocking while optional post-steps finish; completed review/banner updates are attached to the saved blueprint later.
+    - `/youtube` runs a core-first request (`generate_review=false`, `generate_banner=false`) and executes optional AI review as an async post-step.
+    - `Save to My Feed` is intentionally non-blocking while optional post-steps finish; completed review updates are attached to the saved blueprint later.
+    - YouTube-source banners are thumbnail-first (`source_items.thumbnail_url` with deterministic `ytimg` fallback), not generated-banner-first.
     - banner prompt path is constrained to visual-only output (no readable text/typography/logos/watermarks).
   - Auth-only discovery UI in `src/pages/Search.tsx` for YouTube query results and one-click generate.
   - Live feed/community surfaces in `src/pages/MyFeed.tsx`, `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
@@ -83,7 +84,7 @@
     - `GET /api/source-pages/:platform/:externalId` (public-readable source page + follower count + viewer subscription state)
     - `GET /api/source-pages/search` (public-readable source lookup for Explore; app source pages only)
       - includes opportunistic lazy hydration for missing source avatar/banner assets on legacy backfilled rows.
-    - `GET /api/source-pages/:platform/:externalId/blueprints` (public-readable source blueprint feed, deduped by `source_item_id`, cursor-paginated via `next_cursor`)
+    - `GET /api/source-pages/:platform/:externalId/blueprints` (public-readable source blueprint feed, deduped by `source_item_id`, cursor-paginated via `next_cursor`, additive `source_thumbnail_url` per item)
     - `GET /api/source-pages/:platform/:externalId/videos` (auth-only source video-library listing with duplicate state flags for requester and `kind=full|shorts` filter)
       - list limiter policy: burst `4/15s` + sustained `40/10m` per user/IP.
     - `POST /api/source-pages/:platform/:externalId/videos/unlock` (auth-only shared unlock + queue start for selected source-library videos, ingestion scope `source_item_unlock_generation`)
@@ -149,7 +150,7 @@
    - Search-generated `/youtube` handoff carries channel context (id/title/url) so saved source items retain channel subtitle data in My Feed.
    - My Feed source subtitle mapping also falls back to source metadata channel title when column-level channel title is absent.
    - `/youtube` core request is timeout-bounded by `YT2BP_CORE_TIMEOUT_MS` (default `120000`).
-   - optional review/banner generation is executed outside the core endpoint request and may attach after save.
+   - optional review generation is executed outside the core endpoint request and may attach after save.
 3. Subscription create/reactivate:
    - user opens `/subscriptions`, launches `Add Subscription`, searches channels, then clicks subscribe.
    - optional onboarding accelerator: user connects YouTube on `/subscriptions` and imports selected subscriptions in bulk.
@@ -166,12 +167,12 @@
    - unlock cards can be activated by one user; successful generation fans out shared blueprint linkage to subscribed users for that source item.
    - source unlock pricing uses `1 / active_subscribers` (clamped and rounded), with hold -> settle/refund ledger flow.
    - auto-ingest path enables review generation by default.
-   - auto-banner mode is controlled by env:
+   - YouTube source flows use thumbnail-first banner assignment (`blueprints.banner_url` from source thumbnail) and bypass auto-banner enqueue.
+   - auto-banner mode remains env-controlled for compatibility/non-source paths:
      - `off`: no auto banner processing.
      - `async`: enqueue `auto_banner_jobs`, ingest stays non-blocking.
      - `sync`: generate inline (ops/debug mode; higher latency).
-   - successful auto-banner jobs set `blueprints.banner_generated_url` and `blueprints.banner_url`.
-   - cap rebalance enforces newest generated banners up to `SUBSCRIPTION_AUTO_BANNER_CAP`; older generated banners fall back to deterministic channel defaults or `null`.
+   - if compatibility auto-banner jobs run, generated outputs can set `blueprints.banner_generated_url` and rebalance still applies by cap policy.
    - subscription health state is derived in UI from `last_polled_at` + `last_sync_error` (`healthy`, `delayed`, `error`, `never_polled`).
    - manual refresh flow can scan candidate videos and enqueue selected generation in a detached background job (`ingestion_jobs.scope = manual_refresh_selection`), so UI stays responsive.
    - manual refresh hardening:

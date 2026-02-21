@@ -13,6 +13,7 @@ export interface BlueprintResult {
   llmReview: string | null;
   mixNotes: string | null;
   bannerUrl: string | null;
+  sourceThumbnailUrl?: string | null;
   likesCount: number;
   creatorUserId: string;
   createdAt: string;
