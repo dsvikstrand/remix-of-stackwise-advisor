@@ -102,6 +102,45 @@ function getSubscriptionFilterRank(subscription: SourceSubscription, normalizedQ
   return bestRank;
 }
 
+function normalizeYouTubeImportFilterQuery(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function getYouTubeImportFilterRank(item: YouTubeImportPreviewItem, normalizedQuery: string) {
+  if (!normalizedQuery) return 0;
+  const values = [
+    item.channel_title || '',
+    item.channel_id || '',
+    item.channel_url || '',
+  ]
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+
+  let bestRank = Number.POSITIVE_INFINITY;
+  for (const value of values) {
+    if (value === normalizedQuery) {
+      bestRank = Math.min(bestRank, 0);
+      continue;
+    }
+    if (value.startsWith(normalizedQuery)) {
+      bestRank = Math.min(bestRank, 1);
+      continue;
+    }
+    if (
+      value.includes(` ${normalizedQuery}`)
+      || value.includes(`-${normalizedQuery}`)
+      || value.includes(`_${normalizedQuery}`)
+    ) {
+      bestRank = Math.min(bestRank, 2);
+      continue;
+    }
+    if (value.includes(normalizedQuery)) {
+      bestRank = Math.min(bestRank, 3);
+    }
+  }
+  return bestRank;
+}
+
 function formatDateTime(value: string | null) {
   if (!value) return 'Never';
   const parsed = new Date(value);
@@ -189,6 +228,7 @@ export default function Subscriptions() {
   const [pendingRows, setPendingRows] = useState<Record<string, boolean>>({});
   const [subscriptionFilterQuery, setSubscriptionFilterQuery] = useState('');
   const [isYouTubeImportOpen, setIsYouTubeImportOpen] = useState(false);
+  const [youTubeImportFilterQuery, setYouTubeImportFilterQuery] = useState('');
   const [youTubeImportResults, setYouTubeImportResults] = useState<YouTubeImportPreviewItem[]>([]);
   const [youTubeImportSelected, setYouTubeImportSelected] = useState<Record<string, boolean>>({});
   const [youTubeImportTruncated, setYouTubeImportTruncated] = useState(false);
@@ -500,6 +540,7 @@ export default function Subscriptions() {
     setIsYouTubeImportOpen(true);
     setYouTubeImportSummary(null);
     setYouTubeImportError(null);
+    setYouTubeImportFilterQuery('');
     setYouTubeImportResults([]);
     setYouTubeImportSelected({});
     youtubeImportPreviewMutation.mutate();
@@ -509,6 +550,7 @@ export default function Subscriptions() {
     setIsYouTubeImportOpen(nextOpen);
     if (!nextOpen) {
       setYouTubeImportError(null);
+      setYouTubeImportFilterQuery('');
       setYouTubeImportResults([]);
       setYouTubeImportSelected({});
       setYouTubeImportTruncated(false);
@@ -524,12 +566,18 @@ export default function Subscriptions() {
     }));
   };
 
-  const handleYouTubeImportSelectAll = (checked: boolean) => {
-    const next: Record<string, boolean> = {};
-    for (const row of youTubeImportResults) {
-      next[row.channel_id] = checked;
-    }
-    setYouTubeImportSelected(next);
+  const handleYouTubeImportSelectVisible = () => {
+    setYouTubeImportSelected((previous) => {
+      const next = { ...previous };
+      for (const row of filteredYouTubeImportResults) {
+        next[row.channel_id] = true;
+      }
+      return next;
+    });
+  };
+
+  const handleYouTubeImportClearSelection = () => {
+    setYouTubeImportSelected({});
   };
 
   const handleDisconnectYouTube = () => {
@@ -628,6 +676,25 @@ export default function Subscriptions() {
         })),
     [youTubeImportResults, youTubeImportSelected],
   );
+  const normalizedYouTubeImportFilterQuery = useMemo(
+    () => normalizeYouTubeImportFilterQuery(youTubeImportFilterQuery),
+    [youTubeImportFilterQuery],
+  );
+  const filteredYouTubeImportResults = useMemo(() => {
+    if (!normalizedYouTubeImportFilterQuery) return youTubeImportResults;
+    return youTubeImportResults
+      .map((item, index) => ({
+        item,
+        index,
+        rank: getYouTubeImportFilterRank(item, normalizedYouTubeImportFilterQuery),
+      }))
+      .filter((entry) => Number.isFinite(entry.rank))
+      .sort((left, right) => {
+        if (left.rank !== right.rank) return left.rank - right.rank;
+        return left.index - right.index;
+      })
+      .map((entry) => entry.item);
+  }, [youTubeImportResults, normalizedYouTubeImportFilterQuery]);
   const refreshJobStatus = (refreshJobQuery.data?.status || (activeRefreshJobId ? 'queued' : null)) as IngestionJobStatus | null;
   const refreshJobProcessed = refreshJobQuery.data?.processed_count || 0;
   const refreshJobInserted = refreshJobQuery.data?.inserted_count || 0;
@@ -993,15 +1060,15 @@ export default function Subscriptions() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => handleYouTubeImportSelectAll(true)}
-                      disabled={youtubeImportMutation.isPending}
+                      onClick={handleYouTubeImportSelectVisible}
+                      disabled={youtubeImportMutation.isPending || filteredYouTubeImportResults.length === 0}
                     >
-                      Select all
+                      Select visible
                     </Button>
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => handleYouTubeImportSelectAll(false)}
+                      onClick={handleYouTubeImportClearSelection}
                       disabled={youtubeImportMutation.isPending}
                     >
                       Clear
@@ -1020,6 +1087,15 @@ export default function Subscriptions() {
                 </p>
               ) : null}
 
+              {youTubeImportResults.length > 0 ? (
+                <Input
+                  value={youTubeImportFilterQuery}
+                  onChange={(event) => setYouTubeImportFilterQuery(event.target.value)}
+                  placeholder="Filter channels..."
+                  className="h-9"
+                />
+              ) : null}
+
               {youtubeImportPreviewMutation.isPending ? (
                 <div className="space-y-2">
                   <Skeleton className="h-16 rounded-md" />
@@ -1033,9 +1109,15 @@ export default function Subscriptions() {
                 </p>
               ) : null}
 
-              {youTubeImportResults.length > 0 ? (
+              {youTubeImportResults.length > 0 && filteredYouTubeImportResults.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No channels match "{youTubeImportFilterQuery.trim()}".
+                </p>
+              ) : null}
+
+              {filteredYouTubeImportResults.length > 0 ? (
                 <div className="space-y-2 max-h-[52vh] overflow-y-auto pr-1">
-                  {youTubeImportResults.map((item) => {
+                  {filteredYouTubeImportResults.map((item) => {
                     const checked = Boolean(youTubeImportSelected[item.channel_id]);
                     return (
                       <div key={item.channel_id} className="rounded-md border border-border/40 p-3">
