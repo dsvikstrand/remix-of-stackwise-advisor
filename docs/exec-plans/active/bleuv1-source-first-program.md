@@ -238,8 +238,10 @@ Rules:
   - read-heavy polling endpoints (`/api/credits`, `/api/ingestion/jobs/latest-mine`) moved to dedicated read limiter buckets to reduce normal-flow 429 noise.
   - source unlock queue items include `unlock_origin` metadata so worker/retry flows keep stable attribution (`manual_unlock`, `subscription_auto_unlock`, `source_auto_unlock_retry`).
 - No-transcript permanence guard (2026-02-21):
-  - permanent transcript failures are normalized to `NO_TRANSCRIPT_PERMANENT` (legacy `NO_CAPTIONS` compatibility).
-  - locked feed cards for permanent no-transcript videos are hidden from My Feed/Home profile surfaces instead of remaining unlockable forever.
+  - transcript truth model treats `NO_CAPTIONS` as ambiguous/retryable until confirmation quorum is reached.
+  - `NO_TRANSCRIPT_PERMANENT` now requires bounded multi-attempt confirmation (dual-provider no-caption hits).
+  - historical permanent rows are revalidated in the background (`source_transcript_revalidate`) and reset when misclassified.
+  - confirmed no-speech rows are hidden from My Feed/Home/profile and Source Page Video Library unlock surfaces.
 - UI polish pass (2026-02-21):
   - locked source cards now use compact credit chip text and drop `Open source` action from feed-card context.
   - profile tabs are streamlined to `Feed / Comments / Liked`; subscriptions stay on dedicated `/subscriptions`.

@@ -146,7 +146,8 @@ Required runtime variables:
 - `SOURCE_AUTO_UNLOCK_SAMPLE_SIZE` (default `3`)
 - `SOURCE_AUTO_UNLOCK_RETRY_DELAY_SECONDS` (default `90`)
 - `SOURCE_AUTO_UNLOCK_RETRY_MAX_ATTEMPTS` (default `3`)
-- `SOURCE_AUTO_UNLOCK_TRANSCRIPT_RETRY_DELAY_SECONDS` (default `3600`)
+- `SOURCE_TRANSCRIPT_RETRY_DELAY_SECONDS` (default `300`)
+- `SOURCE_TRANSCRIPT_MAX_ATTEMPTS` (default `3`)
 - `SOURCE_UNLOCK_TRANSCRIPT_COOLDOWN_HOURS` (default `6`)
 - `SOURCE_UNLOCK_EXPIRED_SWEEP_BATCH` (default `100`)
 - `SOURCE_UNLOCK_SWEEPS_ENABLED` (default `true`)
@@ -215,7 +216,8 @@ Safe defaults:
 - `SOURCE_AUTO_UNLOCK_SAMPLE_SIZE=3`
 - `SOURCE_AUTO_UNLOCK_RETRY_DELAY_SECONDS=90`
 - `SOURCE_AUTO_UNLOCK_RETRY_MAX_ATTEMPTS=3`
-- `SOURCE_AUTO_UNLOCK_TRANSCRIPT_RETRY_DELAY_SECONDS=3600`
+- `SOURCE_TRANSCRIPT_RETRY_DELAY_SECONDS=300`
+- `SOURCE_TRANSCRIPT_MAX_ATTEMPTS=3`
 - `SOURCE_UNLOCK_TRANSCRIPT_COOLDOWN_HOURS=6`
 - `SOURCE_UNLOCK_EXPIRED_SWEEP_BATCH=100`
 - `SOURCE_UNLOCK_SWEEPS_ENABLED=true`
@@ -325,11 +327,12 @@ Safe defaults:
   4) Retry unlock from source page after verifying provider health.
 
 ### `NO_TRANSCRIPT_PERMANENT`
-- Meaning: video has no usable transcript/captions (non-retryable), so it should not remain as an unlockable feed card.
+- Meaning: video was confirmed as no-speech/no-usable-transcript after bounded retries, so it should not remain unlockable.
 - Action:
-  1) Inspect `source_item_unlocks.last_error_code` and confirm it is `NO_TRANSCRIPT_PERMANENT` (or legacy `NO_CAPTIONS`).
-  2) Confirm feed-card surfaces no longer render the locked item (`My Feed`, Home `For You`, profile feed).
-  3) Do not enqueue retry jobs for this case; only transient transcript errors should retry.
+  1) Inspect `source_item_unlocks` (`last_error_code`, `transcript_status`, `transcript_attempt_count`, `transcript_no_caption_hits`).
+  2) Confirm `transcript_status='confirmed_no_speech'` before treating as permanent.
+  3) Confirm locked-card suppression on `My Feed`, Home `For You`, profile feed, and Source Page Video Library.
+  4) Do not enqueue retry jobs for confirmed permanent rows; only transient transcript errors should retry.
 
 ### `candidate_pending_manual_review` growth
 - Meaning: gate pipeline is producing warn outcomes (fit/quality) and routing to manual review.

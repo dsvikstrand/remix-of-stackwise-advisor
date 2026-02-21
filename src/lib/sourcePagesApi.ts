@@ -105,6 +105,9 @@ export type SourcePageVideoGenerateSummary = {
   insufficient: Array<{ video_id: string; title: string; required: number; balance: number }>;
   transcript_unavailable_count?: number;
   transcript_unavailable?: Array<{ video_id: string; title: string; retry_after_seconds: number }>;
+  transcript_status?: 'unknown' | 'retrying' | 'confirmed_no_speech' | 'transient_error' | null;
+  transcript_attempt_count?: number | null;
+  transcript_retry_after_seconds?: number | null;
 };
 
 function getApiBase() {

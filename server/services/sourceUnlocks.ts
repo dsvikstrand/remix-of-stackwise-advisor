@@ -17,6 +17,10 @@ function asNumber(value: string | number | null | undefined, fallback = 0) {
 }
 
 export type SourceUnlockStatus = 'available' | 'reserved' | 'processing' | 'ready';
+export type UnlockTranscriptStatus = 'unknown' | 'retrying' | 'confirmed_no_speech' | 'transient_error';
+
+const unlockSelect =
+  'id, source_item_id, source_page_id, status, estimated_cost, reserved_by_user_id, reservation_expires_at, reserved_ledger_id, blueprint_id, job_id, last_error_code, last_error_message, transcript_status, transcript_attempt_count, transcript_no_caption_hits, transcript_last_probe_at, transcript_retry_after, transcript_probe_meta, created_at, updated_at';
 
 export type SourceItemUnlockRow = {
   id: string;
@@ -31,6 +35,12 @@ export type SourceItemUnlockRow = {
   job_id: string | null;
   last_error_code: string | null;
   last_error_message: string | null;
+  transcript_status?: UnlockTranscriptStatus | string | null;
+  transcript_attempt_count?: number | null;
+  transcript_no_caption_hits?: number | null;
+  transcript_last_probe_at?: string | null;
+  transcript_retry_after?: string | null;
+  transcript_probe_meta?: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 };
@@ -44,7 +54,7 @@ export function computeUnlockCost(activeSubscriberCount: number) {
 async function readUnlockBySourceItemId(db: DbClient, sourceItemId: string) {
   const { data, error } = await db
     .from('source_item_unlocks')
-    .select('id, source_item_id, source_page_id, status, estimated_cost, reserved_by_user_id, reservation_expires_at, reserved_ledger_id, blueprint_id, job_id, last_error_code, last_error_message, created_at, updated_at')
+    .select(unlockSelect)
     .eq('source_item_id', sourceItemId)
     .maybeSingle();
   if (error) throw error;
@@ -54,7 +64,7 @@ async function readUnlockBySourceItemId(db: DbClient, sourceItemId: string) {
 async function readUnlockById(db: DbClient, unlockId: string) {
   const { data, error } = await db
     .from('source_item_unlocks')
-    .select('id, source_item_id, source_page_id, status, estimated_cost, reserved_by_user_id, reservation_expires_at, reserved_ledger_id, blueprint_id, job_id, last_error_code, last_error_message, created_at, updated_at')
+    .select(unlockSelect)
     .eq('id', unlockId)
     .maybeSingle();
   if (error) throw error;
@@ -75,7 +85,7 @@ export async function getSourceItemUnlocksBySourceItemIds(db: DbClient, sourceIt
 
   const { data, error } = await db
     .from('source_item_unlocks')
-    .select('id, source_item_id, source_page_id, status, estimated_cost, reserved_by_user_id, reservation_expires_at, reserved_ledger_id, blueprint_id, job_id, last_error_code, last_error_message, created_at, updated_at')
+    .select(unlockSelect)
     .in('source_item_id', uniqueIds);
   if (error) throw error;
   return (data || []) as SourceItemUnlockRow[];
@@ -116,7 +126,7 @@ export async function ensureSourceItemUnlock(db: DbClient, input: {
           source_page_id: nextSourcePageId,
         })
         .eq('id', existing.id)
-        .select('id, source_item_id, source_page_id, status, estimated_cost, reserved_by_user_id, reservation_expires_at, reserved_ledger_id, blueprint_id, job_id, last_error_code, last_error_message, created_at, updated_at')
+        .select(unlockSelect)
         .single();
       if (error) throw error;
       return data as SourceItemUnlockRow;
@@ -133,7 +143,7 @@ export async function ensureSourceItemUnlock(db: DbClient, input: {
       status: 'available',
       estimated_cost: round3(input.estimatedCost),
     })
-    .select('id, source_item_id, source_page_id, status, estimated_cost, reserved_by_user_id, reservation_expires_at, reserved_ledger_id, blueprint_id, job_id, last_error_code, last_error_message, created_at, updated_at')
+    .select(unlockSelect)
     .single();
 
   if (error) {
@@ -171,7 +181,7 @@ async function transitionToAvailable(db: DbClient, unlock: SourceItemUnlockRow) 
     })
     .eq('id', unlock.id)
     .eq('updated_at', unlock.updated_at)
-    .select('id, source_item_id, source_page_id, status, estimated_cost, reserved_by_user_id, reservation_expires_at, reserved_ledger_id, blueprint_id, job_id, last_error_code, last_error_message, created_at, updated_at')
+    .select(unlockSelect)
     .maybeSingle();
   if (error) throw error;
   return (data || null) as SourceItemUnlockRow | null;
@@ -232,7 +242,7 @@ export async function reserveUnlock(db: DbClient, input: {
     })
     .eq('id', unlock.id)
     .eq('updated_at', unlock.updated_at)
-    .select('id, source_item_id, source_page_id, status, estimated_cost, reserved_by_user_id, reservation_expires_at, reserved_ledger_id, blueprint_id, job_id, last_error_code, last_error_message, created_at, updated_at')
+    .select(unlockSelect)
     .maybeSingle();
 
   if (error) throw error;
@@ -269,7 +279,7 @@ export async function attachReservationLedger(db: DbClient, input: {
       reserved_by_user_id: input.userId,
     })
     .eq('id', input.unlockId)
-    .select('id, source_item_id, source_page_id, status, estimated_cost, reserved_by_user_id, reservation_expires_at, reserved_ledger_id, blueprint_id, job_id, last_error_code, last_error_message, created_at, updated_at')
+    .select(unlockSelect)
     .single();
   if (error) throw error;
   return data as SourceItemUnlockRow;
@@ -291,7 +301,7 @@ export async function markUnlockProcessing(db: DbClient, input: {
     .eq('id', input.unlockId)
     .eq('reserved_by_user_id', input.userId)
     .eq('status', 'reserved')
-    .select('id, source_item_id, source_page_id, status, estimated_cost, reserved_by_user_id, reservation_expires_at, reserved_ledger_id, blueprint_id, job_id, last_error_code, last_error_message, created_at, updated_at')
+    .select(unlockSelect)
     .maybeSingle();
   if (error) throw error;
   return (data || null) as SourceItemUnlockRow | null;
@@ -318,7 +328,7 @@ export async function completeUnlock(db: DbClient, input: {
     .eq('id', input.unlockId)
     .eq('status', 'processing')
     .eq('job_id', input.expectedJobId || input.jobId)
-    .select('id, source_item_id, source_page_id, status, estimated_cost, reserved_by_user_id, reservation_expires_at, reserved_ledger_id, blueprint_id, job_id, last_error_code, last_error_message, created_at, updated_at')
+    .select(unlockSelect)
     .maybeSingle();
   const { data, error } = await query;
   if (error) throw error;
@@ -349,7 +359,7 @@ export async function failUnlock(db: DbClient, input: {
     })
     .eq('id', input.unlockId)
     .in('status', ['processing', 'reserved'])
-    .select('id, source_item_id, source_page_id, status, estimated_cost, reserved_by_user_id, reservation_expires_at, reserved_ledger_id, blueprint_id, job_id, last_error_code, last_error_message, created_at, updated_at')
+    .select(unlockSelect)
     .maybeSingle();
   if (input.expectedJobId) {
     query = query.eq('job_id', input.expectedJobId);
@@ -368,7 +378,7 @@ export async function findExpiredReservedUnlocks(db: DbClient, limit = 100) {
   const nowIso = new Date().toISOString();
   const { data, error } = await db
     .from('source_item_unlocks')
-    .select('id, source_item_id, source_page_id, status, estimated_cost, reserved_by_user_id, reservation_expires_at, reserved_ledger_id, blueprint_id, job_id, last_error_code, last_error_message, created_at, updated_at')
+    .select(unlockSelect)
     .eq('status', 'reserved')
     .not('reservation_expires_at', 'is', null)
     .lt('reservation_expires_at', nowIso)

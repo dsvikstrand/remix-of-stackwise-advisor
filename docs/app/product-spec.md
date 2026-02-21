@@ -274,8 +274,8 @@ si57) profile-header refresh entrypoint may launch `/subscriptions?refresh=1&ret
 si58) user-menu credits panel remains compact (balance + bar only) without extra refill/activity detail lines in this iteration.
 si59) subscription sync now enriches candidate video states via YouTube `videos.list` and skips unreleased premieres (`upcoming`) before source-item/feed insertion.
 si60) when one or more upcoming premieres are skipped in a sync run, subscription checkpoint (`last_seen_*`) is held for that run to avoid dropping release-time ingestion.
-si61) source unlock failures normalize permanent no-transcript cases (`NO_CAPTIONS` -> `NO_TRANSCRIPT_PERMANENT`) so they are treated differently from transient transcript-unavailable states.
-si62) feed surfaces now hide locked rows tied to source unlocks marked permanent no-transcript (`NO_TRANSCRIPT_PERMANENT` or legacy `NO_CAPTIONS`), while transient transcript failures remain retryable.
+si61) transcript truth model distinguishes temporary transcript failures from confirmed no-speech outcomes; `NO_CAPTIONS` is retryable until confirmation quorum is reached.
+si62) `NO_TRANSCRIPT_PERMANENT` is now set only after bounded confirmation retries, and confirmed no-speech rows are hidden from unlockable feed/video-library surfaces.
 
 ## Next Milestone (Hardening)
 n1) Keep legacy manual gate behavior stable with `CHANNEL_GATES_MODE=bypass` while auto-channel path uses `AUTO_CHANNEL_GATE_MODE`.

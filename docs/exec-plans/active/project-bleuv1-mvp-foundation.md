@@ -136,8 +136,9 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
   - unreleased YouTube premieres (`upcoming`) are skipped before lock-card creation.
   - runs that skip upcoming premieres hold checkpoint advance for that run to prevent missing post-release ingestion.
 - No-transcript permanence guard:
-  - permanent transcript failures normalize to `NO_TRANSCRIPT_PERMANENT` and are treated as non-retryable.
-  - feed rows tied to permanent no-transcript unlocks are hidden from unlockable-card surfaces.
+  - transcript truth model requires bounded confirmation retries before setting permanent `NO_TRANSCRIPT_PERMANENT`.
+  - historical permanent rows are revalidated in background and reset to retryable when misclassified.
+  - confirmed no-speech rows are hidden from unlockable-card surfaces (feed + source video library).
 
 ## Acceptance Baseline Per Iteration
 1. Scope and behavior align with `docs/app/product-spec.md`.

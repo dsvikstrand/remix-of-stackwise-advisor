@@ -41,7 +41,7 @@ export interface MyFeedItemView {
 
 function isPermanentNoTranscriptErrorCode(code: string | null | undefined) {
   const normalized = String(code || '').trim().toUpperCase();
-  return normalized === 'NO_TRANSCRIPT_PERMANENT' || normalized === 'NO_CAPTIONS';
+  return normalized === 'NO_TRANSCRIPT_PERMANENT';
 }
 
 export function useMyFeed(options?: { enabled?: boolean }) {
@@ -89,7 +89,7 @@ export function useMyFeed(options?: { enabled?: boolean }) {
         sourceIds.length
           ? supabase
             .from('source_item_unlocks')
-            .select('source_item_id, status, estimated_cost, blueprint_id, last_error_code')
+            .select('source_item_id, status, estimated_cost, blueprint_id, last_error_code, transcript_status')
             .in('source_item_id', sourceIds)
           : Promise.resolve({ data: [], error: null }),
       ]);
@@ -137,7 +137,9 @@ export function useMyFeed(options?: { enabled?: boolean }) {
       const unlockMap = new Map((unlocks || []).map((row) => [row.source_item_id, row]));
       const permanentNoTranscriptSourceIds = new Set(
         (unlocks || [])
-          .filter((row) => isPermanentNoTranscriptErrorCode(row.last_error_code))
+          .filter((row) =>
+            isPermanentNoTranscriptErrorCode(row.last_error_code)
+            || String((row as { transcript_status?: unknown }).transcript_status || '').trim().toLowerCase() === 'confirmed_no_speech')
           .map((row) => String(row.source_item_id || '').trim())
           .filter(Boolean),
       );

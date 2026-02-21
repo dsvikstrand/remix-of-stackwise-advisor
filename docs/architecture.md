@@ -255,7 +255,10 @@ Current production behavior note:
   - Read-path polling endpoints (`/api/credits`, `/api/ingestion/jobs/latest-mine`) use dedicated limiter buckets, separated from global API limiter.
   - Frontend feed-card surfaces are intentionally low-action in MVP (like/comment only), reducing non-core interaction noise.
   - Subscription checkpoint advancement is intentionally held on runs with skipped upcoming premieres to avoid missing release ingestion.
-  - Permanent no-transcript unlock failures are normalized (`NO_CAPTIONS` -> `NO_TRANSCRIPT_PERMANENT`) and excluded from unlockable feed-card rendering; transient transcript failures continue through cooldown/retry flow.
+  - Transcript truth model now separates ambiguous transcript failures from confirmed no-speech videos:
+    - `NO_CAPTIONS` starts as retryable transcript-unavailable state.
+    - permanent `NO_TRANSCRIPT_PERMANENT` is only set after multi-attempt confirmation.
+    - confirmed no-speech rows are excluded from unlockable feed-card rendering and source video-library listings.
 
 ## 7) Extension Model
 - New adapters:

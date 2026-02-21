@@ -9,7 +9,7 @@ import OpenAI from 'openai';
 import { z } from 'zod';
 import { createLLMClient } from './llm/client';
 import { consumeCredit, getCredits } from './credits';
-import { getTranscriptForVideo } from './transcript/getTranscript';
+import { getTranscriptForVideo, probeTranscriptProviders } from './transcript/getTranscript';
 import { TranscriptProviderError } from './transcript/types';
 import { getAdapterForUrl } from './adapters/registry';
 import { evaluateCandidateForChannel } from './gates';
@@ -179,7 +179,13 @@ const sourceUnlockGenerateMaxItems = clampInt(process.env.SOURCE_UNLOCK_GENERATE
 const sourceAutoUnlockSampleSize = clampInt(process.env.SOURCE_AUTO_UNLOCK_SAMPLE_SIZE, 3, 1, 10);
 const sourceAutoUnlockRetryDelaySeconds = clampInt(process.env.SOURCE_AUTO_UNLOCK_RETRY_DELAY_SECONDS, 90, 10, 3600);
 const sourceAutoUnlockRetryMaxAttempts = clampInt(process.env.SOURCE_AUTO_UNLOCK_RETRY_MAX_ATTEMPTS, 3, 1, 10);
-const sourceAutoUnlockTranscriptRetryDelaySeconds = clampInt(process.env.SOURCE_AUTO_UNLOCK_TRANSCRIPT_RETRY_DELAY_SECONDS, 3600, 60, 24 * 3600);
+const sourceTranscriptRetryDelaySeconds = clampInt(
+  process.env.SOURCE_TRANSCRIPT_RETRY_DELAY_SECONDS || process.env.SOURCE_AUTO_UNLOCK_TRANSCRIPT_RETRY_DELAY_SECONDS,
+  300,
+  30,
+  24 * 3600,
+);
+const sourceTranscriptMaxAttempts = clampInt(process.env.SOURCE_TRANSCRIPT_MAX_ATTEMPTS, 3, 1, 10);
 const sourceUnlockTranscriptCooldownHours = clampInt(process.env.SOURCE_UNLOCK_TRANSCRIPT_COOLDOWN_HOURS, 6, 1, 72);
 const sourceUnlockExpiredSweepBatch = clampInt(process.env.SOURCE_UNLOCK_EXPIRED_SWEEP_BATCH, 100, 10, 1000);
 const sourceUnlockSweepsEnabledRaw = String(process.env.SOURCE_UNLOCK_SWEEPS_ENABLED || 'true').trim().toLowerCase();
@@ -256,6 +262,7 @@ if (autoBannerMode !== 'off' && !String(process.env.SUPABASE_SERVICE_ROLE_KEY ||
 const QUEUED_INGESTION_SCOPES = [
   'source_item_unlock_generation',
   'source_auto_unlock_retry',
+  'source_transcript_revalidate',
   'manual_refresh_selection',
   'all_active_subscriptions',
 ] as const;
@@ -1153,7 +1160,7 @@ app.get('/api/profile/:userId/feed', async (req, res) => {
     sourceIds.length
       ? db
         .from('source_item_unlocks')
-        .select('source_item_id, last_error_code')
+        .select('source_item_id, last_error_code, transcript_status')
         .in('source_item_id', sourceIds)
       : Promise.resolve({ data: [], error: null }),
   ]);
@@ -1198,7 +1205,7 @@ app.get('/api/profile/:userId/feed', async (req, res) => {
   const blueprintMap = new Map((blueprints || []).map((row) => [row.id, row]));
   const permanentNoTranscriptSourceIds = new Set(
     (unlocks || [])
-      .filter((row) => isPermanentNoTranscriptCode(row.last_error_code))
+      .filter((row) => isPermanentNoTranscriptCode(row.last_error_code) || normalizeTranscriptTruthStatus((row as { transcript_status?: unknown }).transcript_status) === 'confirmed_no_speech')
       .map((row) => String(row.source_item_id || '').trim())
       .filter(Boolean),
   );
@@ -3665,6 +3672,18 @@ type TranscriptCooldownState = {
   retryAfterSeconds: number;
 };
 
+type TranscriptTruthStatus = 'unknown' | 'retrying' | 'confirmed_no_speech' | 'transient_error';
+
+type TranscriptFailureDecision = {
+  finalErrorCode: string;
+  transcriptStatus: TranscriptTruthStatus;
+  transcriptAttemptCount: number;
+  transcriptNoCaptionHits: number;
+  retryAfterSeconds: number;
+  probeMeta: Record<string, unknown>;
+  confirmedPermanent: boolean;
+};
+
 type SourceUnlockQueueItem = {
   unlock_id: string;
   source_item_id: string;
@@ -3689,6 +3708,17 @@ type SourceAutoUnlockRetryPayload = {
   title: string;
   trigger: 'user_sync' | 'service_cron' | 'subscription_create' | 'debug_simulation' | 'youtube_import';
   preferred_payer_user_id: string | null;
+};
+
+type SourceTranscriptRevalidatePayload = {
+  unlock_id: string;
+  source_item_id: string;
+  source_page_id: string | null;
+  source_channel_id: string;
+  source_channel_title: string | null;
+  video_id: string;
+  video_url: string;
+  title: string;
 };
 
 const YOUTUBE_VIDEO_ID_REGEX = /^[a-zA-Z0-9_-]{8,15}$/;
@@ -3882,37 +3912,183 @@ function toUnlockSnapshot(input: {
 
 function isPermanentNoTranscriptCode(code: string | null | undefined) {
   const normalized = String(code || '').trim().toUpperCase();
-  return normalized === 'NO_TRANSCRIPT_PERMANENT' || normalized === 'NO_CAPTIONS';
+  return normalized === 'NO_TRANSCRIPT_PERMANENT';
 }
 
 function isTransientTranscriptUnavailableCode(code: string | null | undefined) {
   const normalized = String(code || '').trim().toUpperCase();
-  return normalized === 'TRANSCRIPT_EMPTY' || normalized === 'TRANSCRIPT_UNAVAILABLE';
+  return normalized === 'TRANSCRIPT_EMPTY' || normalized === 'TRANSCRIPT_UNAVAILABLE' || normalized === 'NO_CAPTIONS';
+}
+
+function normalizeTranscriptTruthStatus(value: unknown): TranscriptTruthStatus {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'retrying') return 'retrying';
+  if (normalized === 'confirmed_no_speech') return 'confirmed_no_speech';
+  if (normalized === 'transient_error') return 'transient_error';
+  return 'unknown';
+}
+
+function getUnlockTranscriptAttemptCount(unlock: SourceItemUnlockRow | null) {
+  return Math.max(0, Number(unlock?.transcript_attempt_count || 0));
+}
+
+function getUnlockTranscriptNoCaptionHits(unlock: SourceItemUnlockRow | null) {
+  return Math.max(0, Number(unlock?.transcript_no_caption_hits || 0));
+}
+
+function isConfirmedNoTranscriptUnlock(unlock: SourceItemUnlockRow | null | undefined) {
+  if (!unlock) return false;
+  const status = normalizeTranscriptTruthStatus(unlock.transcript_status);
+  if (status === 'confirmed_no_speech') return true;
+  return isPermanentNoTranscriptCode(unlock.last_error_code);
 }
 
 function normalizeUnlockFailureCode(code: string | null | undefined) {
   const normalized = String(code || '').trim().toUpperCase();
-  if (normalized === 'NO_CAPTIONS') return 'NO_TRANSCRIPT_PERMANENT';
+  if (normalized === 'NO_CAPTIONS' || normalized === 'TRANSCRIPT_EMPTY') return 'TRANSCRIPT_UNAVAILABLE';
   return normalized || 'UNLOCK_GENERATION_FAILED';
 }
 
-function getTranscriptCooldownState(unlock: SourceItemUnlockRow | null): TranscriptCooldownState {
-  if (!unlock || !isTransientTranscriptUnavailableCode(unlock.last_error_code)) {
-    return { active: false, retryAfterSeconds: 0 };
+function getTranscriptRetryAfterSeconds(unlock: SourceItemUnlockRow | null) {
+  if (!unlock) return 0;
+
+  const explicitRetryAtMs = Date.parse(String(unlock.transcript_retry_after || ''));
+  if (Number.isFinite(explicitRetryAtMs)) {
+    const explicitRetryAfterMs = explicitRetryAtMs - Date.now();
+    if (explicitRetryAfterMs > 0) {
+      return Math.max(1, Math.ceil(explicitRetryAfterMs / 1000));
+    }
   }
 
+  if (!isTransientTranscriptUnavailableCode(unlock.last_error_code)) return 0;
   const updatedAtMs = Date.parse(String(unlock.updated_at || ''));
-  if (!Number.isFinite(updatedAtMs)) {
-    return { active: false, retryAfterSeconds: 0 };
-  }
+  if (!Number.isFinite(updatedAtMs)) return 0;
 
   const cooldownMs = sourceUnlockTranscriptCooldownHours * 60 * 60 * 1000;
   const expiresAtMs = updatedAtMs + cooldownMs;
   const retryAfterMs = expiresAtMs - Date.now();
-  if (retryAfterMs <= 0) return { active: false, retryAfterSeconds: 0 };
+  if (retryAfterMs <= 0) return 0;
+  return Math.max(1, Math.ceil(retryAfterMs / 1000));
+}
+
+function getTranscriptCooldownState(unlock: SourceItemUnlockRow | null): TranscriptCooldownState {
+  const retryAfterSeconds = getTranscriptRetryAfterSeconds(unlock);
+  if (!unlock || retryAfterSeconds <= 0) {
+    return { active: false, retryAfterSeconds: 0 };
+  }
   return {
     active: true,
-    retryAfterSeconds: Math.max(1, Math.ceil(retryAfterMs / 1000)),
+    retryAfterSeconds,
+  };
+}
+
+function buildTranscriptRetryAfterIso(delaySeconds: number) {
+  return new Date(Date.now() + Math.max(1, Math.floor(delaySeconds)) * 1000).toISOString();
+}
+
+async function markUnlockTranscriptSuccess(db: ReturnType<typeof createClient>, unlockId: string) {
+  await db
+    .from('source_item_unlocks')
+    .update({
+      transcript_status: 'unknown',
+      transcript_attempt_count: 0,
+      transcript_no_caption_hits: 0,
+      transcript_last_probe_at: null,
+      transcript_retry_after: null,
+      transcript_probe_meta: {},
+    })
+    .eq('id', unlockId);
+}
+
+async function classifyTranscriptFailureForUnlock(input: {
+  db: ReturnType<typeof createClient>;
+  unlock: SourceItemUnlockRow;
+  videoId: string;
+  traceId: string;
+  rawErrorCode: string;
+}) : Promise<TranscriptFailureDecision> {
+  const normalizedRawErrorCode = String(input.rawErrorCode || '').trim().toUpperCase();
+  const nextAttemptCount = getUnlockTranscriptAttemptCount(input.unlock) + 1;
+  let nextNoCaptionHits = getUnlockTranscriptNoCaptionHits(input.unlock);
+  let transcriptStatus: TranscriptTruthStatus = 'transient_error';
+  let finalErrorCode = normalizeUnlockFailureCode(normalizedRawErrorCode);
+  let retryAfterSeconds = sourceTranscriptRetryDelaySeconds;
+  const probeMeta: Record<string, unknown> = {
+    normalized_raw_error_code: normalizedRawErrorCode || null,
+  };
+
+  if (isTransientTranscriptUnavailableCode(normalizedRawErrorCode)) {
+    transcriptStatus = 'retrying';
+  }
+
+  if (normalizedRawErrorCode === 'NO_CAPTIONS') {
+    logUnlockEvent('transcript_probe_started', { trace_id: input.traceId, unlock_id: input.unlock.id }, {
+      video_id: input.videoId,
+      attempt: nextAttemptCount,
+    });
+    const probe = await probeTranscriptProviders(input.videoId);
+    probeMeta.providers = probe.providers;
+    probeMeta.all_no_captions = probe.all_no_captions;
+    probeMeta.any_success = probe.any_success;
+    if (probe.all_no_captions) {
+      nextNoCaptionHits += 1;
+    } else {
+      transcriptStatus = 'transient_error';
+    }
+    logUnlockEvent('transcript_probe_result', { trace_id: input.traceId, unlock_id: input.unlock.id }, {
+      video_id: input.videoId,
+      attempt: nextAttemptCount,
+      no_caption_hits: nextNoCaptionHits,
+      all_no_captions: probe.all_no_captions,
+      any_success: probe.any_success,
+    });
+  }
+
+  const confirmedPermanent = nextAttemptCount >= sourceTranscriptMaxAttempts
+    && nextNoCaptionHits >= sourceTranscriptMaxAttempts;
+  if (confirmedPermanent) {
+    transcriptStatus = 'confirmed_no_speech';
+    finalErrorCode = 'NO_TRANSCRIPT_PERMANENT';
+    retryAfterSeconds = 0;
+  } else if (isTransientTranscriptUnavailableCode(normalizedRawErrorCode)) {
+    finalErrorCode = 'TRANSCRIPT_UNAVAILABLE';
+    retryAfterSeconds = sourceTranscriptRetryDelaySeconds;
+  }
+
+  await input.db
+    .from('source_item_unlocks')
+    .update({
+      transcript_status: transcriptStatus,
+      transcript_attempt_count: nextAttemptCount,
+      transcript_no_caption_hits: nextNoCaptionHits,
+      transcript_last_probe_at: new Date().toISOString(),
+      transcript_retry_after: retryAfterSeconds > 0 ? buildTranscriptRetryAfterIso(retryAfterSeconds) : null,
+      transcript_probe_meta: probeMeta,
+    })
+    .eq('id', input.unlock.id);
+
+  if (confirmedPermanent) {
+    logUnlockEvent('transcript_confirmed_no_speech', { trace_id: input.traceId, unlock_id: input.unlock.id }, {
+      video_id: input.videoId,
+      attempt: nextAttemptCount,
+      no_caption_hits: nextNoCaptionHits,
+    });
+  } else if (retryAfterSeconds > 0) {
+    logUnlockEvent('transcript_retry_scheduled', { trace_id: input.traceId, unlock_id: input.unlock.id }, {
+      video_id: input.videoId,
+      attempt: nextAttemptCount,
+      retry_after_seconds: retryAfterSeconds,
+    });
+  }
+
+  return {
+    finalErrorCode,
+    transcriptStatus,
+    transcriptAttemptCount: nextAttemptCount,
+    transcriptNoCaptionHits: nextNoCaptionHits,
+    retryAfterSeconds,
+    probeMeta,
+    confirmedPermanent,
   };
 }
 
@@ -4042,7 +4218,7 @@ async function attemptAutoUnlockForSourceItem(input: {
   if (input.unlock.status !== 'available') {
     return { queued: false as const, reason: 'UNLOCK_NOT_AVAILABLE' as const };
   }
-  if (isPermanentNoTranscriptCode(input.unlock.last_error_code)) {
+  if (isConfirmedNoTranscriptUnlock(input.unlock)) {
     return { queued: false as const, reason: 'PERMANENT_NO_TRANSCRIPT' as const };
   }
 
@@ -4292,6 +4468,122 @@ async function enqueueSourceAutoUnlockRetryJob(
     enqueued: true as const,
     job_id: job.id,
     next_run_at: nextRunAt,
+  };
+}
+
+async function hasPendingSourceTranscriptRevalidateJob(
+  db: ReturnType<typeof createClient>,
+  unlockId: string,
+) {
+  const normalizedUnlockId = String(unlockId || '').trim();
+  if (!normalizedUnlockId) return false;
+
+  const { data, error } = await db
+    .from('ingestion_jobs')
+    .select('id')
+    .eq('scope', 'source_transcript_revalidate')
+    .in('status', ['queued', 'running'])
+    .filter('payload->>unlock_id', 'eq', normalizedUnlockId)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data?.id);
+}
+
+async function enqueueSourceTranscriptRevalidateJob(
+  db: ReturnType<typeof createClient>,
+  input: SourceTranscriptRevalidatePayload,
+) {
+  if (await hasPendingSourceTranscriptRevalidateJob(db, input.unlock_id)) {
+    return { enqueued: false as const, reason: 'ALREADY_PENDING' as const };
+  }
+
+  const traceId = createUnlockTraceId();
+  const { data: job, error: jobError } = await db
+    .from('ingestion_jobs')
+    .insert({
+      trigger: 'service_cron',
+      scope: 'source_transcript_revalidate',
+      status: 'queued',
+      max_attempts: 1,
+      trace_id: traceId,
+      payload: {
+        ...input,
+        trace_id: traceId,
+      },
+      next_run_at: new Date().toISOString(),
+    })
+    .select('id')
+    .single();
+
+  if (jobError || !job?.id) {
+    throw new Error(jobError?.message || 'Could not enqueue transcript revalidate job.');
+  }
+
+  scheduleQueuedIngestionProcessing();
+  return {
+    enqueued: true as const,
+    job_id: job.id,
+    trace_id: traceId,
+  };
+}
+
+async function seedSourceTranscriptRevalidateJobs(
+  db: ReturnType<typeof createClient>,
+  limit = 50,
+) {
+  const cappedLimit = Math.max(1, Math.min(500, Math.floor(Number(limit) || 50)));
+  const { data: unlockRows, error: unlockError } = await db
+    .from('source_item_unlocks')
+    .select('id, source_item_id, source_page_id, status, last_error_code, transcript_status')
+    .eq('status', 'available')
+    .eq('last_error_code', 'NO_TRANSCRIPT_PERMANENT')
+    .order('updated_at', { ascending: true })
+    .limit(cappedLimit);
+  if (unlockError) throw unlockError;
+
+  const pending = (unlockRows || [])
+    .filter((row) => normalizeTranscriptTruthStatus((row as { transcript_status?: unknown }).transcript_status) !== 'confirmed_no_speech');
+  if (pending.length === 0) return { scanned: 0, enqueued: 0 };
+
+  const sourceItemIds = Array.from(new Set(
+    pending.map((row) => String((row as { source_item_id?: string }).source_item_id || '').trim()).filter(Boolean),
+  ));
+  const { data: sourceRows, error: sourceError } = await db
+    .from('source_items')
+    .select('id, source_native_id, source_url, title, source_channel_id, source_channel_title, source_page_id')
+    .in('id', sourceItemIds);
+  if (sourceError) throw sourceError;
+  const sourceById = new Map((sourceRows || []).map((row) => [row.id, row]));
+
+  let enqueued = 0;
+  for (const unlockRow of pending) {
+    const sourceItemId = String((unlockRow as { source_item_id?: string }).source_item_id || '').trim();
+    const unlockId = String((unlockRow as { id?: string }).id || '').trim();
+    const source = sourceById.get(sourceItemId);
+    if (!source || !unlockId) continue;
+    const videoId = String(source.source_native_id || '').trim();
+    const sourceUrl = String(source.source_url || '').trim();
+    const sourceChannelId = String(source.source_channel_id || '').trim();
+    const title = String(source.title || '').trim();
+    if (!videoId || !sourceUrl || !sourceChannelId || !title) continue;
+
+    const enqueueResult = await enqueueSourceTranscriptRevalidateJob(db, {
+      unlock_id: unlockId,
+      source_item_id: sourceItemId,
+      source_page_id: source.source_page_id || null,
+      source_channel_id: sourceChannelId,
+      source_channel_title: source.source_channel_title || null,
+      video_id: videoId,
+      video_url: sourceUrl,
+      title,
+    });
+    if (enqueueResult.enqueued) enqueued += 1;
+  }
+
+  return {
+    scanned: pending.length,
+    enqueued,
   };
 }
 
@@ -4946,6 +5238,7 @@ async function processSourceItemUnlockGenerationJob(input: {
   const failures: Array<{ video_id: string; unlock_id: string; error_code: string; error: string }> = [];
 
   for (const item of input.items) {
+    let processingUnlockRow: SourceItemUnlockRow | null = null;
     processed += 1;
     try {
       const processingUnlock = await markUnlockProcessing(db, {
@@ -4954,6 +5247,7 @@ async function processSourceItemUnlockGenerationJob(input: {
         jobId: input.jobId,
         reservationSeconds: sourceUnlockReservationSeconds,
       });
+      processingUnlockRow = processingUnlock;
 
       if (!processingUnlock) {
         const current = await getSourceItemUnlockBySourceItemId(db, item.source_item_id);
@@ -5032,6 +5326,7 @@ async function processSourceItemUnlockGenerationJob(input: {
         blueprintId: generated.blueprintId,
         jobId: input.jobId,
       });
+      await markUnlockTranscriptSuccess(db, item.unlock_id);
 
       await settleReservation(db, {
         userId: item.reserved_by_user_id,
@@ -5072,10 +5367,41 @@ async function processSourceItemUnlockGenerationJob(input: {
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const rawErrorCode = error instanceof PipelineError
+      const rawErrorCode = String(error instanceof PipelineError
         ? error.errorCode
-        : getSupabaseErrorCode(error) || 'UNLOCK_GENERATION_FAILED';
-      const errorCode = normalizeUnlockFailureCode(rawErrorCode);
+        : getSupabaseErrorCode(error) || 'UNLOCK_GENERATION_FAILED').trim().toUpperCase();
+      let errorCode = normalizeUnlockFailureCode(rawErrorCode);
+      let transcriptDecision: TranscriptFailureDecision | null = null;
+
+      if (isTransientTranscriptUnavailableCode(rawErrorCode)) {
+        let unlockForDecision = processingUnlockRow;
+        if (!unlockForDecision) {
+          unlockForDecision = await getSourceItemUnlockBySourceItemId(db, item.source_item_id);
+        }
+
+        if (unlockForDecision) {
+          try {
+            transcriptDecision = await classifyTranscriptFailureForUnlock({
+              db,
+              unlock: unlockForDecision,
+              videoId: item.video_id,
+              traceId: input.traceId,
+              rawErrorCode,
+            });
+            errorCode = transcriptDecision.finalErrorCode;
+          } catch (decisionError) {
+            logUnlockEvent(
+              'transcript_classification_failed',
+              { trace_id: input.traceId, job_id: input.jobId, unlock_id: item.unlock_id, source_item_id: item.source_item_id },
+              {
+                video_id: item.video_id,
+                raw_error_code: rawErrorCode,
+                error: decisionError instanceof Error ? decisionError.message : String(decisionError),
+              },
+            );
+          }
+        }
+      }
 
       failures.push({
         video_id: item.video_id,
@@ -5138,7 +5464,8 @@ async function processSourceItemUnlockGenerationJob(input: {
 
       if (
         item.unlock_origin === 'subscription_auto_unlock'
-        && (errorCode === 'TRANSCRIPT_EMPTY' || errorCode === 'TRANSCRIPT_UNAVAILABLE')
+        && errorCode === 'TRANSCRIPT_UNAVAILABLE'
+        && !transcriptDecision?.confirmedPermanent
       ) {
         try {
           const retry = await enqueueSourceAutoUnlockRetryJob(db, {
@@ -5166,6 +5493,8 @@ async function processSourceItemUnlockGenerationJob(input: {
               retry_enqueued: retry.enqueued,
               retry_job_id: retry.enqueued ? retry.job_id : null,
               retry_next_run_at: retry.enqueued ? retry.next_run_at : null,
+              transcript_attempt_count: transcriptDecision?.transcriptAttemptCount || null,
+              transcript_no_caption_hits: transcriptDecision?.transcriptNoCaptionHits || null,
             },
           );
         } catch (retryError) {
@@ -5198,6 +5527,9 @@ async function processSourceItemUnlockGenerationJob(input: {
         {
           error_code: errorCode,
           error: message.slice(0, 220),
+          transcript_status: transcriptDecision?.transcriptStatus || null,
+          transcript_attempt_count: transcriptDecision?.transcriptAttemptCount || null,
+          transcript_no_caption_hits: transcriptDecision?.transcriptNoCaptionHits || null,
         },
       );
     }
@@ -5227,6 +5559,113 @@ async function processSourceItemUnlockGenerationJob(input: {
       failures: failures.length,
     },
   );
+}
+
+async function processSourceTranscriptRevalidateJob(input: {
+  jobId: string;
+  payload: SourceTranscriptRevalidatePayload;
+  traceId: string;
+}) {
+  const db = getServiceSupabaseClient();
+  if (!db) {
+    throw new Error('Service role client not configured');
+  }
+
+  const unlock = await getSourceItemUnlockBySourceItemId(db, input.payload.source_item_id);
+  if (!unlock || unlock.id !== input.payload.unlock_id) {
+    await db.from('ingestion_jobs').update({
+      status: 'succeeded',
+      finished_at: new Date().toISOString(),
+      processed_count: 1,
+      inserted_count: 0,
+      skipped_count: 1,
+      lease_expires_at: null,
+      worker_id: null,
+      last_heartbeat_at: new Date().toISOString(),
+      error_code: null,
+      error_message: null,
+    }).eq('id', input.jobId);
+    return;
+  }
+
+  if (isConfirmedNoTranscriptUnlock(unlock)) {
+    const probe = await probeTranscriptProviders(input.payload.video_id);
+    if (probe.all_no_captions) {
+      await db
+        .from('source_item_unlocks')
+        .update({
+          transcript_status: 'confirmed_no_speech',
+          transcript_attempt_count: Math.max(sourceTranscriptMaxAttempts, getUnlockTranscriptAttemptCount(unlock)),
+          transcript_no_caption_hits: Math.max(sourceTranscriptMaxAttempts, getUnlockTranscriptNoCaptionHits(unlock)),
+          transcript_last_probe_at: new Date().toISOString(),
+          transcript_retry_after: null,
+          transcript_probe_meta: {
+            providers: probe.providers,
+            all_no_captions: true,
+            any_success: probe.any_success,
+            revalidated_at: new Date().toISOString(),
+          },
+          last_error_code: 'NO_TRANSCRIPT_PERMANENT',
+          last_error_message: 'Transcript unavailable for this video.',
+        })
+        .eq('id', unlock.id);
+      logUnlockEvent('transcript_probe_result', { trace_id: input.traceId, unlock_id: unlock.id }, {
+        source_item_id: unlock.source_item_id,
+        video_id: input.payload.video_id,
+        all_no_captions: true,
+      });
+    } else {
+      await db
+        .from('source_item_unlocks')
+        .update({
+          transcript_status: 'retrying',
+          transcript_attempt_count: 0,
+          transcript_no_caption_hits: 0,
+          transcript_last_probe_at: new Date().toISOString(),
+          transcript_retry_after: buildTranscriptRetryAfterIso(sourceTranscriptRetryDelaySeconds),
+          transcript_probe_meta: {
+            providers: probe.providers,
+            all_no_captions: false,
+            any_success: probe.any_success,
+            revalidated_at: new Date().toISOString(),
+          },
+          last_error_code: 'TRANSCRIPT_UNAVAILABLE',
+          last_error_message: 'Transcript temporarily unavailable. Retry later.',
+        })
+        .eq('id', unlock.id);
+      logUnlockEvent('transcript_revalidated_to_retryable', { trace_id: input.traceId, unlock_id: unlock.id }, {
+        source_item_id: unlock.source_item_id,
+        video_id: input.payload.video_id,
+      });
+    }
+  } else {
+    await db.from('ingestion_jobs').update({
+      status: 'succeeded',
+      finished_at: new Date().toISOString(),
+      processed_count: 1,
+      inserted_count: 0,
+      skipped_count: 1,
+      lease_expires_at: null,
+      worker_id: null,
+      last_heartbeat_at: new Date().toISOString(),
+      error_code: null,
+      error_message: null,
+    }).eq('id', input.jobId);
+    return;
+  }
+
+  await db.from('ingestion_jobs').update({
+    status: 'succeeded',
+    finished_at: new Date().toISOString(),
+    processed_count: 1,
+    inserted_count: 1,
+    skipped_count: 0,
+    lease_expires_at: null,
+    worker_id: null,
+    last_heartbeat_at: new Date().toISOString(),
+    error_code: null,
+    error_message: null,
+  }).eq('id', input.jobId);
 }
 
 class AutoUnlockRetryableError extends Error {
@@ -5318,7 +5757,7 @@ async function processSourceAutoUnlockRetryJob(input: {
       throw new AutoUnlockRetryableError({
         errorCode: 'TRANSCRIPT_UNAVAILABLE',
         message: 'Auto-unlock retry delayed: transcript unavailable cooldown active.',
-        retryDelaySeconds: sourceAutoUnlockTranscriptRetryDelaySeconds,
+        retryDelaySeconds: sourceTranscriptRetryDelaySeconds,
       });
     }
     if (attempt.reason === 'NO_ELIGIBLE_USERS' || attempt.reason === 'NO_ELIGIBLE_CREDITS') {
@@ -5471,6 +5910,29 @@ function normalizeSourceAutoUnlockRetryPayload(value: unknown): SourceAutoUnlock
     title,
     trigger,
     preferred_payer_user_id: preferredPayerUserId,
+  };
+}
+
+function normalizeSourceTranscriptRevalidatePayload(value: unknown): SourceTranscriptRevalidatePayload | null {
+  if (!value || typeof value !== 'object') return null;
+  const row = value as Record<string, unknown>;
+  const unlockId = String(row.unlock_id || '').trim();
+  const sourceItemId = String(row.source_item_id || '').trim();
+  const sourceChannelId = String(row.source_channel_id || '').trim();
+  const videoId = String(row.video_id || '').trim();
+  const videoUrl = String(row.video_url || '').trim();
+  const title = String(row.title || '').trim();
+  if (!unlockId || !sourceItemId || !sourceChannelId || !videoId || !videoUrl || !title) return null;
+
+  return {
+    unlock_id: unlockId,
+    source_item_id: sourceItemId,
+    source_page_id: row.source_page_id == null ? null : String(row.source_page_id || '').trim() || null,
+    source_channel_id: sourceChannelId,
+    source_channel_title: row.source_channel_title == null ? null : String(row.source_channel_title || '').trim() || null,
+    video_id: videoId,
+    video_url: videoUrl,
+    title,
   };
 }
 
@@ -5690,6 +6152,19 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
           await processSourceAutoUnlockRetryJob({
             jobId: job.id,
             payload: retryPayload,
+            traceId,
+          });
+          return;
+        }
+
+        if (scope === 'source_transcript_revalidate') {
+          const revalidatePayload = normalizeSourceTranscriptRevalidatePayload(payload);
+          if (!revalidatePayload) {
+            throw new Error('INVALID_TRANSCRIPT_REVALIDATE_PAYLOAD');
+          }
+          await processSourceTranscriptRevalidateJob({
+            jobId: job.id,
+            payload: revalidatePayload,
             traceId,
           });
           return;
@@ -6755,14 +7230,13 @@ app.get(
     }
   }
 
-  return res.json({
-    ok: true,
-    error_code: null,
-    message: 'source page videos',
-    data: {
-      items: page.results.map((item) => {
-        const existing = existingByVideoId.get(item.video_id);
-        return {
+  const items = page.results
+    .map((item) => {
+      const existing = existingByVideoId.get(item.video_id);
+      const unlock = existing?.source_item_id ? unlockBySourceItemId.get(existing.source_item_id) || null : null;
+      return {
+        unlock,
+        payload: {
           video_id: item.video_id,
           video_url: item.video_url,
           title: item.title,
@@ -6776,11 +7250,21 @@ app.get(
           existing_blueprint_id: existing?.existing_blueprint_id || null,
           existing_feed_item_id: existing?.existing_feed_item_id || null,
           ...toUnlockSnapshot({
-            unlock: existing?.source_item_id ? unlockBySourceItemId.get(existing.source_item_id) || null : null,
+            unlock,
             fallbackCost: fallbackUnlockCost,
           }),
-        };
-      }),
+        },
+      };
+    })
+    .filter((row) => !isConfirmedNoTranscriptUnlock(row.unlock))
+    .map((row) => row.payload);
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'source page videos',
+    data: {
+      items,
       next_page_token: page.nextPageToken,
       kind,
       shorts_max_seconds: shortsMaxSeconds,
@@ -6958,7 +7442,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         sourcePageId: sourcePage.id,
         estimatedCost: estimatedUnlockCost,
       });
-      if (isPermanentNoTranscriptCode(unlockSeed.last_error_code)) {
+      if (isConfirmedNoTranscriptUnlock(unlockSeed)) {
         permanentNoTranscriptRows.push({
           video_id: item.video_id,
           title: item.title,
@@ -7122,7 +7606,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
     return res.status(422).json({
       ok: false,
       error_code: 'TRANSCRIPT_UNAVAILABLE',
-      message: 'Transcript unavailable for this video right now. Try again later.',
+      message: 'Only videos with speech can be generated. If this video has speech, please try again in a few minutes.',
       retry_after_seconds: retryAfterSeconds,
       data: {
         ...traceData,
@@ -7147,6 +7631,9 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       message: 'No transcript is available for this video.',
       data: {
         ...traceData,
+        transcript_status: 'confirmed_no_speech',
+        transcript_attempt_count: sourceTranscriptMaxAttempts,
+        transcript_retry_after_seconds: 0,
         no_transcript_count: permanentNoTranscriptRows.length,
         no_transcript: permanentNoTranscriptRows,
       },
@@ -7177,6 +7664,11 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         insufficient: insufficientRows,
         transcript_unavailable_count: transcriptUnavailableRows.length,
         transcript_unavailable: transcriptUnavailableRows,
+        transcript_status: transcriptUnavailableRows.length > 0 ? 'retrying' : null,
+        transcript_attempt_count: null,
+        transcript_retry_after_seconds: transcriptUnavailableRows.length > 0
+          ? Math.max(...transcriptUnavailableRows.map((row) => row.retry_after_seconds))
+          : 0,
         no_transcript_count: permanentNoTranscriptRows.length,
         no_transcript: permanentNoTranscriptRows,
       },
@@ -7270,6 +7762,11 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       insufficient: insufficientRows,
       transcript_unavailable_count: transcriptUnavailableRows.length,
       transcript_unavailable: transcriptUnavailableRows,
+      transcript_status: transcriptUnavailableRows.length > 0 ? 'retrying' : null,
+      transcript_attempt_count: null,
+      transcript_retry_after_seconds: transcriptUnavailableRows.length > 0
+        ? Math.max(...transcriptUnavailableRows.map((row) => row.retry_after_seconds))
+        : 0,
       no_transcript_count: permanentNoTranscriptRows.length,
       no_transcript: permanentNoTranscriptRows,
     },
@@ -8416,6 +8913,19 @@ app.post('/api/ingestion/jobs/trigger', async (req, res) => {
   }
   await runUnlockSweeps(db, { mode: 'cron', force: true });
   await runSourcePageAssetSweep(db, { mode: 'cron' });
+  try {
+    const seeded = await seedSourceTranscriptRevalidateJobs(db, 50);
+    if (seeded.enqueued > 0) {
+      console.log('[transcript_revalidate_seeded]', JSON.stringify({
+        scanned: seeded.scanned,
+        enqueued: seeded.enqueued,
+      }));
+    }
+  } catch (seedError) {
+    console.log('[transcript_revalidate_seed_failed]', JSON.stringify({
+      error: seedError instanceof Error ? seedError.message : String(seedError),
+    }));
+  }
 
   const { data: existingJob, error: runningJobError } = await db
     .from('ingestion_jobs')
