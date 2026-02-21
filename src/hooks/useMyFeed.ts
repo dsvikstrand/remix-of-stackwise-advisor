@@ -28,6 +28,7 @@ export interface MyFeedItemView {
     title: string;
     bannerUrl: string | null;
     llmReview: string | null;
+    mixNotes: string | null;
     isPublic: boolean;
     steps: unknown;
     tags: string[];
@@ -79,7 +80,7 @@ export function useMyFeed(options?: { enabled?: boolean }) {
           .select('id, source_channel_id, source_page_id, source_url, title, source_channel_title, thumbnail_url, metadata')
           .in('id', sourceIds),
         blueprintIds.length
-          ? supabase.from('blueprints').select('id, title, banner_url, llm_review, is_public, steps').in('id', blueprintIds)
+          ? supabase.from('blueprints').select('id, title, banner_url, llm_review, mix_notes, is_public, steps').in('id', blueprintIds)
           : Promise.resolve({ data: [], error: null }),
         supabase
           .from('channel_candidates')
@@ -236,6 +237,7 @@ export function useMyFeed(options?: { enabled?: boolean }) {
                 title: blueprint.title,
                 bannerUrl: blueprint.banner_url,
                 llmReview: blueprint.llm_review,
+                mixNotes: blueprint.mix_notes,
                 isPublic: blueprint.is_public,
                 steps: blueprint.steps,
                 tags: tagsByBlueprint.get(blueprint.id) || [],

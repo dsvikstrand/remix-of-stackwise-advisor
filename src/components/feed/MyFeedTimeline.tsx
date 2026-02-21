@@ -21,7 +21,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
 import { resolvePrimaryChannelFromTags } from '@/lib/channelMapping';
-import { buildFeedSummary } from '@/lib/feedPreview';
+import { buildBlueprintPreviewText, buildFeedSummary } from '@/lib/feedPreview';
 import { getMyFeedStateLabel, type MyFeedItemState } from '@/lib/myFeedState';
 import { publishCandidate, rejectCandidate, submitCandidateAndEvaluate } from '@/lib/myFeedApi';
 import { ForYouLockedSourceCard } from '@/components/wall/ForYouLockedSourceCard';
@@ -522,7 +522,8 @@ export function MyFeedTimeline({
         const isUnlocking = Boolean(item.source?.unlockInProgress) || Boolean(optimisticUnlockingItemIds[item.id]);
         const preview = buildFeedSummary({
           primary: blueprint?.llmReview || null,
-          fallback: source?.title || 'Open to view the full blueprint.',
+          secondary: (blueprint?.mixNotes || buildBlueprintPreviewText({ steps: blueprint?.steps })) || null,
+          fallback: source?.title || 'Open blueprint to view full details.',
           maxChars: 220,
         });
         const createdLabel = formatRelativeShort(item.createdAt);

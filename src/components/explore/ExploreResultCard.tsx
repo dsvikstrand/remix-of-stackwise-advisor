@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Heart, Layers, MessageCircle } from 'lucide-react';
 import { UserMiniCard } from './UserMiniCard';
 import type { BlueprintResult, InventoryResult, UserResult, SourceResult, ExploreResult } from '@/hooks/useExploreSearch';
-import { buildFeedSummary } from '@/lib/feedPreview';
+import { buildBlueprintPreviewText, buildFeedSummary } from '@/lib/feedPreview';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
@@ -25,10 +25,13 @@ function BlueprintCard({
   result: BlueprintResult;
   commentCountByBlueprintId?: Record<string, number>;
 }) {
+  const blueprintPreview = buildBlueprintPreviewText({
+    selectedItems: result.selectedItems,
+  });
   const summary = buildFeedSummary({
     primary: result.llmReview,
-    secondary: result.mixNotes,
-    fallback: 'Open to view the full step-by-step guide.',
+    secondary: result.mixNotes || blueprintPreview,
+    fallback: 'Open blueprint to view full details.',
     maxChars: 190,
   });
   const channelLabel = resolveChannelLabelForBlueprint(result.tags);

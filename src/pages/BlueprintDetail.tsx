@@ -67,6 +67,7 @@ export default function BlueprintDetail() {
   const location = useLocation();
   const loggedBlueprintId = useRef<string | null>(null);
   const steps = blueprint ? parseSteps(blueprint.steps) : [];
+  const hasAiReview = Boolean((blueprint?.llm_review || '').trim());
   const [sourceChannel, setSourceChannel] = useState<{
     title: string;
     url: string | null;
@@ -380,14 +381,17 @@ export default function BlueprintDetail() {
                 )}
               </div>
 
-              <PageDivider />
-
-              <div>
-                <h3 className="font-semibold">AI Review</h3>
-                <div className="mt-2">
-                  <BlueprintAnalysisView review={blueprint.llm_review || ''} density="compact" />
-                </div>
-              </div>
+              {hasAiReview ? (
+                <>
+                  <PageDivider />
+                  <div>
+                    <h3 className="font-semibold">AI Review</h3>
+                    <div className="mt-2">
+                      <BlueprintAnalysisView review={blueprint.llm_review || ''} density="compact" />
+                    </div>
+                  </div>
+                </>
+              ) : null}
             </section>
 
             <PageDivider />

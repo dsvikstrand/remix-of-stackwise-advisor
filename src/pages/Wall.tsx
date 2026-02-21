@@ -15,7 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { usePopularInventoryTags } from '@/hooks/usePopularInventoryTags';
 import { useTagFollows } from '@/hooks/useTagFollows';
 import type { Json } from '@/integrations/supabase/types';
-import { buildFeedSummary } from '@/lib/feedPreview';
+import { buildBlueprintPreviewText, buildFeedSummary } from '@/lib/feedPreview';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { matchesChannelByTags, resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
 import { normalizeTag } from '@/lib/tagging';
@@ -41,6 +41,7 @@ interface BlueprintPost {
   title: string;
   selected_items: Json;
   llm_review: string | null;
+  mix_notes: string | null;
   banner_url: string | null;
   likes_count: number;
   created_at: string;
@@ -82,6 +83,8 @@ type ForYouBlueprintItem = {
   sourceChannelAvatarUrl: string | null;
   sourceThumbnailUrl: string | null;
   llmReview: string | null;
+  mixNotes: string | null;
+  steps: unknown;
   bannerUrl: string | null;
   tags: string[];
   publishedChannelSlug: string | null;
@@ -285,7 +288,7 @@ export default function Wall() {
       const limit = isYourChannelsScope || isSpecificChannelScope ? 140 : 90;
       let query = supabase
         .from('blueprints')
-        .select('id, creator_user_id, title, selected_items, llm_review, banner_url, likes_count, created_at')
+        .select('id, creator_user_id, title, selected_items, llm_review, mix_notes, banner_url, likes_count, created_at')
         .eq('is_public', true)
         .limit(limit);
 
@@ -585,6 +588,8 @@ export default function Wall() {
           sourceChannelAvatarUrl: item.source.sourceChannelAvatarUrl || null,
           sourceThumbnailUrl: item.source.thumbnailUrl || null,
           llmReview: item.blueprint.llmReview,
+          mixNotes: item.blueprint.mixNotes,
+          steps: item.blueprint.steps,
           bannerUrl: item.blueprint.bannerUrl,
           tags: item.blueprint.tags,
           publishedChannelSlug: item.candidate?.status === 'published' ? item.candidate.channelSlug : null,
@@ -1092,9 +1097,13 @@ export default function Wall() {
 
                     const fallbackChannelSlug = resolveChannelLabelForBlueprint(item.tags).replace(/^b\//, '');
                     const channelSlug = item.publishedChannelSlug || fallbackChannelSlug;
+                    const blueprintPreview = buildBlueprintPreviewText({
+                      steps: item.steps,
+                    });
                     const summary = buildFeedSummary({
                       primary: item.llmReview,
-                      fallback: 'Open to view the full step-by-step guide.',
+                      secondary: item.mixNotes || blueprintPreview,
+                      fallback: 'Open blueprint to view full details.',
                       maxChars: 220,
                     });
                     const likesCount = forYouStatsQuery.data?.likes[item.blueprintId] || 0;
@@ -1172,9 +1181,13 @@ export default function Wall() {
             ) : visiblePosts.length > 0 ? (
               <div className="divide-y divide-border/40">
                 {visiblePosts.map((post) => {
+                  const blueprintPreview = buildBlueprintPreviewText({
+                    selectedItems: post.selected_items,
+                  });
                   const preview = buildFeedSummary({
                     primary: post.llm_review,
-                    fallback: 'Open to view the full step-by-step guide.',
+                    secondary: post.mix_notes || blueprintPreview,
+                    fallback: 'Open blueprint to view full details.',
                     maxChars: 220,
                   });
                   const fallbackChannelSlug = resolveChannelLabelForBlueprint(post.tags.map((tag) => tag.slug)).replace(/^b\//, '');

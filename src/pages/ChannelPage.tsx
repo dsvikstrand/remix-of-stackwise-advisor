@@ -13,7 +13,7 @@ import { useTagsBySlugs } from '@/hooks/useTags';
 import { getChannelBySlug } from '@/lib/channelsCatalog';
 import { getChannelIcon } from '@/lib/channelIcons';
 import { useChannelFeed, type ChannelFeedTab } from '@/hooks/useChannelFeed';
-import { buildFeedSummary } from '@/lib/feedPreview';
+import { buildBlueprintPreviewText, buildFeedSummary } from '@/lib/feedPreview';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { bucketJoinError, logP3Event } from '@/lib/telemetry';
@@ -298,10 +298,13 @@ export default function ChannelPage() {
               ) : (
                 <div className="divide-y divide-border/40 border-y border-border/40">
                   {posts.map((post) => {
+                    const blueprintPreview = buildBlueprintPreviewText({
+                      selectedItems: post.selectedItems,
+                    });
                     const preview = buildFeedSummary({
                       primary: post.llmReview,
-                      secondary: post.mixNotes,
-                      fallback: 'Open to view the full step-by-step guide.',
+                      secondary: post.mixNotes || blueprintPreview,
+                      fallback: 'Open blueprint to view full details.',
                       maxChars: 220,
                     });
                     const createdLabel = formatRelativeShort(post.createdAt);
