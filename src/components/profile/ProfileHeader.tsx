@@ -56,7 +56,7 @@ export function ProfileHeader({ profile, onFollowersClick, onFollowingClick }: P
                   </Link>
                 </Button>
                 <Button variant="outline" size="sm" asChild>
-                  <Link to={`/subscriptions?refresh=1&return_to=${encodeURIComponent(`/u/${profile.user_id}`)}`}>
+                  <Link to={`/u/${profile.user_id}?refresh=1`}>
                     <RefreshCcw className="h-4 w-4 mr-1" />
                     Refresh
                   </Link>

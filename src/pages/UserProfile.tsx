@@ -1,21 +1,25 @@
-import { useState } from 'react';
-import { useParams, Navigate, Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useParams, Navigate, Link, useSearchParams } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ProfileHeader } from '@/components/profile/ProfileHeader';
 import { ProfileTabs } from '@/components/profile/ProfileTabs';
 import { FollowersList } from '@/components/profile/FollowersList';
+import { RefreshSubscriptionsDialog } from '@/components/subscriptions/RefreshSubscriptionsDialog';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { useAuth } from '@/contexts/AuthContext';
+import { config } from '@/config/runtime';
 import { Lock } from 'lucide-react';
 
 export default function UserProfile() {
   const { userId } = useParams();
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: profile, isLoading, error } = useUserProfile(userId);
   const [followersOpen, setFollowersOpen] = useState(false);
   const [followingOpen, setFollowingOpen] = useState(false);
+  const [isRefreshDialogOpen, setIsRefreshDialogOpen] = useState(false);
 
   // If viewing /u without a userId, redirect to auth
   if (!userId) {
@@ -24,6 +28,17 @@ export default function UserProfile() {
 
   const isOwnProfile = user?.id === userId;
   const canViewProfile = profile?.is_public || isOwnProfile;
+  const subscriptionsEnabled = Boolean(config.agenticBackendUrl);
+
+  useEffect(() => {
+    if (searchParams.get('refresh') !== '1') return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('refresh');
+    setSearchParams(next, { replace: true });
+    if (isOwnProfile) {
+      setIsRefreshDialogOpen(true);
+    }
+  }, [isOwnProfile, searchParams, setSearchParams]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -102,6 +117,12 @@ export default function UserProfile() {
               type="following"
               open={followingOpen}
               onOpenChange={setFollowingOpen}
+            />
+            <RefreshSubscriptionsDialog
+              open={isRefreshDialogOpen}
+              onOpenChange={setIsRefreshDialogOpen}
+              subscriptionsEnabled={subscriptionsEnabled}
+              userId={user?.id}
             />
           </>
         )}
