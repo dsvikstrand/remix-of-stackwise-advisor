@@ -722,6 +722,7 @@ export default function Subscriptions() {
       });
       if (refreshReturnTo) {
         navigate(refreshReturnTo, { replace: true });
+        setRefreshReturnTo(null);
       }
       return;
     }
@@ -733,6 +734,7 @@ export default function Subscriptions() {
     });
     if (refreshReturnTo) {
       navigate(refreshReturnTo, { replace: true });
+      setRefreshReturnTo(null);
     }
   }, [invalidateSubscriptionViews, navigate, refreshJobQuery.data, refreshReturnTo, terminalHandledJobId, toast]);
 
@@ -754,6 +756,7 @@ export default function Subscriptions() {
   }, [activeRefreshJobId, latestManualRefreshJobQuery.data]);
 
   const handleRefreshDialogChange = (nextOpen: boolean) => {
+    const shouldReturnToProfile = !nextOpen && Boolean(refreshReturnTo);
     setIsRefreshDialogOpen(nextOpen);
     setHasScannedRefreshCandidates(false);
     setRefreshErrorText(null);
@@ -762,6 +765,10 @@ export default function Subscriptions() {
     setRefreshScanErrors([]);
     setRefreshCooldownFiltered(0);
     refreshScanMutation.reset();
+    if (shouldReturnToProfile && refreshReturnTo) {
+      navigate(refreshReturnTo, { replace: true });
+      setRefreshReturnTo(null);
+    }
   };
 
   const toggleRefreshCandidate = (item: SubscriptionRefreshCandidate, nextChecked: boolean) => {
