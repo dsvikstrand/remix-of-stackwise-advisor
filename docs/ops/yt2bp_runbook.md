@@ -323,6 +323,13 @@ Safe defaults:
   3) Correlate unlock logs via `trace_id` from unlock response (`unlock_request_received` -> `unlock_item_*` -> `unlock_job_terminal`).
   4) Retry unlock from source page after verifying provider health.
 
+### `NO_TRANSCRIPT_PERMANENT`
+- Meaning: video has no usable transcript/captions (non-retryable), so it should not remain as an unlockable feed card.
+- Action:
+  1) Inspect `source_item_unlocks.last_error_code` and confirm it is `NO_TRANSCRIPT_PERMANENT` (or legacy `NO_CAPTIONS`).
+  2) Confirm feed-card surfaces no longer render the locked item (`My Feed`, Home `For You`, profile feed).
+  3) Do not enqueue retry jobs for this case; only transient transcript errors should retry.
+
 ### `candidate_pending_manual_review` growth
 - Meaning: gate pipeline is producing warn outcomes (fit/quality) and routing to manual review.
 - Action:
@@ -622,6 +629,7 @@ Expected structured server log markers:
 - `[candidate_published]`
 - `[candidate_rejected]`
 - `[subscription_skip_upcoming_premiere]` (pre-release YouTube premiere filtered during sync)
+- `[subscription_auto_unlock_not_queued]` with `reason=PERMANENT_NO_TRANSCRIPT` (non-retryable no-transcript auto-unlock skip)
 
 Useful `mvp_events.event_name` chain for YT2BP split flow:
 - `source_pull_requested`

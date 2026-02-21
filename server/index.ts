@@ -1137,7 +1137,7 @@ app.get('/api/profile/:userId/feed', async (req, res) => {
   const blueprintIds = Array.from(new Set(filteredFeedRows.map((row) => row.blueprint_id).filter(Boolean))) as string[];
   const feedItemIds = filteredFeedRows.map((row) => row.id);
 
-  const [{ data: sources, error: sourcesError }, { data: blueprints, error: blueprintsError }, { data: candidates, error: candidatesError }] = await Promise.all([
+  const [{ data: sources, error: sourcesError }, { data: blueprints, error: blueprintsError }, { data: candidates, error: candidatesError }, { data: unlocks, error: unlocksError }] = await Promise.all([
     db
       .from('source_items')
       .select('id, source_channel_id, source_url, title, source_channel_title, thumbnail_url, metadata')
@@ -1150,12 +1150,18 @@ app.get('/api/profile/:userId/feed', async (req, res) => {
       .select('id, user_feed_item_id, channel_slug, status, created_at')
       .in('user_feed_item_id', feedItemIds)
       .order('created_at', { ascending: false }),
+    sourceIds.length
+      ? db
+        .from('source_item_unlocks')
+        .select('source_item_id, last_error_code')
+        .in('source_item_id', sourceIds)
+      : Promise.resolve({ data: [], error: null }),
   ]);
-  if (sourcesError || blueprintsError || candidatesError) {
+  if (sourcesError || blueprintsError || candidatesError || unlocksError) {
     return res.status(400).json({
       ok: false,
       error_code: 'READ_FAILED',
-      message: sourcesError?.message || blueprintsError?.message || candidatesError?.message || 'Failed to load feed',
+      message: sourcesError?.message || blueprintsError?.message || candidatesError?.message || unlocksError?.message || 'Failed to load feed',
       data: null,
     });
   }
@@ -1190,6 +1196,12 @@ app.get('/api/profile/:userId/feed', async (req, res) => {
 
   const sourceMap = new Map((sources || []).map((row) => [row.id, row]));
   const blueprintMap = new Map((blueprints || []).map((row) => [row.id, row]));
+  const permanentNoTranscriptSourceIds = new Set(
+    (unlocks || [])
+      .filter((row) => isPermanentNoTranscriptCode(row.last_error_code))
+      .map((row) => String(row.source_item_id || '').trim())
+      .filter(Boolean),
+  );
   const candidateMap = new Map<string, { id: string; channelSlug: string; status: string }>();
   (candidates || []).forEach((row) => {
     if (candidateMap.has(row.user_feed_item_id)) return;
@@ -1200,7 +1212,13 @@ app.get('/api/profile/:userId/feed', async (req, res) => {
     });
   });
 
-  const items = filteredFeedRows.map((row) => {
+  const visibleFeedRows = filteredFeedRows.filter((row) => {
+    if (row.blueprint_id) return true;
+    const sourceItemId = String(row.source_item_id || '').trim();
+    return !sourceItemId || !permanentNoTranscriptSourceIds.has(sourceItemId);
+  });
+
+  const items = visibleFeedRows.map((row) => {
     const source = sourceMap.get(row.source_item_id);
     const blueprint = row.blueprint_id ? blueprintMap.get(row.blueprint_id) : null;
     const sourceMetadata =
@@ -3866,13 +3884,24 @@ function toUnlockSnapshot(input: {
   };
 }
 
-function isTranscriptUnavailableCode(code: string | null | undefined) {
+function isPermanentNoTranscriptCode(code: string | null | undefined) {
   const normalized = String(code || '').trim().toUpperCase();
-  return normalized === 'NO_CAPTIONS' || normalized === 'TRANSCRIPT_EMPTY' || normalized === 'TRANSCRIPT_UNAVAILABLE';
+  return normalized === 'NO_TRANSCRIPT_PERMANENT' || normalized === 'NO_CAPTIONS';
+}
+
+function isTransientTranscriptUnavailableCode(code: string | null | undefined) {
+  const normalized = String(code || '').trim().toUpperCase();
+  return normalized === 'TRANSCRIPT_EMPTY' || normalized === 'TRANSCRIPT_UNAVAILABLE';
+}
+
+function normalizeUnlockFailureCode(code: string | null | undefined) {
+  const normalized = String(code || '').trim().toUpperCase();
+  if (normalized === 'NO_CAPTIONS') return 'NO_TRANSCRIPT_PERMANENT';
+  return normalized || 'UNLOCK_GENERATION_FAILED';
 }
 
 function getTranscriptCooldownState(unlock: SourceItemUnlockRow | null): TranscriptCooldownState {
-  if (!unlock || !isTranscriptUnavailableCode(unlock.last_error_code)) {
+  if (!unlock || !isTransientTranscriptUnavailableCode(unlock.last_error_code)) {
     return { active: false, retryAfterSeconds: 0 };
   }
 
@@ -3930,6 +3959,7 @@ type AutoUnlockAttemptReason =
   | 'SERVICE_DB_MISSING'
   | 'INVALID_SOURCE'
   | 'UNLOCK_NOT_AVAILABLE'
+  | 'PERMANENT_NO_TRANSCRIPT'
   | 'NO_ELIGIBLE_USERS'
   | 'TRANSCRIPT_COOLDOWN'
   | 'ALREADY_READY'
@@ -4015,6 +4045,9 @@ async function attemptAutoUnlockForSourceItem(input: {
 
   if (input.unlock.status !== 'available') {
     return { queued: false as const, reason: 'UNLOCK_NOT_AVAILABLE' as const };
+  }
+  if (isPermanentNoTranscriptCode(input.unlock.last_error_code)) {
+    return { queued: false as const, reason: 'PERMANENT_NO_TRANSCRIPT' as const };
   }
 
   const transcriptCooldown = getTranscriptCooldownState(input.unlock);
@@ -5043,9 +5076,10 @@ async function processSourceItemUnlockGenerationJob(input: {
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const errorCode = error instanceof PipelineError
+      const rawErrorCode = error instanceof PipelineError
         ? error.errorCode
         : getSupabaseErrorCode(error) || 'UNLOCK_GENERATION_FAILED';
+      const errorCode = normalizeUnlockFailureCode(rawErrorCode);
 
       failures.push({
         video_id: item.video_id,
@@ -5108,7 +5142,7 @@ async function processSourceItemUnlockGenerationJob(input: {
 
       if (
         item.unlock_origin === 'subscription_auto_unlock'
-        && (errorCode === 'NO_CAPTIONS' || errorCode === 'TRANSCRIPT_EMPTY' || errorCode === 'TRANSCRIPT_UNAVAILABLE')
+        && (errorCode === 'TRANSCRIPT_EMPTY' || errorCode === 'TRANSCRIPT_UNAVAILABLE')
       ) {
         try {
           const retry = await enqueueSourceAutoUnlockRetryJob(db, {
@@ -5933,7 +5967,11 @@ async function syncSingleSubscription(db: ReturnType<typeof createClient>, subsc
 
         if (
           !attempt.queued
-          && (attempt.reason === 'NO_ELIGIBLE_USERS' || attempt.reason === 'NO_ELIGIBLE_CREDITS' || attempt.reason === 'TRANSCRIPT_COOLDOWN')
+          && (
+            attempt.reason === 'NO_ELIGIBLE_USERS'
+            || attempt.reason === 'NO_ELIGIBLE_CREDITS'
+            || attempt.reason === 'TRANSCRIPT_COOLDOWN'
+          )
         ) {
           try {
             const retryDb = getServiceSupabaseClient();
@@ -6899,6 +6937,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
   const readyRows: Array<{ video_id: string; title: string; blueprint_id: string | null }> = [];
   const insufficientRows: Array<{ video_id: string; title: string; required: number; balance: number }> = [];
   const transcriptUnavailableRows: Array<{ video_id: string; title: string; retry_after_seconds: number }> = [];
+  const permanentNoTranscriptRows: Array<{ video_id: string; title: string }> = [];
 
   const candidateRows = normalizedItems.filter((item) => !existingByVideoId.get(item.video_id)?.already_exists_for_user);
 
@@ -6922,6 +6961,13 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         sourcePageId: sourcePage.id,
         estimatedCost: estimatedUnlockCost,
       });
+      if (isPermanentNoTranscriptCode(unlockSeed.last_error_code)) {
+        permanentNoTranscriptRows.push({
+          video_id: item.video_id,
+          title: item.title,
+        });
+        continue;
+      }
       const transcriptCooldown = getTranscriptCooldownState(unlockSeed);
       if (transcriptCooldown.active) {
         transcriptUnavailableRows.push({
@@ -7048,6 +7094,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
     queueItems.length === 0
     && insufficientRows.length > 0
     && transcriptUnavailableRows.length === 0
+    && permanentNoTranscriptRows.length === 0
     && readyRows.length === 0
     && inProgressRows.length === 0
     && duplicateRows.length === 0
@@ -7069,6 +7116,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
     queueItems.length === 0
     && transcriptUnavailableRows.length > 0
     && insufficientRows.length === 0
+    && permanentNoTranscriptRows.length === 0
     && readyRows.length === 0
     && inProgressRows.length === 0
     && duplicateRows.length === 0
@@ -7083,6 +7131,27 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         ...traceData,
         transcript_unavailable_count: transcriptUnavailableRows.length,
         transcript_unavailable: transcriptUnavailableRows,
+      },
+    });
+  }
+
+  if (
+    queueItems.length === 0
+    && permanentNoTranscriptRows.length > 0
+    && transcriptUnavailableRows.length === 0
+    && insufficientRows.length === 0
+    && readyRows.length === 0
+    && inProgressRows.length === 0
+    && duplicateRows.length === 0
+  ) {
+    return res.status(422).json({
+      ok: false,
+      error_code: 'NO_TRANSCRIPT_PERMANENT',
+      message: 'No transcript is available for this video.',
+      data: {
+        ...traceData,
+        no_transcript_count: permanentNoTranscriptRows.length,
+        no_transcript: permanentNoTranscriptRows,
       },
     });
   }
@@ -7111,6 +7180,8 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         insufficient: insufficientRows,
         transcript_unavailable_count: transcriptUnavailableRows.length,
         transcript_unavailable: transcriptUnavailableRows,
+        no_transcript_count: permanentNoTranscriptRows.length,
+        no_transcript: permanentNoTranscriptRows,
       },
     });
   }
@@ -7202,6 +7273,8 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       insufficient: insufficientRows,
       transcript_unavailable_count: transcriptUnavailableRows.length,
       transcript_unavailable: transcriptUnavailableRows,
+      no_transcript_count: permanentNoTranscriptRows.length,
+      no_transcript: permanentNoTranscriptRows,
     },
   });
 }

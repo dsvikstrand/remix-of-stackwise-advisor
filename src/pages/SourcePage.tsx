@@ -82,6 +82,8 @@ function getSourceVideoLibraryErrorMessage(error: unknown, fallback: string) {
         return 'Source page not found.';
       case 'TRANSCRIPT_UNAVAILABLE':
         return 'No transcript available for this video yet. Try again later.';
+      case 'NO_TRANSCRIPT_PERMANENT':
+        return 'No transcript is available for this video.';
       default:
         return error.message || fallback;
     }

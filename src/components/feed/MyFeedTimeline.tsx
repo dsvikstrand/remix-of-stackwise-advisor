@@ -58,6 +58,9 @@ function getUnlockActionErrorMessage(error: unknown, fallback: string) {
     if (error.errorCode === 'TRANSCRIPT_UNAVAILABLE') {
       return 'No transcript available for this video yet. Try again later.';
     }
+    if (error.errorCode === 'NO_TRANSCRIPT_PERMANENT') {
+      return 'No transcript is available for this video.';
+    }
     return error.message || fallback;
   }
   if (error instanceof Error && /source video id/i.test(error.message)) {

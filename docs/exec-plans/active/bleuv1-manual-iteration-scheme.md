@@ -62,6 +62,10 @@ Execution mode:
 43. [have] Step 42 - Unlock trust pass (shared unlock job activity + credit transparency + Home scope helper clarity)
 44. [have] Step 43 - Backend unlock hardening (reliability sweeps + trace IDs + idempotency/race tests)
 45. [have] Step 44 - Subscription auto-unlock v1 (new videos only, credit-guarded shared unlock with per-subscription toggle)
+46. [have] Step 45 - Unlock transcript guard + read-limit smoothing (retryable transcript errors + polling limiter split)
+47. [have] Step 46 - UI polish pass (profile/sub cards/card actions)
+48. [have] Step 47 - Subscription sync pre-premiere guard (skip unreleased upcoming uploads + hold checkpoint)
+49. [have] Step 48 - Permanent no-transcript lock-card suppression (normalize permanent code + hide non-retryable unlock cards)
 
 Interpretation note
 - Step entries capture execution timeline.
@@ -1031,6 +1035,25 @@ Definition of done
 Evaluation
 - manual smoke: known upcoming premiere does not appear as locked card after sync.
 - manual smoke: once released, same video can be ingested by sync as normal.
+- `npm run test`
+- `npm run build`
+- `npm run docs:refresh-check -- --json`
+- `npm run docs:link-check`
+
+### Step 48 - Permanent no-transcript lock-card suppression
+Scope
+- normalize permanent transcript failures to `NO_TRANSCRIPT_PERMANENT` (legacy `NO_CAPTIONS` compatibility).
+- keep transient transcript-unavailable flow unchanged (cooldown/retry eligible).
+- hide feed unlock cards tied to permanent no-transcript unlock rows.
+
+Definition of done
+- permanent no-transcript videos no longer remain visible as unlockable cards in Home/My Feed/profile feed surfaces.
+- manual source-page unlock returns deterministic `NO_TRANSCRIPT_PERMANENT` when applicable.
+- auto-unlock does not keep retrying permanent no-transcript rows.
+
+Evaluation
+- manual smoke: known no-sound/no-captions video does not persist as unlockable card after failure.
+- manual smoke: transient transcript outages still return retryable behavior (`TRANSCRIPT_UNAVAILABLE`).
 - `npm run test`
 - `npm run build`
 - `npm run docs:refresh-check -- --json`

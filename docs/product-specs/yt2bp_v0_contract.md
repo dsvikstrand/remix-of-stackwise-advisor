@@ -57,6 +57,7 @@
 - 2026-02-20 note: unlock reliability sweeps (expired/stale/orphan recovery) run in source-video routes and service cron trigger path; additive and outside this endpoint envelope.
 - 2026-02-20 note: unlock/generate responses now include additive `trace_id` and unlock lifecycle logs propagate the same correlation ID; additive and outside this endpoint envelope.
 - 2026-02-20 note: ingestion worker hardening adds queue lease/retry metadata on `ingestion_jobs` and service queue-health endpoint `GET /api/ops/queue/health`; additive and outside this endpoint envelope.
+- 2026-02-21 note: permanent no-transcript unlock failures normalize to `NO_TRANSCRIPT_PERMANENT` (legacy `NO_CAPTIONS` compatibility), and associated unlockable feed cards are suppressed; additive and outside this endpoint envelope.
 
 ## Request
 ```json

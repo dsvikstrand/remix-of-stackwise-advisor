@@ -39,6 +39,11 @@ export interface MyFeedItemView {
   } | null;
 }
 
+function isPermanentNoTranscriptErrorCode(code: string | null | undefined) {
+  const normalized = String(code || '').trim().toUpperCase();
+  return normalized === 'NO_TRANSCRIPT_PERMANENT' || normalized === 'NO_CAPTIONS';
+}
+
 export function useMyFeed(options?: { enabled?: boolean }) {
   const { user } = useAuth();
 
@@ -84,7 +89,7 @@ export function useMyFeed(options?: { enabled?: boolean }) {
         sourceIds.length
           ? supabase
             .from('source_item_unlocks')
-            .select('source_item_id, status, estimated_cost, blueprint_id')
+            .select('source_item_id, status, estimated_cost, blueprint_id, last_error_code')
             .in('source_item_id', sourceIds)
           : Promise.resolve({ data: [], error: null }),
       ]);
@@ -130,6 +135,12 @@ export function useMyFeed(options?: { enabled?: boolean }) {
       const sourcePageAvatarById = new Map((sourcePagesData || []).map((row) => [row.id, row.avatar_url || null]));
       const sourcePageAvatarByExternalId = new Map((sourcePagesByExternalData || []).map((row) => [row.external_id, row.avatar_url || null]));
       const unlockMap = new Map((unlocks || []).map((row) => [row.source_item_id, row]));
+      const permanentNoTranscriptSourceIds = new Set(
+        (unlocks || [])
+          .filter((row) => isPermanentNoTranscriptErrorCode(row.last_error_code))
+          .map((row) => String(row.source_item_id || '').trim())
+          .filter(Boolean),
+      );
       const blueprintMap = new Map((blueprints || []).map((row) => [row.id, row]));
       const candidateMap = new Map<string, { id: string; channelSlug: string; status: string }>();
       (candidates || []).forEach((row) => {
@@ -141,7 +152,13 @@ export function useMyFeed(options?: { enabled?: boolean }) {
         });
       });
 
-      return filteredFeedRows.map((row) => {
+      const visibleFeedRows = filteredFeedRows.filter((row) => {
+        if (row.blueprint_id) return true;
+        const sourceItemId = String(row.source_item_id || '').trim();
+        return !sourceItemId || !permanentNoTranscriptSourceIds.has(sourceItemId);
+      });
+
+      return visibleFeedRows.map((row) => {
         const source = sourceMap.get(row.source_item_id);
         const sourceUnlock = source ? unlockMap.get(source.id) : null;
         const blueprint = blueprintMap.get(row.blueprint_id);
