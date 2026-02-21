@@ -304,12 +304,16 @@ export default function BlueprintDetail() {
                   title={isBannerExpanded ? 'Collapse banner' : 'Expand banner'}
                 >
                   {isBannerExpanded ? (
-                    <img
-                      src={effectiveBannerUrl}
-                      alt="Blueprint banner"
-                      className="block w-full h-auto"
-                      loading="lazy"
-                    />
+                    <div className="mx-auto w-full max-w-3xl overflow-hidden rounded-md">
+                      <div className="aspect-video w-full">
+                        <img
+                          src={effectiveBannerUrl}
+                          alt="Blueprint banner"
+                          className="h-full w-full object-cover object-center"
+                          loading="lazy"
+                        />
+                      </div>
+                    </div>
                   ) : (
                     <div className="aspect-[3/1] w-full">
                       <img
