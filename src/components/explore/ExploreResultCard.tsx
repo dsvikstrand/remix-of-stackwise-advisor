@@ -1,12 +1,11 @@
 import { Link } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
-import { Heart, Layers, MessageCircle, Share2 } from 'lucide-react';
+import { Heart, Layers, MessageCircle } from 'lucide-react';
 import { UserMiniCard } from './UserMiniCard';
 import type { BlueprintResult, InventoryResult, UserResult, SourceResult, ExploreResult } from '@/hooks/useExploreSearch';
 import { buildFeedSummary } from '@/lib/feedPreview';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { formatRelativeShort } from '@/lib/timeFormat';
-import { Button } from '@/components/ui/button';
 import { resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
 import { getCatalogChannelTagSlugs } from '@/lib/channelPostContext';
 import { normalizeTag } from '@/lib/tagging';
@@ -72,9 +71,6 @@ function BlueprintCard({
                 <MessageCircle className="h-3.5 w-3.5" />
                 {commentsCount}
               </span>
-              <Button variant="ghost" size="sm" className="h-7 px-2" disabled>
-                <Share2 className="h-3.5 w-3.5" />
-              </Button>
             </div>
 
             {displayTags.length > 0 && (
@@ -131,9 +127,6 @@ function InventoryCard({
             <Heart className="h-3.5 w-3.5" />
             {result.likesCount}
           </span>
-          <Button variant="ghost" size="sm" className="h-7 px-2" disabled>
-            <Share2 className="h-3.5 w-3.5" />
-          </Button>
         </div>
 
         {displayTags.length > 0 && (

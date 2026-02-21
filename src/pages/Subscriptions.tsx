@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
@@ -130,10 +130,19 @@ function getYouTubeConnectionErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
+function sanitizeRefreshReturnPath(value: string | null) {
+  const raw = String(value || '').trim();
+  if (!raw.startsWith('/')) return null;
+  if (raw.startsWith('//')) return null;
+  if (!raw.startsWith('/u/')) return null;
+  return raw;
+}
+
 export default function Subscriptions() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const subscriptionsEnabled = Boolean(config.agenticBackendUrl);
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -161,6 +170,7 @@ export default function Subscriptions() {
   const [activeRefreshJobId, setActiveRefreshJobId] = useState<string | null>(null);
   const [queuedRefreshCount, setQueuedRefreshCount] = useState<number>(0);
   const [terminalHandledJobId, setTerminalHandledJobId] = useState<string | null>(null);
+  const [refreshReturnTo, setRefreshReturnTo] = useState<string | null>(null);
 
   const invalidateSubscriptionViews = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['source-subscriptions', user?.id] });
@@ -199,8 +209,10 @@ export default function Subscriptions() {
     setRefreshSelected({});
     setRefreshScanErrors([]);
     setRefreshCooldownFiltered(0);
+    setRefreshReturnTo(sanitizeRefreshReturnPath(searchParams.get('return_to')));
     const next = new URLSearchParams(searchParams);
     next.delete('refresh');
+    next.delete('return_to');
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
@@ -708,6 +720,9 @@ export default function Subscriptions() {
         title: 'Background generation finished',
         description: `Inserted ${job.inserted_count}, skipped ${job.skipped_count}, failed ${failedCount}.`,
       });
+      if (refreshReturnTo) {
+        navigate(refreshReturnTo, { replace: true });
+      }
       return;
     }
 
@@ -716,7 +731,10 @@ export default function Subscriptions() {
       description: job.error_message || 'Could not complete background generation.',
       variant: 'destructive',
     });
-  }, [invalidateSubscriptionViews, refreshJobQuery.data, terminalHandledJobId, toast]);
+    if (refreshReturnTo) {
+      navigate(refreshReturnTo, { replace: true });
+    }
+  }, [invalidateSubscriptionViews, navigate, refreshJobQuery.data, refreshReturnTo, terminalHandledJobId, toast]);
 
   useEffect(() => {
     if (activeRefreshJobId) return;

@@ -251,6 +251,7 @@ Current production behavior note:
   - Feature/env toggles for fast rollback.
   - Transcript-unavailable path uses retry cooldown for auto-unlock and non-charging deterministic user response for manual unlock.
   - Read-path polling endpoints (`/api/credits`, `/api/ingestion/jobs/latest-mine`) use dedicated limiter buckets, separated from global API limiter.
+  - Frontend feed-card surfaces are intentionally low-action in MVP (like/comment only), reducing non-core interaction noise.
 
 ## 7) Extension Model
 - New adapters:

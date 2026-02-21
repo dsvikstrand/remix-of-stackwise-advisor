@@ -1070,7 +1070,6 @@ export default function Wall() {
                           sourceChannelTitle={item.sourceChannelTitle}
                           sourceChannelAvatarUrl={item.sourceChannelAvatarUrl}
                           createdAt={item.createdAt}
-                          sourceUrl={item.sourceUrl}
                           unlockCost={item.unlockCost}
                           isUnlocking={item.unlockInProgress}
                           onUnlock={() => unlockMutation.mutate(item)}

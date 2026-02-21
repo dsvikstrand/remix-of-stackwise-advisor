@@ -126,6 +126,10 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
   - transcript-unavailable unlocks are deterministic and non-charging (`TRANSCRIPT_UNAVAILABLE` + retry guidance).
   - auto-unlock retries transcript-missing videos through bounded `source_auto_unlock_retry` jobs.
   - credits/latest-mine polling reads use dedicated limiter buckets to avoid normal unlock UX 429 collisions.
+- MVP UI cleanup:
+  - profile tabs simplified to `Feed / Comments / Liked` and share icons removed from blueprint list cards.
+  - locked source cards use compact credit labels and no longer show `Open source` in feed contexts.
+  - profile refresh flow now returns to profile after subscriptions refresh terminal status.
 
 ## Acceptance Baseline Per Iteration
 1. Scope and behavior align with `docs/app/product-spec.md`.

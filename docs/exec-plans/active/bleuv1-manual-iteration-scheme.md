@@ -996,6 +996,27 @@ Evaluation
 - `npm run docs:refresh-check -- --json`
 - `npm run docs:link-check`
 
+### Step 46 - UI polish pass (profile/sub cards/card actions)
+Scope
+- remove `Open source` from locked source cards and compact lock cost chip text (`<n> cr`).
+- remove share icon from blueprint cards across wall/channel/explore list surfaces.
+- keep profile tabs focused to `Feed / Comments / Liked` and keep subscriptions as standalone page.
+- route profile refresh flow through subscriptions refresh dialog but return to `/u/:id` when job reaches terminal state.
+- simplify user-menu credits panel by removing extra refill/activity detail lines.
+
+Definition of done
+- requested card/profile/menu copy/actions are removed/adjusted with no route/API contract breakage.
+- profile refresh launched from profile no longer leaves user parked on `/subscriptions` after completion.
+
+Evaluation
+- manual smoke: locked cards show compact `1 cr` style and no `Open source`.
+- manual smoke: blueprint cards show like/comment only (no share icon).
+- manual smoke: profile tabs show only `Feed / Comments / Liked`.
+- manual smoke: profile refresh returns to `/u/:id` on terminal status.
+- `npm run build`
+- `npm run docs:refresh-check -- --json`
+- `npm run docs:link-check`
+
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary
 2. Plan with touched files and acceptance checks

@@ -1,5 +1,5 @@
 import { Link, useParams } from 'react-router-dom';
-import { Heart, Loader2, MessageCircle, Plus, Share2 } from 'lucide-react';
+import { Heart, Loader2, MessageCircle, Plus } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AppHeader } from '@/components/shared/AppHeader';
@@ -342,15 +342,6 @@ export default function ChannelPage() {
                               <MessageCircle className="h-4 w-4" />
                               {commentsCount}
                             </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2"
-                              disabled
-                              onClick={(event) => event.preventDefault()}
-                            >
-                              <Share2 className="h-4 w-4" />
-                            </Button>
                           </div>
                         </div>
                       </Link>

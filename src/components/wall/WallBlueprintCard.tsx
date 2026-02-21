@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Heart, MessageCircle, Share2 } from 'lucide-react';
+import { Heart, MessageCircle } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -117,15 +117,6 @@ export function WallBlueprintCard({
               <MessageCircle className="h-4 w-4" />
               {commentsCount}
             </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2"
-              disabled
-              onClick={(event) => event.preventDefault()}
-            >
-              <Share2 className="h-4 w-4" />
-            </Button>
           </div>
         </div>
       </div>

@@ -22,7 +22,6 @@ type ForYouLockedSourceCardProps = {
   sourceChannelTitle: string | null;
   sourceChannelAvatarUrl?: string | null;
   createdAt: string;
-  sourceUrl: string | null;
   unlockCost: number;
   isUnlocking: boolean;
   canUnlock?: boolean;
@@ -34,7 +33,6 @@ export function ForYouLockedSourceCard({
   sourceChannelTitle,
   sourceChannelAvatarUrl,
   createdAt,
-  sourceUrl,
   unlockCost,
   isUnlocking,
   canUnlock = true,
@@ -105,22 +103,8 @@ export function ForYouLockedSourceCard({
                 {isUnlocking ? 'Unlocking...' : 'Unlock available'}
               </Badge>
               <span className="inline-flex h-6 items-center rounded-full border border-border/60 bg-muted/40 px-2.5 text-[11px] text-muted-foreground">
-                Cost {unlockCostFormatter.format(unlockCost)} cr
+                {unlockCostFormatter.format(unlockCost)} cr
               </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {sourceUrl ? (
-                <a
-                  href={sourceUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-[11px] text-muted-foreground underline underline-offset-2"
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  Open source
-                </a>
-              ) : null}
             </div>
           </div>
         </div>

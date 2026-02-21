@@ -266,6 +266,11 @@ si50) unlock trace propagation contract: `trace_id` is emitted in unlock respons
 si51) transcript-unavailable unlock handling is deterministic: manual unlock returns `TRANSCRIPT_UNAVAILABLE` + `retry_after_seconds`, no credit hold is created, and auto-unlock retries are deferred via `source_auto_unlock_retry`.
 si52) source-page unlock queue payload now includes additive `unlock_origin` (`manual_unlock|subscription_auto_unlock|source_auto_unlock_retry`) for durable worker/retry semantics.
 si53) read endpoints `GET /api/credits` and `GET /api/ingestion/jobs/latest-mine` are protected by dedicated high-ceiling read limiters and are excluded from generic global limiter handling to prevent UI polling collisions.
+si54) profile tabs contract: owner and public profile tabs are `Feed`, `Comments`, `Liked` (subscriptions tab removed from profile surface).
+si55) locked source cards use compact credit label format (`<n> cr`) and remove `Open source` action on feed cards.
+si56) blueprint list cards in wall/channel/explore remove the share icon action (like/comment remain unchanged).
+si57) profile-header refresh entrypoint may launch `/subscriptions?refresh=1&return_to=/u/:id`; after terminal refresh status, user is returned to profile path.
+si58) user-menu credits panel remains compact (balance + bar only) without extra refill/activity detail lines in this iteration.
 
 ## Next Milestone (Hardening)
 n1) Keep legacy manual gate behavior stable with `CHANNEL_GATES_MODE=bypass` while auto-channel path uses `AUTO_CHANNEL_GATE_MODE`.

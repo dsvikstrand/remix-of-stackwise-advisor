@@ -237,6 +237,11 @@ Rules:
   - transcript-unavailable source videos now return deterministic manual unlock response (`TRANSCRIPT_UNAVAILABLE`) and auto-unlock defers to bounded retry with cooldown.
   - read-heavy polling endpoints (`/api/credits`, `/api/ingestion/jobs/latest-mine`) moved to dedicated read limiter buckets to reduce normal-flow 429 noise.
   - source unlock queue items include `unlock_origin` metadata so worker/retry flows keep stable attribution (`manual_unlock`, `subscription_auto_unlock`, `source_auto_unlock_retry`).
+- UI polish pass (2026-02-21):
+  - locked source cards now use compact credit chip text and drop `Open source` action from feed-card context.
+  - profile tabs are streamlined to `Feed / Comments / Liked`; subscriptions stay on dedicated `/subscriptions`.
+  - profile refresh launcher uses return path flow so `/subscriptions?refresh=1` returns user to profile after terminal status.
+  - share icon action removed from wall/channel/explore blueprint list cards.
 
 ## 12) Next Milestone
 1. Validate Oracle cron reliability and alerting around ingestion failures.

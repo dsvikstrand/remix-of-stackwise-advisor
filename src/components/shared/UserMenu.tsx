@@ -13,8 +13,6 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User, LogOut, Settings, LifeBuoy, HelpCircle, Moon, Sun, Rss } from 'lucide-react';
 import { useAiCredits } from '@/hooks/useAiCredits';
-import { useCreditActivity } from '@/hooks/useCreditActivity';
-import { formatRelativeShort } from '@/lib/timeFormat';
 
 interface UserMenuProps {
   onOpenHelp?: () => void;
@@ -25,7 +23,6 @@ type ThemeMode = 'light' | 'dark';
 export function UserMenu({ onOpenHelp }: UserMenuProps) {
   const { user, profile, signOut, isLoading } = useAuth();
   const creditsQuery = useAiCredits(!!user);
-  const creditActivityQuery = useCreditActivity(!!user, user?.id);
   const [theme, setTheme] = useState<ThemeMode>('light');
 
   useEffect(() => {
@@ -75,7 +72,6 @@ export function UserMenu({ onOpenHelp }: UserMenuProps) {
   const displayName = profile?.display_name || user.email?.split('@')[0] || 'User';
   const initials = displayName.slice(0, 2).toUpperCase();
   const credits = creditsQuery.data;
-  const latestCreditActivity = creditActivityQuery.data?.[0] || null;
   const creditsPercent = credits?.bypass
     ? 100
     : credits
@@ -121,18 +117,6 @@ export function UserMenu({ onOpenHelp }: UserMenuProps) {
               style={{ width: `${creditsPercent}%` }}
             />
           </div>
-          <p className="mt-1 text-[10px] text-muted-foreground">
-            {creditsQuery.isLoading
-              ? 'Loading credits…'
-              : creditsQuery.isError
-              ? 'Credits unavailable (now)'
-              : credits.nextRefillLabel}
-          </p>
-          {!creditsQuery.isLoading && !creditsQuery.isError && latestCreditActivity ? (
-            <p className="mt-0.5 text-[10px] text-muted-foreground">
-              Latest: {latestCreditActivity.summary} ({formatRelativeShort(latestCreditActivity.createdAt)})
-            </p>
-          ) : null}
         </div>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>

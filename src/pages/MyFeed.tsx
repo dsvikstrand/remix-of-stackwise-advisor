@@ -71,6 +71,7 @@ export default function MyFeed() {
             isLoading={isLoading}
             isOwnerView={true}
             profileUserId={user.id}
+            showUnlockActivityPanel={false}
             emptyMessage="No pulled content yet. Start with a YouTube URL."
             emptyActionHref="/youtube"
             emptyActionLabel="Pull from YouTube"

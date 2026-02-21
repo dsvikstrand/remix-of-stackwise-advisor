@@ -527,7 +527,6 @@ export function MyFeedTimeline({
               sourceChannelTitle={source?.sourceChannelTitle || null}
               sourceChannelAvatarUrl={source?.thumbnailUrl || null}
               createdAt={item.createdAt}
-              sourceUrl={source?.sourceUrl || null}
               unlockCost={Number(source?.unlockCost || 0)}
               isUnlocking={isUnlocking}
               canUnlock={canMutate}
@@ -670,16 +669,6 @@ export function MyFeedTimeline({
                     )}
                   </div>
                 </>
-              )}
-
-              {!isSubscriptionNotice && !blueprint && !isUnlockable && (
-                <div className="flex justify-end">
-                  {source?.sourceUrl ? (
-                    <a href={source.sourceUrl} target="_blank" rel="noreferrer" className="underline text-xs text-muted-foreground">
-                      Open source
-                    </a>
-                  ) : null}
-                </div>
               )}
 
               {!autoChannelPipelineEnabled && !isSubscriptionNotice && blueprint && item.lastDecisionCode && item.state !== 'channel_published' && (
