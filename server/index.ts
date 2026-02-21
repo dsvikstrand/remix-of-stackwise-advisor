@@ -179,14 +179,27 @@ const sourceUnlockGenerateMaxItems = clampInt(process.env.SOURCE_UNLOCK_GENERATE
 const sourceAutoUnlockSampleSize = clampInt(process.env.SOURCE_AUTO_UNLOCK_SAMPLE_SIZE, 3, 1, 10);
 const sourceAutoUnlockRetryDelaySeconds = clampInt(process.env.SOURCE_AUTO_UNLOCK_RETRY_DELAY_SECONDS, 90, 10, 3600);
 const sourceAutoUnlockRetryMaxAttempts = clampInt(process.env.SOURCE_AUTO_UNLOCK_RETRY_MAX_ATTEMPTS, 3, 1, 10);
-const sourceTranscriptRetryDelaySeconds = clampInt(
-  process.env.SOURCE_TRANSCRIPT_RETRY_DELAY_SECONDS || process.env.SOURCE_AUTO_UNLOCK_TRANSCRIPT_RETRY_DELAY_SECONDS,
+const sourceTranscriptRetryDelayAttempt1Seconds = clampInt(
+  process.env.SOURCE_TRANSCRIPT_RETRY_DELAY_ATTEMPT1_SECONDS
+    || process.env.SOURCE_TRANSCRIPT_RETRY_DELAY_SECONDS
+    || process.env.SOURCE_AUTO_UNLOCK_TRANSCRIPT_RETRY_DELAY_SECONDS,
   300,
   30,
   24 * 3600,
 );
+const sourceTranscriptRetryDelayAttempt2Seconds = clampInt(
+  process.env.SOURCE_TRANSCRIPT_RETRY_DELAY_ATTEMPT2_SECONDS,
+  900,
+  30,
+  24 * 3600,
+);
+const sourceTranscriptRetryDelayAttempt3Seconds = clampInt(
+  process.env.SOURCE_TRANSCRIPT_RETRY_DELAY_ATTEMPT3_SECONDS,
+  2700,
+  30,
+  24 * 3600,
+);
 const sourceTranscriptMaxAttempts = clampInt(process.env.SOURCE_TRANSCRIPT_MAX_ATTEMPTS, 3, 1, 10);
-const sourceUnlockTranscriptCooldownHours = clampInt(process.env.SOURCE_UNLOCK_TRANSCRIPT_COOLDOWN_HOURS, 6, 1, 72);
 const sourceUnlockExpiredSweepBatch = clampInt(process.env.SOURCE_UNLOCK_EXPIRED_SWEEP_BATCH, 100, 10, 1000);
 const sourceUnlockSweepsEnabledRaw = String(process.env.SOURCE_UNLOCK_SWEEPS_ENABLED || 'true').trim().toLowerCase();
 const sourceUnlockSweepsEnabled = !(sourceUnlockSweepsEnabledRaw === 'false' || sourceUnlockSweepsEnabledRaw === '0' || sourceUnlockSweepsEnabledRaw === 'off');
@@ -1203,9 +1216,14 @@ app.get('/api/profile/:userId/feed', async (req, res) => {
 
   const sourceMap = new Map((sources || []).map((row) => [row.id, row]));
   const blueprintMap = new Map((blueprints || []).map((row) => [row.id, row]));
-  const permanentNoTranscriptSourceIds = new Set(
+  const transcriptHiddenSourceIds = new Set(
     (unlocks || [])
-      .filter((row) => isPermanentNoTranscriptCode(row.last_error_code) || normalizeTranscriptTruthStatus((row as { transcript_status?: unknown }).transcript_status) === 'confirmed_no_speech')
+      .filter((row) => {
+        const status = normalizeTranscriptTruthStatus((row as { transcript_status?: unknown }).transcript_status);
+        if (status === 'confirmed_no_speech' || status === 'retrying') return true;
+        const normalizedErrorCode = String(row.last_error_code || '').trim().toUpperCase();
+        return normalizedErrorCode === 'NO_TRANSCRIPT_PERMANENT' || normalizedErrorCode === 'TRANSCRIPT_UNAVAILABLE';
+      })
       .map((row) => String(row.source_item_id || '').trim())
       .filter(Boolean),
   );
@@ -1222,7 +1240,7 @@ app.get('/api/profile/:userId/feed', async (req, res) => {
   const visibleFeedRows = filteredFeedRows.filter((row) => {
     if (row.blueprint_id) return true;
     const sourceItemId = String(row.source_item_id || '').trim();
-    return !sourceItemId || !permanentNoTranscriptSourceIds.has(sourceItemId);
+    return !sourceItemId || !transcriptHiddenSourceIds.has(sourceItemId);
   });
 
   const items = visibleFeedRows.map((row) => {
@@ -2937,6 +2955,51 @@ async function insertFeedItem(db: ReturnType<typeof createClient>, input: {
   return data;
 }
 
+async function suppressUnlockableFeedRowsForSourceItem(
+  db: ReturnType<typeof createClient>,
+  input: {
+    sourceItemId: string;
+    decisionCode: string;
+    traceId?: string;
+    sourceChannelId?: string | null;
+    videoId?: string | null;
+  },
+) {
+  const sourceItemId = String(input.sourceItemId || '').trim();
+  if (!sourceItemId) return 0;
+
+  const { data, error } = await db
+    .from('user_feed_items')
+    .update({
+      state: 'my_feed_skipped',
+      last_decision_code: String(input.decisionCode || 'TRANSCRIPT_BLOCKED').slice(0, 120),
+    })
+    .eq('source_item_id', sourceItemId)
+    .is('blueprint_id', null)
+    .in('state', ['my_feed_unlockable', 'my_feed_unlocking'])
+    .select('id');
+  if (error) throw error;
+
+  const hiddenCount = (data || []).length;
+  if (hiddenCount > 0) {
+    logUnlockEvent(
+      'auto_transcript_hidden_feed_row',
+      {
+        trace_id: String(input.traceId || '').trim() || createUnlockTraceId(),
+        source_item_id: sourceItemId,
+      },
+      {
+        decision_code: String(input.decisionCode || '').trim() || 'TRANSCRIPT_BLOCKED',
+        hidden_count: hiddenCount,
+        source_channel_id: String(input.sourceChannelId || '').trim() || null,
+        video_id: String(input.videoId || '').trim() || null,
+      },
+    );
+  }
+
+  return hiddenCount;
+}
+
 async function upsertFeedItemWithBlueprint(db: ReturnType<typeof createClient>, input: {
   userId: string;
   sourceItemId: string;
@@ -3861,7 +3924,7 @@ async function runUnlockSweeps(db: ReturnType<typeof createClient>, input?: {
 }) {
   if (!sourceUnlockSweepsEnabled) return null;
   try {
-    return await runUnlockReliabilitySweeps(db, {
+    const sweepResult = await runUnlockReliabilitySweeps(db, {
       mode: input?.mode || 'opportunistic',
       force: Boolean(input?.force),
       traceId: input?.traceId,
@@ -3871,6 +3934,8 @@ async function runUnlockSweeps(db: ReturnType<typeof createClient>, input?: {
       dryLogs: sourceUnlockSweepDryLogs,
       enabled: sourceUnlockSweepsEnabled,
     });
+    await runTranscriptFeedSuppressionSweep(db, { traceId: input?.traceId });
+    return sweepResult;
   } catch (error) {
     logUnlockEvent(
       'unlock_sweep_failed',
@@ -3881,6 +3946,49 @@ async function runUnlockSweeps(db: ReturnType<typeof createClient>, input?: {
       },
     );
     return null;
+  }
+}
+
+async function runTranscriptFeedSuppressionSweep(
+  db: ReturnType<typeof createClient>,
+  input?: { traceId?: string },
+) {
+  const { data, error } = await db
+    .from('source_item_unlocks')
+    .select('source_item_id, transcript_status, last_error_code, updated_at')
+    .or('transcript_status.eq.retrying,transcript_status.eq.confirmed_no_speech,last_error_code.eq.NO_TRANSCRIPT_PERMANENT,last_error_code.eq.TRANSCRIPT_UNAVAILABLE')
+    .order('updated_at', { ascending: false })
+    .limit(Math.max(10, sourceUnlockSweepBatch));
+  if (error) {
+    logUnlockEvent(
+      'transcript_feed_sweep_failed',
+      { trace_id: String(input?.traceId || '').trim() || createUnlockTraceId() },
+      { error: error.message },
+    );
+    return;
+  }
+
+  let hiddenRows = 0;
+  for (const row of data || []) {
+    const sourceItemId = String(row.source_item_id || '').trim();
+    if (!sourceItemId) continue;
+    const isPermanent =
+      normalizeTranscriptTruthStatus((row as { transcript_status?: unknown }).transcript_status) === 'confirmed_no_speech'
+      || isPermanentNoTranscriptCode(String((row as { last_error_code?: unknown }).last_error_code || ''));
+    const hidden = await suppressUnlockableFeedRowsForSourceItem(db, {
+      sourceItemId,
+      decisionCode: isPermanent ? 'NO_TRANSCRIPT_PERMANENT_AUTO' : 'TRANSCRIPT_UNAVAILABLE_AUTO',
+      traceId: input?.traceId,
+    });
+    hiddenRows += hidden;
+  }
+
+  if (hiddenRows > 0) {
+    logUnlockEvent(
+      'transcript_feed_sweep_summary',
+      { trace_id: String(input?.traceId || '').trim() || createUnlockTraceId() },
+      { hidden_rows: hiddenRows, scanned: (data || []).length },
+    );
   }
 }
 
@@ -3949,6 +4057,13 @@ function normalizeUnlockFailureCode(code: string | null | undefined) {
   return normalized || 'UNLOCK_GENERATION_FAILED';
 }
 
+function getTranscriptRetryDelaySecondsForAttempt(attemptCount: number) {
+  const normalizedAttempt = Math.max(1, Math.floor(Number(attemptCount) || 1));
+  if (normalizedAttempt <= 1) return sourceTranscriptRetryDelayAttempt1Seconds;
+  if (normalizedAttempt === 2) return sourceTranscriptRetryDelayAttempt2Seconds;
+  return sourceTranscriptRetryDelayAttempt3Seconds;
+}
+
 function getTranscriptRetryAfterSeconds(unlock: SourceItemUnlockRow | null) {
   if (!unlock) return 0;
 
@@ -3959,16 +4074,7 @@ function getTranscriptRetryAfterSeconds(unlock: SourceItemUnlockRow | null) {
       return Math.max(1, Math.ceil(explicitRetryAfterMs / 1000));
     }
   }
-
-  if (!isTransientTranscriptUnavailableCode(unlock.last_error_code)) return 0;
-  const updatedAtMs = Date.parse(String(unlock.updated_at || ''));
-  if (!Number.isFinite(updatedAtMs)) return 0;
-
-  const cooldownMs = sourceUnlockTranscriptCooldownHours * 60 * 60 * 1000;
-  const expiresAtMs = updatedAtMs + cooldownMs;
-  const retryAfterMs = expiresAtMs - Date.now();
-  if (retryAfterMs <= 0) return 0;
-  return Math.max(1, Math.ceil(retryAfterMs / 1000));
+  return 0;
 }
 
 function getTranscriptCooldownState(unlock: SourceItemUnlockRow | null): TranscriptCooldownState {
@@ -4012,7 +4118,7 @@ async function classifyTranscriptFailureForUnlock(input: {
   let nextNoCaptionHits = getUnlockTranscriptNoCaptionHits(input.unlock);
   let transcriptStatus: TranscriptTruthStatus = 'transient_error';
   let finalErrorCode = normalizeUnlockFailureCode(normalizedRawErrorCode);
-  let retryAfterSeconds = sourceTranscriptRetryDelaySeconds;
+  let retryAfterSeconds = getTranscriptRetryDelaySecondsForAttempt(nextAttemptCount);
   const probeMeta: Record<string, unknown> = {
     normalized_raw_error_code: normalizedRawErrorCode || null,
   };
@@ -4052,7 +4158,7 @@ async function classifyTranscriptFailureForUnlock(input: {
     retryAfterSeconds = 0;
   } else if (isTransientTranscriptUnavailableCode(normalizedRawErrorCode)) {
     finalErrorCode = 'TRANSCRIPT_UNAVAILABLE';
-    retryAfterSeconds = sourceTranscriptRetryDelaySeconds;
+    retryAfterSeconds = getTranscriptRetryDelaySecondsForAttempt(nextAttemptCount);
   }
 
   await input.db
@@ -5403,6 +5509,43 @@ async function processSourceItemUnlockGenerationJob(input: {
         }
       }
 
+      const isAutoOrigin = item.unlock_origin === 'subscription_auto_unlock' || item.unlock_origin === 'source_auto_unlock_retry';
+      const transcriptAttempts = transcriptDecision?.transcriptAttemptCount || 0;
+      const transcriptRetryExhausted =
+        isAutoOrigin
+        && errorCode === 'TRANSCRIPT_UNAVAILABLE'
+        && transcriptAttempts >= sourceTranscriptMaxAttempts;
+      if (transcriptRetryExhausted) {
+        errorCode = 'NO_TRANSCRIPT_PERMANENT';
+        try {
+          await db
+            .from('source_item_unlocks')
+            .update({
+              transcript_status: 'confirmed_no_speech',
+              transcript_attempt_count: Math.max(sourceTranscriptMaxAttempts, transcriptAttempts),
+              transcript_no_caption_hits: Math.max(
+                getUnlockTranscriptNoCaptionHits(processingUnlockRow),
+                transcriptDecision?.transcriptNoCaptionHits || 0,
+              ),
+              transcript_retry_after: null,
+              transcript_probe_meta: {
+                ...(transcriptDecision?.probeMeta || {}),
+                exhausted_at: new Date().toISOString(),
+                exhausted_reason: 'MAX_TRANSCRIPT_ATTEMPTS',
+              },
+              last_error_code: 'NO_TRANSCRIPT_PERMANENT',
+              last_error_message: 'Transcript unavailable after max retry attempts.',
+            })
+            .eq('id', item.unlock_id);
+        } catch (exhaustionError) {
+          logUnlockEvent(
+            'auto_transcript_retry_exhausted_update_failed',
+            { trace_id: input.traceId, job_id: input.jobId, unlock_id: item.unlock_id, source_item_id: item.source_item_id },
+            { error: exhaustionError instanceof Error ? exhaustionError.message : String(exhaustionError) },
+          );
+        }
+      }
+
       failures.push({
         video_id: item.video_id,
         unlock_id: item.unlock_id,
@@ -5462,10 +5605,31 @@ async function processSourceItemUnlockGenerationJob(input: {
         );
       }
 
+      if (isAutoOrigin && (errorCode === 'TRANSCRIPT_UNAVAILABLE' || errorCode === 'NO_TRANSCRIPT_PERMANENT')) {
+        try {
+          await suppressUnlockableFeedRowsForSourceItem(db, {
+            sourceItemId: item.source_item_id,
+            decisionCode: errorCode === 'NO_TRANSCRIPT_PERMANENT'
+              ? 'NO_TRANSCRIPT_PERMANENT_AUTO'
+              : 'TRANSCRIPT_UNAVAILABLE_AUTO',
+            traceId: input.traceId,
+            sourceChannelId: item.source_channel_id,
+            videoId: item.video_id,
+          });
+        } catch (hideError) {
+          logUnlockEvent(
+            'auto_transcript_hide_failed',
+            { trace_id: input.traceId, job_id: input.jobId, unlock_id: item.unlock_id, source_item_id: item.source_item_id },
+            { error: hideError instanceof Error ? hideError.message : String(hideError) },
+          );
+        }
+      }
+
       if (
-        item.unlock_origin === 'subscription_auto_unlock'
+        isAutoOrigin
         && errorCode === 'TRANSCRIPT_UNAVAILABLE'
         && !transcriptDecision?.confirmedPermanent
+        && !transcriptRetryExhausted
       ) {
         try {
           const retry = await enqueueSourceAutoUnlockRetryJob(db, {
@@ -5480,7 +5644,7 @@ async function processSourceItemUnlockGenerationJob(input: {
             preferred_payer_user_id: item.reserved_by_user_id,
           });
           logUnlockEvent(
-            'subscription_auto_unlock_retry_scheduled',
+            'auto_transcript_retry_scheduled',
             {
               trace_id: input.traceId,
               job_id: input.jobId,
@@ -5513,6 +5677,21 @@ async function processSourceItemUnlockGenerationJob(input: {
             },
           );
         }
+      } else if (transcriptRetryExhausted) {
+        logUnlockEvent(
+          'auto_transcript_retry_exhausted',
+          {
+            trace_id: input.traceId,
+            job_id: input.jobId,
+            source_item_id: item.source_item_id,
+            unlock_id: item.unlock_id,
+            video_id: item.video_id,
+          },
+          {
+            transcript_attempt_count: transcriptAttempts,
+            transcript_no_caption_hits: transcriptDecision?.transcriptNoCaptionHits || null,
+          },
+        );
       }
 
       logUnlockEvent(
@@ -5622,7 +5801,7 @@ async function processSourceTranscriptRevalidateJob(input: {
           transcript_attempt_count: 0,
           transcript_no_caption_hits: 0,
           transcript_last_probe_at: new Date().toISOString(),
-          transcript_retry_after: buildTranscriptRetryAfterIso(sourceTranscriptRetryDelaySeconds),
+          transcript_retry_after: buildTranscriptRetryAfterIso(getTranscriptRetryDelaySecondsForAttempt(1)),
           transcript_probe_meta: {
             providers: probe.providers,
             all_no_captions: false,
@@ -5734,6 +5913,55 @@ async function processSourceAutoUnlockRetryJob(input: {
     return;
   }
 
+  const transcriptAttempts = getUnlockTranscriptAttemptCount(unlock);
+  const transcriptStatus = normalizeTranscriptTruthStatus(unlock.transcript_status);
+  const shouldForceTerminalNoTranscript =
+    transcriptAttempts >= sourceTranscriptMaxAttempts
+    && (
+      transcriptStatus === 'retrying'
+      || transcriptStatus === 'transient_error'
+      || isTransientTranscriptUnavailableCode(unlock.last_error_code)
+    );
+  if (shouldForceTerminalNoTranscript) {
+    await db
+      .from('source_item_unlocks')
+      .update({
+        transcript_status: 'confirmed_no_speech',
+        transcript_attempt_count: Math.max(sourceTranscriptMaxAttempts, transcriptAttempts),
+        transcript_no_caption_hits: Math.max(sourceTranscriptMaxAttempts, getUnlockTranscriptNoCaptionHits(unlock)),
+        transcript_retry_after: null,
+        last_error_code: 'NO_TRANSCRIPT_PERMANENT',
+        last_error_message: 'Transcript unavailable after max retry attempts.',
+      })
+      .eq('id', unlock.id);
+    await suppressUnlockableFeedRowsForSourceItem(db, {
+      sourceItemId,
+      decisionCode: 'NO_TRANSCRIPT_PERMANENT_AUTO',
+      traceId: input.traceId,
+      sourceChannelId,
+      videoId: input.payload.video_id,
+    });
+    await db.from('ingestion_jobs').update({
+      status: 'succeeded',
+      finished_at: new Date().toISOString(),
+      processed_count: 1,
+      inserted_count: 0,
+      skipped_count: 1,
+      lease_expires_at: null,
+      worker_id: null,
+      last_heartbeat_at: new Date().toISOString(),
+      error_code: null,
+      error_message: null,
+    }).eq('id', input.jobId);
+
+    logUnlockEvent(
+      'auto_transcript_retry_exhausted',
+      { trace_id: input.traceId, job_id: input.jobId, source_item_id: sourceItemId, unlock_id: unlock.id, video_id: input.payload.video_id },
+      { transcript_attempt_count: transcriptAttempts, forced_terminal: true },
+    );
+    return;
+  }
+
   const attempt = await attemptAutoUnlockForSourceItem({
     sourceItemId,
     sourcePageId: input.payload.source_page_id || null,
@@ -5754,10 +5982,18 @@ async function processSourceAutoUnlockRetryJob(input: {
 
   if (!attempt.queued) {
     if (attempt.reason === 'TRANSCRIPT_COOLDOWN') {
+      const currentUnlock = await getSourceItemUnlockBySourceItemId(db, sourceItemId);
+      const cooldownDelaySeconds = Math.max(
+        5,
+        getTranscriptRetryAfterSeconds(currentUnlock || unlock)
+          || getTranscriptRetryDelaySecondsForAttempt(
+            getUnlockTranscriptAttemptCount(currentUnlock || unlock) + 1,
+          ),
+      );
       throw new AutoUnlockRetryableError({
         errorCode: 'TRANSCRIPT_UNAVAILABLE',
         message: 'Auto-unlock retry delayed: transcript unavailable cooldown active.',
-        retryDelaySeconds: sourceTranscriptRetryDelaySeconds,
+        retryDelaySeconds: cooldownDelaySeconds,
       });
     }
     if (attempt.reason === 'NO_ELIGIBLE_USERS' || attempt.reason === 'NO_ELIGIBLE_CREDITS') {
@@ -6422,9 +6658,11 @@ async function syncSingleSubscription(db: ReturnType<typeof createClient>, subsc
       estimatedCost: estimatedUnlockCost,
     });
 
+    let autoAttempt: AutoUnlockAttemptResult | null = null;
+    let autoAttemptError: unknown = null;
     if (unlock.status === 'available') {
       try {
-        const attempt = await attemptAutoUnlockForSourceItem({
+        autoAttempt = await attemptAutoUnlockForSourceItem({
           sourceItemId: source.id,
           sourcePageId: subscription.source_page_id || source.source_page_id || null,
           sourceChannelId: subscription.source_channel_id || source.source_channel_id || '',
@@ -6437,11 +6675,13 @@ async function syncSingleSubscription(db: ReturnType<typeof createClient>, subsc
         });
 
         if (
-          !attempt.queued
+          !autoAttempt.queued
           && (
-            attempt.reason === 'NO_ELIGIBLE_USERS'
-            || attempt.reason === 'NO_ELIGIBLE_CREDITS'
-            || attempt.reason === 'TRANSCRIPT_COOLDOWN'
+            autoAttempt.reason === 'NO_ELIGIBLE_USERS'
+            || autoAttempt.reason === 'NO_ELIGIBLE_CREDITS'
+            || autoAttempt.reason === 'TRANSCRIPT_COOLDOWN'
+            || autoAttempt.reason === 'QUEUE_BACKPRESSURE'
+            || autoAttempt.reason === 'QUEUE_DISABLED'
           )
         ) {
           try {
@@ -6464,7 +6704,7 @@ async function syncSingleSubscription(db: ReturnType<typeof createClient>, subsc
               user_id: subscription.user_id,
               source_item_id: source.id,
               source_channel_id: subscription.source_channel_id,
-              reason: attempt.reason,
+              reason: autoAttempt.reason,
               retry_enqueued: retry.enqueued,
               retry_job_id: retry.enqueued ? retry.job_id : null,
               retry_next_run_at: retry.enqueued ? retry.next_run_at : null,
@@ -6476,18 +6716,18 @@ async function syncSingleSubscription(db: ReturnType<typeof createClient>, subsc
               user_id: subscription.user_id,
               source_item_id: source.id,
               source_channel_id: subscription.source_channel_id,
-              reason: attempt.reason,
+              reason: autoAttempt.reason,
               trigger: options.trigger,
               error: retryError instanceof Error ? retryError.message : String(retryError),
             }));
           }
-        } else if (!attempt.queued) {
+        } else if (!autoAttempt.queued) {
           console.log('[subscription_auto_unlock_not_queued]', JSON.stringify({
             subscription_id: subscription.id,
             user_id: subscription.user_id,
             source_item_id: source.id,
             source_channel_id: subscription.source_channel_id,
-            reason: attempt.reason,
+            reason: autoAttempt.reason,
             trigger: options.trigger,
           }));
         } else {
@@ -6496,13 +6736,14 @@ async function syncSingleSubscription(db: ReturnType<typeof createClient>, subsc
             user_id: subscription.user_id,
             source_item_id: source.id,
             source_channel_id: subscription.source_channel_id,
-            payer_user_id: attempt.payer_user_id,
-            job_id: attempt.job_id,
-            trace_id: attempt.trace_id,
+            payer_user_id: autoAttempt.payer_user_id,
+            job_id: autoAttempt.job_id,
+            trace_id: autoAttempt.trace_id,
             trigger: options.trigger,
           }));
         }
       } catch (autoUnlockError) {
+        autoAttemptError = autoUnlockError;
         console.log('[subscription_auto_unlock_attempt_failed]', JSON.stringify({
           subscription_id: subscription.id,
           user_id: subscription.user_id,
@@ -6514,22 +6755,57 @@ async function syncSingleSubscription(db: ReturnType<typeof createClient>, subsc
       }
     }
 
-    const insertedItem = await insertFeedItem(db, {
-      userId: subscription.user_id,
-      sourceItemId: source.id,
-      blueprintId: null,
-      state: 'my_feed_unlockable',
-    });
-    if (insertedItem) inserted += 1;
-    else skipped += 1;
+    const latestUnlock = await getSourceItemUnlockBySourceItemId(db, source.id);
+    const transcriptCooldown = getTranscriptCooldownState(latestUnlock);
+    const isTranscriptBlocked = transcriptCooldown.active || isConfirmedNoTranscriptUnlock(latestUnlock);
+    if (isTranscriptBlocked) {
+      await suppressUnlockableFeedRowsForSourceItem(db, {
+        sourceItemId: source.id,
+        decisionCode: isConfirmedNoTranscriptUnlock(latestUnlock)
+          ? 'NO_TRANSCRIPT_PERMANENT_AUTO'
+          : 'TRANSCRIPT_UNAVAILABLE_AUTO',
+        sourceChannelId: subscription.source_channel_id,
+        videoId: video.videoId,
+      });
+    }
 
-    console.log('[subscription_auto_unlockable]', JSON.stringify({
-      subscription_id: subscription.id,
-      user_id: subscription.user_id,
-      source_item_id: source.id,
-      estimated_unlock_cost: estimatedUnlockCost,
-      trigger: options.trigger,
-    }));
+    const shouldInsertUnlockable =
+      (() => {
+        if (unlock.status !== 'available') return false;
+        if (isTranscriptBlocked) return false;
+        if (autoAttempt?.queued) return false;
+        if (autoAttemptError) return true;
+        if (!autoAttempt) return true;
+        return (
+          autoAttempt.reason === 'NO_ELIGIBLE_USERS'
+          || autoAttempt.reason === 'NO_ELIGIBLE_CREDITS'
+          || autoAttempt.reason === 'QUEUE_BACKPRESSURE'
+          || autoAttempt.reason === 'QUEUE_DISABLED'
+          || autoAttempt.reason === 'SERVICE_DB_MISSING'
+          || autoAttempt.reason === 'INVALID_SOURCE'
+        );
+      })();
+
+    if (shouldInsertUnlockable) {
+      const insertedItem = await insertFeedItem(db, {
+        userId: subscription.user_id,
+        sourceItemId: source.id,
+        blueprintId: null,
+        state: 'my_feed_unlockable',
+      });
+      if (insertedItem) inserted += 1;
+      else skipped += 1;
+
+      console.log('[subscription_auto_unlockable]', JSON.stringify({
+        subscription_id: subscription.id,
+        user_id: subscription.user_id,
+        source_item_id: source.id,
+        estimated_unlock_cost: estimatedUnlockCost,
+        trigger: options.trigger,
+      }));
+    } else {
+      skipped += 1;
+    }
   }
 
   await db
@@ -7603,6 +7879,15 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
     && duplicateRows.length === 0
   ) {
     const retryAfterSeconds = Math.max(...transcriptUnavailableRows.map((row) => row.retry_after_seconds));
+    logUnlockEvent(
+      'auto_transcript_manual_add_error_returned',
+      { trace_id: traceId, user_id: userId, source_page_id: sourcePage.id },
+      {
+        transcript_unavailable_count: transcriptUnavailableRows.length,
+        retry_after_seconds: retryAfterSeconds,
+        video_ids: transcriptUnavailableRows.map((row) => row.video_id),
+      },
+    );
     return res.status(422).json({
       ok: false,
       error_code: 'TRANSCRIPT_UNAVAILABLE',

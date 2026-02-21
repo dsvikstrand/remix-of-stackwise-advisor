@@ -57,10 +57,10 @@ function getUnlockActionErrorMessage(error: unknown, fallback: string) {
       return 'Source page missing for this item. Try opening it from source page first.';
     }
     if (error.errorCode === 'TRANSCRIPT_UNAVAILABLE') {
-      return 'Only videos with speech can be generated. If this video has speech, please try again in a few minutes.';
+      return 'Could not unlock this video right now. Please try again in a few minutes.';
     }
     if (error.errorCode === 'NO_TRANSCRIPT_PERMANENT') {
-      return 'No transcript is available for this video.';
+      return 'This video cannot be unlocked right now.';
     }
     return error.message || fallback;
   }

@@ -251,14 +251,14 @@ Current production behavior note:
 - Recovery authority:
   - Logs-first triage in `docs/ops/yt2bp_runbook.md`.
   - Feature/env toggles for fast rollback.
-  - Transcript-unavailable path uses retry cooldown for auto-unlock and non-charging deterministic user response for manual unlock.
+  - Transcript-unavailable path uses silent auto-retries with bounded backoff (`5m -> 15m -> 45m` by default) and only surfaces speech guidance on explicit Source Page `+Add` attempts.
   - Read-path polling endpoints (`/api/credits`, `/api/ingestion/jobs/latest-mine`) use dedicated limiter buckets, separated from global API limiter.
   - Frontend feed-card surfaces are intentionally low-action in MVP (like/comment only), reducing non-core interaction noise.
   - Subscription checkpoint advancement is intentionally held on runs with skipped upcoming premieres to avoid missing release ingestion.
   - Transcript truth model now separates ambiguous transcript failures from confirmed no-speech videos:
     - `NO_CAPTIONS` starts as retryable transcript-unavailable state.
-    - permanent `NO_TRANSCRIPT_PERMANENT` is only set after multi-attempt confirmation.
-    - confirmed no-speech rows are excluded from unlockable feed-card rendering and source video-library listings.
+    - permanent `NO_TRANSCRIPT_PERMANENT` is set after bounded retry/confirmation paths and treated as terminal skip for feed-card surfaces.
+    - transcript-retrying and confirmed no-speech rows are suppressed from unlockable feed-card rendering, while Source Page Video Library remains available for manual retry.
 
 ## 7) Extension Model
 - New adapters:

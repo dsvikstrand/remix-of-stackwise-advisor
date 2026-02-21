@@ -139,6 +139,10 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
   - transcript truth model requires bounded confirmation retries before setting permanent `NO_TRANSCRIPT_PERMANENT`.
   - historical permanent rows are revalidated in background and reset to retryable when misclassified.
   - confirmed no-speech rows are hidden from unlockable-card surfaces (feed + source video library).
+- Silent auto transcript retry follow-up:
+  - auto subscription transcript failures now suppress locked feed cards during retry/permanent states.
+  - retry scheduling uses deterministic bounded backoff ladder (`5m -> 15m -> 45m` defaults) with max-attempt terminal skip behavior.
+  - speech guidance warning copy remains explicit only for Source Page Video Library `+Add`.
 
 ## Acceptance Baseline Per Iteration
 1. Scope and behavior align with `docs/app/product-spec.md`.

@@ -135,11 +135,14 @@ export function useMyFeed(options?: { enabled?: boolean }) {
       const sourcePageAvatarById = new Map((sourcePagesData || []).map((row) => [row.id, row.avatar_url || null]));
       const sourcePageAvatarByExternalId = new Map((sourcePagesByExternalData || []).map((row) => [row.external_id, row.avatar_url || null]));
       const unlockMap = new Map((unlocks || []).map((row) => [row.source_item_id, row]));
-      const permanentNoTranscriptSourceIds = new Set(
+      const transcriptHiddenSourceIds = new Set(
         (unlocks || [])
-          .filter((row) =>
-            isPermanentNoTranscriptErrorCode(row.last_error_code)
-            || String((row as { transcript_status?: unknown }).transcript_status || '').trim().toLowerCase() === 'confirmed_no_speech')
+          .filter((row) => {
+            const transcriptStatus = String((row as { transcript_status?: unknown }).transcript_status || '').trim().toLowerCase();
+            if (transcriptStatus === 'confirmed_no_speech' || transcriptStatus === 'retrying') return true;
+            const lastErrorCode = String(row.last_error_code || '').trim().toUpperCase();
+            return isPermanentNoTranscriptErrorCode(lastErrorCode) || lastErrorCode === 'TRANSCRIPT_UNAVAILABLE';
+          })
           .map((row) => String(row.source_item_id || '').trim())
           .filter(Boolean),
       );
@@ -157,7 +160,7 @@ export function useMyFeed(options?: { enabled?: boolean }) {
       const visibleFeedRows = filteredFeedRows.filter((row) => {
         if (row.blueprint_id) return true;
         const sourceItemId = String(row.source_item_id || '').trim();
-        return !sourceItemId || !permanentNoTranscriptSourceIds.has(sourceItemId);
+        return !sourceItemId || !transcriptHiddenSourceIds.has(sourceItemId);
       });
 
       return visibleFeedRows.map((row) => {

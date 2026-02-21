@@ -276,6 +276,8 @@ si59) subscription sync now enriches candidate video states via YouTube `videos.
 si60) when one or more upcoming premieres are skipped in a sync run, subscription checkpoint (`last_seen_*`) is held for that run to avoid dropping release-time ingestion.
 si61) transcript truth model distinguishes temporary transcript failures from confirmed no-speech outcomes; `NO_CAPTIONS` is retryable until confirmation quorum is reached.
 si62) `NO_TRANSCRIPT_PERMANENT` is now set only after bounded confirmation retries, and confirmed no-speech rows are hidden from unlockable feed/video-library surfaces.
+si63) auto subscription transcript failures now use silent bounded retries with explicit retry-after ladder; feed-card rows are suppressed during retry/permanent states instead of shown as unlockable locks.
+si64) transcript speech-guidance warning copy is scoped to explicit Source Page Video Library `+Add` requests; Wall/My Feed unlock actions use generic retry-safe messaging.
 
 ## Next Milestone (Hardening)
 n1) Keep legacy manual gate behavior stable with `CHANNEL_GATES_MODE=bypass` while auto-channel path uses `AUTO_CHANNEL_GATE_MODE`.

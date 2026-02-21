@@ -242,6 +242,10 @@ Rules:
   - `NO_TRANSCRIPT_PERMANENT` now requires bounded multi-attempt confirmation (dual-provider no-caption hits).
   - historical permanent rows are revalidated in the background (`source_transcript_revalidate`) and reset when misclassified.
   - confirmed no-speech rows are hidden from My Feed/Home/profile and Source Page Video Library unlock surfaces.
+- Silent auto transcript retries (2026-02-21):
+  - auto subscription transcript failures now suppress unlockable feed cards while retries run (default backoff ladder `5m -> 15m -> 45m`).
+  - transcript retry exhaustion (max attempts) transitions to terminal skip/permanent-hidden behavior for feed surfaces.
+  - transcript speech guidance copy is scoped to Source Page Video Library `+Add`; Wall/My Feed unlock errors remain generic.
 - UI polish pass (2026-02-21):
   - locked source cards now use compact credit chip text and drop `Open source` action from feed-card context.
   - profile tabs are streamlined to `Feed / Comments / Liked`; subscriptions stay on dedicated `/subscriptions`.
