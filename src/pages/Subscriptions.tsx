@@ -63,6 +63,45 @@ function getSourcePagePath(subscription: SourceSubscription) {
   return buildSourcePagePath('youtube', channelId);
 }
 
+function normalizeSubscriptionFilterQuery(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function getSubscriptionFilterRank(subscription: SourceSubscription, normalizedQuery: string) {
+  if (!normalizedQuery) return 0;
+  const values = [
+    subscription.source_channel_title || '',
+    subscription.source_channel_id || '',
+    subscription.source_channel_url || '',
+  ]
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+
+  let bestRank = Number.POSITIVE_INFINITY;
+  for (const value of values) {
+    if (value === normalizedQuery) {
+      bestRank = Math.min(bestRank, 0);
+      continue;
+    }
+    if (value.startsWith(normalizedQuery)) {
+      bestRank = Math.min(bestRank, 1);
+      continue;
+    }
+    if (
+      value.includes(` ${normalizedQuery}`)
+      || value.includes(`-${normalizedQuery}`)
+      || value.includes(`_${normalizedQuery}`)
+    ) {
+      bestRank = Math.min(bestRank, 2);
+      continue;
+    }
+    if (value.includes(normalizedQuery)) {
+      bestRank = Math.min(bestRank, 3);
+    }
+  }
+  return bestRank;
+}
+
 function formatDateTime(value: string | null) {
   if (!value) return 'Never';
   const parsed = new Date(value);
@@ -148,6 +187,7 @@ export default function Subscriptions() {
   const [channelSearchError, setChannelSearchError] = useState<string | null>(null);
   const [subscribingChannelIds, setSubscribingChannelIds] = useState<Record<string, boolean>>({});
   const [pendingRows, setPendingRows] = useState<Record<string, boolean>>({});
+  const [subscriptionFilterQuery, setSubscriptionFilterQuery] = useState('');
   const [isYouTubeImportOpen, setIsYouTubeImportOpen] = useState(false);
   const [youTubeImportResults, setYouTubeImportResults] = useState<YouTubeImportPreviewItem[]>([]);
   const [youTubeImportSelected, setYouTubeImportSelected] = useState<Record<string, boolean>>({});
@@ -558,6 +598,25 @@ export default function Subscriptions() {
     () => subscriptions.filter((subscription) => subscription.is_active),
     [subscriptions],
   );
+  const normalizedSubscriptionFilterQuery = useMemo(
+    () => normalizeSubscriptionFilterQuery(subscriptionFilterQuery),
+    [subscriptionFilterQuery],
+  );
+  const filteredActiveSubscriptions = useMemo(() => {
+    if (!normalizedSubscriptionFilterQuery) return activeSubscriptions;
+    return activeSubscriptions
+      .map((subscription, index) => ({
+        subscription,
+        index,
+        rank: getSubscriptionFilterRank(subscription, normalizedSubscriptionFilterQuery),
+      }))
+      .filter((entry) => Number.isFinite(entry.rank))
+      .sort((left, right) => {
+        if (left.rank !== right.rank) return left.rank - right.rank;
+        return left.index - right.index;
+      })
+      .map((entry) => entry.subscription);
+  }, [activeSubscriptions, normalizedSubscriptionFilterQuery]);
   const selectedYouTubeImportChannels = useMemo(
     () =>
       youTubeImportResults
@@ -1059,10 +1118,20 @@ export default function Subscriptions() {
                 <CardTitle className="text-base">Your subscriptions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
+                <Input
+                  value={subscriptionFilterQuery}
+                  onChange={(event) => setSubscriptionFilterQuery(event.target.value)}
+                  placeholder="Filter subscriptions..."
+                  className="h-9"
+                />
                 {activeSubscriptions.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No subscriptions yet.</p>
+                ) : filteredActiveSubscriptions.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No subscriptions match "{subscriptionFilterQuery.trim()}".
+                  </p>
                 ) : (
-                  activeSubscriptions.map((subscription) => {
+                  filteredActiveSubscriptions.map((subscription) => {
                     const sourcePagePath = getSourcePagePath(subscription);
                     return (
                       <div key={subscription.id} className="rounded-md border border-border/40 p-3 space-y-2">
