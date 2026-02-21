@@ -69,31 +69,30 @@ export function WallBlueprintCard({
             <img
               src={effectiveBannerUrl}
               alt=""
-              className="absolute inset-0 h-full w-full scale-105 object-cover opacity-20 blur-sm"
+              className="absolute inset-0 h-full w-full scale-105 object-cover opacity-[0.16] blur"
               loading="lazy"
             />
-            <div className="absolute inset-0 bg-gradient-to-b from-background/10 via-background/25 to-background/45" />
+            <div className="absolute inset-0 bg-gradient-to-b from-background/[0.06] via-background/[0.16] to-background/[0.32]" />
           </>
         )}
 
         <div className="relative space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-foreground/75">
-              <ChannelIcon className="h-3.5 w-3.5" />
-              {channelLabel}
-            </p>
-            <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
-          </div>
-
           {sourceName ? (
-            <div className="flex items-center gap-1.5 min-w-0">
-              <Avatar className="h-4 w-4 shrink-0 border border-border/60">
-                <AvatarImage src={sourceAvatarUrl || undefined} alt={sourceLabel} />
-                <AvatarFallback className="text-[8px]">{sourceInitials}</AvatarFallback>
-              </Avatar>
-              <p className="text-xs text-muted-foreground line-clamp-1">{sourceName}</p>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Avatar className="h-4 w-4 shrink-0 border border-border/60">
+                  <AvatarImage src={sourceAvatarUrl || undefined} alt={sourceLabel} />
+                  <AvatarFallback className="text-[8px]">{sourceInitials}</AvatarFallback>
+                </Avatar>
+                <p className="text-xs text-muted-foreground line-clamp-1">{sourceName}</p>
+              </div>
+              <span className="text-[11px] text-muted-foreground shrink-0">{createdLabel}</span>
             </div>
-          ) : null}
+          ) : (
+            <div className="flex items-center justify-end">
+              <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
+            </div>
+          )}
 
           <h3 className="text-base font-semibold leading-tight">{title}</h3>
           <p className="text-sm text-muted-foreground line-clamp-3">{summary}</p>
@@ -110,20 +109,26 @@ export function WallBlueprintCard({
             />
           )}
 
-          <div className="flex items-center gap-1.5 pt-1 text-xs text-muted-foreground">
-            <Button
-              variant="ghost"
-              size="sm"
-              className={`h-7 px-2 ${userLiked ? 'text-red-500' : ''}`}
-              onClick={onLike}
-            >
-              <Heart className={`h-4 w-4 mr-1 ${userLiked ? 'fill-current' : ''}`} />
-              {likesCount}
-            </Button>
-            <span className="inline-flex h-7 items-center gap-1 px-2">
-              <MessageCircle className="h-4 w-4" />
-              {commentsCount}
-            </span>
+          <div className="flex items-center justify-between gap-2 pt-1 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`h-7 px-2 ${userLiked ? 'text-red-500' : ''}`}
+                onClick={onLike}
+              >
+                <Heart className={`h-4 w-4 mr-1 ${userLiked ? 'fill-current' : ''}`} />
+                {likesCount}
+              </Button>
+              <span className="inline-flex h-7 items-center gap-1 px-2">
+                <MessageCircle className="h-4 w-4" />
+                {commentsCount}
+              </span>
+            </div>
+            <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-foreground/75 shrink-0">
+              <ChannelIcon className="h-3.5 w-3.5" />
+              {channelLabel}
+            </p>
           </div>
         </div>
       </div>
