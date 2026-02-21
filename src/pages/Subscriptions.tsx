@@ -141,13 +141,6 @@ function getYouTubeImportFilterRank(item: YouTubeImportPreviewItem, normalizedQu
   return bestRank;
 }
 
-function formatDateTime(value: string | null) {
-  if (!value) return 'Never';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return 'Unknown';
-  return parsed.toLocaleString();
-}
-
 function getActionErrorMessage(error: unknown, fallback: string) {
   if (error instanceof ApiRequestError) {
     switch (error.errorCode) {
@@ -848,11 +841,6 @@ export default function Subscriptions() {
                     <p className="text-sm font-medium truncate">
                       {youtubeConnection.channel_title || 'Connected YouTube account'}
                     </p>
-                    {youtubeConnection.last_import_at ? (
-                      <p className="text-xs text-muted-foreground">
-                        Last import: {formatDateTime(youtubeConnection.last_import_at)}
-                      </p>
-                    ) : null}
                   </div>
                 </div>
 
@@ -894,12 +882,6 @@ export default function Subscriptions() {
                 </Button>
               </>
             )}
-
-            {youTubeImportSummary ? (
-              <p className="text-xs text-muted-foreground">
-                Last import: Imported {youTubeImportSummary.imported_count}, reactivated {youTubeImportSummary.reactivated_count}, already active {youTubeImportSummary.already_active_count}, failed {youTubeImportSummary.failed_count}.
-              </p>
-            ) : null}
           </CardContent>
         </Card>
 
