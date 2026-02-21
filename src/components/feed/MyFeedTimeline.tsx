@@ -578,10 +578,10 @@ export function MyFeedTimeline({
                 <img
                   src={source.channelBannerUrl}
                   alt=""
-                  className="absolute inset-0 h-full w-full object-cover opacity-30"
+                  className="absolute inset-0 h-full w-full object-cover opacity-22"
                   loading="lazy"
                 />
-                <div className="absolute inset-0 bg-gradient-to-b from-background/30 via-background/70 to-background/85" />
+                <div className="absolute inset-0 bg-gradient-to-b from-background/14 via-background/36 to-background/56" />
               </>
             )}
             {hasBlueprintBanner && (
@@ -589,10 +589,10 @@ export function MyFeedTimeline({
                 <img
                   src={effectiveBlueprintBannerUrl || ''}
                   alt=""
-                  className="absolute inset-0 h-full w-full object-cover opacity-35"
+                  className="absolute inset-0 h-full w-full object-cover opacity-24"
                   loading="lazy"
                 />
-                <div className="absolute inset-0 bg-gradient-to-b from-background/35 via-background/60 to-background/80" />
+                <div className="absolute inset-0 bg-gradient-to-b from-background/15 via-background/35 to-background/55" />
               </>
             )}
             <CardContent className={`p-4 space-y-3 ${isSubscriptionNotice || hasBlueprintBanner ? 'relative' : ''}`}>

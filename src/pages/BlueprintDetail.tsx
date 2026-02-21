@@ -299,7 +299,7 @@ export default function BlueprintDetail() {
               {effectiveBannerUrl && (
                 <button
                   type="button"
-                  className="relative w-full overflow-hidden rounded-md border border-border/40 bg-muted/30 p-2 text-left"
+                  className="relative w-full overflow-hidden rounded-md border border-border/40 text-left"
                   onClick={() => setIsBannerExpanded((current) => !current)}
                   title={isBannerExpanded ? 'Collapse banner' : 'Expand banner'}
                 >
@@ -307,7 +307,7 @@ export default function BlueprintDetail() {
                     <img
                       src={effectiveBannerUrl}
                       alt="Blueprint banner"
-                      className="w-full h-auto max-h-[560px] object-contain rounded-md"
+                      className="block w-full h-auto"
                       loading="lazy"
                     />
                   ) : (

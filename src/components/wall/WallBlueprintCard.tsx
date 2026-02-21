@@ -69,10 +69,10 @@ export function WallBlueprintCard({
             <img
               src={effectiveBannerUrl}
               alt=""
-              className="absolute inset-0 h-full w-full object-cover opacity-35"
+              className="absolute inset-0 h-full w-full object-cover opacity-25"
               loading="lazy"
             />
-            <div className="absolute inset-0 bg-gradient-to-b from-background/35 via-background/60 to-background/80" />
+            <div className="absolute inset-0 bg-gradient-to-b from-background/15 via-background/35 to-background/55" />
           </>
         )}
 
