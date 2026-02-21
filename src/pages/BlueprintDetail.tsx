@@ -63,7 +63,7 @@ export default function BlueprintDetail() {
   const { toast } = useToast();
   const { user } = useAuth();
   const [comment, setComment] = useState('');
-  const [isBannerExpanded, setIsBannerExpanded] = useState(true);
+  const [isBannerExpanded, setIsBannerExpanded] = useState(false);
   const location = useLocation();
   const loggedBlueprintId = useRef<string | null>(null);
   const steps = blueprint ? parseSteps(blueprint.steps) : [];
