@@ -271,6 +271,8 @@ si55) locked source cards use compact credit label format (`<n> cr`) and remove 
 si56) blueprint list cards in wall/channel/explore remove the share icon action (like/comment remain unchanged).
 si57) profile-header refresh entrypoint may launch `/subscriptions?refresh=1&return_to=/u/:id`; after terminal refresh status, user is returned to profile path.
 si58) user-menu credits panel remains compact (balance + bar only) without extra refill/activity detail lines in this iteration.
+si59) subscription sync now enriches candidate video states via YouTube `videos.list` and skips unreleased premieres (`upcoming`) before source-item/feed insertion.
+si60) when one or more upcoming premieres are skipped in a sync run, subscription checkpoint (`last_seen_*`) is held for that run to avoid dropping release-time ingestion.
 
 ## Next Milestone (Hardening)
 n1) Keep legacy manual gate behavior stable with `CHANNEL_GATES_MODE=bypass` while auto-channel path uses `AUTO_CHANNEL_GATE_MODE`.

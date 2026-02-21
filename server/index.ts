@@ -16,6 +16,7 @@ import { evaluateCandidateForChannel } from './gates';
 import type { GateMode } from './gates/types';
 import {
   fetchYouTubeFeed,
+  fetchYouTubeVideoStates,
   isNewerThanCheckpoint,
   resolveYouTubeChannel,
   type YouTubeFeedVideo,
@@ -5848,14 +5849,55 @@ async function syncSingleSubscription(db: ReturnType<typeof createClient>, subsc
       return aTs - bTs;
     });
 
+  let videoStatesById = new Map<string, { isUpcoming: boolean; scheduledStartAt: string | null }>();
+  if (toProcess.length > 0 && youtubeDataApiKey) {
+    try {
+      const fetchedStates = await fetchYouTubeVideoStates({
+        apiKey: youtubeDataApiKey,
+        videoIds: toProcess.map((video) => video.videoId),
+      });
+      videoStatesById = new Map(
+        Array.from(fetchedStates.entries()).map(([videoId, state]) => [
+          videoId,
+          {
+            isUpcoming: Boolean(state.isUpcoming),
+            scheduledStartAt: state.scheduledStartAt || null,
+          },
+        ]),
+      );
+    } catch (videoStateError) {
+      console.log('[subscription_video_state_lookup_failed]', JSON.stringify({
+        subscription_id: subscription.id,
+        source_channel_id: subscription.source_channel_id,
+        trigger: options.trigger,
+        error: videoStateError instanceof Error ? videoStateError.message : String(videoStateError),
+      }));
+    }
+  }
+
   let processed = 0;
   let inserted = 0;
   let skipped = 0;
+  let skippedUpcoming = 0;
   const activeSubscriberCount = await countActiveSubscribersForSourcePage(db, subscription.source_page_id || null);
   const estimatedUnlockCost = computeUnlockCost(activeSubscriberCount);
 
   for (const video of toProcess) {
     processed += 1;
+    const videoState = videoStatesById.get(video.videoId);
+    if (videoState?.isUpcoming) {
+      skipped += 1;
+      skippedUpcoming += 1;
+      console.log('[subscription_skip_upcoming_premiere]', JSON.stringify({
+        subscription_id: subscription.id,
+        user_id: subscription.user_id,
+        source_channel_id: subscription.source_channel_id,
+        source_item_video_id: video.videoId,
+        scheduled_start_at: videoState.scheduledStartAt,
+        trigger: options.trigger,
+      }));
+      continue;
+    }
     const source = await upsertSourceItemFromVideo(db, {
       video,
       channelId: subscription.source_channel_id,
@@ -5986,8 +6028,12 @@ async function syncSingleSubscription(db: ReturnType<typeof createClient>, subsc
     .update({
       source_channel_title: feed.channelTitle,
       last_polled_at: new Date().toISOString(),
-      last_seen_published_at: newest?.publishedAt || subscription.last_seen_published_at,
-      last_seen_video_id: newest?.videoId || subscription.last_seen_video_id,
+      last_seen_published_at: skippedUpcoming > 0
+        ? subscription.last_seen_published_at
+        : (newest?.publishedAt || subscription.last_seen_published_at),
+      last_seen_video_id: skippedUpcoming > 0
+        ? subscription.last_seen_video_id
+        : (newest?.videoId || subscription.last_seen_video_id),
       last_sync_error: null,
     })
     .eq('id', subscription.id);

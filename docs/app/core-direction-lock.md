@@ -46,13 +46,15 @@ Status: `canonical`
 38. Unlock queue items carry explicit `unlock_origin` metadata (`manual_unlock`, `subscription_auto_unlock`, `source_auto_unlock_retry`) for recovery and traceability.
 39. Profile workspace tabs are locked to `Feed / Comments / Liked`; subscriptions management remains a dedicated page (`/subscriptions`) and not a profile tab.
 40. Blueprint feed cards are interaction-minimal in MVP (like/comment only; no share action button).
+41. Subscription sync must skip pre-release YouTube premieres (`upcoming`) so unreleased videos do not appear as unlock cards before publish.
+42. If a sync batch contains skipped upcoming premieres, subscription checkpoint advancement is held for that run to avoid missing those videos once they release.
 
 ## Core user journey
 1. Subscribe to a YouTube channel or search/select a video.
 2. Generate/import blueprint into `My Feed`.
 3. System auto-evaluates and posts eligible blueprints to channels.
 4. Engage through community interactions in Home lanes (`For You`, `Your channels`, and channel scopes).
-5. Use profile workspace (`/u/:userId`) tabs `Feed / Comments / Liked / Subscriptions` for personal history; `/my-feed` remains a compatibility/direct route.
+5. Use profile workspace (`/u/:userId`) tabs `Feed / Comments / Liked` for personal history; `/my-feed` remains a compatibility/direct route.
 
 ## What is not core right now
 1. Library-first creation is deprecated as primary identity.

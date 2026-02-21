@@ -12,6 +12,15 @@ export type YouTubeFeedVideo = {
   thumbnailUrl: string | null;
 };
 
+export type YouTubeVideoState = {
+  videoId: string;
+  liveBroadcastContent: 'none' | 'live' | 'upcoming';
+  scheduledStartAt: string | null;
+  actualStartAt: string | null;
+  isUpcoming: boolean;
+  isLiveNow: boolean;
+};
+
 const CHANNEL_ID_RE = /^UC[a-zA-Z0-9_-]{20,}$/;
 const HANDLE_RE = /^@[a-zA-Z0-9._-]{3,30}$/;
 
@@ -129,6 +138,95 @@ export async function fetchYouTubeFeed(channelId: string, maxItems = 15): Promis
     .slice(0, maxItems);
 
   return { channelTitle, videos: entries };
+}
+
+export async function fetchYouTubeVideoStates(input: {
+  apiKey: string;
+  videoIds: string[];
+}): Promise<Map<string, YouTubeVideoState>> {
+  const apiKey = String(input.apiKey || '').trim();
+  const uniqueVideoIds = Array.from(new Set(
+    (input.videoIds || [])
+      .map((videoId) => String(videoId || '').trim())
+      .filter(Boolean),
+  ));
+
+  const stateMap = new Map<string, YouTubeVideoState>();
+  if (!apiKey || uniqueVideoIds.length === 0) {
+    return stateMap;
+  }
+
+  const batchSize = 50;
+  for (let offset = 0; offset < uniqueVideoIds.length; offset += batchSize) {
+    const ids = uniqueVideoIds.slice(offset, offset + batchSize);
+    const url = new URL('https://www.googleapis.com/youtube/v3/videos');
+    url.searchParams.set('part', 'snippet,liveStreamingDetails');
+    url.searchParams.set('id', ids.join(','));
+    url.searchParams.set('key', apiKey);
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        'User-Agent': 'bleuv1-subscriptions/1.0 (+https://bapi.vdsai.cloud)',
+        Accept: 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`VIDEO_STATE_FETCH_FAILED:${response.status}`);
+    }
+
+    const json = (await response.json().catch(() => null)) as {
+      items?: Array<{
+        id?: string;
+        snippet?: {
+          liveBroadcastContent?: string;
+        };
+        liveStreamingDetails?: {
+          scheduledStartTime?: string;
+          actualStartTime?: string;
+        };
+      }>;
+      error?: {
+        code?: number;
+        message?: string;
+      };
+    } | null;
+
+    if (!json) {
+      throw new Error('VIDEO_STATE_FETCH_FAILED:invalid_json');
+    }
+    if (json.error) {
+      throw new Error(`VIDEO_STATE_FETCH_FAILED:${json.error.code || 'unknown'}:${json.error.message || 'unknown'}`);
+    }
+
+    for (const row of json.items || []) {
+      const videoId = String(row.id || '').trim();
+      if (!videoId) continue;
+
+      const rawLive = String(row.snippet?.liveBroadcastContent || 'none').trim().toLowerCase();
+      const liveBroadcastContent: YouTubeVideoState['liveBroadcastContent'] =
+        rawLive === 'live' || rawLive === 'upcoming' ? rawLive : 'none';
+      const scheduledStartAt = row.liveStreamingDetails?.scheduledStartTime
+        ? String(row.liveStreamingDetails.scheduledStartTime)
+        : null;
+      const actualStartAt = row.liveStreamingDetails?.actualStartTime
+        ? String(row.liveStreamingDetails.actualStartTime)
+        : null;
+      const isUpcoming = liveBroadcastContent === 'upcoming' || (!!scheduledStartAt && !actualStartAt);
+      const isLiveNow = liveBroadcastContent === 'live';
+
+      stateMap.set(videoId, {
+        videoId,
+        liveBroadcastContent,
+        scheduledStartAt,
+        actualStartAt,
+        isUpcoming,
+        isLiveNow,
+      });
+    }
+  }
+
+  return stateMap;
 }
 
 export async function resolveYouTubeChannel(input: string): Promise<ResolvedYouTubeChannel> {

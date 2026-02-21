@@ -1017,6 +1017,25 @@ Evaluation
 - `npm run docs:refresh-check -- --json`
 - `npm run docs:link-check`
 
+### Step 47 - Subscription sync pre-premiere guard
+Scope
+- enrich subscription-sync candidates with YouTube video state and skip unreleased premieres (`upcoming`).
+- prevent pre-release videos from appearing as unlock cards in Home/My Feed.
+- keep checkpoint safe when upcoming items were skipped in the run.
+
+Definition of done
+- upcoming premiere uploads are skipped during subscription sync.
+- sync logs include `subscription_skip_upcoming_premiere` markers.
+- skipped-upcoming runs hold `last_seen_*` checkpoint advancement for that cycle.
+
+Evaluation
+- manual smoke: known upcoming premiere does not appear as locked card after sync.
+- manual smoke: once released, same video can be ingested by sync as normal.
+- `npm run test`
+- `npm run build`
+- `npm run docs:refresh-check -- --json`
+- `npm run docs:link-check`
+
 ## Iteration Template (Use Each Cycle)
 1. Proposed update summary
 2. Plan with touched files and acceptance checks

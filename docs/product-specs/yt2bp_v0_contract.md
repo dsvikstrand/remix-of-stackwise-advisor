@@ -162,6 +162,7 @@
 - Read limiter policy for `/api/credits` and `/api/ingestion/jobs/latest-mine` is intentionally outside this endpoint contract.
 - Subscription `auto_unlock_enabled` toggle and prioritized/sampled auto-attempt behavior (with bounded retries) for new-upload shared unlock are intentionally outside this endpoint contract.
 - Unlock reliability sweep behavior and unlock trace correlation (`trace_id`) are intentionally outside this endpoint contract.
+- Subscription pre-release premiere filtering/checkpoint hold behavior is intentionally outside this endpoint contract.
 
 ## Retry and timeout policy (v0)
 - Endpoint timeout target: env-controlled via `YT2BP_CORE_TIMEOUT_MS` (default `120s`).

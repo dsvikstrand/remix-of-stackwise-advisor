@@ -621,6 +621,7 @@ Expected structured server log markers:
 - `[candidate_manual_review_pending]`
 - `[candidate_published]`
 - `[candidate_rejected]`
+- `[subscription_skip_upcoming_premiere]` (pre-release YouTube premiere filtered during sync)
 
 Useful `mvp_events.event_name` chain for YT2BP split flow:
 - `source_pull_requested`

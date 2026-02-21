@@ -130,6 +130,9 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
   - profile tabs simplified to `Feed / Comments / Liked` and share icons removed from blueprint list cards.
   - locked source cards use compact credit labels and no longer show `Open source` in feed contexts.
   - profile refresh flow now returns to profile after subscriptions refresh terminal status.
+- Subscription sync premiere guard:
+  - unreleased YouTube premieres (`upcoming`) are skipped before lock-card creation.
+  - runs that skip upcoming premieres hold checkpoint advance for that run to prevent missing post-release ingestion.
 
 ## Acceptance Baseline Per Iteration
 1. Scope and behavior align with `docs/app/product-spec.md`.
