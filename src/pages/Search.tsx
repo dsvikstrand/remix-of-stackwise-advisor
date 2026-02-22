@@ -43,6 +43,81 @@ import { PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 const DEFAULT_SEARCH_LIMIT = 10;
 const YOUTUBE_ENDPOINT = getFunctionUrl('youtube-to-blueprint');
 const GENERATE_BLUEPRINT_COST = 1;
+const QUICK_TAG_COUNT = 4;
+const VIDEO_QUICK_TAG_BANK = [
+  'protein meals',
+  'morning routine',
+  'mobility workout',
+  'skincare tips',
+  'ai coding',
+  'productivity habits',
+  'mental performance',
+  'weight loss',
+  'strength training',
+  'healthy recipes',
+  'calisthenics',
+  'sleep optimization',
+  'deep work',
+  'study techniques',
+  'running form',
+  'yoga flow',
+  'meal prep',
+  'finance basics',
+  'career advice',
+  'language learning',
+  'public speaking',
+  'cold exposure',
+  'gut health',
+  'meditation',
+  'data science',
+  'startup strategy',
+  'design systems',
+  'home workouts',
+  'leadership skills',
+  'digital marketing',
+  'paper review',
+  'neuroscience',
+  'supplements',
+  'boxing drills',
+  'stretch routine',
+];
+const CHANNEL_QUICK_TAG_BANK = [
+  'fitness coach',
+  'nutrition expert',
+  'ai research',
+  'coding tutorials',
+  'business strategy',
+  'finance education',
+  'dermatology',
+  'home workout',
+  'meal prep',
+  'biohacking',
+  'calisthenics',
+  'science channel',
+  'podcast clips',
+  'startup founder',
+  'yoga instructor',
+  'mindset coach',
+  'machine learning',
+  'web development',
+  'career growth',
+  'language teacher',
+  'psychology channel',
+  'tech reviews',
+  'nutrition science',
+  'mobility coach',
+  'boxing coach',
+  'wellness doctor',
+  'strength coach',
+  'study channel',
+  'product management',
+  'deep learning',
+  'sleep science',
+  'habit building',
+  'creator economy',
+  'personal finance',
+  'design education',
+];
 
 type YouTubeDraftStep = {
   name: string;
@@ -182,6 +257,17 @@ type GenerateTarget = {
   channel_url: string;
 };
 
+function sampleQuickTags(bank: string[], count = QUICK_TAG_COUNT) {
+  const pool = [...bank];
+  const chosen: string[] = [];
+  while (pool.length > 0 && chosen.length < count) {
+    const index = Math.floor(Math.random() * pool.length);
+    const [pick] = pool.splice(index, 1);
+    chosen.push(pick);
+  }
+  return chosen;
+}
+
 export default function SearchPage() {
   const queryClient = useQueryClient();
   const { session, user } = useAuth();
@@ -206,6 +292,8 @@ export default function SearchPage() {
   const [channelVideosError, setChannelVideosError] = useState<string | null>(null);
   const [generatingVideoIds, setGeneratingVideoIds] = useState<Record<string, boolean>>({});
   const [subscribingChannelIds, setSubscribingChannelIds] = useState<Record<string, boolean>>({});
+  const [quickVideoTags, setQuickVideoTags] = useState<string[]>(() => sampleQuickTags(VIDEO_QUICK_TAG_BANK));
+  const [quickChannelTags, setQuickChannelTags] = useState<string[]>(() => sampleQuickTags(CHANNEL_QUICK_TAG_BANK));
 
   const searchEnabled = Boolean(config.agenticBackendUrl);
   const sourceSubscriptionsQueryKey = useMemo(() => ['search-source-subscriptions', user?.id || 'anon'] as const, [user?.id]);
@@ -363,6 +451,12 @@ export default function SearchPage() {
     });
   };
 
+  const runVideoQuickSearch = (tag: string) => {
+    setQueryInput(tag);
+    setSearchError(null);
+    searchMutation.mutate({ query: tag, append: false });
+  };
+
   const handleChannelSearchSubmit = (event: FormEvent) => {
     event.preventDefault();
     const query = channelQueryInput.trim();
@@ -380,6 +474,12 @@ export default function SearchPage() {
       pageToken: channelNextPageToken,
       append: true,
     });
+  };
+
+  const runChannelQuickSearch = (tag: string) => {
+    setChannelQueryInput(tag);
+    setChannelSearchError(null);
+    channelSearchMutation.mutate({ query: tag, append: false });
   };
 
   const handleBrowseChannelVideos = (channel: YouTubeChannelSearchResult) => {
@@ -600,14 +700,20 @@ export default function SearchPage() {
           <Button
             size="sm"
             variant={mode === 'videos' ? 'default' : 'outline'}
-            onClick={() => setMode('videos')}
+            onClick={() => {
+              setMode('videos');
+              if (quickVideoTags.length === 0) setQuickVideoTags(sampleQuickTags(VIDEO_QUICK_TAG_BANK));
+            }}
           >
             Videos
           </Button>
           <Button
             size="sm"
             variant={mode === 'channels' ? 'default' : 'outline'}
-            onClick={() => setMode('channels')}
+            onClick={() => {
+              setMode('channels');
+              if (quickChannelTags.length === 0) setQuickChannelTags(sampleQuickTags(CHANNEL_QUICK_TAG_BANK));
+            }}
           >
             Channels
           </Button>
@@ -630,6 +736,30 @@ export default function SearchPage() {
                     {searchMutation.isPending ? 'Searching...' : 'Search'}
                   </Button>
                 </form>
+                <div className="flex flex-wrap items-center gap-2">
+                  {quickVideoTags.map((tag) => (
+                    <Button
+                      key={tag}
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 rounded-full px-3 text-xs"
+                      onClick={() => runVideoQuickSearch(tag)}
+                      disabled={searchMutation.isPending || !searchEnabled}
+                    >
+                      {tag}
+                    </Button>
+                  ))}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => setQuickVideoTags(sampleQuickTags(VIDEO_QUICK_TAG_BANK))}
+                  >
+                    Shuffle
+                  </Button>
+                </div>
                 {!searchEnabled ? (
                   <p className="text-xs text-muted-foreground">
                     Search requires `VITE_AGENTIC_BACKEND_URL`.
@@ -744,6 +874,30 @@ export default function SearchPage() {
                     {channelSearchMutation.isPending ? 'Searching...' : 'Search'}
                   </Button>
                 </form>
+                <div className="flex flex-wrap items-center gap-2">
+                  {quickChannelTags.map((tag) => (
+                    <Button
+                      key={tag}
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 rounded-full px-3 text-xs"
+                      onClick={() => runChannelQuickSearch(tag)}
+                      disabled={channelSearchMutation.isPending || !searchEnabled}
+                    >
+                      {tag}
+                    </Button>
+                  ))}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => setQuickChannelTags(sampleQuickTags(CHANNEL_QUICK_TAG_BANK))}
+                  >
+                    Shuffle
+                  </Button>
+                </div>
                 {channelSearchError ? <p className="text-sm text-destructive">{channelSearchError}</p> : null}
               </CardContent>
             </Card>
