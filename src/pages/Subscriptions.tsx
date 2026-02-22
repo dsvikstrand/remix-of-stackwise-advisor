@@ -559,10 +559,10 @@ export default function Subscriptions() {
     }));
   };
 
-  const handleYouTubeImportSelectVisible = () => {
+  const handleYouTubeImportSelectAll = () => {
     setYouTubeImportSelected((previous) => {
       const next = { ...previous };
-      for (const row of filteredYouTubeImportResults) {
+      for (const row of youTubeImportResults) {
         next[row.channel_id] = true;
       }
       return next;
@@ -1028,36 +1028,26 @@ export default function Subscriptions() {
             </DialogHeader>
 
             <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => youtubeImportPreviewMutation.mutate()}
-                  disabled={youtubeImportPreviewMutation.isPending || youtubeImportMutation.isPending}
-                >
-                  {youtubeImportPreviewMutation.isPending ? 'Loading...' : 'Reload list'}
-                </Button>
-                {youTubeImportResults.length > 0 ? (
-                  <>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={handleYouTubeImportSelectVisible}
-                      disabled={youtubeImportMutation.isPending || filteredYouTubeImportResults.length === 0}
-                    >
-                      Select visible
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={handleYouTubeImportClearSelection}
-                      disabled={youtubeImportMutation.isPending}
-                    >
-                      Clear
-                    </Button>
-                  </>
-                ) : null}
-              </div>
+              {youTubeImportResults.length > 0 ? (
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleYouTubeImportSelectAll}
+                    disabled={youtubeImportMutation.isPending || youTubeImportResults.length === 0}
+                  >
+                    Select all
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleYouTubeImportClearSelection}
+                    disabled={youtubeImportMutation.isPending}
+                  >
+                    Clear
+                  </Button>
+                </div>
+              ) : null}
 
               {youTubeImportError ? (
                 <p className="text-sm text-destructive">{youTubeImportError}</p>
@@ -1114,9 +1104,6 @@ export default function Subscriptions() {
                               {item.channel_title || item.channel_id}
                             </p>
                             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                              <a href={item.channel_url} target="_blank" rel="noreferrer" className="underline">
-                                Open channel
-                              </a>
                               {item.already_active ? (
                                 <Badge variant="secondary" className="h-5 px-2 text-[10px]">Already active</Badge>
                               ) : null}
@@ -1140,9 +1127,7 @@ export default function Subscriptions() {
               ) : null}
 
               <div className="flex items-center justify-between gap-2 pt-2">
-                <p className="text-xs text-muted-foreground">
-                  Selected: {selectedYouTubeImportChannels.length} / {youTubeImportResults.length}
-                </p>
+                <span />
                 <Button
                   size="sm"
                   onClick={handleImportSelectedChannels}
