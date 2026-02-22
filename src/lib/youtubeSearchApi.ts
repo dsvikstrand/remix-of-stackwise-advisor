@@ -11,6 +11,9 @@ export type YouTubeSearchResult = {
   channel_url: string;
   thumbnail_url: string | null;
   published_at: string | null;
+  already_exists_for_user: boolean;
+  existing_blueprint_id: string | null;
+  existing_feed_item_id: string | null;
 };
 
 export type YouTubeSearchPage = {
@@ -94,6 +97,9 @@ export function normalizeYouTubeSearchResult(raw: unknown): YouTubeSearchResult 
     channel_url: String(row.channel_url || `https://www.youtube.com/channel/${channelId}`).trim(),
     thumbnail_url: row.thumbnail_url ? String(row.thumbnail_url) : null,
     published_at: row.published_at ? String(row.published_at) : null,
+    already_exists_for_user: Boolean(row.already_exists_for_user),
+    existing_blueprint_id: row.existing_blueprint_id ? String(row.existing_blueprint_id) : null,
+    existing_feed_item_id: row.existing_feed_item_id ? String(row.existing_feed_item_id) : null,
   };
 }
 

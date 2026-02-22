@@ -1604,6 +1604,7 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
 
 app.get('/api/youtube-search', async (req, res) => {
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
   if (!userId) {
     return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
   }
@@ -1630,6 +1631,8 @@ app.get('/api/youtube-search', async (req, res) => {
   const rawLimit = typeof req.query.limit === 'string' ? Number(req.query.limit) : undefined;
   const limit = clampYouTubeSearchLimit(rawLimit, 10);
   const pageToken = typeof req.query.page_token === 'string' ? req.query.page_token.trim() : '';
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
 
   try {
     const result = await searchYouTubeVideos({
@@ -1638,13 +1641,34 @@ app.get('/api/youtube-search', async (req, res) => {
       limit,
       pageToken: pageToken || undefined,
     });
+    let existingByVideoId = new Map<string, SourcePageVideoExistingState>();
+    try {
+      existingByVideoId = await loadExistingSourceVideoStateForUser(
+        db,
+        userId,
+        result.results.map((row) => row.video_id),
+      );
+    } catch (existingError) {
+      console.log('[youtube_search_existing_state_failed]', JSON.stringify({
+        user_id: userId,
+        error: existingError instanceof Error ? existingError.message : String(existingError),
+      }));
+    }
 
     return res.json({
       ok: true,
       error_code: null,
       message: 'youtube search complete',
       data: {
-        results: result.results,
+        results: result.results.map((row) => {
+          const existing = existingByVideoId.get(row.video_id);
+          return {
+            ...row,
+            already_exists_for_user: Boolean(existing?.already_exists_for_user),
+            existing_blueprint_id: existing?.existing_blueprint_id || null,
+            existing_feed_item_id: existing?.existing_feed_item_id || null,
+          };
+        }),
         next_page_token: result.nextPageToken,
       },
     });

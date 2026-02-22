@@ -669,6 +669,7 @@ export default function SearchPage() {
                   const isGenerating = Boolean(generatingVideoIds[result.video_id]);
                   const isSubscribing = Boolean(subscribingChannelIds[result.channel_id]);
                   const isSubscribed = subscribedChannelIds.has(result.channel_id);
+                  const hasExistingBlueprint = Boolean(result.existing_blueprint_id);
                   return (
                     <Card key={result.video_id} className="border-border/50">
                       <CardContent className="p-4 space-y-3">
@@ -689,25 +690,32 @@ export default function SearchPage() {
                               <Badge variant="outline">{result.channel_title}</Badge>
                               {result.published_at ? <Badge variant="secondary">{formatRelativeShort(result.published_at)}</Badge> : null}
                               <Badge variant="secondary">◉{GENERATE_BLUEPRINT_COST}</Badge>
+                              {result.already_exists_for_user ? <Badge variant="outline">In your feed</Badge> : null}
                             </div>
                           </div>
                         </div>
 
                         <div className="flex flex-wrap gap-2">
-                          <Button
-                            size="sm"
-                            onClick={() => handleGenerateBlueprint({
-                              video_id: result.video_id,
-                              video_url: result.video_url,
-                              title: result.title,
-                              channel_id: result.channel_id,
-                              channel_title: result.channel_title || '',
-                              channel_url: result.channel_url || '',
-                            })}
-                            disabled={isGenerating || !user || !hasEnoughCredits}
-                          >
-                            {isGenerating ? 'Generating...' : 'Generate'}
-                          </Button>
+                          {hasExistingBlueprint ? (
+                            <Button asChild size="sm" variant="outline">
+                              <Link to={`/blueprint/${result.existing_blueprint_id}`}>Open blueprint</Link>
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              onClick={() => handleGenerateBlueprint({
+                                video_id: result.video_id,
+                                video_url: result.video_url,
+                                title: result.title,
+                                channel_id: result.channel_id,
+                                channel_title: result.channel_title || '',
+                                channel_url: result.channel_url || '',
+                              })}
+                              disabled={isGenerating || !user || !hasEnoughCredits || result.already_exists_for_user}
+                            >
+                              {isGenerating ? 'Generating...' : result.already_exists_for_user ? 'In your feed' : 'Generate'}
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant={isSubscribed ? 'default' : 'outline'}
