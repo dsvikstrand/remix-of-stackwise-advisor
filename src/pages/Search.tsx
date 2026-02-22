@@ -6,6 +6,7 @@ import { AppFooter } from '@/components/shared/AppFooter';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
@@ -367,6 +368,14 @@ export default function SearchPage() {
       channelId: channel.channel_id,
       append: false,
     });
+  };
+
+  const handleBrowseDialogChange = (open: boolean) => {
+    if (open) return;
+    setSelectedBrowseChannel(null);
+    setChannelVideoItems([]);
+    setChannelVideosNextPageToken(null);
+    setChannelVideosError(null);
   };
 
   const handleLoadMoreChannelVideos = () => {
@@ -757,7 +766,7 @@ export default function SearchPage() {
                         <div className="flex flex-wrap gap-2">
                           <Button
                             size="sm"
-                            variant={isSelected ? 'default' : 'outline'}
+                            variant="outline"
                             onClick={() => handleBrowseChannelVideos(channel)}
                             disabled={channelVideosMutation.isPending && isSelected}
                           >
@@ -787,99 +796,98 @@ export default function SearchPage() {
               </div>
             ) : null}
 
-            {selectedBrowseChannel ? (
-              <Card className="border-border/50">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">
-                    {selectedBrowseChannel.channel_title} · Videos
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {channelVideosError ? (
-                    <p className="text-sm text-destructive">{channelVideosError}</p>
-                  ) : null}
+            <Dialog open={Boolean(selectedBrowseChannel)} onOpenChange={handleBrowseDialogChange}>
+              <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="text-base">
+                    {selectedBrowseChannel?.channel_title || 'Channel'} · Videos
+                  </DialogTitle>
+                </DialogHeader>
 
-                  {channelVideosMutation.isPending && channelVideoItems.length === 0 ? (
-                    <div className="space-y-2">
-                      <Skeleton className="h-20 rounded-md" />
-                      <Skeleton className="h-20 rounded-md" />
-                    </div>
-                  ) : null}
+                {channelVideosError ? (
+                  <p className="text-sm text-destructive">{channelVideosError}</p>
+                ) : null}
 
-                  {channelVideoItems.length === 0 && !channelVideosMutation.isPending && !channelVideosError ? (
-                    <p className="text-sm text-muted-foreground">No videos available from this channel.</p>
-                  ) : null}
+                {channelVideosMutation.isPending && channelVideoItems.length === 0 ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-20 rounded-md" />
+                    <Skeleton className="h-20 rounded-md" />
+                  </div>
+                ) : null}
 
-                  {channelVideoItems.length > 0 ? (
-                    <div className="space-y-3">
-                      {channelVideoItems.map((video) => {
-                        const isGenerating = Boolean(generatingVideoIds[video.video_id]);
-                        const hasExistingBlueprint = Boolean(video.existing_blueprint_id);
-                        return (
-                          <div key={video.video_id} className="rounded-md border border-border/40 p-3 space-y-2">
-                            <div className="flex items-start gap-3">
-                              {video.thumbnail_url ? (
-                                <img
-                                  src={video.thumbnail_url}
-                                  alt={video.title}
-                                  className="h-16 w-28 rounded-md border border-border/40 object-cover shrink-0"
-                                />
-                              ) : (
-                                <div className="h-16 w-28 rounded-md border border-border/40 bg-muted/40 shrink-0" />
-                              )}
-                              <div className="min-w-0 flex-1 space-y-1">
-                                <p className="text-sm font-medium line-clamp-2">{video.title}</p>
-                                <p className="text-xs text-muted-foreground line-clamp-2">
-                                  {video.description || 'No description available.'}
-                                </p>
-                                <div className="flex flex-wrap gap-2">
-                                  <Badge variant="outline">{selectedBrowseChannel.channel_title}</Badge>
-                                  {video.published_at ? <Badge variant="secondary">{formatRelativeShort(video.published_at)}</Badge> : null}
-                                  <Badge variant="secondary">◉{GENERATE_BLUEPRINT_COST}</Badge>
-                                  {video.already_exists_for_user ? (
-                                    <Badge variant="outline">In your feed</Badge>
-                                  ) : null}
-                                </div>
+                {channelVideoItems.length === 0 && !channelVideosMutation.isPending && !channelVideosError ? (
+                  <p className="text-sm text-muted-foreground">No videos available from this channel.</p>
+                ) : null}
+
+                {channelVideoItems.length > 0 ? (
+                  <div className="space-y-3">
+                    {channelVideoItems.map((video) => {
+                      const isGenerating = Boolean(generatingVideoIds[video.video_id]);
+                      const hasExistingBlueprint = Boolean(video.existing_blueprint_id);
+                      return (
+                        <div key={video.video_id} className="rounded-md border border-border/40 p-3 space-y-2">
+                          <div className="flex items-start gap-3">
+                            {video.thumbnail_url ? (
+                              <img
+                                src={video.thumbnail_url}
+                                alt={video.title}
+                                className="h-16 w-28 rounded-md border border-border/40 object-cover shrink-0"
+                              />
+                            ) : (
+                              <div className="h-16 w-28 rounded-md border border-border/40 bg-muted/40 shrink-0" />
+                            )}
+                            <div className="min-w-0 flex-1 space-y-1">
+                              <p className="text-sm font-medium line-clamp-2">{video.title}</p>
+                              <p className="text-xs text-muted-foreground line-clamp-2">
+                                {video.description || 'No description available.'}
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                <Badge variant="outline">{selectedBrowseChannel?.channel_title || video.channel_title}</Badge>
+                                {video.published_at ? <Badge variant="secondary">{formatRelativeShort(video.published_at)}</Badge> : null}
+                                <Badge variant="secondary">◉{GENERATE_BLUEPRINT_COST}</Badge>
+                                {video.already_exists_for_user ? (
+                                  <Badge variant="outline">In your feed</Badge>
+                                ) : null}
                               </div>
                             </div>
-                            <div className="flex flex-wrap gap-2">
-                              {hasExistingBlueprint ? (
-                                <Button asChild size="sm" variant="outline">
-                                  <Link to={`/blueprint/${video.existing_blueprint_id}`}>Open blueprint</Link>
-                                </Button>
-                              ) : (
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleGenerateBlueprint({
-                                    video_id: video.video_id,
-                                    video_url: video.video_url,
-                                    title: video.title,
-                                    channel_id: video.channel_id,
-                                    channel_title: video.channel_title || selectedBrowseChannel.channel_title,
-                                    channel_url: selectedBrowseChannel.channel_url,
-                                  })}
-                                  disabled={isGenerating || !user || !hasEnoughCredits}
-                                >
-                                  {isGenerating ? 'Generating...' : 'Generate'}
-                                </Button>
-                              )}
-                            </div>
                           </div>
-                        );
-                      })}
-
-                      {channelVideosNextPageToken ? (
-                        <div className="flex justify-center">
-                          <Button variant="outline" onClick={handleLoadMoreChannelVideos} disabled={channelVideosMutation.isPending}>
-                            {channelVideosMutation.isPending ? 'Loading...' : 'Load more videos'}
-                          </Button>
+                          <div className="flex flex-wrap gap-2">
+                            {hasExistingBlueprint ? (
+                              <Button asChild size="sm" variant="outline">
+                                <Link to={`/blueprint/${video.existing_blueprint_id}`}>Open blueprint</Link>
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                onClick={() => handleGenerateBlueprint({
+                                  video_id: video.video_id,
+                                  video_url: video.video_url,
+                                  title: video.title,
+                                  channel_id: video.channel_id,
+                                  channel_title: video.channel_title || selectedBrowseChannel?.channel_title || '',
+                                  channel_url: selectedBrowseChannel?.channel_url || '',
+                                })}
+                                disabled={isGenerating || !user || !hasEnoughCredits}
+                              >
+                                {isGenerating ? 'Generating...' : 'Generate'}
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </CardContent>
-              </Card>
-            ) : null}
+                      );
+                    })}
+
+                    {channelVideosNextPageToken ? (
+                      <div className="flex justify-center">
+                        <Button variant="outline" onClick={handleLoadMoreChannelVideos} disabled={channelVideosMutation.isPending}>
+                          {channelVideosMutation.isPending ? 'Loading...' : 'Load more videos'}
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </DialogContent>
+            </Dialog>
           </>
         )}
 
