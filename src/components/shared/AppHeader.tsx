@@ -52,7 +52,7 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
               <div className="w-9 h-9 rounded-xl border border-primary/25 bg-gradient-to-br from-primary/90 to-primary/60 flex items-center justify-center">
                 <BookOpen className="h-4 w-4 text-primary-foreground" />
               </div>
-              <span className="text-lg font-semibold tracking-tight">Bleuprint</span>
+              <span className="text-lg font-semibold tracking-tight">BleuPrint</span>
             </Link>
           </div>
           <div className="hidden sm:flex justify-center min-w-0">

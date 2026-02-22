@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Beaker, Loader2 } from 'lucide-react';
+import { BookOpen, Loader2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { config } from '@/config/runtime';
 
@@ -83,7 +83,7 @@ export default function Auth() {
     } else {
       toast({
         title: 'Account created!',
-        description: 'Welcome to Blueprints. Your account is ready.',
+        description: 'Welcome to BleuPrint. Your account is ready.',
       });
       navigate(postAuthRedirect, { replace: true });
     }
@@ -122,8 +122,10 @@ export default function Auth() {
       <Card className="w-full max-w-md border-border/40 shadow-none">
         <CardHeader className="text-center">
           <div className="flex items-center justify-center gap-2 mb-2">
-            <Beaker className="h-8 w-8 text-primary" />
-            <span className="text-2xl font-bold">Blueprints</span>
+            <div className="w-9 h-9 rounded-xl border border-primary/25 bg-gradient-to-br from-primary/90 to-primary/60 flex items-center justify-center">
+              <BookOpen className="h-4 w-4 text-primary-foreground" />
+            </div>
+            <span className="text-2xl font-bold">BleuPrint</span>
           </div>
           <CardTitle>Welcome</CardTitle>
           <CardDescription>
