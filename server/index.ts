@@ -1726,6 +1726,126 @@ app.get('/api/youtube-channel-search', async (req, res) => {
   }
 });
 
+app.get(
+  '/api/youtube/channels/:channelId/videos',
+  sourceVideoListBurstLimiter,
+  sourceVideoListSustainedLimiter,
+  async (req, res) => {
+    const userId = (res.locals.user as { id?: string } | undefined)?.id;
+    const authToken = (res.locals.authToken as string | undefined) ?? '';
+    if (!userId || !authToken) {
+      return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+    }
+
+    const channelId = String(req.params.channelId || '').trim();
+    if (!channelId) {
+      return res.status(400).json({
+        ok: false,
+        error_code: 'INVALID_INPUT',
+        message: 'channelId required',
+        data: null,
+      });
+    }
+
+    const limit = clampYouTubeSourceVideoLimit(Number(req.query.limit), 12);
+    const pageToken = String(req.query.page_token || '').trim();
+    const kind = normalizeYouTubeSourceVideoKind(String(req.query.kind || ''), 'all');
+    const shortsMaxSeconds = 60;
+
+    const db = getAuthedSupabaseClient(authToken);
+    if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+    let page;
+    try {
+      page = await listYouTubeSourceVideos({
+        apiKey: youtubeDataApiKey,
+        channelId,
+        limit,
+        pageToken: pageToken || undefined,
+        kind,
+        shortsMaxSeconds,
+      });
+    } catch (error) {
+      if (error instanceof YouTubeSourceVideosError) {
+        if (error.code === 'RATE_LIMITED') {
+          return res.status(429).json({
+            ok: false,
+            error_code: 'RATE_LIMITED',
+            message: error.message,
+            data: null,
+          });
+        }
+        if (error.code === 'SEARCH_DISABLED') {
+          return res.status(503).json({
+            ok: false,
+            error_code: 'SOURCE_VIDEO_LIST_FAILED',
+            message: error.message,
+            data: null,
+          });
+        }
+        return res.status(502).json({
+          ok: false,
+          error_code: 'SOURCE_VIDEO_LIST_FAILED',
+          message: error.message,
+          data: null,
+        });
+      }
+      return res.status(502).json({
+        ok: false,
+        error_code: 'SOURCE_VIDEO_LIST_FAILED',
+        message: error instanceof Error ? error.message : 'Could not load channel videos.',
+        data: null,
+      });
+    }
+
+    let existingByVideoId = new Map<string, SourcePageVideoExistingState>();
+    try {
+      existingByVideoId = await loadExistingSourceVideoStateForUser(
+        db,
+        userId,
+        page.results.map((item) => item.video_id),
+      );
+    } catch (error) {
+      return res.status(400).json({
+        ok: false,
+        error_code: 'READ_FAILED',
+        message: error instanceof Error ? error.message : 'Could not resolve duplicate state.',
+        data: null,
+      });
+    }
+
+    const items = page.results.map((item) => {
+      const existing = existingByVideoId.get(item.video_id);
+      return {
+        video_id: item.video_id,
+        video_url: item.video_url,
+        title: item.title,
+        description: item.description,
+        thumbnail_url: item.thumbnail_url,
+        published_at: item.published_at,
+        duration_seconds: item.duration_seconds,
+        channel_id: item.channel_id,
+        channel_title: item.channel_title,
+        already_exists_for_user: Boolean(existing?.already_exists_for_user),
+        existing_blueprint_id: existing?.existing_blueprint_id || null,
+        existing_feed_item_id: existing?.existing_feed_item_id || null,
+      };
+    });
+
+    return res.json({
+      ok: true,
+      error_code: null,
+      message: 'youtube channel videos',
+      data: {
+        items,
+        next_page_token: page.nextPageToken,
+        kind,
+        shorts_max_seconds: shortsMaxSeconds,
+      },
+    });
+  },
+);
+
 app.get('/api/youtube/connection/status', async (_req, res) => {
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
   const authToken = (res.locals.authToken as string | undefined) ?? '';

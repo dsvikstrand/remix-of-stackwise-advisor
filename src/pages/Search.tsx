@@ -24,6 +24,16 @@ import {
   searchYouTube,
   type YouTubeSearchResult,
 } from '@/lib/youtubeSearchApi';
+import {
+  ApiRequestError as ChannelSearchApiRequestError,
+  searchYouTubeChannels,
+  type YouTubeChannelSearchResult,
+} from '@/lib/youtubeChannelSearchApi';
+import {
+  ApiRequestError as ChannelVideosApiRequestError,
+  listYouTubeChannelVideos,
+  type YouTubeChannelVideoItem,
+} from '@/lib/youtubeChannelVideosApi';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 
@@ -126,6 +136,49 @@ function getSearchErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Search failed.';
 }
 
+function getChannelSearchErrorMessage(error: unknown) {
+  if (error instanceof ChannelSearchApiRequestError) {
+    switch (error.errorCode) {
+      case 'INVALID_QUERY':
+        return 'Enter at least 2 characters to search channels.';
+      case 'SEARCH_DISABLED':
+        return 'Channel search is currently unavailable.';
+      case 'RATE_LIMITED':
+        return 'Channel search quota is currently limited. Please retry later.';
+      case 'API_NOT_CONFIGURED':
+        return 'Channel search requires VITE_AGENTIC_BACKEND_URL.';
+      default:
+        return error.message;
+    }
+  }
+  return error instanceof Error ? error.message : 'Channel search failed.';
+}
+
+function getChannelVideosErrorMessage(error: unknown) {
+  if (error instanceof ChannelVideosApiRequestError) {
+    switch (error.errorCode) {
+      case 'RATE_LIMITED':
+        return 'Video listing is temporarily rate limited. Please retry shortly.';
+      case 'AUTH_REQUIRED':
+        return 'Sign in required to browse channel videos.';
+      case 'INVALID_INPUT':
+        return 'Could not load videos for this channel.';
+      default:
+        return error.message;
+    }
+  }
+  return error instanceof Error ? error.message : 'Could not load channel videos.';
+}
+
+type GenerateTarget = {
+  video_id: string;
+  video_url: string;
+  title: string;
+  channel_id: string;
+  channel_title: string;
+  channel_url: string;
+};
+
 export default function SearchPage() {
   const queryClient = useQueryClient();
   const { session, user } = useAuth();
@@ -138,6 +191,16 @@ export default function SearchPage() {
   const [results, setResults] = useState<YouTubeSearchResult[]>([]);
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [mode, setMode] = useState<'videos' | 'channels'>('videos');
+  const [channelQueryInput, setChannelQueryInput] = useState('');
+  const [submittedChannelQuery, setSubmittedChannelQuery] = useState('');
+  const [channelResults, setChannelResults] = useState<YouTubeChannelSearchResult[]>([]);
+  const [channelNextPageToken, setChannelNextPageToken] = useState<string | null>(null);
+  const [channelSearchError, setChannelSearchError] = useState<string | null>(null);
+  const [selectedBrowseChannel, setSelectedBrowseChannel] = useState<YouTubeChannelSearchResult | null>(null);
+  const [channelVideoItems, setChannelVideoItems] = useState<YouTubeChannelVideoItem[]>([]);
+  const [channelVideosNextPageToken, setChannelVideosNextPageToken] = useState<string | null>(null);
+  const [channelVideosError, setChannelVideosError] = useState<string | null>(null);
   const [generatingVideoIds, setGeneratingVideoIds] = useState<Record<string, boolean>>({});
   const [subscribingChannelIds, setSubscribingChannelIds] = useState<Record<string, boolean>>({});
 
@@ -172,6 +235,52 @@ export default function SearchPage() {
     },
     onError: (error) => {
       setSearchError(getSearchErrorMessage(error));
+    },
+  });
+
+  const channelSearchMutation = useMutation({
+    mutationFn: async (input: { query: string; pageToken?: string | null; append?: boolean }) => {
+      const data = await searchYouTubeChannels({
+        q: input.query,
+        limit: DEFAULT_SEARCH_LIMIT,
+        pageToken: input.pageToken || undefined,
+      });
+      return {
+        query: input.query,
+        append: Boolean(input.append),
+        ...data,
+      };
+    },
+    onSuccess: (payload) => {
+      setSubmittedChannelQuery(payload.query);
+      setChannelSearchError(null);
+      setChannelResults((previous) => (payload.append ? [...previous, ...payload.results] : payload.results));
+      setChannelNextPageToken(payload.next_page_token);
+    },
+    onError: (error) => {
+      setChannelSearchError(getChannelSearchErrorMessage(error));
+    },
+  });
+
+  const channelVideosMutation = useMutation({
+    mutationFn: async (input: { channelId: string; pageToken?: string | null; append?: boolean }) => {
+      const data = await listYouTubeChannelVideos({
+        channelId: input.channelId,
+        limit: 12,
+        pageToken: input.pageToken || undefined,
+      });
+      return {
+        append: Boolean(input.append),
+        ...data,
+      };
+    },
+    onSuccess: (payload) => {
+      setChannelVideosError(null);
+      setChannelVideoItems((previous) => (payload.append ? [...previous, ...payload.items] : payload.items));
+      setChannelVideosNextPageToken(payload.next_page_token);
+    },
+    onError: (error) => {
+      setChannelVideosError(getChannelVideosErrorMessage(error));
     },
   });
 
@@ -230,18 +339,57 @@ export default function SearchPage() {
     });
   };
 
-  const handleSubscribeChannel = async (result: YouTubeSearchResult) => {
-    if (subscribingChannelIds[result.channel_id]) return;
-    setSubscribing(result.channel_id, true);
+  const handleChannelSearchSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    const query = channelQueryInput.trim();
+    if (!query) {
+      setChannelSearchError('Enter a channel query.');
+      return;
+    }
+    channelSearchMutation.mutate({ query, append: false });
+  };
+
+  const handleChannelSearchLoadMore = () => {
+    if (!channelNextPageToken || channelSearchMutation.isPending) return;
+    channelSearchMutation.mutate({
+      query: submittedChannelQuery || channelQueryInput.trim(),
+      pageToken: channelNextPageToken,
+      append: true,
+    });
+  };
+
+  const handleBrowseChannelVideos = (channel: YouTubeChannelSearchResult) => {
+    setSelectedBrowseChannel(channel);
+    setChannelVideoItems([]);
+    setChannelVideosNextPageToken(null);
+    setChannelVideosError(null);
+    channelVideosMutation.mutate({
+      channelId: channel.channel_id,
+      append: false,
+    });
+  };
+
+  const handleLoadMoreChannelVideos = () => {
+    if (!selectedBrowseChannel || !channelVideosNextPageToken || channelVideosMutation.isPending) return;
+    channelVideosMutation.mutate({
+      channelId: selectedBrowseChannel.channel_id,
+      pageToken: channelVideosNextPageToken,
+      append: true,
+    });
+  };
+
+  const handleSubscribeChannel = async (channel: { channel_id: string; channel_url: string }) => {
+    if (subscribingChannelIds[channel.channel_id]) return;
+    setSubscribing(channel.channel_id, true);
     try {
-      await subscribeMutation.mutateAsync(result.channel_url || result.channel_id);
+      await subscribeMutation.mutateAsync(channel.channel_url || channel.channel_id);
     } finally {
-      setSubscribing(result.channel_id, false);
+      setSubscribing(channel.channel_id, false);
     }
   };
 
-  const handleGenerateBlueprint = async (result: YouTubeSearchResult) => {
-    if (!user || generatingVideoIds[result.video_id]) return;
+  const handleGenerateBlueprint = async (target: GenerateTarget) => {
+    if (!user || generatingVideoIds[target.video_id]) return;
     if (!hasEnoughCredits) {
       toast({
         title: 'Not enough credits',
@@ -259,15 +407,15 @@ export default function SearchPage() {
       return;
     }
 
-    setGenerating(result.video_id, true);
+    setGenerating(target.video_id, true);
     try {
       await logMvpEvent({
         eventName: 'source_pull_requested',
         userId: user.id,
         metadata: {
           source_type: 'youtube_search',
-          source_video_id: result.video_id,
-          source_channel_id: result.channel_id,
+          source_video_id: target.video_id,
+          source_channel_id: target.channel_id,
         },
       });
 
@@ -278,7 +426,7 @@ export default function SearchPage() {
           ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
         },
         body: JSON.stringify({
-          video_url: result.video_url,
+          video_url: target.video_url,
           generate_review: false,
           generate_banner: false,
           source: 'youtube_mvp',
@@ -300,16 +448,16 @@ export default function SearchPage() {
       }
 
       const sourceItem = await ensureSourceItemForYouTube({
-        videoUrl: result.video_url,
+        videoUrl: target.video_url,
         title: json.draft.title,
-        sourceChannelId: result.channel_id,
-        sourceChannelTitle: result.channel_title || null,
-        sourceChannelUrl: result.channel_url || null,
+        sourceChannelId: target.channel_id,
+        sourceChannelTitle: target.channel_title || null,
+        sourceChannelUrl: target.channel_url || null,
         metadata: {
           run_id: json.run_id,
           transcript_source: json.meta.transcript_source,
           confidence: json.meta.confidence,
-          source_channel_url: result.channel_url || null,
+          source_channel_url: target.channel_url || null,
         },
       });
 
@@ -387,7 +535,7 @@ export default function SearchPage() {
       });
       await queryClient.invalidateQueries({ queryKey: ['ai-credits'] });
     } finally {
-      setGenerating(result.video_id, false);
+      setGenerating(target.video_id, false);
     }
   };
 
@@ -395,6 +543,11 @@ export default function SearchPage() {
     if (!submittedQuery) return null;
     return `Showing ${results.length} result${results.length === 1 ? '' : 's'} for "${submittedQuery}"`;
   }, [results.length, submittedQuery]);
+
+  const channelSearchSummary = useMemo(() => {
+    if (!submittedChannelQuery) return null;
+    return `Showing ${channelResults.length} channel${channelResults.length === 1 ? '' : 's'} for "${submittedChannelQuery}"`;
+  }, [channelResults.length, submittedChannelQuery]);
 
   return (
     <PageRoot>
@@ -408,114 +561,327 @@ export default function SearchPage() {
           </p>
         </PageSection>
 
-        <Card className="border-border/40">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Search YouTube</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <form onSubmit={handleSearchSubmit} className="flex flex-col gap-2 sm:flex-row">
-              <Input
-                value={queryInput}
-                onChange={(event) => setQueryInput(event.target.value)}
-                placeholder="Try: skincare 2026 best"
-              />
-              <Button type="submit" disabled={searchMutation.isPending || !searchEnabled}>
-                {searchMutation.isPending ? 'Searching...' : 'Search'}
-              </Button>
-            </form>
-            {!searchEnabled ? (
-              <p className="text-xs text-muted-foreground">
-                Search requires `VITE_AGENTIC_BACKEND_URL`.
-              </p>
-            ) : null}
-            {searchError ? <p className="text-sm text-destructive">{searchError}</p> : null}
-          </CardContent>
-        </Card>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant={mode === 'videos' ? 'default' : 'outline'}
+            onClick={() => setMode('videos')}
+          >
+            Videos
+          </Button>
+          <Button
+            size="sm"
+            variant={mode === 'channels' ? 'default' : 'outline'}
+            onClick={() => setMode('channels')}
+          >
+            Channels
+          </Button>
+        </div>
 
-        {searchSummary ? <p className="text-sm text-muted-foreground">{searchSummary}</p> : null}
+        {mode === 'videos' ? (
+          <>
+            <Card className="border-border/40">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Search videos</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <form onSubmit={handleSearchSubmit} className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    value={queryInput}
+                    onChange={(event) => setQueryInput(event.target.value)}
+                    placeholder="Try: skincare 2026 best"
+                  />
+                  <Button type="submit" disabled={searchMutation.isPending || !searchEnabled}>
+                    {searchMutation.isPending ? 'Searching...' : 'Search'}
+                  </Button>
+                </form>
+                {!searchEnabled ? (
+                  <p className="text-xs text-muted-foreground">
+                    Search requires `VITE_AGENTIC_BACKEND_URL`.
+                  </p>
+                ) : null}
+                {searchError ? <p className="text-sm text-destructive">{searchError}</p> : null}
+              </CardContent>
+            </Card>
 
-        {searchMutation.isPending && !hasResults ? (
-          <div className="space-y-3">
-            {Array.from({ length: 3 }).map((_, index) => (
-              <Skeleton key={index} className="h-44 rounded-xl" />
-            ))}
-          </div>
-        ) : null}
+            {searchSummary ? <p className="text-sm text-muted-foreground">{searchSummary}</p> : null}
 
-        {showEmpty ? (
-          <Card className="border-border/40">
-            <CardContent className="p-4 space-y-2">
-              <p className="text-sm text-muted-foreground">No results found for your query.</p>
-              <Button asChild size="sm" variant="outline">
-                <Link to="/youtube">Use direct YouTube URL instead</Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {hasResults ? (
-          <div className="space-y-4">
-            {results.map((result) => {
-              const isGenerating = Boolean(generatingVideoIds[result.video_id]);
-              const isSubscribing = Boolean(subscribingChannelIds[result.channel_id]);
-              return (
-                <Card key={result.video_id} className="border-border/50">
-                  <CardContent className="p-4 space-y-3">
-                    <div className="grid gap-3 md:grid-cols-[160px,1fr]">
-                      <a href={result.video_url} target="_blank" rel="noreferrer" className="block">
-                        {result.thumbnail_url ? (
-                          <img
-                            src={result.thumbnail_url}
-                            alt={result.title}
-                            className="w-full h-28 object-cover rounded-md border border-border/40"
-                          />
-                        ) : (
-                          <div className="w-full h-28 rounded-md border border-border/40 bg-muted/40" />
-                        )}
-                      </a>
-                      <div className="space-y-2">
-                        <a href={result.video_url} target="_blank" rel="noreferrer" className="block">
-                          <p className="font-medium leading-tight hover:underline">{result.title}</p>
-                        </a>
-                        <p className="text-sm text-muted-foreground line-clamp-3">{result.description || 'No description available.'}</p>
-                        <div className="flex flex-wrap gap-2">
-                          <Badge variant="outline">{result.channel_title}</Badge>
-                          {result.published_at ? <Badge variant="secondary">{formatRelativeShort(result.published_at)}</Badge> : null}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => handleGenerateBlueprint(result)}
-                        disabled={isGenerating || !user || !hasEnoughCredits}
-                      >
-                        {isGenerating ? 'Generating...' : `Generate Blueprint · ◉${GENERATE_BLUEPRINT_COST}`}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleSubscribeChannel(result)}
-                        disabled={isSubscribing || !searchEnabled}
-                      >
-                        {isSubscribing ? 'Subscribing...' : 'Subscribe Channel'}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-
-            {nextPageToken ? (
-              <div className="flex justify-center">
-                <Button variant="outline" onClick={handleLoadMore} disabled={searchMutation.isPending}>
-                  {searchMutation.isPending ? 'Loading...' : 'Load more'}
-                </Button>
+            {searchMutation.isPending && !hasResults ? (
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <Skeleton key={index} className="h-44 rounded-xl" />
+                ))}
               </div>
             ) : null}
-          </div>
-        ) : null}
+
+            {showEmpty ? (
+              <Card className="border-border/40">
+                <CardContent className="p-4">
+                  <p className="text-sm text-muted-foreground">No results found for your query.</p>
+                </CardContent>
+              </Card>
+            ) : null}
+
+            {hasResults ? (
+              <div className="space-y-4">
+                {results.map((result) => {
+                  const isGenerating = Boolean(generatingVideoIds[result.video_id]);
+                  const isSubscribing = Boolean(subscribingChannelIds[result.channel_id]);
+                  return (
+                    <Card key={result.video_id} className="border-border/50">
+                      <CardContent className="p-4 space-y-3">
+                        <div className="grid gap-3 md:grid-cols-[160px,1fr]">
+                          {result.thumbnail_url ? (
+                            <img
+                              src={result.thumbnail_url}
+                              alt={result.title}
+                              className="w-full h-28 object-cover rounded-md border border-border/40"
+                            />
+                          ) : (
+                            <div className="w-full h-28 rounded-md border border-border/40 bg-muted/40" />
+                          )}
+                          <div className="space-y-2">
+                            <p className="font-medium leading-tight">{result.title}</p>
+                            <p className="text-sm text-muted-foreground line-clamp-3">{result.description || 'No description available.'}</p>
+                            <div className="flex flex-wrap gap-2">
+                              <Badge variant="outline">{result.channel_title}</Badge>
+                              {result.published_at ? <Badge variant="secondary">{formatRelativeShort(result.published_at)}</Badge> : null}
+                              <Badge variant="secondary">◉{GENERATE_BLUEPRINT_COST}</Badge>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => handleGenerateBlueprint({
+                              video_id: result.video_id,
+                              video_url: result.video_url,
+                              title: result.title,
+                              channel_id: result.channel_id,
+                              channel_title: result.channel_title || '',
+                              channel_url: result.channel_url || '',
+                            })}
+                            disabled={isGenerating || !user || !hasEnoughCredits}
+                          >
+                            {isGenerating ? 'Generating...' : 'Generate'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleSubscribeChannel(result)}
+                            disabled={isSubscribing || !searchEnabled}
+                          >
+                            {isSubscribing ? 'Subscribing...' : 'Subscribe'}
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+
+                {nextPageToken ? (
+                  <div className="flex justify-center">
+                    <Button variant="outline" onClick={handleLoadMore} disabled={searchMutation.isPending}>
+                      {searchMutation.isPending ? 'Loading...' : 'Load more'}
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <Card className="border-border/40">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Search channels</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <form onSubmit={handleChannelSearchSubmit} className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    value={channelQueryInput}
+                    onChange={(event) => setChannelQueryInput(event.target.value)}
+                    placeholder="Try: fitness coach"
+                  />
+                  <Button type="submit" disabled={channelSearchMutation.isPending || !searchEnabled}>
+                    {channelSearchMutation.isPending ? 'Searching...' : 'Search'}
+                  </Button>
+                </form>
+                {channelSearchError ? <p className="text-sm text-destructive">{channelSearchError}</p> : null}
+              </CardContent>
+            </Card>
+
+            {channelSearchSummary ? <p className="text-sm text-muted-foreground">{channelSearchSummary}</p> : null}
+
+            {channelSearchMutation.isPending && channelResults.length === 0 ? (
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <Skeleton key={index} className="h-24 rounded-xl" />
+                ))}
+              </div>
+            ) : null}
+
+            {submittedChannelQuery && channelResults.length === 0 && !channelSearchMutation.isPending ? (
+              <Card className="border-border/40">
+                <CardContent className="p-4">
+                  <p className="text-sm text-muted-foreground">No channels found for your query.</p>
+                </CardContent>
+              </Card>
+            ) : null}
+
+            {channelResults.length > 0 ? (
+              <div className="space-y-3">
+                {channelResults.map((channel) => {
+                  const isSubscribing = Boolean(subscribingChannelIds[channel.channel_id]);
+                  const isSelected = selectedBrowseChannel?.channel_id === channel.channel_id;
+                  return (
+                    <Card key={channel.channel_id} className="border-border/50">
+                      <CardContent className="p-4 space-y-2">
+                        <div className="flex items-start gap-3">
+                          {channel.thumbnail_url ? (
+                            <img
+                              src={channel.thumbnail_url}
+                              alt={channel.channel_title}
+                              className="h-11 w-11 rounded-md object-cover border border-border/40 shrink-0"
+                            />
+                          ) : (
+                            <div className="h-11 w-11 rounded-md border border-border/40 bg-muted/40 shrink-0" />
+                          )}
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <p className="font-medium line-clamp-1">{channel.channel_title}</p>
+                            <p className="text-sm text-muted-foreground line-clamp-2">
+                              {channel.description || 'No channel description available.'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            variant={isSelected ? 'default' : 'outline'}
+                            onClick={() => handleBrowseChannelVideos(channel)}
+                            disabled={channelVideosMutation.isPending && isSelected}
+                          >
+                            {isSelected && channelVideosMutation.isPending ? 'Loading...' : 'Browse videos'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleSubscribeChannel(channel)}
+                            disabled={isSubscribing || !searchEnabled}
+                          >
+                            {isSubscribing ? 'Subscribing...' : 'Subscribe'}
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+
+                {channelNextPageToken ? (
+                  <div className="flex justify-center">
+                    <Button variant="outline" onClick={handleChannelSearchLoadMore} disabled={channelSearchMutation.isPending}>
+                      {channelSearchMutation.isPending ? 'Loading...' : 'Load more channels'}
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {selectedBrowseChannel ? (
+              <Card className="border-border/50">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">
+                    {selectedBrowseChannel.channel_title} · Videos
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {channelVideosError ? (
+                    <p className="text-sm text-destructive">{channelVideosError}</p>
+                  ) : null}
+
+                  {channelVideosMutation.isPending && channelVideoItems.length === 0 ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-20 rounded-md" />
+                      <Skeleton className="h-20 rounded-md" />
+                    </div>
+                  ) : null}
+
+                  {channelVideoItems.length === 0 && !channelVideosMutation.isPending && !channelVideosError ? (
+                    <p className="text-sm text-muted-foreground">No videos available from this channel.</p>
+                  ) : null}
+
+                  {channelVideoItems.length > 0 ? (
+                    <div className="space-y-3">
+                      {channelVideoItems.map((video) => {
+                        const isGenerating = Boolean(generatingVideoIds[video.video_id]);
+                        const hasExistingBlueprint = Boolean(video.existing_blueprint_id);
+                        return (
+                          <div key={video.video_id} className="rounded-md border border-border/40 p-3 space-y-2">
+                            <div className="flex items-start gap-3">
+                              {video.thumbnail_url ? (
+                                <img
+                                  src={video.thumbnail_url}
+                                  alt={video.title}
+                                  className="h-16 w-28 rounded-md border border-border/40 object-cover shrink-0"
+                                />
+                              ) : (
+                                <div className="h-16 w-28 rounded-md border border-border/40 bg-muted/40 shrink-0" />
+                              )}
+                              <div className="min-w-0 flex-1 space-y-1">
+                                <p className="text-sm font-medium line-clamp-2">{video.title}</p>
+                                <p className="text-xs text-muted-foreground line-clamp-2">
+                                  {video.description || 'No description available.'}
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                  <Badge variant="outline">{selectedBrowseChannel.channel_title}</Badge>
+                                  {video.published_at ? <Badge variant="secondary">{formatRelativeShort(video.published_at)}</Badge> : null}
+                                  <Badge variant="secondary">◉{GENERATE_BLUEPRINT_COST}</Badge>
+                                  {video.already_exists_for_user ? (
+                                    <Badge variant="outline">In your feed</Badge>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {hasExistingBlueprint ? (
+                                <Button asChild size="sm" variant="outline">
+                                  <Link to={`/blueprint/${video.existing_blueprint_id}`}>Open blueprint</Link>
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleGenerateBlueprint({
+                                    video_id: video.video_id,
+                                    video_url: video.video_url,
+                                    title: video.title,
+                                    channel_id: video.channel_id,
+                                    channel_title: video.channel_title || selectedBrowseChannel.channel_title,
+                                    channel_url: selectedBrowseChannel.channel_url,
+                                  })}
+                                  disabled={isGenerating || !user || !hasEnoughCredits}
+                                >
+                                  {isGenerating ? 'Generating...' : 'Generate'}
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {channelVideosNextPageToken ? (
+                        <div className="flex justify-center">
+                          <Button variant="outline" onClick={handleLoadMoreChannelVideos} disabled={channelVideosMutation.isPending}>
+                            {channelVideosMutation.isPending ? 'Loading...' : 'Load more videos'}
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </CardContent>
+              </Card>
+            ) : null}
+          </>
+        )}
 
         <AppFooter />
       </PageMain>
