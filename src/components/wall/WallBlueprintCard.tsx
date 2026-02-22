@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Heart, MessageCircle } from 'lucide-react';
+import { Heart } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
 import { getChannelIcon } from '@/lib/channelIcons';
 import { resolveEffectiveBanner } from '@/lib/bannerResolver';
+import { getHotnessView } from '@/lib/hotness';
 
 type WallBlueprintCardTag = {
   key: string;
@@ -60,6 +61,10 @@ export function WallBlueprintCard({
     bannerUrl,
     sourceThumbnailUrl,
   });
+  const hotness = getHotnessView({
+    likes: likesCount,
+    comments: commentsCount,
+  });
 
   return (
     <Link to={to} className="block px-3 py-2.5 transition-colors hover:bg-muted/20">
@@ -111,19 +116,20 @@ export function WallBlueprintCard({
 
           <div className="flex items-center justify-between gap-2 pt-1 text-xs text-muted-foreground">
             <div className="flex items-center gap-1.5">
+              <span
+                className={`inline-flex h-7 items-center rounded-full border px-2 text-[11px] font-medium tracking-wide ${hotness.badgeClassName}`}
+                aria-label={`Hotness tier ${hotness.label}`}
+              >
+                {hotness.label}
+              </span>
               <Button
                 variant="ghost"
                 size="sm"
-                className={`h-7 px-2 ${userLiked ? 'text-red-500' : ''}`}
+                className={`h-7 w-7 p-0 ${userLiked ? 'text-red-500' : ''}`}
                 onClick={onLike}
               >
-                <Heart className={`h-4 w-4 mr-1 ${userLiked ? 'fill-current' : ''}`} />
-                {likesCount}
+                <Heart className={`h-4 w-4 ${userLiked ? 'fill-current' : ''}`} />
               </Button>
-              <span className="inline-flex h-7 items-center gap-1 px-2">
-                <MessageCircle className="h-4 w-4" />
-                {commentsCount}
-              </span>
             </div>
             <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-foreground/75 shrink-0">
               <ChannelIcon className="h-3.5 w-3.5" />

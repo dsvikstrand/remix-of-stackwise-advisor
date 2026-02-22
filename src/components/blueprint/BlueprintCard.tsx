@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Heart, MessageCircle } from 'lucide-react';
+import { Heart } from 'lucide-react';
 import type { BlueprintListItem } from '@/hooks/useBlueprintSearch';
 import { cn } from '@/lib/utils';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
@@ -9,6 +9,7 @@ import { buildFeedSummary } from '@/lib/feedPreview';
 import { getCatalogChannelTagSlugs } from '@/lib/channelPostContext';
 import { normalizeTag } from '@/lib/tagging';
 import { resolveEffectiveBanner } from '@/lib/bannerResolver';
+import { getHotnessView } from '@/lib/hotness';
 
 interface BlueprintCardProps {
   blueprint: BlueprintListItem;
@@ -42,6 +43,10 @@ export function BlueprintCard({
     secondary: blueprint.inventory_title ? `From ${blueprint.inventory_title}` : null,
     fallback: blueprint.inventory_title ? `From ${blueprint.inventory_title}` : 'Community blueprint',
     maxChars: 170,
+  });
+  const hotness = getHotnessView({
+    likes: Number(blueprint.likes_count || 0),
+    comments: Number(commentCount || 0),
   });
 
   return (
@@ -107,10 +112,16 @@ export function BlueprintCard({
               )}
 
               <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
+                <span
+                  className={`inline-flex h-7 items-center rounded-full border px-2 text-[11px] font-medium tracking-wide ${hotness.badgeClassName}`}
+                  aria-label={`Hotness tier ${hotness.label}`}
+                >
+                  {hotness.label}
+                </span>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className={`h-7 px-2 ${
+                  className={`h-7 w-7 p-0 ${
                     blueprint.user_liked
                       ? 'text-red-500 hover:text-red-600'
                       : 'text-muted-foreground hover:text-foreground'
@@ -123,12 +134,8 @@ export function BlueprintCard({
                   aria-label={blueprint.user_liked ? 'Unlike blueprint' : 'Like blueprint'}
                 >
                   <Heart className={`h-3.5 w-3.5 ${blueprint.user_liked ? 'fill-current' : ''}`} />
-                  <span className="ml-1">{blueprint.likes_count}</span>
+                  <span className="sr-only">Like</span>
                 </Button>
-                <span className="inline-flex items-center gap-1">
-                  <MessageCircle className="h-3.5 w-3.5" />
-                  {commentCount}
-                </span>
               </div>
             </div>
           </div>
