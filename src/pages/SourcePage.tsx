@@ -26,7 +26,6 @@ import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
 import { getChannelIcon } from '@/lib/channelIcons';
-import { UnlockActivityCard } from '@/components/shared/UnlockActivityCard';
 import { useSourceUnlockJobTracker } from '@/hooks/useSourceUnlockJobTracker';
 import { resolveEffectiveBanner } from '@/lib/bannerResolver';
 
@@ -179,12 +178,12 @@ export default function SourcePage() {
 
   const [selectedVideoIds, setSelectedVideoIds] = useState<Record<string, boolean>>({});
   const [optimisticUnlockingVideoIds, setOptimisticUnlockingVideoIds] = useState<Record<string, boolean>>({});
-  const [videoLibraryKind, setVideoLibraryKind] = useState<'full' | 'shorts'>('full');
 
   const sourceVideosQuery = useInfiniteQuery({
-    queryKey: ['source-page-videos', platform, externalId, user?.id, videoLibraryKind],
+    queryKey: ['source-page-videos', platform, externalId, user?.id],
     enabled: backendEnabled && isValidRoute && Boolean(sourcePage) && Boolean(user),
     staleTime: 120_000,
+    refetchOnMount: 'always',
     refetchOnWindowFocus: false,
     initialPageParam: null as string | null,
     queryFn: ({ pageParam }) => getSourcePageVideos({
@@ -192,7 +191,6 @@ export default function SourcePage() {
       externalId,
       limit: 12,
       pageToken: pageParam ?? null,
-      kind: videoLibraryKind,
     }),
     getNextPageParam: (lastPage) => lastPage.next_page_token || undefined,
   });
@@ -300,10 +298,6 @@ export default function SourcePage() {
   });
   const videoLibraryJobRunning = videoLibraryUnlockTracker.activity.isActive;
 
-  useEffect(() => {
-    setSelectedVideoIds({});
-  }, [videoLibraryKind]);
-
   const handleSubscribeToggle = () => {
     if (!user) return;
     if (subscribed) {
@@ -319,18 +313,6 @@ export default function SourcePage() {
       ...previous,
       [key]: nextChecked,
     }));
-  };
-
-  const handleSelectAllVisibleVideos = () => {
-    const next: Record<string, boolean> = {};
-    for (const item of sourceVideoItems) {
-      next[getVideoSelectionKey(item)] = true;
-    }
-    setSelectedVideoIds(next);
-  };
-
-  const handleClearVisibleVideoSelection = () => {
-    setSelectedVideoIds({});
   };
 
   const handleGenerateSelectedVideos = () => {
@@ -397,17 +379,25 @@ export default function SourcePage() {
                 <CardContent className="p-4 space-y-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
-                      {sourcePage.avatar_url ? (
-                        <img
-                          src={sourcePage.avatar_url}
-                          alt={sourcePage.title}
-                          className="h-12 w-12 rounded-full border border-border/40 object-cover shrink-0"
-                        />
-                      ) : (
-                        <div className="h-12 w-12 rounded-full border border-border/40 bg-muted text-xs font-semibold flex items-center justify-center shrink-0">
-                          {getInitials(sourcePage.title || sourcePage.external_id, sourcePage.external_id)}
-                        </div>
-                      )}
+                      <a
+                        href={sourcePage.external_url || undefined}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={sourcePage.external_url ? 'shrink-0' : 'shrink-0 pointer-events-none'}
+                        aria-label="Open source on YouTube"
+                      >
+                        {sourcePage.avatar_url ? (
+                          <img
+                            src={sourcePage.avatar_url}
+                            alt={sourcePage.title}
+                            className="h-12 w-12 rounded-full border border-border/40 object-cover shrink-0"
+                          />
+                        ) : (
+                          <div className="h-12 w-12 rounded-full border border-border/40 bg-muted text-xs font-semibold flex items-center justify-center shrink-0">
+                            {getInitials(sourcePage.title || sourcePage.external_id, sourcePage.external_id)}
+                          </div>
+                        )}
+                      </a>
                       <div className="min-w-0 space-y-1">
                         <h1 className="text-xl font-semibold leading-tight truncate">{sourcePage.title || sourcePage.external_id}</h1>
                         <div className="flex items-center gap-2">
@@ -433,11 +423,6 @@ export default function SourcePage() {
                       </Button>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <a href={sourcePage.external_url} target="_blank" rel="noreferrer" className="underline underline-offset-2">
-                      Open on source platform
-                    </a>
-                  </div>
                 </CardContent>
               </Card>
 
@@ -459,67 +444,10 @@ export default function SourcePage() {
 
                   {user ? (
                     <>
-                      <div className="flex items-center gap-2">
-                        <div className="inline-flex items-center rounded-md border border-border/40 bg-muted/20 p-1">
-                          <Button
-                            size="sm"
-                            variant={videoLibraryKind === 'full' ? 'default' : 'ghost'}
-                            className="h-7 px-3 text-xs"
-                            onClick={() => setVideoLibraryKind('full')}
-                          >
-                            Full videos
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant={videoLibraryKind === 'shorts' ? 'default' : 'ghost'}
-                            className="h-7 px-3 text-xs"
-                            onClick={() => setVideoLibraryKind('shorts')}
-                          >
-                            Shorts
-                          </Button>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => sourceVideosQuery.refetch()}
-                          disabled={sourceVideosQuery.isFetching || videoLibraryGenerateMutation.isPending}
-                        >
-                          {sourceVideosQuery.isFetching ? 'Loading...' : 'Reload list'}
-                        </Button>
-                        {sourceVideoItems.length > 0 && canUnlockSourceVideos ? (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={handleSelectAllVisibleVideos}
-                              disabled={videoLibraryGenerateMutation.isPending}
-                            >
-                              Select all visible
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={handleClearVisibleVideoSelection}
-                              disabled={videoLibraryGenerateMutation.isPending}
-                            >
-                              Clear
-                            </Button>
-                          </>
-                        ) : null}
-                      </div>
-
                       {!canUnlockSourceVideos ? (
                         <p className="text-xs text-muted-foreground">
                           Subscribe to this source to view unlock cost and activate blueprint generation.
                         </p>
-                      ) : null}
-
-                      {videoLibraryUnlockTracker.activity.visible ? (
-                        <UnlockActivityCard
-                          title="Video Library unlock"
-                          activity={videoLibraryUnlockTracker.activity}
-                          onClear={!videoLibraryUnlockTracker.activity.isActive ? videoLibraryUnlockTracker.clear : undefined}
-                        />
                       ) : null}
 
                       {!sourceVideosQuery.isFetching && sourceVideosQuery.error ? (
@@ -543,9 +471,7 @@ export default function SourcePage() {
 
                       {!sourceVideosQuery.isFetching && !sourceVideosQuery.error && sourceVideoItems.length === 0 ? (
                         <p className="text-sm text-muted-foreground">
-                          {videoLibraryKind === 'shorts'
-                            ? 'No shorts found for this source page right now.'
-                            : 'No full-length videos found for this source page right now.'}
+                          No videos found for this source page right now.
                         </p>
                       ) : null}
 
@@ -582,7 +508,7 @@ export default function SourcePage() {
                                         </a>
                                         {canUnlockSourceVideos ? (
                                           <Badge variant="outline" className="h-5 px-2 text-[10px]">
-                                            Cost {unlockCostFormatter.format(Number(item.unlock_cost || 0))} cr
+                                            🪙 {unlockCostFormatter.format(Number(item.unlock_cost || 0))}
                                           </Badge>
                                         ) : null}
                                         {item.unlock_status === 'ready' ? (
@@ -635,10 +561,7 @@ export default function SourcePage() {
                           ) : null}
 
                           {canUnlockSourceVideos ? (
-                            <div className="flex items-center justify-between gap-2 pt-1">
-                              <p className="text-xs text-muted-foreground">
-                                Selected: {selectedSourceVideoItems.length} / {sourceVideoItems.length}
-                              </p>
+                            <div className="flex justify-end pt-1">
                               <Button
                                 size="sm"
                                 onClick={handleGenerateSelectedVideos}
