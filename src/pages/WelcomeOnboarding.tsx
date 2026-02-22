@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { config } from '@/config/runtime';
@@ -60,7 +61,6 @@ const ONBOARDING_TAG_SLUGS = ONBOARDING_JOINABLE_CHANNELS.map((c) => c.tagSlug);
 function OnboardingChannelPicker() {
   const { data: tags = [], isLoading: tagsLoading } = useTagsBySlugs(ONBOARDING_TAG_SLUGS);
   const {
-    followedIds,
     joinChannel,
     leaveChannel,
     getFollowState,
@@ -151,6 +151,45 @@ function OnboardingChannelPicker() {
   );
 }
 
+function normalizeImportFilterQuery(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function getImportFilterRank(item: YouTubeImportPreviewItem, normalizedQuery: string) {
+  if (!normalizedQuery) return 0;
+  const values = [
+    item.channel_title || '',
+    item.channel_id || '',
+    item.channel_url || '',
+  ]
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+
+  let bestRank = Number.POSITIVE_INFINITY;
+  for (const value of values) {
+    if (value === normalizedQuery) {
+      bestRank = Math.min(bestRank, 0);
+      continue;
+    }
+    if (value.startsWith(normalizedQuery)) {
+      bestRank = Math.min(bestRank, 1);
+      continue;
+    }
+    if (
+      value.includes(` ${normalizedQuery}`)
+      || value.includes(`-${normalizedQuery}`)
+      || value.includes(`_${normalizedQuery}`)
+    ) {
+      bestRank = Math.min(bestRank, 2);
+      continue;
+    }
+    if (value.includes(normalizedQuery)) {
+      bestRank = Math.min(bestRank, 3);
+    }
+  }
+  return bestRank;
+}
+
 export default function WelcomeOnboarding() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -169,6 +208,7 @@ export default function WelcomeOnboarding() {
 
   const [previewRows, setPreviewRows] = useState<YouTubeImportPreviewItem[]>([]);
   const [previewSelected, setPreviewSelected] = useState<Record<string, boolean>>({});
+  const [previewFilterQuery, setPreviewFilterQuery] = useState('');
   const [previewTruncated, setPreviewTruncated] = useState(false);
   const [importSummary, setImportSummary] = useState<YouTubeImportResult | null>(null);
 
@@ -387,15 +427,42 @@ export default function WelcomeOnboarding() {
         })),
     [previewRows, previewSelected],
   );
+  const normalizedPreviewFilterQuery = useMemo(
+    () => normalizeImportFilterQuery(previewFilterQuery),
+    [previewFilterQuery],
+  );
+  const filteredPreviewRows = useMemo(() => {
+    if (!normalizedPreviewFilterQuery) return previewRows;
+    return previewRows
+      .map((row, index) => ({
+        row,
+        index,
+        rank: getImportFilterRank(row, normalizedPreviewFilterQuery),
+      }))
+      .filter((entry) => Number.isFinite(entry.rank))
+      .sort((left, right) => {
+        if (left.rank !== right.rank) return left.rank - right.rank;
+        return left.index - right.index;
+      })
+      .map((entry) => entry.row);
+  }, [previewRows, normalizedPreviewFilterQuery]);
 
   const toggleRow = (channelId: string, checked: boolean) => {
     setPreviewSelected((previous) => ({ ...previous, [channelId]: checked }));
   };
 
-  const setAllRows = (checked: boolean) => {
-    const next: Record<string, boolean> = {};
-    for (const row of previewRows) next[row.channel_id] = checked;
-    setPreviewSelected(next);
+  const selectAllVisibleRows = () => {
+    setPreviewSelected((previous) => {
+      const next = { ...previous };
+      for (const row of filteredPreviewRows) {
+        next[row.channel_id] = true;
+      }
+      return next;
+    });
+  };
+
+  const clearAllRows = () => {
+    setPreviewSelected({});
   };
 
   const handleImport = () => {
@@ -550,15 +617,29 @@ export default function WelcomeOnboarding() {
               </Button>
               {previewRows.length > 0 ? (
                 <>
-                  <Button size="sm" variant="ghost" onClick={() => setAllRows(true)} disabled={importMutation.isPending}>
-                    Select all
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={selectAllVisibleRows}
+                    disabled={importMutation.isPending || filteredPreviewRows.length === 0}
+                  >
+                    Select visible
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setAllRows(false)} disabled={importMutation.isPending}>
+                  <Button size="sm" variant="ghost" onClick={clearAllRows} disabled={importMutation.isPending}>
                     Clear
                   </Button>
                 </>
               ) : null}
             </div>
+
+            {previewRows.length > 0 ? (
+              <Input
+                value={previewFilterQuery}
+                onChange={(event) => setPreviewFilterQuery(event.target.value)}
+                placeholder="Filter channels..."
+                className="h-9"
+              />
+            ) : null}
 
             {previewTruncated ? (
               <p className="text-xs text-muted-foreground">
@@ -573,9 +654,15 @@ export default function WelcomeOnboarding() {
               </div>
             ) : null}
 
-            {!previewMutation.isPending && previewRows.length > 0 ? (
+            {!previewMutation.isPending && previewRows.length > 0 && filteredPreviewRows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No channels match "{previewFilterQuery.trim()}".
+              </p>
+            ) : null}
+
+            {!previewMutation.isPending && filteredPreviewRows.length > 0 ? (
               <div className="space-y-2 max-h-[46vh] overflow-y-auto pr-1">
-                {previewRows.map((row) => (
+                {filteredPreviewRows.map((row) => (
                   <div key={row.channel_id} className="rounded-md border border-border/40 p-3">
                     <div className="flex items-start gap-3">
                       <Checkbox
