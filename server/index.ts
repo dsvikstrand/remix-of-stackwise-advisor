@@ -82,6 +82,12 @@ import {
   type IngestionJobRow,
 } from './services/ingestionQueue';
 import {
+  createNotificationFromEvent,
+  listNotificationsForUser,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from './services/notifications';
+import {
   clampInt,
   getFailureTransition,
   normalizeAutoBannerMode,
@@ -5094,6 +5100,43 @@ async function collectRefreshCandidatesForUser(db: ReturnType<typeof createClien
   };
 }
 
+async function emitGenerationTerminalNotification(
+  db: ReturnType<typeof createClient>,
+  params: {
+    userId: string;
+    jobId: string;
+    scope: string;
+    inserted: number;
+    skipped: number;
+    failed: number;
+    traceId?: string | null;
+    firstBlueprintId?: string | null;
+  },
+) {
+  if (params.inserted <= 0 && params.failed <= 0) return;
+  try {
+    await createNotificationFromEvent(db, {
+      kind: 'generation_terminal',
+      userId: params.userId,
+      jobId: params.jobId,
+      scope: params.scope,
+      inserted: params.inserted,
+      skipped: params.skipped,
+      failed: params.failed,
+      traceId: params.traceId || null,
+      firstBlueprintId: params.firstBlueprintId || null,
+    });
+  } catch (notificationError) {
+    console.log('[notification_emit_failed]', JSON.stringify({
+      kind: 'generation_terminal',
+      user_id: params.userId,
+      job_id: params.jobId,
+      scope: params.scope,
+      error: notificationError instanceof Error ? notificationError.message : String(notificationError),
+    }));
+  }
+}
+
 async function processManualRefreshGenerateJob(input: {
   jobId: string;
   userId: string;
@@ -5107,6 +5150,7 @@ async function processManualRefreshGenerateJob(input: {
   let processed = 0;
   let inserted = 0;
   let skipped = 0;
+  let firstBlueprintId: string | null = null;
   const failures: Array<{ subscription_id: string; video_id: string; error_code: string; error: string }> = [];
   const checkpointBySubscription = new Map<string, { publishedAt: string | null; videoId: string }>();
 
@@ -5196,6 +5240,7 @@ async function processManualRefreshGenerateJob(input: {
       });
       if (insertedItem) inserted += 1;
       else skipped += 1;
+      if (insertedItem && !firstBlueprintId) firstBlueprintId = generated.blueprintId;
 
       if (insertedItem) {
         try {
@@ -5308,6 +5353,16 @@ async function processManualRefreshGenerateJob(input: {
     error_message: failures.length ? JSON.stringify(failures).slice(0, 1000) : null,
   }).eq('id', input.jobId);
 
+  await emitGenerationTerminalNotification(db, {
+    userId: input.userId,
+    jobId: input.jobId,
+    scope: 'manual_refresh_selection',
+    inserted,
+    skipped,
+    failed: failures.length,
+    firstBlueprintId,
+  });
+
   console.log('[subscription_manual_refresh_job_done]', JSON.stringify({
     job_id: input.jobId,
     user_id: input.userId,
@@ -5334,6 +5389,7 @@ async function processSourcePageVideoLibraryJob(input: {
   let processed = 0;
   let inserted = 0;
   let skipped = 0;
+  let firstBlueprintId: string | null = null;
   const failures: Array<{ video_id: string; error_code: string; error: string }> = [];
 
   for (const item of input.items) {
@@ -5375,6 +5431,7 @@ async function processSourcePageVideoLibraryJob(input: {
       });
       if (insertedItem) inserted += 1;
       else skipped += 1;
+      if (insertedItem && !firstBlueprintId) firstBlueprintId = generated.blueprintId;
 
       if (insertedItem) {
         try {
@@ -5432,6 +5489,16 @@ async function processSourcePageVideoLibraryJob(input: {
     error_message: failures.length ? JSON.stringify(failures).slice(0, 1000) : null,
   }).eq('id', input.jobId);
 
+  await emitGenerationTerminalNotification(db, {
+    userId: input.userId,
+    jobId: input.jobId,
+    scope: 'source_page_video_library_selection',
+    inserted,
+    skipped,
+    failed: failures.length,
+    firstBlueprintId,
+  });
+
   console.log('[source_page_video_generate_job_done]', JSON.stringify({
     job_id: input.jobId,
     user_id: input.userId,
@@ -5464,6 +5531,7 @@ async function processSourceItemUnlockGenerationJob(input: {
   let processed = 0;
   let inserted = 0;
   let skipped = 0;
+  let firstBlueprintId: string | null = null;
   const failures: Array<{ video_id: string; unlock_id: string; error_code: string; error: string }> = [];
 
   for (const item of input.items) {
@@ -5579,6 +5647,7 @@ async function processSourceItemUnlockGenerationJob(input: {
       });
 
       inserted += 1;
+      if (!firstBlueprintId) firstBlueprintId = generated.blueprintId;
 
       logUnlockEvent(
         'unlock_item_succeeded',
@@ -5849,6 +5918,17 @@ async function processSourceItemUnlockGenerationJob(input: {
     error_code: failures.length ? 'PARTIAL_FAILURE' : null,
     error_message: failures.length ? JSON.stringify(failures).slice(0, 1000) : null,
   }).eq('id', input.jobId);
+
+  await emitGenerationTerminalNotification(db, {
+    userId: input.userId,
+    jobId: input.jobId,
+    scope: 'source_item_unlock_generation',
+    inserted,
+    skipped,
+    failed: failures.length,
+    traceId: input.traceId,
+    firstBlueprintId,
+  });
 
   logUnlockEvent(
     'unlock_job_terminal',
@@ -9300,6 +9380,105 @@ app.get('/api/ingestion/jobs/latest-mine', ingestionLatestMineLimiter, async (re
         }
       : null,
   });
+});
+
+app.get('/api/notifications', async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+  const limit = clampInt(req.query.limit, 20, 1, 50);
+  const cursor = String(req.query.cursor || '').trim() || null;
+
+  try {
+    const list = await listNotificationsForUser(db, { userId, limit, cursor });
+    return res.json({
+      ok: true,
+      error_code: null,
+      message: 'notifications fetched',
+      data: list,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: error instanceof Error ? error.message : 'Could not load notifications.',
+      data: null,
+    });
+  }
+});
+
+app.post('/api/notifications/read-all', async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+  try {
+    const result = await markAllNotificationsRead(db, { userId });
+    return res.json({
+      ok: true,
+      error_code: null,
+      message: 'notifications marked read',
+      data: result,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'WRITE_FAILED',
+      message: error instanceof Error ? error.message : 'Could not update notifications.',
+      data: null,
+    });
+  }
+});
+
+app.post('/api/notifications/:id([0-9a-fA-F-]{36})/read', async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+  try {
+    const result = await markNotificationRead(db, {
+      userId,
+      notificationId: String(req.params.id || '').trim(),
+    });
+    if (!result) {
+      return res.status(404).json({
+        ok: false,
+        error_code: 'NOT_FOUND',
+        message: 'Notification not found.',
+        data: null,
+      });
+    }
+
+    return res.json({
+      ok: true,
+      error_code: null,
+      message: 'notification marked read',
+      data: result,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'WRITE_FAILED',
+      message: error instanceof Error ? error.message : 'Could not update notification.',
+      data: null,
+    });
+  }
 });
 
 app.post('/api/ingestion/jobs/trigger', async (req, res) => {

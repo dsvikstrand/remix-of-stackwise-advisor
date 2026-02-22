@@ -39,6 +39,11 @@
   - `POST /api/source-pages/:platform/:externalId/subscribe` (auth)
   - `DELETE /api/source-pages/:platform/:externalId/subscribe` (auth)
   - Frontend trust status now resumes unlock jobs via `GET /api/ingestion/jobs/latest-mine?scope=source_item_unlock_generation` after reload.
+  - Notification inbox endpoints (auth):
+    - `GET /api/notifications`
+    - `POST /api/notifications/:id/read`
+    - `POST /api/notifications/read-all`
+    - emitted event families: `comment_reply`, `generation_succeeded`, `generation_failed`.
 - Profile feed read endpoint:
   - `GET /api/profile/:userId/feed` (optional auth; public profiles readable, private profiles owner-only)
 - Subscription auto-unlock policy:
@@ -76,6 +81,11 @@ curl -sS https://bapi.vdsai.cloud/api/auto-banner/jobs/latest \
 curl -sS -X POST https://bapi.vdsai.cloud/api/youtube-to-blueprint \
   -H 'Content-Type: application/json' \
   --data '{"video_url":"https://www.youtube.com/watch?v=16hFQZbxZpU","generate_review":false,"generate_banner":false,"source":"youtube_mvp"}'
+```
+- Notification inbox probe (auth):
+```bash
+curl -sS "https://bapi.vdsai.cloud/api/notifications?limit=5" \
+  -H "Authorization: Bearer $USER_TOKEN"
 ```
 
 ## Service lifecycle

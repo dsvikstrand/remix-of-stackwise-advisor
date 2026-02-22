@@ -70,6 +70,7 @@
     - skip path records non-blocking onboarding state.
   - User menu includes a direct `Subscriptions` shortcut to `/subscriptions`; profile tab keeps a lightweight owner-only list with `Unsubscribe`.
   - User menu credit panel shows refill timing (`next +1`) plus latest wallet ledger activity summary when available.
+  - Header now includes an auth-only notifications bell inbox (reply + generation terminal notifications with read/read-all actions).
 - Backend:
   - Express server in `server/index.ts`.
   - `/api/youtube-to-blueprint` generation pipeline.
@@ -100,6 +101,9 @@
     - `POST /api/source-subscriptions/refresh-generate` (auth-only enqueue for selected videos; starts async background generation job)
     - `GET /api/ingestion/jobs/:id` (auth-only, owner-scoped status for manual refresh background jobs)
     - `GET /api/ingestion/jobs/latest-mine` (auth-only, user-scoped latest refresh job; used to restore in-flight status after reload)
+    - `GET /api/notifications` (auth-only inbox list with unread count + cursor pagination)
+    - `POST /api/notifications/:id/read` (auth-only mark one read)
+    - `POST /api/notifications/read-all` (auth-only mark all unread read)
     - `GET /api/youtube-search` (auth-only YouTube result discovery, relevance-sorted)
     - `GET /api/youtube-channel-search` (auth-only YouTube channel discovery, relevance-sorted)
     - `GET /api/youtube/connection/status` (auth-only YouTube OAuth status)
@@ -126,6 +130,7 @@
   - `bleuV1` extension: source-item canonical tables + user feed item tables + subscription/ingestion job tables + auto-banner policy/queue tables + refill-credit/unlock tables.
   - source-identity foundation: `source_pages` table and FK links from `user_source_subscriptions` + `source_items` via `source_page_id`.
   - shared unlock foundation: `source_item_unlocks` (status/cost/reservation/ready blueprint) + `user_credit_wallets` + immutable `credit_ledger`.
+  - notifications foundation: `notifications` table with owner-read/update RLS and dedupe key support (`user_id + dedupe_key`).
   - unlock reliability sweeps:
     - opportunistic sweeps on source-page video list/unlock routes.
     - forced sweep on service cron trigger path.

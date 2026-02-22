@@ -77,6 +77,7 @@ a65) [have] Unlock/manual/service ingestion execution is now enqueue-first with 
 a66) [have] Service operations now include `GET /api/ops/queue/health` for queue depth, stale leases, and provider circuit snapshots.
 a67) [have] Subscription rows now support `auto_unlock_enabled` (default `true`) so new uploads can auto-attempt shared unlock generation when eligible subscribers have credits.
 a68) [have] YouTube-source blueprints now use thumbnail-first banners across cards and detail views; legacy source-linked rows are backfilled to thumbnails and source flows bypass auto-banner enqueue.
+a69) [have] Notifications MVP now emits reply and generation-terminal notifications and surfaces them through an auth inbox bell in the app header.
 
 ## Core Model
 b1) `Source Item`
@@ -278,6 +279,10 @@ si61) transcript truth model distinguishes temporary transcript failures from co
 si62) `NO_TRANSCRIPT_PERMANENT` is now set only after bounded confirmation retries, and confirmed no-speech rows are hidden from unlockable feed/video-library surfaces.
 si63) auto subscription transcript failures now use silent bounded retries with explicit retry-after ladder; feed-card rows are suppressed during retry/permanent states instead of shown as unlockable locks.
 si64) transcript speech-guidance warning copy is scoped to explicit Source Page Video Library `+Add` requests; Wall/My Feed unlock actions use generic retry-safe messaging.
+si65) auth endpoint: `GET /api/notifications?limit=<1..50>&cursor=<opaque?>` returns inbox rows with `unread_count` and `next_cursor`.
+si66) auth endpoint: `POST /api/notifications/:id/read` marks one notification read.
+si67) auth endpoint: `POST /api/notifications/read-all` marks all unread notifications read.
+si68) comment reply notifications are produced by DB trigger on `wall_comments` reply inserts (self-replies ignored; dedupe key is `comment_reply:<reply_comment_id>`).
 
 ## Next Milestone (Hardening)
 n1) Keep legacy manual gate behavior stable with `CHANNEL_GATES_MODE=bypass` while auto-channel path uses `AUTO_CHANNEL_GATE_MODE`.

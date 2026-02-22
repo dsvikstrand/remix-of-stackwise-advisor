@@ -69,6 +69,7 @@ Execution mode:
 50. [have] Step 49 - Thumbnail-first banners for source YouTube flows (old-source backfill + source auto-banner bypass + thumbnail fallback hardening)
 51. [have] Step 50 - Transcript truth model hardening (ambiguous no-captions retries + confirmation quorum + historical revalidation jobs)
 52. [have] Step 51 - Silent auto transcript retries + manual `+Add` warning scope (auto feed suppression, bounded retry ladder, non-wall transcript messaging)
+53. [have] Step 52 - Notifications MVP foundation (comment replies + generation terminal events + header bell inbox)
 
 Interpretation note
 - Step entries capture execution timeline.

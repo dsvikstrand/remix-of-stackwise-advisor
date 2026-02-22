@@ -5,6 +5,10 @@ Status: `active`
 ## Goal
 Convert the current feature-complete MVP into a stable, clear, and scalable product surface by hardening UX trust, runtime reliability, and engineering foundations.
 
+## Canonical Launch Checklist
+a0) [have] Canonical launch-readiness and phased fix process is maintained in `docs/ops/mvp-launch-readiness-checklist.md`.
+a00) [have] Use this playbook for strategic priority framing and use the ops checklist for execution evidence/status tracking.
+
 ## Current State Snapshot
 a1) [have] Core source-first loop is live: source subscriptions -> unlock/generate -> blueprint -> channel/home visibility.
 a2) [have] Source Pages, Source Video Library, shared unlock, refill credits, onboarding, and Explore source search are implemented.
@@ -28,6 +32,7 @@ c2) [have] Unlock pipeline now emits correlation `trace_id` from request -> queu
 c3) [todo] Normalize unlock failure reasons to stable user-facing messages and stable internal reason codes.
 c4) [have] Added focused backend integration tests for hold/settle/refund idempotency and concurrent unlock reserve semantics.
 c5) [todo] Add explicit smoke playbook for mobile OAuth callback edge cases and unlock transitions.
+c6) [have] Notifications MVP foundation is live (`comment_reply`, `generation_succeeded`, `generation_failed`) with header bell inbox and read/read-all controls.
 
 ### P2 - Maintainability and Scale-readiness
 d1) [todo] Split `server/index.ts` into route modules (`source pages`, `subscriptions`, `unlock/credits`, `ingestion jobs`).

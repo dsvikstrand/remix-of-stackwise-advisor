@@ -104,6 +104,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Step 24 scale follow-up shifts unlock/manual/service generation to enqueue-only worker execution with DB claim+lease heartbeat semantics, queue backpressure controls, provider retry/circuit guards, and service queue health endpoint (`GET /api/ops/queue/health`).
 - Step 25 subscription auto-unlock v1 adds per-subscription `auto_unlock_enabled` (default `true`), prioritizes the current subscriber, then samples up to 3 eligible subscribers for new-video auto-attempts, and runs bounded `source_auto_unlock_retry` attempts when credits are temporarily unavailable.
 - Step 26 thumbnail-first banner cutover sets source YouTube banner rendering to thumbnails across Wall/Feed/Explore/Detail/Source Page, backfills old source-linked blueprints, and bypasses source auto-banner enqueue paths.
+- Step 27 notifications MVP adds reply + generation-terminal notification events and ships an auth header bell inbox with read/read-all actions.
 - Added service-ops endpoint `GET /api/ingestion/jobs/latest` for latest ingestion status checks.
 - Added user endpoint `GET /api/ingestion/jobs/:id` for owner-scoped manual refresh progress.
 - Added user endpoint `GET /api/ingestion/jobs/latest-mine` for owner-scoped latest refresh-job restore after page reload.
