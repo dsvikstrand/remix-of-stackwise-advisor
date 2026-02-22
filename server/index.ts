@@ -3006,6 +3006,7 @@ async function upsertFeedItemWithBlueprint(db: ReturnType<typeof createClient>, 
   blueprintId: string;
   state: string;
 }) {
+  const nowIso = new Date().toISOString();
   const { data, error } = await db
     .from('user_feed_items')
     .upsert(
@@ -3015,6 +3016,8 @@ async function upsertFeedItemWithBlueprint(db: ReturnType<typeof createClient>, 
         blueprint_id: input.blueprintId,
         state: input.state,
         last_decision_code: null,
+        // Treat unlock completion as fresh feed content for ordering.
+        created_at: nowIso,
       },
       { onConflict: 'user_id,source_item_id' },
     )
