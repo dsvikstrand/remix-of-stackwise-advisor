@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -12,21 +12,11 @@ import { BookOpen, Loader2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { config } from '@/config/runtime';
 
-function getSafeRedirectPath(rawRedirect: string | null) {
-  const value = String(rawRedirect || '').trim();
-  if (!value) return '/wall';
-  if (!value.startsWith('/')) return '/wall';
-  if (value.startsWith('//')) return '/wall';
-  if (value.startsWith('/auth')) return '/wall';
-  return value;
-}
-
 export default function Auth() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const { signIn, signUp, user } = useAuth();
   const { toast } = useToast();
-  const postAuthRedirect = getSafeRedirectPath(searchParams.get('redirect'));
+  const postAuthRedirect = '/wall';
   
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
