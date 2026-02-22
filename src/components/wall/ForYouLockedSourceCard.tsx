@@ -103,7 +103,7 @@ export function ForYouLockedSourceCard({
                 {isUnlocking ? 'Unlocking...' : 'Unlock available'}
               </Badge>
               <span className="inline-flex h-6 items-center rounded-full border border-border/60 bg-muted/40 px-2.5 text-[11px] text-muted-foreground">
-                🪙 {unlockCostFormatter.format(unlockCost)}
+                ◉ {unlockCostFormatter.format(unlockCost)}
               </span>
             </div>
           </div>
@@ -116,7 +116,7 @@ export function ForYouLockedSourceCard({
           <AlertDialogHeader>
             <AlertDialogTitle>Unlock this blueprint?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will spend 🪙 {unlockCostFormatter.format(unlockCost)} to unlock and generate it.
+              This will spend {unlockCostFormatter.format(unlockCost)} credits to unlock and generate it.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

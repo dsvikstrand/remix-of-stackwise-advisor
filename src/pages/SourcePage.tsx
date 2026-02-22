@@ -497,18 +497,15 @@ export default function SourcePage() {
                                         || videoLibraryGenerateMutation.isPending
                                       }
                                       onCheckedChange={(value) => toggleVideoSelection(item, value === true)}
-                                      className="mt-0.5"
+                                      className={item.already_exists_for_user ? 'mt-0.5 opacity-50 cursor-default' : 'mt-0.5'}
                                     />
                                     <div className="min-w-0 flex-1 space-y-1">
                                       <p className="text-sm font-medium line-clamp-2">{item.title}</p>
                                       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                                         <span>{createdLabel}</span>
-                                        <a href={item.video_url} target="_blank" rel="noreferrer" className="underline">
-                                          Open video
-                                        </a>
                                         {canUnlockSourceVideos ? (
                                           <Badge variant="outline" className="h-5 px-2 text-[10px]">
-                                            🪙 {unlockCostFormatter.format(Number(item.unlock_cost || 0))}
+                                            ◉ {unlockCostFormatter.format(Number(item.unlock_cost || 0))}
                                           </Badge>
                                         ) : null}
                                         {item.unlock_status === 'ready' ? (
@@ -519,11 +516,6 @@ export default function SourcePage() {
                                         {isUnlocking ? (
                                           <Badge variant="secondary" className="h-5 px-2 text-[10px]">
                                             Unlocking...
-                                          </Badge>
-                                        ) : null}
-                                        {item.already_exists_for_user ? (
-                                          <Badge variant="secondary" className="h-5 px-2 text-[10px]">
-                                            Already in your feed
                                           </Badge>
                                         ) : null}
                                         {item.existing_blueprint_id || item.ready_blueprint_id ? (
