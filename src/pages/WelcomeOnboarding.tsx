@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Loader2 } from 'lucide-react';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { PageMain, PageRoot, PageSection } from '@/components/layout/Page';
@@ -12,6 +13,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { config } from '@/config/runtime';
+import { useTagFollows } from '@/hooks/useTagFollows';
+import { useTagsBySlugs } from '@/hooks/useTags';
+import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
+import { getChannelIcon } from '@/lib/channelIcons';
 import { useYouTubeOnboarding } from '@/hooks/useYouTubeOnboarding';
 import {
   disconnectYouTubeConnection,
@@ -44,6 +49,106 @@ function getYouTubeConnectionErrorMessage(error: unknown, fallback: string) {
     }
   }
   return error instanceof Error ? error.message : fallback;
+}
+
+const ONBOARDING_JOINABLE_CHANNELS = CHANNELS_CATALOG
+  .filter((c) => c.isJoinEnabled && c.status === 'active')
+  .sort((a, b) => a.priority - b.priority);
+
+const ONBOARDING_TAG_SLUGS = ONBOARDING_JOINABLE_CHANNELS.map((c) => c.tagSlug);
+
+function OnboardingChannelPicker() {
+  const { data: tags = [], isLoading: tagsLoading } = useTagsBySlugs(ONBOARDING_TAG_SLUGS);
+  const {
+    followedIds,
+    joinChannel,
+    leaveChannel,
+    getFollowState,
+    isLoading: followsLoading,
+  } = useTagFollows();
+
+  const tagBySlug = useMemo(
+    () => new Map(tags.map((t) => [t.slug, t])),
+    [tags],
+  );
+
+  const handleToggle = async (tagId: string, tagSlug: string, isJoined: boolean) => {
+    try {
+      if (isJoined) {
+        await leaveChannel({ id: tagId, slug: tagSlug });
+      } else {
+        await joinChannel({ id: tagId, slug: tagSlug });
+      }
+    } catch {
+      // useTagFollows already handles error state
+    }
+  };
+
+  return (
+    <Card className="border-border/40">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Step 3: Join channels (optional)</CardTitle>
+        <CardDescription>
+          Select channels you'd like to follow. You can change these anytime from Channels.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-1">
+        {tagsLoading || followsLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-10 rounded-md" />
+            <Skeleton className="h-10 rounded-md" />
+            <Skeleton className="h-10 rounded-md" />
+          </div>
+        ) : (
+          <div className="max-h-[40vh] overflow-y-auto space-y-0.5 pr-1">
+            {ONBOARDING_JOINABLE_CHANNELS.map((channel) => {
+              const tag = tagBySlug.get(channel.tagSlug);
+              const tagId = tag?.id ?? null;
+              const state = tagId ? getFollowState({ id: tagId }) : null;
+              const isJoined = state === 'joined' || state === 'leaving';
+              const isPending = state === 'joining' || state === 'leaving';
+              const unavailable = !tagId;
+
+              const ChannelIcon = getChannelIcon(channel.icon);
+
+              return (
+                <div
+                  key={channel.slug}
+                  className="flex items-center justify-between gap-3 py-2 px-1"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="h-7 w-7 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                      <ChannelIcon className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{channel.name}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-1">{channel.description}</p>
+                    </div>
+                  </div>
+                  {unavailable ? (
+                    <Button size="sm" variant="outline" disabled className="h-7 px-2 text-xs shrink-0">
+                      Unavailable
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant={isJoined ? 'outline' : 'default'}
+                      disabled={isPending}
+                      className="h-7 px-2 text-xs shrink-0"
+                      onClick={() => handleToggle(tagId!, channel.tagSlug, isJoined)}
+                    >
+                      {isPending && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                      {state === 'joining' ? 'Joining...' : state === 'leaving' ? 'Leaving...' : isJoined ? 'Joined' : 'Join'}
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function WelcomeOnboarding() {
@@ -527,6 +632,8 @@ export default function WelcomeOnboarding() {
             </div>
           </CardContent>
         </Card>
+
+        <OnboardingChannelPicker />
 
         <Card className="border-border/40">
           <CardContent className="p-4 flex flex-wrap items-center justify-between gap-2">
