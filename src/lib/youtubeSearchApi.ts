@@ -18,6 +18,24 @@ export type YouTubeSearchPage = {
   next_page_token: string | null;
 };
 
+export type SearchVideoGenerateItem = {
+  video_id: string;
+  video_url: string;
+  title: string;
+  channel_id: string;
+  channel_title?: string | null;
+  channel_url?: string | null;
+  published_at?: string | null;
+  thumbnail_url?: string | null;
+};
+
+export type SearchVideoGenerateResponse = {
+  job_id: string;
+  queue_depth: number;
+  estimated_start_seconds: number;
+  queued_count: number;
+};
+
 type ApiEnvelope<T> = {
   ok: boolean;
   error_code: string | null;
@@ -122,4 +140,39 @@ export async function searchYouTube(input: { q: string; limit?: number; pageToke
       .filter((row): row is YouTubeSearchResult => !!row),
     next_page_token: json.data?.next_page_token || null,
   } as YouTubeSearchPage;
+}
+
+export async function generateSearchVideos(input: {
+  items: SearchVideoGenerateItem[];
+}) {
+  const base = getApiBase();
+  if (!base) {
+    throw new ApiRequestError(503, 'Backend API is not configured.', 'API_NOT_CONFIGURED');
+  }
+  const authHeader = await getAuthHeader();
+
+  const response = await fetch(`${base}/search/videos/generate`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeader,
+    },
+    body: JSON.stringify({
+      items: input.items,
+    }),
+  });
+
+  const json = (await response.json().catch(() => null)) as ApiEnvelope<SearchVideoGenerateResponse> | null;
+  if (!response.ok || !json) {
+    throw new ApiRequestError(
+      response.status,
+      json?.message || `Request failed (${response.status})`,
+      json?.error_code || null,
+    );
+  }
+  if (!json.ok) {
+    throw new ApiRequestError(response.status, json.message || 'Request failed.', json.error_code || null);
+  }
+
+  return json.data;
 }

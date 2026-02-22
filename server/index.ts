@@ -282,6 +282,7 @@ const QUEUED_INGESTION_SCOPES = [
   'source_item_unlock_generation',
   'source_auto_unlock_retry',
   'source_transcript_revalidate',
+  'search_video_generate',
   'manual_refresh_selection',
   'all_active_subscriptions',
 ] as const;
@@ -703,6 +704,21 @@ const SourcePageVideosGenerateSchema = z.object({
       thumbnail_url: z.string().url().optional().nullable(),
     }),
   ).min(1).max(500),
+});
+
+const SearchVideosGenerateSchema = z.object({
+  items: z.array(
+    z.object({
+      video_id: z.string().min(1),
+      video_url: z.string().url(),
+      title: z.string().min(1),
+      channel_id: z.string().min(1),
+      channel_title: z.string().nullable().optional(),
+      channel_url: z.string().nullable().optional(),
+      published_at: z.string().nullable().optional(),
+      thumbnail_url: z.string().nullable().optional(),
+    }),
+  ).min(1).max(50),
 });
 
 type YouTubeDraftStep = {
@@ -1658,6 +1674,119 @@ app.get('/api/youtube-search', async (req, res) => {
     });
   }
 });
+
+app.post(
+  '/api/search/videos/generate',
+  sourceVideoUnlockBurstLimiter,
+  sourceVideoUnlockSustainedLimiter,
+  async (req, res) => {
+    const userId = (res.locals.user as { id?: string } | undefined)?.id;
+    const authToken = (res.locals.authToken as string | undefined) ?? '';
+    if (!userId || !authToken) {
+      return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+    }
+
+    const parsed = SearchVideosGenerateSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({
+        ok: false,
+        error_code: 'INVALID_INPUT',
+        message: 'Invalid generate request',
+        data: null,
+      });
+    }
+
+    if (parsed.data.items.length > sourceUnlockGenerateMaxItems) {
+      return res.status(400).json({
+        ok: false,
+        error_code: 'MAX_ITEMS_EXCEEDED',
+        message: `Select up to ${sourceUnlockGenerateMaxItems} videos per generation run.`,
+        data: null,
+      });
+    }
+
+    const db = getAuthedSupabaseClient(authToken);
+    if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+    const serviceDb = getServiceSupabaseClient();
+    if (!serviceDb) {
+      return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+    }
+
+    const dedupedMap = new Map<string, SearchVideoGenerateItem>();
+    for (const item of parsed.data.items) {
+      const key = String(item.video_id || '').trim();
+      if (!key) continue;
+      dedupedMap.set(key, {
+        video_id: key,
+        video_url: String(item.video_url || '').trim(),
+        title: String(item.title || '').trim(),
+        channel_id: String(item.channel_id || '').trim(),
+        channel_title: item.channel_title == null ? null : String(item.channel_title || '').trim() || null,
+        channel_url: item.channel_url == null ? null : String(item.channel_url || '').trim() || null,
+        published_at: item.published_at == null ? null : String(item.published_at || '').trim() || null,
+        thumbnail_url: item.thumbnail_url == null ? null : String(item.thumbnail_url || '').trim() || null,
+      });
+    }
+    const dedupedItems = Array.from(dedupedMap.values())
+      .filter((item) => item.video_id && item.video_url && item.title && item.channel_id);
+    if (dedupedItems.length === 0) {
+      return res.status(400).json({
+        ok: false,
+        error_code: 'NO_ELIGIBLE_ITEMS',
+        message: 'No eligible videos found for generation.',
+        data: null,
+      });
+    }
+
+    const queueDepth = await countQueueDepth(serviceDb, { includeRunning: true });
+    const userQueueDepth = await countQueueDepth(serviceDb, { userId, includeRunning: true });
+    if (queueDepth >= queueDepthHardLimit || userQueueDepth >= queueDepthPerUserLimit) {
+      return res.status(429).json({
+        ok: false,
+        error_code: 'QUEUE_BACKPRESSURE',
+        message: 'Generation queue is busy. Please retry shortly.',
+        retry_after_seconds: 30,
+        data: {
+          queue_depth: queueDepth,
+          user_queue_depth: userQueueDepth,
+        },
+      });
+    }
+
+    const { data: job, error: jobCreateError } = await db
+      .from('ingestion_jobs')
+      .insert({
+        trigger: 'user_sync',
+        scope: 'search_video_generate',
+        status: 'queued',
+        requested_by_user_id: userId,
+        payload: {
+          user_id: userId,
+          items: dedupedItems,
+        },
+        next_run_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single();
+    if (jobCreateError) {
+      return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: jobCreateError.message, data: null });
+    }
+
+    scheduleQueuedIngestionProcessing();
+
+    return res.status(202).json({
+      ok: true,
+      error_code: null,
+      message: 'background generation started',
+      data: {
+        job_id: job.id,
+        queue_depth: queueDepth + 1,
+        estimated_start_seconds: Math.max(1, Math.ceil((queueDepth + 1) / Math.max(1, workerConcurrency)) * 4),
+        queued_count: dedupedItems.length,
+      },
+    });
+  },
+);
 
 app.get('/api/youtube-channel-search', async (req, res) => {
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
@@ -3844,6 +3973,17 @@ type SourcePageVideoGenerateItem = {
   thumbnail_url: string | null;
 };
 
+type SearchVideoGenerateItem = {
+  video_id: string;
+  video_url: string;
+  title: string;
+  channel_id: string;
+  channel_title: string | null;
+  channel_url: string | null;
+  published_at: string | null;
+  thumbnail_url: string | null;
+};
+
 type SourcePageVideoExistingState = {
   already_exists_for_user: boolean;
   existing_blueprint_id: string | null;
@@ -5137,6 +5277,139 @@ async function emitGenerationTerminalNotification(
   }
 }
 
+async function processSearchVideoGenerateJob(input: {
+  jobId: string;
+  userId: string;
+  items: SearchVideoGenerateItem[];
+}) {
+  const db = getServiceSupabaseClient();
+  if (!db) {
+    throw new Error('Service role client not configured');
+  }
+
+  let processed = 0;
+  let inserted = 0;
+  let skipped = 0;
+  let firstBlueprintId: string | null = null;
+  const failures: Array<{ video_id: string; error_code: string; error: string }> = [];
+
+  for (const item of input.items) {
+    processed += 1;
+    try {
+      const source = await upsertSourceItemFromVideo(db, {
+        video: {
+          videoId: item.video_id,
+          title: item.title,
+          url: item.video_url,
+          publishedAt: item.published_at || null,
+          thumbnailUrl: item.thumbnail_url || null,
+        },
+        channelId: item.channel_id,
+        channelTitle: item.channel_title || null,
+        channelUrl: item.channel_url || null,
+        sourcePageId: null,
+      });
+
+      const existingFeedItem = await getExistingFeedItem(db, input.userId, source.id);
+      if (existingFeedItem) {
+        skipped += 1;
+        continue;
+      }
+
+      const generated = await createBlueprintFromVideo(db, {
+        userId: input.userId,
+        videoUrl: source.source_url,
+        videoId: source.source_native_id,
+        sourceTag: 'youtube_search_direct',
+        sourceItemId: source.id,
+        subscriptionId: null,
+      });
+
+      const insertedItem = await insertFeedItem(db, {
+        userId: input.userId,
+        sourceItemId: source.id,
+        blueprintId: generated.blueprintId,
+        state: 'my_feed_published',
+      });
+      if (insertedItem) inserted += 1;
+      else skipped += 1;
+      if (insertedItem && !firstBlueprintId) firstBlueprintId = generated.blueprintId;
+
+      if (insertedItem) {
+        try {
+          await runAutoChannelForFeedItem({
+            db,
+            userId: input.userId,
+            userFeedItemId: insertedItem.id,
+            blueprintId: generated.blueprintId,
+            sourceItemId: source.id,
+            sourceTag: 'youtube_search_direct',
+          });
+        } catch (autoChannelError) {
+          console.log('[auto_channel_pipeline_failed]', JSON.stringify({
+            user_id: input.userId,
+            user_feed_item_id: insertedItem.id,
+            blueprint_id: generated.blueprintId,
+            source_item_id: source.id,
+            source_tag: 'youtube_search_direct',
+            error: autoChannelError instanceof Error ? autoChannelError.message : String(autoChannelError),
+          }));
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const errorCode = error instanceof PipelineError
+        ? error.errorCode
+        : getSupabaseErrorCode(error) || 'GENERATION_FAILED';
+      failures.push({
+        video_id: item.video_id,
+        error_code: errorCode,
+        error: message,
+      });
+      console.log('[search_video_generate_item_failed]', JSON.stringify({
+        job_id: input.jobId,
+        user_id: input.userId,
+        video_id: item.video_id,
+        channel_id: item.channel_id,
+        error_code: errorCode,
+        error: message.slice(0, 220),
+      }));
+    }
+  }
+
+  await db.from('ingestion_jobs').update({
+    status: failures.length ? 'failed' : 'succeeded',
+    finished_at: new Date().toISOString(),
+    processed_count: processed,
+    inserted_count: inserted,
+    skipped_count: skipped,
+    lease_expires_at: null,
+    worker_id: null,
+    last_heartbeat_at: new Date().toISOString(),
+    error_code: failures.length ? 'PARTIAL_FAILURE' : null,
+    error_message: failures.length ? JSON.stringify(failures).slice(0, 1000) : null,
+  }).eq('id', input.jobId);
+
+  await emitGenerationTerminalNotification(db, {
+    userId: input.userId,
+    jobId: input.jobId,
+    scope: 'search_video_generate',
+    inserted,
+    skipped,
+    failed: failures.length,
+    firstBlueprintId,
+  });
+
+  console.log('[search_video_generate_job_done]', JSON.stringify({
+    job_id: input.jobId,
+    user_id: input.userId,
+    processed,
+    inserted,
+    skipped,
+    failures: failures.length,
+  }));
+}
+
 async function processManualRefreshGenerateJob(input: {
   jobId: string;
   userId: string;
@@ -6402,6 +6675,31 @@ function normalizeRefreshScanCandidates(value: unknown): RefreshScanCandidate[] 
   return rows;
 }
 
+function normalizeSearchVideoGenerateItems(value: unknown): SearchVideoGenerateItem[] {
+  if (!Array.isArray(value)) return [];
+  const rows: SearchVideoGenerateItem[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object') continue;
+    const row = raw as Record<string, unknown>;
+    const videoId = String(row.video_id || '').trim();
+    const videoUrl = String(row.video_url || '').trim();
+    const title = String(row.title || '').trim();
+    const channelId = String(row.channel_id || '').trim();
+    if (!videoId || !videoUrl || !title || !channelId) continue;
+    rows.push({
+      video_id: videoId,
+      video_url: videoUrl,
+      title,
+      channel_id: channelId,
+      channel_title: row.channel_title == null ? null : String(row.channel_title || '').trim() || null,
+      channel_url: row.channel_url == null ? null : String(row.channel_url || '').trim() || null,
+      published_at: row.published_at == null ? null : String(row.published_at || '').trim() || null,
+      thumbnail_url: row.thumbnail_url == null ? null : String(row.thumbnail_url || '').trim() || null,
+    });
+  }
+  return rows;
+}
+
 function getRetryDelayForErrorCode(errorCode: string) {
   switch (errorCode) {
     case 'PROVIDER_DEGRADED':
@@ -6616,6 +6914,20 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
             throw new Error('INVALID_MANUAL_REFRESH_JOB_PAYLOAD');
           }
           await processManualRefreshGenerateJob({
+            jobId: job.id,
+            userId,
+            items,
+          });
+          return;
+        }
+
+        if (scope === 'search_video_generate') {
+          const userId = String(payload.user_id || job.requested_by_user_id || '').trim();
+          const items = normalizeSearchVideoGenerateItems(payload.items);
+          if (!userId || items.length === 0) {
+            throw new Error('INVALID_SEARCH_GENERATE_JOB_PAYLOAD');
+          }
+          await processSearchVideoGenerateJob({
             jobId: job.id,
             userId,
             items,

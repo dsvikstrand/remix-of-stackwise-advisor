@@ -11,19 +11,18 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { config, getFunctionUrl } from '@/config/runtime';
-import { logMvpEvent } from '@/lib/logEvent';
-import { useCreateBlueprint } from '@/hooks/useBlueprints';
+import { config } from '@/config/runtime';
 import { useAiCredits } from '@/hooks/useAiCredits';
-import { autoPublishMyFeedItem, ensureSourceItemForYouTube, getExistingUserFeedItem, upsertUserFeedItem } from '@/lib/myFeedApi';
 import {
   ApiRequestError as SubscriptionApiRequestError,
   createSourceSubscription,
+  getIngestionJob,
   listSourceSubscriptions,
   type SourceSubscription,
 } from '@/lib/subscriptionsApi';
 import {
   ApiRequestError,
+  generateSearchVideos,
   searchYouTube,
   type YouTubeSearchResult,
 } from '@/lib/youtubeSearchApi';
@@ -41,7 +40,6 @@ import { formatRelativeShort } from '@/lib/timeFormat';
 import { PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 
 const DEFAULT_SEARCH_LIMIT = 10;
-const YOUTUBE_ENDPOINT = getFunctionUrl('youtube-to-blueprint');
 const GENERATE_BLUEPRINT_COST = 1;
 const QUICK_TAG_COUNT = 4;
 const VIDEO_QUICK_TAG_BANK = [
@@ -119,81 +117,28 @@ const CHANNEL_QUICK_TAG_BANK = [
   'design education',
 ];
 
-type YouTubeDraftStep = {
-  name: string;
-  notes: string;
-  timestamp: string | null;
-};
-
-type YouTubeDraftPreview = {
-  title: string;
-  description: string;
-  steps: YouTubeDraftStep[];
-  notes: string | null;
-  tags: string[];
-};
-
-type YouTubeToBlueprintSuccessResponse = {
-  ok: true;
-  run_id: string;
-  draft: YouTubeDraftPreview;
-  review: { available: boolean; summary: string | null };
-  banner: { available: boolean; url: string | null };
-  meta: {
-    transcript_source: string;
-    confidence: number | null;
-    duration_ms: number;
-  };
-};
-
-type YouTubeToBlueprintErrorResponse = {
-  ok: false;
-  error_code:
-    | 'INVALID_URL'
-    | 'NO_CAPTIONS'
-    | 'TRANSCRIPT_FETCH_FAIL'
-    | 'TRANSCRIPT_EMPTY'
-    | 'PROVIDER_FAIL'
-    | 'SERVICE_DISABLED'
-    | 'GENERATION_FAIL'
-    | 'SAFETY_BLOCKED'
-    | 'PII_BLOCKED'
-    | 'RATE_LIMITED'
-    | 'TIMEOUT';
-  message: string;
-  run_id: string | null;
-};
-
-function toBlueprintStepsForSave(steps: YouTubeDraftStep[]) {
-  return steps.map((step, index) => ({
-    id: `yt-step-${index + 1}`,
-    title: step.name,
-    description: step.notes,
-    items: [],
-  }));
-}
-
 function toGenerateErrorMessage(errorCode?: string | null) {
   switch (errorCode) {
-    case 'INVALID_URL':
-      return 'Please use a valid YouTube video.';
-    case 'NO_CAPTIONS':
-    case 'TRANSCRIPT_EMPTY':
+    case 'INSUFFICIENT_CREDITS':
+      return 'Insufficient credits right now. Please wait for refill and try again.';
+    case 'QUEUE_BACKPRESSURE':
+      return 'Generation queue is busy. Please retry shortly.';
+    case 'NO_TRANSCRIPT_PERMANENT':
       return 'Transcript unavailable for this video. Please try another one.';
-    case 'PROVIDER_FAIL':
-    case 'TRANSCRIPT_FETCH_FAIL':
-      return 'Transcript provider is currently unavailable. Please try again.';
-    case 'SERVICE_DISABLED':
-      return 'Generation is temporarily unavailable. Please try later.';
-    case 'TIMEOUT':
-      return 'This video took too long to process. Please try another one.';
+    case 'TRANSCRIPT_UNAVAILABLE':
+      return 'Transcript temporarily unavailable. Please try again in a few minutes.';
     case 'RATE_LIMITED':
       return 'Too many requests right now. Please retry shortly.';
-    case 'SAFETY_BLOCKED':
-      return 'This video could not be converted safely. Try another video.';
+    case 'MAX_ITEMS_EXCEEDED':
+    case 'INVALID_INPUT':
+      return 'Could not generate this video right now.';
     default:
       return 'Could not generate blueprint right now. Please try again.';
   }
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function getSearchErrorMessage(error: unknown) {
@@ -270,9 +215,8 @@ function sampleQuickTags(bank: string[], count = QUICK_TAG_COUNT) {
 
 export default function SearchPage() {
   const queryClient = useQueryClient();
-  const { session, user } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
-  const createBlueprint = useCreateBlueprint();
   const creditsQuery = useAiCredits(Boolean(user));
 
   const [queryInput, setQueryInput] = useState('');
@@ -533,139 +477,71 @@ export default function SearchPage() {
       });
       return;
     }
-    if (!YOUTUBE_ENDPOINT) {
-      toast({
-        title: 'Generation unavailable',
-        description: 'Backend API is not configured.',
-        variant: 'destructive',
-      });
-      return;
-    }
 
     setGenerating(target.video_id, true);
     try {
-      await logMvpEvent({
-        eventName: 'source_pull_requested',
-        userId: user.id,
-        metadata: {
-          source_type: 'youtube_search',
-          source_video_id: target.video_id,
-          source_channel_id: target.channel_id,
-        },
+      const queued = await generateSearchVideos({
+        items: [
+          {
+            video_id: target.video_id,
+            video_url: target.video_url,
+            title: target.title,
+            channel_id: target.channel_id,
+            channel_title: target.channel_title || null,
+            channel_url: target.channel_url || null,
+          },
+        ],
       });
 
-      const response = await fetch(YOUTUBE_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-        },
-        body: JSON.stringify({
-          video_url: target.video_url,
-          generate_review: false,
-          generate_banner: false,
-          source: 'youtube_mvp',
-        }),
-      });
-
-      const json = await response.json().catch(() => null) as
-        | YouTubeToBlueprintSuccessResponse
-        | YouTubeToBlueprintErrorResponse
-        | null;
-
-      if (!response.ok || !json || !('ok' in json) || !json.ok) {
-        const errorCode = json && 'error_code' in json ? json.error_code : null;
-        const message = json && 'message' in json ? json.message : null;
-        if ((message || '').toLowerCase().includes('insufficient credits')) {
-          throw new Error('Insufficient credits right now. Please wait for refill and try again.');
+      let finalJob = await getIngestionJob(queued.job_id);
+      let pollCount = 0;
+      while (finalJob.status === 'queued' || finalJob.status === 'running') {
+        pollCount += 1;
+        if (pollCount > 60) {
+          throw new Error('Generation is still running. Please check your notifications in a moment.');
         }
-        throw new Error(message || toGenerateErrorMessage(errorCode));
+        await sleep(2000);
+        finalJob = await getIngestionJob(queued.job_id);
       }
 
-      const sourceItem = await ensureSourceItemForYouTube({
-        videoUrl: target.video_url,
-        title: json.draft.title,
-        sourceChannelId: target.channel_id,
-        sourceChannelTitle: target.channel_title || null,
-        sourceChannelUrl: target.channel_url || null,
-        metadata: {
-          run_id: json.run_id,
-          transcript_source: json.meta.transcript_source,
-          confidence: json.meta.confidence,
-          source_channel_url: target.channel_url || null,
-        },
-      });
-
-      const existing = await getExistingUserFeedItem(user.id, sourceItem.id);
-      if (existing) {
+      if (finalJob.status === 'succeeded') {
         toast({
-          title: 'Already in your feed',
-          description: 'This video is already available in your feed.',
+          title: 'Blueprint generated',
+          description: finalJob.inserted_count > 0
+            ? 'Added to your feed.'
+            : 'Already in your feed.',
         });
-        await queryClient.invalidateQueries({ queryKey: ['ai-credits'] });
-        return;
+      } else {
+        const detail = String(finalJob.error_message || '').trim();
+        const parsedMessage = detail.startsWith('[')
+          ? (() => {
+              try {
+                const arr = JSON.parse(detail) as Array<{ error?: string }>;
+                return arr[0]?.error || '';
+              } catch {
+                return '';
+              }
+            })()
+          : '';
+        throw new Error(parsedMessage || detail || 'Could not generate this blueprint right now.');
       }
 
-      const created = await createBlueprint.mutateAsync({
-        inventoryId: null,
-        title: json.draft.title,
-        selectedItems: {},
-        steps: toBlueprintStepsForSave(json.draft.steps),
-        mixNotes: json.draft.notes,
-        reviewPrompt: 'youtube_search_direct',
-        bannerUrl: sourceItem.thumbnail_url || null,
-        llmReview: null,
-        tags: json.draft.tags || [],
-        isPublic: false,
-      });
-
-      const feedItem = await upsertUserFeedItem({
-        userId: user.id,
-        sourceItemId: sourceItem.id,
-        blueprintId: created.id,
-        state: 'my_feed_published',
-      });
-
-      if (config.features.autoChannelPipelineV1 && feedItem?.id) {
-        try {
-          await autoPublishMyFeedItem({
-            userFeedItemId: feedItem.id,
-            sourceTag: 'youtube_search_direct',
-          });
-        } catch (autoPublishError) {
-          console.log('[auto_channel_frontend_trigger_failed]', {
-            user_feed_item_id: feedItem.id,
-            blueprint_id: created.id,
-            error: autoPublishError instanceof Error ? autoPublishError.message : String(autoPublishError),
-          });
-        }
-      }
-
-      await logMvpEvent({
-        eventName: 'source_pull_succeeded',
-        userId: user.id,
-        blueprintId: created.id,
-        metadata: {
-          source_type: 'youtube_search',
-          run_id: json.run_id,
-          source_item_id: sourceItem.id,
-          user_feed_item_id: feedItem?.id || null,
-          canonical_key: sourceItem.canonical_key,
-        },
-      });
-
-      toast({
-        title: 'Blueprint generated',
-        description: 'Added to your feed.',
-      });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['ai-credits'] }),
         queryClient.invalidateQueries({ queryKey: ['my-feed-items', user.id] }),
+        queryClient.invalidateQueries({ queryKey: ['notifications', user.id] }),
+        queryClient.invalidateQueries({ queryKey: ['wall-for-you-stream', user.id] }),
+        queryClient.invalidateQueries({ queryKey: ['wall-feed', user.id] }),
       ]);
     } catch (error) {
+      const description = error instanceof ApiRequestError
+        ? toGenerateErrorMessage(error.errorCode)
+        : error instanceof Error
+          ? error.message
+          : 'Could not generate this blueprint right now.';
       toast({
         title: 'Generation failed',
-        description: error instanceof Error ? error.message : 'Could not generate this blueprint right now.',
+        description,
         variant: 'destructive',
       });
       await queryClient.invalidateQueries({ queryKey: ['ai-credits'] });
