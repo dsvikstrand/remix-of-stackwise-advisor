@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, MessageCircleReply, Sparkles, TriangleAlert } from 'lucide-react';
+import { Bell, LoaderCircle, MessageCircleReply, Sparkles, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -30,6 +30,7 @@ function formatRelativeTime(iso: string) {
 
 function notificationIcon(item: NotificationItem) {
   if (item.type === 'comment_reply') return MessageCircleReply;
+  if (item.type === 'generation_started') return LoaderCircle;
   if (item.type === 'generation_failed') return TriangleAlert;
   return Sparkles;
 }

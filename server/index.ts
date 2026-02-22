@@ -1796,6 +1796,14 @@ app.post(
       return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: jobCreateError.message, data: null });
     }
 
+    await emitGenerationStartedNotification(serviceDb, {
+      userId,
+      jobId: job.id,
+      scope: 'search_video_generate',
+      queuedCount: dedupedItems.length,
+      linkPath: getGenerationNotificationLinkPath({ scope: 'search_video_generate' }),
+    });
+
     scheduleQueuedIngestionProcessing();
 
     return res.status(202).json({
@@ -5275,6 +5283,7 @@ async function emitGenerationTerminalNotification(
     failed: number;
     traceId?: string | null;
     firstBlueprintId?: string | null;
+    linkPath?: string | null;
   },
 ) {
   if (params.inserted <= 0 && params.failed <= 0) return;
@@ -5288,11 +5297,100 @@ async function emitGenerationTerminalNotification(
       skipped: params.skipped,
       failed: params.failed,
       traceId: params.traceId || null,
+      linkPath: params.linkPath || null,
       firstBlueprintId: params.firstBlueprintId || null,
     });
   } catch (notificationError) {
     console.log('[notification_emit_failed]', JSON.stringify({
       kind: 'generation_terminal',
+      user_id: params.userId,
+      job_id: params.jobId,
+      scope: params.scope,
+      error: notificationError instanceof Error ? notificationError.message : String(notificationError),
+    }));
+  }
+}
+
+function getGenerationNotificationLinkPath(input: {
+  scope: string;
+  sourcePagePath?: string | null;
+}) {
+  if (input.sourcePagePath) return input.sourcePagePath;
+  switch (String(input.scope || '').trim()) {
+    case 'search_video_generate':
+      return '/search';
+    case 'manual_refresh_selection':
+      return '/subscriptions';
+    case 'source_item_unlock_generation':
+    default:
+      return '/my-feed';
+  }
+}
+
+async function emitGenerationStartedNotification(
+  db: ReturnType<typeof createClient>,
+  params: {
+    userId: string;
+    jobId: string;
+    scope: string;
+    queuedCount: number;
+    traceId?: string | null;
+    linkPath?: string | null;
+  },
+) {
+  const queuedCount = Math.max(0, Number(params.queuedCount || 0));
+  if (queuedCount <= 0) return;
+
+  try {
+    const noisyWindowMs = 30_000;
+    const { data: latestUnread, error: latestUnreadError } = await db
+      .from('notifications')
+      .select('id, created_at, metadata')
+      .eq('user_id', params.userId)
+      .eq('type', 'generation_started')
+      .eq('is_read', false)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!latestUnreadError && latestUnread) {
+      const createdAtMs = Date.parse(String(latestUnread.created_at || ''));
+      const scope = latestUnread.metadata && typeof latestUnread.metadata === 'object'
+        ? String((latestUnread.metadata as Record<string, unknown>).scope || '').trim()
+        : '';
+      if (
+        Number.isFinite(createdAtMs)
+        && Date.now() - createdAtMs <= noisyWindowMs
+        && scope === params.scope
+      ) {
+        console.log('[notification_generation_started_skipped]', JSON.stringify({
+          user_id: params.userId,
+          job_id: params.jobId,
+          scope: params.scope,
+          reason: 'scope_coalesce_window',
+          noisy_window_ms: noisyWindowMs,
+        }));
+        return;
+      }
+    }
+
+    await createNotificationFromEvent(db, {
+      kind: 'generation_started',
+      userId: params.userId,
+      jobId: params.jobId,
+      scope: params.scope,
+      queuedCount,
+      traceId: params.traceId || null,
+      linkPath: params.linkPath || null,
+    });
+    console.log('[notification_generation_started_emitted]', JSON.stringify({
+      user_id: params.userId,
+      job_id: params.jobId,
+      scope: params.scope,
+      queued_count: queuedCount,
+    }));
+  } catch (notificationError) {
+    console.log('[notification_emit_failed]', JSON.stringify({
+      kind: 'generation_started',
       user_id: params.userId,
       job_id: params.jobId,
       scope: params.scope,
@@ -5421,6 +5519,7 @@ async function processSearchVideoGenerateJob(input: {
     inserted,
     skipped,
     failed: failures.length,
+    linkPath: getGenerationNotificationLinkPath({ scope: 'search_video_generate' }),
     firstBlueprintId,
   });
 
@@ -5657,6 +5756,7 @@ async function processManualRefreshGenerateJob(input: {
     inserted,
     skipped,
     failed: failures.length,
+    linkPath: getGenerationNotificationLinkPath({ scope: 'manual_refresh_selection' }),
     firstBlueprintId,
   });
 
@@ -5793,6 +5893,7 @@ async function processSourcePageVideoLibraryJob(input: {
     inserted,
     skipped,
     failed: failures.length,
+    linkPath: getGenerationNotificationLinkPath({ scope: 'source_item_unlock_generation' }),
     firstBlueprintId,
   });
 
@@ -6224,6 +6325,7 @@ async function processSourceItemUnlockGenerationJob(input: {
     skipped,
     failed: failures.length,
     traceId: input.traceId,
+    linkPath: getGenerationNotificationLinkPath({ scope: 'source_item_unlock_generation' }),
     firstBlueprintId,
   });
 
@@ -8559,6 +8661,18 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
     });
   }
 
+  await emitGenerationStartedNotification(sourcePageDb, {
+    userId,
+    jobId: job.id,
+    scope: 'source_item_unlock_generation',
+    queuedCount: queueItems.length,
+    traceId: traceId || null,
+    linkPath: getGenerationNotificationLinkPath({
+      scope: 'source_item_unlock_generation',
+      sourcePagePath: buildSourcePagePath(sourcePage.platform, sourcePage.external_id),
+    }),
+  });
+
   scheduleQueuedIngestionProcessing();
 
   return res.status(202).json({
@@ -9429,6 +9543,14 @@ app.post('/api/source-subscriptions/refresh-generate', refreshGenerateLimiter, a
   if (jobCreateError) {
     return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: jobCreateError.message, data: null });
   }
+
+  await emitGenerationStartedNotification(serviceDb, {
+    userId,
+    jobId: job.id,
+    scope: 'manual_refresh_selection',
+    queuedCount: dedupedItems.length,
+    linkPath: getGenerationNotificationLinkPath({ scope: 'manual_refresh_selection' }),
+  });
   scheduleQueuedIngestionProcessing();
 
   return res.status(202).json({

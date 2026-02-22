@@ -4,6 +4,7 @@ type DbClient = SupabaseClient<any, 'public', any>;
 
 export type NotificationType =
   | 'comment_reply'
+  | 'generation_started'
   | 'generation_succeeded'
   | 'generation_failed';
 
@@ -23,6 +24,15 @@ export type NotificationRow = {
 };
 
 export type NotificationEvent =
+  | {
+      kind: 'generation_started';
+      userId: string;
+      jobId: string;
+      scope: string;
+      queuedCount: number;
+      traceId?: string | null;
+      linkPath?: string | null;
+    }
   | {
       kind: 'generation_terminal';
       userId: string;
@@ -53,6 +63,7 @@ type NotificationEventBuilder<TEvent extends NotificationEvent> = (
 const eventBuilders: {
   [K in NotificationEvent['kind']]: NotificationEventBuilder<Extract<NotificationEvent, { kind: K }>>;
 } = {
+  generation_started: buildGenerationStartedEvent,
   generation_terminal: buildGenerationTerminalEvent,
 };
 
@@ -111,6 +122,34 @@ export async function createNotification(
     .maybeSingle();
   if (error) throw error;
   return (data || null) as NotificationRow | null;
+}
+
+function buildGenerationStartedEvent(
+  event: Extract<NotificationEvent, { kind: 'generation_started' }>,
+): NotificationInsertInput | null {
+  const queuedCount = Math.max(0, Number(event.queuedCount || 0));
+  if (queuedCount <= 0) return null;
+  const title = 'Generation started';
+  const body = queuedCount === 1
+    ? 'We started generating your blueprint. We will notify you when it is done.'
+    : `We started ${queuedCount} blueprint generations. We will notify you when they are done.`;
+  const linkPath = String(event.linkPath || '').trim() || '/my-feed';
+  const dedupeKey = `generation_started:${event.scope}:${event.jobId}`;
+
+  return {
+    userId: event.userId,
+    type: 'generation_started',
+    title,
+    body,
+    linkPath,
+    metadata: {
+      job_id: event.jobId,
+      scope: event.scope,
+      queued_count: queuedCount,
+      trace_id: event.traceId || null,
+    },
+    dedupeKey,
+  };
 }
 
 function buildGenerationTerminalEvent(

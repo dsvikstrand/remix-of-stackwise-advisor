@@ -11,6 +11,7 @@ type ApiEnvelope<T> = {
 
 export type NotificationType =
   | 'comment_reply'
+  | 'generation_started'
   | 'generation_succeeded'
   | 'generation_failed'
   | (string & {});
