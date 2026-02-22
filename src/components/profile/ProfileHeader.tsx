@@ -11,9 +11,17 @@ interface ProfileHeaderProps {
   profile: PublicProfile;
   onFollowersClick?: () => void;
   onFollowingClick?: () => void;
+  onRefreshClick?: () => void;
+  refreshPending?: boolean;
 }
 
-export function ProfileHeader({ profile, onFollowersClick, onFollowingClick }: ProfileHeaderProps) {
+export function ProfileHeader({
+  profile,
+  onFollowersClick,
+  onFollowingClick,
+  onRefreshClick,
+  refreshPending = false,
+}: ProfileHeaderProps) {
   const { user } = useAuth();
   const isOwnProfile = user?.id === profile.user_id;
 
@@ -55,11 +63,15 @@ export function ProfileHeader({ profile, onFollowersClick, onFollowingClick }: P
                     Subscriptions
                   </Link>
                 </Button>
-                <Button variant="outline" size="sm" asChild>
-                  <Link to={`/u/${profile.user_id}?refresh=1`}>
-                    <RefreshCcw className="h-4 w-4 mr-1" />
-                    Refresh
-                  </Link>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onRefreshClick}
+                  disabled={refreshPending || !onRefreshClick}
+                  aria-label={refreshPending ? 'Refreshing subscriptions' : 'Refresh subscriptions'}
+                  title={refreshPending ? 'Refreshing...' : 'Refresh'}
+                >
+                    <RefreshCcw className="h-4 w-4" />
                 </Button>
               </>
             ) : (
