@@ -118,14 +118,14 @@ export function WallBlueprintCard({
             <div className="flex items-center gap-1.5">
               <span
                 className={`inline-flex h-7 items-center rounded-full border px-2 text-[11px] font-medium tracking-wide ${hotness.badgeClassName}`}
-                aria-label={`Hotness tier ${hotness.label}`}
+                aria-label={`Hotness tier ${hotness.tierName}`}
               >
                 {hotness.label}
               </span>
               <Button
                 variant="ghost"
                 size="sm"
-                className={`h-7 w-7 p-0 ${userLiked ? 'text-red-500' : ''}`}
+                className={`h-7 w-7 rounded-full border p-0 ${hotness.surfaceClassName} ${userLiked ? 'text-red-500 hover:text-red-600' : 'text-foreground/80 hover:text-foreground'}`}
                 onClick={onLike}
               >
                 <Heart className={`h-4 w-4 ${userLiked ? 'fill-current' : ''}`} />
