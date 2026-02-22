@@ -1,6 +1,6 @@
 import { FormEvent, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +19,8 @@ import { autoPublishMyFeedItem, ensureSourceItemForYouTube, getExistingUserFeedI
 import {
   ApiRequestError as SubscriptionApiRequestError,
   createSourceSubscription,
+  listSourceSubscriptions,
+  type SourceSubscription,
 } from '@/lib/subscriptionsApi';
 import {
   ApiRequestError,
@@ -206,11 +208,25 @@ export default function SearchPage() {
   const [subscribingChannelIds, setSubscribingChannelIds] = useState<Record<string, boolean>>({});
 
   const searchEnabled = Boolean(config.agenticBackendUrl);
+  const sourceSubscriptionsQueryKey = useMemo(() => ['search-source-subscriptions', user?.id || 'anon'] as const, [user?.id]);
+  const subscriptionsQuery = useQuery({
+    queryKey: sourceSubscriptionsQueryKey,
+    queryFn: listSourceSubscriptions,
+    enabled: Boolean(user && searchEnabled),
+    staleTime: 60_000,
+  });
   const hasEnoughCredits = Boolean(
     !user
     || creditsQuery.data?.bypass
     || (creditsQuery.data && creditsQuery.data.displayBalance >= GENERATE_BLUEPRINT_COST),
   );
+  const subscribedChannelIds = useMemo(() => {
+    return new Set(
+      (subscriptionsQuery.data || [])
+        .filter((row) => row.is_active)
+        .map((row) => row.source_channel_id),
+    );
+  }, [subscriptionsQuery.data]);
 
   const hasResults = results.length > 0;
   const showEmpty = submittedQuery.length > 0 && !hasResults;
@@ -286,8 +302,15 @@ export default function SearchPage() {
   });
 
   const subscribeMutation = useMutation({
-    mutationFn: (channelInput: string) => createSourceSubscription({ channelInput }),
-    onSuccess: () => {
+    mutationFn: (input: { channelInput: string; channelId: string }) => createSourceSubscription({ channelInput: input.channelInput }),
+    onSuccess: (_data, variables) => {
+      queryClient.setQueryData<SourceSubscription[] | undefined>(sourceSubscriptionsQueryKey, (previous) => {
+        if (!previous) return previous;
+        const alreadyPresent = previous.some((row) => row.source_channel_id === variables.channelId && row.is_active);
+        if (alreadyPresent) return previous;
+        return previous;
+      });
+      void queryClient.invalidateQueries({ queryKey: sourceSubscriptionsQueryKey });
       toast({
         title: 'Subscription saved',
         description: 'New uploads from this channel will appear in your feed.',
@@ -388,10 +411,13 @@ export default function SearchPage() {
   };
 
   const handleSubscribeChannel = async (channel: { channel_id: string; channel_url: string }) => {
-    if (subscribingChannelIds[channel.channel_id]) return;
+    if (subscribingChannelIds[channel.channel_id] || subscribedChannelIds.has(channel.channel_id)) return;
     setSubscribing(channel.channel_id, true);
     try {
-      await subscribeMutation.mutateAsync(channel.channel_url || channel.channel_id);
+      await subscribeMutation.mutateAsync({
+        channelInput: channel.channel_url || channel.channel_id,
+        channelId: channel.channel_id,
+      });
     } finally {
       setSubscribing(channel.channel_id, false);
     }
@@ -636,6 +662,7 @@ export default function SearchPage() {
                 {results.map((result) => {
                   const isGenerating = Boolean(generatingVideoIds[result.video_id]);
                   const isSubscribing = Boolean(subscribingChannelIds[result.channel_id]);
+                  const isSubscribed = subscribedChannelIds.has(result.channel_id);
                   return (
                     <Card key={result.video_id} className="border-border/50">
                       <CardContent className="p-4 space-y-3">
@@ -677,11 +704,12 @@ export default function SearchPage() {
                           </Button>
                           <Button
                             size="sm"
-                            variant="outline"
+                            variant={isSubscribed ? 'default' : 'outline'}
+                            className={isSubscribed ? 'bg-orange-500 hover:bg-orange-500/90 text-white border-orange-500' : undefined}
                             onClick={() => handleSubscribeChannel(result)}
-                            disabled={isSubscribing || !searchEnabled}
+                            disabled={isSubscribing || !searchEnabled || isSubscribed}
                           >
-                            {isSubscribing ? 'Subscribing...' : 'Subscribe'}
+                            {isSubscribing ? 'Subscribing...' : isSubscribed ? 'Subscribed' : 'Subscribe'}
                           </Button>
                         </div>
                       </CardContent>
@@ -743,6 +771,7 @@ export default function SearchPage() {
                 {channelResults.map((channel) => {
                   const isSubscribing = Boolean(subscribingChannelIds[channel.channel_id]);
                   const isSelected = selectedBrowseChannel?.channel_id === channel.channel_id;
+                  const isSubscribed = subscribedChannelIds.has(channel.channel_id);
                   return (
                     <Card key={channel.channel_id} className="border-border/50">
                       <CardContent className="p-4 space-y-2">
@@ -774,11 +803,12 @@ export default function SearchPage() {
                           </Button>
                           <Button
                             size="sm"
-                            variant="outline"
+                            variant={isSubscribed ? 'default' : 'outline'}
+                            className={isSubscribed ? 'bg-orange-500 hover:bg-orange-500/90 text-white border-orange-500' : undefined}
                             onClick={() => handleSubscribeChannel(channel)}
-                            disabled={isSubscribing || !searchEnabled}
+                            disabled={isSubscribing || !searchEnabled || isSubscribed}
                           >
-                            {isSubscribing ? 'Subscribing...' : 'Subscribe'}
+                            {isSubscribing ? 'Subscribing...' : isSubscribed ? 'Subscribed' : 'Subscribe'}
                           </Button>
                         </div>
                       </CardContent>
