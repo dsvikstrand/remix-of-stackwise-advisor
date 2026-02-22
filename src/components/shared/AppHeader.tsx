@@ -1,11 +1,10 @@
 import { ReactNode, useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { BookOpen, Plus } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { BookOpen } from 'lucide-react';
 import { AppNavigation } from '@/components/shared/AppNavigation';
 import { UserMenu } from '@/components/shared/UserMenu';
 import { useAuth } from '@/contexts/AuthContext';
 import { HelpOverlay } from '@/components/shared/HelpOverlay';
-import { Button } from '@/components/ui/button';
 
 interface AppHeaderProps {
   actions?: ReactNode;
@@ -14,13 +13,11 @@ interface AppHeaderProps {
 
 export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
   const { user } = useAuth();
-  const location = useLocation();
   const [showHelp, setShowHelp] = useState(false);
   const [hideFloatingNav, setHideFloatingNav] = useState(false);
 
   const navMode = user ? 'all' : 'public';
   const brandTarget = user ? '/wall' : '/';
-  const hideCreate = location.pathname.startsWith('/auth');
 
   useEffect(() => {
     if (!showFloatingNav) return;
@@ -63,14 +60,6 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
           </div>
           <div className="flex items-center gap-2 justify-end">
             {actions}
-            {user && !hideCreate && (
-              <Button asChild variant="outline" size="sm" className="gap-2 shrink-0 h-8 px-2 text-xs" aria-label="Add">
-                <Link to="/search">
-                  <Plus className="h-4 w-4" />
-                  <span className="hidden lg:inline">Add</span>
-                </Link>
-              </Button>
-            )}
             <UserMenu onOpenHelp={() => setShowHelp(true)} />
           </div>
         </div>
