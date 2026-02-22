@@ -58,9 +58,14 @@ const ONBOARDING_JOINABLE_CHANNELS = CHANNELS_CATALOG
 
 const ONBOARDING_TAG_SLUGS = ONBOARDING_JOINABLE_CHANNELS.map((c) => c.tagSlug);
 
-function OnboardingChannelPicker() {
+function OnboardingChannelPicker({
+  onJoinedCountChange,
+}: {
+  onJoinedCountChange?: (count: number) => void;
+}) {
   const { data: tags = [], isLoading: tagsLoading } = useTagsBySlugs(ONBOARDING_TAG_SLUGS);
   const {
+    followedIds,
     joinChannel,
     leaveChannel,
     getFollowState,
@@ -84,12 +89,21 @@ function OnboardingChannelPicker() {
     }
   };
 
+  const joinedCount = useMemo(
+    () => tags.reduce((count, tag) => (followedIds.has(tag.id) ? count + 1 : count), 0),
+    [followedIds, tags],
+  );
+
+  useEffect(() => {
+    onJoinedCountChange?.(joinedCount);
+  }, [joinedCount, onJoinedCountChange]);
+
   return (
     <Card className="border-border/40">
       <CardHeader className="pb-2">
-        <CardTitle className="text-base">Step 3: Join channels (optional)</CardTitle>
+        <CardTitle className="text-base">Step 3: Join channels</CardTitle>
         <CardDescription>
-          Select channels you'd like to follow. You can change these anytime from Channels.
+          Join at least one channel to finish onboarding. You can update this anytime from Channels.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-1">
@@ -211,6 +225,7 @@ export default function WelcomeOnboarding() {
   const [previewFilterQuery, setPreviewFilterQuery] = useState('');
   const [previewTruncated, setPreviewTruncated] = useState(false);
   const [importSummary, setImportSummary] = useState<YouTubeImportResult | null>(null);
+  const [joinedChannelCount, setJoinedChannelCount] = useState(0);
 
   const youtubeConnectionQuery = useQuery({
     queryKey: ['youtube-connection-status', user?.id],
@@ -275,15 +290,10 @@ export default function WelcomeOnboarding() {
 
       const successfulImports = Number(result.imported_count || 0) + Number(result.reactivated_count || 0);
       if (successfulImports > 0) {
-        await updateOnboarding({
-          status: 'completed',
-          completed_at: new Date().toISOString(),
-        });
         toast({
-          title: 'Setup complete',
-          description: `Imported ${result.imported_count} and reactivated ${result.reactivated_count} subscriptions.`,
+          title: 'Subscriptions imported',
+          description: `Imported ${result.imported_count} and reactivated ${result.reactivated_count}. Now join at least one channel to continue.`,
         });
-        navigate('/wall', { replace: true });
         return;
       }
 
@@ -326,17 +336,17 @@ export default function WelcomeOnboarding() {
     },
   });
 
-  const skipMutation = useMutation({
+  const completeMutation = useMutation({
     mutationFn: async () => updateOnboarding({
-      status: 'skipped',
-      first_prompted_at: onboardingRow?.first_prompted_at || new Date().toISOString(),
+      status: 'completed',
+      completed_at: new Date().toISOString(),
     }),
     onSuccess: () => {
       navigate('/wall', { replace: true });
     },
     onError: () => {
       toast({
-        title: 'Could not skip right now',
+        title: 'Could not finish setup',
         description: 'Please retry in a moment.',
         variant: 'destructive',
       });
@@ -427,6 +437,9 @@ export default function WelcomeOnboarding() {
         })),
     [previewRows, previewSelected],
   );
+  const successfulImports = Number(importSummary?.imported_count || 0) + Number(importSummary?.reactivated_count || 0);
+  const hasImportedSubscriptions = successfulImports > 0;
+  const canFinishOnboarding = hasImportedSubscriptions && joinedChannelCount > 0;
   const normalizedPreviewFilterQuery = useMemo(
     () => normalizeImportFilterQuery(previewFilterQuery),
     [previewFilterQuery],
@@ -694,16 +707,8 @@ export default function WelcomeOnboarding() {
               </div>
             ) : null}
 
-            {importSummary ? (
-              <p className="text-xs text-muted-foreground">
-                Last import: Imported {importSummary.imported_count}, reactivated {importSummary.reactivated_count}, already active {importSummary.already_active_count}, failed {importSummary.failed_count}.
-              </p>
-            ) : null}
-
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-muted-foreground">
-                Selected: {selectedChannels.length} / {previewRows.length}
-              </p>
+              <div />
               <Button
                 size="sm"
                 onClick={handleImport}
@@ -720,19 +725,25 @@ export default function WelcomeOnboarding() {
           </CardContent>
         </Card>
 
-        <OnboardingChannelPicker />
+        <OnboardingChannelPicker onJoinedCountChange={setJoinedChannelCount} />
 
         <Card className="border-border/40">
           <CardContent className="p-4 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm text-muted-foreground">
-              You can skip this now and use <Link to="/subscriptions" className="underline">Subscriptions</Link> later.
-            </p>
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Welcome</p>
+              {!hasImportedSubscriptions ? (
+                <p className="text-xs text-muted-foreground">Import at least one subscription to continue.</p>
+              ) : joinedChannelCount <= 0 ? (
+                <p className="text-xs text-muted-foreground">Join at least one channel to continue.</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">You're all set. Continue to your feed.</p>
+              )}
+            </div>
             <Button
-              variant="ghost"
-              onClick={() => skipMutation.mutate()}
-              disabled={skipMutation.isPending || onboardingQuery.isUpdating}
+              onClick={() => completeMutation.mutate()}
+              disabled={!canFinishOnboarding || completeMutation.isPending || onboardingQuery.isUpdating}
             >
-              {skipMutation.isPending ? 'Skipping...' : 'Skip for now'}
+              {completeMutation.isPending ? 'Opening...' : 'Welcome to Bleuprint'}
             </Button>
           </CardContent>
         </Card>
