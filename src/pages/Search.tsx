@@ -1,6 +1,6 @@
 import { FormEvent, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Badge } from '@/components/ui/badge';
@@ -10,8 +10,11 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { config } from '@/config/runtime';
+import { config, getFunctionUrl } from '@/config/runtime';
 import { logMvpEvent } from '@/lib/logEvent';
+import { useCreateBlueprint } from '@/hooks/useBlueprints';
+import { useAiCredits } from '@/hooks/useAiCredits';
+import { autoPublishMyFeedItem, ensureSourceItemForYouTube, getExistingUserFeedItem, upsertUserFeedItem } from '@/lib/myFeedApi';
 import {
   ApiRequestError as SubscriptionApiRequestError,
   createSourceSubscription,
@@ -25,6 +28,85 @@ import { formatRelativeShort } from '@/lib/timeFormat';
 import { PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 
 const DEFAULT_SEARCH_LIMIT = 10;
+const YOUTUBE_ENDPOINT = getFunctionUrl('youtube-to-blueprint');
+const GENERATE_BLUEPRINT_COST = 1;
+
+type YouTubeDraftStep = {
+  name: string;
+  notes: string;
+  timestamp: string | null;
+};
+
+type YouTubeDraftPreview = {
+  title: string;
+  description: string;
+  steps: YouTubeDraftStep[];
+  notes: string | null;
+  tags: string[];
+};
+
+type YouTubeToBlueprintSuccessResponse = {
+  ok: true;
+  run_id: string;
+  draft: YouTubeDraftPreview;
+  review: { available: boolean; summary: string | null };
+  banner: { available: boolean; url: string | null };
+  meta: {
+    transcript_source: string;
+    confidence: number | null;
+    duration_ms: number;
+  };
+};
+
+type YouTubeToBlueprintErrorResponse = {
+  ok: false;
+  error_code:
+    | 'INVALID_URL'
+    | 'NO_CAPTIONS'
+    | 'TRANSCRIPT_FETCH_FAIL'
+    | 'TRANSCRIPT_EMPTY'
+    | 'PROVIDER_FAIL'
+    | 'SERVICE_DISABLED'
+    | 'GENERATION_FAIL'
+    | 'SAFETY_BLOCKED'
+    | 'PII_BLOCKED'
+    | 'RATE_LIMITED'
+    | 'TIMEOUT';
+  message: string;
+  run_id: string | null;
+};
+
+function toBlueprintStepsForSave(steps: YouTubeDraftStep[]) {
+  return steps.map((step, index) => ({
+    id: `yt-step-${index + 1}`,
+    title: step.name,
+    description: step.notes,
+    items: [],
+  }));
+}
+
+function toGenerateErrorMessage(errorCode?: string | null) {
+  switch (errorCode) {
+    case 'INVALID_URL':
+      return 'Please use a valid YouTube video.';
+    case 'NO_CAPTIONS':
+    case 'TRANSCRIPT_EMPTY':
+      return 'Transcript unavailable for this video. Please try another one.';
+    case 'PROVIDER_FAIL':
+    case 'TRANSCRIPT_FETCH_FAIL':
+      return 'Transcript provider is currently unavailable. Please try again.';
+    case 'SERVICE_DISABLED':
+      return 'Generation is temporarily unavailable. Please try later.';
+    case 'TIMEOUT':
+      return 'This video took too long to process. Please try another one.';
+    case 'RATE_LIMITED':
+      return 'Too many requests right now. Please retry shortly.';
+    case 'SAFETY_BLOCKED':
+      return 'This video could not be converted safely. Try another video.';
+    default:
+      return 'Could not generate blueprint right now. Please try again.';
+  }
+}
 
 function getSearchErrorMessage(error: unknown) {
   if (error instanceof ApiRequestError) {
@@ -45,9 +127,11 @@ function getSearchErrorMessage(error: unknown) {
 }
 
 export default function SearchPage() {
-  const navigate = useNavigate();
-  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const { session, user } = useAuth();
   const { toast } = useToast();
+  const createBlueprint = useCreateBlueprint();
+  const creditsQuery = useAiCredits(Boolean(user));
 
   const [queryInput, setQueryInput] = useState('');
   const [submittedQuery, setSubmittedQuery] = useState('');
@@ -58,6 +142,11 @@ export default function SearchPage() {
   const [subscribingChannelIds, setSubscribingChannelIds] = useState<Record<string, boolean>>({});
 
   const searchEnabled = Boolean(config.agenticBackendUrl);
+  const hasEnoughCredits = Boolean(
+    !user
+    || creditsQuery.data?.bypass
+    || (creditsQuery.data && creditsQuery.data.displayBalance >= GENERATE_BLUEPRINT_COST),
+  );
 
   const hasResults = results.length > 0;
   const showEmpty = submittedQuery.length > 0 && !hasResults;
@@ -153,6 +242,23 @@ export default function SearchPage() {
 
   const handleGenerateBlueprint = async (result: YouTubeSearchResult) => {
     if (!user || generatingVideoIds[result.video_id]) return;
+    if (!hasEnoughCredits) {
+      toast({
+        title: 'Not enough credits',
+        description: 'Wait for refill, then try again.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (!YOUTUBE_ENDPOINT) {
+      toast({
+        title: 'Generation unavailable',
+        description: 'Backend API is not configured.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setGenerating(result.video_id, true);
     try {
       await logMvpEvent({
@@ -164,24 +270,122 @@ export default function SearchPage() {
           source_channel_id: result.channel_id,
         },
       });
-      const params = new URLSearchParams({
-        video_url: result.video_url,
-        autostart: '1',
-        generate_review: '0',
-        generate_banner: '1',
-        source: 'youtube_search',
-        channel_id: result.channel_id,
-        channel_title: result.channel_title || '',
-        channel_name: result.channel_title || '',
-        channel_url: result.channel_url || '',
+
+      const response = await fetch(YOUTUBE_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({
+          video_url: result.video_url,
+          generate_review: false,
+          generate_banner: false,
+          source: 'youtube_mvp',
+        }),
       });
-      navigate(`/youtube?${params.toString()}`);
+
+      const json = await response.json().catch(() => null) as
+        | YouTubeToBlueprintSuccessResponse
+        | YouTubeToBlueprintErrorResponse
+        | null;
+
+      if (!response.ok || !json || !('ok' in json) || !json.ok) {
+        const errorCode = json && 'error_code' in json ? json.error_code : null;
+        const message = json && 'message' in json ? json.message : null;
+        if ((message || '').toLowerCase().includes('insufficient credits')) {
+          throw new Error('Insufficient credits right now. Please wait for refill and try again.');
+        }
+        throw new Error(message || toGenerateErrorMessage(errorCode));
+      }
+
+      const sourceItem = await ensureSourceItemForYouTube({
+        videoUrl: result.video_url,
+        title: json.draft.title,
+        sourceChannelId: result.channel_id,
+        sourceChannelTitle: result.channel_title || null,
+        sourceChannelUrl: result.channel_url || null,
+        metadata: {
+          run_id: json.run_id,
+          transcript_source: json.meta.transcript_source,
+          confidence: json.meta.confidence,
+          source_channel_url: result.channel_url || null,
+        },
+      });
+
+      const existing = await getExistingUserFeedItem(user.id, sourceItem.id);
+      if (existing) {
+        toast({
+          title: 'Already in your feed',
+          description: 'This video is already available in your feed.',
+        });
+        await queryClient.invalidateQueries({ queryKey: ['ai-credits'] });
+        return;
+      }
+
+      const created = await createBlueprint.mutateAsync({
+        inventoryId: null,
+        title: json.draft.title,
+        selectedItems: {},
+        steps: toBlueprintStepsForSave(json.draft.steps),
+        mixNotes: json.draft.notes,
+        reviewPrompt: 'youtube_search_direct',
+        bannerUrl: sourceItem.thumbnail_url || null,
+        llmReview: null,
+        tags: json.draft.tags || [],
+        isPublic: false,
+      });
+
+      const feedItem = await upsertUserFeedItem({
+        userId: user.id,
+        sourceItemId: sourceItem.id,
+        blueprintId: created.id,
+        state: 'my_feed_published',
+      });
+
+      if (config.features.autoChannelPipelineV1 && feedItem?.id) {
+        try {
+          await autoPublishMyFeedItem({
+            userFeedItemId: feedItem.id,
+            sourceTag: 'youtube_search_direct',
+          });
+        } catch (autoPublishError) {
+          console.log('[auto_channel_frontend_trigger_failed]', {
+            user_feed_item_id: feedItem.id,
+            blueprint_id: created.id,
+            error: autoPublishError instanceof Error ? autoPublishError.message : String(autoPublishError),
+          });
+        }
+      }
+
+      await logMvpEvent({
+        eventName: 'source_pull_succeeded',
+        userId: user.id,
+        blueprintId: created.id,
+        metadata: {
+          source_type: 'youtube_search',
+          run_id: json.run_id,
+          source_item_id: sourceItem.id,
+          user_feed_item_id: feedItem?.id || null,
+          canonical_key: sourceItem.canonical_key,
+        },
+      });
+
+      toast({
+        title: 'Blueprint generated',
+        description: 'Added to your feed.',
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['ai-credits'] }),
+        queryClient.invalidateQueries({ queryKey: ['my-feed-items', user.id] }),
+      ]);
     } catch (error) {
       toast({
-        title: 'Could not open generator',
-        description: error instanceof Error ? error.message : 'Please open this result in YouTube and paste its URL manually.',
+        title: 'Generation failed',
+        description: error instanceof Error ? error.message : 'Could not generate this blueprint right now.',
         variant: 'destructive',
       });
+      await queryClient.invalidateQueries({ queryKey: ['ai-credits'] });
     } finally {
       setGenerating(result.video_id, false);
     }
@@ -200,7 +404,7 @@ export default function SearchPage() {
           <p className="text-sm font-semibold text-primary uppercase tracking-wide">Create</p>
           <h1 className="text-2xl font-semibold">Find YouTube content and create blueprints</h1>
           <p className="text-sm text-muted-foreground">
-            Results are suggestion-only. Nothing is saved until you click Generate Blueprint.
+            Generate directly from search results. Successful generations are added to your feed.
           </p>
         </PageSection>
 
@@ -285,9 +489,9 @@ export default function SearchPage() {
                       <Button
                         size="sm"
                         onClick={() => handleGenerateBlueprint(result)}
-                        disabled={isGenerating || !user}
+                        disabled={isGenerating || !user || !hasEnoughCredits}
                       >
-                        {isGenerating ? 'Opening...' : 'Generate Blueprint'}
+                        {isGenerating ? 'Generating...' : `Generate Blueprint · ◉${GENERATE_BLUEPRINT_COST}`}
                       </Button>
                       <Button
                         size="sm"
@@ -296,11 +500,6 @@ export default function SearchPage() {
                         disabled={isSubscribing || !searchEnabled}
                       >
                         {isSubscribing ? 'Subscribing...' : 'Subscribe Channel'}
-                      </Button>
-                      <Button asChild size="sm" variant="ghost">
-                        <a href={result.video_url} target="_blank" rel="noreferrer">
-                          Open on YouTube
-                        </a>
                       </Button>
                     </div>
                   </CardContent>
