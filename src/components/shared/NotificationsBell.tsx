@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, CheckCheck, MessageCircleReply, Sparkles, TriangleAlert } from 'lucide-react';
+import { Bell, MessageCircleReply, Sparkles, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -41,9 +41,7 @@ export function NotificationsBell() {
     unreadCount,
     isEnabled,
     isLoading,
-    markRead,
     markAllRead,
-    isMarkingAllRead,
   } = useNotifications({ limit: 15 });
 
   const sortedItems = useMemo(
@@ -52,9 +50,6 @@ export function NotificationsBell() {
   );
 
   const handleOpenItem = async (item: NotificationItem) => {
-    if (!item.is_read) {
-      await markRead(item.id).catch(() => undefined);
-    }
     if (item.link_path) {
       navigate(item.link_path);
     }
@@ -63,7 +58,13 @@ export function NotificationsBell() {
   if (!isEnabled) return null;
 
   return (
-    <DropdownMenu>
+    <DropdownMenu
+      onOpenChange={(open) => {
+        if (open && unreadCount > 0) {
+          void markAllRead().catch(() => undefined);
+        }
+      }}
+    >
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-full">
           <Bell className="h-4 w-4" />
@@ -75,21 +76,7 @@ export function NotificationsBell() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[360px] p-0">
-        <DropdownMenuLabel className="flex items-center justify-between px-3 py-2">
-          <span>Notifications</span>
-          {unreadCount > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-xs"
-              disabled={isMarkingAllRead}
-              onClick={() => { void markAllRead(); }}
-            >
-              <CheckCheck className="mr-1 h-3.5 w-3.5" />
-              Mark all read
-            </Button>
-          )}
-        </DropdownMenuLabel>
+        <DropdownMenuLabel className="px-3 py-2">Notifications</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <ScrollArea className="max-h-[420px]">
           {isLoading ? (
