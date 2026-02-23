@@ -74,6 +74,8 @@ export default function BlueprintDetail() {
     avatarUrl: string | null;
     thumbnailUrl: string | null;
   } | null>(null);
+  const [sourceChannelLookupFailed, setSourceChannelLookupFailed] = useState(false);
+  const [isSourceChannelResolved, setIsSourceChannelResolved] = useState(false);
   const curatedChannelTagSlugs = useMemo(() => new Set(getCatalogChannelTagSlugs().map(normalizeTag)), []);
   const displayTags = useMemo(() => {
     if (!blueprint?.tags?.length) return [];
@@ -96,8 +98,11 @@ export default function BlueprintDetail() {
   useEffect(() => {
     let cancelled = false;
     async function loadSourceChannel() {
+      setIsSourceChannelResolved(false);
+      setSourceChannelLookupFailed(false);
       if (!blueprint?.id) {
         setSourceChannel(null);
+        setIsSourceChannelResolved(true);
         return;
       }
       let sourceItemId: string | null = null;
@@ -143,7 +148,11 @@ export default function BlueprintDetail() {
       }
 
       if (!sourceItemId) {
-        if (!cancelled) setSourceChannel(null);
+        if (!cancelled) {
+          setSourceChannel(null);
+          setSourceChannelLookupFailed(true);
+          setIsSourceChannelResolved(true);
+        }
         return;
       }
       const { data: source, error: sourceError } = await supabase
@@ -152,7 +161,11 @@ export default function BlueprintDetail() {
         .eq('id', sourceItemId)
         .maybeSingle();
       if (sourceError || !source) {
-        if (!cancelled) setSourceChannel(null);
+        if (!cancelled) {
+          setSourceChannel(null);
+          setSourceChannelLookupFailed(true);
+          setIsSourceChannelResolved(true);
+        }
         return;
       }
       const sourceMetadata =
@@ -204,6 +217,8 @@ export default function BlueprintDetail() {
           avatarUrl: sourcePageAvatarUrl || metadataChannelAvatarUrl || sourceExternalAvatarUrl || null,
           thumbnailUrl: String(source.thumbnail_url || '').trim() || null,
         });
+        setSourceChannelLookupFailed(false);
+        setIsSourceChannelResolved(true);
       }
     }
     void loadSourceChannel();
@@ -286,13 +301,13 @@ export default function BlueprintDetail() {
                       src={sourceChannel?.avatarUrl || undefined}
                     />
                     <AvatarFallback className="text-[10px]">
-                      {(sourceChannel?.title || blueprint.creator_profile?.display_name || 'U')
+                      {(sourceChannel?.title || (isSourceChannelResolved && sourceChannelLookupFailed ? (blueprint.creator_profile?.display_name || 'U') : 'S'))
                         .slice(0, 2)
                         .toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   <span className="text-sm text-muted-foreground truncate">
-                    {sourceChannel?.title || blueprint.creator_profile?.display_name || 'Anonymous'}
+                    {sourceChannel?.title || (isSourceChannelResolved && sourceChannelLookupFailed ? (blueprint.creator_profile?.display_name || 'Anonymous') : 'Source')}
                   </span>
                 </div>
                 <span className="text-xs text-muted-foreground shrink-0">

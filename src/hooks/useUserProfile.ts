@@ -99,7 +99,7 @@ export function useUserLikedBlueprints(userId: string | undefined, limit = 4) {
 
       const { data: blueprints, error: blueprintsError } = await supabase
         .from('blueprints')
-        .select('id, title, creator_user_id, likes_count, created_at')
+        .select('id, title, creator_user_id, selected_items, likes_count, created_at')
         .in('id', blueprintIds)
         .eq('is_public', true);
 
@@ -113,9 +113,147 @@ export function useUserLikedBlueprints(userId: string | undefined, limit = 4) {
         .in('user_id', creatorIds);
 
       const profileMap = new Map((profiles || []).map((p) => [p.user_id, p]));
+      const publicBlueprintIds = (blueprints || []).map((bp) => bp.id);
+
+      const { data: unlockRows } = publicBlueprintIds.length > 0
+        ? await supabase
+          .from('source_item_unlocks')
+          .select('blueprint_id, source_item_id, updated_at')
+          .in('blueprint_id', publicBlueprintIds)
+          .order('updated_at', { ascending: false })
+        : { data: [] as Array<{ blueprint_id: string; source_item_id: string | null; updated_at: string | null }> };
+
+      const sourceItemIdByBlueprint = new Map<string, string>();
+      (unlockRows || []).forEach((row) => {
+        const blueprintId = String(row.blueprint_id || '').trim();
+        const sourceItemId = String(row.source_item_id || '').trim();
+        if (!blueprintId || !sourceItemId) return;
+        if (!sourceItemIdByBlueprint.has(blueprintId)) {
+          sourceItemIdByBlueprint.set(blueprintId, sourceItemId);
+        }
+      });
+
+      const unresolvedBlueprintIds = publicBlueprintIds.filter((id) => !sourceItemIdByBlueprint.has(id));
+      if (unresolvedBlueprintIds.length > 0) {
+        const { data: feedRows } = await supabase
+          .from('user_feed_items')
+          .select('blueprint_id, source_item_id, created_at')
+          .in('blueprint_id', unresolvedBlueprintIds)
+          .order('created_at', { ascending: false });
+        (feedRows || []).forEach((row) => {
+          const blueprintId = String(row.blueprint_id || '').trim();
+          const sourceItemId = String(row.source_item_id || '').trim();
+          if (!blueprintId || !sourceItemId) return;
+          if (!sourceItemIdByBlueprint.has(blueprintId)) {
+            sourceItemIdByBlueprint.set(blueprintId, sourceItemId);
+          }
+        });
+      }
+
+      const selectedVideoUrls = new Set(
+        (blueprints || [])
+          .map((bp) => {
+            if (!bp.selected_items || typeof bp.selected_items !== 'object' || Array.isArray(bp.selected_items)) return '';
+            const selected = bp.selected_items as Record<string, unknown>;
+            return typeof selected.video_url === 'string' ? String(selected.video_url || '').trim() : '';
+          })
+          .filter(Boolean),
+      );
+      const { data: sourceByUrlRows } = selectedVideoUrls.size > 0
+        ? await supabase
+          .from('source_items')
+          .select('id, source_url, created_at')
+          .in('source_url', Array.from(selectedVideoUrls))
+          .order('created_at', { ascending: false })
+        : { data: [] as Array<{ id: string; source_url: string; created_at: string }> };
+      const sourceByUrl = new Map<string, string>();
+      (sourceByUrlRows || []).forEach((row) => {
+        const url = String(row.source_url || '').trim();
+        const id = String(row.id || '').trim();
+        if (!url || !id || sourceByUrl.has(url)) return;
+        sourceByUrl.set(url, id);
+      });
+
+      (blueprints || []).forEach((bp) => {
+        if (sourceItemIdByBlueprint.has(bp.id)) return;
+        if (!bp.selected_items || typeof bp.selected_items !== 'object' || Array.isArray(bp.selected_items)) return;
+        const selected = bp.selected_items as Record<string, unknown>;
+        const videoUrl = typeof selected.video_url === 'string' ? String(selected.video_url || '').trim() : '';
+        if (!videoUrl) return;
+        const sourceItemId = sourceByUrl.get(videoUrl);
+        if (sourceItemId) sourceItemIdByBlueprint.set(bp.id, sourceItemId);
+      });
+
+      const sourceItemIds = Array.from(new Set(Array.from(sourceItemIdByBlueprint.values()).filter(Boolean)));
+      const { data: sourceRows } = sourceItemIds.length > 0
+        ? await supabase
+          .from('source_items')
+          .select('id, source_page_id, source_channel_id, source_channel_title, metadata')
+          .in('id', sourceItemIds)
+        : { data: [] as Array<{ id: string; source_page_id: string | null; source_channel_id: string | null; source_channel_title: string | null; metadata: unknown }> };
+      const sourceById = new Map((sourceRows || []).map((row) => [row.id, row]));
+
+      const sourcePageIds = Array.from(new Set(
+        (sourceRows || [])
+          .map((row) => String(row.source_page_id || '').trim())
+          .filter(Boolean),
+      ));
+      const sourceChannelIds = Array.from(new Set(
+        (sourceRows || [])
+          .map((row) => String(row.source_channel_id || '').trim())
+          .filter(Boolean),
+      ));
+      const { data: sourcePagesById } = sourcePageIds.length > 0
+        ? await supabase.from('source_pages').select('id, avatar_url').in('id', sourcePageIds)
+        : { data: [] as Array<{ id: string; avatar_url: string | null }> };
+      const { data: sourcePagesByExternal } = sourceChannelIds.length > 0
+        ? await supabase
+          .from('source_pages')
+          .select('external_id, avatar_url')
+          .eq('platform', 'youtube')
+          .in('external_id', sourceChannelIds)
+        : { data: [] as Array<{ external_id: string; avatar_url: string | null }> };
+      const sourceAvatarByPageId = new Map((sourcePagesById || []).map((row) => [row.id, row.avatar_url || null]));
+      const sourceAvatarByExternalId = new Map((sourcePagesByExternal || []).map((row) => [row.external_id, row.avatar_url || null]));
 
       return (blueprints || []).map((bp) => ({
         ...bp,
+        source_channel: (() => {
+          const sourceItemId = sourceItemIdByBlueprint.get(bp.id);
+          if (!sourceItemId) return null;
+          const source = sourceById.get(sourceItemId);
+          if (!source) return null;
+          const sourceMetadata =
+            source.metadata && typeof source.metadata === 'object' && source.metadata !== null
+              ? (source.metadata as Record<string, unknown>)
+              : null;
+          const metadataTitle =
+            sourceMetadata && typeof sourceMetadata.source_channel_title === 'string'
+              ? String(sourceMetadata.source_channel_title || '').trim() || null
+              : (
+                sourceMetadata && typeof sourceMetadata.channel_title === 'string'
+                  ? String(sourceMetadata.channel_title || '').trim() || null
+                  : null
+              );
+          const metadataAvatar =
+            sourceMetadata && typeof sourceMetadata.source_channel_avatar_url === 'string'
+              ? String(sourceMetadata.source_channel_avatar_url || '').trim() || null
+              : (
+                sourceMetadata && typeof sourceMetadata.channel_avatar_url === 'string'
+                  ? String(sourceMetadata.channel_avatar_url || '').trim() || null
+                  : null
+              );
+          const sourcePageId = String(source.source_page_id || '').trim();
+          const sourceChannelId = String(source.source_channel_id || '').trim();
+          return {
+            title: source.source_channel_title || metadataTitle || null,
+            avatar_url:
+              sourceAvatarByPageId.get(sourcePageId)
+              || metadataAvatar
+              || sourceAvatarByExternalId.get(sourceChannelId)
+              || null,
+          };
+        })(),
         creator_profile: profileMap.get(bp.creator_user_id) || null,
       }));
     },

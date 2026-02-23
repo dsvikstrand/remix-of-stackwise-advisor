@@ -107,7 +107,7 @@ export function ProfileTabs({ userId, isOwnerView, profileIsPublic }: ProfileTab
                   <CardContent className="p-4">
                     <h4 className="font-medium truncate">{bp.title}</h4>
                     <p className="text-sm text-muted-foreground mt-1">
-                      by {bp.creator_profile?.display_name || 'Anonymous'}
+                      by {bp.source_channel?.title || bp.creator_profile?.display_name || 'Anonymous'}
                     </p>
                     <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
                       <Heart className="h-3 w-3 fill-current text-destructive" />
