@@ -5980,6 +5980,7 @@ async function processSourceItemUnlockGenerationJob(input: {
   const firstItemTitle = String(input.items[0]?.title || '').trim() || null;
   let firstBlueprintId: string | null = null;
   let firstBlueprintTitle: string | null = null;
+  let notifyFailedCount = 0;
   const failures: Array<{ video_id: string; unlock_id: string; error_code: string; error: string }> = [];
 
   for (const item of input.items) {
@@ -6194,6 +6195,31 @@ async function processSourceItemUnlockGenerationJob(input: {
         error: message,
       });
 
+      const isIntermediateAutoTranscriptFailure =
+        isAutoOrigin
+        && errorCode === 'TRANSCRIPT_UNAVAILABLE'
+        && !transcriptRetryExhausted
+        && !transcriptDecision?.confirmedPermanent;
+      if (!isIntermediateAutoTranscriptFailure) {
+        notifyFailedCount += 1;
+      } else {
+        logUnlockEvent(
+          'auto_transcript_failure_notification_suppressed',
+          {
+            trace_id: input.traceId,
+            job_id: input.jobId,
+            unlock_id: item.unlock_id,
+            source_item_id: item.source_item_id,
+            video_id: item.video_id,
+          },
+          {
+            error_code: errorCode,
+            transcript_attempt_count: transcriptDecision?.transcriptAttemptCount || null,
+            transcript_no_caption_hits: transcriptDecision?.transcriptNoCaptionHits || null,
+          },
+        );
+      }
+
       try {
         await refundReservation(db, {
           userId: item.reserved_by_user_id,
@@ -6374,7 +6400,7 @@ async function processSourceItemUnlockGenerationJob(input: {
     scope: 'source_item_unlock_generation',
     inserted,
     skipped,
-    failed: failures.length,
+    failed: notifyFailedCount,
     itemTitle: firstItemTitle,
     blueprintTitle: firstBlueprintTitle,
     traceId: input.traceId,
