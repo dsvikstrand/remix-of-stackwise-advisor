@@ -91,7 +91,7 @@ export default function Channels() {
     const set = new Set<string>();
     followedTags.forEach((tag) => {
       const slug = resolvePrimaryChannelFromTags([tag.slug]);
-      if (slug !== 'general') set.add(slug);
+      set.add(slug);
     });
     return set;
   }, [followedTags]);

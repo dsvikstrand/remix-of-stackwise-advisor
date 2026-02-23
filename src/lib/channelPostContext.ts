@@ -3,7 +3,6 @@ import { CHANNELS_CATALOG, getChannelBySlug } from '@/lib/channelsCatalog';
 export function isPostableChannelSlug(slug: string): boolean {
   const channel = getChannelBySlug(slug);
   if (!channel) return false;
-  if (channel.slug === 'general') return false;
   return channel.status === 'active' && channel.isJoinEnabled;
 }
 
@@ -29,4 +28,3 @@ export function buildUrlWithChannel(path: string, channelSlug: string, extra?: R
 export function getCatalogChannelTagSlugs(): string[] {
   return Array.from(new Set(CHANNELS_CATALOG.map((c) => c.tagSlug)));
 }
-

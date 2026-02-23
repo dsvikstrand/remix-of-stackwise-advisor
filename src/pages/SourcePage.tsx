@@ -28,6 +28,7 @@ import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
 import { getChannelIcon } from '@/lib/channelIcons';
 import { useSourceUnlockJobTracker } from '@/hooks/useSourceUnlockJobTracker';
 import { resolveEffectiveBanner } from '@/lib/bannerResolver';
+import { resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
 
 function getInitials(title: string, fallback: string) {
   const raw = title.trim() || fallback.trim();
@@ -608,7 +609,8 @@ export default function SourcePage() {
                   {!sourceBlueprintsQuery.isLoading && !sourceBlueprintsQuery.error && sourceBlueprintItems.length > 0 ? (
                     <div className="space-y-3">
                       {sourceBlueprintItems.map((item) => {
-                        const channelSlug = item.published_channel_slug || 'general';
+                        const fallbackChannelSlug = resolveChannelLabelForBlueprint(item.tags.map((tag) => tag.slug)).replace(/^b\//, '');
+                        const channelSlug = item.published_channel_slug || fallbackChannelSlug;
                         const channelLabel = `b/${channelSlug}`;
                         const channelConfig = CHANNELS_CATALOG.find((channel) => channel.slug === channelSlug);
                         const ChannelIcon = getChannelIcon(channelConfig?.icon || 'sparkles');

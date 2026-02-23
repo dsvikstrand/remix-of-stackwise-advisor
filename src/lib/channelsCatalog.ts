@@ -14,10 +14,10 @@ export const CHANNELS_CATALOG: ChannelCatalogEntry[] = [
   {
     slug: 'general',
     name: 'General Blueprints',
-    description: 'Fallback lane for public blueprints that are not mapped to a curated channel yet.',
+    description: 'Broad creator blueprints and cross-domain routines.',
     status: 'active',
     tagSlug: 'general',
-    isJoinEnabled: false,
+    isJoinEnabled: true,
     aliases: ['other', 'misc', 'unlabeled'],
     icon: 'globe',
     priority: 999,
