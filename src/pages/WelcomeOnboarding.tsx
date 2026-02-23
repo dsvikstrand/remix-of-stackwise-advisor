@@ -743,7 +743,7 @@ export default function WelcomeOnboarding() {
               onClick={() => completeMutation.mutate()}
               disabled={!canFinishOnboarding || completeMutation.isPending || onboardingQuery.isUpdating}
             >
-              {completeMutation.isPending ? 'Opening...' : 'Welcome to Bleuprint'}
+              {completeMutation.isPending ? 'Opening...' : 'Welcome to Bleup'}
             </Button>
           </CardContent>
         </Card>

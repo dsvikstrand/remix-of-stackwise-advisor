@@ -73,7 +73,7 @@ export default function Auth() {
     } else {
       toast({
         title: 'Account created!',
-        description: 'Welcome to BleuPrint. Your account is ready.',
+        description: 'Welcome to Bleup. Your account is ready.',
       });
       navigate(postAuthRedirect, { replace: true });
     }
@@ -87,7 +87,8 @@ export default function Auth() {
     // IMPORTANT: On GitHub Pages the app is usually served from a sub-path.
     // Use Vite's BASE_URL so OAuth redirects back to the deployed SPA path,
     // not the domain root (which would 404).
-    const redirectTo = new URL(config.basePath, window.location.origin).toString();
+    const wallPath = `${config.basePath.replace(/\/$/, '')}/wall`.replace(/\/{2,}/g, '/');
+    const redirectTo = new URL(wallPath, window.location.origin).toString();
     
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -115,7 +116,7 @@ export default function Auth() {
             <div className="w-9 h-9 rounded-xl border border-primary/25 bg-gradient-to-br from-primary/90 to-primary/60 flex items-center justify-center">
               <BookOpen className="h-4 w-4 text-primary-foreground" />
             </div>
-            <span className="text-2xl font-bold">BleuPrint</span>
+            <span className="text-2xl font-bold">Bleup</span>
           </div>
           <CardTitle>Welcome</CardTitle>
           <CardDescription>
