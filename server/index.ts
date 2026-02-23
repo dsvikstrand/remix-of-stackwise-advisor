@@ -143,6 +143,9 @@ const limiter = rateLimit({
     req.path === '/api/health'
     || req.path === '/api/credits'
     || req.path === '/api/ingestion/jobs/latest-mine'
+    || req.path === '/api/youtube-search'
+    || req.path === '/api/youtube-channel-search'
+    || req.path.startsWith('/api/youtube/channels/')
   ),
 });
 
@@ -167,6 +170,8 @@ const sourceVideoUnlockBurstWindowMs = clampInt(process.env.SOURCE_VIDEO_UNLOCK_
 const sourceVideoUnlockBurstMax = clampInt(process.env.SOURCE_VIDEO_UNLOCK_BURST_MAX, 8, 1, 100);
 const sourceVideoUnlockSustainedWindowMs = clampInt(process.env.SOURCE_VIDEO_UNLOCK_SUSTAINED_WINDOW_MS, 10 * 60_000, 60_000, 60 * 60_000);
 const sourceVideoUnlockSustainedMax = clampInt(process.env.SOURCE_VIDEO_UNLOCK_SUSTAINED_MAX, 120, 10, 2_000);
+const searchApiWindowMs = clampInt(process.env.SEARCH_API_WINDOW_MS, 60_000, 10_000, 10 * 60_000);
+const searchApiMax = clampInt(process.env.SEARCH_API_MAX, 180, 20, 5_000);
 const creditsReadWindowMs = clampInt(process.env.CREDITS_READ_WINDOW_MS, 60_000, 10_000, 10 * 60_000);
 const creditsReadMaxPerWindow = clampInt(process.env.CREDITS_READ_MAX_PER_WINDOW, 180, 30, 2_000);
 const ingestionLatestMineWindowMs = clampInt(process.env.INGESTION_LATEST_MINE_WINDOW_MS, 60_000, 10_000, 10 * 60_000);
@@ -415,6 +420,26 @@ function sourceVideoRateLimitHandler(
     data: null,
   });
 }
+
+function searchRateLimitHandler(req: express.Request, res: express.Response) {
+  const retryAfter = getRetryAfterSeconds(req);
+  return res.status(429).json({
+    ok: false,
+    error_code: 'RATE_LIMITED',
+    message: 'Search is cooling down. Please retry shortly.',
+    retry_after_seconds: retryAfter,
+    data: null,
+  });
+}
+
+const searchApiLimiter = rateLimit({
+  windowMs: searchApiWindowMs,
+  max: searchApiMax,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req, res) => getUserOrIpRateLimitKey(req, res),
+  handler: (req, res) => searchRateLimitHandler(req, res),
+});
 
 const sourceVideoListBurstLimiter = rateLimit({
   windowMs: sourceVideoListBurstWindowMs,
@@ -1602,7 +1627,7 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
   }
 });
 
-app.get('/api/youtube-search', async (req, res) => {
+app.get('/api/youtube-search', searchApiLimiter, async (req, res) => {
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
   const authToken = (res.locals.authToken as string | undefined) ?? '';
   if (!userId) {
@@ -1820,7 +1845,7 @@ app.post(
   },
 );
 
-app.get('/api/youtube-channel-search', async (req, res) => {
+app.get('/api/youtube-channel-search', searchApiLimiter, async (req, res) => {
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
   if (!userId) {
     return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
@@ -1895,6 +1920,7 @@ app.get('/api/youtube-channel-search', async (req, res) => {
 
 app.get(
   '/api/youtube/channels/:channelId/videos',
+  searchApiLimiter,
   sourceVideoListBurstLimiter,
   sourceVideoListSustainedLimiter,
   async (req, res) => {
