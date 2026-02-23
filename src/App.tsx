@@ -37,8 +37,8 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <TooltipProvider>
-        <Toaster />
-        <Sonner />
+        {config.developerMode && <Toaster />}
+        {config.developerMode && <Sonner />}
         <BrowserRouter basename={config.basePath}>
           <YouTubeOnboardingRedirectGate />
           <Routes>

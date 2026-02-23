@@ -17,6 +17,9 @@ export const config = {
   /** Vite base path (for SPA routing on GitHub Pages etc.). */
   basePath: import.meta.env.BASE_URL as string,
 
+  /** Developer-facing UI elements (toasts/debug hints). */
+  developerMode: toBool(import.meta.env.VITE_DEVELOPER_MODE, true),
+
   /** Feature flags for phased bleuV1 rollout. */
   features: {
     myFeedV1: toBool(import.meta.env.VITE_FEATURE_MY_FEED_V1, true),

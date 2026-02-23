@@ -10,7 +10,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { useNotifications, type NotificationItem } from '@/hooks/useNotifications';
 
@@ -79,7 +78,7 @@ export function NotificationsBell() {
       <DropdownMenuContent align="end" className="w-[360px] p-0">
         <DropdownMenuLabel className="px-3 py-2">Notifications</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <ScrollArea className="max-h-[420px]">
+        <div className="max-h-[420px] overflow-y-auto">
           {isLoading ? (
             <div className="px-3 py-4 text-sm text-muted-foreground">Loading notifications...</div>
           ) : sortedItems.length === 0 ? (
@@ -119,7 +118,7 @@ export function NotificationsBell() {
               );
             })
           )}
-        </ScrollArea>
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   );

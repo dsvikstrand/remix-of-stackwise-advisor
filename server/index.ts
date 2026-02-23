@@ -1826,6 +1826,7 @@ app.post(
       jobId: job.id,
       scope: 'search_video_generate',
       queuedCount: dedupedItems.length,
+      itemTitle: dedupedItems[0]?.title || null,
       linkPath: getGenerationNotificationLinkPath({ scope: 'search_video_generate' }),
     });
 
@@ -5307,6 +5308,8 @@ async function emitGenerationTerminalNotification(
     inserted: number;
     skipped: number;
     failed: number;
+    itemTitle?: string | null;
+    blueprintTitle?: string | null;
     traceId?: string | null;
     firstBlueprintId?: string | null;
     linkPath?: string | null;
@@ -5322,6 +5325,8 @@ async function emitGenerationTerminalNotification(
       inserted: params.inserted,
       skipped: params.skipped,
       failed: params.failed,
+      itemTitle: params.itemTitle || null,
+      blueprintTitle: params.blueprintTitle || null,
       traceId: params.traceId || null,
       linkPath: params.linkPath || null,
       firstBlueprintId: params.firstBlueprintId || null,
@@ -5360,6 +5365,7 @@ async function emitGenerationStartedNotification(
     jobId: string;
     scope: string;
     queuedCount: number;
+    itemTitle?: string | null;
     traceId?: string | null;
     linkPath?: string | null;
   },
@@ -5405,6 +5411,7 @@ async function emitGenerationStartedNotification(
       jobId: params.jobId,
       scope: params.scope,
       queuedCount,
+      itemTitle: params.itemTitle || null,
       traceId: params.traceId || null,
       linkPath: params.linkPath || null,
     });
@@ -5438,7 +5445,9 @@ async function processSearchVideoGenerateJob(input: {
   let processed = 0;
   let inserted = 0;
   let skipped = 0;
+  const firstItemTitle = String(input.items[0]?.title || '').trim() || null;
   let firstBlueprintId: string | null = null;
+  let firstBlueprintTitle: string | null = null;
   const failures: Array<{ video_id: string; error_code: string; error: string }> = [];
 
   for (const item of input.items) {
@@ -5482,6 +5491,7 @@ async function processSearchVideoGenerateJob(input: {
       if (insertedItem) inserted += 1;
       else skipped += 1;
       if (insertedItem && !firstBlueprintId) firstBlueprintId = generated.blueprintId;
+      if (insertedItem && !firstBlueprintTitle) firstBlueprintTitle = String(generated.title || '').trim() || null;
 
       if (insertedItem) {
         try {
@@ -5545,6 +5555,8 @@ async function processSearchVideoGenerateJob(input: {
     inserted,
     skipped,
     failed: failures.length,
+    itemTitle: firstItemTitle,
+    blueprintTitle: firstBlueprintTitle,
     linkPath: getGenerationNotificationLinkPath({ scope: 'search_video_generate' }),
     firstBlueprintId,
   });
@@ -5572,7 +5584,9 @@ async function processManualRefreshGenerateJob(input: {
   let processed = 0;
   let inserted = 0;
   let skipped = 0;
+  const firstItemTitle = String(input.items[0]?.title || '').trim() || null;
   let firstBlueprintId: string | null = null;
+  let firstBlueprintTitle: string | null = null;
   const failures: Array<{ subscription_id: string; video_id: string; error_code: string; error: string }> = [];
   const checkpointBySubscription = new Map<string, { publishedAt: string | null; videoId: string }>();
 
@@ -5663,6 +5677,7 @@ async function processManualRefreshGenerateJob(input: {
       if (insertedItem) inserted += 1;
       else skipped += 1;
       if (insertedItem && !firstBlueprintId) firstBlueprintId = generated.blueprintId;
+      if (insertedItem && !firstBlueprintTitle) firstBlueprintTitle = String(generated.title || '').trim() || null;
 
       if (insertedItem) {
         try {
@@ -5782,6 +5797,8 @@ async function processManualRefreshGenerateJob(input: {
     inserted,
     skipped,
     failed: failures.length,
+    itemTitle: firstItemTitle,
+    blueprintTitle: firstBlueprintTitle,
     linkPath: getGenerationNotificationLinkPath({ scope: 'manual_refresh_selection' }),
     firstBlueprintId,
   });
@@ -5812,7 +5829,9 @@ async function processSourcePageVideoLibraryJob(input: {
   let processed = 0;
   let inserted = 0;
   let skipped = 0;
+  const firstItemTitle = String(input.items[0]?.title || '').trim() || null;
   let firstBlueprintId: string | null = null;
+  let firstBlueprintTitle: string | null = null;
   const failures: Array<{ video_id: string; error_code: string; error: string }> = [];
 
   for (const item of input.items) {
@@ -5855,6 +5874,7 @@ async function processSourcePageVideoLibraryJob(input: {
       if (insertedItem) inserted += 1;
       else skipped += 1;
       if (insertedItem && !firstBlueprintId) firstBlueprintId = generated.blueprintId;
+      if (insertedItem && !firstBlueprintTitle) firstBlueprintTitle = String(generated.title || '').trim() || null;
 
       if (insertedItem) {
         try {
@@ -5919,6 +5939,8 @@ async function processSourcePageVideoLibraryJob(input: {
     inserted,
     skipped,
     failed: failures.length,
+    itemTitle: firstItemTitle,
+    blueprintTitle: firstBlueprintTitle,
     linkPath: getGenerationNotificationLinkPath({ scope: 'source_item_unlock_generation' }),
     firstBlueprintId,
   });
@@ -5955,7 +5977,9 @@ async function processSourceItemUnlockGenerationJob(input: {
   let processed = 0;
   let inserted = 0;
   let skipped = 0;
+  const firstItemTitle = String(input.items[0]?.title || '').trim() || null;
   let firstBlueprintId: string | null = null;
+  let firstBlueprintTitle: string | null = null;
   const failures: Array<{ video_id: string; unlock_id: string; error_code: string; error: string }> = [];
 
   for (const item of input.items) {
@@ -6072,6 +6096,7 @@ async function processSourceItemUnlockGenerationJob(input: {
 
       inserted += 1;
       if (!firstBlueprintId) firstBlueprintId = generated.blueprintId;
+      if (!firstBlueprintTitle) firstBlueprintTitle = String(generated.title || '').trim() || null;
 
       logUnlockEvent(
         'unlock_item_succeeded',
@@ -6350,6 +6375,8 @@ async function processSourceItemUnlockGenerationJob(input: {
     inserted,
     skipped,
     failed: failures.length,
+    itemTitle: firstItemTitle,
+    blueprintTitle: firstBlueprintTitle,
     traceId: input.traceId,
     linkPath: getGenerationNotificationLinkPath({ scope: 'source_item_unlock_generation' }),
     firstBlueprintId,
@@ -8692,6 +8719,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
     jobId: job.id,
     scope: 'source_item_unlock_generation',
     queuedCount: queueItems.length,
+    itemTitle: queueItems[0]?.title || null,
     traceId: traceId || null,
     linkPath: getGenerationNotificationLinkPath({
       scope: 'source_item_unlock_generation',
@@ -9575,6 +9603,7 @@ app.post('/api/source-subscriptions/refresh-generate', refreshGenerateLimiter, a
     jobId: job.id,
     scope: 'manual_refresh_selection',
     queuedCount: dedupedItems.length,
+    itemTitle: dedupedItems[0]?.title || null,
     linkPath: getGenerationNotificationLinkPath({ scope: 'manual_refresh_selection' }),
   });
   scheduleQueuedIngestionProcessing();
