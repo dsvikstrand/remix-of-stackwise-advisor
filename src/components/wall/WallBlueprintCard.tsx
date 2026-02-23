@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Heart } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -47,6 +47,7 @@ export function WallBlueprintCard({
   tags,
   onLike,
 }: WallBlueprintCardProps) {
+  const navigate = useNavigate();
   const channelLabel = `b/${channelSlug}`;
   const channelConfig = CHANNELS_CATALOG.find((channel) => channel.slug === channelSlug);
   const ChannelIcon = getChannelIcon(channelConfig?.icon || 'sparkles');
@@ -67,7 +68,14 @@ export function WallBlueprintCard({
   });
 
   return (
-    <Link to={to} className="block px-3 py-2.5 transition-colors hover:bg-muted/20">
+    <div
+      className="block cursor-pointer px-3 py-2.5 transition-colors hover:bg-muted/20"
+      onClick={(event) => {
+        const target = event.target as HTMLElement | null;
+        if (target?.closest('button, a')) return;
+        navigate(to);
+      }}
+    >
       <div className="relative overflow-hidden">
         {!!effectiveBannerUrl && (
           <>
@@ -131,13 +139,19 @@ export function WallBlueprintCard({
                 <Heart className={`h-4 w-4 ${userLiked ? 'fill-current' : ''}`} />
               </Button>
             </div>
-            <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-foreground/75 shrink-0">
-              <ChannelIcon className="h-3.5 w-3.5" />
-              {channelLabel}
-            </p>
+            <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-foreground/75 shrink-0">
+              <Link
+                to={`/b/${channelSlug}`}
+                onClick={(event) => event.stopPropagation()}
+                className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2 text-[11px] font-semibold tracking-wide ${hotness.surfaceClassName} text-foreground/80 hover:text-foreground`}
+              >
+                <ChannelIcon className="h-3.5 w-3.5" />
+                {channelLabel}
+              </Link>
+            </div>
           </div>
         </div>
       </div>
-    </Link>
+    </div>
   );
 }
