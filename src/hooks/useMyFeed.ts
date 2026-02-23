@@ -25,6 +25,7 @@ export interface MyFeedItemView {
   } | null;
   blueprint: {
     id: string;
+    creatorUserId: string | null;
     title: string;
     bannerUrl: string | null;
     llmReview: string | null;
@@ -80,7 +81,10 @@ export function useMyFeed(options?: { enabled?: boolean }) {
           .select('id, source_channel_id, source_page_id, source_url, title, source_channel_title, thumbnail_url, metadata')
           .in('id', sourceIds),
         blueprintIds.length
-          ? supabase.from('blueprints').select('id, title, banner_url, llm_review, mix_notes, is_public, steps').in('id', blueprintIds)
+          ? supabase
+            .from('blueprints')
+            .select('id, creator_user_id, title, banner_url, llm_review, mix_notes, is_public, steps')
+            .in('id', blueprintIds)
           : Promise.resolve({ data: [], error: null }),
         supabase
           .from('channel_candidates')
@@ -233,8 +237,9 @@ export function useMyFeed(options?: { enabled?: boolean }) {
             : null,
           blueprint: blueprint
             ? {
-                id: blueprint.id,
-                title: blueprint.title,
+              id: blueprint.id,
+              creatorUserId: blueprint.creator_user_id || null,
+              title: blueprint.title,
                 bannerUrl: blueprint.banner_url,
                 llmReview: blueprint.llm_review,
                 mixNotes: blueprint.mix_notes,

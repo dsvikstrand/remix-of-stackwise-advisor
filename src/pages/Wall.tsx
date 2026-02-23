@@ -573,8 +573,13 @@ export default function Wall() {
       const isSubscribedSource =
         (sourcePageId && activeSourcePageIds.has(sourcePageId))
         || (sourceChannelId && activeSourceChannelIds.has(sourceChannelId));
+      const isGeneratedByUser = Boolean(
+        item.blueprint
+        && user
+        && String(item.blueprint.creatorUserId || '').trim() === user.id,
+      );
 
-      if (!isSubscribedSource) return;
+      if (!isSubscribedSource && !isGeneratedByUser) return;
 
       if (item.blueprint) {
         items.push({
