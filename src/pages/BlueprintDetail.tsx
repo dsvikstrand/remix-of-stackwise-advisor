@@ -100,21 +100,56 @@ export default function BlueprintDetail() {
         setSourceChannel(null);
         return;
       }
-      const { data: feedRow, error: feedError } = await supabase
-        .from('user_feed_items')
-        .select('source_item_id, created_at')
+      let sourceItemId: string | null = null;
+
+      const { data: unlockRow } = await supabase
+        .from('source_item_unlocks')
+        .select('source_item_id, updated_at')
         .eq('blueprint_id', blueprint.id)
-        .order('created_at', { ascending: false })
+        .order('updated_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (feedError || !feedRow?.source_item_id) {
+      sourceItemId = String(unlockRow?.source_item_id || '').trim() || null;
+
+      if (!sourceItemId) {
+        const { data: feedRow } = await supabase
+          .from('user_feed_items')
+          .select('source_item_id, created_at')
+          .eq('blueprint_id', blueprint.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        sourceItemId = String(feedRow?.source_item_id || '').trim() || null;
+      }
+
+      if (!sourceItemId) {
+        const selectedItems =
+          blueprint.selected_items && typeof blueprint.selected_items === 'object'
+            ? (blueprint.selected_items as Record<string, unknown>)
+            : null;
+        const videoUrl = selectedItems && typeof selectedItems.video_url === 'string'
+          ? String(selectedItems.video_url || '').trim()
+          : '';
+        if (videoUrl) {
+          const { data: sourceByUrl } = await supabase
+            .from('source_items')
+            .select('id, created_at')
+            .eq('source_url', videoUrl)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          sourceItemId = String(sourceByUrl?.id || '').trim() || null;
+        }
+      }
+
+      if (!sourceItemId) {
         if (!cancelled) setSourceChannel(null);
         return;
       }
       const { data: source, error: sourceError } = await supabase
         .from('source_items')
         .select('title, source_url, source_page_id, source_channel_id, source_channel_title, thumbnail_url, metadata')
-        .eq('id', feedRow.source_item_id)
+        .eq('id', sourceItemId)
         .maybeSingle();
       if (sourceError || !source) {
         if (!cancelled) setSourceChannel(null);
