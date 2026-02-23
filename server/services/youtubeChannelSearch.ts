@@ -5,6 +5,7 @@ export type YouTubeChannelSearchResult = {
   description: string;
   thumbnail_url: string | null;
   published_at: string | null;
+  subscriber_count: number | null;
 };
 
 export type YouTubeChannelSearchPage = {
@@ -62,7 +63,65 @@ export function normalizeYouTubeChannelSearchItem(raw: unknown): YouTubeChannelS
       || item.snippet?.thumbnails?.default?.url
       || null,
     published_at: item.snippet?.publishedAt ? String(item.snippet.publishedAt) : null,
+    subscriber_count: null,
   };
+}
+
+async function fetchChannelSubscriberMap(input: {
+  apiKey: string;
+  channelIds: string[];
+}) {
+  const apiKey = String(input.apiKey || '').trim();
+  const uniqueChannelIds = Array.from(new Set(
+    input.channelIds.map((channelId) => String(channelId || '').trim()).filter(Boolean),
+  ));
+  const subscriberMap = new Map<string, number | null>();
+  if (!apiKey || uniqueChannelIds.length === 0) return subscriberMap;
+
+  const batchSize = 50;
+  for (let offset = 0; offset < uniqueChannelIds.length; offset += batchSize) {
+    const ids = uniqueChannelIds.slice(offset, offset + batchSize);
+    const url = new URL('https://www.googleapis.com/youtube/v3/channels');
+    url.searchParams.set('part', 'statistics');
+    url.searchParams.set('id', ids.join(','));
+    url.searchParams.set('key', apiKey);
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        'User-Agent': 'bleuv1-youtube-channel-search/1.0 (+https://bapi.vdsai.cloud)',
+        Accept: 'application/json',
+      },
+    });
+    if (response.status === 403 || response.status === 429) {
+      throw new YouTubeChannelSearchError('RATE_LIMITED', 'Search provider quota is currently limited.');
+    }
+    if (!response.ok) {
+      throw new YouTubeChannelSearchError('PROVIDER_FAIL', `YouTube channels provider failed (${response.status}).`);
+    }
+
+    const json = (await response.json().catch(() => null)) as {
+      items?: Array<{ id?: string; statistics?: { subscriberCount?: string } }>;
+      error?: { code?: number; message?: string };
+    } | null;
+    if (!json) {
+      throw new YouTubeChannelSearchError('PROVIDER_FAIL', 'Invalid response from YouTube channels provider.');
+    }
+    if (json.error) {
+      if (json.error.code === 403 || json.error.code === 429) {
+        throw new YouTubeChannelSearchError('RATE_LIMITED', json.error.message || 'Search provider quota is currently limited.');
+      }
+      throw new YouTubeChannelSearchError('PROVIDER_FAIL', json.error.message || 'YouTube channels provider returned an error.');
+    }
+
+    for (const row of json.items || []) {
+      const channelId = String(row.id || '').trim();
+      if (!channelId) continue;
+      const rawCount = Number(row.statistics?.subscriberCount || NaN);
+      subscriberMap.set(channelId, Number.isFinite(rawCount) ? Math.max(0, Math.floor(rawCount)) : null);
+    }
+  }
+
+  return subscriberMap;
 }
 
 export async function searchYouTubeChannels(input: {
@@ -130,8 +189,16 @@ export async function searchYouTubeChannels(input: {
     .map((item) => normalizeYouTubeChannelSearchItem(item))
     .filter((item): item is YouTubeChannelSearchResult => !!item);
 
+  const subscriberMap = await fetchChannelSubscriberMap({
+    apiKey,
+    channelIds: results.map((row) => row.channel_id),
+  });
+
   return {
-    results,
+    results: results.map((row) => ({
+      ...row,
+      subscriber_count: subscriberMap.get(row.channel_id) ?? null,
+    })),
     nextPageToken: typeof json.nextPageToken === 'string' ? json.nextPageToken : null,
   };
 }

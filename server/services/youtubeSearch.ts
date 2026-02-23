@@ -8,6 +8,7 @@ export type YouTubeSearchResult = {
   channel_url: string;
   thumbnail_url: string | null;
   published_at: string | null;
+  duration_seconds: number | null;
 };
 
 export type YouTubeSearchPage = {
@@ -71,7 +72,80 @@ export function normalizeYouTubeSearchItem(raw: unknown): YouTubeSearchResult | 
       || item.snippet?.thumbnails?.default?.url
       || null,
     published_at: item.snippet?.publishedAt ? String(item.snippet.publishedAt) : null,
+    duration_seconds: null,
   };
+}
+
+function parseIsoDurationToSeconds(rawDuration: string | undefined) {
+  const value = String(rawDuration || '').trim();
+  if (!value) return null;
+  const match = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/i.exec(value);
+  if (!match) return null;
+  const hours = Number(match[1] || 0);
+  const minutes = Number(match[2] || 0);
+  const seconds = Number(match[3] || 0);
+  const total = (hours * 3600) + (minutes * 60) + seconds;
+  return Number.isFinite(total) ? total : null;
+}
+
+async function fetchYouTubeDurationMap(input: {
+  apiKey: string;
+  videoIds: string[];
+}) {
+  const apiKey = String(input.apiKey || '').trim();
+  const uniqueVideoIds = Array.from(new Set(
+    input.videoIds.map((videoId) => String(videoId || '').trim()).filter(Boolean),
+  ));
+  const durationMap = new Map<string, number | null>();
+
+  if (!apiKey || uniqueVideoIds.length === 0) {
+    return durationMap;
+  }
+
+  const batchSize = 50;
+  for (let offset = 0; offset < uniqueVideoIds.length; offset += batchSize) {
+    const ids = uniqueVideoIds.slice(offset, offset + batchSize);
+    const url = new URL('https://www.googleapis.com/youtube/v3/videos');
+    url.searchParams.set('part', 'contentDetails');
+    url.searchParams.set('id', ids.join(','));
+    url.searchParams.set('key', apiKey);
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        'User-Agent': 'bleuv1-youtube-search/1.0 (+https://bapi.vdsai.cloud)',
+        Accept: 'application/json',
+      },
+    });
+
+    if (response.status === 403 || response.status === 429) {
+      throw new YouTubeSearchError('RATE_LIMITED', 'Search provider quota is currently limited.');
+    }
+    if (!response.ok) {
+      throw new YouTubeSearchError('PROVIDER_FAIL', `YouTube duration provider failed (${response.status}).`);
+    }
+
+    const json = (await response.json().catch(() => null)) as {
+      items?: Array<{ id?: string; contentDetails?: { duration?: string } }>;
+      error?: { code?: number; message?: string };
+    } | null;
+    if (!json) {
+      throw new YouTubeSearchError('PROVIDER_FAIL', 'Invalid response from YouTube duration provider.');
+    }
+    if (json.error) {
+      if (json.error.code === 403 || json.error.code === 429) {
+        throw new YouTubeSearchError('RATE_LIMITED', json.error.message || 'Search provider quota is currently limited.');
+      }
+      throw new YouTubeSearchError('PROVIDER_FAIL', json.error.message || 'YouTube duration provider returned an error.');
+    }
+
+    for (const row of json.items || []) {
+      const videoId = String(row.id || '').trim();
+      if (!videoId) continue;
+      durationMap.set(videoId, parseIsoDurationToSeconds(row.contentDetails?.duration));
+    }
+  }
+
+  return durationMap;
 }
 
 export async function searchYouTubeVideos(input: {
@@ -135,9 +209,20 @@ export async function searchYouTubeVideos(input: {
   }
 
   const items = Array.isArray(json.items) ? json.items : [];
-  const results = items
+  let results = items
     .map((item) => normalizeYouTubeSearchItem(item))
     .filter((item): item is YouTubeSearchResult => !!item);
+
+  if (results.length > 0) {
+    const durationMap = await fetchYouTubeDurationMap({
+      apiKey,
+      videoIds: results.map((row) => row.video_id),
+    });
+    results = results.map((row) => ({
+      ...row,
+      duration_seconds: durationMap.get(row.video_id) ?? null,
+    }));
+  }
 
   return {
     results,

@@ -16,6 +16,7 @@ import { useAiCredits } from '@/hooks/useAiCredits';
 import {
   ApiRequestError as SubscriptionApiRequestError,
   createSourceSubscription,
+  deactivateSourceSubscriptionByChannelId,
   getIngestionJob,
   listSourceSubscriptions,
   type SourceSubscription,
@@ -213,6 +214,25 @@ function sampleQuickTags(bank: string[], count = QUICK_TAG_COUNT) {
   return chosen;
 }
 
+function formatDuration(seconds: number | null | undefined) {
+  const total = Math.max(0, Math.floor(Number(seconds || 0)));
+  if (!Number.isFinite(total) || total <= 0) return null;
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function formatSubscriberCount(value: number | null | undefined) {
+  const count = Number(value);
+  if (!Number.isFinite(count) || count < 0) return null;
+  if (count >= 1_000_000_000) return `${(count / 1_000_000_000).toFixed(1).replace(/\.0$/, '')}B`;
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+  if (count >= 1_000) return `${(count / 1_000).toFixed(1).replace(/\.0$/, '')}K`;
+  return `${Math.floor(count)}`;
+}
+
 export default function SearchPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -236,6 +256,7 @@ export default function SearchPage() {
   const [channelVideosError, setChannelVideosError] = useState<string | null>(null);
   const [generatingVideoIds, setGeneratingVideoIds] = useState<Record<string, boolean>>({});
   const [subscribingChannelIds, setSubscribingChannelIds] = useState<Record<string, boolean>>({});
+  const [pendingUnsubscribeChannelIds, setPendingUnsubscribeChannelIds] = useState<Record<string, boolean>>({});
   const [quickVideoTags, setQuickVideoTags] = useState<string[]>(() => sampleQuickTags(VIDEO_QUICK_TAG_BANK));
   const [quickChannelTags, setQuickChannelTags] = useState<string[]>(() => sampleQuickTags(CHANNEL_QUICK_TAG_BANK));
 
@@ -358,6 +379,21 @@ export default function SearchPage() {
     },
   });
 
+  const unsubscribeMutation = useMutation({
+    mutationFn: (input: { channelId: string }) => deactivateSourceSubscriptionByChannelId(input.channelId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: sourceSubscriptionsQueryKey });
+      toast({
+        title: 'Unsubscribed',
+        description: 'You will stop receiving new uploads from this channel.',
+      });
+    },
+    onError: (error) => {
+      const description = error instanceof Error ? error.message : 'Could not unsubscribe.';
+      toast({ title: 'Unsubscribe failed', description, variant: 'destructive' });
+    },
+  });
+
   const setGenerating = (videoId: string, value: boolean) => {
     setGeneratingVideoIds((previous) => {
       if (value) return { ...previous, [videoId]: true };
@@ -369,6 +405,15 @@ export default function SearchPage() {
 
   const setSubscribing = (channelId: string, value: boolean) => {
     setSubscribingChannelIds((previous) => {
+      if (value) return { ...previous, [channelId]: true };
+      const next = { ...previous };
+      delete next[channelId];
+      return next;
+    });
+  };
+
+  const setPendingUnsubscribe = (channelId: string, value: boolean) => {
+    setPendingUnsubscribeChannelIds((previous) => {
       if (value) return { ...previous, [channelId]: true };
       const next = { ...previous };
       delete next[channelId];
@@ -464,6 +509,34 @@ export default function SearchPage() {
       });
     } finally {
       setSubscribing(channel.channel_id, false);
+    }
+  };
+
+  const handleSubscriptionToggle = async (channel: { channel_id: string; channel_url: string }) => {
+    const channelId = channel.channel_id;
+    if (!channelId) return;
+    if (subscribingChannelIds[channelId]) return;
+
+    const isSubscribed = subscribedChannelIds.has(channelId);
+    if (!isSubscribed) {
+      setPendingUnsubscribe(channelId, false);
+      await handleSubscribeChannel(channel);
+      return;
+    }
+
+    const isPendingConfirm = Boolean(pendingUnsubscribeChannelIds[channelId]);
+    if (!isPendingConfirm) {
+      setPendingUnsubscribe(channelId, true);
+      window.setTimeout(() => setPendingUnsubscribe(channelId, false), 5000);
+      return;
+    }
+
+    setSubscribing(channelId, true);
+    try {
+      await unsubscribeMutation.mutateAsync({ channelId });
+      setPendingUnsubscribe(channelId, false);
+    } finally {
+      setSubscribing(channelId, false);
     }
   };
 
@@ -669,7 +742,9 @@ export default function SearchPage() {
                   const isGenerating = Boolean(generatingVideoIds[result.video_id]);
                   const isSubscribing = Boolean(subscribingChannelIds[result.channel_id]);
                   const isSubscribed = subscribedChannelIds.has(result.channel_id);
+                  const isPendingUnsubscribe = Boolean(pendingUnsubscribeChannelIds[result.channel_id]);
                   const hasExistingBlueprint = Boolean(result.existing_blueprint_id);
+                  const durationLabel = formatDuration(result.duration_seconds);
                   return (
                     <Card key={result.video_id} className="border-border/50">
                       <CardContent className="p-4 space-y-3">
@@ -689,6 +764,7 @@ export default function SearchPage() {
                             <div className="flex flex-wrap gap-2">
                               <Badge variant="outline">{result.channel_title}</Badge>
                               {result.published_at ? <Badge variant="secondary">{formatRelativeShort(result.published_at)}</Badge> : null}
+                              {durationLabel ? <Badge variant="secondary">{durationLabel}</Badge> : null}
                               <Badge variant="secondary">◉{GENERATE_BLUEPRINT_COST}</Badge>
                               {result.already_exists_for_user ? <Badge variant="outline">In your feed</Badge> : null}
                             </div>
@@ -720,10 +796,14 @@ export default function SearchPage() {
                             size="sm"
                             variant={isSubscribed ? 'default' : 'outline'}
                             className={isSubscribed ? 'bg-orange-500 hover:bg-orange-500/90 text-white border-orange-500' : undefined}
-                            onClick={() => handleSubscribeChannel(result)}
-                            disabled={isSubscribing || !searchEnabled || isSubscribed}
+                            onClick={() => handleSubscriptionToggle(result)}
+                            disabled={isSubscribing || !searchEnabled}
                           >
-                            {isSubscribing ? 'Subscribing...' : isSubscribed ? 'Subscribed' : 'Subscribe'}
+                            {isSubscribing
+                              ? 'Saving...'
+                              : isSubscribed
+                                ? (isPendingUnsubscribe ? 'Confirm unsubscribe' : 'Subscribed')
+                                : 'Subscribe'}
                           </Button>
                         </div>
                       </CardContent>
@@ -810,6 +890,8 @@ export default function SearchPage() {
                   const isSubscribing = Boolean(subscribingChannelIds[channel.channel_id]);
                   const isSelected = selectedBrowseChannel?.channel_id === channel.channel_id;
                   const isSubscribed = subscribedChannelIds.has(channel.channel_id);
+                  const isPendingUnsubscribe = Boolean(pendingUnsubscribeChannelIds[channel.channel_id]);
+                  const subscriberCountLabel = formatSubscriberCount(channel.subscriber_count);
                   return (
                     <Card key={channel.channel_id} className="border-border/50">
                       <CardContent className="p-4 space-y-2">
@@ -825,6 +907,9 @@ export default function SearchPage() {
                           )}
                           <div className="min-w-0 flex-1 space-y-1">
                             <p className="font-medium line-clamp-1">{channel.channel_title}</p>
+                            {subscriberCountLabel ? (
+                              <p className="text-xs text-muted-foreground">{subscriberCountLabel} subscribers</p>
+                            ) : null}
                             <p className="text-sm text-muted-foreground line-clamp-2">
                               {channel.description || 'No channel description available.'}
                             </p>
@@ -843,10 +928,14 @@ export default function SearchPage() {
                             size="sm"
                             variant={isSubscribed ? 'default' : 'outline'}
                             className={isSubscribed ? 'bg-orange-500 hover:bg-orange-500/90 text-white border-orange-500' : undefined}
-                            onClick={() => handleSubscribeChannel(channel)}
-                            disabled={isSubscribing || !searchEnabled || isSubscribed}
+                            onClick={() => handleSubscriptionToggle(channel)}
+                            disabled={isSubscribing || !searchEnabled}
                           >
-                            {isSubscribing ? 'Subscribing...' : isSubscribed ? 'Subscribed' : 'Subscribe'}
+                            {isSubscribing
+                              ? 'Saving...'
+                              : isSubscribed
+                                ? (isPendingUnsubscribe ? 'Confirm unsubscribe' : 'Subscribed')
+                                : 'Subscribe'}
                           </Button>
                         </div>
                       </CardContent>
@@ -892,6 +981,7 @@ export default function SearchPage() {
                     {channelVideoItems.map((video) => {
                       const isGenerating = Boolean(generatingVideoIds[video.video_id]);
                       const hasExistingBlueprint = Boolean(video.existing_blueprint_id);
+                      const durationLabel = formatDuration(video.duration_seconds);
                       return (
                         <div key={video.video_id} className="rounded-md border border-border/40 p-3 space-y-2">
                           <div className="flex items-start gap-3">
@@ -912,6 +1002,7 @@ export default function SearchPage() {
                               <div className="flex flex-wrap gap-2">
                                 <Badge variant="outline">{selectedBrowseChannel?.channel_title || video.channel_title}</Badge>
                                 {video.published_at ? <Badge variant="secondary">{formatRelativeShort(video.published_at)}</Badge> : null}
+                                {durationLabel ? <Badge variant="secondary">{durationLabel}</Badge> : null}
                                 <Badge variant="secondary">◉{GENERATE_BLUEPRINT_COST}</Badge>
                                 {video.already_exists_for_user ? (
                                   <Badge variant="outline">In your feed</Badge>

@@ -11,6 +11,7 @@ export type YouTubeSearchResult = {
   channel_url: string;
   thumbnail_url: string | null;
   published_at: string | null;
+  duration_seconds: number | null;
   already_exists_for_user: boolean;
   existing_blueprint_id: string | null;
   existing_feed_item_id: string | null;
@@ -97,6 +98,7 @@ export function normalizeYouTubeSearchResult(raw: unknown): YouTubeSearchResult 
     channel_url: String(row.channel_url || `https://www.youtube.com/channel/${channelId}`).trim(),
     thumbnail_url: row.thumbnail_url ? String(row.thumbnail_url) : null,
     published_at: row.published_at ? String(row.published_at) : null,
+    duration_seconds: Number.isFinite(Number(row.duration_seconds)) ? Math.max(0, Math.floor(Number(row.duration_seconds))) : null,
     already_exists_for_user: Boolean(row.already_exists_for_user),
     existing_blueprint_id: row.existing_blueprint_id ? String(row.existing_blueprint_id) : null,
     existing_feed_item_id: row.existing_feed_item_id ? String(row.existing_feed_item_id) : null,

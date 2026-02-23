@@ -8,6 +8,7 @@ export type YouTubeChannelSearchResult = {
   description: string;
   thumbnail_url: string | null;
   published_at: string | null;
+  subscriber_count: number | null;
 };
 
 export type YouTubeChannelSearchPage = {
@@ -69,6 +70,9 @@ export function normalizeYouTubeChannelSearchResult(raw: unknown): YouTubeChanne
     description: String(row.description || '').trim(),
     thumbnail_url: row.thumbnail_url ? String(row.thumbnail_url) : null,
     published_at: row.published_at ? String(row.published_at) : null,
+    subscriber_count: Number.isFinite(Number(row.subscriber_count))
+      ? Math.max(0, Math.floor(Number(row.subscriber_count)))
+      : null,
   };
 }
 
