@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Tag, Layers, Check, Sparkles, Grid3X3, Users } from 'lucide-react';
+import { Tag, Layers, Sparkles, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { usePopularInventoryTags } from '@/hooks/usePopularInventoryTags';
 import { useTagFollows } from '@/hooks/useTagFollows';
@@ -21,9 +21,6 @@ import { matchesChannelByTags, resolveChannelLabelForBlueprint } from '@/lib/cha
 import { normalizeTag } from '@/lib/tagging';
 import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
 import { logOncePerSession, logP3Event } from '@/lib/telemetry';
-import { getChannelIcon } from '@/lib/channelIcons';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 import { useMyFeed } from '@/hooks/useMyFeed';
 import { extractYouTubeVideoId } from '@/lib/sourceIdentity';
@@ -100,7 +97,6 @@ type FeedSort = (typeof SORT_TABS)[number]['value'];
 const SCOPE_FOR_YOU = 'for-you';
 const SCOPE_YOUR_CHANNELS = 'your-channels';
 const SCOPE_ALL = 'all';
-const SCOPE_VIEW = 'view';
 
 function getForYouErrorMessage(error: unknown, fallback: string) {
   if (error instanceof ApiRequestError) {
@@ -132,26 +128,21 @@ export default function Wall() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [viewPickerOpen, setViewPickerOpen] = useState(false);
   const [selectedTagSlug, setSelectedTagSlug] = useState<string | null>(null);
   const [optimisticUnlockingSourceItemIds, setOptimisticUnlockingSourceItemIds] = useState<Record<string, boolean>>({});
   const { followedTags } = useTagFollows();
 
-  const viewChannelOptions = useMemo(
-    () =>
-      CHANNELS_CATALOG
-        .filter((channel) => channel.status === 'active')
-        .sort((a, b) => a.priority - b.priority)
-        .map((channel) => ({
-          value: channel.slug,
-          label: `b/${channel.slug}`,
-          icon: getChannelIcon(channel.icon),
-        })),
-    [],
-  );
   const scopeValues = useMemo(
-    () => new Set([SCOPE_FOR_YOU, SCOPE_YOUR_CHANNELS, SCOPE_ALL, ...viewChannelOptions.map((option) => option.value)]),
-    [viewChannelOptions],
+    () =>
+      new Set([
+        SCOPE_FOR_YOU,
+        SCOPE_YOUR_CHANNELS,
+        SCOPE_ALL,
+        ...CHANNELS_CATALOG
+          .filter((channel) => channel.status === 'active')
+          .map((channel) => channel.slug),
+      ]),
+    [],
   );
   const scopeParam = (searchParams.get('scope') || '').trim();
   const sortParam = (searchParams.get('sort') || '').trim();
@@ -168,9 +159,7 @@ export default function Wall() {
     ? SCOPE_FOR_YOU
     : isYourChannelsScope
       ? SCOPE_YOUR_CHANNELS
-      : effectiveScope === SCOPE_ALL
-        ? SCOPE_ALL
-        : SCOPE_VIEW;
+      : SCOPE_ALL;
 
   const updateSearchParams = (updates: { scope?: string; sort?: FeedSort }) => {
     const next = new URLSearchParams(searchParams);
@@ -190,7 +179,6 @@ export default function Wall() {
       scope,
       sort: nextSort,
     });
-    setViewPickerOpen(false);
 
     logP3Event({
       eventName: 'wall_scope_selected',
@@ -200,14 +188,6 @@ export default function Wall() {
         scope,
       },
     });
-  };
-
-  const handleLaneSelect = (lane: string) => {
-    if (lane === SCOPE_VIEW) {
-      setViewPickerOpen(true);
-      return;
-    }
-    handleScopeSelect(lane);
   };
 
   const { data: popularTags = [] } = usePopularInventoryTags(6);
@@ -812,22 +792,16 @@ export default function Wall() {
   };
 
   const showZeroJoinYourChannelsCta = !!user && isYourChannelsScope && joinedCuratedCount === 0;
-  const selectedViewChannel = useMemo(
-    () => (activeLane === SCOPE_VIEW ? viewChannelOptions.find((option) => option.value === effectiveScope) || null : null),
-    [activeLane, effectiveScope, viewChannelOptions],
-  );
   const scopeLaneButtons = useMemo(
     () =>
       user
         ? [
             { value: SCOPE_FOR_YOU, label: 'For You', icon: Sparkles },
             { value: SCOPE_YOUR_CHANNELS, label: 'Joined', icon: Users },
-            { value: SCOPE_ALL, label: 'All', icon: Grid3X3 },
-            { value: SCOPE_VIEW, label: 'View', icon: Tag },
+            { value: SCOPE_ALL, label: 'All', icon: Layers },
           ]
         : [
-            { value: SCOPE_ALL, label: 'All', icon: Grid3X3 },
-            { value: SCOPE_VIEW, label: 'View', icon: Tag },
+            { value: SCOPE_ALL, label: 'All', icon: Layers },
           ],
     [user],
   );
@@ -896,8 +870,8 @@ export default function Wall() {
         )}
 
         <div className="space-y-3">
-          <div className="px-3 sm:px-4 flex flex-col gap-2">
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="px-3 sm:px-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="inline-flex rounded-md bg-muted/40 p-0.5">
                 {scopeLaneButtons.map((lane) => {
                   const LaneIcon = lane.icon;
@@ -907,7 +881,7 @@ export default function Wall() {
                       key={lane.value}
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleLaneSelect(lane.value)}
+                      onClick={() => handleScopeSelect(lane.value)}
                       className={cn(
                         'h-8 rounded-[6px] px-2.5 text-xs sm:text-sm',
                         isActive
@@ -922,67 +896,19 @@ export default function Wall() {
                 })}
               </div>
 
-              {activeLane === SCOPE_VIEW && selectedViewChannel ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 rounded-[6px] px-2.5 text-xs sm:text-sm"
-                  onClick={() => setViewPickerOpen(true)}
-                >
-                  {selectedViewChannel.icon && <selectedViewChannel.icon className="mr-1.5 h-3.5 w-3.5" />}
-                  {selectedViewChannel.label}
-                </Button>
+              {!isForYouScope ? (
+                <Tabs value={feedSort} onValueChange={(v) => updateSearchParams({ sort: v as FeedSort })}>
+                  <TabsList className="h-9 w-full sm:w-fit rounded-md bg-muted/40 p-0.5">
+                    {SORT_TABS.map((tab) => (
+                      <TabsTrigger key={tab.value} value={tab.value} className="flex-1 sm:flex-none">
+                        {tab.label}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                </Tabs>
               ) : null}
             </div>
-
-            {!isForYouScope ? (
-              <Tabs value={feedSort} onValueChange={(v) => updateSearchParams({ sort: v as FeedSort })}>
-                <TabsList className="h-9 w-full sm:w-fit rounded-md bg-muted/40 p-0.5">
-                  {SORT_TABS.map((tab) => (
-                    <TabsTrigger key={tab.value} value={tab.value} className="flex-1 sm:flex-none">
-                      {tab.label}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </Tabs>
-            ) : null}
           </div>
-
-          <Sheet open={viewPickerOpen} onOpenChange={setViewPickerOpen}>
-            <SheetContent side="bottom" className="h-[72vh] overflow-hidden px-0">
-              <SheetHeader className="px-4 pb-2">
-                <SheetTitle>Select channel view</SheetTitle>
-                <SheetDescription>Pick any channel to open its Home lane.</SheetDescription>
-              </SheetHeader>
-              <div className="px-4 pb-4">
-                <Command className="rounded-lg border">
-                  <CommandInput placeholder="Search channels..." />
-                  <CommandList className="max-h-[54vh]">
-                    <CommandEmpty>No channels found.</CommandEmpty>
-                    <CommandGroup>
-                      {viewChannelOptions.map((option) => (
-                        <CommandItem
-                          key={option.value}
-                          value={`${option.label} ${option.value}`}
-                          onSelect={() => handleScopeSelect(option.value)}
-                          className="flex items-center gap-2"
-                        >
-                          <option.icon className="h-4 w-4 text-muted-foreground" />
-                          <span className="truncate">{option.label}</span>
-                          <Check
-                            className={cn(
-                              'ml-auto h-4 w-4',
-                              effectiveScope === option.value ? 'opacity-100' : 'opacity-0',
-                            )}
-                          />
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </div>
-            </SheetContent>
-          </Sheet>
 
           <div className="mt-0">
             {!isForYouScope && selectedTagSlug && (
