@@ -116,7 +116,7 @@ export default function Auth() {
             <div className="w-9 h-9 rounded-xl border border-primary/25 bg-gradient-to-br from-primary/90 to-primary/60 flex items-center justify-center">
               <BookOpen className="h-4 w-4 text-primary-foreground" />
             </div>
-            <span className="text-2xl font-bold">Bleup</span>
+            <span className="text-2xl font-bold">Blęup</span>
           </div>
           <CardTitle>Welcome</CardTitle>
           <CardDescription>
