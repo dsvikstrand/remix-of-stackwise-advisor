@@ -8,6 +8,7 @@ import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
 import { getChannelIcon } from '@/lib/channelIcons';
 import { resolveEffectiveBanner } from '@/lib/bannerResolver';
 import { getHotnessView } from '@/lib/hotness';
+import { getChannelColorView } from '@/lib/channelColors';
 
 type WallBlueprintCardTag = {
   key: string;
@@ -66,6 +67,7 @@ export function WallBlueprintCard({
     likes: likesCount,
     comments: commentsCount,
   });
+  const channelColors = getChannelColorView(channelSlug);
 
   return (
     <div
@@ -125,7 +127,7 @@ export function WallBlueprintCard({
           <div className="flex items-center justify-between gap-2 pt-1 text-xs text-muted-foreground">
             <div className="flex items-center gap-1.5">
               <span
-                className={`inline-flex h-7 items-center rounded-full border px-2 text-[11px] font-medium tracking-wide ${hotness.badgeClassName}`}
+                className={`inline-flex h-7 items-center rounded-full border px-2 text-[11px] font-medium tracking-wide ${channelColors.badgeClassName}`}
                 aria-label={`Hotness tier ${hotness.tierName}`}
               >
                 {hotness.label}
@@ -133,7 +135,7 @@ export function WallBlueprintCard({
               <Button
                 variant="ghost"
                 size="sm"
-                className={`h-7 w-7 rounded-full border p-0 ${hotness.surfaceClassName} ${userLiked ? 'text-red-500 hover:text-red-600' : 'text-foreground/80 hover:text-foreground'}`}
+                className={`h-7 w-7 rounded-full border p-0 ${channelColors.surfaceClassName} ${userLiked ? 'text-red-500 hover:text-red-600' : 'text-foreground/80 hover:text-foreground'}`}
                 onClick={onLike}
               >
                 <Heart className={`h-4 w-4 ${userLiked ? 'fill-current' : ''}`} />
@@ -143,7 +145,7 @@ export function WallBlueprintCard({
               <Link
                 to={`/b/${channelSlug}`}
                 onClick={(event) => event.stopPropagation()}
-                className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2 text-[11px] font-semibold tracking-wide ${hotness.surfaceClassName} text-foreground/80 hover:text-foreground`}
+                className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2 text-[11px] font-semibold tracking-wide ${channelColors.surfaceClassName} text-foreground/80 hover:text-foreground`}
               >
                 <ChannelIcon className="h-3.5 w-3.5" />
                 {channelLabel}

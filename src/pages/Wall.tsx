@@ -98,7 +98,6 @@ const SORT_TABS = [
 ] as const;
 
 type FeedSort = (typeof SORT_TABS)[number]['value'];
-type ForYouFilter = 'all' | 'locked' | 'open';
 
 const SCOPE_FOR_YOU = 'for-you';
 const SCOPE_YOUR_CHANNELS = 'your-channels';
@@ -192,7 +191,6 @@ export default function Wall() {
   const scopeValues = useMemo(() => new Set(scopeOptions.map((option) => option.value)), [scopeOptions]);
   const scopeParam = (searchParams.get('scope') || '').trim();
   const sortParam = (searchParams.get('sort') || '').trim();
-  const forYouFilterParam = (searchParams.get('state') || '').trim();
   const defaultScope = user ? SCOPE_FOR_YOU : SCOPE_ALL;
   const feedScope = scopeValues.has(scopeParam) ? scopeParam : defaultScope;
   const requestedSort: FeedSort = sortParam === 'trending' ? 'trending' : 'latest';
@@ -202,16 +200,11 @@ export default function Wall() {
   const isForYouScope = effectiveScope === SCOPE_FOR_YOU && !!user;
   const isYourChannelsScope = effectiveScope === SCOPE_YOUR_CHANNELS && !!user;
   const feedSort: FeedSort = isForYouScope ? 'latest' : requestedSort;
-  const forYouFilter: ForYouFilter = forYouFilterParam === 'locked' || forYouFilterParam === 'open'
-    ? forYouFilterParam
-    : 'all';
 
-  const updateSearchParams = (updates: { scope?: string; sort?: FeedSort; state?: ForYouFilter | null }) => {
+  const updateSearchParams = (updates: { scope?: string; sort?: FeedSort }) => {
     const next = new URLSearchParams(searchParams);
     if (updates.scope) next.set('scope', updates.scope);
     if (updates.sort) next.set('sort', updates.sort);
-    if (updates.state === null) next.delete('state');
-    else if (updates.state) next.set('state', updates.state);
     setSearchParams(next, { replace: true });
   };
 
@@ -225,7 +218,6 @@ export default function Wall() {
     updateSearchParams({
       scope,
       sort: nextSort,
-      state: scope === SCOPE_FOR_YOU ? forYouFilter : null,
     });
     setScopeOpen(false);
 
@@ -842,13 +834,6 @@ export default function Wall() {
 
   const showZeroJoinYourChannelsCta = !!user && isYourChannelsScope && joinedCuratedCount === 0;
 
-  const filteredForYouStream = useMemo(() => {
-    if (!isForYouScope) return forYouStream;
-    if (forYouFilter === 'locked') return forYouStream.filter((item) => item.kind === 'locked');
-    if (forYouFilter === 'open') return forYouStream.filter((item) => item.kind === 'blueprint');
-    return forYouStream;
-  }, [forYouFilter, forYouStream, isForYouScope]);
-
   useEffect(() => {
     if (!showZeroJoinYourChannelsCta) return;
     logOncePerSession('p3_wall_zero_join_cta_impression', () => {
@@ -1004,15 +989,7 @@ export default function Wall() {
               </Popover>
             )}
 
-            {isForYouScope ? (
-              <Tabs value={forYouFilter} onValueChange={(value) => updateSearchParams({ state: value as ForYouFilter })}>
-                <TabsList className="h-9 w-full sm:w-fit rounded-md bg-muted/40 p-0.5">
-                  <TabsTrigger value="all" className="flex-1 sm:flex-none">All</TabsTrigger>
-                  <TabsTrigger value="locked" className="flex-1 sm:flex-none">Locked</TabsTrigger>
-                  <TabsTrigger value="open" className="flex-1 sm:flex-none">Open</TabsTrigger>
-                </TabsList>
-              </Tabs>
-            ) : (
+            {!isForYouScope ? (
               <Tabs value={feedSort} onValueChange={(v) => updateSearchParams({ sort: v as FeedSort })}>
                 <TabsList className="h-9 w-full sm:w-fit rounded-md bg-muted/40 p-0.5">
                   {SORT_TABS.map((tab) => (
@@ -1022,7 +999,7 @@ export default function Wall() {
                   ))}
                 </TabsList>
               </Tabs>
-            )}
+            ) : null}
           </div>
 
           <div className="mt-0">
@@ -1082,9 +1059,9 @@ export default function Wall() {
                     Could not load For You right now. Please refresh and try again.
                   </CardContent>
                 </Card>
-              ) : filteredForYouStream.length > 0 ? (
+              ) : forYouStream.length > 0 ? (
                 <div className="divide-y divide-border/40">
-                  {filteredForYouStream.map((item) => {
+                  {forYouStream.map((item) => {
                     if (item.kind === 'locked') {
                       return (
                         <ForYouLockedSourceCard
