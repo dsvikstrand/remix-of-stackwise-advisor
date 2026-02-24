@@ -251,7 +251,7 @@ export function useCreateInventory() {
         ...(input.generationControls ? { generation_controls: input.generationControls } : {}),
       });
 
-      // Lovable Cloud DB schema may lag behind code. If the column is missing, retry without it.
+      // Some remote schemas may lag behind code. If the column is missing, retry without it.
       if (insertRes.error && input.generationControls && isMissingColumnError(insertRes.error, 'generation_controls')) {
         insertRes = await tryInsert(basePayload);
       }
