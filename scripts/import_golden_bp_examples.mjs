@@ -88,6 +88,7 @@ function usage() {
 
 function stripMd(line) {
   return String(line || '')
+    .replace(/!\[[^\]]*]\([^)]+\)/g, '')
     .replace(/^\s{0,3}#{1,6}\s+/, '')
     .replace(/^\s*(?:[-*+]\s+|\d+\.\s+|\d+\)\s+)/, '')
     .replace(/`/g, '')
@@ -160,6 +161,7 @@ function parseStepsFromMarkdown(markdown) {
 
     const trimmed = line.trim();
     if (!trimmed) continue;
+    if (/^\s*!\[[^\]]*]\([^)]+\)\s*$/.test(trimmed)) continue;
     if (/^\s*#\s+/.test(trimmed)) continue;
     if (/^\s*###\s+/.test(trimmed)) {
       current.paragraphs.push(stripMd(trimmed));

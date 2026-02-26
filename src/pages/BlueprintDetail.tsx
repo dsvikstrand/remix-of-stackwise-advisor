@@ -25,6 +25,7 @@ import { resolveEffectiveBanner } from '@/lib/bannerResolver';
 type ItemValue = string | { name?: string; context?: string };
 type StepItem = { category?: string; name?: string; context?: string };
 type BlueprintStep = { id?: string; title?: string; description?: string | null; items?: StepItem[] };
+type RenderStep = { id?: string; title: string; description: string; items: StepItem[] };
 
 function formatItem(item: ItemValue) {
   if (typeof item === 'string') return item;
@@ -51,6 +52,24 @@ function parseSteps(steps: Json) {
   if (!steps || typeof steps !== 'object') return [] as BlueprintStep[];
   if (!Array.isArray(steps)) return [] as BlueprintStep[];
   return steps.filter((step): step is BlueprintStep => !!step && typeof step === 'object');
+}
+
+function stripMarkdownImageTokens(text: string) {
+  return text.replace(/!\[[^\]]*]\([^)]+\)/g, '').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function normalizeGoldenStep(step: BlueprintStep, fallbackIndex: number): RenderStep {
+  const title = (step.title || '').trim() || `Section ${fallbackIndex + 1}`;
+  const description = stripMarkdownImageTokens(String(step.description || '').trim());
+  const items = Array.isArray(step.items)
+    ? step.items
+        .map((item) => ({
+          ...item,
+          name: stripMarkdownImageTokens(String(item?.name || '').trim()),
+        }))
+        .filter((item) => item.name || item.context || item.category)
+    : [];
+  return { id: step.id, title, description, items };
 }
 
 function isGoldenBlueprintExample(selectedItems: Json | null | undefined) {
@@ -269,9 +288,43 @@ export default function BlueprintDetail() {
     bannerUrl: blueprint?.banner_url || null,
     sourceThumbnailUrl: sourceChannel?.thumbnailUrl || null,
   });
-  const leadingGoldenSections = isGoldenExample ? steps.slice(0, 2) : [];
-  const trailingGoldenSections = isGoldenExample ? steps.slice(2) : [];
+  const goldenSections = isGoldenExample
+    ? steps.map((step, index) => normalizeGoldenStep(step, index))
+    : [];
+  const goldenLeadSections = goldenSections.slice(0, 1);
+  const goldenRemainderSections = goldenSections.slice(1);
+  const goldenMidSplit = Math.ceil(goldenRemainderSections.length / 2);
+  const goldenMiddleSections = goldenRemainderSections.slice(0, goldenMidSplit);
+  const goldenTailSections = goldenRemainderSections.slice(goldenMidSplit);
   const selectedItemGroups = blueprint ? parseSelectedItems(blueprint.selected_items) : [];
+
+  const renderGoldenGroup = (group: RenderStep[]) => {
+    if (group.length === 0) return null;
+    return (
+      <div className="rounded-md border border-border/40 px-3 py-3 space-y-0">
+        {group.map((step, index) => (
+          <div
+            key={step.id || `${step.title}-${index}`}
+            className={index === 0 ? 'space-y-1.5' : 'mt-3 border-t border-border/30 pt-3 space-y-1.5'}
+          >
+            <p className="text-sm font-medium">{step.title}</p>
+            {step.description ? (
+              <p className="text-sm text-muted-foreground whitespace-pre-line">{step.description}</p>
+            ) : null}
+            {step.items.length > 0 ? (
+              <ul className="space-y-1 list-disc pl-5">
+                {step.items.map((item, itemIndex) => (
+                  <li key={`${step.id || index}-${itemIndex}`} className="text-sm leading-snug">
+                    {formatStepItem(item)}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   const renderBanner = effectiveBannerUrl ? (
     <button
@@ -392,51 +445,10 @@ export default function BlueprintDetail() {
 
               {isGoldenExample ? (
                 <>
-                  {leadingGoldenSections.length > 0 && (
-                    <div className="space-y-2">
-                      {leadingGoldenSections.map((step, index) => (
-                        <div key={step.id || `${step.title}-${index}`} className="rounded-md border border-border/40 px-3 py-2.5">
-                          <p className="text-sm font-medium">{step.title?.trim() ? step.title : `Section ${index + 1}`}</p>
-                          {step.description && (
-                            <p className="text-sm text-muted-foreground mt-1 whitespace-pre-line">{step.description}</p>
-                          )}
-                          {Array.isArray(step.items) && step.items.length > 0 ? (
-                            <ul className="mt-1.5 space-y-1 list-disc pl-5">
-                              {step.items.map((item, itemIndex) => (
-                                <li key={`${step.id || index}-${itemIndex}`} className="text-sm leading-snug">
-                                  {formatStepItem(item)}
-                                </li>
-                              ))}
-                            </ul>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
+                  {renderGoldenGroup(goldenLeadSections)}
                   {renderBanner}
-
-                  {trailingGoldenSections.length > 0 && (
-                    <div className="space-y-2">
-                      {trailingGoldenSections.map((step, index) => (
-                        <div key={step.id || `${step.title}-${index}`} className="rounded-md border border-border/40 px-3 py-2.5">
-                          <p className="text-sm font-medium">{step.title?.trim() ? step.title : `Section ${index + 3}`}</p>
-                          {step.description && (
-                            <p className="text-sm text-muted-foreground mt-1 whitespace-pre-line">{step.description}</p>
-                          )}
-                          {Array.isArray(step.items) && step.items.length > 0 ? (
-                            <ul className="mt-1.5 space-y-1 list-disc pl-5">
-                              {step.items.map((item, itemIndex) => (
-                                <li key={`${step.id || index}-${itemIndex}`} className="text-sm leading-snug">
-                                  {formatStepItem(item)}
-                                </li>
-                              ))}
-                            </ul>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  {renderGoldenGroup(goldenMiddleSections)}
+                  {renderGoldenGroup(goldenTailSections)}
                 </>
               ) : (
                 <>
