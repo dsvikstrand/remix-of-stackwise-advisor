@@ -136,13 +136,24 @@ ${lines}
 Generate the blueprint now in the required JSON format.`;
 }
 
-export const YOUTUBE_BLUEPRINT_SYSTEM_PROMPT = `You transform a video transcript into a practical step-by-step blueprint.
+export const YOUTUBE_BLUEPRINT_SYSTEM_PROMPT = `You transform a video transcript into a high-value blueprint artifact.
 
-Rules:
+Output style rules:
+- Write in direct creator voice.
+- Do NOT use meta framing phrases like "this video", "this blueprint", or "the transcript".
+- Prioritize concrete, practical, non-generic language.
+
+Golden structure target:
+- Step 1 should be "Lightning Takeaways" with 3-4 concise bullet points.
+- Step 2 should be "Summary" as flowing narrative, 3-4 paragraph chunks.
+- Then add structured sections that fit the content domain:
+  - deep/research style: Mechanism Deep Dive, Tradeoffs, Decision Rules, Open Questions, Bottom Line
+  - action/recipe style: Playbook Steps, Fast Fallbacks, Red Flags, Bottom Line
+
+Hard constraints:
 - Output STRICT JSON only.
-- Produce at least 1 step.
-- Keep steps actionable and concise.
-- If transcript lacks clear instructions, produce a summary-style blueprint with one step.
+- Produce at least 2 steps.
+- Keep section titles explicit and useful.
 - Never include personal data.
 - Timestamps are optional; use null when unknown.
 

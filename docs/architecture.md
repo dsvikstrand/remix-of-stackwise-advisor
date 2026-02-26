@@ -50,6 +50,7 @@
     - subscription notice details popup is intentionally minimal (relative time + unsubscribe only).
     - `My Feed` header includes both `Add Subscription` and `Manage subscriptions` entrypoints.
   - Blueprint detail in `src/pages/BlueprintDetail.tsx` now prefers source-channel attribution for imported YouTube blueprints and hides edit CTA in default MVP UI.
+  - Blueprint detail renders `Summary` as swipeable slides when content is chunkable (3-4 chunks) and keeps non-summary sections in standard text blocks.
   - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: popup channel search + subscribe + active-list `Unsubscribe`; aggregate health summary hidden for user clarity; row avatars shown when available).
     - per-row `Auto unlock` toggle (`auto_unlock_enabled`) controls whether that subscription participates in new-video auto unlock attempts.
   - Source page surface in `src/pages/SourcePage.tsx` at `/s/:platform/:externalId`:
@@ -171,7 +172,8 @@
    - if auto-attempt fails due temporary credit availability, backend enqueues bounded retry jobs (`source_auto_unlock_retry`) before falling back to manual unlock-only state.
    - unlock cards can be activated by one user; successful generation fans out shared blueprint linkage to subscribed users for that source item.
    - source unlock pricing uses `1 / active_subscribers` (clamped and rounded), with hold -> settle/refund ledger flow.
-   - auto-ingest path enables review generation by default.
+  - auto-ingest path enables review generation by default.
+  - YouTube generation now normalizes output into Golden BP v1 section structure by default (`Lightning Takeaways`, flowing `Summary`, then domain-adapted structured sections) and writes additive metadata markers (`selected_items.bp_style = golden_v1`, `bp_origin = youtube_pipeline`).
    - YouTube source flows use thumbnail-first banner assignment (`blueprints.banner_url` from source thumbnail) and bypass auto-banner enqueue.
    - auto-banner mode remains env-controlled for compatibility/non-source paths:
      - `off`: no auto banner processing.

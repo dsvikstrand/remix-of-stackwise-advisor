@@ -97,6 +97,7 @@ import {
   type BannerEffectiveSource,
 } from './services/autoBannerPolicy';
 import { runAutoChannelPipeline } from './services/autoChannelPipeline';
+import { normalizeYouTubeDraftToGoldenV1 } from './services/goldenBlueprintFormat';
 import type {
   BlueprintAnalysisRequest,
   BlueprintGenerationRequest,
@@ -3154,12 +3155,30 @@ async function ensureTagId(db: ReturnType<typeof createClient>, userId: string, 
 }
 
 function mapDraftStepsForBlueprint(steps: Array<{ name: string; notes: string }>) {
-  return steps.map((step, index) => ({
-    id: `yt-sub-step-${index + 1}`,
-    title: step.name,
-    description: step.notes,
-    items: [],
-  }));
+  return steps.map((step, index) => {
+    const rawLines = String(step.notes || '').split(/\r?\n/);
+    const bulletItems = rawLines
+      .map((line) => line.trim())
+      .filter((line) => /^([-*•]|\d+[.)])\s+/.test(line))
+      .map((line) => line.replace(/^([-*•]|\d+[.)])\s+/, '').trim())
+      .filter(Boolean);
+
+    const descriptionLines = rawLines
+      .map((line) => line.replace(/\s+$/g, ''))
+      .filter((line) => !/^([-*•]|\d+[.)])\s+/.test(line.trim()));
+
+    const description = descriptionLines
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
+    return {
+      id: `yt-sub-step-${index + 1}`,
+      title: step.name,
+      description: description || null,
+      items: bulletItems.map((item) => ({ name: item })),
+    };
+  });
 }
 
 async function upsertSourceItemFromVideo(db: ReturnType<typeof createClient>, input: {
@@ -3939,7 +3958,13 @@ async function createBlueprintFromVideo(db: ReturnType<typeof createClient>, inp
   userId: string;
   videoUrl: string;
   videoId: string;
-  sourceTag: 'subscription_auto' | 'subscription_accept' | 'source_page_video_library';
+  sourceTag:
+    | 'subscription_auto'
+    | 'subscription_accept'
+    | 'source_page_video_library'
+    | 'youtube_search_direct'
+    | 'source_unlock_generation'
+    | 'manual_refresh_generate';
   sourceItemId?: string | null;
   subscriptionId?: string | null;
 }) {
@@ -3966,6 +3991,7 @@ async function createBlueprintFromVideo(db: ReturnType<typeof createClient>, inp
     generateBanner: false,
     authToken: '',
   });
+  const goldenFormat = normalizeYouTubeDraftToGoldenV1(result.draft);
 
   const { data: blueprint, error: blueprintError } = await db
     .from('blueprints')
@@ -3973,11 +3999,15 @@ async function createBlueprintFromVideo(db: ReturnType<typeof createClient>, inp
       title: result.draft.title,
       creator_user_id: input.userId,
       is_public: false,
-      steps: mapDraftStepsForBlueprint(result.draft.steps),
+      steps: mapDraftStepsForBlueprint(goldenFormat.steps),
       selected_items: {
         source: input.sourceTag,
         run_id: result.run_id,
         video_url: input.videoUrl,
+        bp_style: 'golden_v1',
+        bp_origin: 'youtube_pipeline',
+        bp_domain: goldenFormat.domain,
+        summary_word_count: goldenFormat.summaryWordCount,
       },
       banner_url: sourceThumbnailUrl,
       mix_notes: result.draft.notes || null,

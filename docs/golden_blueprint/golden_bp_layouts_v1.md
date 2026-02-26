@@ -5,6 +5,7 @@
 - Use these as layout scaffolds for generation, not as final prose.
 - Keep placeholders during drafting, then fill from transcript evidence.
 - Do not copy section text between videos; only reuse the structure.
+- Backend YouTube generation now targets this Golden v1 shape by default for new outputs.
 
 ## Global Top Block (Use in all layouts)
 

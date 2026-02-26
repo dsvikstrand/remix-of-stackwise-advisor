@@ -22,6 +22,7 @@ import { getCatalogChannelTagSlugs } from '@/lib/channelPostContext';
 import { normalizeTag } from '@/lib/tagging';
 import { supabase } from '@/integrations/supabase/client';
 import { resolveEffectiveBanner } from '@/lib/bannerResolver';
+import { splitSummaryIntoSlides } from '@/lib/summarySlides';
 
 type ItemValue = string | { name?: string; context?: string };
 type StepItem = { category?: string; name?: string; context?: string };
@@ -79,41 +80,9 @@ function isGoldenBlueprintExample(selectedItems: Json | null | undefined) {
   return source === 'golden_bp_examples_v1' || source === 'golden_bp_examples_v1_prev';
 }
 
-function splitSummarySlides(step: RenderStep) {
-  const text = String(step.description || '').replace(/\s+\n/g, '\n').trim();
-  if (!text) return [] as string[];
-
-  const byParagraph = text
-    .split(/\n{2,}/)
-    .map((chunk) => chunk.trim())
-    .filter(Boolean);
-  if (byParagraph.length >= 3 && byParagraph.length <= 4) return byParagraph;
-  if (byParagraph.length > 4) {
-    const folded = [...byParagraph.slice(0, 3), byParagraph.slice(3).join(' ')]
-      .map((chunk) => chunk.trim())
-      .filter(Boolean);
-    return folded;
-  }
-
-  const sentences = text
-    .split(/(?<=[.!?])\s+/)
-    .map((chunk) => chunk.trim())
-    .filter(Boolean);
-  if (sentences.length <= 2) return [text];
-
-  const targetSlides = Math.min(4, Math.max(3, Math.round(text.length / 280)));
-  const chunkSize = Math.ceil(sentences.length / targetSlides);
-  const grouped = [] as string[];
-  for (let i = 0; i < sentences.length; i += chunkSize) {
-    grouped.push(sentences.slice(i, i + chunkSize).join(' ').trim());
-  }
-
-  const slides = grouped.slice(0, 4);
-  if (slides.length > 4) {
-    slides[3] = `${slides[3]} ${slides.slice(4).join(' ')}`.trim();
-    return slides.slice(0, 4);
-  }
-  return slides;
+function isGoldenV1GeneratedBlueprint(selectedItems: Json | null | undefined) {
+  if (!selectedItems || typeof selectedItems !== 'object' || Array.isArray(selectedItems)) return false;
+  return String((selectedItems as Record<string, unknown>).bp_style || '').trim() === 'golden_v1';
 }
 
 export default function BlueprintDetail() {
@@ -131,6 +100,7 @@ export default function BlueprintDetail() {
   const loggedBlueprintId = useRef<string | null>(null);
   const steps = blueprint ? parseSteps(blueprint.steps) : [];
   const isGoldenExample = isGoldenBlueprintExample(blueprint?.selected_items);
+  const isGoldenV1Generated = isGoldenV1GeneratedBlueprint(blueprint?.selected_items);
   const hasAiReview = !isGoldenExample && Boolean((blueprint?.llm_review || '').trim());
   const [sourceChannel, setSourceChannel] = useState<{
     title: string;
@@ -342,15 +312,16 @@ export default function BlueprintDetail() {
     return (
       <div className="rounded-md border border-border/40 px-3 py-3 space-y-0">
         {group.map((step, index) => {
-          const summarySlides = /^summary$/i.test(step.title) ? splitSummarySlides(step) : [];
-          const useSummarySlider = summarySlides.length > 0;
+          const isSummarySection = /^summary$/i.test(step.title);
+          const summarySlides = isSummarySection ? splitSummaryIntoSlides(step.description) : [];
+          const useSummarySlider = isSummarySection && (summarySlides.length > 1 || isGoldenExample || isGoldenV1Generated);
           return (
             <div
               key={step.id || `${step.title}-${index}`}
               className={index === 0 ? 'space-y-1.5' : 'mt-3 border-t border-border/30 pt-3 space-y-1.5'}
             >
               {useSummarySlider ? (
-                <SummarySlides title={step.title} slides={summarySlides} />
+                <SummarySlides title={step.title} slides={summarySlides.length > 0 ? summarySlides : [step.description]} />
               ) : (
                 <>
                   <p className="text-sm font-medium">{step.title}</p>
@@ -514,9 +485,26 @@ export default function BlueprintDetail() {
                                   {step.title?.trim() ? step.title : `Step ${index + 1}`}
                                 </p>
                               </div>
-                              {step.description && (
-                                <p className="text-xs text-muted-foreground mt-1">{step.description}</p>
-                              )}
+                              {step.description && (() => {
+                                const normalizedSummary = normalizeGoldenStep(step, index);
+                                const summarySlides = /^summary$/i.test(normalizedSummary.title)
+                                  ? splitSummaryIntoSlides(normalizedSummary.description)
+                                  : [];
+                                const useSummarySlider = summarySlides.length > 1 || isGoldenV1Generated;
+                                if (useSummarySlider) {
+                                  return (
+                                    <div className="mt-1">
+                                      <SummarySlides
+                                        title={normalizedSummary.title}
+                                        slides={summarySlides.length > 0 ? summarySlides : [normalizedSummary.description]}
+                                      />
+                                    </div>
+                                  );
+                                }
+                                return (
+                                  <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line">{step.description}</p>
+                                );
+                              })()}
                               {Array.isArray(step.items) && step.items.length > 0 ? (
                                 <div className="mt-1.5 space-y-1.5">
                                   {step.items.map((item, itemIndex) => (
