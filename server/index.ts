@@ -3162,18 +3162,61 @@ async function ensureTagId(db: ReturnType<typeof createClient>, userId: string, 
 }
 
 function mapDraftStepsForBlueprint(steps: Array<{ name: string; notes: string }>) {
+  const knownSectionLabels = [
+    'lightning takeaways',
+    'summary',
+    'mechanism deep dive',
+    'tradeoffs',
+    'decision rules',
+    'open questions',
+    'bottom line',
+    'playbook steps',
+    'fast fallbacks',
+    'red flags',
+    'steps',
+  ];
+  const normalizeLabel = (value: string) => value.toLowerCase().replace(/^#+\s+/, '').replace(/:$/, '').replace(/\s+/g, ' ').trim();
+  const startsWithSectionLabel = (line: string, titleKey: string) => {
+    const normalized = normalizeLabel(line);
+    for (const label of knownSectionLabels) {
+      if (label === titleKey) continue;
+      if (
+        normalized === label
+        || normalized.startsWith(`${label}:`)
+        || normalized.startsWith(`${label} `)
+        || normalized.startsWith(`${label}(`)
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+  const stripHeadingPrefix = (line: string, title: string, titleKey: string) => {
+    let next = line.trimStart().replace(/^#{1,6}\s+/, '').trim();
+    const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').trim();
+    if (escapedTitle) {
+      next = next.replace(new RegExp(`^(?:${escapedTitle}\\s*[:\\-–—]?\\s*)+`, 'i'), '').trim();
+    }
+    while (normalizeLabel(next) === titleKey) {
+      next = '';
+      break;
+    }
+    return next;
+  };
+
   return steps.map((step, index) => {
     const title = String(step.name || '').trim();
-    const titleKey = title.toLowerCase().replace(/\s+/g, ' ').trim();
+    const titleKey = normalizeLabel(title);
     const isSummaryStep = titleKey === 'summary';
     const rawLines = String(step.notes || '').split(/\r?\n/);
     const cleanedLines = rawLines
       .map((line) => line.replace(/\s+$/g, ''))
-      .map((line) => line.trimStart().replace(/^#{1,6}\s+/, ''))
+      .map((line) => stripHeadingPrefix(line, title, titleKey))
+      .filter((line) => !startsWithSectionLabel(line, titleKey))
       .filter((line) => {
         const trimmed = line.trim();
         if (!trimmed) return false;
-        const normalized = trimmed.toLowerCase().replace(/:$/, '').replace(/\s+/g, ' ').trim();
+        const normalized = normalizeLabel(trimmed);
         return normalized !== titleKey;
       });
 
@@ -3182,8 +3225,8 @@ function mapDraftStepsForBlueprint(steps: Array<{ name: string; notes: string }>
       .filter((line) => /^([-*•]|\d+[.)])\s+/.test(line))
       .map((line) => line.replace(/^([-*•]|\d+[.)])\s+/, '').trim())
       .filter((line) => {
-        const normalized = line.toLowerCase().replace(/:$/, '').replace(/\s+/g, ' ').trim();
-        return normalized !== titleKey;
+        const normalized = normalizeLabel(line);
+        return normalized !== titleKey && !startsWithSectionLabel(line, titleKey);
       })
       .filter(Boolean);
 

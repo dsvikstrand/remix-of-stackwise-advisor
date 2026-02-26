@@ -75,7 +75,14 @@ function stripRepeatedHeadingPrefix(description: string, title: string) {
   if (!cleaned) return '';
   const titleKey = normalizeHeadingKey(title);
   if (!titleKey) return cleaned;
-  const lines = cleaned.split(/\r?\n/);
+  let normalizedText = cleaned;
+  const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').trim();
+  if (escapedTitle) {
+    normalizedText = normalizedText
+      .replace(new RegExp(`^(?:${escapedTitle}\\s*[:\\-–—]?\\s*)+`, 'i'), '')
+      .trim();
+  }
+  const lines = normalizedText.split(/\r?\n/);
   while (lines.length > 0) {
     const head = normalizeHeadingKey(lines[0] || '');
     if (head !== titleKey) break;
@@ -91,7 +98,7 @@ function normalizeGoldenStep(step: BlueprintStep, fallbackIndex: number): Render
     ? step.items
         .map((item) => ({
           ...item,
-          name: stripMarkdownImageTokens(String(item?.name || '').trim()),
+          name: stripRepeatedHeadingPrefix(String(item?.name || '').trim(), title),
         }))
         .filter((item) => item.name || item.context || item.category)
     : [];
@@ -329,7 +336,7 @@ export default function BlueprintDetail() {
     bannerUrl: blueprint?.banner_url || null,
     sourceThumbnailUrl: sourceChannel?.thumbnailUrl || null,
   });
-  const goldenSections = isGoldenExample
+  const goldenSections = useGoldenRender
     ? steps.map((step, index) => normalizeGoldenStep(step, index))
     : [];
   const goldenLeadSections = goldenSections.slice(0, 1);
