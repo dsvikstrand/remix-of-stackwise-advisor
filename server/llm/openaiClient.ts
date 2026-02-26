@@ -102,6 +102,18 @@ function isModelCompatibilityError(error: unknown) {
   );
 }
 
+function logGenerationModelEvent(event: 'primary_success' | 'fallback_success' | 'request_failed', payload: {
+  operation: 'generateInventory' | 'generateBlueprint' | 'generateYouTubeBlueprint';
+  model_used: string;
+  fallback_used: boolean;
+  fallback_model?: string | null;
+  reasoning_effort?: GenerationReasoningEffort | null;
+  status?: number | null;
+  message?: string | null;
+}) {
+  console.info(`[llm_generation_model] ${JSON.stringify({ event, ...payload })}`);
+}
+
 export function createOpenAIClient(): LLMClient {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -140,7 +152,15 @@ export function createOpenAIClient(): LLMClient {
     };
 
     try {
-      return await runOnce(generationModel, true);
+      const response = await runOnce(generationModel, true);
+      logGenerationModelEvent('primary_success', {
+        operation: input.operation,
+        model_used: generationModel,
+        fallback_used: false,
+        fallback_model: generationFallbackModel || null,
+        reasoning_effort: generationReasoningEffort,
+      });
+      return response;
     } catch (error) {
       const shouldFallback =
         generationFallbackModel
@@ -148,13 +168,30 @@ export function createOpenAIClient(): LLMClient {
         && isModelCompatibilityError(error);
 
       if (!shouldFallback) {
+        logGenerationModelEvent('request_failed', {
+          operation: input.operation,
+          model_used: generationModel,
+          fallback_used: false,
+          fallback_model: generationFallbackModel || null,
+          reasoning_effort: generationReasoningEffort,
+          status: Number((error as { status?: unknown })?.status || 0) || null,
+          message: String((error as { message?: unknown })?.message || '').slice(0, 240) || null,
+        });
         throw error;
       }
 
       console.warn(
         `[llm] ${input.operation} primary model ${generationModel} failed; retrying fallback ${generationFallbackModel}`,
       );
-      return runOnce(generationFallbackModel, false);
+      const response = await runOnce(generationFallbackModel, false);
+      logGenerationModelEvent('fallback_success', {
+        operation: input.operation,
+        model_used: generationFallbackModel,
+        fallback_used: true,
+        fallback_model: generationFallbackModel,
+        reasoning_effort: null,
+      });
+      return response;
     }
   }
 
