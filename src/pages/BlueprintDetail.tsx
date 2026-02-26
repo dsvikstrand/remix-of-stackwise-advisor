@@ -70,29 +70,57 @@ function normalizeHeadingKey(value: string) {
     .trim();
 }
 
+function canonicalSectionTitle(rawTitle: string, fallbackIndex: number) {
+  const normalized = normalizeHeadingKey(rawTitle);
+  if (normalized === 'lightning takeaways' || normalized === 'takeaways') return 'Takeaways';
+  if (normalized === 'mechanism deep dive' || normalized === 'deep dive') return 'Deep Dive';
+  if (normalized === 'summary') return 'Summary';
+  if (normalized === 'tradeoffs') return 'Tradeoffs';
+  if (normalized === 'decision rules' || normalized === 'practical rules') return 'Practical Rules';
+  if (normalized === 'open questions') return 'Open Questions';
+  if (normalized === 'bottom line') return 'Bottom Line';
+  const cleaned = (rawTitle || '').trim();
+  return cleaned || `Section ${fallbackIndex + 1}`;
+}
+
+function headingAliasesFor(titleKey: string) {
+  if (titleKey === 'takeaways' || titleKey === 'lightning takeaways') {
+    return ['takeaways', 'lightning takeaways'];
+  }
+  if (titleKey === 'deep dive' || titleKey === 'mechanism deep dive') {
+    return ['deep dive', 'mechanism deep dive'];
+  }
+  if (titleKey === 'practical rules' || titleKey === 'decision rules') {
+    return ['practical rules', 'decision rules'];
+  }
+  return [titleKey];
+}
+
 function stripRepeatedHeadingPrefix(description: string, title: string) {
   const cleaned = stripMarkdownImageTokens(description);
   if (!cleaned) return '';
   const titleKey = normalizeHeadingKey(title);
   if (!titleKey) return cleaned;
+  const aliases = headingAliasesFor(titleKey);
   let normalizedText = cleaned;
-  const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').trim();
-  if (escapedTitle) {
+  for (const alias of aliases) {
+    const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').trim();
+    if (!escaped) continue;
     normalizedText = normalizedText
-      .replace(new RegExp(`^(?:${escapedTitle}\\s*[:\\-–—]?\\s*)+`, 'i'), '')
+      .replace(new RegExp(`^(?:${escaped}\\s*[:\\-–—]?\\s*)+`, 'i'), '')
       .trim();
   }
   const lines = normalizedText.split(/\r?\n/);
   while (lines.length > 0) {
     const head = normalizeHeadingKey(lines[0] || '');
-    if (head !== titleKey) break;
+    if (!aliases.includes(head)) break;
     lines.shift();
   }
   return lines.join('\n').trim();
 }
 
 function normalizeGoldenStep(step: BlueprintStep, fallbackIndex: number): RenderStep {
-  const title = (step.title || '').trim() || `Section ${fallbackIndex + 1}`;
+  const title = canonicalSectionTitle(String(step.title || ''), fallbackIndex);
   const description = stripRepeatedHeadingPrefix(String(step.description || '').trim(), title);
   const items = Array.isArray(step.items)
     ? step.items
@@ -119,7 +147,7 @@ function isGoldenV1GeneratedBlueprint(selectedItems: Json | null | undefined) {
 function hasGoldenStructure(steps: BlueprintStep[]) {
   if (!Array.isArray(steps) || steps.length < 2) return false;
   const titles = steps.map((step) => normalizeHeadingKey(step.title || '')).filter(Boolean);
-  return titles.includes('lightning takeaways') && titles.includes('summary');
+  return (titles.includes('lightning takeaways') || titles.includes('takeaways')) && titles.includes('summary');
 }
 
 export default function BlueprintDetail() {
@@ -339,11 +367,15 @@ export default function BlueprintDetail() {
   const goldenSections = useGoldenRender
     ? steps.map((step, index) => normalizeGoldenStep(step, index))
     : [];
-  const goldenLeadSections = goldenSections.slice(0, 1);
-  const goldenRemainderSections = goldenSections.slice(1);
-  const goldenMidSplit = Math.ceil(goldenRemainderSections.length / 2);
-  const goldenMiddleSections = goldenRemainderSections.slice(0, goldenMidSplit);
-  const goldenTailSections = goldenRemainderSections.slice(goldenMidSplit);
+  const visibleGoldenSections = goldenSections.filter((step) => normalizeHeadingKey(step.title) !== 'open questions');
+  const takeawaysSection = visibleGoldenSections.find((step) => {
+    const key = normalizeHeadingKey(step.title);
+    return key === 'takeaways' || key === 'lightning takeaways';
+  });
+  const summarySection = visibleGoldenSections.find((step) => normalizeHeadingKey(step.title) === 'summary');
+  const deepDiveAndMoreSections = visibleGoldenSections.filter(
+    (step) => step !== takeawaysSection && step !== summarySection,
+  );
   const selectedItemGroups = blueprint ? parseSelectedItems(blueprint.selected_items) : [];
 
   const renderGoldenGroup = (group: RenderStep[]) => {
@@ -507,10 +539,10 @@ export default function BlueprintDetail() {
 
               {useGoldenRender ? (
                 <>
-                  {renderGoldenGroup(goldenLeadSections)}
+                  {renderGoldenGroup(takeawaysSection ? [takeawaysSection] : [])}
                   {renderBanner}
-                  {renderGoldenGroup(goldenMiddleSections)}
-                  {renderGoldenGroup(goldenTailSections)}
+                  {renderGoldenGroup(summarySection ? [summarySection] : [])}
+                  {renderGoldenGroup(deepDiveAndMoreSections)}
                 </>
               ) : (
                 <>

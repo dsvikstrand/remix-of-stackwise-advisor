@@ -79,14 +79,13 @@ describe('goldenBlueprintFormat (backend)', () => {
     const names = result.steps.map((step) => step.name);
 
     expect(result.domain).toBe('deep');
-    expect(names.slice(0, 2)).toEqual(['Lightning Takeaways', 'Summary']);
+    expect(names.slice(0, 2)).toEqual(['Takeaways', 'Summary']);
     expect(names).toEqual([
-      'Lightning Takeaways',
+      'Takeaways',
       'Summary',
-      'Mechanism Deep Dive',
+      'Deep Dive',
       'Tradeoffs',
-      'Decision Rules',
-      'Open Questions',
+      'Practical Rules',
       'Bottom Line',
     ]);
 
@@ -100,6 +99,7 @@ describe('goldenBlueprintFormat (backend)', () => {
       expect(value).not.toBe('mechanism deep dive');
       expect(value).not.toBe('tradeoffs');
       expect(value).not.toBe('decision rules');
+      expect(value).not.toBe('practical rules');
       expect(value).not.toBe('open questions');
       expect(value).not.toBe('bottom line');
     }
@@ -113,9 +113,9 @@ describe('goldenBlueprintFormat (backend)', () => {
     const names = result.steps.map((step) => step.name);
 
     expect(result.domain).toBe('action');
-    expect(names.slice(0, 2)).toEqual(['Lightning Takeaways', 'Summary']);
+    expect(names.slice(0, 2)).toEqual(['Takeaways', 'Summary']);
     expect(names).toEqual([
-      'Lightning Takeaways',
+      'Takeaways',
       'Summary',
       'Playbook Steps',
       'Fast Fallbacks',

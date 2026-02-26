@@ -52,10 +52,13 @@ const META_FRAMING_PATTERNS = [
 
 const GENERIC_SECTION_LABELS = new Set([
   'lightning takeaways',
+  'takeaways',
   'summary',
   'mechanism deep dive',
+  'deep dive',
   'tradeoffs',
   'decision rules',
+  'practical rules',
   'open questions',
   'bottom line',
   'playbook steps',
@@ -281,7 +284,7 @@ function buildDeepSections(draft: YouTubeBlueprintResult) {
 
   return [
     {
-      name: 'Mechanism Deep Dive',
+      name: 'Deep Dive',
       notes: toBulletBlock(
         mechanismBullets.length > 0
           ? mechanismBullets
@@ -303,20 +306,11 @@ function buildDeepSections(draft: YouTubeBlueprintResult) {
       timestamp: null,
     },
     {
-      name: 'Decision Rules',
+      name: 'Practical Rules',
       notes: toBulletBlock([
         'Use this when long-term function and consistency are the main goals.',
         'Pair the protocol with strong fundamentals before expecting outsized gains.',
         'Avoid treating the approach as universal across every context.',
-      ]),
-      timestamp: null,
-    },
-    {
-      name: 'Open Questions',
-      notes: toBulletBlock([
-        'Which contexts show the strongest repeatable lift?',
-        'How much of the result depends on baseline behaviors?',
-        'Where does the approach stop adding incremental value?',
       ]),
       timestamp: null,
     },
@@ -386,7 +380,7 @@ export function normalizeYouTubeDraftToGoldenV1(draft: YouTubeBlueprintResult): 
 
   const steps: YouTubeDraftStep[] = [
     {
-      name: 'Lightning Takeaways',
+      name: 'Takeaways',
       notes: toBulletBlock(takeaways),
       timestamp: null,
     },
