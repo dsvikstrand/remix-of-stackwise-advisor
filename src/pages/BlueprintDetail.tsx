@@ -5,6 +5,7 @@ import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -131,6 +132,78 @@ function normalizeGoldenStep(step: BlueprintStep, fallbackIndex: number): Render
         .filter((item) => item.name || item.context || item.category)
     : [];
   return { id: step.id, title, description, items };
+}
+
+function parseDescriptionBlocks(description: string) {
+  const lines = String(description || '').split(/\r?\n/);
+  const textLines: string[] = [];
+  const bullets: string[] = [];
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      textLines.push('');
+      continue;
+    }
+    const bulletMatch = line.match(/^[-*•]\s+(.+)$/) || line.match(/^\d+[.)]\s+(.+)$/);
+    if (bulletMatch) {
+      bullets.push(bulletMatch[1].trim());
+      continue;
+    }
+    textLines.push(line);
+  }
+
+  return {
+    text: textLines.join('\n').replace(/\n{3,}/g, '\n\n').trim(),
+    bullets,
+  };
+}
+
+function splitEmbeddedGoldenSections(step: RenderStep): RenderStep[] {
+  const description = String(step.description || '').trim();
+  if (!description) return [step];
+  const lines = description.split(/\r?\n/);
+  const sections: RenderStep[] = [];
+  let currentTitle = step.title;
+  let currentLines: string[] = [];
+  let sectionIndex = 0;
+
+  const flush = () => {
+    const nextDescription = currentLines.join('\n').trim();
+    const normalizedTitle = canonicalSectionTitle(currentTitle, sectionIndex);
+    const normalizedKey = normalizeHeadingKey(normalizedTitle);
+    if (!nextDescription && normalizedKey !== 'bottom line') {
+      currentLines = [];
+      return;
+    }
+    sections.push({
+      id: step.id ? `${step.id}-${sectionIndex}` : undefined,
+      title: normalizedTitle,
+      description: nextDescription,
+      items: [],
+    });
+    sectionIndex += 1;
+    currentLines = [];
+  };
+
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    const headingOnlyMatch = trimmed.match(/^(deep dive|mechanism deep dive|tradeoffs|practical rules|decision rules|bottom line|open questions)\s*:?\s*$/i);
+    if (headingOnlyMatch) {
+      if (currentLines.length > 0) flush();
+      currentTitle = canonicalSectionTitle(headingOnlyMatch[1], sectionIndex);
+      continue;
+    }
+    currentLines.push(rawLine);
+  }
+
+  flush();
+
+  if (sections.length <= 1) return [step];
+  if (step.items.length > 0) {
+    sections[0] = { ...sections[0], items: step.items };
+  }
+  return sections;
 }
 
 function isGoldenBlueprintExample(selectedItems: Json | null | undefined) {
@@ -376,6 +449,20 @@ export default function BlueprintDetail() {
   const deepDiveAndMoreSections = visibleGoldenSections.filter(
     (step) => step !== takeawaysSection && step !== summarySection,
   );
+  const deepDiveInteractiveSections = deepDiveAndMoreSections
+    .flatMap((step) => splitEmbeddedGoldenSections(step))
+    .filter((step) => normalizeHeadingKey(step.title) !== 'open questions')
+    .sort((a, b) => {
+      const rank = (value: RenderStep) => {
+        const key = normalizeHeadingKey(value.title);
+        if (key === 'deep dive') return 1;
+        if (key === 'tradeoffs') return 2;
+        if (key === 'practical rules') return 3;
+        if (key === 'bottom line') return 4;
+        return 99;
+      };
+      return rank(a) - rank(b);
+    });
   const selectedItemGroups = blueprint ? parseSelectedItems(blueprint.selected_items) : [];
 
   const renderGoldenGroup = (group: RenderStep[]) => {
@@ -385,6 +472,11 @@ export default function BlueprintDetail() {
         {group.map((step, index) => {
           const isSummarySection = /^summary$/i.test(step.title);
           const summarySlides = isSummarySection ? splitSummaryIntoSlides(step.description) : [];
+          const parsedDescription = parseDescriptionBlocks(step.description);
+          const combinedBullets = [
+            ...parsedDescription.bullets,
+            ...step.items.map((item) => formatStepItem(item)),
+          ];
           const useSummarySlider =
             isSummarySection &&
             step.description.trim().length > 0 &&
@@ -399,14 +491,14 @@ export default function BlueprintDetail() {
               ) : (
                 <>
                   <p className="text-sm font-medium">{step.title}</p>
-                  {step.description ? (
-                    <p className="text-sm text-muted-foreground whitespace-pre-line">{step.description}</p>
+                  {parsedDescription.text ? (
+                    <p className="text-sm text-muted-foreground whitespace-pre-line">{parsedDescription.text}</p>
                   ) : null}
-                  {step.items.length > 0 ? (
+                  {combinedBullets.length > 0 ? (
                     <ul className="space-y-1 list-disc pl-5">
-                      {step.items.map((item, itemIndex) => (
+                      {combinedBullets.map((itemText, itemIndex) => (
                         <li key={`${step.id || index}-${itemIndex}`} className="text-sm leading-snug">
-                          {formatStepItem(item)}
+                          {itemText}
                         </li>
                       ))}
                     </ul>
@@ -416,6 +508,56 @@ export default function BlueprintDetail() {
             </div>
           );
         })}
+      </div>
+    );
+  };
+
+  const renderGoldenInteractiveGroup = (group: RenderStep[]) => {
+    if (group.length === 0) return null;
+    return (
+      <div className="rounded-md border border-border/40 overflow-hidden">
+        <Tabs defaultValue={`golden-section-${0}`} className="w-full">
+          <TabsList className="w-full justify-start rounded-none border-b border-border/40 bg-muted/20 flex-nowrap overflow-x-auto px-3 py-2">
+            {group.map((step, index) => (
+              <TabsTrigger
+                key={step.id || `trigger-${step.title}-${index}`}
+                value={`golden-section-${index}`}
+                className="shrink-0 text-[11px] px-2 py-1 uppercase tracking-wide data-[state=active]:bg-background"
+              >
+                {step.title}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+
+          <div className="p-3 sm:p-4">
+            {group.map((step, index) => {
+              const parsedDescription = parseDescriptionBlocks(step.description);
+              const combinedBullets = [
+                ...parsedDescription.bullets,
+                ...step.items.map((item) => formatStepItem(item)),
+              ];
+              return (
+                <TabsContent key={step.id || `content-${step.title}-${index}`} value={`golden-section-${index}`} className="mt-0 space-y-2.5">
+                  {parsedDescription.text ? (
+                    <p className="text-sm text-muted-foreground whitespace-pre-line">{parsedDescription.text}</p>
+                  ) : null}
+                  {combinedBullets.length > 0 ? (
+                    <ul className="space-y-1 list-disc pl-5">
+                      {combinedBullets.map((itemText, itemIndex) => (
+                        <li key={`${step.id || index}-${itemIndex}`} className="text-sm leading-snug">
+                          {itemText}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {!parsedDescription.text && combinedBullets.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No details yet.</p>
+                  ) : null}
+                </TabsContent>
+              );
+            })}
+          </div>
+        </Tabs>
       </div>
     );
   };
@@ -542,7 +684,7 @@ export default function BlueprintDetail() {
                   {renderGoldenGroup(takeawaysSection ? [takeawaysSection] : [])}
                   {renderBanner}
                   {renderGoldenGroup(summarySection ? [summarySection] : [])}
-                  {renderGoldenGroup(deepDiveAndMoreSections)}
+                  {renderGoldenInteractiveGroup(deepDiveInteractiveSections)}
                 </>
               ) : (
                 <>
