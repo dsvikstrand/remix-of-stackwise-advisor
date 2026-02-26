@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BlueprintAnalysisView } from '@/components/blueprint/BlueprintAnalysisView';
+import { SummarySlides } from '@/components/blueprint/SummarySlides';
 import { useBlueprint, useBlueprintComments, useCreateBlueprintComment, useToggleBlueprintLike } from '@/hooks/useBlueprints';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Heart, Maximize2, Minimize2 } from 'lucide-react';
@@ -74,7 +75,45 @@ function normalizeGoldenStep(step: BlueprintStep, fallbackIndex: number): Render
 
 function isGoldenBlueprintExample(selectedItems: Json | null | undefined) {
   if (!selectedItems || typeof selectedItems !== 'object' || Array.isArray(selectedItems)) return false;
-  return String((selectedItems as Record<string, unknown>).source || '').trim() === 'golden_bp_examples_v1';
+  const source = String((selectedItems as Record<string, unknown>).source || '').trim();
+  return source === 'golden_bp_examples_v1' || source === 'golden_bp_examples_v1_prev';
+}
+
+function splitSummarySlides(step: RenderStep) {
+  const text = String(step.description || '').replace(/\s+\n/g, '\n').trim();
+  if (!text) return [] as string[];
+
+  const byParagraph = text
+    .split(/\n{2,}/)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean);
+  if (byParagraph.length >= 3 && byParagraph.length <= 4) return byParagraph;
+  if (byParagraph.length > 4) {
+    const folded = [...byParagraph.slice(0, 3), byParagraph.slice(3).join(' ')]
+      .map((chunk) => chunk.trim())
+      .filter(Boolean);
+    return folded;
+  }
+
+  const sentences = text
+    .split(/(?<=[.!?])\s+/)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean);
+  if (sentences.length <= 2) return [text];
+
+  const targetSlides = Math.min(4, Math.max(3, Math.round(text.length / 280)));
+  const chunkSize = Math.ceil(sentences.length / targetSlides);
+  const grouped = [] as string[];
+  for (let i = 0; i < sentences.length; i += chunkSize) {
+    grouped.push(sentences.slice(i, i + chunkSize).join(' ').trim());
+  }
+
+  const slides = grouped.slice(0, 4);
+  if (slides.length > 4) {
+    slides[3] = `${slides[3]} ${slides.slice(4).join(' ')}`.trim();
+    return slides.slice(0, 4);
+  }
+  return slides;
 }
 
 export default function BlueprintDetail() {
@@ -302,26 +341,36 @@ export default function BlueprintDetail() {
     if (group.length === 0) return null;
     return (
       <div className="rounded-md border border-border/40 px-3 py-3 space-y-0">
-        {group.map((step, index) => (
-          <div
-            key={step.id || `${step.title}-${index}`}
-            className={index === 0 ? 'space-y-1.5' : 'mt-3 border-t border-border/30 pt-3 space-y-1.5'}
-          >
-            <p className="text-sm font-medium">{step.title}</p>
-            {step.description ? (
-              <p className="text-sm text-muted-foreground whitespace-pre-line">{step.description}</p>
-            ) : null}
-            {step.items.length > 0 ? (
-              <ul className="space-y-1 list-disc pl-5">
-                {step.items.map((item, itemIndex) => (
-                  <li key={`${step.id || index}-${itemIndex}`} className="text-sm leading-snug">
-                    {formatStepItem(item)}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
-        ))}
+        {group.map((step, index) => {
+          const summarySlides = /^summary$/i.test(step.title) ? splitSummarySlides(step) : [];
+          const useSummarySlider = summarySlides.length > 0;
+          return (
+            <div
+              key={step.id || `${step.title}-${index}`}
+              className={index === 0 ? 'space-y-1.5' : 'mt-3 border-t border-border/30 pt-3 space-y-1.5'}
+            >
+              {useSummarySlider ? (
+                <SummarySlides title={step.title} slides={summarySlides} />
+              ) : (
+                <>
+                  <p className="text-sm font-medium">{step.title}</p>
+                  {step.description ? (
+                    <p className="text-sm text-muted-foreground whitespace-pre-line">{step.description}</p>
+                  ) : null}
+                  {step.items.length > 0 ? (
+                    <ul className="space-y-1 list-disc pl-5">
+                      {step.items.map((item, itemIndex) => (
+                        <li key={`${step.id || index}-${itemIndex}`} className="text-sm leading-snug">
+                          {formatStepItem(item)}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </>
+              )}
+            </div>
+          );
+        })}
       </div>
     );
   };

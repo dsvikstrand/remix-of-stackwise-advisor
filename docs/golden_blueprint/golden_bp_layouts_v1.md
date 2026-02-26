@@ -23,6 +23,7 @@
 4. `[Summary style lock]`
 <!-- Rule: Summary is one flowing narrative block (target 220-350 words for deep/research). -->
 <!-- Avoid splitting Summary into mini-sections like Context/Thesis blocks. -->
+<!-- UI note: write Summary in 3-4 paragraph chunks so it can render cleanly as swipe slides. -->
 
 ---
 
