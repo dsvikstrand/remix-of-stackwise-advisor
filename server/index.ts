@@ -3163,16 +3163,37 @@ async function ensureTagId(db: ReturnType<typeof createClient>, userId: string, 
 
 function mapDraftStepsForBlueprint(steps: Array<{ name: string; notes: string }>) {
   return steps.map((step, index) => {
+    const title = String(step.name || '').trim();
+    const titleKey = title.toLowerCase().replace(/\s+/g, ' ').trim();
+    const isSummaryStep = titleKey === 'summary';
     const rawLines = String(step.notes || '').split(/\r?\n/);
-    const bulletItems = rawLines
+    const cleanedLines = rawLines
+      .map((line) => line.replace(/\s+$/g, ''))
+      .map((line) => line.trimStart().replace(/^#{1,6}\s+/, ''))
+      .filter((line) => {
+        const trimmed = line.trim();
+        if (!trimmed) return false;
+        const normalized = trimmed.toLowerCase().replace(/:$/, '').replace(/\s+/g, ' ').trim();
+        return normalized !== titleKey;
+      });
+
+    const bulletItems = cleanedLines
       .map((line) => line.trim())
       .filter((line) => /^([-*•]|\d+[.)])\s+/.test(line))
       .map((line) => line.replace(/^([-*•]|\d+[.)])\s+/, '').trim())
+      .filter((line) => {
+        const normalized = line.toLowerCase().replace(/:$/, '').replace(/\s+/g, ' ').trim();
+        return normalized !== titleKey;
+      })
       .filter(Boolean);
 
-    const descriptionLines = rawLines
-      .map((line) => line.replace(/\s+$/g, ''))
-      .filter((line) => !/^([-*•]|\d+[.)])\s+/.test(line.trim()));
+    const descriptionLines = cleanedLines
+      .filter((line) => !/^([-*•]|\d+[.)])\s+/.test(line.trim()))
+      .concat(
+        isSummaryStep
+          ? bulletItems
+          : [],
+      );
 
     const description = descriptionLines
       .join('\n')
@@ -3181,9 +3202,9 @@ function mapDraftStepsForBlueprint(steps: Array<{ name: string; notes: string }>
 
     return {
       id: `yt-sub-step-${index + 1}`,
-      title: step.name,
+      title,
       description: description || null,
-      items: bulletItems.map((item) => ({ name: item })),
+      items: isSummaryStep ? [] : bulletItems.map((item) => ({ name: item })),
     };
   });
 }

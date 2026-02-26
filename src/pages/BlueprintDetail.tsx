@@ -60,9 +60,33 @@ function stripMarkdownImageTokens(text: string) {
   return text.replace(/!\[[^\]]*]\([^)]+\)/g, '').replace(/\n{3,}/g, '\n\n').trim();
 }
 
+function normalizeHeadingKey(value: string) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/^#+\s+/, '')
+    .replace(/^[-*•]\s+/, '')
+    .replace(/:$/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function stripRepeatedHeadingPrefix(description: string, title: string) {
+  const cleaned = stripMarkdownImageTokens(description);
+  if (!cleaned) return '';
+  const titleKey = normalizeHeadingKey(title);
+  if (!titleKey) return cleaned;
+  const lines = cleaned.split(/\r?\n/);
+  while (lines.length > 0) {
+    const head = normalizeHeadingKey(lines[0] || '');
+    if (head !== titleKey) break;
+    lines.shift();
+  }
+  return lines.join('\n').trim();
+}
+
 function normalizeGoldenStep(step: BlueprintStep, fallbackIndex: number): RenderStep {
   const title = (step.title || '').trim() || `Section ${fallbackIndex + 1}`;
-  const description = stripMarkdownImageTokens(String(step.description || '').trim());
+  const description = stripRepeatedHeadingPrefix(String(step.description || '').trim(), title);
   const items = Array.isArray(step.items)
     ? step.items
         .map((item) => ({
@@ -85,6 +109,12 @@ function isGoldenV1GeneratedBlueprint(selectedItems: Json | null | undefined) {
   return String((selectedItems as Record<string, unknown>).bp_style || '').trim() === 'golden_v1';
 }
 
+function hasGoldenStructure(steps: BlueprintStep[]) {
+  if (!Array.isArray(steps) || steps.length < 2) return false;
+  const titles = steps.map((step) => normalizeHeadingKey(step.title || '')).filter(Boolean);
+  return titles.includes('lightning takeaways') && titles.includes('summary');
+}
+
 export default function BlueprintDetail() {
   const navigate = useNavigate();
   const { blueprintId } = useParams();
@@ -101,7 +131,9 @@ export default function BlueprintDetail() {
   const steps = blueprint ? parseSteps(blueprint.steps) : [];
   const isGoldenExample = isGoldenBlueprintExample(blueprint?.selected_items);
   const isGoldenV1Generated = isGoldenV1GeneratedBlueprint(blueprint?.selected_items);
-  const hasAiReview = !isGoldenExample && Boolean((blueprint?.llm_review || '').trim());
+  const isGoldenStructured = hasGoldenStructure(steps);
+  const useGoldenRender = isGoldenExample || isGoldenV1Generated || isGoldenStructured;
+  const hasAiReview = !useGoldenRender && Boolean((blueprint?.llm_review || '').trim());
   const [sourceChannel, setSourceChannel] = useState<{
     title: string;
     url: string | null;
@@ -314,7 +346,10 @@ export default function BlueprintDetail() {
         {group.map((step, index) => {
           const isSummarySection = /^summary$/i.test(step.title);
           const summarySlides = isSummarySection ? splitSummaryIntoSlides(step.description) : [];
-          const useSummarySlider = isSummarySection && (summarySlides.length > 1 || isGoldenExample || isGoldenV1Generated);
+          const useSummarySlider =
+            isSummarySection &&
+            step.description.trim().length > 0 &&
+            (summarySlides.length > 1 || useGoldenRender);
           return (
             <div
               key={step.id || `${step.title}-${index}`}
@@ -463,7 +498,7 @@ export default function BlueprintDetail() {
                 <p className="text-sm text-muted-foreground whitespace-pre-line">{blueprint.mix_notes}</p>
               )}
 
-              {isGoldenExample ? (
+              {useGoldenRender ? (
                 <>
                   {renderGoldenGroup(goldenLeadSections)}
                   {renderBanner}
@@ -480,17 +515,12 @@ export default function BlueprintDetail() {
                         <div className="mt-2 space-y-2">
                           {steps.map((step, index) => (
                             <div key={step.id || `${step.title}-${index}`} className="rounded-md border border-border/40 px-3 py-2.5">
-                              <div className="flex items-center justify-between gap-2">
-                                <p className="text-sm font-medium">
-                                  {step.title?.trim() ? step.title : `Step ${index + 1}`}
-                                </p>
-                              </div>
                               {step.description && (() => {
                                 const normalizedSummary = normalizeGoldenStep(step, index);
                                 const summarySlides = /^summary$/i.test(normalizedSummary.title)
                                   ? splitSummaryIntoSlides(normalizedSummary.description)
                                   : [];
-                                const useSummarySlider = summarySlides.length > 1 || isGoldenV1Generated;
+                                const useSummarySlider = summarySlides.length > 1;
                                 if (useSummarySlider) {
                                   return (
                                     <div className="mt-1">
@@ -502,9 +532,23 @@ export default function BlueprintDetail() {
                                   );
                                 }
                                 return (
-                                  <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line">{step.description}</p>
+                                  <>
+                                    <div className="flex items-center justify-between gap-2">
+                                      <p className="text-sm font-medium">
+                                        {normalizedSummary.title?.trim() ? normalizedSummary.title : `Step ${index + 1}`}
+                                      </p>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line">{normalizedSummary.description}</p>
+                                  </>
                                 );
                               })()}
+                              {!step.description ? (
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="text-sm font-medium">
+                                    {step.title?.trim() ? step.title : `Step ${index + 1}`}
+                                  </p>
+                                </div>
+                              ) : null}
                               {Array.isArray(step.items) && step.items.length > 0 ? (
                                 <div className="mt-1.5 space-y-1.5">
                                   {step.items.map((item, itemIndex) => (

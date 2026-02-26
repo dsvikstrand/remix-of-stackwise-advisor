@@ -50,6 +50,29 @@ function buildActionDraft(): YouTubeBlueprintResult {
   };
 }
 
+function buildNoisyDraft(): YouTubeBlueprintResult {
+  return {
+    title: 'CoQ10 Basics',
+    description: [
+      'Summary',
+      '- CoQ10 supports mitochondrial ATP production.',
+      '- Benefits are context-dependent and not universal.',
+      '- Medication interactions require caution.',
+    ].join('\n'),
+    notes: [
+      'Mechanism Deep Dive',
+      '- Mitochondrial electron transport support appears central.',
+      '- Oxidative stress load can change perceived benefit.',
+    ].join('\n'),
+    tags: ['supplement', 'research'],
+    steps: [
+      { name: 'Lightning Takeaways', notes: '- Summary\n- Tradeoffs', timestamp: null },
+      { name: 'Summary', notes: 'Summary\n\n- CoQ10 may help when deficiency risk is elevated.', timestamp: null },
+      { name: 'Mechanism Deep Dive', notes: 'Mechanism Deep Dive\n\n- ATP pathway relevance.', timestamp: null },
+    ],
+  };
+}
+
 describe('goldenBlueprintFormat (backend)', () => {
   it('normalizes deep/research drafts to required Golden v1 section order', () => {
     const result = normalizeYouTubeDraftToGoldenV1(buildDeepDraft());
@@ -70,8 +93,19 @@ describe('goldenBlueprintFormat (backend)', () => {
     const takeawayLines = (result.steps[0]?.notes || '').split('\n').filter((line) => line.trim().startsWith('- '));
     expect(takeawayLines.length).toBeGreaterThanOrEqual(3);
     expect(takeawayLines.length).toBeLessThanOrEqual(4);
+    for (const line of takeawayLines) {
+      const value = line.replace(/^- /, '').trim().toLowerCase();
+      expect(value).not.toBe('lightning takeaways');
+      expect(value).not.toBe('summary');
+      expect(value).not.toBe('mechanism deep dive');
+      expect(value).not.toBe('tradeoffs');
+      expect(value).not.toBe('decision rules');
+      expect(value).not.toBe('open questions');
+      expect(value).not.toBe('bottom line');
+    }
     expect((result.steps[1]?.notes || '').toLowerCase()).not.toContain('this video');
     expect((result.steps[1]?.notes || '').toLowerCase()).not.toContain('the transcript');
+    expect((result.steps[1]?.notes || '')).not.toContain('\n- ');
   });
 
   it('normalizes action/recipe drafts to action section set', () => {
@@ -89,5 +123,20 @@ describe('goldenBlueprintFormat (backend)', () => {
       'Bottom Line',
     ]);
   });
-});
 
+  it('filters section-label artifacts from takeaways and summary sources', () => {
+    const result = normalizeYouTubeDraftToGoldenV1(buildNoisyDraft());
+    const takeawayLines = (result.steps[0]?.notes || '').split('\n').filter((line) => line.trim().startsWith('- '));
+    const summaryText = result.steps[1]?.notes || '';
+
+    for (const line of takeawayLines) {
+      const value = line.replace(/^- /, '').trim().toLowerCase();
+      expect(value).not.toBe('lightning takeaways');
+      expect(value).not.toBe('summary');
+      expect(value).not.toBe('mechanism deep dive');
+      expect(value).not.toBe('tradeoffs');
+    }
+    expect(summaryText.toLowerCase()).not.toContain('\nsummary');
+    expect(summaryText.toLowerCase()).not.toContain('mechanism deep dive');
+  });
+});

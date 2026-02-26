@@ -50,6 +50,20 @@ const META_FRAMING_PATTERNS = [
   /\bthe\s+transcript\b/gi,
 ];
 
+const GENERIC_SECTION_LABELS = new Set([
+  'lightning takeaways',
+  'summary',
+  'mechanism deep dive',
+  'tradeoffs',
+  'decision rules',
+  'open questions',
+  'bottom line',
+  'playbook steps',
+  'fast fallbacks',
+  'red flags',
+  'steps',
+]);
+
 function normalizeWhitespace(value: string) {
   return String(value || '')
     .replace(/\r/g, '')
@@ -104,6 +118,38 @@ function compactSentence(value: string, maxWords = 26) {
   return `${words.slice(0, maxWords).join(' ').replace(/[.,;:!?]+$/, '')}.`;
 }
 
+function normalizeHeadingKey(value: string) {
+  return normalizeWhitespace(value)
+    .toLowerCase()
+    .replace(/^#+\s+/, '')
+    .replace(/^[-*•]\s+/, '')
+    .replace(/:$/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isGenericSectionLabel(value: string) {
+  const key = normalizeHeadingKey(value);
+  return key.length > 0 && GENERIC_SECTION_LABELS.has(key);
+}
+
+function stripListPrefix(value: string) {
+  return String(value || '')
+    .replace(/^[-*•]\s+/, '')
+    .replace(/^\d+[.)]\s+/, '')
+    .trim();
+}
+
+function toSentenceCandidates(value: string) {
+  const lines = String(value || '').split(/\r?\n/);
+  const cleaned = lines
+    .map((line) => normalizeWhitespace(stripListPrefix(line)))
+    .filter(Boolean)
+    .filter((line) => !isGenericSectionLabel(line))
+    .join(' ');
+  return toSentences(cleaned);
+}
+
 function detectDomain(draft: YouTubeBlueprintResult): GoldenBlueprintDomain {
   const corpus = [
     draft.title,
@@ -127,14 +173,18 @@ function detectDomain(draft: YouTubeBlueprintResult): GoldenBlueprintDomain {
 }
 
 function selectTakeawayCandidates(draft: YouTubeBlueprintResult, domain: GoldenBlueprintDomain) {
-  const candidates = dedupeKeepOrder(
-    (draft.steps || [])
-      .map((step) => stripMetaFraming(step.name))
-      .filter((step) => step.length >= 10),
-  );
-
-  const fromDescription = toSentences(draft.description).map((sentence) => compactSentence(sentence, 20));
-  const merged = dedupeKeepOrder([...candidates, ...fromDescription]).slice(0, 4);
+  const sentenceCandidates = dedupeKeepOrder([
+    ...toSentenceCandidates(draft.description),
+    ...toSentenceCandidates(draft.notes || ''),
+    ...(draft.steps || []).flatMap((step) => [
+      ...toSentenceCandidates(step.notes),
+      ...toSentenceCandidates(step.name),
+    ]),
+  ])
+    .map((sentence) => compactSentence(sentence, 20))
+    .filter((sentence) => sentence.length >= 18)
+    .filter((sentence) => !isGenericSectionLabel(sentence))
+    .slice(0, 4);
 
   const defaults = domain === 'action'
     ? [
@@ -148,7 +198,7 @@ function selectTakeawayCandidates(draft: YouTubeBlueprintResult, domain: GoldenB
         'Treat this as a framework for tradeoffs, not a single universal rule.',
       ];
 
-  const final = [...merged];
+  const final = [...sentenceCandidates];
   for (const fallback of defaults) {
     if (final.length >= 4) break;
     if (!final.some((entry) => entry.toLowerCase() === fallback.toLowerCase())) {
@@ -160,9 +210,9 @@ function selectTakeawayCandidates(draft: YouTubeBlueprintResult, domain: GoldenB
 
 function buildSummaryParagraphs(draft: YouTubeBlueprintResult, domain: GoldenBlueprintDomain) {
   const sentencePool = dedupeKeepOrder([
-    ...toSentences(draft.description),
-    ...toSentences(draft.notes || ''),
-    ...(draft.steps || []).flatMap((step) => toSentences(step.notes)),
+    ...toSentenceCandidates(draft.description),
+    ...toSentenceCandidates(draft.notes || ''),
+    ...(draft.steps || []).flatMap((step) => toSentenceCandidates(step.notes)),
   ]);
 
   const extraDomainSentences = domain === 'action'
@@ -221,6 +271,7 @@ function buildDeepSections(draft: YouTubeBlueprintResult) {
     (draft.steps || [])
       .slice(0, 4)
       .map((step) => {
+        if (isGenericSectionLabel(step.name)) return '';
         const note = compactSentence(step.notes, 28);
         if (!note) return '';
         return `${stripMetaFraming(step.name)}: ${note}`;
@@ -280,7 +331,10 @@ function buildDeepSections(draft: YouTubeBlueprintResult) {
 function buildActionSections(draft: YouTubeBlueprintResult) {
   const stepBullets = dedupeKeepOrder(
     (draft.steps || [])
-      .map((step) => compactSentence(step.name, 14))
+      .map((step) => stripMetaFraming(step.name))
+      .filter((name) => name.length >= 10)
+      .filter((name) => !isGenericSectionLabel(name))
+      .map((name) => compactSentence(name, 14))
       .filter(Boolean),
   ).slice(0, 6);
 
@@ -350,4 +404,3 @@ export function normalizeYouTubeDraftToGoldenV1(draft: YouTubeBlueprintResult): 
     summaryWordCount: wordCount(summaryParagraphs.join(' ')),
   };
 }
-
