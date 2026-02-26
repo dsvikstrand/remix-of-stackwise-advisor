@@ -6,44 +6,36 @@
 - Meal-timed leucine (with protein intake) appears more meaningful than random dosing.
 - The practical edge likely increases when protein intake is borderline, not already very high.
 
-## Summary
-This video explores why leucine/BCAA/EAA discussions are often oversimplified. You’ll learn where leucine seems to have real value for aging adults, what the evidence suggests about dosing context, and how to think in terms of maintenance-first outcomes.
-
 ![Video thumbnail](https://i.ytimg.com/vi/IherD4otL2I/hqdefault.jpg)
 
-## Context Snapshot
-The core argument is nuance: no large lean-mass increase does not automatically mean “no benefit,” especially when the goal is preserving strength and function with age.
+## Summary
+Use leucine as a maintenance lever first, not a hypertrophy shortcut. The strongest practical case is preserving muscle function as you age, especially when protein intake is inconsistent or only moderate. If the goal is long-term strength quality, recovery, and day-to-day function, leucine can be useful in a focused way.
 
-## Thesis + Position
-For adults over ~35-40, leucine appears most useful as a muscle-preservation amplifier when protein intake is inconsistent or low-to-moderate.
+The key interpretation is nuance: no large lean-mass jump does not automatically mean “no value.” Functional markers matter. Improvements in grip strength and gait speed are meaningful outcomes for aging adults, even when mirror-visible mass changes are smaller than expected. That framing shifts the target from “instant size” to “durable capacity.”
+
+Treat timing as part of the protocol, not a small detail. Meal-paired dosing appears to outperform random standalone use because context influences anabolic signaling. Leucine works best as an amplifier layered on fundamentals, not as a replacement for them. The cleaner your baseline training, sleep, and total protein strategy, the more realistic your expectations should be about incremental gains.
+
+Use this approach when maintenance and function are the priority, and avoid selling it to yourself as a single-compound growth hack.
 
 ## Mechanism Deep Dive
-
-1) **Functional outcomes may improve even without large mass gains.**  
-Evidence: The transcript cites a large synthesis (17 RCTs) with no clear lean-mass increase but better grip strength and gait speed.  
-Operational meaning: For aging contexts, functional metrics can be more relevant than hypertrophy alone.
-
-2) **Leucine with meals may improve anabolic response.**  
-Evidence: A study described in the transcript used 4 g leucine with each meal and observed improved post-absorptive muscle protein synthesis.  
-Operational meaning: Timing and context (with food/protein) matter.
-
-3) **Leptin signaling is presented as a plausible pathway.**  
-Evidence: The transcript references literature linking leucine to leptin changes and leptin-related muscle outcomes.  
-Operational meaning: Benefits may involve endocrine signaling, not only direct amino availability.
+- Functional outcomes can improve even when lean-mass changes are modest.
+- Meal-paired leucine dosing can raise post-absorptive protein synthesis response.
+- Leptin-linked signaling may explain part of the benefit in aging contexts.
 
 ## Tradeoffs
-- Upside: better maintenance-oriented outcomes (strength/function markers).
-- Constraint: not a guaranteed hypertrophy solution in isolation.
-- Unknown: incremental value when daily protein is already very high.
+- Upside: stronger maintenance signal in function-forward goals.
+- Constraint: not a guaranteed mass-builder in isolation.
+- Unknown: incremental lift when total protein intake is already high.
 
 ## Decision Rules
-- Use this approach when aging-related maintenance is the priority and protein consistency is imperfect.
-- De-prioritize this approach as a “magic lever” if total diet/training fundamentals are already optimized.
+- Prioritize this when preserving function is the main objective.
+- Pair leucine with meals and sufficient daily protein.
+- De-prioritize this if you are looking for a standalone hypertrophy shortcut.
 
 ## Open Questions
-- How much benefit remains at very high protein intakes?
-- What dose/timing pattern works best by age and training profile?
-- How robust is the leptin-mediated effect in real-world settings?
+- How much value remains at very high baseline protein intake?
+- Which dose/timing pattern performs best across age and training profiles?
+- How robust is the leptin-mediated effect in real-world adherence?
 
 ## Bottom Line
-Think leucine as maintenance leverage for muscle quality and function, not as a standalone muscle-growth shortcut.
+Use leucine like maintenance leverage for muscle quality and function, not as a one-step mass solution.

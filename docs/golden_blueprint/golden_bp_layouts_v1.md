@@ -13,12 +13,16 @@
 <!-- Why: this is the highest ROI section for retention and saves. -->
 
 2. `[Summary: what the video is about + what the reader gains]`
-<!-- What: 2-4 lines that explain scope + payoff. -->
-<!-- Why: anchors expectations before deeper reading. -->
+<!-- What: one rich section that carries most of the blueprint value. -->
+<!-- Why: reduces fragmented "many tiny sections" feel and improves readability. -->
 
 3. `[Thumbnail]`
 <!-- What: source video thumbnail shown early. -->
 <!-- Why: visual grounding and stronger source identity. -->
+
+4. `[Summary style lock]`
+<!-- Rule: Summary is one flowing narrative block (target 220-350 words for deep/research). -->
+<!-- Avoid splitting Summary into mini-sections like Context/Thesis blocks. -->
 
 ---
 
@@ -34,11 +38,9 @@
 ### Structure
 
 1. `[Title: Outcome-oriented]`
-2. `[Key Insights: 3-5 blocks]`
-<!-- Format per block: Claim -> Evidence -> Practical implication. -->
-3. `[What Most People Miss]`
-4. `[When This Fails / Caveat]`
-5. `[1-Line Close: What to do next]`
+2. `[Summary (primary body): 4-8 short paragraphs or compact bullets]`
+<!-- Put key insights, implications, and caveats inside Summary instead of splitting into many sections. -->
+3. `[Optional: One Action / Caveat block]`
 
 ### Section guardrails
 - No section without at least one concrete anchor (number, mechanism, threshold, example).
@@ -59,19 +61,18 @@
 ### Structure
 
 1. `[Title: Problem + Shift]`
-2. `[Context Snapshot]`
-3. `[Thesis + Position]`
-4. `[Mechanism Deep Dive: 3 evidence-backed blocks]`
-5. `[Tradeoffs]`
-<!-- list or compact table; avoid decorative formatting -->
-6. `[Decision Rules]`
-7. `[Open Questions / Unknowns]`
-8. `[Bottom Line in 2 lines]`
+2. `[Summary (flowing narrative, 220-350 words)]`
+<!-- Merge context + thesis into one cohesive block. -->
+3. `[Mechanism Deep Dive]`
+4. `[Tradeoffs]`
+5. `[Decision Rules]`
+6. `[Open Questions]`
+7. `[Bottom Line]`
 
 ### Section guardrails
 - Prefer evidence chains over generic explanation.
 - Keep jargon only when needed; define briefly when introduced.
-- Avoid excessive subheaders inside a section.
+- Keep Summary flowing; use later sections for structure.
 
 ---
 
@@ -87,15 +88,12 @@
 ### Structure
 
 1. `[Title: Desired outcome + audience]`
-2. `[Who this is for / not for]`
-<!-- keep this as one compact bullet block, no split subtitles -->
-3. `[Start Here: Minimum viable setup]`
-4. `[Playbook Steps: 4-6 steps]`
-<!-- For each step: Goal -> Exact action -> Common mistake -> Success signal. -->
-5. `[Fast Fallbacks]`
-6. `[Red Flags / Failure Modes]`
-7. `[7-day / 30-day checkpoint]`
-8. `[One-Line Action Commit]`
+2. `[Summary (flowing practical narrative)]`
+<!-- Keep this cohesive and readable; no fragmented mini-headings. -->
+3. `[Playbook Steps]`
+4. `[Fast Fallbacks]`
+5. `[Red Flags / Failure Modes]`
+6. `[Bottom Line]`
 
 ### Section guardrails
 - Every step must include a success signal.
