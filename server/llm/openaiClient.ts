@@ -76,6 +76,32 @@ const ChannelLabelValidator = z.object({
   confidence: z.number().min(0).max(1).nullable().optional(),
 });
 
+type GenerationReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+
+function normalizeGenerationReasoningEffort(raw: string | undefined): GenerationReasoningEffort {
+  const normalized = String(raw || '').trim().toLowerCase();
+  if (normalized === 'none') return 'none';
+  if (normalized === 'low') return 'low';
+  if (normalized === 'medium') return 'medium';
+  if (normalized === 'high') return 'high';
+  if (normalized === 'xhigh') return 'xhigh';
+  return 'medium';
+}
+
+function isModelCompatibilityError(error: unknown) {
+  const status = Number((error as { status?: unknown })?.status || 0);
+  const message = String((error as { message?: unknown })?.message || '').toLowerCase();
+  return (
+    status === 400
+    || status === 404
+    || message.includes('model')
+    || message.includes('unsupported')
+    || message.includes('not found')
+    || message.includes('does not exist')
+    || message.includes('reasoning')
+  );
+}
+
 export function createOpenAIClient(): LLMClient {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -83,17 +109,61 @@ export function createOpenAIClient(): LLMClient {
   }
 
   const model = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
+  const generationModel = process.env.OPENAI_GENERATION_MODEL || 'gpt-5.2';
+  const generationFallbackModel = process.env.OPENAI_GENERATION_FALLBACK_MODEL || 'o4-mini';
+  const generationReasoningEffort = normalizeGenerationReasoningEffort(process.env.OPENAI_GENERATION_REASONING_EFFORT);
   const imageModel = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1';
   const imageSize = process.env.OPENAI_IMAGE_SIZE || '1536x1024';
   const imageQuality = process.env.OPENAI_IMAGE_QUALITY || 'low';
   const client = new OpenAI({ apiKey });
 
+  async function runGenerationRequest(input: {
+    operation: 'generateInventory' | 'generateBlueprint' | 'generateYouTubeBlueprint';
+    instructions: string;
+    prompt: string;
+  }) {
+    const runOnce = async (selectedModel: string, includeReasoning: boolean) => {
+      const payload: {
+        model: string;
+        instructions: string;
+        input: string;
+        reasoning?: { effort: Exclude<GenerationReasoningEffort, 'none'> };
+      } = {
+        model: selectedModel,
+        instructions: input.instructions,
+        input: input.prompt,
+      };
+      if (includeReasoning && generationReasoningEffort !== 'none') {
+        payload.reasoning = { effort: generationReasoningEffort };
+      }
+      return client.responses.create(payload);
+    };
+
+    try {
+      return await runOnce(generationModel, true);
+    } catch (error) {
+      const shouldFallback =
+        generationFallbackModel
+        && generationFallbackModel !== generationModel
+        && isModelCompatibilityError(error);
+
+      if (!shouldFallback) {
+        throw error;
+      }
+
+      console.warn(
+        `[llm] ${input.operation} primary model ${generationModel} failed; retrying fallback ${generationFallbackModel}`,
+      );
+      return runOnce(generationFallbackModel, false);
+    }
+  }
+
   return {
     async generateInventory(input: InventoryRequest): Promise<InventorySchema> {
-      const response = await client.responses.create({
-        model,
+      const response = await runGenerationRequest({
+        operation: 'generateInventory',
         instructions: INVENTORY_SYSTEM_PROMPT,
-        input: buildInventoryUserPrompt(input),
+        prompt: buildInventoryUserPrompt(input),
       });
 
       const outputText = response.output_text?.trim();
@@ -150,10 +220,10 @@ export function createOpenAIClient(): LLMClient {
       };
     },
     async generateBlueprint(input: BlueprintGenerationRequest): Promise<BlueprintGenerationResult> {
-      const response = await client.responses.create({
-        model,
+      const response = await runGenerationRequest({
+        operation: 'generateBlueprint',
         instructions: BLUEPRINT_GENERATION_SYSTEM_PROMPT,
-        input: buildBlueprintGenerationUserPrompt(input),
+        prompt: buildBlueprintGenerationUserPrompt(input),
       });
 
       const outputText = response.output_text?.trim();
@@ -165,10 +235,10 @@ export function createOpenAIClient(): LLMClient {
       return BlueprintGenerationValidator.parse(parsed);
     },
     async generateYouTubeBlueprint(input: YouTubeBlueprintRequest): Promise<YouTubeBlueprintResult> {
-      const response = await client.responses.create({
-        model,
+      const response = await runGenerationRequest({
+        operation: 'generateYouTubeBlueprint',
         instructions: YOUTUBE_BLUEPRINT_SYSTEM_PROMPT,
-        input: buildYouTubeBlueprintUserPrompt(input),
+        prompt: buildYouTubeBlueprintUserPrompt(input),
       });
 
       const outputText = response.output_text?.trim();
