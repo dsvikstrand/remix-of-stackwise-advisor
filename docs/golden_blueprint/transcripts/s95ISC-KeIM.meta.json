@@ -1,0 +1,8 @@
+{
+  "ok": true,
+  "provider": "yt_to_text",
+  "source": "yt_to_text_subtitles_v1",
+  "duration_ms": 714,
+  "chars": 10804,
+  "segments": 312
+}

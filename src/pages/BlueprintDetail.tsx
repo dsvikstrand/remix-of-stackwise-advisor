@@ -53,6 +53,11 @@ function parseSteps(steps: Json) {
   return steps.filter((step): step is BlueprintStep => !!step && typeof step === 'object');
 }
 
+function isGoldenBlueprintExample(selectedItems: Json | null | undefined) {
+  if (!selectedItems || typeof selectedItems !== 'object' || Array.isArray(selectedItems)) return false;
+  return String((selectedItems as Record<string, unknown>).source || '').trim() === 'golden_bp_examples_v1';
+}
+
 export default function BlueprintDetail() {
   const navigate = useNavigate();
   const { blueprintId } = useParams();
@@ -67,7 +72,8 @@ export default function BlueprintDetail() {
   const location = useLocation();
   const loggedBlueprintId = useRef<string | null>(null);
   const steps = blueprint ? parseSteps(blueprint.steps) : [];
-  const hasAiReview = Boolean((blueprint?.llm_review || '').trim());
+  const isGoldenExample = isGoldenBlueprintExample(blueprint?.selected_items);
+  const hasAiReview = !isGoldenExample && Boolean((blueprint?.llm_review || '').trim());
   const [sourceChannel, setSourceChannel] = useState<{
     title: string;
     url: string | null;
@@ -263,6 +269,43 @@ export default function BlueprintDetail() {
     bannerUrl: blueprint?.banner_url || null,
     sourceThumbnailUrl: sourceChannel?.thumbnailUrl || null,
   });
+  const leadingGoldenSections = isGoldenExample ? steps.slice(0, 2) : [];
+  const trailingGoldenSections = isGoldenExample ? steps.slice(2) : [];
+  const selectedItemGroups = blueprint ? parseSelectedItems(blueprint.selected_items) : [];
+
+  const renderBanner = effectiveBannerUrl ? (
+    <button
+      type="button"
+      className="relative w-full overflow-hidden rounded-md border border-border/40 text-left"
+      onClick={() => setIsBannerExpanded((current) => !current)}
+      title={isBannerExpanded ? 'Collapse banner' : 'Expand banner'}
+    >
+      {isBannerExpanded ? (
+        <div className="mx-auto w-full max-w-3xl overflow-hidden rounded-md">
+          <div className="aspect-video w-full">
+            <img
+              src={effectiveBannerUrl}
+              alt="Blueprint banner"
+              className="h-full w-full object-cover object-center"
+              loading="lazy"
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="aspect-[3/1] w-full">
+          <img
+            src={effectiveBannerUrl}
+            alt="Blueprint banner"
+            className="h-full w-full object-cover object-center rounded-md"
+            loading="lazy"
+          />
+        </div>
+      )}
+      <span className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm">
+        {isBannerExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+      </span>
+    </button>
+  ) : null;
 
   return (
     <PageRoot>
@@ -344,92 +387,109 @@ export default function BlueprintDetail() {
             <section className="space-y-4">
 
               {blueprint.mix_notes && (
-                <p className="text-sm text-muted-foreground">{blueprint.mix_notes}</p>
+                <p className="text-sm text-muted-foreground whitespace-pre-line">{blueprint.mix_notes}</p>
               )}
 
-              {effectiveBannerUrl && (
-                <button
-                  type="button"
-                  className="relative w-full overflow-hidden rounded-md border border-border/40 text-left"
-                  onClick={() => setIsBannerExpanded((current) => !current)}
-                  title={isBannerExpanded ? 'Collapse banner' : 'Expand banner'}
-                >
-                  {isBannerExpanded ? (
-                    <div className="mx-auto w-full max-w-3xl overflow-hidden rounded-md">
-                      <div className="aspect-video w-full">
-                        <img
-                          src={effectiveBannerUrl}
-                          alt="Blueprint banner"
-                          className="h-full w-full object-cover object-center"
-                          loading="lazy"
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="aspect-[3/1] w-full">
-                      <img
-                        src={effectiveBannerUrl}
-                        alt="Blueprint banner"
-                        className="h-full w-full object-cover object-center rounded-md"
-                        loading="lazy"
-                      />
+              {isGoldenExample ? (
+                <>
+                  {leadingGoldenSections.length > 0 && (
+                    <div className="space-y-2">
+                      {leadingGoldenSections.map((step, index) => (
+                        <div key={step.id || `${step.title}-${index}`} className="rounded-md border border-border/40 px-3 py-2.5">
+                          <p className="text-sm font-medium">{step.title?.trim() ? step.title : `Section ${index + 1}`}</p>
+                          {step.description && (
+                            <p className="text-sm text-muted-foreground mt-1 whitespace-pre-line">{step.description}</p>
+                          )}
+                          {Array.isArray(step.items) && step.items.length > 0 ? (
+                            <ul className="mt-1.5 space-y-1 list-disc pl-5">
+                              {step.items.map((item, itemIndex) => (
+                                <li key={`${step.id || index}-${itemIndex}`} className="text-sm leading-snug">
+                                  {formatStepItem(item)}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </div>
+                      ))}
                     </div>
                   )}
-                  <span className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm">
-                    {isBannerExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-                  </span>
-                </button>
-              )}
 
-              <div>
-                {steps.length > 0 ? (
-                  <>
-                    <h3 className="font-semibold">Steps</h3>
-                    <div className="mt-2 space-y-2">
-                      {steps.map((step, index) => (
+                  {renderBanner}
+
+                  {trailingGoldenSections.length > 0 && (
+                    <div className="space-y-2">
+                      {trailingGoldenSections.map((step, index) => (
                         <div key={step.id || `${step.title}-${index}`} className="rounded-md border border-border/40 px-3 py-2.5">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="text-sm font-medium">
-                              {step.title?.trim() ? step.title : `Step ${index + 1}`}
-                            </p>
-                          </div>
+                          <p className="text-sm font-medium">{step.title?.trim() ? step.title : `Section ${index + 3}`}</p>
                           {step.description && (
-                            <p className="text-xs text-muted-foreground mt-1">{step.description}</p>
+                            <p className="text-sm text-muted-foreground mt-1 whitespace-pre-line">{step.description}</p>
                           )}
-                          <div className="mt-1.5 space-y-1.5">
-                            {step.items && step.items.length > 0 ? (
-                              step.items.map((item, itemIndex) => (
-                                <div key={`${step.id || index}-${itemIndex}`} className="text-sm">
-                                  <p className="text-sm leading-snug">{formatStepItem(item)}</p>
-                                  {item.category && (
-                                    <p className="text-xs text-muted-foreground">{item.category}</p>
-                                  )}
+                          {Array.isArray(step.items) && step.items.length > 0 ? (
+                            <ul className="mt-1.5 space-y-1 list-disc pl-5">
+                              {step.items.map((item, itemIndex) => (
+                                <li key={`${step.id || index}-${itemIndex}`} className="text-sm leading-snug">
+                                  {formatStepItem(item)}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  {renderBanner}
+                  <div>
+                    {steps.length > 0 ? (
+                      <>
+                        <h3 className="font-semibold">Steps</h3>
+                        <div className="mt-2 space-y-2">
+                          {steps.map((step, index) => (
+                            <div key={step.id || `${step.title}-${index}`} className="rounded-md border border-border/40 px-3 py-2.5">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-sm font-medium">
+                                  {step.title?.trim() ? step.title : `Step ${index + 1}`}
+                                </p>
+                              </div>
+                              {step.description && (
+                                <p className="text-xs text-muted-foreground mt-1">{step.description}</p>
+                              )}
+                              {Array.isArray(step.items) && step.items.length > 0 ? (
+                                <div className="mt-1.5 space-y-1.5">
+                                  {step.items.map((item, itemIndex) => (
+                                    <div key={`${step.id || index}-${itemIndex}`} className="text-sm">
+                                      <p className="text-sm leading-snug">{formatStepItem(item)}</p>
+                                      {item.category && (
+                                        <p className="text-xs text-muted-foreground">{item.category}</p>
+                                      )}
+                                    </div>
+                                  ))}
                                 </div>
-                              ))
-                            ) : (
-                              <p className="text-xs text-muted-foreground">No items assigned.</p>
-                            )}
-                          </div>
+                              ) : null}
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <h3 className="font-semibold">Selected items</h3>
-                    <div className="mt-2 space-y-2">
-                      {parseSelectedItems(blueprint.selected_items).map(([category, items]) => (
-                        <div key={category} className="rounded-md border border-border/40 p-3">
-                          <p className="text-sm font-medium">{category}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {items.length > 0 ? items.map(formatItem).join(', ') : 'No items listed'}
-                          </p>
+                      </>
+                    ) : selectedItemGroups.length > 0 ? (
+                      <>
+                        <h3 className="font-semibold">Selected items</h3>
+                        <div className="mt-2 space-y-2">
+                          {selectedItemGroups.map(([category, items]) => (
+                            <div key={category} className="rounded-md border border-border/40 p-3">
+                              <p className="text-sm font-medium">{category}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {items.length > 0 ? items.map(formatItem).join(', ') : 'No items listed'}
+                              </p>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
+                      </>
+                    ) : null}
+                  </div>
+                </>
+              )}
 
               {hasAiReview ? (
                 <>
