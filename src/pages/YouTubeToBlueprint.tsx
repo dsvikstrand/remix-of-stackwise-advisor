@@ -101,12 +101,27 @@ function validateYouTubeInput(urlRaw: string) {
 }
 
 function toBlueprintStepsForSave(steps: YouTubeDraftStep[]) {
-  return steps.map((step, index) => ({
-    id: `yt-step-${index + 1}`,
-    title: step.name,
-    description: step.notes,
-    items: [],
-  }));
+  return steps.map((step, index) => {
+    const lines = String(step.notes || '').split(/\r?\n/);
+    const itemLines = lines
+      .map((line) => line.trim())
+      .filter((line) => /^([-*•]|\d+[.)])\s+/.test(line))
+      .map((line) => line.replace(/^([-*•]|\d+[.)])\s+/, '').trim())
+      .filter(Boolean);
+    const description = lines
+      .map((line) => line.replace(/\s+$/g, ''))
+      .filter((line) => !/^([-*•]|\d+[.)])\s+/.test(line.trim()))
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
+    return {
+      id: `yt-step-${index + 1}`,
+      title: step.name,
+      description: description || null,
+      items: itemLines.map((name) => ({ name })),
+    };
+  });
 }
 
 function toYouTubeErrorMessage(errorCode: YouTubeToBlueprintErrorResponse['error_code']) {
@@ -623,7 +638,13 @@ export default function YouTubeToBlueprint() {
       const created = await createBlueprint.mutateAsync({
         inventoryId: null,
         title: result.draft.title,
-        selectedItems: {},
+        selectedItems: {
+          source: 'youtube_mvp',
+          run_id: result.run_id,
+          video_url: videoUrl.trim(),
+          bp_style: 'golden_v1',
+          bp_origin: 'youtube_pipeline',
+        },
         steps: toBlueprintStepsForSave(result.draft.steps),
         mixNotes: result.draft.notes,
         reviewPrompt: 'youtube_mvp',

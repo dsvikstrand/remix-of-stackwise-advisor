@@ -1599,7 +1599,14 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
       }),
       yt2bpCoreTimeoutMs
     );
-    return res.json(result);
+    const goldenFormat = normalizeYouTubeDraftToGoldenV1(result.draft);
+    return res.json({
+      ...result,
+      draft: {
+        ...result.draft,
+        steps: goldenFormat.steps,
+      },
+    });
   } catch (error) {
     const known = mapPipelineError(error);
     if (known) {
