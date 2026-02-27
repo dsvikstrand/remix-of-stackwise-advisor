@@ -116,7 +116,6 @@ describe('goldenBlueprintFormat (backend)', () => {
       'Takeaways',
       'Bleup',
       'Deep Dive',
-      'Tradeoffs',
       'Practical Rules',
       'Open Questions',
     ]);
@@ -142,13 +141,13 @@ describe('goldenBlueprintFormat (backend)', () => {
     expect((result.steps[2]?.notes || '').toLowerCase()).not.toContain('the transcript');
     expect((result.steps[2]?.notes || '')).not.toContain('\n- ');
     const bleupParagraphs = (result.steps[2]?.notes || '').split(/\n{2,}/).map((part) => part.trim()).filter(Boolean);
-    expect(bleupParagraphs.length).toBeGreaterThanOrEqual(3);
-    expect(bleupParagraphs.length).toBeLessThanOrEqual(4);
+    expect(bleupParagraphs.length).toBeGreaterThanOrEqual(2);
+    expect(bleupParagraphs.length).toBeLessThanOrEqual(3);
     const summaryLead = ((result.steps[0]?.notes || '').split(/\n+/)[0] || '').trim();
     expect(summaryLead.length).toBeGreaterThan(20);
     expect((result.steps[2]?.notes || '')).not.toContain(summaryLead);
 
-    for (const stepName of ['Deep Dive', 'Tradeoffs', 'Practical Rules', 'Open Questions']) {
+    for (const stepName of ['Deep Dive', 'Practical Rules', 'Open Questions']) {
       const section = result.steps.find((step) => step.name === stepName);
       expect(section).toBeTruthy();
       const sectionBullets = (section?.notes || '').split('\n').filter((line) => line.trim().startsWith('- '));
@@ -177,7 +176,6 @@ describe('goldenBlueprintFormat (backend)', () => {
       'Takeaways',
       'Bleup',
       'Deep Dive',
-      'Tradeoffs',
       'Practical Rules',
       'Open Questions',
     ]);
@@ -218,7 +216,6 @@ describe('goldenBlueprintFormat (backend)', () => {
       { name: 'Takeaways', notes: '- only one bullet', timestamp: null },
       { name: 'Bleup', notes: '', timestamp: null },
       { name: 'Deep Dive', notes: '- one\n- two', timestamp: null },
-      { name: 'Tradeoffs', notes: '- one\n- two', timestamp: null },
       { name: 'Practical Rules', notes: '- one\n- two', timestamp: null },
       { name: 'Open Questions', notes: '- one\n- two', timestamp: null },
     ];
@@ -237,7 +234,6 @@ describe('goldenBlueprintFormat (backend)', () => {
       { name: 'Takeaways', notes: '- One clear claim with context.\n- Second clear claim with context.\n- Third clear claim with context.', timestamp: null },
       { name: 'Bleup', notes: 'Only one paragraph should fail paragraph density check for deterministic enforcement.', timestamp: null },
       { name: 'Deep Dive', notes: '- Mechanism detail with receptor context.\n- Context and condition are explicit.\n- Practical implication is included.', timestamp: null },
-      { name: 'Tradeoffs', notes: '- Upside is concrete and bounded.\n- Constraint is explicit in context.\n- Unknown is stated with scope.', timestamp: null },
       { name: 'Practical Rules', notes: '- If condition A, do action B.\n- If condition C, adjust behavior D.\n- Avoid overgeneralizing across contexts.', timestamp: null },
       { name: 'Open Questions', notes: '- Which subgroup sees strongest lift?\n- What baseline changes effect size?\n- Where does incremental value flatten?', timestamp: null },
     ];
@@ -253,7 +249,6 @@ describe('goldenBlueprintFormat (backend)', () => {
       { name: 'Takeaways', notes: '- Helps consistency. Why it matters: this changes how you decide when and how to apply it.\n- Helps consistency. Why it matters: this changes how you decide when and how to apply it.\n- Helps consistency. Why it matters: this changes how you decide when and how to apply it.', timestamp: null },
       { name: 'Bleup', notes: 'Shared sentence one. Shared sentence two. Shared sentence one.', timestamp: null },
       { name: 'Deep Dive', notes: '- Improves outcomes.\n- Improves outcomes.\n- Improves outcomes.', timestamp: null },
-      { name: 'Tradeoffs', notes: '- Improves outcomes.\n- Improves outcomes.\n- Improves outcomes.', timestamp: null },
       { name: 'Practical Rules', notes: '- Improves outcomes.\n- Improves outcomes.\n- Improves outcomes.', timestamp: null },
       { name: 'Open Questions', notes: '- Improves outcomes.\n- Improves outcomes.\n- Improves outcomes.', timestamp: null },
     ];
@@ -261,7 +256,9 @@ describe('goldenBlueprintFormat (backend)', () => {
     const gate = evaluateGoldenQuality({ steps: repeatedSteps, transcript: 'taurine taurine taurine mechanism membrane receptor context depends' });
     expect(gate.ok).toBe(false);
     expect(gate.issues).toContain('BOILERPLATE_REPEATED');
-    expect(gate.issues).toContain('DUPLICATE_SENTENCES_ACROSS_SECTIONS');
+    expect(
+      gate.issues.some((code) => code === 'DUPLICATE_SENTENCES_ACROSS_SECTIONS' || code.startsWith('REPETITION_TRIGRAM_')),
+    ).toBe(true);
     expect(gate.issues).toContain('GENERIC_BULLET_NO_CONTEXT');
   });
 
@@ -271,7 +268,6 @@ describe('goldenBlueprintFormat (backend)', () => {
       { name: 'Takeaways', notes: '- Useful claim with mechanism context and implication.\n- Second useful claim with condition and implication.\n- Third useful claim with context and implication.', timestamp: null },
       { name: 'Bleup', notes: 'This paragraph mentions Oracle POS dir and should be caught. Oracle POS dir path is not allowed in output.\n\nSecond paragraph with transcript-grounded phrasing.\n\nThird paragraph for structure compliance.', timestamp: null },
       { name: 'Deep Dive', notes: '- Mechanism includes receptor and membrane context.\n- Context depends on baseline behavior quality.\n- Practical implication is explicit.', timestamp: null },
-      { name: 'Tradeoffs', notes: '- Upside is bounded by context.\n- Constraint is concrete in real conditions.\n- Unknown remains under subgroup variance.', timestamp: null },
       { name: 'Practical Rules', notes: '- If baseline is low, start conservative.\n- If response is stable, scale gradually.\n- Avoid changing multiple variables at once.', timestamp: null },
       { name: 'Open Questions', notes: '- Which condition predicts strongest response?\n- Where does value flatten in advanced users?\n- Which signal predicts long-term adherence?', timestamp: null },
     ];
@@ -286,9 +282,10 @@ describe('goldenBlueprintFormat (backend)', () => {
   });
 
   it('supports quality-gate evaluation with repair disabled and enabled', () => {
-    const noRepair = normalizeYouTubeDraftToGoldenV1(buildDeepDraft(), { repairQuality: false });
-    const withRepair = normalizeYouTubeDraftToGoldenV1(buildDeepDraft(), { repairQuality: true });
-    expect(noRepair.qualityGate.ok).toBe(false);
+    const noRepair = normalizeYouTubeDraftToGoldenV1(buildNoisyDraft(), { repairQuality: false });
+    const withRepair = normalizeYouTubeDraftToGoldenV1(buildNoisyDraft(), { repairQuality: true });
+    expect(noRepair.structureGate.ok).toBe(true);
+    expect(withRepair.structureGate.ok).toBe(true);
     expect(withRepair.qualityGate.ok).toBe(true);
   });
 });

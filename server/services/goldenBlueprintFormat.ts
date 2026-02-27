@@ -92,8 +92,9 @@ const MIN_SECTION_BULLETS = 3;
 const MAX_SECTION_BULLETS = 5;
 const MIN_TAKEAWAYS_BULLETS = 3;
 const MAX_TAKEAWAYS_BULLETS = 4;
-const MIN_BLEUP_PARAGRAPHS = 3;
-const MAX_BLEUP_PARAGRAPHS = 4;
+const MIN_BLEUP_PARAGRAPHS = 2;
+const MAX_BLEUP_PARAGRAPHS = 3;
+const MAX_SECTION_PARENTHESES = 2;
 const REPETITION_TRIGRAM_SECTION_THRESHOLD = 0.14;
 const REPETITION_TRIGRAM_GLOBAL_THRESHOLD = 0.14;
 const DUPLICATE_SENTENCE_REUSE_THRESHOLD = 3;
@@ -156,7 +157,6 @@ const REQUIRED_GOLDEN_SECTION_ORDER = [
   'Takeaways',
   'Bleup',
   'Deep Dive',
-  'Tradeoffs',
   'Practical Rules',
   'Open Questions',
 ] as const;
@@ -244,6 +244,30 @@ function normalizeWhitespace(value: string) {
     .trim();
 }
 
+function countParentheticalPairs(value: string) {
+  const matches = String(value || '').match(/\([^()\n]{1,100}\)/g);
+  return matches ? matches.length : 0;
+}
+
+function limitParentheticalUsage(value: string, maxPairs: number) {
+  const input = String(value || '');
+  if (maxPairs < 0) return normalizeWhitespace(input);
+  let seen = 0;
+  const stripped = input.replace(/\([^()\n]{1,100}\)/g, (match) => {
+    if (seen < maxPairs) {
+      seen += 1;
+      return match;
+    }
+    return '';
+  });
+  return normalizeWhitespace(
+    stripped
+      .replace(/\s+([,.;!?])/g, '$1')
+      .replace(/\(\s*\)/g, '')
+      .replace(/\s{2,}/g, ' '),
+  );
+}
+
 function stripMetaFraming(value: string) {
   let next = String(value || '');
   for (const pattern of META_FRAMING_PATTERNS) {
@@ -315,7 +339,10 @@ function normalizeBleupParagraphs(primary: string, fallback: string) {
     paragraphs = [...head, normalizeWhitespace(tail)].filter(Boolean);
   }
 
-  return normalizeWhitespace(paragraphs.join('\n\n'));
+  const limited = paragraphs
+    .map((paragraph) => limitParentheticalUsage(paragraph, 1))
+    .filter(Boolean);
+  return normalizeWhitespace(limited.join('\n\n'));
 }
 
 function dedupeKeepOrder(values: string[]) {
@@ -433,7 +460,7 @@ function selectTakeawayCandidates(draft: YouTubeBlueprintResult, domain: GoldenB
     : [
         'Focus on mechanism and evidence, not headline-level claims.',
         'Use practical decision rules instead of abstract conclusions.',
-        'Treat this as a framework for tradeoffs, not a single universal rule.',
+        'Treat this as a framework for practical decisions and limits, not a single universal rule.',
       ];
 
   const final = [...sentenceCandidates];
@@ -460,7 +487,7 @@ function buildSummaryParagraphs(draft: YouTubeBlueprintResult, domain: GoldenBlu
       ]
     : [
         'Treat outcomes as context-dependent and prioritize decision quality over one-dimensional headline metrics.',
-        'Use this as a practical framework for action and tradeoffs instead of a universal rule that applies unchanged everywhere.',
+        'Use this as a practical framework for action and constraints instead of a universal rule that applies unchanged everywhere.',
       ];
 
   const selected: string[] = [];
@@ -486,14 +513,14 @@ function buildSummaryParagraphs(draft: YouTubeBlueprintResult, domain: GoldenBlu
     trimmed = dedupeKeepOrder([...trimmed, ...extraDomainSentences]);
   }
 
-  const targetParagraphs = wordCount(trimmed.join(' ')) > 290 ? 4 : 3;
+  const targetParagraphs = wordCount(trimmed.join(' ')) > 290 ? 3 : 2;
   const chunkSize = Math.max(2, Math.ceil(trimmed.length / targetParagraphs));
   const paragraphs: string[] = [];
   for (let i = 0; i < trimmed.length; i += chunkSize) {
     const paragraph = normalizeWhitespace(trimmed.slice(i, i + chunkSize).join(' '));
     if (paragraph) paragraphs.push(paragraph);
   }
-  return paragraphs.slice(0, 4);
+  return paragraphs.slice(0, 3);
 }
 
 function buildTopSummary(summaryParagraphs: string[]) {
@@ -501,20 +528,21 @@ function buildTopSummary(summaryParagraphs: string[]) {
     .map((paragraph) => normalizeWhitespace(paragraph))
     .filter(Boolean);
   if (filtered.length === 0) return '';
-  let summary = filtered[0];
-  if (wordCount(summary) < 80 && filtered[1]) {
+  let summary = limitParentheticalUsage(filtered[0], 1);
+  if (wordCount(summary) < 70 && filtered[1]) {
     summary = `${summary} ${filtered[1]}`;
   }
   const words = summary.split(/\s+/).filter(Boolean);
-  if (words.length > 170) {
-    summary = `${words.slice(0, 170).join(' ')}.`;
+  if (words.length > 130) {
+    summary = `${words.slice(0, 130).join(' ')}.`;
   }
-  return normalizeWhitespace(summary);
+  return normalizeWhitespace(limitParentheticalUsage(summary, 1));
 }
 
 function toBulletBlock(lines: string[]) {
   return lines
     .map((line) => stripMetaFraming(line))
+    .map((line) => limitParentheticalUsage(line, 1))
     .filter(Boolean)
     .map((line) => `- ${line}`)
     .join('\n');
@@ -561,7 +589,7 @@ function sanitizeBulletCandidate(value: string) {
   const lastWord = words[words.length - 1]?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
   if (INCOMPLETE_TAIL_WORDS.has(lastWord)) return null;
   if (!/[.!?]$/.test(next)) next = `${next}.`;
-  return next;
+  return limitParentheticalUsage(next, 1);
 }
 
 function makeWhyItMattersTail(value: string) {
@@ -801,7 +829,6 @@ export function evaluateGoldenQuality(input: {
   const minSpecificityBySection = new Map<string, number>([
     ['Takeaways', 1],
     ['Deep Dive', 2],
-    ['Tradeoffs', 1],
     ['Practical Rules', 1],
   ]);
   for (const [section, minCount] of minSpecificityBySection.entries()) {
@@ -838,6 +865,13 @@ export function evaluateGoldenQuality(input: {
   for (const step of steps) {
     const section = normalizeWhitespace(step.name);
     const text = sectionMap.get(section)?.text || '';
+    if (countParentheticalPairs(text) > MAX_SECTION_PARENTHESES) {
+      issues.push({
+        code: 'PARENTHETICAL_OVERUSE',
+        section,
+        detail: `count=${countParentheticalPairs(text)}`,
+      });
+    }
     const placeholderMatches = Array.from(text.matchAll(PLACEHOLDER_TOKEN_PATTERN))
       .map((match) => match?.[1] || '')
       .filter(Boolean);
@@ -852,6 +886,18 @@ export function evaluateGoldenQuality(input: {
       issues.push({
         code: 'PROMPT_CONTEXT_LEAK',
         section,
+      });
+    }
+  }
+
+  const openQuestionBullets = sectionMap.get('Open Questions')?.looseBullets || [];
+  if (openQuestionBullets.length > 0) {
+    const nonQuestionCount = openQuestionBullets.filter((line) => !/\?\s*$/.test(line)).length;
+    if (nonQuestionCount > 0) {
+      issues.push({
+        code: 'OPEN_QUESTIONS_NOT_QUESTIONS',
+        section: 'Open Questions',
+        detail: `count=${nonQuestionCount}`,
       });
     }
   }
@@ -899,11 +945,16 @@ export function validateGoldenStructure(steps: YouTubeDraftStep[]): GoldenStruct
     issues.push('TAKEAWAYS_BULLET_COUNT');
   }
 
-  for (const sectionName of ['Deep Dive', 'Tradeoffs', 'Practical Rules', 'Open Questions']) {
+  for (const sectionName of ['Deep Dive', 'Practical Rules', 'Open Questions']) {
     const count = parseBulletLines(byName.get(sectionName)?.notes || '').length;
     if (count < MIN_SECTION_BULLETS || count > MAX_SECTION_BULLETS) {
       issues.push(`${sectionName.toUpperCase().replace(/\s+/g, '_')}_BULLET_COUNT`);
     }
+  }
+
+  const openQuestionBullets = parseBulletLines(byName.get('Open Questions')?.notes || '');
+  if (openQuestionBullets.some((line) => !/\?\s*$/.test(line))) {
+    issues.push('OPEN_QUESTIONS_NOT_QUESTIONS');
   }
 
   return {
@@ -931,6 +982,14 @@ function normalizeBulletSection(
   return toBulletBlock(filled.slice(0, maxBullets));
 }
 
+function forceQuestionBullets(notes: string) {
+  const bullets = parseBulletLines(notes).map((line) => {
+    const trimmed = normalizeWhitespace(line).replace(/[.!\s]+$/, '');
+    return trimmed ? `${trimmed}?` : line;
+  });
+  return toBulletBlock(bullets);
+}
+
 function repairGoldenStructure(
   steps: YouTubeDraftStep[],
   input: {
@@ -953,13 +1012,16 @@ function repairGoldenStructure(
     MAX_TAKEAWAYS_BULLETS,
   );
 
-  const fixedDeep = ['Deep Dive', 'Tradeoffs', 'Practical Rules', 'Open Questions'].map((sectionName) => {
-    const normalized = normalizeBulletSection(
+  const fixedDeep = ['Deep Dive', 'Practical Rules', 'Open Questions'].map((sectionName) => {
+    let normalized = normalizeBulletSection(
       byName.get(sectionName)?.notes || '',
       input.deepFallbackByName.get(sectionName) || '',
       MIN_SECTION_BULLETS,
       MAX_SECTION_BULLETS,
     );
+    if (sectionName === 'Open Questions') {
+      normalized = forceQuestionBullets(normalized);
+    }
     return {
       name: sectionName,
       notes: normalized,
@@ -1019,16 +1081,19 @@ function repairGoldenQuality(
     const fallback = parseBulletLines(input.fallbackByName.get(sectionName) || '');
     const cleanedCurrent = current
       .map((line) => stripBoilerplateTail(line))
+      .map((line) => limitParentheticalUsage(line, 1))
       .map((line) => sanitizeBulletCandidate(line))
       .filter((line): line is string => Boolean(line))
       .filter((line) => !isGenericBulletWithoutContext(line, context));
     const cleanedFallback = fallback
       .map((line) => stripBoilerplateTail(line))
+      .map((line) => limitParentheticalUsage(line, 1))
       .map((line) => sanitizeBulletCandidate(line))
       .filter((line): line is string => Boolean(line))
       .filter((line) => !isGenericBulletWithoutContext(line, context));
     const relaxedFallback = fallback
       .map((line) => stripBoilerplateTail(line))
+      .map((line) => limitParentheticalUsage(line, 1))
       .map((line) => sanitizeBulletCandidate(line))
       .filter((line): line is string => Boolean(line));
     const merged: string[] = [];
@@ -1066,7 +1131,13 @@ function repairGoldenQuality(
       globalBulletSeen.add(key);
       merged.push(candidate);
     }
-    return toBulletBlock(merged.slice(0, max));
+    const sectionBullets = merged.slice(0, max).map((line) => {
+      if (sectionName !== 'Open Questions') return line;
+      const trimmed = normalizeWhitespace(line).replace(/[.!\s]+$/, '');
+      if (!trimmed) return line;
+      return `${trimmed}?`;
+    });
+    return toBulletBlock(sectionBullets);
   };
 
   const summaryFallback = normalizeWhitespace(input.description || input.title || '');
@@ -1075,7 +1146,10 @@ function repairGoldenQuality(
   );
   const summarySentences = dedupeKeepOrder(toSentences(summarySource));
   const uniqueSummary = summarySentences.filter((sentence) => rememberSentence(sentence));
-  const summary = normalizeWhitespace(uniqueSummary.join(' ')) || dedupeSentencesKeepOrder(summarySource) || summaryFallback;
+  const summary = limitParentheticalUsage(
+    normalizeWhitespace(uniqueSummary.join(' ')) || dedupeSentencesKeepOrder(summarySource) || summaryFallback,
+    1,
+  );
   rememberBlockSentences(summary);
 
   const bleupFallback = normalizeWhitespace(input.description || summary || '');
@@ -1110,11 +1184,6 @@ function repairGoldenQuality(
     {
       name: 'Deep Dive',
       notes: normalizeSectionBullets('Deep Dive', MIN_SECTION_BULLETS, MAX_SECTION_BULLETS),
-      timestamp: null,
-    },
-    {
-      name: 'Tradeoffs',
-      notes: normalizeSectionBullets('Tradeoffs', MIN_SECTION_BULLETS, MAX_SECTION_BULLETS),
       timestamp: null,
     },
     {
@@ -1197,23 +1266,6 @@ function buildDeepSections(draft: YouTubeBlueprintResult) {
     {
       name: 'Deep Dive',
       notes: toBulletBlock(mechanismBullets),
-      timestamp: null,
-    },
-    {
-      name: 'Tradeoffs',
-      notes: toBulletBlock(
-        normalizeGuidedBulletGroup(
-          [
-            'Upside: clearer decision quality and better maintenance-oriented outcomes.',
-            'Constraint: this is not a one-variable shortcut.',
-            'Unknown: effect size can vary by baseline quality and adherence.',
-          ],
-          [
-            'Upside and constraints should be evaluated against baseline habits.',
-            'Unknowns usually come from adherence differences, not only mechanism quality.',
-          ],
-        ),
-      ),
       timestamp: null,
     },
     {
@@ -1380,7 +1432,6 @@ export function normalizeYouTubeDraftToGoldenV1(
       fallbackByName: new Map([
         ['Takeaways', toBulletBlock(takeaways)],
         ['Deep Dive', deepFallbackByName.get('Deep Dive') || ''],
-        ['Tradeoffs', deepFallbackByName.get('Tradeoffs') || ''],
         ['Practical Rules', deepFallbackByName.get('Practical Rules') || ''],
         ['Open Questions', deepFallbackByName.get('Open Questions') || ''],
       ]),

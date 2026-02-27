@@ -10,6 +10,7 @@ Owner intent: Build blueprints people choose to read for value, not because they
 - `v1` (2026-02-27): Introduced canonical prompt contract with strict section semantics, Reddit vibe-only policy, and representation pass/fail guidance.
 - `v1.1` (2026-02-27): Added canonical POS folder strategy (local + Oracle path), cherry-pick subset guidance, and final generation directive layer.
 - `v1.2` (2026-02-27): Replaced placeholder/order prose sections with deterministic enforcement contract, moved changelog to top, and added final job recap.
+- `v1.3` (2026-02-27): Removed `Tradeoffs` from active section contract, reframed `Summary` as intro/prerequisite context, reduced Bleup density target to fewer richer slides, and tightened parenthetical-overuse guidance.
 
 ## Purpose
 
@@ -45,7 +46,7 @@ When bullets are used, each bullet must be complete and readable on its own. A c
 
 ### Golden structure target
 
-The default section sequence is `Takeaways`, `Bleup`, `Deep Dive`, `Tradeoffs`, `Practical Rules`, and `Open Questions`, with optional domain adaptation for non-research content only when semantic intent is preserved. `Takeaways` is the fast-value entry point. `Bleup` is the core narrative section that carries the main argument in flowing prose. The remaining sections convert understanding into mechanism clarity, tradeoff framing, execution rules, and explicit unknowns.
+The default section sequence is `Takeaways`, `Bleup`, `Deep Dive`, `Practical Rules`, and `Open Questions`, with optional domain adaptation for non-research content only when semantic intent is preserved. `Takeaways` is the fast-value entry point. `Bleup` is the core narrative section that carries the main argument in flowing prose. The remaining sections convert understanding into mechanism clarity, execution rules, and explicit unknowns.
 
 Sections must not duplicate each other semantically. If a sentence appears in one section, it should not reappear with minor wording changes elsewhere.
 
@@ -53,9 +54,15 @@ Sections must not duplicate each other semantically. If a sentence appears in on
 
 Output must be strict valid JSON in the expected generation schema. Section titles must be explicit and useful. Tags must stay broad, human-searchable, and capped at five. Obscure niche tags that typical users would not search are disallowed. Personal data is never allowed. Timestamps are optional and should be null when unknown.
 
-All deep sections target three to five complete bullets each. Empty sections, one-line placeholders, repeated boilerplate tails, and malformed bullets (for example `-.`) are hard failures.
+All deep sections target three to five complete bullets each. Empty sections, one-line placeholders, repeated boilerplate tails, and malformed bullets (for example `-.`) are hard failures. Parenthetical expansions like `(XYZ)` should be used sparingly and only when they add necessary clarity.
+
+`Summary` is an intro layer, not the bulk layer. It should provide a concise topic orientation and prerequisite context at an ELI15 depth. The bulk payload belongs in `Bleup`.
 
 ## Section Contract
+
+### Summary
+
+Summary is the opening context layer and should orient the reader to the topic quickly before detailed reasoning starts. It should explain what the topic is about, why it matters, and what baseline prerequisites or assumptions the reader should keep in mind. Keep it concise, readable, and general enough to help first-pass comprehension. Do not use Summary to dump detailed mechanisms or dense evidence blocks; those belong in `Bleup` and `Deep Dive`.
 
 ### Takeaways
 
@@ -63,15 +70,11 @@ Takeaways is the highest-value skim section and should deliver immediate payoff 
 
 ### Bleup
 
-Bleup is the narrative core and should read like a coherent mini-essay in three to four short paragraphs. It carries the main through-line: what matters, why it matters, and how to interpret it in practice. This section should feel human, connected, and intentional, not stitched together from note fragments. It should not degrade into bullet artifacts or duplicate sentences from Takeaways. Target depth is enough for a full read to feel satisfying without requiring the original video.
+Bleup is the narrative core and should read like a coherent mini-essay in two to three content-rich paragraphs/slides. It carries the main through-line: what matters, why it matters, and how to interpret it in practice. This section should feel human, connected, and intentional, not stitched together from note fragments. It should not degrade into bullet artifacts or duplicate sentences from Takeaways. Target depth is enough for a full read to feel satisfying without requiring the original video.
 
 ### Deep Dive
 
 Deep Dive explains mechanism and reasoning. It should provide three to five complete bullets that show how or why outcomes happen, under what conditions they hold, and where boundaries appear. Language should stay domain-native and specific to the topic, not generic framework filler. This section should make the reader feel more precise, not simply more verbose.
-
-### Tradeoffs
-
-Tradeoffs clarifies the upside, constraints, and uncertainty in concrete terms. It should provide three to five complete bullets that help the reader avoid simplistic conclusions. This is where nuance becomes decision-useful: what improves, what remains limited, and what depends on context. The tone should be honest and practical, never performatively cautious.
 
 ### Practical Rules
 
@@ -86,9 +89,8 @@ Open Questions defines what remains unresolved in a useful way. It should provid
 | Section | Required shape | Depth target | Fail conditions |
 |---|---|---|---|
 | `Takeaways` | 3-4 complete bullets | fast-skim value in ~10 seconds | clipped bullets, generic labels, keyword-only lines |
-| `Bleup` | 3-4 coherent paragraphs | primary narrative payload | random fact stacking, duplicated lines, list artifacts |
+| `Bleup` | 2-3 coherent content-rich paragraphs/slides | primary narrative payload | random fact stacking, duplicated lines, thin filler slides, list artifacts |
 | `Deep Dive` | 3-5 complete bullets | mechanism/context clarity | generic off-domain bullets, stubs, repeated boilerplate tails |
-| `Tradeoffs` | 3-5 complete bullets | upside/constraint/unknown balance | one-sided framing, vague caveats, duplicated bullets |
 | `Practical Rules` | 3-5 complete bullets | actionable decisions | non-operational advice, abstract slogans |
 | `Open Questions` | 3-5 complete bullets | meaningful unknowns | generic filler questions, repeated "why it matters" tails |
 
