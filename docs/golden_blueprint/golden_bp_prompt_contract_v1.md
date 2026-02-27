@@ -5,6 +5,12 @@ Status: Canonical (current)
 Last updated: 2026-02-27  
 Owner intent: Build blueprints people choose to read for value, not because they are testing the app.
 
+## Change Log
+
+- `v1` (2026-02-27): Introduced canonical prompt contract with strict section semantics, Reddit vibe-only policy, and representation pass/fail guidance.
+- `v1.1` (2026-02-27): Added canonical POS folder strategy (local + Oracle path), cherry-pick subset guidance, and final generation directive layer.
+- `v1.2` (2026-02-27): Replaced placeholder/order prose sections with deterministic enforcement contract, moved changelog to top, and added final job recap.
+
 ## Purpose
 
 This document is the canonical writing and quality contract for Golden Blueprint generation in Bluep. It defines what a blueprint is, how it should feel, how each section should behave, how Reddit references can be used safely for vibe calibration, and how reviewers should score quality before we call output acceptable.
@@ -120,9 +126,58 @@ The assembly order should be stable: transcript truth block first, vibe referenc
 
 For operational consistency, include a brief engagement check sentence in the context layer, such as asking whether the draft would feel useful, specific, and discussion-worthy to the same audience profile as the positive references, while still being fully source-faithful to `<SOURCE_TRANSCRIPT_CONTEXT>`.
 
+## Input Placeholders Contract (Required at Runtime)
+
+The runtime prompt template must be rendered with explicit placeholders before each generation run. Required placeholders are `<VIDEO_URL>`, `<VIDEO_TITLE>`, `<TRANSCRIPT_SOURCE>`, `<SOURCE_TRANSCRIPT_CONTEXT>`, `<ORACLE_POS_DIR>`, and `<POSITIVE_REFERENCE_SET_DESCRIPTION>`. Optional placeholders are `<ADDITIONAL_INSTRUCTIONS>`, `<QUALITY_ISSUE_CODES>`, and `<QUALITY_ISSUE_DETAILS>` for retries.
+
+`<SOURCE_TRANSCRIPT_CONTEXT>` should contain the transcript window selected for generation and must remain the only factual source of truth. `<ORACLE_POS_DIR>` should point to `/home/ubuntu/remix-of-stackwise-advisor/docs/golden_blueprint/reddit/clean/pos`. `<POSITIVE_REFERENCE_SET_DESCRIPTION>` should briefly state why selected references fit the current run's vibe target.
+
+## Deterministic Enforcement Contract
+
+These rules are deterministic checks, not optional writing guidance. Runtime should enforce them with explicit fail reasons and no silent bypass.
+
+Required deterministic checks:
+- Placeholder completeness: fail if any required placeholder is missing or empty at render time.
+- Section order: fail if output does not follow canonical order (`Takeaways`, `Bleup`, `Deep Dive`, `Tradeoffs`, `Practical Rules`, `Open Questions`).
+- Density checks: fail if `Takeaways` is not 3-4 complete bullets, if `Bleup` is not 3-4 coherent paragraphs, or if deep sections are outside 3-5 complete bullets.
+- Completeness checks: fail malformed bullets, clipped fragments, duplicated headers, and repeated boilerplate tails.
+- Source hierarchy checks: fail if content appears to import factual payload from vibe references instead of transcript context.
+
+## No-Duplication Rule
+
+Do not repeat the same sentence or near-identical idea across sections. If an idea appears in one section, later sections must extend or contextualize it rather than restate it.
+
+## Domain-Language Rule
+
+Use language that belongs to the topic domain of the transcript. Avoid cross-domain template bleed (for example, health-style "protocol" framing in finance, or finance-style abstraction in recipes). Section wording must feel native to the subject matter.
+
+## Transcript Precedence Rule
+
+Transcript context is the top authority for all factual statements. Vibe references can shape tone and readability only. If there is any ambiguity, choose transcript fidelity over stylistic flourish.
+
+## Retry Patch Slot (Same Template, Different Context)
+
+Retries should use the same prompt template and inject quality issues through `<QUALITY_ISSUE_CODES>` and `<QUALITY_ISSUE_DETAILS>`. The retry context should request one-pass repair of all listed failures while preserving transcript fidelity and the section contract.
+
 ## Final Generation Directive (Last Instruction Layer)
 
 End the prompt context with a short final directive that reasserts the job and source hierarchy. The directive should explicitly say that the model must now generate the blueprint using `<SOURCE_TRANSCRIPT_CONTEXT>` as the only factual source, while using `<POSITIVE_REFERENCE_PATHS>` only for vibe calibration (tone, pacing, and engagement feel). It should explicitly ban importing facts, numbers, examples, and distinctive wording from references. It should end with a clear "generate now" instruction tied to the required JSON schema and section contract.
+
+## Response Format (Strict JSON Shape)
+
+The rendered prompt must include the required output shape and must reject non-JSON output.
+
+```json
+{
+  "title": "string",
+  "description": "string",
+  "steps": [
+    { "name": "string", "notes": "string", "timestamp": "string|null" }
+  ],
+  "notes": "string|null",
+  "tags": ["string"]
+}
+```
 
 ## Known Slop Patterns and Rewrite Guidance
 
@@ -169,7 +224,6 @@ Rewrite direction: enforce domain-native vocabulary and decision framing per top
 - Human-vibe guidance is present without weakening source fidelity constraints.  
 - Reddit usage rules prevent content leakage while preserving engagement signal.
 
-## Change Log
+## Final Job Recap
 
-- `v1` (2026-02-27): Introduced canonical prompt contract with strict section semantics, Reddit vibe-only policy, and representation pass/fail guidance.
-- `v1.1` (2026-02-27): Added canonical POS folder strategy (local + Oracle path), cherry-pick subset guidance, and final generation directive layer.
+Write a high-value blueprint in direct creator voice that feels human, useful, and discussion-worthy. Use transcript context as the only factual source, use Oracle POS references only for vibe calibration, follow the section contract exactly, and return strict JSON in the required shape.

@@ -141,6 +141,9 @@ describe('goldenBlueprintFormat (backend)', () => {
     expect((result.steps[2]?.notes || '').toLowerCase()).not.toContain('this video');
     expect((result.steps[2]?.notes || '').toLowerCase()).not.toContain('the transcript');
     expect((result.steps[2]?.notes || '')).not.toContain('\n- ');
+    const bleupParagraphs = (result.steps[2]?.notes || '').split(/\n{2,}/).map((part) => part.trim()).filter(Boolean);
+    expect(bleupParagraphs.length).toBeGreaterThanOrEqual(3);
+    expect(bleupParagraphs.length).toBeLessThanOrEqual(4);
     const summaryLead = ((result.steps[0]?.notes || '').split(/\n+/)[0] || '').trim();
     expect(summaryLead.length).toBeGreaterThan(20);
     expect((result.steps[2]?.notes || '')).not.toContain(summaryLead);
@@ -228,6 +231,22 @@ describe('goldenBlueprintFormat (backend)', () => {
     expect(gate.issues).toContain('DEEP_DIVE_BULLET_COUNT');
   });
 
+  it('flags bleup paragraph count deterministically', () => {
+    const malformedBleup = [
+      { name: 'Summary', notes: 'Valid summary paragraph.', timestamp: null },
+      { name: 'Takeaways', notes: '- One clear claim with context.\n- Second clear claim with context.\n- Third clear claim with context.', timestamp: null },
+      { name: 'Bleup', notes: 'Only one paragraph should fail paragraph density check for deterministic enforcement.', timestamp: null },
+      { name: 'Deep Dive', notes: '- Mechanism detail with receptor context.\n- Context and condition are explicit.\n- Practical implication is included.', timestamp: null },
+      { name: 'Tradeoffs', notes: '- Upside is concrete and bounded.\n- Constraint is explicit in context.\n- Unknown is stated with scope.', timestamp: null },
+      { name: 'Practical Rules', notes: '- If condition A, do action B.\n- If condition C, adjust behavior D.\n- Avoid overgeneralizing across contexts.', timestamp: null },
+      { name: 'Open Questions', notes: '- Which subgroup sees strongest lift?\n- What baseline changes effect size?\n- Where does incremental value flatten?', timestamp: null },
+    ];
+
+    const gate = validateGoldenStructure(malformedBleup);
+    expect(gate.ok).toBe(false);
+    expect(gate.issues).toContain('BLEUP_PARAGRAPH_COUNT');
+  });
+
   it('flags repetition and boilerplate patterns in quality gate', () => {
     const repeatedSteps = [
       { name: 'Summary', notes: 'Shared sentence one. Shared sentence two. Shared sentence one.', timestamp: null },
@@ -244,6 +263,26 @@ describe('goldenBlueprintFormat (backend)', () => {
     expect(gate.issues).toContain('BOILERPLATE_REPEATED');
     expect(gate.issues).toContain('DUPLICATE_SENTENCES_ACROSS_SECTIONS');
     expect(gate.issues).toContain('GENERIC_BULLET_NO_CONTEXT');
+  });
+
+  it('flags placeholder and prompt-context leakage deterministically', () => {
+    const leakSteps = [
+      { name: 'Summary', notes: 'Use <SOURCE_TRANSCRIPT_CONTEXT> and then continue analysis.', timestamp: null },
+      { name: 'Takeaways', notes: '- Useful claim with mechanism context and implication.\n- Second useful claim with condition and implication.\n- Third useful claim with context and implication.', timestamp: null },
+      { name: 'Bleup', notes: 'This paragraph mentions Oracle POS dir and should be caught. Oracle POS dir path is not allowed in output.\n\nSecond paragraph with transcript-grounded phrasing.\n\nThird paragraph for structure compliance.', timestamp: null },
+      { name: 'Deep Dive', notes: '- Mechanism includes receptor and membrane context.\n- Context depends on baseline behavior quality.\n- Practical implication is explicit.', timestamp: null },
+      { name: 'Tradeoffs', notes: '- Upside is bounded by context.\n- Constraint is concrete in real conditions.\n- Unknown remains under subgroup variance.', timestamp: null },
+      { name: 'Practical Rules', notes: '- If baseline is low, start conservative.\n- If response is stable, scale gradually.\n- Avoid changing multiple variables at once.', timestamp: null },
+      { name: 'Open Questions', notes: '- Which condition predicts strongest response?\n- Where does value flatten in advanced users?\n- Which signal predicts long-term adherence?', timestamp: null },
+    ];
+
+    const gate = evaluateGoldenQuality({
+      steps: leakSteps,
+      transcript: 'mechanism receptor membrane context condition practical implication baseline response adherence',
+    });
+    expect(gate.ok).toBe(false);
+    expect(gate.issues).toContain('PLACEHOLDER_TOKEN_LEAK');
+    expect(gate.issues).toContain('PROMPT_CONTEXT_LEAK');
   });
 
   it('supports quality-gate evaluation with repair disabled and enabled', () => {

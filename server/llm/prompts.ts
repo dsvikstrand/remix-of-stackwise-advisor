@@ -161,6 +161,9 @@ Hard constraints:
 - Timestamps are optional; use null when unknown.
 - Tags: 3-5 max, broad and user-searchable. Avoid obscure niche tags.
 - Deep sections should target 3-5 complete bullets each (no stubs like "-." or cut-off fragments).
+- All factual claims must come from the provided transcript context only.
+- Vibe references are style-only calibration inputs and must never supply facts, numbers, examples, or copied phrasing.
+- If style pressure and transcript fidelity conflict, transcript fidelity always wins.
 
 Response format:
 {
@@ -173,17 +176,45 @@ Response format:
   "tags": ["string"]
 }`;
 
+const YOUTUBE_POS_VIBE_ORACLE_DIR = '/home/ubuntu/remix-of-stackwise-advisor/docs/golden_blueprint/reddit/clean/pos';
+
 export function buildYouTubeBlueprintUserPrompt(input: { videoUrl: string; transcript: string; additionalInstructions?: string }) {
-  const trimmedTranscript = input.transcript.trim().slice(0, 18_000);
+  const videoUrl = String(input.videoUrl || '').trim();
+  const transcript = String(input.transcript || '').trim();
+  const oraclePosDir = String(YOUTUBE_POS_VIBE_ORACLE_DIR || '').trim();
+  if (!videoUrl) {
+    throw new Error('YOUTUBE_PROMPT_INPUT_VIDEO_URL_REQUIRED');
+  }
+  if (!transcript) {
+    throw new Error('YOUTUBE_PROMPT_INPUT_TRANSCRIPT_REQUIRED');
+  }
+  if (!oraclePosDir) {
+    throw new Error('YOUTUBE_PROMPT_INPUT_ORACLE_POS_DIR_REQUIRED');
+  }
+
+  const trimmedTranscript = transcript.slice(0, 18_000);
   const extra = String(input.additionalInstructions || '').trim();
-  return `Video URL: ${input.videoUrl}
+  const vibeContext = `Vibe calibration context (style-only):
+- Read all positive examples from Oracle POS dir: ${oraclePosDir}
+- Use those examples only for tone, pacing, readability, and engagement feel.
+- Do NOT import facts, numbers, examples, or distinctive wording from those references.
+- Keep all factual content grounded in the transcript below.
+`;
+  return `Video URL: ${videoUrl}
 
 Transcript:
 ${trimmedTranscript}
 
+${vibeContext}
+
 ${extra ? `Additional instructions:\n${extra}\n` : ''}
 
-	Generate a usable blueprint now.`;
+Final generation directive:
+- Use transcript as the only factual source of truth.
+- Use Oracle POS references only for vibe/engagement calibration.
+- Follow required section contract and output strict JSON now.
+
+Generate a usable blueprint now.`;
 }
 
 export function buildYouTubeQualityRetryInstructions(input: {

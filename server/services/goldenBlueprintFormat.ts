@@ -92,10 +92,19 @@ const MIN_SECTION_BULLETS = 3;
 const MAX_SECTION_BULLETS = 5;
 const MIN_TAKEAWAYS_BULLETS = 3;
 const MAX_TAKEAWAYS_BULLETS = 4;
+const MIN_BLEUP_PARAGRAPHS = 3;
+const MAX_BLEUP_PARAGRAPHS = 4;
 const REPETITION_TRIGRAM_SECTION_THRESHOLD = 0.14;
-const REPETITION_TRIGRAM_GLOBAL_THRESHOLD = 0.10;
+const REPETITION_TRIGRAM_GLOBAL_THRESHOLD = 0.14;
 const DUPLICATE_SENTENCE_REUSE_THRESHOLD = 3;
 const BOILERPLATE_TAIL_PATTERN = /why it matters:\s*this changes how you decide when and how to apply it\.?/gi;
+const PLACEHOLDER_TOKEN_PATTERN = /<([A-Z_][A-Z0-9_]{2,80})>/g;
+const PROMPT_CONTEXT_LEAK_PATTERNS = [
+  /oracle\s+pos\s+dir/i,
+  /vibe\s+calibration\s+context/i,
+  /\/home\/ubuntu\/remix-of-stackwise-advisor\/docs\/golden_blueprint\/reddit\/clean\/pos/i,
+  /docs\/golden_blueprint\/reddit\/clean\/pos/i,
+];
 const MECHANISM_TERMS = new Set([
   'mechanism',
   'pathway',
@@ -261,6 +270,52 @@ function wordCount(value: string) {
     .trim()
     .split(/\s+/)
     .filter(Boolean).length;
+}
+
+function splitParagraphs(value: string) {
+  return normalizeWhitespace(value)
+    .split(/\n{2,}/)
+    .map((part) => normalizeWhitespace(part))
+    .filter(Boolean);
+}
+
+function buildParagraphsFromSentences(sentences: string[], targetParagraphCount: number) {
+  const clean = dedupeKeepOrder(sentences.map((sentence) => normalizeWhitespace(sentence)).filter(Boolean));
+  if (!clean.length) return [] as string[];
+  const target = Math.max(1, targetParagraphCount);
+  const chunkSize = Math.max(1, Math.ceil(clean.length / target));
+  const out: string[] = [];
+  for (let index = 0; index < clean.length; index += chunkSize) {
+    out.push(clean.slice(index, index + chunkSize).join(' '));
+  }
+  return out;
+}
+
+function normalizeBleupParagraphs(primary: string, fallback: string) {
+  let paragraphs = splitParagraphs(primary);
+  const fallbackParagraphs = splitParagraphs(fallback);
+  if (paragraphs.length === 0 && fallbackParagraphs.length > 0) {
+    paragraphs = fallbackParagraphs;
+  }
+
+  if (paragraphs.length < MIN_BLEUP_PARAGRAPHS) {
+    const sentencePool = dedupeKeepOrder([
+      ...toSentences(primary),
+      ...toSentences(fallback),
+      ...toSentences(paragraphs.join(' ')),
+    ]);
+    if (sentencePool.length > 0) {
+      paragraphs = buildParagraphsFromSentences(sentencePool, MIN_BLEUP_PARAGRAPHS);
+    }
+  }
+
+  if (paragraphs.length > MAX_BLEUP_PARAGRAPHS) {
+    const head = paragraphs.slice(0, MAX_BLEUP_PARAGRAPHS - 1);
+    const tail = paragraphs.slice(MAX_BLEUP_PARAGRAPHS - 1).join(' ');
+    paragraphs = [...head, normalizeWhitespace(tail)].filter(Boolean);
+  }
+
+  return normalizeWhitespace(paragraphs.join('\n\n'));
 }
 
 function dedupeKeepOrder(values: string[]) {
@@ -780,6 +835,27 @@ export function evaluateGoldenQuality(input: {
     });
   }
 
+  for (const step of steps) {
+    const section = normalizeWhitespace(step.name);
+    const text = sectionMap.get(section)?.text || '';
+    const placeholderMatches = Array.from(text.matchAll(PLACEHOLDER_TOKEN_PATTERN))
+      .map((match) => match?.[1] || '')
+      .filter(Boolean);
+    if (placeholderMatches.length > 0) {
+      issues.push({
+        code: 'PLACEHOLDER_TOKEN_LEAK',
+        section,
+        detail: `tokens=${Array.from(new Set(placeholderMatches)).slice(0, 6).join(',')}`,
+      });
+    }
+    if (PROMPT_CONTEXT_LEAK_PATTERNS.some((pattern) => pattern.test(text))) {
+      issues.push({
+        code: 'PROMPT_CONTEXT_LEAK',
+        section,
+      });
+    }
+  }
+
   const uniqueKey = (issue: GoldenQualityGateIssue) => `${issue.code}::${issue.section || ''}::${issue.detail || ''}`;
   const deduped: GoldenQualityGateIssue[] = [];
   const seen = new Set<string>();
@@ -811,6 +887,12 @@ export function validateGoldenStructure(steps: YouTubeDraftStep[]): GoldenStruct
 
   const bleup = normalizeWhitespace(byName.get('Bleup')?.notes || '');
   if (!bleup) issues.push('BLEUP_EMPTY');
+  if (bleup) {
+    const bleupParagraphCount = splitParagraphs(bleup).length;
+    if (bleupParagraphCount < MIN_BLEUP_PARAGRAPHS || bleupParagraphCount > MAX_BLEUP_PARAGRAPHS) {
+      issues.push('BLEUP_PARAGRAPH_COUNT');
+    }
+  }
 
   const takeawaysCount = parseBulletLines(byName.get('Takeaways')?.notes || '').length;
   if (takeawaysCount < MIN_TAKEAWAYS_BULLETS || takeawaysCount > MAX_TAKEAWAYS_BULLETS) {
@@ -860,7 +942,10 @@ function repairGoldenStructure(
 ): YouTubeDraftStep[] {
   const byName = new Map((steps || []).map((step) => [normalizeWhitespace(step?.name || ''), step]));
   const summary = normalizeWhitespace(byName.get('Summary')?.notes || '') || input.summaryFallback;
-  const bleup = normalizeWhitespace(byName.get('Bleup')?.notes || '') || input.bleupFallback;
+  const bleup = normalizeBleupParagraphs(
+    normalizeWhitespace(byName.get('Bleup')?.notes || ''),
+    input.bleupFallback,
+  );
   const takeaways = normalizeBulletSection(
     byName.get('Takeaways')?.notes || '',
     input.takeawaysFallback,
@@ -1000,7 +1085,10 @@ function repairGoldenQuality(
     ...toSentences(bleupFallback),
   ]);
   const uniqueBleup = bleupCandidates.filter((sentence) => rememberSentence(sentence));
-  const bleup = normalizeWhitespace(uniqueBleup.join(' ')) || dedupeSentencesKeepOrder(bleupSource) || bleupFallback;
+  const bleup = normalizeBleupParagraphs(
+    normalizeWhitespace(uniqueBleup.join(' ')) || dedupeSentencesKeepOrder(bleupSource),
+    bleupFallback,
+  );
   rememberBlockSentences(bleup);
 
   return [
