@@ -4083,6 +4083,8 @@ async function createBlueprintFromVideo(db: ReturnType<typeof createClient>, inp
         bp_origin: 'youtube_pipeline',
         bp_domain: goldenFormat.domain,
         summary_word_count: goldenFormat.summaryWordCount,
+        bp_structure_ok: goldenFormat.structureGate.ok,
+        bp_structure_issues: goldenFormat.structureGate.issues,
       },
       banner_url: sourceThumbnailUrl,
       mix_notes: result.draft.notes || null,

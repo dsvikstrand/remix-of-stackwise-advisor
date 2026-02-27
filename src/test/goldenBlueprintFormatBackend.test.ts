@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeYouTubeDraftToGoldenV1 } from '../../server/services/goldenBlueprintFormat';
+import { normalizeYouTubeDraftToGoldenV1, validateGoldenStructure } from '../../server/services/goldenBlueprintFormat';
 import type { YouTubeBlueprintResult } from '../../server/llm/types';
 
 function buildDeepDraft(): YouTubeBlueprintResult {
@@ -102,6 +102,8 @@ describe('goldenBlueprintFormat (backend)', () => {
     const names = result.steps.map((step) => step.name);
 
     expect(result.domain).toBe('deep');
+    expect(result.structureGate.ok).toBe(true);
+    expect(result.structureGate.issues).toEqual([]);
     expect(names.slice(0, 3)).toEqual(['Summary', 'Takeaways', 'Bleup']);
     expect(names).toEqual([
       'Summary',
@@ -153,6 +155,8 @@ describe('goldenBlueprintFormat (backend)', () => {
     const names = result.steps.map((step) => step.name);
 
     expect(result.domain).toBe('deep');
+    expect(result.structureGate.ok).toBe(true);
+    expect(result.structureGate.issues).toEqual([]);
     expect(names.slice(0, 3)).toEqual(['Summary', 'Takeaways', 'Bleup']);
     expect(names).toEqual([
       'Summary',
@@ -192,5 +196,24 @@ describe('goldenBlueprintFormat (backend)', () => {
     expect(result.tags).not.toContain('parallel-transport');
     expect(result.tags).toContain('ai');
     expect(result.tags.some((tag) => ['software', 'developer-tools', 'analysis', 'automation'].includes(tag))).toBe(true);
+  });
+
+  it('detects malformed section shape in gate validator', () => {
+    const malformed = [
+      { name: 'Summary', notes: '', timestamp: null },
+      { name: 'Takeaways', notes: '- only one bullet', timestamp: null },
+      { name: 'Bleup', notes: '', timestamp: null },
+      { name: 'Deep Dive', notes: '- one\n- two', timestamp: null },
+      { name: 'Tradeoffs', notes: '- one\n- two', timestamp: null },
+      { name: 'Practical Rules', notes: '- one\n- two', timestamp: null },
+      { name: 'Open Questions', notes: '- one\n- two', timestamp: null },
+    ];
+
+    const gate = validateGoldenStructure(malformed);
+    expect(gate.ok).toBe(false);
+    expect(gate.issues).toContain('SUMMARY_EMPTY');
+    expect(gate.issues).toContain('BLEUP_EMPTY');
+    expect(gate.issues).toContain('TAKEAWAYS_BULLET_COUNT');
+    expect(gate.issues).toContain('DEEP_DIVE_BULLET_COUNT');
   });
 });

@@ -7,6 +7,12 @@ export type GoldenBlueprintFormatResult = {
   steps: YouTubeDraftStep[];
   summaryWordCount: number;
   tags: string[];
+  structureGate: GoldenStructureGateResult;
+};
+
+export type GoldenStructureGateResult = {
+  ok: boolean;
+  issues: string[];
 };
 
 const ACTION_KEYWORDS = [
@@ -71,6 +77,17 @@ const GENERIC_SECTION_LABELS = new Set([
 
 const MIN_SECTION_BULLETS = 3;
 const MAX_SECTION_BULLETS = 5;
+const MIN_TAKEAWAYS_BULLETS = 3;
+const MAX_TAKEAWAYS_BULLETS = 4;
+const REQUIRED_GOLDEN_SECTION_ORDER = [
+  'Summary',
+  'Takeaways',
+  'Bleup',
+  'Deep Dive',
+  'Tradeoffs',
+  'Practical Rules',
+  'Open Questions',
+] as const;
 const INCOMPLETE_TAIL_WORDS = new Set([
   'and',
   'or',
@@ -385,6 +402,18 @@ function toBulletBlock(lines: string[]) {
     .join('\n');
 }
 
+function parseBulletLines(notes: string) {
+  return String(notes || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .map((line) => {
+      const match = line.match(/^[-*•]\s+(.+)$/) || line.match(/^\d+[.)]\s+(.+)$/);
+      return match ? match[1].trim() : '';
+    })
+    .map((line) => sanitizeBulletCandidate(line))
+    .filter((line): line is string => Boolean(line));
+}
+
 function sanitizeBulletCandidate(value: string) {
   let next = stripMetaFraming(stripListPrefix(value));
   next = normalizeWhitespace(next)
@@ -448,6 +477,99 @@ function normalizeGuidedBulletGroup(primary: string[], fallback: string[]) {
     .map((item) => toGuidedBullet(item))
     .filter((item): item is string => Boolean(item));
   return normalizeBulletGroup(guidedPrimary, guidedFallback);
+}
+
+export function validateGoldenStructure(steps: YouTubeDraftStep[]): GoldenStructureGateResult {
+  const issues: string[] = [];
+  const titles = (steps || []).map((step) => normalizeWhitespace(step?.name || ''));
+  const expected = [...REQUIRED_GOLDEN_SECTION_ORDER];
+  if (titles.length !== expected.length || titles.some((title, idx) => title !== expected[idx])) {
+    issues.push('SECTION_ORDER_MISMATCH');
+  }
+
+  const byName = new Map((steps || []).map((step) => [normalizeWhitespace(step?.name || ''), step]));
+  const summary = normalizeWhitespace(byName.get('Summary')?.notes || '');
+  if (!summary) issues.push('SUMMARY_EMPTY');
+
+  const bleup = normalizeWhitespace(byName.get('Bleup')?.notes || '');
+  if (!bleup) issues.push('BLEUP_EMPTY');
+
+  const takeawaysCount = parseBulletLines(byName.get('Takeaways')?.notes || '').length;
+  if (takeawaysCount < MIN_TAKEAWAYS_BULLETS || takeawaysCount > MAX_TAKEAWAYS_BULLETS) {
+    issues.push('TAKEAWAYS_BULLET_COUNT');
+  }
+
+  for (const sectionName of ['Deep Dive', 'Tradeoffs', 'Practical Rules', 'Open Questions']) {
+    const count = parseBulletLines(byName.get(sectionName)?.notes || '').length;
+    if (count < MIN_SECTION_BULLETS || count > MAX_SECTION_BULLETS) {
+      issues.push(`${sectionName.toUpperCase().replace(/\s+/g, '_')}_BULLET_COUNT`);
+    }
+  }
+
+  return {
+    ok: issues.length === 0,
+    issues,
+  };
+}
+
+function normalizeBulletSection(
+  notes: string,
+  fallbackNotes: string,
+  minBullets: number,
+  maxBullets: number,
+) {
+  const existing = parseBulletLines(notes);
+  const fallback = parseBulletLines(fallbackNotes);
+  const merged = dedupeKeepOrder([...existing, ...fallback]).slice(0, maxBullets);
+  const filled = [...merged];
+  let idx = 0;
+  while (filled.length < minBullets && idx < fallback.length) {
+    const candidate = fallback[idx];
+    idx += 1;
+    if (!filled.includes(candidate)) filled.push(candidate);
+  }
+  return toBulletBlock(filled.slice(0, maxBullets));
+}
+
+function repairGoldenStructure(
+  steps: YouTubeDraftStep[],
+  input: {
+    summaryFallback: string;
+    takeawaysFallback: string;
+    bleupFallback: string;
+    deepFallbackByName: Map<string, string>;
+  },
+): YouTubeDraftStep[] {
+  const byName = new Map((steps || []).map((step) => [normalizeWhitespace(step?.name || ''), step]));
+  const summary = normalizeWhitespace(byName.get('Summary')?.notes || '') || input.summaryFallback;
+  const bleup = normalizeWhitespace(byName.get('Bleup')?.notes || '') || input.bleupFallback;
+  const takeaways = normalizeBulletSection(
+    byName.get('Takeaways')?.notes || '',
+    input.takeawaysFallback,
+    MIN_TAKEAWAYS_BULLETS,
+    MAX_TAKEAWAYS_BULLETS,
+  );
+
+  const fixedDeep = ['Deep Dive', 'Tradeoffs', 'Practical Rules', 'Open Questions'].map((sectionName) => {
+    const normalized = normalizeBulletSection(
+      byName.get(sectionName)?.notes || '',
+      input.deepFallbackByName.get(sectionName) || '',
+      MIN_SECTION_BULLETS,
+      MAX_SECTION_BULLETS,
+    );
+    return {
+      name: sectionName,
+      notes: normalized,
+      timestamp: null,
+    } satisfies YouTubeDraftStep;
+  });
+
+  return [
+    { name: 'Summary', notes: summary, timestamp: null },
+    { name: 'Takeaways', notes: takeaways, timestamp: null },
+    { name: 'Bleup', notes: bleup, timestamp: null },
+    ...fixedDeep,
+  ];
 }
 
 function chooseGeneralTags(draft: YouTubeBlueprintResult, domain: GoldenBlueprintDomain) {
@@ -646,8 +768,10 @@ export function normalizeYouTubeDraftToGoldenV1(draft: YouTubeBlueprintResult): 
   const summaryParagraphs = buildSummaryParagraphs(draft, domain);
   const topSummary = buildTopSummary(summaryParagraphs);
   const tags = chooseGeneralTags(draft, domain);
+  const deepSections = buildDeepSections(draft);
+  const deepFallbackByName = new Map(deepSections.map((step) => [step.name, step.notes]));
 
-  const steps: YouTubeDraftStep[] = [
+  const initialSteps: YouTubeDraftStep[] = [
     {
       name: 'Summary',
       notes: topSummary || summaryParagraphs[0] || '',
@@ -663,13 +787,26 @@ export function normalizeYouTubeDraftToGoldenV1(draft: YouTubeBlueprintResult): 
       notes: summaryParagraphs.join('\n\n'),
       timestamp: null,
     },
-    ...buildDeepSections(draft),
+    ...deepSections,
   ];
+
+  let steps = initialSteps;
+  let structureGate = validateGoldenStructure(steps);
+  if (!structureGate.ok) {
+    steps = repairGoldenStructure(steps, {
+      summaryFallback: topSummary || summaryParagraphs[0] || '',
+      takeawaysFallback: toBulletBlock(takeaways),
+      bleupFallback: summaryParagraphs.join('\n\n'),
+      deepFallbackByName,
+    });
+    structureGate = validateGoldenStructure(steps);
+  }
 
   return {
     domain,
     steps,
     summaryWordCount: wordCount(summaryParagraphs.join(' ')),
     tags,
+    structureGate,
   };
 }
