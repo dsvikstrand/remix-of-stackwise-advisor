@@ -2,6 +2,13 @@
 
 This folder is the working area for building and validating the Golden BP generation pipeline.
 
+## Canonical Docs
+
+- Prompt/spec source of truth: `golden_bp_prompt_contract_v1.md`
+- Historical baseline protocol: `golden_bp_protocol_v0.md`
+- Layout scaffolds: `golden_bp_layouts_v0.md`
+- Reddit signal analysis: `reddit_pos_neg_insights.md`
+
 ## Structure
 
 - `reddit/clean/pos`: cleaned positive reference posts

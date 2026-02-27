@@ -1,5 +1,8 @@
 # Golden Blueprint Protocol v0
 
+> Canonical update: for current generation prompt contract and strict section semantics, use `docs/golden_blueprint/golden_bp_prompt_contract_v1.md`.  
+> This v0 document is preserved as historical baseline context.
+
 ## Purpose
 
 - [have] Define the current baseline protocol for generating new Golden Blueprints in Bluep.
