@@ -524,15 +524,17 @@ export default function BlueprintDetail() {
     return (
       <div className="space-y-0">
         {group.map((step, index) => {
-          const isSummarySection = isNarrativeKey(normalizeHeadingKey(step.title));
-          const summarySlides = isSummarySection ? splitSummaryIntoSlides(step.description) : [];
+          const sectionKey = normalizeHeadingKey(step.title);
+          const isTopSummarySection = isSummaryKey(sectionKey);
+          const isBleupSection = isBleupKey(sectionKey);
+          const summarySlides = isBleupSection ? splitSummaryIntoSlides(step.description) : [];
           const parsedDescription = parseDescriptionBlocks(step.description);
           const combinedBullets = [
             ...parsedDescription.bullets,
             ...step.items.map((item) => formatStepItem(item)),
           ];
           const useSummarySlider =
-            isSummarySection &&
+            isBleupSection &&
             step.description.trim().length > 0 &&
             (summarySlides.length > 1 || useGoldenRender);
           return (
@@ -544,11 +546,11 @@ export default function BlueprintDetail() {
                 <SummarySlides title={step.title} slides={summarySlides.length > 0 ? summarySlides : [step.description]} />
               ) : (
                 <>
-                  <p className="text-sm font-medium">{step.title}</p>
+                  {!isTopSummarySection ? <p className="text-sm font-medium">{step.title}</p> : null}
                   {parsedDescription.text ? (
                     <p className="text-sm text-muted-foreground whitespace-pre-line">{parsedDescription.text}</p>
                   ) : null}
-                  {combinedBullets.length > 0 ? (
+                  {combinedBullets.length > 0 && !isTopSummarySection ? (
                     <ul className="space-y-1 list-disc pl-5">
                       {combinedBullets.map((itemText, itemIndex) => (
                         <li key={`${step.id || index}-${itemIndex}`} className="text-sm leading-snug">

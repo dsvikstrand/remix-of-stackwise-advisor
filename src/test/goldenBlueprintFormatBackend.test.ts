@@ -141,6 +141,9 @@ describe('goldenBlueprintFormat (backend)', () => {
     expect((result.steps[2]?.notes || '').toLowerCase()).not.toContain('this video');
     expect((result.steps[2]?.notes || '').toLowerCase()).not.toContain('the transcript');
     expect((result.steps[2]?.notes || '')).not.toContain('\n- ');
+    const summaryLead = ((result.steps[0]?.notes || '').split(/\n+/)[0] || '').trim();
+    expect(summaryLead.length).toBeGreaterThan(20);
+    expect((result.steps[2]?.notes || '')).not.toContain(summaryLead);
 
     for (const stepName of ['Deep Dive', 'Tradeoffs', 'Practical Rules', 'Open Questions']) {
       const section = result.steps.find((step) => step.name === stepName);
@@ -244,9 +247,8 @@ describe('goldenBlueprintFormat (backend)', () => {
   });
 
   it('supports quality-gate evaluation with repair disabled and enabled', () => {
-    const noisy = buildNoisyDraft();
-    const noRepair = normalizeYouTubeDraftToGoldenV1(noisy, { repairQuality: false });
-    const withRepair = normalizeYouTubeDraftToGoldenV1(noisy, { repairQuality: true });
+    const noRepair = normalizeYouTubeDraftToGoldenV1(buildDeepDraft(), { repairQuality: false });
+    const withRepair = normalizeYouTubeDraftToGoldenV1(buildDeepDraft(), { repairQuality: true });
     expect(noRepair.qualityGate.ok).toBe(false);
     expect(withRepair.qualityGate.ok).toBe(true);
   });

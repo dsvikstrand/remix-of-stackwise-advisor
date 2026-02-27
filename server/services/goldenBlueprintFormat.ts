@@ -1243,6 +1243,8 @@ export function normalizeYouTubeDraftToGoldenV1(
   const takeaways = selectTakeawayCandidates(draft, domain);
   const summaryParagraphs = buildSummaryParagraphs(draft, domain);
   const topSummary = buildTopSummary(summaryParagraphs);
+  const bleupNarrative = normalizeWhitespace(summaryParagraphs.slice(1).join('\n\n'))
+    || normalizeWhitespace(summaryParagraphs.join('\n\n'));
   const tags = chooseGeneralTags(draft, domain);
   const deepSections = buildDeepSections(draft);
   const deepFallbackByName = new Map(deepSections.map((step) => [step.name, step.notes]));
@@ -1260,7 +1262,7 @@ export function normalizeYouTubeDraftToGoldenV1(
     },
     {
       name: 'Bleup',
-      notes: summaryParagraphs.join('\n\n'),
+      notes: bleupNarrative,
       timestamp: null,
     },
     ...deepSections,
@@ -1272,7 +1274,7 @@ export function normalizeYouTubeDraftToGoldenV1(
     steps = repairGoldenStructure(steps, {
       summaryFallback: topSummary || summaryParagraphs[0] || '',
       takeawaysFallback: toBulletBlock(takeaways),
-      bleupFallback: summaryParagraphs.join('\n\n'),
+      bleupFallback: bleupNarrative,
       deepFallbackByName,
     });
     structureGate = validateGoldenStructure(steps);
