@@ -755,7 +755,7 @@ export default function BlueprintDetail() {
                             <div key={step.id || `${step.title}-${index}`} className="rounded-md border border-border/40 px-3 py-2.5">
                               {step.description && (() => {
                                 const normalizedSummary = normalizeGoldenStep(step, index);
-                                const summarySlides = isNarrativeKey(normalizeHeadingKey(normalizedSummary.title))
+                                const summarySlides = isBleupKey(normalizeHeadingKey(normalizedSummary.title))
                                   ? splitSummaryIntoSlides(normalizedSummary.description)
                                   : [];
                                 const useSummarySlider = summarySlides.length > 1;
