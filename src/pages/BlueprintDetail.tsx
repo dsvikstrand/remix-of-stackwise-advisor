@@ -522,7 +522,7 @@ export default function BlueprintDetail() {
   const renderGoldenGroup = (group: RenderStep[]) => {
     if (group.length === 0) return null;
     return (
-      <div className="rounded-md border border-border/40 px-3 py-3 space-y-0">
+      <div className="space-y-0">
         {group.map((step, index) => {
           const isSummarySection = isNarrativeKey(normalizeHeadingKey(step.title));
           const summarySlides = isSummarySection ? splitSummaryIntoSlides(step.description) : [];
@@ -538,7 +538,7 @@ export default function BlueprintDetail() {
           return (
             <div
               key={step.id || `${step.title}-${index}`}
-              className={index === 0 ? 'space-y-1.5' : 'mt-3 border-t border-border/30 pt-3 space-y-1.5'}
+              className={index === 0 ? 'space-y-1.5' : 'mt-3 pt-1 space-y-1.5'}
             >
               {useSummarySlider ? (
                 <SummarySlides title={step.title} slides={summarySlides.length > 0 ? summarySlides : [step.description]} />
@@ -569,21 +569,21 @@ export default function BlueprintDetail() {
   const renderGoldenInteractiveGroup = (group: RenderStep[]) => {
     if (group.length === 0) return null;
     return (
-      <div className="rounded-md border border-border/40 overflow-hidden">
+      <div className="space-y-2">
         <Tabs defaultValue={`golden-section-${0}`} className="w-full">
-          <TabsList className="w-full justify-center rounded-none border-b border-border/40 bg-muted/20 flex-nowrap overflow-x-auto px-3 py-2">
+          <TabsList className="w-full justify-center bg-transparent flex-nowrap overflow-x-auto px-0 py-1">
             {group.map((step, index) => (
               <TabsTrigger
                 key={step.id || `trigger-${step.title}-${index}`}
                 value={`golden-section-${index}`}
-                className="shrink-0 text-[11px] px-2 py-1 uppercase tracking-wide data-[state=active]:bg-background"
+                className="shrink-0 text-[11px] px-2.5 py-1 uppercase tracking-wide data-[state=active]:bg-muted/50"
               >
                 {step.title}
               </TabsTrigger>
             ))}
           </TabsList>
 
-          <div className="p-3 sm:p-4">
+          <div className="px-0 py-1">
             {group.map((step, index) => {
               const parsedDescription = parseDescriptionBlocks(step.description);
               const combinedBullets = [
