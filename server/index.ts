@@ -171,6 +171,13 @@ const yt2bpAuthLimitPerMin = Number(process.env.YT2BP_AUTH_LIMIT_PER_MIN) || 20;
 const yt2bpIpLimitPerHour = Number(process.env.YT2BP_IP_LIMIT_PER_HOUR) || 30;
 const yt2bpEnabledRaw = String(process.env.YT2BP_ENABLED ?? 'true').trim().toLowerCase();
 const yt2bpEnabled = !(yt2bpEnabledRaw === 'false' || yt2bpEnabledRaw === '0' || yt2bpEnabledRaw === 'off');
+const yt2bpSafetyBlockEnabledRaw = String(process.env.YT2BP_SAFETY_BLOCK_ENABLED ?? 'false').trim().toLowerCase();
+const yt2bpSafetyBlockEnabled = (
+  yt2bpSafetyBlockEnabledRaw === '1'
+  || yt2bpSafetyBlockEnabledRaw === 'true'
+  || yt2bpSafetyBlockEnabledRaw === 'yes'
+  || yt2bpSafetyBlockEnabledRaw === 'on'
+);
 const yt2bpCoreTimeoutMs = clampInt(process.env.YT2BP_CORE_TIMEOUT_MS, 120_000, 30_000, 300_000);
 const ingestionServiceToken = String(process.env.INGESTION_SERVICE_TOKEN || '').trim();
 const ingestionMaxPerSubscription = Math.max(1, Number(process.env.INGESTION_MAX_PER_SUBSCRIPTION) || 5);
@@ -11834,6 +11841,44 @@ async function runYouTubePipeline(input: {
         },
       });
     };
+    const bypassSafetyBlock = async (payload: {
+      stage: string;
+      blockedTopics: string[];
+      attempt: number;
+      run: number;
+      globalRun: number;
+    }) => {
+      console.warn('[yt2bp_safety_block_bypassed]', JSON.stringify({
+        run_id: input.runId,
+        stage: payload.stage,
+        blocked_topics: payload.blockedTopics,
+        attempt: payload.attempt,
+        run: payload.run,
+        global_run: payload.globalRun,
+        safety_block_enabled: yt2bpSafetyBlockEnabled,
+      }));
+      if (traceContext.db && traceContext.userId) {
+        await safeGenerationTraceWrite({
+          runId: input.runId,
+          op: 'event_safety_block_bypassed',
+          fn: async () => {
+            await appendGenerationEvent(traceContext.db as any, {
+              runId: input.runId,
+              level: 'warn',
+              event: 'safety_block_bypassed',
+              payload: {
+                stage: payload.stage,
+                blocked_topics: payload.blockedTopics,
+                attempt: payload.attempt,
+                run: payload.run,
+                global_run: payload.globalRun,
+                safety_block_enabled: yt2bpSafetyBlockEnabled,
+              },
+            });
+          },
+        });
+      }
+    };
     const qualityConfig = readYt2bpQualityConfig();
     const contentSafetyConfig = readYt2bpContentSafetyConfig();
     const qualityAttempts = qualityConfig.enabled ? 1 + qualityConfig.retry_policy.max_retries : 1;
@@ -12013,7 +12058,17 @@ async function runYouTubePipeline(input: {
         });
       }
       if (!deterministicSafety.ok) {
-        makePipelineError('SAFETY_BLOCKED', `Forbidden topics detected: ${deterministicSafety.blockedTopics.join(', ')}`);
+        if (yt2bpSafetyBlockEnabled) {
+          makePipelineError('SAFETY_BLOCKED', `Forbidden topics detected: ${deterministicSafety.blockedTopics.join(', ')}`);
+        } else {
+          await bypassSafetyBlock({
+            stage: 'deterministic_draft',
+            blockedTopics: deterministicSafety.blockedTopics,
+            attempt,
+            run: attemptRunCount,
+            globalRun: globalRunIndex,
+          });
+        }
       }
       if (!pii.ok) {
         makePipelineError('PII_BLOCKED', `PII detected: ${pii.matches.join(', ')}`);
@@ -12128,8 +12183,17 @@ async function runYouTubePipeline(input: {
             safetyRetryHint =
               'Avoid these forbidden topics: self_harm, sexual_minors, hate_harassment. Keep output safe and compliant.';
             continue;
-          } else {
+          } else if (yt2bpSafetyBlockEnabled) {
             makePipelineError('SAFETY_BLOCKED', 'This video content could not be converted safely. Please try another video.');
+          } else {
+            await bypassSafetyBlock({
+              stage: 'llm_content_safety',
+              blockedTopics: safetyScore.failedCriteria || ['llm_content_safety'],
+              attempt,
+              run: attemptRunCount,
+              globalRun: globalRunIndex,
+            });
+            safetyPassed = true;
           }
         }
 
@@ -12333,7 +12397,17 @@ async function runYouTubePipeline(input: {
     const retryFlattened = flattenDraftText(retryDraft);
     const retrySafety = runSafetyChecks(retryFlattened);
     if (!retrySafety.ok) {
-      makePipelineError('SAFETY_BLOCKED', `Forbidden topics detected: ${retrySafety.blockedTopics.join(', ')}`);
+      if (yt2bpSafetyBlockEnabled) {
+        makePipelineError('SAFETY_BLOCKED', `Forbidden topics detected: ${retrySafety.blockedTopics.join(', ')}`);
+      } else {
+        await bypassSafetyBlock({
+          stage: 'deterministic_retry',
+          blockedTopics: retrySafety.blockedTopics,
+          attempt: retryAttempt,
+          run: 1,
+          globalRun: retryAttempt,
+        });
+      }
     }
     const retryPii = runPiiChecks(retryFlattened);
     if (!retryPii.ok) {
