@@ -843,7 +843,7 @@ export default function Wall() {
       <AppHeader />
 
       <main className="max-w-3xl mx-auto px-0 pb-24">
-        <section className="mb-6 px-3 sm:px-4">
+        <section className="mb-6 px-3 sm:px-4 hidden sm:block">
           <div className="flex flex-col gap-2">
             <p className="text-sm font-semibold text-primary uppercase tracking-wide">Home</p>
             <h1 className="text-2xl font-semibold">Live blueprint stream</h1>
