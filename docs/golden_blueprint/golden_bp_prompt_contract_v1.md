@@ -110,38 +110,23 @@ Worked example: if Reddit positives show "claim -> evidence -> implication" paci
 
 Use this section as the runtime context envelope for generation input. The goal is to combine transcript-grounded truth with vibe calibration from strong Reddit positives, without content leakage.
 
-The input should always carry two explicit sources. First source is transcript truth context, represented with placeholders like `<VIDEO_URL>`, `<VIDEO_TITLE>`, `<TRANSCRIPT_SOURCE>`, and `<SOURCE_TRANSCRIPT_CONTEXT>` (full transcript or approved excerpt window). Second source is vibe calibration context, represented with placeholders like `<POSITIVE_REFERENCE_SET_DESCRIPTION>` and `<POSITIVE_REFERENCE_PATHS>`, where references point to one canonical POS folder.
+The input should always carry two explicit sources. First source is transcript truth context, represented with placeholders like `<VIDEO_URL>`, `<VIDEO_TITLE>`, `<TRANSCRIPT_SOURCE>`, and `<SOURCE_TRANSCRIPT_CONTEXT>` (full transcript or approved excerpt window). Second source is vibe calibration context, represented with placeholders like `<POSITIVE_REFERENCE_PATHS>` and `<POSITIVE_REFERENCE_EXCERPTS>`, where references point to one canonical POS folder.
 
 Canonical POS folder paths:
 - Local repo path: `docs/golden_blueprint/reddit/clean/pos`
 - Oracle live path: `/home/ubuntu/remix-of-stackwise-advisor/docs/golden_blueprint/reddit/clean/pos`
 
-Use a cherry-picked subset per run, not the full folder. The recommended subset size is 3-5 references selected to match the current topic vibe. Pass selected references as `<POSITIVE_REFERENCE_PATHS>` and include a one-line reason for each selection in `<POSITIVE_REFERENCE_SET_DESCRIPTION>`.
+For this phase, include all available POS examples by default. Pass selected references as `<POSITIVE_REFERENCE_PATHS>` and inject their full text as `<POSITIVE_REFERENCE_EXCERPTS>`.
 
 The instruction framing should stay human and direct. It should tell the model that Bluep is a community-driven reading product and that writing should feel engaging enough that the same kind of users who engage with those reference posts would also want to read and comment here. It should also state that references are for tone, pacing, and engagement feel only.
+
+Use this direct framing in runtime context: "Here are cherry-picked Reddit posts with high like/comment counts and strong community appreciation. Inspect them for feel, pacing, readability, and engagement style. Do not import their facts or claims."
 
 Guardrails must be explicit and non-negotiable: all factual claims must come from `<SOURCE_TRANSCRIPT_CONTEXT>` only, and no facts, numbers, examples, topic claims, or distinctive phrasing may be imported from Reddit references. If there is any conflict between vibe pressure and transcript fidelity, transcript fidelity wins.
 
 The assembly order should be stable: transcript truth block first, vibe reference block second, hard constraints third, and final output instruction last. This ordering prevents style calibration from overriding source-grounded content.
 
 For operational consistency, include a brief engagement check sentence in the context layer, such as asking whether the draft would feel useful, specific, and discussion-worthy to the same audience profile as the positive references, while still being fully source-faithful to `<SOURCE_TRANSCRIPT_CONTEXT>`.
-
-## Input Placeholders Contract (Required at Runtime)
-
-The runtime prompt template must be rendered with explicit placeholders before each generation run. Required placeholders are `<VIDEO_URL>`, `<VIDEO_TITLE>`, `<TRANSCRIPT_SOURCE>`, `<SOURCE_TRANSCRIPT_CONTEXT>`, `<ORACLE_POS_DIR>`, and `<POSITIVE_REFERENCE_SET_DESCRIPTION>`. Optional placeholders are `<ADDITIONAL_INSTRUCTIONS>`, `<QUALITY_ISSUE_CODES>`, and `<QUALITY_ISSUE_DETAILS>` for retries.
-
-`<SOURCE_TRANSCRIPT_CONTEXT>` should contain the transcript window selected for generation and must remain the only factual source of truth. `<ORACLE_POS_DIR>` should point to `/home/ubuntu/remix-of-stackwise-advisor/docs/golden_blueprint/reddit/clean/pos`. `<POSITIVE_REFERENCE_SET_DESCRIPTION>` should briefly state why selected references fit the current run's vibe target.
-
-## Deterministic Enforcement Contract
-
-These rules are deterministic checks, not optional writing guidance. Runtime should enforce them with explicit fail reasons and no silent bypass.
-
-Required deterministic checks:
-- Placeholder completeness: fail if any required placeholder is missing or empty at render time.
-- Section order: fail if output does not follow canonical order (`Takeaways`, `Bleup`, `Deep Dive`, `Tradeoffs`, `Practical Rules`, `Open Questions`).
-- Density checks: fail if `Takeaways` is not 3-4 complete bullets, if `Bleup` is not 3-4 coherent paragraphs, or if deep sections are outside 3-5 complete bullets.
-- Completeness checks: fail malformed bullets, clipped fragments, duplicated headers, and repeated boilerplate tails.
-- Source hierarchy checks: fail if content appears to import factual payload from vibe references instead of transcript context.
 
 ## No-Duplication Rule
 
@@ -189,10 +174,11 @@ Transcript source: {{TRANSCRIPT_SOURCE}}
 
 Oracle POS vibe directory (read all examples for vibe only): {{ORACLE_POS_DIR}}
 
-Positive reference set description: {{POSITIVE_REFERENCE_SET_DESCRIPTION}}
-
 Selected positive reference paths:
 {{POSITIVE_REFERENCE_PATHS}}
+
+Injected positive reference excerpts (vibe-only, not factual source):
+{{POSITIVE_REFERENCE_EXCERPTS}}
 
 Quality issue codes (retry only, else `none`):
 {{QUALITY_ISSUE_CODES}}

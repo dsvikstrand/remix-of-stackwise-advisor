@@ -11981,7 +11981,6 @@ async function runYouTubePipeline(input: {
           videoTitle: input.videoId,
           transcriptSource: transcript.source,
           transcript: transcript.text,
-          positiveReferenceSetDescription: 'Read all Oracle POS examples in the configured directory for vibe/engagement calibration only.',
           additionalInstructions: safetyRetryHint || undefined,
         }, {
           onGenerationModelEvent: generationModelEventCallback,
@@ -12384,7 +12383,6 @@ async function runYouTubePipeline(input: {
         videoTitle: input.videoId,
         transcriptSource: transcript.source,
         transcript: transcript.text,
-        positiveReferenceSetDescription: 'Read all Oracle POS examples in the configured directory for vibe/engagement calibration only.',
         qualityIssueCodes: gateIssueCodes,
         qualityIssueDetails: gateIssueDetails,
         additionalInstructions: retryInstructions,

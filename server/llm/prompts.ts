@@ -153,7 +153,7 @@ const YOUTUBE_REQUIRED_TEMPLATE_KEYS = [
   'TRANSCRIPT_SOURCE',
   'SOURCE_TRANSCRIPT_CONTEXT',
   'ORACLE_POS_DIR',
-  'POSITIVE_REFERENCE_SET_DESCRIPTION',
+  'POSITIVE_REFERENCE_EXCERPTS',
 ] as const;
 
 let youtubePromptTemplateCache: string | null = null;
@@ -207,14 +207,102 @@ function joinListOrNone(lines: string[]) {
   return lines.length > 0 ? lines.map((line) => `- ${line}`).join('\n') : 'none';
 }
 
+function parseLimit(value: string | undefined, fallback: number) {
+  const raw = String(value || '').trim();
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return fallback;
+  if (parsed === -1) return -1;
+  return Math.max(0, Math.floor(parsed));
+}
+
+function isTruthyEnv(raw: string | undefined, fallback = true) {
+  const value = String(raw || '').trim().toLowerCase();
+  if (!value) return fallback;
+  return !(value === '0' || value === 'false' || value === 'off' || value === 'no');
+}
+
+function resolvePositiveReferenceFiles(input: { oraclePosDir: string; positiveReferencePaths: string[]; maxFiles: number }) {
+  const explicit = input.positiveReferencePaths
+    .map((entry) => String(entry || '').trim())
+    .filter(Boolean)
+    .filter((entry) => !entry.includes('*'))
+    .filter((entry) => fs.existsSync(entry) && fs.statSync(entry).isFile());
+  if (explicit.length > 0) {
+    return input.maxFiles === -1 ? explicit : explicit.slice(0, input.maxFiles);
+  }
+  if (!fs.existsSync(input.oraclePosDir)) {
+    return [];
+  }
+  const files = fs.readdirSync(input.oraclePosDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => path.join(input.oraclePosDir, entry.name))
+    .filter((filePath) => /\.(md|txt)$/i.test(path.basename(filePath)))
+    .sort((a, b) => a.localeCompare(b));
+  return input.maxFiles === -1 ? files : files.slice(0, input.maxFiles);
+}
+
+function buildPositiveReferenceExcerpts(input: {
+  oraclePosDir: string;
+  positiveReferencePaths: string[];
+}) {
+  const enabled = isTruthyEnv(process.env.YT2BP_POS_REF_ENABLED, true);
+  if (!enabled) {
+    return {
+      excerpts: 'POS references disabled by env.',
+      usedPaths: [],
+    };
+  }
+
+  const maxFiles = parseLimit(process.env.YT2BP_POS_REF_MAX_FILES, -1);
+  const maxCharsPerFile = parseLimit(process.env.YT2BP_POS_REF_MAX_CHARS_PER_FILE, -1);
+  const maxTotalChars = parseLimit(process.env.YT2BP_POS_REF_MAX_TOTAL_CHARS, -1);
+  const files = resolvePositiveReferenceFiles({
+    oraclePosDir: input.oraclePosDir,
+    positiveReferencePaths: input.positiveReferencePaths,
+    maxFiles,
+  });
+
+  if (files.length === 0) {
+    return {
+      excerpts: 'No POS reference files found.',
+      usedPaths: [],
+    };
+  }
+
+  let remainingTotal = maxTotalChars;
+  const chunks: string[] = [];
+  for (const filePath of files) {
+    let text = '';
+    try {
+      text = fs.readFileSync(filePath, 'utf8');
+    } catch {
+      continue;
+    }
+    if (maxCharsPerFile !== -1) {
+      text = text.slice(0, maxCharsPerFile);
+    }
+    if (remainingTotal !== -1) {
+      if (remainingTotal <= 0) break;
+      text = text.slice(0, remainingTotal);
+      remainingTotal -= text.length;
+    }
+    if (!text.trim()) continue;
+    chunks.push(`### POS Reference: ${path.basename(filePath)}\n${text}`);
+  }
+
+  return {
+    excerpts: chunks.length > 0 ? chunks.join('\n\n') : 'No readable POS reference excerpts found.',
+    usedPaths: files,
+  };
+}
+
 export function buildYouTubeBlueprintUserPrompt(input: YouTubeBlueprintRequest) {
   const videoUrl = String(input.videoUrl || '').trim();
   const transcript = String(input.transcript || '').trim();
   const videoTitle = String(input.videoTitle || '').trim() || `YouTube video (${videoUrl || 'unknown'})`;
   const transcriptSource = String(input.transcriptSource || '').trim() || 'youtube_transcript';
   const oraclePosDir = String(input.oraclePosDir || YOUTUBE_POS_VIBE_ORACLE_DIR || '').trim();
-  const positiveReferenceSetDescription = String(input.positiveReferenceSetDescription || '').trim()
-    || 'Read all examples in Oracle POS dir for vibe calibration (tone, pacing, readability, engagement).';
   const positiveReferencePaths = (input.positiveReferencePaths || [])
     .map((entry) => String(entry || '').trim())
     .filter(Boolean);
@@ -229,7 +317,11 @@ export function buildYouTubeBlueprintUserPrompt(input: YouTubeBlueprintRequest) 
   if (!videoUrl) throw new Error('YOUTUBE_PROMPT_INPUT_VIDEO_URL_REQUIRED');
   if (!transcript) throw new Error('YOUTUBE_PROMPT_INPUT_TRANSCRIPT_REQUIRED');
   if (!oraclePosDir) throw new Error('YOUTUBE_PROMPT_INPUT_ORACLE_POS_DIR_REQUIRED');
-  if (!positiveReferenceSetDescription) throw new Error('YOUTUBE_PROMPT_INPUT_POSITIVE_REFERENCE_SET_DESCRIPTION_REQUIRED');
+
+  const positiveReferences = buildPositiveReferenceExcerpts({
+    oraclePosDir,
+    positiveReferencePaths,
+  });
 
   const template = readYouTubePromptTemplate();
   assertTemplateHasRuntimePlaceholders(template);
@@ -240,10 +332,10 @@ export function buildYouTubeBlueprintUserPrompt(input: YouTubeBlueprintRequest) 
     TRANSCRIPT_SOURCE: transcriptSource,
     SOURCE_TRANSCRIPT_CONTEXT: transcript,
     ORACLE_POS_DIR: oraclePosDir,
-    POSITIVE_REFERENCE_SET_DESCRIPTION: positiveReferenceSetDescription,
-    POSITIVE_REFERENCE_PATHS: positiveReferencePaths.length > 0
-      ? positiveReferencePaths.join('\n')
+    POSITIVE_REFERENCE_PATHS: positiveReferences.usedPaths.length > 0
+      ? positiveReferences.usedPaths.join('\n')
       : `${oraclePosDir}/*`,
+    POSITIVE_REFERENCE_EXCERPTS: positiveReferences.excerpts,
     ADDITIONAL_INSTRUCTIONS: normalizePromptMultiline(additionalInstructions),
     QUALITY_ISSUE_CODES: joinListOrNone(qualityIssueCodes),
     QUALITY_ISSUE_DETAILS: joinListOrNone(qualityIssueDetails),
