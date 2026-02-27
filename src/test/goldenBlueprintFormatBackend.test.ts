@@ -148,20 +148,20 @@ describe('goldenBlueprintFormat (backend)', () => {
     }
   });
 
-  it('normalizes action/recipe drafts to action section set', () => {
+  it('normalizes action/recipe drafts to the shared deep section set', () => {
     const result = normalizeYouTubeDraftToGoldenV1(buildActionDraft());
     const names = result.steps.map((step) => step.name);
 
-    expect(result.domain).toBe('action');
+    expect(result.domain).toBe('deep');
     expect(names.slice(0, 3)).toEqual(['Summary', 'Takeaways', 'Bleup']);
     expect(names).toEqual([
       'Summary',
       'Takeaways',
       'Bleup',
-      'Playbook Steps',
-      'Fast Fallbacks',
-      'Red Flags',
-      'Bottom Line',
+      'Deep Dive',
+      'Tradeoffs',
+      'Practical Rules',
+      'Open Questions',
     ]);
   });
 

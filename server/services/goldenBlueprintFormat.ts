@@ -640,7 +640,8 @@ function buildActionSections(draft: YouTubeBlueprintResult) {
 }
 
 export function normalizeYouTubeDraftToGoldenV1(draft: YouTubeBlueprintResult): GoldenBlueprintFormatResult {
-  const domain = detectDomain(draft);
+  // Golden BP v1 is currently locked to the deep/research section template.
+  const domain: GoldenBlueprintDomain = 'deep';
   const takeaways = selectTakeawayCandidates(draft, domain);
   const summaryParagraphs = buildSummaryParagraphs(draft, domain);
   const topSummary = buildTopSummary(summaryParagraphs);
@@ -662,7 +663,7 @@ export function normalizeYouTubeDraftToGoldenV1(draft: YouTubeBlueprintResult): 
       notes: summaryParagraphs.join('\n\n'),
       timestamp: null,
     },
-    ...(domain === 'deep' ? buildDeepSections(draft) : buildActionSections(draft)),
+    ...buildDeepSections(draft),
   ];
 
   return {
