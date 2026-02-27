@@ -144,10 +144,10 @@ Output style rules:
 - Prioritize concrete, practical, non-generic language.
 
 Golden structure target:
-- Step 1 should be "Lightning Takeaways" with 3-4 concise bullet points.
-- Step 2 should be "Summary" as flowing narrative, 3-4 paragraph chunks.
+- Step 1 should be "Takeaways" with 3-4 concise bullet points.
+- Step 2 should be "Bleup" as flowing narrative, 3-4 paragraph chunks.
 - Then add structured sections that fit the content domain:
-  - deep/research style: Mechanism Deep Dive, Tradeoffs, Decision Rules, Open Questions, Bottom Line
+  - deep/research style: Deep Dive, Tradeoffs, Practical Rules, Open Questions
   - action/recipe style: Playbook Steps, Fast Fallbacks, Red Flags, Bottom Line
 
 Hard constraints:
@@ -156,6 +156,7 @@ Hard constraints:
 - Keep section titles explicit and useful.
 - Never include personal data.
 - Timestamps are optional; use null when unknown.
+- Tags: 3-5 max, broad and user-searchable. Avoid obscure niche tags.
 
 Response format:
 {

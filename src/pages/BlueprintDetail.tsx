@@ -74,8 +74,8 @@ function normalizeHeadingKey(value: string) {
 function canonicalSectionTitle(rawTitle: string, fallbackIndex: number) {
   const normalized = normalizeHeadingKey(rawTitle);
   if (normalized === 'lightning takeaways' || normalized === 'takeaways') return 'Takeaways';
+  if (normalized === 'summary' || normalized === 'bleup') return 'Bleup';
   if (normalized === 'mechanism deep dive' || normalized === 'deep dive') return 'Deep Dive';
-  if (normalized === 'summary') return 'Summary';
   if (normalized === 'tradeoffs') return 'Tradeoffs';
   if (normalized === 'decision rules' || normalized === 'practical rules') return 'Practical Rules';
   if (normalized === 'open questions') return 'Open Questions';
@@ -90,6 +90,9 @@ function headingAliasesFor(titleKey: string) {
   }
   if (titleKey === 'deep dive' || titleKey === 'mechanism deep dive') {
     return ['deep dive', 'mechanism deep dive'];
+  }
+  if (titleKey === 'bleup' || titleKey === 'summary') {
+    return ['bleup', 'summary'];
   }
   if (titleKey === 'practical rules' || titleKey === 'decision rules') {
     return ['practical rules', 'decision rules'];
@@ -220,7 +223,8 @@ function isGoldenV1GeneratedBlueprint(selectedItems: Json | null | undefined) {
 function hasGoldenStructure(steps: BlueprintStep[]) {
   if (!Array.isArray(steps) || steps.length < 2) return false;
   const titles = steps.map((step) => normalizeHeadingKey(step.title || '')).filter(Boolean);
-  return (titles.includes('lightning takeaways') || titles.includes('takeaways')) && titles.includes('summary');
+  return (titles.includes('lightning takeaways') || titles.includes('takeaways'))
+    && (titles.includes('summary') || titles.includes('bleup'));
 }
 
 export default function BlueprintDetail() {
@@ -440,35 +444,32 @@ export default function BlueprintDetail() {
   const goldenSections = useGoldenRender
     ? steps.map((step, index) => normalizeGoldenStep(step, index))
     : [];
-  const visibleGoldenSections = goldenSections.filter((step) => normalizeHeadingKey(step.title) !== 'open questions');
+  const visibleGoldenSections = goldenSections.filter((step) => normalizeHeadingKey(step.title) !== 'bottom line');
   const takeawaysSection = visibleGoldenSections.find((step) => {
     const key = normalizeHeadingKey(step.title);
     return key === 'takeaways' || key === 'lightning takeaways';
   });
-  const summarySection = visibleGoldenSections.find((step) => normalizeHeadingKey(step.title) === 'summary');
+  const summarySection = visibleGoldenSections.find((step) => {
+    const key = normalizeHeadingKey(step.title);
+    return key === 'summary' || key === 'bleup';
+  });
   const deepDiveAndMoreSections = visibleGoldenSections.filter(
     (step) => step !== takeawaysSection && step !== summarySection,
   );
   const deepDiveInteractiveSections = deepDiveAndMoreSections
     .flatMap((step) => splitEmbeddedGoldenSections(step))
-    .filter((step) => normalizeHeadingKey(step.title) !== 'open questions')
+    .filter((step) => normalizeHeadingKey(step.title) !== 'bottom line')
     .sort((a, b) => {
       const rank = (value: RenderStep) => {
         const key = normalizeHeadingKey(value.title);
         if (key === 'deep dive') return 1;
         if (key === 'tradeoffs') return 2;
         if (key === 'practical rules') return 3;
-        if (key === 'bottom line') return 4;
+        if (key === 'open questions') return 4;
         return 99;
       };
       return rank(a) - rank(b);
     });
-  const deepDiveBottomLineSection = deepDiveInteractiveSections.find(
-    (step) => normalizeHeadingKey(step.title) === 'bottom line',
-  ) || null;
-  const deepDiveTabbedSections = deepDiveInteractiveSections.filter(
-    (step) => normalizeHeadingKey(step.title) !== 'bottom line',
-  );
   const selectedItemGroups = blueprint ? parseSelectedItems(blueprint.selected_items) : [];
 
   const renderGoldenGroup = (group: RenderStep[]) => {
@@ -476,7 +477,7 @@ export default function BlueprintDetail() {
     return (
       <div className="rounded-md border border-border/40 px-3 py-3 space-y-0">
         {group.map((step, index) => {
-          const isSummarySection = /^summary$/i.test(step.title);
+          const isSummarySection = /^(summary|bleup)$/i.test(step.title);
           const summarySlides = isSummarySection ? splitSummaryIntoSlides(step.description) : [];
           const parsedDescription = parseDescriptionBlocks(step.description);
           const combinedBullets = [
@@ -518,79 +519,52 @@ export default function BlueprintDetail() {
     );
   };
 
-  const renderGoldenInteractiveGroup = (group: RenderStep[], bottomLine: RenderStep | null) => {
-    if (group.length === 0 && !bottomLine) return null;
+  const renderGoldenInteractiveGroup = (group: RenderStep[]) => {
+    if (group.length === 0) return null;
     return (
       <div className="rounded-md border border-border/40 overflow-hidden">
-        {group.length > 0 ? (
-          <Tabs defaultValue={`golden-section-${0}`} className="w-full">
-            <TabsList className="w-full justify-center rounded-none border-b border-border/40 bg-muted/20 flex-nowrap overflow-x-auto px-3 py-2">
-              {group.map((step, index) => (
-                <TabsTrigger
-                  key={step.id || `trigger-${step.title}-${index}`}
-                  value={`golden-section-${index}`}
-                  className="shrink-0 text-[11px] px-2 py-1 uppercase tracking-wide data-[state=active]:bg-background"
-                >
-                  {step.title}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+        <Tabs defaultValue={`golden-section-${0}`} className="w-full">
+          <TabsList className="w-full justify-center rounded-none border-b border-border/40 bg-muted/20 flex-nowrap overflow-x-auto px-3 py-2">
+            {group.map((step, index) => (
+              <TabsTrigger
+                key={step.id || `trigger-${step.title}-${index}`}
+                value={`golden-section-${index}`}
+                className="shrink-0 text-[11px] px-2 py-1 uppercase tracking-wide data-[state=active]:bg-background"
+              >
+                {step.title}
+              </TabsTrigger>
+            ))}
+          </TabsList>
 
-            <div className="p-3 sm:p-4">
-              {group.map((step, index) => {
-                const parsedDescription = parseDescriptionBlocks(step.description);
-                const combinedBullets = [
-                  ...parsedDescription.bullets,
-                  ...step.items.map((item) => formatStepItem(item)),
-                ];
-                return (
-                  <TabsContent key={step.id || `content-${step.title}-${index}`} value={`golden-section-${index}`} className="mt-0 space-y-2.5">
-                    {parsedDescription.text ? (
-                      <p className="text-sm text-muted-foreground whitespace-pre-line">{parsedDescription.text}</p>
-                    ) : null}
-                    {combinedBullets.length > 0 ? (
-                      <ul className="space-y-1 list-disc pl-5">
-                        {combinedBullets.map((itemText, itemIndex) => (
-                          <li key={`${step.id || index}-${itemIndex}`} className="text-sm leading-snug">
-                            {itemText}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                    {!parsedDescription.text && combinedBullets.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No details yet.</p>
-                    ) : null}
-                  </TabsContent>
-                );
-              })}
-            </div>
-          </Tabs>
-        ) : null}
-
-        {bottomLine ? (() => {
-          const parsedDescription = parseDescriptionBlocks(bottomLine.description);
-          const combinedBullets = [
-            ...parsedDescription.bullets,
-            ...bottomLine.items.map((item) => formatStepItem(item)),
-          ];
-          return (
-            <div className="border-t border-border/30 px-3 py-3 space-y-1.5">
-              <p className="text-sm font-medium">{bottomLine.title}</p>
-              {parsedDescription.text ? (
-                <p className="text-sm text-muted-foreground whitespace-pre-line">{parsedDescription.text}</p>
-              ) : null}
-              {combinedBullets.length > 0 ? (
-                <ul className="space-y-1 list-disc pl-5">
-                  {combinedBullets.map((itemText, itemIndex) => (
-                    <li key={`${bottomLine.id || 'bottom'}-${itemIndex}`} className="text-sm leading-snug">
-                      {itemText}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-          );
-        })() : null}
+          <div className="p-3 sm:p-4">
+            {group.map((step, index) => {
+              const parsedDescription = parseDescriptionBlocks(step.description);
+              const combinedBullets = [
+                ...parsedDescription.bullets,
+                ...step.items.map((item) => formatStepItem(item)),
+              ];
+              return (
+                <TabsContent key={step.id || `content-${step.title}-${index}`} value={`golden-section-${index}`} className="mt-0 space-y-2.5">
+                  {parsedDescription.text ? (
+                    <p className="text-sm text-muted-foreground whitespace-pre-line">{parsedDescription.text}</p>
+                  ) : null}
+                  {combinedBullets.length > 0 ? (
+                    <ul className="space-y-1 list-disc pl-5">
+                      {combinedBullets.map((itemText, itemIndex) => (
+                        <li key={`${step.id || index}-${itemIndex}`} className="text-sm leading-snug">
+                          {itemText}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {!parsedDescription.text && combinedBullets.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No details yet.</p>
+                  ) : null}
+                </TabsContent>
+              );
+            })}
+          </div>
+        </Tabs>
       </div>
     );
   };
@@ -717,7 +691,7 @@ export default function BlueprintDetail() {
                   {renderGoldenGroup(takeawaysSection ? [takeawaysSection] : [])}
                   {renderBanner}
                   {renderGoldenGroup(summarySection ? [summarySection] : [])}
-                  {renderGoldenInteractiveGroup(deepDiveTabbedSections, deepDiveBottomLineSection)}
+                  {renderGoldenInteractiveGroup(deepDiveInteractiveSections)}
                 </>
               ) : (
                 <>
@@ -731,7 +705,7 @@ export default function BlueprintDetail() {
                             <div key={step.id || `${step.title}-${index}`} className="rounded-md border border-border/40 px-3 py-2.5">
                               {step.description && (() => {
                                 const normalizedSummary = normalizeGoldenStep(step, index);
-                                const summarySlides = /^summary$/i.test(normalizedSummary.title)
+                                const summarySlides = /^(summary|bleup)$/i.test(normalizedSummary.title)
                                   ? splitSummaryIntoSlides(normalizedSummary.description)
                                   : [];
                                 const useSummarySlider = summarySlides.length > 1;

@@ -73,20 +73,43 @@ function buildNoisyDraft(): YouTubeBlueprintResult {
   };
 }
 
+function buildNicheTagDraft(): YouTubeBlueprintResult {
+  return {
+    title: 'Riemannian geometry tricks for AI agents in software workflows',
+    description:
+      'A practical analysis of agent architecture choices, automation boundaries, and developer workflows.',
+    notes:
+      'Focus on implementation tradeoffs, software quality, and product-level decision making.',
+    tags: ['riemannian-geometry', 'parallel-transport', 'ai', 'developer-tools', 'ultra-niche-operator'],
+    steps: [
+      {
+        name: 'Agent architecture choices',
+        notes: 'Compare orchestration tradeoffs and implementation complexity.',
+        timestamp: null,
+      },
+      {
+        name: 'Practical automation boundaries',
+        notes: 'Use clear escalation rules and fallback paths in production.',
+        timestamp: null,
+      },
+    ],
+  };
+}
+
 describe('goldenBlueprintFormat (backend)', () => {
   it('normalizes deep/research drafts to required Golden v1 section order', () => {
     const result = normalizeYouTubeDraftToGoldenV1(buildDeepDraft());
     const names = result.steps.map((step) => step.name);
 
     expect(result.domain).toBe('deep');
-    expect(names.slice(0, 2)).toEqual(['Takeaways', 'Summary']);
+    expect(names.slice(0, 2)).toEqual(['Takeaways', 'Bleup']);
     expect(names).toEqual([
       'Takeaways',
-      'Summary',
+      'Bleup',
       'Deep Dive',
       'Tradeoffs',
       'Practical Rules',
-      'Bottom Line',
+      'Open Questions',
     ]);
 
     const takeawayLines = (result.steps[0]?.notes || '').split('\n').filter((line) => line.trim().startsWith('- '));
@@ -106,6 +129,19 @@ describe('goldenBlueprintFormat (backend)', () => {
     expect((result.steps[1]?.notes || '').toLowerCase()).not.toContain('this video');
     expect((result.steps[1]?.notes || '').toLowerCase()).not.toContain('the transcript');
     expect((result.steps[1]?.notes || '')).not.toContain('\n- ');
+
+    for (const stepName of ['Deep Dive', 'Tradeoffs', 'Practical Rules', 'Open Questions']) {
+      const section = result.steps.find((step) => step.name === stepName);
+      expect(section).toBeTruthy();
+      const sectionBullets = (section?.notes || '').split('\n').filter((line) => line.trim().startsWith('- '));
+      expect(sectionBullets.length).toBeGreaterThanOrEqual(3);
+      expect(sectionBullets.length).toBeLessThanOrEqual(5);
+      for (const bulletLine of sectionBullets) {
+        const bulletText = bulletLine.replace(/^- /, '').trim();
+        expect(bulletText.length).toBeGreaterThan(12);
+        expect(bulletText).not.toMatch(/^[-.]+$/);
+      }
+    }
   });
 
   it('normalizes action/recipe drafts to action section set', () => {
@@ -113,10 +149,10 @@ describe('goldenBlueprintFormat (backend)', () => {
     const names = result.steps.map((step) => step.name);
 
     expect(result.domain).toBe('action');
-    expect(names.slice(0, 2)).toEqual(['Takeaways', 'Summary']);
+    expect(names.slice(0, 2)).toEqual(['Takeaways', 'Bleup']);
     expect(names).toEqual([
       'Takeaways',
-      'Summary',
+      'Bleup',
       'Playbook Steps',
       'Fast Fallbacks',
       'Red Flags',
@@ -127,7 +163,7 @@ describe('goldenBlueprintFormat (backend)', () => {
   it('filters section-label artifacts from takeaways and summary sources', () => {
     const result = normalizeYouTubeDraftToGoldenV1(buildNoisyDraft());
     const takeawayLines = (result.steps[0]?.notes || '').split('\n').filter((line) => line.trim().startsWith('- '));
-    const summaryText = result.steps[1]?.notes || '';
+    const bleupText = result.steps[1]?.notes || '';
 
     for (const line of takeawayLines) {
       const value = line.replace(/^- /, '').trim().toLowerCase();
@@ -136,7 +172,17 @@ describe('goldenBlueprintFormat (backend)', () => {
       expect(value).not.toBe('mechanism deep dive');
       expect(value).not.toBe('tradeoffs');
     }
-    expect(summaryText.toLowerCase()).not.toContain('\nsummary');
-    expect(summaryText.toLowerCase()).not.toContain('mechanism deep dive');
+    expect(bleupText.toLowerCase()).not.toContain('\nsummary');
+    expect(bleupText.toLowerCase()).not.toContain('mechanism deep dive');
+  });
+
+  it('caps and generalizes tags to broad user-searchable slugs', () => {
+    const result = normalizeYouTubeDraftToGoldenV1(buildNicheTagDraft());
+    expect(result.tags.length).toBeGreaterThanOrEqual(1);
+    expect(result.tags.length).toBeLessThanOrEqual(5);
+    expect(result.tags).not.toContain('riemannian-geometry');
+    expect(result.tags).not.toContain('parallel-transport');
+    expect(result.tags).toContain('ai');
+    expect(result.tags.some((tag) => ['software', 'developer-tools', 'analysis', 'automation'].includes(tag))).toBe(true);
   });
 });

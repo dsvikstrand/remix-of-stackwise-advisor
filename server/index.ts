@@ -3164,10 +3164,14 @@ async function ensureTagId(db: ReturnType<typeof createClient>, userId: string, 
 function mapDraftStepsForBlueprint(steps: Array<{ name: string; notes: string }>) {
   const knownSectionLabels = [
     'lightning takeaways',
+    'takeaways',
     'summary',
+    'bleup',
     'mechanism deep dive',
+    'deep dive',
     'tradeoffs',
     'decision rules',
+    'practical rules',
     'open questions',
     'bottom line',
     'playbook steps',
@@ -3207,7 +3211,7 @@ function mapDraftStepsForBlueprint(steps: Array<{ name: string; notes: string }>
   return steps.map((step, index) => {
     const title = String(step.name || '').trim();
     const titleKey = normalizeLabel(title);
-    const isSummaryStep = titleKey === 'summary';
+    const isSummaryStep = titleKey === 'summary' || titleKey === 'bleup';
     const rawLines = String(step.notes || '').split(/\r?\n/);
     const cleanedLines = rawLines
       .map((line) => line.replace(/\s+$/g, ''))
@@ -4088,7 +4092,7 @@ async function createBlueprintFromVideo(db: ReturnType<typeof createClient>, inp
     .single();
   if (blueprintError) throw blueprintError;
 
-  for (const rawTag of result.draft.tags || []) {
+  for (const rawTag of goldenFormat.tags || []) {
     const tagSlug = toTagSlug(rawTag);
     if (!tagSlug) continue;
     const tagId = await ensureTagId(db, input.userId, tagSlug);

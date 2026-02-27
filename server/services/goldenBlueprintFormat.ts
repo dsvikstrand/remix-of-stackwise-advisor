@@ -6,6 +6,7 @@ export type GoldenBlueprintFormatResult = {
   domain: GoldenBlueprintDomain;
   steps: YouTubeDraftStep[];
   summaryWordCount: number;
+  tags: string[];
 };
 
 const ACTION_KEYWORDS = [
@@ -54,6 +55,7 @@ const GENERIC_SECTION_LABELS = new Set([
   'lightning takeaways',
   'takeaways',
   'summary',
+  'bleup',
   'mechanism deep dive',
   'deep dive',
   'tradeoffs',
@@ -66,6 +68,84 @@ const GENERIC_SECTION_LABELS = new Set([
   'red flags',
   'steps',
 ]);
+
+const MIN_SECTION_BULLETS = 3;
+const MAX_SECTION_BULLETS = 5;
+const INCOMPLETE_TAIL_WORDS = new Set([
+  'and',
+  'or',
+  'with',
+  'to',
+  'for',
+  'of',
+  'the',
+  'a',
+  'an',
+  'in',
+  'on',
+  'at',
+  'by',
+  'from',
+  'into',
+  'about',
+  'via',
+  'through',
+  'using',
+]);
+
+const ALLOWED_GENERAL_TAGS = new Set([
+  'ai',
+  'software',
+  'coding',
+  'developer-tools',
+  'productivity',
+  'automation',
+  'research',
+  'science',
+  'health',
+  'nutrition',
+  'supplements',
+  'fitness',
+  'muscle',
+  'longevity',
+  'recipe',
+  'cooking',
+  'food',
+  'business',
+  'finance',
+  'mindset',
+  'education',
+  'tutorial',
+  'news',
+  'analysis',
+]);
+
+const BROAD_TAG_RULES: Array<{ pattern: RegExp; tag: string }> = [
+  { pattern: /\b(ai|artificial intelligence|llm|agent|openai|gpt|gemini|claude)\b/i, tag: 'ai' },
+  { pattern: /\b(code|coding|programming|typescript|javascript|python|repo|github)\b/i, tag: 'coding' },
+  { pattern: /\bsoftware|app|backend|frontend|api|deployment|architecture\b/i, tag: 'software' },
+  { pattern: /\bdeveloper tool|workflow|automation|autonomous\b/i, tag: 'developer-tools' },
+  { pattern: /\bproductivity|focus|workflow|efficiency\b/i, tag: 'productivity' },
+  { pattern: /\bautomate|automation|pipeline\b/i, tag: 'automation' },
+  { pattern: /\bresearch|study|trial|rct|paper|meta analysis|arxiv\b/i, tag: 'research' },
+  { pattern: /\bscience|scientific|mechanism\b/i, tag: 'science' },
+  { pattern: /\bhealth|wellness|metabolic|inflammation|blood sugar\b/i, tag: 'health' },
+  { pattern: /\bnutrition|diet|macros|protein|carb|fat\b/i, tag: 'nutrition' },
+  { pattern: /\bsupplement|amino|glycine|leucine|coq10|nmn|nr\b/i, tag: 'supplements' },
+  { pattern: /\bfitness|workout|training|exercise\b/i, tag: 'fitness' },
+  { pattern: /\bmuscle|hypertrophy|strength\b/i, tag: 'muscle' },
+  { pattern: /\blongevity|aging|anti aging|lifespan\b/i, tag: 'longevity' },
+  { pattern: /\brecipe|ingredients|cook|cooking|kitchen|meal\b/i, tag: 'recipe' },
+  { pattern: /\bcooking|bake|fry|simmer|boil|grill\b/i, tag: 'cooking' },
+  { pattern: /\bfood|dish|meal prep|flavor\b/i, tag: 'food' },
+  { pattern: /\bbusiness|saas|startup|founder\b/i, tag: 'business' },
+  { pattern: /\bfinance|invest|market|valuation|stock\b/i, tag: 'finance' },
+  { pattern: /\bmindset|habit|discipline|motivation\b/i, tag: 'mindset' },
+  { pattern: /\blearn|education|teaching|explain\b/i, tag: 'education' },
+  { pattern: /\bguide|tutorial|how to|step by step\b/i, tag: 'tutorial' },
+  { pattern: /\bnews|update|announcement|launch\b/i, tag: 'news' },
+  { pattern: /\banalysis|breakdown|tradeoff\b/i, tag: 'analysis' },
+];
 
 function normalizeWhitespace(value: string) {
   return String(value || '')
@@ -113,6 +193,14 @@ function dedupeKeepOrder(values: string[]) {
     out.push(value);
   }
   return out;
+}
+
+function toSimpleTag(value: string) {
+  return normalizeWhitespace(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
 }
 
 function compactSentence(value: string, maxWords = 26) {
@@ -269,10 +357,90 @@ function toBulletBlock(lines: string[]) {
     .join('\n');
 }
 
+function sanitizeBulletCandidate(value: string) {
+  let next = stripMetaFraming(stripListPrefix(value));
+  next = normalizeWhitespace(next)
+    .replace(/^[\s\-*•.,;:()]+/, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  if (!next) return null;
+  if (!/[a-z0-9]/i.test(next)) return null;
+  if (/^[-.]+$/.test(next)) return null;
+  if (next.length < 14) return null;
+  const words = next.split(/\s+/).filter(Boolean);
+  if (words.length < 3) return null;
+  const lastWord = words[words.length - 1]?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
+  if (INCOMPLETE_TAIL_WORDS.has(lastWord)) return null;
+  if (!/[.!?]$/.test(next)) next = `${next}.`;
+  return next;
+}
+
+function normalizeBulletGroup(primary: string[], fallback: string[]) {
+  const output: string[] = [];
+  const pushUnique = (candidate: string | null) => {
+    if (!candidate) return;
+    const key = candidate.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    if (!key) return;
+    if (output.some((existing) => existing.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() === key)) return;
+    output.push(candidate);
+  };
+
+  for (const item of primary) {
+    pushUnique(sanitizeBulletCandidate(item));
+    if (output.length >= MAX_SECTION_BULLETS) break;
+  }
+  for (const item of fallback) {
+    if (output.length >= MAX_SECTION_BULLETS) break;
+    pushUnique(sanitizeBulletCandidate(item));
+  }
+  return output.slice(0, Math.max(MIN_SECTION_BULLETS, Math.min(MAX_SECTION_BULLETS, output.length)));
+}
+
+function chooseGeneralTags(draft: YouTubeBlueprintResult, domain: GoldenBlueprintDomain) {
+  const corpus = [
+    draft.title,
+    draft.description,
+    draft.notes || '',
+    ...(draft.tags || []),
+    ...(draft.steps || []).flatMap((step) => [step.name, step.notes]),
+  ]
+    .join(' ')
+    .toLowerCase();
+
+  const selected: string[] = [];
+  const add = (tag: string) => {
+    if (selected.length >= 5) return;
+    if (!ALLOWED_GENERAL_TAGS.has(tag)) return;
+    if (selected.includes(tag)) return;
+    selected.push(tag);
+  };
+
+  for (const rule of BROAD_TAG_RULES) {
+    if (rule.pattern.test(corpus)) add(rule.tag);
+  }
+
+  for (const rawTag of draft.tags || []) {
+    const simple = toSimpleTag(rawTag);
+    if (ALLOWED_GENERAL_TAGS.has(simple)) add(simple);
+  }
+
+  if (selected.length === 0) {
+    if (domain === 'deep') {
+      add('research');
+      add('analysis');
+    } else {
+      add('tutorial');
+      add('productivity');
+    }
+  }
+
+  return selected.slice(0, 5);
+}
+
 function buildDeepSections(draft: YouTubeBlueprintResult) {
-  const mechanismBullets = dedupeKeepOrder(
+  const mechanismCandidates = dedupeKeepOrder(
     (draft.steps || [])
-      .slice(0, 4)
+      .slice(0, 8)
       .map((step) => {
         if (isGenericSectionLabel(step.name)) return '';
         const note = compactSentence(step.notes, 28);
@@ -280,43 +448,72 @@ function buildDeepSections(draft: YouTubeBlueprintResult) {
         return `${stripMetaFraming(step.name)}: ${note}`;
       })
       .filter(Boolean),
-  ).slice(0, 4);
+  );
+  const mechanismBullets = normalizeBulletGroup(
+    mechanismCandidates,
+    [
+      'Functional outcomes can improve even when headline metrics move slowly.',
+      'Timing and protocol context often drive most of the measurable effect.',
+      'Baseline behavior quality changes the size of incremental gains.',
+      'Meaningful gains often come from consistency rather than one-off optimization.',
+    ],
+  );
 
   return [
     {
       name: 'Deep Dive',
-      notes: toBulletBlock(
-        mechanismBullets.length > 0
-          ? mechanismBullets
-          : [
-              'Functional outcomes can improve even when headline metrics move slowly.',
-              'Timing and protocol context often drive most of the measurable effect.',
-              'Baseline behavior quality changes the size of incremental gains.',
-            ],
-      ),
+      notes: toBulletBlock(mechanismBullets),
       timestamp: null,
     },
     {
       name: 'Tradeoffs',
-      notes: toBulletBlock([
-        'Upside: clearer decision quality and better maintenance-oriented outcomes.',
-        'Constraint: this is not a one-variable shortcut.',
-        'Unknown: effect size can vary by baseline quality and adherence.',
-      ]),
+      notes: toBulletBlock(
+        normalizeBulletGroup(
+          [
+            'Upside: clearer decision quality and better maintenance-oriented outcomes.',
+            'Constraint: this is not a one-variable shortcut.',
+            'Unknown: effect size can vary by baseline quality and adherence.',
+          ],
+          [
+            'Upside and constraints should be evaluated against baseline habits.',
+            'Unknowns usually come from adherence differences, not only mechanism quality.',
+          ],
+        ),
+      ),
       timestamp: null,
     },
     {
       name: 'Practical Rules',
-      notes: toBulletBlock([
-        'Use this when long-term function and consistency are the main goals.',
-        'Pair the protocol with strong fundamentals before expecting outsized gains.',
-        'Avoid treating the approach as universal across every context.',
-      ]),
+      notes: toBulletBlock(
+        normalizeBulletGroup(
+          [
+            'Use this when long-term function and consistency are the main goals.',
+            'Pair the protocol with strong fundamentals before expecting outsized gains.',
+            'Avoid treating the approach as universal across every context.',
+          ],
+          [
+            'Apply this as a repeatable framework, then adjust based on measured response.',
+            'Use one-variable changes between cycles so signal remains interpretable.',
+          ],
+        ),
+      ),
       timestamp: null,
     },
     {
-      name: 'Bottom Line',
-      notes: 'Use this as a practical framework for mechanism, tradeoffs, and decisions, then adapt to your own context.',
+      name: 'Open Questions',
+      notes: toBulletBlock(
+        normalizeBulletGroup(
+          [
+            'Which contexts produce the strongest repeatable outcomes?',
+            'How much of the effect depends on baseline quality and consistency?',
+            'Where does incremental value flatten for advanced users?',
+          ],
+          [
+            'What minimum viable protocol still delivers useful outcomes?',
+            'Which early signals reliably predict long-term benefit?',
+          ],
+        ),
+      ),
       timestamp: null,
     },
   ] satisfies YouTubeDraftStep[];
@@ -336,33 +533,48 @@ function buildActionSections(draft: YouTubeBlueprintResult) {
     {
       name: 'Playbook Steps',
       notes: toBulletBlock(
-        stepBullets.length > 0
-          ? stepBullets
-          : [
-              'Set up the minimum ingredients/tools first.',
-              'Run the core sequence in order.',
-              'Check quality signals before final adjustments.',
-              'Make one change at a time between attempts.',
-            ],
+        normalizeBulletGroup(
+          stepBullets,
+          [
+            'Set up the minimum ingredients/tools first.',
+            'Run the core sequence in order.',
+            'Check quality signals before final adjustments.',
+            'Make one change at a time between attempts.',
+          ],
+        ),
       ),
       timestamp: null,
     },
     {
       name: 'Fast Fallbacks',
-      notes: toBulletBlock([
-        'If output is too heavy, reduce one intensity variable first.',
-        'If output is too light, extend the core processing window.',
-        'If flavor/signal is flat, adjust in small increments and retest.',
-      ]),
+      notes: toBulletBlock(
+        normalizeBulletGroup(
+          [
+            'If output is too heavy, reduce one intensity variable first.',
+            'If output is too light, extend the core processing window.',
+            'If flavor/signal is flat, adjust in small increments and retest.',
+          ],
+          [
+            'Use a single fallback per run so you can isolate what changed.',
+          ],
+        ),
+      ),
       timestamp: null,
     },
     {
       name: 'Red Flags',
-      notes: toBulletBlock([
-        'Core texture or quality signal breaks early in the flow.',
-        'Adjustments are stacked all at once and hide root cause.',
-        'Final output looks complete but misses the intended payoff.',
-      ]),
+      notes: toBulletBlock(
+        normalizeBulletGroup(
+          [
+            'Core texture or quality signal breaks early in the flow.',
+            'Adjustments are stacked all at once and hide root cause.',
+            'Final output looks complete but misses the intended payoff.',
+          ],
+          [
+            'Large late-stage corrections usually indicate upstream sequence drift.',
+          ],
+        ),
+      ),
       timestamp: null,
     },
     {
@@ -377,6 +589,7 @@ export function normalizeYouTubeDraftToGoldenV1(draft: YouTubeBlueprintResult): 
   const domain = detectDomain(draft);
   const takeaways = selectTakeawayCandidates(draft, domain);
   const summaryParagraphs = buildSummaryParagraphs(draft, domain);
+  const tags = chooseGeneralTags(draft, domain);
 
   const steps: YouTubeDraftStep[] = [
     {
@@ -385,7 +598,7 @@ export function normalizeYouTubeDraftToGoldenV1(draft: YouTubeBlueprintResult): 
       timestamp: null,
     },
     {
-      name: 'Summary',
+      name: 'Bleup',
       notes: summaryParagraphs.join('\n\n'),
       timestamp: null,
     },
@@ -396,5 +609,6 @@ export function normalizeYouTubeDraftToGoldenV1(draft: YouTubeBlueprintResult): 
     domain,
     steps,
     summaryWordCount: wordCount(summaryParagraphs.join(' ')),
+    tags,
   };
 }
