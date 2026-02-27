@@ -509,10 +509,10 @@ export default function BlueprintDetail() {
     .sort((a, b) => {
       const rank = (value: RenderStep) => {
         const key = normalizeHeadingKey(value.title);
-        if (key === 'deep dive') return 1;
-        if (key === 'tradeoffs') return 2;
-        if (key === 'practical rules') return 3;
-        if (key === 'open questions') return 4;
+        if (key === 'practical rules') return 1;
+        if (key === 'deep dive') return 2;
+        if (key === 'open questions') return 3;
+        if (key === 'tradeoffs') return 4;
         return 99;
       };
       return rank(a) - rank(b);
@@ -570,9 +570,11 @@ export default function BlueprintDetail() {
 
   const renderGoldenInteractiveGroup = (group: RenderStep[]) => {
     if (group.length === 0) return null;
+    const practicalRulesIndex = group.findIndex((step) => normalizeHeadingKey(step.title) === 'practical rules');
+    const defaultTabIndex = practicalRulesIndex >= 0 ? practicalRulesIndex : 0;
     return (
       <div className="space-y-2">
-        <Tabs defaultValue={`golden-section-${0}`} className="w-full">
+        <Tabs defaultValue={`golden-section-${defaultTabIndex}`} className="w-full">
           <TabsList className="w-full justify-center bg-transparent flex-nowrap overflow-x-auto px-0 py-1">
             {group.map((step, index) => (
               <TabsTrigger
@@ -738,8 +740,8 @@ export default function BlueprintDetail() {
               {useGoldenRender ? (
                 <>
                   {renderGoldenGroup(effectiveTopSummarySection ? [effectiveTopSummarySection] : [])}
-                  {renderGoldenGroup(takeawaysSection ? [takeawaysSection] : [])}
                   {renderBanner}
+                  {renderGoldenGroup(takeawaysSection ? [takeawaysSection] : [])}
                   {renderGoldenGroup(effectiveBleupSection ? [effectiveBleupSection] : [])}
                   {renderGoldenInteractiveGroup(deepDiveInteractiveSections)}
                 </>
