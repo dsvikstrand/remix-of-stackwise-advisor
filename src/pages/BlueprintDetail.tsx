@@ -71,10 +71,26 @@ function normalizeHeadingKey(value: string) {
     .trim();
 }
 
+function isTakeawaysKey(key: string) {
+  return key === 'takeaways' || key === 'lightning takeaways' || key.startsWith('takeaways ');
+}
+
+function isNarrativeKey(key: string) {
+  return key === 'summary'
+    || key === 'bleup'
+    || key === 'beup'
+    || key.startsWith('summary ')
+    || key.startsWith('summary(')
+    || key.startsWith('bleup ')
+    || key.startsWith('bleup(')
+    || key.startsWith('beup ')
+    || key.startsWith('beup(');
+}
+
 function canonicalSectionTitle(rawTitle: string, fallbackIndex: number) {
   const normalized = normalizeHeadingKey(rawTitle);
-  if (normalized === 'lightning takeaways' || normalized === 'takeaways') return 'Takeaways';
-  if (normalized === 'summary' || normalized === 'bleup') return 'Bleup';
+  if (isTakeawaysKey(normalized)) return 'Takeaways';
+  if (isNarrativeKey(normalized)) return 'Bleup';
   if (normalized === 'mechanism deep dive' || normalized === 'deep dive') return 'Deep Dive';
   if (normalized === 'tradeoffs') return 'Tradeoffs';
   if (normalized === 'decision rules' || normalized === 'practical rules') return 'Practical Rules';
@@ -91,8 +107,8 @@ function headingAliasesFor(titleKey: string) {
   if (titleKey === 'deep dive' || titleKey === 'mechanism deep dive') {
     return ['deep dive', 'mechanism deep dive'];
   }
-  if (titleKey === 'bleup' || titleKey === 'summary') {
-    return ['bleup', 'summary'];
+  if (titleKey === 'bleup' || titleKey === 'summary' || titleKey === 'beup') {
+    return ['bleup', 'beup', 'summary'];
   }
   if (titleKey === 'practical rules' || titleKey === 'decision rules') {
     return ['practical rules', 'decision rules'];
@@ -223,8 +239,8 @@ function isGoldenV1GeneratedBlueprint(selectedItems: Json | null | undefined) {
 function hasGoldenStructure(steps: BlueprintStep[]) {
   if (!Array.isArray(steps) || steps.length < 2) return false;
   const titles = steps.map((step) => normalizeHeadingKey(step.title || '')).filter(Boolean);
-  return (titles.includes('lightning takeaways') || titles.includes('takeaways'))
-    && (titles.includes('summary') || titles.includes('bleup'));
+  return titles.some((key) => isTakeawaysKey(key))
+    && titles.some((key) => isNarrativeKey(key));
 }
 
 export default function BlueprintDetail() {
@@ -447,14 +463,14 @@ export default function BlueprintDetail() {
   const visibleGoldenSections = goldenSections.filter((step) => normalizeHeadingKey(step.title) !== 'bottom line');
   const takeawaysSection = visibleGoldenSections.find((step) => {
     const key = normalizeHeadingKey(step.title);
-    return key === 'takeaways' || key === 'lightning takeaways';
+    return isTakeawaysKey(key);
   });
   const summarySection = visibleGoldenSections.find((step) => {
     const key = normalizeHeadingKey(step.title);
-    return key === 'summary' || key === 'bleup';
+    return isNarrativeKey(key);
   });
   const deepDiveAndMoreSections = visibleGoldenSections.filter(
-    (step) => step !== takeawaysSection && step !== summarySection,
+    (step) => step !== takeawaysSection && !isNarrativeKey(normalizeHeadingKey(step.title)),
   );
   const deepDiveInteractiveSections = deepDiveAndMoreSections
     .flatMap((step) => splitEmbeddedGoldenSections(step))
@@ -477,7 +493,7 @@ export default function BlueprintDetail() {
     return (
       <div className="rounded-md border border-border/40 px-3 py-3 space-y-0">
         {group.map((step, index) => {
-          const isSummarySection = /^(summary|bleup)$/i.test(step.title);
+          const isSummarySection = isNarrativeKey(normalizeHeadingKey(step.title));
           const summarySlides = isSummarySection ? splitSummaryIntoSlides(step.description) : [];
           const parsedDescription = parseDescriptionBlocks(step.description);
           const combinedBullets = [
@@ -705,7 +721,7 @@ export default function BlueprintDetail() {
                             <div key={step.id || `${step.title}-${index}`} className="rounded-md border border-border/40 px-3 py-2.5">
                               {step.description && (() => {
                                 const normalizedSummary = normalizeGoldenStep(step, index);
-                                const summarySlides = /^(summary|bleup)$/i.test(normalizedSummary.title)
+                                const summarySlides = isNarrativeKey(normalizeHeadingKey(normalizedSummary.title))
                                   ? splitSummaryIntoSlides(normalizedSummary.description)
                                   : [];
                                 const useSummarySlider = summarySlides.length > 1;
