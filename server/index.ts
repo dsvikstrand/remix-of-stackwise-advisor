@@ -171,6 +171,8 @@ const yt2bpAuthLimitPerMin = Number(process.env.YT2BP_AUTH_LIMIT_PER_MIN) || 20;
 const yt2bpIpLimitPerHour = Number(process.env.YT2BP_IP_LIMIT_PER_HOUR) || 30;
 const yt2bpEnabledRaw = String(process.env.YT2BP_ENABLED ?? 'true').trim().toLowerCase();
 const yt2bpEnabled = !(yt2bpEnabledRaw === 'false' || yt2bpEnabledRaw === '0' || yt2bpEnabledRaw === 'off');
+const yt2bpOutputModeRaw = String(process.env.YT2BP_OUTPUT_MODE || 'llm_native').trim().toLowerCase();
+const yt2bpOutputMode: 'llm_native' | 'deterministic' = yt2bpOutputModeRaw === 'deterministic' ? 'deterministic' : 'llm_native';
 const yt2bpSafetyBlockEnabledRaw = String(process.env.YT2BP_SAFETY_BLOCK_ENABLED ?? 'false').trim().toLowerCase();
 const yt2bpSafetyBlockEnabled = (
   yt2bpSafetyBlockEnabledRaw === '1'
@@ -1627,14 +1629,7 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
       }),
       yt2bpCoreTimeoutMs
     );
-    const goldenFormat = normalizeYouTubeDraftToGoldenV1(result.draft);
-    return res.json({
-      ...result,
-      draft: {
-        ...result.draft,
-        steps: goldenFormat.steps,
-      },
-    });
+    return res.json(result);
   } catch (error) {
     const known = mapPipelineError(error);
     if (known) {
@@ -4127,7 +4122,14 @@ async function createBlueprintFromVideo(db: ReturnType<typeof createClient>, inp
       sourceTag: input.sourceTag,
     },
   });
-  const goldenFormat = normalizeYouTubeDraftToGoldenV1(result.draft);
+  const draftTags = (result.draft.tags || [])
+    .map((tag) => toTagSlug(String(tag || '').trim()))
+    .filter(Boolean)
+    .slice(0, 5);
+  const summaryWordCount = String(result.draft.description || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
 
   const { data: blueprint, error: blueprintError } = await db
     .from('blueprints')
@@ -4135,23 +4137,26 @@ async function createBlueprintFromVideo(db: ReturnType<typeof createClient>, inp
       title: result.draft.title,
       creator_user_id: input.userId,
       is_public: false,
-      steps: mapDraftStepsForBlueprint(goldenFormat.steps),
+      steps: mapDraftStepsForBlueprint(result.draft.steps),
       selected_items: {
         source: input.sourceTag,
         run_id: result.run_id,
         video_url: input.videoUrl,
         bp_style: 'golden_v1',
         bp_origin: 'youtube_pipeline',
-        bp_domain: goldenFormat.domain,
-        summary_word_count: goldenFormat.summaryWordCount,
-        bp_structure_ok: goldenFormat.structureGate.ok,
-        bp_structure_issues: goldenFormat.structureGate.issues,
+        bp_domain: 'deep',
+        summary_word_count: summaryWordCount,
+        bp_structure_ok: Boolean((result.meta as { bp_structure_ok?: unknown } | null)?.bp_structure_ok ?? true),
+        bp_structure_issues: Array.isArray((result.meta as { bp_structure_issues?: unknown } | null)?.bp_structure_issues)
+          ? (result.meta as { bp_structure_issues: unknown[] }).bp_structure_issues
+          : [],
         bp_quality_ok: Boolean((result.meta as { bp_quality_ok?: unknown } | null)?.bp_quality_ok),
         bp_quality_issues: Array.isArray((result.meta as { bp_quality_issues?: unknown } | null)?.bp_quality_issues)
           ? (result.meta as { bp_quality_issues: unknown[] }).bp_quality_issues
-          : goldenFormat.qualityGate.issues,
+          : [],
         bp_quality_retries_used: Number((result.meta as { bp_quality_retries_used?: unknown } | null)?.bp_quality_retries_used || 0),
         bp_quality_final_mode: String((result.meta as { bp_quality_final_mode?: unknown } | null)?.bp_quality_final_mode || 'direct'),
+        bp_output_mode: String((result.meta as { bp_output_mode?: unknown } | null)?.bp_output_mode || yt2bpOutputMode),
         bp_trace_version: String((result.meta as { bp_trace_version?: unknown } | null)?.bp_trace_version || 'yt2bp_trace_v2'),
         bp_run_id: result.run_id,
         bp_trace_source: 'generation_runs',
@@ -4164,8 +4169,7 @@ async function createBlueprintFromVideo(db: ReturnType<typeof createClient>, inp
     .single();
   if (blueprintError) throw blueprintError;
 
-  for (const rawTag of goldenFormat.tags || []) {
-    const tagSlug = toTagSlug(rawTag);
+  for (const tagSlug of draftTags) {
     if (!tagSlug) continue;
     const tagId = await ensureTagId(db, input.userId, tagSlug);
     await db
@@ -11931,7 +11935,7 @@ async function runYouTubePipeline(input: {
       issue_details: string[];
     }>,
     gate_final: null as null | {
-      mode: 'direct' | 'retry_pass' | 'repaired_after_retry';
+      mode: 'direct' | 'retry_pass' | 'repaired_after_retry' | 'llm_native_direct';
       pass: boolean;
       issues: string[];
       issue_details: string[];
@@ -12274,147 +12278,21 @@ async function runYouTubePipeline(input: {
   }
 
   let draft = selected.draft;
-  let goldenFormat = normalizeYouTubeDraftToGoldenV1(draftToNormalizationInput(draft), {
-    repairQuality: false,
-    transcript: transcript.text,
-  });
-  let qualityRetriesUsed = 0;
-  let qualityFinalMode: 'direct' | 'retry_pass' | 'repaired_after_retry' = 'direct';
-  let gateIssueCodes = Array.from(new Set([
-    ...goldenFormat.structureGate.issues,
-    ...goldenFormat.qualityGate.issues,
-  ]));
-  let gateIssueDetails = [
-    ...goldenFormat.structureGate.issues.map((code) => `${code} section=structure detail=shape_or_order`),
-    ...formatGoldenQualityIssueDetails(goldenFormat.qualityGate.detail),
-  ];
-  let gatePassed = goldenFormat.structureGate.ok && goldenFormat.qualityGate.ok;
-  generationTrace.gate_initial = {
-    pass: gatePassed,
-    issues: gateIssueCodes.slice(0, 20),
-    issue_details: gateIssueDetails.slice(0, 20),
+  draft = {
+    ...draft,
+    tags: (draft.tags || []).map((tag) => String(tag || '').trim()).filter(Boolean).slice(0, 5),
   };
-  if (traceContext.db && traceContext.userId) {
-    await safeGenerationTraceWrite({
-      runId: input.runId,
-      op: 'event_gate_initial',
-      fn: async () => {
-        await appendGenerationEvent(traceContext.db as any, {
-          runId: input.runId,
-          level: gatePassed ? 'info' : 'warn',
-          event: 'gate_initial',
-          payload: {
-            pass: gatePassed,
-            issues: gateIssueCodes,
-            issue_details: gateIssueDetails.slice(0, 20),
-          },
-        });
-      },
-    });
-  }
+  const useDeterministicPostProcessing = yt2bpOutputMode === 'deterministic';
+  let qualityRetriesUsed = 0;
+  let qualityFinalMode: 'direct' | 'retry_pass' | 'repaired_after_retry' | 'llm_native_direct' = useDeterministicPostProcessing
+    ? 'direct'
+    : 'llm_native_direct';
+  let gateIssueCodes: string[] = [];
+  let gateIssueDetails: string[] = [];
+  let gatePassed = true;
 
-  console.log('[bp_quality_gate_eval]', JSON.stringify({
-    run_id: input.runId,
-    video_id: input.videoId,
-    attempt: 0,
-    retry_count: qualityRetriesUsed,
-    pass: gatePassed,
-    issues: gateIssueCodes,
-    issue_details: gateIssueDetails.slice(0, 12),
-    final_mode: gatePassed ? 'direct' : 'pending',
-  }));
-
-  while (!gatePassed && qualityRetriesUsed < GOLDEN_QUALITY_MAX_RETRIES) {
-    const retryAttempt = qualityRetriesUsed + 1;
-    const previousOutput = JSON.stringify({
-      title: draft.title,
-      description: draft.description,
-      steps: goldenFormat.steps,
-      notes: draft.notes || null,
-      tags: draft.tags || [],
-    }).slice(0, 12000);
-
-    console.log('[bp_quality_retry_requested]', JSON.stringify({
-      run_id: input.runId,
-      video_id: input.videoId,
-      attempt: retryAttempt,
-      retry_count: retryAttempt,
-      issues: gateIssueCodes,
-      issue_details: gateIssueDetails.slice(0, 12),
-    }));
-    if (traceContext.db && traceContext.userId) {
-      await safeGenerationTraceWrite({
-        runId: input.runId,
-        op: 'event_gate_retry_requested',
-        fn: async () => {
-          await appendGenerationEvent(traceContext.db as any, {
-            runId: input.runId,
-            level: 'warn',
-            event: 'gate_retry_requested',
-            payload: {
-              attempt: retryAttempt,
-              issues: gateIssueCodes,
-              issue_details: gateIssueDetails.slice(0, 20),
-            },
-          });
-        },
-      });
-    }
-
-    const retryInstructions = buildYouTubeQualityRetryInstructions({
-      attempt: retryAttempt,
-      maxRetries: GOLDEN_QUALITY_MAX_RETRIES,
-      issueCodes: gateIssueCodes,
-      issueDetails: gateIssueDetails,
-      previousOutput,
-    });
-
-    const retryRawDraft = await runWithProviderRetry(
-      {
-        providerKey: 'llm_generate_blueprint',
-        db: serviceDb,
-        maxAttempts: providerRetryDefaults.llmAttempts,
-        timeoutMs: providerRetryDefaults.llmTimeoutMs,
-        baseDelayMs: 300,
-        jitterMs: 200,
-      },
-      async () => client.generateYouTubeBlueprint({
-        videoUrl: input.videoUrl,
-        videoTitle: input.videoId,
-        transcriptSource: transcript.source,
-        transcript: transcript.text,
-        qualityIssueCodes: gateIssueCodes,
-        qualityIssueDetails: gateIssueDetails,
-        additionalInstructions: retryInstructions,
-      }, {
-        onGenerationModelEvent: generationModelEventCallback,
-        onGenerationPromptEvent: generationPromptEventCallback,
-      }),
-    );
-    const retryDraft = toDraft(retryRawDraft);
-    const retryFlattened = flattenDraftText(retryDraft);
-    const retrySafety = runSafetyChecks(retryFlattened);
-    if (!retrySafety.ok) {
-      if (yt2bpSafetyBlockEnabled) {
-        makePipelineError('SAFETY_BLOCKED', `Forbidden topics detected: ${retrySafety.blockedTopics.join(', ')}`);
-      } else {
-        await bypassSafetyBlock({
-          stage: 'deterministic_retry',
-          blockedTopics: retrySafety.blockedTopics,
-          attempt: retryAttempt,
-          run: 1,
-          globalRun: retryAttempt,
-        });
-      }
-    }
-    const retryPii = runPiiChecks(retryFlattened);
-    if (!retryPii.ok) {
-      makePipelineError('PII_BLOCKED', `PII detected: ${retryPii.matches.join(', ')}`);
-    }
-
-    draft = retryDraft;
-    qualityRetriesUsed = retryAttempt;
-    goldenFormat = normalizeYouTubeDraftToGoldenV1(draftToNormalizationInput(draft), {
+  if (useDeterministicPostProcessing) {
+    let goldenFormat = normalizeYouTubeDraftToGoldenV1(draftToNormalizationInput(draft), {
       repairQuality: false,
       transcript: transcript.text,
     });
@@ -12427,35 +12305,23 @@ async function runYouTubePipeline(input: {
       ...formatGoldenQualityIssueDetails(goldenFormat.qualityGate.detail),
     ];
     gatePassed = goldenFormat.structureGate.ok && goldenFormat.qualityGate.ok;
-    generationTrace.gate_retries.push({
-      attempt: retryAttempt,
+    generationTrace.gate_initial = {
       pass: gatePassed,
       issues: gateIssueCodes.slice(0, 20),
       issue_details: gateIssueDetails.slice(0, 20),
-    });
-
-    console.log('[bp_quality_retry_result]', JSON.stringify({
-      run_id: input.runId,
-      video_id: input.videoId,
-      attempt: retryAttempt,
-      retry_count: qualityRetriesUsed,
-      pass: gatePassed,
-      issues: gateIssueCodes,
-      issue_details: gateIssueDetails.slice(0, 12),
-      final_mode: gatePassed ? 'retry_pass' : 'pending',
-    }));
+    };
     if (traceContext.db && traceContext.userId) {
       await safeGenerationTraceWrite({
         runId: input.runId,
-        op: 'event_gate_retry_result',
+        op: 'event_gate_initial',
         fn: async () => {
           await appendGenerationEvent(traceContext.db as any, {
             runId: input.runId,
             level: gatePassed ? 'info' : 'warn',
-            event: 'gate_retry_result',
+            event: 'gate_initial',
             payload: {
-              attempt: retryAttempt,
               pass: gatePassed,
+              output_mode: yt2bpOutputMode,
               issues: gateIssueCodes,
               issue_details: gateIssueDetails.slice(0, 20),
             },
@@ -12463,74 +12329,284 @@ async function runYouTubePipeline(input: {
         },
       });
     }
-    if (gatePassed) {
-      qualityFinalMode = 'retry_pass';
-      break;
-    }
-  }
 
-  if (!gatePassed) {
-    goldenFormat = normalizeYouTubeDraftToGoldenV1(draftToNormalizationInput(draft), {
-      repairQuality: true,
-      transcript: transcript.text,
-    });
-    gateIssueCodes = Array.from(new Set([
-      ...goldenFormat.structureGate.issues,
-      ...goldenFormat.qualityGate.issues,
-    ]));
-    gateIssueDetails = [
-      ...goldenFormat.structureGate.issues.map((code) => `${code} section=structure detail=shape_or_order`),
-      ...formatGoldenQualityIssueDetails(goldenFormat.qualityGate.detail),
-    ];
-    qualityFinalMode = 'repaired_after_retry';
-    gatePassed = goldenFormat.structureGate.ok && goldenFormat.qualityGate.ok;
-
-    console.log('[bp_quality_retry_exhausted_repaired]', JSON.stringify({
+    console.log('[bp_quality_gate_eval]', JSON.stringify({
       run_id: input.runId,
       video_id: input.videoId,
+      attempt: 0,
       retry_count: qualityRetriesUsed,
+      output_mode: yt2bpOutputMode,
       pass: gatePassed,
       issues: gateIssueCodes,
       issue_details: gateIssueDetails.slice(0, 12),
+      final_mode: gatePassed ? 'direct' : 'pending',
+    }));
+
+    while (!gatePassed && qualityRetriesUsed < GOLDEN_QUALITY_MAX_RETRIES) {
+      const retryAttempt = qualityRetriesUsed + 1;
+      const previousOutput = JSON.stringify({
+        title: draft.title,
+        description: draft.description,
+        steps: goldenFormat.steps,
+        notes: draft.notes || null,
+        tags: draft.tags || [],
+      }).slice(0, 12000);
+
+      console.log('[bp_quality_retry_requested]', JSON.stringify({
+        run_id: input.runId,
+        video_id: input.videoId,
+        output_mode: yt2bpOutputMode,
+        attempt: retryAttempt,
+        retry_count: retryAttempt,
+        issues: gateIssueCodes,
+        issue_details: gateIssueDetails.slice(0, 12),
+      }));
+      if (traceContext.db && traceContext.userId) {
+        await safeGenerationTraceWrite({
+          runId: input.runId,
+          op: 'event_gate_retry_requested',
+          fn: async () => {
+            await appendGenerationEvent(traceContext.db as any, {
+              runId: input.runId,
+              level: 'warn',
+              event: 'gate_retry_requested',
+              payload: {
+                attempt: retryAttempt,
+                output_mode: yt2bpOutputMode,
+                issues: gateIssueCodes,
+                issue_details: gateIssueDetails.slice(0, 20),
+              },
+            });
+          },
+        });
+      }
+
+      const retryInstructions = buildYouTubeQualityRetryInstructions({
+        attempt: retryAttempt,
+        maxRetries: GOLDEN_QUALITY_MAX_RETRIES,
+        issueCodes: gateIssueCodes,
+        issueDetails: gateIssueDetails,
+        previousOutput,
+      });
+
+      const retryRawDraft = await runWithProviderRetry(
+        {
+          providerKey: 'llm_generate_blueprint',
+          db: serviceDb,
+          maxAttempts: providerRetryDefaults.llmAttempts,
+          timeoutMs: providerRetryDefaults.llmTimeoutMs,
+          baseDelayMs: 300,
+          jitterMs: 200,
+        },
+        async () => client.generateYouTubeBlueprint({
+          videoUrl: input.videoUrl,
+          videoTitle: input.videoId,
+          transcriptSource: transcript.source,
+          transcript: transcript.text,
+          qualityIssueCodes: gateIssueCodes,
+          qualityIssueDetails: gateIssueDetails,
+          additionalInstructions: retryInstructions,
+        }, {
+          onGenerationModelEvent: generationModelEventCallback,
+          onGenerationPromptEvent: generationPromptEventCallback,
+        }),
+      );
+      const retryDraft = toDraft(retryRawDraft);
+      const retryFlattened = flattenDraftText(retryDraft);
+      const retrySafety = runSafetyChecks(retryFlattened);
+      if (!retrySafety.ok) {
+        if (yt2bpSafetyBlockEnabled) {
+          makePipelineError('SAFETY_BLOCKED', `Forbidden topics detected: ${retrySafety.blockedTopics.join(', ')}`);
+        } else {
+          await bypassSafetyBlock({
+            stage: 'deterministic_retry',
+            blockedTopics: retrySafety.blockedTopics,
+            attempt: retryAttempt,
+            run: 1,
+            globalRun: retryAttempt,
+          });
+        }
+      }
+      const retryPii = runPiiChecks(retryFlattened);
+      if (!retryPii.ok) {
+        makePipelineError('PII_BLOCKED', `PII detected: ${retryPii.matches.join(', ')}`);
+      }
+
+      draft = {
+        ...retryDraft,
+        tags: (retryDraft.tags || []).map((tag) => String(tag || '').trim()).filter(Boolean).slice(0, 5),
+      };
+      qualityRetriesUsed = retryAttempt;
+      goldenFormat = normalizeYouTubeDraftToGoldenV1(draftToNormalizationInput(draft), {
+        repairQuality: false,
+        transcript: transcript.text,
+      });
+      gateIssueCodes = Array.from(new Set([
+        ...goldenFormat.structureGate.issues,
+        ...goldenFormat.qualityGate.issues,
+      ]));
+      gateIssueDetails = [
+        ...goldenFormat.structureGate.issues.map((code) => `${code} section=structure detail=shape_or_order`),
+        ...formatGoldenQualityIssueDetails(goldenFormat.qualityGate.detail),
+      ];
+      gatePassed = goldenFormat.structureGate.ok && goldenFormat.qualityGate.ok;
+      generationTrace.gate_retries.push({
+        attempt: retryAttempt,
+        pass: gatePassed,
+        issues: gateIssueCodes.slice(0, 20),
+        issue_details: gateIssueDetails.slice(0, 20),
+      });
+
+      console.log('[bp_quality_retry_result]', JSON.stringify({
+        run_id: input.runId,
+        video_id: input.videoId,
+        output_mode: yt2bpOutputMode,
+        attempt: retryAttempt,
+        retry_count: qualityRetriesUsed,
+        pass: gatePassed,
+        issues: gateIssueCodes,
+        issue_details: gateIssueDetails.slice(0, 12),
+        final_mode: gatePassed ? 'retry_pass' : 'pending',
+      }));
+      if (traceContext.db && traceContext.userId) {
+        await safeGenerationTraceWrite({
+          runId: input.runId,
+          op: 'event_gate_retry_result',
+          fn: async () => {
+            await appendGenerationEvent(traceContext.db as any, {
+              runId: input.runId,
+              level: gatePassed ? 'info' : 'warn',
+              event: 'gate_retry_result',
+              payload: {
+                attempt: retryAttempt,
+                output_mode: yt2bpOutputMode,
+                pass: gatePassed,
+                issues: gateIssueCodes,
+                issue_details: gateIssueDetails.slice(0, 20),
+              },
+            });
+          },
+        });
+      }
+      if (gatePassed) {
+        qualityFinalMode = 'retry_pass';
+        break;
+      }
+    }
+
+    if (!gatePassed) {
+      goldenFormat = normalizeYouTubeDraftToGoldenV1(draftToNormalizationInput(draft), {
+        repairQuality: true,
+        transcript: transcript.text,
+      });
+      gateIssueCodes = Array.from(new Set([
+        ...goldenFormat.structureGate.issues,
+        ...goldenFormat.qualityGate.issues,
+      ]));
+      gateIssueDetails = [
+        ...goldenFormat.structureGate.issues.map((code) => `${code} section=structure detail=shape_or_order`),
+        ...formatGoldenQualityIssueDetails(goldenFormat.qualityGate.detail),
+      ];
+      qualityFinalMode = 'repaired_after_retry';
+      gatePassed = goldenFormat.structureGate.ok && goldenFormat.qualityGate.ok;
+
+      console.log('[bp_quality_retry_exhausted_repaired]', JSON.stringify({
+        run_id: input.runId,
+        video_id: input.videoId,
+        output_mode: yt2bpOutputMode,
+        retry_count: qualityRetriesUsed,
+        pass: gatePassed,
+        issues: gateIssueCodes,
+        issue_details: gateIssueDetails.slice(0, 12),
+        final_mode: qualityFinalMode,
+      }));
+      if (traceContext.db && traceContext.userId) {
+        await safeGenerationTraceWrite({
+          runId: input.runId,
+          op: 'event_gate_repaired',
+          fn: async () => {
+            await appendGenerationEvent(traceContext.db as any, {
+              runId: input.runId,
+              level: gatePassed ? 'info' : 'warn',
+              event: 'gate_repaired',
+              payload: {
+                output_mode: yt2bpOutputMode,
+                pass: gatePassed,
+                issues: gateIssueCodes,
+                issue_details: gateIssueDetails.slice(0, 20),
+                retries_used: qualityRetriesUsed,
+              },
+            });
+          },
+        });
+      }
+    }
+    generationTrace.gate_final = {
+      mode: qualityFinalMode,
+      pass: gatePassed,
+      issues: gateIssueCodes.slice(0, 20),
+      issue_details: gateIssueDetails.slice(0, 20),
+      retries_used: qualityRetriesUsed,
+    };
+
+    draft = {
+      ...draft,
+      steps: goldenFormat.steps.map((step) => ({
+        name: step.name,
+        notes: step.notes,
+        timestamp: step.timestamp || null,
+      })),
+      tags: goldenFormat.tags.length > 0 ? goldenFormat.tags : draft.tags,
+    };
+  } else {
+    gatePassed = true;
+    gateIssueCodes = [];
+    gateIssueDetails = [];
+    generationTrace.gate_initial = {
+      pass: true,
+      issues: [],
+      issue_details: [],
+    };
+    generationTrace.gate_final = {
+      mode: qualityFinalMode,
+      pass: true,
+      issues: [],
+      issue_details: [],
+      retries_used: 0,
+    };
+    console.log('[bp_quality_gate_eval]', JSON.stringify({
+      run_id: input.runId,
+      video_id: input.videoId,
+      attempt: 0,
+      retry_count: 0,
+      output_mode: yt2bpOutputMode,
+      pass: true,
+      issues: [],
+      issue_details: [],
       final_mode: qualityFinalMode,
+      note: 'deterministic_post_processing_skipped',
     }));
     if (traceContext.db && traceContext.userId) {
       await safeGenerationTraceWrite({
         runId: input.runId,
-        op: 'event_gate_repaired',
+        op: 'event_gate_initial',
         fn: async () => {
           await appendGenerationEvent(traceContext.db as any, {
             runId: input.runId,
-            level: gatePassed ? 'info' : 'warn',
-            event: 'gate_repaired',
+            level: 'info',
+            event: 'gate_initial',
             payload: {
-              pass: gatePassed,
-              issues: gateIssueCodes,
-              issue_details: gateIssueDetails.slice(0, 20),
-              retries_used: qualityRetriesUsed,
+              pass: true,
+              output_mode: yt2bpOutputMode,
+              issues: [],
+              issue_details: [],
+              note: 'deterministic_post_processing_skipped',
             },
           });
         },
       });
     }
   }
-  generationTrace.gate_final = {
-    mode: qualityFinalMode,
-    pass: gatePassed,
-    issues: gateIssueCodes.slice(0, 20),
-    issue_details: gateIssueDetails.slice(0, 20),
-    retries_used: qualityRetriesUsed,
-  };
-
-  draft = {
-    ...draft,
-    steps: goldenFormat.steps.map((step) => ({
-      name: step.name,
-      notes: step.notes,
-      timestamp: step.timestamp || null,
-    })),
-    tags: goldenFormat.tags.length > 0 ? goldenFormat.tags : draft.tags,
-  };
   console.log(
     `[yt2bp] run_id=${input.runId} transcript_source=${transcript.source} transcript_chars=${transcript.text.length}`
   );
@@ -12590,6 +12666,7 @@ async function runYouTubePipeline(input: {
             runId: input.runId,
             event: 'pipeline_succeeded',
             payload: {
+              output_mode: yt2bpOutputMode,
               quality_ok: gatePassed,
               quality_issues: gateIssueCodes,
               quality_retries_used: qualityRetriesUsed,
@@ -12625,6 +12702,9 @@ async function runYouTubePipeline(input: {
       meta: {
         transcript_source: transcript.source,
         confidence: transcript.confidence,
+        bp_output_mode: yt2bpOutputMode,
+        bp_structure_ok: gatePassed,
+        bp_structure_issues: gateIssueCodes,
         bp_quality_ok: gatePassed,
         bp_quality_issues: gateIssueCodes,
         bp_quality_retries_used: qualityRetriesUsed,
