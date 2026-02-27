@@ -183,7 +183,33 @@ ${trimmedTranscript}
 
 ${extra ? `Additional instructions:\n${extra}\n` : ''}
 
-Generate a usable blueprint now.`;
+	Generate a usable blueprint now.`;
+}
+
+export function buildYouTubeQualityRetryInstructions(input: {
+  attempt: number;
+  maxRetries: number;
+  issueCodes: string[];
+  issueDetails?: string[];
+  previousOutput: string;
+}) {
+  const codes = (input.issueCodes || []).map((code) => String(code || '').trim()).filter(Boolean);
+  const details = (input.issueDetails || []).map((line) => String(line || '').trim()).filter(Boolean);
+  return [
+    `Quality retry ${input.attempt}/${input.maxRetries}.`,
+    'Fix all listed quality failures in one pass.',
+    'Return strict JSON in the required format only.',
+    'Do not use meta framing like "this video", "this blueprint", or "the transcript".',
+    '',
+    'Failed issue codes:',
+    ...(codes.length > 0 ? codes.map((code) => `- ${code}`) : ['- none']),
+    '',
+    'Failed issue details:',
+    ...(details.length > 0 ? details.map((line) => `- ${line}`) : ['- none']),
+    '',
+    'Previous output to repair:',
+    previousOutput,
+  ].join('\n');
 }
 
 export const CHANNEL_LABEL_SYSTEM_PROMPT = `You assign exactly one channel label to a generated blueprint.

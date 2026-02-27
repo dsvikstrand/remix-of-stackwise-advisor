@@ -8,11 +8,24 @@ export type GoldenBlueprintFormatResult = {
   summaryWordCount: number;
   tags: string[];
   structureGate: GoldenStructureGateResult;
+  qualityGate: GoldenQualityGateResult;
 };
 
 export type GoldenStructureGateResult = {
   ok: boolean;
   issues: string[];
+};
+
+export type GoldenQualityGateIssue = {
+  code: string;
+  section?: string;
+  detail?: string;
+};
+
+export type GoldenQualityGateResult = {
+  ok: boolean;
+  issues: string[];
+  detail: GoldenQualityGateIssue[];
 };
 
 const ACTION_KEYWORDS = [
@@ -79,6 +92,56 @@ const MIN_SECTION_BULLETS = 3;
 const MAX_SECTION_BULLETS = 5;
 const MIN_TAKEAWAYS_BULLETS = 3;
 const MAX_TAKEAWAYS_BULLETS = 4;
+const REPETITION_TRIGRAM_SECTION_THRESHOLD = 0.14;
+const REPETITION_TRIGRAM_GLOBAL_THRESHOLD = 0.10;
+const DUPLICATE_SENTENCE_REUSE_THRESHOLD = 3;
+const BOILERPLATE_TAIL_PATTERN = /why it matters:\s*this changes how you decide when and how to apply it\.?/gi;
+const MECHANISM_TERMS = new Set([
+  'mechanism',
+  'pathway',
+  'receptor',
+  'membrane',
+  'mitochondria',
+  'mitochondrial',
+  'signal',
+  'signaling',
+  'hormone',
+  'metabolic',
+  'enzyme',
+  'oxidative',
+  'inflammation',
+  'electrolyte',
+  'neuro',
+  'gaba',
+  'detox',
+]);
+const CONTEXT_TERMS = new Set([
+  'if',
+  'when',
+  'unless',
+  'context',
+  'depends',
+  'under',
+  'with',
+  'without',
+  'while',
+  'versus',
+  'based',
+  'because',
+  'given',
+  'where',
+]);
+const GENERIC_BULLET_PATTERNS = [
+  /\b(improves?|improved|improvement)\s+(outcomes?|results?)\b/i,
+  /\b(helps?|supports?)\s+(consistency|performance|recovery|goals?)\b/i,
+];
+const STOPWORDS = new Set([
+  'the', 'and', 'that', 'with', 'from', 'into', 'this', 'your', 'about', 'have', 'will', 'their', 'there',
+  'which', 'would', 'could', 'should', 'what', 'when', 'where', 'while', 'because', 'than', 'then', 'them',
+  'they', 'these', 'those', 'just', 'more', 'most', 'very', 'much', 'many', 'some', 'such', 'only', 'over',
+  'under', 'after', 'before', 'also', 'using', 'used', 'use', 'like', 'make', 'made', 'into', 'onto', 'across',
+  'between', 'through', 'around', 'about', 'other', 'each', 'both', 'same', 'here', 'there', 'video', 'blueprint',
+]);
 const REQUIRED_GOLDEN_SECTION_ORDER = [
   'Summary',
   'Takeaways',
@@ -414,6 +477,19 @@ function parseBulletLines(notes: string) {
     .filter((line): line is string => Boolean(line));
 }
 
+function parseLooseBulletLines(notes: string) {
+  return String(notes || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .map((line) => {
+      const match = line.match(/^[-*•]\s+(.+)$/) || line.match(/^\d+[.)]\s+(.+)$/);
+      return match ? stripMetaFraming(stripListPrefix(match[1])) : '';
+    })
+    .map((line) => normalizeWhitespace(line))
+    .filter((line) => line.length >= 10)
+    .filter((line) => !isGenericSectionLabel(line));
+}
+
 function sanitizeBulletCandidate(value: string) {
   let next = stripMetaFraming(stripListPrefix(value));
   next = normalizeWhitespace(next)
@@ -439,7 +515,7 @@ function makeWhyItMattersTail(value: string) {
   if (low.includes('use this when') || low.includes('apply this when')) return value;
   if (low.includes('this means') || low.includes('which means')) return value;
   if (low.includes('so you can')) return value;
-  return `${value.replace(/[.!?]+$/, '')}. Why it matters: this changes how you decide when and how to apply it.`;
+  return value;
 }
 
 function normalizeBulletGroup(primary: string[], fallback: string[]) {
@@ -477,6 +553,248 @@ function normalizeGuidedBulletGroup(primary: string[], fallback: string[]) {
     .map((item) => toGuidedBullet(item))
     .filter((item): item is string => Boolean(item));
   return normalizeBulletGroup(guidedPrimary, guidedFallback);
+}
+
+function tokenizeWords(value: string) {
+  return normalizeWhitespace(value)
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function normalizeSentenceKey(value: string) {
+  return normalizeWhitespace(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function collectSectionText(step: YouTubeDraftStep) {
+  const bullets = parseBulletLines(step.notes || '');
+  const looseBullets = parseLooseBulletLines(step.notes || '');
+  const text = normalizeWhitespace(String(step.notes || ''));
+  return { bullets, looseBullets, text };
+}
+
+function isGate2ScopeSection(sectionName: string) {
+  const normalized = normalizeWhitespace(sectionName);
+  return normalized !== 'Summary';
+}
+
+function trigramRepetitionRatio(value: string) {
+  const tokens = tokenizeWords(value);
+  if (tokens.length < 3) return 0;
+  const total = tokens.length - 2;
+  const counts = new Map<string, number>();
+  for (let i = 0; i < tokens.length - 2; i += 1) {
+    const key = `${tokens[i]} ${tokens[i + 1]} ${tokens[i + 2]}`;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  let repeated = 0;
+  for (const count of counts.values()) {
+    if (count > 1) repeated += count - 1;
+  }
+  return total > 0 ? repeated / total : 0;
+}
+
+function extractDomainEntities(input: { transcript?: string; title?: string; description?: string; tags?: string[] }) {
+  const combined = [
+    input.title || '',
+    input.description || '',
+    ...(input.tags || []),
+    input.transcript || '',
+  ].join(' ');
+  const tokens = tokenizeWords(combined).filter((token) => token.length >= 4 && !STOPWORDS.has(token));
+  const counts = new Map<string, number>();
+  for (const token of tokens) {
+    counts.set(token, (counts.get(token) || 0) + 1);
+  }
+  return new Set(
+    Array.from(counts.entries())
+      .filter(([, count]) => count >= 2)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 80)
+      .map(([token]) => token),
+  );
+}
+
+function hasSpecificityAnchor(
+  bullet: string,
+  context: { domainEntities: Set<string> },
+) {
+  const text = String(bullet || '');
+  if (/\b\d+([.:x-]\d+)?\b/.test(text)) return true;
+  const tokens = tokenizeWords(text);
+  const mechanismHits = tokens.filter((token) => MECHANISM_TERMS.has(token)).length;
+  const contextHits = tokens.filter((token) => CONTEXT_TERMS.has(token)).length;
+  const entityHits = tokens.filter((token) => context.domainEntities.has(token)).length;
+  return mechanismHits + contextHits + entityHits >= 2;
+}
+
+function isGenericBulletWithoutContext(
+  bullet: string,
+  context: { domainEntities: Set<string> },
+) {
+  const text = String(bullet || '').trim();
+  if (!text) return false;
+  const generic = GENERIC_BULLET_PATTERNS.some((pattern) => pattern.test(text));
+  if (!generic) return false;
+  return !hasSpecificityAnchor(text, context);
+}
+
+function dedupeSentencesKeepOrder(value: string) {
+  const sentences = toSentences(value);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const sentence of sentences) {
+    const key = normalizeSentenceKey(sentence);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(sentence);
+  }
+  return out.join(' ');
+}
+
+export function evaluateGoldenQuality(input: {
+  steps: YouTubeDraftStep[];
+  transcript?: string;
+  title?: string;
+  description?: string;
+  tags?: string[];
+}): GoldenQualityGateResult {
+  const issues: GoldenQualityGateIssue[] = [];
+  const steps = input.steps || [];
+  const context = {
+    domainEntities: extractDomainEntities({
+      transcript: input.transcript,
+      title: input.title,
+      description: input.description,
+      tags: input.tags,
+    }),
+  };
+  const sectionMap = new Map<string, { bullets: string[]; looseBullets: string[]; text: string }>();
+  for (const step of steps) {
+    sectionMap.set(normalizeWhitespace(step.name), collectSectionText(step));
+  }
+  const gate2ScopeSteps = steps.filter((step) => isGate2ScopeSection(step.name));
+
+  for (const step of gate2ScopeSteps) {
+    const section = normalizeWhitespace(step.name);
+    const text = sectionMap.get(section)?.text || '';
+    const sectionRatio = trigramRepetitionRatio(text);
+    if (sectionRatio > REPETITION_TRIGRAM_SECTION_THRESHOLD) {
+      issues.push({
+        code: 'REPETITION_TRIGRAM_SECTION',
+        section,
+        detail: `ratio=${sectionRatio.toFixed(3)}`,
+      });
+    }
+  }
+
+  const globalText = gate2ScopeSteps.map((step) => sectionMap.get(normalizeWhitespace(step.name))?.text || '').join('\n');
+  const globalRatio = trigramRepetitionRatio(globalText);
+  if (globalRatio > REPETITION_TRIGRAM_GLOBAL_THRESHOLD) {
+    issues.push({
+      code: 'REPETITION_TRIGRAM_GLOBAL',
+      detail: `ratio=${globalRatio.toFixed(3)}`,
+    });
+  }
+
+  const sentenceSectionMap = new Map<string, Set<string>>();
+  for (const step of gate2ScopeSteps) {
+    const section = normalizeWhitespace(step.name);
+    const payload = sectionMap.get(section);
+    if (!payload) continue;
+    const sentenceCandidates = [
+      ...toSentences(payload.text),
+      ...payload.looseBullets,
+    ];
+    for (const sentence of sentenceCandidates) {
+      const key = normalizeSentenceKey(sentence);
+      if (!key || key.length < 14) continue;
+      if (!sentenceSectionMap.has(key)) sentenceSectionMap.set(key, new Set());
+      sentenceSectionMap.get(key)?.add(section);
+    }
+  }
+  const duplicateAcrossSections = Array.from(sentenceSectionMap.values())
+    .filter((set) => set.size > 1)
+    .reduce((sum, set) => sum + (set.size - 1), 0);
+  if (duplicateAcrossSections >= DUPLICATE_SENTENCE_REUSE_THRESHOLD) {
+    issues.push({
+      code: 'DUPLICATE_SENTENCES_ACROSS_SECTIONS',
+      detail: `count=${duplicateAcrossSections}`,
+    });
+  }
+
+  for (const step of gate2ScopeSteps) {
+    const section = normalizeWhitespace(step.name);
+    const bullets = sectionMap.get(section)?.looseBullets || [];
+    const boilerplateCount = bullets
+      .map((line) => (line.match(BOILERPLATE_TAIL_PATTERN) || []).length)
+      .reduce((sum, count) => sum + count, 0);
+    if (boilerplateCount >= 2) {
+      issues.push({
+        code: 'BOILERPLATE_REPEATED',
+        section,
+        detail: `count=${boilerplateCount}`,
+      });
+    }
+  }
+
+  const minSpecificityBySection = new Map<string, number>([
+    ['Takeaways', 1],
+    ['Deep Dive', 2],
+    ['Tradeoffs', 1],
+    ['Practical Rules', 1],
+  ]);
+  for (const [section, minCount] of minSpecificityBySection.entries()) {
+    const payload = sectionMap.get(section);
+    if (!payload) continue;
+    const tokens = tokenizeWords(payload.text);
+    const mechanismHits = tokens.filter((token) => MECHANISM_TERMS.has(token)).length;
+    const contextHits = tokens.filter((token) => CONTEXT_TERMS.has(token)).length;
+    const entityHits = tokens.filter((token) => context.domainEntities.has(token)).length;
+    const score = mechanismHits + contextHits + entityHits;
+    if (score < minCount) {
+      issues.push({
+        code: 'SPECIFICITY_LOW',
+        section,
+        detail: `score=${score},min=${minCount}`,
+      });
+    }
+  }
+
+  for (const step of steps) {
+    const section = normalizeWhitespace(step.name);
+    const bullets = sectionMap.get(section)?.looseBullets || [];
+    bullets.forEach((bullet, idx) => {
+      if (isGenericBulletWithoutContext(bullet, context)) {
+        issues.push({
+          code: 'GENERIC_BULLET_NO_CONTEXT',
+          section,
+          detail: `bullet_index=${idx + 1}`,
+        });
+      }
+    });
+  }
+
+  const uniqueKey = (issue: GoldenQualityGateIssue) => `${issue.code}::${issue.section || ''}::${issue.detail || ''}`;
+  const deduped: GoldenQualityGateIssue[] = [];
+  const seen = new Set<string>();
+  for (const issue of issues) {
+    const key = uniqueKey(issue);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(issue);
+  }
+
+  return {
+    ok: deduped.length === 0,
+    issues: deduped.map((issue) => issue.code),
+    detail: deduped,
+  };
 }
 
 export function validateGoldenStructure(steps: YouTubeDraftStep[]): GoldenStructureGateResult {
@@ -570,6 +888,158 @@ function repairGoldenStructure(
     { name: 'Bleup', notes: bleup, timestamp: null },
     ...fixedDeep,
   ];
+}
+
+function stripBoilerplateTail(value: string) {
+  return normalizeWhitespace(String(value || '').replace(BOILERPLATE_TAIL_PATTERN, ''));
+}
+
+function repairGoldenQuality(
+  steps: YouTubeDraftStep[],
+  input: {
+    fallbackByName: Map<string, string>;
+    transcript?: string;
+    title?: string;
+    description?: string;
+    tags?: string[];
+  },
+): YouTubeDraftStep[] {
+  const byName = new Map((steps || []).map((step) => [normalizeWhitespace(step.name), step]));
+  const context = {
+    domainEntities: extractDomainEntities({
+      transcript: input.transcript,
+      title: input.title,
+      description: input.description,
+      tags: input.tags,
+    }),
+  };
+
+  const seenSentenceKeys = new Set<string>();
+  const rememberSentence = (value: string) => {
+    const key = normalizeSentenceKey(value);
+    if (!key) return false;
+    if (seenSentenceKeys.has(key)) return false;
+    seenSentenceKeys.add(key);
+    return true;
+  };
+  const rememberBlockSentences = (value: string) => {
+    for (const sentence of toSentences(value)) {
+      rememberSentence(sentence);
+    }
+  };
+
+  const globalBulletSeen = new Set<string>();
+  const normalizeSectionBullets = (sectionName: string, min: number, max: number) => {
+    const current = parseBulletLines(byName.get(sectionName)?.notes || '');
+    const fallback = parseBulletLines(input.fallbackByName.get(sectionName) || '');
+    const cleanedCurrent = current
+      .map((line) => stripBoilerplateTail(line))
+      .map((line) => sanitizeBulletCandidate(line))
+      .filter((line): line is string => Boolean(line))
+      .filter((line) => !isGenericBulletWithoutContext(line, context));
+    const cleanedFallback = fallback
+      .map((line) => stripBoilerplateTail(line))
+      .map((line) => sanitizeBulletCandidate(line))
+      .filter((line): line is string => Boolean(line))
+      .filter((line) => !isGenericBulletWithoutContext(line, context));
+    const relaxedFallback = fallback
+      .map((line) => stripBoilerplateTail(line))
+      .map((line) => sanitizeBulletCandidate(line))
+      .filter((line): line is string => Boolean(line));
+    const merged: string[] = [];
+    const pushUnique = (candidate: string) => {
+      const bulletKey = normalizeSentenceKey(candidate);
+      if (!bulletKey || globalBulletSeen.has(bulletKey) || seenSentenceKeys.has(bulletKey)) return false;
+      globalBulletSeen.add(bulletKey);
+      seenSentenceKeys.add(bulletKey);
+      merged.push(candidate);
+      return true;
+    };
+    for (const candidate of [...cleanedCurrent, ...cleanedFallback]) {
+      pushUnique(candidate);
+      if (merged.length >= max) break;
+    }
+    let idx = 0;
+    while (merged.length < min && idx < cleanedFallback.length) {
+      const candidate = cleanedFallback[idx];
+      idx += 1;
+      pushUnique(candidate);
+    }
+    let relaxedIdx = 0;
+    while (merged.length < min && relaxedIdx < relaxedFallback.length) {
+      const candidate = relaxedFallback[relaxedIdx];
+      relaxedIdx += 1;
+      pushUnique(candidate);
+    }
+    // Final fallback: keep section structurally valid even if uniqueness budget is exhausted.
+    let finalIdx = 0;
+    while (merged.length < min && finalIdx < relaxedFallback.length) {
+      const candidate = relaxedFallback[finalIdx];
+      finalIdx += 1;
+      const key = normalizeSentenceKey(candidate);
+      if (!key || globalBulletSeen.has(key)) continue;
+      globalBulletSeen.add(key);
+      merged.push(candidate);
+    }
+    return toBulletBlock(merged.slice(0, max));
+  };
+
+  const summaryFallback = normalizeWhitespace(input.description || input.title || '');
+  const summarySource = stripBoilerplateTail(
+    byName.get('Summary')?.notes || summaryFallback || '',
+  );
+  const summarySentences = dedupeKeepOrder(toSentences(summarySource));
+  const uniqueSummary = summarySentences.filter((sentence) => rememberSentence(sentence));
+  const summary = normalizeWhitespace(uniqueSummary.join(' ')) || dedupeSentencesKeepOrder(summarySource) || summaryFallback;
+  rememberBlockSentences(summary);
+
+  const bleupFallback = normalizeWhitespace(input.description || summary || '');
+  const bleupSource = stripBoilerplateTail(byName.get('Bleup')?.notes || bleupFallback || '');
+  const bleupCandidates = dedupeKeepOrder([
+    ...toSentences(bleupSource),
+    ...toSentences(bleupFallback),
+  ]);
+  const uniqueBleup = bleupCandidates.filter((sentence) => rememberSentence(sentence));
+  const bleup = normalizeWhitespace(uniqueBleup.join(' ')) || dedupeSentencesKeepOrder(bleupSource) || bleupFallback;
+  rememberBlockSentences(bleup);
+
+  return [
+    {
+      name: 'Summary',
+      notes: summary,
+      timestamp: null,
+    },
+    {
+      name: 'Takeaways',
+      notes: normalizeSectionBullets('Takeaways', MIN_TAKEAWAYS_BULLETS, MAX_TAKEAWAYS_BULLETS),
+      timestamp: null,
+    },
+    {
+      name: 'Bleup',
+      notes: bleup,
+      timestamp: null,
+    },
+    {
+      name: 'Deep Dive',
+      notes: normalizeSectionBullets('Deep Dive', MIN_SECTION_BULLETS, MAX_SECTION_BULLETS),
+      timestamp: null,
+    },
+    {
+      name: 'Tradeoffs',
+      notes: normalizeSectionBullets('Tradeoffs', MIN_SECTION_BULLETS, MAX_SECTION_BULLETS),
+      timestamp: null,
+    },
+    {
+      name: 'Practical Rules',
+      notes: normalizeSectionBullets('Practical Rules', MIN_SECTION_BULLETS, MAX_SECTION_BULLETS),
+      timestamp: null,
+    },
+    {
+      name: 'Open Questions',
+      notes: normalizeSectionBullets('Open Questions', MIN_SECTION_BULLETS, MAX_SECTION_BULLETS),
+      timestamp: null,
+    },
+  ] satisfies YouTubeDraftStep[];
 }
 
 function chooseGeneralTags(draft: YouTubeBlueprintResult, domain: GoldenBlueprintDomain) {
@@ -761,7 +1231,13 @@ function buildActionSections(draft: YouTubeBlueprintResult) {
   ] satisfies YouTubeDraftStep[];
 }
 
-export function normalizeYouTubeDraftToGoldenV1(draft: YouTubeBlueprintResult): GoldenBlueprintFormatResult {
+export function normalizeYouTubeDraftToGoldenV1(
+  draft: YouTubeBlueprintResult,
+  options?: {
+    repairQuality?: boolean;
+    transcript?: string;
+  },
+): GoldenBlueprintFormatResult {
   // Golden BP v1 is currently locked to the deep/research section template.
   const domain: GoldenBlueprintDomain = 'deep';
   const takeaways = selectTakeawayCandidates(draft, domain);
@@ -802,11 +1278,43 @@ export function normalizeYouTubeDraftToGoldenV1(draft: YouTubeBlueprintResult): 
     structureGate = validateGoldenStructure(steps);
   }
 
+  let qualityGate = evaluateGoldenQuality({
+    steps,
+    transcript: options?.transcript,
+    title: draft.title,
+    description: draft.description,
+    tags: draft.tags || [],
+  });
+  if (!qualityGate.ok && options?.repairQuality !== false) {
+    steps = repairGoldenQuality(steps, {
+      fallbackByName: new Map([
+        ['Takeaways', toBulletBlock(takeaways)],
+        ['Deep Dive', deepFallbackByName.get('Deep Dive') || ''],
+        ['Tradeoffs', deepFallbackByName.get('Tradeoffs') || ''],
+        ['Practical Rules', deepFallbackByName.get('Practical Rules') || ''],
+        ['Open Questions', deepFallbackByName.get('Open Questions') || ''],
+      ]),
+      transcript: options?.transcript,
+      title: draft.title,
+      description: draft.description,
+      tags: draft.tags || [],
+    });
+    structureGate = validateGoldenStructure(steps);
+    qualityGate = evaluateGoldenQuality({
+      steps,
+      transcript: options?.transcript,
+      title: draft.title,
+      description: draft.description,
+      tags: draft.tags || [],
+    });
+  }
+
   return {
     domain,
     steps,
     summaryWordCount: wordCount(summaryParagraphs.join(' ')),
     tags,
     structureGate,
+    qualityGate,
   };
 }

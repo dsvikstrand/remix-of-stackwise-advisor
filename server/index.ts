@@ -98,6 +98,7 @@ import {
 } from './services/autoBannerPolicy';
 import { runAutoChannelPipeline } from './services/autoChannelPipeline';
 import { normalizeYouTubeDraftToGoldenV1 } from './services/goldenBlueprintFormat';
+import { buildYouTubeQualityRetryInstructions } from './llm/prompts';
 import type {
   BlueprintAnalysisRequest,
   BlueprintGenerationRequest,
@@ -4085,6 +4086,12 @@ async function createBlueprintFromVideo(db: ReturnType<typeof createClient>, inp
         summary_word_count: goldenFormat.summaryWordCount,
         bp_structure_ok: goldenFormat.structureGate.ok,
         bp_structure_issues: goldenFormat.structureGate.issues,
+        bp_quality_ok: Boolean((result.meta as { bp_quality_ok?: unknown } | null)?.bp_quality_ok),
+        bp_quality_issues: Array.isArray((result.meta as { bp_quality_issues?: unknown } | null)?.bp_quality_issues)
+          ? (result.meta as { bp_quality_issues: unknown[] }).bp_quality_issues
+          : goldenFormat.qualityGate.issues,
+        bp_quality_retries_used: Number((result.meta as { bp_quality_retries_used?: unknown } | null)?.bp_quality_retries_used || 0),
+        bp_quality_final_mode: String((result.meta as { bp_quality_final_mode?: unknown } | null)?.bp_quality_final_mode || 'direct'),
       },
       banner_url: sourceThumbnailUrl,
       mix_notes: result.draft.notes || null,
@@ -11283,6 +11290,26 @@ function flattenDraftText(draft: {
   return blocks.filter(Boolean).join('\n').toLowerCase();
 }
 
+const GOLDEN_QUALITY_MAX_RETRIES = 2;
+
+function draftToNormalizationInput(draft: YouTubeDraft) {
+  return {
+    title: draft.title,
+    description: draft.description,
+    steps: draft.steps,
+    notes: draft.notes,
+    tags: draft.tags,
+  };
+}
+
+function formatGoldenQualityIssueDetails(detail: Array<{ code: string; section?: string; detail?: string }>) {
+  return detail.map((item) => {
+    const section = item.section ? ` section=${item.section}` : '';
+    const reason = item.detail ? ` detail=${item.detail}` : '';
+    return `${item.code}${section}${reason}`.trim();
+  });
+}
+
 function runSafetyChecks(flattened: string) {
   const checks: Record<string, RegExp[]> = {
     self_harm: [/\bkill yourself\b/, /\bsuicide\b/, /\bself-harm\b/, /\bhow to self harm\b/],
@@ -11499,7 +11526,155 @@ async function runYouTubePipeline(input: {
     makePipelineError('GENERATION_FAIL', GENERIC_YT2BP_FAILURE_MESSAGE);
   }
 
-  const draft = selected.draft;
+  let draft = selected.draft;
+  let goldenFormat = normalizeYouTubeDraftToGoldenV1(draftToNormalizationInput(draft), {
+    repairQuality: false,
+    transcript: transcript.text,
+  });
+  let qualityRetriesUsed = 0;
+  let qualityFinalMode: 'direct' | 'retry_pass' | 'repaired_after_retry' = 'direct';
+  let gateIssueCodes = Array.from(new Set([
+    ...goldenFormat.structureGate.issues,
+    ...goldenFormat.qualityGate.issues,
+  ]));
+  let gateIssueDetails = [
+    ...goldenFormat.structureGate.issues.map((code) => `${code} section=structure detail=shape_or_order`),
+    ...formatGoldenQualityIssueDetails(goldenFormat.qualityGate.detail),
+  ];
+  let gatePassed = goldenFormat.structureGate.ok && goldenFormat.qualityGate.ok;
+
+  console.log('[bp_quality_gate_eval]', JSON.stringify({
+    run_id: input.runId,
+    video_id: input.videoId,
+    attempt: 0,
+    retry_count: qualityRetriesUsed,
+    pass: gatePassed,
+    issues: gateIssueCodes,
+    issue_details: gateIssueDetails.slice(0, 12),
+    final_mode: gatePassed ? 'direct' : 'pending',
+  }));
+
+  while (!gatePassed && qualityRetriesUsed < GOLDEN_QUALITY_MAX_RETRIES) {
+    const retryAttempt = qualityRetriesUsed + 1;
+    const previousOutput = JSON.stringify({
+      title: draft.title,
+      description: draft.description,
+      steps: goldenFormat.steps,
+      notes: draft.notes || null,
+      tags: draft.tags || [],
+    }).slice(0, 12000);
+
+    console.log('[bp_quality_retry_requested]', JSON.stringify({
+      run_id: input.runId,
+      video_id: input.videoId,
+      attempt: retryAttempt,
+      retry_count: retryAttempt,
+      issues: gateIssueCodes,
+      issue_details: gateIssueDetails.slice(0, 12),
+    }));
+
+    const retryInstructions = buildYouTubeQualityRetryInstructions({
+      attempt: retryAttempt,
+      maxRetries: GOLDEN_QUALITY_MAX_RETRIES,
+      issueCodes: gateIssueCodes,
+      issueDetails: gateIssueDetails,
+      previousOutput,
+    });
+
+    const retryRawDraft = await runWithProviderRetry(
+      {
+        providerKey: 'llm_generate_blueprint',
+        db: serviceDb,
+        maxAttempts: providerRetryDefaults.llmAttempts,
+        timeoutMs: providerRetryDefaults.llmTimeoutMs,
+        baseDelayMs: 300,
+        jitterMs: 200,
+      },
+      async () => client.generateYouTubeBlueprint({
+        videoUrl: input.videoUrl,
+        transcript: transcript.text,
+        additionalInstructions: retryInstructions,
+      }),
+    );
+    const retryDraft = toDraft(retryRawDraft);
+    const retryFlattened = flattenDraftText(retryDraft);
+    const retrySafety = runSafetyChecks(retryFlattened);
+    if (!retrySafety.ok) {
+      makePipelineError('SAFETY_BLOCKED', `Forbidden topics detected: ${retrySafety.blockedTopics.join(', ')}`);
+    }
+    const retryPii = runPiiChecks(retryFlattened);
+    if (!retryPii.ok) {
+      makePipelineError('PII_BLOCKED', `PII detected: ${retryPii.matches.join(', ')}`);
+    }
+
+    draft = retryDraft;
+    qualityRetriesUsed = retryAttempt;
+    goldenFormat = normalizeYouTubeDraftToGoldenV1(draftToNormalizationInput(draft), {
+      repairQuality: false,
+      transcript: transcript.text,
+    });
+    gateIssueCodes = Array.from(new Set([
+      ...goldenFormat.structureGate.issues,
+      ...goldenFormat.qualityGate.issues,
+    ]));
+    gateIssueDetails = [
+      ...goldenFormat.structureGate.issues.map((code) => `${code} section=structure detail=shape_or_order`),
+      ...formatGoldenQualityIssueDetails(goldenFormat.qualityGate.detail),
+    ];
+    gatePassed = goldenFormat.structureGate.ok && goldenFormat.qualityGate.ok;
+
+    console.log('[bp_quality_retry_result]', JSON.stringify({
+      run_id: input.runId,
+      video_id: input.videoId,
+      attempt: retryAttempt,
+      retry_count: qualityRetriesUsed,
+      pass: gatePassed,
+      issues: gateIssueCodes,
+      issue_details: gateIssueDetails.slice(0, 12),
+      final_mode: gatePassed ? 'retry_pass' : 'pending',
+    }));
+    if (gatePassed) {
+      qualityFinalMode = 'retry_pass';
+      break;
+    }
+  }
+
+  if (!gatePassed) {
+    goldenFormat = normalizeYouTubeDraftToGoldenV1(draftToNormalizationInput(draft), {
+      repairQuality: true,
+      transcript: transcript.text,
+    });
+    gateIssueCodes = Array.from(new Set([
+      ...goldenFormat.structureGate.issues,
+      ...goldenFormat.qualityGate.issues,
+    ]));
+    gateIssueDetails = [
+      ...goldenFormat.structureGate.issues.map((code) => `${code} section=structure detail=shape_or_order`),
+      ...formatGoldenQualityIssueDetails(goldenFormat.qualityGate.detail),
+    ];
+    qualityFinalMode = 'repaired_after_retry';
+    gatePassed = goldenFormat.structureGate.ok && goldenFormat.qualityGate.ok;
+
+    console.log('[bp_quality_retry_exhausted_repaired]', JSON.stringify({
+      run_id: input.runId,
+      video_id: input.videoId,
+      retry_count: qualityRetriesUsed,
+      pass: gatePassed,
+      issues: gateIssueCodes,
+      issue_details: gateIssueDetails.slice(0, 12),
+      final_mode: qualityFinalMode,
+    }));
+  }
+
+  draft = {
+    ...draft,
+    steps: goldenFormat.steps.map((step) => ({
+      name: step.name,
+      notes: step.notes,
+      timestamp: step.timestamp || null,
+    })),
+    tags: goldenFormat.tags.length > 0 ? goldenFormat.tags : draft.tags,
+  };
   console.log(
     `[yt2bp] run_id=${input.runId} transcript_source=${transcript.source} transcript_chars=${transcript.text.length}`
   );
@@ -11559,6 +11734,10 @@ async function runYouTubePipeline(input: {
     meta: {
       transcript_source: transcript.source,
       confidence: transcript.confidence,
+      bp_quality_ok: gatePassed,
+      bp_quality_issues: gateIssueCodes,
+      bp_quality_retries_used: qualityRetriesUsed,
+      bp_quality_final_mode: qualityFinalMode,
       duration_ms: Date.now() - startedAt,
     },
   };

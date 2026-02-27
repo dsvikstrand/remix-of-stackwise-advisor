@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeYouTubeDraftToGoldenV1, validateGoldenStructure } from '../../server/services/goldenBlueprintFormat';
+import {
+  evaluateGoldenQuality,
+  normalizeYouTubeDraftToGoldenV1,
+  validateGoldenStructure,
+} from '../../server/services/goldenBlueprintFormat';
 import type { YouTubeBlueprintResult } from '../../server/llm/types';
 
 function buildDeepDraft(): YouTubeBlueprintResult {
@@ -104,6 +108,8 @@ describe('goldenBlueprintFormat (backend)', () => {
     expect(result.domain).toBe('deep');
     expect(result.structureGate.ok).toBe(true);
     expect(result.structureGate.issues).toEqual([]);
+    expect(result.qualityGate.ok).toBe(true);
+    expect(result.qualityGate.issues).toEqual([]);
     expect(names.slice(0, 3)).toEqual(['Summary', 'Takeaways', 'Bleup']);
     expect(names).toEqual([
       'Summary',
@@ -157,6 +163,8 @@ describe('goldenBlueprintFormat (backend)', () => {
     expect(result.domain).toBe('deep');
     expect(result.structureGate.ok).toBe(true);
     expect(result.structureGate.issues).toEqual([]);
+    expect(result.qualityGate.ok).toBe(true);
+    expect(result.qualityGate.issues).toEqual([]);
     expect(names.slice(0, 3)).toEqual(['Summary', 'Takeaways', 'Bleup']);
     expect(names).toEqual([
       'Summary',
@@ -215,5 +223,31 @@ describe('goldenBlueprintFormat (backend)', () => {
     expect(gate.issues).toContain('BLEUP_EMPTY');
     expect(gate.issues).toContain('TAKEAWAYS_BULLET_COUNT');
     expect(gate.issues).toContain('DEEP_DIVE_BULLET_COUNT');
+  });
+
+  it('flags repetition and boilerplate patterns in quality gate', () => {
+    const repeatedSteps = [
+      { name: 'Summary', notes: 'Shared sentence one. Shared sentence two. Shared sentence one.', timestamp: null },
+      { name: 'Takeaways', notes: '- Helps consistency. Why it matters: this changes how you decide when and how to apply it.\n- Helps consistency. Why it matters: this changes how you decide when and how to apply it.\n- Helps consistency. Why it matters: this changes how you decide when and how to apply it.', timestamp: null },
+      { name: 'Bleup', notes: 'Shared sentence one. Shared sentence two. Shared sentence one.', timestamp: null },
+      { name: 'Deep Dive', notes: '- Improves outcomes.\n- Improves outcomes.\n- Improves outcomes.', timestamp: null },
+      { name: 'Tradeoffs', notes: '- Improves outcomes.\n- Improves outcomes.\n- Improves outcomes.', timestamp: null },
+      { name: 'Practical Rules', notes: '- Improves outcomes.\n- Improves outcomes.\n- Improves outcomes.', timestamp: null },
+      { name: 'Open Questions', notes: '- Improves outcomes.\n- Improves outcomes.\n- Improves outcomes.', timestamp: null },
+    ];
+
+    const gate = evaluateGoldenQuality({ steps: repeatedSteps, transcript: 'taurine taurine taurine mechanism membrane receptor context depends' });
+    expect(gate.ok).toBe(false);
+    expect(gate.issues).toContain('BOILERPLATE_REPEATED');
+    expect(gate.issues).toContain('DUPLICATE_SENTENCES_ACROSS_SECTIONS');
+    expect(gate.issues).toContain('GENERIC_BULLET_NO_CONTEXT');
+  });
+
+  it('supports quality-gate evaluation with repair disabled and enabled', () => {
+    const noisy = buildNoisyDraft();
+    const noRepair = normalizeYouTubeDraftToGoldenV1(noisy, { repairQuality: false });
+    const withRepair = normalizeYouTubeDraftToGoldenV1(noisy, { repairQuality: true });
+    expect(noRepair.qualityGate.ok).toBe(false);
+    expect(withRepair.qualityGate.ok).toBe(true);
   });
 });
