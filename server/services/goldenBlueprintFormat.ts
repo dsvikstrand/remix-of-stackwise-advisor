@@ -221,7 +221,19 @@ function normalizeHeadingKey(value: string) {
 
 function isGenericSectionLabel(value: string) {
   const key = normalizeHeadingKey(value);
-  return key.length > 0 && GENERIC_SECTION_LABELS.has(key);
+  if (!key.length) return false;
+  if (GENERIC_SECTION_LABELS.has(key)) return true;
+  for (const label of GENERIC_SECTION_LABELS) {
+    if (
+      key.startsWith(`${label}:`)
+      || key.startsWith(`${label} `)
+      || key.startsWith(`${label}(`)
+      || key.startsWith(`${label} (`)
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function stripListPrefix(value: string) {
@@ -369,10 +381,20 @@ function sanitizeBulletCandidate(value: string) {
   if (next.length < 14) return null;
   const words = next.split(/\s+/).filter(Boolean);
   if (words.length < 3) return null;
+  if (/^(what|when|why|how)\b/i.test(next) && words.length < 5) return null;
   const lastWord = words[words.length - 1]?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
   if (INCOMPLETE_TAIL_WORDS.has(lastWord)) return null;
   if (!/[.!?]$/.test(next)) next = `${next}.`;
   return next;
+}
+
+function makeWhyItMattersTail(value: string) {
+  const low = value.toLowerCase();
+  if (low.includes('why it matters')) return value;
+  if (low.includes('use this when') || low.includes('apply this when')) return value;
+  if (low.includes('this means') || low.includes('which means')) return value;
+  if (low.includes('so you can')) return value;
+  return `${value.replace(/[.!?]+$/, '')}. Why it matters: this changes how you decide when and how to apply it.`;
 }
 
 function normalizeBulletGroup(primary: string[], fallback: string[]) {
@@ -394,6 +416,22 @@ function normalizeBulletGroup(primary: string[], fallback: string[]) {
     pushUnique(sanitizeBulletCandidate(item));
   }
   return output.slice(0, Math.max(MIN_SECTION_BULLETS, Math.min(MAX_SECTION_BULLETS, output.length)));
+}
+
+function toGuidedBullet(value: string) {
+  const sanitized = sanitizeBulletCandidate(value);
+  if (!sanitized) return null;
+  return sanitizeBulletCandidate(makeWhyItMattersTail(sanitized));
+}
+
+function normalizeGuidedBulletGroup(primary: string[], fallback: string[]) {
+  const guidedPrimary = primary
+    .map((item) => toGuidedBullet(item))
+    .filter((item): item is string => Boolean(item));
+  const guidedFallback = fallback
+    .map((item) => toGuidedBullet(item))
+    .filter((item): item is string => Boolean(item));
+  return normalizeBulletGroup(guidedPrimary, guidedFallback);
 }
 
 function chooseGeneralTags(draft: YouTubeBlueprintResult, domain: GoldenBlueprintDomain) {
@@ -449,7 +487,7 @@ function buildDeepSections(draft: YouTubeBlueprintResult) {
       })
       .filter(Boolean),
   );
-  const mechanismBullets = normalizeBulletGroup(
+  const mechanismBullets = normalizeGuidedBulletGroup(
     mechanismCandidates,
     [
       'Functional outcomes can improve even when headline metrics move slowly.',
@@ -468,7 +506,7 @@ function buildDeepSections(draft: YouTubeBlueprintResult) {
     {
       name: 'Tradeoffs',
       notes: toBulletBlock(
-        normalizeBulletGroup(
+        normalizeGuidedBulletGroup(
           [
             'Upside: clearer decision quality and better maintenance-oriented outcomes.',
             'Constraint: this is not a one-variable shortcut.',
@@ -485,7 +523,7 @@ function buildDeepSections(draft: YouTubeBlueprintResult) {
     {
       name: 'Practical Rules',
       notes: toBulletBlock(
-        normalizeBulletGroup(
+        normalizeGuidedBulletGroup(
           [
             'Use this when long-term function and consistency are the main goals.',
             'Pair the protocol with strong fundamentals before expecting outsized gains.',
@@ -502,7 +540,7 @@ function buildDeepSections(draft: YouTubeBlueprintResult) {
     {
       name: 'Open Questions',
       notes: toBulletBlock(
-        normalizeBulletGroup(
+        normalizeGuidedBulletGroup(
           [
             'Which contexts produce the strongest repeatable outcomes?',
             'How much of the effect depends on baseline quality and consistency?',
@@ -533,7 +571,7 @@ function buildActionSections(draft: YouTubeBlueprintResult) {
     {
       name: 'Playbook Steps',
       notes: toBulletBlock(
-        normalizeBulletGroup(
+        normalizeGuidedBulletGroup(
           stepBullets,
           [
             'Set up the minimum ingredients/tools first.',
@@ -548,7 +586,7 @@ function buildActionSections(draft: YouTubeBlueprintResult) {
     {
       name: 'Fast Fallbacks',
       notes: toBulletBlock(
-        normalizeBulletGroup(
+        normalizeGuidedBulletGroup(
           [
             'If output is too heavy, reduce one intensity variable first.',
             'If output is too light, extend the core processing window.',
@@ -564,7 +602,7 @@ function buildActionSections(draft: YouTubeBlueprintResult) {
     {
       name: 'Red Flags',
       notes: toBulletBlock(
-        normalizeBulletGroup(
+        normalizeGuidedBulletGroup(
           [
             'Core texture or quality signal breaks early in the flow.',
             'Adjustments are stacked all at once and hide root cause.',

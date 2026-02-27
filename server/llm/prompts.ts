@@ -142,6 +142,9 @@ Output style rules:
 - Write in direct creator voice.
 - Do NOT use meta framing phrases like "this video", "this blueprint", or "the transcript".
 - Prioritize concrete, practical, non-generic language.
+- Avoid transcript-like random fact lists.
+- Each section should read like one coherent argument, not disconnected notes.
+- Each bullet should follow this shape: claim -> why it matters -> practical implication.
 
 Golden structure target:
 - Step 1 should be "Takeaways" with 3-4 concise bullet points.
@@ -157,6 +160,7 @@ Hard constraints:
 - Never include personal data.
 - Timestamps are optional; use null when unknown.
 - Tags: 3-5 max, broad and user-searchable. Avoid obscure niche tags.
+- Deep sections should target 3-5 complete bullets each (no stubs like "-." or cut-off fragments).
 
 Response format:
 {

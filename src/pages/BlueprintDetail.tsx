@@ -157,6 +157,13 @@ function parseDescriptionBlocks(description: string) {
   const lines = String(description || '').split(/\r?\n/);
   const textLines: string[] = [];
   const bullets: string[] = [];
+  const isValidBullet = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return false;
+    if (!/[a-z0-9]/i.test(trimmed)) return false;
+    if (/^[-.]+$/.test(trimmed)) return false;
+    return trimmed.length >= 3;
+  };
 
   for (const rawLine of lines) {
     const line = rawLine.trim();
@@ -166,7 +173,8 @@ function parseDescriptionBlocks(description: string) {
     }
     const bulletMatch = line.match(/^[-*•]\s+(.+)$/) || line.match(/^\d+[.)]\s+(.+)$/);
     if (bulletMatch) {
-      bullets.push(bulletMatch[1].trim());
+      const normalized = bulletMatch[1].trim();
+      if (isValidBullet(normalized)) bullets.push(normalized);
       continue;
     }
     textLines.push(line);
@@ -472,9 +480,15 @@ export default function BlueprintDetail() {
   const deepDiveAndMoreSections = visibleGoldenSections.filter(
     (step) => step !== takeawaysSection && !isNarrativeKey(normalizeHeadingKey(step.title)),
   );
+  const splitSections = deepDiveAndMoreSections.flatMap((step) => splitEmbeddedGoldenSections(step));
+  const fallbackNarrativeFromSplit = splitSections.find((step) => isNarrativeKey(normalizeHeadingKey(step.title))) || null;
+  const effectiveSummarySection = summarySection || fallbackNarrativeFromSplit;
   const deepDiveInteractiveSections = deepDiveAndMoreSections
     .flatMap((step) => splitEmbeddedGoldenSections(step))
-    .filter((step) => normalizeHeadingKey(step.title) !== 'bottom line')
+    .filter((step) => {
+      const key = normalizeHeadingKey(step.title);
+      return key !== 'bottom line' && !isNarrativeKey(key);
+    })
     .sort((a, b) => {
       const rank = (value: RenderStep) => {
         const key = normalizeHeadingKey(value.title);
@@ -706,7 +720,7 @@ export default function BlueprintDetail() {
                 <>
                   {renderGoldenGroup(takeawaysSection ? [takeawaysSection] : [])}
                   {renderBanner}
-                  {renderGoldenGroup(summarySection ? [summarySection] : [])}
+                  {renderGoldenGroup(effectiveSummarySection ? [effectiveSummarySection] : [])}
                   {renderGoldenInteractiveGroup(deepDiveInteractiveSections)}
                 </>
               ) : (
