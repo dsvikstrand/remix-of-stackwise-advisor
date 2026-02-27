@@ -1,97 +1,112 @@
-<mxfile host="app.diagrams.net" modified="2026-02-26T22:10:00.000Z" agent="codex" version="24.7.17" editor="www.diagrams.net" type="device">
-  <diagram id="golden-v0-main" name="Golden BP v0 (Core)">
-    <mxGraphModel dx="1600" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="2000" math="0" shadow="0">
-      <root>
-        <mxCell id="0"/>
-        <mxCell id="1" parent="0"/>
-
-        <mxCell id="title" value="Golden Blueprint v0 Template&#xa;(structure skeleton)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="60" y="30" width="520" height="40" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="takeaways" value="1) Takeaways (3-4 bullets)&#xa;What goes here: highest-value claims in 10 seconds.&#xa;Why: fast payoff and skim value." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;align=left;verticalAlign=top;spacing=10;" vertex="1" parent="1">
-          <mxGeometry x="60" y="90" width="1080" height="140" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="thumb" value="2) Thumbnail&#xa;What goes here: source video image.&#xa;Why: keep source context before long-form text." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;align=left;verticalAlign=top;spacing=10;" vertex="1" parent="1">
-          <mxGeometry x="60" y="260" width="1080" height="100" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="summary" value="3) Summary (flowing, 3-4 chunks / slides)&#xa;What goes here: core thesis + practical interpretation in one smooth narrative.&#xa;Why: depth without fragmenting into tiny sections.&#xa;Rule: no meta phrasing (\"this video explains\"), no bullet artifacts inside prose." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;align=left;verticalAlign=top;spacing=10;" vertex="1" parent="1">
-          <mxGeometry x="60" y="390" width="1080" height="180" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="deep" value="4) Deep Dive&#xa;What goes here: mechanisms / evidence links / key drivers." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;align=left;verticalAlign=top;spacing=10;" vertex="1" parent="1">
-          <mxGeometry x="60" y="600" width="520" height="120" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="tradeoffs" value="5) Tradeoffs&#xa;What goes here: upside, constraints, unknowns." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;align=left;verticalAlign=top;spacing=10;" vertex="1" parent="1">
-          <mxGeometry x="620" y="600" width="520" height="120" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="rules" value="6) Practical Rules&#xa;What goes here: practical if/when rules and actions." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;align=left;verticalAlign=top;spacing=10;" vertex="1" parent="1">
-          <mxGeometry x="60" y="750" width="520" height="120" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="bottom" value="7) Bottom Line&#xa;What goes here: one clear closing decision message." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;align=left;verticalAlign=top;spacing=10;" vertex="1" parent="1">
-          <mxGeometry x="60" y="900" width="1080" height="100" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="guardrails" value="Protocol Guardrails&#xa;- creator-like tone, person-to-person&#xa;- specific and actionable, avoid generic filler&#xa;- no AI Review / no legacy step-noise artifacts" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;align=left;verticalAlign=top;spacing=10;dashed=1;" vertex="1" parent="1">
-          <mxGeometry x="60" y="1030" width="1080" height="100" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;" edge="1" parent="1" source="takeaways" target="thumb">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;" edge="1" parent="1" source="thumb" target="summary">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-        <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;" edge="1" parent="1" source="summary" target="deep">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-        <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;" edge="1" parent="1" source="summary" target="tradeoffs">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-        <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;" edge="1" parent="1" source="deep" target="rules">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-        <mxCell id="e7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;" edge="1" parent="1" source="rules" target="bottom">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-        <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;" edge="1" parent="1" source="tradeoffs" target="bottom">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-      </root>
-    </mxGraphModel>
-  </diagram>
-
-  <diagram id="golden-v0-domain" name="Domain Adaptation Notes">
-    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="1200" math="0" shadow="0">
-      <root>
-        <mxCell id="0"/>
-        <mxCell id="1" parent="0"/>
-
-        <mxCell id="dtitle" value="Golden BP v0 - Domain Adaptation (same backbone)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="60" y="30" width="700" height="40" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="research" value="Research/Deep Dive&#xa;- emphasize mechanism depth, boundary conditions, uncertainty&#xa;- keep Practical Rules concrete" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;align=left;verticalAlign=top;spacing=10;" vertex="1" parent="1">
-          <mxGeometry x="60" y="100" width="330" height="180" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="recipe" value="Recipe/Practical&#xa;- emphasize playbook steps, substitutions, failure points&#xa;- keep Bottom Line as do-now plan" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;align=left;verticalAlign=top;spacing=10;" vertex="1" parent="1">
-          <mxGeometry x="430" y="100" width="330" height="180" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="action" value="Action/How-To&#xa;- emphasize sequencing, thresholds, execution triggers&#xa;- keep Tradeoffs realistic and concise" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;align=left;verticalAlign=top;spacing=10;" vertex="1" parent="1">
-          <mxGeometry x="800" y="100" width="330" height="180" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="shared" value="Shared constraints across all domains&#xa;- top-first value (3-4 takeaways)&#xa;- flowing summary (no bullet artifacts)&#xa;- creator-style tone, no meta narrator phrasing&#xa;- clarity + specificity > decorative language" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;align=left;verticalAlign=top;spacing=10;dashed=1;" vertex="1" parent="1">
-          <mxGeometry x="60" y="320" width="1070" height="180" as="geometry"/>
-        </mxCell>
-      </root>
-    </mxGraphModel>
-  </diagram>
+<mxfile host="65bd71144e">
+    <diagram id="golden-v0-main" name="Golden BP v0 (Core)">
+        <mxGraphModel dx="1367" dy="1114" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="2000" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="Golden Blueprint v0 Template&#xa;(structure skeleton)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="30" width="520" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="takeaways" value="1) Lightning Takeaways (3-4 bullets)&#xa;What goes here: highest-value claims in 10 seconds.&#xa;Why: fast payoff and skim value." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;align=left;verticalAlign=top;spacing=10;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="170" width="1080" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="thumb" value="2) Thumbnail&#xa;What goes here: source video image.&#xa;Why: keep source context before long-form text." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;align=left;verticalAlign=top;spacing=10;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="340" width="1080" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="summary" value="3) Beup (flowing, 3-4 chunks / slides)&lt;br&gt;What goes here: core thesis + practical interpretation in one smooth narrative.&lt;br&gt;Why: depth without fragmenting into tiny sections.&lt;br&gt;Rule: no meta phrasing (&quot;this video explains&quot;), no bullet artifacts inside prose." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;align=left;verticalAlign=top;spacing=10;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="470" width="1080" height="180" as="geometry"/>
+                </mxCell>
+                <mxCell id="deep" value="4) Deep Dive&lt;br&gt;What goes here: mechanisms / evidence links / key drivers." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;align=left;verticalAlign=top;spacing=10;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="789" width="520" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="tradeoffs" value="5) Tradeoffs&#xa;What goes here: upside, constraints, unknowns." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;align=left;verticalAlign=top;spacing=10;" parent="1" vertex="1">
+                    <mxGeometry x="620" y="788" width="520" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="rules" value="6) Decision Rules&#xa;What goes here: practical if/when rules and actions." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;align=left;verticalAlign=top;spacing=10;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="939" width="520" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="questions" value="7) Open Questions&#xa;What goes here: unresolved points + uncertainty." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;align=left;verticalAlign=top;spacing=10;" parent="1" vertex="1">
+                    <mxGeometry x="620" y="938" width="520" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="guardrails" value="Protocol Guardrails&#xa;- creator-like tone, person-to-person&#xa;- specific and actionable, avoid generic filler&#xa;- no AI Review / no legacy step-noise artifacts" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;align=left;verticalAlign=top;spacing=10;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="1110" width="1080" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;" parent="1" source="takeaways" target="thumb" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;" parent="1" source="thumb" target="summary" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;" parent="1" source="summary" target="deep" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="600" y="740"/>
+                            <mxPoint x="320" y="740"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;" parent="1" source="8" target="tradeoffs" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;" parent="1" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="320" y="908" as="sourcePoint"/>
+                        <mxPoint x="320" y="938" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;" parent="1" source="tradeoffs" target="questions" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;" parent="1" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="580" y="998" as="sourcePoint"/>
+                        <mxPoint x="600" y="1088" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;" parent="1" source="questions" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="600" y="1088" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="7" style="edgeStyle=none;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="2" target="takeaways">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="2" value="1)&amp;nbsp;&lt;span style=&quot;color: rgb(0, 0, 0);&quot;&gt;Summary&amp;nbsp;&lt;/span&gt;(3-4 sentences)&lt;div&gt;Capture the overall theme for the video. Should be in a user friendly tone such that user can get a grasp of idea videa about the video. Its should not descibe &quot;what will you get from this video&quot; (thats, what ge got the Takeaways to), but instead it should introduce the topics and concepts in the video, such that even users unfamiliar with the topics get an understanding&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffcd28;strokeColor=#d79b00;fontSize=13;align=left;verticalAlign=top;spacing=10;gradientColor=#ffa500;" vertex="1" parent="1">
+                    <mxGeometry x="60" y="90" width="1080" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;" edge="1" parent="1" source="summary" target="8">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="600" y="650" as="sourcePoint"/>
+                        <mxPoint x="880" y="788" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="8" value="" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                    <mxGeometry x="540" y="660" width="120" height="40" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="golden-v0-domain" name="Domain Adaptation Notes">
+        <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="1200" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="dtitle" value="Golden BP v0 - Domain Adaptation (same backbone)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="60" y="30" width="700" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="research" value="Research/Deep Dive&#xa;- emphasize mechanism depth, boundary conditions, uncertainty&#xa;- keep Decision Rules concrete" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;align=left;verticalAlign=top;spacing=10;" vertex="1" parent="1">
+                    <mxGeometry x="60" y="100" width="330" height="180" as="geometry"/>
+                </mxCell>
+                <mxCell id="recipe" value="Recipe/Practical&#xa;- emphasize playbook steps, substitutions, failure points&#xa;- keep Bottom Line as do-now plan" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;align=left;verticalAlign=top;spacing=10;" vertex="1" parent="1">
+                    <mxGeometry x="430" y="100" width="330" height="180" as="geometry"/>
+                </mxCell>
+                <mxCell id="action" value="Action/How-To&#xa;- emphasize sequencing, thresholds, execution triggers&#xa;- keep Tradeoffs realistic and concise" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;align=left;verticalAlign=top;spacing=10;" vertex="1" parent="1">
+                    <mxGeometry x="800" y="100" width="330" height="180" as="geometry"/>
+                </mxCell>
+                <mxCell id="shared" value="Shared constraints across all domains&#xa;- top-first value (3-4 takeaways)&#xa;- flowing summary (no bullet artifacts)&#xa;- creator-style tone, no meta narrator phrasing&#xa;- clarity + specificity &gt; decorative language" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;align=left;verticalAlign=top;spacing=10;dashed=1;" vertex="1" parent="1">
+                    <mxGeometry x="60" y="320" width="1070" height="180" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
 </mxfile>

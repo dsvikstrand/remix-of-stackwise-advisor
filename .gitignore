@@ -16,9 +16,9 @@ supabase/.temp/
 
 # Editor directories and files
 .vscode/*
-!.vscode/extensions.json
+!.vscode/extensions.jsonno lets 
 .idea
-.DS_Store
+.DS_Storewhat
 *.suo
 *.ntvs*
 *.njsproj
@@ -34,6 +34,7 @@ seed/auth/*.bak.*
 seed/secrets.local.json
 seed/secrets.local.json.*
 personas/auth_local/
+reddit/*
 
 # Backend runtime state (should never be committed)
 server/data/
@@ -49,3 +50,8 @@ server/data/
 # Eval method run artifacts (local/runtime outputs)
 eval/methods/**/artifacts/
 youtube_urls.txt
+so im thinking about moving in to my most importand 
+
+# Golden blueprint research artifacts
+docs/golden_blueprint/reddit/**
+docs/golden_blueprint/transcripts/**
