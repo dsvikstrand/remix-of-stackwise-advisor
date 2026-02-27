@@ -239,7 +239,7 @@ export function buildYouTubeQualityRetryInstructions(input: {
     ...(details.length > 0 ? details.map((line) => `- ${line}`) : ['- none']),
     '',
     'Previous output to repair:',
-    previousOutput,
+    input.previousOutput,
   ].join('\n');
 }
 
