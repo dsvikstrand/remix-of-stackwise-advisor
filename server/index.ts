@@ -88,6 +88,17 @@ import {
   markNotificationRead,
 } from './services/notifications';
 import {
+  appendGenerationEvent,
+  attachBlueprintToRun,
+  finalizeGenerationRunFailure,
+  finalizeGenerationRunSuccess,
+  getGenerationRunByRunId,
+  getLatestGenerationRunByBlueprintId,
+  listGenerationRunEvents,
+  startGenerationRun,
+  updateGenerationModelInfo,
+} from './services/generationTrace';
+import {
   clampInt,
   getFailureTransition,
   normalizeAutoBannerMode,
@@ -104,6 +115,7 @@ import type {
   BlueprintGenerationRequest,
   BlueprintGenerationResult,
   BlueprintSelectedItem,
+  GenerationModelEvent,
   InventoryRequest,
 } from './llm/types';
 
@@ -1589,6 +1601,7 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
   }
 
   try {
+    const traceDb = getServiceSupabaseClient();
     const result = await withTimeout(
       runYouTubePipeline({
         runId,
@@ -1597,6 +1610,12 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
         generateReview: false,
         generateBanner: parsed.data.generate_banner,
         authToken,
+        trace: {
+          db: traceDb,
+          userId: userId || null,
+          sourceScope: 'youtube_to_blueprint_api',
+          sourceTag: 'youtube_to_blueprint_api',
+        },
       }),
       yt2bpCoreTimeoutMs
     );
@@ -4044,6 +4063,13 @@ async function createBlueprintFromVideo(db: ReturnType<typeof createClient>, inp
   sourceItemId?: string | null;
   subscriptionId?: string | null;
 }) {
+  const sourceScope = input.sourceTag === 'youtube_search_direct'
+    ? 'search_video_generate'
+    : input.sourceTag === 'manual_refresh_generate'
+      ? 'manual_refresh_selection'
+      : input.sourceTag === 'source_unlock_generation'
+        ? 'source_item_unlock_generation'
+        : input.sourceTag;
   let sourceThumbnailUrl: string | null = null;
   const normalizedSourceItemId = String(input.sourceItemId || '').trim();
   if (normalizedSourceItemId) {
@@ -4059,6 +4085,26 @@ async function createBlueprintFromVideo(db: ReturnType<typeof createClient>, inp
   }
 
   const runId = `sub-${input.sourceTag}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const traceDb = getServiceSupabaseClient();
+  if (traceDb) {
+    await safeGenerationTraceWrite({
+      runId,
+      op: 'start_run_create_blueprint',
+      fn: async () => {
+        await startGenerationRun(traceDb, {
+          runId,
+          userId: input.userId,
+          sourceScope,
+          sourceTag: input.sourceTag,
+          videoId: input.videoId,
+          videoUrl: input.videoUrl,
+          modelPrimary: String(process.env.OPENAI_GENERATION_MODEL || 'gpt-5.2').trim() || 'gpt-5.2',
+          reasoningEffort: String(process.env.OPENAI_GENERATION_REASONING_EFFORT || 'medium').trim().toLowerCase() || 'medium',
+          traceVersion: 'yt2bp_trace_v2',
+        });
+      },
+    });
+  }
   const result = await runYouTubePipeline({
     runId,
     videoId: input.videoId,
@@ -4066,6 +4112,12 @@ async function createBlueprintFromVideo(db: ReturnType<typeof createClient>, inp
     generateReview: false,
     generateBanner: false,
     authToken: '',
+    trace: {
+      db: traceDb,
+      userId: input.userId,
+      sourceScope,
+      sourceTag: input.sourceTag,
+    },
   });
   const goldenFormat = normalizeYouTubeDraftToGoldenV1(result.draft);
 
@@ -4092,11 +4144,9 @@ async function createBlueprintFromVideo(db: ReturnType<typeof createClient>, inp
           : goldenFormat.qualityGate.issues,
         bp_quality_retries_used: Number((result.meta as { bp_quality_retries_used?: unknown } | null)?.bp_quality_retries_used || 0),
         bp_quality_final_mode: String((result.meta as { bp_quality_final_mode?: unknown } | null)?.bp_quality_final_mode || 'direct'),
-        bp_trace_version: String((result.meta as { bp_trace_version?: unknown } | null)?.bp_trace_version || 'yt2bp_trace_v1'),
-        bp_trace: (() => {
-          const trace = (result.meta as { bp_trace?: unknown } | null)?.bp_trace;
-          return trace && typeof trace === 'object' ? trace : null;
-        })(),
+        bp_trace_version: String((result.meta as { bp_trace_version?: unknown } | null)?.bp_trace_version || 'yt2bp_trace_v2'),
+        bp_run_id: result.run_id,
+        bp_trace_source: 'generation_runs',
       },
       banner_url: sourceThumbnailUrl,
       mix_notes: result.draft.notes || null,
@@ -4113,6 +4163,19 @@ async function createBlueprintFromVideo(db: ReturnType<typeof createClient>, inp
     await db
       .from('blueprint_tags')
       .upsert({ blueprint_id: blueprint.id, tag_id: tagId }, { onConflict: 'blueprint_id,tag_id' });
+  }
+
+  if (traceDb) {
+    await safeGenerationTraceWrite({
+      runId: result.run_id,
+      op: 'attach_blueprint_to_run',
+      fn: async () => {
+        await attachBlueprintToRun(traceDb, {
+          runId: result.run_id,
+          blueprintId: blueprint.id,
+        });
+      },
+    });
   }
 
   return {
@@ -10040,6 +10103,208 @@ app.get('/api/ingestion/jobs/latest-mine', ingestionLatestMineLimiter, async (re
   });
 });
 
+function parseIncludeEvents(raw: unknown, defaultValue = true) {
+  const normalized = String(raw || '').trim().toLowerCase();
+  if (!normalized) return defaultValue;
+  if (normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on') return true;
+  if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off') return false;
+  return defaultValue;
+}
+
+function formatGenerationTraceResponse(run: Record<string, any>, events: {
+  items: Array<Record<string, any>>;
+  next_cursor: string | null;
+}) {
+  return {
+    run_id: String(run.run_id || ''),
+    status: String(run.status || 'unknown'),
+    source_scope: String(run.source_scope || '').trim() || null,
+    source_tag: String(run.source_tag || '').trim() || null,
+    video_id: String(run.video_id || '').trim() || null,
+    video_url: String(run.video_url || '').trim() || null,
+    model: {
+      primary: String(run.model_primary || '').trim() || null,
+      used: String(run.model_used || '').trim() || null,
+      fallback_used: run.fallback_used == null ? null : Boolean(run.fallback_used),
+      fallback_model: String(run.fallback_model || '').trim() || null,
+      reasoning_effort: String(run.reasoning_effort || '').trim() || null,
+    },
+    quality: {
+      ok: run.quality_ok == null ? null : Boolean(run.quality_ok),
+      issues: Array.isArray(run.quality_issues) ? run.quality_issues : [],
+      retries_used: Number(run.quality_retries_used || 0),
+      final_mode: String(run.quality_final_mode || '').trim() || null,
+    },
+    timing: {
+      started_at: run.started_at || null,
+      finished_at: run.finished_at || null,
+      created_at: run.created_at || null,
+      updated_at: run.updated_at || null,
+    },
+    error: {
+      code: String(run.error_code || '').trim() || null,
+      message: String(run.error_message || '').trim() || null,
+    },
+    trace_version: String(run.trace_version || '').trim() || null,
+    summary: run.summary && typeof run.summary === 'object' ? run.summary : {},
+    events: events.items || [],
+    next_cursor: events.next_cursor || null,
+  };
+}
+
+app.get('/api/generation-runs/:runId', async (req, res) => {
+  const runId = String(req.params.runId || '').trim();
+  if (!runId) {
+    return res.status(400).json({ ok: false, error_code: 'INVALID_INPUT', message: 'runId required', data: null });
+  }
+
+  const serviceRequest = isServiceRequestAuthorized(req);
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!serviceRequest && (!userId || !authToken)) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+
+  const db = serviceRequest
+    ? getServiceSupabaseClient()
+    : getAuthedSupabaseClient(authToken);
+  if (!db) {
+    return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+  }
+
+  try {
+    const run = await getGenerationRunByRunId(db, runId);
+    if (!run) {
+      return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Generation run not found', data: null });
+    }
+    if (!serviceRequest && run.user_id !== userId) {
+      return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Generation run not found', data: null });
+    }
+
+    const includeEvents = parseIncludeEvents(req.query.include_events, true);
+    const limit = clampInt(req.query.limit, 50, 1, 200);
+    const cursor = String(req.query.cursor || '').trim() || null;
+    const events = includeEvents
+      ? await listGenerationRunEvents(db, { runId: run.run_id, limit, cursor })
+      : { items: [], next_cursor: null };
+
+    return res.json({
+      ok: true,
+      error_code: null,
+      message: 'generation trace',
+      data: formatGenerationTraceResponse(run as any, events as any),
+    });
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: error instanceof Error ? error.message : 'Could not load generation trace.',
+      data: null,
+    });
+  }
+});
+
+app.get('/api/blueprints/:id([0-9a-fA-F-]{36})/generation-trace', async (req, res) => {
+  const blueprintId = String(req.params.id || '').trim();
+  const serviceRequest = isServiceRequestAuthorized(req);
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!serviceRequest && (!userId || !authToken)) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+
+  const db = serviceRequest
+    ? getServiceSupabaseClient()
+    : getAuthedSupabaseClient(authToken);
+  if (!db) {
+    return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+  }
+
+  try {
+    const { data: blueprint, error: blueprintError } = await db
+      .from('blueprints')
+      .select('id, creator_user_id, selected_items')
+      .eq('id', blueprintId)
+      .maybeSingle();
+    if (blueprintError) {
+      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: blueprintError.message, data: null });
+    }
+    if (!blueprint) {
+      return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Blueprint not found', data: null });
+    }
+    if (!serviceRequest && String(blueprint.creator_user_id || '').trim() !== String(userId || '').trim()) {
+      return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Blueprint not found', data: null });
+    }
+
+    const selectedItems = blueprint.selected_items && typeof blueprint.selected_items === 'object' && !Array.isArray(blueprint.selected_items)
+      ? (blueprint.selected_items as Record<string, unknown>)
+      : null;
+    const selectedRunId = selectedItems
+      ? (String(selectedItems.bp_run_id || selectedItems.run_id || '').trim() || null)
+      : null;
+
+    let run = await getLatestGenerationRunByBlueprintId(db, blueprintId);
+    if (!run && selectedRunId) {
+      run = await getGenerationRunByRunId(db, selectedRunId);
+    }
+
+    if (run) {
+      const includeEvents = parseIncludeEvents(req.query.include_events, true);
+      const limit = clampInt(req.query.limit, 50, 1, 200);
+      const cursor = String(req.query.cursor || '').trim() || null;
+      const events = includeEvents
+        ? await listGenerationRunEvents(db, { runId: run.run_id, limit, cursor })
+        : { items: [], next_cursor: null };
+
+      return res.json({
+        ok: true,
+        error_code: null,
+        message: 'blueprint generation trace',
+        data: {
+          source: 'generation_runs',
+          blueprint_id: blueprintId,
+          ...formatGenerationTraceResponse(run as any, events as any),
+        },
+      });
+    }
+
+    const legacyTrace = selectedItems && selectedItems.bp_trace && typeof selectedItems.bp_trace === 'object'
+      ? (selectedItems.bp_trace as Record<string, unknown>)
+      : null;
+    if (legacyTrace) {
+      return res.json({
+        ok: true,
+        error_code: null,
+        message: 'blueprint generation trace (legacy)',
+        data: {
+          source: 'legacy_selected_items',
+          blueprint_id: blueprintId,
+          run_id: selectedRunId,
+          status: 'legacy',
+          trace_version: String(selectedItems?.bp_trace_version || legacyTrace.trace_version || '').trim() || null,
+          summary: legacyTrace,
+          events: [],
+          next_cursor: null,
+        },
+      });
+    }
+
+    return res.status(404).json({
+      ok: false,
+      error_code: 'TRACE_NOT_FOUND',
+      message: 'No generation trace found for this blueprint.',
+      data: null,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: error instanceof Error ? error.message : 'Could not load generation trace.',
+      data: null,
+    });
+  }
+});
+
 app.get('/api/notifications', async (req, res) => {
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
   const authToken = (res.locals.authToken as string | undefined) ?? '';
@@ -11356,6 +11621,49 @@ async function withTimeout<T>(task: Promise<T>, timeoutMs: number): Promise<T> {
   }
 }
 
+type YouTubeGenerationTraceContext = {
+  db: ReturnType<typeof createClient> | null;
+  userId: string | null;
+  sourceScope: string | null;
+  sourceTag: string | null;
+  modelPrimary: string | null;
+  reasoningEffort: string | null;
+  traceVersion: string;
+};
+
+function getYouTubeGenerationTraceContext(input: {
+  db?: ReturnType<typeof createClient> | null;
+  userId?: string | null;
+  sourceScope?: string | null;
+  sourceTag?: string | null;
+}): YouTubeGenerationTraceContext {
+  return {
+    db: input.db || null,
+    userId: String(input.userId || '').trim() || null,
+    sourceScope: String(input.sourceScope || '').trim() || null,
+    sourceTag: String(input.sourceTag || '').trim() || null,
+    modelPrimary: String(process.env.OPENAI_GENERATION_MODEL || 'gpt-5.2').trim() || 'gpt-5.2',
+    reasoningEffort: String(process.env.OPENAI_GENERATION_REASONING_EFFORT || 'medium').trim().toLowerCase() || 'medium',
+    traceVersion: 'yt2bp_trace_v2',
+  };
+}
+
+async function safeGenerationTraceWrite(input: {
+  runId: string;
+  op: string;
+  fn: () => Promise<unknown>;
+}) {
+  try {
+    await input.fn();
+  } catch (error) {
+    console.log('[generation_trace_write_failed]', JSON.stringify({
+      run_id: input.runId,
+      op: input.op,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+}
+
 async function runYouTubePipeline(input: {
   runId: string;
   videoId: string;
@@ -11363,10 +11671,58 @@ async function runYouTubePipeline(input: {
   generateReview: boolean;
   generateBanner: boolean;
   authToken: string;
+  trace?: {
+    db?: ReturnType<typeof createClient> | null;
+    userId?: string | null;
+    sourceScope?: string | null;
+    sourceTag?: string | null;
+  };
 }) {
   const startedAt = Date.now();
   const serviceDb = getServiceSupabaseClient();
-  const transcript = await runWithProviderRetry(
+  const traceContext = getYouTubeGenerationTraceContext({
+    db: input.trace?.db || serviceDb,
+    userId: input.trace?.userId || null,
+    sourceScope: input.trace?.sourceScope || null,
+    sourceTag: input.trace?.sourceTag || input.runId.split('-').slice(1, 2).join('-') || 'unknown',
+  });
+  if (traceContext.db && traceContext.userId) {
+    await safeGenerationTraceWrite({
+      runId: input.runId,
+      op: 'start_run',
+      fn: async () => {
+        await startGenerationRun(traceContext.db as any, {
+          runId: input.runId,
+          userId: traceContext.userId as string,
+          sourceScope: traceContext.sourceScope,
+          sourceTag: traceContext.sourceTag,
+          videoId: input.videoId,
+          videoUrl: input.videoUrl,
+          modelPrimary: traceContext.modelPrimary,
+          reasoningEffort: traceContext.reasoningEffort,
+          traceVersion: traceContext.traceVersion,
+        });
+      },
+    });
+    await safeGenerationTraceWrite({
+      runId: input.runId,
+      op: 'event_pipeline_started',
+      fn: async () => {
+        await appendGenerationEvent(traceContext.db as any, {
+          runId: input.runId,
+          event: 'pipeline_started',
+          payload: {
+            source_scope: traceContext.sourceScope,
+            source_tag: traceContext.sourceTag,
+            video_id: input.videoId,
+          },
+        });
+      },
+    });
+  }
+
+  try {
+    const transcript = await runWithProviderRetry(
     {
       providerKey: 'transcript',
       db: serviceDb,
@@ -11377,16 +11733,71 @@ async function runYouTubePipeline(input: {
     },
     async () => getTranscriptForVideo(input.videoId),
   );
-  const client = createLLMClient();
-  const qualityConfig = readYt2bpQualityConfig();
-  const contentSafetyConfig = readYt2bpContentSafetyConfig();
-  const qualityAttempts = qualityConfig.enabled ? 1 + qualityConfig.retry_policy.max_retries : 1;
-  const safetyRetryBudget = contentSafetyConfig.enabled ? contentSafetyConfig.retry_policy.max_retries : 0;
-  const generationTrace = {
-    trace_version: 'yt2bp_trace_v1',
+    if (traceContext.db && traceContext.userId) {
+      await safeGenerationTraceWrite({
+        runId: input.runId,
+        op: 'event_transcript_loaded',
+        fn: async () => {
+          await appendGenerationEvent(traceContext.db as any, {
+            runId: input.runId,
+            event: 'transcript_loaded',
+            payload: {
+              source: transcript.source,
+              chars: transcript.text.length,
+              confidence: transcript.confidence,
+            },
+          });
+        },
+      });
+    }
+    const client = createLLMClient();
+    const generationModelEventCallback = (event: GenerationModelEvent) => {
+      if (!traceContext.db || !traceContext.userId) return;
+      void safeGenerationTraceWrite({
+        runId: input.runId,
+        op: 'update_model_info',
+        fn: async () => {
+          await updateGenerationModelInfo(traceContext.db as any, {
+            runId: input.runId,
+            modelPrimary: traceContext.modelPrimary,
+            modelUsed: event.model_used,
+            fallbackUsed: event.fallback_used,
+            fallbackModel: event.fallback_model || null,
+            reasoningEffort: event.reasoning_effort || traceContext.reasoningEffort,
+          });
+        },
+      });
+      void safeGenerationTraceWrite({
+        runId: input.runId,
+        op: 'event_model_resolution',
+        fn: async () => {
+          await appendGenerationEvent(traceContext.db as any, {
+            runId: input.runId,
+            level: event.event === 'request_failed' ? 'warn' : 'info',
+            event: 'model_resolution',
+            payload: {
+              event: event.event,
+              operation: event.operation,
+              model_used: event.model_used,
+              fallback_used: event.fallback_used,
+              fallback_model: event.fallback_model || null,
+              reasoning_effort: event.reasoning_effort || null,
+              status: 'status' in event ? event.status || null : null,
+              message: 'message' in event ? event.message || null : null,
+            },
+          });
+        },
+      });
+    };
+    const qualityConfig = readYt2bpQualityConfig();
+    const contentSafetyConfig = readYt2bpContentSafetyConfig();
+    const qualityAttempts = qualityConfig.enabled ? 1 + qualityConfig.retry_policy.max_retries : 1;
+    const safetyRetryBudget = contentSafetyConfig.enabled ? contentSafetyConfig.retry_policy.max_retries : 0;
+    const generationTrace = {
+    trace_version: traceContext.traceVersion,
     run_id: input.runId,
     video_id: input.videoId,
-    source_tag: input.runId.split('-').slice(1, 2).join('-') || 'unknown',
+    source_tag: traceContext.sourceTag || 'unknown',
     transcript: {
       source: transcript.source,
       chars: transcript.text.length,
@@ -11479,7 +11890,7 @@ async function runYouTubePipeline(input: {
           videoUrl: input.videoUrl,
           transcript: transcript.text,
           additionalInstructions: safetyRetryHint || undefined,
-        }),
+        }, { onGenerationModelEvent: generationModelEventCallback }),
       );
       const draft = toDraft(rawDraft);
 
@@ -11493,6 +11904,27 @@ async function runYouTubePipeline(input: {
           failures: ['NO_STEPS'],
           reason: 'no_steps',
         });
+        if (traceContext.db && traceContext.userId) {
+          await safeGenerationTraceWrite({
+            runId: input.runId,
+            op: 'event_quality_judge_result',
+            fn: async () => {
+              await appendGenerationEvent(traceContext.db as any, {
+                runId: input.runId,
+                level: 'warn',
+                event: 'quality_judge_result',
+                payload: {
+                  attempt,
+                  run: attemptRunCount,
+                  global_run: globalRunIndex,
+                  pass: false,
+                  failures: ['NO_STEPS'],
+                  reason: 'no_steps',
+                },
+              });
+            },
+          });
+        }
         console.log(
           `[yt2bp-quality] run_id=${input.runId} attempt=${attempt}/${qualityAttempts} run=${attemptRunCount}/${maxRunsForAttempt} global_run=${globalRunIndex} pass=false reason=no_steps`
         );
@@ -11508,6 +11940,27 @@ async function runYouTubePipeline(input: {
         safety_blocked_topics: deterministicSafety.ok ? [] : deterministicSafety.blockedTopics,
         pii_matches: pii.ok ? [] : pii.matches,
       });
+      if (traceContext.db && traceContext.userId) {
+        await safeGenerationTraceWrite({
+          runId: input.runId,
+          op: 'event_draft_generated',
+          fn: async () => {
+            await appendGenerationEvent(traceContext.db as any, {
+              runId: input.runId,
+              event: 'draft_generated',
+              payload: {
+                attempt,
+                run: attemptRunCount,
+                global_run: globalRunIndex,
+                step_count: draft.steps.length,
+                deterministic_pass: deterministicSafety.ok && pii.ok,
+                safety_blocked_topics: deterministicSafety.ok ? [] : deterministicSafety.blockedTopics,
+                pii_matches: pii.ok ? [] : pii.matches,
+              },
+            });
+          },
+        });
+      }
       if (!deterministicSafety.ok) {
         makePipelineError('SAFETY_BLOCKED', `Forbidden topics detected: ${deterministicSafety.blockedTopics.join(', ')}`);
       }
@@ -11540,6 +11993,27 @@ async function runYouTubePipeline(input: {
           overall: Number.isFinite(graded.overall) ? graded.overall : null,
           failures: graded.failures || [],
         });
+        if (traceContext.db && traceContext.userId) {
+          await safeGenerationTraceWrite({
+            runId: input.runId,
+            op: 'event_quality_judge_result',
+            fn: async () => {
+              await appendGenerationEvent(traceContext.db as any, {
+                runId: input.runId,
+                level: graded.ok ? 'info' : 'warn',
+                event: 'quality_judge_result',
+                payload: {
+                  attempt,
+                  run: attemptRunCount,
+                  global_run: globalRunIndex,
+                  pass: graded.ok,
+                  overall: Number.isFinite(graded.overall) ? graded.overall : null,
+                  failures: graded.failures || [],
+                },
+              });
+            },
+          });
+        }
         console.log(
           `[yt2bp-quality] run_id=${input.runId} attempt=${attempt}/${qualityAttempts} run=${attemptRunCount}/${maxRunsForAttempt} global_run=${globalRunIndex} pass=${graded.ok} overall=${graded.overall.toFixed(2)} failures=${failIds}`
         );
@@ -11572,6 +12046,27 @@ async function runYouTubePipeline(input: {
             failed_criteria: safetyScore.failedCriteria || [],
             retried_for_safety: !safetyScore.ok && safetyRetriesUsed < safetyRetryBudget && attemptRunCount < maxRunsForAttempt,
           });
+          if (traceContext.db && traceContext.userId) {
+            await safeGenerationTraceWrite({
+              runId: input.runId,
+              op: 'event_content_safety_result',
+              fn: async () => {
+                await appendGenerationEvent(traceContext.db as any, {
+                  runId: input.runId,
+                  level: safetyScore.ok ? 'info' : 'warn',
+                  event: 'content_safety_result',
+                  payload: {
+                    attempt,
+                    run: attemptRunCount,
+                    global_run: globalRunIndex,
+                    pass: safetyScore.ok,
+                    failed_criteria: safetyScore.failedCriteria || [],
+                    retried_for_safety: !safetyScore.ok && safetyRetriesUsed < safetyRetryBudget && attemptRunCount < maxRunsForAttempt,
+                  },
+                });
+              },
+            });
+          }
           console.log(
             `[yt2bp-content-safety] run_id=${input.runId} attempt=${attempt}/${qualityAttempts} run=${attemptRunCount}/${maxRunsForAttempt} global_run=${globalRunIndex} pass=${safetyScore.ok} flagged=${flagged}`
           );
@@ -11606,6 +12101,27 @@ async function runYouTubePipeline(input: {
           failures: ['JUDGE_ERROR'],
           reason: message.slice(0, 180),
         });
+        if (traceContext.db && traceContext.userId) {
+          await safeGenerationTraceWrite({
+            runId: input.runId,
+            op: 'event_quality_judge_result',
+            fn: async () => {
+              await appendGenerationEvent(traceContext.db as any, {
+                runId: input.runId,
+                level: 'error',
+                event: 'quality_judge_result',
+                payload: {
+                  attempt,
+                  run: attemptRunCount,
+                  global_run: globalRunIndex,
+                  pass: false,
+                  failures: ['JUDGE_ERROR'],
+                  reason: message.slice(0, 180),
+                },
+              });
+            },
+          });
+        }
         console.log(
           `[${phase}] run_id=${input.runId} attempt=${attempt}/${qualityAttempts} run=${attemptRunCount}/${maxRunsForAttempt} pass=false judge_error=${message.slice(0, 180)}`
         );
@@ -11618,6 +12134,22 @@ async function runYouTubePipeline(input: {
     .slice()
     .sort((a, b) => b.overall - a.overall)[0];
   generationTrace.selected_candidate.overall = selected ? selected.overall : null;
+  if (selected && traceContext.db && traceContext.userId) {
+    await safeGenerationTraceWrite({
+      runId: input.runId,
+      op: 'event_draft_selected',
+      fn: async () => {
+        await appendGenerationEvent(traceContext.db as any, {
+          runId: input.runId,
+          event: 'draft_selected',
+          payload: {
+            overall: selected.overall,
+            candidate_count: passingCandidates.length,
+          },
+        });
+      },
+    });
+  }
   if (!selected) {
     if (bestFailingQuality) {
       console.log(
@@ -11648,6 +12180,24 @@ async function runYouTubePipeline(input: {
     issues: gateIssueCodes.slice(0, 20),
     issue_details: gateIssueDetails.slice(0, 20),
   };
+  if (traceContext.db && traceContext.userId) {
+    await safeGenerationTraceWrite({
+      runId: input.runId,
+      op: 'event_gate_initial',
+      fn: async () => {
+        await appendGenerationEvent(traceContext.db as any, {
+          runId: input.runId,
+          level: gatePassed ? 'info' : 'warn',
+          event: 'gate_initial',
+          payload: {
+            pass: gatePassed,
+            issues: gateIssueCodes,
+            issue_details: gateIssueDetails.slice(0, 20),
+          },
+        });
+      },
+    });
+  }
 
   console.log('[bp_quality_gate_eval]', JSON.stringify({
     run_id: input.runId,
@@ -11678,6 +12228,24 @@ async function runYouTubePipeline(input: {
       issues: gateIssueCodes,
       issue_details: gateIssueDetails.slice(0, 12),
     }));
+    if (traceContext.db && traceContext.userId) {
+      await safeGenerationTraceWrite({
+        runId: input.runId,
+        op: 'event_gate_retry_requested',
+        fn: async () => {
+          await appendGenerationEvent(traceContext.db as any, {
+            runId: input.runId,
+            level: 'warn',
+            event: 'gate_retry_requested',
+            payload: {
+              attempt: retryAttempt,
+              issues: gateIssueCodes,
+              issue_details: gateIssueDetails.slice(0, 20),
+            },
+          });
+        },
+      });
+    }
 
     const retryInstructions = buildYouTubeQualityRetryInstructions({
       attempt: retryAttempt,
@@ -11700,7 +12268,7 @@ async function runYouTubePipeline(input: {
         videoUrl: input.videoUrl,
         transcript: transcript.text,
         additionalInstructions: retryInstructions,
-      }),
+      }, { onGenerationModelEvent: generationModelEventCallback }),
     );
     const retryDraft = toDraft(retryRawDraft);
     const retryFlattened = flattenDraftText(retryDraft);
@@ -11745,6 +12313,25 @@ async function runYouTubePipeline(input: {
       issue_details: gateIssueDetails.slice(0, 12),
       final_mode: gatePassed ? 'retry_pass' : 'pending',
     }));
+    if (traceContext.db && traceContext.userId) {
+      await safeGenerationTraceWrite({
+        runId: input.runId,
+        op: 'event_gate_retry_result',
+        fn: async () => {
+          await appendGenerationEvent(traceContext.db as any, {
+            runId: input.runId,
+            level: gatePassed ? 'info' : 'warn',
+            event: 'gate_retry_result',
+            payload: {
+              attempt: retryAttempt,
+              pass: gatePassed,
+              issues: gateIssueCodes,
+              issue_details: gateIssueDetails.slice(0, 20),
+            },
+          });
+        },
+      });
+    }
     if (gatePassed) {
       qualityFinalMode = 'retry_pass';
       break;
@@ -11776,6 +12363,25 @@ async function runYouTubePipeline(input: {
       issue_details: gateIssueDetails.slice(0, 12),
       final_mode: qualityFinalMode,
     }));
+    if (traceContext.db && traceContext.userId) {
+      await safeGenerationTraceWrite({
+        runId: input.runId,
+        op: 'event_gate_repaired',
+        fn: async () => {
+          await appendGenerationEvent(traceContext.db as any, {
+            runId: input.runId,
+            level: gatePassed ? 'info' : 'warn',
+            event: 'gate_repaired',
+            payload: {
+              pass: gatePassed,
+              issues: gateIssueCodes,
+              issue_details: gateIssueDetails.slice(0, 20),
+              retries_used: qualityRetriesUsed,
+            },
+          });
+        },
+      });
+    }
   }
   generationTrace.gate_final = {
     mode: qualityFinalMode,
@@ -11844,24 +12450,98 @@ async function runYouTubePipeline(input: {
     bannerUrl = await uploadBannerToSupabase(banner.buffer.toString('base64'), banner.mimeType, input.authToken);
   }
 
-  return {
-    ok: true,
-    run_id: input.runId,
-    draft,
-    review: { available: input.generateReview, summary: reviewSummary },
-    banner: { available: input.generateBanner, url: bannerUrl },
-    meta: {
-      transcript_source: transcript.source,
-      confidence: transcript.confidence,
-      bp_quality_ok: gatePassed,
-      bp_quality_issues: gateIssueCodes,
-      bp_quality_retries_used: qualityRetriesUsed,
-      bp_quality_final_mode: qualityFinalMode,
-      bp_trace_version: generationTrace.trace_version,
-      bp_trace: generationTrace,
-      duration_ms: Date.now() - startedAt,
-    },
-  };
+    if (traceContext.db && traceContext.userId) {
+      await safeGenerationTraceWrite({
+        runId: input.runId,
+        op: 'event_pipeline_succeeded',
+        fn: async () => {
+          await appendGenerationEvent(traceContext.db as any, {
+            runId: input.runId,
+            event: 'pipeline_succeeded',
+            payload: {
+              quality_ok: gatePassed,
+              quality_issues: gateIssueCodes,
+              quality_retries_used: qualityRetriesUsed,
+              quality_final_mode: qualityFinalMode,
+              duration_ms: Date.now() - startedAt,
+            },
+          });
+        },
+      });
+      await safeGenerationTraceWrite({
+        runId: input.runId,
+        op: 'finalize_run_success',
+        fn: async () => {
+          await finalizeGenerationRunSuccess(traceContext.db as any, {
+            runId: input.runId,
+            qualityOk: gatePassed,
+            qualityIssues: gateIssueCodes,
+            qualityRetriesUsed: qualityRetriesUsed,
+            qualityFinalMode: qualityFinalMode,
+            traceVersion: traceContext.traceVersion,
+            summary: generationTrace,
+          });
+        },
+      });
+    }
+
+    return {
+      ok: true,
+      run_id: input.runId,
+      draft,
+      review: { available: input.generateReview, summary: reviewSummary },
+      banner: { available: input.generateBanner, url: bannerUrl },
+      meta: {
+        transcript_source: transcript.source,
+        confidence: transcript.confidence,
+        bp_quality_ok: gatePassed,
+        bp_quality_issues: gateIssueCodes,
+        bp_quality_retries_used: qualityRetriesUsed,
+        bp_quality_final_mode: qualityFinalMode,
+        bp_trace_version: generationTrace.trace_version,
+        bp_trace: generationTrace,
+        duration_ms: Date.now() - startedAt,
+      },
+    };
+  } catch (error) {
+    if (traceContext.db && traceContext.userId) {
+      await safeGenerationTraceWrite({
+        runId: input.runId,
+        op: 'event_pipeline_failed',
+        fn: async () => {
+          await appendGenerationEvent(traceContext.db as any, {
+            runId: input.runId,
+            level: 'error',
+            event: 'pipeline_failed',
+            payload: {
+              error_code: mapPipelineError(error)?.error_code || 'GENERATION_FAIL',
+              error_message: mapPipelineError(error)?.message || (error instanceof Error ? error.message : String(error)),
+              duration_ms: Date.now() - startedAt,
+            },
+          });
+        },
+      });
+      await safeGenerationTraceWrite({
+        runId: input.runId,
+        op: 'finalize_run_failure',
+        fn: async () => {
+          await finalizeGenerationRunFailure(traceContext.db as any, {
+            runId: input.runId,
+            errorCode: mapPipelineError(error)?.error_code || 'GENERATION_FAIL',
+            errorMessage: mapPipelineError(error)?.message || (error instanceof Error ? error.message : String(error)),
+            traceVersion: traceContext.traceVersion,
+            summary: {
+              run_id: input.runId,
+              video_id: input.videoId,
+              source_tag: traceContext.sourceTag || 'unknown',
+              duration_ms: Date.now() - startedAt,
+            },
+          });
+        },
+      });
+    }
+    throw error;
+  }
 }
 
 async function uploadBannerToSupabase(imageBase64: string, contentType: string, authToken: string) {

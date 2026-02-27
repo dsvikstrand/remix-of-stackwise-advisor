@@ -8,6 +8,8 @@ import type {
   BlueprintGenerationResult,
   ChannelLabelRequest,
   ChannelLabelResult,
+  GenerationModelEvent,
+  LLMGenerationOptions,
   InventoryRequest,
   InventorySchema,
   LLMClient,
@@ -133,7 +135,16 @@ export function createOpenAIClient(): LLMClient {
     operation: 'generateInventory' | 'generateBlueprint' | 'generateYouTubeBlueprint';
     instructions: string;
     prompt: string;
+    options?: LLMGenerationOptions;
   }) {
+    const emitModelEvent = (event: GenerationModelEvent) => {
+      try {
+        input.options?.onGenerationModelEvent?.(event);
+      } catch (callbackError) {
+        console.warn('[llm_generation_model_callback_error]', String(callbackError instanceof Error ? callbackError.message : callbackError));
+      }
+    };
+
     const runOnce = async (selectedModel: string, includeReasoning: boolean) => {
       const payload: {
         model: string;
@@ -160,6 +171,14 @@ export function createOpenAIClient(): LLMClient {
         fallback_model: generationFallbackModel || null,
         reasoning_effort: generationReasoningEffort,
       });
+      emitModelEvent({
+        event: 'primary_success',
+        operation: input.operation,
+        model_used: generationModel,
+        fallback_used: false,
+        fallback_model: generationFallbackModel || null,
+        reasoning_effort: generationReasoningEffort,
+      });
       return response;
     } catch (error) {
       const shouldFallback =
@@ -169,6 +188,16 @@ export function createOpenAIClient(): LLMClient {
 
       if (!shouldFallback) {
         logGenerationModelEvent('request_failed', {
+          operation: input.operation,
+          model_used: generationModel,
+          fallback_used: false,
+          fallback_model: generationFallbackModel || null,
+          reasoning_effort: generationReasoningEffort,
+          status: Number((error as { status?: unknown })?.status || 0) || null,
+          message: String((error as { message?: unknown })?.message || '').slice(0, 240) || null,
+        });
+        emitModelEvent({
+          event: 'request_failed',
           operation: input.operation,
           model_used: generationModel,
           fallback_used: false,
@@ -191,16 +220,25 @@ export function createOpenAIClient(): LLMClient {
         fallback_model: generationFallbackModel,
         reasoning_effort: null,
       });
+      emitModelEvent({
+        event: 'fallback_success',
+        operation: input.operation,
+        model_used: generationFallbackModel,
+        fallback_used: true,
+        fallback_model: generationFallbackModel,
+        reasoning_effort: null,
+      });
       return response;
     }
   }
 
   return {
-    async generateInventory(input: InventoryRequest): Promise<InventorySchema> {
+    async generateInventory(input: InventoryRequest, options?: LLMGenerationOptions): Promise<InventorySchema> {
       const response = await runGenerationRequest({
         operation: 'generateInventory',
         instructions: INVENTORY_SYSTEM_PROMPT,
         prompt: buildInventoryUserPrompt(input),
+        options,
       });
 
       const outputText = response.output_text?.trim();
@@ -256,11 +294,12 @@ export function createOpenAIClient(): LLMClient {
         prompt,
       };
     },
-    async generateBlueprint(input: BlueprintGenerationRequest): Promise<BlueprintGenerationResult> {
+    async generateBlueprint(input: BlueprintGenerationRequest, options?: LLMGenerationOptions): Promise<BlueprintGenerationResult> {
       const response = await runGenerationRequest({
         operation: 'generateBlueprint',
         instructions: BLUEPRINT_GENERATION_SYSTEM_PROMPT,
         prompt: buildBlueprintGenerationUserPrompt(input),
+        options,
       });
 
       const outputText = response.output_text?.trim();
@@ -271,11 +310,12 @@ export function createOpenAIClient(): LLMClient {
       const parsed = JSON.parse(extractJson(outputText));
       return BlueprintGenerationValidator.parse(parsed);
     },
-    async generateYouTubeBlueprint(input: YouTubeBlueprintRequest): Promise<YouTubeBlueprintResult> {
+    async generateYouTubeBlueprint(input: YouTubeBlueprintRequest, options?: LLMGenerationOptions): Promise<YouTubeBlueprintResult> {
       const response = await runGenerationRequest({
         operation: 'generateYouTubeBlueprint',
         instructions: YOUTUBE_BLUEPRINT_SYSTEM_PROMPT,
         prompt: buildYouTubeBlueprintUserPrompt(input),
+        options,
       });
 
       const outputText = response.output_text?.trim();

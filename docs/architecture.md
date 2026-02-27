@@ -105,6 +105,8 @@
     - `GET /api/notifications` (auth-only inbox list with unread count + cursor pagination)
     - `POST /api/notifications/:id/read` (auth-only mark one read)
     - `POST /api/notifications/read-all` (auth-only mark all unread read)
+    - `GET /api/blueprints/:id/generation-trace` (auth owner or service token; returns latest durable generation trace by blueprint with optional event pagination)
+    - `GET /api/generation-runs/:runId` (auth owner or service token; returns durable generation trace by run id with optional event pagination)
     - `GET /api/youtube-search` (auth-only YouTube result discovery, relevance-sorted)
     - `GET /api/youtube-channel-search` (auth-only YouTube channel discovery, relevance-sorted)
     - `GET /api/youtube/connection/status` (auth-only YouTube OAuth status)
@@ -132,6 +134,7 @@
   - source-identity foundation: `source_pages` table and FK links from `user_source_subscriptions` + `source_items` via `source_page_id`.
   - shared unlock foundation: `source_item_unlocks` (status/cost/reservation/ready blueprint) + `user_credit_wallets` + immutable `credit_ledger`.
   - notifications foundation: `notifications` table with owner-read/update RLS and dedupe key support (`user_id + dedupe_key`).
+  - durable generation trace foundation: `generation_runs` (run summary/model/quality terminal state) + `generation_run_events` (ordered stage-level events); 30-day event retention via service-role purge function, run summary retained indefinitely.
   - unlock reliability sweeps:
     - opportunistic sweeps on source-page video list/unlock routes.
     - forced sweep on service cron trigger path.

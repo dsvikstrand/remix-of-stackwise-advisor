@@ -154,6 +154,13 @@ class QueryBuilder {
     return { data: rows[0], error: null };
   }
 
+  then<TResult1 = any, TResult2 = never>(
+    onfulfilled?: ((value: { data: any; error: any }) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null,
+  ): Promise<TResult1 | TResult2> {
+    return this.execute().then(onfulfilled as any, onrejected as any);
+  }
+
   private getTable() {
     if (!this.state[this.tableName]) {
       this.state[this.tableName] = [];
@@ -212,8 +219,11 @@ class QueryBuilder {
       }
       const inserted: Row[] = [];
       for (const payload of this.insertPayload) {
+        const generatedId = this.tableName === 'generation_run_events'
+          ? table.length + inserted.length + 1
+          : `${this.tableName}_${table.length + inserted.length + 1}`;
         const row: Row = {
-          id: payload.id || `${this.tableName}_${table.length + inserted.length + 1}`,
+          id: payload.id || generatedId,
           created_at: payload.created_at || nowIso,
           updated_at: payload.updated_at || nowIso,
           ...payload,
@@ -250,6 +260,8 @@ export function createMockSupabase(initialTables?: Partial<TablesState>) {
     credit_ledger: [],
     source_item_unlocks: [],
     ingestion_jobs: [],
+    generation_runs: [],
+    generation_run_events: [],
     ...(initialTables || {}),
   };
 
@@ -260,4 +272,3 @@ export function createMockSupabase(initialTables?: Partial<TablesState>) {
     },
   };
 }
-

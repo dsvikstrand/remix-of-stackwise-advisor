@@ -6,6 +6,7 @@ import type {
   BlueprintGenerationResult,
   ChannelLabelRequest,
   ChannelLabelResult,
+  LLMGenerationOptions,
   InventoryRequest,
   InventorySchema,
   LLMClient,
@@ -15,7 +16,7 @@ import type {
 
 export function createMockClient(): LLMClient {
   return {
-    async generateInventory(input: InventoryRequest): Promise<InventorySchema> {
+    async generateInventory(input: InventoryRequest, _options?: LLMGenerationOptions): Promise<InventorySchema> {
       const title = input.title?.trim() || `${input.keywords.trim()} Inventory`;
       return {
         summary: `A starter inventory for ${title.toLowerCase()}.`,
@@ -68,7 +69,7 @@ export function createMockClient(): LLMClient {
         prompt: 'mock-banner',
       };
     },
-    async generateBlueprint(input: BlueprintGenerationRequest): Promise<BlueprintGenerationResult> {
+    async generateBlueprint(input: BlueprintGenerationRequest, _options?: LLMGenerationOptions): Promise<BlueprintGenerationResult> {
       const title = input.title?.trim() || `${input.inventoryTitle.trim()} Blueprint`;
       const categories = input.categories || [];
       const pickItem = (index: number) => {
@@ -100,7 +101,7 @@ export function createMockClient(): LLMClient {
         steps,
       };
     },
-    async generateYouTubeBlueprint(input: YouTubeBlueprintRequest): Promise<YouTubeBlueprintResult> {
+    async generateYouTubeBlueprint(input: YouTubeBlueprintRequest, _options?: LLMGenerationOptions): Promise<YouTubeBlueprintResult> {
       return {
         title: `Blueprint from ${input.videoUrl}`,
         description: 'Mock YouTube blueprint generated from transcript.',

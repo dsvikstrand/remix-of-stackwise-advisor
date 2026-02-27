@@ -5,6 +5,43 @@ export interface InventoryRequest {
   preferredCategories?: string[];
 }
 
+export type GenerationOperation =
+  | 'generateInventory'
+  | 'generateBlueprint'
+  | 'generateYouTubeBlueprint';
+
+export type GenerationModelEvent =
+  | {
+      event: 'primary_success';
+      operation: GenerationOperation;
+      model_used: string;
+      fallback_used: boolean;
+      fallback_model?: string | null;
+      reasoning_effort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | null;
+    }
+  | {
+      event: 'fallback_success';
+      operation: GenerationOperation;
+      model_used: string;
+      fallback_used: boolean;
+      fallback_model?: string | null;
+      reasoning_effort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | null;
+    }
+  | {
+      event: 'request_failed';
+      operation: GenerationOperation;
+      model_used: string;
+      fallback_used: boolean;
+      fallback_model?: string | null;
+      reasoning_effort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | null;
+      status?: number | null;
+      message?: string | null;
+    };
+
+export interface LLMGenerationOptions {
+  onGenerationModelEvent?: (event: GenerationModelEvent) => void;
+}
+
 export interface InventorySchema {
   summary: string;
   categories: Array<{ name: string; items: string[] }>;
@@ -106,10 +143,10 @@ export interface ChannelLabelResult {
 }
 
 export interface LLMClient {
-  generateInventory(input: InventoryRequest): Promise<InventorySchema>;
+  generateInventory(input: InventoryRequest, options?: LLMGenerationOptions): Promise<InventorySchema>;
   analyzeBlueprint(input: BlueprintAnalysisRequest): Promise<string>;
   generateBanner(input: BannerRequest): Promise<BannerResult>;
-  generateBlueprint(input: BlueprintGenerationRequest): Promise<BlueprintGenerationResult>;
-  generateYouTubeBlueprint(input: YouTubeBlueprintRequest): Promise<YouTubeBlueprintResult>;
+  generateBlueprint(input: BlueprintGenerationRequest, options?: LLMGenerationOptions): Promise<BlueprintGenerationResult>;
+  generateYouTubeBlueprint(input: YouTubeBlueprintRequest, options?: LLMGenerationOptions): Promise<YouTubeBlueprintResult>;
   generateChannelLabel(input: ChannelLabelRequest): Promise<ChannelLabelResult>;
 }
