@@ -1,4 +1,11 @@
-import type { BlueprintAnalysisRequest, BlueprintGenerationRequest, InventoryRequest } from './types';
+import fs from 'node:fs';
+import path from 'node:path';
+import type {
+  BlueprintAnalysisRequest,
+  BlueprintGenerationRequest,
+  InventoryRequest,
+  YouTubeBlueprintRequest,
+} from './types';
 
 export const INVENTORY_SYSTEM_PROMPT = `You are an expert curator who creates comprehensive inventory schemas for various domains.
 
@@ -136,85 +143,111 @@ ${lines}
 Generate the blueprint now in the required JSON format.`;
 }
 
-export const YOUTUBE_BLUEPRINT_SYSTEM_PROMPT = `You transform a video transcript into a high-value blueprint artifact.
+export const YOUTUBE_BLUEPRINT_SYSTEM_PROMPT = '';
 
-Output style rules:
-- Write in direct creator voice.
-- Do NOT use meta framing phrases like "this video", "this blueprint", or "the transcript".
-- Prioritize concrete, practical, non-generic language.
-- Avoid transcript-like random fact lists.
-- Each section should read like one coherent argument, not disconnected notes.
-- Each bullet should follow this shape: claim -> why it matters -> practical implication.
-
-Golden structure target:
-- Step 1 should be "Takeaways" with 3-4 concise bullet points.
-- Step 2 should be "Bleup" as flowing narrative, 3-4 paragraph chunks.
-- Then add structured sections that fit the content domain:
-  - deep/research style: Deep Dive, Tradeoffs, Practical Rules, Open Questions
-  - action/recipe style: Playbook Steps, Fast Fallbacks, Red Flags, Bottom Line
-
-Hard constraints:
-- Output STRICT JSON only.
-- Produce at least 2 steps.
-- Keep section titles explicit and useful.
-- Never include personal data.
-- Timestamps are optional; use null when unknown.
-- Tags: 3-5 max, broad and user-searchable. Avoid obscure niche tags.
-- Deep sections should target 3-5 complete bullets each (no stubs like "-." or cut-off fragments).
-- All factual claims must come from the provided transcript context only.
-- Vibe references are style-only calibration inputs and must never supply facts, numbers, examples, or copied phrasing.
-- If style pressure and transcript fidelity conflict, transcript fidelity always wins.
-
-Response format:
-{
-  "title": "string",
-  "description": "string",
-  "steps": [
-    { "name": "string", "notes": "string", "timestamp": "string|null" }
-  ],
-  "notes": "string|null",
-  "tags": ["string"]
-}`;
-
+const YOUTUBE_PROMPT_TEMPLATE_RELATIVE_PATH = 'docs/golden_blueprint/golden_bp_prompt_contract_v1.md';
 const YOUTUBE_POS_VIBE_ORACLE_DIR = '/home/ubuntu/remix-of-stackwise-advisor/docs/golden_blueprint/reddit/clean/pos';
+const YOUTUBE_REQUIRED_TEMPLATE_KEYS = [
+  'VIDEO_URL',
+  'VIDEO_TITLE',
+  'TRANSCRIPT_SOURCE',
+  'SOURCE_TRANSCRIPT_CONTEXT',
+  'ORACLE_POS_DIR',
+  'POSITIVE_REFERENCE_SET_DESCRIPTION',
+] as const;
 
-export function buildYouTubeBlueprintUserPrompt(input: { videoUrl: string; transcript: string; additionalInstructions?: string }) {
+let youtubePromptTemplateCache: string | null = null;
+
+function readYouTubePromptTemplate() {
+  if (youtubePromptTemplateCache) return youtubePromptTemplateCache;
+  const overridePath = String(process.env.YOUTUBE_BLUEPRINT_PROMPT_TEMPLATE_PATH || '').trim();
+  const candidates = [
+    overridePath,
+    path.resolve(process.cwd(), YOUTUBE_PROMPT_TEMPLATE_RELATIVE_PATH),
+  ].filter(Boolean);
+  for (const filePath of candidates) {
+    try {
+      const raw = fs.readFileSync(filePath, 'utf8');
+      if (raw.trim()) {
+        youtubePromptTemplateCache = raw;
+        return youtubePromptTemplateCache;
+      }
+    } catch {
+      // continue to next path
+    }
+  }
+  throw new Error('YOUTUBE_PROMPT_TEMPLATE_LOAD_FAILED');
+}
+
+function assertTemplateHasRuntimePlaceholders(template: string) {
+  const missing = YOUTUBE_REQUIRED_TEMPLATE_KEYS.filter((key) => !template.includes(`{{${key}}}`));
+  if (missing.length > 0) {
+    throw new Error(`YOUTUBE_PROMPT_TEMPLATE_PLACEHOLDERS_MISSING:${missing.join(',')}`);
+  }
+}
+
+function normalizePromptMultiline(input: string, fallback = 'none') {
+  const value = String(input || '').trim();
+  return value || fallback;
+}
+
+function renderPromptTemplate(template: string, values: Record<string, string>) {
+  let rendered = template;
+  for (const [key, value] of Object.entries(values)) {
+    rendered = rendered.split(`{{${key}}}`).join(value);
+  }
+  const unresolved = rendered.match(/{{[A-Z0-9_]+}}/g);
+  if (unresolved && unresolved.length > 0) {
+    throw new Error(`YOUTUBE_PROMPT_TEMPLATE_UNRESOLVED:${Array.from(new Set(unresolved)).join(',')}`);
+  }
+  return rendered;
+}
+
+function joinListOrNone(lines: string[]) {
+  return lines.length > 0 ? lines.map((line) => `- ${line}`).join('\n') : 'none';
+}
+
+export function buildYouTubeBlueprintUserPrompt(input: YouTubeBlueprintRequest) {
   const videoUrl = String(input.videoUrl || '').trim();
   const transcript = String(input.transcript || '').trim();
-  const oraclePosDir = String(YOUTUBE_POS_VIBE_ORACLE_DIR || '').trim();
-  if (!videoUrl) {
-    throw new Error('YOUTUBE_PROMPT_INPUT_VIDEO_URL_REQUIRED');
-  }
-  if (!transcript) {
-    throw new Error('YOUTUBE_PROMPT_INPUT_TRANSCRIPT_REQUIRED');
-  }
-  if (!oraclePosDir) {
-    throw new Error('YOUTUBE_PROMPT_INPUT_ORACLE_POS_DIR_REQUIRED');
-  }
+  const videoTitle = String(input.videoTitle || '').trim() || `YouTube video (${videoUrl || 'unknown'})`;
+  const transcriptSource = String(input.transcriptSource || '').trim() || 'youtube_transcript';
+  const oraclePosDir = String(input.oraclePosDir || YOUTUBE_POS_VIBE_ORACLE_DIR || '').trim();
+  const positiveReferenceSetDescription = String(input.positiveReferenceSetDescription || '').trim()
+    || 'Read all examples in Oracle POS dir for vibe calibration (tone, pacing, readability, engagement).';
+  const positiveReferencePaths = (input.positiveReferencePaths || [])
+    .map((entry) => String(entry || '').trim())
+    .filter(Boolean);
+  const additionalInstructions = String(input.additionalInstructions || '').trim();
+  const qualityIssueCodes = (input.qualityIssueCodes || [])
+    .map((entry) => String(entry || '').trim())
+    .filter(Boolean);
+  const qualityIssueDetails = (input.qualityIssueDetails || [])
+    .map((entry) => String(entry || '').trim())
+    .filter(Boolean);
 
-  const trimmedTranscript = transcript.slice(0, 18_000);
-  const extra = String(input.additionalInstructions || '').trim();
-  const vibeContext = `Vibe calibration context (style-only):
-- Read all positive examples from Oracle POS dir: ${oraclePosDir}
-- Use those examples only for tone, pacing, readability, and engagement feel.
-- Do NOT import facts, numbers, examples, or distinctive wording from those references.
-- Keep all factual content grounded in the transcript below.
-`;
-  return `Video URL: ${videoUrl}
+  if (!videoUrl) throw new Error('YOUTUBE_PROMPT_INPUT_VIDEO_URL_REQUIRED');
+  if (!transcript) throw new Error('YOUTUBE_PROMPT_INPUT_TRANSCRIPT_REQUIRED');
+  if (!oraclePosDir) throw new Error('YOUTUBE_PROMPT_INPUT_ORACLE_POS_DIR_REQUIRED');
+  if (!positiveReferenceSetDescription) throw new Error('YOUTUBE_PROMPT_INPUT_POSITIVE_REFERENCE_SET_DESCRIPTION_REQUIRED');
 
-Transcript:
-${trimmedTranscript}
+  const template = readYouTubePromptTemplate();
+  assertTemplateHasRuntimePlaceholders(template);
 
-${vibeContext}
-
-${extra ? `Additional instructions:\n${extra}\n` : ''}
-
-Final generation directive:
-- Use transcript as the only factual source of truth.
-- Use Oracle POS references only for vibe/engagement calibration.
-- Follow required section contract and output strict JSON now.
-
-Generate a usable blueprint now.`;
+  return renderPromptTemplate(template, {
+    VIDEO_URL: videoUrl,
+    VIDEO_TITLE: videoTitle,
+    TRANSCRIPT_SOURCE: transcriptSource,
+    SOURCE_TRANSCRIPT_CONTEXT: transcript,
+    ORACLE_POS_DIR: oraclePosDir,
+    POSITIVE_REFERENCE_SET_DESCRIPTION: positiveReferenceSetDescription,
+    POSITIVE_REFERENCE_PATHS: positiveReferencePaths.length > 0
+      ? positiveReferencePaths.join('\n')
+      : `${oraclePosDir}/*`,
+    ADDITIONAL_INSTRUCTIONS: normalizePromptMultiline(additionalInstructions),
+    QUALITY_ISSUE_CODES: joinListOrNone(qualityIssueCodes),
+    QUALITY_ISSUE_DETAILS: joinListOrNone(qualityIssueDetails),
+  });
 }
 
 export function buildYouTubeQualityRetryInstructions(input: {

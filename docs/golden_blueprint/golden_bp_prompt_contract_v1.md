@@ -179,6 +179,33 @@ The rendered prompt must include the required output shape and must reject non-J
 }
 ```
 
+## Runtime Prompt Payload (Machine-Rendered)
+
+Use this block as the direct runtime input for each generation run.
+
+Video URL: {{VIDEO_URL}}  
+Video title: {{VIDEO_TITLE}}  
+Transcript source: {{TRANSCRIPT_SOURCE}}
+
+Oracle POS vibe directory (read all examples for vibe only): {{ORACLE_POS_DIR}}
+
+Positive reference set description: {{POSITIVE_REFERENCE_SET_DESCRIPTION}}
+
+Selected positive reference paths:
+{{POSITIVE_REFERENCE_PATHS}}
+
+Quality issue codes (retry only, else `none`):
+{{QUALITY_ISSUE_CODES}}
+
+Quality issue details (retry only, else `none`):
+{{QUALITY_ISSUE_DETAILS}}
+
+Additional instructions:
+{{ADDITIONAL_INSTRUCTIONS}}
+
+Source transcript context (ONLY factual source of truth):
+{{SOURCE_TRANSCRIPT_CONTEXT}}
+
 ## Known Slop Patterns and Rewrite Guidance
 
 ### Repetition and near-duplication

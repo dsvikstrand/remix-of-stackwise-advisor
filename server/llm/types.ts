@@ -108,7 +108,14 @@ export interface YouTubeDraftStep {
 
 export interface YouTubeBlueprintRequest {
   videoUrl: string;
+  videoTitle?: string;
+  transcriptSource?: string;
   transcript: string;
+  oraclePosDir?: string;
+  positiveReferenceSetDescription?: string;
+  positiveReferencePaths?: string[];
+  qualityIssueCodes?: string[];
+  qualityIssueDetails?: string[];
   additionalInstructions?: string;
 }
 

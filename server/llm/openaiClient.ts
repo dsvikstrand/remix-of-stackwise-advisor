@@ -133,7 +133,7 @@ export function createOpenAIClient(): LLMClient {
 
   async function runGenerationRequest(input: {
     operation: 'generateInventory' | 'generateBlueprint' | 'generateYouTubeBlueprint';
-    instructions: string;
+    instructions?: string;
     prompt: string;
     options?: LLMGenerationOptions;
   }) {
@@ -148,14 +148,17 @@ export function createOpenAIClient(): LLMClient {
     const runOnce = async (selectedModel: string, includeReasoning: boolean) => {
       const payload: {
         model: string;
-        instructions: string;
+        instructions?: string;
         input: string;
         reasoning?: { effort: Exclude<GenerationReasoningEffort, 'none'> };
       } = {
         model: selectedModel,
-        instructions: input.instructions,
         input: input.prompt,
       };
+      const instructions = String(input.instructions || '').trim();
+      if (instructions) {
+        payload.instructions = instructions;
+      }
       if (includeReasoning && generationReasoningEffort !== 'none') {
         payload.reasoning = { effort: generationReasoningEffort };
       }
