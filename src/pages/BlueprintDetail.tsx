@@ -75,22 +75,28 @@ function isTakeawaysKey(key: string) {
   return key === 'takeaways' || key === 'lightning takeaways' || key.startsWith('takeaways ');
 }
 
-function isNarrativeKey(key: string) {
-  return key === 'summary'
-    || key === 'bleup'
+function isSummaryKey(key: string) {
+  return key === 'summary' || key.startsWith('summary ') || key.startsWith('summary(');
+}
+
+function isBleupKey(key: string) {
+  return key === 'bleup'
     || key === 'beup'
-    || key.startsWith('summary ')
-    || key.startsWith('summary(')
     || key.startsWith('bleup ')
     || key.startsWith('bleup(')
     || key.startsWith('beup ')
     || key.startsWith('beup(');
 }
 
+function isNarrativeKey(key: string) {
+  return isSummaryKey(key) || isBleupKey(key);
+}
+
 function canonicalSectionTitle(rawTitle: string, fallbackIndex: number) {
   const normalized = normalizeHeadingKey(rawTitle);
   if (isTakeawaysKey(normalized)) return 'Takeaways';
-  if (isNarrativeKey(normalized)) return 'Bleup';
+  if (isSummaryKey(normalized)) return 'Summary';
+  if (isBleupKey(normalized)) return 'Bleup';
   if (normalized === 'mechanism deep dive' || normalized === 'deep dive') return 'Deep Dive';
   if (normalized === 'tradeoffs') return 'Tradeoffs';
   if (normalized === 'decision rules' || normalized === 'practical rules') return 'Practical Rules';
@@ -107,7 +113,10 @@ function headingAliasesFor(titleKey: string) {
   if (titleKey === 'deep dive' || titleKey === 'mechanism deep dive') {
     return ['deep dive', 'mechanism deep dive'];
   }
-  if (titleKey === 'bleup' || titleKey === 'summary' || titleKey === 'beup') {
+  if (titleKey === 'summary') {
+    return ['summary'];
+  }
+  if (titleKey === 'bleup' || titleKey === 'beup') {
     return ['bleup', 'beup', 'summary'];
   }
   if (titleKey === 'practical rules' || titleKey === 'decision rules') {
@@ -473,16 +482,24 @@ export default function BlueprintDetail() {
     const key = normalizeHeadingKey(step.title);
     return isTakeawaysKey(key);
   });
-  const summarySection = visibleGoldenSections.find((step) => {
+  const topSummarySection = visibleGoldenSections.find((step) => {
     const key = normalizeHeadingKey(step.title);
-    return isNarrativeKey(key);
+    return isSummaryKey(key);
+  });
+  const bleupSection = visibleGoldenSections.find((step) => {
+    const key = normalizeHeadingKey(step.title);
+    return isBleupKey(key);
   });
   const deepDiveAndMoreSections = visibleGoldenSections.filter(
-    (step) => step !== takeawaysSection && !isNarrativeKey(normalizeHeadingKey(step.title)),
+    (step) =>
+      step !== topSummarySection
+      && step !== bleupSection
+      && step !== takeawaysSection,
   );
   const splitSections = deepDiveAndMoreSections.flatMap((step) => splitEmbeddedGoldenSections(step));
   const fallbackNarrativeFromSplit = splitSections.find((step) => isNarrativeKey(normalizeHeadingKey(step.title))) || null;
-  const effectiveSummarySection = summarySection || fallbackNarrativeFromSplit;
+  const effectiveTopSummarySection = topSummarySection || null;
+  const effectiveBleupSection = bleupSection || fallbackNarrativeFromSplit;
   const deepDiveInteractiveSections = deepDiveAndMoreSections
     .flatMap((step) => splitEmbeddedGoldenSections(step))
     .filter((step) => {
@@ -718,9 +735,10 @@ export default function BlueprintDetail() {
 
               {useGoldenRender ? (
                 <>
+                  {renderGoldenGroup(effectiveTopSummarySection ? [effectiveTopSummarySection] : [])}
                   {renderGoldenGroup(takeawaysSection ? [takeawaysSection] : [])}
                   {renderBanner}
-                  {renderGoldenGroup(effectiveSummarySection ? [effectiveSummarySection] : [])}
+                  {renderGoldenGroup(effectiveBleupSection ? [effectiveBleupSection] : [])}
                   {renderGoldenInteractiveGroup(deepDiveInteractiveSections)}
                 </>
               ) : (

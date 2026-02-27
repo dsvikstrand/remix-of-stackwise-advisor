@@ -361,6 +361,22 @@ function buildSummaryParagraphs(draft: YouTubeBlueprintResult, domain: GoldenBlu
   return paragraphs.slice(0, 4);
 }
 
+function buildTopSummary(summaryParagraphs: string[]) {
+  const filtered = summaryParagraphs
+    .map((paragraph) => normalizeWhitespace(paragraph))
+    .filter(Boolean);
+  if (filtered.length === 0) return '';
+  let summary = filtered[0];
+  if (wordCount(summary) < 80 && filtered[1]) {
+    summary = `${summary} ${filtered[1]}`;
+  }
+  const words = summary.split(/\s+/).filter(Boolean);
+  if (words.length > 170) {
+    summary = `${words.slice(0, 170).join(' ')}.`;
+  }
+  return normalizeWhitespace(summary);
+}
+
 function toBulletBlock(lines: string[]) {
   return lines
     .map((line) => stripMetaFraming(line))
@@ -627,9 +643,15 @@ export function normalizeYouTubeDraftToGoldenV1(draft: YouTubeBlueprintResult): 
   const domain = detectDomain(draft);
   const takeaways = selectTakeawayCandidates(draft, domain);
   const summaryParagraphs = buildSummaryParagraphs(draft, domain);
+  const topSummary = buildTopSummary(summaryParagraphs);
   const tags = chooseGeneralTags(draft, domain);
 
   const steps: YouTubeDraftStep[] = [
+    {
+      name: 'Summary',
+      notes: topSummary || summaryParagraphs[0] || '',
+      timestamp: null,
+    },
     {
       name: 'Takeaways',
       notes: toBulletBlock(takeaways),

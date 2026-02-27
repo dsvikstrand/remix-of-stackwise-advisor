@@ -102,8 +102,9 @@ describe('goldenBlueprintFormat (backend)', () => {
     const names = result.steps.map((step) => step.name);
 
     expect(result.domain).toBe('deep');
-    expect(names.slice(0, 2)).toEqual(['Takeaways', 'Bleup']);
+    expect(names.slice(0, 3)).toEqual(['Summary', 'Takeaways', 'Bleup']);
     expect(names).toEqual([
+      'Summary',
       'Takeaways',
       'Bleup',
       'Deep Dive',
@@ -112,7 +113,7 @@ describe('goldenBlueprintFormat (backend)', () => {
       'Open Questions',
     ]);
 
-    const takeawayLines = (result.steps[0]?.notes || '').split('\n').filter((line) => line.trim().startsWith('- '));
+    const takeawayLines = (result.steps[1]?.notes || '').split('\n').filter((line) => line.trim().startsWith('- '));
     expect(takeawayLines.length).toBeGreaterThanOrEqual(3);
     expect(takeawayLines.length).toBeLessThanOrEqual(4);
     for (const line of takeawayLines) {
@@ -126,9 +127,12 @@ describe('goldenBlueprintFormat (backend)', () => {
       expect(value).not.toBe('open questions');
       expect(value).not.toBe('bottom line');
     }
-    expect((result.steps[1]?.notes || '').toLowerCase()).not.toContain('this video');
-    expect((result.steps[1]?.notes || '').toLowerCase()).not.toContain('the transcript');
-    expect((result.steps[1]?.notes || '')).not.toContain('\n- ');
+    expect((result.steps[0]?.notes || '').toLowerCase()).not.toContain('this video');
+    expect((result.steps[0]?.notes || '').toLowerCase()).not.toContain('the transcript');
+    expect((result.steps[0]?.notes || '')).not.toContain('\n- ');
+    expect((result.steps[2]?.notes || '').toLowerCase()).not.toContain('this video');
+    expect((result.steps[2]?.notes || '').toLowerCase()).not.toContain('the transcript');
+    expect((result.steps[2]?.notes || '')).not.toContain('\n- ');
 
     for (const stepName of ['Deep Dive', 'Tradeoffs', 'Practical Rules', 'Open Questions']) {
       const section = result.steps.find((step) => step.name === stepName);
@@ -149,8 +153,9 @@ describe('goldenBlueprintFormat (backend)', () => {
     const names = result.steps.map((step) => step.name);
 
     expect(result.domain).toBe('action');
-    expect(names.slice(0, 2)).toEqual(['Takeaways', 'Bleup']);
+    expect(names.slice(0, 3)).toEqual(['Summary', 'Takeaways', 'Bleup']);
     expect(names).toEqual([
+      'Summary',
       'Takeaways',
       'Bleup',
       'Playbook Steps',
@@ -162,8 +167,9 @@ describe('goldenBlueprintFormat (backend)', () => {
 
   it('filters section-label artifacts from takeaways and summary sources', () => {
     const result = normalizeYouTubeDraftToGoldenV1(buildNoisyDraft());
-    const takeawayLines = (result.steps[0]?.notes || '').split('\n').filter((line) => line.trim().startsWith('- '));
-    const bleupText = result.steps[1]?.notes || '';
+    const takeawayLines = (result.steps[1]?.notes || '').split('\n').filter((line) => line.trim().startsWith('- '));
+    const summaryText = result.steps[0]?.notes || '';
+    const bleupText = result.steps[2]?.notes || '';
 
     for (const line of takeawayLines) {
       const value = line.replace(/^- /, '').trim().toLowerCase();
@@ -172,6 +178,8 @@ describe('goldenBlueprintFormat (backend)', () => {
       expect(value).not.toBe('mechanism deep dive');
       expect(value).not.toBe('tradeoffs');
     }
+    expect(summaryText.toLowerCase()).not.toContain('\nsummary');
+    expect(summaryText.toLowerCase()).not.toContain('mechanism deep dive');
     expect(bleupText.toLowerCase()).not.toContain('\nsummary');
     expect(bleupText.toLowerCase()).not.toContain('mechanism deep dive');
   });
