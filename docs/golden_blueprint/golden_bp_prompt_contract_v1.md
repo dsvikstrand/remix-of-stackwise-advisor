@@ -104,7 +104,13 @@ Worked example: if Reddit positives show "claim -> evidence -> implication" paci
 
 Use this section as the runtime context envelope for generation input. The goal is to combine transcript-grounded truth with vibe calibration from strong Reddit positives, without content leakage.
 
-The input should always carry two explicit sources. First source is transcript truth context, represented with placeholders like `<VIDEO_URL>`, `<VIDEO_TITLE>`, `<TRANSCRIPT_SOURCE>`, and `<SOURCE_TRANSCRIPT_CONTEXT>` (full transcript or approved excerpt window). Second source is vibe calibration context, represented with placeholders like `<POSITIVE_REFERENCE_SET_DESCRIPTION>` and `<POSITIVE_REFERENCE_PATHS>`, where references point to curated positive examples (for example from `docs/golden_blueprint/reddit/clean/pos`).
+The input should always carry two explicit sources. First source is transcript truth context, represented with placeholders like `<VIDEO_URL>`, `<VIDEO_TITLE>`, `<TRANSCRIPT_SOURCE>`, and `<SOURCE_TRANSCRIPT_CONTEXT>` (full transcript or approved excerpt window). Second source is vibe calibration context, represented with placeholders like `<POSITIVE_REFERENCE_SET_DESCRIPTION>` and `<POSITIVE_REFERENCE_PATHS>`, where references point to one canonical POS folder.
+
+Canonical POS folder paths:
+- Local repo path: `docs/golden_blueprint/reddit/clean/pos`
+- Oracle live path: `/home/ubuntu/remix-of-stackwise-advisor/docs/golden_blueprint/reddit/clean/pos`
+
+Use a cherry-picked subset per run, not the full folder. The recommended subset size is 3-5 references selected to match the current topic vibe. Pass selected references as `<POSITIVE_REFERENCE_PATHS>` and include a one-line reason for each selection in `<POSITIVE_REFERENCE_SET_DESCRIPTION>`.
 
 The instruction framing should stay human and direct. It should tell the model that Bluep is a community-driven reading product and that writing should feel engaging enough that the same kind of users who engage with those reference posts would also want to read and comment here. It should also state that references are for tone, pacing, and engagement feel only.
 
@@ -113,6 +119,10 @@ Guardrails must be explicit and non-negotiable: all factual claims must come fro
 The assembly order should be stable: transcript truth block first, vibe reference block second, hard constraints third, and final output instruction last. This ordering prevents style calibration from overriding source-grounded content.
 
 For operational consistency, include a brief engagement check sentence in the context layer, such as asking whether the draft would feel useful, specific, and discussion-worthy to the same audience profile as the positive references, while still being fully source-faithful to `<SOURCE_TRANSCRIPT_CONTEXT>`.
+
+## Final Generation Directive (Last Instruction Layer)
+
+End the prompt context with a short final directive that reasserts the job and source hierarchy. The directive should explicitly say that the model must now generate the blueprint using `<SOURCE_TRANSCRIPT_CONTEXT>` as the only factual source, while using `<POSITIVE_REFERENCE_PATHS>` only for vibe calibration (tone, pacing, and engagement feel). It should explicitly ban importing facts, numbers, examples, and distinctive wording from references. It should end with a clear "generate now" instruction tied to the required JSON schema and section contract.
 
 ## Known Slop Patterns and Rewrite Guidance
 
@@ -162,3 +172,4 @@ Rewrite direction: enforce domain-native vocabulary and decision framing per top
 ## Change Log
 
 - `v1` (2026-02-27): Introduced canonical prompt contract with strict section semantics, Reddit vibe-only policy, and representation pass/fail guidance.
+- `v1.1` (2026-02-27): Added canonical POS folder strategy (local + Oracle path), cherry-pick subset guidance, and final generation directive layer.
