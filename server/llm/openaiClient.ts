@@ -8,6 +8,7 @@ import type {
   BlueprintGenerationResult,
   ChannelLabelRequest,
   ChannelLabelResult,
+  GenerationPromptEvent,
   GenerationModelEvent,
   LLMGenerationOptions,
   InventoryRequest,
@@ -144,6 +145,19 @@ export function createOpenAIClient(): LLMClient {
         console.warn('[llm_generation_model_callback_error]', String(callbackError instanceof Error ? callbackError.message : callbackError));
       }
     };
+    const emitPromptEvent = (event: GenerationPromptEvent) => {
+      try {
+        input.options?.onGenerationPromptEvent?.(event);
+      } catch (callbackError) {
+        console.warn('[llm_generation_prompt_callback_error]', String(callbackError instanceof Error ? callbackError.message : callbackError));
+      }
+    };
+
+    emitPromptEvent({
+      operation: input.operation,
+      instructions: String(input.instructions || ''),
+      prompt: input.prompt,
+    });
 
     const runOnce = async (selectedModel: string, includeReasoning: boolean) => {
       const payload: {

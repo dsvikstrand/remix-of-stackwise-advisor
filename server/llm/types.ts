@@ -10,6 +10,12 @@ export type GenerationOperation =
   | 'generateBlueprint'
   | 'generateYouTubeBlueprint';
 
+export interface GenerationPromptEvent {
+  operation: GenerationOperation;
+  instructions: string;
+  prompt: string;
+}
+
 export type GenerationModelEvent =
   | {
       event: 'primary_success';
@@ -40,6 +46,7 @@ export type GenerationModelEvent =
 
 export interface LLMGenerationOptions {
   onGenerationModelEvent?: (event: GenerationModelEvent) => void;
+  onGenerationPromptEvent?: (event: GenerationPromptEvent) => void;
 }
 
 export interface InventorySchema {

@@ -116,6 +116,7 @@ import type {
   BlueprintGenerationResult,
   BlueprintSelectedItem,
   GenerationModelEvent,
+  GenerationPromptEvent,
   InventoryRequest,
 } from './llm/types';
 
@@ -11751,6 +11752,7 @@ async function runYouTubePipeline(input: {
       });
     }
     const client = createLLMClient();
+    let youtubePromptRenderCount = 0;
     const generationModelEventCallback = (event: GenerationModelEvent) => {
       if (!traceContext.db || !traceContext.userId) return;
       void safeGenerationTraceWrite({
@@ -11784,6 +11786,49 @@ async function runYouTubePipeline(input: {
               reasoning_effort: event.reasoning_effort || null,
               status: 'status' in event ? event.status || null : null,
               message: 'message' in event ? event.message || null : null,
+            },
+          });
+        },
+      });
+    };
+    const generationPromptEventCallback = (event: GenerationPromptEvent) => {
+      if (event.operation !== 'generateYouTubeBlueprint') return;
+      const promptText = String(event.prompt || '');
+      const instructionsText = String(event.instructions || '');
+      const maxPromptChars = 120_000;
+      const maxInstructionsChars = 20_000;
+      const promptStored = promptText.slice(0, maxPromptChars);
+      const instructionsStored = instructionsText.slice(0, maxInstructionsChars);
+      const promptTruncated = promptText.length > maxPromptChars;
+      const instructionsTruncated = instructionsText.length > maxInstructionsChars;
+      youtubePromptRenderCount += 1;
+
+      console.log('[yt2bp_prompt_rendered]', JSON.stringify({
+        run_id: input.runId,
+        render_index: youtubePromptRenderCount,
+        prompt_chars: promptText.length,
+        prompt_truncated: promptTruncated,
+        instructions_chars: instructionsText.length,
+        instructions_truncated: instructionsTruncated,
+      }));
+
+      if (!traceContext.db || !traceContext.userId) return;
+      void safeGenerationTraceWrite({
+        runId: input.runId,
+        op: 'event_prompt_rendered',
+        fn: async () => {
+          await appendGenerationEvent(traceContext.db as any, {
+            runId: input.runId,
+            event: 'prompt_rendered',
+            payload: {
+              operation: event.operation,
+              render_index: youtubePromptRenderCount,
+              prompt_chars: promptText.length,
+              prompt_truncated: promptTruncated,
+              prompt: promptStored,
+              instructions_chars: instructionsText.length,
+              instructions_truncated: instructionsTruncated,
+              instructions: instructionsStored,
             },
           });
         },
@@ -11893,7 +11938,10 @@ async function runYouTubePipeline(input: {
           transcript: transcript.text,
           positiveReferenceSetDescription: 'Read all Oracle POS examples in the configured directory for vibe/engagement calibration only.',
           additionalInstructions: safetyRetryHint || undefined,
-        }, { onGenerationModelEvent: generationModelEventCallback }),
+        }, {
+          onGenerationModelEvent: generationModelEventCallback,
+          onGenerationPromptEvent: generationPromptEventCallback,
+        }),
       );
       const draft = toDraft(rawDraft);
 
@@ -12276,7 +12324,10 @@ async function runYouTubePipeline(input: {
         qualityIssueCodes: gateIssueCodes,
         qualityIssueDetails: gateIssueDetails,
         additionalInstructions: retryInstructions,
-      }, { onGenerationModelEvent: generationModelEventCallback }),
+      }, {
+        onGenerationModelEvent: generationModelEventCallback,
+        onGenerationPromptEvent: generationPromptEventCallback,
+      }),
     );
     const retryDraft = toDraft(retryRawDraft);
     const retryFlattened = flattenDraftText(retryDraft);
