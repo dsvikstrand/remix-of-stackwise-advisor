@@ -44,6 +44,8 @@ Write in direct creator voice and avoid meta framing like "this video," "this bl
 
 When bullets are used, each bullet must be complete and readable on its own. A complete bullet states the core claim, explains why it matters in context, and ends with a practical implication. Bullet fragments, clipped lines, and stub artifacts are invalid output.
 
+Keep bullets tight. `Takeaways`, `Deep Dive`, `Practical Rules`, and `Open Questions` bullets should be one to two sentences max. Do not write paragraph-length bullets.
+
 ### Golden structure target
 
 The default section sequence is `Takeaways`, `Bleup`, `Deep Dive`, `Practical Rules`, and `Open Questions`, with optional domain adaptation for non-research content only when semantic intent is preserved. `Takeaways` is the fast-value entry point. `Bleup` is the core narrative section that carries the main argument in flowing prose. The remaining sections convert understanding into mechanism clarity, execution rules, and explicit unknowns.
@@ -66,7 +68,7 @@ Summary is the opening context layer and should orient the reader to the topic q
 
 ### Takeaways
 
-Takeaways is the highest-value skim section and should deliver immediate payoff in three to four complete bullets. Each bullet must stand alone and give the reader one meaningful thing they can retain or use right away. This section is not a keyword list and not a teaser. It should read like distilled insight with practical consequence. Depth should be concise but non-trivial: enough specificity to be useful, short enough to scan in seconds.
+Takeaways is the highest-value skim section and should deliver immediate payoff in three to four complete bullets. Each bullet must stand alone and give the reader one meaningful thing they can retain or use right away. This section is not a keyword list and not a teaser. It should read like distilled insight with practical consequence. Depth should be concise but non-trivial: enough specificity to be useful, short enough to scan in seconds. Target total read time is roughly ten to twenty seconds.
 
 ### Bleup
 
@@ -88,11 +90,11 @@ Open Questions defines what remains unresolved in a useful way. It should provid
 
 | Section | Required shape | Depth target | Fail conditions |
 |---|---|---|---|
-| `Takeaways` | 3-4 complete bullets | fast-skim value in ~10 seconds | clipped bullets, generic labels, keyword-only lines |
+| `Takeaways` | 3-4 complete bullets, each 1-2 sentences | fast-skim value in ~10-20 seconds | clipped bullets, generic labels, keyword-only lines, overlong bullets |
 | `Bleup` | 2-3 coherent content-rich paragraphs/slides | primary narrative payload | random fact stacking, duplicated lines, thin filler slides, list artifacts |
-| `Deep Dive` | 3-5 complete bullets | mechanism/context clarity | generic off-domain bullets, stubs, repeated boilerplate tails |
-| `Practical Rules` | 3-5 complete bullets | actionable decisions | non-operational advice, abstract slogans |
-| `Open Questions` | 3-5 complete bullets | meaningful unknowns | generic filler questions, repeated "why it matters" tails |
+| `Deep Dive` | 3-5 complete bullets, each 1-2 sentences | mechanism/context clarity | generic off-domain bullets, stubs, repeated boilerplate tails, overlong bullets |
+| `Practical Rules` | 3-5 complete bullets, each 1-2 sentences | actionable decisions | non-operational advice, abstract slogans, overlong bullets |
+| `Open Questions` | 3-5 complete bullets, each 1-2 sentences | meaningful unknowns | generic filler questions, repeated "why it matters" tails, overlong bullets |
 
 All sections must be semantically complete, domain-consistent, and non-redundant.
 

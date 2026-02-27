@@ -11574,6 +11574,122 @@ function flattenDraftText(draft: {
 
 const GOLDEN_QUALITY_MAX_RETRIES = 2;
 
+type LlmNativeGateResult = {
+  pass: boolean;
+  issues: string[];
+  issueDetails: string[];
+};
+
+function normalizeSectionKey(value: string) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/^#+\s+/, '')
+    .replace(/:$/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function canonicalSectionName(value: string) {
+  const key = normalizeSectionKey(value);
+  if (!key) return '';
+  if (key === 'takeaways' || key === 'lightning takeaways') return 'takeaways';
+  if (key === 'deep dive' || key === 'mechanism deep dive') return 'deep_dive';
+  if (key === 'practical rules' || key === 'decision rules') return 'practical_rules';
+  if (key === 'open questions') return 'open_questions';
+  return key;
+}
+
+function extractSectionBullets(notes: string) {
+  return String(notes || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .map((line) => {
+      const bulletMatch = line.match(/^[-*•]\s+(.+)$/);
+      if (bulletMatch) return bulletMatch[1].trim();
+      const numberedMatch = line.match(/^\d+[.)]\s+(.+)$/);
+      if (numberedMatch) return numberedMatch[1].trim();
+      return '';
+    })
+    .filter(Boolean);
+}
+
+function sentenceCount(value: string) {
+  const sentences = String(value || '')
+    .replace(/\s+/g, ' ')
+    .split(/(?<=[.!?])\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return sentences.length === 0 && String(value || '').trim() ? 1 : sentences.length;
+}
+
+function wordCount(value: string) {
+  return String(value || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+}
+
+function evaluateLlmNativeGate(draft: YouTubeDraft): LlmNativeGateResult {
+  const issues: string[] = [];
+  const issueDetails: string[] = [];
+  const sectionMap = new Map<string, YouTubeDraftStep>();
+  for (const step of draft.steps || []) {
+    const key = canonicalSectionName(step.name);
+    if (!key || sectionMap.has(key)) continue;
+    sectionMap.set(key, step);
+  }
+
+  const targetSections: Array<{ key: string; code: string }> = [
+    { key: 'takeaways', code: 'TAKEAWAYS' },
+    { key: 'deep_dive', code: 'DEEP_DIVE' },
+    { key: 'practical_rules', code: 'PRACTICAL_RULES' },
+    { key: 'open_questions', code: 'OPEN_QUESTIONS' },
+  ];
+
+  for (const target of targetSections) {
+    const section = sectionMap.get(target.key);
+    if (!section) {
+      issues.push(`${target.code}_MISSING`);
+      issueDetails.push(`${target.code}_MISSING section=${target.key}`);
+      continue;
+    }
+    const bullets = extractSectionBullets(section.notes || '');
+    if (bullets.length === 0) {
+      issues.push(`${target.code}_NO_BULLETS`);
+      issueDetails.push(`${target.code}_NO_BULLETS section=${section.name}`);
+      continue;
+    }
+    if (target.key === 'takeaways') {
+      if (bullets.length < 3 || bullets.length > 4) {
+        issues.push('TAKEAWAYS_BULLET_COUNT');
+        issueDetails.push(`TAKEAWAYS_BULLET_COUNT count=${bullets.length}`);
+      }
+      const totalWords = bullets.reduce((sum, bullet) => sum + wordCount(bullet), 0);
+      if (totalWords > 70) {
+        issues.push('TAKEAWAYS_TOO_LONG');
+        issueDetails.push(`TAKEAWAYS_TOO_LONG words=${totalWords}`);
+      }
+    } else if (bullets.length < 3 || bullets.length > 5) {
+      issues.push(`${target.code}_BULLET_COUNT`);
+      issueDetails.push(`${target.code}_BULLET_COUNT count=${bullets.length}`);
+    }
+
+    bullets.forEach((bullet, index) => {
+      const sentences = sentenceCount(bullet);
+      if (sentences > 2) {
+        issues.push(`${target.code}_BULLET_SENTENCE_LIMIT`);
+        issueDetails.push(`${target.code}_BULLET_SENTENCE_LIMIT bullet=${index + 1} sentences=${sentences}`);
+      }
+    });
+  }
+
+  return {
+    pass: issues.length === 0,
+    issues: Array.from(new Set(issues)),
+    issueDetails: Array.from(new Set(issueDetails)),
+  };
+}
+
 function draftToNormalizationInput(draft: YouTubeDraft) {
   return {
     title: draft.title,
@@ -12559,20 +12675,14 @@ async function runYouTubePipeline(input: {
       tags: goldenFormat.tags.length > 0 ? goldenFormat.tags : draft.tags,
     };
   } else {
-    gatePassed = true;
-    gateIssueCodes = [];
-    gateIssueDetails = [];
+    let nativeGate = evaluateLlmNativeGate(draft);
+    gatePassed = nativeGate.pass;
+    gateIssueCodes = nativeGate.issues;
+    gateIssueDetails = nativeGate.issueDetails;
     generationTrace.gate_initial = {
-      pass: true,
-      issues: [],
-      issue_details: [],
-    };
-    generationTrace.gate_final = {
-      mode: qualityFinalMode,
-      pass: true,
-      issues: [],
-      issue_details: [],
-      retries_used: 0,
+      pass: gatePassed,
+      issues: gateIssueCodes.slice(0, 20),
+      issue_details: gateIssueDetails.slice(0, 20),
     };
     console.log('[bp_quality_gate_eval]', JSON.stringify({
       run_id: input.runId,
@@ -12580,11 +12690,11 @@ async function runYouTubePipeline(input: {
       attempt: 0,
       retry_count: 0,
       output_mode: yt2bpOutputMode,
-      pass: true,
-      issues: [],
-      issue_details: [],
-      final_mode: qualityFinalMode,
-      note: 'deterministic_post_processing_skipped',
+      pass: gatePassed,
+      issues: gateIssueCodes,
+      issue_details: gateIssueDetails.slice(0, 12),
+      final_mode: gatePassed ? qualityFinalMode : 'pending',
+      note: 'llm_native_gate_only',
     }));
     if (traceContext.db && traceContext.userId) {
       await safeGenerationTraceWrite({
@@ -12593,19 +12703,175 @@ async function runYouTubePipeline(input: {
         fn: async () => {
           await appendGenerationEvent(traceContext.db as any, {
             runId: input.runId,
-            level: 'info',
+            level: gatePassed ? 'info' : 'warn',
             event: 'gate_initial',
             payload: {
-              pass: true,
+              pass: gatePassed,
               output_mode: yt2bpOutputMode,
-              issues: [],
-              issue_details: [],
-              note: 'deterministic_post_processing_skipped',
+              issues: gateIssueCodes,
+              issue_details: gateIssueDetails.slice(0, 20),
+              note: 'llm_native_gate_only',
             },
           });
         },
       });
     }
+
+    while (!gatePassed && qualityRetriesUsed < GOLDEN_QUALITY_MAX_RETRIES) {
+      const retryAttempt = qualityRetriesUsed + 1;
+      const previousOutput = JSON.stringify({
+        title: draft.title,
+        description: draft.description,
+        steps: draft.steps,
+        notes: draft.notes || null,
+        tags: draft.tags || [],
+      }).slice(0, 12000);
+
+      console.log('[bp_quality_retry_requested]', JSON.stringify({
+        run_id: input.runId,
+        video_id: input.videoId,
+        output_mode: yt2bpOutputMode,
+        attempt: retryAttempt,
+        retry_count: retryAttempt,
+        issues: gateIssueCodes,
+        issue_details: gateIssueDetails.slice(0, 12),
+      }));
+      if (traceContext.db && traceContext.userId) {
+        await safeGenerationTraceWrite({
+          runId: input.runId,
+          op: 'event_gate_retry_requested',
+          fn: async () => {
+            await appendGenerationEvent(traceContext.db as any, {
+              runId: input.runId,
+              level: 'warn',
+              event: 'gate_retry_requested',
+              payload: {
+                attempt: retryAttempt,
+                output_mode: yt2bpOutputMode,
+                issues: gateIssueCodes,
+                issue_details: gateIssueDetails.slice(0, 20),
+              },
+            });
+          },
+        });
+      }
+
+      const retryInstructions = `${buildYouTubeQualityRetryInstructions({
+        attempt: retryAttempt,
+        maxRetries: GOLDEN_QUALITY_MAX_RETRIES,
+        issueCodes: gateIssueCodes,
+        issueDetails: gateIssueDetails,
+        previousOutput,
+      })}
+
+Keep section bullets concise:
+- Takeaways: 3-4 bullets, total read should feel like 10-20 seconds.
+- Takeaways/Deep Dive/Practical Rules/Open Questions: each bullet must be 1-2 sentences max.`;
+
+      const retryRawDraft = await runWithProviderRetry(
+        {
+          providerKey: 'llm_generate_blueprint',
+          db: serviceDb,
+          maxAttempts: providerRetryDefaults.llmAttempts,
+          timeoutMs: providerRetryDefaults.llmTimeoutMs,
+          baseDelayMs: 300,
+          jitterMs: 200,
+        },
+        async () => client.generateYouTubeBlueprint({
+          videoUrl: input.videoUrl,
+          videoTitle: input.videoId,
+          transcriptSource: transcript.source,
+          transcript: transcript.text,
+          qualityIssueCodes: gateIssueCodes,
+          qualityIssueDetails: gateIssueDetails,
+          additionalInstructions: retryInstructions,
+        }, {
+          onGenerationModelEvent: generationModelEventCallback,
+          onGenerationPromptEvent: generationPromptEventCallback,
+        }),
+      );
+
+      const retryDraft = toDraft(retryRawDraft);
+      const retryFlattened = flattenDraftText(retryDraft);
+      const retrySafety = runSafetyChecks(retryFlattened);
+      if (!retrySafety.ok) {
+        if (yt2bpSafetyBlockEnabled) {
+          makePipelineError('SAFETY_BLOCKED', `Forbidden topics detected: ${retrySafety.blockedTopics.join(', ')}`);
+        } else {
+          await bypassSafetyBlock({
+            stage: 'llm_native_retry',
+            blockedTopics: retrySafety.blockedTopics,
+            attempt: retryAttempt,
+            run: 1,
+            globalRun: retryAttempt,
+          });
+        }
+      }
+      const retryPii = runPiiChecks(retryFlattened);
+      if (!retryPii.ok) {
+        makePipelineError('PII_BLOCKED', `PII detected: ${retryPii.matches.join(', ')}`);
+      }
+
+      draft = {
+        ...retryDraft,
+        tags: (retryDraft.tags || []).map((tag) => String(tag || '').trim()).filter(Boolean).slice(0, 5),
+      };
+      qualityRetriesUsed = retryAttempt;
+      nativeGate = evaluateLlmNativeGate(draft);
+      gatePassed = nativeGate.pass;
+      gateIssueCodes = nativeGate.issues;
+      gateIssueDetails = nativeGate.issueDetails;
+      generationTrace.gate_retries.push({
+        attempt: retryAttempt,
+        pass: gatePassed,
+        issues: gateIssueCodes.slice(0, 20),
+        issue_details: gateIssueDetails.slice(0, 20),
+      });
+
+      console.log('[bp_quality_retry_result]', JSON.stringify({
+        run_id: input.runId,
+        video_id: input.videoId,
+        output_mode: yt2bpOutputMode,
+        attempt: retryAttempt,
+        retry_count: qualityRetriesUsed,
+        pass: gatePassed,
+        issues: gateIssueCodes,
+        issue_details: gateIssueDetails.slice(0, 12),
+        final_mode: gatePassed ? 'retry_pass' : 'pending',
+      }));
+      if (traceContext.db && traceContext.userId) {
+        await safeGenerationTraceWrite({
+          runId: input.runId,
+          op: 'event_gate_retry_result',
+          fn: async () => {
+            await appendGenerationEvent(traceContext.db as any, {
+              runId: input.runId,
+              level: gatePassed ? 'info' : 'warn',
+              event: 'gate_retry_result',
+              payload: {
+                attempt: retryAttempt,
+                output_mode: yt2bpOutputMode,
+                pass: gatePassed,
+                issues: gateIssueCodes,
+                issue_details: gateIssueDetails.slice(0, 20),
+              },
+            });
+          },
+        });
+      }
+      if (gatePassed) {
+        qualityFinalMode = 'retry_pass';
+        break;
+      }
+    }
+
+    generationTrace.gate_final = {
+      mode: qualityFinalMode,
+      pass: gatePassed,
+      issues: gateIssueCodes.slice(0, 20),
+      issue_details: gateIssueDetails.slice(0, 20),
+      retries_used: qualityRetriesUsed,
+    };
   }
   console.log(
     `[yt2bp] run_id=${input.runId} transcript_source=${transcript.source} transcript_chars=${transcript.text.length}`
