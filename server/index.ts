@@ -4092,6 +4092,11 @@ async function createBlueprintFromVideo(db: ReturnType<typeof createClient>, inp
           : goldenFormat.qualityGate.issues,
         bp_quality_retries_used: Number((result.meta as { bp_quality_retries_used?: unknown } | null)?.bp_quality_retries_used || 0),
         bp_quality_final_mode: String((result.meta as { bp_quality_final_mode?: unknown } | null)?.bp_quality_final_mode || 'direct'),
+        bp_trace_version: String((result.meta as { bp_trace_version?: unknown } | null)?.bp_trace_version || 'yt2bp_trace_v1'),
+        bp_trace: (() => {
+          const trace = (result.meta as { bp_trace?: unknown } | null)?.bp_trace;
+          return trace && typeof trace === 'object' ? trace : null;
+        })(),
       },
       banner_url: sourceThumbnailUrl,
       mix_notes: result.draft.notes || null,
@@ -11377,6 +11382,61 @@ async function runYouTubePipeline(input: {
   const contentSafetyConfig = readYt2bpContentSafetyConfig();
   const qualityAttempts = qualityConfig.enabled ? 1 + qualityConfig.retry_policy.max_retries : 1;
   const safetyRetryBudget = contentSafetyConfig.enabled ? contentSafetyConfig.retry_policy.max_retries : 0;
+  const generationTrace = {
+    trace_version: 'yt2bp_trace_v1',
+    run_id: input.runId,
+    video_id: input.videoId,
+    source_tag: input.runId.split('-').slice(1, 2).join('-') || 'unknown',
+    transcript: {
+      source: transcript.source,
+      chars: transcript.text.length,
+      confidence: transcript.confidence,
+    },
+    deterministic_checks: [] as Array<{
+      stage: string;
+      pass: boolean;
+      safety_blocked_topics: string[];
+      pii_matches: string[];
+    }>,
+    quality_judge_runs: [] as Array<{
+      attempt: number;
+      run: number;
+      global_run: number;
+      pass: boolean;
+      overall: number | null;
+      failures: string[];
+      reason?: string;
+    }>,
+    content_safety_runs: [] as Array<{
+      attempt: number;
+      run: number;
+      global_run: number;
+      pass: boolean;
+      failed_criteria: string[];
+      retried_for_safety: boolean;
+    }>,
+    selected_candidate: {
+      overall: null as number | null,
+    },
+    gate_initial: null as null | {
+      pass: boolean;
+      issues: string[];
+      issue_details: string[];
+    },
+    gate_retries: [] as Array<{
+      attempt: number;
+      pass: boolean;
+      issues: string[];
+      issue_details: string[];
+    }>,
+    gate_final: null as null | {
+      mode: 'direct' | 'retry_pass' | 'repaired_after_retry';
+      pass: boolean;
+      issues: string[];
+      issue_details: string[];
+      retries_used: number;
+    },
+  };
   let bestFailingQuality: {
     draft: YouTubeDraft;
     overall: number;
@@ -11424,6 +11484,15 @@ async function runYouTubePipeline(input: {
       const draft = toDraft(rawDraft);
 
       if (!draft.steps.length) {
+        generationTrace.quality_judge_runs.push({
+          attempt,
+          run: attemptRunCount,
+          global_run: globalRunIndex,
+          pass: false,
+          overall: null,
+          failures: ['NO_STEPS'],
+          reason: 'no_steps',
+        });
         console.log(
           `[yt2bp-quality] run_id=${input.runId} attempt=${attempt}/${qualityAttempts} run=${attemptRunCount}/${maxRunsForAttempt} global_run=${globalRunIndex} pass=false reason=no_steps`
         );
@@ -11432,10 +11501,16 @@ async function runYouTubePipeline(input: {
 
       const flattened = flattenDraftText(draft);
       const deterministicSafety = runSafetyChecks(flattened);
+      const pii = runPiiChecks(flattened);
+      generationTrace.deterministic_checks.push({
+        stage: `quality_attempt_${attempt}_run_${attemptRunCount}`,
+        pass: deterministicSafety.ok && pii.ok,
+        safety_blocked_topics: deterministicSafety.ok ? [] : deterministicSafety.blockedTopics,
+        pii_matches: pii.ok ? [] : pii.matches,
+      });
       if (!deterministicSafety.ok) {
         makePipelineError('SAFETY_BLOCKED', `Forbidden topics detected: ${deterministicSafety.blockedTopics.join(', ')}`);
       }
-      const pii = runPiiChecks(flattened);
       if (!pii.ok) {
         makePipelineError('PII_BLOCKED', `PII detected: ${pii.matches.join(', ')}`);
       }
@@ -11457,6 +11532,14 @@ async function runYouTubePipeline(input: {
           async () => scoreYt2bpQualityWithOpenAI(draft, qualityConfig),
         );
         const failIds = graded.failures.join(',') || 'none';
+        generationTrace.quality_judge_runs.push({
+          attempt,
+          run: attemptRunCount,
+          global_run: globalRunIndex,
+          pass: graded.ok,
+          overall: Number.isFinite(graded.overall) ? graded.overall : null,
+          failures: graded.failures || [],
+        });
         console.log(
           `[yt2bp-quality] run_id=${input.runId} attempt=${attempt}/${qualityAttempts} run=${attemptRunCount}/${maxRunsForAttempt} global_run=${globalRunIndex} pass=${graded.ok} overall=${graded.overall.toFixed(2)} failures=${failIds}`
         );
@@ -11481,6 +11564,14 @@ async function runYouTubePipeline(input: {
             async () => scoreYt2bpContentSafetyWithOpenAI(draft, contentSafetyConfig),
           );
           const flagged = safetyScore.failedCriteria.join(',') || 'none';
+          generationTrace.content_safety_runs.push({
+            attempt,
+            run: attemptRunCount,
+            global_run: globalRunIndex,
+            pass: safetyScore.ok,
+            failed_criteria: safetyScore.failedCriteria || [],
+            retried_for_safety: !safetyScore.ok && safetyRetriesUsed < safetyRetryBudget && attemptRunCount < maxRunsForAttempt,
+          });
           console.log(
             `[yt2bp-content-safety] run_id=${input.runId} attempt=${attempt}/${qualityAttempts} run=${attemptRunCount}/${maxRunsForAttempt} global_run=${globalRunIndex} pass=${safetyScore.ok} flagged=${flagged}`
           );
@@ -11506,6 +11597,15 @@ async function runYouTubePipeline(input: {
         }
         const message = error instanceof Error ? error.message : String(error);
         const phase = message.toLowerCase().includes('safety') ? 'yt2bp-content-safety' : 'yt2bp-quality';
+        generationTrace.quality_judge_runs.push({
+          attempt,
+          run: attemptRunCount,
+          global_run: globalRunIndex,
+          pass: false,
+          overall: null,
+          failures: ['JUDGE_ERROR'],
+          reason: message.slice(0, 180),
+        });
         console.log(
           `[${phase}] run_id=${input.runId} attempt=${attempt}/${qualityAttempts} run=${attemptRunCount}/${maxRunsForAttempt} pass=false judge_error=${message.slice(0, 180)}`
         );
@@ -11517,6 +11617,7 @@ async function runYouTubePipeline(input: {
   const selected = passingCandidates
     .slice()
     .sort((a, b) => b.overall - a.overall)[0];
+  generationTrace.selected_candidate.overall = selected ? selected.overall : null;
   if (!selected) {
     if (bestFailingQuality) {
       console.log(
@@ -11542,6 +11643,11 @@ async function runYouTubePipeline(input: {
     ...formatGoldenQualityIssueDetails(goldenFormat.qualityGate.detail),
   ];
   let gatePassed = goldenFormat.structureGate.ok && goldenFormat.qualityGate.ok;
+  generationTrace.gate_initial = {
+    pass: gatePassed,
+    issues: gateIssueCodes.slice(0, 20),
+    issue_details: gateIssueDetails.slice(0, 20),
+  };
 
   console.log('[bp_quality_gate_eval]', JSON.stringify({
     run_id: input.runId,
@@ -11622,6 +11728,12 @@ async function runYouTubePipeline(input: {
       ...formatGoldenQualityIssueDetails(goldenFormat.qualityGate.detail),
     ];
     gatePassed = goldenFormat.structureGate.ok && goldenFormat.qualityGate.ok;
+    generationTrace.gate_retries.push({
+      attempt: retryAttempt,
+      pass: gatePassed,
+      issues: gateIssueCodes.slice(0, 20),
+      issue_details: gateIssueDetails.slice(0, 20),
+    });
 
     console.log('[bp_quality_retry_result]', JSON.stringify({
       run_id: input.runId,
@@ -11665,6 +11777,13 @@ async function runYouTubePipeline(input: {
       final_mode: qualityFinalMode,
     }));
   }
+  generationTrace.gate_final = {
+    mode: qualityFinalMode,
+    pass: gatePassed,
+    issues: gateIssueCodes.slice(0, 20),
+    issue_details: gateIssueDetails.slice(0, 20),
+    retries_used: qualityRetriesUsed,
+  };
 
   draft = {
     ...draft,
@@ -11738,6 +11857,8 @@ async function runYouTubePipeline(input: {
       bp_quality_issues: gateIssueCodes,
       bp_quality_retries_used: qualityRetriesUsed,
       bp_quality_final_mode: qualityFinalMode,
+      bp_trace_version: generationTrace.trace_version,
+      bp_trace: generationTrace,
       duration_ms: Date.now() - startedAt,
     },
   };
