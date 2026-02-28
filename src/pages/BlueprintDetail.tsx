@@ -894,6 +894,33 @@ export default function BlueprintDetail() {
                   <span className="ml-1 text-xs">{blueprint.likes_count}</span>
                 </Button>
               </div>
+
+              {useGoldenRender ? (
+                <div className="flex items-center justify-start pt-1">
+                  <div className="inline-flex items-center gap-1 rounded-full border border-border/40 bg-muted/20 p-1">
+                    {summaryExpertiseLevels.map((level) => {
+                      const active = summaryExpertiseLevel === level.key;
+                      const disabled = level.key === 'eli5' && !hasEli5Content;
+                      return (
+                        <Button
+                          key={level.key}
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className={`h-7 rounded-full px-2.5 text-xs ${active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'} ${disabled ? 'opacity-50 cursor-not-allowed hover:text-muted-foreground' : ''}`}
+                          onClick={() => setSummaryExpertiseLevel(level.key)}
+                          aria-pressed={active}
+                          aria-label={`Set summary level to ${level.ariaLabel}`}
+                          title={level.ariaLabel}
+                          disabled={disabled}
+                        >
+                          {level.label}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
             </PageSection>
 
             <PageDivider />
@@ -906,32 +933,6 @@ export default function BlueprintDetail() {
               {useGoldenRender ? (
                 <>
                   {renderGoldenGroup(effectiveTopSummarySection ? [effectiveTopSummarySection] : [])}
-                  {effectiveTopSummarySection ? (
-                    <div className="flex items-center justify-start">
-                      <div className="inline-flex items-center gap-1 rounded-full border border-border/40 bg-muted/20 p-1">
-                        {summaryExpertiseLevels.map((level) => {
-                          const active = summaryExpertiseLevel === level.key;
-                          const disabled = level.key === 'eli5' && !hasEli5Content;
-                          return (
-                            <Button
-                              key={level.key}
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className={`h-7 rounded-full px-2.5 text-xs ${active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'} ${disabled ? 'opacity-50 cursor-not-allowed hover:text-muted-foreground' : ''}`}
-                              onClick={() => setSummaryExpertiseLevel(level.key)}
-                              aria-pressed={active}
-                              aria-label={`Set summary level to ${level.ariaLabel}`}
-                              title={level.ariaLabel}
-                              disabled={disabled}
-                            >
-                              {level.label}
-                            </Button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ) : null}
                   {renderBanner}
                   {renderGoldenGroup(takeawaysSection ? [takeawaysSection] : [])}
                   {renderGoldenGroup(effectiveBleupSection ? [effectiveBleupSection] : [])}
