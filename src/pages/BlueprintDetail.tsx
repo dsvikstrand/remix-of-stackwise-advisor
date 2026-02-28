@@ -128,7 +128,7 @@ function isNarrativeKey(key: string) {
 function sectionDisplayTitle(rawTitle: string) {
   const key = normalizeHeadingKey(rawTitle);
   if (isSummaryKey(key)) return 'About';
-  if (isBleupKey(key)) return 'Content';
+  if (isBleupKey(key)) return 'Storyline';
   return rawTitle;
 }
 
