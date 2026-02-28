@@ -289,6 +289,7 @@ export default function BlueprintDetail() {
   const [comment, setComment] = useState('');
   const [isBannerExpanded, setIsBannerExpanded] = useState(false);
   const [interactiveSectionsExpanded, setInteractiveSectionsExpanded] = useState(false);
+  const [takeawaysExpanded, setTakeawaysExpanded] = useState(false);
   const [activeInteractiveTab, setActiveInteractiveTab] = useState('');
   const [summaryExpertiseLevel, setSummaryExpertiseLevel] = useState<SummaryExpertiseLevel>('default');
   const location = useLocation();
@@ -335,6 +336,7 @@ export default function BlueprintDetail() {
 
   useEffect(() => {
     setInteractiveSectionsExpanded(false);
+    setTakeawaysExpanded(false);
     setActiveInteractiveTab('');
     setSummaryExpertiseLevel('default');
   }, [blueprint?.id]);
@@ -577,6 +579,7 @@ export default function BlueprintDetail() {
         {group.map((step, index) => {
           const sectionKey = normalizeHeadingKey(step.title);
           const isTopSummarySection = isSummaryKey(sectionKey);
+          const isTakeawaysSection = isTakeawaysKey(sectionKey);
           const isBleupSection = isBleupKey(sectionKey);
           const summarySlides = isBleupSection ? splitSummaryIntoSlides(step.description) : [];
           const parsedDescription = parseDescriptionBlocks(step.description);
@@ -584,6 +587,11 @@ export default function BlueprintDetail() {
             ...parsedDescription.bullets,
             ...step.items.map((item) => formatStepItem(item)),
           ];
+          const takeawaysPreviewRows = 3;
+          const takeawaysCanExpand = isTakeawaysSection && combinedBullets.length > takeawaysPreviewRows;
+          const takeawaysVisibleBullets = takeawaysCanExpand && !takeawaysExpanded
+            ? combinedBullets.slice(0, takeawaysPreviewRows)
+            : combinedBullets;
           const useSummarySlider =
             isBleupSection &&
             step.description.trim().length > 0 &&
@@ -606,13 +614,41 @@ export default function BlueprintDetail() {
                     <p className="text-sm text-muted-foreground whitespace-pre-line">{parsedDescription.text}</p>
                   ) : null}
                   {combinedBullets.length > 0 && !isTopSummarySection ? (
-                    <ul className="space-y-1 list-disc pl-5">
-                      {combinedBullets.map((itemText, itemIndex) => (
-                        <li key={`${step.id || index}-${itemIndex}`} className="text-sm leading-snug">
-                          {itemText}
-                        </li>
-                      ))}
-                    </ul>
+                    <div
+                      role={takeawaysCanExpand ? 'button' : undefined}
+                      tabIndex={takeawaysCanExpand ? 0 : -1}
+                      className={takeawaysCanExpand ? 'cursor-pointer' : ''}
+                      onClick={() => {
+                        if (!takeawaysCanExpand) return;
+                        setTakeawaysExpanded((current) => !current);
+                      }}
+                      onKeyDown={(event) => {
+                        if (!takeawaysCanExpand) return;
+                        if (event.key !== 'Enter' && event.key !== ' ') return;
+                        event.preventDefault();
+                        setTakeawaysExpanded((current) => !current);
+                      }}
+                      aria-label={takeawaysCanExpand ? (takeawaysExpanded ? 'Collapse takeaways' : 'Expand takeaways') : undefined}
+                    >
+                      <ul className="space-y-1 list-disc pl-5">
+                        {(isTakeawaysSection ? takeawaysVisibleBullets : combinedBullets).map((itemText, itemIndex) => (
+                          <li key={`${step.id || index}-${itemIndex}`} className="text-sm leading-snug">
+                            {itemText}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {takeawaysCanExpand ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-0 text-xs text-muted-foreground hover:text-foreground"
+                      onClick={() => setTakeawaysExpanded((current) => !current)}
+                    >
+                      {takeawaysExpanded ? 'Show less' : 'Show more'}
+                    </Button>
                   ) : null}
                 </>
               )}
