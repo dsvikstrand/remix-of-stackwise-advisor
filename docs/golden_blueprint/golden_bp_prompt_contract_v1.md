@@ -11,6 +11,7 @@ Owner intent: Build blueprints people choose to read for value, not because they
 - `v1.1` (2026-02-27): Added canonical POS folder strategy (local + Oracle path), cherry-pick subset guidance, and final generation directive layer.
 - `v1.2` (2026-02-27): Replaced placeholder/order prose sections with deterministic enforcement contract, moved changelog to top, and added final job recap.
 - `v1.3` (2026-02-27): Removed `Tradeoffs` from active section contract, reframed `Summary` as intro/prerequisite context, reduced Bleup density target to fewer richer slides, and tightened parenthetical-overuse guidance.
+- `v1.4` (2026-02-28): Made all six sections explicitly required (`Summary`, `Takeaways`, `Bleup`, `Deep Dive`, `Practical Rules`, `Open Questions`) and added explicit retry-on-missing-section language.
 
 ## Purpose
 
@@ -48,7 +49,7 @@ Keep bullets tight. `Takeaways`, `Deep Dive`, `Practical Rules`, and `Open Quest
 
 ### Golden structure target
 
-The default section sequence is `Takeaways`, `Bleup`, `Deep Dive`, `Practical Rules`, and `Open Questions`, with optional domain adaptation for non-research content only when semantic intent is preserved. `Takeaways` is the fast-value entry point. `Bleup` is the core narrative section that carries the main argument in flowing prose. The remaining sections convert understanding into mechanism clarity, execution rules, and explicit unknowns.
+The required section sequence is `Summary`, `Takeaways`, `Bleup`, `Deep Dive`, `Practical Rules`, and `Open Questions`. All six are mandatory. If any required section is missing or empty, the output is considered a failed generation and should be retried. `Summary` is the intro context layer, `Takeaways` is the fast-value entry point, `Bleup` is the core narrative section, and the remaining sections convert understanding into mechanism clarity, execution rules, and explicit unknowns.
 
 Sections must not duplicate each other semantically. If a sentence appears in one section, it should not reappear with minor wording changes elsewhere.
 
@@ -59,6 +60,8 @@ Output must be strict valid JSON in the expected generation schema. Section titl
 All deep sections target three to five complete bullets each. Empty sections, one-line placeholders, repeated boilerplate tails, and malformed bullets (for example `-.`) are hard failures. Parenthetical expansions like `(XYZ)` should be used sparingly and only when they add necessary clarity.
 
 `Summary` is an intro layer, not the bulk layer. It should provide a concise topic orientation and prerequisite context at an ELI15 depth. The bulk payload belongs in `Bleup`.
+
+All required sections must exist in every output: `Summary`, `Takeaways`, `Bleup`, `Deep Dive`, `Practical Rules`, `Open Questions`. Missing any required section is a hard fail that should trigger eval failure and a retry.
 
 ## Section Contract
 
@@ -90,6 +93,7 @@ Open Questions defines what remains unresolved in a useful way. It should provid
 
 | Section | Required shape | Depth target | Fail conditions |
 |---|---|---|---|
+| `Summary` | concise intro context paragraph block | orientation + prerequisites without detail overload | missing section, empty content, dense mechanism dumping |
 | `Takeaways` | 3-4 complete bullets, each 1-2 sentences | fast-skim value in ~10-20 seconds | clipped bullets, generic labels, keyword-only lines, overlong bullets |
 | `Bleup` | 2-3 coherent content-rich paragraphs/slides | primary narrative payload | random fact stacking, duplicated lines, thin filler slides, list artifacts |
 | `Deep Dive` | 3-5 complete bullets, each 1-2 sentences | mechanism/context clarity | generic off-domain bullets, stubs, repeated boilerplate tails, overlong bullets |
@@ -150,7 +154,7 @@ Retries should use the same prompt template and inject quality issues through `<
 
 ## Final Generation Directive (Last Instruction Layer)
 
-End the prompt context with a short final directive that reasserts the job and source hierarchy. The directive should explicitly say that the model must now generate the blueprint using `<SOURCE_TRANSCRIPT_CONTEXT>` as the only factual source, while using `<POSITIVE_REFERENCE_PATHS>` only for vibe calibration (tone, pacing, and engagement feel). It should explicitly ban importing facts, numbers, examples, and distinctive wording from references. It should end with a clear "generate now" instruction tied to the required JSON schema and section contract.
+End the prompt context with a short final directive that reasserts the job and source hierarchy. The directive should explicitly say that the model must now generate the blueprint using `<SOURCE_TRANSCRIPT_CONTEXT>` as the only factual source, while using `<POSITIVE_REFERENCE_PATHS>` only for vibe calibration (tone, pacing, and engagement feel). It should explicitly ban importing facts, numbers, examples, and distinctive wording from references. It should require all six sections (`Summary`, `Takeaways`, `Bleup`, `Deep Dive`, `Practical Rules`, `Open Questions`) and make clear that missing any required section should trigger eval failure and retry. It should end with a clear "generate now" instruction tied to the required JSON schema and section contract.
 
 ## Response Format (Strict JSON Shape)
 
@@ -192,6 +196,8 @@ Quality issue details (retry only, else `none`):
 
 Additional instructions:
 {{ADDITIONAL_INSTRUCTIONS}}
+
+Required sections (missing any section triggers eval fail + retry): Summary, Takeaways, Bleup, Deep Dive, Practical Rules, Open Questions.
 
 Source transcript context (ONLY factual source of truth):
 {{SOURCE_TRANSCRIPT_CONTEXT}}
@@ -243,4 +249,4 @@ Rewrite direction: enforce domain-native vocabulary and decision framing per top
 
 ## Final Job Recap
 
-Write a high-value blueprint in direct creator voice that feels human, useful, and discussion-worthy. Use transcript context as the only factual source, use Oracle POS references only for vibe calibration, follow the section contract exactly, and return strict JSON in the required shape.
+Write a high-value blueprint in direct creator voice that feels human, useful, and discussion-worthy. Use transcript context as the only factual source, use Oracle POS references only for vibe calibration, include all required sections (`Summary`, `Takeaways`, `Bleup`, `Deep Dive`, `Practical Rules`, `Open Questions`) or expect eval failure with retry, follow the section contract exactly, and return strict JSON in the required shape.

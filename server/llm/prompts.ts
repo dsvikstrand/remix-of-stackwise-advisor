@@ -356,6 +356,8 @@ export function buildYouTubeQualityRetryInstructions(input: {
     'Fix all listed quality failures in one pass.',
     'Return strict JSON in the required format only.',
     'Do not use meta framing like "this video", "this blueprint", or "the transcript".',
+    'All required sections must be present and non-empty: Summary, Takeaways, Bleup, Deep Dive, Practical Rules, Open Questions.',
+    'If any required section is missing or empty, regenerate full output before returning.',
     '',
     'Failed issue codes:',
     ...(codes.length > 0 ? codes.map((code) => `- ${code}`) : ['- none']),

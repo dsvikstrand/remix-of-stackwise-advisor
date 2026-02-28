@@ -11639,6 +11639,24 @@ function evaluateLlmNativeGate(draft: YouTubeDraft): LlmNativeGateResult {
     sectionMap.set(key, step);
   }
 
+  const requiredNarrativeSections: Array<{ key: string; code: string }> = [
+    { key: 'summary', code: 'SUMMARY' },
+    { key: 'bleup', code: 'BLEUP' },
+  ];
+  for (const target of requiredNarrativeSections) {
+    const section = sectionMap.get(target.key);
+    if (!section) {
+      issues.push(`${target.code}_MISSING`);
+      issueDetails.push(`${target.code}_MISSING section=${target.key}`);
+      continue;
+    }
+    const notes = String(section.notes || '').trim();
+    if (!notes) {
+      issues.push(`${target.code}_EMPTY`);
+      issueDetails.push(`${target.code}_EMPTY section=${section.name}`);
+    }
+  }
+
   const targetSections: Array<{ key: string; code: string }> = [
     { key: 'takeaways', code: 'TAKEAWAYS' },
     { key: 'deep_dive', code: 'DEEP_DIVE' },
