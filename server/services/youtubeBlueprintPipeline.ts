@@ -15,6 +15,7 @@ type YouTubeDraft = {
   title: string;
   description: string;
   steps: YouTubeDraftStep[];
+  eli5Steps: YouTubeDraftStep[];
   notes: string | null;
   tags: string[];
   summaryVariants: {
@@ -146,7 +147,7 @@ async function runYouTubePipeline(input: {
       });
     }
     const client = createLLMClient();
-    let youtubePromptRenderCount = 0;
+    const promptRenderCounts: Record<string, number> = {};
     const generationModelEventCallback = (event: GenerationModelEvent) => {
       if (!traceContext.db || !traceContext.userId) return;
       void safeGenerationTraceWrite({
@@ -186,7 +187,6 @@ async function runYouTubePipeline(input: {
       });
     };
     const generationPromptEventCallback = (event: GenerationPromptEvent) => {
-      if (event.operation !== 'generateYouTubeBlueprint') return;
       const promptText = String(event.prompt || '');
       const instructionsText = String(event.instructions || '');
       const maxPromptChars = 120_000;
@@ -195,11 +195,13 @@ async function runYouTubePipeline(input: {
       const instructionsStored = instructionsText.slice(0, maxInstructionsChars);
       const promptTruncated = promptText.length > maxPromptChars;
       const instructionsTruncated = instructionsText.length > maxInstructionsChars;
-      youtubePromptRenderCount += 1;
+      const renderIndex = (promptRenderCounts[event.operation] || 0) + 1;
+      promptRenderCounts[event.operation] = renderIndex;
 
       console.log('[yt2bp_prompt_rendered]', JSON.stringify({
         run_id: input.runId,
-        render_index: youtubePromptRenderCount,
+        operation: event.operation,
+        render_index: renderIndex,
         prompt_chars: promptText.length,
         prompt_truncated: promptTruncated,
         instructions_chars: instructionsText.length,
@@ -216,7 +218,7 @@ async function runYouTubePipeline(input: {
             event: 'prompt_rendered',
             payload: {
               operation: event.operation,
-              render_index: youtubePromptRenderCount,
+              render_index: renderIndex,
               prompt_chars: promptText.length,
               prompt_truncated: promptTruncated,
               prompt: promptStored,
@@ -348,18 +350,49 @@ async function runYouTubePipeline(input: {
     const summaryDefault = normalizeSummaryVariantText(
       rawDraft.summary_variants?.default || summaryStepNotes || rawDraft.description || '',
     );
-    const summaryEli5 = normalizeSummaryVariantText(rawDraft.summary_variants?.eli5 || '');
     return {
       title: rawDraft.title?.trim() || 'YouTube Blueprint',
       description: rawDraft.description?.trim() || 'AI-generated blueprint from video transcript.',
       steps: normalizedSteps,
+      eli5Steps: [],
       notes: rawDraft.notes?.trim() || null,
       tags: (rawDraft.tags || []).map((tag) => tag.trim()).filter(Boolean).slice(0, 8),
       summaryVariants: {
         default: summaryDefault,
-        eli5: summaryEli5,
+        eli5: '',
       },
     };
+  };
+
+  const buildPass1BlueprintJson = (draft: YouTubeDraft) => JSON.stringify({
+    title: draft.title,
+    description: draft.description,
+    summary: draft.summaryVariants.default || draft.description,
+    steps: draft.steps,
+    notes: draft.notes || null,
+    tags: draft.tags || [],
+  });
+
+  const buildEli5Steps = (defaultSteps: YouTubeDraftStep[], candidateSteps: YouTubeDraftStep[]) => {
+    if (!Array.isArray(defaultSteps) || defaultSteps.length === 0) return [] as YouTubeDraftStep[];
+    const byCanonical = new Map<string, YouTubeDraftStep>();
+    candidateSteps.forEach((step) => {
+      const key = canonicalSectionName(String(step.name || ''));
+      if (!key || byCanonical.has(key)) return;
+      byCanonical.set(key, step);
+    });
+    return defaultSteps.map((defaultStep, index) => {
+      const key = canonicalSectionName(defaultStep.name);
+      const byName = key ? byCanonical.get(key) : null;
+      const byIndex = candidateSteps[index] || null;
+      const source = byName || byIndex || null;
+      const notes = String(source?.notes || '').trim() || defaultStep.notes;
+      return {
+        name: defaultStep.name,
+        notes,
+        timestamp: source?.timestamp ?? defaultStep.timestamp ?? null,
+      };
+    });
   };
 
   let safetyRetriesUsed = 0;
@@ -1161,6 +1194,119 @@ Keep section bullets concise:
   console.log(
     `[yt2bp] run_id=${input.runId} transcript_source=${transcript.source} transcript_chars=${transcript.text.length}`
   );
+
+  try {
+    const pass1BlueprintJson = buildPass1BlueprintJson(draft);
+    const pass2 = await runWithProviderRetry(
+      {
+        providerKey: 'llm_generate_blueprint_eli5_transform',
+        db: serviceDb,
+        maxAttempts: providerRetryDefaults.llmAttempts,
+        timeoutMs: providerRetryDefaults.llmTimeoutMs,
+        baseDelayMs: 300,
+        jitterMs: 200,
+      },
+      async () => client.generateYouTubeBlueprintPass2Transform({
+        transcript: transcript.text,
+        pass1BlueprintJson,
+      }, {
+        onGenerationModelEvent: generationModelEventCallback,
+        onGenerationPromptEvent: generationPromptEventCallback,
+      }),
+    );
+    const candidateEli5Steps = (pass2.eli5_steps || [])
+      .map((step) => ({
+        name: String(step.name || '').trim(),
+        notes: String(step.notes || '').trim(),
+        timestamp: step.timestamp?.trim() || null,
+      }))
+      .filter((step) => step.name && step.notes);
+    const mergedEli5Steps = buildEli5Steps(draft.steps, candidateEli5Steps);
+    const summaryFromPass2 = normalizeSummaryVariantText(pass2.eli5_summary || '');
+    const summaryFromSteps = normalizeSummaryVariantText(
+      mergedEli5Steps.find((step) => canonicalSectionName(step.name) === 'summary')?.notes || '',
+    );
+    const mergedSummaryEli5 = summaryFromPass2 || summaryFromSteps || draft.summaryVariants.default;
+
+    const eli5Flattened = [
+      mergedSummaryEli5,
+      ...mergedEli5Steps.flatMap((step) => [step.name, step.notes, step.timestamp || '']),
+    ].filter(Boolean).join('\n').toLowerCase();
+    const eli5Safety = runSafetyChecks(eli5Flattened);
+    if (!eli5Safety.ok) {
+      if (yt2bpSafetyBlockEnabled) {
+        makePipelineError('SAFETY_BLOCKED', `Forbidden topics detected: ${eli5Safety.blockedTopics.join(', ')}`);
+      } else {
+        await bypassSafetyBlock({
+          stage: 'eli5_transform',
+          blockedTopics: eli5Safety.blockedTopics,
+          attempt: 1,
+          run: 1,
+          globalRun: 1,
+        });
+      }
+    }
+    const eli5Pii = runPiiChecks(eli5Flattened);
+    if (!eli5Pii.ok) {
+      makePipelineError('PII_BLOCKED', `PII detected: ${eli5Pii.matches.join(', ')}`);
+    }
+
+    draft = {
+      ...draft,
+      eli5Steps: mergedEli5Steps,
+      summaryVariants: {
+        ...draft.summaryVariants,
+        eli5: mergedSummaryEli5,
+      },
+    };
+
+    if (traceContext.db && traceContext.userId) {
+      await safeGenerationTraceWrite({
+        runId: input.runId,
+        op: 'event_pass2_transform_succeeded',
+        fn: async () => {
+          await appendGenerationEvent(traceContext.db as any, {
+            runId: input.runId,
+            event: 'pass2_transform_succeeded',
+            payload: {
+              eli5_step_count: mergedEli5Steps.length,
+              eli5_summary_chars: mergedSummaryEli5.length,
+            },
+          });
+        },
+      });
+    }
+  } catch (error) {
+    console.warn('[yt2bp_pass2_transform_failed]', JSON.stringify({
+      run_id: input.runId,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    draft = {
+      ...draft,
+      eli5Steps: draft.steps.map((step) => ({ ...step })),
+      summaryVariants: {
+        ...draft.summaryVariants,
+        eli5: draft.summaryVariants.default,
+      },
+    };
+    if (traceContext.db && traceContext.userId) {
+      await safeGenerationTraceWrite({
+        runId: input.runId,
+        op: 'event_pass2_transform_failed',
+        fn: async () => {
+          await appendGenerationEvent(traceContext.db as any, {
+            runId: input.runId,
+            level: 'warn',
+            event: 'pass2_transform_failed',
+            payload: {
+              error: error instanceof Error ? error.message : String(error),
+              fallback: 'default_copied_to_eli5',
+            },
+          });
+        },
+      });
+    }
+  }
 
   let reviewSummary: string | null = null;
   if (input.generateReview) {

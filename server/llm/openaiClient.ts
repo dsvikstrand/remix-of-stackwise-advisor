@@ -6,11 +6,14 @@ import type {
   BlueprintAnalysisRequest,
   ChannelLabelRequest,
   ChannelLabelResult,
+  GenerationOperation,
   GenerationPromptEvent,
   GenerationModelEvent,
   LLMGenerationOptions,
   LLMClient,
   YouTubeBlueprintResult,
+  YouTubeBlueprintPass2TransformResult,
+  YouTubeBlueprintPass2TransformRequest,
   YouTubeBlueprintRequest,
 } from './types';
 import {
@@ -19,6 +22,7 @@ import {
   YOUTUBE_BLUEPRINT_SYSTEM_PROMPT,
   buildBlueprintUserPrompt,
   buildChannelLabelUserPrompt,
+  buildYouTubeBlueprintPass2TransformPrompt,
   buildYouTubeBlueprintUserPrompt,
   extractJson,
 } from './prompts';
@@ -39,6 +43,17 @@ const YouTubeBlueprintValidator = z.object({
       timestamp: z.string().nullable().optional(),
     })
   ).min(1),
+});
+
+const YouTubeBlueprintPass2TransformValidator = z.object({
+  eli5_steps: z.array(
+    z.object({
+      name: z.string(),
+      notes: z.string(),
+      timestamp: z.string().nullable().optional(),
+    }),
+  ).min(1),
+  eli5_summary: z.string(),
 });
 
 const ChannelLabelValidator = z.object({
@@ -74,7 +89,7 @@ function isModelCompatibilityError(error: unknown) {
 }
 
 function logGenerationModelEvent(event: 'primary_success' | 'fallback_success' | 'request_failed', payload: {
-  operation: 'generateYouTubeBlueprint';
+  operation: GenerationOperation;
   model_used: string;
   fallback_used: boolean;
   fallback_model?: string | null;
@@ -101,7 +116,7 @@ export function createOpenAIClient(): LLMClient {
   const client = new OpenAI({ apiKey });
 
   async function runGenerationRequest(input: {
-    operation: 'generateYouTubeBlueprint';
+    operation: GenerationOperation;
     instructions?: string;
     prompt: string;
     options?: LLMGenerationOptions;
@@ -277,6 +292,24 @@ export function createOpenAIClient(): LLMClient {
       }
       const parsed = JSON.parse(extractJson(outputText));
       return YouTubeBlueprintValidator.parse(parsed);
+    },
+    async generateYouTubeBlueprintPass2Transform(
+      input: YouTubeBlueprintPass2TransformRequest,
+      options?: LLMGenerationOptions,
+    ): Promise<YouTubeBlueprintPass2TransformResult> {
+      const response = await runGenerationRequest({
+        operation: 'generateYouTubeBlueprintPass2Transform',
+        instructions: YOUTUBE_BLUEPRINT_SYSTEM_PROMPT,
+        prompt: buildYouTubeBlueprintPass2TransformPrompt(input),
+        options,
+      });
+
+      const outputText = response.output_text?.trim();
+      if (!outputText) {
+        throw new Error('No output text from OpenAI');
+      }
+      const parsed = JSON.parse(extractJson(outputText));
+      return YouTubeBlueprintPass2TransformValidator.parse(parsed);
     },
     async generateChannelLabel(input: ChannelLabelRequest): Promise<ChannelLabelResult> {
       const response = await client.responses.create({

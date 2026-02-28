@@ -67,6 +67,7 @@ export type BlueprintCreationDeps = {
         default: string;
         eli5: string;
       };
+      eli5Steps: Array<{ name: string; notes: string; timestamp: string | null }>;
     };
     review: {
       summary: string | null;
@@ -181,6 +182,14 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
           bp_summary_variants: {
             default: deps.normalizeSummaryVariantText(result.draft.summaryVariants?.default || ''),
             eli5: deps.normalizeSummaryVariantText(result.draft.summaryVariants?.eli5 || ''),
+          },
+          bp_step_variants: {
+            default: deps.mapDraftStepsForBlueprint(result.draft.steps),
+            eli5: deps.mapDraftStepsForBlueprint(
+              Array.isArray(result.draft.eli5Steps) && result.draft.eli5Steps.length > 0
+                ? result.draft.eli5Steps
+                : result.draft.steps,
+            ),
           },
           bp_trace_version: String((result.meta as { bp_trace_version?: unknown } | null)?.bp_trace_version || 'yt2bp_trace_v2'),
           bp_run_id: result.run_id,

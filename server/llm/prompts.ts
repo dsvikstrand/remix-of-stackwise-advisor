@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type {
   BlueprintAnalysisRequest,
+  YouTubeBlueprintPass2TransformRequest,
   YouTubeBlueprintRequest,
 } from './types';
 
@@ -47,6 +48,7 @@ Write the review now following the format rules.`;
 export const YOUTUBE_BLUEPRINT_SYSTEM_PROMPT = '';
 
 const YOUTUBE_PROMPT_TEMPLATE_RELATIVE_PATH = 'docs/golden_blueprint/golden_bp_prompt_contract_v1.md';
+const YOUTUBE_PASS2_PROMPT_TEMPLATE_RELATIVE_PATH = 'docs/golden_blueprint/golden_bp_pass2_transform_prompt_v1.md';
 const YOUTUBE_POS_VIBE_ORACLE_DIR = '/home/ubuntu/remix-of-stackwise-advisor/docs/golden_blueprint/reddit/clean/pos';
 const YOUTUBE_REQUIRED_TEMPLATE_KEYS = [
   'VIDEO_URL',
@@ -56,34 +58,69 @@ const YOUTUBE_REQUIRED_TEMPLATE_KEYS = [
   'ORACLE_POS_DIR',
   'POSITIVE_REFERENCE_EXCERPTS',
 ] as const;
+const YOUTUBE_PASS2_REQUIRED_TEMPLATE_KEYS = [
+  'PASS1_BLUEPRINT_JSON',
+  'SOURCE_TRANSCRIPT_CONTEXT',
+  'POSITIVE_REFERENCE_PATHS',
+  'POSITIVE_REFERENCE_EXCERPTS',
+  'TRANSFORM_CONSTRAINTS',
+  'LENGTH_PARITY_TARGET',
+  'ADDITIONAL_INSTRUCTIONS',
+] as const;
 
 let youtubePromptTemplateCache: string | null = null;
+let youtubePass2PromptTemplateCache: string | null = null;
 
-function readYouTubePromptTemplate() {
-  if (youtubePromptTemplateCache) return youtubePromptTemplateCache;
-  const overridePath = String(process.env.YOUTUBE_BLUEPRINT_PROMPT_TEMPLATE_PATH || '').trim();
+function readPromptTemplate(input: {
+  cache: string | null;
+  overridePath: string;
+  relativePath: string;
+  loadFailedCode: string;
+}) {
+  if (input.cache) return input.cache;
   const candidates = [
-    overridePath,
-    path.resolve(process.cwd(), YOUTUBE_PROMPT_TEMPLATE_RELATIVE_PATH),
+    input.overridePath,
+    path.resolve(process.cwd(), input.relativePath),
   ].filter(Boolean);
   for (const filePath of candidates) {
     try {
       const raw = fs.readFileSync(filePath, 'utf8');
       if (raw.trim()) {
-        youtubePromptTemplateCache = raw;
-        return youtubePromptTemplateCache;
+        return raw;
       }
     } catch {
       // continue to next path
     }
   }
-  throw new Error('YOUTUBE_PROMPT_TEMPLATE_LOAD_FAILED');
+  throw new Error(input.loadFailedCode);
 }
 
-function assertTemplateHasRuntimePlaceholders(template: string) {
-  const missing = YOUTUBE_REQUIRED_TEMPLATE_KEYS.filter((key) => !template.includes(`{{${key}}}`));
+function readYouTubePromptTemplate() {
+  const template = readPromptTemplate({
+    cache: youtubePromptTemplateCache,
+    overridePath: String(process.env.YOUTUBE_BLUEPRINT_PROMPT_TEMPLATE_PATH || '').trim(),
+    relativePath: YOUTUBE_PROMPT_TEMPLATE_RELATIVE_PATH,
+    loadFailedCode: 'YOUTUBE_PROMPT_TEMPLATE_LOAD_FAILED',
+  });
+  youtubePromptTemplateCache = template;
+  return template;
+}
+
+function readYouTubePass2PromptTemplate() {
+  const template = readPromptTemplate({
+    cache: youtubePass2PromptTemplateCache,
+    overridePath: String(process.env.YOUTUBE_BLUEPRINT_PASS2_PROMPT_TEMPLATE_PATH || '').trim(),
+    relativePath: YOUTUBE_PASS2_PROMPT_TEMPLATE_RELATIVE_PATH,
+    loadFailedCode: 'YOUTUBE_PASS2_PROMPT_TEMPLATE_LOAD_FAILED',
+  });
+  youtubePass2PromptTemplateCache = template;
+  return template;
+}
+
+function assertTemplateHasRuntimePlaceholders(template: string, requiredKeys: readonly string[], errorPrefix: string) {
+  const missing = requiredKeys.filter((key) => !template.includes(`{{${key}}}`));
   if (missing.length > 0) {
-    throw new Error(`YOUTUBE_PROMPT_TEMPLATE_PLACEHOLDERS_MISSING:${missing.join(',')}`);
+    throw new Error(`${errorPrefix}:${missing.join(',')}`);
   }
 }
 
@@ -225,7 +262,11 @@ export function buildYouTubeBlueprintUserPrompt(input: YouTubeBlueprintRequest) 
   });
 
   const template = readYouTubePromptTemplate();
-  assertTemplateHasRuntimePlaceholders(template);
+  assertTemplateHasRuntimePlaceholders(
+    template,
+    YOUTUBE_REQUIRED_TEMPLATE_KEYS,
+    'YOUTUBE_PROMPT_TEMPLATE_PLACEHOLDERS_MISSING',
+  );
 
   return renderPromptTemplate(template, {
     VIDEO_URL: videoUrl,
@@ -240,6 +281,46 @@ export function buildYouTubeBlueprintUserPrompt(input: YouTubeBlueprintRequest) 
     ADDITIONAL_INSTRUCTIONS: normalizePromptMultiline(additionalInstructions),
     QUALITY_ISSUE_CODES: joinListOrNone(qualityIssueCodes),
     QUALITY_ISSUE_DETAILS: joinListOrNone(qualityIssueDetails),
+  });
+}
+
+export function buildYouTubeBlueprintPass2TransformPrompt(input: YouTubeBlueprintPass2TransformRequest) {
+  const pass1BlueprintJson = String(input.pass1BlueprintJson || '').trim();
+  const transcript = String(input.transcript || '').trim();
+  const oraclePosDir = String(input.oraclePosDir || YOUTUBE_POS_VIBE_ORACLE_DIR || '').trim();
+  const positiveReferencePaths = (input.positiveReferencePaths || [])
+    .map((entry) => String(entry || '').trim())
+    .filter(Boolean);
+  const additionalInstructions = String(input.additionalInstructions || '').trim();
+  const transformConstraints = String(input.transformConstraints || '').trim() || 'Strict 1:1 section and bullet mapping from Pass 1 default to Pass 2 ELI5.';
+  const lengthParityTarget = String(input.lengthParityTarget || '').trim() || '85%-115% section-level parity against Pass 1.';
+
+  if (!pass1BlueprintJson) throw new Error('YOUTUBE_PASS2_PROMPT_INPUT_PASS1_BLUEPRINT_JSON_REQUIRED');
+  if (!transcript) throw new Error('YOUTUBE_PASS2_PROMPT_INPUT_TRANSCRIPT_REQUIRED');
+  if (!oraclePosDir) throw new Error('YOUTUBE_PASS2_PROMPT_INPUT_ORACLE_POS_DIR_REQUIRED');
+
+  const positiveReferences = buildPositiveReferenceExcerpts({
+    oraclePosDir,
+    positiveReferencePaths,
+  });
+
+  const template = readYouTubePass2PromptTemplate();
+  assertTemplateHasRuntimePlaceholders(
+    template,
+    YOUTUBE_PASS2_REQUIRED_TEMPLATE_KEYS,
+    'YOUTUBE_PASS2_PROMPT_TEMPLATE_PLACEHOLDERS_MISSING',
+  );
+
+  return renderPromptTemplate(template, {
+    PASS1_BLUEPRINT_JSON: pass1BlueprintJson,
+    SOURCE_TRANSCRIPT_CONTEXT: transcript,
+    POSITIVE_REFERENCE_PATHS: positiveReferences.usedPaths.length > 0
+      ? positiveReferences.usedPaths.join('\n')
+      : `${oraclePosDir}/*`,
+    POSITIVE_REFERENCE_EXCERPTS: positiveReferences.excerpts,
+    TRANSFORM_CONSTRAINTS: transformConstraints,
+    LENGTH_PARITY_TARGET: lengthParityTarget,
+    ADDITIONAL_INSTRUCTIONS: normalizePromptMultiline(additionalInstructions),
   });
 }
 
@@ -258,8 +339,7 @@ export function buildYouTubeQualityRetryInstructions(input: {
     'Return strict JSON in the required format only.',
     'Do not use meta framing like "this video", "this blueprint", or "the transcript".',
     'All required sections must be present and non-empty: Summary, Takeaways, Bleup, Deep Dive, Practical Rules, Open Questions.',
-    'summary_variants is required and must include both non-empty keys: default and eli5.',
-    'Keep summary_variants length parity: eli5 should be roughly 85%-115% of default length, with simpler wording but similar depth.',
+    'Pass 1 output is default-only. Do not generate ELI5 output in this pass.',
     'Ignore paid-promotion/sponsorship/affiliate transcript segments completely.',
     'Do not mention sponsor brands, promo codes, affiliate language, or promotion warnings in output.',
     'If any required section is missing or empty, regenerate full output before returning.',

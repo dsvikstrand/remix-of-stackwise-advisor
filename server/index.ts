@@ -6060,14 +6060,9 @@ function evaluateLlmNativeGate(draft: YouTubeDraft): LlmNativeGateResult {
   }
 
   const summaryDefault = normalizeSummaryVariantText(draft.summaryVariants?.default || '');
-  const summaryEli5 = normalizeSummaryVariantText(draft.summaryVariants?.eli5 || '');
   if (!summaryDefault) {
     issues.push('SUMMARY_VARIANT_DEFAULT_MISSING');
     issueDetails.push('SUMMARY_VARIANT_DEFAULT_MISSING section=summary_variants.default');
-  }
-  if (!summaryEli5) {
-    issues.push('SUMMARY_VARIANT_ELI5_MISSING');
-    issueDetails.push('SUMMARY_VARIANT_ELI5_MISSING section=summary_variants.eli5');
   }
 
   const targetSections: Array<{ key: string; code: string }> = [

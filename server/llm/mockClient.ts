@@ -6,6 +6,8 @@ import type {
   ChannelLabelResult,
   LLMGenerationOptions,
   LLMClient,
+  YouTubeBlueprintPass2TransformRequest,
+  YouTubeBlueprintPass2TransformResult,
   YouTubeBlueprintRequest,
   YouTubeBlueprintResult,
 } from './types';
@@ -60,6 +62,28 @@ export function createMockClient(): LLMClient {
           { name: 'Step 1', notes: 'Review the key ideas in the video.', timestamp: null },
           { name: 'Step 2', notes: 'Apply the main action item.', timestamp: null },
         ],
+      };
+    },
+    async generateYouTubeBlueprintPass2Transform(
+      input: YouTubeBlueprintPass2TransformRequest,
+      _options?: LLMGenerationOptions,
+    ): Promise<YouTubeBlueprintPass2TransformResult> {
+      let pass1: { steps?: Array<{ name?: string; notes?: string; timestamp?: string | null }>; description?: string } = {};
+      try {
+        pass1 = JSON.parse(String(input.pass1BlueprintJson || '{}'));
+      } catch {
+        pass1 = {};
+      }
+      const steps = Array.isArray(pass1.steps) ? pass1.steps : [];
+      return {
+        eli5_steps: steps
+          .map((step) => ({
+            name: String(step.name || '').trim(),
+            notes: String(step.notes || '').trim() || 'Simplified explanation.',
+            timestamp: step.timestamp ?? null,
+          }))
+          .filter((step) => step.name && step.notes),
+        eli5_summary: String(pass1.description || '').trim() || 'Simplified summary.',
       };
     },
     async generateChannelLabel(input: ChannelLabelRequest): Promise<ChannelLabelResult> {

@@ -14,6 +14,7 @@ Owner intent: Build blueprints people choose to read for value, not because they
 - `v1.4` (2026-02-28): Made all six sections explicitly required (`Summary`, `Takeaways`, `Bleup`, `Deep Dive`, `Practical Rules`, `Open Questions`) and added explicit retry-on-missing-section language.
 - `v1.5` (2026-02-28): Added required `summary_variants` output (`default`, `eli5`) for expertise-level toggle on first section.
 - `v1.6` (2026-02-28): Added length-parity rule for `summary_variants` so `eli5` remains approximately as long as `default` while simplifying language.
+- `v1.7` (2026-02-28): Pass 1 now outputs default content only; ELI5 is generated in Pass 2 for full-section transform.
 
 ## Purpose
 
@@ -64,8 +65,7 @@ All deep sections target three to five complete bullets each. Empty sections, on
 If the transcript includes paid promotion, sponsorship, or affiliate segments, treat those segments as non-content noise and ignore them completely. Do not include sponsor brand names, promo codes, sponsorship disclaimers, affiliate language, or any promotion warning text in the generated blueprint.
 
 `Summary` is an intro layer, not the bulk layer. It should provide a concise topic orientation and prerequisite context at an ELI15 depth. The bulk payload belongs in `Bleup`.
-`summary_variants` is mandatory and must include both `default` and `eli5` strings. Missing either variant is a hard fail that should trigger eval failure and retry.
-`summary_variants.eli5` must keep approximately the same information density and length as `summary_variants.default` (target roughly 85%-115% of default length). ELI5 should simplify wording and framing, not significantly shorten content depth.
+Pass 1 is default-only. Do not generate ELI5 output in Pass 1. ELI5 is handled by Pass 2 transform.
 
 All required sections must exist in every output: `Summary`, `Takeaways`, `Bleup`, `Deep Dive`, `Practical Rules`, `Open Questions`. Missing any required section is a hard fail that should trigger eval failure and a retry.
 
@@ -173,8 +173,7 @@ The rendered prompt must include the required output shape and must reject non-J
   "title": "string",
   "description": "string",
   "summary_variants": {
-    "default": "string",
-    "eli5": "string"
+    "default": "string"
   },
   "steps": [
     { "name": "string", "notes": "string", "timestamp": "string|null" }

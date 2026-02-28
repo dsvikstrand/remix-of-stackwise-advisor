@@ -1,5 +1,6 @@
 export type GenerationOperation =
-  | 'generateYouTubeBlueprint';
+  | 'generateYouTubeBlueprint'
+  | 'generateYouTubeBlueprintPass2Transform';
 
 export interface GenerationPromptEvent {
   operation: GenerationOperation;
@@ -85,6 +86,16 @@ export interface YouTubeBlueprintRequest {
   additionalInstructions?: string;
 }
 
+export interface YouTubeBlueprintPass2TransformRequest {
+  transcript: string;
+  oraclePosDir?: string;
+  positiveReferencePaths?: string[];
+  pass1BlueprintJson: string;
+  transformConstraints?: string;
+  lengthParityTarget?: string;
+  additionalInstructions?: string;
+}
+
 export interface YouTubeBlueprintResult {
   title: string;
   description: string;
@@ -95,6 +106,11 @@ export interface YouTubeBlueprintResult {
     default?: string | null;
     eli5?: string | null;
   } | null;
+}
+
+export interface YouTubeBlueprintPass2TransformResult {
+  eli5_steps: YouTubeDraftStep[];
+  eli5_summary: string;
 }
 
 export interface ChannelLabelOption {
@@ -123,5 +139,9 @@ export interface LLMClient {
   analyzeBlueprint(input: BlueprintAnalysisRequest): Promise<string>;
   generateBanner(input: BannerRequest): Promise<BannerResult>;
   generateYouTubeBlueprint(input: YouTubeBlueprintRequest, options?: LLMGenerationOptions): Promise<YouTubeBlueprintResult>;
+  generateYouTubeBlueprintPass2Transform(
+    input: YouTubeBlueprintPass2TransformRequest,
+    options?: LLMGenerationOptions,
+  ): Promise<YouTubeBlueprintPass2TransformResult>;
   generateChannelLabel(input: ChannelLabelRequest): Promise<ChannelLabelResult>;
 }
