@@ -11,6 +11,8 @@ This file is the authoritative active/completed registry for execution plans.
   Step-by-step execution scheme with per-step completion tracking (plan -> PA -> implement -> evaluate).
 - `docs/exec-plans/active/bleuv1-mvp-hardening-playbook.md`
   Followable deep-dive hardening playbook (blind spots, MVP priorities, sprint sequence, and success metrics).
+- `docs/exec-plans/active/bleuv1-refactor-a3-parity-checklist.md`
+  Active backend-first refactor parity contract (with route/response baseline artifacts for no-behavior-change validation).
 - `docs/exec-plans/tech-debt-tracker.md`
   Deferred work backlog and non-blocking engineering debt.
 

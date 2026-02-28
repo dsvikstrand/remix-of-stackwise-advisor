@@ -1,0 +1,277 @@
+import type express from 'express';
+import type { createClient } from '@supabase/supabase-js';
+
+type DbClient = ReturnType<typeof createClient>;
+
+type GeneratedBlueprint = {
+  blueprintId: string;
+  runId: string | null;
+};
+
+type AutoChannelResult = {
+  userFeedItemId: string;
+  candidateId: string;
+  channelSlug: string;
+  decision: 'published' | 'rejected';
+  reasonCode: string;
+  classifierMode: string;
+  classifierReason: string;
+  classifierConfidence?: number | null;
+};
+
+export type FeedRouteDeps = {
+  autoChannelPipelineEnabled: boolean;
+  getAuthedSupabaseClient: (authToken: string) => DbClient | null;
+  createBlueprintFromVideo: (db: DbClient, input: {
+    userId: string;
+    videoUrl: string;
+    videoId: string;
+    sourceTag: string;
+    sourceItemId: string;
+  }) => Promise<GeneratedBlueprint>;
+  runAutoChannelForFeedItem: (input: {
+    db: DbClient;
+    userId: string;
+    userFeedItemId: string;
+    blueprintId: string;
+    sourceItemId: string | null;
+    sourceTag: string;
+  }) => Promise<AutoChannelResult | null>;
+};
+
+export function registerFeedRoutes(app: express.Express, deps: FeedRouteDeps) {
+  app.post('/api/my-feed/items/:id/accept', async (req, res) => {
+    const userId = (res.locals.user as { id?: string } | undefined)?.id;
+    const authToken = (res.locals.authToken as string | undefined) ?? '';
+    if (!userId || !authToken) return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+
+    const db = deps.getAuthedSupabaseClient(authToken);
+    if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+    const feedItemId = req.params.id;
+    const { data: feedItem, error: readError } = await db
+      .from('user_feed_items')
+      .select('id, user_id, source_item_id, blueprint_id, state')
+      .eq('id', feedItemId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (readError) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: readError.message, data: null });
+    if (!feedItem) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Feed item not found', data: null });
+
+    if (feedItem.blueprint_id && feedItem.state === 'my_feed_published') {
+      return res.json({
+        ok: true,
+        error_code: null,
+        message: 'item already accepted',
+        data: {
+          user_feed_item_id: feedItem.id,
+          blueprint_id: feedItem.blueprint_id,
+          state: feedItem.state,
+        },
+      });
+    }
+
+    if (feedItem.state !== 'my_feed_pending_accept') {
+      return res.status(409).json({ ok: false, error_code: 'INVALID_STATE', message: 'Only pending items can be accepted', data: null });
+    }
+
+    const { data: sourceRow, error: sourceError } = await db
+      .from('source_items')
+      .select('id, source_url, source_native_id')
+      .eq('id', feedItem.source_item_id)
+      .maybeSingle();
+    if (sourceError || !sourceRow?.source_url || !sourceRow.source_native_id) {
+      await db.from('user_feed_items').update({ state: 'my_feed_skipped', last_decision_code: 'SOURCE_MISSING' }).eq('id', feedItem.id);
+      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: sourceError?.message || 'Source item missing', data: null });
+    }
+
+    try {
+      const generated = await deps.createBlueprintFromVideo(db, {
+        userId,
+        videoUrl: sourceRow.source_url,
+        videoId: sourceRow.source_native_id,
+        sourceTag: 'subscription_accept',
+        sourceItemId: sourceRow.id,
+      });
+
+      await db.from('user_feed_items').update({
+        blueprint_id: generated.blueprintId,
+        state: 'my_feed_published',
+        last_decision_code: null,
+      }).eq('id', feedItem.id).eq('user_id', userId);
+
+      let responseState: string = 'my_feed_published';
+      let responseReasonCode: string | null = null;
+      try {
+        const autoResult = await deps.runAutoChannelForFeedItem({
+          db,
+          userId,
+          userFeedItemId: feedItem.id,
+          blueprintId: generated.blueprintId,
+          sourceItemId: sourceRow.id,
+          sourceTag: 'subscription_accept',
+        });
+        if (autoResult) {
+          responseState = autoResult.decision === 'published' ? 'channel_published' : 'channel_rejected';
+          responseReasonCode = autoResult.reasonCode;
+        }
+      } catch (autoChannelError) {
+        console.log('[auto_channel_pipeline_failed]', JSON.stringify({
+          user_id: userId,
+          user_feed_item_id: feedItem.id,
+          blueprint_id: generated.blueprintId,
+          source_item_id: sourceRow.id,
+          source_tag: 'subscription_accept',
+          error: autoChannelError instanceof Error ? autoChannelError.message : String(autoChannelError),
+        }));
+      }
+
+      console.log('[my_feed_pending_accepted]', JSON.stringify({
+        user_feed_item_id: feedItem.id,
+        source_item_id: sourceRow.id,
+        blueprint_id: generated.blueprintId,
+        run_id: generated.runId,
+      }));
+
+      return res.json({
+        ok: true,
+        error_code: null,
+        message: 'item accepted and generated',
+        data: {
+          user_feed_item_id: feedItem.id,
+          blueprint_id: generated.blueprintId,
+          state: responseState,
+          reason_code: responseReasonCode,
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await db.from('user_feed_items').update({
+        state: 'my_feed_pending_accept',
+        last_decision_code: 'GENERATION_FAILED',
+      }).eq('id', feedItem.id).eq('user_id', userId);
+
+      return res.status(500).json({
+        ok: false,
+        error_code: 'GENERATION_FAILED',
+        message,
+        data: {
+          user_feed_item_id: feedItem.id,
+        },
+      });
+    }
+  });
+
+  app.post('/api/my-feed/items/:id/skip', async (req, res) => {
+    const userId = (res.locals.user as { id?: string } | undefined)?.id;
+    const authToken = (res.locals.authToken as string | undefined) ?? '';
+    if (!userId || !authToken) return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+
+    const db = deps.getAuthedSupabaseClient(authToken);
+    if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+    const { data, error } = await db
+      .from('user_feed_items')
+      .update({ state: 'my_feed_skipped', last_decision_code: 'SKIPPED_BY_USER' })
+      .eq('id', req.params.id)
+      .eq('user_id', userId)
+      .eq('state', 'my_feed_pending_accept')
+      .select('id, state')
+      .maybeSingle();
+    if (error) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: error.message, data: null });
+    if (!data) return res.status(409).json({ ok: false, error_code: 'INVALID_STATE', message: 'Only pending items can be skipped', data: null });
+
+    return res.json({
+      ok: true,
+      error_code: null,
+      message: 'item skipped',
+      data: {
+        user_feed_item_id: data.id,
+        state: data.state,
+      },
+    });
+  });
+
+  app.post('/api/my-feed/items/:id/auto-publish', async (req, res) => {
+    const userId = (res.locals.user as { id?: string } | undefined)?.id;
+    const authToken = (res.locals.authToken as string | undefined) ?? '';
+    if (!userId || !authToken) return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+
+    if (!deps.autoChannelPipelineEnabled) {
+      return res.status(409).json({
+        ok: false,
+        error_code: 'AUTO_CHANNEL_DISABLED',
+        message: 'Auto-channel pipeline is disabled.',
+        data: null,
+      });
+    }
+
+    const db = deps.getAuthedSupabaseClient(authToken);
+    if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+    const { data: feedItem, error: readError } = await db
+      .from('user_feed_items')
+      .select('id, user_id, source_item_id, blueprint_id')
+      .eq('id', req.params.id)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (readError) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: readError.message, data: null });
+    if (!feedItem) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Feed item not found', data: null });
+    if (!feedItem.blueprint_id) {
+      return res.status(409).json({
+        ok: false,
+        error_code: 'BLUEPRINT_REQUIRED',
+        message: 'Feed item has no blueprint to auto-publish.',
+        data: null,
+      });
+    }
+
+    const sourceTag = String(req.body?.source_tag || 'manual_save').trim() || 'manual_save';
+
+    try {
+      const result = await deps.runAutoChannelForFeedItem({
+        db,
+        userId,
+        userFeedItemId: feedItem.id,
+        blueprintId: feedItem.blueprint_id,
+        sourceItemId: feedItem.source_item_id || null,
+        sourceTag,
+      });
+
+      if (!result) {
+        return res.status(500).json({
+          ok: false,
+          error_code: 'AUTO_CHANNEL_DISABLED',
+          message: 'Auto-channel pipeline is disabled.',
+          data: null,
+        });
+      }
+
+      return res.json({
+        ok: true,
+        error_code: null,
+        message: 'auto publish complete',
+        data: {
+          user_feed_item_id: result.userFeedItemId,
+          candidate_id: result.candidateId,
+          channel_slug: result.channelSlug,
+          decision: result.decision,
+          reason_code: result.reasonCode,
+          classifier_mode: result.classifierMode,
+          classifier_reason: result.classifierReason,
+          classifier_confidence: result.classifierConfidence ?? null,
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return res.status(500).json({
+        ok: false,
+        error_code: 'AUTO_CHANNEL_FAILED',
+        message,
+        data: {
+          user_feed_item_id: feedItem.id,
+        },
+      });
+    }
+  });
+}
