@@ -2,62 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type {
   BlueprintAnalysisRequest,
-  BlueprintGenerationRequest,
-  InventoryRequest,
   YouTubeBlueprintRequest,
 } from './types';
-
-export const INVENTORY_SYSTEM_PROMPT = `You are an expert curator who creates comprehensive inventory schemas for various domains.
-
-Your job is to generate a structured inventory of items organized into logical categories based on user input keywords.
-
-Guidelines:
-- Create exactly 6 categories based on the domain
-- Include 6-12 items per category
-- Default to general item names (e.g., "Gentle Cleanser" instead of "Salicylic Acid Cleanser")
-- Only use highly specific or ingredient-level items if the user explicitly asks for specificity
-- Avoid brand names unless the user explicitly requests them
-- Items should be real, commonly used products/ingredients/tools in that domain
-- Cover a range from beginner-friendly to advanced options
-
-Response format (STRICT JSON - no markdown, no explanation):
-{
-  "summary": "Brief 1-2 sentence description of what this inventory covers",
-  "categories": [
-    {
-      "name": "Category Name",
-      "items": ["Item 1", "Item 2", "Item 3", ...]
-    }
-  ],
-  "suggestedTags": ["tag1", "tag2", "tag3", "tag4"]
-}
-
-Examples of domains and what to include:
-- "skincare routine" → Cleansers, Toners, Serums, Moisturizers, SPF, Treatments, Tools
-- "green smoothie" → Leafy Greens, Fruits, Proteins, Liquids, Boosters, Sweeteners
-- "home workout" → Warm-up, Cardio, Strength Upper, Strength Lower, Core, Stretching
-- "morning routine" → Wake-up, Hygiene, Movement, Nutrition, Mindfulness, Planning
-`;
-
-export function buildInventoryUserPrompt(input: InventoryRequest) {
-  const instructions = input.customInstructions?.trim() || '';
-  const preferredList = (input.preferredCategories || [])
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .slice(0, 6);
-  const preferredBlock = preferredList.length > 0
-    ? `Preferred categories (must include exactly, even if similar):\n${preferredList.map((item) => `- ${item}`).join('\n')}`
-    : '';
-
-  return `Generate a comprehensive inventory schema for: "${input.keywords.trim()}"
-${input.title ? `Title hint: ${input.title.trim()}` : ''}
-${instructions ? `Additional instructions: ${instructions}` : ''}
-${preferredBlock}
-
-Create practical, real-world items that someone would actually use for this purpose.
-Default to general item names and only get highly specific if the user asks for specificity.
-Always return exactly 6 categories total. If preferred categories are provided, include them and generate the remaining categories to reach 6.`;
-}
 
 export const BLUEPRINT_SYSTEM_PROMPT = `You are an expert blueprint reviewer.
 
@@ -96,51 +42,6 @@ Selected items:
 ${items}
 
 Write the review now following the format rules.`;
-}
-
-export const BLUEPRINT_GENERATION_SYSTEM_PROMPT = `You are an expert routine designer.
-
-Your job is to generate a complete step-by-step blueprint using ONLY the items provided in the inventory list.
-
-Guidelines:
-- Create 4-8 steps total.
-- Each step must have a short title and 1-2 sentence description.
-- Each step must include 1-4 items.
-- Items must match the inventory items exactly (category + item name).
-- Add short context for items when helpful (timing, dosage, reps, duration).
-- If a title is provided, use it. Otherwise, create a concise, descriptive title.
-
-Response format (STRICT JSON - no markdown, no explanation):
-{
-  "title": "Blueprint Title",
-  "steps": [
-    {
-      "title": "Step title",
-      "description": "1-2 sentence description",
-      "items": [
-        { "category": "Category Name", "name": "Item Name", "context": "optional" }
-      ]
-    }
-  ]
-}`;
-
-export function buildBlueprintGenerationUserPrompt(input: BlueprintGenerationRequest) {
-  const lines = input.categories
-    .map((category) => {
-      const items = category.items.map((item) => `- ${item}`).join('\n');
-      return `${category.name}:\n${items}`;
-    })
-    .join('\n\n');
-
-  return `Inventory title: ${input.inventoryTitle.trim()}
-${input.title?.trim() ? `Requested title: ${input.title.trim()}` : ''}
-${input.description?.trim() ? `Description: ${input.description.trim()}` : ''}
-${input.notes?.trim() ? `Notes: ${input.notes.trim()}` : ''}
-
-Inventory items (use only these):
-${lines}
-
-Generate the blueprint now in the required JSON format.`;
 }
 
 export const YOUTUBE_BLUEPRINT_SYSTEM_PROMPT = '';

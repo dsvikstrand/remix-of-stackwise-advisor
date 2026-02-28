@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { normalizeTag } from '@/lib/tagging';
 import { searchSourcePages } from '@/lib/sourcePagesApi';
 
-export type ExploreFilter = 'all' | 'blueprints' | 'inventories' | 'users' | 'sources';
+export type ExploreFilter = 'all' | 'blueprints' | 'users' | 'sources';
 
 export interface BlueprintResult {
   type: 'blueprint';
@@ -14,17 +14,6 @@ export interface BlueprintResult {
   mixNotes: string | null;
   bannerUrl: string | null;
   sourceThumbnailUrl?: string | null;
-  likesCount: number;
-  creatorUserId: string;
-  createdAt: string;
-  tags: string[];
-}
-
-export interface InventoryResult {
-  type: 'inventory';
-  id: string;
-  title: string;
-  promptCategories: string;
   likesCount: number;
   creatorUserId: string;
   createdAt: string;
@@ -51,7 +40,7 @@ export interface SourceResult {
   path: string;
 }
 
-export type ExploreResult = BlueprintResult | InventoryResult | UserResult | SourceResult;
+export type ExploreResult = BlueprintResult | UserResult | SourceResult;
 
 interface UseExploreSearchOptions {
   query: string;
@@ -173,110 +162,6 @@ async function searchBlueprints(query: string, isTagSearch: boolean): Promise<Bl
   return [...titleResults, ...tagOnlyResults];
 }
 
-async function searchInventories(query: string, isTagSearch: boolean): Promise<InventoryResult[]> {
-  const normalizedQuery = normalizeTag(query.replace(/^#/, ''));
-
-  if (isTagSearch && normalizedQuery) {
-    const { data: tagMatches } = await supabase
-      .from('tags')
-      .select('id')
-      .ilike('slug', `%${normalizedQuery}%`);
-
-    if (!tagMatches || tagMatches.length === 0) return [];
-
-    const tagIds = tagMatches.map(t => t.id);
-
-    const { data: inventoryTags } = await supabase
-      .from('inventory_tags')
-      .select('inventory_id')
-      .in('tag_id', tagIds);
-
-    if (!inventoryTags || inventoryTags.length === 0) return [];
-
-    const inventoryIds = [...new Set(inventoryTags.map(it => it.inventory_id))];
-
-    const { data: inventories, error } = await supabase
-      .from('inventories')
-      .select('id, title, prompt_categories, likes_count, creator_user_id, created_at')
-      .eq('is_public', true)
-      .in('id', inventoryIds)
-      .order('likes_count', { ascending: false })
-      .limit(20);
-
-    if (error || !inventories) return [];
-
-    const { data: allTags } = await supabase
-      .from('inventory_tags')
-      .select('inventory_id, tags(slug)')
-      .in('inventory_id', inventoryIds);
-
-    const tagsByInventory = new Map<string, string[]>();
-    allTags?.forEach(it => {
-      const existing = tagsByInventory.get(it.inventory_id) || [];
-      if (it.tags && typeof it.tags === 'object' && 'slug' in it.tags) {
-        existing.push((it.tags as { slug: string }).slug);
-      }
-      tagsByInventory.set(it.inventory_id, existing);
-    });
-
-    return inventories.map(i => ({
-      type: 'inventory' as const,
-      id: i.id,
-      title: i.title,
-      promptCategories: i.prompt_categories,
-      likesCount: i.likes_count,
-      creatorUserId: i.creator_user_id,
-      createdAt: i.created_at,
-      tags: tagsByInventory.get(i.id) || [],
-    }));
-  }
-
-  const { data: inventories, error } = await supabase
-    .from('inventories')
-    .select('id, title, prompt_categories, likes_count, creator_user_id, created_at')
-    .eq('is_public', true)
-    .ilike('title', `%${query}%`)
-    .order('likes_count', { ascending: false })
-    .limit(20);
-
-  if (error || !inventories) return [];
-
-  const inventoryIds = inventories.map(i => i.id);
-  const { data: allTags } = await supabase
-    .from('inventory_tags')
-    .select('inventory_id, tags(slug)')
-    .in('inventory_id', inventoryIds);
-
-  const tagsByInventory = new Map<string, string[]>();
-  allTags?.forEach(it => {
-    const existing = tagsByInventory.get(it.inventory_id) || [];
-    if (it.tags && typeof it.tags === 'object' && 'slug' in it.tags) {
-      existing.push((it.tags as { slug: string }).slug);
-    }
-    tagsByInventory.set(it.inventory_id, existing);
-  });
-
-  const titleResults = inventories.map(i => ({
-    type: 'inventory' as const,
-    id: i.id,
-    title: i.title,
-    promptCategories: i.prompt_categories,
-    likesCount: i.likes_count,
-    creatorUserId: i.creator_user_id,
-    createdAt: i.created_at,
-    tags: tagsByInventory.get(i.id) || [],
-  }));
-
-  if (!normalizedQuery) return titleResults;
-
-  const tagResults = await searchInventories(`#${normalizedQuery}`, true);
-  if (tagResults.length === 0) return titleResults;
-
-  const seenIds = new Set(titleResults.map((row) => row.id));
-  const tagOnlyResults = tagResults.filter((row) => !seenIds.has(row.id));
-  return [...titleResults, ...tagOnlyResults];
-}
-
 async function searchUsers(query: string): Promise<UserResult[]> {
   const { data: users, error } = await supabase
     .from('profiles')
@@ -334,11 +219,6 @@ export function useExploreSearch({ query, filter, enabled = true }: UseExploreSe
       if (filter === 'all' || filter === 'blueprints') {
         const blueprints = await searchBlueprints(trimmedQuery, isTagSearch);
         results.push(...blueprints);
-      }
-
-      if (filter === 'all' || filter === 'inventories') {
-        const inventories = await searchInventories(trimmedQuery, isTagSearch);
-        results.push(...inventories);
       }
 
       if ((filter === 'all' || filter === 'users') && !isTagSearch) {

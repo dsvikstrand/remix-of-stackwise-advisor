@@ -9,7 +9,7 @@ import { HelpCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const GLOSSARY: Record<string, string> = {
-  inventory: 'Legacy concept: libraries remain in the codebase but are deprecated in the primary MVP journey.',
+  inventory: 'Legacy term from earlier builds. The current MVP focuses on source-first blueprint generation.',
   blueprint: 'A bite-sized, step-by-step summary generated from source content, optionally remixed by users.',
   wall: 'Home: For You is your subscribed-source lane (latest, locked + unlocked), and Your channels is your followed-channel lane (latest/trending).',
   tag: 'A label that helps organize and discover content.',

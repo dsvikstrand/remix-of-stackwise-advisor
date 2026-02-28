@@ -5,10 +5,8 @@ import type { ChannelLabelResult, LLMClient } from '../../server/llm/types';
 function createStubClient(sequence: Array<ChannelLabelResult | Error>): LLMClient {
   let index = 0;
   return {
-    generateInventory: async () => { throw new Error('not-used'); },
     analyzeBlueprint: async () => { throw new Error('not-used'); },
     generateBanner: async () => { throw new Error('not-used'); },
-    generateBlueprint: async () => { throw new Error('not-used'); },
     generateYouTubeBlueprint: async () => { throw new Error('not-used'); },
     generateChannelLabel: async () => {
       const next = sequence[index] ?? sequence[sequence.length - 1];

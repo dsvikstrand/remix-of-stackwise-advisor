@@ -15,8 +15,8 @@ export default function About() {
               discussion and voting.
             </p>
             <p>
-              Legacy library flows still exist in parts of the app for compatibility, but they are
-              deprecated in the MVP primary journey.
+              The primary path is source-first: pull videos, generate blueprints, and publish to
+              community lanes when eligible.
             </p>
             <div>
               <p className="font-medium text-foreground">Contact</p>

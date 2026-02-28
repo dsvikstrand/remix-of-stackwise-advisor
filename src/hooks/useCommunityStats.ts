@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export interface CommunityStats {
   totalBlueprints: number;
-  totalInventories: number;
+  totalSources: number;
   activeTags: number;
 }
 
@@ -11,15 +11,15 @@ export function useCommunityStats() {
   return useQuery({
     queryKey: ['community-stats'],
     queryFn: async (): Promise<CommunityStats> => {
-      const [blueprintsRes, inventoriesRes, tagsRes] = await Promise.all([
+      const [blueprintsRes, sourcesRes, tagsRes] = await Promise.all([
         supabase.from('blueprints').select('id', { count: 'exact', head: true }).eq('is_public', true),
-        supabase.from('inventories').select('id', { count: 'exact', head: true }).eq('is_public', true),
+        supabase.from('source_pages').select('id', { count: 'exact', head: true }),
         supabase.from('tags').select('id', { count: 'exact', head: true }),
       ]);
 
       return {
         totalBlueprints: blueprintsRes.count ?? 0,
-        totalInventories: inventoriesRes.count ?? 0,
+        totalSources: sourcesRes.count ?? 0,
         activeTags: tagsRes.count ?? 0,
       };
     },

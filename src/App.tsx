@@ -17,12 +17,7 @@ import SearchPage from "./pages/Search";
 import MyFeed from "./pages/MyFeed";
 import Subscriptions from "./pages/Subscriptions";
 import SourcePage from "./pages/SourcePage";
-import Inventory from "./pages/Inventory";
-import InventoryCreate from "./pages/InventoryCreate";
-import InventoryDetail from "./pages/InventoryDetail";
-import InventoryBuild from "./pages/InventoryBuild";
 import BlueprintDetail from "./pages/BlueprintDetail";
-import BlueprintRemix from "./pages/BlueprintRemix";
 import YouTubeToBlueprint from "./pages/YouTubeToBlueprint";
 import About from "./pages/About";
 import NotFound from "./pages/NotFound";
@@ -60,13 +55,13 @@ const App = () => (
             <Route path="/wall" element={<Wall />} />
             <Route path="/wall/:postId" element={<RequireAuth><PostDetail /></RequireAuth>} />
             <Route path="/auth" element={<Auth />} />
-            <Route path="/inventory" element={<Inventory />} />
-            <Route path="/inventory/create" element={<RequireAuth><InventoryCreate /></RequireAuth>} />
-            <Route path="/inventory/:inventoryId" element={<InventoryDetail />} />
-            <Route path="/inventory/:inventoryId/build" element={<InventoryBuild />} />
-            <Route path="/blueprint/:blueprintId/edit" element={<RequireAuth><InventoryBuild /></RequireAuth>} />
+            <Route path="/inventory" element={<Navigate to="/wall" replace />} />
+            <Route path="/inventory/create" element={<Navigate to="/wall" replace />} />
+            <Route path="/inventory/:inventoryId" element={<Navigate to="/wall" replace />} />
+            <Route path="/inventory/:inventoryId/build" element={<Navigate to="/wall" replace />} />
+            <Route path="/blueprint/:blueprintId/edit" element={<Navigate to=".." replace />} />
             <Route path="/blueprint/:blueprintId" element={<BlueprintDetail />} />
-            <Route path="/blueprint/:blueprintId/remix" element={<RequireAuth><BlueprintRemix /></RequireAuth>} />
+            <Route path="/blueprint/:blueprintId/remix" element={<Navigate to=".." replace />} />
             <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
             <Route path="/u/:userId" element={<UserProfile />} />
             <Route path="/tags" element={<Navigate to="/channels" replace />} />

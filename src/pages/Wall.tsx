@@ -12,7 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tag, Layers, Sparkles, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { usePopularInventoryTags } from '@/hooks/usePopularInventoryTags';
+import { useTrendingTags } from '@/hooks/useExploreSearch';
 import { useTagFollows } from '@/hooks/useTagFollows';
 import type { Json } from '@/integrations/supabase/types';
 import { buildBlueprintPreviewText, buildFeedSummary } from '@/lib/feedPreview';
@@ -190,7 +190,7 @@ export default function Wall() {
     });
   };
 
-  const { data: popularTags = [] } = usePopularInventoryTags(6);
+  const { data: popularTags = [] } = useTrendingTags();
 
   const curatedJoinableSlugs = useMemo(
     () =>

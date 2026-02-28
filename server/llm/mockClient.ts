@@ -2,13 +2,9 @@ import type {
   BannerRequest,
   BannerResult,
   BlueprintAnalysisRequest,
-  BlueprintGenerationRequest,
-  BlueprintGenerationResult,
   ChannelLabelRequest,
   ChannelLabelResult,
   LLMGenerationOptions,
-  InventoryRequest,
-  InventorySchema,
   LLMClient,
   YouTubeBlueprintRequest,
   YouTubeBlueprintResult,
@@ -16,21 +12,6 @@ import type {
 
 export function createMockClient(): LLMClient {
   return {
-    async generateInventory(input: InventoryRequest, _options?: LLMGenerationOptions): Promise<InventorySchema> {
-      const title = input.title?.trim() || `${input.keywords.trim()} Inventory`;
-      return {
-        summary: `A starter inventory for ${title.toLowerCase()}.`,
-        categories: [
-          { name: 'Category 1', items: ['Item A', 'Item B', 'Item C'] },
-          { name: 'Category 2', items: ['Item D', 'Item E', 'Item F'] },
-          { name: 'Category 3', items: ['Item G', 'Item H', 'Item I'] },
-          { name: 'Category 4', items: ['Item J', 'Item K', 'Item L'] },
-          { name: 'Category 5', items: ['Item M', 'Item N', 'Item O'] },
-          { name: 'Category 6', items: ['Item P', 'Item Q', 'Item R'] },
-        ],
-        suggestedTags: ['starter', 'routine', 'blueprint', 'community'],
-      };
-    },
     async analyzeBlueprint(input: BlueprintAnalysisRequest): Promise<string> {
       const sections = input.reviewSections && input.reviewSections.length > 0
         ? input.reviewSections
@@ -67,38 +48,6 @@ export function createMockClient(): LLMClient {
         buffer: Buffer.from(svg),
         mimeType: 'image/svg+xml',
         prompt: 'mock-banner',
-      };
-    },
-    async generateBlueprint(input: BlueprintGenerationRequest, _options?: LLMGenerationOptions): Promise<BlueprintGenerationResult> {
-      const title = input.title?.trim() || `${input.inventoryTitle.trim()} Blueprint`;
-      const categories = input.categories || [];
-      const pickItem = (index: number) => {
-        const category = categories[index % categories.length];
-        const item = category?.items?.[0];
-        if (!category || !item) return null;
-        return { category: category.name, name: item, context: 'Mock context' };
-      };
-      const steps = [
-        {
-          title: 'Step 1',
-          description: 'Mock step description.',
-          items: [pickItem(0)].filter(Boolean) as NonNullable<ReturnType<typeof pickItem>>[],
-        },
-        {
-          title: 'Step 2',
-          description: 'Mock step description.',
-          items: [pickItem(1)].filter(Boolean) as NonNullable<ReturnType<typeof pickItem>>[],
-        },
-        {
-          title: 'Step 3',
-          description: 'Mock step description.',
-          items: [pickItem(2)].filter(Boolean) as NonNullable<ReturnType<typeof pickItem>>[],
-        },
-      ].filter((step) => step.items.length > 0);
-
-      return {
-        title,
-        steps,
       };
     },
     async generateYouTubeBlueprint(input: YouTubeBlueprintRequest, _options?: LLMGenerationOptions): Promise<YouTubeBlueprintResult> {

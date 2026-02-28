@@ -112,12 +112,9 @@ import { normalizeYouTubeDraftToGoldenV1 } from './services/goldenBlueprintForma
 import { buildYouTubeQualityRetryInstructions } from './llm/prompts';
 import type {
   BlueprintAnalysisRequest,
-  BlueprintGenerationRequest,
-  BlueprintGenerationResult,
   BlueprintSelectedItem,
   GenerationModelEvent,
   GenerationPromptEvent,
-  InventoryRequest,
 } from './llm/types';
 
 const app = express();
@@ -675,13 +672,6 @@ app.use((req, res, next) => {
     });
 });
 
-const InventoryRequestSchema = z.object({
-  keywords: z.string().min(1),
-  title: z.string().optional(),
-  customInstructions: z.string().optional(),
-  preferredCategories: z.array(z.string()).optional(),
-});
-
 const SelectedItemSchema = z.union([
   z.string(),
   z.object({
@@ -706,19 +696,6 @@ const BannerRequestSchema = z.object({
   tags: z.array(z.string()).optional(),
   // Seed pipelines may want to generate without writing to Storage.
   dryRun: z.boolean().optional(),
-});
-
-const BlueprintGenerationSchema = z.object({
-  title: z.string().optional(),
-  description: z.string().optional(),
-  notes: z.string().optional(),
-  inventoryTitle: z.string().min(1),
-  categories: z.array(
-    z.object({
-      name: z.string().min(1),
-      items: z.array(z.string()).min(1),
-    })
-  ).min(1),
 });
 
 const YouTubeToBlueprintRequestSchema = z.object({
@@ -1394,45 +1371,6 @@ app.get('/api/credits', creditsReadLimiter, async (_req, res) => {
   return res.json(credits);
 });
 
-app.post('/api/generate-inventory', async (req, res) => {
-  const parsed = InventoryRequestSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });
-  }
-
-  const payload: InventoryRequest = parsed.data;
-  const userId = (res.locals.user as { id?: string } | undefined)?.id;
-  if (!userId) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-  const creditCheck = await consumeCredit(userId, {
-    reasonCode: 'INVENTORY_GENERATE',
-  });
-  if (!creditCheck.ok) {
-    if (creditCheck.reason === 'global') {
-      return res.status(429).json({
-        error: 'We’re at capacity right now. Please try again in a few minutes.',
-        retryAfterSeconds: creditCheck.retryAfterSeconds,
-      });
-    }
-    return res.status(429).json({
-      error: 'Insufficient credits right now. Please wait for refill and try again.',
-      remaining: creditCheck.remaining,
-      limit: creditCheck.limit,
-      resetAt: creditCheck.resetAt,
-    });
-  }
-
-  try {
-    const client = createLLMClient();
-    const schema = await client.generateInventory(payload);
-    return res.json(schema);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return res.status(500).json({ error: message });
-  }
-});
-
 app.post('/api/analyze-blueprint', async (req, res) => {
   const parsed = BlueprintReviewSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -1497,58 +1435,6 @@ app.post('/api/analyze-blueprint', async (req, res) => {
     }
     res.write('data: [DONE]\n\n');
     res.end();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return res.status(500).json({ error: message });
-  }
-});
-
-app.post('/api/generate-blueprint', async (req, res) => {
-  const parsed = BlueprintGenerationSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });
-  }
-  const userId = (res.locals.user as { id?: string } | undefined)?.id;
-  if (!userId) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-  const creditCheck = await consumeCredit(userId, {
-    reasonCode: 'BLUEPRINT_GENERATE',
-  });
-  if (!creditCheck.ok) {
-    if (creditCheck.reason === 'global') {
-      return res.status(429).json({
-        error: 'We’re at capacity right now. Please try again in a few minutes.',
-        retryAfterSeconds: creditCheck.retryAfterSeconds,
-      });
-    }
-    return res.status(429).json({
-      error: 'Insufficient credits right now. Please wait for refill and try again.',
-      remaining: creditCheck.remaining,
-      limit: creditCheck.limit,
-      resetAt: creditCheck.resetAt,
-    });
-  }
-
-  const payload: BlueprintGenerationRequest = {
-    title: parsed.data.title?.trim() || undefined,
-    description: parsed.data.description?.trim() || undefined,
-    notes: parsed.data.notes?.trim() || undefined,
-    inventoryTitle: parsed.data.inventoryTitle.trim(),
-    categories: parsed.data.categories.map((category) => ({
-      name: category.name.trim(),
-      items: category.items.map((item) => item.trim()).filter(Boolean),
-    })).filter((category) => category.items.length > 0),
-  };
-
-  try {
-    const client = createLLMClient();
-    const generated = await client.generateBlueprint(payload);
-    const normalized = normalizeGeneratedBlueprint(payload, generated);
-    if (!normalized.steps.length) {
-      return res.status(500).json({ error: 'Generated blueprint had no usable steps.' });
-    }
-    return res.json(normalized);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return res.status(500).json({ error: message });
@@ -11473,45 +11359,6 @@ app.post('/api/channel-candidates/:id/reject', async (req, res) => {
     },
   });
 });
-
-function normalizeGeneratedBlueprint(
-  request: BlueprintGenerationRequest,
-  generated: BlueprintGenerationResult
-) {
-  const categoryMap = new Map<string, Set<string>>();
-  request.categories.forEach((category) => {
-    categoryMap.set(
-      category.name,
-      new Set(category.items.map((item) => item.trim()).filter(Boolean))
-    );
-  });
-
-  const steps = (generated.steps || [])
-    .map((step) => {
-      const items = (step.items || [])
-        .map((item) => ({
-          category: item.category?.trim() || '',
-          name: item.name?.trim() || '',
-          context: item.context?.trim() || undefined,
-        }))
-        .filter((item) => {
-          if (!item.category || !item.name) return false;
-          const allowed = categoryMap.get(item.category);
-          return !!allowed && allowed.has(item.name);
-        });
-      return {
-        title: step.title?.trim() || 'Step',
-        description: step.description?.trim() || '',
-        items,
-      };
-    })
-    .filter((step) => step.items.length > 0);
-
-  return {
-    title: generated.title?.trim() || request.title || request.inventoryTitle,
-    steps,
-  };
-}
 
 type PipelineErrorCode =
   | 'SERVICE_DISABLED'

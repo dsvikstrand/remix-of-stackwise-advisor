@@ -1,8 +1,8 @@
 import { Link } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
-import { Heart, Layers, MessageCircle } from 'lucide-react';
+import { Heart, MessageCircle } from 'lucide-react';
 import { UserMiniCard } from './UserMiniCard';
-import type { BlueprintResult, InventoryResult, UserResult, SourceResult, ExploreResult } from '@/hooks/useExploreSearch';
+import type { BlueprintResult, UserResult, SourceResult, ExploreResult } from '@/hooks/useExploreSearch';
 import { buildBlueprintPreviewText, buildFeedSummary } from '@/lib/feedPreview';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { formatRelativeShort } from '@/lib/timeFormat';
@@ -99,60 +99,6 @@ function BlueprintCard({
   );
 }
 
-function InventoryCard({
-  result,
-}: {
-  result: InventoryResult;
-}) {
-  const summary = buildFeedSummary({
-    primary: result.promptCategories,
-    fallback: 'Open to view the full step-by-step guide.',
-    maxChars: 190,
-  });
-  const channelLabel = resolveChannelLabelForBlueprint(result.tags);
-  const channelTagSlugs = new Set(getCatalogChannelTagSlugs().map(normalizeTag));
-  const displayTags = result.tags.filter((tag) => !channelTagSlugs.has(normalizeTag(tag)));
-  const createdLabel = formatRelativeShort(result.createdAt);
-
-  return (
-    <Link to={`/inventory/${result.id}`}>
-      <Card className="p-3 border-border/40 bg-transparent rounded-sm hover:bg-muted/10 transition-colors shadow-none">
-        <div className="flex items-center justify-between gap-2 mb-1">
-          <p className="text-[11px] font-semibold tracking-wide text-foreground/75">{channelLabel}</p>
-          <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
-        </div>
-        <div className="flex items-start justify-between gap-2 mb-1">
-          <h3 className="font-semibold text-base leading-tight line-clamp-2">{result.title}</h3>
-          <Layers className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-        </div>
-
-        <p className="text-xs text-muted-foreground line-clamp-3 mb-2">
-          {summary}
-        </p>
-
-        <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
-          <span className="inline-flex h-7 items-center gap-1 px-2">
-            <Heart className="h-3.5 w-3.5" />
-            {result.likesCount}
-          </span>
-        </div>
-
-        {displayTags.length > 0 && (
-          <OneRowTagChips
-            className="flex flex-nowrap gap-1 overflow-hidden"
-            items={displayTags.map((tag) => ({
-              key: tag,
-              label: tag,
-              variant: 'secondary',
-              className: 'text-xs transition-colors border bg-muted/40 text-muted-foreground border-border/60',
-            }))}
-          />
-        )}
-      </Card>
-    </Link>
-  );
-}
-
 function UserCard({ result }: { result: UserResult }) {
   return (
     <UserMiniCard
@@ -216,8 +162,6 @@ export function ExploreResultCard({ result, commentCountByBlueprintId }: Explore
           commentCountByBlueprintId={commentCountByBlueprintId}
         />
       );
-    case 'inventory':
-      return <InventoryCard result={result} />;
     case 'user':
       return <UserCard result={result} />;
     case 'source':

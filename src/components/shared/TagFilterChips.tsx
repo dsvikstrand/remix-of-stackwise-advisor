@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { X } from 'lucide-react';
+
 interface TagFilterChipsProps {
   tags: Array<{ id: string; slug: string; count: number }>;
   selectedTag: string | null;

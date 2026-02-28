@@ -1,13 +1,4 @@
-export interface InventoryRequest {
-  keywords: string;
-  title?: string;
-  customInstructions?: string;
-  preferredCategories?: string[];
-}
-
 export type GenerationOperation =
-  | 'generateInventory'
-  | 'generateBlueprint'
   | 'generateYouTubeBlueprint';
 
 export interface GenerationPromptEvent {
@@ -49,12 +40,6 @@ export interface LLMGenerationOptions {
   onGenerationPromptEvent?: (event: GenerationPromptEvent) => void;
 }
 
-export interface InventorySchema {
-  summary: string;
-  categories: Array<{ name: string; items: string[] }>;
-  suggestedTags?: string[];
-}
-
 export interface BlueprintSelectedItem {
   name: string;
   context?: string;
@@ -80,31 +65,6 @@ export interface BannerResult {
   buffer: Buffer;
   mimeType: string;
   prompt: string;
-}
-
-export interface BlueprintGenerationRequest {
-  title?: string;
-  description?: string;
-  notes?: string;
-  inventoryTitle: string;
-  categories: Array<{ name: string; items: string[] }>;
-}
-
-export interface BlueprintStepItem {
-  category: string;
-  name: string;
-  context?: string;
-}
-
-export interface BlueprintStep {
-  title: string;
-  description?: string;
-  items: BlueprintStepItem[];
-}
-
-export interface BlueprintGenerationResult {
-  title: string;
-  steps: BlueprintStep[];
 }
 
 export interface YouTubeDraftStep {
@@ -160,10 +120,8 @@ export interface ChannelLabelResult {
 }
 
 export interface LLMClient {
-  generateInventory(input: InventoryRequest, options?: LLMGenerationOptions): Promise<InventorySchema>;
   analyzeBlueprint(input: BlueprintAnalysisRequest): Promise<string>;
   generateBanner(input: BannerRequest): Promise<BannerResult>;
-  generateBlueprint(input: BlueprintGenerationRequest, options?: LLMGenerationOptions): Promise<BlueprintGenerationResult>;
   generateYouTubeBlueprint(input: YouTubeBlueprintRequest, options?: LLMGenerationOptions): Promise<YouTubeBlueprintResult>;
   generateChannelLabel(input: ChannelLabelRequest): Promise<ChannelLabelResult>;
 }

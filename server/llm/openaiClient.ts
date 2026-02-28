@@ -4,60 +4,24 @@ import type {
   BannerRequest,
   BannerResult,
   BlueprintAnalysisRequest,
-  BlueprintGenerationRequest,
-  BlueprintGenerationResult,
   ChannelLabelRequest,
   ChannelLabelResult,
   GenerationPromptEvent,
   GenerationModelEvent,
   LLMGenerationOptions,
-  InventoryRequest,
-  InventorySchema,
   LLMClient,
   YouTubeBlueprintResult,
   YouTubeBlueprintRequest,
 } from './types';
 import {
   BLUEPRINT_SYSTEM_PROMPT,
-  BLUEPRINT_GENERATION_SYSTEM_PROMPT,
   CHANNEL_LABEL_SYSTEM_PROMPT,
-  INVENTORY_SYSTEM_PROMPT,
   YOUTUBE_BLUEPRINT_SYSTEM_PROMPT,
   buildBlueprintUserPrompt,
-  buildBlueprintGenerationUserPrompt,
   buildChannelLabelUserPrompt,
   buildYouTubeBlueprintUserPrompt,
-  buildInventoryUserPrompt,
   extractJson,
 } from './prompts';
-
-const InventorySchemaValidator = z.object({
-  summary: z.string(),
-  categories: z.array(
-    z.object({
-      name: z.string(),
-      items: z.array(z.string()),
-    })
-  ),
-  suggestedTags: z.array(z.string()).optional(),
-});
-
-const BlueprintGenerationValidator = z.object({
-  title: z.string(),
-  steps: z.array(
-    z.object({
-      title: z.string(),
-      description: z.string().optional().nullable(),
-      items: z.array(
-        z.object({
-          category: z.string(),
-          name: z.string(),
-          context: z.string().optional(),
-        })
-      ),
-    })
-  ),
-});
 
 const YouTubeBlueprintValidator = z.object({
   title: z.string(),
@@ -110,7 +74,7 @@ function isModelCompatibilityError(error: unknown) {
 }
 
 function logGenerationModelEvent(event: 'primary_success' | 'fallback_success' | 'request_failed', payload: {
-  operation: 'generateInventory' | 'generateBlueprint' | 'generateYouTubeBlueprint';
+  operation: 'generateYouTubeBlueprint';
   model_used: string;
   fallback_used: boolean;
   fallback_model?: string | null;
@@ -137,7 +101,7 @@ export function createOpenAIClient(): LLMClient {
   const client = new OpenAI({ apiKey });
 
   async function runGenerationRequest(input: {
-    operation: 'generateInventory' | 'generateBlueprint' | 'generateYouTubeBlueprint';
+    operation: 'generateYouTubeBlueprint';
     instructions?: string;
     prompt: string;
     options?: LLMGenerationOptions;
@@ -254,22 +218,6 @@ export function createOpenAIClient(): LLMClient {
   }
 
   return {
-    async generateInventory(input: InventoryRequest, options?: LLMGenerationOptions): Promise<InventorySchema> {
-      const response = await runGenerationRequest({
-        operation: 'generateInventory',
-        instructions: INVENTORY_SYSTEM_PROMPT,
-        prompt: buildInventoryUserPrompt(input),
-        options,
-      });
-
-      const outputText = response.output_text?.trim();
-      if (!outputText) {
-        throw new Error('No output text from OpenAI');
-      }
-
-      const parsed = JSON.parse(extractJson(outputText));
-      return InventorySchemaValidator.parse(parsed);
-    },
     async analyzeBlueprint(input: BlueprintAnalysisRequest): Promise<string> {
       const response = await client.responses.create({
         model,
@@ -314,22 +262,6 @@ export function createOpenAIClient(): LLMClient {
         mimeType: downloaded.mimeType,
         prompt,
       };
-    },
-    async generateBlueprint(input: BlueprintGenerationRequest, options?: LLMGenerationOptions): Promise<BlueprintGenerationResult> {
-      const response = await runGenerationRequest({
-        operation: 'generateBlueprint',
-        instructions: BLUEPRINT_GENERATION_SYSTEM_PROMPT,
-        prompt: buildBlueprintGenerationUserPrompt(input),
-        options,
-      });
-
-      const outputText = response.output_text?.trim();
-      if (!outputText) {
-        throw new Error('No output text from OpenAI');
-      }
-
-      const parsed = JSON.parse(extractJson(outputText));
-      return BlueprintGenerationValidator.parse(parsed);
     },
     async generateYouTubeBlueprint(input: YouTubeBlueprintRequest, options?: LLMGenerationOptions): Promise<YouTubeBlueprintResult> {
       const response = await runGenerationRequest({

@@ -57,27 +57,6 @@ export function useUserBlueprints(userId: string | undefined, limit = 4) {
   });
 }
 
-export function useUserInventories(userId: string | undefined, limit = 4) {
-  return useQuery({
-    queryKey: ['user-inventories', userId, limit],
-    queryFn: async () => {
-      if (!userId) return [];
-
-      const { data, error } = await supabase
-        .from('inventories')
-        .select('id, title, prompt_categories, likes_count, created_at')
-        .eq('creator_user_id', userId)
-        .eq('is_public', true)
-        .order('created_at', { ascending: false })
-        .limit(limit);
-
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!userId,
-  });
-}
-
 export function useUserLikedBlueprints(userId: string | undefined, limit = 4) {
   return useQuery({
     queryKey: ['user-liked-blueprints', userId, limit],

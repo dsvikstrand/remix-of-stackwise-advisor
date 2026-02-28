@@ -14,7 +14,7 @@ import { useToggleBlueprintLike } from '@/hooks/useBlueprints';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { BlueprintCard } from '@/components/blueprint/BlueprintCard';
-import { TagFilterChips } from '@/components/inventory/TagFilterChips';
+import { TagFilterChips } from '@/components/shared/TagFilterChips';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Filter, Plus, Search } from 'lucide-react';
 import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
@@ -154,9 +154,9 @@ export default function Blueprints() {
           {showBlueprintInfo && (
             <div className="border border-border/40 px-3 py-3 text-sm text-muted-foreground leading-relaxed">
               <p>
-                A Blueprint is a step-by-step routine built from a library.
-                It turns a list of items into an ordered plan.
-                Each step can include multiple items and short context.
+                A Blueprint is a source-grounded, step-by-step plan.
+                It turns long-form content into an ordered, practical flow.
+                Each step includes concrete actions and context you can apply.
                 Blueprints are meant to be practical and repeatable.
                 You can follow a blueprint as-is or edit it to fit your style.
                 The review helps you check gaps or risks before you publish.

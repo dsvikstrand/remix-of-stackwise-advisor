@@ -45,7 +45,7 @@ export async function getAuthHeader(): Promise<string> {
  *
  * @example
  *   // JSON request
- *   const data = await apiFetch("generate-inventory", { body: { keywords: "skincare" } });
+ *   const data = await apiFetch("youtube-search", { body: { query: "creatine" } });
  *
  *   // SSE streaming
  *   const res = await apiFetch("analyze-blueprint", { body: payload, stream: true });

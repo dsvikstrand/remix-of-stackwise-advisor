@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, Plus, Youtube, Layers, Search } from 'lucide-react';
+import { Loader2, Plus, Youtube, Search } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -95,12 +95,10 @@ export function CreateBlueprintFlowModal({ open, onOpenChange, presetChannelSlug
     setIsPickingChannel(false);
   }
 
-  function goToSource(source: 'library' | 'youtube') {
+  function continueToYouTube() {
     if (!selectedChannelSlug) return;
     const extra = { intent: 'post' };
-    const target = source === 'library'
-      ? buildUrlWithChannel('/inventory', selectedChannelSlug, extra)
-      : buildUrlWithChannel('/youtube', selectedChannelSlug, extra);
+    const target = buildUrlWithChannel('/youtube', selectedChannelSlug, extra);
     onOpenChange(false);
     navigate(target);
   }
@@ -187,38 +185,20 @@ export function CreateBlueprintFlowModal({ open, onOpenChange, presetChannelSlug
             </>
           )}
 
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Card className="p-4 flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <Youtube className="h-4 w-4 text-muted-foreground" />
-                <div className="text-sm font-semibold">YouTube</div>
-              </div>
-              <div className="text-xs text-muted-foreground">Primary MVP path: generate from a YouTube video.</div>
-              <Button
-                onClick={() => goToSource('youtube')}
-                className="mt-2"
-                disabled={!selectedChannelSlug}
-              >
-                Continue
-              </Button>
-            </Card>
-
-            <Card className="p-4 flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <Layers className="h-4 w-4 text-muted-foreground" />
-                <div className="text-sm font-semibold">Legacy library path</div>
-              </div>
-              <div className="text-xs text-muted-foreground">Compatibility-only flow for existing library surfaces.</div>
-              <Button
-                onClick={() => goToSource('library')}
-                className="mt-2"
-                variant="outline"
-                disabled={!selectedChannelSlug}
-              >
-                Continue
-              </Button>
-            </Card>
-          </div>
+          <Card className="p-4 flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <Youtube className="h-4 w-4 text-muted-foreground" />
+              <div className="text-sm font-semibold">YouTube</div>
+            </div>
+            <div className="text-xs text-muted-foreground">Primary MVP path: generate from a YouTube video.</div>
+            <Button
+              onClick={continueToYouTube}
+              className="mt-2"
+              disabled={!selectedChannelSlug}
+            >
+              Continue
+            </Button>
+          </Card>
 
           <div className="flex items-center justify-end">
             <Button variant="outline" onClick={() => { onOpenChange(false); }} className="gap-2">
