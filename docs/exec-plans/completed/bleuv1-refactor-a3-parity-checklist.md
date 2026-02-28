@@ -82,3 +82,5 @@ p41) [have] Final parity reconfirmed after remaining-domain rewiring:
 p42) [have] Final local + Oracle smoke matrix passed with unchanged contract behavior:
 - local: health/tracing/notifications/feed unauth + youtube invalid payload + source search short query
 - oracle: ops queue health `200`, ingestion latest `200`, ingestion trigger `202`, health `200`.
+p43) [have] Phase 4 contract-centralization is fully completed across all backend route domains (`core`, `ops`, `youtube`, `sourcePages`, `sourceSubscriptions`, `feed`, `tracing`, `notifications`, `ingestion`, `profile`, `channels`).
+p44) [have] Final refactor a3 parity evidence is captured and archived as complete (route parity, smoke matrix, and no-behavior-drift invariants).

@@ -11,10 +11,6 @@ This file is the authoritative active/completed registry for execution plans.
   Step-by-step execution scheme with per-step completion tracking (plan -> PA -> implement -> evaluate).
 - `docs/exec-plans/active/bleuv1-mvp-hardening-playbook.md`
   Followable deep-dive hardening playbook (blind spots, MVP priorities, sprint sequence, and success metrics).
-- `docs/exec-plans/active/bleuv1-refactor-a3-parity-checklist.md`
-  Active backend-first refactor parity contract (with route/response baseline artifacts for no-behavior-change validation).
-- `docs/exec-plans/active/bleuv1-refactor-a3-route-map-current.md`
-  Current modular route-distribution snapshot after Phase 1 extraction (kept alongside baseline artifacts).
 - `docs/exec-plans/tech-debt-tracker.md`
   Deferred work backlog and non-blocking engineering debt.
 
@@ -40,6 +36,10 @@ This file is the authoritative active/completed registry for execution plans.
   Completed: Supabase migration closure and validation notes.
 - `docs/exec-plans/completed/docs-consolidation-audit-2026-02-14.md`
   Completed: full docs inventory/classification and deprecated-stub removal.
+- `docs/exec-plans/completed/bleuv1-refactor-a3-parity-checklist.md`
+  Completed: backend-first no-behavior-drift parity contract, including final Phase 4 validation evidence.
+- `docs/exec-plans/completed/bleuv1-refactor-a3-route-map-current.md`
+  Completed: final modular route-distribution snapshot (`53` routes, `0` direct registrations in `server/index.ts`).
 
 ## Current Program Snapshot
 - Core identity lock: `docs/app/core-direction-lock.md`.

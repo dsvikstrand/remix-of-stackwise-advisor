@@ -74,6 +74,11 @@
   - Header now includes an auth-only notifications bell inbox (reply + generation terminal notifications with read/read-all actions).
 - Backend:
   - Express server in `server/index.ts`.
+  - Backend refactor a3 is completed with no behavior drift:
+    - route registration is fully modular (`53` API routes across `server/routes/*` / route-domain modules)
+    - `server/index.ts` has `0` direct `app.*` route registrations and now acts as composition/bootstrap only
+    - route/domain contracts are centralized under `server/contracts/api/*` as canonical typing surfaces
+    - extracted route-heavy logic is split into `server/handlers/*` (active domains) and orchestration services under `server/services/*`
   - `/api/youtube-to-blueprint` generation pipeline.
   - subscription ingestion APIs:
     - `POST|GET|PATCH|DELETE /api/source-subscriptions`
