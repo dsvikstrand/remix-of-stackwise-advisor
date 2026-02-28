@@ -641,7 +641,6 @@ export default function BlueprintDetail() {
                 key={step.id || `trigger-${step.title}-${index}`}
                 value={`golden-section-${index}`}
                 className="shrink-0 text-[11px] px-2.5 py-1 uppercase tracking-wide data-[state=active]:bg-muted/50"
-                onClick={() => setInteractiveSectionsExpanded((current) => !current)}
               >
                 {step.title}
               </TabsTrigger>
@@ -668,6 +667,22 @@ export default function BlueprintDetail() {
                     <p className="text-sm text-muted-foreground whitespace-pre-line">{parsedDescription.text}</p>
                   ) : null}
                   {visibleBullets.length > 0 ? (
+                    <div
+                      role={canExpand ? 'button' : undefined}
+                      tabIndex={canExpand ? 0 : -1}
+                      className={canExpand ? 'cursor-pointer' : ''}
+                      onClick={() => {
+                        if (!canExpand) return;
+                        setInteractiveSectionsExpanded((current) => !current);
+                      }}
+                      onKeyDown={(event) => {
+                        if (!canExpand) return;
+                        if (event.key !== 'Enter' && event.key !== ' ') return;
+                        event.preventDefault();
+                        setInteractiveSectionsExpanded((current) => !current);
+                      }}
+                      aria-label={canExpand ? (isExpanded ? 'Collapse section details' : 'Expand section details') : undefined}
+                    >
                     <ul className="space-y-1 list-disc pl-5">
                       {visibleBullets.map((itemText, itemIndex) => (
                         <li key={`${step.id || index}-${itemIndex}`} className="text-sm leading-snug">
@@ -675,6 +690,7 @@ export default function BlueprintDetail() {
                         </li>
                       ))}
                     </ul>
+                    </div>
                   ) : null}
                   {canExpand ? (
                     <Button
