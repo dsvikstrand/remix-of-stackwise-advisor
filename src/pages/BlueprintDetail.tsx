@@ -289,6 +289,7 @@ export default function BlueprintDetail() {
   const [comment, setComment] = useState('');
   const [isBannerExpanded, setIsBannerExpanded] = useState(false);
   const [interactiveSectionsExpanded, setInteractiveSectionsExpanded] = useState(false);
+  const [activeInteractiveTab, setActiveInteractiveTab] = useState('');
   const [summaryExpertiseLevel, setSummaryExpertiseLevel] = useState<SummaryExpertiseLevel>('default');
   const location = useLocation();
   const loggedBlueprintId = useRef<string | null>(null);
@@ -334,6 +335,7 @@ export default function BlueprintDetail() {
 
   useEffect(() => {
     setInteractiveSectionsExpanded(false);
+    setActiveInteractiveTab('');
     setSummaryExpertiseLevel('default');
   }, [blueprint?.id]);
 
@@ -628,15 +630,18 @@ export default function BlueprintDetail() {
       key === 'practical rules' || key === 'deep dive' || key === 'open questions';
     const practicalRulesIndex = group.findIndex((step) => normalizeHeadingKey(step.title) === 'practical rules');
     const defaultTabIndex = practicalRulesIndex >= 0 ? practicalRulesIndex : 0;
+    const defaultTabValue = `golden-section-${defaultTabIndex}`;
+    const currentTabValue = activeInteractiveTab || defaultTabValue;
     return (
       <div className="space-y-2">
-        <Tabs defaultValue={`golden-section-${defaultTabIndex}`} className="w-full">
+        <Tabs value={currentTabValue} onValueChange={setActiveInteractiveTab} className="w-full">
           <TabsList className="w-full justify-center bg-transparent flex-nowrap overflow-x-auto px-0 py-1">
             {group.map((step, index) => (
               <TabsTrigger
                 key={step.id || `trigger-${step.title}-${index}`}
                 value={`golden-section-${index}`}
                 className="shrink-0 text-[11px] px-2.5 py-1 uppercase tracking-wide data-[state=active]:bg-muted/50"
+                onClick={() => setInteractiveSectionsExpanded((current) => !current)}
               >
                 {step.title}
               </TabsTrigger>
