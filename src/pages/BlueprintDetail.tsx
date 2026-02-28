@@ -271,7 +271,7 @@ export default function BlueprintDetail() {
   const { user } = useAuth();
   const [comment, setComment] = useState('');
   const [isBannerExpanded, setIsBannerExpanded] = useState(false);
-  const [expandedInteractiveSections, setExpandedInteractiveSections] = useState<Record<string, boolean>>({});
+  const [interactiveSectionsExpanded, setInteractiveSectionsExpanded] = useState(false);
   const location = useLocation();
   const loggedBlueprintId = useRef<string | null>(null);
   const steps = blueprint ? parseSteps(blueprint.steps) : [];
@@ -308,7 +308,7 @@ export default function BlueprintDetail() {
   }, [blueprint?.id, location.pathname, user?.id]);
 
   useEffect(() => {
-    setExpandedInteractiveSections({});
+    setInteractiveSectionsExpanded(false);
   }, [blueprint?.id]);
 
   useEffect(() => {
@@ -608,7 +608,7 @@ export default function BlueprintDetail() {
                 ...parsedDescription.bullets,
                 ...step.items.map((item) => formatStepItem(item)),
               ];
-              const isExpanded = Boolean(expandedInteractiveSections[sectionKey]);
+              const isExpanded = interactiveSectionsExpanded;
               const visibleBullets = expandable && !isExpanded
                 ? combinedBullets.slice(0, previewBulletRows)
                 : combinedBullets;
@@ -633,12 +633,7 @@ export default function BlueprintDetail() {
                       variant="ghost"
                       size="sm"
                       className="h-7 px-0 text-xs text-muted-foreground hover:text-foreground"
-                      onClick={() => {
-                        setExpandedInteractiveSections((current) => ({
-                          ...current,
-                          [sectionKey]: !Boolean(current[sectionKey]),
-                        }));
-                      }}
+                      onClick={() => setInteractiveSectionsExpanded((current) => !current)}
                     >
                       {isExpanded ? 'Show less' : 'Show more'}
                     </Button>
