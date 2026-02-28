@@ -1,5 +1,8 @@
 import type express from 'express';
-import type { CoreRouteDeps } from '../routes/core';
+import type {
+  AnalyzeBlueprintNormalizedPayload,
+  CoreRouteDeps,
+} from '../contracts/api/core';
 
 export function handleHealth(_req: express.Request, res: express.Response, _deps: CoreRouteDeps) {
   res.json({ ok: true });
@@ -52,7 +55,7 @@ export async function handleAnalyzeBlueprint(req: express.Request, res: express.
     normalizedItems[category] = normalized;
   });
 
-  const payload = {
+  const payload: AnalyzeBlueprintNormalizedPayload = {
     title: parsed.data.title,
     inventoryTitle: parsed.data.inventoryTitle,
     selectedItems: normalizedItems,

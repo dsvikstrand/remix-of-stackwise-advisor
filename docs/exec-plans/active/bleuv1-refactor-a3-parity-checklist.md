@@ -25,9 +25,9 @@ Validation Gates (Per PR)
 p13) [have] `npm run build`
 p14) [have] `TMPDIR=/tmp npm run test`
 p15) [have] `server/index.ts` direct route registrations remain `0` after Phase 3 extraction.
-p16) [todo] Route parity diff reconfirmation (`53` total routes) needs an updated route-map recount in this slice.
+p16) [have] Route parity diff reconfirmed in this slice (`53` total routes) with route-map refresh evidence.
 p17) [have] Local runtime smoke (`TMPDIR=/tmp npx -y tsx server/index.ts` + curl matrix) passes after extraction wiring fixes.
-p18) [todo] Targeted Oracle smoke-checks for extracted orchestration slices pending runtime execution.
+p18) [have] Targeted Oracle service-token smoke-checks passed (`/api/ops/queue/health` `200`, `/api/ingestion/jobs/latest` `200`, `/api/ingestion/jobs/trigger` `202`) after persisting token in `agentic-backend.service` runtime env.
 
 Representative Endpoint Shape Checks
 p19) [have] `GET /api/health` -> `200` with `{"ok":true}`.
@@ -38,3 +38,14 @@ p23) [have] `POST /api/ingestion/jobs/trigger` (no service token) -> `401 SERVIC
 p24) [todo] `POST /api/my-feed/items/:id/accept` -> not executed in this pass.
 p25) [have] `POST /api/youtube-to-blueprint` invalid payload -> `400 INVALID_URL`.
 p26) [have] `GET /api/source-pages/search?q=a` -> `400 INVALID_QUERY`.
+p27) [have] `GET /api/ops/queue/health` (no service token) -> `401 SERVICE_AUTH_REQUIRED`.
+p28) [have] `GET /api/credits` unauth returns `401` after local runtime mapping (`SUPABASE_URL <- VITE_SUPABASE_URL`, `SUPABASE_ANON_KEY <- VITE_SUPABASE_PUBLISHABLE_KEY`).
+
+Phase 4 (b1+b2) Core/Ops Contract Tightening
+p29) [have] Added canonical contract modules for this slice:
+- `server/contracts/api/shared.ts`
+- `server/contracts/api/core.ts`
+- `server/contracts/api/ops.ts`
+p30) [have] `server/routes/core.ts` and `server/handlers/coreHandlers.ts` now consume `CoreRouteDeps` from `server/contracts/api/core.ts`.
+p31) [have] `server/routes/ops.ts` and `server/handlers/opsHandlers.ts` now consume `OpsRouteDeps` from `server/contracts/api/ops.ts`.
+p32) [have] No endpoint path changes or response-envelope key changes were introduced in the core/ops contract rewiring.

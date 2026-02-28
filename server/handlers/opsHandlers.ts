@@ -1,5 +1,5 @@
 import type express from 'express';
-import type { OpsRouteDeps } from '../routes/ops';
+import type { OpsRouteDeps } from '../contracts/api/ops';
 
 export async function handleIngestionJobsTrigger(req: express.Request, res: express.Response, deps: OpsRouteDeps) {
   if (!deps.isServiceRequestAuthorized(req)) {
