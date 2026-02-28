@@ -259,6 +259,8 @@ export function buildYouTubeQualityRetryInstructions(input: {
     'Do not use meta framing like "this video", "this blueprint", or "the transcript".',
     'All required sections must be present and non-empty: Summary, Takeaways, Bleup, Deep Dive, Practical Rules, Open Questions.',
     'summary_variants is required and must include both non-empty keys: default and eli5.',
+    'Ignore paid-promotion/sponsorship/affiliate transcript segments completely.',
+    'Do not mention sponsor brands, promo codes, affiliate language, or promotion warnings in output.',
     'If any required section is missing or empty, regenerate full output before returning.',
     '',
     'Failed issue codes:',

@@ -60,6 +60,8 @@ Output must be strict valid JSON in the expected generation schema. Section titl
 
 All deep sections target three to five complete bullets each. Empty sections, one-line placeholders, repeated boilerplate tails, and malformed bullets (for example `-.`) are hard failures. Parenthetical expansions like `(XYZ)` should be used sparingly and only when they add necessary clarity.
 
+If the transcript includes paid promotion, sponsorship, or affiliate segments, treat those segments as non-content noise and ignore them completely. Do not include sponsor brand names, promo codes, sponsorship disclaimers, affiliate language, or any promotion warning text in the generated blueprint.
+
 `Summary` is an intro layer, not the bulk layer. It should provide a concise topic orientation and prerequisite context at an ELI15 depth. The bulk payload belongs in `Bleup`.
 `summary_variants` is mandatory and must include both `default` and `eli5` strings. Missing either variant is a hard fail that should trigger eval failure and retry.
 
@@ -149,6 +151,7 @@ Use language that belongs to the topic domain of the transcript. Avoid cross-dom
 ## Transcript Precedence Rule
 
 Transcript context is the top authority for all factual statements. Vibe references can shape tone and readability only. If there is any ambiguity, choose transcript fidelity over stylistic flourish.
+Paid promotion/sponsorship/affiliate transcript segments are explicitly excluded from content extraction and should not appear in output.
 
 ## Retry Patch Slot (Same Template, Different Context)
 
@@ -157,6 +160,7 @@ Retries should use the same prompt template and inject quality issues through `<
 ## Final Generation Directive (Last Instruction Layer)
 
 End the prompt context with a short final directive that reasserts the job and source hierarchy. The directive should explicitly say that the model must now generate the blueprint using `<SOURCE_TRANSCRIPT_CONTEXT>` as the only factual source, while using `<POSITIVE_REFERENCE_PATHS>` only for vibe calibration (tone, pacing, and engagement feel). It should explicitly ban importing facts, numbers, examples, and distinctive wording from references. It should require all six sections (`Summary`, `Takeaways`, `Bleup`, `Deep Dive`, `Practical Rules`, `Open Questions`) and make clear that missing any required section should trigger eval failure and retry. It should end with a clear "generate now" instruction tied to the required JSON schema and section contract.
+It should also explicitly require that any sponsorship, paid-promotion, or affiliate transcript segments are ignored and never referenced in output (including no sponsor-name mentions and no promotion warnings).
 
 ## Response Format (Strict JSON Shape)
 
@@ -255,4 +259,4 @@ Rewrite direction: enforce domain-native vocabulary and decision framing per top
 
 ## Final Job Recap
 
-Write a high-value blueprint in direct creator voice that feels human, useful, and discussion-worthy. Use transcript context as the only factual source, use Oracle POS references only for vibe calibration, include all required sections (`Summary`, `Takeaways`, `Bleup`, `Deep Dive`, `Practical Rules`, `Open Questions`) or expect eval failure with retry, follow the section contract exactly, and return strict JSON in the required shape.
+Write a high-value blueprint in direct creator voice that feels human, useful, and discussion-worthy. Use transcript context as the only factual source, use Oracle POS references only for vibe calibration, include all required sections (`Summary`, `Takeaways`, `Bleup`, `Deep Dive`, `Practical Rules`, `Open Questions`) or expect eval failure with retry, follow the section contract exactly, ignore paid-promotion/sponsorship/affiliate transcript segments completely (no references, no namedrops, no warning text), and return strict JSON in the required shape.
