@@ -543,7 +543,11 @@ export default function BlueprintDetail() {
               className={index === 0 ? 'space-y-1.5' : 'mt-3 pt-1 space-y-1.5'}
             >
               {useSummarySlider ? (
-                <SummarySlides title={step.title} slides={summarySlides.length > 0 ? summarySlides : [step.description]} />
+                <SummarySlides
+                  title={step.title}
+                  slides={summarySlides.length > 0 ? summarySlides : [step.description]}
+                  surface={isBleupSection ? 'flat' : 'boxed'}
+                />
               ) : (
                 <>
                   {!isTopSummarySection ? <p className="text-sm font-medium">{step.title}</p> : null}
@@ -767,6 +771,7 @@ export default function BlueprintDetail() {
                                       <SummarySlides
                                         title={normalizedSummary.title}
                                         slides={summarySlides.length > 0 ? summarySlides : [normalizedSummary.description]}
+                                        surface="flat"
                                       />
                                     </div>
                                   );

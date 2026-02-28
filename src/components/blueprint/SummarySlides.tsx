@@ -7,9 +7,10 @@ import { cn } from '@/lib/utils';
 type SummarySlidesProps = {
   title: string;
   slides: string[];
+  surface?: 'boxed' | 'flat';
 };
 
-export function SummarySlides({ title, slides }: SummarySlidesProps) {
+export function SummarySlides({ title, slides, surface = 'boxed' }: SummarySlidesProps) {
   const [api, setApi] = useState<CarouselApi>();
   const [activeIndex, setActiveIndex] = useState(0);
   const canSlide = slides.length > 1;
@@ -46,7 +47,12 @@ export function SummarySlides({ title, slides }: SummarySlidesProps) {
         <CarouselContent className="ml-0">
           {slides.map((slide, index) => (
             <CarouselItem key={`summary-slide-${index}`} className="pl-0">
-              <div className="min-h-[132px] rounded-md border border-border/30 bg-muted/20 px-3 py-2.5">
+              <div
+                className={cn(
+                  'min-h-[132px] px-0 py-1',
+                  surface === 'boxed' ? 'rounded-md border border-border/30 bg-muted/20 px-3 py-2.5' : 'border-0 bg-transparent',
+                )}
+              >
                 <p className="text-sm text-muted-foreground whitespace-pre-line">{slide}</p>
               </div>
             </CarouselItem>
@@ -95,4 +101,3 @@ export function SummarySlides({ title, slides }: SummarySlidesProps) {
     </div>
   );
 }
-
