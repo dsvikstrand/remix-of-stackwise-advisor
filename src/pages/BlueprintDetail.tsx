@@ -74,6 +74,22 @@ function parseSteps(steps: Json) {
   return steps.filter((step): step is BlueprintStep => !!step && typeof step === 'object');
 }
 
+function parseStepVariants(selected: Json | null | undefined) {
+  const fallback: Record<SummaryExpertiseLevel, BlueprintStep[]> = {
+    default: [],
+    eli5: [],
+  };
+  if (!selected || typeof selected !== 'object' || Array.isArray(selected)) return fallback;
+  const payload = selected as Record<string, unknown>;
+  const variants = payload.bp_step_variants;
+  if (!variants || typeof variants !== 'object' || Array.isArray(variants)) return fallback;
+  const map = variants as Record<string, Json>;
+  return {
+    default: parseSteps(map.default),
+    eli5: parseSteps(map.eli5),
+  };
+}
+
 function stripMarkdownImageTokens(text: string) {
   return text.replace(/!\[[^\]]*]\([^)]+\)/g, '').replace(/\n{3,}/g, '\n\n').trim();
 }
@@ -294,10 +310,19 @@ export default function BlueprintDetail() {
   const [summaryExpertiseLevel, setSummaryExpertiseLevel] = useState<SummaryExpertiseLevel>('eli5');
   const location = useLocation();
   const loggedBlueprintId = useRef<string | null>(null);
-  const steps = blueprint ? parseSteps(blueprint.steps) : [];
+  const summaryVariants = parseSummaryVariants(blueprint?.selected_items);
+  const stepVariants = parseStepVariants(blueprint?.selected_items);
+  const baseSteps = blueprint ? parseSteps(blueprint.steps) : [];
+  const defaultVariantSteps = stepVariants.default.length > 0 ? stepVariants.default : baseSteps;
+  const hasEli5StepVariant = stepVariants.eli5.length > 0;
+  const hasEli5SummaryVariant = Boolean(summaryVariants.eli5);
+  const hasEli5Content = hasEli5SummaryVariant || hasEli5StepVariant;
+  const steps = summaryExpertiseLevel === 'eli5' && hasEli5StepVariant
+    ? stepVariants.eli5
+    : defaultVariantSteps;
   const isGoldenExample = isGoldenBlueprintExample(blueprint?.selected_items);
   const isGoldenV1Generated = isGoldenV1GeneratedBlueprint(blueprint?.selected_items);
-  const isGoldenStructured = hasGoldenStructure(steps);
+  const isGoldenStructured = hasGoldenStructure(defaultVariantSteps);
   const useGoldenRender = isGoldenExample || isGoldenV1Generated || isGoldenStructured;
   const hasAiReview = !useGoldenRender && Boolean((blueprint?.llm_review || '').trim());
   const [sourceChannel, setSourceChannel] = useState<{
@@ -511,6 +536,14 @@ export default function BlueprintDetail() {
   const goldenSections = useGoldenRender
     ? steps.map((step, index) => normalizeGoldenStep(step, index))
     : [];
+  const defaultGoldenSections = useGoldenRender
+    ? defaultVariantSteps.map((step, index) => normalizeGoldenStep(step, index))
+    : [];
+  const defaultVisibleGoldenSections = defaultGoldenSections.filter((step) => normalizeHeadingKey(step.title) !== 'bottom line');
+  const defaultTopSummarySection = defaultVisibleGoldenSections.find((step) => {
+    const key = normalizeHeadingKey(step.title);
+    return isSummaryKey(key);
+  });
   const visibleGoldenSections = goldenSections.filter((step) => normalizeHeadingKey(step.title) !== 'bottom line');
   const takeawaysSection = visibleGoldenSections.find((step) => {
     const key = normalizeHeadingKey(step.title);
@@ -520,15 +553,14 @@ export default function BlueprintDetail() {
     const key = normalizeHeadingKey(step.title);
     return isSummaryKey(key);
   });
-  const summaryVariants = parseSummaryVariants(blueprint?.selected_items);
-  const hasEli5SummaryVariant = Boolean(summaryVariants.eli5);
   useEffect(() => {
-    setSummaryExpertiseLevel(hasEli5SummaryVariant ? 'eli5' : 'default');
-  }, [blueprint?.id, hasEli5SummaryVariant]);
+    setSummaryExpertiseLevel(hasEli5Content ? 'eli5' : 'default');
+  }, [blueprint?.id, hasEli5Content]);
 
-  const summaryDefaultText = summaryVariants.default || topSummarySection?.description || '';
-  const selectedSummaryText = summaryExpertiseLevel === 'eli5' && hasEli5SummaryVariant
-    ? summaryVariants.eli5
+  const summaryDefaultText = summaryVariants.default || defaultTopSummarySection?.description || topSummarySection?.description || '';
+  const summaryEli5Text = summaryVariants.eli5 || (summaryExpertiseLevel === 'eli5' ? (topSummarySection?.description || '') : '');
+  const selectedSummaryText = summaryExpertiseLevel === 'eli5'
+    ? summaryEli5Text || summaryDefaultText
     : summaryDefaultText;
   const bleupSection = visibleGoldenSections.find((step) => {
     const key = normalizeHeadingKey(step.title);
@@ -879,7 +911,7 @@ export default function BlueprintDetail() {
                       <div className="inline-flex items-center gap-1 rounded-full border border-border/40 bg-muted/20 p-1">
                         {summaryExpertiseLevels.map((level) => {
                           const active = summaryExpertiseLevel === level.key;
-                          const disabled = level.key === 'eli5' && !hasEli5SummaryVariant;
+                          const disabled = level.key === 'eli5' && !hasEli5Content;
                           return (
                             <Button
                               key={level.key}
