@@ -125,6 +125,13 @@ function isNarrativeKey(key: string) {
   return isSummaryKey(key) || isBleupKey(key);
 }
 
+function sectionDisplayTitle(rawTitle: string) {
+  const key = normalizeHeadingKey(rawTitle);
+  if (isSummaryKey(key)) return 'About';
+  if (isBleupKey(key)) return 'Content';
+  return rawTitle;
+}
+
 function canonicalSectionTitle(rawTitle: string, fallbackIndex: number) {
   const normalized = normalizeHeadingKey(rawTitle);
   if (isTakeawaysKey(normalized)) return 'Takeaways';
@@ -616,6 +623,7 @@ export default function BlueprintDetail() {
           const isTopSummarySection = isSummaryKey(sectionKey);
           const isTakeawaysSection = isTakeawaysKey(sectionKey);
           const isBleupSection = isBleupKey(sectionKey);
+          const displayTitle = sectionDisplayTitle(step.title);
           const summarySlides = isBleupSection ? splitSummaryIntoSlides(step.description) : [];
           const parsedDescription = parseDescriptionBlocks(step.description);
           const combinedBullets = [
@@ -638,13 +646,13 @@ export default function BlueprintDetail() {
             >
               {useSummarySlider ? (
                 <SummarySlides
-                  title={step.title}
+                  title={displayTitle}
                   slides={summarySlides.length > 0 ? summarySlides : [step.description]}
                   surface={isBleupSection ? 'flat' : 'boxed'}
                 />
               ) : (
                 <>
-                  {!isTopSummarySection ? <p className="text-sm font-medium">{step.title}</p> : null}
+                  <p className="text-sm font-medium">{displayTitle}</p>
                   {parsedDescription.text ? (
                     <p className="text-sm text-muted-foreground whitespace-pre-line">{parsedDescription.text}</p>
                   ) : null}
