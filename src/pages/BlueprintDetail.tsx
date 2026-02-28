@@ -587,7 +587,7 @@ export default function BlueprintDetail() {
             ...parsedDescription.bullets,
             ...step.items.map((item) => formatStepItem(item)),
           ];
-          const takeawaysPreviewRows = 3;
+          const takeawaysPreviewRows = 2;
           const takeawaysCanExpand = isTakeawaysSection && combinedBullets.length > takeawaysPreviewRows;
           const takeawaysVisibleBullets = takeawaysCanExpand && !takeawaysExpanded
             ? combinedBullets.slice(0, takeawaysPreviewRows)
