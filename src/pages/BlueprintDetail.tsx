@@ -272,6 +272,7 @@ export default function BlueprintDetail() {
   const [comment, setComment] = useState('');
   const [isBannerExpanded, setIsBannerExpanded] = useState(false);
   const [interactiveSectionsExpanded, setInteractiveSectionsExpanded] = useState(false);
+  const [summaryExpertiseLevel, setSummaryExpertiseLevel] = useState<'default' | 'eli5'>('default');
   const location = useLocation();
   const loggedBlueprintId = useRef<string | null>(null);
   const steps = blueprint ? parseSteps(blueprint.steps) : [];
@@ -294,6 +295,13 @@ export default function BlueprintDetail() {
     // Keep channel tags out of the hashtag row to preserve the "channel != hashtag" mental model.
     return blueprint.tags.filter((tag) => !curatedChannelTagSlugs.has(normalizeTag(tag.slug)));
   }, [blueprint?.tags, curatedChannelTagSlugs]);
+  const summaryExpertiseLevels = useMemo(
+    () => [
+      { key: 'default' as const, label: 'Default' },
+      { key: 'eli5' as const, label: 'ELI5' },
+    ],
+    [],
+  );
 
   useEffect(() => {
     if (!blueprint?.id) return;
@@ -309,6 +317,7 @@ export default function BlueprintDetail() {
 
   useEffect(() => {
     setInteractiveSectionsExpanded(false);
+    setSummaryExpertiseLevel('default');
   }, [blueprint?.id]);
 
   useEffect(() => {
@@ -770,6 +779,29 @@ export default function BlueprintDetail() {
               {useGoldenRender ? (
                 <>
                   {renderGoldenGroup(effectiveTopSummarySection ? [effectiveTopSummarySection] : [])}
+                  {effectiveTopSummarySection ? (
+                    <div className="flex items-center justify-start">
+                      <div className="inline-flex items-center gap-1 rounded-full border border-border/40 bg-muted/20 p-1">
+                        {summaryExpertiseLevels.map((level) => {
+                          const active = summaryExpertiseLevel === level.key;
+                          return (
+                            <Button
+                              key={level.key}
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className={`h-7 rounded-full px-3 text-xs ${active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                              onClick={() => setSummaryExpertiseLevel(level.key)}
+                              aria-pressed={active}
+                              aria-label={`Set summary level to ${level.label}`}
+                            >
+                              {level.label}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
                   {renderBanner}
                   {renderGoldenGroup(takeawaysSection ? [takeawaysSection] : [])}
                   {renderGoldenGroup(effectiveBleupSection ? [effectiveBleupSection] : [])}
