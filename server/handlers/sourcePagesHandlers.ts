@@ -1,0 +1,1800 @@
+import type express from 'express';
+
+type SourceItemUnlockRow = any;
+type SourcePageVideoExistingState = any;
+type SourcePageVideoGenerateItem = any;
+type SourceUnlockQueueItem = any;
+type SyncSubscriptionResult = any;
+
+export type SourcePagesRouteDeps = {
+  clampInt: any;
+  getAuthedSupabaseClient: any;
+  getServiceSupabaseClient: any;
+  buildSourcePagePath: any;
+  normalizeSourcePagePlatform: any;
+  getSourcePageByPlatformExternalId: any;
+  needsSourcePageAssetHydration: any;
+  hydrateSourcePageAssetsForRow: any;
+  youtubeDataApiKey: string;
+  getUserSubscriptionStateForSourcePage: any;
+  sourceVideoListBurstLimiter: express.RequestHandler;
+  sourceVideoListSustainedLimiter: express.RequestHandler;
+  sourceVideoUnlockBurstLimiter: express.RequestHandler;
+  sourceVideoUnlockSustainedLimiter: express.RequestHandler;
+  clampYouTubeSourceVideoLimit: any;
+  normalizeYouTubeSourceVideoKind: any;
+  runUnlockSweeps: any;
+  listYouTubeSourceVideos: any;
+  YouTubeSourceVideosError: any;
+  loadExistingSourceVideoStateForUser: any;
+  countActiveSubscribersForSourcePage: any;
+  computeUnlockCost: any;
+  getSourceItemUnlocksBySourceItemIds: any;
+  toUnlockSnapshot: any;
+  isConfirmedNoTranscriptUnlock: any;
+  createUnlockTraceId: any;
+  SourcePageVideosGenerateSchema: any;
+  sourceUnlockGenerateMaxItems: number;
+  logUnlockEvent: any;
+  normalizeSourcePageVideoGenerateItem: any;
+  upsertSourceItemFromVideo: any;
+  ensureSourceItemUnlock: any;
+  getTranscriptCooldownState: any;
+  reserveUnlock: any;
+  sourceUnlockReservationSeconds: number;
+  reserveCredits: any;
+  buildUnlockLedgerIdempotencyKey: any;
+  failUnlock: any;
+  attachReservationLedger: any;
+  markUnlockProcessing: any;
+  countQueueDepth: any;
+  unlockIntakeEnabled: boolean;
+  queueDepthHardLimit: number;
+  queueDepthPerUserLimit: number;
+  workerConcurrency: number;
+  emitGenerationStartedNotification: any;
+  getGenerationNotificationLinkPath: any;
+  scheduleQueuedIngestionProcessing: any;
+  settleReservation: any;
+  completeUnlock: any;
+  runYouTubePipeline: any;
+  getFailureTransition: any;
+  sourceTranscriptMaxAttempts: number;
+  resolveYouTubeChannel: any;
+  fetchYouTubeChannelAssetMap: any;
+  ensureSourcePageFromYouTubeChannel: any;
+  syncSingleSubscription: any;
+  markSubscriptionSyncError: any;
+  upsertSubscriptionNoticeSourceItem: any;
+  insertFeedItem: any;
+  cleanupSubscriptionNoticeForChannel: any;
+};
+
+export function registerSourcePagesRouteHandlers(app: express.Express, deps: SourcePagesRouteDeps) {
+  const {
+    clampInt,
+    getAuthedSupabaseClient,
+    getServiceSupabaseClient,
+    buildSourcePagePath,
+    normalizeSourcePagePlatform,
+    getSourcePageByPlatformExternalId,
+    needsSourcePageAssetHydration,
+    hydrateSourcePageAssetsForRow,
+    youtubeDataApiKey,
+    getUserSubscriptionStateForSourcePage,
+    sourceVideoListBurstLimiter,
+    sourceVideoListSustainedLimiter,
+    sourceVideoUnlockBurstLimiter,
+    sourceVideoUnlockSustainedLimiter,
+    clampYouTubeSourceVideoLimit,
+    normalizeYouTubeSourceVideoKind,
+    runUnlockSweeps,
+    listYouTubeSourceVideos,
+    YouTubeSourceVideosError,
+    loadExistingSourceVideoStateForUser,
+    countActiveSubscribersForSourcePage,
+    computeUnlockCost,
+    getSourceItemUnlocksBySourceItemIds,
+    toUnlockSnapshot,
+    isConfirmedNoTranscriptUnlock,
+    createUnlockTraceId,
+    SourcePageVideosGenerateSchema,
+    sourceUnlockGenerateMaxItems,
+    logUnlockEvent,
+    normalizeSourcePageVideoGenerateItem,
+    upsertSourceItemFromVideo,
+    ensureSourceItemUnlock,
+    getTranscriptCooldownState,
+    reserveUnlock,
+    sourceUnlockReservationSeconds,
+    reserveCredits,
+    buildUnlockLedgerIdempotencyKey,
+    failUnlock,
+    attachReservationLedger,
+    markUnlockProcessing,
+    countQueueDepth,
+    unlockIntakeEnabled,
+    queueDepthHardLimit,
+    queueDepthPerUserLimit,
+    workerConcurrency,
+    emitGenerationStartedNotification,
+    getGenerationNotificationLinkPath,
+    scheduleQueuedIngestionProcessing,
+    settleReservation,
+    completeUnlock,
+    runYouTubePipeline,
+    getFailureTransition,
+    sourceTranscriptMaxAttempts,
+    resolveYouTubeChannel,
+    fetchYouTubeChannelAssetMap,
+    ensureSourcePageFromYouTubeChannel,
+    syncSingleSubscription,
+    markSubscriptionSyncError,
+    upsertSubscriptionNoticeSourceItem,
+    insertFeedItem,
+    cleanupSubscriptionNoticeForChannel,
+  } = deps;
+type SourcePageBlueprintCursor = {
+  createdAt: string;
+  feedItemId: string;
+};
+
+type SourcePageFeedScanRow = {
+  id: string;
+  source_item_id: string;
+  blueprint_id: string;
+  created_at: string;
+};
+
+type SourcePageFeedSourceRow = {
+  id: string;
+  source_page_id: string | null;
+  source_channel_id: string | null;
+  source_url: string;
+  thumbnail_url: string | null;
+};
+
+function normalizeSourcePageBlueprintCursor(input: SourcePageBlueprintCursor) {
+  const createdAtMs = Date.parse(input.createdAt);
+  if (!Number.isFinite(createdAtMs)) return null;
+  const feedItemId = String(input.feedItemId || '').trim();
+  if (!feedItemId) return null;
+  return {
+    createdAt: new Date(createdAtMs).toISOString(),
+    feedItemId,
+  };
+}
+
+function encodeSourcePageBlueprintCursor(input: SourcePageBlueprintCursor) {
+  const normalized = normalizeSourcePageBlueprintCursor(input);
+  if (!normalized) return null;
+  const payload = JSON.stringify({
+    created_at: normalized.createdAt,
+    feed_item_id: normalized.feedItemId,
+  });
+  return Buffer.from(payload, 'utf8').toString('base64url');
+}
+
+function decodeSourcePageBlueprintCursor(raw: string) {
+  const value = String(raw || '').trim();
+  if (!value) return null;
+  try {
+    const decoded = Buffer.from(value, 'base64url').toString('utf8');
+    const parsed = JSON.parse(decoded) as { created_at?: string; feed_item_id?: string };
+    return normalizeSourcePageBlueprintCursor({
+      createdAt: String(parsed.created_at || ''),
+      feedItemId: String(parsed.feed_item_id || ''),
+    });
+  } catch {
+    return null;
+  }
+}
+
+function buildSourcePageCursorFilter(cursor: SourcePageBlueprintCursor) {
+  const normalized = normalizeSourcePageBlueprintCursor(cursor);
+  if (!normalized) return null;
+  return `created_at.lt.${normalized.createdAt},and(created_at.eq.${normalized.createdAt},id.lt.${normalized.feedItemId})`;
+}
+
+function cleanSourcePageSummaryText(raw: string) {
+  return raw
+    .replace(/\s+/g, ' ')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/\*\*/g, '')
+    .replace(/__/g, '')
+    .replace(/`/g, '')
+    .trim();
+}
+
+function buildSourcePageSummary(input: {
+  llmReview: string | null;
+  selectedItems: unknown;
+  fallbackTitle: string;
+  maxChars?: number;
+}) {
+  const maxChars = Math.max(80, Math.min(320, Number(input.maxChars || 220)));
+  const selectedItems =
+    input.selectedItems && typeof input.selectedItems === 'object' ? input.selectedItems as Record<string, unknown> : null;
+  const selectedItemsOverview = selectedItems
+    ? [selectedItems.overview, selectedItems.description, selectedItems.notes]
+      .find((value) => typeof value === 'string' && String(value).trim().length > 0) || null
+    : null;
+  const candidate = cleanSourcePageSummaryText(
+    String(input.llmReview || selectedItemsOverview || input.fallbackTitle || ''),
+  );
+  if (!candidate) return 'Open to view the full step-by-step blueprint.';
+  if (candidate.length <= maxChars) return candidate;
+  return `${candidate.slice(0, maxChars).trim()}...`;
+}
+
+type SourcePageSearchRow = {
+  id: string;
+  platform: string;
+  external_id: string;
+  external_url: string;
+  title: string;
+  avatar_url: string | null;
+  is_active: boolean;
+};
+
+function normalizeSourcePageSearchToken(raw: string) {
+  return String(raw || '').trim().toLowerCase();
+}
+
+function scoreSourcePageSearchRow(row: SourcePageSearchRow, normalizedQuery: string) {
+  const normalizedTitle = normalizeSourcePageSearchToken(row.title);
+  const normalizedExternalId = normalizeSourcePageSearchToken(row.external_id);
+  if (!normalizedQuery) return 99;
+  if (normalizedTitle === normalizedQuery || normalizedExternalId === normalizedQuery) return 0;
+  if (normalizedTitle.startsWith(normalizedQuery)) return 1;
+  if (normalizedExternalId.startsWith(normalizedQuery)) return 2;
+  if (normalizedTitle.includes(normalizedQuery)) return 3;
+  if (normalizedExternalId.includes(normalizedQuery)) return 4;
+  return 9;
+}
+
+app.get('/api/source-pages/search', async (req, res) => {
+  const rawQuery = String(req.query.q || '').trim();
+  if (rawQuery.length < 2) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'INVALID_QUERY',
+      message: 'Query must be at least 2 characters.',
+      data: null,
+    });
+  }
+
+  const limit = clampInt(req.query.limit, 12, 1, 25);
+  const scanLimit = clampInt(limit * 4, 48, 20, 100);
+  const db = getServiceSupabaseClient();
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+  void runSourcePageAssetSweep(db, { mode: 'opportunistic' });
+
+  const likePattern = `%${rawQuery}%`;
+  const [titleResult, externalResult] = await Promise.all([
+    db
+      .from('source_pages')
+      .select('id, platform, external_id, external_url, title, avatar_url, is_active')
+      .eq('is_active', true)
+      .ilike('title', likePattern)
+      .limit(scanLimit),
+    db
+      .from('source_pages')
+      .select('id, platform, external_id, external_url, title, avatar_url, is_active')
+      .eq('is_active', true)
+      .ilike('external_id', likePattern)
+      .limit(scanLimit),
+  ]);
+
+  if (titleResult.error || externalResult.error) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_SEARCH_FAILED',
+      message: titleResult.error?.message || externalResult.error?.message || 'Could not search source pages.',
+      data: null,
+    });
+  }
+
+  const dedupedById = new Map<string, SourcePageSearchRow>();
+  for (const row of ([...(titleResult.data || []), ...(externalResult.data || [])] as SourcePageSearchRow[])) {
+    if (!row?.id) continue;
+    dedupedById.set(row.id, row);
+  }
+
+  const normalizedQuery = normalizeSourcePageSearchToken(rawQuery);
+  const items = Array.from(dedupedById.values())
+    .sort((a, b) => {
+      const scoreDelta = scoreSourcePageSearchRow(a, normalizedQuery) - scoreSourcePageSearchRow(b, normalizedQuery);
+      if (scoreDelta !== 0) return scoreDelta;
+      const titleDelta = String(a.title || '').localeCompare(String(b.title || ''), undefined, { sensitivity: 'base' });
+      if (titleDelta !== 0) return titleDelta;
+      return String(a.external_id || '').localeCompare(String(b.external_id || ''), undefined, { sensitivity: 'base' });
+    })
+    .slice(0, limit)
+    .map((row) => ({
+      id: row.id,
+      platform: row.platform,
+      external_id: row.external_id,
+      external_url: row.external_url,
+      title: row.title,
+      avatar_url: row.avatar_url,
+      is_active: row.is_active,
+      path: buildSourcePagePath(row.platform, row.external_id),
+    }));
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'source page search',
+    data: {
+      items,
+    },
+  });
+});
+
+app.get('/api/source-pages/:platform/:externalId', async (req, res) => {
+  const platform = normalizeSourcePagePlatform(req.params.platform || '');
+  if (!platform) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_PLATFORM_UNSUPPORTED',
+      message: 'Unsupported source page platform.',
+      data: null,
+    });
+  }
+
+  const externalId = String(req.params.externalId || '').trim();
+  if (!externalId) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'INVALID_INPUT',
+      message: 'externalId required',
+      data: null,
+    });
+  }
+
+  const db = getServiceSupabaseClient();
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+
+  let sourcePage;
+  try {
+    sourcePage = await getSourcePageByPlatformExternalId(db, { platform, externalId });
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: error instanceof Error ? error.message : 'Could not fetch source page.',
+      data: null,
+    });
+  }
+  if (!sourcePage) {
+    return res.status(404).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_NOT_FOUND',
+      message: 'Source page not found.',
+      data: null,
+    });
+  }
+
+  // Opportunistic lazy hydration: older backfilled rows can miss avatar/banner
+  // until a subscribe/import rewrite occurs. Fill once on read when possible.
+  if (needsSourcePageAssetHydration(sourcePage) && youtubeDataApiKey) {
+    try {
+      const hydration = await hydrateSourcePageAssetsForRow(db, sourcePage as SourcePageAssetRecord);
+      sourcePage = hydration.sourcePage as typeof sourcePage;
+    } catch (assetError) {
+      console.log('[source_page_assets_lookup_failed]', JSON.stringify({
+        source_page_id: sourcePage.id,
+        source_channel_id: sourcePage.external_id,
+        error: assetError instanceof Error ? assetError.message : String(assetError),
+      }));
+    }
+  }
+
+  const { count: linkedFollowerCount, error: linkedFollowerCountError } = await db
+    .from('user_source_subscriptions')
+    .select('id', { count: 'exact', head: true })
+    .eq('source_page_id', sourcePage.id)
+    .eq('is_active', true);
+  if (linkedFollowerCountError) {
+    return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: linkedFollowerCountError.message, data: null });
+  }
+
+  let followerCount = Number(linkedFollowerCount || 0);
+  if (followerCount === 0 && platform === 'youtube') {
+    const { count: fallbackFollowerCount } = await db
+      .from('user_source_subscriptions')
+      .select('id', { count: 'exact', head: true })
+      .eq('source_type', 'youtube')
+      .eq('source_channel_id', sourcePage.external_id)
+      .eq('is_active', true);
+    followerCount = Number(fallbackFollowerCount || 0);
+  }
+
+  const userId = (res.locals.user as { id?: string } | undefined)?.id || null;
+  let subscribed = false;
+  let subscriptionId: string | null = null;
+  if (userId) {
+    try {
+      const subscriptionState = await getUserSubscriptionStateForSourcePage(db, {
+        userId,
+        sourcePageId: sourcePage.id,
+      });
+      subscribed = Boolean(subscriptionState.subscribed);
+      subscriptionId = subscriptionState.subscription_id || null;
+
+      if (!subscribed && platform === 'youtube') {
+        const { data: fallbackSub } = await db
+          .from('user_source_subscriptions')
+          .select('id, is_active')
+          .eq('user_id', userId)
+          .eq('source_type', 'youtube')
+          .eq('source_channel_id', sourcePage.external_id)
+          .maybeSingle();
+        if (fallbackSub?.is_active) {
+          subscribed = true;
+          subscriptionId = fallbackSub.id;
+        }
+      }
+    } catch {
+      // Optional viewer state should not fail public reads.
+      subscribed = false;
+      subscriptionId = null;
+    }
+  }
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'source page fetched',
+    data: {
+      source_page: {
+        ...sourcePage,
+        path: buildSourcePagePath(sourcePage.platform, sourcePage.external_id),
+        follower_count: followerCount,
+      },
+      viewer: {
+        authenticated: Boolean(userId),
+        subscribed,
+        subscription_id: subscriptionId,
+      },
+    },
+  });
+});
+
+app.get(
+  '/api/source-pages/:platform/:externalId/videos',
+  sourceVideoListBurstLimiter,
+  sourceVideoListSustainedLimiter,
+  async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+
+  const platform = normalizeSourcePagePlatform(req.params.platform || '');
+  if (!platform) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_PLATFORM_UNSUPPORTED',
+      message: 'Unsupported source page platform.',
+      data: null,
+    });
+  }
+  if (platform !== 'youtube') {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_PLATFORM_UNSUPPORTED',
+      message: 'Only YouTube source pages are supported in this version.',
+      data: null,
+    });
+  }
+
+  const externalId = String(req.params.externalId || '').trim();
+  if (!externalId) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'INVALID_INPUT',
+      message: 'externalId required',
+      data: null,
+    });
+  }
+
+  const limit = clampYouTubeSourceVideoLimit(Number(req.query.limit), 12);
+  const pageToken = String(req.query.page_token || '').trim();
+  const kind = normalizeYouTubeSourceVideoKind(String(req.query.kind || ''), 'full');
+  const shortsMaxSeconds = 60;
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+  const sourcePageDb = getServiceSupabaseClient();
+  if (!sourcePageDb) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+
+  let sourcePage;
+  try {
+    sourcePage = await getSourcePageByPlatformExternalId(sourcePageDb, { platform, externalId });
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: error instanceof Error ? error.message : 'Could not read source page.',
+      data: null,
+    });
+  }
+  if (!sourcePage) {
+    return res.status(404).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_NOT_FOUND',
+      message: 'Source page not found.',
+      data: null,
+    });
+  }
+
+  let page;
+  try {
+    await runUnlockSweeps(sourcePageDb, { mode: 'opportunistic' });
+    page = await listYouTubeSourceVideos({
+      apiKey: youtubeDataApiKey,
+      channelId: sourcePage.external_id,
+      limit,
+      pageToken: pageToken || undefined,
+      kind,
+      shortsMaxSeconds,
+    });
+  } catch (error) {
+    if (error instanceof YouTubeSourceVideosError) {
+      if (error.code === 'RATE_LIMITED') {
+        return res.status(429).json({
+          ok: false,
+          error_code: 'RATE_LIMITED',
+          message: error.message,
+          data: null,
+        });
+      }
+      if (error.code === 'SEARCH_DISABLED') {
+        return res.status(503).json({
+          ok: false,
+          error_code: 'SOURCE_VIDEO_LIST_FAILED',
+          message: error.message,
+          data: null,
+        });
+      }
+      return res.status(502).json({
+        ok: false,
+        error_code: 'SOURCE_VIDEO_LIST_FAILED',
+        message: error.message,
+        data: null,
+      });
+    }
+    return res.status(502).json({
+      ok: false,
+      error_code: 'SOURCE_VIDEO_LIST_FAILED',
+      message: error instanceof Error ? error.message : 'Could not load source videos.',
+      data: null,
+    });
+  }
+
+  let existingByVideoId = new Map<string, SourcePageVideoExistingState>();
+  try {
+    existingByVideoId = await loadExistingSourceVideoStateForUser(
+      db,
+      userId,
+      page.results.map((item) => item.video_id),
+    );
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: error instanceof Error ? error.message : 'Could not resolve duplicate state.',
+      data: null,
+    });
+  }
+
+  let activeSubscriberCount = 0;
+  try {
+    activeSubscriberCount = await countActiveSubscribersForSourcePage(sourcePageDb, sourcePage.id);
+  } catch (error) {
+    console.log('[source_video_active_subscriber_count_failed]', JSON.stringify({
+      source_page_id: sourcePage.id,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+  const fallbackUnlockCost = computeUnlockCost(activeSubscriberCount);
+
+  const sourceItemIds = Array.from(new Set(
+    page.results
+      .map((item) => existingByVideoId.get(item.video_id)?.source_item_id || null)
+      .filter((value): value is string => Boolean(value)),
+  ));
+  let unlockBySourceItemId = new Map<string, SourceItemUnlockRow>();
+  if (sourceItemIds.length > 0) {
+    try {
+      const unlockRows = await getSourceItemUnlocksBySourceItemIds(sourcePageDb, sourceItemIds);
+      unlockBySourceItemId = new Map(unlockRows.map((row) => [row.source_item_id, row]));
+    } catch (error) {
+      console.log('[source_video_unlock_lookup_failed]', JSON.stringify({
+        source_page_id: sourcePage.id,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+
+  const items = page.results
+    .map((item) => {
+      const existing = existingByVideoId.get(item.video_id);
+      const unlock = existing?.source_item_id ? unlockBySourceItemId.get(existing.source_item_id) || null : null;
+      return {
+        unlock,
+        payload: {
+          video_id: item.video_id,
+          video_url: item.video_url,
+          title: item.title,
+          description: item.description,
+          thumbnail_url: item.thumbnail_url,
+          published_at: item.published_at,
+          duration_seconds: item.duration_seconds,
+          channel_id: item.channel_id,
+          channel_title: item.channel_title,
+          already_exists_for_user: Boolean(existing?.already_exists_for_user),
+          existing_blueprint_id: existing?.existing_blueprint_id || null,
+          existing_feed_item_id: existing?.existing_feed_item_id || null,
+          ...toUnlockSnapshot({
+            unlock,
+            fallbackCost: fallbackUnlockCost,
+          }),
+        },
+      };
+    })
+    .filter((row) => !isConfirmedNoTranscriptUnlock(row.unlock))
+    .map((row) => row.payload);
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'source page videos',
+    data: {
+      items,
+      next_page_token: page.nextPageToken,
+      kind,
+      shorts_max_seconds: shortsMaxSeconds,
+    },
+  });
+  },
+);
+
+async function handleSourcePageVideosUnlock(req: express.Request, res: express.Response) {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+  const traceId = createUnlockTraceId();
+  const traceData = { trace_id: traceId };
+
+  const platform = normalizeSourcePagePlatform(req.params.platform || '');
+  if (!platform) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_PLATFORM_UNSUPPORTED',
+      message: 'Unsupported source page platform.',
+      data: traceData,
+    });
+  }
+  if (platform !== 'youtube') {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_PLATFORM_UNSUPPORTED',
+      message: 'Only YouTube source pages are supported in this version.',
+      data: traceData,
+    });
+  }
+
+  const externalId = String(req.params.externalId || '').trim();
+  if (!externalId) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'INVALID_INPUT',
+      message: 'externalId required',
+      data: traceData,
+    });
+  }
+
+  const parsed = SourcePageVideosGenerateSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'SOURCE_VIDEO_GENERATE_INVALID_INPUT',
+      message: 'Invalid unlock payload.',
+      data: traceData,
+    });
+  }
+  if (parsed.data.items.length > sourceUnlockGenerateMaxItems) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'SOURCE_VIDEO_GENERATE_INVALID_INPUT',
+      message: `Select up to ${sourceUnlockGenerateMaxItems} videos per request.`,
+      data: traceData,
+    });
+  }
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: traceData });
+  const sourcePageDb = getServiceSupabaseClient();
+  if (!sourcePageDb) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: traceData });
+
+  logUnlockEvent('unlock_request_received', { trace_id: traceId, user_id: userId, platform, external_id: externalId }, {
+    requested_items: parsed.data.items.length,
+    route: req.path,
+  });
+
+  let sourcePage;
+  try {
+    sourcePage = await getSourcePageByPlatformExternalId(sourcePageDb, { platform, externalId });
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: error instanceof Error ? error.message : 'Could not read source page.',
+      data: traceData,
+    });
+  }
+  if (!sourcePage) {
+    return res.status(404).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_NOT_FOUND',
+      message: 'Source page not found.',
+      data: traceData,
+    });
+  }
+
+  await runUnlockSweeps(sourcePageDb, { mode: 'opportunistic', traceId });
+
+  const dedupedMap = new Map<string, SourcePageVideoGenerateItem>();
+  for (const item of parsed.data.items) {
+    const normalized = normalizeSourcePageVideoGenerateItem(item);
+    if (!normalized) continue;
+    dedupedMap.set(normalized.video_id, normalized);
+  }
+  const normalizedItems = Array.from(dedupedMap.values());
+  if (normalizedItems.length === 0) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'SOURCE_VIDEO_GENERATE_INVALID_INPUT',
+      message: 'No valid videos selected for generation.',
+      data: traceData,
+    });
+  }
+
+  let existingByVideoId = new Map<string, SourcePageVideoExistingState>();
+  try {
+    existingByVideoId = await loadExistingSourceVideoStateForUser(
+      db,
+      userId,
+      normalizedItems.map((item) => item.video_id),
+    );
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: error instanceof Error ? error.message : 'Could not resolve duplicate state.',
+      data: traceData,
+    });
+  }
+
+  const duplicateRows = normalizedItems
+    .map((item) => ({
+      item,
+      existing: existingByVideoId.get(item.video_id),
+    }))
+    .filter((row) => Boolean(row.existing?.already_exists_for_user));
+
+  let activeSubscriberCount = 0;
+  try {
+    activeSubscriberCount = await countActiveSubscribersForSourcePage(sourcePageDb, sourcePage.id);
+  } catch (error) {
+    logUnlockEvent(
+      'source_unlock_active_subscriber_count_failed',
+      { trace_id: traceId, user_id: userId, source_page_id: sourcePage.id },
+      {
+        error: error instanceof Error ? error.message : String(error),
+      },
+    );
+  }
+  const estimatedUnlockCost = computeUnlockCost(activeSubscriberCount);
+
+  const queueItems: SourceUnlockQueueItem[] = [];
+  const inProgressRows: Array<{ video_id: string; title: string }> = [];
+  const readyRows: Array<{ video_id: string; title: string; blueprint_id: string | null }> = [];
+  const insufficientRows: Array<{ video_id: string; title: string; required: number; balance: number }> = [];
+  const transcriptUnavailableRows: Array<{ video_id: string; title: string; retry_after_seconds: number }> = [];
+  const permanentNoTranscriptRows: Array<{ video_id: string; title: string }> = [];
+
+  const candidateRows = normalizedItems.filter((item) => !existingByVideoId.get(item.video_id)?.already_exists_for_user);
+
+  for (const item of candidateRows) {
+    try {
+      const source = await upsertSourceItemFromVideo(sourcePageDb, {
+        video: {
+          videoId: item.video_id,
+          title: item.title,
+          url: item.video_url,
+          publishedAt: item.published_at || null,
+          thumbnailUrl: item.thumbnail_url || null,
+        },
+        channelId: sourcePage.external_id,
+        channelTitle: sourcePage.title || sourcePage.external_id,
+        sourcePageId: sourcePage.id,
+      });
+
+      const unlockSeed = await ensureSourceItemUnlock(sourcePageDb, {
+        sourceItemId: source.id,
+        sourcePageId: sourcePage.id,
+        estimatedCost: estimatedUnlockCost,
+      });
+      if (isConfirmedNoTranscriptUnlock(unlockSeed)) {
+        permanentNoTranscriptRows.push({
+          video_id: item.video_id,
+          title: item.title,
+        });
+        continue;
+      }
+      const transcriptCooldown = getTranscriptCooldownState(unlockSeed);
+      if (transcriptCooldown.active) {
+        transcriptUnavailableRows.push({
+          video_id: item.video_id,
+          title: item.title,
+          retry_after_seconds: transcriptCooldown.retryAfterSeconds,
+        });
+        continue;
+      }
+
+      const reserveResult = await reserveUnlock(sourcePageDb, {
+        unlock: unlockSeed,
+        userId,
+        estimatedCost: estimatedUnlockCost,
+        reservationSeconds: sourceUnlockReservationSeconds,
+      });
+
+      if (reserveResult.state === 'ready') {
+        readyRows.push({
+          video_id: item.video_id,
+          title: item.title,
+          blueprint_id: reserveResult.unlock.blueprint_id || null,
+        });
+        continue;
+      }
+
+      if (reserveResult.state === 'in_progress') {
+        inProgressRows.push({
+          video_id: item.video_id,
+          title: item.title,
+        });
+        continue;
+      }
+
+      let reservedUnlock = reserveResult.unlock;
+      if (!reservedUnlock.reserved_ledger_id) {
+        const hold = await reserveCredits(sourcePageDb, {
+          userId,
+          amount: Math.max(0.001, Number(reservedUnlock.estimated_cost || estimatedUnlockCost)),
+          idempotencyKey: buildUnlockLedgerIdempotencyKey({
+            unlockId: reservedUnlock.id,
+            userId,
+            action: 'hold',
+          }),
+          reasonCode: 'UNLOCK_HOLD',
+          context: {
+            source_item_id: source.id,
+            source_page_id: sourcePage.id,
+            unlock_id: reservedUnlock.id,
+            metadata: {
+              source: 'source_page_video_library',
+              video_id: item.video_id,
+              trace_id: traceId,
+            },
+          },
+        });
+
+        if (!hold.ok) {
+          await failUnlock(sourcePageDb, {
+            unlockId: reservedUnlock.id,
+            errorCode: 'INSUFFICIENT_CREDITS',
+            errorMessage: 'Insufficient credits to reserve unlock.',
+          });
+          insufficientRows.push({
+            video_id: item.video_id,
+            title: item.title,
+            required: Math.max(0.001, Number(reservedUnlock.estimated_cost || estimatedUnlockCost)),
+            balance: hold.wallet.balance,
+          });
+          continue;
+        }
+
+        reservedUnlock = await attachReservationLedger(sourcePageDb, {
+          unlockId: reservedUnlock.id,
+          userId,
+          ledgerId: hold.ledger_id || null,
+          amount: hold.reserved_amount,
+        });
+      }
+
+      queueItems.push({
+        unlock_id: reservedUnlock.id,
+        source_item_id: source.id,
+        source_page_id: sourcePage.id,
+        source_channel_id: sourcePage.external_id,
+        source_channel_title: sourcePage.title || sourcePage.external_id,
+        video_id: item.video_id,
+        video_url: item.video_url,
+        title: item.title,
+        reserved_cost: Math.max(0.001, Number(reservedUnlock.estimated_cost || estimatedUnlockCost)),
+        reserved_by_user_id: userId,
+        unlock_origin: 'manual_unlock',
+      });
+      logUnlockEvent(
+        'unlock_item_queued',
+        {
+          trace_id: traceId,
+          user_id: userId,
+          source_page_id: sourcePage.id,
+          unlock_id: reservedUnlock.id,
+          source_item_id: source.id,
+          video_id: item.video_id,
+        },
+        {
+          cost: Math.max(0.001, Number(reservedUnlock.estimated_cost || estimatedUnlockCost)),
+        },
+      );
+    } catch (error) {
+      logUnlockEvent(
+        'source_unlock_prepare_failed',
+        { trace_id: traceId, user_id: userId, source_page_id: sourcePage.id, video_id: item.video_id },
+        {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
+      inProgressRows.push({
+        video_id: item.video_id,
+        title: item.title,
+      });
+    }
+  }
+
+  if (
+    queueItems.length === 0
+    && insufficientRows.length > 0
+    && transcriptUnavailableRows.length === 0
+    && permanentNoTranscriptRows.length === 0
+    && readyRows.length === 0
+    && inProgressRows.length === 0
+    && duplicateRows.length === 0
+  ) {
+    return res.status(402).json({
+      ok: false,
+      error_code: 'INSUFFICIENT_CREDITS',
+      message: 'Insufficient credits for unlock.',
+      data: {
+        ...traceData,
+        required: insufficientRows[0]?.required || 0,
+        balance: insufficientRows[0]?.balance || 0,
+        insufficient: insufficientRows,
+      },
+    });
+  }
+
+  if (
+    queueItems.length === 0
+    && transcriptUnavailableRows.length > 0
+    && insufficientRows.length === 0
+    && permanentNoTranscriptRows.length === 0
+    && readyRows.length === 0
+    && inProgressRows.length === 0
+    && duplicateRows.length === 0
+  ) {
+    const retryAfterSeconds = Math.max(...transcriptUnavailableRows.map((row) => row.retry_after_seconds));
+    logUnlockEvent(
+      'auto_transcript_manual_add_error_returned',
+      { trace_id: traceId, user_id: userId, source_page_id: sourcePage.id },
+      {
+        transcript_unavailable_count: transcriptUnavailableRows.length,
+        retry_after_seconds: retryAfterSeconds,
+        video_ids: transcriptUnavailableRows.map((row) => row.video_id),
+      },
+    );
+    return res.status(422).json({
+      ok: false,
+      error_code: 'TRANSCRIPT_UNAVAILABLE',
+      message: 'Only videos with speech can be generated. If this video has speech, please try again in a few minutes.',
+      retry_after_seconds: retryAfterSeconds,
+      data: {
+        ...traceData,
+        transcript_unavailable_count: transcriptUnavailableRows.length,
+        transcript_unavailable: transcriptUnavailableRows,
+      },
+    });
+  }
+
+  if (
+    queueItems.length === 0
+    && permanentNoTranscriptRows.length > 0
+    && transcriptUnavailableRows.length === 0
+    && insufficientRows.length === 0
+    && readyRows.length === 0
+    && inProgressRows.length === 0
+    && duplicateRows.length === 0
+  ) {
+    return res.status(422).json({
+      ok: false,
+      error_code: 'NO_TRANSCRIPT_PERMANENT',
+      message: 'No transcript is available for this video.',
+      data: {
+        ...traceData,
+        transcript_status: 'confirmed_no_speech',
+        transcript_attempt_count: sourceTranscriptMaxAttempts,
+        transcript_retry_after_seconds: 0,
+        no_transcript_count: permanentNoTranscriptRows.length,
+        no_transcript: permanentNoTranscriptRows,
+      },
+    });
+  }
+
+  if (queueItems.length === 0) {
+    return res.json({
+      ok: true,
+      error_code: null,
+      message: 'source unlock status resolved',
+      data: {
+        ...traceData,
+        job_id: null,
+        queued_count: 0,
+        skipped_existing_count: duplicateRows.length,
+        skipped_existing: duplicateRows.map((row) => ({
+          video_id: row.item.video_id,
+          title: row.item.title,
+          existing_blueprint_id: row.existing?.existing_blueprint_id || null,
+          existing_feed_item_id: row.existing?.existing_feed_item_id || null,
+        })),
+        ready_count: readyRows.length,
+        ready: readyRows,
+        in_progress_count: inProgressRows.length,
+        in_progress: inProgressRows,
+        insufficient_count: insufficientRows.length,
+        insufficient: insufficientRows,
+        transcript_unavailable_count: transcriptUnavailableRows.length,
+        transcript_unavailable: transcriptUnavailableRows,
+        transcript_status: transcriptUnavailableRows.length > 0 ? 'retrying' : null,
+        transcript_attempt_count: null,
+        transcript_retry_after_seconds: transcriptUnavailableRows.length > 0
+          ? Math.max(...transcriptUnavailableRows.map((row) => row.retry_after_seconds))
+          : 0,
+        no_transcript_count: permanentNoTranscriptRows.length,
+        no_transcript: permanentNoTranscriptRows,
+      },
+    });
+  }
+
+  const queueDepth = await countQueueDepth(sourcePageDb, {
+    scope: 'source_item_unlock_generation',
+    includeRunning: true,
+  });
+  const userQueueDepth = await countQueueDepth(sourcePageDb, {
+    scope: 'source_item_unlock_generation',
+    userId,
+    includeRunning: true,
+  });
+  if (!unlockIntakeEnabled) {
+    return res.status(503).json({
+      ok: false,
+      error_code: 'QUEUE_INTAKE_DISABLED',
+      message: 'Unlock intake is temporarily paused.',
+      data: {
+        ...traceData,
+        queue_depth: queueDepth,
+      },
+    });
+  }
+  if (queueDepth >= queueDepthHardLimit || userQueueDepth >= queueDepthPerUserLimit) {
+    return res.status(429).json({
+      ok: false,
+      error_code: 'QUEUE_BACKPRESSURE',
+      message: 'Unlock queue is busy. Please retry shortly.',
+      retry_after_seconds: 30,
+      data: {
+        ...traceData,
+        queue_depth: queueDepth,
+        user_queue_depth: userQueueDepth,
+      },
+    });
+  }
+
+  const { data: job, error: jobCreateError } = await db
+    .from('ingestion_jobs')
+    .insert({
+      trigger: 'user_sync',
+      scope: 'source_item_unlock_generation',
+      status: 'queued',
+      requested_by_user_id: userId,
+      trace_id: traceId,
+      payload: {
+        user_id: userId,
+        trace_id: traceId,
+        items: queueItems,
+      },
+      next_run_at: new Date().toISOString(),
+    })
+    .select('id')
+    .single();
+  if (jobCreateError) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'SOURCE_VIDEO_GENERATE_FAILED',
+      message: jobCreateError.message,
+      data: traceData,
+    });
+  }
+
+  await emitGenerationStartedNotification(sourcePageDb, {
+    userId,
+    jobId: job.id,
+    scope: 'source_item_unlock_generation',
+    queuedCount: queueItems.length,
+    itemTitle: queueItems[0]?.title || null,
+    traceId: traceId || null,
+    linkPath: getGenerationNotificationLinkPath({
+      scope: 'source_item_unlock_generation',
+      sourcePagePath: buildSourcePagePath(sourcePage.platform, sourcePage.external_id),
+    }),
+  });
+
+  scheduleQueuedIngestionProcessing();
+
+  return res.status(202).json({
+    ok: true,
+    error_code: null,
+    message: 'background unlock generation started',
+    data: {
+      ...traceData,
+      job_id: job.id,
+      queue_depth: queueDepth + 1,
+      estimated_start_seconds: Math.max(1, Math.ceil((queueDepth + 1) / Math.max(1, workerConcurrency)) * 4),
+      queued_count: queueItems.length,
+      skipped_existing_count: duplicateRows.length,
+      skipped_existing: duplicateRows.map((row) => ({
+        video_id: row.item.video_id,
+        title: row.item.title,
+        existing_blueprint_id: row.existing?.existing_blueprint_id || null,
+        existing_feed_item_id: row.existing?.existing_feed_item_id || null,
+      })),
+      ready_count: readyRows.length,
+      ready: readyRows,
+      in_progress_count: inProgressRows.length,
+      in_progress: inProgressRows,
+      insufficient_count: insufficientRows.length,
+      insufficient: insufficientRows,
+      transcript_unavailable_count: transcriptUnavailableRows.length,
+      transcript_unavailable: transcriptUnavailableRows,
+      transcript_status: transcriptUnavailableRows.length > 0 ? 'retrying' : null,
+      transcript_attempt_count: null,
+      transcript_retry_after_seconds: transcriptUnavailableRows.length > 0
+        ? Math.max(...transcriptUnavailableRows.map((row) => row.retry_after_seconds))
+        : 0,
+      no_transcript_count: permanentNoTranscriptRows.length,
+      no_transcript: permanentNoTranscriptRows,
+    },
+  });
+}
+
+app.post(
+  '/api/source-pages/:platform/:externalId/videos/unlock',
+  sourceVideoUnlockBurstLimiter,
+  sourceVideoUnlockSustainedLimiter,
+  handleSourcePageVideosUnlock,
+);
+app.post(
+  '/api/source-pages/:platform/:externalId/videos/generate',
+  sourceVideoUnlockBurstLimiter,
+  sourceVideoUnlockSustainedLimiter,
+  handleSourcePageVideosUnlock,
+);
+
+app.get('/api/source-pages/:platform/:externalId/blueprints', async (req, res) => {
+  const platform = normalizeSourcePagePlatform(req.params.platform || '');
+  if (!platform) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_PLATFORM_UNSUPPORTED',
+      message: 'Unsupported source page platform.',
+      data: null,
+    });
+  }
+
+  const externalId = String(req.params.externalId || '').trim();
+  if (!externalId) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'INVALID_INPUT',
+      message: 'externalId required',
+      data: null,
+    });
+  }
+
+  const db = getServiceSupabaseClient();
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+
+  let sourcePage;
+  try {
+    sourcePage = await getSourcePageByPlatformExternalId(db, { platform, externalId });
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: error instanceof Error ? error.message : 'Could not fetch source page.',
+      data: null,
+    });
+  }
+  if (!sourcePage) {
+    return res.status(404).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_NOT_FOUND',
+      message: 'Source page not found.',
+      data: null,
+    });
+  }
+
+  const limit = clampInt(req.query.limit, 12, 1, 24);
+  const rawCursor = String(req.query.cursor || '').trim();
+  const decodedCursor = rawCursor ? decodeSourcePageBlueprintCursor(rawCursor) : null;
+  if (rawCursor && !decodedCursor) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'INVALID_CURSOR',
+      message: 'Invalid cursor.',
+      data: null,
+    });
+  }
+
+  const scanBatch = Math.max(limit * 6, 48);
+  const maxScanRows = 2000;
+  const seenSourceItemIds = new Set<string>();
+  const selectedRows: Array<{
+    sourceItemId: string;
+    blueprintId: string;
+    createdAt: string;
+    sourceUrl: string;
+    sourceThumbnailUrl: string | null;
+  }> = [];
+
+  let scanRows = 0;
+  let cursor = decodedCursor;
+  let exhausted = false;
+  let reachedLimit = false;
+  let lastAcceptedCursor: SourcePageBlueprintCursor | null = null;
+  let lastScannedCursor: SourcePageBlueprintCursor | null = null;
+
+  while (!reachedLimit && !exhausted && scanRows < maxScanRows) {
+    let feedQuery = db
+      .from('user_feed_items')
+      .select('id, source_item_id, blueprint_id, created_at')
+      .eq('state', 'channel_published')
+      .not('blueprint_id', 'is', null)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(scanBatch);
+
+    const cursorFilter = cursor ? buildSourcePageCursorFilter(cursor) : null;
+    if (cursorFilter) feedQuery = feedQuery.or(cursorFilter);
+
+    const { data: feedRowsData, error: feedRowsError } = await feedQuery;
+    if (feedRowsError) {
+      return res.status(400).json({
+        ok: false,
+        error_code: 'READ_FAILED',
+        message: feedRowsError.message,
+        data: null,
+      });
+    }
+
+    const feedRows = (feedRowsData || []) as SourcePageFeedScanRow[];
+    if (!feedRows.length) {
+      exhausted = true;
+      break;
+    }
+
+    scanRows += feedRows.length;
+    const lastFeedRow = feedRows[feedRows.length - 1];
+    const normalizedLastFeedCursor = normalizeSourcePageBlueprintCursor({
+      createdAt: lastFeedRow.created_at,
+      feedItemId: lastFeedRow.id,
+    });
+    if (normalizedLastFeedCursor) {
+      lastScannedCursor = normalizedLastFeedCursor;
+      cursor = normalizedLastFeedCursor;
+    }
+
+    const sourceItemIds = Array.from(new Set(feedRows.map((row) => String(row.source_item_id || '').trim()).filter(Boolean)));
+    const chunkBlueprintIds = Array.from(new Set(feedRows.map((row) => String(row.blueprint_id || '').trim()).filter(Boolean)));
+    if (!sourceItemIds.length || !chunkBlueprintIds.length) {
+      if (feedRows.length < scanBatch) exhausted = true;
+      continue;
+    }
+
+    const [{ data: sourceRowsData, error: sourceRowsError }, { data: blueprintVisibilityData, error: blueprintVisibilityError }] = await Promise.all([
+      db
+        .from('source_items')
+        .select('id, source_page_id, source_channel_id, source_url, thumbnail_url')
+        .in('id', sourceItemIds),
+      db
+        .from('blueprints')
+        .select('id, is_public')
+        .in('id', chunkBlueprintIds),
+    ]);
+
+    if (sourceRowsError || blueprintVisibilityError) {
+      return res.status(400).json({
+        ok: false,
+        error_code: 'READ_FAILED',
+        message: sourceRowsError?.message || blueprintVisibilityError?.message || 'Could not load source-page feed rows.',
+        data: null,
+      });
+    }
+
+    const sourceMap = new Map((sourceRowsData || []).map((row) => [row.id, row as SourcePageFeedSourceRow]));
+    const publicBlueprintIds = new Set(
+      (blueprintVisibilityData || [])
+        .filter((row) => Boolean(row.is_public))
+        .map((row) => String(row.id || '').trim())
+        .filter(Boolean),
+    );
+
+    for (const row of feedRows) {
+      const sourceItemId = String(row.source_item_id || '').trim();
+      const blueprintId = String(row.blueprint_id || '').trim();
+      if (!sourceItemId || !blueprintId) continue;
+      if (!publicBlueprintIds.has(blueprintId)) continue;
+
+      const source = sourceMap.get(sourceItemId);
+      if (!source) continue;
+
+      const sourcePageId = String(source.source_page_id || '').trim() || null;
+      const sourceChannelId = String(source.source_channel_id || '').trim() || null;
+      const matchesLinkedSource = sourcePageId === sourcePage.id;
+      const matchesLegacyYoutubeFallback =
+        platform === 'youtube'
+        && !sourcePageId
+        && sourceChannelId === sourcePage.external_id;
+      if (!matchesLinkedSource && !matchesLegacyYoutubeFallback) continue;
+
+      if (seenSourceItemIds.has(sourceItemId)) continue;
+      seenSourceItemIds.add(sourceItemId);
+
+      const normalizedAcceptedCursor = normalizeSourcePageBlueprintCursor({
+        createdAt: row.created_at,
+        feedItemId: row.id,
+      });
+      if (normalizedAcceptedCursor) lastAcceptedCursor = normalizedAcceptedCursor;
+
+      selectedRows.push({
+        sourceItemId,
+        blueprintId,
+        createdAt: normalizedAcceptedCursor?.createdAt || row.created_at,
+        sourceUrl: String(source.source_url || '').trim(),
+        sourceThumbnailUrl: String(source.thumbnail_url || '').trim() || null,
+      });
+
+      if (selectedRows.length >= limit) {
+        reachedLimit = true;
+        break;
+      }
+    }
+
+    if (feedRows.length < scanBatch) exhausted = true;
+  }
+
+  if (!selectedRows.length) {
+    return res.json({
+      ok: true,
+      error_code: null,
+      message: 'source page blueprints',
+      data: {
+        items: [],
+        next_cursor: null,
+      },
+    });
+  }
+
+  const blueprintIds = Array.from(new Set(selectedRows.map((row) => row.blueprintId)));
+  const [{ data: blueprintRowsData, error: blueprintRowsError }, { data: tagRowsData, error: tagRowsError }] = await Promise.all([
+    db
+      .from('blueprints')
+      .select('id, title, llm_review, banner_url, selected_items, is_public')
+      .in('id', blueprintIds),
+    db
+      .from('blueprint_tags')
+      .select('blueprint_id, tag_id')
+      .in('blueprint_id', blueprintIds),
+  ]);
+
+  if (blueprintRowsError || tagRowsError) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: blueprintRowsError?.message || tagRowsError?.message || 'Could not load source-page blueprints.',
+      data: null,
+    });
+  }
+
+  const tagIds = Array.from(new Set((tagRowsData || []).map((row) => String(row.tag_id || '').trim()).filter(Boolean)));
+  const { data: tagDefsData, error: tagDefsError } = tagIds.length
+    ? await db
+      .from('tags')
+      .select('id, slug')
+      .in('id', tagIds)
+    : { data: [], error: null };
+  if (tagDefsError) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: tagDefsError.message,
+      data: null,
+    });
+  }
+
+  const { data: allPublishedFeedRows, error: allPublishedFeedRowsError } = await db
+    .from('user_feed_items')
+    .select('id, blueprint_id')
+    .eq('state', 'channel_published')
+    .in('blueprint_id', blueprintIds);
+  if (allPublishedFeedRowsError) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: allPublishedFeedRowsError.message,
+      data: null,
+    });
+  }
+
+  const publishedFeedItemIds = Array.from(new Set((allPublishedFeedRows || []).map((row) => String(row.id || '').trim()).filter(Boolean)));
+  const blueprintIdByFeedItemId = new Map(
+    (allPublishedFeedRows || []).map((row) => [String(row.id || '').trim(), String(row.blueprint_id || '').trim()]),
+  );
+
+  const { data: candidateRowsData, error: candidateRowsError } = publishedFeedItemIds.length
+    ? await db
+      .from('channel_candidates')
+      .select('user_feed_item_id, channel_slug, created_at')
+      .eq('status', 'published')
+      .in('user_feed_item_id', publishedFeedItemIds)
+      .order('created_at', { ascending: false })
+    : { data: [], error: null };
+  if (candidateRowsError) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: candidateRowsError.message,
+      data: null,
+    });
+  }
+
+  const publicBlueprintMap = new Map(
+    (blueprintRowsData || [])
+      .filter((row) => Boolean(row.is_public))
+      .map((row) => [String(row.id || '').trim(), row]),
+  );
+  const tagDefMap = new Map((tagDefsData || []).map((row) => [String(row.id || '').trim(), String(row.slug || '').trim()]));
+  const tagsByBlueprint = new Map<string, Array<{ id: string; slug: string }>>();
+  for (const row of tagRowsData || []) {
+    const blueprintId = String(row.blueprint_id || '').trim();
+    const tagId = String(row.tag_id || '').trim();
+    const tagSlug = tagDefMap.get(tagId);
+    if (!blueprintId || !tagId || !tagSlug) continue;
+    const list = tagsByBlueprint.get(blueprintId) || [];
+    list.push({ id: tagId, slug: tagSlug });
+    tagsByBlueprint.set(blueprintId, list);
+  }
+
+  const publishedChannelByBlueprint = new Map<string, { slug: string; createdAtMs: number }>();
+  for (const row of candidateRowsData || []) {
+    const feedItemId = String(row.user_feed_item_id || '').trim();
+    const blueprintId = blueprintIdByFeedItemId.get(feedItemId);
+    const channelSlug = String(row.channel_slug || '').trim().toLowerCase();
+    if (!blueprintId || !channelSlug) continue;
+    const createdAtMs = Date.parse(String(row.created_at || ''));
+    const safeCreatedAtMs = Number.isFinite(createdAtMs) ? createdAtMs : 0;
+    const existing = publishedChannelByBlueprint.get(blueprintId);
+    if (!existing || safeCreatedAtMs > existing.createdAtMs || (safeCreatedAtMs === existing.createdAtMs && channelSlug < existing.slug)) {
+      publishedChannelByBlueprint.set(blueprintId, {
+        slug: channelSlug,
+        createdAtMs: safeCreatedAtMs,
+      });
+    }
+  }
+
+  const items = selectedRows
+    .map((row) => {
+      const blueprint = publicBlueprintMap.get(row.blueprintId);
+      if (!blueprint) return null;
+      return {
+        source_item_id: row.sourceItemId,
+        blueprint_id: row.blueprintId,
+        title: String(blueprint.title || '').trim() || 'Untitled blueprint',
+        summary: buildSourcePageSummary({
+          llmReview: blueprint.llm_review || null,
+          selectedItems: blueprint.selected_items ?? null,
+          fallbackTitle: String(blueprint.title || ''),
+        }),
+        banner_url: blueprint.banner_url || null,
+        created_at: row.createdAt,
+        published_channel_slug: publishedChannelByBlueprint.get(row.blueprintId)?.slug || null,
+        tags: tagsByBlueprint.get(row.blueprintId) || [],
+        source_url: row.sourceUrl || '',
+        source_thumbnail_url: row.sourceThumbnailUrl,
+      };
+    })
+    .filter(Boolean);
+
+  let nextCursor: string | null = null;
+  if (reachedLimit && lastAcceptedCursor) {
+    nextCursor = encodeSourcePageBlueprintCursor(lastAcceptedCursor);
+  } else if (!exhausted && lastScannedCursor) {
+    nextCursor = encodeSourcePageBlueprintCursor(lastScannedCursor);
+  }
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'source page blueprints',
+    data: {
+      items,
+      next_cursor: nextCursor,
+    },
+  });
+});
+
+app.post('/api/source-pages/:platform/:externalId/subscribe', async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+
+  const platform = normalizeSourcePagePlatform(req.params.platform || '');
+  if (!platform) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_PLATFORM_UNSUPPORTED',
+      message: 'Unsupported source page platform.',
+      data: null,
+    });
+  }
+  if (platform !== 'youtube') {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_PLATFORM_UNSUPPORTED',
+      message: 'Only YouTube source pages are supported in this version.',
+      data: null,
+    });
+  }
+
+  const externalId = String(req.params.externalId || '').trim();
+  if (!externalId) {
+    return res.status(400).json({ ok: false, error_code: 'INVALID_INPUT', message: 'externalId required', data: null });
+  }
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+  const sourcePageDb = getServiceSupabaseClient();
+  if (!sourcePageDb) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+
+  let resolved;
+  try {
+    resolved = await resolveYouTubeChannel(externalId);
+  } catch {
+    return res.status(400).json({ ok: false, error_code: 'INVALID_CHANNEL', message: 'Could not resolve YouTube channel', data: null });
+  }
+
+  let channelAvatarUrl: string | null = null;
+  let channelBannerUrl: string | null = null;
+  if (youtubeDataApiKey) {
+    try {
+      const assetMap = await fetchYouTubeChannelAssetMap({
+        apiKey: youtubeDataApiKey,
+        channelIds: [resolved.channelId],
+      });
+      const assets = assetMap.get(resolved.channelId);
+      channelAvatarUrl = assets?.avatarUrl || null;
+      channelBannerUrl = assets?.bannerUrl || null;
+    } catch (assetError) {
+      console.log('[source_page_assets_lookup_failed]', JSON.stringify({
+        source_channel_id: resolved.channelId,
+        error: assetError instanceof Error ? assetError.message : String(assetError),
+      }));
+    }
+  }
+
+  let sourcePage;
+  try {
+    sourcePage = await ensureSourcePageFromYouTubeChannel(sourcePageDb, {
+      channelId: resolved.channelId,
+      channelUrl: resolved.channelUrl,
+      title: resolved.channelTitle,
+      avatarUrl: channelAvatarUrl,
+      bannerUrl: channelBannerUrl,
+    });
+  } catch (sourcePageError) {
+    return res.status(500).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_SUBSCRIBE_FAILED',
+      message: sourcePageError instanceof Error ? sourcePageError.message : 'Could not prepare source page.',
+      data: null,
+    });
+  }
+
+  const { data: existingSub } = await db
+    .from('user_source_subscriptions')
+    .select('id, is_active, auto_unlock_enabled')
+    .eq('user_id', userId)
+    .eq('source_type', 'youtube')
+    .eq('source_channel_id', resolved.channelId)
+    .maybeSingle();
+  const isCreateOrReactivate = !existingSub || !existingSub.is_active;
+
+  const { data: upserted, error: upsertError } = await db
+    .from('user_source_subscriptions')
+    .upsert(
+      {
+        user_id: userId,
+        source_type: 'youtube',
+        source_channel_id: resolved.channelId,
+        source_channel_url: resolved.channelUrl,
+        source_channel_title: resolved.channelTitle,
+        source_page_id: sourcePage.id,
+        mode: 'auto',
+        auto_unlock_enabled: existingSub?.auto_unlock_enabled ?? true,
+        is_active: true,
+        last_sync_error: null,
+      },
+      { onConflict: 'user_id,source_type,source_channel_id' },
+    )
+    .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, source_page_id, mode, auto_unlock_enabled, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
+    .single();
+  if (upsertError) {
+    return res.status(400).json({ ok: false, error_code: 'SOURCE_PAGE_SUBSCRIBE_FAILED', message: upsertError.message, data: null });
+  }
+
+  let sync: SyncSubscriptionResult | null = null;
+  try {
+    sync = await syncSingleSubscription(db, upserted, { trigger: 'subscription_create' });
+  } catch (error) {
+    await markSubscriptionSyncError(db, upserted.id, error);
+  }
+
+  if (isCreateOrReactivate) {
+    try {
+      const noticeSource = await upsertSubscriptionNoticeSourceItem(db, {
+        channelId: resolved.channelId,
+        channelTitle: resolved.channelTitle,
+        channelUrl: resolved.channelUrl,
+        channelAvatarUrl,
+        channelBannerUrl,
+      });
+      await insertFeedItem(db, {
+        userId,
+        sourceItemId: noticeSource.id,
+        blueprintId: null,
+        state: 'subscription_notice',
+      });
+    } catch (noticeError) {
+      console.log('[subscription_notice_insert_failed]', JSON.stringify({
+        user_id: userId,
+        source_channel_id: resolved.channelId,
+        error: noticeError instanceof Error ? noticeError.message : String(noticeError),
+      }));
+    }
+  }
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'source page subscribed',
+    data: {
+      source_page: {
+        ...sourcePage,
+        path: buildSourcePagePath(sourcePage.platform, sourcePage.external_id),
+      },
+      subscription: {
+        ...upserted,
+        source_page_path: buildSourcePagePath(sourcePage.platform, sourcePage.external_id),
+      },
+      sync,
+    },
+  });
+});
+
+app.delete('/api/source-pages/:platform/:externalId/subscribe', async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+
+  const platform = normalizeSourcePagePlatform(req.params.platform || '');
+  if (!platform) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_PLATFORM_UNSUPPORTED',
+      message: 'Unsupported source page platform.',
+      data: null,
+    });
+  }
+  if (platform !== 'youtube') {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_PLATFORM_UNSUPPORTED',
+      message: 'Only YouTube source pages are supported in this version.',
+      data: null,
+    });
+  }
+
+  const externalId = String(req.params.externalId || '').trim();
+  if (!externalId) {
+    return res.status(400).json({ ok: false, error_code: 'INVALID_INPUT', message: 'externalId required', data: null });
+  }
+
+  const db = getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+  const sourcePageDb = getServiceSupabaseClient();
+  if (!sourcePageDb) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+
+  let sourcePage;
+  try {
+    sourcePage = await getSourcePageByPlatformExternalId(sourcePageDb, { platform, externalId });
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: error instanceof Error ? error.message : 'Could not read source page.',
+      data: null,
+    });
+  }
+  if (!sourcePage) {
+    return res.status(404).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_NOT_FOUND',
+      message: 'Source page not found.',
+      data: null,
+    });
+  }
+
+  const { data, error } = await db
+    .from('user_source_subscriptions')
+    .update({ is_active: false })
+    .eq('user_id', userId)
+    .eq('source_type', 'youtube')
+    .eq('source_channel_id', sourcePage.external_id)
+    .select('id, source_channel_id')
+    .maybeSingle();
+  if (error) return res.status(400).json({ ok: false, error_code: 'SOURCE_PAGE_UNSUBSCRIBE_FAILED', message: error.message, data: null });
+  if (!data) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Subscription not found', data: null });
+
+  await cleanupSubscriptionNoticeForChannel(db, {
+    userId,
+    subscriptionId: data.id,
+    channelId: data.source_channel_id,
+  });
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'source page unsubscribed',
+    data: {
+      source_page: {
+        ...sourcePage,
+        path: buildSourcePagePath(sourcePage.platform, sourcePage.external_id),
+      },
+      subscription: data,
+    },
+  });
+});
+
+}
