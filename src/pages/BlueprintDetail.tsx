@@ -271,6 +271,7 @@ export default function BlueprintDetail() {
   const { user } = useAuth();
   const [comment, setComment] = useState('');
   const [isBannerExpanded, setIsBannerExpanded] = useState(false);
+  const [expandedInteractiveSections, setExpandedInteractiveSections] = useState<Record<string, boolean>>({});
   const location = useLocation();
   const loggedBlueprintId = useRef<string | null>(null);
   const steps = blueprint ? parseSteps(blueprint.steps) : [];
@@ -305,6 +306,10 @@ export default function BlueprintDetail() {
       path: location.pathname,
     });
   }, [blueprint?.id, location.pathname, user?.id]);
+
+  useEffect(() => {
+    setExpandedInteractiveSections({});
+  }, [blueprint?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -574,6 +579,9 @@ export default function BlueprintDetail() {
 
   const renderGoldenInteractiveGroup = (group: RenderStep[]) => {
     if (group.length === 0) return null;
+    const previewBulletRows = 2;
+    const isExpandableSectionKey = (key: string) =>
+      key === 'practical rules' || key === 'deep dive' || key === 'open questions';
     const practicalRulesIndex = group.findIndex((step) => normalizeHeadingKey(step.title) === 'practical rules');
     const defaultTabIndex = practicalRulesIndex >= 0 ? practicalRulesIndex : 0;
     return (
@@ -593,24 +601,47 @@ export default function BlueprintDetail() {
 
           <div className="px-0 py-1">
             {group.map((step, index) => {
+              const sectionKey = normalizeHeadingKey(step.title);
+              const expandable = isExpandableSectionKey(sectionKey);
               const parsedDescription = parseDescriptionBlocks(step.description);
               const combinedBullets = [
                 ...parsedDescription.bullets,
                 ...step.items.map((item) => formatStepItem(item)),
               ];
+              const isExpanded = Boolean(expandedInteractiveSections[sectionKey]);
+              const visibleBullets = expandable && !isExpanded
+                ? combinedBullets.slice(0, previewBulletRows)
+                : combinedBullets;
+              const canExpand = expandable && combinedBullets.length > previewBulletRows;
               return (
                 <TabsContent key={step.id || `content-${step.title}-${index}`} value={`golden-section-${index}`} className="mt-0 space-y-2.5">
                   {parsedDescription.text ? (
                     <p className="text-sm text-muted-foreground whitespace-pre-line">{parsedDescription.text}</p>
                   ) : null}
-                  {combinedBullets.length > 0 ? (
+                  {visibleBullets.length > 0 ? (
                     <ul className="space-y-1 list-disc pl-5">
-                      {combinedBullets.map((itemText, itemIndex) => (
+                      {visibleBullets.map((itemText, itemIndex) => (
                         <li key={`${step.id || index}-${itemIndex}`} className="text-sm leading-snug">
                           {itemText}
                         </li>
                       ))}
                     </ul>
+                  ) : null}
+                  {canExpand ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-0 text-xs text-muted-foreground hover:text-foreground"
+                      onClick={() => {
+                        setExpandedInteractiveSections((current) => ({
+                          ...current,
+                          [sectionKey]: !Boolean(current[sectionKey]),
+                        }));
+                      }}
+                    >
+                      {isExpanded ? 'Show less' : 'Show more'}
+                    </Button>
                   ) : null}
                   {!parsedDescription.text && combinedBullets.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No details yet.</p>
