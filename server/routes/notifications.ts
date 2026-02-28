@@ -1,21 +1,5 @@
 import type express from 'express';
-import type { createClient } from '@supabase/supabase-js';
-
-type DbClient = ReturnType<typeof createClient>;
-
-type NotificationList = {
-  items?: Array<Record<string, any>>;
-  next_cursor?: string | null;
-  unread_count?: number;
-};
-
-export type NotificationsRouteDeps = {
-  getAuthedSupabaseClient: (authToken: string) => DbClient | null;
-  listNotificationsForUser: (db: DbClient, input: { userId: string; limit?: number; cursor?: string | null }) => Promise<NotificationList>;
-  markAllNotificationsRead: (db: DbClient, input: { userId: string }) => Promise<Record<string, any>>;
-  markNotificationRead: (db: DbClient, input: { userId: string; notificationId: string }) => Promise<Record<string, any> | null>;
-  clampInt: (raw: unknown, fallbackValue: number, minValue: number, maxValue: number) => number;
-};
+import type { NotificationsRouteDeps } from '../contracts/api/notifications';
 
 export function registerNotificationRoutes(app: express.Express, deps: NotificationsRouteDeps) {
   app.get('/api/notifications', async (req, res) => {

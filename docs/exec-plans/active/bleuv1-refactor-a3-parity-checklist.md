@@ -59,3 +59,26 @@ p34) [have] `server/routes/youtube.ts` and `server/handlers/youtubeHandlers.ts` 
 p35) [have] `server/routes/sourcePages.ts` and `server/handlers/sourcePagesHandlers.ts` now consume `SourcePagesRouteDeps` and source-page helper row/cursor types from `server/contracts/api/sourcePages.ts`.
 p36) [have] `server/routes/sourceSubscriptions.ts` and `server/handlers/sourceSubscriptionsHandlers.ts` now consume `SourceSubscriptionsRouteDeps` plus scan/generate contract types from `server/contracts/api/sourceSubscriptions.ts`.
 p37) [have] No endpoint path changes, middleware-order changes, or response-envelope key changes were introduced in the remaining-domain contract rewiring.
+
+Phase 4 (final remaining 6 domains) Contract Tightening
+p38) [have] Added canonical contract modules for remaining route-owned domains:
+- `server/contracts/api/feed.ts`
+- `server/contracts/api/tracing.ts`
+- `server/contracts/api/notifications.ts`
+- `server/contracts/api/ingestion.ts`
+- `server/contracts/api/profile.ts`
+- `server/contracts/api/channels.ts`
+p39) [have] Route files now consume canonical deps contracts for all remaining domains:
+- `server/routes/feed.ts` -> `server/contracts/api/feed.ts`
+- `server/routes/tracing.ts` -> `server/contracts/api/tracing.ts`
+- `server/routes/notifications.ts` -> `server/contracts/api/notifications.ts`
+- `server/routes/ingestion.ts` -> `server/contracts/api/ingestion.ts`
+- `server/routes/profile.ts` -> `server/contracts/api/profile.ts`
+- `server/routes/channels.ts` -> `server/contracts/api/channels.ts`
+p40) [have] No remaining authoritative `export type *RouteDeps` declarations exist in `server/routes/*` for active API domains.
+p41) [have] Final parity reconfirmed after remaining-domain rewiring:
+- `53` total route registrations
+- `0` direct route registrations in `server/index.ts`
+p42) [have] Final local + Oracle smoke matrix passed with unchanged contract behavior:
+- local: health/tracing/notifications/feed unauth + youtube invalid payload + source search short query
+- oracle: ops queue health `200`, ingestion latest `200`, ingestion trigger `202`, health `200`.

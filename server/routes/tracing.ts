@@ -1,23 +1,9 @@
 import type express from 'express';
-import type { createClient } from '@supabase/supabase-js';
-
-type DbClient = ReturnType<typeof createClient>;
-
-type GenerationRunRecord = Record<string, any>;
-type GenerationRunEvents = {
-  items: Array<Record<string, any>>;
-  next_cursor: string | null;
-};
-
-export type TracingRouteDeps = {
-  isServiceRequestAuthorized: (req: express.Request) => boolean;
-  getServiceSupabaseClient: () => DbClient | null;
-  getAuthedSupabaseClient: (authToken: string) => DbClient | null;
-  getGenerationRunByRunId: (db: DbClient, runId: string) => Promise<GenerationRunRecord | null>;
-  getLatestGenerationRunByBlueprintId: (db: DbClient, blueprintId: string) => Promise<GenerationRunRecord | null>;
-  listGenerationRunEvents: (db: DbClient, input: { runId: string; limit?: number; cursor?: string | null }) => Promise<GenerationRunEvents>;
-  clampInt: (raw: unknown, fallbackValue: number, minValue: number, maxValue: number) => number;
-};
+import type {
+  GenerationRunEvents,
+  GenerationRunRecord,
+  TracingRouteDeps,
+} from '../contracts/api/tracing';
 
 function parseIncludeEvents(raw: unknown, defaultValue = true) {
   const normalized = String(raw || '').trim().toLowerCase();

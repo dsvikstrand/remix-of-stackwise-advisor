@@ -1,13 +1,5 @@
 import type express from 'express';
-import type { createClient } from '@supabase/supabase-js';
-
-type DbClient = ReturnType<typeof createClient>;
-
-export type IngestionRouteDeps = {
-  getAuthedSupabaseClient: (authToken: string) => DbClient | null;
-  clampInt: (raw: unknown, fallbackValue: number, minValue: number, maxValue: number) => number;
-  ingestionLatestMineLimiter: express.RequestHandler;
-};
+import type { IngestionRouteDeps } from '../contracts/api/ingestion';
 
 export function registerIngestionUserRoutes(app: express.Express, deps: IngestionRouteDeps) {
   app.get('/api/ingestion/jobs/:id([0-9a-fA-F-]{36})', async (req, res) => {

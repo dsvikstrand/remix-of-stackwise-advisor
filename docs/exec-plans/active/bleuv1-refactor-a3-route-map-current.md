@@ -8,6 +8,7 @@ c02) [have] `server/index.ts` direct `app.*` route registrations: `0`
 c03) [have] Phase 2 extraction moved heavy route callback logic into `server/handlers/*` for YouTube + Source Pages while preserving route registration parity.
 c04) [have] Phase 4 slice (`b1+b2`) tightened `core + ops` route/handler contracts via `server/contracts/api/*` with no route distribution change.
 c05) [have] Phase 4 remaining slice tightened contracts for `youtube`, `sourcePages`, and `sourceSubscriptions` via `server/contracts/api/*` with no route distribution change.
+c06) [have] Phase 4 final slice tightened contracts for `feed`, `tracing`, `notifications`, `ingestion`, `profile`, and `channels`, leaving route modules contract-consumers only.
 
 Current Distribution
 - `server/routes/core.ts`: 4

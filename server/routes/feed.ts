@@ -1,43 +1,5 @@
 import type express from 'express';
-import type { createClient } from '@supabase/supabase-js';
-
-type DbClient = ReturnType<typeof createClient>;
-
-type GeneratedBlueprint = {
-  blueprintId: string;
-  runId: string | null;
-};
-
-type AutoChannelResult = {
-  userFeedItemId: string;
-  candidateId: string;
-  channelSlug: string;
-  decision: 'published' | 'rejected';
-  reasonCode: string;
-  classifierMode: string;
-  classifierReason: string;
-  classifierConfidence?: number | null;
-};
-
-export type FeedRouteDeps = {
-  autoChannelPipelineEnabled: boolean;
-  getAuthedSupabaseClient: (authToken: string) => DbClient | null;
-  createBlueprintFromVideo: (db: DbClient, input: {
-    userId: string;
-    videoUrl: string;
-    videoId: string;
-    sourceTag: string;
-    sourceItemId: string;
-  }) => Promise<GeneratedBlueprint>;
-  runAutoChannelForFeedItem: (input: {
-    db: DbClient;
-    userId: string;
-    userFeedItemId: string;
-    blueprintId: string;
-    sourceItemId: string | null;
-    sourceTag: string;
-  }) => Promise<AutoChannelResult | null>;
-};
+import type { FeedRouteDeps } from '../contracts/api/feed';
 
 export function registerFeedRoutes(app: express.Express, deps: FeedRouteDeps) {
   app.post('/api/my-feed/items/:id/accept', async (req, res) => {

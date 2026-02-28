@@ -1,12 +1,5 @@
 import type express from 'express';
-import type { createClient } from '@supabase/supabase-js';
-
-type DbClient = ReturnType<typeof createClient>;
-
-export type ProfileRouteDeps = {
-  getServiceSupabaseClient: () => DbClient | null;
-  normalizeTranscriptTruthStatus: (value: unknown) => string;
-};
+import type { ProfileRouteDeps } from '../contracts/api/profile';
 
 export function registerProfileRoutes(app: express.Express, deps: ProfileRouteDeps) {
   app.get('/api/profile/:userId/feed', async (req, res) => {
