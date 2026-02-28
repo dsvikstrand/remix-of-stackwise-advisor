@@ -291,7 +291,7 @@ export default function BlueprintDetail() {
   const [interactiveSectionsExpanded, setInteractiveSectionsExpanded] = useState(false);
   const [takeawaysExpanded, setTakeawaysExpanded] = useState(false);
   const [activeInteractiveTab, setActiveInteractiveTab] = useState('');
-  const [summaryExpertiseLevel, setSummaryExpertiseLevel] = useState<SummaryExpertiseLevel>('default');
+  const [summaryExpertiseLevel, setSummaryExpertiseLevel] = useState<SummaryExpertiseLevel>('eli5');
   const location = useLocation();
   const loggedBlueprintId = useRef<string | null>(null);
   const steps = blueprint ? parseSteps(blueprint.steps) : [];
@@ -316,8 +316,8 @@ export default function BlueprintDetail() {
   }, [blueprint?.tags, curatedChannelTagSlugs]);
   const summaryExpertiseLevels = useMemo(
     () => [
-      { key: 'default' as const, label: 'Default' },
-      { key: 'eli5' as const, label: 'ELI5' },
+      { key: 'eli5' as const, label: '😎', ariaLabel: 'ELI5' },
+      { key: 'default' as const, label: '🧐', ariaLabel: 'Default' },
     ],
     [],
   );
@@ -338,7 +338,6 @@ export default function BlueprintDetail() {
     setInteractiveSectionsExpanded(false);
     setTakeawaysExpanded(false);
     setActiveInteractiveTab('');
-    setSummaryExpertiseLevel('default');
   }, [blueprint?.id]);
 
   useEffect(() => {
@@ -523,6 +522,10 @@ export default function BlueprintDetail() {
   });
   const summaryVariants = parseSummaryVariants(blueprint?.selected_items);
   const hasEli5SummaryVariant = Boolean(summaryVariants.eli5);
+  useEffect(() => {
+    setSummaryExpertiseLevel(hasEli5SummaryVariant ? 'eli5' : 'default');
+  }, [blueprint?.id, hasEli5SummaryVariant]);
+
   const summaryDefaultText = summaryVariants.default || topSummarySection?.description || '';
   const selectedSummaryText = summaryExpertiseLevel === 'eli5' && hasEli5SummaryVariant
     ? summaryVariants.eli5
@@ -883,10 +886,11 @@ export default function BlueprintDetail() {
                               type="button"
                               variant="ghost"
                               size="sm"
-                              className={`h-7 rounded-full px-3 text-xs ${active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'} ${disabled ? 'opacity-50 cursor-not-allowed hover:text-muted-foreground' : ''}`}
+                              className={`h-7 rounded-full px-2.5 text-xs ${active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'} ${disabled ? 'opacity-50 cursor-not-allowed hover:text-muted-foreground' : ''}`}
                               onClick={() => setSummaryExpertiseLevel(level.key)}
                               aria-pressed={active}
-                              aria-label={`Set summary level to ${level.label}`}
+                              aria-label={`Set summary level to ${level.ariaLabel}`}
+                              title={level.ariaLabel}
                               disabled={disabled}
                             >
                               {level.label}
