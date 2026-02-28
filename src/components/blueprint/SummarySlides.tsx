@@ -30,7 +30,9 @@ export function SummarySlides({ title, slides, surface = 'boxed' }: SummarySlide
   if (!canSlide) {
     return (
       <div className="space-y-1.5">
-        <p className="text-sm font-medium">{title}</p>
+        {title.trim().length > 0 ? (
+          <p className="text-sm font-medium">{title}</p>
+        ) : null}
         <p className="text-sm text-muted-foreground whitespace-pre-line">{slides[0] || ''}</p>
       </div>
     );
@@ -38,10 +40,11 @@ export function SummarySlides({ title, slides, surface = 'boxed' }: SummarySlide
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-medium">{title}</p>
-        <span className="text-[11px] text-muted-foreground">Slide {activeIndex + 1}/{slides.length}</span>
-      </div>
+      {title.trim().length > 0 ? (
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-medium">{title}</p>
+        </div>
+      ) : null}
 
       <Carousel setApi={setApi} opts={{ align: 'start', loop: false }}>
         <CarouselContent className="ml-0">

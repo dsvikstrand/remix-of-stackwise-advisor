@@ -152,7 +152,7 @@ function isNarrativeKey(key: string) {
 
 function sectionDisplayTitle(rawTitle: string) {
   const key = normalizeHeadingKey(rawTitle);
-  if (isSummaryKey(key)) return 'About';
+  if (isSummaryKey(key)) return '';
   if (isBleupKey(key)) return 'Storyline';
   return rawTitle;
 }
@@ -692,7 +692,9 @@ export default function BlueprintDetail() {
                 />
               ) : (
                 <>
-                  <p className="text-sm font-medium">{displayTitle}</p>
+                  {displayTitle.trim().length > 0 ? (
+                    <p className="text-sm font-medium">{displayTitle}</p>
+                  ) : null}
                   {parsedDescription.text ? (
                     <p className="text-sm text-muted-foreground whitespace-pre-line">{parsedDescription.text}</p>
                   ) : null}
