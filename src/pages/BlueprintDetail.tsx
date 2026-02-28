@@ -31,6 +31,31 @@ type BlueprintStep = { id?: string; title?: string; description?: string | null;
 type RenderStep = { id?: string; title: string; description: string; items: StepItem[] };
 type SummaryExpertiseLevel = 'default' | 'eli5';
 
+function extractYouTubeVideoId(url: string) {
+  const raw = String(url || '').trim();
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    const host = parsed.hostname.replace(/^www\./, '').toLowerCase();
+    if (host === 'youtu.be') {
+      const id = parsed.pathname.replace(/^\/+/, '').split('/')[0];
+      return id || null;
+    }
+    if (host.endsWith('youtube.com')) {
+      const directId = parsed.searchParams.get('v');
+      if (directId) return directId;
+      const parts = parsed.pathname.split('/').filter(Boolean);
+      if (parts.length >= 2 && (parts[0] === 'embed' || parts[0] === 'shorts')) {
+        return parts[1] || null;
+      }
+    }
+  } catch {
+    const match = raw.match(/[?&]v=([a-zA-Z0-9_-]{6,})/);
+    if (match?.[1]) return match[1];
+  }
+  return null;
+}
+
 function formatItem(item: ItemValue) {
   if (typeof item === 'string') return item;
   if (!item || typeof item !== 'object') return String(item);
@@ -311,6 +336,7 @@ export default function BlueprintDetail() {
   const { user } = useAuth();
   const [comment, setComment] = useState('');
   const [isBannerExpanded, setIsBannerExpanded] = useState(false);
+  const [isBannerVideoPlaying, setIsBannerVideoPlaying] = useState(false);
   const [interactiveSectionsExpanded, setInteractiveSectionsExpanded] = useState(false);
   const [takeawaysExpanded, setTakeawaysExpanded] = useState(false);
   const [activeInteractiveTab, setActiveInteractiveTab] = useState('');
@@ -370,6 +396,8 @@ export default function BlueprintDetail() {
     setInteractiveSectionsExpanded(false);
     setTakeawaysExpanded(false);
     setActiveInteractiveTab('');
+    setIsBannerExpanded(false);
+    setIsBannerVideoPlaying(false);
   }, [blueprint?.id]);
 
   useEffect(() => {
@@ -540,6 +568,18 @@ export default function BlueprintDetail() {
     bannerUrl: blueprint?.banner_url || null,
     sourceThumbnailUrl: sourceChannel?.thumbnailUrl || null,
   });
+  const selectedItemsPayload =
+    blueprint?.selected_items && typeof blueprint.selected_items === 'object' && !Array.isArray(blueprint.selected_items)
+      ? (blueprint.selected_items as Record<string, unknown>)
+      : null;
+  const sourceVideoUrl = selectedItemsPayload && typeof selectedItemsPayload.video_url === 'string'
+    ? String(selectedItemsPayload.video_url || '').trim()
+    : '';
+  const youtubeVideoId = extractYouTubeVideoId(sourceVideoUrl);
+  const youtubeEmbedUrl = youtubeVideoId
+    ? `https://www.youtube-nocookie.com/embed/${youtubeVideoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1`
+    : '';
+  const hasInlineVideo = Boolean(youtubeEmbedUrl);
   const goldenSections = useGoldenRender
     ? steps.map((step, index) => normalizeGoldenStep(step, index))
     : [];
@@ -794,38 +834,83 @@ export default function BlueprintDetail() {
     );
   };
 
+  const handleBannerExpandToggle = () => {
+    setIsBannerExpanded((current) => {
+      const next = !current;
+      if (!next) setIsBannerVideoPlaying(false);
+      return next;
+    });
+  };
+
   const renderBanner = effectiveBannerUrl ? (
-    <button
-      type="button"
-      className="relative w-full overflow-hidden rounded-md border border-border/40 text-left"
-      onClick={() => setIsBannerExpanded((current) => !current)}
-      title={isBannerExpanded ? 'Collapse banner' : 'Expand banner'}
-    >
-      {isBannerExpanded ? (
-        <div className="mx-auto w-full max-w-3xl overflow-hidden rounded-md">
-          <div className="aspect-video w-full">
+    <div className="relative w-full overflow-hidden rounded-md border border-border/40 text-left">
+      {!isBannerExpanded ? (
+        <button
+          type="button"
+          className="w-full text-left"
+          onClick={handleBannerExpandToggle}
+          title="Expand banner"
+        >
+          <div className="aspect-[3/1] w-full">
             <img
               src={effectiveBannerUrl}
               alt="Blueprint banner"
-              className="h-full w-full object-cover object-center"
+              className="h-full w-full object-cover object-center rounded-md"
               loading="lazy"
             />
           </div>
-        </div>
+        </button>
       ) : (
-        <div className="aspect-[3/1] w-full">
-          <img
-            src={effectiveBannerUrl}
-            alt="Blueprint banner"
-            className="h-full w-full object-cover object-center rounded-md"
-            loading="lazy"
-          />
+        <div className="mx-auto w-full max-w-3xl overflow-hidden rounded-md">
+          <div className="aspect-video w-full bg-black/5">
+            {hasInlineVideo && isBannerVideoPlaying ? (
+              <iframe
+                src={youtubeEmbedUrl}
+                title="Blueprint source video"
+                className="h-full w-full border-0"
+                loading="lazy"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allowFullScreen
+              />
+            ) : hasInlineVideo ? (
+              <button
+                type="button"
+                className="relative h-full w-full text-left"
+                onClick={() => setIsBannerVideoPlaying(true)}
+                title="Play source video"
+              >
+                <img
+                  src={effectiveBannerUrl}
+                  alt="Blueprint banner"
+                  className="h-full w-full object-cover object-center"
+                  loading="lazy"
+                />
+                <span className="absolute bottom-3 left-3 inline-flex items-center rounded-full bg-black/70 px-3 py-1 text-xs text-white">
+                  Play video
+                </span>
+              </button>
+            ) : (
+              <img
+                src={effectiveBannerUrl}
+                alt="Blueprint banner"
+                className="h-full w-full object-cover object-center"
+                loading="lazy"
+              />
+            )}
+          </div>
         </div>
       )}
-      <span className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm">
+      <button
+        type="button"
+        className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm"
+        onClick={handleBannerExpandToggle}
+        title={isBannerExpanded ? 'Collapse banner' : 'Expand banner'}
+        aria-label={isBannerExpanded ? 'Collapse banner' : 'Expand banner'}
+      >
         {isBannerExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-      </span>
-    </button>
+      </button>
+    </div>
   ) : null;
 
   return (
