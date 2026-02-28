@@ -7,6 +7,7 @@ c01) [have] Total registered API routes across backend: `53`
 c02) [have] `server/index.ts` direct `app.*` route registrations: `0`
 c03) [have] Phase 2 extraction moved heavy route callback logic into `server/handlers/*` for YouTube + Source Pages while preserving route registration parity.
 c04) [have] Phase 4 slice (`b1+b2`) tightened `core + ops` route/handler contracts via `server/contracts/api/*` with no route distribution change.
+c05) [have] Phase 4 remaining slice tightened contracts for `youtube`, `sourcePages`, and `sourceSubscriptions` via `server/contracts/api/*` with no route distribution change.
 
 Current Distribution
 - `server/routes/core.ts`: 4
@@ -24,5 +25,6 @@ Current Distribution
 Validation
 - `npm run build` passed
 - `TMPDIR=/tmp npm run test` passed
-- targeted local smoke run executed (env-limited for Supabase-backed auth flows)
+- targeted local smoke run executed (including unauth checks for tracing/notifications/feed accept under mapped Supabase runtime env)
 - route recount command confirms `53` registered routes and `0` direct registrations in `server/index.ts`
+- targeted Oracle service-token smoke re-verified (`queue/health` `200`, `jobs/latest` `200`, `jobs/trigger` `202`)

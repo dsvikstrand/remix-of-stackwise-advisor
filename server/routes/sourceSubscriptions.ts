@@ -8,38 +8,7 @@ import {
   handleRefreshScan,
   handleSyncSourceSubscription,
 } from '../handlers/sourceSubscriptionsHandlers';
-
-type SyncSubscriptionResult = any;
-type RefreshScanCandidate = any;
-
-export type SourceSubscriptionsRouteDeps = {
-  getAuthedSupabaseClient: any;
-  getServiceSupabaseClient: any;
-  resolveYouTubeChannel: any;
-  youtubeDataApiKey: string;
-  fetchYouTubeChannelAssetMap: any;
-  ensureSourcePageFromYouTubeChannel: any;
-  syncSingleSubscription: any;
-  markSubscriptionSyncError: any;
-  upsertSubscriptionNoticeSourceItem: any;
-  insertFeedItem: any;
-  buildSourcePagePath: any;
-  cleanupSubscriptionNoticeForChannel: any;
-  refreshScanLimiter: express.RequestHandler;
-  refreshGenerateLimiter: express.RequestHandler;
-  RefreshSubscriptionsScanSchema: any;
-  collectRefreshCandidatesForUser: any;
-  RefreshSubscriptionsGenerateSchema: any;
-  refreshGenerateMaxItems: number;
-  recoverStaleIngestionJobs: any;
-  getActiveManualRefreshJob: any;
-  countQueueDepth: any;
-  queueDepthHardLimit: number;
-  queueDepthPerUserLimit: number;
-  emitGenerationStartedNotification: any;
-  getGenerationNotificationLinkPath: any;
-  scheduleQueuedIngestionProcessing: any;
-};
+import type { SourceSubscriptionsRouteDeps } from '../contracts/api/sourceSubscriptions';
 
 export function registerSourceSubscriptionsRoutes(app: express.Express, deps: SourceSubscriptionsRouteDeps) {
   app.post('/api/source-subscriptions', (req, res) => handleCreateSourceSubscription(req, res, deps));

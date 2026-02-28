@@ -1,74 +1,16 @@
 import type express from 'express';
-
-type SourceItemUnlockRow = any;
-type SourcePageVideoExistingState = any;
-type SourcePageVideoGenerateItem = any;
-type SourceUnlockQueueItem = any;
-type SyncSubscriptionResult = any;
-
-export type SourcePagesRouteDeps = {
-  clampInt: any;
-  getAuthedSupabaseClient: any;
-  getServiceSupabaseClient: any;
-  buildSourcePagePath: any;
-  normalizeSourcePagePlatform: any;
-  getSourcePageByPlatformExternalId: any;
-  needsSourcePageAssetHydration: any;
-  hydrateSourcePageAssetsForRow: any;
-  youtubeDataApiKey: string;
-  getUserSubscriptionStateForSourcePage: any;
-  sourceVideoListBurstLimiter: express.RequestHandler;
-  sourceVideoListSustainedLimiter: express.RequestHandler;
-  sourceVideoUnlockBurstLimiter: express.RequestHandler;
-  sourceVideoUnlockSustainedLimiter: express.RequestHandler;
-  clampYouTubeSourceVideoLimit: any;
-  normalizeYouTubeSourceVideoKind: any;
-  runUnlockSweeps: any;
-  listYouTubeSourceVideos: any;
-  YouTubeSourceVideosError: any;
-  loadExistingSourceVideoStateForUser: any;
-  countActiveSubscribersForSourcePage: any;
-  computeUnlockCost: any;
-  getSourceItemUnlocksBySourceItemIds: any;
-  toUnlockSnapshot: any;
-  isConfirmedNoTranscriptUnlock: any;
-  createUnlockTraceId: any;
-  SourcePageVideosGenerateSchema: any;
-  sourceUnlockGenerateMaxItems: number;
-  logUnlockEvent: any;
-  normalizeSourcePageVideoGenerateItem: any;
-  upsertSourceItemFromVideo: any;
-  ensureSourceItemUnlock: any;
-  getTranscriptCooldownState: any;
-  reserveUnlock: any;
-  sourceUnlockReservationSeconds: number;
-  reserveCredits: any;
-  buildUnlockLedgerIdempotencyKey: any;
-  failUnlock: any;
-  attachReservationLedger: any;
-  markUnlockProcessing: any;
-  countQueueDepth: any;
-  unlockIntakeEnabled: boolean;
-  queueDepthHardLimit: number;
-  queueDepthPerUserLimit: number;
-  workerConcurrency: number;
-  emitGenerationStartedNotification: any;
-  getGenerationNotificationLinkPath: any;
-  scheduleQueuedIngestionProcessing: any;
-  settleReservation: any;
-  completeUnlock: any;
-  runYouTubePipeline: any;
-  getFailureTransition: any;
-  sourceTranscriptMaxAttempts: number;
-  resolveYouTubeChannel: any;
-  fetchYouTubeChannelAssetMap: any;
-  ensureSourcePageFromYouTubeChannel: any;
-  syncSingleSubscription: any;
-  markSubscriptionSyncError: any;
-  upsertSubscriptionNoticeSourceItem: any;
-  insertFeedItem: any;
-  cleanupSubscriptionNoticeForChannel: any;
-};
+import type {
+  SourceItemUnlockRow,
+  SourcePageBlueprintCursor,
+  SourcePageFeedScanRow,
+  SourcePageFeedSourceRow,
+  SourcePageSearchRow,
+  SourcePagesRouteDeps,
+  SourcePageVideoExistingState,
+  SourcePageVideoGenerateItem,
+  SourceUnlockQueueItem,
+  SyncSubscriptionResult,
+} from '../contracts/api/sourcePages';
 
 export function registerSourcePagesRouteHandlers(app: express.Express, deps: SourcePagesRouteDeps) {
   const {
@@ -134,26 +76,6 @@ export function registerSourcePagesRouteHandlers(app: express.Express, deps: Sou
     insertFeedItem,
     cleanupSubscriptionNoticeForChannel,
   } = deps;
-type SourcePageBlueprintCursor = {
-  createdAt: string;
-  feedItemId: string;
-};
-
-type SourcePageFeedScanRow = {
-  id: string;
-  source_item_id: string;
-  blueprint_id: string;
-  created_at: string;
-};
-
-type SourcePageFeedSourceRow = {
-  id: string;
-  source_page_id: string | null;
-  source_channel_id: string | null;
-  source_url: string;
-  thumbnail_url: string | null;
-};
-
 function normalizeSourcePageBlueprintCursor(input: SourcePageBlueprintCursor) {
   const createdAtMs = Date.parse(input.createdAt);
   if (!Number.isFinite(createdAtMs)) return null;
@@ -226,16 +148,6 @@ function buildSourcePageSummary(input: {
   if (candidate.length <= maxChars) return candidate;
   return `${candidate.slice(0, maxChars).trim()}...`;
 }
-
-type SourcePageSearchRow = {
-  id: string;
-  platform: string;
-  external_id: string;
-  external_url: string;
-  title: string;
-  avatar_url: string | null;
-  is_active: boolean;
-};
 
 function normalizeSourcePageSearchToken(raw: string) {
   return String(raw || '').trim().toLowerCase();

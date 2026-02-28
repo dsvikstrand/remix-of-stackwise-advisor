@@ -1,81 +1,10 @@
 import type express from 'express';
-
-type SourcePageVideoExistingState = any;
-type SearchVideoGenerateItem = any;
-type UserYouTubeConnectionRow = any;
-
-export type YouTubeRouteDeps = {
-  yt2bpIpHourlyLimiter: express.RequestHandler;
-  yt2bpAnonLimiter: express.RequestHandler;
-  yt2bpAuthLimiter: express.RequestHandler;
-  yt2bpEnabled: boolean;
-  yt2bpCoreTimeoutMs: number;
-  searchApiLimiter: express.RequestHandler;
-  sourceVideoUnlockBurstLimiter: express.RequestHandler;
-  sourceVideoUnlockSustainedLimiter: express.RequestHandler;
-  sourceVideoListBurstLimiter: express.RequestHandler;
-  sourceVideoListSustainedLimiter: express.RequestHandler;
-  youtubeConnectStartLimiter: express.RequestHandler;
-  youtubePreviewLimiter: express.RequestHandler;
-  youtubeImportLimiter: express.RequestHandler;
-  youtubeDisconnectLimiter: express.RequestHandler;
-  youtubeDataApiKey: string;
-  sourceUnlockGenerateMaxItems: number;
-  queueDepthHardLimit: number;
-  queueDepthPerUserLimit: number;
-  workerConcurrency: number;
-  youtubeOAuthStateTtlSeconds: number;
-  youtubeImportMaxChannels: number;
-  tokenEncryptionKey: string;
-  YouTubeToBlueprintRequestSchema: any;
-  SearchVideosGenerateSchema: any;
-  YouTubeConnectionStartSchema: any;
-  YouTubeSubscriptionsImportSchema: any;
-  getAdapterForUrl: any;
-  consumeCredit: any;
-  getServiceSupabaseClient: any;
-  withTimeout: any;
-  runYouTubePipeline: any;
-  mapPipelineError: any;
-  clampYouTubeSearchLimit: any;
-  getAuthedSupabaseClient: any;
-  searchYouTubeVideos: any;
-  loadExistingSourceVideoStateForUser: any;
-  YouTubeSearchError: any;
-  countQueueDepth: any;
-  emitGenerationStartedNotification: any;
-  getGenerationNotificationLinkPath: any;
-  scheduleQueuedIngestionProcessing: any;
-  clampYouTubeChannelSearchLimit: any;
-  searchYouTubeChannels: any;
-  YouTubeChannelSearchError: any;
-  clampYouTubeSourceVideoLimit: any;
-  normalizeYouTubeSourceVideoKind: any;
-  listYouTubeSourceVideos: any;
-  YouTubeSourceVideosError: any;
-  ensureYouTubeOAuthConfig: any;
-  normalizeReturnToUrl: any;
-  buildDefaultReturnTo: any;
-  randomBytes: (size: number) => { toString: (encoding: string) => string };
-  hashOAuthState: any;
-  buildYouTubeOAuthUrl: any;
-  youtubeOAuthConfig: any;
-  appendReturnToQuery: any;
-  exchangeYouTubeOAuthCode: any;
-  fetchYouTubeOAuthAccountProfile: any;
-  encryptToken: any;
-  mapYouTubeOAuthError: any;
-  getUsableYouTubeAccessToken: any;
-  fetchYouTubeUserSubscriptions: any;
-  fetchYouTubeChannelAssetMap: any;
-  ensureSourcePageFromYouTubeChannel: any;
-  syncSingleSubscription: any;
-  markSubscriptionSyncError: any;
-  upsertSubscriptionNoticeSourceItem: any;
-  insertFeedItem: any;
-  decryptToken: any;
-  revokeYouTubeToken: any;
-};
+import type {
+  SearchVideoGenerateItem,
+  SourcePageVideoExistingState,
+  UserYouTubeConnectionRow,
+  YouTubeRouteDeps,
+} from '../contracts/api/youtube';
 
 export function registerYouTubeRouteHandlers(app: express.Express, deps: YouTubeRouteDeps) {
   const {

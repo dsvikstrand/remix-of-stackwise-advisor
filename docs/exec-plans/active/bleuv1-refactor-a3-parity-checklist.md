@@ -31,11 +31,11 @@ p18) [have] Targeted Oracle service-token smoke-checks passed (`/api/ops/queue/h
 
 Representative Endpoint Shape Checks
 p19) [have] `GET /api/health` -> `200` with `{"ok":true}`.
-p20) [todo] `GET /api/generation-runs/:runId` -> local smoke blocked by missing Supabase runtime config in this environment (`500 CONFIG_ERROR`).
-p21) [todo] `GET /api/blueprints/:id/generation-trace` -> not executed in this pass.
-p22) [todo] `GET /api/notifications` -> local smoke blocked by missing Supabase runtime config in this environment (`500 CONFIG_ERROR` before auth envelope).
+p20) [have] `GET /api/generation-runs/:runId` unauth -> `401 Unauthorized` after local runtime mapping (`SUPABASE_URL <- VITE_SUPABASE_URL`, `SUPABASE_ANON_KEY <- VITE_SUPABASE_PUBLISHABLE_KEY`).
+p21) [have] `GET /api/blueprints/:id/generation-trace` unauth -> `401 Unauthorized`.
+p22) [have] `GET /api/notifications` unauth -> `401 Unauthorized`.
 p23) [have] `POST /api/ingestion/jobs/trigger` (no service token) -> `401 SERVICE_AUTH_REQUIRED`.
-p24) [todo] `POST /api/my-feed/items/:id/accept` -> not executed in this pass.
+p24) [have] `POST /api/my-feed/items/:id/accept` unauth -> `401 Unauthorized`.
 p25) [have] `POST /api/youtube-to-blueprint` invalid payload -> `400 INVALID_URL`.
 p26) [have] `GET /api/source-pages/search?q=a` -> `400 INVALID_QUERY`.
 p27) [have] `GET /api/ops/queue/health` (no service token) -> `401 SERVICE_AUTH_REQUIRED`.
@@ -49,3 +49,13 @@ p29) [have] Added canonical contract modules for this slice:
 p30) [have] `server/routes/core.ts` and `server/handlers/coreHandlers.ts` now consume `CoreRouteDeps` from `server/contracts/api/core.ts`.
 p31) [have] `server/routes/ops.ts` and `server/handlers/opsHandlers.ts` now consume `OpsRouteDeps` from `server/contracts/api/ops.ts`.
 p32) [have] No endpoint path changes or response-envelope key changes were introduced in the core/ops contract rewiring.
+
+Phase 4 (remaining core-3 domains) Contract Tightening
+p33) [have] Added canonical contract modules for remaining domains:
+- `server/contracts/api/youtube.ts`
+- `server/contracts/api/sourcePages.ts`
+- `server/contracts/api/sourceSubscriptions.ts`
+p34) [have] `server/routes/youtube.ts` and `server/handlers/youtubeHandlers.ts` now consume `YouTubeRouteDeps` from `server/contracts/api/youtube.ts`.
+p35) [have] `server/routes/sourcePages.ts` and `server/handlers/sourcePagesHandlers.ts` now consume `SourcePagesRouteDeps` and source-page helper row/cursor types from `server/contracts/api/sourcePages.ts`.
+p36) [have] `server/routes/sourceSubscriptions.ts` and `server/handlers/sourceSubscriptionsHandlers.ts` now consume `SourceSubscriptionsRouteDeps` plus scan/generate contract types from `server/contracts/api/sourceSubscriptions.ts`.
+p37) [have] No endpoint path changes, middleware-order changes, or response-envelope key changes were introduced in the remaining-domain contract rewiring.

@@ -1,8 +1,9 @@
 import type express from 'express';
-import type { SourceSubscriptionsRouteDeps } from '../routes/sourceSubscriptions';
-
-type SyncSubscriptionResult = any;
-type RefreshScanCandidate = any;
+import type {
+  RefreshScanCandidate,
+  SourceSubscriptionsRouteDeps,
+  SyncSubscriptionResult,
+} from '../contracts/api/sourceSubscriptions';
 
 export async function handleCreateSourceSubscription(req: express.Request, res: express.Response, deps: SourceSubscriptionsRouteDeps) {
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
