@@ -13,6 +13,8 @@ This file is the authoritative active/completed registry for execution plans.
   Followable deep-dive hardening playbook (blind spots, MVP priorities, sprint sequence, and success metrics).
 - `docs/exec-plans/active/bleuv1-refactor-a3-parity-checklist.md`
   Active backend-first refactor parity contract (with route/response baseline artifacts for no-behavior-change validation).
+- `docs/exec-plans/active/bleuv1-refactor-a3-route-map-current.md`
+  Current modular route-distribution snapshot after Phase 1 extraction (kept alongside baseline artifacts).
 - `docs/exec-plans/tech-debt-tracker.md`
   Deferred work backlog and non-blocking engineering debt.
 

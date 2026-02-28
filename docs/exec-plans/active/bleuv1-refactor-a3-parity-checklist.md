@@ -3,21 +3,21 @@
 Status
 p01) [have] Baseline commit captured at `63420eb`.
 p02) [have] Backend route inventory captured from `server/index.ts`.
-p03) [todo] Preserve API path/method inventory during route modularization.
-p04) [todo] Preserve auth + limiter ordering/behavior.
-p05) [todo] Preserve response envelope patterns (`ok`, `error_code`, `message`, `data`).
-p06) [todo] Preserve active MVP flows (`/youtube`, search generate, source-page unlock/generate, notifications, generation trace).
+p03) [have] API path/method inventory preserved during route modularization (`53` total routes before/after).
+p04) [have] Auth + limiter ordering/behavior preserved by verbatim route-body extraction into `server/routes/*`.
+p05) [have] Response envelope patterns (`ok`, `error_code`, `message`, `data`) preserved in extracted handlers.
+p06) [have] Active MVP flows preserved (`/youtube`, search generate, source-page unlock/generate, notifications, generation trace) via build+test pass.
 
 No-Behavior-Change Invariants
-p07) [todo] No endpoint path additions/removals in refactor phases.
-p08) [todo] No intentional response payload contract drift.
-p09) [todo] No DB schema changes in refactor phases.
-p10) [todo] No UI/UX behavior changes in backend-first phases.
+p07) [have] No endpoint path additions/removals in this phase.
+p08) [have] No intentional response payload contract drift in this phase.
+p09) [have] No DB schema changes in this phase.
+p10) [have] No UI/UX behavior changes in this backend-first phase.
 
 Validation Gates (Per PR)
-p11) [todo] `npm run build`
-p12) [todo] `npm run test`
-p13) [todo] Route parity diff against `bleuv1-refactor-a3-route-map-baseline.txt`.
+p11) [have] `npm run build`
+p12) [have] `TMPDIR=/tmp npm run test`
+p13) [have] Route parity diff confirmed (`53` total route registrations before/after).
 p14) [todo] Smoke-check representative endpoints for envelope/shape parity.
 
 Representative Endpoint Shape Checks
