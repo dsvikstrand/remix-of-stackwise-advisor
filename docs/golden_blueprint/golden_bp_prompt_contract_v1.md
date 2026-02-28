@@ -12,6 +12,7 @@ Owner intent: Build blueprints people choose to read for value, not because they
 - `v1.2` (2026-02-27): Replaced placeholder/order prose sections with deterministic enforcement contract, moved changelog to top, and added final job recap.
 - `v1.3` (2026-02-27): Removed `Tradeoffs` from active section contract, reframed `Summary` as intro/prerequisite context, reduced Bleup density target to fewer richer slides, and tightened parenthetical-overuse guidance.
 - `v1.4` (2026-02-28): Made all six sections explicitly required (`Summary`, `Takeaways`, `Bleup`, `Deep Dive`, `Practical Rules`, `Open Questions`) and added explicit retry-on-missing-section language.
+- `v1.5` (2026-02-28): Added required `summary_variants` output (`default`, `eli5`) for expertise-level toggle on first section.
 
 ## Purpose
 
@@ -60,6 +61,7 @@ Output must be strict valid JSON in the expected generation schema. Section titl
 All deep sections target three to five complete bullets each. Empty sections, one-line placeholders, repeated boilerplate tails, and malformed bullets (for example `-.`) are hard failures. Parenthetical expansions like `(XYZ)` should be used sparingly and only when they add necessary clarity.
 
 `Summary` is an intro layer, not the bulk layer. It should provide a concise topic orientation and prerequisite context at an ELI15 depth. The bulk payload belongs in `Bleup`.
+`summary_variants` is mandatory and must include both `default` and `eli5` strings. Missing either variant is a hard fail that should trigger eval failure and retry.
 
 All required sections must exist in every output: `Summary`, `Takeaways`, `Bleup`, `Deep Dive`, `Practical Rules`, `Open Questions`. Missing any required section is a hard fail that should trigger eval failure and a retry.
 
@@ -164,6 +166,10 @@ The rendered prompt must include the required output shape and must reject non-J
 {
   "title": "string",
   "description": "string",
+  "summary_variants": {
+    "default": "string",
+    "eli5": "string"
+  },
   "steps": [
     { "name": "string", "notes": "string", "timestamp": "string|null" }
   ],

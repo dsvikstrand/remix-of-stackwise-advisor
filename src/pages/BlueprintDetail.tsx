@@ -29,6 +29,7 @@ type ItemValue = string | { name?: string; context?: string };
 type StepItem = { category?: string; name?: string; context?: string };
 type BlueprintStep = { id?: string; title?: string; description?: string | null; items?: StepItem[] };
 type RenderStep = { id?: string; title: string; description: string; items: StepItem[] };
+type SummaryExpertiseLevel = 'default' | 'eli5';
 
 function formatItem(item: ItemValue) {
   if (typeof item === 'string') return item;
@@ -49,6 +50,22 @@ function parseSelectedItems(selected: Json) {
     return [] as Array<[string, ItemValue[]]>;
   }
   return Object.entries(selected as Record<string, ItemValue[]>).filter(([, items]) => Array.isArray(items));
+}
+
+function parseSummaryVariants(selected: Json | null | undefined) {
+  const fallback: Record<SummaryExpertiseLevel, string> = {
+    default: '',
+    eli5: '',
+  };
+  if (!selected || typeof selected !== 'object' || Array.isArray(selected)) return fallback;
+  const payload = selected as Record<string, unknown>;
+  const variants = payload.bp_summary_variants;
+  if (!variants || typeof variants !== 'object' || Array.isArray(variants)) return fallback;
+  const map = variants as Record<string, unknown>;
+  return {
+    default: String(map.default || '').trim(),
+    eli5: String(map.eli5 || '').trim(),
+  };
 }
 
 function parseSteps(steps: Json) {
@@ -272,7 +289,7 @@ export default function BlueprintDetail() {
   const [comment, setComment] = useState('');
   const [isBannerExpanded, setIsBannerExpanded] = useState(false);
   const [interactiveSectionsExpanded, setInteractiveSectionsExpanded] = useState(false);
-  const [summaryExpertiseLevel, setSummaryExpertiseLevel] = useState<'default' | 'eli5'>('default');
+  const [summaryExpertiseLevel, setSummaryExpertiseLevel] = useState<SummaryExpertiseLevel>('default');
   const location = useLocation();
   const loggedBlueprintId = useRef<string | null>(null);
   const steps = blueprint ? parseSteps(blueprint.steps) : [];
@@ -500,6 +517,12 @@ export default function BlueprintDetail() {
     const key = normalizeHeadingKey(step.title);
     return isSummaryKey(key);
   });
+  const summaryVariants = parseSummaryVariants(blueprint?.selected_items);
+  const hasEli5SummaryVariant = Boolean(summaryVariants.eli5);
+  const summaryDefaultText = summaryVariants.default || topSummarySection?.description || '';
+  const selectedSummaryText = summaryExpertiseLevel === 'eli5' && hasEli5SummaryVariant
+    ? summaryVariants.eli5
+    : summaryDefaultText;
   const bleupSection = visibleGoldenSections.find((step) => {
     const key = normalizeHeadingKey(step.title);
     return isBleupKey(key);
@@ -512,7 +535,19 @@ export default function BlueprintDetail() {
   );
   const splitSections = deepDiveAndMoreSections.flatMap((step) => splitEmbeddedGoldenSections(step));
   const fallbackNarrativeFromSplit = splitSections.find((step) => isNarrativeKey(normalizeHeadingKey(step.title))) || null;
-  const effectiveTopSummarySection = topSummarySection || null;
+  const effectiveTopSummarySection = topSummarySection
+    ? {
+        ...topSummarySection,
+        description: selectedSummaryText || topSummarySection.description,
+      }
+    : summaryDefaultText
+      ? {
+          id: 'summary-virtual',
+          title: 'Summary',
+          description: selectedSummaryText || summaryDefaultText,
+          items: [],
+        }
+      : null;
   const effectiveBleupSection = bleupSection || fallbackNarrativeFromSplit;
   const deepDiveInteractiveSections = deepDiveAndMoreSections
     .flatMap((step) => splitEmbeddedGoldenSections(step))
@@ -784,16 +819,18 @@ export default function BlueprintDetail() {
                       <div className="inline-flex items-center gap-1 rounded-full border border-border/40 bg-muted/20 p-1">
                         {summaryExpertiseLevels.map((level) => {
                           const active = summaryExpertiseLevel === level.key;
+                          const disabled = level.key === 'eli5' && !hasEli5SummaryVariant;
                           return (
                             <Button
                               key={level.key}
                               type="button"
                               variant="ghost"
                               size="sm"
-                              className={`h-7 rounded-full px-3 text-xs ${active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                              className={`h-7 rounded-full px-3 text-xs ${active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'} ${disabled ? 'opacity-50 cursor-not-allowed hover:text-muted-foreground' : ''}`}
                               onClick={() => setSummaryExpertiseLevel(level.key)}
                               aria-pressed={active}
                               aria-label={`Set summary level to ${level.label}`}
+                              disabled={disabled}
                             >
                               {level.label}
                             </Button>

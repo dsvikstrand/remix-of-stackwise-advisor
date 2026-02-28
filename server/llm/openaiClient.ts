@@ -64,6 +64,10 @@ const YouTubeBlueprintValidator = z.object({
   description: z.string(),
   notes: z.string().nullable().optional(),
   tags: z.array(z.string()).optional(),
+  summary_variants: z.object({
+    default: z.string().nullable().optional(),
+    eli5: z.string().nullable().optional(),
+  }).nullable().optional(),
   steps: z.array(
     z.object({
       name: z.string(),

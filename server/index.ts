@@ -782,6 +782,10 @@ type YouTubeDraft = {
   steps: YouTubeDraftStep[];
   notes: string | null;
   tags: string[];
+  summaryVariants: {
+    default: string;
+    eli5: string;
+  };
 };
 
 type QualityCriterion = {
@@ -4157,6 +4161,10 @@ async function createBlueprintFromVideo(db: ReturnType<typeof createClient>, inp
         bp_quality_retries_used: Number((result.meta as { bp_quality_retries_used?: unknown } | null)?.bp_quality_retries_used || 0),
         bp_quality_final_mode: String((result.meta as { bp_quality_final_mode?: unknown } | null)?.bp_quality_final_mode || 'direct'),
         bp_output_mode: String((result.meta as { bp_output_mode?: unknown } | null)?.bp_output_mode || yt2bpOutputMode),
+        bp_summary_variants: {
+          default: normalizeSummaryVariantText(result.draft.summaryVariants?.default || ''),
+          eli5: normalizeSummaryVariantText(result.draft.summaryVariants?.eli5 || ''),
+        },
         bp_trace_version: String((result.meta as { bp_trace_version?: unknown } | null)?.bp_trace_version || 'yt2bp_trace_v2'),
         bp_run_id: result.run_id,
         bp_trace_source: 'generation_runs',
@@ -11565,6 +11573,8 @@ function flattenDraftText(draft: {
   const blocks = [
     draft.title,
     draft.description,
+    draft.summaryVariants?.default || '',
+    draft.summaryVariants?.eli5 || '',
     draft.notes || '',
     ...(draft.tags || []),
     ...draft.steps.flatMap((step) => [step.name, step.notes, step.timestamp || '']),
@@ -11629,6 +11639,13 @@ function wordCount(value: string) {
     .filter(Boolean).length;
 }
 
+function normalizeSummaryVariantText(value: unknown) {
+  return String(value || '')
+    .replace(/\r/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function evaluateLlmNativeGate(draft: YouTubeDraft): LlmNativeGateResult {
   const issues: string[] = [];
   const issueDetails: string[] = [];
@@ -11655,6 +11672,17 @@ function evaluateLlmNativeGate(draft: YouTubeDraft): LlmNativeGateResult {
       issues.push(`${target.code}_EMPTY`);
       issueDetails.push(`${target.code}_EMPTY section=${section.name}`);
     }
+  }
+
+  const summaryDefault = normalizeSummaryVariantText(draft.summaryVariants?.default || '');
+  const summaryEli5 = normalizeSummaryVariantText(draft.summaryVariants?.eli5 || '');
+  if (!summaryDefault) {
+    issues.push('SUMMARY_VARIANT_DEFAULT_MISSING');
+    issueDetails.push('SUMMARY_VARIANT_DEFAULT_MISSING section=summary_variants.default');
+  }
+  if (!summaryEli5) {
+    issues.push('SUMMARY_VARIANT_ELI5_MISSING');
+    issueDetails.push('SUMMARY_VARIANT_ELI5_MISSING section=summary_variants.eli5');
   }
 
   const targetSections: Array<{ key: string; code: string }> = [
@@ -12021,7 +12049,7 @@ async function runYouTubePipeline(input: {
     const contentSafetyConfig = readYt2bpContentSafetyConfig();
     const qualityAttempts = qualityConfig.enabled ? 1 + qualityConfig.retry_policy.max_retries : 1;
     const safetyRetryBudget = contentSafetyConfig.enabled ? contentSafetyConfig.retry_policy.max_retries : 0;
-    const generationTrace = {
+  const generationTrace = {
     trace_version: traceContext.traceVersion,
     run_id: input.runId,
     video_id: input.videoId,
@@ -12030,6 +12058,10 @@ async function runYouTubePipeline(input: {
       source: transcript.source,
       chars: transcript.text.length,
       confidence: transcript.confidence,
+    },
+    summary_variants: {
+      default_chars: null as number | null,
+      eli5_chars: null as number | null,
     },
     deterministic_checks: [] as Array<{
       stage: string;
@@ -12083,19 +12115,31 @@ async function runYouTubePipeline(input: {
   } | null = null;
   const passingCandidates: Array<{ draft: YouTubeDraft; overall: number }> = [];
 
-  const toDraft = (rawDraft: Awaited<ReturnType<typeof client.generateYouTubeBlueprint>>): YouTubeDraft => ({
-    title: rawDraft.title?.trim() || 'YouTube Blueprint',
-    description: rawDraft.description?.trim() || 'AI-generated blueprint from video transcript.',
-    steps: (rawDraft.steps || [])
+  const toDraft = (rawDraft: Awaited<ReturnType<typeof client.generateYouTubeBlueprint>>): YouTubeDraft => {
+    const normalizedSteps = (rawDraft.steps || [])
       .map((step) => ({
         name: step.name?.trim() || '',
         notes: step.notes?.trim() || '',
         timestamp: step.timestamp?.trim() || null,
       }))
-      .filter((step) => step.name && step.notes),
-    notes: rawDraft.notes?.trim() || null,
-    tags: (rawDraft.tags || []).map((tag) => tag.trim()).filter(Boolean).slice(0, 8),
-  });
+      .filter((step) => step.name && step.notes);
+    const summaryStepNotes = normalizedSteps.find((step) => canonicalSectionName(step.name) === 'summary')?.notes || '';
+    const summaryDefault = normalizeSummaryVariantText(
+      rawDraft.summary_variants?.default || summaryStepNotes || rawDraft.description || '',
+    );
+    const summaryEli5 = normalizeSummaryVariantText(rawDraft.summary_variants?.eli5 || '');
+    return {
+      title: rawDraft.title?.trim() || 'YouTube Blueprint',
+      description: rawDraft.description?.trim() || 'AI-generated blueprint from video transcript.',
+      steps: normalizedSteps,
+      notes: rawDraft.notes?.trim() || null,
+      tags: (rawDraft.tags || []).map((tag) => tag.trim()).filter(Boolean).slice(0, 8),
+      summaryVariants: {
+        default: summaryDefault,
+        eli5: summaryEli5,
+      },
+    };
+  };
 
   let safetyRetriesUsed = 0;
   for (let attempt = 1; attempt <= qualityAttempts; attempt += 1) {
@@ -12481,6 +12525,7 @@ async function runYouTubePipeline(input: {
       const previousOutput = JSON.stringify({
         title: draft.title,
         description: draft.description,
+        summary_variants: draft.summaryVariants,
         steps: goldenFormat.steps,
         notes: draft.notes || null,
         tags: draft.tags || [],
@@ -12740,6 +12785,7 @@ async function runYouTubePipeline(input: {
       const previousOutput = JSON.stringify({
         title: draft.title,
         description: draft.description,
+        summary_variants: draft.summaryVariants,
         steps: draft.steps,
         notes: draft.notes || null,
         tags: draft.tags || [],
@@ -12941,6 +12987,11 @@ Keep section bullets concise:
     bannerUrl = await uploadBannerToSupabase(banner.buffer.toString('base64'), banner.mimeType, input.authToken);
   }
 
+    generationTrace.summary_variants = {
+      default_chars: draft.summaryVariants.default.length,
+      eli5_chars: draft.summaryVariants.eli5.length,
+    };
+
     if (traceContext.db && traceContext.userId) {
       await safeGenerationTraceWrite({
         runId: input.runId,
@@ -12955,6 +13006,8 @@ Keep section bullets concise:
               quality_issues: gateIssueCodes,
               quality_retries_used: qualityRetriesUsed,
               quality_final_mode: qualityFinalMode,
+              summary_variant_default_chars: draft.summaryVariants.default.length,
+              summary_variant_eli5_chars: draft.summaryVariants.eli5.length,
               duration_ms: Date.now() - startedAt,
             },
           });

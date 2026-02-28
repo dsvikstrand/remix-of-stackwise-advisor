@@ -131,6 +131,10 @@ export interface YouTubeBlueprintResult {
   steps: YouTubeDraftStep[];
   notes?: string | null;
   tags?: string[];
+  summary_variants?: {
+    default?: string | null;
+    eli5?: string | null;
+  } | null;
 }
 
 export interface ChannelLabelOption {
