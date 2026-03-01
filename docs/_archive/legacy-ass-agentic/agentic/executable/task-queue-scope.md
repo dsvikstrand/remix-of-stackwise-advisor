@@ -42,6 +42,6 @@ Purpose: ensure generated tasks are atomic, testable, and aligned to `bleuV1` sc
 
 ## Traceability Requirement
 Each task must map to at least one source in:
-- `docs/agentic/foundation/`
-- `docs/agentic/executable/`
+- `docs/_archive/legacy-ass-agentic/agentic/foundation/`
+- `docs/_archive/legacy-ass-agentic/agentic/executable/`
 - canonical docs (`docs/app/product-spec.md`, `docs/architecture.md`)

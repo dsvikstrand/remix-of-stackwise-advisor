@@ -42,8 +42,8 @@ Purpose: define a strict task artifact format for planner output and evaluator c
     "UI redesign"
   ],
   "inputs": [
-    "docs/agentic/foundation/gate-policy.md",
-    "docs/agentic/executable/eval-harness.md"
+    "docs/_archive/legacy-ass-agentic/agentic/foundation/gate-policy.md",
+    "docs/_archive/legacy-ass-agentic/agentic/executable/eval-harness.md"
   ],
   "files_to_touch": [
     "server/index.ts",

@@ -85,8 +85,8 @@
         "codex/skills/seed-blueprints/scripts/**"
       ],
       "required_docs": [
-        "docs/design-docs/seed_ass_spec.md",
-        "docs/design-docs/ASS_simple.mmd",
+        "docs/_archive/legacy-ass-agentic/design-docs/seed_ass_spec.md",
+        "docs/_archive/legacy-ass-agentic/design-docs/ASS_simple.mmd",
         "docs/ops/yt2bp_runbook.md",
         "docs/exec-plans/active/project-bleuv1-mvp-foundation.md",
         "docs/exec-plans/active/bleuv1-manual-iteration-scheme.md"
@@ -119,7 +119,7 @@
     {
       "id": "agentic-docs-reference",
       "paths": [
-        "docs/agentic/**"
+        "docs/_archive/legacy-ass-agentic/agentic/**"
       ],
       "required_docs": [
         "docs/README.md",
@@ -129,8 +129,8 @@
         "docs/exec-plans/index.md",
         "docs/exec-plans/active/project-bleuv1-mvp-foundation.md",
         "docs/exec-plans/active/bleuv1-manual-iteration-scheme.md",
-        "docs/agentic/README.md",
-        "docs/agentic/executable/README.md"
+        "docs/_archive/legacy-ass-agentic/agentic/README.md",
+        "docs/_archive/legacy-ass-agentic/agentic/executable/README.md"
       ],
       "suggested_sections": [
         "Reference status",

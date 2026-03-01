@@ -15,9 +15,9 @@ This file is the authoritative active/completed registry for execution plans.
   Deferred work backlog and non-blocking engineering debt.
 
 ## Paused Reference (Not Active)
-- `docs/agentic/README.md`
-- `docs/agentic/foundation/`
-- `docs/agentic/executable/`
+- `docs/_archive/legacy-ass-agentic/README.md`
+- `docs/_archive/legacy-ass-agentic/agentic/foundation/`
+- `docs/_archive/legacy-ass-agentic/agentic/executable/`
 
 ## Completed
 - `docs/exec-plans/completed/project-1-ia-and-lingo.md`
@@ -46,7 +46,7 @@ This file is the authoritative active/completed registry for execution plans.
 - Legacy channels-first program: completed/archived.
 - `bleuV1` source-first program: active.
 - `bleuV1` MVP build execution: manual iterative mode.
-- Agentic orchestration: paused reference path.
+- Agentic orchestration: archived reference path.
 
 ## Rules
 - Keep only truly active docs in `active/`.

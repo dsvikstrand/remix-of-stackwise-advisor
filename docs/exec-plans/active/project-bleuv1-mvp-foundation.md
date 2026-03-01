@@ -166,9 +166,9 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Production gate enforcement (`CHANNEL_GATES_MODE=enforce`).
 
 ## Reference Material (Paused Track)
-- `docs/agentic/README.md`
-- `docs/agentic/foundation/`
-- `docs/agentic/executable/`
+- `docs/_archive/legacy-ass-agentic/README.md`
+- `docs/_archive/legacy-ass-agentic/agentic/foundation/`
+- `docs/_archive/legacy-ass-agentic/agentic/executable/`
 
 ## Completion Criteria For This Plan
 1. Remaining MVP work is shipped through manual iterations without identity drift.

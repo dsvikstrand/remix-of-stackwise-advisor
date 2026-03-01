@@ -53,9 +53,9 @@ if (!builtins.includes('rubric?.library || rubric?.inventory || {}')) {
 }
 
 const policyDocs = [
-  'docs/design-docs/seed_ass_spec.md',
+  'docs/_archive/legacy-ass-agentic/design-docs/seed_ass_spec.md',
   'docs/app/product-spec.md',
-  'docs/schemas/ass_eval_config_schema.md',
+  'docs/_archive/legacy-ass-agentic/schemas/ass_eval_config_schema.md',
   'docs/schemas/eval_scorecard_schema.md',
 ];
 for (const rel of policyDocs) {

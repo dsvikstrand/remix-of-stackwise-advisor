@@ -13,7 +13,7 @@ The baseline is a **linear agentic system (LAS)**. We will evolve it into a **dy
 - Runner: `codex/skills/seed-blueprints/scripts/seed_stage0.ts`
 - Input spec: `seed/seed_spec_v0.json`
 - Outputs: `seed/outputs/<run_id>/...`
-- Mermaid graph: `docs/design-docs/ASS_simple.mmd`
+- Mermaid graph: `docs/_archive/legacy-ass-agentic/design-docs/ASS_simple.mmd`
 
 ## Preflight (Current)
 Before generation, the runner performs a fail-fast preflight step and writes:
@@ -80,7 +80,7 @@ Notes:
 ASS eval config v2 describes **eval instances per node** (which eval classes run, and with what params).
 
 - Example: `seed/ass_eval_policy_v2.example.json`
-- Schema: `docs/schemas/ass_eval_config_schema.md`
+- Schema: `docs/_archive/legacy-ass-agentic/schemas/ass_eval_config_schema.md`
 - Runner flag: `--ass-eval-config <path>`
 - Resolved config log: `logs/ass_eval_config_resolved.json`
 

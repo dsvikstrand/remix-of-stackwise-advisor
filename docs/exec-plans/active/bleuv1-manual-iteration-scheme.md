@@ -5,6 +5,11 @@ Status: `active`
 ## Purpose
 This document is the step-by-step execution scheme for the remaining `bleuV1` MVP work.
 
+## Reference Status
+- Historical ASS/agentic seeding documentation is archived under:
+  - `docs/_archive/legacy-ass-agentic/README.md`
+- This manual iteration scheme tracks the active `bleuV1` source-first execution path and should be treated as authoritative over archived seeding tracks.
+
 Execution mode:
 - manual iterative loop only
 - one step completed before the next starts

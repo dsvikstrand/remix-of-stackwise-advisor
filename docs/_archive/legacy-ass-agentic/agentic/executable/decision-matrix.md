@@ -35,7 +35,7 @@ Purpose: freeze high-impact defaults so role agents do not invent policy.
 1. Any change to identity/scope defaults requires a documented decision update in:
    - `docs/app/product-spec.md`
    - `docs/architecture.md`
-   - `docs/agentic/executable/decision-matrix.md`
+   - `docs/_archive/legacy-ass-agentic/agentic/executable/decision-matrix.md`
 2. Any safety/PII threshold class change triggers stop-checkpoint 2.
 3. Emergency overrides must include rollback note and owner in task artifact.
 

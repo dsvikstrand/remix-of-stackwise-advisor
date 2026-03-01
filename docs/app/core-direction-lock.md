@@ -2,6 +2,16 @@
 
 Status: `canonical`
 
+## Reference Status
+- Legacy ASS/agentic seeding references are archived and non-runtime:
+  - `docs/_archive/legacy-ass-agentic/README.md`
+  - `docs/_archive/legacy-ass-agentic/agentic/README.md`
+  - `docs/_archive/legacy-ass-agentic/ass_das/ASS_full.mmd`
+  - `docs/_archive/legacy-ass-agentic/design-docs/ASS_simple.mmd`
+  - `docs/_archive/legacy-ass-agentic/design-docs/seed_ass_spec.md`
+  - `docs/_archive/legacy-ass-agentic/schemas/ass_eval_config_schema.md`
+- Active product/runtime direction for `bleuV1` remains source-first YouTube-to-blueprint and is defined by this file plus canonical product/architecture docs.
+
 ## One-line promise
 `bleuV1` gives you an automated feed of bite-sized blueprints from the media you follow, with automatic channel publishing for eligible items.
 

@@ -3,6 +3,9 @@
 ## 1) Intent And Boundaries
 - Direction lock reference:
   - `docs/app/core-direction-lock.md`
+- Reference status:
+  - legacy ASS/agentic seeding docs are archived under `docs/_archive/legacy-ass-agentic/README.md`
+  - those artifacts are historical-only and do not define current runtime architecture contracts
 - Product scope:
   - Source-first blueprint app.
   - Personal unfiltered feed (`My Feed`) as primary lane.

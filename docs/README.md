@@ -33,13 +33,14 @@ This folder is the source of truth for product, architecture, planning, and oper
 - If a detailed plan/reference file conflicts with canonical docs, follow canonical docs.
 - Treat `docs/product-specs/youtube_to_blueprint_plan.md` as detailed historical/reference context; use `docs/product-specs/yt2bp_v0_contract.md` for runtime API truth.
 
-## Reference-Only (Paused)
-- Agentic foundation pack: `docs/agentic/foundation/`
-- Agentic executable pack: `docs/agentic/executable/`
+## Legacy Archive (Reference-Only)
+- Agentic foundation pack (archived): `docs/_archive/legacy-ass-agentic/agentic/foundation/`
+- Agentic executable pack (archived): `docs/_archive/legacy-ass-agentic/agentic/executable/`
+- ASS/DAS design docs (archived): `docs/_archive/legacy-ass-agentic/`
 
 ## Folder Map
 - `docs/app/` product-level behavior and user flow docs
-- `docs/agentic/` reference contracts from paused orchestration track
+- `docs/_archive/legacy-ass-agentic/` archived ASS/agentic reference contracts (not active runtime guidance)
 - `docs/architecture.md` system topology and invariants
 - `docs/design-docs/` technical design + diagrams
 - `docs/exec-plans/active/` currently active plans/program docs

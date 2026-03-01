@@ -19,28 +19,28 @@ Current status: paused reference track. Manual iterative delivery is the active 
 7. CP3 milestone unit is objective bundle (3-8 tasks, one integration candidate).
 
 ## Read Order (Foundation)
-1. `docs/agentic/foundation/north-star.md`
-2. `docs/agentic/foundation/mvp-scope-contract.md`
-3. `docs/agentic/foundation/system-map.md`
-4. `docs/agentic/foundation/lifecycle-and-state-machine.md`
-5. `docs/agentic/foundation/data-contract.md`
-6. `docs/agentic/foundation/gate-policy.md`
-7. `docs/agentic/foundation/risk-register.md`
-8. `docs/agentic/foundation/glossary.md`
+1. `docs/_archive/legacy-ass-agentic/agentic/foundation/north-star.md`
+2. `docs/_archive/legacy-ass-agentic/agentic/foundation/mvp-scope-contract.md`
+3. `docs/_archive/legacy-ass-agentic/agentic/foundation/system-map.md`
+4. `docs/_archive/legacy-ass-agentic/agentic/foundation/lifecycle-and-state-machine.md`
+5. `docs/_archive/legacy-ass-agentic/agentic/foundation/data-contract.md`
+6. `docs/_archive/legacy-ass-agentic/agentic/foundation/gate-policy.md`
+7. `docs/_archive/legacy-ass-agentic/agentic/foundation/risk-register.md`
+8. `docs/_archive/legacy-ass-agentic/agentic/foundation/glossary.md`
 
 ## Read Order (Executable)
-1. `docs/agentic/executable/decision-matrix.md`
-2. `docs/agentic/executable/task-queue-scope.md`
-3. `docs/agentic/executable/task-schema.md`
-4. `docs/agentic/executable/task-artifact.schema.json`
-5. `docs/agentic/executable/interface-contracts.md`
-6. `docs/agentic/executable/schema-contracts.md`
-7. `docs/agentic/executable/state-machine-tests.md`
-8. `docs/agentic/executable/eval-harness.md`
-9. `docs/agentic/executable/stop-inspect-policy.md`
-10. `docs/agentic/executable/terminology-rules.md`
-11. `docs/agentic/executable/role-contracts.md`
-12. `docs/agentic/executable/review-gates.md`
+1. `docs/_archive/legacy-ass-agentic/agentic/executable/decision-matrix.md`
+2. `docs/_archive/legacy-ass-agentic/agentic/executable/task-queue-scope.md`
+3. `docs/_archive/legacy-ass-agentic/agentic/executable/task-schema.md`
+4. `docs/_archive/legacy-ass-agentic/agentic/executable/task-artifact.schema.json`
+5. `docs/_archive/legacy-ass-agentic/agentic/executable/interface-contracts.md`
+6. `docs/_archive/legacy-ass-agentic/agentic/executable/schema-contracts.md`
+7. `docs/_archive/legacy-ass-agentic/agentic/executable/state-machine-tests.md`
+8. `docs/_archive/legacy-ass-agentic/agentic/executable/eval-harness.md`
+9. `docs/_archive/legacy-ass-agentic/agentic/executable/stop-inspect-policy.md`
+10. `docs/_archive/legacy-ass-agentic/agentic/executable/terminology-rules.md`
+11. `docs/_archive/legacy-ass-agentic/agentic/executable/role-contracts.md`
+12. `docs/_archive/legacy-ass-agentic/agentic/executable/review-gates.md`
 
 ## Foundation -> Executable Mapping
 - `north-star.md` -> `decision-matrix.md`

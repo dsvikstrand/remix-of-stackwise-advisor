@@ -8,6 +8,16 @@
 - Primary MVP journey: source input -> `My Feed` -> auto channel evaluation/publish.
 - Library/inventory routes are compatibility-only and not part of the core user journey.
 
+## Reference Status
+- Legacy ASS/agentic seeding material is archived for historical reference only:
+  - `docs/_archive/legacy-ass-agentic/README.md`
+  - `docs/_archive/legacy-ass-agentic/agentic/README.md`
+  - `docs/_archive/legacy-ass-agentic/ass_das/ASS_full.mmd`
+  - `docs/_archive/legacy-ass-agentic/design-docs/ASS_simple.mmd`
+  - `docs/_archive/legacy-ass-agentic/design-docs/seed_ass_spec.md`
+  - `docs/_archive/legacy-ass-agentic/schemas/ass_eval_config_schema.md`
+- Runtime behavior and roadmap decisions should be based on active/canonical docs, not archived seeding tracks.
+
 ## Status Snapshot
 a1) [have] YouTube to Blueprint generation is live (`/youtube` + `/api/youtube-to-blueprint`).
 a2) [have] Public feed/channel/community primitives are live (`/wall`, `/channels`, `/b/:channelSlug`, likes/comments).
