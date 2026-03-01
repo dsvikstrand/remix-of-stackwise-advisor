@@ -13,9 +13,9 @@ This folder is the source of truth for product, architecture, planning, and oper
 2. `docs/architecture.md`
 3. `docs/app/product-spec.md`
 4. `docs/exec-plans/index.md`
-5. `docs/exec-plans/active/bleuv1-source-first-program.md`
+5. `docs/exec-plans/active/bleuv1-mvp-hardening-playbook.md`
 6. `docs/exec-plans/active/project-bleuv1-mvp-foundation.md`
-7. `docs/exec-plans/active/bleuv1-manual-iteration-scheme.md`
+7. `docs/exec-plans/completed/bleuv1-manual-iteration-scheme.md`
 8. `docs/ops/yt2bp_runbook.md`
 
 ## Canonical Documents
@@ -23,9 +23,9 @@ This folder is the source of truth for product, architecture, planning, and oper
 - Architecture: `docs/architecture.md`
 - Product behavior/spec: `docs/app/product-spec.md`
 - Execution registry (active/completed): `docs/exec-plans/index.md`
-- Program direction (`bleuV1`): `docs/exec-plans/active/bleuv1-source-first-program.md`
+- Program direction (`bleuV1`): `docs/exec-plans/active/bleuv1-mvp-hardening-playbook.md`
 - Active MVP build plan (manual): `docs/exec-plans/active/project-bleuv1-mvp-foundation.md`
-- Active stepwise execution scheme: `docs/exec-plans/active/bleuv1-manual-iteration-scheme.md`
+- Completed stepwise execution scheme (reference): `docs/exec-plans/completed/bleuv1-manual-iteration-scheme.md`
 - YT2BP API contract (adapter v0): `docs/product-specs/yt2bp_v0_contract.md`
 - YT2BP runbook: `docs/ops/yt2bp_runbook.md`
 
@@ -48,7 +48,7 @@ This folder is the source of truth for product, architecture, planning, and oper
 - `docs/ops/` runbooks and operational procedures
 - `docs/product-specs/` product contracts and scoped feature plans
 - `docs/references/` stable reference material
-- `docs/schemas/` schema contracts
+- `docs/_archive/legacy-ass-agentic/schemas/` archived schema contracts (legacy seed/ASS)
 
 ## Governance Rules
 - Do not reintroduce moved/deprecated stub docs.

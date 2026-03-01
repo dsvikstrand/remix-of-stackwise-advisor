@@ -3,12 +3,8 @@
 This file is the authoritative active/completed registry for execution plans.
 
 ## Active
-- `docs/exec-plans/active/bleuv1-source-first-program.md`
-  Program-level umbrella for `bleuV1` source-first MVP direction.
 - `docs/exec-plans/active/project-bleuv1-mvp-foundation.md`
   Active manual iterative build plan for the remaining MVP work.
-- `docs/exec-plans/active/bleuv1-manual-iteration-scheme.md`
-  Step-by-step execution scheme with per-step completion tracking (plan -> PA -> implement -> evaluate).
 - `docs/exec-plans/active/bleuv1-mvp-hardening-playbook.md`
   Followable deep-dive hardening playbook (blind spots, MVP priorities, sprint sequence, and success metrics).
 - `docs/exec-plans/tech-debt-tracker.md`
@@ -40,11 +36,19 @@ This file is the authoritative active/completed registry for execution plans.
   Completed: backend-first no-behavior-drift parity contract, including final Phase 4 validation evidence.
 - `docs/exec-plans/completed/bleuv1-refactor-a3-route-map-current.md`
   Completed: final modular route-distribution snapshot (`53` routes, `0` direct registrations in `server/index.ts`).
+- `docs/exec-plans/completed/bleuv1-refactor-a3-route-map-baseline.md`
+  Completed: pre-refactor route-map baseline artifact.
+- `docs/exec-plans/completed/bleuv1-refactor-a3-response-shape-baseline.md`
+  Completed: pre-refactor response-shape baseline artifact.
+- `docs/exec-plans/completed/bleuv1-source-first-program.md`
+  Completed: initial source-first umbrella direction plan (superseded by hardening + foundation active tracks).
+- `docs/exec-plans/completed/bleuv1-manual-iteration-scheme.md`
+  Completed: stepwise execution tracker with full MVP sequence closure.
 
 ## Current Program Snapshot
 - Core identity lock: `docs/app/core-direction-lock.md`.
 - Legacy channels-first program: completed/archived.
-- `bleuV1` source-first program: active.
+- `bleuV1` source-first umbrella program: completed.
 - `bleuV1` MVP build execution: manual iterative mode.
 - Agentic orchestration: archived reference path.
 

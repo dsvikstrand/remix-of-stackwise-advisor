@@ -29,7 +29,7 @@ Process:
 - Only after I approve the plan should you write or modify code. 
 
 ## Plan approved
-if I add PA (plan approved), you can go with code (don't need to wait for code ok here).
+if I add PA (plan approved), you can go with code 
 PAP (plan approved -> push to github), push the latest update once you are done (with a simple comment)
 
 ## Git push access in this environment
@@ -37,20 +37,6 @@ Push access depends on the SSH key stored in this environment. Any Codex session
 
 ## UDO shortcut for execution
 If a message ends with `UDO`, treat it as approval to execute the actions you propose without waiting for a separate confirmation. Always summarize what you did afterward. (Not for code, only for commands : PA/PAP is for code)
-
-## Shortcuts
-If I type REC -> "use/go with your recommendations"
-for example: if you give me a follow up question:
-(codex) - "Would you like option A or B?"/"How should I do X"
-(me) - "REC" -> "Please use/go with your recommendations"
-
-some other "shortcuts" are (these are not commands):
-IMP -> Implement
-SUCC -> Successful
-SPC -> Specific
-FQ -> Follow-Up questions
-ST -> Smoke test
-LL -> "Last Line" of Your message (usually a follow-up Question, where "LL yep" -> "Yes to your follow up" )
 
 
 ## Remote server: Oracle (SSH alias + multiplexing)
@@ -159,41 +145,6 @@ Next steps
 b1) [todo] Implement the LIB_GEN eval gate + retry wiring
 b2) [todo] Run a DAS smoke test and link the run_log.json
 ```
-
-## Effort Flags (Soft)
-
-Use effort flags to control how much exploration/tooling depth I use during planning and implementation.
-
-How to use
-- Add one flag to your request: `[low]`, `[med]`, or `[high]`.
-- Example: `Plan [low]`, `Review [high]`, `Implement [med]`.
-
-Meaning (soft limits, not hard stops)
-- `[low]`: minimal exploration; smallest viable change; prefer 1-2 smoke tests.
-- `[med]`: normal; enough exploration to be confident; a couple of focused smoke tests.
-- `[high]`: deeper investigation; more file reads and cross-checks; broader smoke tests as needed.
-
-Important
-- These flags do not change which GUI/model tier you are using. They only change my behavior and how much I explore.
-
-## Final GUI reasoning effort recommendation
-When you give me a full implementation plan (effort flags included). Also give me a finial REC for the GUI/MODEL REASONING to use. one of-> |Low,Med,High,xHigh|
-
-## Build Check Policy (Credit-Saving)
-
-Default intent
-- Keep command usage low for small tasks.
-- Do not run full build automatically for every tiny edit.
-
-Recommended behavior
-- For `PA`: skip `npm run build` by default unless change-risk is medium/high.
-- For `PAP`: run `npm run build` before push by default.
-- For small copy/style/localized edits: prefer no build (or a lighter check if needed).
-- Run full build when changes touch:
-  - routing/navigation
-  - shared components/layout primitives
-  - type-heavy refactors
-  - publish/auth/data flow paths
 
 ## Docs Governance (Canonical + Status Registry)
 

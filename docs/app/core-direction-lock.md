@@ -84,5 +84,5 @@ Status: `canonical`
 ## Canonical references
 - Product: `docs/app/product-spec.md`
 - Architecture: `docs/architecture.md`
-- Active program: `docs/exec-plans/active/bleuv1-source-first-program.md`
+- Active program: `docs/exec-plans/active/bleuv1-mvp-hardening-playbook.md`
 - Runbook: `docs/ops/yt2bp_runbook.md`

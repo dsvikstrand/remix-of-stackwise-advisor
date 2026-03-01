@@ -56,7 +56,7 @@ const policyDocs = [
   'docs/_archive/legacy-ass-agentic/design-docs/seed_ass_spec.md',
   'docs/app/product-spec.md',
   'docs/_archive/legacy-ass-agentic/schemas/ass_eval_config_schema.md',
-  'docs/schemas/eval_scorecard_schema.md',
+  'docs/_archive/legacy-ass-agentic/schemas/eval_scorecard_schema.md',
 ];
 for (const rel of policyDocs) {
   if (!fs.existsSync(path.join(repoRoot, rel))) {

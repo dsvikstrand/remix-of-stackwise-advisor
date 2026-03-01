@@ -1,5 +1,7 @@
 # bleuV1 Refactor a3 Route Map Baseline
 
+Status: `completed (historical baseline artifact)`
+
 Baseline commit: 63420eb
 Generated at: 2026-02-28T10:19:56Z
 

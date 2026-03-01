@@ -1,6 +1,6 @@
 # bleuV1 Source-First Program
 
-Status: `active`
+Status: `completed`
 
 ## 1) Problem Statement
 Current product value is real but split across two identities:

@@ -1,6 +1,6 @@
 # bleuV1 Manual Iteration Scheme
 
-Status: `active`
+Status: `completed`
 
 ## Purpose
 This document is the step-by-step execution scheme for the remaining `bleuV1` MVP work.

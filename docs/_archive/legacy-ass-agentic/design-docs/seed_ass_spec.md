@@ -101,7 +101,7 @@ Files (v0):
 - `eval/policy/bounds/v0/control_pack/bounds_v0.json`
 
 Schema doc:
-- `docs/schemas/eval_bounds_schema.md`
+- `docs/_archive/legacy-ass-agentic/schemas/eval_bounds_schema.md`
 
 Runner flag:
 - `--eval-bounds <dir>` (default: `eval/policy/bounds/v0`)
@@ -120,7 +120,7 @@ Example (active global methods):
 - `eval/methods/v0/pii_leakage_v0/global_pack_v0.json`
 
 Scorecard schema:
-- `docs/schemas/eval_scorecard_schema.md`
+- `docs/_archive/legacy-ass-agentic/schemas/eval_scorecard_schema.md`
 
 ## Domains (Eval Asset Namespace)
 
@@ -222,14 +222,14 @@ we define node-scoped, machine-readable taxonomies:
 The runner accepts `--eval-taxonomy` as either:
 - a file path (legacy, applies to all nodes), or
 - a directory path (recommended; loads the node-scoped files above).
-- Schema doc: `docs/schemas/eval_controls_taxonomy_schema.md`
+- Schema doc: `docs/_archive/legacy-ass-agentic/schemas/eval_controls_taxonomy_schema.md`
 
 Eval classes can use the taxonomy for deterministic validation (example: `controls_taxonomy_alignment_v0`).
 
 ## Promptless Controls (Current)
 We support a promptless intent layer (`ControlPackV0`) that is rendered into a `PromptPackV0` for backend compatibility.
 
-- Schema doc: `docs/schemas/control_pack_schema.md`
+- Schema doc: `docs/_archive/legacy-ass-agentic/schemas/control_pack_schema.md`
 - Runner flag: `--compose-controls`
 - Output: `requests/control_pack.json` (plus the rendered `requests/prompt_pack.json`)
 
@@ -239,7 +239,7 @@ Personas are not "seed-only". They are a reusable contract that can be used by:
 - Future interactive agent runs (agents that act like users)
 
 Schema doc:
-- `docs/schemas/persona_schema.md`
+- `docs/_archive/legacy-ass-agentic/schemas/persona_schema.md`
 
 Storage:
 - `personas/v0/<persona_id>.json`

@@ -4,7 +4,7 @@ This file captures envelope-level response expectations used during no-behavior-
 
 Status
 s01) [have] Baseline captured before route extraction.
-s02) [todo] Re-validate after each phase.
+s02) [have] Re-validation completed during refactor closeout; artifact retained for historical parity reference.
 
 Envelope Pattern
 s03) [have] Most endpoints return `{ ok, error_code, message, data }`.

@@ -43,13 +43,13 @@ Status: `completed`
 | docs/lovable/lovable_sql_add_generation_controls.md | lovable SQL note | canonical/reference | self | low |
 | docs/ops/normalization_loop_protocol.md | ops protocol | canonical | self | low |
 | docs/ops/yt2bp_runbook.md | production runbook | canonical | self | medium |
-| docs/schemas/ass_eval_config_schema.md | schema contract | canonical | self | low |
-| docs/schemas/control_pack_schema.md | schema contract | canonical | self | low |
-| docs/schemas/eval_bounds_schema.md | schema contract | canonical | self | low |
-| docs/schemas/eval_controls_taxonomy_schema.md | schema contract | canonical | self | low |
-| docs/schemas/eval_scorecard_schema.md | schema contract | canonical | self | low |
-| docs/schemas/persona_schema.md | schema contract | canonical | self | low |
-| docs/schemas/seed_secrets_schema.md | schema contract | canonical | self | low |
+| docs/_archive/legacy-ass-agentic/schemas/ass_eval_config_schema.md | schema contract | canonical | self | low |
+| docs/_archive/legacy-ass-agentic/schemas/control_pack_schema.md | schema contract | canonical | self | low |
+| docs/_archive/legacy-ass-agentic/schemas/eval_bounds_schema.md | schema contract | canonical | self | low |
+| docs/_archive/legacy-ass-agentic/schemas/eval_controls_taxonomy_schema.md | schema contract | canonical | self | low |
+| docs/_archive/legacy-ass-agentic/schemas/eval_scorecard_schema.md | schema contract | canonical | self | low |
+| docs/_archive/legacy-ass-agentic/schemas/persona_schema.md | schema contract | canonical | self | low |
+| docs/_archive/legacy-ass-agentic/schemas/seed_secrets_schema.md | schema contract | canonical | self | low |
 
 ## Deprecated/Stub Files Removed (Hard Delete)
 - app/youtube_to_blueprint_plan.md
