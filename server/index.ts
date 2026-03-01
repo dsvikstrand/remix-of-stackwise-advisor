@@ -356,6 +356,14 @@ const useCodexForGeneration = (
 const codexExecPath = String(process.env.CODEX_EXEC_PATH || 'codex').trim() || 'codex';
 const codexExecTimeoutMs = clampInt(process.env.CODEX_EXEC_TIMEOUT_MS, 90_000, 10_000, 10 * 60 * 1000);
 const codexExecReasoningEffort = normalizeReasoningEffort(process.env.CODEX_EXEC_REASONING_EFFORT, 'low');
+const codexExecReasoningEffortFree = normalizeReasoningEffort(
+  process.env.CODEX_EXEC_REASONING_EFFORT_FREE,
+  codexExecReasoningEffort,
+);
+const codexExecReasoningEffortTier = normalizeReasoningEffort(
+  process.env.CODEX_EXEC_REASONING_EFFORT_TIER,
+  codexExecReasoningEffort,
+);
 const codexFallbackEnabledRaw = String(process.env.CODEX_FALLBACK_ENABLED || 'true').trim().toLowerCase();
 const codexFallbackEnabled = !(
   codexFallbackEnabledRaw === 'false'
@@ -377,11 +385,11 @@ const codexFreeModelRaw = String(process.env.CODEX_FREE_MODEL || '').trim();
 const codexTierModelRaw = String(process.env.CODEX_TIER_MODEL || '').trim();
 const codexFreeProfile: CodexModelProfile = {
   model: codexFreeModelRaw || generationTierFreeProfile.model,
-  reasoningEffort: codexExecReasoningEffort,
+  reasoningEffort: codexExecReasoningEffortFree,
 };
 const codexTierProfile: CodexModelProfile = {
   model: codexTierModelRaw || generationTierTierProfile.model,
-  reasoningEffort: codexExecReasoningEffort,
+  reasoningEffort: codexExecReasoningEffortTier,
 };
 
 function resolveCodexModelProfile(tier: GenerationTier): CodexModelProfile {

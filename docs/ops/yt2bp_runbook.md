@@ -229,6 +229,8 @@ Required runtime variables:
 - `CODEX_EXEC_TIMEOUT_MS` (default `90000`)
 - `CODEX_EXEC_LANE_CONCURRENCY` (forced to `1` in MVP)
 - `CODEX_EXEC_REASONING_EFFORT` (default `low`)
+- `CODEX_EXEC_REASONING_EFFORT_FREE` (optional; defaults to `CODEX_EXEC_REASONING_EFFORT`)
+- `CODEX_EXEC_REASONING_EFFORT_TIER` (optional; defaults to `CODEX_EXEC_REASONING_EFFORT`)
 - `CODEX_FREE_MODEL` (default `gpt-5-mini`)
 - `CODEX_TIER_MODEL` (default `gpt-5.2`)
 - `CODEX_FALLBACK_ENABLED` (default `true`; immediate API fallback on Codex errors)
