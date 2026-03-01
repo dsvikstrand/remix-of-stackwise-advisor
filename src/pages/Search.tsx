@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppHeader } from '@/components/shared/AppHeader';
@@ -19,6 +19,7 @@ import {
   deactivateSourceSubscriptionByChannelId,
   getIngestionJob,
   listSourceSubscriptions,
+  type GenerationTier,
   type SourceSubscription,
 } from '@/lib/subscriptionsApi';
 import {
@@ -39,6 +40,7 @@ import {
 } from '@/lib/youtubeChannelVideosApi';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { PageMain, PageRoot, PageSection } from '@/components/layout/Page';
+import { useGenerationTierAccess } from '@/hooks/useGenerationTierAccess';
 
 const DEFAULT_SEARCH_LIMIT = 10;
 const GENERATE_BLUEPRINT_COST = 1;
@@ -130,6 +132,8 @@ function toGenerateErrorMessage(errorCode?: string | null) {
       return 'Transcript temporarily unavailable. Please try again in a few minutes.';
     case 'RATE_LIMITED':
       return 'Too many requests right now. Please retry shortly.';
+    case 'TIER_NOT_ALLOWED':
+      return 'This generation tier is not enabled for your account.';
     case 'VIDEO_TOO_LONG':
     case 'VIDEO_DURATION_POLICY_BLOCKED':
       return 'This video exceeds the 45-minute generation limit.';
@@ -243,7 +247,9 @@ export default function SearchPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { toast } = useToast();
+  const searchEnabled = Boolean(config.agenticBackendUrl);
   const creditsQuery = useAiCredits(Boolean(user));
+  const generationTierAccessQuery = useGenerationTierAccess(Boolean(user && searchEnabled));
 
   const [queryInput, setQueryInput] = useState('');
   const [submittedQuery, setSubmittedQuery] = useState('');
@@ -263,10 +269,10 @@ export default function SearchPage() {
   const [generatingVideoIds, setGeneratingVideoIds] = useState<Record<string, boolean>>({});
   const [subscribingChannelIds, setSubscribingChannelIds] = useState<Record<string, boolean>>({});
   const [pendingUnsubscribeChannelIds, setPendingUnsubscribeChannelIds] = useState<Record<string, boolean>>({});
+  const [requestedTier, setRequestedTier] = useState<GenerationTier>('free');
   const [quickVideoTags, setQuickVideoTags] = useState<string[]>(() => sampleQuickTags(VIDEO_QUICK_TAG_BANK));
   const [quickChannelTags, setQuickChannelTags] = useState<string[]>(() => sampleQuickTags(CHANNEL_QUICK_TAG_BANK));
 
-  const searchEnabled = Boolean(config.agenticBackendUrl);
   const sourceSubscriptionsQueryKey = useMemo(() => ['search-source-subscriptions', user?.id || 'anon'] as const, [user?.id]);
   const subscriptionsQuery = useQuery({
     queryKey: sourceSubscriptionsQueryKey,
@@ -279,6 +285,15 @@ export default function SearchPage() {
     || creditsQuery.data?.bypass
     || (creditsQuery.data && creditsQuery.data.displayBalance >= GENERATE_BLUEPRINT_COST),
   );
+  const allowedGenerationTiers = generationTierAccessQuery.data?.allowedTiers || ['free'];
+
+  useEffect(() => {
+    if (!user) return;
+    const defaultTier = generationTierAccessQuery.data?.defaultTier || 'free';
+    if (!allowedGenerationTiers.includes(requestedTier)) {
+      setRequestedTier(defaultTier);
+    }
+  }, [allowedGenerationTiers, generationTierAccessQuery.data?.defaultTier, requestedTier, user]);
   const subscribedChannelIds = useMemo(() => {
     return new Set(
       (subscriptionsQuery.data || [])
@@ -571,6 +586,7 @@ export default function SearchPage() {
             duration_seconds: target.duration_seconds ?? null,
           },
         ],
+        requestedTier,
       });
 
       let finalJob = await getIngestionJob(queued.job_id);
@@ -720,6 +736,33 @@ export default function SearchPage() {
                   <p className="text-xs text-muted-foreground">
                     Search requires `VITE_AGENTIC_BACKEND_URL`.
                   </p>
+                ) : null}
+                {user ? (
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-muted-foreground">Generation tier:</span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={requestedTier === 'free' ? 'default' : 'outline'}
+                      className="h-7 px-2 text-xs"
+                      onClick={() => setRequestedTier('free')}
+                    >
+                      Free
+                    </Button>
+                    {allowedGenerationTiers.includes('tier') ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={requestedTier === 'tier' ? 'default' : 'outline'}
+                        className="h-7 px-2 text-xs"
+                        onClick={() => setRequestedTier('tier')}
+                      >
+                        Tier
+                      </Button>
+                    ) : (
+                      <span className="text-muted-foreground">Tier locked</span>
+                    )}
+                  </div>
                 ) : null}
                 {searchError ? <p className="text-sm text-destructive">{searchError}</p> : null}
               </CardContent>

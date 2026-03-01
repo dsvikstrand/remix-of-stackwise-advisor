@@ -259,6 +259,20 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
       data: null,
     });
   }
+  const requestedTier = deps.normalizeRequestedGenerationTier(parsed.data.requested_tier);
+  const tierAccess = deps.resolveGenerationTierAccess(userId);
+  const resolvedTier = deps.resolveRequestedGenerationTier({
+    requestedTier,
+    access: tierAccess,
+  });
+  if (!resolvedTier) {
+    return res.status(403).json({
+      ok: false,
+      error_code: 'TIER_NOT_ALLOWED',
+      message: 'Requested generation tier is not allowed for this account.',
+      data: null,
+    });
+  }
 
   const db = deps.getAuthedSupabaseClient(authToken);
   if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
@@ -426,6 +440,7 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
         requested_by_user_id: userId,
         payload: {
           user_id: userId,
+          generation_tier: resolvedTier,
           items: allowedDurationItems,
         },
         next_run_at: new Date().toISOString(),
@@ -454,6 +469,9 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
       job_id: job.id,
       queue_depth: queueDepth + 1,
       queued_count: allowedDurationItems.length,
+      requested_tier: requestedTier || null,
+      resolved_tier: resolvedTier,
+      variant_status: 'queued',
       duration_blocked_count: durationBlocked.length,
       duration_blocked: durationBlocked,
     },

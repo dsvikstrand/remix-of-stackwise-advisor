@@ -39,6 +39,9 @@
   - `POST /api/source-pages/:platform/:externalId/subscribe` (auth)
   - `DELETE /api/source-pages/:platform/:externalId/subscribe` (auth)
   - Frontend trust status now resumes unlock jobs via `GET /api/ingestion/jobs/latest-mine?scope=source_item_unlock_generation` after reload.
+  - Tier test endpoints (auth):
+    - `GET /api/generation/tier-access`
+    - `GET /api/blueprints/:id/variants`
   - Notification inbox endpoints (auth):
     - `GET /api/notifications`
     - `POST /api/notifications/:id/read`
@@ -194,6 +197,15 @@ Required runtime variables:
 - `TRANSCRIPT_THROTTLE_TIERS_MS` (default `3000,10000,30000,60000`)
 - `TRANSCRIPT_THROTTLE_JITTER_MS` (default `500`)
 - `TRANSCRIPT_THROTTLE_INTERACTIVE_MAX_WAIT_MS` (default `2000`)
+- `GENERATION_TIER_TEST_MODE_ENABLED` (default `false`)
+- `GENERATION_TIER_TIER_USER_IDS` (csv user ids that can request `tier`)
+- `GENERATION_TIER_FREE_USER_IDS` (optional csv free allowlist; others default free)
+- `GENERATION_TIER_FREE_MODEL` (default `gpt-5-mini`)
+- `GENERATION_TIER_FREE_FALLBACK_MODEL` (default follows `OPENAI_GENERATION_FALLBACK_MODEL`)
+- `GENERATION_TIER_FREE_REASONING_EFFORT` (default follows `OPENAI_GENERATION_REASONING_EFFORT`)
+- `GENERATION_TIER_TIER_MODEL` (default `gpt-5.2`)
+- `GENERATION_TIER_TIER_FALLBACK_MODEL` (default follows `OPENAI_GENERATION_FALLBACK_MODEL`)
+- `GENERATION_TIER_TIER_REASONING_EFFORT` (default follows `OPENAI_GENERATION_REASONING_EFFORT`)
 - `LLM_MAX_ATTEMPTS` (default `2`)
 - `LLM_TIMEOUT_MS` (default `60000`)
 - `PROVIDER_CIRCUIT_FAILURE_THRESHOLD` (default `5`)

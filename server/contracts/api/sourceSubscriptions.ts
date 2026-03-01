@@ -27,6 +27,7 @@ export type RefreshSubscriptionsScanInput = {
 
 export type RefreshSubscriptionsGenerateInput = {
   items: RefreshScanCandidate[];
+  requested_tier?: 'free' | 'tier';
 };
 
 export type SourceSubscriptionsRouteDeps = {
@@ -60,4 +61,8 @@ export type SourceSubscriptionsRouteDeps = {
   emitGenerationStartedNotification: any;
   getGenerationNotificationLinkPath: any;
   scheduleQueuedIngestionProcessing: any;
+  resolveGenerationTierAccess: any;
+  resolveRequestedGenerationTier: any;
+  normalizeRequestedGenerationTier: any;
+  resolveVariantOrReady: any;
 };

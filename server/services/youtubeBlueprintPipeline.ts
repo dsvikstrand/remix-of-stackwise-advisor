@@ -2,6 +2,7 @@ import type {
   GenerationModelEvent,
   GenerationPromptEvent,
 } from '../llm/types';
+import type { GenerationTier } from './generationTierAccess';
 
 type DbClient = any;
 
@@ -71,6 +72,12 @@ async function runYouTubePipeline(input: {
   generateReview: boolean;
   generateBanner: boolean;
   authToken: string;
+  generationTier?: GenerationTier;
+  generationModelProfile?: {
+    model?: string;
+    fallbackModel?: string;
+    reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+  };
   requestClass?: 'interactive' | 'background';
   trace?: {
     db?: DbClient | null;
@@ -86,6 +93,8 @@ async function runYouTubePipeline(input: {
     userId: input.trace?.userId || null,
     sourceScope: input.trace?.sourceScope || null,
     sourceTag: input.trace?.sourceTag || input.runId.split('-').slice(1, 2).join('-') || 'unknown',
+    modelPrimary: input.generationModelProfile?.model || null,
+    reasoningEffort: input.generationModelProfile?.reasoningEffort || null,
   });
   if (traceContext.db && traceContext.userId) {
     await safeGenerationTraceWrite({
@@ -112,13 +121,14 @@ async function runYouTubePipeline(input: {
         await appendGenerationEvent(traceContext.db as any, {
           runId: input.runId,
           event: 'pipeline_started',
-          payload: {
-            source_scope: traceContext.sourceScope,
-            source_tag: traceContext.sourceTag,
-            video_id: input.videoId,
-          },
-        });
-      },
+            payload: {
+              source_scope: traceContext.sourceScope,
+              source_tag: traceContext.sourceTag,
+              video_id: input.videoId,
+              generation_tier: input.generationTier || 'free',
+            },
+          });
+        },
     });
   }
 
@@ -452,6 +462,7 @@ async function runYouTubePipeline(input: {
         }, {
           onGenerationModelEvent: generationModelEventCallback,
           onGenerationPromptEvent: generationPromptEventCallback,
+          generationProfile: input.generationModelProfile,
         }),
       );
       const draft = toDraft(rawDraft);
@@ -873,6 +884,7 @@ async function runYouTubePipeline(input: {
         }, {
           onGenerationModelEvent: generationModelEventCallback,
           onGenerationPromptEvent: generationPromptEventCallback,
+          generationProfile: input.generationModelProfile,
         }),
       );
       const retryDraft = toDraft(retryRawDraft);
@@ -1137,6 +1149,7 @@ Keep section bullets concise:
         }, {
           onGenerationModelEvent: generationModelEventCallback,
           onGenerationPromptEvent: generationPromptEventCallback,
+          generationProfile: input.generationModelProfile,
         }),
       );
 
@@ -1243,6 +1256,7 @@ Keep section bullets concise:
       }, {
         onGenerationModelEvent: generationModelEventCallback,
         onGenerationPromptEvent: generationPromptEventCallback,
+        generationProfile: input.generationModelProfile,
       }),
     );
     const candidateEli5Steps = (pass2.eli5_steps || [])
@@ -1404,6 +1418,7 @@ Keep section bullets concise:
               quality_issues: gateIssueCodes,
               quality_retries_used: qualityRetriesUsed,
               quality_final_mode: qualityFinalMode,
+              generation_tier: input.generationTier || 'free',
               summary_variant_default_chars: draft.summaryVariants.default.length,
               summary_variant_eli5_chars: draft.summaryVariants.eli5.length,
               duration_ms: Date.now() - startedAt,
@@ -1444,6 +1459,8 @@ Keep section bullets concise:
         bp_quality_issues: gateIssueCodes,
         bp_quality_retries_used: qualityRetriesUsed,
         bp_quality_final_mode: qualityFinalMode,
+        generation_tier: input.generationTier || 'free',
+        generation_model_primary: input.generationModelProfile?.model || traceContext.modelPrimary || null,
         bp_trace_version: generationTrace.trace_version,
         bp_trace: generationTrace,
         duration_ms: Date.now() - startedAt,

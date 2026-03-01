@@ -39,6 +39,11 @@ export type GenerationModelEvent =
 export interface LLMGenerationOptions {
   onGenerationModelEvent?: (event: GenerationModelEvent) => void;
   onGenerationPromptEvent?: (event: GenerationPromptEvent) => void;
+  generationProfile?: {
+    model?: string;
+    fallbackModel?: string;
+    reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+  };
 }
 
 export interface BlueprintSelectedItem {

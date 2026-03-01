@@ -2,6 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { config } from '@/config/runtime';
 
 export type SubscriptionMode = 'auto' | 'manual';
+export type GenerationTier = 'free' | 'tier';
 
 export type SourceSubscription = {
   id: string;
@@ -322,10 +323,14 @@ export async function listActiveMyIngestionJobs(input?: {
 
 export async function generateSubscriptionRefreshBlueprints(input: {
   items: SubscriptionRefreshCandidate[];
+  requestedTier?: GenerationTier;
 }) {
   const response = await apiRequest<{
     job_id: string;
     queued_count: number;
+    requested_tier?: GenerationTier | null;
+    resolved_tier?: GenerationTier;
+    variant_status?: 'queued' | 'generated' | 'ready' | 'in_progress';
     duration_blocked_count?: number;
     duration_blocked?: Array<{
       video_id: string;
@@ -339,7 +344,37 @@ export async function generateSubscriptionRefreshBlueprints(input: {
     method: 'POST',
     body: JSON.stringify({
       items: input.items,
+      requested_tier: input.requestedTier,
     }),
+  });
+  return response.data;
+}
+
+export async function getGenerationTierAccess() {
+  const response = await apiRequest<{
+    allowed_tiers: GenerationTier[];
+    default_tier: GenerationTier;
+    test_mode_enabled: boolean;
+  }>('/generation/tier-access', {
+    method: 'GET',
+  });
+  return response.data;
+}
+
+export async function listBlueprintVariants(blueprintId: string) {
+  const normalizedBlueprintId = String(blueprintId || '').trim();
+  if (!normalizedBlueprintId) {
+    throw new ApiRequestError(400, 'Blueprint id is required.', 'INVALID_INPUT');
+  }
+  const response = await apiRequest<{
+    source_item_id: string | null;
+    variants: Array<{
+      tier: GenerationTier;
+      blueprint_id: string | null;
+      status: 'available' | 'queued' | 'running' | 'ready' | 'failed';
+    }>;
+  }>(`/blueprints/${encodeURIComponent(normalizedBlueprintId)}/variants`, {
+    method: 'GET',
   });
   return response.data;
 }

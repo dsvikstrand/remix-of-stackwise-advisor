@@ -90,6 +90,9 @@ export type SourcePageVideoLibraryPage = {
 export type SourcePageVideoGenerateSummary = {
   job_id: string | null;
   queued_count: number;
+  requested_tier?: 'free' | 'tier' | null;
+  resolved_tier?: 'free' | 'tier';
+  variant_status?: 'queued' | 'generated' | 'ready' | 'in_progress';
   skipped_existing_count: number;
   skipped_existing: Array<{
     video_id: string;
@@ -302,6 +305,7 @@ export async function generateSourcePageVideos(input: {
     thumbnail_url?: string | null;
     duration_seconds?: number | null;
   }>;
+  requestedTier?: 'free' | 'tier';
 }) {
   return unlockSourcePageVideos(input);
 }
@@ -317,6 +321,7 @@ export async function unlockSourcePageVideos(input: {
     thumbnail_url?: string | null;
     duration_seconds?: number | null;
   }>;
+  requestedTier?: 'free' | 'tier';
 }) {
   const authHeader = await getRequiredAuthHeader();
   const response = await apiRequest<SourcePageVideoGenerateSummary>(
@@ -329,6 +334,7 @@ export async function unlockSourcePageVideos(input: {
       },
       body: JSON.stringify({
         items: input.items,
+        requested_tier: input.requestedTier,
       }),
     },
   );

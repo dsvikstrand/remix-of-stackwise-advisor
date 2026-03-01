@@ -39,6 +39,9 @@ export type SearchVideoGenerateResponse = {
   queue_depth: number;
   estimated_start_seconds: number;
   queued_count: number;
+  requested_tier?: 'free' | 'tier' | null;
+  resolved_tier?: 'free' | 'tier';
+  variant_status?: 'queued' | 'generated' | 'ready' | 'in_progress';
   duration_blocked_count?: number;
   duration_blocked?: Array<{
     video_id: string;
@@ -162,6 +165,7 @@ export async function searchYouTube(input: { q: string; limit?: number; pageToke
 
 export async function generateSearchVideos(input: {
   items: SearchVideoGenerateItem[];
+  requestedTier?: 'free' | 'tier';
 }) {
   const base = getApiBase();
   if (!base) {
@@ -177,6 +181,7 @@ export async function generateSearchVideos(input: {
     },
     body: JSON.stringify({
       items: input.items,
+      requested_tier: input.requestedTier,
     }),
   });
 

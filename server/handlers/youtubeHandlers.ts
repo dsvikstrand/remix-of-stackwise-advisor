@@ -84,6 +84,12 @@ export function registerYouTubeRouteHandlers(app: express.Express, deps: YouTube
     insertFeedItem,
     decryptToken,
     revokeYouTubeToken,
+    resolveGenerationTierAccess,
+    resolveRequestedGenerationTier,
+    normalizeRequestedGenerationTier,
+    resolveGenerationModelProfile,
+    resolveVariantOrReady,
+    findVariantsByBlueprintId,
   } = deps;
 app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt2bpAuthLimiter, async (req, res) => {
   if (!yt2bpEnabled) {
@@ -128,6 +134,21 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
 
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
   const authToken = (res.locals.authToken as string | undefined) ?? '';
+  const requestedTier = normalizeRequestedGenerationTier(parsed.data.requested_tier);
+  const tierAccess = userId ? resolveGenerationTierAccess(userId) : { allowedTiers: ['free'], defaultTier: 'free', testModeEnabled: false };
+  const resolvedTier = resolveRequestedGenerationTier({
+    requestedTier,
+    access: tierAccess,
+  });
+  if (!resolvedTier) {
+    return res.status(403).json({
+      ok: false,
+      error_code: 'TIER_NOT_ALLOWED',
+      message: 'Requested generation tier is not allowed for this account.',
+      run_id: runId,
+    });
+  }
+  const generationModelProfile = resolveGenerationModelProfile(resolvedTier);
   let resolvedDurationSeconds: number | null = null;
   if (generationDurationCapEnabled) {
     try {
@@ -216,6 +237,8 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
         generateReview: false,
         generateBanner: parsed.data.generate_banner,
         authToken,
+        generationTier: resolvedTier,
+        generationModelProfile,
         requestClass: 'interactive',
         trace: {
           db: traceDb,
@@ -226,7 +249,13 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
       }),
       yt2bpCoreTimeoutMs
     );
-    return res.json(result);
+    return res.json({
+      ...result,
+      requested_tier: requestedTier || null,
+      resolved_tier: resolvedTier,
+      generation_tier: resolvedTier,
+      variant_status: 'generated',
+    });
   } catch (error) {
     const known = mapPipelineError(error);
     if (known) {
@@ -253,6 +282,61 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
       error_code: 'GENERATION_FAIL',
       message,
       run_id: runId,
+    });
+  }
+});
+
+app.get('/api/generation/tier-access', async (_req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  if (!userId) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+  const access = resolveGenerationTierAccess(userId);
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'generation tier access',
+    data: {
+      allowed_tiers: access.allowedTiers,
+      default_tier: access.defaultTier,
+      test_mode_enabled: access.testModeEnabled,
+    },
+  });
+});
+
+app.get('/api/blueprints/:id/variants', async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  if (!userId) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+  const blueprintId = String(req.params.id || '').trim();
+  if (!blueprintId) {
+    return res.status(400).json({ ok: false, error_code: 'INVALID_INPUT', message: 'Blueprint id required.', data: null });
+  }
+
+  try {
+    const result = await findVariantsByBlueprintId(blueprintId);
+    const variants = (result?.variants || []).map((variant: any) => ({
+      tier: String(variant.generation_tier || '').trim(),
+      blueprint_id: String(variant.blueprint_id || '').trim() || null,
+      status: String(variant.status || '').trim() || 'available',
+    }));
+    return res.json({
+      ok: true,
+      error_code: null,
+      message: 'blueprint variants',
+      data: {
+        source_item_id: result?.sourceItemId || null,
+        variants,
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Could not list blueprint variants.';
+    return res.status(500).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message,
+      data: null,
     });
   }
 });
@@ -371,6 +455,20 @@ app.post(
         ok: false,
         error_code: 'INVALID_INPUT',
         message: 'Invalid generate request',
+        data: null,
+      });
+    }
+    const requestedTier = normalizeRequestedGenerationTier(parsed.data.requested_tier);
+    const tierAccess = resolveGenerationTierAccess(userId);
+    const resolvedTier = resolveRequestedGenerationTier({
+      requestedTier,
+      access: tierAccess,
+    });
+    if (!resolvedTier) {
+      return res.status(403).json({
+        ok: false,
+        error_code: 'TIER_NOT_ALLOWED',
+        message: 'Requested generation tier is not allowed for this account.',
         data: null,
       });
     }
@@ -509,6 +607,7 @@ app.post(
         payload: {
           user_id: userId,
           items: allowedItems,
+          generation_tier: resolvedTier,
         },
         next_run_at: new Date().toISOString(),
       })
@@ -538,6 +637,9 @@ app.post(
         queue_depth: queueDepth + 1,
         estimated_start_seconds: Math.max(1, Math.ceil((queueDepth + 1) / Math.max(1, workerConcurrency)) * 4),
         queued_count: allowedItems.length,
+        requested_tier: requestedTier || null,
+        resolved_tier: resolvedTier,
+        variant_status: 'queued',
         duration_blocked_count: durationBlocked.length,
         duration_blocked: durationBlocked,
       },

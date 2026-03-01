@@ -64,7 +64,7 @@ const ChannelLabelValidator = z.object({
 
 type GenerationReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
 
-function normalizeGenerationReasoningEffort(raw: string | undefined): GenerationReasoningEffort {
+function normalizeGenerationReasoningEffort(raw: string | undefined | null): GenerationReasoningEffort {
   const normalized = String(raw || '').trim().toLowerCase();
   if (normalized === 'none') return 'none';
   if (normalized === 'low') return 'low';
@@ -107,9 +107,9 @@ export function createOpenAIClient(): LLMClient {
   }
 
   const model = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
-  const generationModel = process.env.OPENAI_GENERATION_MODEL || 'gpt-5.2';
-  const generationFallbackModel = process.env.OPENAI_GENERATION_FALLBACK_MODEL || 'o4-mini';
-  const generationReasoningEffort = normalizeGenerationReasoningEffort(process.env.OPENAI_GENERATION_REASONING_EFFORT);
+  const generationModelDefault = process.env.OPENAI_GENERATION_MODEL || 'gpt-5.2';
+  const generationFallbackModelDefault = process.env.OPENAI_GENERATION_FALLBACK_MODEL || 'o4-mini';
+  const generationReasoningEffortDefault = normalizeGenerationReasoningEffort(process.env.OPENAI_GENERATION_REASONING_EFFORT);
   const imageModel = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1';
   const imageSize = process.env.OPENAI_IMAGE_SIZE || '1536x1024';
   const imageQuality = process.env.OPENAI_IMAGE_QUALITY || 'low';
@@ -121,6 +121,15 @@ export function createOpenAIClient(): LLMClient {
     prompt: string;
     options?: LLMGenerationOptions;
   }) {
+    const profileModelRaw = input.options?.generationProfile?.model;
+    const profileFallbackRaw = input.options?.generationProfile?.fallbackModel;
+    const profileReasoningRaw = input.options?.generationProfile?.reasoningEffort;
+    const generationModel = String(profileModelRaw || generationModelDefault).trim() || generationModelDefault;
+    const generationFallbackModel = String(profileFallbackRaw || generationFallbackModelDefault).trim() || generationFallbackModelDefault;
+    const generationReasoningEffort = normalizeGenerationReasoningEffort(
+      profileReasoningRaw || generationReasoningEffortDefault,
+    );
+
     const emitModelEvent = (event: GenerationModelEvent) => {
       try {
         input.options?.onGenerationModelEvent?.(event);

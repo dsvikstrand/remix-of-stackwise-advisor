@@ -46,6 +46,7 @@ export type SourcePageVideosGenerateInput = {
     thumbnail_url?: string | null;
     duration_seconds?: number | null;
   }>;
+  requested_tier?: 'free' | 'tier';
 };
 
 export type SourcePagesRouteDeps = {
@@ -114,4 +115,8 @@ export type SourcePagesRouteDeps = {
   upsertSubscriptionNoticeSourceItem: any;
   insertFeedItem: any;
   cleanupSubscriptionNoticeForChannel: any;
+  resolveGenerationTierAccess: any;
+  resolveRequestedGenerationTier: any;
+  normalizeRequestedGenerationTier: any;
+  resolveVariantOrReady: any;
 };

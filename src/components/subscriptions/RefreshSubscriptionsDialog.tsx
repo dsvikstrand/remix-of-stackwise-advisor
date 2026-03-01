@@ -9,8 +9,10 @@ import {
   ApiRequestError,
   generateSubscriptionRefreshBlueprints,
   scanSubscriptionRefreshCandidates,
+  type GenerationTier,
   type SubscriptionRefreshCandidate,
 } from '@/lib/subscriptionsApi';
+import { useGenerationTierAccess } from '@/hooks/useGenerationTierAccess';
 
 type RefreshSubscriptionsDialogProps = {
   open: boolean;
@@ -50,6 +52,17 @@ export function RefreshSubscriptionsDialog({
   const [refreshDurationFiltered, setRefreshDurationFiltered] = useState<number>(0);
   const [refreshErrorText, setRefreshErrorText] = useState<string | null>(null);
   const [hasScannedRefreshCandidates, setHasScannedRefreshCandidates] = useState(false);
+  const [requestedTier, setRequestedTier] = useState<GenerationTier>('free');
+  const generationTierAccessQuery = useGenerationTierAccess(Boolean(open && userId));
+  const allowedGenerationTiers = generationTierAccessQuery.data?.allowedTiers || ['free'];
+
+  useEffect(() => {
+    if (!userId) return;
+    const defaultTier = generationTierAccessQuery.data?.defaultTier || 'free';
+    if (!allowedGenerationTiers.includes(requestedTier)) {
+      setRequestedTier(defaultTier);
+    }
+  }, [allowedGenerationTiers, generationTierAccessQuery.data?.defaultTier, requestedTier, userId]);
 
   const resetDialogState = () => {
     setHasScannedRefreshCandidates(false);
@@ -113,7 +126,10 @@ export function RefreshSubscriptionsDialog({
   const refreshGenerateMutation = useMutation({
     mutationFn: async (items: SubscriptionRefreshCandidate[]) => {
       if (!subscriptionsEnabled) throw new Error('Backend API is not configured.');
-      return generateSubscriptionRefreshBlueprints({ items });
+      return generateSubscriptionRefreshBlueprints({
+        items,
+        requestedTier,
+      });
     },
     onSuccess: (payload) => {
       invalidateSubscriptionViews();
@@ -149,6 +165,14 @@ export function RefreshSubscriptionsDialog({
           toast({
             title: 'Selection blocked by length policy',
             description: 'Only videos up to 45 minutes can be generated in MVP.',
+            variant: 'destructive',
+          });
+          return;
+        }
+        if (error.errorCode === 'TIER_NOT_ALLOWED') {
+          toast({
+            title: 'Tier access denied',
+            description: 'This generation tier is not enabled for your account.',
             variant: 'destructive',
           });
           return;
@@ -210,6 +234,29 @@ export function RefreshSubscriptionsDialog({
             >
               {refreshScanMutation.isPending ? 'Scanning...' : 'Scan'}
             </Button>
+            <span className="ml-2 text-xs text-muted-foreground">Tier:</span>
+            <Button
+              type="button"
+              size="sm"
+              variant={requestedTier === 'free' ? 'default' : 'outline'}
+              className="h-7 px-2 text-xs"
+              onClick={() => setRequestedTier('free')}
+            >
+              Free
+            </Button>
+            {allowedGenerationTiers.includes('tier') ? (
+              <Button
+                type="button"
+                size="sm"
+                variant={requestedTier === 'tier' ? 'default' : 'outline'}
+                className="h-7 px-2 text-xs"
+                onClick={() => setRequestedTier('tier')}
+              >
+                Tier
+              </Button>
+            ) : (
+              <span className="text-xs text-muted-foreground">Tier locked</span>
+            )}
             {refreshCandidates.length > 0 ? (
               <>
                 <Button

@@ -81,6 +81,10 @@ export function registerSourcePagesRouteHandlers(app: express.Express, deps: Sou
     upsertSubscriptionNoticeSourceItem,
     insertFeedItem,
     cleanupSubscriptionNoticeForChannel,
+    resolveGenerationTierAccess,
+    resolveRequestedGenerationTier,
+    normalizeRequestedGenerationTier,
+    resolveVariantOrReady,
   } = deps;
 function normalizeSourcePageBlueprintCursor(input: SourcePageBlueprintCursor) {
   const createdAtMs = Date.parse(input.createdAt);
@@ -635,6 +639,20 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       data: traceData,
     });
   }
+  const requestedTier = normalizeRequestedGenerationTier(parsed.data.requested_tier);
+  const tierAccess = resolveGenerationTierAccess(userId);
+  const resolvedTier = resolveRequestedGenerationTier({
+    requestedTier,
+    access: tierAccess,
+  });
+  if (!resolvedTier) {
+    return res.status(403).json({
+      ok: false,
+      error_code: 'TIER_NOT_ALLOWED',
+      message: 'Requested generation tier is not allowed for this account.',
+      data: traceData,
+    });
+  }
 
   const db = getAuthedSupabaseClient(authToken);
   if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: traceData });
@@ -800,6 +818,26 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         sourcePageId: sourcePage.id,
       });
 
+      const variantState = await resolveVariantOrReady({
+        sourceItemId: source.id,
+        generationTier: resolvedTier,
+      });
+      if (variantState.state === 'ready') {
+        readyRows.push({
+          video_id: item.video_id,
+          title: item.title,
+          blueprint_id: variantState.blueprintId || null,
+        });
+        continue;
+      }
+      if (variantState.state === 'in_progress') {
+        inProgressRows.push({
+          video_id: item.video_id,
+          title: item.title,
+        });
+        continue;
+      }
+
       const unlockSeed = await ensureSourceItemUnlock(sourcePageDb, {
         sourceItemId: source.id,
         sourcePageId: sourcePage.id,
@@ -905,6 +943,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         reserved_cost: Math.max(0.001, Number(reservedUnlock.estimated_cost || estimatedUnlockCost)),
         reserved_by_user_id: userId,
         unlock_origin: 'manual_unlock',
+        generation_tier: resolvedTier,
       });
       logUnlockEvent(
         'unlock_item_queued',
@@ -1123,6 +1162,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       payload: {
         user_id: userId,
         trace_id: traceId,
+        generation_tier: resolvedTier,
         items: queueItems,
       },
       next_run_at: new Date().toISOString(),
@@ -1163,6 +1203,9 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       queue_depth: queueDepth + 1,
       estimated_start_seconds: Math.max(1, Math.ceil((queueDepth + 1) / Math.max(1, workerConcurrency)) * 4),
       queued_count: queueItems.length,
+      requested_tier: requestedTier || null,
+      resolved_tier: resolvedTier,
+      variant_status: 'queued',
       skipped_existing_count: duplicateRows.length,
       skipped_existing: duplicateRows.map((row) => ({
         video_id: row.item.video_id,

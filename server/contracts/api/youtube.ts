@@ -10,6 +10,7 @@ export type YouTubeToBlueprintInput = {
   generate_review?: boolean;
   generate_banner?: boolean;
   source?: 'youtube_mvp';
+  requested_tier?: 'free' | 'tier';
 };
 
 export type SearchVideosGenerateInput = {
@@ -24,6 +25,7 @@ export type SearchVideosGenerateInput = {
     thumbnail_url?: string | null;
     duration_seconds?: number | null;
   }>;
+  requested_tier?: 'free' | 'tier';
 };
 
 export type YouTubeConnectionStartInput = {
@@ -113,4 +115,10 @@ export type YouTubeRouteDeps = {
   insertFeedItem: any;
   decryptToken: any;
   revokeYouTubeToken: any;
+  resolveGenerationTierAccess: any;
+  resolveRequestedGenerationTier: any;
+  normalizeRequestedGenerationTier: any;
+  resolveGenerationModelProfile: any;
+  resolveVariantOrReady: any;
+  findVariantsByBlueprintId: any;
 };
