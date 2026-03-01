@@ -1324,8 +1324,8 @@ registerYouTubeRoutes(app, {
   resolveRequestedGenerationTier,
   normalizeRequestedGenerationTier,
   resolveGenerationModelProfile,
-  resolveVariantOrReady,
-  findVariantsByBlueprintId,
+  resolveVariantOrReady: (variantInput: any) => resolveVariantOrReady(variantInput),
+  findVariantsByBlueprintId: (variantInput: any) => findVariantsByBlueprintId(variantInput),
 });
 
 async function fetchYouTubeChannelAssetMap(input: {
