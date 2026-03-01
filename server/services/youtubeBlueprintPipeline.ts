@@ -60,6 +60,19 @@ export function createYouTubeBlueprintPipelineService(deps: any) {
     mapPipelineError,
     canonicalSectionName,
     normalizeSummaryVariantText,
+    pruneTranscriptForGeneration = (pruningInput: { transcriptText: string }) => ({
+      text: pruningInput.transcriptText,
+      meta: {
+        enabled: false,
+        applied: false,
+        original_chars: String(pruningInput.transcriptText || '').trim().length,
+        pruned_chars: String(pruningInput.transcriptText || '').trim().length,
+        budget_chars: String(pruningInput.transcriptText || '').trim().length,
+        window_count: 1,
+        threshold_bucket: 'disabled',
+        windows: [],
+      },
+    }),
     enforceVideoDurationPolicy = async (policyInput: {
       durationSeconds?: number | null;
     }) => policyInput.durationSeconds ?? null,
@@ -170,6 +183,11 @@ async function runYouTubePipeline(input: {
         reason: 'pipeline_transcript_fetch',
       }),
     );
+    const rawTranscriptText = String(transcript.text || '').trim();
+    const transcriptPruning = pruneTranscriptForGeneration({
+      transcriptText: rawTranscriptText,
+    });
+    const effectiveTranscriptText = String(transcriptPruning?.text || rawTranscriptText).trim();
     if (traceContext.db && traceContext.userId) {
       await safeGenerationTraceWrite({
         runId: input.runId,
@@ -180,8 +198,22 @@ async function runYouTubePipeline(input: {
             event: 'transcript_loaded',
             payload: {
               source: transcript.source,
-              chars: transcript.text.length,
+              chars: effectiveTranscriptText.length,
+              raw_chars: rawTranscriptText.length,
               confidence: transcript.confidence,
+            },
+          });
+        },
+      });
+      await safeGenerationTraceWrite({
+        runId: input.runId,
+        op: 'event_transcript_pruning_applied',
+        fn: async () => {
+          await appendGenerationEvent(traceContext.db as any, {
+            runId: input.runId,
+            event: 'transcript_pruning_applied',
+            payload: {
+              ...(transcriptPruning?.meta || {}),
             },
           });
         },
@@ -323,8 +355,10 @@ async function runYouTubePipeline(input: {
     source_tag: traceContext.sourceTag || 'unknown',
     transcript: {
       source: transcript.source,
-      chars: transcript.text.length,
+      chars: effectiveTranscriptText.length,
+      raw_chars: rawTranscriptText.length,
       confidence: transcript.confidence,
+      pruning: transcriptPruning?.meta || null,
     },
     summary_variants: {
       default_chars: null as number | null,
@@ -460,7 +494,7 @@ async function runYouTubePipeline(input: {
           videoUrl: input.videoUrl,
           videoTitle: input.videoId,
           transcriptSource: transcript.source,
-          transcript: transcript.text,
+          transcript: effectiveTranscriptText,
           additionalInstructions: safetyRetryHint || undefined,
         }, {
           onGenerationModelEvent: generationModelEventCallback,
@@ -771,7 +805,7 @@ async function runYouTubePipeline(input: {
   if (useDeterministicPostProcessing) {
     let goldenFormat = normalizeYouTubeDraftToGoldenV1(draftToNormalizationInput(draft), {
       repairQuality: false,
-      transcript: transcript.text,
+      transcript: effectiveTranscriptText,
     });
     gateIssueCodes = Array.from(new Set([
       ...goldenFormat.structureGate.issues,
@@ -880,7 +914,7 @@ async function runYouTubePipeline(input: {
           videoUrl: input.videoUrl,
           videoTitle: input.videoId,
           transcriptSource: transcript.source,
-          transcript: transcript.text,
+          transcript: effectiveTranscriptText,
           qualityIssueCodes: gateIssueCodes,
           qualityIssueDetails: gateIssueDetails,
           additionalInstructions: retryInstructions,
@@ -918,7 +952,7 @@ async function runYouTubePipeline(input: {
       qualityRetriesUsed = retryAttempt;
       goldenFormat = normalizeYouTubeDraftToGoldenV1(draftToNormalizationInput(draft), {
         repairQuality: false,
-        transcript: transcript.text,
+        transcript: effectiveTranscriptText,
       });
       gateIssueCodes = Array.from(new Set([
         ...goldenFormat.structureGate.issues,
@@ -976,7 +1010,7 @@ async function runYouTubePipeline(input: {
     if (!gatePassed) {
       goldenFormat = normalizeYouTubeDraftToGoldenV1(draftToNormalizationInput(draft), {
         repairQuality: true,
-        transcript: transcript.text,
+        transcript: effectiveTranscriptText,
       });
       gateIssueCodes = Array.from(new Set([
         ...goldenFormat.structureGate.issues,
@@ -1145,7 +1179,7 @@ Keep section bullets concise:
           videoUrl: input.videoUrl,
           videoTitle: input.videoId,
           transcriptSource: transcript.source,
-          transcript: transcript.text,
+          transcript: effectiveTranscriptText,
           qualityIssueCodes: gateIssueCodes,
           qualityIssueDetails: gateIssueDetails,
           additionalInstructions: retryInstructions,
@@ -1239,7 +1273,7 @@ Keep section bullets concise:
     };
   }
   console.log(
-    `[yt2bp] run_id=${input.runId} transcript_source=${transcript.source} transcript_chars=${transcript.text.length}`
+    `[yt2bp] run_id=${input.runId} transcript_source=${transcript.source} transcript_chars=${effectiveTranscriptText.length}`
   );
 
   try {
@@ -1254,7 +1288,7 @@ Keep section bullets concise:
         jitterMs: 200,
       },
       async () => client.generateYouTubeBlueprintPass2Transform({
-        transcript: transcript.text,
+        transcript: effectiveTranscriptText,
         pass1BlueprintJson,
       }, {
         onGenerationModelEvent: generationModelEventCallback,
@@ -1455,6 +1489,7 @@ Keep section bullets concise:
       meta: {
         transcript_source: transcript.source,
         confidence: transcript.confidence,
+        transcript_pruning: transcriptPruning?.meta || null,
         bp_output_mode: yt2bpOutputMode,
         bp_structure_ok: gatePassed,
         bp_structure_issues: gateIssueCodes,

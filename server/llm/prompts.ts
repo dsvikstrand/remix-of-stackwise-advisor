@@ -160,21 +160,33 @@ function isTruthyEnv(raw: string | undefined, fallback = true) {
   return !(value === '0' || value === 'false' || value === 'off' || value === 'no');
 }
 
+function isFileInsideDir(filePath: string, dirPath: string) {
+  const normalizedFile = path.resolve(filePath);
+  const normalizedDir = path.resolve(dirPath);
+  if (normalizedFile === normalizedDir) return false;
+  const dirWithSep = normalizedDir.endsWith(path.sep) ? normalizedDir : `${normalizedDir}${path.sep}`;
+  return normalizedFile.startsWith(dirWithSep);
+}
+
 function resolvePositiveReferenceFiles(input: { oraclePosDir: string; positiveReferencePaths: string[]; maxFiles: number }) {
+  const normalizedPosDir = path.resolve(input.oraclePosDir);
   const explicit = input.positiveReferencePaths
     .map((entry) => String(entry || '').trim())
     .filter(Boolean)
     .filter((entry) => !entry.includes('*'))
-    .filter((entry) => fs.existsSync(entry) && fs.statSync(entry).isFile());
+    .map((entry) => path.resolve(entry))
+    .filter((entry) => isFileInsideDir(entry, normalizedPosDir))
+    .filter((entry) => fs.existsSync(entry) && fs.statSync(entry).isFile())
+    .filter((entry) => /\.(md|txt)$/i.test(path.basename(entry)));
   if (explicit.length > 0) {
     return input.maxFiles === -1 ? explicit : explicit.slice(0, input.maxFiles);
   }
-  if (!fs.existsSync(input.oraclePosDir)) {
+  if (!fs.existsSync(normalizedPosDir)) {
     return [];
   }
-  const files = fs.readdirSync(input.oraclePosDir, { withFileTypes: true })
+  const files = fs.readdirSync(normalizedPosDir, { withFileTypes: true })
     .filter((entry) => entry.isFile())
-    .map((entry) => path.join(input.oraclePosDir, entry.name))
+    .map((entry) => path.join(normalizedPosDir, entry.name))
     .filter((filePath) => /\.(md|txt)$/i.test(path.basename(filePath)))
     .sort((a, b) => a.localeCompare(b));
   return input.maxFiles === -1 ? files : files.slice(0, input.maxFiles);

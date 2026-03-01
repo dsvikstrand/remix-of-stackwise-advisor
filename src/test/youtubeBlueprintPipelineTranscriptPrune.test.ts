@@ -1,0 +1,222 @@
+import { describe, expect, it } from 'vitest';
+import { createYouTubeBlueprintPipelineService } from '../../server/services/youtubeBlueprintPipeline';
+import {
+  pruneTranscriptForGeneration,
+  type TranscriptPruningConfig,
+} from '../../server/services/transcriptPruning';
+
+type EventRow = {
+  event: string;
+  payload?: Record<string, unknown>;
+};
+
+function buildDeps(input: {
+  transcriptText: string;
+  pruningConfig: TranscriptPruningConfig;
+  events: EventRow[];
+  pass1Transcripts: string[];
+  pass2Transcripts: string[];
+}) {
+  return {
+    getServiceSupabaseClient: () => ({ id: 'db' }),
+    getYouTubeGenerationTraceContext: (traceInput: Record<string, unknown>) => ({
+      db: traceInput.db,
+      userId: traceInput.userId,
+      sourceScope: traceInput.sourceScope || null,
+      sourceTag: traceInput.sourceTag || 'test',
+      modelPrimary: traceInput.modelPrimary || null,
+      reasoningEffort: traceInput.reasoningEffort || null,
+      traceVersion: 'yt2bp_trace_v2',
+    }),
+    safeGenerationTraceWrite: async (inputWrite: { fn: () => Promise<void> }) => {
+      await inputWrite.fn();
+    },
+    startGenerationRun: async () => undefined,
+    appendGenerationEvent: async (_db: unknown, row: EventRow) => {
+      input.events.push(row);
+    },
+    runWithProviderRetry: async (_config: unknown, fn: () => Promise<unknown>) => fn(),
+    providerRetryDefaults: {
+      transcriptAttempts: 1,
+      transcriptTimeoutMs: 2000,
+      llmAttempts: 1,
+      llmTimeoutMs: 2000,
+    },
+    getTranscriptForVideo: async () => ({
+      source: 'yt_to_text',
+      text: input.transcriptText,
+      confidence: null,
+    }),
+    pruneTranscriptForGeneration: (pruneInput: { transcriptText: string }) => pruneTranscriptForGeneration({
+      transcriptText: pruneInput.transcriptText,
+      config: input.pruningConfig,
+    }),
+    createYouTubeGenerationLLMClient: () => ({
+      generateYouTubeBlueprint: async (request: { transcript: string }) => {
+        input.pass1Transcripts.push(request.transcript);
+        return {
+          title: 'T',
+          description: 'D',
+          steps: [
+            { name: 'Summary', notes: 'S', timestamp: null },
+            { name: 'Takeaways', notes: 'T', timestamp: null },
+            { name: 'Bleup', notes: 'B', timestamp: null },
+            { name: 'Deep Dive', notes: 'DD', timestamp: null },
+            { name: 'Practical Rules', notes: 'PR', timestamp: null },
+            { name: 'Open Questions', notes: 'OQ', timestamp: null },
+          ],
+          notes: null,
+          tags: ['one'],
+          summary_variants: {
+            default: 'summary',
+            eli5: null,
+          },
+        };
+      },
+      generateYouTubeBlueprintPass2Transform: async (request: { transcript: string }) => {
+        input.pass2Transcripts.push(request.transcript);
+        return {
+          eli5_steps: [
+            { name: 'Summary', notes: 'E1', timestamp: null },
+            { name: 'Takeaways', notes: 'E2', timestamp: null },
+          ],
+          eli5_summary: 'easy summary',
+        };
+      },
+      analyzeBlueprint: async () => 'ok',
+      generateBanner: async () => ({ buffer: Buffer.from(''), mimeType: 'image/png', prompt: 'x' }),
+      generateChannelLabel: async () => ({ channelSlug: 'general', confidence: 0.5, reason: 'fallback' }),
+    }),
+    updateGenerationModelInfo: async () => undefined,
+    yt2bpSafetyBlockEnabled: false,
+    readYt2bpQualityConfig: () => ({
+      enabled: false,
+      retry_policy: { max_retries: 0 },
+    }),
+    readYt2bpContentSafetyConfig: () => ({
+      enabled: false,
+      retry_policy: { max_retries: 0 },
+    }),
+    flattenDraftText: () => 'flattened',
+    runSafetyChecks: () => ({ ok: true, blockedTopics: [] }),
+    runPiiChecks: () => ({ ok: true, matches: [] }),
+    makePipelineError: (_code: string, message: string) => {
+      throw new Error(message);
+    },
+    scoreYt2bpQuality: async () => ({ ok: true, overall: 1, failures: [] }),
+    scoreYt2bpContentSafety: async () => ({ ok: true, failedCriteria: [] }),
+    evaluateLlmNativeGate: () => ({ pass: true, issues: [], issueDetails: [] }),
+    yt2bpOutputMode: 'llm_native',
+    normalizeYouTubeDraftToGoldenV1: () => ({
+      structureGate: { ok: true, issues: [] },
+      qualityGate: { ok: true, issues: [], detail: [] },
+      steps: [],
+      tags: [],
+    }),
+    draftToNormalizationInput: (draft: unknown) => draft,
+    formatGoldenQualityIssueDetails: () => [],
+    buildYouTubeQualityRetryInstructions: () => 'retry',
+    GOLDEN_QUALITY_MAX_RETRIES: 2,
+    uploadBannerToSupabase: async () => null,
+    supabaseUrl: '',
+    finalizeGenerationRunSuccess: async () => undefined,
+    finalizeGenerationRunFailure: async () => undefined,
+    mapPipelineError: () => ({ error_code: 'GENERATION_FAIL', message: 'failed' }),
+    canonicalSectionName: (name: string) => String(name || '').trim().toLowerCase(),
+    normalizeSummaryVariantText: (text: string) => String(text || '').trim(),
+    enforceVideoDurationPolicy: async (policyInput: { durationSeconds?: number | null }) => policyInput.durationSeconds ?? null,
+  };
+}
+
+describe('youtubeBlueprintPipeline transcript pruning', () => {
+  it('uses pruned transcript for pass1 and pass2 and emits pruning metadata', async () => {
+    const events: EventRow[] = [];
+    const pass1Transcripts: string[] = [];
+    const pass2Transcripts: string[] = [];
+    const transcriptText = `BEGIN_SENTINEL ${'a'.repeat(7000)} MID_SENTINEL ${'b'.repeat(7000)} END_SENTINEL`;
+    const pruningConfig: TranscriptPruningConfig = {
+      enabled: true,
+      budgetChars: 4500,
+      thresholds: [4500, 9000, 16000],
+      windows: [1, 4, 6, 8],
+      separator: '\n\n...\n\n',
+      minWindowChars: 120,
+    };
+    const deps = buildDeps({
+      transcriptText,
+      pruningConfig,
+      events,
+      pass1Transcripts,
+      pass2Transcripts,
+    });
+    const service = createYouTubeBlueprintPipelineService(deps);
+
+    const result = await service.runYouTubePipeline({
+      runId: 'run-1',
+      videoId: 'abc123',
+      videoUrl: 'https://www.youtube.com/watch?v=abc123',
+      durationSeconds: 100,
+      generateReview: false,
+      generateBanner: false,
+      authToken: '',
+      requestClass: 'background',
+      trace: {
+        db: { id: 'trace-db' },
+        userId: 'user-1',
+        sourceScope: 'search_video_generate',
+        sourceTag: 'search',
+      },
+    });
+
+    expect(pass1Transcripts.length).toBeGreaterThan(0);
+    expect(pass2Transcripts.length).toBeGreaterThan(0);
+    expect(pass1Transcripts[0].length).toBeLessThanOrEqual(4500);
+    expect(pass2Transcripts[0].length).toBeLessThanOrEqual(4500);
+    expect(result.meta.transcript_pruning?.applied).toBe(true);
+    expect(result.meta.transcript_pruning?.pruned_chars).toBeLessThanOrEqual(4500);
+    expect(events.some((row) => row.event === 'transcript_pruning_applied')).toBe(true);
+  });
+
+  it('passes full transcript through when pruning is disabled', async () => {
+    const events: EventRow[] = [];
+    const pass1Transcripts: string[] = [];
+    const pass2Transcripts: string[] = [];
+    const transcriptText = `BEGIN ${'x'.repeat(6000)} END`;
+    const pruningConfig: TranscriptPruningConfig = {
+      enabled: false,
+      budgetChars: 4500,
+      thresholds: [4500, 9000, 16000],
+      windows: [1, 4, 6, 8],
+      separator: '\n\n...\n\n',
+      minWindowChars: 120,
+    };
+    const deps = buildDeps({
+      transcriptText,
+      pruningConfig,
+      events,
+      pass1Transcripts,
+      pass2Transcripts,
+    });
+    const service = createYouTubeBlueprintPipelineService(deps);
+
+    const result = await service.runYouTubePipeline({
+      runId: 'run-2',
+      videoId: 'xyz789',
+      videoUrl: 'https://www.youtube.com/watch?v=xyz789',
+      durationSeconds: 100,
+      generateReview: false,
+      generateBanner: false,
+      authToken: '',
+      requestClass: 'background',
+      trace: {
+        db: { id: 'trace-db' },
+        userId: 'user-2',
+      },
+    });
+
+    expect(pass1Transcripts[0]).toBe(transcriptText);
+    expect(pass2Transcripts[0]).toBe(transcriptText);
+    expect(result.meta.transcript_pruning?.applied).toBe(false);
+    expect(events.some((row) => row.event === 'transcript_pruning_applied')).toBe(true);
+  });
+});

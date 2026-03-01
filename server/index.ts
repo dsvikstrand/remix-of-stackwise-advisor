@@ -123,6 +123,10 @@ import {
   splitByDurationPolicy,
   toDurationSeconds,
 } from './services/videoDurationPolicy';
+import {
+  pruneTranscriptForGeneration as applyTranscriptPruning,
+  readTranscriptPruningConfigFromEnv,
+} from './services/transcriptPruning';
 import { createSourcePageAssetSweepService } from './services/sourcePageAssetSweep';
 import { createAutoBannerQueueService } from './services/autoBannerQueue';
 import { createSourceSubscriptionSyncService } from './services/sourceSubscriptionSync';
@@ -303,6 +307,8 @@ const generationDurationCapEnabled = generationDurationPolicy.enabled;
 const generationMaxVideoSeconds = generationDurationPolicy.maxSeconds;
 const generationBlockUnknownDuration = generationDurationPolicy.blockUnknown;
 const generationDurationLookupTimeoutMs = generationDurationPolicy.lookupTimeoutMs;
+const transcriptPruningConfigResult = readTranscriptPruningConfigFromEnv(process.env);
+const transcriptPruningConfig = transcriptPruningConfigResult.config;
 const generationTierConfig = readGenerationTierConfigFromEnv(process.env);
 const resolveGenerationTierAccess = createGenerationTierAccessResolver(generationTierConfig);
 const generationTierDualGenerateConfig = readGenerationTierDualGenerateConfigFromEnv(process.env);
@@ -464,6 +470,10 @@ if (!tokenEncryptionKey) {
 
 if (transcriptThrottleTierParseWarn) {
   console.warn('[transcript-throttle] TRANSCRIPT_THROTTLE_TIERS_MS is invalid. Falling back to defaults 3000,10000,30000,60000.');
+}
+
+for (const warning of transcriptPruningConfigResult.warnings) {
+  console.warn(`[yt2bp_transcript_prune] ${warning}`);
 }
 
 if (generationTierConfig.testModeEnabled && generationTierConfig.tierUserIds.size === 0) {
@@ -7578,6 +7588,10 @@ const youtubeBlueprintPipelineService = createYouTubeBlueprintPipelineService({
   mapPipelineError,
   canonicalSectionName,
   normalizeSummaryVariantText,
+  pruneTranscriptForGeneration: (input: { transcriptText: string }) => applyTranscriptPruning({
+    transcriptText: input.transcriptText,
+    config: transcriptPruningConfig,
+  }),
   enforceVideoDurationPolicy: (input: {
     videoId: string;
     videoTitle?: string | null;
