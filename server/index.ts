@@ -5912,8 +5912,12 @@ registerSourcePagesRoutes(app, {
 
 registerIngestionUserRoutes(app, {
   getAuthedSupabaseClient,
+  getServiceSupabaseClient,
   clampInt,
   ingestionLatestMineLimiter,
+  workerConcurrency,
+  queuedIngestionScopes: QUEUED_INGESTION_SCOPES,
+  isQueuedIngestionScope,
 });
 
 registerOpsRoutes(app, {

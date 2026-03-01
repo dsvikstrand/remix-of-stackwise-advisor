@@ -252,6 +252,36 @@ export type IngestionJob = {
   updated_at?: string | null;
 };
 
+export type ActiveIngestionJob = {
+  job_id: string;
+  scope: string;
+  trigger: string;
+  status: Extract<IngestionJobStatus, 'queued' | 'running'>;
+  created_at: string;
+  started_at: string | null;
+  next_run_at: string | null;
+  processed_count: number;
+  inserted_count: number;
+  skipped_count: number;
+  attempts: number;
+  max_attempts: number;
+  error_code: string | null;
+  error_message: string | null;
+  queue_position: number | null;
+  queue_ahead_count: number | null;
+  estimated_start_seconds: number | null;
+  is_position_estimate: boolean;
+};
+
+export type ActiveIngestionJobsResponse = {
+  items: ActiveIngestionJob[];
+  summary: {
+    active_count: number;
+    queued_count: number;
+    running_count: number;
+  };
+};
+
 export async function getIngestionJob(jobId: string) {
   const response = await apiRequest<IngestionJob>(`/ingestion/jobs/${jobId}`, {
     method: 'GET',
@@ -263,6 +293,25 @@ export async function getLatestMyIngestionJob(scope = 'manual_refresh_selection'
   const query = new URLSearchParams();
   if (scope) query.set('scope', scope);
   const response = await apiRequest<IngestionJob | null>(`/ingestion/jobs/latest-mine?${query.toString()}`, {
+    method: 'GET',
+  });
+  return response.data;
+}
+
+export async function listActiveMyIngestionJobs(input?: {
+  scopes?: string[];
+  limit?: number;
+}) {
+  const query = new URLSearchParams();
+  const scopes = Array.isArray(input?.scopes)
+    ? input.scopes.map((scope) => String(scope || '').trim()).filter(Boolean)
+    : [];
+  if (scopes.length > 0) query.set('scope', scopes.join(','));
+  if (Number.isFinite(input?.limit)) {
+    query.set('limit', String(input?.limit));
+  }
+  const suffix = query.toString();
+  const response = await apiRequest<ActiveIngestionJobsResponse>(`/ingestion/jobs/active-mine${suffix ? `?${suffix}` : ''}`, {
     method: 'GET',
   });
   return response.data;

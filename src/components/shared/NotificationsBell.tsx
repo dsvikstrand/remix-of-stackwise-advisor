@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, LoaderCircle, MessageCircleReply, Sparkles, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { useNotifications, type NotificationItem } from '@/hooks/useNotifications';
+import { useGenerationQueue } from '@/hooks/useGenerationQueue';
+import { GenerationQueueRow } from '@/components/queue/GenerationQueueRow';
 
 function formatRelativeTime(iso: string) {
   const dateMs = Date.parse(iso);
@@ -36,6 +38,7 @@ function notificationIcon(item: NotificationItem) {
 
 export function NotificationsBell() {
   const navigate = useNavigate();
+  const [isOpen, setIsOpen] = useState(false);
   const {
     items,
     unreadCount,
@@ -48,6 +51,15 @@ export function NotificationsBell() {
     () => [...items].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)),
     [items],
   );
+  const {
+    items: activeJobs,
+    isLoading: isQueueLoading,
+  } = useGenerationQueue({
+    pollMs: isOpen ? 4_000 : 10_000,
+    limit: 20,
+    enabled: isEnabled,
+  });
+  const liveQueueTop = useMemo(() => activeJobs.slice(0, 3), [activeJobs]);
 
   const handleOpenItem = async (item: NotificationItem) => {
     if (item.link_path) {
@@ -60,6 +72,7 @@ export function NotificationsBell() {
   return (
     <DropdownMenu
       onOpenChange={(open) => {
+        setIsOpen(open);
         if (open && unreadCount > 0) {
           void markAllRead().catch(() => undefined);
         }
@@ -77,6 +90,35 @@ export function NotificationsBell() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[360px] p-0">
         <DropdownMenuLabel className="px-3 py-2">Notifications</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <div className="px-3 py-2">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-xs font-medium text-muted-foreground">Live Queue</p>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-[11px]"
+              onClick={() => navigate('/generation-queue')}
+            >
+              View full queue
+            </Button>
+          </div>
+          {isQueueLoading && liveQueueTop.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Checking queue...</p>
+          ) : liveQueueTop.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No active generations.</p>
+          ) : (
+            <div className="space-y-2">
+              {liveQueueTop.map((job) => (
+                <GenerationQueueRow
+                  key={job.job_id}
+                  job={job}
+                  compact
+                />
+              ))}
+            </div>
+          )}
+        </div>
         <DropdownMenuSeparator />
         <div className="max-h-[420px] overflow-y-auto">
           {isLoading ? (

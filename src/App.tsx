@@ -19,6 +19,7 @@ import Subscriptions from "./pages/Subscriptions";
 import SourcePage from "./pages/SourcePage";
 import BlueprintDetail from "./pages/BlueprintDetail";
 import YouTubeToBlueprint from "./pages/YouTubeToBlueprint";
+import GenerationQueue from "./pages/GenerationQueue";
 import About from "./pages/About";
 import NotFound from "./pages/NotFound";
 import { RequireAuth } from "@/components/shared/RequireAuth";
@@ -41,6 +42,7 @@ const App = () => (
             <Route path="/explore" element={<Explore />} />
             <Route path="/blueprints" element={<Navigate to="/wall" replace />} />
             <Route path="/youtube" element={<YouTubeToBlueprint />} />
+            <Route path="/generation-queue" element={<RequireAuth><GenerationQueue /></RequireAuth>} />
             <Route path="/channels" element={<Channels />} />
             <Route path="/search" element={<RequireAuth><SearchPage /></RequireAuth>} />
             <Route path="/b/:channelSlug" element={<ChannelPage />} />
