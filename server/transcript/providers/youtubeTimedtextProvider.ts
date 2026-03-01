@@ -15,6 +15,20 @@ function decodeHtml(text: string) {
     .replace(/&nbsp;/g, ' ');
 }
 
+function parseRetryAfterSeconds(value: string | null) {
+  const normalized = String(value || '').trim();
+  if (!normalized) return null;
+  const asSeconds = Number(normalized);
+  if (Number.isFinite(asSeconds) && asSeconds > 0) {
+    return Math.max(1, Math.ceil(asSeconds));
+  }
+  const asDateMs = Date.parse(normalized);
+  if (!Number.isFinite(asDateMs)) return null;
+  const deltaMs = asDateMs - Date.now();
+  if (deltaMs <= 0) return null;
+  return Math.max(1, Math.ceil(deltaMs / 1000));
+}
+
 function parseCaptionTracks(xml: string) {
   const tracks: Array<{ lang: string; name: string | null }> = [];
   const regex = /<track\b([^>]*)\/>/g;
@@ -45,6 +59,13 @@ function extractTranscriptFromJson3(payload: any) {
 async function fetchOnce(videoId: string): Promise<TranscriptResult> {
   const listUrl = `https://www.youtube.com/api/timedtext?type=list&v=${encodeURIComponent(videoId)}`;
   const listResponse = await fetch(listUrl);
+  if (listResponse.status === 429) {
+    throw new TranscriptProviderError(
+      'RATE_LIMITED',
+      'Transcript provider rate limited. Please retry shortly.',
+      { retryAfterSeconds: parseRetryAfterSeconds(listResponse.headers.get('retry-after')) },
+    );
+  }
   if (!listResponse.ok) {
     throw new TranscriptProviderError('TRANSCRIPT_FETCH_FAIL', 'Could not fetch transcript metadata.');
   }
@@ -63,6 +84,13 @@ async function fetchOnce(videoId: string): Promise<TranscriptResult> {
   if (preferred.name) trackUrl.searchParams.set('name', preferred.name);
 
   const trackResponse = await fetch(trackUrl.toString());
+  if (trackResponse.status === 429) {
+    throw new TranscriptProviderError(
+      'RATE_LIMITED',
+      'Transcript provider rate limited. Please retry shortly.',
+      { retryAfterSeconds: parseRetryAfterSeconds(trackResponse.headers.get('retry-after')) },
+    );
+  }
   if (!trackResponse.ok) {
     throw new TranscriptProviderError('TRANSCRIPT_FETCH_FAIL', 'Could not fetch transcript content.');
   }

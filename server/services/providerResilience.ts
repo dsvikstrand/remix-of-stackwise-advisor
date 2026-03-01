@@ -29,7 +29,7 @@ export type ProviderRetryOptions = {
 
 function defaultIsRetryable(error: unknown) {
   if (error instanceof TranscriptProviderError) {
-    return error.code === 'TRANSCRIPT_FETCH_FAIL' || error.code === 'TIMEOUT';
+    return error.code === 'TRANSCRIPT_FETCH_FAIL' || error.code === 'TIMEOUT' || error.code === 'RATE_LIMITED';
   }
   if (error instanceof Error) {
     const message = error.message.toLowerCase();

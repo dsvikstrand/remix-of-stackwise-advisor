@@ -20,6 +20,7 @@ Provider implementations must throw `TranscriptProviderError` with one of:
 - `NO_CAPTIONS`
 - `TRANSCRIPT_FETCH_FAIL`
 - `TRANSCRIPT_EMPTY`
+- `RATE_LIMITED`
 - `TIMEOUT`
 
 Unknown errors are normalized by orchestration to `TRANSCRIPT_FETCH_FAIL`.
@@ -44,4 +45,3 @@ Unknown errors are normalized by orchestration to `TRANSCRIPT_FETCH_FAIL`.
   - provider resolution test
   - probe matrix parity test
   - unknown error normalization test
-

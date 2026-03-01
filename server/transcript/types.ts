@@ -4,6 +4,7 @@ export type TranscriptProviderErrorCode =
   | 'NO_CAPTIONS'
   | 'TRANSCRIPT_FETCH_FAIL'
   | 'TRANSCRIPT_EMPTY'
+  | 'RATE_LIMITED'
   | 'TIMEOUT';
 
 export type TranscriptSegment = {
@@ -26,10 +27,19 @@ export type TranscriptProviderAdapter = {
 
 export class TranscriptProviderError extends Error {
   code: TranscriptProviderErrorCode;
+  retryAfterSeconds: number | null;
 
-  constructor(code: TranscriptProviderErrorCode, message: string) {
+  constructor(
+    code: TranscriptProviderErrorCode,
+    message: string,
+    options?: { retryAfterSeconds?: number | null },
+  ) {
     super(message);
     this.code = code;
+    const retryAfterRaw = Number(options?.retryAfterSeconds);
+    this.retryAfterSeconds = Number.isFinite(retryAfterRaw) && retryAfterRaw > 0
+      ? Math.max(1, Math.ceil(retryAfterRaw))
+      : null;
   }
 }
 

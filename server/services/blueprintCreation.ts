@@ -49,6 +49,7 @@ export type BlueprintCreationDeps = {
     generateReview: boolean;
     generateBanner: boolean;
     authToken: string;
+    requestClass?: 'interactive' | 'background';
     trace?: {
       db?: DbClient | null;
       userId?: string | null;
@@ -137,6 +138,7 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
       generateReview: false,
       generateBanner: false,
       authToken: '',
+      requestClass: 'background',
       trace: {
         db: traceDb,
         userId: input.userId,

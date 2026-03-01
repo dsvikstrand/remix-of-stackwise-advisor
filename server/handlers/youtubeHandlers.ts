@@ -148,6 +148,7 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
         generateReview: false,
         generateBanner: parsed.data.generate_banner,
         authToken,
+        requestClass: 'interactive',
         trace: {
           db: traceDb,
           userId: userId || null,
@@ -173,6 +174,7 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
       return res.status(status).json({
         ok: false,
         ...known,
+        retry_after_seconds: known.error_code === 'RATE_LIMITED' ? known.retry_after_seconds : undefined,
         run_id: runId,
       });
     }

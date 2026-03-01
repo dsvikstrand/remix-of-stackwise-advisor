@@ -67,6 +67,7 @@ async function runYouTubePipeline(input: {
   generateReview: boolean;
   generateBanner: boolean;
   authToken: string;
+  requestClass?: 'interactive' | 'background';
   trace?: {
     db?: DbClient | null;
     userId?: string | null;
@@ -118,17 +119,21 @@ async function runYouTubePipeline(input: {
   }
 
   try {
+    const requestClass = input.requestClass === 'interactive' ? 'interactive' : 'background';
     const transcript = await runWithProviderRetry(
-    {
-      providerKey: 'transcript',
-      db: serviceDb,
-      maxAttempts: providerRetryDefaults.transcriptAttempts,
-      timeoutMs: providerRetryDefaults.transcriptTimeoutMs,
-      baseDelayMs: 250,
-      jitterMs: 150,
-    },
-    async () => getTranscriptForVideo(input.videoId),
-  );
+      {
+        providerKey: 'transcript',
+        db: serviceDb,
+        maxAttempts: providerRetryDefaults.transcriptAttempts,
+        timeoutMs: providerRetryDefaults.transcriptTimeoutMs,
+        baseDelayMs: 250,
+        jitterMs: 150,
+      },
+      async () => getTranscriptForVideo(input.videoId, {
+        requestClass,
+        reason: 'pipeline_transcript_fetch',
+      }),
+    );
     if (traceContext.db && traceContext.userId) {
       await safeGenerationTraceWrite({
         runId: input.runId,

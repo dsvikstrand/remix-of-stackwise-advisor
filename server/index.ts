@@ -74,6 +74,7 @@ import { runUnlockReliabilitySweeps } from './services/unlockReliabilitySweeps';
 import { createUnlockTraceId, logUnlockEvent } from './services/unlockTrace';
 import { ProviderCircuitOpenError, getProviderCircuitSnapshot } from './services/providerCircuit';
 import { getProviderRetryDefaults, runWithProviderRetry } from './services/providerResilience';
+import { createTranscriptThrottle, type TranscriptRequestClass } from './services/transcriptThrottle';
 import {
   claimQueuedIngestionJobs,
   countQueueDepth,
@@ -293,6 +294,25 @@ const autoChannelLegacyManualFlowEnabledRaw = String(process.env.AUTO_CHANNEL_LE
 const autoChannelLegacyManualFlowEnabled = !(autoChannelLegacyManualFlowEnabledRaw === 'false' || autoChannelLegacyManualFlowEnabledRaw === '0' || autoChannelLegacyManualFlowEnabledRaw === 'off');
 const autoChannelGateMode = normalizeGateMode(process.env.AUTO_CHANNEL_GATE_MODE, 'enforce');
 const providerRetryDefaults = getProviderRetryDefaults();
+const transcriptThrottleEnabledRaw = String(process.env.TRANSCRIPT_THROTTLE_ENABLED || 'false').trim().toLowerCase();
+const transcriptThrottleEnabled = (
+  transcriptThrottleEnabledRaw === 'true'
+  || transcriptThrottleEnabledRaw === '1'
+  || transcriptThrottleEnabledRaw === 'yes'
+  || transcriptThrottleEnabledRaw === 'on'
+);
+const transcriptThrottleTierDefaults = [3000, 10_000, 30_000, 60_000];
+const transcriptThrottleTiersRaw = String(process.env.TRANSCRIPT_THROTTLE_TIERS_MS || '').trim();
+const transcriptThrottleTierValues = transcriptThrottleTiersRaw
+  .split(',')
+  .map((value) => clampInt(value, 0, 0, 24 * 60 * 60 * 1000))
+  .filter((value) => value > 0);
+const transcriptThrottleTiersMs = transcriptThrottleTierValues.length > 0
+  ? transcriptThrottleTierValues
+  : transcriptThrottleTierDefaults;
+const transcriptThrottleTierParseWarn = transcriptThrottleTiersRaw.length > 0 && transcriptThrottleTierValues.length === 0;
+const transcriptThrottleJitterMs = clampInt(process.env.TRANSCRIPT_THROTTLE_JITTER_MS, 500, 0, 5000);
+const transcriptThrottleInteractiveMaxWaitMs = clampInt(process.env.TRANSCRIPT_THROTTLE_INTERACTIVE_MAX_WAIT_MS, 2000, 100, 60_000);
 const youtubeOAuthConfig: YouTubeOAuthConfig = {
   clientId: googleOAuthClientId,
   clientSecret: googleOAuthClientSecret,
@@ -311,6 +331,10 @@ if (!youtubeOAuthConfigured) {
 
 if (!tokenEncryptionKey) {
   console.warn('[youtube-oauth] TOKEN_ENCRYPTION_KEY is not configured. YouTube connection endpoints will return YT_OAUTH_NOT_CONFIGURED.');
+}
+
+if (transcriptThrottleTierParseWarn) {
+  console.warn('[transcript-throttle] TRANSCRIPT_THROTTLE_TIERS_MS is invalid. Falling back to defaults 3000,10000,30000,60000.');
 }
 
 if (autoBannerMode !== 'off' && !String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim()) {
@@ -2772,7 +2796,13 @@ function isPermanentNoTranscriptCode(code: string | null | undefined) {
 
 function isTransientTranscriptUnavailableCode(code: string | null | undefined) {
   const normalized = String(code || '').trim().toUpperCase();
-  return normalized === 'TRANSCRIPT_EMPTY' || normalized === 'TRANSCRIPT_UNAVAILABLE' || normalized === 'NO_CAPTIONS';
+  return normalized === 'TRANSCRIPT_EMPTY'
+    || normalized === 'TRANSCRIPT_UNAVAILABLE'
+    || normalized === 'NO_CAPTIONS'
+    || normalized === 'RATE_LIMITED'
+    || normalized === 'TIMEOUT'
+    || normalized === 'TRANSCRIPT_FETCH_FAIL'
+    || normalized === 'PROVIDER_FAIL';
 }
 
 function normalizeTranscriptTruthStatus(value: unknown): TranscriptTruthStatus {
@@ -2800,7 +2830,16 @@ function isConfirmedNoTranscriptUnlock(unlock: SourceItemUnlockRow | null | unde
 
 function normalizeUnlockFailureCode(code: string | null | undefined) {
   const normalized = String(code || '').trim().toUpperCase();
-  if (normalized === 'NO_CAPTIONS' || normalized === 'TRANSCRIPT_EMPTY') return 'TRANSCRIPT_UNAVAILABLE';
+  if (
+    normalized === 'NO_CAPTIONS'
+    || normalized === 'TRANSCRIPT_EMPTY'
+    || normalized === 'RATE_LIMITED'
+    || normalized === 'TIMEOUT'
+    || normalized === 'TRANSCRIPT_FETCH_FAIL'
+    || normalized === 'PROVIDER_FAIL'
+  ) {
+    return 'TRANSCRIPT_UNAVAILABLE';
+  }
   return normalized || 'UNLOCK_GENERATION_FAILED';
 }
 
@@ -2879,7 +2918,10 @@ async function classifyTranscriptFailureForUnlock(input: {
       video_id: input.videoId,
       attempt: nextAttemptCount,
     });
-    const probe = await probeTranscriptProviders(input.videoId);
+    const probe = await probeTranscriptProvidersWithThrottle(input.videoId, {
+      requestClass: 'background',
+      reason: 'unlock_no_captions_probe',
+    });
     probeMeta.providers = probe.providers;
     probeMeta.all_no_captions = probe.all_no_captions;
     probeMeta.any_success = probe.any_success;
@@ -4868,7 +4910,10 @@ async function processSourceTranscriptRevalidateJob(input: {
   }
 
   if (isConfirmedNoTranscriptUnlock(unlock)) {
-    const probe = await probeTranscriptProviders(input.payload.video_id);
+    const probe = await probeTranscriptProvidersWithThrottle(input.payload.video_id, {
+      requestClass: 'background',
+      reason: 'source_transcript_revalidate_probe',
+    });
     if (probe.all_no_captions) {
       await db
         .from('source_item_unlocks')
@@ -5329,6 +5374,7 @@ function getRetryDelayForErrorCode(errorCode: string) {
     case 'PROVIDER_DEGRADED':
       return 30;
     case 'PROVIDER_FAIL':
+    case 'TRANSCRIPT_FETCH_FAIL':
     case 'RATE_LIMITED':
     case 'TIMEOUT':
     case 'WORKER_TIMEOUT':
@@ -5360,6 +5406,13 @@ function classifyQueuedJobError(error: unknown) {
       retryDelaySeconds: getRetryDelayForErrorCode('PROVIDER_DEGRADED'),
     };
   }
+  if (error instanceof TranscriptProviderError) {
+    return {
+      errorCode: error.code,
+      message: error.message,
+      retryDelaySeconds: getRetryDelayForErrorCode(error.code),
+    };
+  }
   if (error instanceof PipelineError) {
     return {
       errorCode: error.errorCode,
@@ -5367,12 +5420,25 @@ function classifyQueuedJobError(error: unknown) {
       retryDelaySeconds: getRetryDelayForErrorCode(error.errorCode),
     };
   }
-  const providerCode = String((error as { code?: string } | null)?.code || '').trim();
+  const providerCode = String((error as { code?: string } | null)?.code || '').trim().toUpperCase();
   if (providerCode === 'PROVIDER_DEGRADED') {
     return {
       errorCode: 'PROVIDER_DEGRADED',
       message: error instanceof Error ? error.message : 'Provider temporarily degraded.',
       retryDelaySeconds: getRetryDelayForErrorCode('PROVIDER_DEGRADED'),
+    };
+  }
+  if (
+    providerCode === 'RATE_LIMITED'
+    || providerCode === 'TIMEOUT'
+    || providerCode === 'TRANSCRIPT_FETCH_FAIL'
+    || providerCode === 'TRANSCRIPT_EMPTY'
+    || providerCode === 'NO_CAPTIONS'
+  ) {
+    return {
+      errorCode: providerCode,
+      message: error instanceof Error ? error.message : 'Transcript provider failed.',
+      retryDelaySeconds: getRetryDelayForErrorCode(providerCode),
     };
   }
   const message = error instanceof Error ? error.message : String(error || 'Unknown job error');
@@ -5914,23 +5980,45 @@ type PipelineErrorCode =
 type PipelineErrorShape = {
   error_code: PipelineErrorCode;
   message: string;
+  retry_after_seconds?: number;
 };
 
 class PipelineError extends Error {
   errorCode: PipelineErrorCode;
-  constructor(errorCode: PipelineErrorCode, message: string) {
+  retryAfterSeconds: number | null;
+  constructor(
+    errorCode: PipelineErrorCode,
+    message: string,
+    options?: {
+      retryAfterSeconds?: number | null;
+    },
+  ) {
     super(message);
     this.errorCode = errorCode;
+    const retryAfterRaw = Number(options?.retryAfterSeconds);
+    this.retryAfterSeconds = Number.isFinite(retryAfterRaw) && retryAfterRaw > 0
+      ? Math.max(1, Math.ceil(retryAfterRaw))
+      : null;
   }
 }
 
-function makePipelineError(errorCode: PipelineErrorCode, message: string): never {
-  throw new PipelineError(errorCode, message);
+function makePipelineError(
+  errorCode: PipelineErrorCode,
+  message: string,
+  options?: {
+    retryAfterSeconds?: number | null;
+  },
+): never {
+  throw new PipelineError(errorCode, message, options);
 }
 
 function mapPipelineError(error: unknown): PipelineErrorShape | null {
   if (error instanceof PipelineError) {
-    return { error_code: error.errorCode, message: error.message };
+    return {
+      error_code: error.errorCode,
+      message: error.message,
+      retry_after_seconds: error.retryAfterSeconds || undefined,
+    };
   }
   const providerCode = String((error as { code?: string } | null)?.code || '').trim();
   if (providerCode === 'PROVIDER_DEGRADED') {
@@ -5943,7 +6031,11 @@ function mapPipelineError(error: unknown): PipelineErrorShape | null {
     if (error.code === 'TRANSCRIPT_FETCH_FAIL') {
       return { error_code: 'PROVIDER_FAIL', message: 'Transcript provider is currently unavailable. Please try another video.' };
     }
-    return { error_code: error.code, message: error.message };
+    return {
+      error_code: error.code,
+      message: error.message,
+      retry_after_seconds: error.retryAfterSeconds || undefined,
+    };
   }
   return null;
 }
@@ -6218,6 +6310,62 @@ async function safeGenerationTraceWrite(input: {
   }
 }
 
+const transcriptThrottle = createTranscriptThrottle({
+  enabled: transcriptThrottleEnabled,
+  tiersMs: transcriptThrottleTiersMs,
+  jitterMs: transcriptThrottleJitterMs,
+  interactiveMaxWaitMs: transcriptThrottleInteractiveMaxWaitMs,
+});
+
+async function runTranscriptTaskWithThrottle<T>(
+  input: {
+    requestClass?: TranscriptRequestClass;
+    reason?: string;
+    videoId?: string;
+  },
+  task: () => Promise<T>,
+) {
+  return transcriptThrottle.runTranscriptTask({
+    requestClass: input.requestClass === 'interactive' ? 'interactive' : 'background',
+    reason: input.reason,
+    videoId: input.videoId,
+  }, task);
+}
+
+async function getTranscriptForVideoWithThrottle(
+  videoId: string,
+  options?: {
+    requestClass?: TranscriptRequestClass;
+    reason?: string;
+  },
+) {
+  return runTranscriptTaskWithThrottle(
+    {
+      requestClass: options?.requestClass,
+      reason: options?.reason || 'pipeline_transcript_fetch',
+      videoId,
+    },
+    () => getTranscriptForVideo(videoId),
+  );
+}
+
+async function probeTranscriptProvidersWithThrottle(
+  videoId: string,
+  options?: {
+    requestClass?: TranscriptRequestClass;
+    reason?: string;
+  },
+) {
+  return runTranscriptTaskWithThrottle(
+    {
+      requestClass: options?.requestClass,
+      reason: options?.reason || 'transcript_probe',
+      videoId,
+    },
+    () => probeTranscriptProviders(videoId),
+  );
+}
+
 const youtubeBlueprintPipelineService = createYouTubeBlueprintPipelineService({
   getServiceSupabaseClient,
   getYouTubeGenerationTraceContext,
@@ -6226,7 +6374,7 @@ const youtubeBlueprintPipelineService = createYouTubeBlueprintPipelineService({
   appendGenerationEvent,
   runWithProviderRetry,
   providerRetryDefaults,
-  getTranscriptForVideo,
+  getTranscriptForVideo: getTranscriptForVideoWithThrottle,
   createLLMClient,
   updateGenerationModelInfo,
   yt2bpSafetyBlockEnabled,

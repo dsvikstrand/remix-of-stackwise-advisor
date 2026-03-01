@@ -11,6 +11,20 @@ function toSeconds(input: unknown) {
   return Number.isFinite(n) ? n : undefined;
 }
 
+function parseRetryAfterSeconds(value: string | null) {
+  const normalized = String(value || '').trim();
+  if (!normalized) return null;
+  const asSeconds = Number(normalized);
+  if (Number.isFinite(asSeconds) && asSeconds > 0) {
+    return Math.max(1, Math.ceil(asSeconds));
+  }
+  const asDateMs = Date.parse(normalized);
+  if (!Number.isFinite(asDateMs)) return null;
+  const deltaMs = asDateMs - Date.now();
+  if (deltaMs <= 0) return null;
+  return Math.max(1, Math.ceil(deltaMs / 1000));
+}
+
 async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -40,6 +54,13 @@ async function fetchOnce(videoId: string): Promise<TranscriptSegment[]> {
 
   if (response.status === 403 || response.status === 404) {
     throw new TranscriptProviderError('NO_CAPTIONS', 'Transcript unavailable for this video. Please try another video.');
+  }
+  if (response.status === 429) {
+    throw new TranscriptProviderError(
+      'RATE_LIMITED',
+      'Transcript provider rate limited. Please retry shortly.',
+      { retryAfterSeconds: parseRetryAfterSeconds(response.headers.get('retry-after')) },
+    );
   }
   if (!response.ok) {
     throw new TranscriptProviderError('TRANSCRIPT_FETCH_FAIL', `Transcript provider returned HTTP ${response.status}.`);

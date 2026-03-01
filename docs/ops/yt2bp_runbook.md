@@ -186,6 +186,10 @@ Required runtime variables:
 - `JOB_EXECUTION_TIMEOUT_MS` (default `120000`)
 - `TRANSCRIPT_MAX_ATTEMPTS` (default `2`)
 - `TRANSCRIPT_TIMEOUT_MS` (default `25000`)
+- `TRANSCRIPT_THROTTLE_ENABLED` (default `false`, transcript single-lane governor)
+- `TRANSCRIPT_THROTTLE_TIERS_MS` (default `3000,10000,30000,60000`)
+- `TRANSCRIPT_THROTTLE_JITTER_MS` (default `500`)
+- `TRANSCRIPT_THROTTLE_INTERACTIVE_MAX_WAIT_MS` (default `2000`)
 - `LLM_MAX_ATTEMPTS` (default `2`)
 - `LLM_TIMEOUT_MS` (default `60000`)
 - `PROVIDER_CIRCUIT_FAILURE_THRESHOLD` (default `5`)
@@ -259,11 +263,30 @@ Safe defaults:
 - `JOB_EXECUTION_TIMEOUT_MS=120000`
 - `TRANSCRIPT_MAX_ATTEMPTS=2`
 - `TRANSCRIPT_TIMEOUT_MS=25000`
+- `TRANSCRIPT_THROTTLE_ENABLED=false`
+- `TRANSCRIPT_THROTTLE_TIERS_MS=3000,10000,30000,60000`
+- `TRANSCRIPT_THROTTLE_JITTER_MS=500`
+- `TRANSCRIPT_THROTTLE_INTERACTIVE_MAX_WAIT_MS=2000`
 - `LLM_MAX_ATTEMPTS=2`
 - `LLM_TIMEOUT_MS=60000`
 - `PROVIDER_CIRCUIT_FAILURE_THRESHOLD=5`
 - `PROVIDER_CIRCUIT_COOLDOWN_SECONDS=60`
 - `PROVIDER_FAIL_FAST_MODE=false`
+
+## Transcript throttle rollout checks
+- Deploy phase 1:
+  - keep `TRANSCRIPT_THROTTLE_ENABLED=false`.
+  - deploy/restart and confirm no behavior change.
+- Deploy phase 2:
+  - set `TRANSCRIPT_THROTTLE_ENABLED=true` with default tiers and wait cap.
+  - restart service and monitor for 24h.
+- Verify:
+  - concurrent `/api/youtube-to-blueprint` calls should serialize at transcript stage.
+  - overloaded interactive calls should return `429 RATE_LIMITED` with `retry_after_seconds`.
+  - queued generation should continue progressing (background waits, no fast-fail).
+- Fast rollback:
+  - set `TRANSCRIPT_THROTTLE_ENABLED=false`.
+  - restart `agentic-backend.service`.
 
 ## Onboarding rollout checks
 - Schema check:
@@ -294,8 +317,9 @@ Safe defaults:
 - Meaning: anon/auth/hourly limiter tripped.
 - Action:
   1) Check request volume in logs.
-  2) Temporarily raise limits if operationally justified.
-  3) Keep hourly cap as abuse guard.
+  2) Check whether rate limit is endpoint limiter or transcript throttle (`retry_after_seconds` present on YT2BP responses).
+  3) Temporarily raise limits only if operationally justified.
+  4) Keep hourly cap as abuse guard.
 
 ### `TIMEOUT`
 - Meaning: pipeline exceeded max timeout.

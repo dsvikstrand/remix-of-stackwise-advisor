@@ -124,4 +124,36 @@ describe('transcript service modularity (backend)', () => {
     expect(result.any_success).toBe(false);
     expect(result.all_no_captions).toBe(false);
   });
+
+  it('keeps RATE_LIMITED provider errors in probe results', async () => {
+    const providers: TranscriptProviderAdapter[] = [
+      {
+        id: 'yt_to_text',
+        getTranscript: async () => {
+          throw new TranscriptProviderError('RATE_LIMITED', 'Rate limited', { retryAfterSeconds: 12 });
+        },
+      },
+      {
+        id: 'youtube_timedtext',
+        getTranscript: async () => {
+          throw new TranscriptProviderError('NO_CAPTIONS', 'No captions');
+        },
+      },
+    ];
+
+    const service = createTranscriptService({
+      listProvidersForProbe: () => providers,
+      getProviderById: (providerId) => providers.find((row) => row.id === providerId) || null,
+      timeoutMs: 1000,
+    });
+
+    const result = await service.probeTranscriptProviders('video123');
+    expect(result.providers[0]).toEqual({
+      provider: 'yt_to_text',
+      ok: false,
+      error_code: 'RATE_LIMITED',
+    });
+    expect(result.any_success).toBe(false);
+    expect(result.all_no_captions).toBe(false);
+  });
 });
