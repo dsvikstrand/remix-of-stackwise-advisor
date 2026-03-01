@@ -4,6 +4,7 @@ type CreateBlueprintFromVideoInput = {
   userId: string;
   videoUrl: string;
   videoId: string;
+  durationSeconds?: number | null;
   sourceTag:
     | 'subscription_auto'
     | 'subscription_accept'
@@ -46,6 +47,7 @@ export type BlueprintCreationDeps = {
     runId: string;
     videoId: string;
     videoUrl: string;
+    durationSeconds?: number | null;
     generateReview: boolean;
     generateBanner: boolean;
     authToken: string;
@@ -135,6 +137,7 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
       runId,
       videoId: input.videoId,
       videoUrl: input.videoUrl,
+      durationSeconds: input.durationSeconds ?? null,
       generateReview: false,
       generateBanner: false,
       authToken: '',

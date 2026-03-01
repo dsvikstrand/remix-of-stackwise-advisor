@@ -33,6 +33,7 @@ export type SubscriptionRefreshCandidate = {
   title: string;
   published_at: string | null;
   thumbnail_url: string | null;
+  duration_seconds?: number | null;
 };
 
 type ApiEnvelope<T> = {
@@ -224,6 +225,8 @@ export async function scanSubscriptionRefreshCandidates(input?: {
     candidates: SubscriptionRefreshCandidate[];
     scan_errors: Array<{ subscription_id: string; error: string }>;
     cooldown_filtered?: number;
+    duration_filtered_count?: number;
+    duration_filtered_reasons?: { too_long: number; unknown: number };
   }>('/source-subscriptions/refresh-scan', {
     method: 'POST',
     body: JSON.stringify({
@@ -323,6 +326,15 @@ export async function generateSubscriptionRefreshBlueprints(input: {
   const response = await apiRequest<{
     job_id: string;
     queued_count: number;
+    duration_blocked_count?: number;
+    duration_blocked?: Array<{
+      video_id: string;
+      title: string;
+      error_code: 'VIDEO_TOO_LONG' | 'VIDEO_DURATION_UNAVAILABLE';
+      reason: 'too_long' | 'unknown';
+      max_duration_seconds: number;
+      video_duration_seconds: number | null;
+    }>;
   }>('/source-subscriptions/refresh-generate', {
     method: 'POST',
     body: JSON.stringify({

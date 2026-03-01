@@ -4,6 +4,8 @@ import type {
   SourceSubscriptionsRouteDeps,
   SyncSubscriptionResult,
 } from '../contracts/api/sourceSubscriptions';
+import { fetchYouTubeDurationMap, YouTubeDurationLookupError } from '../services/youtubeDuration';
+import { splitByDurationPolicy, toDurationSeconds } from '../services/videoDurationPolicy';
 
 export async function handleCreateSourceSubscription(req: express.Request, res: express.Response, deps: SourceSubscriptionsRouteDeps) {
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
@@ -216,6 +218,7 @@ export async function handleRefreshScan(req: express.Request, res: express.Respo
       candidates_total: scanned.candidates.length,
       scan_errors: scanned.scanErrors.length,
       cooldown_filtered: scanned.cooldownFiltered,
+      duration_filtered: scanned.durationFilteredCount || 0,
     }));
     return res.json({
       ok: true,
@@ -227,6 +230,8 @@ export async function handleRefreshScan(req: express.Request, res: express.Respo
         candidates: scanned.candidates,
         scan_errors: scanned.scanErrors,
         cooldown_filtered: scanned.cooldownFiltered,
+        duration_filtered_count: scanned.durationFilteredCount || 0,
+        duration_filtered_reasons: scanned.durationFilteredReasons || { too_long: 0, unknown: 0 },
       },
     });
   } catch (error) {
@@ -317,6 +322,7 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
       title: item.title,
       published_at: item.published_at || null,
       thumbnail_url: item.thumbnail_url || null,
+      duration_seconds: toDurationSeconds(item.duration_seconds),
     });
   }
   const dedupedItems = Array.from(dedupedMap.values());
@@ -327,6 +333,72 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
       error_code: 'NO_ELIGIBLE_ITEMS',
       message: 'No eligible videos found for active subscriptions',
       data: null,
+    });
+  }
+  let allowedDurationItems = dedupedItems;
+  let durationBlocked: Array<{
+    video_id: string;
+    title: string;
+    error_code: 'VIDEO_TOO_LONG' | 'VIDEO_DURATION_UNAVAILABLE';
+    reason: 'too_long' | 'unknown';
+    max_duration_seconds: number;
+    video_duration_seconds: number | null;
+  }> = [];
+  if (deps.generationDurationCapEnabled) {
+    try {
+      const durationMap = await fetchYouTubeDurationMap({
+        apiKey: deps.youtubeDataApiKey,
+        videoIds: dedupedItems.filter((item) => item.duration_seconds == null).map((item) => item.video_id),
+        timeoutMs: deps.generationDurationLookupTimeoutMs,
+        userAgent: 'bleuv1-refresh-generate/1.0 (+https://bapi.vdsai.cloud)',
+      });
+      const withResolvedDurations = dedupedItems.map((item) => ({
+        ...item,
+        duration_seconds: item.duration_seconds ?? durationMap.get(item.video_id) ?? null,
+      }));
+      const split = splitByDurationPolicy({
+        items: withResolvedDurations,
+        config: {
+          enabled: deps.generationDurationCapEnabled,
+          maxSeconds: deps.generationMaxVideoSeconds,
+          blockUnknown: deps.generationBlockUnknownDuration,
+        },
+        getVideoId: (item) => item.video_id,
+        getTitle: (item) => item.title,
+        getDurationSeconds: (item) => item.duration_seconds ?? null,
+      });
+      allowedDurationItems = split.allowed;
+      durationBlocked = split.blocked;
+    } catch (error) {
+      if (error instanceof YouTubeDurationLookupError) {
+        if (error.code === 'RATE_LIMITED') {
+          return res.status(429).json({
+            ok: false,
+            error_code: 'RATE_LIMITED',
+            message: 'Too many requests right now. Please retry shortly.',
+            data: null,
+          });
+        }
+        return res.status(502).json({
+          ok: false,
+          error_code: 'PROVIDER_FAIL',
+          message: 'Video metadata provider is currently unavailable. Please try again.',
+          data: null,
+        });
+      }
+      throw error;
+    }
+  }
+
+  if (allowedDurationItems.length === 0 && durationBlocked.length > 0) {
+    return res.status(422).json({
+      ok: false,
+      error_code: 'VIDEO_DURATION_POLICY_BLOCKED',
+      message: 'All selected videos are blocked by duration policy.',
+      data: {
+        duration_blocked_count: durationBlocked.length,
+        duration_blocked: durationBlocked,
+      },
     });
   }
 
@@ -351,13 +423,13 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
       trigger: 'user_sync',
       scope: 'manual_refresh_selection',
       status: 'queued',
-      requested_by_user_id: userId,
-      payload: {
-        user_id: userId,
-        items: dedupedItems,
-      },
-      next_run_at: new Date().toISOString(),
-    })
+        requested_by_user_id: userId,
+        payload: {
+          user_id: userId,
+          items: allowedDurationItems,
+        },
+        next_run_at: new Date().toISOString(),
+      })
     .select('id')
     .single();
   if (jobCreateError) {
@@ -368,8 +440,8 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
     userId,
     jobId: job.id,
     scope: 'manual_refresh_selection',
-    queuedCount: dedupedItems.length,
-    itemTitle: dedupedItems[0]?.title || null,
+    queuedCount: allowedDurationItems.length,
+    itemTitle: allowedDurationItems[0]?.title || null,
     linkPath: deps.getGenerationNotificationLinkPath({ scope: 'manual_refresh_selection' }),
   });
   deps.scheduleQueuedIngestionProcessing();
@@ -381,7 +453,9 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
     data: {
       job_id: job.id,
       queue_depth: queueDepth + 1,
-      queued_count: dedupedItems.length,
+      queued_count: allowedDurationItems.length,
+      duration_blocked_count: durationBlocked.length,
+      duration_blocked: durationBlocked,
     },
   });
 }

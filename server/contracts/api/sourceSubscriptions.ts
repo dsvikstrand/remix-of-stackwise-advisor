@@ -17,6 +17,7 @@ export type RefreshScanCandidate = {
   title: string;
   published_at?: string | null;
   thumbnail_url?: string | null;
+  duration_seconds?: number | null;
 };
 
 export type RefreshSubscriptionsScanInput = {
@@ -47,6 +48,10 @@ export type SourceSubscriptionsRouteDeps = {
   collectRefreshCandidatesForUser: any;
   RefreshSubscriptionsGenerateSchema: SafeParser<RefreshSubscriptionsGenerateInput>;
   refreshGenerateMaxItems: number;
+  generationDurationCapEnabled: boolean;
+  generationMaxVideoSeconds: number;
+  generationBlockUnknownDuration: boolean;
+  generationDurationLookupTimeoutMs: number;
   recoverStaleIngestionJobs: any;
   getActiveManualRefreshJob: any;
   countQueueDepth: any;

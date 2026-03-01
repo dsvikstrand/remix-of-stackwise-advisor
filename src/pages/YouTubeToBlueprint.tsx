@@ -53,6 +53,8 @@ type YouTubeToBlueprintErrorResponse = {
   ok: false;
   error_code:
     | 'INVALID_URL'
+    | 'VIDEO_TOO_LONG'
+    | 'VIDEO_DURATION_UNAVAILABLE'
     | 'NO_CAPTIONS'
     | 'TRANSCRIPT_FETCH_FAIL'
     | 'TRANSCRIPT_EMPTY'
@@ -131,6 +133,10 @@ function toYouTubeErrorMessage(errorCode: YouTubeToBlueprintErrorResponse['error
     case 'NO_CAPTIONS':
     case 'TRANSCRIPT_EMPTY':
       return 'Transcript unavailable for this video. Please try another video.';
+    case 'VIDEO_TOO_LONG':
+      return 'This video exceeds the 45-minute generation limit.';
+    case 'VIDEO_DURATION_UNAVAILABLE':
+      return 'Video length is unavailable for this video. Please try another video.';
     case 'PROVIDER_FAIL':
     case 'TRANSCRIPT_FETCH_FAIL':
       return 'Transcript provider is currently unavailable. Please try another video.';

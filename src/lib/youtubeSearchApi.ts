@@ -31,6 +31,7 @@ export type SearchVideoGenerateItem = {
   channel_url?: string | null;
   published_at?: string | null;
   thumbnail_url?: string | null;
+  duration_seconds?: number | null;
 };
 
 export type SearchVideoGenerateResponse = {
@@ -38,6 +39,15 @@ export type SearchVideoGenerateResponse = {
   queue_depth: number;
   estimated_start_seconds: number;
   queued_count: number;
+  duration_blocked_count?: number;
+  duration_blocked?: Array<{
+    video_id: string;
+    title: string;
+    error_code: 'VIDEO_TOO_LONG' | 'VIDEO_DURATION_UNAVAILABLE';
+    reason: 'too_long' | 'unknown';
+    max_duration_seconds: number;
+    video_duration_seconds: number | null;
+  }>;
 };
 
 type ApiEnvelope<T> = {

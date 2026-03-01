@@ -130,6 +130,11 @@ function toGenerateErrorMessage(errorCode?: string | null) {
       return 'Transcript temporarily unavailable. Please try again in a few minutes.';
     case 'RATE_LIMITED':
       return 'Too many requests right now. Please retry shortly.';
+    case 'VIDEO_TOO_LONG':
+    case 'VIDEO_DURATION_POLICY_BLOCKED':
+      return 'This video exceeds the 45-minute generation limit.';
+    case 'VIDEO_DURATION_UNAVAILABLE':
+      return 'Video length is unavailable for this video. Please try another one.';
     case 'MAX_ITEMS_EXCEEDED':
     case 'INVALID_INPUT':
       return 'Could not generate this video right now.';
@@ -201,6 +206,7 @@ type GenerateTarget = {
   channel_id: string;
   channel_title: string;
   channel_url: string;
+  duration_seconds?: number | null;
 };
 
 function sampleQuickTags(bank: string[], count = QUICK_TAG_COUNT) {
@@ -562,6 +568,7 @@ export default function SearchPage() {
             channel_id: target.channel_id,
             channel_title: target.channel_title || null,
             channel_url: target.channel_url || null,
+            duration_seconds: target.duration_seconds ?? null,
           },
         ],
       });
@@ -786,6 +793,7 @@ export default function SearchPage() {
                                 channel_id: result.channel_id,
                                 channel_title: result.channel_title || '',
                                 channel_url: result.channel_url || '',
+                                duration_seconds: result.duration_seconds,
                               })}
                               disabled={isGenerating || !user || !hasEnoughCredits || result.already_exists_for_user}
                             >
@@ -1025,6 +1033,7 @@ export default function SearchPage() {
                                   channel_id: video.channel_id,
                                   channel_title: video.channel_title || selectedBrowseChannel?.channel_title || '',
                                   channel_url: selectedBrowseChannel?.channel_url || '',
+                                  duration_seconds: video.duration_seconds,
                                 })}
                                 disabled={isGenerating || !user || !hasEnoughCredits}
                               >

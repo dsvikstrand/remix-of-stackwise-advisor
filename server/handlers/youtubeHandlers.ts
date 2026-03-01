@@ -5,6 +5,8 @@ import type {
   UserYouTubeConnectionRow,
   YouTubeRouteDeps,
 } from '../contracts/api/youtube';
+import { fetchYouTubeDurationMap, YouTubeDurationLookupError } from '../services/youtubeDuration';
+import { splitByDurationPolicy, toDurationSeconds } from '../services/videoDurationPolicy';
 
 export function registerYouTubeRouteHandlers(app: express.Express, deps: YouTubeRouteDeps) {
   const {
@@ -24,6 +26,10 @@ export function registerYouTubeRouteHandlers(app: express.Express, deps: YouTube
     youtubeDisconnectLimiter,
     youtubeDataApiKey,
     sourceUnlockGenerateMaxItems,
+    generationDurationCapEnabled,
+    generationMaxVideoSeconds,
+    generationBlockUnknownDuration,
+    generationDurationLookupTimeoutMs,
     queueDepthHardLimit,
     queueDepthPerUserLimit,
     workerConcurrency,
@@ -122,6 +128,67 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
 
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
   const authToken = (res.locals.authToken as string | undefined) ?? '';
+  let resolvedDurationSeconds: number | null = null;
+  if (generationDurationCapEnabled) {
+    try {
+      const durationMap = await fetchYouTubeDurationMap({
+        apiKey: youtubeDataApiKey,
+        videoIds: [validatedUrl.sourceNativeId],
+        timeoutMs: generationDurationLookupTimeoutMs,
+        userAgent: 'bleuv1-youtube-direct-generate/1.0 (+https://bapi.vdsai.cloud)',
+      });
+      resolvedDurationSeconds = durationMap.get(validatedUrl.sourceNativeId) ?? null;
+      const split = await splitByDurationPolicy({
+        items: [{
+          video_id: validatedUrl.sourceNativeId,
+          title: validatedUrl.sourceNativeId,
+          duration_seconds: resolvedDurationSeconds,
+        }],
+        config: {
+          enabled: generationDurationCapEnabled,
+          maxSeconds: generationMaxVideoSeconds,
+          blockUnknown: generationBlockUnknownDuration,
+        },
+        getVideoId: (item) => item.video_id,
+        getTitle: (item) => item.title,
+        getDurationSeconds: (item) => toDurationSeconds(item.duration_seconds),
+      });
+      if (split.allowed.length === 0) {
+        const blocked = split.blocked[0];
+        if (blocked) {
+          return res.status(422).json({
+            ok: false,
+            error_code: blocked.error_code,
+            message: blocked.error_code === 'VIDEO_TOO_LONG'
+              ? `Video exceeds max length of ${Math.floor(generationMaxVideoSeconds / 60)} minutes.`
+              : 'Video length is unavailable for now. Please try another video.',
+            max_duration_seconds: blocked.max_duration_seconds,
+            video_duration_seconds: blocked.video_duration_seconds,
+            video_id: blocked.video_id,
+            run_id: runId,
+          });
+        }
+      }
+    } catch (error) {
+      if (error instanceof YouTubeDurationLookupError) {
+        if (error.code === 'RATE_LIMITED') {
+          return res.status(429).json({
+            ok: false,
+            error_code: 'RATE_LIMITED',
+            message: 'Too many requests right now. Please retry shortly.',
+            run_id: runId,
+          });
+        }
+        return res.status(502).json({
+          ok: false,
+          error_code: 'PROVIDER_FAIL',
+          message: 'Video metadata provider is currently unavailable. Please try another video.',
+          run_id: runId,
+        });
+      }
+      throw error;
+    }
+  }
   if (userId) {
     const creditCheck = await consumeCredit(userId, {
       reasonCode: 'YOUTUBE_TO_BLUEPRINT',
@@ -145,6 +212,7 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
         runId,
         videoId: validatedUrl.sourceNativeId,
         videoUrl: parsed.data.video_url,
+        durationSeconds: resolvedDurationSeconds,
         generateReview: false,
         generateBanner: parsed.data.generate_banner,
         authToken,
@@ -166,6 +234,7 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
       const status =
         known.error_code === 'TIMEOUT' ? 504
           : known.error_code === 'INVALID_URL' ? 400
+            : known.error_code === 'VIDEO_TOO_LONG' || known.error_code === 'VIDEO_DURATION_UNAVAILABLE' || known.error_code === 'VIDEO_DURATION_POLICY_BLOCKED' ? 422
             : known.error_code === 'NO_CAPTIONS' || known.error_code === 'TRANSCRIPT_EMPTY' ? 422
               : known.error_code === 'PROVIDER_FAIL' ? 502
                 : known.error_code === 'PII_BLOCKED' || known.error_code === 'SAFETY_BLOCKED' ? 422
@@ -335,6 +404,7 @@ app.post(
         channel_url: item.channel_url == null ? null : String(item.channel_url || '').trim() || null,
         published_at: item.published_at == null ? null : String(item.published_at || '').trim() || null,
         thumbnail_url: item.thumbnail_url == null ? null : String(item.thumbnail_url || '').trim() || null,
+        duration_seconds: toDurationSeconds(item.duration_seconds),
       });
     }
     const dedupedItems = Array.from(dedupedMap.values())
@@ -345,6 +415,72 @@ app.post(
         error_code: 'NO_ELIGIBLE_ITEMS',
         message: 'No eligible videos found for generation.',
         data: null,
+      });
+    }
+    let allowedItems = dedupedItems;
+    let durationBlocked: Array<{
+      video_id: string;
+      title: string;
+      error_code: 'VIDEO_TOO_LONG' | 'VIDEO_DURATION_UNAVAILABLE';
+      reason: 'too_long' | 'unknown';
+      max_duration_seconds: number;
+      video_duration_seconds: number | null;
+    }> = [];
+    if (generationDurationCapEnabled) {
+      try {
+        const durationMap = await fetchYouTubeDurationMap({
+          apiKey: youtubeDataApiKey,
+          videoIds: dedupedItems.filter((row) => row.duration_seconds == null).map((row) => row.video_id),
+          timeoutMs: generationDurationLookupTimeoutMs,
+          userAgent: 'bleuv1-search-generate/1.0 (+https://bapi.vdsai.cloud)',
+        });
+        const normalizedWithDuration = dedupedItems.map((item) => ({
+          ...item,
+          duration_seconds: item.duration_seconds ?? durationMap.get(item.video_id) ?? null,
+        }));
+        const split = splitByDurationPolicy({
+          items: normalizedWithDuration,
+          config: {
+            enabled: generationDurationCapEnabled,
+            maxSeconds: generationMaxVideoSeconds,
+            blockUnknown: generationBlockUnknownDuration,
+          },
+          getVideoId: (item) => item.video_id,
+          getTitle: (item) => item.title,
+          getDurationSeconds: (item) => item.duration_seconds ?? null,
+        });
+        allowedItems = split.allowed;
+        durationBlocked = split.blocked;
+      } catch (error) {
+        if (error instanceof YouTubeDurationLookupError) {
+          if (error.code === 'RATE_LIMITED') {
+            return res.status(429).json({
+              ok: false,
+              error_code: 'RATE_LIMITED',
+              message: 'Too many requests right now. Please retry shortly.',
+              data: null,
+            });
+          }
+          return res.status(502).json({
+            ok: false,
+            error_code: 'PROVIDER_FAIL',
+            message: 'Video metadata provider is currently unavailable. Please try again.',
+            data: null,
+          });
+        }
+        throw error;
+      }
+    }
+
+    if (allowedItems.length === 0 && durationBlocked.length > 0) {
+      return res.status(422).json({
+        ok: false,
+        error_code: 'VIDEO_DURATION_POLICY_BLOCKED',
+        message: 'All selected videos are blocked by duration policy.',
+        data: {
+          duration_blocked_count: durationBlocked.length,
+          duration_blocked: durationBlocked,
+        },
       });
     }
 
@@ -372,7 +508,7 @@ app.post(
         requested_by_user_id: userId,
         payload: {
           user_id: userId,
-          items: dedupedItems,
+          items: allowedItems,
         },
         next_run_at: new Date().toISOString(),
       })
@@ -386,8 +522,8 @@ app.post(
       userId,
       jobId: job.id,
       scope: 'search_video_generate',
-      queuedCount: dedupedItems.length,
-      itemTitle: dedupedItems[0]?.title || null,
+      queuedCount: allowedItems.length,
+      itemTitle: allowedItems[0]?.title || null,
       linkPath: getGenerationNotificationLinkPath({ scope: 'search_video_generate' }),
     });
 
@@ -401,7 +537,9 @@ app.post(
         job_id: job.id,
         queue_depth: queueDepth + 1,
         estimated_start_seconds: Math.max(1, Math.ceil((queueDepth + 1) / Math.max(1, workerConcurrency)) * 4),
-        queued_count: dedupedItems.length,
+        queued_count: allowedItems.length,
+        duration_blocked_count: durationBlocked.length,
+        duration_blocked: durationBlocked,
       },
     });
   },

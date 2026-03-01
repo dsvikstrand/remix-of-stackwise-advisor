@@ -44,6 +44,7 @@ export type SourcePageVideosGenerateInput = {
     title: string;
     published_at?: string | null;
     thumbnail_url?: string | null;
+    duration_seconds?: number | null;
   }>;
 };
 
@@ -76,6 +77,10 @@ export type SourcePagesRouteDeps = {
   createUnlockTraceId: any;
   SourcePageVideosGenerateSchema: SafeParser<SourcePageVideosGenerateInput>;
   sourceUnlockGenerateMaxItems: number;
+  generationDurationCapEnabled: boolean;
+  generationMaxVideoSeconds: number;
+  generationBlockUnknownDuration: boolean;
+  generationDurationLookupTimeoutMs: number;
   logUnlockEvent: any;
   normalizeSourcePageVideoGenerateItem: any;
   upsertSourceItemFromVideo: any;

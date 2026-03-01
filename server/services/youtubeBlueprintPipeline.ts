@@ -59,11 +59,15 @@ export function createYouTubeBlueprintPipelineService(deps: any) {
     mapPipelineError,
     canonicalSectionName,
     normalizeSummaryVariantText,
+    enforceVideoDurationPolicy = async (policyInput: {
+      durationSeconds?: number | null;
+    }) => policyInput.durationSeconds ?? null,
   } = deps;
 async function runYouTubePipeline(input: {
   runId: string;
   videoId: string;
   videoUrl: string;
+  durationSeconds?: number | null;
   generateReview: boolean;
   generateBanner: boolean;
   authToken: string;
@@ -119,6 +123,28 @@ async function runYouTubePipeline(input: {
   }
 
   try {
+    const resolvedDurationSeconds = await enforceVideoDurationPolicy({
+      videoId: input.videoId,
+      videoTitle: null,
+      durationSeconds: input.durationSeconds ?? null,
+      userAgent: 'bleuv1-youtube-pipeline/1.0 (+https://bapi.vdsai.cloud)',
+    });
+    if (traceContext.db && traceContext.userId) {
+      await safeGenerationTraceWrite({
+        runId: input.runId,
+        op: 'event_duration_policy_checked',
+        fn: async () => {
+          await appendGenerationEvent(traceContext.db as any, {
+            runId: input.runId,
+            event: 'duration_policy_checked',
+            payload: {
+              duration_seconds: resolvedDurationSeconds,
+              cap_enabled: true,
+            },
+          });
+        },
+      });
+    }
     const requestClass = input.requestClass === 'interactive' ? 'interactive' : 'background';
     const transcript = await runWithProviderRetry(
       {

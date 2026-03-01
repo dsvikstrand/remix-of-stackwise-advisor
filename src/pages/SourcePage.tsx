@@ -85,6 +85,11 @@ function getSourceVideoLibraryErrorMessage(error: unknown, fallback: string) {
         return 'Only videos with speech can be generated. If this video has speech, please try again in a few minutes.';
       case 'NO_TRANSCRIPT_PERMANENT':
         return 'No transcript is available for this video.';
+      case 'VIDEO_TOO_LONG':
+      case 'VIDEO_DURATION_POLICY_BLOCKED':
+        return 'One or more selected videos exceed the 45-minute limit.';
+      case 'VIDEO_DURATION_UNAVAILABLE':
+        return 'Video length is unavailable for this video. Please try another one.';
       default:
         return error.message || fallback;
     }
@@ -257,6 +262,7 @@ export default function SourcePage() {
         title: item.title,
         published_at: item.published_at,
         thumbnail_url: item.thumbnail_url,
+        duration_seconds: item.duration_seconds,
       })),
     }),
     onSuccess: (data, _items, context) => {
@@ -270,8 +276,8 @@ export default function SourcePage() {
       toast({
         title: data.job_id ? 'Unlock queued' : 'No unlock queued',
         description: data.job_id
-          ? `Queued ${data.queued_count}, ready ${data.ready_count}, in progress ${data.in_progress_count}, skipped existing ${data.skipped_existing_count}.`
-          : `Ready ${data.ready_count}, in progress ${data.in_progress_count}, skipped existing ${data.skipped_existing_count}.`,
+          ? `Queued ${data.queued_count}, ready ${data.ready_count}, in progress ${data.in_progress_count}, skipped existing ${data.skipped_existing_count}, blocked by length ${data.duration_blocked_count || 0}.`
+          : `Ready ${data.ready_count}, in progress ${data.in_progress_count}, skipped existing ${data.skipped_existing_count}, blocked by length ${data.duration_blocked_count || 0}.`,
       });
     },
     onError: (error, _items, context) => {

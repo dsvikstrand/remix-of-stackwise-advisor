@@ -11,6 +11,8 @@ import type {
   SourceUnlockQueueItem,
   SyncSubscriptionResult,
 } from '../contracts/api/sourcePages';
+import { fetchYouTubeDurationMap, YouTubeDurationLookupError } from '../services/youtubeDuration';
+import { splitByDurationPolicy, toDurationSeconds } from '../services/videoDurationPolicy';
 
 export function registerSourcePagesRouteHandlers(app: express.Express, deps: SourcePagesRouteDeps) {
   const {
@@ -42,6 +44,10 @@ export function registerSourcePagesRouteHandlers(app: express.Express, deps: Sou
     createUnlockTraceId,
     SourcePageVideosGenerateSchema,
     sourceUnlockGenerateMaxItems,
+    generationDurationCapEnabled,
+    generationMaxVideoSeconds,
+    generationBlockUnknownDuration,
+    generationDurationLookupTimeoutMs,
     logUnlockEvent,
     normalizeSourcePageVideoGenerateItem,
     upsertSourceItemFromVideo,
@@ -723,8 +729,62 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
   const permanentNoTranscriptRows: Array<{ video_id: string; title: string }> = [];
 
   const candidateRows = normalizedItems.filter((item) => !existingByVideoId.get(item.video_id)?.already_exists_for_user);
+  let durationBlocked: Array<{
+    video_id: string;
+    title: string;
+    error_code: 'VIDEO_TOO_LONG' | 'VIDEO_DURATION_UNAVAILABLE';
+    reason: 'too_long' | 'unknown';
+    max_duration_seconds: number;
+    video_duration_seconds: number | null;
+  }> = [];
+  let eligibleCandidateRows = candidateRows;
+  if (generationDurationCapEnabled && candidateRows.length > 0) {
+    try {
+      const durationMap = await fetchYouTubeDurationMap({
+        apiKey: youtubeDataApiKey,
+        videoIds: candidateRows.filter((row) => row.duration_seconds == null).map((row) => row.video_id),
+        timeoutMs: generationDurationLookupTimeoutMs,
+        userAgent: 'bleuv1-source-page-unlock/1.0 (+https://bapi.vdsai.cloud)',
+      });
+      const withResolvedDurations = candidateRows.map((item) => ({
+        ...item,
+        duration_seconds: item.duration_seconds ?? durationMap.get(item.video_id) ?? null,
+      }));
+      const split = splitByDurationPolicy({
+        items: withResolvedDurations,
+        config: {
+          enabled: generationDurationCapEnabled,
+          maxSeconds: generationMaxVideoSeconds,
+          blockUnknown: generationBlockUnknownDuration,
+        },
+        getVideoId: (item) => item.video_id,
+        getTitle: (item) => item.title,
+        getDurationSeconds: (item) => item.duration_seconds ?? null,
+      });
+      eligibleCandidateRows = split.allowed;
+      durationBlocked = split.blocked;
+    } catch (error) {
+      if (error instanceof YouTubeDurationLookupError) {
+        if (error.code === 'RATE_LIMITED') {
+          return res.status(429).json({
+            ok: false,
+            error_code: 'RATE_LIMITED',
+            message: 'Too many requests right now. Please retry shortly.',
+            data: traceData,
+          });
+        }
+        return res.status(502).json({
+          ok: false,
+          error_code: 'SOURCE_VIDEO_GENERATE_FAILED',
+          message: 'Video metadata provider is currently unavailable. Please try again.',
+          data: traceData,
+        });
+      }
+      throw error;
+    }
+  }
 
-  for (const item of candidateRows) {
+  for (const item of eligibleCandidateRows) {
     try {
       const source = await upsertSourceItemFromVideo(sourcePageDb, {
         video: {
@@ -733,6 +793,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
           url: item.video_url,
           publishedAt: item.published_at || null,
           thumbnailUrl: item.thumbnail_url || null,
+          durationSeconds: item.duration_seconds,
         },
         channelId: sourcePage.external_id,
         channelTitle: sourcePage.title || sourcePage.external_id,
@@ -840,6 +901,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         video_id: item.video_id,
         video_url: item.video_url,
         title: item.title,
+        duration_seconds: toDurationSeconds(item.duration_seconds),
         reserved_cost: Math.max(0.001, Number(reservedUnlock.estimated_cost || estimatedUnlockCost)),
         reserved_by_user_id: userId,
         unlock_origin: 'manual_unlock',
@@ -875,6 +937,28 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
 
   if (
     queueItems.length === 0
+    && durationBlocked.length > 0
+    && insufficientRows.length === 0
+    && transcriptUnavailableRows.length === 0
+    && permanentNoTranscriptRows.length === 0
+    && readyRows.length === 0
+    && inProgressRows.length === 0
+    && duplicateRows.length === 0
+  ) {
+    return res.status(422).json({
+      ok: false,
+      error_code: 'VIDEO_DURATION_POLICY_BLOCKED',
+      message: 'All selected videos are blocked by duration policy.',
+      data: {
+        ...traceData,
+        duration_blocked_count: durationBlocked.length,
+        duration_blocked: durationBlocked,
+      },
+    });
+  }
+
+  if (
+    queueItems.length === 0
     && insufficientRows.length > 0
     && transcriptUnavailableRows.length === 0
     && permanentNoTranscriptRows.length === 0
@@ -891,6 +975,8 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         required: insufficientRows[0]?.required || 0,
         balance: insufficientRows[0]?.balance || 0,
         insufficient: insufficientRows,
+        duration_blocked_count: durationBlocked.length,
+        duration_blocked: durationBlocked,
       },
     });
   }
@@ -923,6 +1009,8 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         ...traceData,
         transcript_unavailable_count: transcriptUnavailableRows.length,
         transcript_unavailable: transcriptUnavailableRows,
+        duration_blocked_count: durationBlocked.length,
+        duration_blocked: durationBlocked,
       },
     });
   }
@@ -947,6 +1035,8 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         transcript_retry_after_seconds: 0,
         no_transcript_count: permanentNoTranscriptRows.length,
         no_transcript: permanentNoTranscriptRows,
+        duration_blocked_count: durationBlocked.length,
+        duration_blocked: durationBlocked,
       },
     });
   }
@@ -982,6 +1072,8 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
           : 0,
         no_transcript_count: permanentNoTranscriptRows.length,
         no_transcript: permanentNoTranscriptRows,
+        duration_blocked_count: durationBlocked.length,
+        duration_blocked: durationBlocked,
       },
     });
   }
@@ -1093,6 +1185,8 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         : 0,
       no_transcript_count: permanentNoTranscriptRows.length,
       no_transcript: permanentNoTranscriptRows,
+      duration_blocked_count: durationBlocked.length,
+      duration_blocked: durationBlocked,
     },
   });
 }

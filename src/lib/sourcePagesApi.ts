@@ -108,6 +108,15 @@ export type SourcePageVideoGenerateSummary = {
   transcript_status?: 'unknown' | 'retrying' | 'confirmed_no_speech' | 'transient_error' | null;
   transcript_attempt_count?: number | null;
   transcript_retry_after_seconds?: number | null;
+  duration_blocked_count?: number;
+  duration_blocked?: Array<{
+    video_id: string;
+    title: string;
+    error_code: 'VIDEO_TOO_LONG' | 'VIDEO_DURATION_UNAVAILABLE';
+    reason: 'too_long' | 'unknown';
+    max_duration_seconds: number;
+    video_duration_seconds: number | null;
+  }>;
 };
 
 function getApiBase() {
@@ -291,6 +300,7 @@ export async function generateSourcePageVideos(input: {
     title: string;
     published_at?: string | null;
     thumbnail_url?: string | null;
+    duration_seconds?: number | null;
   }>;
 }) {
   return unlockSourcePageVideos(input);
@@ -305,6 +315,7 @@ export async function unlockSourcePageVideos(input: {
     title: string;
     published_at?: string | null;
     thumbnail_url?: string | null;
+    duration_seconds?: number | null;
   }>;
 }) {
   const authHeader = await getRequiredAuthHeader();

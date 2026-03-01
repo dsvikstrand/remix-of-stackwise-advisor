@@ -1,3 +1,5 @@
+import { classifyVideoDuration, toDurationSeconds } from './videoDurationPolicy';
+
 type DbClient = any;
 
 type SyncSubscriptionResult = {
@@ -31,6 +33,8 @@ export type SourceSubscriptionSyncDeps = {
       url: string;
       title: string;
       publishedAt: string | null;
+      thumbnailUrl: string | null;
+      durationSeconds?: number | null;
     }>;
   }>;
   isNewerThanCheckpoint: (
@@ -40,6 +44,16 @@ export type SourceSubscriptionSyncDeps = {
   ) => boolean;
   ingestionMaxPerSubscription: number;
   youtubeDataApiKey: string;
+  generationDurationCapEnabled: boolean;
+  generationMaxVideoSeconds: number;
+  generationBlockUnknownDuration: boolean;
+  generationDurationLookupTimeoutMs: number;
+  fetchYouTubeDurationMap: (input: {
+    apiKey: string;
+    videoIds: string[];
+    timeoutMs?: number;
+    userAgent?: string;
+  }) => Promise<Map<string, number | null>>;
   fetchYouTubeVideoStates: (input: {
     apiKey: string;
     videoIds: string[];
@@ -52,6 +66,8 @@ export type SourceSubscriptionSyncDeps = {
         url: string;
         title: string;
         publishedAt: string | null;
+        thumbnailUrl: string | null;
+        durationSeconds?: number | null;
       };
       channelId: string;
       channelTitle: string | null;
@@ -84,6 +100,8 @@ export type SourceSubscriptionSyncDeps = {
       url: string;
       title: string;
       publishedAt: string | null;
+      thumbnailUrl: string | null;
+      durationSeconds?: number | null;
     };
     unlock: { status: string };
     estimatedUnlockCost: number;
@@ -107,6 +125,7 @@ export type SourceSubscriptionSyncDeps = {
       video_id: string;
       video_url: string;
       title: string;
+      duration_seconds: number | null;
       trigger: 'user_sync' | 'service_cron' | 'subscription_create' | 'debug_simulation' | 'youtube_import';
       preferred_payer_user_id: string;
     },
@@ -208,8 +227,38 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
     let inserted = 0;
     let skipped = 0;
     let skippedUpcoming = 0;
+    let skippedByDurationPolicy = 0;
     const activeSubscriberCount = await deps.countActiveSubscribersForSourcePage(db, subscription.source_page_id || null);
     const estimatedUnlockCost = deps.computeUnlockCost(activeSubscriberCount);
+    const durationByVideoId = new Map<string, number | null>();
+    for (const video of toProcess) {
+      durationByVideoId.set(video.videoId, toDurationSeconds(video.durationSeconds));
+    }
+    if (deps.generationDurationCapEnabled && toProcess.length > 0) {
+      const missingDurationIds = toProcess
+        .map((video) => video.videoId)
+        .filter((videoId) => durationByVideoId.get(videoId) == null);
+      if (missingDurationIds.length > 0) {
+        try {
+          const fetchedDurations = await deps.fetchYouTubeDurationMap({
+            apiKey: deps.youtubeDataApiKey,
+            videoIds: missingDurationIds,
+            timeoutMs: deps.generationDurationLookupTimeoutMs,
+            userAgent: 'bleuv1-subscription-auto/1.0 (+https://bapi.vdsai.cloud)',
+          });
+          for (const videoId of missingDurationIds) {
+            durationByVideoId.set(videoId, fetchedDurations.get(videoId) ?? null);
+          }
+        } catch (durationLookupError) {
+          console.log('[subscription_duration_lookup_failed]', JSON.stringify({
+            subscription_id: subscription.id,
+            source_channel_id: subscription.source_channel_id,
+            trigger: options.trigger,
+            error: durationLookupError instanceof Error ? durationLookupError.message : String(durationLookupError),
+          }));
+        }
+      }
+    }
 
     for (const video of toProcess) {
       processed += 1;
@@ -227,8 +276,34 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
         }));
         continue;
       }
+      const durationSeconds = durationByVideoId.get(video.videoId) ?? null;
+      if (deps.generationDurationCapEnabled) {
+        const durationDecision = classifyVideoDuration({
+          durationSeconds,
+          maxSeconds: deps.generationMaxVideoSeconds,
+          blockUnknown: deps.generationBlockUnknownDuration,
+        });
+        if (durationDecision !== 'allow') {
+          skipped += 1;
+          skippedByDurationPolicy += 1;
+          console.log('[subscription_skip_duration_policy]', JSON.stringify({
+            subscription_id: subscription.id,
+            user_id: subscription.user_id,
+            source_channel_id: subscription.source_channel_id,
+            video_id: video.videoId,
+            reason: durationDecision === 'too_long' ? 'VIDEO_TOO_LONG' : 'VIDEO_DURATION_UNAVAILABLE',
+            max_duration_seconds: deps.generationMaxVideoSeconds,
+            video_duration_seconds: durationSeconds,
+            trigger: options.trigger,
+          }));
+          continue;
+        }
+      }
       const source = await deps.upsertSourceItemFromVideo(db, {
-        video,
+        video: {
+          ...video,
+          durationSeconds,
+        },
         channelId: subscription.source_channel_id,
         channelTitle: feed.channelTitle,
         sourcePageId: subscription.source_page_id || null,
@@ -255,7 +330,10 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
             sourcePageId: subscription.source_page_id || source.source_page_id || null,
             sourceChannelId: subscription.source_channel_id || source.source_channel_id || '',
             sourceChannelTitle: feed.channelTitle || source.source_channel_title || null,
-            video,
+            video: {
+              ...video,
+              durationSeconds,
+            },
             unlock,
             estimatedUnlockCost,
             preferredPayerUserId: subscription.user_id,
@@ -283,6 +361,7 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
                 video_id: video.videoId,
                 video_url: video.url,
                 title: video.title,
+                duration_seconds: durationSeconds,
                 trigger: options.trigger,
                 preferred_payer_user_id: subscription.user_id,
               });
@@ -410,6 +489,15 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
         last_sync_error: null,
       })
       .eq('id', subscription.id);
+    if (skippedByDurationPolicy > 0) {
+      console.log('[subscription_duration_policy_summary]', JSON.stringify({
+        subscription_id: subscription.id,
+        user_id: subscription.user_id,
+        source_channel_id: subscription.source_channel_id,
+        skipped_by_duration_policy: skippedByDurationPolicy,
+        trigger: options.trigger,
+      }));
+    }
 
     return {
       processed,

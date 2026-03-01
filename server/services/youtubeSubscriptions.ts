@@ -10,6 +10,7 @@ export type YouTubeFeedVideo = {
   url: string;
   publishedAt: string | null;
   thumbnailUrl: string | null;
+  durationSeconds?: number | null;
 };
 
 export type YouTubeVideoState = {

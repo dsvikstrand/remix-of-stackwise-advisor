@@ -47,6 +47,7 @@ export function RefreshSubscriptionsDialog({
   const [refreshSelected, setRefreshSelected] = useState<Record<string, boolean>>({});
   const [refreshScanErrors, setRefreshScanErrors] = useState<Array<{ subscription_id: string; error: string }>>([]);
   const [refreshCooldownFiltered, setRefreshCooldownFiltered] = useState<number>(0);
+  const [refreshDurationFiltered, setRefreshDurationFiltered] = useState<number>(0);
   const [refreshErrorText, setRefreshErrorText] = useState<string | null>(null);
   const [hasScannedRefreshCandidates, setHasScannedRefreshCandidates] = useState(false);
 
@@ -57,6 +58,7 @@ export function RefreshSubscriptionsDialog({
     setRefreshSelected({});
     setRefreshScanErrors([]);
     setRefreshCooldownFiltered(0);
+    setRefreshDurationFiltered(0);
     refreshScanMutation.reset();
   };
 
@@ -81,6 +83,7 @@ export function RefreshSubscriptionsDialog({
       setRefreshCandidates(payload.candidates || []);
       setRefreshScanErrors(payload.scan_errors || []);
       setRefreshCooldownFiltered(Math.max(0, Number(payload.cooldown_filtered || 0)));
+      setRefreshDurationFiltered(Math.max(0, Number(payload.duration_filtered_count || 0)));
       const next: Record<string, boolean> = {};
       for (const candidate of payload.candidates || []) {
         next[getRefreshCandidateKey(candidate)] = true;
@@ -97,6 +100,7 @@ export function RefreshSubscriptionsDialog({
       setRefreshCandidates([]);
       setRefreshScanErrors([]);
       setRefreshCooldownFiltered(0);
+      setRefreshDurationFiltered(0);
       setRefreshSelected({});
     },
   });
@@ -137,6 +141,14 @@ export function RefreshSubscriptionsDialog({
           toast({
             title: 'Selection too large',
             description: 'Select up to 20 videos per generation run.',
+            variant: 'destructive',
+          });
+          return;
+        }
+        if (error.errorCode === 'VIDEO_DURATION_POLICY_BLOCKED' || error.errorCode === 'VIDEO_TOO_LONG') {
+          toast({
+            title: 'Selection blocked by length policy',
+            description: 'Only videos up to 45 minutes can be generated in MVP.',
             variant: 'destructive',
           });
           return;
@@ -233,6 +245,12 @@ export function RefreshSubscriptionsDialog({
           {refreshScanMutation.status === 'success' && refreshCooldownFiltered > 0 ? (
             <p className="text-xs text-muted-foreground">
               Hidden due to recent failures: {refreshCooldownFiltered} (retry window: 6 hours).
+            </p>
+          ) : null}
+
+          {refreshScanMutation.status === 'success' && refreshDurationFiltered > 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Filtered by length policy: {refreshDurationFiltered} (45-minute max, unknown length blocked).
             </p>
           ) : null}
 

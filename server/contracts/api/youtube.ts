@@ -22,6 +22,7 @@ export type SearchVideosGenerateInput = {
     channel_url?: string | null;
     published_at?: string | null;
     thumbnail_url?: string | null;
+    duration_seconds?: number | null;
   }>;
 };
 
@@ -57,6 +58,10 @@ export type YouTubeRouteDeps = {
   queueDepthHardLimit: number;
   queueDepthPerUserLimit: number;
   workerConcurrency: number;
+  generationDurationCapEnabled: boolean;
+  generationMaxVideoSeconds: number;
+  generationBlockUnknownDuration: boolean;
+  generationDurationLookupTimeoutMs: number;
   youtubeOAuthStateTtlSeconds: number;
   youtubeImportMaxChannels: number;
   tokenEncryptionKey: string;

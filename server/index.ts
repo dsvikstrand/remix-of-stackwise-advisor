@@ -27,6 +27,10 @@ import {
   YouTubeSearchError,
 } from './services/youtubeSearch';
 import {
+  fetchYouTubeDurationMap,
+  YouTubeDurationLookupError,
+} from './services/youtubeDuration';
+import {
   clampYouTubeSourceVideoLimit,
   listYouTubeSourceVideos,
   normalizeYouTubeSourceVideoKind,
@@ -107,6 +111,13 @@ import {
   selectDeterministicDefaultBanner,
   type BannerEffectiveSource,
 } from './services/autoBannerPolicy';
+import {
+  buildDurationFilteredReasonCounts,
+  classifyVideoDuration,
+  readVideoDurationPolicyFromEnv,
+  splitByDurationPolicy,
+  toDurationSeconds,
+} from './services/videoDurationPolicy';
 import { createSourcePageAssetSweepService } from './services/sourcePageAssetSweep';
 import { createAutoBannerQueueService } from './services/autoBannerQueue';
 import { createSourceSubscriptionSyncService } from './services/sourceSubscriptionSync';
@@ -272,6 +283,14 @@ const autoBannerStaleRunningMs = clampInt(process.env.AUTO_BANNER_STALE_RUNNING_
 const debugEndpointsEnabledRaw = String(process.env.ENABLE_DEBUG_ENDPOINTS || 'false').trim().toLowerCase();
 const debugEndpointsEnabled = debugEndpointsEnabledRaw === 'true' || debugEndpointsEnabledRaw === '1' || debugEndpointsEnabledRaw === 'on';
 const youtubeDataApiKey = String(process.env.YOUTUBE_DATA_API_KEY || '').trim();
+const generationDurationPolicy = readVideoDurationPolicyFromEnv(process.env);
+const generationDurationCapEnabled = generationDurationPolicy.enabled;
+const generationMaxVideoSeconds = generationDurationPolicy.maxSeconds;
+const generationBlockUnknownDuration = generationDurationPolicy.blockUnknown;
+const generationDurationLookupTimeoutMs = generationDurationPolicy.lookupTimeoutMs;
+if (generationDurationCapEnabled && !youtubeDataApiKey && generationBlockUnknownDuration) {
+  console.warn('[duration_policy] cap enabled without YOUTUBE_DATA_API_KEY; unknown durations will be blocked.');
+}
 const googleOAuthClientId = String(process.env.GOOGLE_OAUTH_CLIENT_ID || '').trim();
 const googleOAuthClientSecret = String(process.env.GOOGLE_OAUTH_CLIENT_SECRET || '').trim();
 const youtubeOAuthRedirectUri = String(process.env.YOUTUBE_OAUTH_REDIRECT_URI || '').trim();
@@ -766,6 +785,7 @@ const SourcePageVideosGenerateSchema = z.object({
       title: z.string().min(1),
       published_at: z.string().optional().nullable(),
       thumbnail_url: z.string().url().optional().nullable(),
+      duration_seconds: z.number().int().min(0).nullable().optional(),
     }),
   ).min(1).max(500),
 });
@@ -781,6 +801,7 @@ const SearchVideosGenerateSchema = z.object({
       channel_url: z.string().nullable().optional(),
       published_at: z.string().nullable().optional(),
       thumbnail_url: z.string().nullable().optional(),
+      duration_seconds: z.number().int().min(0).nullable().optional(),
     }),
   ).min(1).max(50),
 });
@@ -1185,6 +1206,10 @@ registerYouTubeRoutes(app, {
   youtubeDisconnectLimiter,
   youtubeDataApiKey,
   sourceUnlockGenerateMaxItems,
+  generationDurationCapEnabled,
+  generationMaxVideoSeconds,
+  generationBlockUnknownDuration,
+  generationDurationLookupTimeoutMs,
   queueDepthHardLimit,
   queueDepthPerUserLimit,
   workerConcurrency,
@@ -1801,6 +1826,7 @@ async function upsertSourceItemFromVideo(db: ReturnType<typeof createClient>, in
         thumbnail_url: input.video.thumbnailUrl,
         metadata: {
           provider: 'youtube_rss',
+          duration_seconds: toDurationSeconds((input.video as { durationSeconds?: unknown }).durationSeconds),
         },
       },
       { onConflict: 'canonical_key' },
@@ -2467,6 +2493,7 @@ type RefreshScanCandidate = {
   title: string;
   published_at: string | null;
   thumbnail_url: string | null;
+  duration_seconds: number | null;
 };
 
 type SourcePageVideoGenerateItem = {
@@ -2475,6 +2502,7 @@ type SourcePageVideoGenerateItem = {
   title: string;
   published_at: string | null;
   thumbnail_url: string | null;
+  duration_seconds: number | null;
 };
 
 type SearchVideoGenerateItem = {
@@ -2486,6 +2514,7 @@ type SearchVideoGenerateItem = {
   channel_url: string | null;
   published_at: string | null;
   thumbnail_url: string | null;
+  duration_seconds: number | null;
 };
 
 type SourcePageVideoExistingState = {
@@ -2529,6 +2558,7 @@ type SourceUnlockQueueItem = {
   video_id: string;
   video_url: string;
   title: string;
+  duration_seconds: number | null;
   reserved_cost: number;
   reserved_by_user_id: string;
   unlock_origin: 'manual_unlock' | 'subscription_auto_unlock' | 'source_auto_unlock_retry';
@@ -2542,6 +2572,7 @@ type SourceAutoUnlockRetryPayload = {
   video_id: string;
   video_url: string;
   title: string;
+  duration_seconds: number | null;
   trigger: 'user_sync' | 'service_cron' | 'subscription_create' | 'debug_simulation' | 'youtube_import';
   preferred_payer_user_id: string | null;
 };
@@ -2558,6 +2589,171 @@ type SourceTranscriptRevalidatePayload = {
 };
 
 const YOUTUBE_VIDEO_ID_REGEX = /^[a-zA-Z0-9_-]{8,15}$/;
+
+type DurationPolicyVideoItem = {
+  video_id: string;
+  title: string;
+  duration_seconds?: number | null;
+};
+
+async function resolveDurationsForItems(input: {
+  apiKey: string;
+  lookupTimeoutMs: number;
+  items: DurationPolicyVideoItem[];
+  userAgent: string;
+}) {
+  const normalizedItems = input.items.map((item) => ({
+    ...item,
+    duration_seconds: toDurationSeconds(item.duration_seconds),
+  }));
+  const missingVideoIds = normalizedItems
+    .filter((item) => item.duration_seconds == null)
+    .map((item) => item.video_id);
+  if (missingVideoIds.length === 0) {
+    return new Map<string, number | null>(normalizedItems.map((item) => [item.video_id, item.duration_seconds ?? null]));
+  }
+
+  const fetched = await fetchYouTubeDurationMap({
+    apiKey: input.apiKey,
+    videoIds: missingVideoIds,
+    timeoutMs: input.lookupTimeoutMs,
+    userAgent: input.userAgent,
+  });
+
+  const result = new Map<string, number | null>();
+  for (const item of normalizedItems) {
+    if (item.duration_seconds != null) {
+      result.set(item.video_id, item.duration_seconds);
+      continue;
+    }
+    result.set(item.video_id, fetched.get(item.video_id) ?? null);
+  }
+  return result;
+}
+
+async function splitItemsByDurationPolicy<T extends DurationPolicyVideoItem>(input: {
+  enabled: boolean;
+  maxSeconds: number;
+  blockUnknown: boolean;
+  apiKey: string;
+  lookupTimeoutMs: number;
+  userAgent: string;
+  items: T[];
+}) {
+  if (!input.enabled) {
+    return {
+      allowed: input.items.map((item) => ({
+        ...item,
+        duration_seconds: toDurationSeconds(item.duration_seconds),
+      })),
+      blocked: [] as Array<{
+        video_id: string;
+        title: string;
+        error_code: 'VIDEO_TOO_LONG' | 'VIDEO_DURATION_UNAVAILABLE';
+        reason: 'too_long' | 'unknown';
+        max_duration_seconds: number;
+        video_duration_seconds: number | null;
+      }>,
+    };
+  }
+
+  const durationByVideoId = await resolveDurationsForItems({
+    apiKey: input.apiKey,
+    lookupTimeoutMs: input.lookupTimeoutMs,
+    items: input.items,
+    userAgent: input.userAgent,
+  });
+
+  const normalized = input.items.map((item) => ({
+    ...item,
+    duration_seconds: durationByVideoId.get(item.video_id) ?? null,
+  }));
+
+  const split = splitByDurationPolicy({
+    items: normalized,
+    config: {
+      enabled: input.enabled,
+      maxSeconds: input.maxSeconds,
+      blockUnknown: input.blockUnknown,
+    },
+    getVideoId: (item) => item.video_id,
+    getTitle: (item) => item.title,
+    getDurationSeconds: (item) => item.duration_seconds ?? null,
+  });
+
+  return {
+    allowed: split.allowed,
+    blocked: split.blocked,
+  };
+}
+
+async function enforceVideoDurationPolicyForGeneration(input: {
+  videoId: string;
+  videoTitle?: string | null;
+  durationSeconds?: number | null;
+  userAgent: string;
+}) {
+  const videoId = String(input.videoId || '').trim();
+  const videoTitle = String(input.videoTitle || '').trim() || `Video ${videoId}`;
+  let durationSeconds = toDurationSeconds(input.durationSeconds);
+  if (!generationDurationCapEnabled) return durationSeconds;
+
+  if (durationSeconds == null) {
+    try {
+      const durationMap = await fetchYouTubeDurationMap({
+        apiKey: youtubeDataApiKey,
+        videoIds: [videoId],
+        timeoutMs: generationDurationLookupTimeoutMs,
+        userAgent: input.userAgent,
+      });
+      durationSeconds = durationMap.get(videoId) ?? null;
+    } catch (error) {
+      if (error instanceof YouTubeDurationLookupError) {
+        if (error.code === 'RATE_LIMITED') {
+          makePipelineError('RATE_LIMITED', 'Too many requests right now. Please retry shortly.');
+        }
+        makePipelineError('PROVIDER_FAIL', 'Video metadata provider is currently unavailable. Please try again.');
+      }
+      throw error;
+    }
+  }
+
+  const decision = classifyVideoDuration({
+    durationSeconds,
+    maxSeconds: generationMaxVideoSeconds,
+    blockUnknown: generationBlockUnknownDuration,
+  });
+  if (decision === 'too_long') {
+    makePipelineError(
+      'VIDEO_TOO_LONG',
+      `Video exceeds max length of ${Math.floor(generationMaxVideoSeconds / 60)} minutes.`,
+      {
+        details: {
+          video_id: videoId,
+          max_duration_seconds: generationMaxVideoSeconds,
+          video_duration_seconds: durationSeconds,
+          title: videoTitle,
+        },
+      },
+    );
+  }
+  if (decision === 'unknown') {
+    makePipelineError(
+      'VIDEO_DURATION_UNAVAILABLE',
+      'Video length is unavailable for now. Please try another video.',
+      {
+        details: {
+          video_id: videoId,
+          max_duration_seconds: generationMaxVideoSeconds,
+          video_duration_seconds: null,
+          title: videoTitle,
+        },
+      },
+    );
+  }
+
+  return durationSeconds;
+}
 
 function extractYouTubeVideoIdFromUrl(rawUrl: string) {
   const value = String(rawUrl || '').trim();
@@ -2596,6 +2792,7 @@ function normalizeSourcePageVideoGenerateItem(raw: unknown): SourcePageVideoGene
     title?: unknown;
     published_at?: unknown;
     thumbnail_url?: unknown;
+    duration_seconds?: unknown;
   };
 
   const videoId = String(row.video_id || '').trim();
@@ -2603,6 +2800,7 @@ function normalizeSourcePageVideoGenerateItem(raw: unknown): SourcePageVideoGene
   const title = String(row.title || '').trim();
   const publishedAt = row.published_at == null ? null : String(row.published_at || '').trim() || null;
   const thumbnailUrl = row.thumbnail_url == null ? null : String(row.thumbnail_url || '').trim() || null;
+  const durationSeconds = toDurationSeconds(row.duration_seconds);
 
   if (!YOUTUBE_VIDEO_ID_REGEX.test(videoId)) return null;
   if (!title || !videoUrl) return null;
@@ -2616,6 +2814,7 @@ function normalizeSourcePageVideoGenerateItem(raw: unknown): SourcePageVideoGene
     title,
     published_at: publishedAt,
     thumbnail_url: thumbnailUrl,
+    duration_seconds: durationSeconds,
   };
 }
 
@@ -3258,6 +3457,7 @@ async function attemptAutoUnlockForSourceItem(input: {
             video_id: input.video.videoId,
             video_url: input.video.url,
             title: input.video.title,
+            duration_seconds: toDurationSeconds((input.video as { durationSeconds?: unknown }).durationSeconds),
             reserved_cost: reservedCost,
             reserved_by_user_id: payerUserId,
             unlock_origin: 'subscription_auto_unlock',
@@ -3507,6 +3707,7 @@ const RefreshSubscriptionsGenerateSchema = z.object({
       title: z.string().min(1),
       published_at: z.string().nullable().optional(),
       thumbnail_url: z.string().nullable().optional(),
+      duration_seconds: z.number().int().min(0).nullable().optional(),
     }),
   ).min(1).max(200),
 });
@@ -3663,6 +3864,11 @@ async function collectRefreshCandidatesForUser(db: ReturnType<typeof createClien
   const scanErrors: Array<{ subscription_id: string; error: string }> = [];
   const rawCandidates: RefreshScanCandidate[] = [];
   let cooldownFiltered = 0;
+  let durationFilteredCount = 0;
+  let durationFilteredReasons: { too_long: number; unknown: number } = {
+    too_long: 0,
+    unknown: 0,
+  };
 
   for (const subscription of subscriptions || []) {
     try {
@@ -3684,6 +3890,7 @@ async function collectRefreshCandidatesForUser(db: ReturnType<typeof createClien
           title: video.title,
           published_at: video.publishedAt,
           thumbnail_url: video.thumbnailUrl,
+          duration_seconds: toDurationSeconds((video as { durationSeconds?: unknown }).durationSeconds),
         });
       }
     } catch (error) {
@@ -3733,6 +3940,24 @@ async function collectRefreshCandidatesForUser(db: ReturnType<typeof createClien
   }
 
   if (candidates.length > 0) {
+    const split = await splitItemsByDurationPolicy({
+      enabled: generationDurationCapEnabled,
+      maxSeconds: generationMaxVideoSeconds,
+      blockUnknown: generationBlockUnknownDuration,
+      apiKey: youtubeDataApiKey,
+      lookupTimeoutMs: generationDurationLookupTimeoutMs,
+      userAgent: 'bleuv1-subscription-refresh-scan/1.0 (+https://bapi.vdsai.cloud)',
+      items: candidates,
+    });
+    candidates = split.allowed.map((item) => ({
+      ...item,
+      duration_seconds: toDurationSeconds(item.duration_seconds),
+    }));
+    durationFilteredCount = split.blocked.length;
+    durationFilteredReasons = buildDurationFilteredReasonCounts(split.blocked);
+  }
+
+  if (candidates.length > 0) {
     const cooldownRows = await fetchActiveRefreshCooldownRows(db, {
       userId,
       subscriptionIds: Array.from(new Set(candidates.map((candidate) => candidate.subscription_id))),
@@ -3759,6 +3984,8 @@ async function collectRefreshCandidatesForUser(db: ReturnType<typeof createClien
     candidates,
     scanErrors,
     cooldownFiltered,
+    durationFilteredCount,
+    durationFilteredReasons,
   };
 }
 
@@ -3923,6 +4150,7 @@ async function processSearchVideoGenerateJob(input: {
           url: item.video_url,
           publishedAt: item.published_at || null,
           thumbnailUrl: item.thumbnail_url || null,
+          durationSeconds: item.duration_seconds,
         },
         channelId: item.channel_id,
         channelTitle: item.channel_title || null,
@@ -3940,6 +4168,7 @@ async function processSearchVideoGenerateJob(input: {
         userId: input.userId,
         videoUrl: source.source_url,
         videoId: source.source_native_id,
+        durationSeconds: item.duration_seconds,
         sourceTag: 'youtube_search_direct',
         sourceItemId: source.id,
         subscriptionId: null,
@@ -4109,6 +4338,7 @@ async function processManualRefreshGenerateJob(input: {
           url: item.video_url,
           publishedAt: item.published_at || null,
           thumbnailUrl: item.thumbnail_url || null,
+          durationSeconds: item.duration_seconds,
         },
         channelId: subscription.source_channel_id,
         channelTitle: item.source_channel_title || subscription.source_channel_title || null,
@@ -4126,6 +4356,7 @@ async function processManualRefreshGenerateJob(input: {
         userId: input.userId,
         videoUrl: source.source_url,
         videoId: source.source_native_id,
+        durationSeconds: item.duration_seconds,
         sourceTag: 'subscription_auto',
         sourceItemId: source.id,
         subscriptionId: subscription.id,
@@ -4307,6 +4538,7 @@ async function processSourcePageVideoLibraryJob(input: {
           url: item.video_url,
           publishedAt: item.published_at || null,
           thumbnailUrl: item.thumbnail_url || null,
+          durationSeconds: item.duration_seconds,
         },
         channelId: input.sourceChannelId,
         channelTitle: input.sourceChannelTitle,
@@ -4323,6 +4555,7 @@ async function processSourcePageVideoLibraryJob(input: {
         userId: input.userId,
         videoUrl: source.source_url,
         videoId: source.source_native_id,
+        durationSeconds: item.duration_seconds,
         sourceTag: 'source_page_video_library',
         sourceItemId: source.id,
         subscriptionId: null,
@@ -4487,6 +4720,7 @@ async function processSourceItemUnlockGenerationJob(input: {
         userId: input.userId,
         videoUrl: sourceRow.source_url,
         videoId: sourceRow.source_native_id,
+        durationSeconds: item.duration_seconds,
         sourceTag: 'source_page_video_library',
         sourceItemId: sourceRow.id,
         subscriptionId: null,
@@ -4735,13 +4969,26 @@ async function processSourceItemUnlockGenerationJob(input: {
         );
       }
 
-      if (isAutoOrigin && (errorCode === 'TRANSCRIPT_UNAVAILABLE' || errorCode === 'NO_TRANSCRIPT_PERMANENT')) {
+      if (
+        isAutoOrigin
+        && (
+          errorCode === 'TRANSCRIPT_UNAVAILABLE'
+          || errorCode === 'NO_TRANSCRIPT_PERMANENT'
+          || errorCode === 'VIDEO_TOO_LONG'
+          || errorCode === 'VIDEO_DURATION_UNAVAILABLE'
+        )
+      ) {
         try {
+          const decisionCode = errorCode === 'NO_TRANSCRIPT_PERMANENT'
+            ? 'NO_TRANSCRIPT_PERMANENT_AUTO'
+            : errorCode === 'VIDEO_TOO_LONG'
+              ? 'VIDEO_TOO_LONG_AUTO'
+              : errorCode === 'VIDEO_DURATION_UNAVAILABLE'
+                ? 'VIDEO_DURATION_UNAVAILABLE_AUTO'
+                : 'TRANSCRIPT_UNAVAILABLE_AUTO';
           await suppressUnlockableFeedRowsForSourceItem(db, {
             sourceItemId: item.source_item_id,
-            decisionCode: errorCode === 'NO_TRANSCRIPT_PERMANENT'
-              ? 'NO_TRANSCRIPT_PERMANENT_AUTO'
-              : 'TRANSCRIPT_UNAVAILABLE_AUTO',
+            decisionCode,
             traceId: input.traceId,
             sourceChannelId: item.source_channel_id,
             videoId: item.video_id,
@@ -4770,6 +5017,7 @@ async function processSourceItemUnlockGenerationJob(input: {
             video_id: item.video_id,
             video_url: item.video_url,
             title: item.title,
+            duration_seconds: item.duration_seconds,
             trigger: 'service_cron',
             preferred_payer_user_id: item.reserved_by_user_id,
           });
@@ -5120,6 +5368,7 @@ async function processSourceAutoUnlockRetryJob(input: {
       url: input.payload.video_url,
       publishedAt: null,
       thumbnailUrl: null,
+      durationSeconds: input.payload.duration_seconds,
     },
     unlock,
     estimatedUnlockCost,
@@ -5252,6 +5501,7 @@ function normalizeSourceUnlockQueueItems(value: unknown): SourceUnlockQueueItem[
       video_id: videoId,
       video_url: videoUrl,
       title,
+      duration_seconds: toDurationSeconds(row.duration_seconds),
       reserved_cost: Math.max(0, Number(row.reserved_cost || 0)),
       reserved_by_user_id: reservedByUserId,
       unlock_origin: unlockOrigin,
@@ -5291,6 +5541,7 @@ function normalizeSourceAutoUnlockRetryPayload(value: unknown): SourceAutoUnlock
     video_id: videoId,
     video_url: videoUrl,
     title,
+    duration_seconds: toDurationSeconds(row.duration_seconds),
     trigger,
     preferred_payer_user_id: preferredPayerUserId,
   };
@@ -5341,6 +5592,7 @@ function normalizeRefreshScanCandidates(value: unknown): RefreshScanCandidate[] 
       title,
       published_at: row.published_at == null ? null : String(row.published_at || '').trim() || null,
       thumbnail_url: row.thumbnail_url == null ? null : String(row.thumbnail_url || '').trim() || null,
+      duration_seconds: toDurationSeconds(row.duration_seconds),
     });
   }
   return rows;
@@ -5366,6 +5618,7 @@ function normalizeSearchVideoGenerateItems(value: unknown): SearchVideoGenerateI
       channel_url: row.channel_url == null ? null : String(row.channel_url || '').trim() || null,
       published_at: row.published_at == null ? null : String(row.published_at || '').trim() || null,
       thumbnail_url: row.thumbnail_url == null ? null : String(row.thumbnail_url || '').trim() || null,
+      duration_seconds: toDurationSeconds(row.duration_seconds),
     });
   }
   return rows;
@@ -5753,6 +6006,11 @@ const sourceSubscriptionSyncService = createSourceSubscriptionSyncService({
   isNewerThanCheckpoint,
   ingestionMaxPerSubscription,
   youtubeDataApiKey,
+  generationDurationCapEnabled,
+  generationMaxVideoSeconds,
+  generationBlockUnknownDuration,
+  generationDurationLookupTimeoutMs,
+  fetchYouTubeDurationMap,
   fetchYouTubeVideoStates,
   upsertSourceItemFromVideo,
   getExistingFeedItem,
@@ -5838,6 +6096,10 @@ registerSourceSubscriptionsRoutes(app, {
   collectRefreshCandidatesForUser,
   RefreshSubscriptionsGenerateSchema,
   refreshGenerateMaxItems,
+  generationDurationCapEnabled,
+  generationMaxVideoSeconds,
+  generationBlockUnknownDuration,
+  generationDurationLookupTimeoutMs,
   recoverStaleIngestionJobs,
   getActiveManualRefreshJob,
   countQueueDepth,
@@ -5877,6 +6139,10 @@ registerSourcePagesRoutes(app, {
   createUnlockTraceId,
   SourcePageVideosGenerateSchema,
   sourceUnlockGenerateMaxItems,
+  generationDurationCapEnabled,
+  generationMaxVideoSeconds,
+  generationBlockUnknownDuration,
+  generationDurationLookupTimeoutMs,
   logUnlockEvent,
   normalizeSourcePageVideoGenerateItem,
   upsertSourceItemFromVideo,
@@ -5981,6 +6247,9 @@ registerChannelCandidateRoutes(app, {
 type PipelineErrorCode =
   | 'SERVICE_DISABLED'
   | 'INVALID_URL'
+  | 'VIDEO_TOO_LONG'
+  | 'VIDEO_DURATION_UNAVAILABLE'
+  | 'VIDEO_DURATION_POLICY_BLOCKED'
   | 'NO_CAPTIONS'
   | 'PROVIDER_FAIL'
   | 'PROVIDER_DEGRADED'
@@ -5995,16 +6264,21 @@ type PipelineErrorShape = {
   error_code: PipelineErrorCode;
   message: string;
   retry_after_seconds?: number;
+  max_duration_seconds?: number;
+  video_duration_seconds?: number | null;
+  video_id?: string;
 };
 
 class PipelineError extends Error {
   errorCode: PipelineErrorCode;
   retryAfterSeconds: number | null;
+  details: Record<string, unknown> | null;
   constructor(
     errorCode: PipelineErrorCode,
     message: string,
     options?: {
       retryAfterSeconds?: number | null;
+      details?: Record<string, unknown>;
     },
   ) {
     super(message);
@@ -6013,6 +6287,7 @@ class PipelineError extends Error {
     this.retryAfterSeconds = Number.isFinite(retryAfterRaw) && retryAfterRaw > 0
       ? Math.max(1, Math.ceil(retryAfterRaw))
       : null;
+    this.details = options?.details ? { ...options.details } : null;
   }
 }
 
@@ -6021,6 +6296,7 @@ function makePipelineError(
   message: string,
   options?: {
     retryAfterSeconds?: number | null;
+    details?: Record<string, unknown>;
   },
 ): never {
   throw new PipelineError(errorCode, message, options);
@@ -6028,10 +6304,22 @@ function makePipelineError(
 
 function mapPipelineError(error: unknown): PipelineErrorShape | null {
   if (error instanceof PipelineError) {
+    const details = error.details || {};
     return {
       error_code: error.errorCode,
       message: error.message,
       retry_after_seconds: error.retryAfterSeconds || undefined,
+      max_duration_seconds: Number.isFinite(Number(details.max_duration_seconds))
+        ? Math.max(1, Math.floor(Number(details.max_duration_seconds)))
+        : undefined,
+      video_duration_seconds: Object.prototype.hasOwnProperty.call(details, 'video_duration_seconds')
+        ? (details.video_duration_seconds == null
+          ? null
+          : Number.isFinite(Number(details.video_duration_seconds))
+            ? Math.max(0, Math.floor(Number(details.video_duration_seconds)))
+            : null)
+        : undefined,
+      video_id: typeof details.video_id === 'string' ? details.video_id : undefined,
     };
   }
   const providerCode = String((error as { code?: string } | null)?.code || '').trim();
@@ -6414,6 +6702,12 @@ const youtubeBlueprintPipelineService = createYouTubeBlueprintPipelineService({
   mapPipelineError,
   canonicalSectionName,
   normalizeSummaryVariantText,
+  enforceVideoDurationPolicy: (input: {
+    videoId: string;
+    videoTitle?: string | null;
+    durationSeconds?: number | null;
+    userAgent: string;
+  }) => enforceVideoDurationPolicyForGeneration(input),
 });
 const { runYouTubePipeline } = youtubeBlueprintPipelineService;
 
