@@ -35,7 +35,7 @@ export function createYouTubeBlueprintPipelineService(deps: any) {
     runWithProviderRetry,
     providerRetryDefaults,
     getTranscriptForVideo,
-    createLLMClient,
+    createYouTubeGenerationLLMClient = () => deps.createLLMClient(),
     updateGenerationModelInfo,
     yt2bpSafetyBlockEnabled,
     readYt2bpQualityConfig,
@@ -44,8 +44,8 @@ export function createYouTubeBlueprintPipelineService(deps: any) {
     runSafetyChecks,
     runPiiChecks,
     makePipelineError,
-    scoreYt2bpQualityWithOpenAI,
-    scoreYt2bpContentSafetyWithOpenAI,
+    scoreYt2bpQuality,
+    scoreYt2bpContentSafety,
     evaluateLlmNativeGate,
     yt2bpOutputMode,
     normalizeYouTubeDraftToGoldenV1,
@@ -187,7 +187,9 @@ async function runYouTubePipeline(input: {
         },
       });
     }
-    const client = createLLMClient();
+    const client = createYouTubeGenerationLLMClient({
+      generationTier: input.generationTier || 'free',
+    });
     const promptRenderCounts: Record<string, number> = {};
     const generationModelEventCallback = (event: GenerationModelEvent) => {
       if (!traceContext.db || !traceContext.userId) return;
@@ -222,6 +224,7 @@ async function runYouTubePipeline(input: {
               reasoning_effort: event.reasoning_effort || null,
               status: 'status' in event ? event.status || null : null,
               message: 'message' in event ? event.message || null : null,
+              provider: event.provider || 'openai_api',
             },
           });
         },
@@ -565,7 +568,7 @@ async function runYouTubePipeline(input: {
             baseDelayMs: 250,
             jitterMs: 200,
           },
-          async () => scoreYt2bpQualityWithOpenAI(draft, qualityConfig),
+          async () => scoreYt2bpQuality(draft, qualityConfig, input.generationTier || 'free'),
         );
         const failIds = graded.failures.join(',') || 'none';
         generationTrace.quality_judge_runs.push({
@@ -618,7 +621,7 @@ async function runYouTubePipeline(input: {
               baseDelayMs: 250,
               jitterMs: 200,
             },
-            async () => scoreYt2bpContentSafetyWithOpenAI(draft, contentSafetyConfig),
+            async () => scoreYt2bpContentSafety(draft, contentSafetyConfig, input.generationTier || 'free'),
           );
           const flagged = safetyScore.failedCriteria.join(',') || 'none';
           generationTrace.content_safety_runs.push({

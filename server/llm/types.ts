@@ -1,6 +1,7 @@
 export type GenerationOperation =
   | 'generateYouTubeBlueprint'
-  | 'generateYouTubeBlueprintPass2Transform';
+  | 'generateYouTubeBlueprintPass2Transform'
+  | 'analyzeBlueprint';
 
 export interface GenerationPromptEvent {
   operation: GenerationOperation;
@@ -11,6 +12,7 @@ export interface GenerationPromptEvent {
 export type GenerationModelEvent =
   | {
       event: 'primary_success';
+      provider?: 'codex_cli' | 'openai_api';
       operation: GenerationOperation;
       model_used: string;
       fallback_used: boolean;
@@ -19,6 +21,7 @@ export type GenerationModelEvent =
     }
   | {
       event: 'fallback_success';
+      provider?: 'codex_cli' | 'openai_api';
       operation: GenerationOperation;
       model_used: string;
       fallback_used: boolean;
@@ -27,6 +30,7 @@ export type GenerationModelEvent =
     }
   | {
       event: 'request_failed';
+      provider?: 'codex_cli' | 'openai_api';
       operation: GenerationOperation;
       model_used: string;
       fallback_used: boolean;

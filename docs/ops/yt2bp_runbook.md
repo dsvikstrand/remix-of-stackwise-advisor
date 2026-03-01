@@ -85,6 +85,20 @@ curl -sS -X POST https://bapi.vdsai.cloud/api/youtube-to-blueprint \
   -H 'Content-Type: application/json' \
   --data '{"video_url":"https://www.youtube.com/watch?v=16hFQZbxZpU","generate_review":false,"generate_banner":false,"source":"youtube_mvp"}'
 ```
+
+### Experimental Codex rollout (safe sequence)
+1. Deploy code with `USE_CODEX_FOR_GENERATION=false`.
+2. Set Codex envs (`CODEX_*`) on Oracle and restart service.
+3. Verify Codex is reachable on host:
+```bash
+ssh oracle-free 'codex --version'
+```
+4. Enable `USE_CODEX_FOR_GENERATION=true`, restart service, then run YT2BP smoke.
+5. Watch logs for:
+   - `codex_generation_attempt` (`codex_success` vs `codex_fallback_openai`)
+   - `codex_generation_circuit_open`
+6. Roll back instantly by setting `USE_CODEX_FOR_GENERATION=false` and restarting.
+
 - Notification inbox probe (auth):
 ```bash
 curl -sS "https://bapi.vdsai.cloud/api/notifications?limit=5" \
@@ -210,6 +224,16 @@ Required runtime variables:
 - `GENERATION_TIER_DUAL_GENERATE_USER_IDS` (csv user ids allowlisted for dual-generate mode)
 - `GENERATION_TIER_DUAL_GENERATE_SCOPE` (default `queue_only`)
 - `GENERATION_TIER_DUAL_GENERATE_CREDIT_MODE` (default `none`; queue-source unlock flow bypasses hold/settle/refund for dual-mode users)
+- `USE_CODEX_FOR_GENERATION` (default `false`; experimental Codex-first generation path for YT2BP stages)
+- `CODEX_EXEC_PATH` (default `codex`)
+- `CODEX_EXEC_TIMEOUT_MS` (default `90000`)
+- `CODEX_EXEC_LANE_CONCURRENCY` (forced to `1` in MVP)
+- `CODEX_EXEC_REASONING_EFFORT` (default `low`)
+- `CODEX_FREE_MODEL` (default `gpt-5-mini`)
+- `CODEX_TIER_MODEL` (default `gpt-5.2`)
+- `CODEX_FALLBACK_ENABLED` (default `true`; immediate API fallback on Codex errors)
+- `CODEX_CIRCUIT_FAILURE_THRESHOLD` (default `5`)
+- `CODEX_CIRCUIT_COOLDOWN_MS` (default `300000`)
 - `LLM_MAX_ATTEMPTS` (default `2`)
 - `LLM_TIMEOUT_MS` (default `60000`)
 - `PROVIDER_CIRCUIT_FAILURE_THRESHOLD` (default `5`)

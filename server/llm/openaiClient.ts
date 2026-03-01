@@ -89,6 +89,7 @@ function isModelCompatibilityError(error: unknown) {
 }
 
 function logGenerationModelEvent(event: 'primary_success' | 'fallback_success' | 'request_failed', payload: {
+  provider?: 'codex_cli' | 'openai_api';
   operation: GenerationOperation;
   model_used: string;
   fallback_used: boolean;
@@ -174,6 +175,7 @@ export function createOpenAIClient(): LLMClient {
     try {
       const response = await runOnce(generationModel, true);
       logGenerationModelEvent('primary_success', {
+        provider: 'openai_api',
         operation: input.operation,
         model_used: generationModel,
         fallback_used: false,
@@ -182,6 +184,7 @@ export function createOpenAIClient(): LLMClient {
       });
       emitModelEvent({
         event: 'primary_success',
+        provider: 'openai_api',
         operation: input.operation,
         model_used: generationModel,
         fallback_used: false,
@@ -197,6 +200,7 @@ export function createOpenAIClient(): LLMClient {
 
       if (!shouldFallback) {
         logGenerationModelEvent('request_failed', {
+          provider: 'openai_api',
           operation: input.operation,
           model_used: generationModel,
           fallback_used: false,
@@ -207,6 +211,7 @@ export function createOpenAIClient(): LLMClient {
         });
         emitModelEvent({
           event: 'request_failed',
+          provider: 'openai_api',
           operation: input.operation,
           model_used: generationModel,
           fallback_used: false,
@@ -223,6 +228,7 @@ export function createOpenAIClient(): LLMClient {
       );
       const response = await runOnce(generationFallbackModel, false);
       logGenerationModelEvent('fallback_success', {
+        provider: 'openai_api',
         operation: input.operation,
         model_used: generationFallbackModel,
         fallback_used: true,
@@ -231,6 +237,7 @@ export function createOpenAIClient(): LLMClient {
       });
       emitModelEvent({
         event: 'fallback_success',
+        provider: 'openai_api',
         operation: input.operation,
         model_used: generationFallbackModel,
         fallback_used: true,

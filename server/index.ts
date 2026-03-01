@@ -5,9 +5,13 @@ import { createClient } from '@supabase/supabase-js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import OpenAI from 'openai';
 import { z } from 'zod';
-import { createLLMClient } from './llm/client';
+import { createLLMClient, createLLMClientForPurpose } from './llm/client';
+import { createOpenAIClient } from './llm/openaiClient';
+import { createCodexGenerationClient } from './llm/codexGenerationClient';
+import { CodexExecError, runCodexExec } from './llm/codexExec';
 import { consumeCredit, getCredits } from './credits';
 import { getTranscriptForVideo, probeTranscriptProviders } from './transcript/getTranscript';
 import { TranscriptProviderError } from './transcript/types';
@@ -79,6 +83,7 @@ import { createUnlockTraceId, logUnlockEvent } from './services/unlockTrace';
 import { ProviderCircuitOpenError, getProviderCircuitSnapshot } from './services/providerCircuit';
 import { getProviderRetryDefaults, runWithProviderRetry } from './services/providerResilience';
 import { createTranscriptThrottle, type TranscriptRequestClass } from './services/transcriptThrottle';
+import { createCodexLane } from './services/codexLane';
 import {
   claimQueuedIngestionJobs,
   countQueueDepth,
@@ -135,7 +140,7 @@ import {
 import { createBlueprintVariantsService, BlueprintVariantInProgressError } from './services/blueprintVariants';
 import { runAutoChannelPipeline } from './services/autoChannelPipeline';
 import { normalizeYouTubeDraftToGoldenV1 } from './services/goldenBlueprintFormat';
-import { buildYouTubeQualityRetryInstructions } from './llm/prompts';
+import { buildYouTubeQualityRetryInstructions, extractJson } from './llm/prompts';
 import type {
   GenerationModelEvent,
   GenerationPromptEvent,
@@ -341,6 +346,48 @@ function resolveGenerationModelProfile(tier: GenerationTier): GenerationModelPro
   return tier === 'tier' ? generationTierTierProfile : generationTierFreeProfile;
 }
 
+const useCodexForGenerationRaw = String(process.env.USE_CODEX_FOR_GENERATION || 'false').trim().toLowerCase();
+const useCodexForGeneration = (
+  useCodexForGenerationRaw === 'true'
+  || useCodexForGenerationRaw === '1'
+  || useCodexForGenerationRaw === 'yes'
+  || useCodexForGenerationRaw === 'on'
+);
+const codexExecPath = String(process.env.CODEX_EXEC_PATH || 'codex').trim() || 'codex';
+const codexExecTimeoutMs = clampInt(process.env.CODEX_EXEC_TIMEOUT_MS, 90_000, 10_000, 10 * 60 * 1000);
+const codexExecReasoningEffort = normalizeReasoningEffort(process.env.CODEX_EXEC_REASONING_EFFORT, 'low');
+const codexFallbackEnabledRaw = String(process.env.CODEX_FALLBACK_ENABLED || 'true').trim().toLowerCase();
+const codexFallbackEnabled = !(
+  codexFallbackEnabledRaw === 'false'
+  || codexFallbackEnabledRaw === '0'
+  || codexFallbackEnabledRaw === 'off'
+  || codexFallbackEnabledRaw === 'no'
+);
+const codexCircuitFailureThreshold = clampInt(process.env.CODEX_CIRCUIT_FAILURE_THRESHOLD, 5, 1, 100);
+const codexCircuitCooldownMs = clampInt(process.env.CODEX_CIRCUIT_COOLDOWN_MS, 300_000, 5_000, 24 * 60 * 60 * 1000);
+const codexExecLaneConcurrencyRaw = clampInt(process.env.CODEX_EXEC_LANE_CONCURRENCY, 1, 1, 8);
+const codexExecLaneConcurrency = 1;
+
+type CodexModelProfile = {
+  model: string;
+  reasoningEffort: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+};
+
+const codexFreeModelRaw = String(process.env.CODEX_FREE_MODEL || '').trim();
+const codexTierModelRaw = String(process.env.CODEX_TIER_MODEL || '').trim();
+const codexFreeProfile: CodexModelProfile = {
+  model: codexFreeModelRaw || generationTierFreeProfile.model,
+  reasoningEffort: codexExecReasoningEffort,
+};
+const codexTierProfile: CodexModelProfile = {
+  model: codexTierModelRaw || generationTierTierProfile.model,
+  reasoningEffort: codexExecReasoningEffort,
+};
+
+function resolveCodexModelProfile(tier: GenerationTier): CodexModelProfile {
+  return tier === 'tier' ? codexTierProfile : codexFreeProfile;
+}
+
 if (generationDurationCapEnabled && !youtubeDataApiKey && generationBlockUnknownDuration) {
   console.warn('[duration_policy] cap enabled without YOUTUBE_DATA_API_KEY; unknown durations will be blocked.');
 }
@@ -425,6 +472,30 @@ if (generationTierDualGenerateCreditModeRaw && generationTierDualGenerateCreditM
 }
 if (generationTierDualGenerateConfig.enabled && generationTierDualGenerateConfig.userIds.size === 0) {
   console.warn('[generation-tier] dual-generate is enabled but GENERATION_TIER_DUAL_GENERATE_USER_IDS is empty; dual-generate remains inactive.');
+}
+
+if (useCodexForGeneration && !codexFreeModelRaw) {
+  console.warn('[codex_generation] CODEX_FREE_MODEL is empty. Falling back to free tier API model name.');
+}
+
+if (useCodexForGeneration && !codexTierModelRaw) {
+  console.warn('[codex_generation] CODEX_TIER_MODEL is empty. Falling back to tier API model name.');
+}
+
+if (codexExecLaneConcurrencyRaw !== 1) {
+  console.warn('[codex_generation] CODEX_EXEC_LANE_CONCURRENCY is forced to 1 for MVP safety.');
+}
+
+let codexBinaryAvailable = false;
+if (useCodexForGeneration) {
+  const probe = spawnSync(codexExecPath, ['--version'], {
+    encoding: 'utf8',
+    timeout: 10_000,
+  });
+  codexBinaryAvailable = probe.status === 0;
+  if (!codexBinaryAvailable) {
+    console.warn('[codex_generation] USE_CODEX_FOR_GENERATION enabled but codex binary is unavailable. API fallback-only mode will be used.');
+  }
 }
 
 if (autoBannerMode !== 'off' && !String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim()) {
@@ -1102,37 +1173,16 @@ function buildYt2bpQualityJudgeInput(draft: YouTubeDraft, config: Yt2bpQualityCo
   ].join('\n');
 }
 
-async function scoreYt2bpQualityWithOpenAI(
-  draft: YouTubeDraft,
-  config: Yt2bpQualityConfig
-): Promise<{
+function parseYt2bpQualityJudgeOutput(
+  outputText: string,
+  config: Yt2bpQualityConfig,
+): {
   ok: boolean;
   overall: number;
   scores: Array<{ id: string; score: number; min_score: number; required: boolean; pass: boolean }>;
   failures: string[];
-}> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error('OPENAI_API_KEY is not set');
-
-  const client = new OpenAI({ apiKey });
-  const response = await client.responses.create({
-    model: config.judge_model,
-    instructions: [
-      'You are a strict JSON generator.',
-      'Do not include markdown.',
-      'Output only JSON with fields: scores, overall.',
-    ].join('\n'),
-    input: buildYt2bpQualityJudgeInput(draft, config),
-  });
-
-  const outputText = String(response.output_text || '').trim();
-  if (!outputText) throw new Error('No output text from quality judge');
-  let jsonText = outputText;
-  if (jsonText.startsWith('```json')) jsonText = jsonText.slice(7);
-  if (jsonText.startsWith('```')) jsonText = jsonText.slice(3);
-  if (jsonText.endsWith('```')) jsonText = jsonText.slice(0, -3);
-  jsonText = jsonText.trim();
-
+} {
+  const jsonText = extractJson(String(outputText || '').trim());
   let parsed: unknown;
   try {
     parsed = JSON.parse(jsonText);
@@ -1171,6 +1221,34 @@ async function scoreYt2bpQualityWithOpenAI(
   return { ok: failures.length === 0, overall, scores, failures };
 }
 
+async function scoreYt2bpQualityWithOpenAI(
+  draft: YouTubeDraft,
+  config: Yt2bpQualityConfig
+): Promise<{
+  ok: boolean;
+  overall: number;
+  scores: Array<{ id: string; score: number; min_score: number; required: boolean; pass: boolean }>;
+  failures: string[];
+}> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('OPENAI_API_KEY is not set');
+
+  const client = new OpenAI({ apiKey });
+  const response = await client.responses.create({
+    model: config.judge_model,
+    instructions: [
+      'You are a strict JSON generator.',
+      'Do not include markdown.',
+      'Output only JSON with fields: scores, overall.',
+    ].join('\n'),
+    input: buildYt2bpQualityJudgeInput(draft, config),
+  });
+
+  const outputText = String(response.output_text || '').trim();
+  if (!outputText) throw new Error('No output text from quality judge');
+  return parseYt2bpQualityJudgeOutput(outputText, config);
+}
+
 function buildYt2bpContentSafetyJudgeInput(draft: YouTubeDraft, config: Yt2bpContentSafetyConfig) {
   const criteriaLines = config.criteria
     .map((c) => `- ${c.id}: ${c.text}`)
@@ -1191,6 +1269,38 @@ function buildYt2bpContentSafetyJudgeInput(draft: YouTubeDraft, config: Yt2bpCon
     'Return ONLY strict JSON in this shape:',
     '{"criteria":[{"id":"criterion_id","pass":true,"rationale":"optional"}],"blocked":false}',
   ].join('\n');
+}
+
+function parseYt2bpContentSafetyJudgeOutput(
+  outputText: string,
+  config: Yt2bpContentSafetyConfig,
+): {
+  ok: boolean;
+  blocked: boolean;
+  failedCriteria: string[];
+  details: Array<{ id: string; pass: boolean; rationale?: string }>;
+} {
+  const jsonText = extractJson(String(outputText || '').trim());
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch {
+    throw new Error('Content safety judge output is not valid JSON');
+  }
+  const judged = ContentSafetyJudgeResponseSchema.parse(parsed);
+
+  const expectedIds = config.criteria.map((c) => c.id).sort();
+  const actualIds = judged.criteria.map((c) => c.id).sort();
+  if (
+    expectedIds.length !== actualIds.length ||
+    expectedIds.some((id, i) => id !== actualIds[i])
+  ) {
+    throw new Error('Content safety criterion id mismatch');
+  }
+
+  const failedCriteria = judged.criteria.filter((c) => !c.pass).map((c) => c.id);
+  const blocked = Boolean(judged.blocked) || failedCriteria.length > 0;
+  return { ok: !blocked, blocked, failedCriteria, details: judged.criteria };
 }
 
 async function scoreYt2bpContentSafetyWithOpenAI(
@@ -1217,32 +1327,64 @@ async function scoreYt2bpContentSafetyWithOpenAI(
 
   const outputText = String(response.output_text || '').trim();
   if (!outputText) throw new Error('No output text from content safety judge');
-  let jsonText = outputText;
-  if (jsonText.startsWith('```json')) jsonText = jsonText.slice(7);
-  if (jsonText.startsWith('```')) jsonText = jsonText.slice(3);
-  if (jsonText.endsWith('```')) jsonText = jsonText.slice(0, -3);
-  jsonText = jsonText.trim();
+  return parseYt2bpContentSafetyJudgeOutput(outputText, config);
+}
 
-  let parsed: unknown;
+async function scoreYt2bpQuality(
+  draft: YouTubeDraft,
+  config: Yt2bpQualityConfig,
+  generationTier: GenerationTier = 'free',
+) {
+  if (!(useCodexForGeneration && codexBinaryAvailable)) {
+    return scoreYt2bpQualityWithOpenAI(draft, config);
+  }
+  const codexProfile = resolveCodexModelProfile(generationTier);
   try {
-    parsed = JSON.parse(jsonText);
-  } catch {
-    throw new Error('Content safety judge output is not valid JSON');
+    const response = await runCodexPromptForGeneration({
+      stage: 'quality_judge',
+      model: codexProfile.model,
+      reasoningEffort: codexProfile.reasoningEffort,
+      prompt: [
+        'You are a strict JSON generator.',
+        'Do not include markdown.',
+        'Output only JSON with fields: scores, overall.',
+        '',
+        buildYt2bpQualityJudgeInput(draft, config),
+      ].join('\n'),
+    });
+    return parseYt2bpQualityJudgeOutput(response.outputText, config);
+  } catch (error) {
+    if (!codexFallbackEnabled) throw error;
+    return scoreYt2bpQualityWithOpenAI(draft, config);
   }
-  const judged = ContentSafetyJudgeResponseSchema.parse(parsed);
+}
 
-  const expectedIds = config.criteria.map((c) => c.id).sort();
-  const actualIds = judged.criteria.map((c) => c.id).sort();
-  if (
-    expectedIds.length !== actualIds.length ||
-    expectedIds.some((id, i) => id !== actualIds[i])
-  ) {
-    throw new Error('Content safety criterion id mismatch');
+async function scoreYt2bpContentSafety(
+  draft: YouTubeDraft,
+  config: Yt2bpContentSafetyConfig,
+  generationTier: GenerationTier = 'free',
+) {
+  if (!(useCodexForGeneration && codexBinaryAvailable)) {
+    return scoreYt2bpContentSafetyWithOpenAI(draft, config);
   }
-
-  const failedCriteria = judged.criteria.filter((c) => !c.pass).map((c) => c.id);
-  const blocked = Boolean(judged.blocked) || failedCriteria.length > 0;
-  return { ok: !blocked, blocked, failedCriteria, details: judged.criteria };
+  const codexProfile = resolveCodexModelProfile(generationTier);
+  try {
+    const response = await runCodexPromptForGeneration({
+      stage: 'content_safety_judge',
+      model: codexProfile.model,
+      reasoningEffort: codexProfile.reasoningEffort,
+      prompt: [
+        'You are a strict JSON generator.',
+        'Return only JSON.',
+        '',
+        buildYt2bpContentSafetyJudgeInput(draft, config),
+      ].join('\n'),
+    });
+    return parseYt2bpContentSafetyJudgeOutput(response.outputText, config);
+  } catch (error) {
+    if (!codexFallbackEnabled) throw error;
+    return scoreYt2bpContentSafetyWithOpenAI(draft, config);
+  }
 }
 
 
@@ -6209,6 +6351,18 @@ function classifyQueuedJobError(error: unknown) {
       retryDelaySeconds: getRetryDelayForErrorCode(error.code),
     };
   }
+  if (error instanceof CodexExecError) {
+    const mappedErrorCode = error.code === 'TIMEOUT'
+      ? 'TIMEOUT'
+      : error.code === 'RATE_LIMITED'
+        ? 'RATE_LIMITED'
+        : 'PROVIDER_FAIL';
+    return {
+      errorCode: mappedErrorCode,
+      message: error.message,
+      retryDelaySeconds: getRetryDelayForErrorCode(mappedErrorCode),
+    };
+  }
   if (error instanceof PipelineError) {
     return {
       errorCode: error.errorCode,
@@ -6917,6 +7071,25 @@ function mapPipelineError(error: unknown): PipelineErrorShape | null {
       retry_after_seconds: error.retryAfterSeconds || undefined,
     };
   }
+  if (error instanceof CodexExecError) {
+    if (error.code === 'TIMEOUT') {
+      return {
+        error_code: 'TIMEOUT',
+        message: 'Generation request timed out. Please retry.',
+      };
+    }
+    if (error.code === 'RATE_LIMITED') {
+      return {
+        error_code: 'RATE_LIMITED',
+        message: 'Generation provider is rate-limited. Please retry shortly.',
+        retry_after_seconds: 15,
+      };
+    }
+    return {
+      error_code: 'PROVIDER_FAIL',
+      message: 'Generation provider is currently unavailable. Please try again.',
+    };
+  }
   return null;
 }
 
@@ -7248,6 +7421,121 @@ async function probeTranscriptProvidersWithThrottle(
   );
 }
 
+const codexLane = createCodexLane({
+  enabled: useCodexForGeneration && codexBinaryAvailable,
+  concurrency: codexExecLaneConcurrency,
+});
+let codexCircuitConsecutiveFailures = 0;
+let codexCircuitOpenUntilMs = 0;
+
+function isCodexCircuitOpen() {
+  return Date.now() < codexCircuitOpenUntilMs;
+}
+
+function onCodexSuccess() {
+  codexCircuitConsecutiveFailures = 0;
+}
+
+function onCodexFailure() {
+  codexCircuitConsecutiveFailures += 1;
+  if (codexCircuitConsecutiveFailures >= codexCircuitFailureThreshold) {
+    codexCircuitOpenUntilMs = Date.now() + codexCircuitCooldownMs;
+    codexCircuitConsecutiveFailures = 0;
+    console.warn('[codex_generation_circuit_open]', JSON.stringify({
+      cooldown_ms: codexCircuitCooldownMs,
+    }));
+  }
+}
+
+async function runCodexPromptForGeneration(input: {
+  stage: string;
+  model: string;
+  reasoningEffort: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+  prompt: string;
+}) {
+  if (!(useCodexForGeneration && codexBinaryAvailable)) {
+    throw new CodexExecError({
+      code: 'PROCESS_FAIL',
+      message: 'Codex generation is disabled.',
+    });
+  }
+  if (isCodexCircuitOpen()) {
+    throw new CodexExecError({
+      code: 'PROCESS_FAIL',
+      message: 'Codex circuit is temporarily open.',
+    });
+  }
+
+  return codexLane.runCodexTask(
+    { stage: input.stage },
+    async () => {
+      const startedAt = Date.now();
+      try {
+        const result = await runCodexExec({
+          prompt: input.prompt,
+          model: input.model,
+          reasoningEffort: input.reasoningEffort,
+          timeoutMs: codexExecTimeoutMs,
+          execPath: codexExecPath,
+        });
+        onCodexSuccess();
+        console.log('[codex_generation_attempt]', JSON.stringify({
+          stage: input.stage,
+          model: input.model,
+          reasoning_effort: input.reasoningEffort,
+          result: 'codex_success',
+          latency_ms: Date.now() - startedAt,
+        }));
+        return result;
+      } catch (error) {
+        onCodexFailure();
+        const code = error instanceof CodexExecError ? error.code : 'PROCESS_FAIL';
+        console.warn('[codex_generation_attempt]', JSON.stringify({
+          stage: input.stage,
+          model: input.model,
+          reasoning_effort: input.reasoningEffort,
+          result: codexFallbackEnabled ? 'codex_fallback_openai' : 'codex_failed_no_fallback',
+          codex_error_code: code,
+          message: error instanceof Error ? error.message : String(error),
+          latency_ms: Date.now() - startedAt,
+        }));
+        throw error;
+      }
+    },
+  );
+}
+
+function createYouTubeGenerationLLMClient(input: {
+  generationTier: GenerationTier;
+}) {
+  const codexProfile = resolveCodexModelProfile(input.generationTier);
+  const codexEnabled = useCodexForGeneration && codexBinaryAvailable;
+  return createLLMClientForPurpose({
+    purpose: 'youtube_generation',
+    codexEnabled,
+    createCodexClient: () => createCodexGenerationClient({
+      fallbackClientFactory: () => createOpenAIClient(),
+      fallbackEnabled: codexFallbackEnabled,
+      codexModel: codexProfile.model,
+      codexReasoningEffort: codexProfile.reasoningEffort,
+      codexTimeoutMs: codexExecTimeoutMs,
+      runCodexPrompt: async (payload) => runCodexPromptForGeneration({
+        stage: payload.operation,
+        model: payload.model,
+        reasoningEffort: payload.reasoningEffort,
+        prompt: payload.prompt,
+      }),
+      onCodexFallback: (payload) => {
+        console.warn('[codex_generation_fallback]', JSON.stringify({
+          stage: payload.operation,
+          error_code: payload.errorCode,
+          message: payload.message,
+        }));
+      },
+    }),
+  });
+}
+
 const youtubeBlueprintPipelineService = createYouTubeBlueprintPipelineService({
   getServiceSupabaseClient,
   getYouTubeGenerationTraceContext,
@@ -7257,7 +7545,7 @@ const youtubeBlueprintPipelineService = createYouTubeBlueprintPipelineService({
   runWithProviderRetry,
   providerRetryDefaults,
   getTranscriptForVideo: getTranscriptForVideoWithThrottle,
-  createLLMClient,
+  createYouTubeGenerationLLMClient,
   updateGenerationModelInfo,
   yt2bpSafetyBlockEnabled,
   readYt2bpQualityConfig,
@@ -7266,8 +7554,8 @@ const youtubeBlueprintPipelineService = createYouTubeBlueprintPipelineService({
   runSafetyChecks,
   runPiiChecks,
   makePipelineError,
-  scoreYt2bpQualityWithOpenAI,
-  scoreYt2bpContentSafetyWithOpenAI,
+  scoreYt2bpQuality,
+  scoreYt2bpContentSafety,
   evaluateLlmNativeGate,
   yt2bpOutputMode,
   normalizeYouTubeDraftToGoldenV1,
