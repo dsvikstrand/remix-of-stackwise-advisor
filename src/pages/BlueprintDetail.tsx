@@ -980,33 +980,61 @@ export default function BlueprintDetail() {
                 </div>
               </div>
 
-              {hasVariantToggle ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">Variant:</span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={currentVariantTier === 'free' ? 'default' : 'outline'}
-                    className="h-7 px-2 text-xs"
-                    onClick={() => {
-                      const targetId = readyVariantIds.free;
-                      if (targetId && targetId !== blueprint.id) navigate(`/blueprint/${targetId}`);
-                    }}
-                  >
-                    Free
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={currentVariantTier === 'tier' ? 'default' : 'outline'}
-                    className="h-7 px-2 text-xs"
-                    onClick={() => {
-                      const targetId = readyVariantIds.tier;
-                      if (targetId && targetId !== blueprint.id) navigate(`/blueprint/${targetId}`);
-                    }}
-                  >
-                    Tier
-                  </Button>
+              {hasVariantToggle || useGoldenRender ? (
+                <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap">
+                  {hasVariantToggle ? (
+                    <>
+                      <span className="text-xs text-muted-foreground">Variant:</span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={currentVariantTier === 'free' ? 'default' : 'outline'}
+                        className="h-7 px-2 text-xs"
+                        onClick={() => {
+                          const targetId = readyVariantIds.free;
+                          if (targetId && targetId !== blueprint.id) navigate(`/blueprint/${targetId}`);
+                        }}
+                      >
+                        Free
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={currentVariantTier === 'tier' ? 'default' : 'outline'}
+                        className="h-7 px-2 text-xs"
+                        onClick={() => {
+                          const targetId = readyVariantIds.tier;
+                          if (targetId && targetId !== blueprint.id) navigate(`/blueprint/${targetId}`);
+                        }}
+                      >
+                        Tier
+                      </Button>
+                    </>
+                  ) : null}
+                  {useGoldenRender ? (
+                    <div className="inline-flex items-center gap-1 rounded-full border border-border/40 bg-muted/20 p-1">
+                      {summaryExpertiseLevels.map((level) => {
+                        const active = summaryExpertiseLevel === level.key;
+                        const disabled = level.key === 'eli5' && !hasEli5Content;
+                        return (
+                          <Button
+                            key={level.key}
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className={`h-7 rounded-full px-2.5 text-xs ${active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'} ${disabled ? 'opacity-50 cursor-not-allowed hover:text-muted-foreground' : ''}`}
+                            onClick={() => setSummaryExpertiseLevel(level.key)}
+                            aria-pressed={active}
+                            aria-label={`Set summary level to ${level.ariaLabel}`}
+                            title={level.ariaLabel}
+                            disabled={disabled}
+                          >
+                            {level.label}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -1055,32 +1083,7 @@ export default function BlueprintDetail() {
                 </Button>
               </div>
 
-              {useGoldenRender ? (
-                <div className="flex items-center justify-start pt-1">
-                  <div className="inline-flex items-center gap-1 rounded-full border border-border/40 bg-muted/20 p-1">
-                    {summaryExpertiseLevels.map((level) => {
-                      const active = summaryExpertiseLevel === level.key;
-                      const disabled = level.key === 'eli5' && !hasEli5Content;
-                      return (
-                        <Button
-                          key={level.key}
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className={`h-7 rounded-full px-2.5 text-xs ${active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'} ${disabled ? 'opacity-50 cursor-not-allowed hover:text-muted-foreground' : ''}`}
-                          onClick={() => setSummaryExpertiseLevel(level.key)}
-                          aria-pressed={active}
-                          aria-label={`Set summary level to ${level.ariaLabel}`}
-                          title={level.ariaLabel}
-                          disabled={disabled}
-                        >
-                          {level.label}
-                        </Button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
+              
             </PageSection>
 
             <PageDivider />
