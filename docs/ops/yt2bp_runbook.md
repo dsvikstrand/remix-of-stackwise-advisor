@@ -205,7 +205,7 @@ Required runtime variables:
 - `GENERATION_TIER_FREE_REASONING_EFFORT` (default follows `OPENAI_GENERATION_REASONING_EFFORT`)
 - `GENERATION_TIER_TIER_MODEL` (default `gpt-5.2`)
 - `GENERATION_TIER_TIER_FALLBACK_MODEL` (default follows `OPENAI_GENERATION_FALLBACK_MODEL`)
-- `GENERATION_TIER_TIER_REASONING_EFFORT` (default follows `OPENAI_GENERATION_REASONING_EFFORT`)
+- `GENERATION_TIER_TIER_REASONING_EFFORT` (default `low`)
 - `GENERATION_TIER_DUAL_GENERATE_ENABLED` (default `false`; dev compare mode for queue surfaces)
 - `GENERATION_TIER_DUAL_GENERATE_USER_IDS` (csv user ids allowlisted for dual-generate mode)
 - `GENERATION_TIER_DUAL_GENERATE_SCOPE` (default `queue_only`)

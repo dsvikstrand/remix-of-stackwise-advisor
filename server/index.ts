@@ -333,7 +333,7 @@ const generationTierTierProfile: GenerationModelProfile = {
   fallbackModel: String(process.env.GENERATION_TIER_TIER_FALLBACK_MODEL || process.env.OPENAI_GENERATION_FALLBACK_MODEL || 'o4-mini').trim() || 'o4-mini',
   reasoningEffort: normalizeReasoningEffort(
     process.env.GENERATION_TIER_TIER_REASONING_EFFORT,
-    normalizeReasoningEffort(process.env.OPENAI_GENERATION_REASONING_EFFORT, 'medium'),
+    'low',
   ),
 };
 
