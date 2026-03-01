@@ -1245,6 +1245,18 @@ registerProfileRoutes(app, {
   normalizeTranscriptTruthStatus,
 });
 
+const blueprintVariantsService = createBlueprintVariantsService({
+  getServiceSupabaseClient,
+});
+const {
+  claimVariantForGeneration,
+  markVariantReady,
+  markVariantFailed,
+  listVariantsForSourceItem,
+  findVariantsByBlueprintId,
+  resolveVariantOrReady,
+} = blueprintVariantsService;
+
 registerYouTubeRoutes(app, {
   yt2bpIpHourlyLimiter,
   yt2bpAnonLimiter,
@@ -2498,17 +2510,6 @@ const autoBannerQueueService = createAutoBannerQueueService({
   rebalanceGeneratedBannerCap,
 });
 const { processAutoBannerQueue } = autoBannerQueueService;
-const blueprintVariantsService = createBlueprintVariantsService({
-  getServiceSupabaseClient,
-});
-const {
-  claimVariantForGeneration,
-  markVariantReady,
-  markVariantFailed,
-  listVariantsForSourceItem,
-  findVariantsByBlueprintId,
-  resolveVariantOrReady,
-} = blueprintVariantsService;
 
 async function maybeApplyAutoBannerPolicyAfterCreate(input: {
   blueprintId: string;
