@@ -12,6 +12,16 @@ export type GenerationTierConfig = {
   freeUserIds: Set<string>;
 };
 
+export type GenerationTierDualGenerateScope = 'queue_only';
+export type GenerationTierDualGenerateCreditMode = 'none';
+
+export type GenerationTierDualGenerateConfig = {
+  enabled: boolean;
+  userIds: Set<string>;
+  scope: GenerationTierDualGenerateScope;
+  creditMode: GenerationTierDualGenerateCreditMode;
+};
+
 function parseBoolean(raw: unknown, fallback: boolean) {
   const normalized = String(raw ?? '').trim().toLowerCase();
   if (!normalized) return fallback;
@@ -28,6 +38,16 @@ function parseUserIdCsv(raw: unknown) {
     .map((value) => normalizeUserId(value))
     .filter(Boolean);
   return new Set(values);
+}
+
+function parseDualGenerateScope(raw: unknown): GenerationTierDualGenerateScope {
+  const normalized = String(raw || '').trim().toLowerCase();
+  return normalized === 'queue_only' ? 'queue_only' : 'queue_only';
+}
+
+function parseDualGenerateCreditMode(raw: unknown): GenerationTierDualGenerateCreditMode {
+  const normalized = String(raw || '').trim().toLowerCase();
+  return normalized === 'none' ? 'none' : 'none';
 }
 
 export function readGenerationTierConfigFromEnv(env: NodeJS.ProcessEnv = process.env): GenerationTierConfig {
@@ -71,6 +91,30 @@ export function createGenerationTierAccessResolver(config: GenerationTierConfig)
       defaultTier: 'free',
       testModeEnabled: true,
     };
+  };
+}
+
+export function readGenerationTierDualGenerateConfigFromEnv(env: NodeJS.ProcessEnv = process.env): GenerationTierDualGenerateConfig {
+  return {
+    enabled: parseBoolean(env.GENERATION_TIER_DUAL_GENERATE_ENABLED, false),
+    userIds: parseUserIdCsv(env.GENERATION_TIER_DUAL_GENERATE_USER_IDS),
+    scope: parseDualGenerateScope(env.GENERATION_TIER_DUAL_GENERATE_SCOPE),
+    creditMode: parseDualGenerateCreditMode(env.GENERATION_TIER_DUAL_GENERATE_CREDIT_MODE),
+  };
+}
+
+export function createGenerationTierDualGenerateResolver(config: GenerationTierDualGenerateConfig) {
+  return function isDualGenerateEnabledForUser(input: {
+    userId?: string | null;
+    scope?: 'queue' | 'direct' | null;
+  }) {
+    const scope = input.scope || 'queue';
+    if (!config.enabled) return false;
+    if (config.scope === 'queue_only' && scope !== 'queue') return false;
+    const normalizedUserId = normalizeUserId(input.userId || '');
+    if (!normalizedUserId) return false;
+    if (config.userIds.size === 0) return false;
+    return config.userIds.has(normalizedUserId);
   };
 }
 

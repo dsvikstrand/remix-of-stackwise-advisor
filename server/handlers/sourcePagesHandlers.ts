@@ -84,6 +84,8 @@ export function registerSourcePagesRouteHandlers(app: express.Express, deps: Sou
     resolveGenerationTierAccess,
     resolveRequestedGenerationTier,
     normalizeRequestedGenerationTier,
+    isDualGenerateEnabledForUser,
+    getDualGenerateTiers,
     resolveVariantOrReady,
   } = deps;
 function normalizeSourcePageBlueprintCursor(input: SourcePageBlueprintCursor) {
@@ -645,6 +647,14 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
     requestedTier,
     access: tierAccess,
   });
+  const dualGenerateEnabled = isDualGenerateEnabledForUser({
+    userId,
+    scope: 'queue',
+  });
+  const dualGenerateTiers = getDualGenerateTiers({
+    requestedTier: resolvedTier || tierAccess.defaultTier,
+    enabled: dualGenerateEnabled,
+  });
   if (!resolvedTier) {
     return res.status(403).json({
       ok: false,
@@ -885,49 +895,54 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       }
 
       let reservedUnlock = reserveResult.unlock;
+      const reservedCost = dualGenerateEnabled
+        ? 0
+        : Math.max(0.001, Number(reservedUnlock.estimated_cost || estimatedUnlockCost));
       if (!reservedUnlock.reserved_ledger_id) {
-        const hold = await reserveCredits(sourcePageDb, {
-          userId,
-          amount: Math.max(0.001, Number(reservedUnlock.estimated_cost || estimatedUnlockCost)),
-          idempotencyKey: buildUnlockLedgerIdempotencyKey({
+        if (!dualGenerateEnabled) {
+          const hold = await reserveCredits(sourcePageDb, {
+            userId,
+            amount: reservedCost,
+            idempotencyKey: buildUnlockLedgerIdempotencyKey({
+              unlockId: reservedUnlock.id,
+              userId,
+              action: 'hold',
+            }),
+            reasonCode: 'UNLOCK_HOLD',
+            context: {
+              source_item_id: source.id,
+              source_page_id: sourcePage.id,
+              unlock_id: reservedUnlock.id,
+              metadata: {
+                source: 'source_page_video_library',
+                video_id: item.video_id,
+                trace_id: traceId,
+              },
+            },
+          });
+
+          if (!hold.ok) {
+            await failUnlock(sourcePageDb, {
+              unlockId: reservedUnlock.id,
+              errorCode: 'INSUFFICIENT_CREDITS',
+              errorMessage: 'Insufficient credits to reserve unlock.',
+            });
+            insufficientRows.push({
+              video_id: item.video_id,
+              title: item.title,
+              required: reservedCost,
+              balance: hold.wallet.balance,
+            });
+            continue;
+          }
+
+          reservedUnlock = await attachReservationLedger(sourcePageDb, {
             unlockId: reservedUnlock.id,
             userId,
-            action: 'hold',
-          }),
-          reasonCode: 'UNLOCK_HOLD',
-          context: {
-            source_item_id: source.id,
-            source_page_id: sourcePage.id,
-            unlock_id: reservedUnlock.id,
-            metadata: {
-              source: 'source_page_video_library',
-              video_id: item.video_id,
-              trace_id: traceId,
-            },
-          },
-        });
-
-        if (!hold.ok) {
-          await failUnlock(sourcePageDb, {
-            unlockId: reservedUnlock.id,
-            errorCode: 'INSUFFICIENT_CREDITS',
-            errorMessage: 'Insufficient credits to reserve unlock.',
+            ledgerId: hold.ledger_id || null,
+            amount: hold.reserved_amount,
           });
-          insufficientRows.push({
-            video_id: item.video_id,
-            title: item.title,
-            required: Math.max(0.001, Number(reservedUnlock.estimated_cost || estimatedUnlockCost)),
-            balance: hold.wallet.balance,
-          });
-          continue;
         }
-
-        reservedUnlock = await attachReservationLedger(sourcePageDb, {
-          unlockId: reservedUnlock.id,
-          userId,
-          ledgerId: hold.ledger_id || null,
-          amount: hold.reserved_amount,
-        });
       }
 
       queueItems.push({
@@ -940,10 +955,11 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         video_url: item.video_url,
         title: item.title,
         duration_seconds: toDurationSeconds(item.duration_seconds),
-        reserved_cost: Math.max(0.001, Number(reservedUnlock.estimated_cost || estimatedUnlockCost)),
+        reserved_cost: reservedCost,
         reserved_by_user_id: userId,
         unlock_origin: 'manual_unlock',
         generation_tier: resolvedTier,
+        dual_generate_enabled: dualGenerateEnabled,
       });
       logUnlockEvent(
         'unlock_item_queued',
@@ -956,7 +972,8 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
           video_id: item.video_id,
         },
         {
-          cost: Math.max(0.001, Number(reservedUnlock.estimated_cost || estimatedUnlockCost)),
+          cost: reservedCost,
+          dual_generate_enabled: dualGenerateEnabled,
         },
       );
     } catch (error) {
@@ -1206,6 +1223,8 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       requested_tier: requestedTier || null,
       resolved_tier: resolvedTier,
       variant_status: 'queued',
+      dual_generate_enabled: dualGenerateEnabled,
+      dual_generate_tiers: dualGenerateTiers,
       skipped_existing_count: duplicateRows.length,
       skipped_existing: duplicateRows.map((row) => ({
         video_id: row.item.video_id,

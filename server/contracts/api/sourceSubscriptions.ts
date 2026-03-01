@@ -64,5 +64,7 @@ export type SourceSubscriptionsRouteDeps = {
   resolveGenerationTierAccess: any;
   resolveRequestedGenerationTier: any;
   normalizeRequestedGenerationTier: any;
+  isDualGenerateEnabledForUser: any;
+  getDualGenerateTiers: any;
   resolveVariantOrReady: any;
 };

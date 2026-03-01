@@ -125,8 +125,10 @@ import { createBlueprintCreationService } from './services/blueprintCreation';
 import { createYouTubeBlueprintPipelineService } from './services/youtubeBlueprintPipeline';
 import {
   createGenerationTierAccessResolver,
+  createGenerationTierDualGenerateResolver,
   normalizeRequestedGenerationTier,
   readGenerationTierConfigFromEnv,
+  readGenerationTierDualGenerateConfigFromEnv,
   resolveRequestedGenerationTier,
   type GenerationTier,
 } from './services/generationTierAccess';
@@ -298,6 +300,8 @@ const generationBlockUnknownDuration = generationDurationPolicy.blockUnknown;
 const generationDurationLookupTimeoutMs = generationDurationPolicy.lookupTimeoutMs;
 const generationTierConfig = readGenerationTierConfigFromEnv(process.env);
 const resolveGenerationTierAccess = createGenerationTierAccessResolver(generationTierConfig);
+const generationTierDualGenerateConfig = readGenerationTierDualGenerateConfigFromEnv(process.env);
+const isDualGenerateEnabledForUser = createGenerationTierDualGenerateResolver(generationTierDualGenerateConfig);
 
 function normalizeReasoningEffort(raw: unknown, fallback: 'none' | 'low' | 'medium' | 'high' | 'xhigh') {
   const normalized = String(raw || '').trim().toLowerCase();
@@ -409,6 +413,18 @@ if (transcriptThrottleTierParseWarn) {
 
 if (generationTierConfig.testModeEnabled && generationTierConfig.tierUserIds.size === 0) {
   console.warn('[generation-tier] test mode is enabled but GENERATION_TIER_TIER_USER_IDS is empty; all users remain free-tier only.');
+}
+
+const generationTierDualGenerateScopeRaw = String(process.env.GENERATION_TIER_DUAL_GENERATE_SCOPE || '').trim().toLowerCase();
+if (generationTierDualGenerateScopeRaw && generationTierDualGenerateScopeRaw !== 'queue_only') {
+  console.warn('[generation-tier] GENERATION_TIER_DUAL_GENERATE_SCOPE is invalid. Falling back to queue_only.');
+}
+const generationTierDualGenerateCreditModeRaw = String(process.env.GENERATION_TIER_DUAL_GENERATE_CREDIT_MODE || '').trim().toLowerCase();
+if (generationTierDualGenerateCreditModeRaw && generationTierDualGenerateCreditModeRaw !== 'none') {
+  console.warn('[generation-tier] GENERATION_TIER_DUAL_GENERATE_CREDIT_MODE is invalid. Falling back to none.');
+}
+if (generationTierDualGenerateConfig.enabled && generationTierDualGenerateConfig.userIds.size === 0) {
+  console.warn('[generation-tier] dual-generate is enabled but GENERATION_TIER_DUAL_GENERATE_USER_IDS is empty; dual-generate remains inactive.');
 }
 
 if (autoBannerMode !== 'off' && !String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim()) {
@@ -1335,6 +1351,8 @@ registerYouTubeRoutes(app, {
   resolveGenerationTierAccess,
   resolveRequestedGenerationTier,
   normalizeRequestedGenerationTier,
+  isDualGenerateEnabledForUser,
+  getDualGenerateTiers,
   resolveGenerationModelProfile,
   resolveVariantOrReady: (variantInput: any) => resolveVariantOrReady(variantInput),
   findVariantsByBlueprintId: (variantInput: any) => findVariantsByBlueprintId(variantInput),
@@ -2641,6 +2659,7 @@ type SourceUnlockQueueItem = {
   reserved_by_user_id: string;
   unlock_origin: 'manual_unlock' | 'subscription_auto_unlock' | 'source_auto_unlock_retry';
   generation_tier?: GenerationTier | null;
+  dual_generate_enabled?: boolean | null;
 };
 
 type SourceAutoUnlockRetryPayload = {
@@ -3419,6 +3438,10 @@ async function attemptAutoUnlockForSourceItem(input: {
   let currentUnlock = input.unlock;
   let sawInsufficientCredits = false;
   for (const payerUserId of sampledUsers) {
+    const dualGenerateEnabled = isDualGenerateEnabledForUser({
+      userId: payerUserId,
+      scope: 'queue',
+    });
     const reserveResult = await reserveUnlock(db, {
       unlock: currentUnlock,
       userId: payerUserId,
@@ -3434,48 +3457,52 @@ async function attemptAutoUnlockForSourceItem(input: {
     }
 
     let reservedUnlock = reserveResult.unlock;
-    const reservedCost = Math.max(0.001, Number(reservedUnlock.estimated_cost || input.estimatedUnlockCost));
-    const hold = await reserveCredits(db, {
-      userId: payerUserId,
-      amount: reservedCost,
-      idempotencyKey: buildUnlockLedgerIdempotencyKey({
+    const reservedCost = dualGenerateEnabled
+      ? 0
+      : Math.max(0.001, Number(reservedUnlock.estimated_cost || input.estimatedUnlockCost));
+    if (!dualGenerateEnabled) {
+      const hold = await reserveCredits(db, {
+        userId: payerUserId,
+        amount: reservedCost,
+        idempotencyKey: buildUnlockLedgerIdempotencyKey({
+          unlockId: reservedUnlock.id,
+          userId: payerUserId,
+          action: 'hold',
+        }),
+        reasonCode: 'UNLOCK_HOLD',
+        context: {
+          source_item_id: sourceItemId,
+          source_page_id: input.sourcePageId,
+          unlock_id: reservedUnlock.id,
+          metadata: {
+            source: 'subscription_auto_unlock',
+            video_id: input.video.videoId,
+          },
+        },
+      });
+
+      if (!hold.ok) {
+        sawInsufficientCredits = true;
+        await failUnlock(db, {
+          unlockId: reservedUnlock.id,
+          errorCode: 'INSUFFICIENT_CREDITS',
+          errorMessage: 'Auto-unlock payer has insufficient credits.',
+        });
+        const reloaded = await getSourceItemUnlockBySourceItemId(db, sourceItemId);
+        if (!reloaded || reloaded.status !== 'available') {
+          return { queued: false as const, reason: 'UNLOCK_NOT_AVAILABLE' as const };
+        }
+        currentUnlock = reloaded;
+        continue;
+      }
+
+      reservedUnlock = await attachReservationLedger(db, {
         unlockId: reservedUnlock.id,
         userId: payerUserId,
-        action: 'hold',
-      }),
-      reasonCode: 'UNLOCK_HOLD',
-      context: {
-        source_item_id: sourceItemId,
-        source_page_id: input.sourcePageId,
-        unlock_id: reservedUnlock.id,
-        metadata: {
-          source: 'subscription_auto_unlock',
-          video_id: input.video.videoId,
-        },
-      },
-    });
-
-    if (!hold.ok) {
-      sawInsufficientCredits = true;
-      await failUnlock(db, {
-        unlockId: reservedUnlock.id,
-        errorCode: 'INSUFFICIENT_CREDITS',
-        errorMessage: 'Auto-unlock payer has insufficient credits.',
+        ledgerId: hold.ledger_id || null,
+        amount: hold.reserved_amount,
       });
-      const reloaded = await getSourceItemUnlockBySourceItemId(db, sourceItemId);
-      if (!reloaded || reloaded.status !== 'available') {
-        return { queued: false as const, reason: 'UNLOCK_NOT_AVAILABLE' as const };
-      }
-      currentUnlock = reloaded;
-      continue;
     }
-
-    reservedUnlock = await attachReservationLedger(db, {
-      unlockId: reservedUnlock.id,
-      userId: payerUserId,
-      ledgerId: hold.ledger_id || null,
-      amount: hold.reserved_amount,
-    });
 
     const queueDepth = await countQueueDepth(db, {
       scope: 'source_item_unlock_generation',
@@ -3487,25 +3514,27 @@ async function attemptAutoUnlockForSourceItem(input: {
       includeRunning: true,
     });
     if (!unlockIntakeEnabled || queueDepth >= queueDepthHardLimit || userQueueDepth >= queueDepthPerUserLimit) {
-      await refundReservation(db, {
-        userId: payerUserId,
-        amount: reservedCost,
-        idempotencyKey: buildUnlockLedgerIdempotencyKey({
-          unlockId: reservedUnlock.id,
+      if (reservedCost > 0) {
+        await refundReservation(db, {
           userId: payerUserId,
-          action: 'refund',
-        }),
-        reasonCode: 'UNLOCK_REFUND',
-        context: {
-          source_item_id: sourceItemId,
-          source_page_id: input.sourcePageId,
-          unlock_id: reservedUnlock.id,
-          metadata: {
-            source: 'subscription_auto_unlock',
-            error_code: !unlockIntakeEnabled ? 'QUEUE_INTAKE_DISABLED' : 'QUEUE_BACKPRESSURE',
+          amount: reservedCost,
+          idempotencyKey: buildUnlockLedgerIdempotencyKey({
+            unlockId: reservedUnlock.id,
+            userId: payerUserId,
+            action: 'refund',
+          }),
+          reasonCode: 'UNLOCK_REFUND',
+          context: {
+            source_item_id: sourceItemId,
+            source_page_id: input.sourcePageId,
+            unlock_id: reservedUnlock.id,
+            metadata: {
+              source: 'subscription_auto_unlock',
+              error_code: !unlockIntakeEnabled ? 'QUEUE_INTAKE_DISABLED' : 'QUEUE_BACKPRESSURE',
+            },
           },
-        },
-      });
+        });
+      }
       await failUnlock(db, {
         unlockId: reservedUnlock.id,
         errorCode: !unlockIntakeEnabled ? 'QUEUE_INTAKE_DISABLED' : 'QUEUE_BACKPRESSURE',
@@ -3546,6 +3575,7 @@ async function attemptAutoUnlockForSourceItem(input: {
             reserved_by_user_id: payerUserId,
             unlock_origin: 'subscription_auto_unlock',
             generation_tier: payerGenerationTier,
+            dual_generate_enabled: dualGenerateEnabled,
           } satisfies SourceUnlockQueueItem],
         },
         next_run_at: new Date().toISOString(),
@@ -3554,25 +3584,27 @@ async function attemptAutoUnlockForSourceItem(input: {
       .single();
 
     if (jobError || !job?.id) {
-      await refundReservation(db, {
-        userId: payerUserId,
-        amount: reservedCost,
-        idempotencyKey: buildUnlockLedgerIdempotencyKey({
-          unlockId: reservedUnlock.id,
+      if (reservedCost > 0) {
+        await refundReservation(db, {
           userId: payerUserId,
-          action: 'refund',
-        }),
-        reasonCode: 'UNLOCK_REFUND',
-        context: {
-          source_item_id: sourceItemId,
-          source_page_id: input.sourcePageId,
-          unlock_id: reservedUnlock.id,
-          metadata: {
-            source: 'subscription_auto_unlock',
-            error_code: 'QUEUE_INSERT_FAILED',
+          amount: reservedCost,
+          idempotencyKey: buildUnlockLedgerIdempotencyKey({
+            unlockId: reservedUnlock.id,
+            userId: payerUserId,
+            action: 'refund',
+          }),
+          reasonCode: 'UNLOCK_REFUND',
+          context: {
+            source_item_id: sourceItemId,
+            source_page_id: input.sourcePageId,
+            unlock_id: reservedUnlock.id,
+            metadata: {
+              source: 'subscription_auto_unlock',
+              error_code: 'QUEUE_INSERT_FAILED',
+            },
           },
-        },
-      });
+        });
+      }
       await failUnlock(db, {
         unlockId: reservedUnlock.id,
         errorCode: 'SOURCE_VIDEO_GENERATE_FAILED',
@@ -4219,6 +4251,7 @@ async function processSearchVideoGenerateJob(input: {
   userId: string;
   items: SearchVideoGenerateItem[];
   generationTier: GenerationTier;
+  dualGenerateEnabled: boolean;
 }) {
   const db = getServiceSupabaseClient();
   if (!db) {
@@ -4252,7 +4285,7 @@ async function processSearchVideoGenerateJob(input: {
       });
 
       const existingFeedItem = await getExistingFeedItem(db, input.userId, source.id);
-      if (existingFeedItem) {
+      if (existingFeedItem && !input.dualGenerateEnabled) {
         skipped += 1;
         continue;
       }
@@ -4267,6 +4300,24 @@ async function processSearchVideoGenerateJob(input: {
         subscriptionId: null,
         generationTier: input.generationTier,
       });
+      await ensureMirrorVariantForQueueItem({
+        db,
+        enabled: input.dualGenerateEnabled,
+        jobId: input.jobId,
+        scope: 'search_video_generate',
+        userId: input.userId,
+        sourceItemId: source.id,
+        videoUrl: source.source_url,
+        videoId: source.source_native_id,
+        durationSeconds: item.duration_seconds,
+        sourceTag: 'youtube_search_direct',
+        primaryTier: input.generationTier,
+      });
+
+      if (existingFeedItem) {
+        skipped += 1;
+        continue;
+      }
 
       const insertedItem = await insertFeedItem(db, {
         userId: input.userId,
@@ -4302,6 +4353,37 @@ async function processSearchVideoGenerateJob(input: {
       }
     } catch (error) {
       if (error instanceof BlueprintVariantInProgressError) {
+        try {
+          const source = await upsertSourceItemFromVideo(db, {
+            video: {
+              videoId: item.video_id,
+              title: item.title,
+              url: item.video_url,
+              publishedAt: item.published_at || null,
+              thumbnailUrl: item.thumbnail_url || null,
+              durationSeconds: item.duration_seconds,
+            },
+            channelId: item.channel_id,
+            channelTitle: item.channel_title || null,
+            channelUrl: item.channel_url || null,
+            sourcePageId: null,
+          });
+          await ensureMirrorVariantForQueueItem({
+            db,
+            enabled: input.dualGenerateEnabled,
+            jobId: input.jobId,
+            scope: 'search_video_generate',
+            userId: input.userId,
+            sourceItemId: source.id,
+            videoUrl: source.source_url,
+            videoId: source.source_native_id,
+            durationSeconds: item.duration_seconds,
+            sourceTag: 'youtube_search_direct',
+            primaryTier: input.generationTier,
+          });
+        } catch {
+          // no-op: preserve existing in-progress handling
+        }
         skipped += 1;
         console.log('[search_video_generate_variant_in_progress]', JSON.stringify({
           job_id: input.jobId,
@@ -4369,11 +4451,62 @@ async function processSearchVideoGenerateJob(input: {
   }));
 }
 
+async function ensureMirrorVariantForQueueItem(input: {
+  db: ReturnType<typeof createClient>;
+  enabled: boolean;
+  jobId: string;
+  scope: string;
+  userId: string;
+  sourceItemId: string;
+  videoUrl: string;
+  videoId: string;
+  durationSeconds: number | null;
+  sourceTag: 'subscription_auto' | 'source_page_video_library' | 'youtube_search_direct';
+  primaryTier: GenerationTier;
+  subscriptionId?: string | null;
+}) {
+  if (!input.enabled) return;
+  const mirrorTier = getOppositeGenerationTier(input.primaryTier);
+  try {
+    await createBlueprintFromVideo(input.db, {
+      userId: input.userId,
+      videoUrl: input.videoUrl,
+      videoId: input.videoId,
+      durationSeconds: input.durationSeconds,
+      sourceTag: input.sourceTag,
+      sourceItemId: input.sourceItemId,
+      subscriptionId: input.subscriptionId || null,
+      generationTier: mirrorTier,
+    });
+  } catch (error) {
+    if (error instanceof BlueprintVariantInProgressError) {
+      console.log('[queue_mirror_variant_in_progress]', JSON.stringify({
+        scope: input.scope,
+        job_id: input.jobId,
+        user_id: input.userId,
+        source_item_id: input.sourceItemId,
+        generation_tier: error.generationTier,
+        active_job_id: error.activeJobId,
+      }));
+      return;
+    }
+    console.log('[queue_mirror_variant_failed]', JSON.stringify({
+      scope: input.scope,
+      job_id: input.jobId,
+      user_id: input.userId,
+      source_item_id: input.sourceItemId,
+      generation_tier: mirrorTier,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+}
+
 async function processManualRefreshGenerateJob(input: {
   jobId: string;
   userId: string;
   items: RefreshScanCandidate[];
   generationTier: GenerationTier;
+  dualGenerateEnabled: boolean;
 }) {
   const db = getServiceSupabaseClient();
   if (!db) {
@@ -4453,7 +4586,7 @@ async function processManualRefreshGenerateJob(input: {
       });
 
       const existingFeedItem = await getExistingFeedItem(db, input.userId, source.id);
-      if (existingFeedItem) {
+      if (existingFeedItem && !input.dualGenerateEnabled) {
         skipped += 1;
         recordCheckpointCandidate(item);
         continue;
@@ -4469,6 +4602,26 @@ async function processManualRefreshGenerateJob(input: {
         subscriptionId: subscription.id,
         generationTier: input.generationTier,
       });
+      await ensureMirrorVariantForQueueItem({
+        db,
+        enabled: input.dualGenerateEnabled,
+        jobId: input.jobId,
+        scope: 'manual_refresh_selection',
+        userId: input.userId,
+        sourceItemId: source.id,
+        videoUrl: source.source_url,
+        videoId: source.source_native_id,
+        durationSeconds: item.duration_seconds,
+        sourceTag: 'subscription_auto',
+        primaryTier: input.generationTier,
+        subscriptionId: subscription.id,
+      });
+
+      if (existingFeedItem) {
+        skipped += 1;
+        recordCheckpointCandidate(item);
+        continue;
+      }
 
       const insertedItem = await insertFeedItem(db, {
         userId: input.userId,
@@ -4519,6 +4672,37 @@ async function processManualRefreshGenerateJob(input: {
       }));
     } catch (error) {
       if (error instanceof BlueprintVariantInProgressError) {
+        try {
+          const source = await upsertSourceItemFromVideo(db, {
+            video: {
+              videoId: item.video_id,
+              title: item.title,
+              url: item.video_url,
+              publishedAt: item.published_at || null,
+              thumbnailUrl: item.thumbnail_url || null,
+              durationSeconds: item.duration_seconds,
+            },
+            channelId: subscription.source_channel_id,
+            channelTitle: item.source_channel_title || subscription.source_channel_title || null,
+            sourcePageId: subscription.source_page_id || null,
+          });
+          await ensureMirrorVariantForQueueItem({
+            db,
+            enabled: input.dualGenerateEnabled,
+            jobId: input.jobId,
+            scope: 'manual_refresh_selection',
+            userId: input.userId,
+            sourceItemId: source.id,
+            videoUrl: source.source_url,
+            videoId: source.source_native_id,
+            durationSeconds: item.duration_seconds,
+            sourceTag: 'subscription_auto',
+            primaryTier: input.generationTier,
+            subscriptionId: subscription.id,
+          });
+        } catch {
+          // no-op: preserve existing in-progress handling
+        }
         skipped += 1;
         console.log('[subscription_refresh_generate_variant_in_progress]', JSON.stringify({
           job_id: input.jobId,
@@ -4814,10 +4998,19 @@ async function processSourceItemUnlockGenerationJob(input: {
   let firstBlueprintTitle: string | null = null;
   let notifyFailedCount = 0;
   const failures: Array<{ video_id: string; unlock_id: string; error_code: string; error: string }> = [];
+  const dualGenerateEnabled = isDualGenerateEnabledForUser({
+    userId: input.userId,
+    scope: 'queue',
+  }) || input.items.some((item) => Boolean(item.dual_generate_enabled));
 
   for (const item of input.items) {
     let processingUnlockRow: SourceItemUnlockRow | null = null;
     let skipUnlockSettlement = false;
+    let sourceRowForMirror: {
+      id: string;
+      source_url: string;
+      source_native_id: string;
+    } | null = null;
     const itemGenerationTier: GenerationTier = item.generation_tier === 'tier' ? 'tier' : input.generationTier;
     processed += 1;
     try {
@@ -4836,14 +5029,41 @@ async function processSourceItemUnlockGenerationJob(input: {
           generationTier: itemGenerationTier,
         });
         if (variantState.state === 'ready' && variantState.blueprintId) {
-          skipped += 1;
-          continue;
+          if (!dualGenerateEnabled) {
+            skipped += 1;
+            continue;
+          }
+          skipUnlockSettlement = true;
         }
         if (variantState.state === 'in_progress') {
+          if (dualGenerateEnabled) {
+            const { data: sourceForMirror } = await db
+              .from('source_items')
+              .select('id, source_url, source_native_id')
+              .eq('id', item.source_item_id)
+              .maybeSingle();
+            if (sourceForMirror?.id && sourceForMirror.source_url && sourceForMirror.source_native_id) {
+              await ensureMirrorVariantForQueueItem({
+                db,
+                enabled: true,
+                jobId: input.jobId,
+                scope: 'source_item_unlock_generation',
+                userId: input.userId,
+                sourceItemId: sourceForMirror.id,
+                videoUrl: sourceForMirror.source_url,
+                videoId: sourceForMirror.source_native_id,
+                durationSeconds: item.duration_seconds,
+                sourceTag: 'source_page_video_library',
+                primaryTier: itemGenerationTier,
+              });
+            }
+          }
           skipped += 1;
           continue;
         }
-        if (current?.status === 'ready' && current.blueprint_id) {
+        if (skipUnlockSettlement) {
+          // Dual-generate mode: primary is already ready, keep going so mirror can be ensured.
+        } else if (current?.status === 'ready' && current.blueprint_id) {
           skipUnlockSettlement = true;
         } else {
           skipped += 1;
@@ -4857,14 +5077,41 @@ async function processSourceItemUnlockGenerationJob(input: {
           generationTier: itemGenerationTier,
         });
         if (variantState.state === 'ready' && variantState.blueprintId) {
-          skipped += 1;
-          continue;
+          if (!dualGenerateEnabled) {
+            skipped += 1;
+            continue;
+          }
+          skipUnlockSettlement = true;
         }
         if (variantState.state === 'in_progress') {
+          if (dualGenerateEnabled) {
+            const { data: sourceForMirror } = await db
+              .from('source_items')
+              .select('id, source_url, source_native_id')
+              .eq('id', item.source_item_id)
+              .maybeSingle();
+            if (sourceForMirror?.id && sourceForMirror.source_url && sourceForMirror.source_native_id) {
+              await ensureMirrorVariantForQueueItem({
+                db,
+                enabled: true,
+                jobId: input.jobId,
+                scope: 'source_item_unlock_generation',
+                userId: input.userId,
+                sourceItemId: sourceForMirror.id,
+                videoUrl: sourceForMirror.source_url,
+                videoId: sourceForMirror.source_native_id,
+                durationSeconds: item.duration_seconds,
+                sourceTag: 'source_page_video_library',
+                primaryTier: itemGenerationTier,
+              });
+            }
+          }
           skipped += 1;
           continue;
         }
-        skipUnlockSettlement = true;
+        if (!skipUnlockSettlement) {
+          skipUnlockSettlement = true;
+        }
       }
 
       const { data: sourceRow, error: sourceError } = await db
@@ -4876,6 +5123,11 @@ async function processSourceItemUnlockGenerationJob(input: {
       if (sourceError || !sourceRow) {
         throw new Error(sourceError?.message || 'SOURCE_ITEM_NOT_FOUND');
       }
+      sourceRowForMirror = {
+        id: sourceRow.id,
+        source_url: sourceRow.source_url,
+        source_native_id: sourceRow.source_native_id,
+      };
 
       const generated = await createBlueprintFromVideo(db, {
         userId: input.userId,
@@ -4886,6 +5138,19 @@ async function processSourceItemUnlockGenerationJob(input: {
         sourceItemId: sourceRow.id,
         subscriptionId: null,
         generationTier: itemGenerationTier,
+      });
+      await ensureMirrorVariantForQueueItem({
+        db,
+        enabled: dualGenerateEnabled,
+        jobId: input.jobId,
+        scope: 'source_item_unlock_generation',
+        userId: input.userId,
+        sourceItemId: sourceRow.id,
+        videoUrl: sourceRow.source_url,
+        videoId: sourceRow.source_native_id,
+        durationSeconds: item.duration_seconds,
+        sourceTag: 'source_page_video_library',
+        primaryTier: itemGenerationTier,
       });
 
       const feedRows = await attachBlueprintToSubscribedUsers(db, {
@@ -4934,26 +5199,28 @@ async function processSourceItemUnlockGenerationJob(input: {
         });
         await markUnlockTranscriptSuccess(db, item.unlock_id);
 
-        await settleReservation(db, {
-          userId: item.reserved_by_user_id,
-          amount: item.reserved_cost,
-          idempotencyKey: buildUnlockLedgerIdempotencyKey({
-            unlockId: item.unlock_id,
+        if (item.reserved_cost > 0) {
+          await settleReservation(db, {
             userId: item.reserved_by_user_id,
-            action: 'settle',
-          }),
-          reasonCode: 'UNLOCK_SETTLE',
-          context: {
-            source_item_id: item.source_item_id,
-            source_page_id: item.source_page_id,
-            unlock_id: item.unlock_id,
-            metadata: {
-              job_id: input.jobId,
-              blueprint_id: generated.blueprintId,
-              trace_id: input.traceId,
+            amount: item.reserved_cost,
+            idempotencyKey: buildUnlockLedgerIdempotencyKey({
+              unlockId: item.unlock_id,
+              userId: item.reserved_by_user_id,
+              action: 'settle',
+            }),
+            reasonCode: 'UNLOCK_SETTLE',
+            context: {
+              source_item_id: item.source_item_id,
+              source_page_id: item.source_page_id,
+              unlock_id: item.unlock_id,
+              metadata: {
+                job_id: input.jobId,
+                blueprint_id: generated.blueprintId,
+                trace_id: input.traceId,
+              },
             },
-          },
-        });
+          });
+        }
       }
 
       inserted += 1;
@@ -4976,29 +5243,46 @@ async function processSourceItemUnlockGenerationJob(input: {
       );
     } catch (error) {
       if (error instanceof BlueprintVariantInProgressError) {
+        if (sourceRowForMirror) {
+          await ensureMirrorVariantForQueueItem({
+            db,
+            enabled: dualGenerateEnabled,
+            jobId: input.jobId,
+            scope: 'source_item_unlock_generation',
+            userId: input.userId,
+            sourceItemId: sourceRowForMirror.id,
+            videoUrl: sourceRowForMirror.source_url,
+            videoId: sourceRowForMirror.source_native_id,
+            durationSeconds: item.duration_seconds,
+            sourceTag: 'source_page_video_library',
+            primaryTier: itemGenerationTier,
+          });
+        }
         skipped += 1;
         if (processingUnlockRow) {
           try {
-            await refundReservation(db, {
-              userId: item.reserved_by_user_id,
-              amount: item.reserved_cost,
-              idempotencyKey: buildUnlockLedgerIdempotencyKey({
-                unlockId: item.unlock_id,
+            if (item.reserved_cost > 0) {
+              await refundReservation(db, {
                 userId: item.reserved_by_user_id,
-                action: 'refund',
-              }),
-              reasonCode: 'UNLOCK_REFUND',
-              context: {
-                source_item_id: item.source_item_id,
-                source_page_id: item.source_page_id,
-                unlock_id: item.unlock_id,
-                metadata: {
-                  job_id: input.jobId,
-                  error_code: 'ALREADY_IN_PROGRESS',
-                  trace_id: input.traceId,
+                amount: item.reserved_cost,
+                idempotencyKey: buildUnlockLedgerIdempotencyKey({
+                  unlockId: item.unlock_id,
+                  userId: item.reserved_by_user_id,
+                  action: 'refund',
+                }),
+                reasonCode: 'UNLOCK_REFUND',
+                context: {
+                  source_item_id: item.source_item_id,
+                  source_page_id: item.source_page_id,
+                  unlock_id: item.unlock_id,
+                  metadata: {
+                    job_id: input.jobId,
+                    error_code: 'ALREADY_IN_PROGRESS',
+                    trace_id: input.traceId,
+                  },
                 },
-              },
-            });
+              });
+            }
           } catch (refundError) {
             logUnlockEvent(
               'source_unlock_variant_refund_failed',
@@ -5144,26 +5428,28 @@ async function processSourceItemUnlockGenerationJob(input: {
 
       if (processingUnlockRow) {
         try {
-          await refundReservation(db, {
-            userId: item.reserved_by_user_id,
-            amount: item.reserved_cost,
-            idempotencyKey: buildUnlockLedgerIdempotencyKey({
-              unlockId: item.unlock_id,
+          if (item.reserved_cost > 0) {
+            await refundReservation(db, {
               userId: item.reserved_by_user_id,
-              action: 'refund',
-            }),
-            reasonCode: 'UNLOCK_REFUND',
-            context: {
-              source_item_id: item.source_item_id,
-              source_page_id: item.source_page_id,
-              unlock_id: item.unlock_id,
-              metadata: {
-                job_id: input.jobId,
-                error_code: errorCode,
-                trace_id: input.traceId,
+              amount: item.reserved_cost,
+              idempotencyKey: buildUnlockLedgerIdempotencyKey({
+                unlockId: item.unlock_id,
+                userId: item.reserved_by_user_id,
+                action: 'refund',
+              }),
+              reasonCode: 'UNLOCK_REFUND',
+              context: {
+                source_item_id: item.source_item_id,
+                source_page_id: item.source_page_id,
+                unlock_id: item.unlock_id,
+                metadata: {
+                  job_id: input.jobId,
+                  error_code: errorCode,
+                  trace_id: input.traceId,
+                },
               },
-            },
-          });
+            });
+          }
         } catch (refundError) {
           logUnlockEvent(
             'source_unlock_refund_failed',
@@ -5734,6 +6020,7 @@ function normalizeSourceUnlockQueueItems(value: unknown): SourceUnlockQueueItem[
       reserved_by_user_id: reservedByUserId,
       unlock_origin: unlockOrigin,
       generation_tier: generationTier,
+      dual_generate_enabled: Boolean(row.dual_generate_enabled),
     });
   }
   return rows;
@@ -5864,6 +6151,18 @@ function resolveGenerationTierForUser(input: {
     requestedTier,
     access,
   }) || access.defaultTier;
+}
+
+function getOppositeGenerationTier(tier: GenerationTier): GenerationTier {
+  return tier === 'tier' ? 'free' : 'tier';
+}
+
+function getDualGenerateTiers(input: {
+  requestedTier: GenerationTier;
+  enabled: boolean;
+}): GenerationTier[] {
+  if (!input.enabled) return [input.requestedTier];
+  return [input.requestedTier, getOppositeGenerationTier(input.requestedTier)];
 }
 
 function getRetryDelayForErrorCode(errorCode: string) {
@@ -6109,11 +6408,16 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
             userId,
             payloadTierRaw: payload.generation_tier,
           });
+          const dualGenerateEnabled = isDualGenerateEnabledForUser({
+            userId,
+            scope: 'queue',
+          });
           await processManualRefreshGenerateJob({
             jobId: job.id,
             userId,
             items,
             generationTier,
+            dualGenerateEnabled,
           });
           return;
         }
@@ -6128,11 +6432,16 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
             userId,
             payloadTierRaw: payload.generation_tier,
           });
+          const dualGenerateEnabled = isDualGenerateEnabledForUser({
+            userId,
+            scope: 'queue',
+          });
           await processSearchVideoGenerateJob({
             jobId: job.id,
             userId,
             items,
             generationTier,
+            dualGenerateEnabled,
           });
           return;
         }
@@ -6368,6 +6677,8 @@ registerSourceSubscriptionsRoutes(app, {
   resolveGenerationTierAccess,
   resolveRequestedGenerationTier,
   normalizeRequestedGenerationTier,
+  isDualGenerateEnabledForUser,
+  getDualGenerateTiers,
   resolveVariantOrReady,
 });
 
@@ -6440,6 +6751,8 @@ registerSourcePagesRoutes(app, {
   resolveGenerationTierAccess,
   resolveRequestedGenerationTier,
   normalizeRequestedGenerationTier,
+  isDualGenerateEnabledForUser,
+  getDualGenerateTiers,
   resolveVariantOrReady,
 });
 

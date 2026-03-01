@@ -265,6 +265,14 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
     requestedTier,
     access: tierAccess,
   });
+  const dualGenerateEnabled = deps.isDualGenerateEnabledForUser({
+    userId,
+    scope: 'queue',
+  });
+  const dualGenerateTiers = deps.getDualGenerateTiers({
+    requestedTier: resolvedTier || tierAccess.defaultTier,
+    enabled: dualGenerateEnabled,
+  });
   if (!resolvedTier) {
     return res.status(403).json({
       ok: false,
@@ -472,6 +480,8 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
       requested_tier: requestedTier || null,
       resolved_tier: resolvedTier,
       variant_status: 'queued',
+      dual_generate_enabled: dualGenerateEnabled,
+      dual_generate_tiers: dualGenerateTiers,
       duration_blocked_count: durationBlocked.length,
       duration_blocked: durationBlocked,
     },

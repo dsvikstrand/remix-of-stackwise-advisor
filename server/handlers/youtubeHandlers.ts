@@ -87,6 +87,8 @@ export function registerYouTubeRouteHandlers(app: express.Express, deps: YouTube
     resolveGenerationTierAccess,
     resolveRequestedGenerationTier,
     normalizeRequestedGenerationTier,
+    isDualGenerateEnabledForUser,
+    getDualGenerateTiers,
     resolveGenerationModelProfile,
     resolveVariantOrReady,
     findVariantsByBlueprintId,
@@ -300,6 +302,10 @@ app.get('/api/generation/tier-access', async (_req, res) => {
       allowed_tiers: access.allowedTiers,
       default_tier: access.defaultTier,
       test_mode_enabled: access.testModeEnabled,
+      dual_generate_enabled: isDualGenerateEnabledForUser({
+        userId,
+        scope: 'queue',
+      }),
     },
   });
 });
@@ -463,6 +469,14 @@ app.post(
     const resolvedTier = resolveRequestedGenerationTier({
       requestedTier,
       access: tierAccess,
+    });
+    const dualGenerateEnabled = isDualGenerateEnabledForUser({
+      userId,
+      scope: 'queue',
+    });
+    const dualGenerateTiers = getDualGenerateTiers({
+      requestedTier: resolvedTier || tierAccess.defaultTier,
+      enabled: dualGenerateEnabled,
     });
     if (!resolvedTier) {
       return res.status(403).json({
@@ -640,6 +654,8 @@ app.post(
         requested_tier: requestedTier || null,
         resolved_tier: resolvedTier,
         variant_status: 'queued',
+        dual_generate_enabled: dualGenerateEnabled,
+        dual_generate_tiers: dualGenerateTiers,
         duration_blocked_count: durationBlocked.length,
         duration_blocked: durationBlocked,
       },
