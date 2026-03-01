@@ -169,6 +169,8 @@ const limiter = rateLimit({
     req.path === '/api/health'
     || req.path === '/api/credits'
     || req.path === '/api/ingestion/jobs/latest-mine'
+    || req.path === '/api/ingestion/jobs/active-mine'
+    || req.path.startsWith('/api/notifications')
     || req.path === '/api/youtube-search'
     || req.path === '/api/youtube-channel-search'
     || req.path.startsWith('/api/youtube/channels/')
@@ -5918,6 +5920,14 @@ registerIngestionUserRoutes(app, {
   workerConcurrency,
   queuedIngestionScopes: QUEUED_INGESTION_SCOPES,
   isQueuedIngestionScope,
+});
+
+registerNotificationRoutes(app, {
+  getAuthedSupabaseClient,
+  listNotificationsForUser,
+  markAllNotificationsRead,
+  markNotificationRead,
+  clampInt,
 });
 
 registerOpsRoutes(app, {

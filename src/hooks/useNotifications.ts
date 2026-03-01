@@ -21,6 +21,7 @@ export function useNotifications(input?: { limit?: number }) {
     enabled: Boolean(user?.id),
     staleTime: 15_000,
     refetchInterval: 20_000,
+    retry: false,
   });
 
   const markReadMutation = useMutation({
