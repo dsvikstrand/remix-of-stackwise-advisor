@@ -1,4 +1,9 @@
-import { TranscriptProviderError, normalizeTranscriptWhitespace, type TranscriptResult } from '../types';
+import {
+  TranscriptProviderError,
+  normalizeTranscriptWhitespace,
+  type TranscriptProviderAdapter,
+  type TranscriptResult,
+} from '../types';
 
 function decodeHtml(text: string) {
   return text
@@ -85,3 +90,8 @@ export async function getTranscriptFromYouTubeTimedtext(videoId: string): Promis
     return fetchOnce(videoId);
   }
 }
+
+export const youtubeTimedtextTranscriptProviderAdapter: TranscriptProviderAdapter = {
+  id: 'youtube_timedtext',
+  getTranscript: getTranscriptFromYouTubeTimedtext,
+};

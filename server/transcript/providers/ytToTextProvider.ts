@@ -1,4 +1,10 @@
-import { TranscriptProviderError, normalizeTranscriptWhitespace, type TranscriptResult, type TranscriptSegment } from '../types';
+import {
+  TranscriptProviderError,
+  normalizeTranscriptWhitespace,
+  type TranscriptProviderAdapter,
+  type TranscriptResult,
+  type TranscriptSegment,
+} from '../types';
 
 function toSeconds(input: unknown) {
   const n = Number(input);
@@ -84,3 +90,8 @@ export async function getTranscriptFromYtToText(videoId: string): Promise<Transc
     segments,
   };
 }
+
+export const ytToTextTranscriptProviderAdapter: TranscriptProviderAdapter = {
+  id: 'yt_to_text',
+  getTranscript: getTranscriptFromYtToText,
+};
