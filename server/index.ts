@@ -4448,6 +4448,7 @@ async function processSearchVideoGenerateJob(input: {
   const failures: Array<{ video_id: string; error_code: string; error: string }> = [];
 
   for (const item of input.items) {
+    let mirrorAttemptedForItem = false;
     processed += 1;
     try {
       const source = await upsertSourceItemFromVideo(db, {
@@ -4471,29 +4472,43 @@ async function processSearchVideoGenerateJob(input: {
         continue;
       }
 
-      const generated = await createBlueprintFromVideo(db, {
-        userId: input.userId,
-        videoUrl: source.source_url,
-        videoId: source.source_native_id,
-        durationSeconds: item.duration_seconds,
-        sourceTag: 'youtube_search_direct',
-        sourceItemId: source.id,
-        subscriptionId: null,
-        generationTier: input.generationTier,
-      });
-      await ensureMirrorVariantForQueueItem({
-        db,
-        enabled: input.dualGenerateEnabled,
-        jobId: input.jobId,
-        scope: 'search_video_generate',
-        userId: input.userId,
-        sourceItemId: source.id,
-        videoUrl: source.source_url,
-        videoId: source.source_native_id,
-        durationSeconds: item.duration_seconds,
-        sourceTag: 'youtube_search_direct',
-        primaryTier: input.generationTier,
-      });
+      const tryMirrorGeneration = async () => {
+        if (!input.dualGenerateEnabled) return;
+        mirrorAttemptedForItem = true;
+        await ensureMirrorVariantForQueueItem({
+          db,
+          enabled: input.dualGenerateEnabled,
+          jobId: input.jobId,
+          scope: 'search_video_generate',
+          userId: input.userId,
+          sourceItemId: source.id,
+          videoUrl: source.source_url,
+          videoId: source.source_native_id,
+          durationSeconds: item.duration_seconds,
+          sourceTag: 'youtube_search_direct',
+          primaryTier: input.generationTier,
+        });
+      };
+
+      let generated: { blueprintId: string; runId: string; title: string } | null = null;
+      try {
+        generated = await createBlueprintFromVideo(db, {
+          userId: input.userId,
+          videoUrl: source.source_url,
+          videoId: source.source_native_id,
+          durationSeconds: item.duration_seconds,
+          sourceTag: 'youtube_search_direct',
+          sourceItemId: source.id,
+          subscriptionId: null,
+          generationTier: input.generationTier,
+        });
+      } catch (primaryError) {
+        await tryMirrorGeneration();
+        throw primaryError;
+      }
+
+      await tryMirrorGeneration();
+      if (!generated) throw new Error('PRIMARY_GENERATION_MISSING');
 
       if (existingFeedItem) {
         skipped += 1;
@@ -4534,36 +4549,38 @@ async function processSearchVideoGenerateJob(input: {
       }
     } catch (error) {
       if (error instanceof BlueprintVariantInProgressError) {
-        try {
-          const source = await upsertSourceItemFromVideo(db, {
-            video: {
-              videoId: item.video_id,
-              title: item.title,
-              url: item.video_url,
-              publishedAt: item.published_at || null,
-              thumbnailUrl: item.thumbnail_url || null,
+        if (!mirrorAttemptedForItem) {
+          try {
+            const source = await upsertSourceItemFromVideo(db, {
+              video: {
+                videoId: item.video_id,
+                title: item.title,
+                url: item.video_url,
+                publishedAt: item.published_at || null,
+                thumbnailUrl: item.thumbnail_url || null,
+                durationSeconds: item.duration_seconds,
+              },
+              channelId: item.channel_id,
+              channelTitle: item.channel_title || null,
+              channelUrl: item.channel_url || null,
+              sourcePageId: null,
+            });
+            await ensureMirrorVariantForQueueItem({
+              db,
+              enabled: input.dualGenerateEnabled,
+              jobId: input.jobId,
+              scope: 'search_video_generate',
+              userId: input.userId,
+              sourceItemId: source.id,
+              videoUrl: source.source_url,
+              videoId: source.source_native_id,
               durationSeconds: item.duration_seconds,
-            },
-            channelId: item.channel_id,
-            channelTitle: item.channel_title || null,
-            channelUrl: item.channel_url || null,
-            sourcePageId: null,
-          });
-          await ensureMirrorVariantForQueueItem({
-            db,
-            enabled: input.dualGenerateEnabled,
-            jobId: input.jobId,
-            scope: 'search_video_generate',
-            userId: input.userId,
-            sourceItemId: source.id,
-            videoUrl: source.source_url,
-            videoId: source.source_native_id,
-            durationSeconds: item.duration_seconds,
-            sourceTag: 'youtube_search_direct',
-            primaryTier: input.generationTier,
-          });
-        } catch {
-          // no-op: preserve existing in-progress handling
+              sourceTag: 'youtube_search_direct',
+              primaryTier: input.generationTier,
+            });
+          } catch {
+            // no-op: preserve existing in-progress handling
+          }
         }
         skipped += 1;
         console.log('[search_video_generate_variant_in_progress]', JSON.stringify({
@@ -4740,6 +4757,7 @@ async function processManualRefreshGenerateJob(input: {
   const subscriptionById = new Map((subscriptions || []).map((row) => [row.id, row]));
 
   for (const item of input.items) {
+    let mirrorAttemptedForItem = false;
     processed += 1;
     const subscription = subscriptionById.get(item.subscription_id);
     if (!subscription) {
@@ -4773,30 +4791,44 @@ async function processManualRefreshGenerateJob(input: {
         continue;
       }
 
-      const generated = await createBlueprintFromVideo(db, {
-        userId: input.userId,
-        videoUrl: source.source_url,
-        videoId: source.source_native_id,
-        durationSeconds: item.duration_seconds,
-        sourceTag: 'subscription_auto',
-        sourceItemId: source.id,
-        subscriptionId: subscription.id,
-        generationTier: input.generationTier,
-      });
-      await ensureMirrorVariantForQueueItem({
-        db,
-        enabled: input.dualGenerateEnabled,
-        jobId: input.jobId,
-        scope: 'manual_refresh_selection',
-        userId: input.userId,
-        sourceItemId: source.id,
-        videoUrl: source.source_url,
-        videoId: source.source_native_id,
-        durationSeconds: item.duration_seconds,
-        sourceTag: 'subscription_auto',
-        primaryTier: input.generationTier,
-        subscriptionId: subscription.id,
-      });
+      const tryMirrorGeneration = async () => {
+        if (!input.dualGenerateEnabled) return;
+        mirrorAttemptedForItem = true;
+        await ensureMirrorVariantForQueueItem({
+          db,
+          enabled: input.dualGenerateEnabled,
+          jobId: input.jobId,
+          scope: 'manual_refresh_selection',
+          userId: input.userId,
+          sourceItemId: source.id,
+          videoUrl: source.source_url,
+          videoId: source.source_native_id,
+          durationSeconds: item.duration_seconds,
+          sourceTag: 'subscription_auto',
+          primaryTier: input.generationTier,
+          subscriptionId: subscription.id,
+        });
+      };
+
+      let generated: { blueprintId: string; runId: string; title: string } | null = null;
+      try {
+        generated = await createBlueprintFromVideo(db, {
+          userId: input.userId,
+          videoUrl: source.source_url,
+          videoId: source.source_native_id,
+          durationSeconds: item.duration_seconds,
+          sourceTag: 'subscription_auto',
+          sourceItemId: source.id,
+          subscriptionId: subscription.id,
+          generationTier: input.generationTier,
+        });
+      } catch (primaryError) {
+        await tryMirrorGeneration();
+        throw primaryError;
+      }
+
+      await tryMirrorGeneration();
+      if (!generated) throw new Error('PRIMARY_GENERATION_MISSING');
 
       if (existingFeedItem) {
         skipped += 1;
@@ -4853,36 +4885,38 @@ async function processManualRefreshGenerateJob(input: {
       }));
     } catch (error) {
       if (error instanceof BlueprintVariantInProgressError) {
-        try {
-          const source = await upsertSourceItemFromVideo(db, {
-            video: {
-              videoId: item.video_id,
-              title: item.title,
-              url: item.video_url,
-              publishedAt: item.published_at || null,
-              thumbnailUrl: item.thumbnail_url || null,
+        if (!mirrorAttemptedForItem) {
+          try {
+            const source = await upsertSourceItemFromVideo(db, {
+              video: {
+                videoId: item.video_id,
+                title: item.title,
+                url: item.video_url,
+                publishedAt: item.published_at || null,
+                thumbnailUrl: item.thumbnail_url || null,
+                durationSeconds: item.duration_seconds,
+              },
+              channelId: subscription.source_channel_id,
+              channelTitle: item.source_channel_title || subscription.source_channel_title || null,
+              sourcePageId: subscription.source_page_id || null,
+            });
+            await ensureMirrorVariantForQueueItem({
+              db,
+              enabled: input.dualGenerateEnabled,
+              jobId: input.jobId,
+              scope: 'manual_refresh_selection',
+              userId: input.userId,
+              sourceItemId: source.id,
+              videoUrl: source.source_url,
+              videoId: source.source_native_id,
               durationSeconds: item.duration_seconds,
-            },
-            channelId: subscription.source_channel_id,
-            channelTitle: item.source_channel_title || subscription.source_channel_title || null,
-            sourcePageId: subscription.source_page_id || null,
-          });
-          await ensureMirrorVariantForQueueItem({
-            db,
-            enabled: input.dualGenerateEnabled,
-            jobId: input.jobId,
-            scope: 'manual_refresh_selection',
-            userId: input.userId,
-            sourceItemId: source.id,
-            videoUrl: source.source_url,
-            videoId: source.source_native_id,
-            durationSeconds: item.duration_seconds,
-            sourceTag: 'subscription_auto',
-            primaryTier: input.generationTier,
-            subscriptionId: subscription.id,
-          });
-        } catch {
-          // no-op: preserve existing in-progress handling
+              sourceTag: 'subscription_auto',
+              primaryTier: input.generationTier,
+              subscriptionId: subscription.id,
+            });
+          } catch {
+            // no-op: preserve existing in-progress handling
+          }
         }
         skipped += 1;
         console.log('[subscription_refresh_generate_variant_in_progress]', JSON.stringify({
@@ -5185,6 +5219,7 @@ async function processSourceItemUnlockGenerationJob(input: {
   }) || input.items.some((item) => Boolean(item.dual_generate_enabled));
 
   for (const item of input.items) {
+    let mirrorAttemptedForItem = false;
     let processingUnlockRow: SourceItemUnlockRow | null = null;
     let skipUnlockSettlement = false;
     let sourceRowForMirror: {
@@ -5310,29 +5345,42 @@ async function processSourceItemUnlockGenerationJob(input: {
         source_native_id: sourceRow.source_native_id,
       };
 
-      const generated = await createBlueprintFromVideo(db, {
-        userId: input.userId,
-        videoUrl: sourceRow.source_url,
-        videoId: sourceRow.source_native_id,
-        durationSeconds: item.duration_seconds,
-        sourceTag: 'source_page_video_library',
-        sourceItemId: sourceRow.id,
-        subscriptionId: null,
-        generationTier: itemGenerationTier,
-      });
-      await ensureMirrorVariantForQueueItem({
-        db,
-        enabled: dualGenerateEnabled,
-        jobId: input.jobId,
-        scope: 'source_item_unlock_generation',
-        userId: input.userId,
-        sourceItemId: sourceRow.id,
-        videoUrl: sourceRow.source_url,
-        videoId: sourceRow.source_native_id,
-        durationSeconds: item.duration_seconds,
-        sourceTag: 'source_page_video_library',
-        primaryTier: itemGenerationTier,
-      });
+      const tryMirrorGeneration = async () => {
+        if (!dualGenerateEnabled) return;
+        mirrorAttemptedForItem = true;
+        await ensureMirrorVariantForQueueItem({
+          db,
+          enabled: dualGenerateEnabled,
+          jobId: input.jobId,
+          scope: 'source_item_unlock_generation',
+          userId: input.userId,
+          sourceItemId: sourceRow.id,
+          videoUrl: sourceRow.source_url,
+          videoId: sourceRow.source_native_id,
+          durationSeconds: item.duration_seconds,
+          sourceTag: 'source_page_video_library',
+          primaryTier: itemGenerationTier,
+        });
+      };
+
+      let generated: { blueprintId: string; runId: string; title: string } | null = null;
+      try {
+        generated = await createBlueprintFromVideo(db, {
+          userId: input.userId,
+          videoUrl: sourceRow.source_url,
+          videoId: sourceRow.source_native_id,
+          durationSeconds: item.duration_seconds,
+          sourceTag: 'source_page_video_library',
+          sourceItemId: sourceRow.id,
+          subscriptionId: null,
+          generationTier: itemGenerationTier,
+        });
+      } catch (primaryError) {
+        await tryMirrorGeneration();
+        throw primaryError;
+      }
+      await tryMirrorGeneration();
+      if (!generated) throw new Error('PRIMARY_GENERATION_MISSING');
 
       const feedRows = await attachBlueprintToSubscribedUsers(db, {
         sourceItemId: sourceRow.id,
@@ -5424,7 +5472,7 @@ async function processSourceItemUnlockGenerationJob(input: {
       );
     } catch (error) {
       if (error instanceof BlueprintVariantInProgressError) {
-        if (sourceRowForMirror) {
+        if (sourceRowForMirror && !mirrorAttemptedForItem) {
           await ensureMirrorVariantForQueueItem({
             db,
             enabled: dualGenerateEnabled,
