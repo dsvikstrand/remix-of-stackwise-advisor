@@ -25,6 +25,99 @@ type YouTubeDraft = {
   };
 };
 
+type TakeawaysClampMeta = {
+  applied: boolean;
+  beforeWords: number;
+  afterWords: number;
+  beforeBullets: number;
+  afterBullets: number;
+  truncatedLastBullet: boolean;
+};
+
+function splitWords(value: string) {
+  return String(value || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function countWords(value: string) {
+  return splitWords(value).length;
+}
+
+export function clampTakeawaysNotesToWordBudget(input: {
+  notes: string;
+  maxWords?: number;
+  minBullets?: number;
+}) {
+  const maxWords = Math.max(1, Math.floor(Number(input.maxWords ?? 100) || 100));
+  const minBullets = Math.max(1, Math.floor(Number(input.minBullets ?? 3) || 3));
+  const sourceLines = String(input.notes || '')
+    .replace(/\r/g, '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const bulletItems = sourceLines
+    .map((line) => {
+      const bulletMatch = line.match(/^[-*•]\s+(.+)$/);
+      if (bulletMatch) return bulletMatch[1].trim();
+      const numberedMatch = line.match(/^\d+[.)]\s+(.+)$/);
+      if (numberedMatch) return numberedMatch[1].trim();
+      return '';
+    })
+    .filter(Boolean);
+
+  const beforeWords = bulletItems.reduce((sum, item) => sum + countWords(item), 0);
+  const beforeBullets = bulletItems.length;
+  if (beforeBullets === 0 || beforeWords <= maxWords) {
+    return {
+      notes: String(input.notes || '').trim(),
+      meta: {
+        applied: false,
+        beforeWords,
+        afterWords: beforeWords,
+        beforeBullets,
+        afterBullets: beforeBullets,
+        truncatedLastBullet: false,
+      } satisfies TakeawaysClampMeta,
+    };
+  }
+
+  const working = bulletItems.slice();
+  let truncatedLastBullet = false;
+  while (working.length > minBullets) {
+    const words = working.reduce((sum, item) => sum + countWords(item), 0);
+    if (words <= maxWords) break;
+    working.pop();
+  }
+
+  let wordsAfterDrop = working.reduce((sum, item) => sum + countWords(item), 0);
+  if (wordsAfterDrop > maxWords && working.length > 0) {
+    const headWords = working.slice(0, -1).reduce((sum, item) => sum + countWords(item), 0);
+    const remainingBudget = Math.max(1, maxWords - headWords);
+    const lastIndex = working.length - 1;
+    const lastWords = splitWords(working[lastIndex] || '');
+    const trimmedWords = lastWords.slice(0, remainingBudget);
+    if (trimmedWords.length > 0) {
+      working[lastIndex] = trimmedWords.join(' ');
+      truncatedLastBullet = trimmedWords.length < lastWords.length;
+    }
+    wordsAfterDrop = working.reduce((sum, item) => sum + countWords(item), 0);
+  }
+
+  return {
+    notes: working.map((item) => `- ${item}`).join('\n'),
+    meta: {
+      applied: true,
+      beforeWords,
+      afterWords: wordsAfterDrop,
+      beforeBullets,
+      afterBullets: working.length,
+      truncatedLastBullet,
+    } satisfies TakeawaysClampMeta,
+  };
+}
+
 export function createYouTubeBlueprintPipelineService(deps: any) {
   const {
     getServiceSupabaseClient,
@@ -445,6 +538,14 @@ async function runYouTubePipeline(input: {
       issues: string[];
       issue_details: string[];
     }>,
+    takeaways_clamp_runs: [] as Array<{
+      stage: string;
+      before_words: number;
+      after_words: number;
+      before_bullets: number;
+      after_bullets: number;
+      truncated_last_bullet: boolean;
+    }>,
     gate_final: null as null | {
       mode: 'direct' | 'retry_pass' | 'repaired_after_retry' | 'llm_native_direct' | 'terminal_publish_anyway';
       pass: boolean;
@@ -518,6 +619,68 @@ async function runYouTubePipeline(input: {
   };
 
   let safetyRetriesUsed = 0;
+
+  const applyTakeawaysClamp = async (stage: string, draftInput: YouTubeDraft) => {
+    const steps = Array.isArray(draftInput.steps) ? draftInput.steps : [];
+    const takeawaysIndex = steps.findIndex((step) => canonicalSectionName(step.name) === 'takeaways');
+    if (takeawaysIndex < 0) return draftInput;
+    const takeawaysStep = steps[takeawaysIndex];
+    const clamp = clampTakeawaysNotesToWordBudget({
+      notes: takeawaysStep?.notes || '',
+      maxWords: 100,
+      minBullets: 3,
+    });
+    if (!clamp.meta.applied) return draftInput;
+
+    const nextSteps = steps.map((step, index) => (index === takeawaysIndex
+      ? { ...step, notes: clamp.notes }
+      : step));
+    const nextDraft: YouTubeDraft = {
+      ...draftInput,
+      steps: nextSteps,
+    };
+    generationTrace.takeaways_clamp_runs.push({
+      stage,
+      before_words: clamp.meta.beforeWords,
+      after_words: clamp.meta.afterWords,
+      before_bullets: clamp.meta.beforeBullets,
+      after_bullets: clamp.meta.afterBullets,
+      truncated_last_bullet: clamp.meta.truncatedLastBullet,
+    });
+
+    console.log('[bp_takeaways_clamped]', JSON.stringify({
+      run_id: input.runId,
+      video_id: input.videoId,
+      stage,
+      before_words: clamp.meta.beforeWords,
+      after_words: clamp.meta.afterWords,
+      before_bullets: clamp.meta.beforeBullets,
+      after_bullets: clamp.meta.afterBullets,
+      truncated_last_bullet: clamp.meta.truncatedLastBullet,
+    }));
+
+    if (traceContext.db && traceContext.userId) {
+      await safeGenerationTraceWrite({
+        runId: input.runId,
+        op: 'event_takeaways_clamped',
+        fn: async () => {
+          await appendGenerationEvent(traceContext.db as any, {
+            runId: input.runId,
+            event: 'takeaways_clamped',
+            payload: {
+              stage,
+              before_words: clamp.meta.beforeWords,
+              after_words: clamp.meta.afterWords,
+              before_bullets: clamp.meta.beforeBullets,
+              after_bullets: clamp.meta.afterBullets,
+              truncated_last_bullet: clamp.meta.truncatedLastBullet,
+            },
+          });
+        },
+      });
+    }
+    return nextDraft;
+  };
   for (let attempt = 1; attempt <= qualityAttempts; attempt += 1) {
     let safetyRetryHint = '';
     let attemptRunCount = 0;
@@ -1122,6 +1285,7 @@ async function runYouTubePipeline(input: {
       tags: goldenFormat.tags.length > 0 ? goldenFormat.tags : draft.tags,
     };
   } else {
+    draft = await applyTakeawaysClamp('llm_native_initial', draft);
     let nativeGate = evaluateLlmNativeGate(draft);
     gatePassed = nativeGate.pass;
     gateIssueCodes = nativeGate.issues;
@@ -1267,6 +1431,7 @@ Keep section bullets concise:
         ...retryDraft,
         tags: (retryDraft.tags || []).map((tag) => String(tag || '').trim()).filter(Boolean).slice(0, 5),
       };
+      draft = await applyTakeawaysClamp(`llm_native_retry_${retryAttempt}`, draft);
       qualityRetriesUsed = retryAttempt;
       nativeGate = evaluateLlmNativeGate(draft);
       gatePassed = nativeGate.pass;
@@ -1640,6 +1805,7 @@ Keep section bullets concise:
         bp_quality_issues: gateIssueCodes,
         bp_quality_retries_used: qualityRetriesUsed,
         bp_quality_final_mode: qualityFinalMode,
+        bp_takeaways_clamp_runs: generationTrace.takeaways_clamp_runs.length,
         generation_tier: input.generationTier || 'free',
         generation_model_primary: input.generationModelProfile?.model || traceContext.modelPrimary || null,
         bp_trace_version: generationTrace.trace_version,

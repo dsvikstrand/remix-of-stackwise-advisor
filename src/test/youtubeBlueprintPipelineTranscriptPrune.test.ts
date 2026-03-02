@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { createYouTubeBlueprintPipelineService } from '../../server/services/youtubeBlueprintPipeline';
+import {
+  clampTakeawaysNotesToWordBudget,
+  createYouTubeBlueprintPipelineService,
+} from '../../server/services/youtubeBlueprintPipeline';
 import {
   pruneTranscriptForGeneration,
   type TranscriptPruningConfig,
@@ -9,6 +12,13 @@ type EventRow = {
   event: string;
   payload?: Record<string, unknown>;
 };
+
+function countWords(value: string) {
+  return String(value || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+}
 
 function buildDeps(input: {
   transcriptText: string;
@@ -155,6 +165,52 @@ function buildDeps(input: {
 }
 
 describe('youtubeBlueprintPipeline transcript pruning', () => {
+  it('clamps takeaways by dropping trailing bullets until budget is met', () => {
+    const notes = [
+      '- one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twentyone twentytwo twentythree twentyfour twentyfive twentysix twentyseven twentyeight twentynine thirty',
+      '- one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twentyone twentytwo twentythree twentyfour twentyfive twentysix twentyseven twentyeight twentynine thirty',
+      '- one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twentyone twentytwo twentythree twentyfour twentyfive twentysix twentyseven twentyeight twentynine thirty',
+      '- one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twentyone twentytwo twentythree twentyfour twentyfive twentysix twentyseven twentyeight twentynine thirty',
+    ].join('\n');
+
+    const result = clampTakeawaysNotesToWordBudget({
+      notes,
+      maxWords: 100,
+      minBullets: 3,
+    });
+
+    const lines = result.notes.split('\n').map((line) => line.trim()).filter(Boolean);
+    const totalWords = lines.reduce((sum, line) => sum + countWords(line.replace(/^- /, '')), 0);
+
+    expect(result.meta.applied).toBe(true);
+    expect(result.meta.beforeBullets).toBe(4);
+    expect(result.meta.afterBullets).toBe(3);
+    expect(totalWords).toBeLessThanOrEqual(100);
+  });
+
+  it('trims the last bullet when at min bullet count and still over budget', () => {
+    const notes = [
+      '- one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twentyone twentytwo twentythree twentyfour twentyfive twentysix twentyseven twentyeight twentynine thirty thirtyone thirtytwo thirtythree thirtyfour thirtyfive forty',
+      '- one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twentyone twentytwo twentythree twentyfour twentyfive twentysix twentyseven twentyeight twentynine thirty thirtyone thirtytwo thirtythree thirtyfour thirtyfive forty',
+      '- one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twentyone twentytwo twentythree twentyfour twentyfive twentysix twentyseven twentyeight twentynine thirty thirtyone thirtytwo thirtythree thirtyfour thirtyfive forty',
+    ].join('\n');
+
+    const result = clampTakeawaysNotesToWordBudget({
+      notes,
+      maxWords: 100,
+      minBullets: 3,
+    });
+
+    const lines = result.notes.split('\n').map((line) => line.trim()).filter(Boolean);
+    const totalWords = lines.reduce((sum, line) => sum + countWords(line.replace(/^- /, '')), 0);
+
+    expect(result.meta.applied).toBe(true);
+    expect(result.meta.beforeBullets).toBe(3);
+    expect(result.meta.afterBullets).toBe(3);
+    expect(result.meta.truncatedLastBullet).toBe(true);
+    expect(totalWords).toBeLessThanOrEqual(100);
+  });
+
   it('uses pruned transcript for pass1 and pass2 and emits pruning metadata', async () => {
     const events: EventRow[] = [];
     const pass1Transcripts: string[] = [];
