@@ -5,6 +5,17 @@ Status: Canonical (current)
 Last updated: 2026-02-27  
 Owner intent: Build blueprints people choose to read for value, not because they are testing the app.
 
+## Change Log
+
+- `v1` (2026-02-27): Introduced canonical prompt contract with strict section semantics, Reddit vibe-only policy, and representation pass/fail guidance.
+- `v1.1` (2026-02-27): Added canonical POS folder strategy (local + Oracle path), cherry-pick subset guidance, and final generation directive layer.
+- `v1.2` (2026-02-27): Replaced placeholder/order prose sections with deterministic enforcement contract, moved changelog to top, and added final job recap.
+- `v1.3` (2026-02-27): Removed `Tradeoffs` from active section contract, reframed `Summary` as intro/prerequisite context, reduced Bleup density target to fewer richer slides, and tightened parenthetical-overuse guidance.
+- `v1.4` (2026-02-28): Made all six sections explicitly required (`Summary`, `Takeaways`, `Bleup`, `Deep Dive`, `Practical Rules`, `Open Questions`) and added explicit retry-on-missing-section language.
+- `v1.5` (2026-02-28): Added required `summary_variants` output (`default`, `eli5`) for expertise-level toggle on first section.
+- `v1.6` (2026-02-28): Added length-parity rule for `summary_variants` so `eli5` remains approximately as long as `default` while simplifying language.
+- `v1.7` (2026-02-28): Pass 1 now outputs default content only; ELI5 is generated in Pass 2 for full-section transform.
+
 ## Purpose
 
 This document is the canonical writing and quality contract for Golden Blueprint generation in Bluep. It defines what a blueprint is, how it should feel, how each section should behave, how Reddit references can be used safely for vibe calibration, and how reviewers should score quality before we call output acceptable.
@@ -29,8 +40,6 @@ The target voice is person-to-person, creator-like, and grounded. It should soun
 
 The tone must stay useful over polished. If a sentence sounds impressive but does not add actionable or interpretive value, it should be removed or rewritten. Confidence should be calibrated: state what is known, what is likely, and what remains uncertain without hedging every line.
 
-In one-step mode, readability simplification must happen in this same generation pass. The final output should feel clear and down-to-earth while preserving source-faithful depth.
-
 ## Strict Rule Sets
 
 ### Output style rules
@@ -40,8 +49,6 @@ Write in direct creator voice and avoid meta framing like "this video," "this bl
 When bullets are used, each bullet must be complete and readable on its own. A complete bullet states the core claim, explains why it matters in context, and ends with a practical implication. Bullet fragments, clipped lines, and stub artifacts are invalid output.
 
 Keep bullets tight. `Takeaways`, `Deep Dive`, `Practical Rules`, and `Open Questions` bullets should be one to two sentences max. Do not write paragraph-length bullets.
-
-Use plain language by default. Prefer simple words, shorter clauses, and direct sentence flow unless technical terms are required for fidelity. If a technical term is necessary, keep surrounding phrasing easy to read.
 
 ### Golden structure target
 
@@ -58,7 +65,7 @@ All deep sections target three to five complete bullets each. Empty sections, on
 If the transcript includes paid promotion, sponsorship, or affiliate segments, treat those segments as non-content noise and ignore them completely. Do not include sponsor brand names, promo codes, sponsorship disclaimers, affiliate language, or any promotion warning text in the generated blueprint.
 
 `Summary` is an intro layer, not the bulk layer. It should provide a concise topic orientation and prerequisite context at an ELI15 depth. The bulk payload belongs in `Bleup`.
-One-step generation only: produce final readable output in this pass. Do not assume any downstream rewrite pass will simplify language for you.
+Pass 1 is default-only. Do not generate ELI5 output in Pass 1. ELI5 is handled by Pass 2 transform.
 
 All required sections must exist in every output: `Summary`, `Takeaways`, `Bleup`, `Deep Dive`, `Practical Rules`, `Open Questions`. Missing any required section is a hard fail that should trigger eval failure and a retry.
 
@@ -113,21 +120,15 @@ Use a small curated set of positive references to derive a short "vibe profile" 
 
 Worked example: if Reddit positives show "claim -> evidence -> implication" pacing, apply that pacing to blueprint writing, but populate each claim and implication only from transcript-grounded facts. If a Reddit post uses a memorable phrase, do not copy the phrase; recreate the clarity pattern in fresh wording tied to the source material.
 
-## One-Step Vibe Enforcement
-
-Apply these style checks in the same generation pass:
-
-- Keep a creator-like voice that feels human and useful, not polished filler.
-- Front-load payoff in each section so readers get value quickly.
-- Preserve depth and meaning while simplifying wording and sentence structure.
-- Keep vocabulary domain-native but avoid avoidable jargon and abstraction.
-- Keep factual grounding strict: style may change, claims may not.
-
 ## Context Vibe Input (Runtime Guidance with Placeholders)
 
 Use this section as the runtime context envelope for generation input. The goal is to combine transcript-grounded truth with vibe calibration from strong Reddit positives, without content leakage.
 
-The input should always carry two explicit sources. First source is transcript truth context, represented with placeholders like `<VIDEO_URL>`, `<VIDEO_TITLE>`, `<TRANSCRIPT_SOURCE>`, and `<SOURCE_TRANSCRIPT_CONTEXT>` (full transcript or approved excerpt window). Second source is vibe calibration context, represented with placeholders like `<POSITIVE_REFERENCE_PATHS>` and `<POSITIVE_REFERENCE_EXCERPTS>`.
+The input should always carry two explicit sources. First source is transcript truth context, represented with placeholders like `<VIDEO_URL>`, `<VIDEO_TITLE>`, `<TRANSCRIPT_SOURCE>`, and `<SOURCE_TRANSCRIPT_CONTEXT>` (full transcript or approved excerpt window). Second source is vibe calibration context, represented with placeholders like `<POSITIVE_REFERENCE_PATHS>` and `<POSITIVE_REFERENCE_EXCERPTS>`, where references point to one canonical POS folder.
+
+Canonical POS folder paths:
+- Local repo path: `docs/golden_blueprint/reddit/clean/pos`
+- Oracle live path: `/home/ubuntu/remix-of-stackwise-advisor/docs/golden_blueprint/reddit/clean/pos`
 
 For this phase, include all available POS examples by default. Pass selected references as `<POSITIVE_REFERENCE_PATHS>` and inject their full text as `<POSITIVE_REFERENCE_EXCERPTS>`.
 
@@ -161,7 +162,6 @@ Retries should use the same prompt template and inject quality issues through `<
 ## Final Generation Directive (Last Instruction Layer)
 
 End the prompt context with a short final directive that reasserts the job and source hierarchy. The directive should explicitly say that the model must now generate the blueprint using `<SOURCE_TRANSCRIPT_CONTEXT>` as the only factual source, while using `<POSITIVE_REFERENCE_PATHS>` only for vibe calibration (tone, pacing, and engagement feel). It should explicitly ban importing facts, numbers, examples, and distinctive wording from references. It should require all six sections (`Summary`, `Takeaways`, `Bleup`, `Deep Dive`, `Practical Rules`, `Open Questions`) and make clear that missing any required section should trigger eval failure and retry. It should end with a clear "generate now" instruction tied to the required JSON schema and section contract.
-It should explicitly require one-step final readability quality in this same pass (no downstream simplification pass).
 It should also explicitly require that any sponsorship, paid-promotion, or affiliate transcript segments are ignored and never referenced in output (including no sponsor-name mentions and no promotion warnings).
 
 ## Response Format (Strict JSON Shape)
@@ -207,12 +207,6 @@ Quality issue details (retry only, else `none`):
 
 Additional instructions:
 {{ADDITIONAL_INSTRUCTIONS}}
-
-One-step style directives (hard):
-- Generate final output in one pass with no downstream rewrite assumptions.
-- Match strong ELI5-like readability while preserving source depth.
-- Keep meaning stable and avoid adding new facts, numbers, examples, or recommendations.
-- Do not use meta framing or generic boilerplate endings.
 
 Required sections (missing any section triggers eval fail + retry): Summary, Takeaways, Bleup, Deep Dive, Practical Rules, Open Questions.
 
@@ -266,4 +260,5 @@ Rewrite direction: enforce domain-native vocabulary and decision framing per top
 
 ## Final Job Recap
 
-Write a high-value blueprint in direct creator voice that feels human, useful, and discussion-worthy. In this one-step mode, the final output must already be clear and down-to-earth while preserving source depth and meaning. Use transcript context as the only factual source, use Oracle POS references only for vibe calibration, include all required sections (`Summary`, `Takeaways`, `Bleup`, `Deep Dive`, `Practical Rules`, `Open Questions`) or expect eval failure with retry, follow the section contract exactly, ignore paid-promotion/sponsorship/affiliate transcript segments completely (no references, no namedrops, no warning text), and return strict JSON in the required shape.
+Write a high-value blueprint in direct creator voice that feels human, useful, and discussion-worthy. Use transcript context as the only factual source, use Oracle POS references only for vibe calibration, include all required sections (`Summary`, `Takeaways`, `Bleup`, `Deep Dive`, `Practical Rules`, `Open Questions`) or expect eval failure with retry, follow the section contract exactly, ignore paid-promotion/sponsorship/affiliate transcript segments completely (no references, no namedrops, no warning text), and return strict JSON in the required shape.
+Tier one-step style hint: keep wording approachable (ELI15 vibe), avoid unnecessary technical jargon, and preserve transcript-grounded meaning and required structure exactly.
