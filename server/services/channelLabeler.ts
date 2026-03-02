@@ -8,9 +8,8 @@ export type ChannelLabelReasonCode = 'LLM_VALID' | 'LLM_RETRY_VALID' | 'LLM_INVA
 
 export type ChannelLabelerInput = {
   title: string;
-  llmReview?: string | null;
+  summary?: string | null;
   tagSlugs: string[];
-  stepHints: string[];
   fallbackSlug: string;
   llmClient?: LLMClient;
 };
@@ -47,8 +46,11 @@ function getValidatedFallbackSlug(fallbackSlug: string, allowedSlugs: Set<string
   return first || 'general';
 }
 
-function toStepHints(stepHints: string[]) {
-  return (stepHints || []).map((hint) => String(hint || '').trim()).filter(Boolean).slice(0, 8);
+function toSummary(summary: string | null | undefined) {
+  return String(summary || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 600);
 }
 
 function toTags(tagSlugs: string[]) {
@@ -81,9 +83,8 @@ export async function labelChannelFromArtifact(input: ChannelLabelerInput): Prom
 
   const requestPayload = {
     title: String(input.title || '').trim() || 'Untitled Blueprint',
-    llmReview: input.llmReview || null,
+    summary: toSummary(input.summary),
     tags: toTags(input.tagSlugs),
-    stepHints: toStepHints(input.stepHints),
     fallbackSlug,
     allowedChannels,
   };

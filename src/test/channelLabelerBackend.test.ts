@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { labelChannelFromArtifact } from '../../server/services/channelLabeler';
-import type { ChannelLabelResult, LLMClient } from '../../server/llm/types';
+import type { ChannelLabelRequest, ChannelLabelResult, LLMClient } from '../../server/llm/types';
 
-function createStubClient(sequence: Array<ChannelLabelResult | Error>): LLMClient {
+function createStubClient(
+  sequence: Array<ChannelLabelResult | Error>,
+  requests?: ChannelLabelRequest[],
+): LLMClient {
   let index = 0;
   return {
     analyzeBlueprint: async () => { throw new Error('not-used'); },
     generateBanner: async () => { throw new Error('not-used'); },
     generateYouTubeBlueprint: async () => { throw new Error('not-used'); },
-    generateChannelLabel: async () => {
+    generateChannelLabel: async (input) => {
+      requests?.push(input);
       const next = sequence[index] ?? sequence[sequence.length - 1];
       index += 1;
       if (next instanceof Error) throw next;
@@ -21,9 +25,8 @@ describe('channelLabeler (backend)', () => {
   it('accepts first valid LLM label result', async () => {
     const result = await labelChannelFromArtifact({
       title: 'AI prompt automation workflow',
-      llmReview: 'A concise system for automation with LLM prompts.',
+      summary: 'A concise system for automation with LLM prompts.',
       tagSlugs: ['ai', 'automation'],
-      stepHints: ['Choose model', 'Run prompt'],
       fallbackSlug: 'general',
       llmClient: createStubClient([
         { channelSlug: 'ai-tools-automation', reason: 'best fit', confidence: 0.86 },
@@ -40,9 +43,8 @@ describe('channelLabeler (backend)', () => {
   it('retries once when first result is invalid and accepts second valid slug', async () => {
     const result = await labelChannelFromArtifact({
       title: 'Meal prep systems',
-      llmReview: 'Nutrition workflow for weekly planning.',
+      summary: 'Nutrition workflow for weekly planning.',
       tagSlugs: ['nutrition'],
-      stepHints: ['Plan meals', 'Batch cook'],
       fallbackSlug: 'general',
       llmClient: createStubClient([
         { channelSlug: 'not-in-catalog', reason: 'bad', confidence: 0.77 },
@@ -60,9 +62,8 @@ describe('channelLabeler (backend)', () => {
   it('falls back to general after retry fails', async () => {
     const result = await labelChannelFromArtifact({
       title: 'Unknown topic',
-      llmReview: null,
+      summary: null,
       tagSlugs: ['novel-topic'],
-      stepHints: ['Do something'],
       fallbackSlug: 'general',
       llmClient: createStubClient([
         new Error('invalid json'),
@@ -75,5 +76,22 @@ describe('channelLabeler (backend)', () => {
     expect(result.reasonCode).toBe('LLM_INVALID_FALLBACK_GENERAL');
     expect(result.retryUsed).toBe(true);
     expect(result.fallbackUsed).toBe(true);
+  });
+
+  it('clamps summary payload to 600 chars before label request', async () => {
+    const requests: ChannelLabelRequest[] = [];
+    await labelChannelFromArtifact({
+      title: 'Long summary case',
+      summary: `${'a'.repeat(700)} ${'b'.repeat(700)}`,
+      tagSlugs: ['ai'],
+      fallbackSlug: 'general',
+      llmClient: createStubClient([
+        { channelSlug: 'general', reason: 'fallback', confidence: 0.5 },
+      ], requests),
+    });
+
+    expect(requests.length).toBe(1);
+    expect((requests[0]?.summary || '').length).toBe(600);
+    expect(requests[0]?.summary).toBe('a'.repeat(600));
   });
 });

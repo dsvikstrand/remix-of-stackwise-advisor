@@ -89,9 +89,8 @@ export function createMockClient(): LLMClient {
     async generateChannelLabel(input: ChannelLabelRequest): Promise<ChannelLabelResult> {
       const text = [
         input.title,
-        input.llmReview || '',
+        input.summary || '',
         ...(input.tags || []),
-        ...(input.stepHints || []),
       ].join(' ').toLowerCase();
 
       let preferred = input.fallbackSlug;

@@ -16,9 +16,8 @@ export interface AutoChannelResolver {
   resolveChannelSlugForBlueprint(input: {
     blueprintId: string;
     title: string;
-    llmReview?: string | null;
+    summary?: string | null;
     tagSlugs: string[];
-    stepHints: string[];
     defaultChannelSlug: string;
     classifierMode: AutoChannelClassifierMode;
   }): AutoChannelResolution | Promise<AutoChannelResolution>;
@@ -38,9 +37,8 @@ class DeterministicAutoChannelResolver implements AutoChannelResolver {
   resolveChannelSlugForBlueprint(input: {
     blueprintId: string;
     title: string;
-    llmReview?: string | null;
+    summary?: string | null;
     tagSlugs: string[];
-    stepHints: string[];
     defaultChannelSlug: string;
     classifierMode: AutoChannelClassifierMode;
   }) {
@@ -56,9 +54,8 @@ class DeterministicAutoChannelResolver implements AutoChannelResolver {
     if (input.classifierMode === 'llm_labeler_v1') {
       return labelChannelFromArtifact({
         title: input.title,
-        llmReview: input.llmReview || null,
+        summary: input.summary || null,
         tagSlugs: input.tagSlugs,
-        stepHints: input.stepHints,
         fallbackSlug,
       }).then((result) => ({
         channelSlug: result.channelSlug,
@@ -158,19 +155,22 @@ async function getBlueprintTagSlugs(db: DbClient, blueprintId: string): Promise<
   return Array.from(new Set(tagSlugs));
 }
 
-function getBlueprintStepHints(rawSteps: unknown): string[] {
-  if (!Array.isArray(rawSteps)) return [];
-  const hints: string[] = [];
+function getBlueprintSummary(rawSteps: unknown) {
+  if (!Array.isArray(rawSteps)) return '';
+  const sections: Array<{ name: string; notes: string }> = [];
   for (const step of rawSteps) {
     if (!step || typeof step !== 'object') continue;
     const record = step as Record<string, unknown>;
-    const title = String(record.title || record.name || '').trim();
-    const description = String(record.description || record.notes || '').trim();
-    const hint = [title, description].filter(Boolean).join(' — ');
-    if (hint) hints.push(hint);
-    if (hints.length >= 8) break;
+    const name = String(record.title || record.name || '').trim();
+    const notes = String(record.description || record.notes || '').trim();
+    if (!name && !notes) continue;
+    sections.push({ name, notes });
+    if (sections.length >= 12) break;
   }
-  return hints;
+  const preferred = sections.find((section) => /^summary\b/i.test(section.name)) || sections[0] || null;
+  const raw = String(preferred?.notes || '').trim();
+  const withoutLabel = raw.replace(/^summary\s*(—|-|:)?\s*/i, '').trim();
+  return withoutLabel.slice(0, 600);
 }
 
 export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): Promise<AutoChannelPipelineResult> {
@@ -186,22 +186,21 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
   }
 
   const tagSlugs = await getBlueprintTagSlugs(input.db, input.blueprintId);
-  const stepHints = getBlueprintStepHints(blueprint.steps);
+  const summary = getBlueprintSummary(blueprint.steps);
   if (input.classifierMode === 'llm_labeler_v1') {
     console.log('[auto_channel_label_started]', JSON.stringify({
       blueprint_id: input.blueprintId,
       user_feed_item_id: input.userFeedItemId,
       fallback_slug: input.defaultChannelSlug,
       tag_count: tagSlugs.length,
-      step_hint_count: stepHints.length,
+      summary_chars: summary.length,
     }));
   }
   const resolution = await resolver.resolveChannelSlugForBlueprint({
     blueprintId: input.blueprintId,
     title: blueprint.title,
-    llmReview: blueprint.llm_review,
+    summary,
     tagSlugs,
-    stepHints,
     defaultChannelSlug: input.defaultChannelSlug,
     classifierMode: input.classifierMode,
   });

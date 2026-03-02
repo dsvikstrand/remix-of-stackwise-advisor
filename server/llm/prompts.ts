@@ -381,7 +381,7 @@ Rules:
 - Output STRICT JSON only.
 - Choose exactly one channel slug from the allowed list provided by the user.
 - Do not invent new slugs.
-- Prefer the best semantic fit based on title, tags, review summary, and step hints.
+- Prefer the best semantic fit based on title, summary, and tags.
 - If context is weak or ambiguous, choose the provided fallback slug.
 
 Response format:
@@ -393,14 +393,12 @@ Response format:
 
 export function buildChannelLabelUserPrompt(input: {
   title: string;
-  llmReview?: string | null;
+  summary?: string | null;
   tags?: string[];
-  stepHints?: string[];
   fallbackSlug: string;
   allowedChannels: Array<{ slug: string; name: string; description: string; aliases?: string[] }>;
 }) {
   const tags = (input.tags || []).map((tag) => tag.trim()).filter(Boolean).slice(0, 12);
-  const hints = (input.stepHints || []).map((hint) => hint.trim()).filter(Boolean).slice(0, 8);
   const allowed = input.allowedChannels
     .map((channel) => {
       const aliases = (channel.aliases || []).slice(0, 12).join(', ');
@@ -409,9 +407,8 @@ export function buildChannelLabelUserPrompt(input: {
     .join('\n');
 
   return `Blueprint title: ${input.title.trim()}
-Review summary: ${(input.llmReview || '').trim() || 'none'}
+Summary: ${(input.summary || '').trim() || 'none'}
 Tags: ${tags.length > 0 ? tags.join(', ') : 'none'}
-Step hints: ${hints.length > 0 ? hints.join(' | ') : 'none'}
 Fallback slug: ${input.fallbackSlug}
 
 Allowed channels:

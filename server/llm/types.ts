@@ -132,9 +132,8 @@ export interface ChannelLabelOption {
 
 export interface ChannelLabelRequest {
   title: string;
-  llmReview?: string | null;
+  summary?: string | null;
   tags?: string[];
-  stepHints?: string[];
   fallbackSlug: string;
   allowedChannels: ChannelLabelOption[];
 }
