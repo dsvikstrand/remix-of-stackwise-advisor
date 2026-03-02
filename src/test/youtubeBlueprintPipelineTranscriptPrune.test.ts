@@ -352,8 +352,10 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
 
     expect(pass1Requests.length).toBe(3);
     expect(pass1Requests[0].qualityIssueCodes).toEqual([]);
-    expect(pass1Requests[1].qualityIssueCodes).toContain('SUMMARY_MISSING');
-    expect(pass1Requests[2].qualityIssueCodes).toContain('SUMMARY_MISSING');
+    expect(pass1Requests[1].qualityIssueCodes).toEqual([]);
+    expect(pass1Requests[2].qualityIssueCodes).toEqual([]);
+    expect(pass1Requests[1].additionalInstructions).toContain('Your previous output did not follow the required Bleu blueprint structure.');
+    expect(pass1Requests[2].additionalInstructions).toContain('Do not rename, merge, or invent section names.');
     expect(pass2Transcripts.length).toBe(1);
     expect(events.some((row) => row.event === 'gate_failed_terminal')).toBe(true);
     expect(events.some((row) => row.event === 'gate_published_anyway')).toBe(true);

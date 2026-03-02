@@ -826,6 +826,17 @@ async function runYouTubePipeline(input: {
   let gateIssueCodes: string[] = [];
   let gateIssueDetails: string[] = [];
   let gatePassed = true;
+  const structureSectionPrefixes = ['SUMMARY', 'BLEUP', 'TAKEAWAYS', 'DEEP_DIVE', 'PRACTICAL_RULES', 'OPEN_QUESTIONS'];
+  const structureRetryInstructionBlock = `Your previous output did not follow the required Bleu blueprint structure.
+Regenerate now using exactly these six sections in this exact order:
+Summary, Takeaways, Bleup, Deep Dive, Practical Rules, Open Questions.
+Each section must be present and non-empty.
+Use bullets where expected and keep bullet length concise.
+Do not rename, merge, or invent section names.
+If this is not met, an error will trigger and a new attempt will be needed. It is important that you follow this structure.`;
+  const hasStructureIssue = (issueCodes: string[]) => issueCodes.some((code) =>
+    structureSectionPrefixes.some((prefix) => String(code || '').toUpperCase().startsWith(`${prefix}_`))
+  );
 
   if (useDeterministicPostProcessing) {
     let goldenFormat = normalizeYouTubeDraftToGoldenV1(draftToNormalizationInput(draft), {
@@ -880,6 +891,9 @@ async function runYouTubePipeline(input: {
 
     while (!gatePassed && qualityRetriesUsed < qualityRetryBudget) {
       const retryAttempt = qualityRetriesUsed + 1;
+      const structureIssueFail = hasStructureIssue(gateIssueCodes);
+      const promptIssueCodes = structureIssueFail ? [] : gateIssueCodes;
+      const promptIssueDetails = structureIssueFail ? [] : gateIssueDetails;
       const previousOutput = JSON.stringify({
         title: draft.title,
         description: draft.description,
@@ -921,10 +935,10 @@ async function runYouTubePipeline(input: {
       const retryInstructions = buildYouTubeQualityRetryInstructions({
         attempt: retryAttempt,
         maxRetries: qualityRetryBudget,
-        issueCodes: gateIssueCodes,
-        issueDetails: gateIssueDetails,
+        issueCodes: promptIssueCodes,
+        issueDetails: promptIssueDetails,
         previousOutput,
-      });
+      }) + (structureIssueFail ? `\n\n${structureRetryInstructionBlock}` : '');
 
       const retryRawDraft = await runWithProviderRetry(
         {
@@ -941,8 +955,8 @@ async function runYouTubePipeline(input: {
           transcriptSource: transcript.source,
           transcript: effectiveTranscriptText,
           promptTemplatePath: oneStepPromptTemplatePath,
-          qualityIssueCodes: gateIssueCodes,
-          qualityIssueDetails: gateIssueDetails,
+          qualityIssueCodes: promptIssueCodes,
+          qualityIssueDetails: promptIssueDetails,
           additionalInstructions: retryInstructions,
         }, {
           onGenerationModelEvent: generationModelEventCallback,
@@ -1142,6 +1156,9 @@ async function runYouTubePipeline(input: {
 
     while (!gatePassed && qualityRetriesUsed < qualityRetryBudget) {
       const retryAttempt = qualityRetriesUsed + 1;
+      const structureIssueFail = hasStructureIssue(gateIssueCodes);
+      const promptIssueCodes = structureIssueFail ? [] : gateIssueCodes;
+      const promptIssueDetails = structureIssueFail ? [] : gateIssueDetails;
       const previousOutput = JSON.stringify({
         title: draft.title,
         description: draft.description,
@@ -1183,14 +1200,14 @@ async function runYouTubePipeline(input: {
       const retryInstructions = `${buildYouTubeQualityRetryInstructions({
         attempt: retryAttempt,
         maxRetries: qualityRetryBudget,
-        issueCodes: gateIssueCodes,
-        issueDetails: gateIssueDetails,
+        issueCodes: promptIssueCodes,
+        issueDetails: promptIssueDetails,
         previousOutput,
       })}
 
 Keep section bullets concise:
 - Takeaways: 3-4 bullets, total read should feel like 10-20 seconds.
-- Takeaways/Deep Dive/Practical Rules/Open Questions: each bullet must be 1-2 sentences max.`;
+- Takeaways/Deep Dive/Practical Rules/Open Questions: each bullet must be 1-2 sentences max.${structureIssueFail ? `\n\n${structureRetryInstructionBlock}` : ''}`;
 
       const retryRawDraft = await runWithProviderRetry(
         {
@@ -1206,8 +1223,8 @@ Keep section bullets concise:
           videoTitle: input.videoId,
           transcriptSource: transcript.source,
           transcript: effectiveTranscriptText,
-          qualityIssueCodes: gateIssueCodes,
-          qualityIssueDetails: gateIssueDetails,
+          qualityIssueCodes: promptIssueCodes,
+          qualityIssueDetails: promptIssueDetails,
           additionalInstructions: retryInstructions,
         }, {
           onGenerationModelEvent: generationModelEventCallback,
