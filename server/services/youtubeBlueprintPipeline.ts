@@ -177,6 +177,7 @@ async function runYouTubePipeline(input: {
   videoId: string;
   videoUrl: string;
   videoTitle?: string | null;
+  providedTranscriptText?: string | null;
   durationSeconds?: number | null;
   generateReview: boolean;
   generateBanner: boolean;
@@ -285,21 +286,28 @@ async function runYouTubePipeline(input: {
         },
       });
     }
+    const providedTranscriptText = String(input.providedTranscriptText || '').trim();
     const requestClass = input.requestClass === 'interactive' ? 'interactive' : 'background';
-    const transcript = await runWithProviderRetry(
-      {
-        providerKey: 'transcript',
-        db: serviceDb,
-        maxAttempts: providerRetryDefaults.transcriptAttempts,
-        timeoutMs: providerRetryDefaults.transcriptTimeoutMs,
-        baseDelayMs: 250,
-        jitterMs: 150,
-      },
-      async () => getTranscriptForVideo(input.videoId, {
-        requestClass,
-        reason: 'pipeline_transcript_fetch',
-      }),
-    );
+    const transcript = providedTranscriptText
+      ? {
+          text: providedTranscriptText,
+          source: 'client_supplied',
+          confidence: null,
+        }
+      : await runWithProviderRetry(
+          {
+            providerKey: 'transcript',
+            db: serviceDb,
+            maxAttempts: providerRetryDefaults.transcriptAttempts,
+            timeoutMs: providerRetryDefaults.transcriptTimeoutMs,
+            baseDelayMs: 250,
+            jitterMs: 150,
+          },
+          async () => getTranscriptForVideo(input.videoId, {
+            requestClass,
+            reason: 'pipeline_transcript_fetch',
+          }),
+        );
     const rawTranscriptText = String(transcript.text || '').trim();
     const transcriptPruning = pruneTranscriptForGeneration({
       transcriptText: rawTranscriptText,

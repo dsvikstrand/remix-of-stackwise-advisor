@@ -224,6 +224,18 @@ const yt2bpSafetyBlockEnabled = (
   || yt2bpSafetyBlockEnabledRaw === 'on'
 );
 const yt2bpCoreTimeoutMs = clampInt(process.env.YT2BP_CORE_TIMEOUT_MS, 120_000, 30_000, 300_000);
+const yt2bpClientTranscriptEnabledRaw = String(process.env.YT2BP_CLIENT_TRANSCRIPT_ENABLED ?? 'true').trim().toLowerCase();
+const yt2bpClientTranscriptEnabled = !(
+  yt2bpClientTranscriptEnabledRaw === 'false'
+  || yt2bpClientTranscriptEnabledRaw === '0'
+  || yt2bpClientTranscriptEnabledRaw === 'off'
+);
+const yt2bpClientTranscriptMaxChars = clampInt(
+  process.env.YT2BP_CLIENT_TRANSCRIPT_MAX_CHARS,
+  120_000,
+  1_000,
+  1_000_000,
+);
 const ingestionServiceToken = String(process.env.INGESTION_SERVICE_TOKEN || '').trim();
 const ingestionMaxPerSubscription = Math.max(1, Number(process.env.INGESTION_MAX_PER_SUBSCRIPTION) || 5);
 const refreshScanCooldownMs = clampInt(process.env.REFRESH_SCAN_COOLDOWN_MS, 30_000, 5_000, 300_000);
@@ -936,6 +948,9 @@ const BannerRequestSchema = z.object({
 
 const YouTubeToBlueprintRequestSchema = z.object({
   video_url: z.string().min(1),
+  video_title: z.string().min(1).max(300).optional().nullable(),
+  duration_seconds: z.number().int().min(0).nullable().optional(),
+  transcript_text: z.string().optional().nullable(),
   generate_review: z.boolean().default(false),
   generate_banner: z.boolean().default(false),
   source: z.literal('youtube_mvp').default('youtube_mvp'),
@@ -1460,6 +1475,8 @@ registerYouTubeRoutes(app, {
   yt2bpAuthLimiter,
   yt2bpEnabled,
   yt2bpCoreTimeoutMs,
+  yt2bpClientTranscriptEnabled,
+  yt2bpClientTranscriptMaxChars,
   searchApiLimiter,
   sourceVideoUnlockBurstLimiter,
   sourceVideoUnlockSustainedLimiter,

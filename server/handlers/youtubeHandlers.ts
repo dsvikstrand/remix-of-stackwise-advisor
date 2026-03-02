@@ -15,6 +15,8 @@ export function registerYouTubeRouteHandlers(app: express.Express, deps: YouTube
     yt2bpAuthLimiter,
     yt2bpEnabled,
     yt2bpCoreTimeoutMs,
+    yt2bpClientTranscriptEnabled,
+    yt2bpClientTranscriptMaxChars,
     searchApiLimiter,
     sourceVideoUnlockBurstLimiter,
     sourceVideoUnlockSustainedLimiter,
@@ -115,6 +117,23 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
   }
 
   const runId = `yt2bp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const providedTranscriptText = String(parsed.data.transcript_text || '').trim();
+  if (providedTranscriptText && !yt2bpClientTranscriptEnabled) {
+    return res.status(503).json({
+      ok: false,
+      error_code: 'SERVICE_DISABLED',
+      message: 'Client transcript generation is temporarily disabled.',
+      run_id: runId,
+    });
+  }
+  if (providedTranscriptText && providedTranscriptText.length > yt2bpClientTranscriptMaxChars) {
+    return res.status(422).json({
+      ok: false,
+      error_code: 'TRANSCRIPT_TOO_LARGE',
+      message: `Transcript exceeds max size (${yt2bpClientTranscriptMaxChars} chars).`,
+      run_id: runId,
+    });
+  }
   const adapter = getAdapterForUrl(parsed.data.video_url);
   if (!adapter) {
     return res.status(400).json({
@@ -151,16 +170,18 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
     });
   }
   const generationModelProfile = resolveGenerationModelProfile(resolvedTier);
-  let resolvedDurationSeconds: number | null = null;
+  let resolvedDurationSeconds: number | null = toDurationSeconds(parsed.data.duration_seconds);
   if (generationDurationCapEnabled) {
     try {
-      const durationMap = await fetchYouTubeDurationMap({
-        apiKey: youtubeDataApiKey,
-        videoIds: [validatedUrl.sourceNativeId],
-        timeoutMs: generationDurationLookupTimeoutMs,
-        userAgent: 'bleuv1-youtube-direct-generate/1.0 (+https://bapi.vdsai.cloud)',
-      });
-      resolvedDurationSeconds = durationMap.get(validatedUrl.sourceNativeId) ?? null;
+      if (resolvedDurationSeconds == null) {
+        const durationMap = await fetchYouTubeDurationMap({
+          apiKey: youtubeDataApiKey,
+          videoIds: [validatedUrl.sourceNativeId],
+          timeoutMs: generationDurationLookupTimeoutMs,
+          userAgent: 'bleuv1-youtube-direct-generate/1.0 (+https://bapi.vdsai.cloud)',
+        });
+        resolvedDurationSeconds = durationMap.get(validatedUrl.sourceNativeId) ?? null;
+      }
       const split = await splitByDurationPolicy({
         items: [{
           video_id: validatedUrl.sourceNativeId,
@@ -235,6 +256,8 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
         runId,
         videoId: validatedUrl.sourceNativeId,
         videoUrl: parsed.data.video_url,
+        videoTitle: String(parsed.data.video_title || '').trim() || null,
+        providedTranscriptText: providedTranscriptText || null,
         durationSeconds: resolvedDurationSeconds,
         generateReview: false,
         generateBanner: parsed.data.generate_banner,
@@ -270,6 +293,7 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
               : known.error_code === 'PROVIDER_FAIL' ? 502
                 : known.error_code === 'PII_BLOCKED' || known.error_code === 'SAFETY_BLOCKED' ? 422
                   : known.error_code === 'RATE_LIMITED' ? 429
+                    : known.error_code === 'TRANSCRIPT_TOO_LARGE' ? 422
                 : 500;
       return res.status(status).json({
         ok: false,

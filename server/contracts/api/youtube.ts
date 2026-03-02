@@ -7,6 +7,9 @@ export type UserYouTubeConnectionRow = any;
 
 export type YouTubeToBlueprintInput = {
   video_url: string;
+  video_title?: string | null;
+  duration_seconds?: number | null;
+  transcript_text?: string | null;
   generate_review?: boolean;
   generate_banner?: boolean;
   source?: 'youtube_mvp';
@@ -46,6 +49,8 @@ export type YouTubeRouteDeps = {
   yt2bpAuthLimiter: express.RequestHandler;
   yt2bpEnabled: boolean;
   yt2bpCoreTimeoutMs: number;
+  yt2bpClientTranscriptEnabled: boolean;
+  yt2bpClientTranscriptMaxChars: number;
   searchApiLimiter: express.RequestHandler;
   sourceVideoUnlockBurstLimiter: express.RequestHandler;
   sourceVideoUnlockSustainedLimiter: express.RequestHandler;
