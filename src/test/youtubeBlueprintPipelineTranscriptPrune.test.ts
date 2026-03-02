@@ -300,6 +300,50 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
     expect(events.some((row) => row.event === 'pass2_transform_skipped_one_step')).toBe(true);
   });
 
+  it('uses provided video title instead of LLM-generated title', async () => {
+    const events: EventRow[] = [];
+    const pass1Transcripts: string[] = [];
+    const pass2Transcripts: string[] = [];
+    const pass1PromptTemplatePaths: string[] = [];
+    const transcriptText = 'tiny transcript';
+    const pruningConfig: TranscriptPruningConfig = {
+      enabled: true,
+      budgetChars: 4500,
+      thresholds: [4500, 9000, 16000],
+      windows: [1, 4, 6, 8],
+      separator: '\n\n...\n\n',
+      minWindowChars: 120,
+    };
+    const deps = buildDeps({
+      transcriptText,
+      pruningConfig,
+      events,
+      pass1Transcripts,
+      pass2Transcripts,
+      pass1PromptTemplatePaths,
+    });
+    const service = createYouTubeBlueprintPipelineService(deps);
+
+    const result = await service.runYouTubePipeline({
+      runId: 'run-3b',
+      videoId: 'title123',
+      videoTitle: '  My\u200B   Video   Title  ',
+      videoUrl: 'https://www.youtube.com/watch?v=title123',
+      durationSeconds: 100,
+      generateReview: false,
+      generateBanner: false,
+      authToken: '',
+      generationTier: 'tier',
+      requestClass: 'background',
+      trace: {
+        db: { id: 'trace-db' },
+        userId: 'user-3',
+      },
+    });
+
+    expect(result.draft.title).toBe('My Video Title');
+  });
+
   it('publishes with terminal gate issues after max retries and injects issues into retries', async () => {
     const events: EventRow[] = [];
     const pass1Transcripts: string[] = [];
@@ -352,10 +396,13 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
 
     expect(pass1Requests.length).toBe(3);
     expect(pass1Requests[0].qualityIssueCodes).toEqual([]);
-    expect(pass1Requests[1].qualityIssueCodes).toEqual([]);
-    expect(pass1Requests[2].qualityIssueCodes).toEqual([]);
-    expect(pass1Requests[1].additionalInstructions).toContain('Your previous output did not follow the required Bleu blueprint structure.');
-    expect(pass1Requests[2].additionalInstructions).toContain('Do not rename, merge, or invent section names.');
+    expect(pass1Requests[1].qualityIssueCodes).toEqual(['SUMMARY_MISSING']);
+    expect(pass1Requests[2].qualityIssueCodes).toEqual(['SUMMARY_MISSING']);
+    expect(pass1Requests[1].qualityIssueDetails).toEqual(['SUMMARY_MISSING section=summary']);
+    expect(pass1Requests[2].qualityIssueDetails).toEqual(['SUMMARY_MISSING section=summary']);
+    expect(pass1Requests[0].additionalInstructions).toContain('Return exactly 6 steps in this exact order and exact names:');
+    expect(pass1Requests[1].additionalInstructions).toContain('Return exactly 6 steps in this exact order and exact names:');
+    expect(pass1Requests[2].additionalInstructions).toContain('Return exactly 6 steps in this exact order and exact names:');
     expect(pass2Transcripts.length).toBe(1);
     expect(events.some((row) => row.event === 'gate_failed_terminal')).toBe(true);
     expect(events.some((row) => row.event === 'gate_published_anyway')).toBe(true);

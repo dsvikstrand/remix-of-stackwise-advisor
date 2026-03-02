@@ -83,6 +83,7 @@ async function runYouTubePipeline(input: {
   runId: string;
   videoId: string;
   videoUrl: string;
+  videoTitle?: string | null;
   durationSeconds?: number | null;
   generateReview: boolean;
   generateBanner: boolean;
@@ -102,6 +103,27 @@ async function runYouTubePipeline(input: {
   };
 }) {
   const startedAt = Date.now();
+  const normalizeBlueprintTitle = (raw: unknown) => {
+    const cleaned = String(raw || '')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!cleaned) return 'YouTube Blueprint';
+    return cleaned.slice(0, 160);
+  };
+  const resolvedVideoTitle = normalizeBlueprintTitle(input.videoTitle || input.videoId || 'YouTube Blueprint');
+  const structureRetryInstructionBlock = [
+    'Structure fix required.',
+    'Return exactly 6 steps in this exact order and exact names:',
+    'Summary, Takeaways, Bleup, Deep Dive, Practical Rules, Open Questions.',
+    'Return strict JSON only.',
+  ].join('\n');
+  const withStructureHint = (instructions?: string | null) => {
+    const base = String(instructions || '').trim();
+    return base
+      ? `${base}\n${structureRetryInstructionBlock}`
+      : structureRetryInstructionBlock;
+  };
   const serviceDb = getServiceSupabaseClient();
   const traceContext = getYouTubeGenerationTraceContext({
     db: input.trace?.db || serviceDb,
@@ -451,7 +473,7 @@ async function runYouTubePipeline(input: {
       rawDraft.summary_variants?.default || summaryStepNotes || rawDraft.description || '',
     );
     return {
-      title: rawDraft.title?.trim() || 'YouTube Blueprint',
+      title: resolvedVideoTitle,
       description: rawDraft.description?.trim() || 'AI-generated blueprint from video transcript.',
       steps: normalizedSteps,
       eli5Steps: [],
@@ -514,11 +536,11 @@ async function runYouTubePipeline(input: {
         },
         async () => client.generateYouTubeBlueprint({
           videoUrl: input.videoUrl,
-          videoTitle: input.videoId,
+          videoTitle: input.videoTitle || input.videoId,
           transcriptSource: transcript.source,
           transcript: effectiveTranscriptText,
           promptTemplatePath: oneStepPromptTemplatePath,
-          additionalInstructions: safetyRetryHint || undefined,
+          additionalInstructions: withStructureHint(safetyRetryHint || undefined),
         }, {
           onGenerationModelEvent: generationModelEventCallback,
           onGenerationPromptEvent: generationPromptEventCallback,
@@ -826,17 +848,6 @@ async function runYouTubePipeline(input: {
   let gateIssueCodes: string[] = [];
   let gateIssueDetails: string[] = [];
   let gatePassed = true;
-  const structureSectionPrefixes = ['SUMMARY', 'BLEUP', 'TAKEAWAYS', 'DEEP_DIVE', 'PRACTICAL_RULES', 'OPEN_QUESTIONS'];
-  const structureRetryInstructionBlock = `Your previous output did not follow the required Bleu blueprint structure.
-Regenerate now using exactly these six sections in this exact order:
-Summary, Takeaways, Bleup, Deep Dive, Practical Rules, Open Questions.
-Each section must be present and non-empty.
-Use bullets where expected and keep bullet length concise.
-Do not rename, merge, or invent section names.
-If this is not met, an error will trigger and a new attempt will be needed. It is important that you follow this structure.`;
-  const hasStructureIssue = (issueCodes: string[]) => issueCodes.some((code) =>
-    structureSectionPrefixes.some((prefix) => String(code || '').toUpperCase().startsWith(`${prefix}_`))
-  );
 
   if (useDeterministicPostProcessing) {
     let goldenFormat = normalizeYouTubeDraftToGoldenV1(draftToNormalizationInput(draft), {
@@ -891,9 +902,8 @@ If this is not met, an error will trigger and a new attempt will be needed. It i
 
     while (!gatePassed && qualityRetriesUsed < qualityRetryBudget) {
       const retryAttempt = qualityRetriesUsed + 1;
-      const structureIssueFail = hasStructureIssue(gateIssueCodes);
-      const promptIssueCodes = structureIssueFail ? [] : gateIssueCodes;
-      const promptIssueDetails = structureIssueFail ? [] : gateIssueDetails;
+      const promptIssueCodes = gateIssueCodes;
+      const promptIssueDetails = gateIssueDetails;
       const previousOutput = JSON.stringify({
         title: draft.title,
         description: draft.description,
@@ -938,7 +948,7 @@ If this is not met, an error will trigger and a new attempt will be needed. It i
         issueCodes: promptIssueCodes,
         issueDetails: promptIssueDetails,
         previousOutput,
-      }) + (structureIssueFail ? `\n\n${structureRetryInstructionBlock}` : '');
+      });
 
       const retryRawDraft = await runWithProviderRetry(
         {
@@ -951,13 +961,13 @@ If this is not met, an error will trigger and a new attempt will be needed. It i
         },
         async () => client.generateYouTubeBlueprint({
           videoUrl: input.videoUrl,
-          videoTitle: input.videoId,
+          videoTitle: input.videoTitle || input.videoId,
           transcriptSource: transcript.source,
           transcript: effectiveTranscriptText,
           promptTemplatePath: oneStepPromptTemplatePath,
           qualityIssueCodes: promptIssueCodes,
           qualityIssueDetails: promptIssueDetails,
-          additionalInstructions: retryInstructions,
+          additionalInstructions: withStructureHint(retryInstructions),
         }, {
           onGenerationModelEvent: generationModelEventCallback,
           onGenerationPromptEvent: generationPromptEventCallback,
@@ -1156,9 +1166,8 @@ If this is not met, an error will trigger and a new attempt will be needed. It i
 
     while (!gatePassed && qualityRetriesUsed < qualityRetryBudget) {
       const retryAttempt = qualityRetriesUsed + 1;
-      const structureIssueFail = hasStructureIssue(gateIssueCodes);
-      const promptIssueCodes = structureIssueFail ? [] : gateIssueCodes;
-      const promptIssueDetails = structureIssueFail ? [] : gateIssueDetails;
+      const promptIssueCodes = gateIssueCodes;
+      const promptIssueDetails = gateIssueDetails;
       const previousOutput = JSON.stringify({
         title: draft.title,
         description: draft.description,
@@ -1207,7 +1216,7 @@ If this is not met, an error will trigger and a new attempt will be needed. It i
 
 Keep section bullets concise:
 - Takeaways: 3-4 bullets, total read should feel like 10-20 seconds.
-- Takeaways/Deep Dive/Practical Rules/Open Questions: each bullet must be 1-2 sentences max.${structureIssueFail ? `\n\n${structureRetryInstructionBlock}` : ''}`;
+- Takeaways/Deep Dive/Practical Rules/Open Questions: each bullet must be 1-2 sentences max.`;
 
       const retryRawDraft = await runWithProviderRetry(
         {
@@ -1220,12 +1229,12 @@ Keep section bullets concise:
         },
         async () => client.generateYouTubeBlueprint({
           videoUrl: input.videoUrl,
-          videoTitle: input.videoId,
+          videoTitle: input.videoTitle || input.videoId,
           transcriptSource: transcript.source,
           transcript: effectiveTranscriptText,
           qualityIssueCodes: promptIssueCodes,
           qualityIssueDetails: promptIssueDetails,
-          additionalInstructions: retryInstructions,
+          additionalInstructions: withStructureHint(retryInstructions),
         }, {
           onGenerationModelEvent: generationModelEventCallback,
           onGenerationPromptEvent: generationPromptEventCallback,

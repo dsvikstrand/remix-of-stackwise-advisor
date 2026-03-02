@@ -4,18 +4,18 @@ export type ChannelColorView = {
 };
 
 const CHANNEL_COLOR_PALETTE: ChannelColorView[] = [
-  { badgeClassName: 'border-sky-400/40 bg-sky-500/14 text-foreground/85', surfaceClassName: 'border-sky-400/35 bg-sky-500/10' },
-  { badgeClassName: 'border-cyan-400/40 bg-cyan-500/14 text-foreground/85', surfaceClassName: 'border-cyan-400/35 bg-cyan-500/10' },
-  { badgeClassName: 'border-blue-400/40 bg-blue-500/14 text-foreground/85', surfaceClassName: 'border-blue-400/35 bg-blue-500/10' },
-  { badgeClassName: 'border-indigo-400/40 bg-indigo-500/14 text-foreground/85', surfaceClassName: 'border-indigo-400/35 bg-indigo-500/10' },
-  { badgeClassName: 'border-violet-400/40 bg-violet-500/14 text-foreground/85', surfaceClassName: 'border-violet-400/35 bg-violet-500/10' },
-  { badgeClassName: 'border-fuchsia-400/40 bg-fuchsia-500/14 text-foreground/85', surfaceClassName: 'border-fuchsia-400/35 bg-fuchsia-500/10' },
-  { badgeClassName: 'border-rose-400/40 bg-rose-500/14 text-foreground/85', surfaceClassName: 'border-rose-400/35 bg-rose-500/10' },
-  { badgeClassName: 'border-orange-400/40 bg-orange-500/14 text-foreground/85', surfaceClassName: 'border-orange-400/35 bg-orange-500/10' },
-  { badgeClassName: 'border-amber-400/40 bg-amber-500/14 text-foreground/85', surfaceClassName: 'border-amber-400/35 bg-amber-500/10' },
-  { badgeClassName: 'border-lime-400/40 bg-lime-500/14 text-foreground/85', surfaceClassName: 'border-lime-400/35 bg-lime-500/10' },
-  { badgeClassName: 'border-emerald-400/40 bg-emerald-500/14 text-foreground/85', surfaceClassName: 'border-emerald-400/35 bg-emerald-500/10' },
-  { badgeClassName: 'border-teal-400/40 bg-teal-500/14 text-foreground/85', surfaceClassName: 'border-teal-400/35 bg-teal-500/10' },
+  { badgeClassName: 'border-sky-400/28 bg-sky-500/8 text-foreground/80', surfaceClassName: 'border-sky-400/24 bg-sky-500/6' },
+  { badgeClassName: 'border-cyan-400/28 bg-cyan-500/8 text-foreground/80', surfaceClassName: 'border-cyan-400/24 bg-cyan-500/6' },
+  { badgeClassName: 'border-blue-400/28 bg-blue-500/8 text-foreground/80', surfaceClassName: 'border-blue-400/24 bg-blue-500/6' },
+  { badgeClassName: 'border-indigo-400/28 bg-indigo-500/8 text-foreground/80', surfaceClassName: 'border-indigo-400/24 bg-indigo-500/6' },
+  { badgeClassName: 'border-violet-400/28 bg-violet-500/8 text-foreground/80', surfaceClassName: 'border-violet-400/24 bg-violet-500/6' },
+  { badgeClassName: 'border-fuchsia-400/28 bg-fuchsia-500/8 text-foreground/80', surfaceClassName: 'border-fuchsia-400/24 bg-fuchsia-500/6' },
+  { badgeClassName: 'border-rose-400/28 bg-rose-500/8 text-foreground/80', surfaceClassName: 'border-rose-400/24 bg-rose-500/6' },
+  { badgeClassName: 'border-orange-400/28 bg-orange-500/8 text-foreground/80', surfaceClassName: 'border-orange-400/24 bg-orange-500/6' },
+  { badgeClassName: 'border-amber-400/28 bg-amber-500/8 text-foreground/80', surfaceClassName: 'border-amber-400/24 bg-amber-500/6' },
+  { badgeClassName: 'border-lime-400/28 bg-lime-500/8 text-foreground/80', surfaceClassName: 'border-lime-400/24 bg-lime-500/6' },
+  { badgeClassName: 'border-emerald-400/28 bg-emerald-500/8 text-foreground/80', surfaceClassName: 'border-emerald-400/24 bg-emerald-500/6' },
+  { badgeClassName: 'border-teal-400/28 bg-teal-500/8 text-foreground/80', surfaceClassName: 'border-teal-400/24 bg-teal-500/6' },
 ];
 
 const NEUTRAL_CHANNEL_COLOR: ChannelColorView = {

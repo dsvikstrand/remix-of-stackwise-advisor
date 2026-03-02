@@ -107,7 +107,7 @@ export interface YouTubeBlueprintPass2TransformRequest {
 }
 
 export interface YouTubeBlueprintResult {
-  title: string;
+  title?: string;
   description: string;
   steps: YouTubeDraftStep[];
   notes?: string | null;

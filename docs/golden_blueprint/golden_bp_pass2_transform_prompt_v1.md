@@ -14,7 +14,7 @@ Your job is to transform the existing default blueprint into an ELI5-style versi
 
 You will receive strict output-format rules, source context, and vibe references. Use them to simplify language and improve readability while preserving the original meaning.
 
-## Source Priority
+## Source Prioritya2 but if i
 
 1. `Pass 1 blueprint JSON` is the source of truth for claims, structure, and section order.  
 2. Transcript context is a fidelity backstop when wording is ambiguous, not a source for adding new claims.  

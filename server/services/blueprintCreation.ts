@@ -7,6 +7,7 @@ type CreateBlueprintFromVideoInput = {
   userId: string;
   videoUrl: string;
   videoId: string;
+  videoTitle?: string | null;
   durationSeconds?: number | null;
   sourceTag:
     | 'subscription_auto'
@@ -51,6 +52,7 @@ export type BlueprintCreationDeps = {
     runId: string;
     videoId: string;
     videoUrl: string;
+    videoTitle?: string | null;
     durationSeconds?: number | null;
     generateReview: boolean;
     generateBanner: boolean;
@@ -139,6 +141,7 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
           ? 'source_item_unlock_generation'
           : input.sourceTag;
     let sourceThumbnailUrl: string | null = null;
+    let resolvedVideoTitle: string | null = String(input.videoTitle || '').trim() || null;
     const normalizedSourceItemId = String(input.sourceItemId || '').trim();
     const generationTier: GenerationTier = input.generationTier === 'tier' ? 'tier' : 'free';
     const generationModelProfile = deps.resolveGenerationModelProfile(generationTier);
@@ -179,10 +182,13 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
     if (normalizedSourceItemId) {
       const { data: sourceRow } = await db
         .from('source_items')
-        .select('thumbnail_url')
+        .select('thumbnail_url, title')
         .eq('id', normalizedSourceItemId)
         .maybeSingle();
       sourceThumbnailUrl = String(sourceRow?.thumbnail_url || '').trim() || null;
+      if (!resolvedVideoTitle) {
+        resolvedVideoTitle = String(sourceRow?.title || '').trim() || null;
+      }
     }
     if (!sourceThumbnailUrl && deps.youtubeVideoIdRegex.test(String(input.videoId || '').trim())) {
       sourceThumbnailUrl = `https://i.ytimg.com/vi/${String(input.videoId || '').trim()}/hqdefault.jpg`;
@@ -214,6 +220,7 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
         runId,
         videoId: input.videoId,
         videoUrl: input.videoUrl,
+        videoTitle: resolvedVideoTitle || input.videoId,
         durationSeconds: input.durationSeconds ?? null,
         generateReview: false,
         generateBanner: false,

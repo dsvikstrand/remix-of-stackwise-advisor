@@ -28,7 +28,6 @@ import {
 } from './prompts';
 
 const YouTubeBlueprintValidator = z.object({
-  title: z.string(),
   description: z.string(),
   notes: z.string().nullable().optional(),
   tags: z.array(z.string()).optional(),

@@ -53,7 +53,10 @@ describe('codex generation client', () => {
       videoUrl: 'https://youtube.com/watch?v=abc',
       transcript: 'hello',
     });
-    expect(result.title).toBe('codex');
+    expect(result.title).toBeUndefined();
+    expect(result.description).toBe('codex');
+    expect(result.steps).toHaveLength(1);
+    expect(result.steps[0]?.name).toBe('A');
   });
 
   it('falls back to API client when codex fails', async () => {
@@ -80,7 +83,8 @@ describe('codex generation client', () => {
         events.push(`${event.provider}:${event.event}`);
       },
     });
-    expect(result.title).toBe('fallback');
+    expect(result.description).toBe('fallback');
+    expect(result.steps).toHaveLength(1);
     expect(events).toContain('codex_cli:request_failed');
     expect(events).toContain('openai_api:fallback_success');
   });
