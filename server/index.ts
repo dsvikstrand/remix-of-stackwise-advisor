@@ -249,7 +249,7 @@ const workerConcurrency = clampInt(process.env.WORKER_CONCURRENCY, 2, 1, 16);
 const workerBatchSize = clampInt(process.env.WORKER_BATCH_SIZE, 10, 1, 200);
 const workerLeaseMs = clampInt(process.env.WORKER_LEASE_MS, 90_000, 5_000, 15 * 60_000);
 const workerHeartbeatMs = clampInt(process.env.WORKER_HEARTBEAT_MS, 10_000, 1_000, 5 * 60_000);
-const jobExecutionTimeoutMs = clampInt(process.env.JOB_EXECUTION_TIMEOUT_MS, 120_000, 5_000, 10 * 60_000);
+const jobExecutionTimeoutMs = clampInt(process.env.JOB_EXECUTION_TIMEOUT_MS, 180_000, 5_000, 10 * 60_000);
 const unlockIntakeEnabledRaw = String(process.env.UNLOCK_INTAKE_ENABLED || 'true').trim().toLowerCase();
 const unlockIntakeEnabled = !(unlockIntakeEnabledRaw === 'false' || unlockIntakeEnabledRaw === '0' || unlockIntakeEnabledRaw === 'off');
 const sourceUnlockReservationSeconds = clampInt(process.env.SOURCE_UNLOCK_RESERVATION_SECONDS, 300, 60, 3600);
@@ -7323,7 +7323,7 @@ function evaluateLlmNativeGate(draft: YouTubeDraft): LlmNativeGateResult {
         issueDetails.push(`TAKEAWAYS_BULLET_COUNT count=${bullets.length}`);
       }
       const totalWords = bullets.reduce((sum, bullet) => sum + wordCount(bullet), 0);
-      if (totalWords > 70) {
+      if (totalWords > 100) {
         issues.push('TAKEAWAYS_TOO_LONG');
         issueDetails.push(`TAKEAWAYS_TOO_LONG words=${totalWords}`);
       }

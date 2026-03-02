@@ -424,7 +424,7 @@ async function runYouTubePipeline(input: {
       issue_details: string[];
     }>,
     gate_final: null as null | {
-      mode: 'direct' | 'retry_pass' | 'repaired_after_retry' | 'llm_native_direct';
+      mode: 'direct' | 'retry_pass' | 'repaired_after_retry' | 'llm_native_direct' | 'terminal_publish_anyway';
       pass: boolean;
       issues: string[];
       issue_details: string[];
@@ -819,9 +819,8 @@ async function runYouTubePipeline(input: {
   const useDeterministicPostProcessing = yt2bpOutputMode === 'deterministic';
   const qualityRetryBudget = Math.min(2, Math.max(0, Math.floor(Number(GOLDEN_QUALITY_MAX_RETRIES) || 0)));
   const qualityAttemptBudget = 1 + qualityRetryBudget;
-  const terminalGateFailureMessage = 'We couldn’t generate a stable blueprint for this video right now. Please try another video or retry in a bit.';
   let qualityRetriesUsed = 0;
-  let qualityFinalMode: 'direct' | 'retry_pass' | 'repaired_after_retry' | 'llm_native_direct' = useDeterministicPostProcessing
+  let qualityFinalMode: 'direct' | 'retry_pass' | 'repaired_after_retry' | 'llm_native_direct' | 'terminal_publish_anyway' = useDeterministicPostProcessing
     ? 'direct'
     : 'llm_native_direct';
   let gateIssueCodes: string[] = [];
@@ -1301,6 +1300,14 @@ Keep section bullets concise:
   }
 
   if (!gatePassed) {
+    qualityFinalMode = 'terminal_publish_anyway';
+    generationTrace.gate_final = {
+      mode: qualityFinalMode,
+      pass: gatePassed,
+      issues: gateIssueCodes.slice(0, 20),
+      issue_details: gateIssueDetails.slice(0, 20),
+      retries_used: qualityRetriesUsed,
+    };
     console.log('[bp_quality_gate_failed_terminal]', JSON.stringify({
       run_id: input.runId,
       video_id: input.videoId,
@@ -1327,12 +1334,33 @@ Keep section bullets concise:
               issues: gateIssueCodes.slice(0, 20),
               issue_details: gateIssueDetails.slice(0, 20),
               final_mode: qualityFinalMode,
+              published_anyway: true,
             },
           });
         },
       });
     }
-    makePipelineError('GENERATION_FAIL', terminalGateFailureMessage);
+    if (traceContext.db && traceContext.userId) {
+      await safeGenerationTraceWrite({
+        runId: input.runId,
+        op: 'event_gate_publish_anyway',
+        fn: async () => {
+          await appendGenerationEvent(traceContext.db as any, {
+            runId: input.runId,
+            level: 'warn',
+            event: 'gate_published_anyway',
+            payload: {
+              output_mode: yt2bpOutputMode,
+              retries_used: qualityRetriesUsed,
+              attempt_budget: qualityAttemptBudget,
+              issues: gateIssueCodes.slice(0, 20),
+              issue_details: gateIssueDetails.slice(0, 20),
+              final_mode: qualityFinalMode,
+            },
+          });
+        },
+      });
+    }
   }
   console.log(
     `[yt2bp] run_id=${input.runId} transcript_source=${transcript.source} transcript_chars=${effectiveTranscriptText.length}`

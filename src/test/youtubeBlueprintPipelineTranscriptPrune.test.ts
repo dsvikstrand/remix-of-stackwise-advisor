@@ -300,7 +300,7 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
     expect(events.some((row) => row.event === 'pass2_transform_skipped_one_step')).toBe(true);
   });
 
-  it('hard-fails after max gate attempts and injects issues into retries', async () => {
+  it('publishes with terminal gate issues after max retries and injects issues into retries', async () => {
     const events: EventRow[] = [];
     const pass1Transcripts: string[] = [];
     const pass2Transcripts: string[] = [];
@@ -335,7 +335,7 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
     });
     const service = createYouTubeBlueprintPipelineService(deps);
 
-    await expect(service.runYouTubePipeline({
+    const result = await service.runYouTubePipeline({
       runId: 'run-4',
       videoId: 'gatefail123',
       videoUrl: 'https://www.youtube.com/watch?v=gatefail123',
@@ -348,13 +348,16 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
         db: { id: 'trace-db' },
         userId: 'user-4',
       },
-    })).rejects.toThrow('stable blueprint');
+    });
 
     expect(pass1Requests.length).toBe(3);
     expect(pass1Requests[0].qualityIssueCodes).toEqual([]);
     expect(pass1Requests[1].qualityIssueCodes).toContain('SUMMARY_MISSING');
     expect(pass1Requests[2].qualityIssueCodes).toContain('SUMMARY_MISSING');
-    expect(pass2Transcripts.length).toBe(0);
+    expect(pass2Transcripts.length).toBe(1);
     expect(events.some((row) => row.event === 'gate_failed_terminal')).toBe(true);
+    expect(events.some((row) => row.event === 'gate_published_anyway')).toBe(true);
+    expect((result.meta as Record<string, unknown>).bp_structure_ok).toBe(false);
+    expect((result.meta as Record<string, unknown>).bp_quality_final_mode).toBe('terminal_publish_anyway');
   });
 });
