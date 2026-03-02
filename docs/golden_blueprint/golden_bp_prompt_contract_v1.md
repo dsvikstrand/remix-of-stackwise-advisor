@@ -5,17 +5,6 @@ Status: Canonical (current)
 Last updated: 2026-02-27  
 Owner intent: Build blueprints people choose to read for value, not because they are testing the app.
 
-## Change Log
-
-- `v1` (2026-02-27): Introduced canonical prompt contract with strict section semantics, Reddit vibe-only policy, and representation pass/fail guidance.
-- `v1.1` (2026-02-27): Added canonical POS folder strategy (local + Oracle path), cherry-pick subset guidance, and final generation directive layer.
-- `v1.2` (2026-02-27): Replaced placeholder/order prose sections with deterministic enforcement contract, moved changelog to top, and added final job recap.
-- `v1.3` (2026-02-27): Removed `Tradeoffs` from active section contract, reframed `Summary` as intro/prerequisite context, reduced Bleup density target to fewer richer slides, and tightened parenthetical-overuse guidance.
-- `v1.4` (2026-02-28): Made all six sections explicitly required (`Summary`, `Takeaways`, `Bleup`, `Deep Dive`, `Practical Rules`, `Open Questions`) and added explicit retry-on-missing-section language.
-- `v1.5` (2026-02-28): Added required `summary_variants` output (`default`, `eli5`) for expertise-level toggle on first section.
-- `v1.6` (2026-02-28): Added length-parity rule for `summary_variants` so `eli5` remains approximately as long as `default` while simplifying language.
-- `v1.7` (2026-02-28): Pass 1 now outputs default content only; ELI5 is generated in Pass 2 for full-section transform.
-
 ## Purpose
 
 This document is the canonical writing and quality contract for Golden Blueprint generation in Bluep. It defines what a blueprint is, how it should feel, how each section should behave, how Reddit references can be used safely for vibe calibration, and how reviewers should score quality before we call output acceptable.
