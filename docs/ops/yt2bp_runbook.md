@@ -224,6 +224,8 @@ Required runtime variables:
 - `GENERATION_TIER_TIER_MODEL` (default `gpt-5.2`)
 - `GENERATION_TIER_TIER_FALLBACK_MODEL` (default follows `OPENAI_GENERATION_FALLBACK_MODEL`)
 - `GENERATION_TIER_TIER_REASONING_EFFORT` (default `low`)
+- `YT2BP_TIER_ONE_STEP_ENABLED` (default `false`; when enabled, tier uses one-step prompt and skips pass2 transform)
+- `YT2BP_TIER_ONE_STEP_PROMPT_TEMPLATE_PATH` (default `docs/golden_blueprint/golden_bp_prompt_contract_one_step_v1.md`)
 - `GENERATION_TIER_DUAL_GENERATE_ENABLED` (default `false`; dev compare mode for queue surfaces)
 - `GENERATION_TIER_DUAL_GENERATE_USER_IDS` (csv user ids allowlisted for dual-generate mode)
 - `GENERATION_TIER_DUAL_GENERATE_SCOPE` (default `queue_only`)
@@ -258,6 +260,8 @@ Safe defaults:
 - `YT2BP_TRANSCRIPT_PRUNE_BUDGET_CHARS=4500`
 - `YT2BP_TRANSCRIPT_PRUNE_THRESHOLDS=4500,9000,16000`
 - `YT2BP_TRANSCRIPT_PRUNE_WINDOWS=1,4,6,8`
+- `YT2BP_TIER_ONE_STEP_ENABLED=false`
+- `YT2BP_TIER_ONE_STEP_PROMPT_TEMPLATE_PATH=docs/golden_blueprint/golden_bp_prompt_contract_one_step_v1.md`
 - `GENERATION_DURATION_CAP_ENABLED=false`
 - `GENERATION_MAX_VIDEO_SECONDS=2700`
 - `GENERATION_BLOCK_UNKNOWN_DURATION=true`

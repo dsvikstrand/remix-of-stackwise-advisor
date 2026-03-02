@@ -352,6 +352,18 @@ function resolveGenerationModelProfile(tier: GenerationTier): GenerationModelPro
   return tier === 'tier' ? generationTierTierProfile : generationTierFreeProfile;
 }
 
+const yt2bpTierOneStepEnabledRaw = String(process.env.YT2BP_TIER_ONE_STEP_ENABLED || 'false').trim().toLowerCase();
+const yt2bpTierOneStepEnabled = (
+  yt2bpTierOneStepEnabledRaw === 'true'
+  || yt2bpTierOneStepEnabledRaw === '1'
+  || yt2bpTierOneStepEnabledRaw === 'yes'
+  || yt2bpTierOneStepEnabledRaw === 'on'
+);
+const yt2bpTierOneStepPromptTemplatePath = String(
+  process.env.YT2BP_TIER_ONE_STEP_PROMPT_TEMPLATE_PATH
+  || 'docs/golden_blueprint/golden_bp_prompt_contract_one_step_v1.md',
+).trim();
+
 const useCodexForGenerationRaw = String(process.env.USE_CODEX_FOR_GENERATION || 'false').trim().toLowerCase();
 const useCodexForGeneration = (
   useCodexForGenerationRaw === 'true'
@@ -466,6 +478,15 @@ if (!youtubeOAuthConfigured) {
 
 if (!tokenEncryptionKey) {
   console.warn('[youtube-oauth] TOKEN_ENCRYPTION_KEY is not configured. YouTube connection endpoints will return YT_OAUTH_NOT_CONFIGURED.');
+}
+
+if (yt2bpTierOneStepEnabled) {
+  const resolvedTemplatePath = path.isAbsolute(yt2bpTierOneStepPromptTemplatePath)
+    ? yt2bpTierOneStepPromptTemplatePath
+    : path.resolve(process.cwd(), yt2bpTierOneStepPromptTemplatePath);
+  if (!fs.existsSync(resolvedTemplatePath)) {
+    console.warn(`[yt2bp_one_step] YT2BP_TIER_ONE_STEP_PROMPT_TEMPLATE_PATH not found: ${resolvedTemplatePath}`);
+  }
 }
 
 if (transcriptThrottleTierParseWarn) {
@@ -7588,6 +7609,8 @@ const youtubeBlueprintPipelineService = createYouTubeBlueprintPipelineService({
   mapPipelineError,
   canonicalSectionName,
   normalizeSummaryVariantText,
+  yt2bpTierOneStepEnabled,
+  yt2bpTierOneStepPromptTemplatePath,
   pruneTranscriptForGeneration: (input: { transcriptText: string }) => applyTranscriptPruning({
     transcriptText: input.transcriptText,
     config: transcriptPruningConfig,

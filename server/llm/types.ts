@@ -88,6 +88,7 @@ export interface YouTubeBlueprintRequest {
   videoTitle?: string;
   transcriptSource?: string;
   transcript: string;
+  promptTemplatePath?: string;
   oraclePosDir?: string;
   positiveReferencePaths?: string[];
   qualityIssueCodes?: string[];

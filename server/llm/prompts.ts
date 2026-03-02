@@ -68,16 +68,18 @@ const YOUTUBE_PASS2_REQUIRED_TEMPLATE_KEYS = [
   'ADDITIONAL_INSTRUCTIONS',
 ] as const;
 
-let youtubePromptTemplateCache: string | null = null;
-let youtubePass2PromptTemplateCache: string | null = null;
+const youtubePromptTemplateCache = new Map<string, string>();
+const youtubePass2PromptTemplateCache = new Map<string, string>();
 
 function readPromptTemplate(input: {
-  cache: string | null;
+  cache: Map<string, string>;
+  cacheKey: string;
   overridePath: string;
   relativePath: string;
   loadFailedCode: string;
 }) {
-  if (input.cache) return input.cache;
+  const cached = input.cache.get(input.cacheKey);
+  if (cached) return cached;
   const candidates = [
     input.overridePath,
     path.resolve(process.cwd(), input.relativePath),
@@ -86,6 +88,7 @@ function readPromptTemplate(input: {
     try {
       const raw = fs.readFileSync(filePath, 'utf8');
       if (raw.trim()) {
+        input.cache.set(input.cacheKey, raw);
         return raw;
       }
     } catch {
@@ -95,25 +98,29 @@ function readPromptTemplate(input: {
   throw new Error(input.loadFailedCode);
 }
 
-function readYouTubePromptTemplate() {
+function readYouTubePromptTemplate(overridePathRaw?: string) {
+  const overridePath = String(overridePathRaw || process.env.YOUTUBE_BLUEPRINT_PROMPT_TEMPLATE_PATH || '').trim();
+  const cacheKey = `youtube_prompt:${overridePath || 'default'}`;
   const template = readPromptTemplate({
     cache: youtubePromptTemplateCache,
-    overridePath: String(process.env.YOUTUBE_BLUEPRINT_PROMPT_TEMPLATE_PATH || '').trim(),
+    cacheKey,
+    overridePath,
     relativePath: YOUTUBE_PROMPT_TEMPLATE_RELATIVE_PATH,
     loadFailedCode: 'YOUTUBE_PROMPT_TEMPLATE_LOAD_FAILED',
   });
-  youtubePromptTemplateCache = template;
   return template;
 }
 
 function readYouTubePass2PromptTemplate() {
+  const overridePath = String(process.env.YOUTUBE_BLUEPRINT_PASS2_PROMPT_TEMPLATE_PATH || '').trim();
+  const cacheKey = `youtube_pass2_prompt:${overridePath || 'default'}`;
   const template = readPromptTemplate({
     cache: youtubePass2PromptTemplateCache,
-    overridePath: String(process.env.YOUTUBE_BLUEPRINT_PASS2_PROMPT_TEMPLATE_PATH || '').trim(),
+    cacheKey,
+    overridePath,
     relativePath: YOUTUBE_PASS2_PROMPT_TEMPLATE_RELATIVE_PATH,
     loadFailedCode: 'YOUTUBE_PASS2_PROMPT_TEMPLATE_LOAD_FAILED',
   });
-  youtubePass2PromptTemplateCache = template;
   return template;
 }
 
@@ -250,6 +257,7 @@ function buildPositiveReferenceExcerpts(input: {
 export function buildYouTubeBlueprintUserPrompt(input: YouTubeBlueprintRequest) {
   const videoUrl = String(input.videoUrl || '').trim();
   const transcript = String(input.transcript || '').trim();
+  const promptTemplatePath = String(input.promptTemplatePath || '').trim();
   const videoTitle = String(input.videoTitle || '').trim() || `YouTube video (${videoUrl || 'unknown'})`;
   const transcriptSource = String(input.transcriptSource || '').trim() || 'youtube_transcript';
   const oraclePosDir = String(input.oraclePosDir || YOUTUBE_POS_VIBE_ORACLE_DIR || '').trim();
@@ -273,7 +281,7 @@ export function buildYouTubeBlueprintUserPrompt(input: YouTubeBlueprintRequest) 
     positiveReferencePaths,
   });
 
-  const template = readYouTubePromptTemplate();
+  const template = readYouTubePromptTemplate(promptTemplatePath);
   assertTemplateHasRuntimePlaceholders(
     template,
     YOUTUBE_REQUIRED_TEMPLATE_KEYS,

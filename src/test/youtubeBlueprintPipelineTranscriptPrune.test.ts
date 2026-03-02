@@ -16,6 +16,9 @@ function buildDeps(input: {
   events: EventRow[];
   pass1Transcripts: string[];
   pass2Transcripts: string[];
+  pass1PromptTemplatePaths: string[];
+  tierOneStepEnabled?: boolean;
+  tierOneStepPromptTemplatePath?: string;
 }) {
   return {
     getServiceSupabaseClient: () => ({ id: 'db' }),
@@ -52,8 +55,9 @@ function buildDeps(input: {
       config: input.pruningConfig,
     }),
     createYouTubeGenerationLLMClient: () => ({
-      generateYouTubeBlueprint: async (request: { transcript: string }) => {
+      generateYouTubeBlueprint: async (request: { transcript: string; promptTemplatePath?: string }) => {
         input.pass1Transcripts.push(request.transcript);
+        input.pass1PromptTemplatePaths.push(String(request.promptTemplatePath || ''));
         return {
           title: 'T',
           description: 'D',
@@ -125,6 +129,8 @@ function buildDeps(input: {
     canonicalSectionName: (name: string) => String(name || '').trim().toLowerCase(),
     normalizeSummaryVariantText: (text: string) => String(text || '').trim(),
     enforceVideoDurationPolicy: async (policyInput: { durationSeconds?: number | null }) => policyInput.durationSeconds ?? null,
+    yt2bpTierOneStepEnabled: Boolean(input.tierOneStepEnabled),
+    yt2bpTierOneStepPromptTemplatePath: String(input.tierOneStepPromptTemplatePath || ''),
   };
 }
 
@@ -133,6 +139,7 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
     const events: EventRow[] = [];
     const pass1Transcripts: string[] = [];
     const pass2Transcripts: string[] = [];
+    const pass1PromptTemplatePaths: string[] = [];
     const transcriptText = `BEGIN_SENTINEL ${'a'.repeat(7000)} MID_SENTINEL ${'b'.repeat(7000)} END_SENTINEL`;
     const pruningConfig: TranscriptPruningConfig = {
       enabled: true,
@@ -148,6 +155,7 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
       events,
       pass1Transcripts,
       pass2Transcripts,
+      pass1PromptTemplatePaths,
     });
     const service = createYouTubeBlueprintPipelineService(deps);
 
@@ -181,6 +189,7 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
     const events: EventRow[] = [];
     const pass1Transcripts: string[] = [];
     const pass2Transcripts: string[] = [];
+    const pass1PromptTemplatePaths: string[] = [];
     const transcriptText = `BEGIN ${'x'.repeat(6000)} END`;
     const pruningConfig: TranscriptPruningConfig = {
       enabled: false,
@@ -196,6 +205,7 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
       events,
       pass1Transcripts,
       pass2Transcripts,
+      pass1PromptTemplatePaths,
     });
     const service = createYouTubeBlueprintPipelineService(deps);
 
@@ -218,5 +228,55 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
     expect(pass2Transcripts[0]).toBe(transcriptText);
     expect(result.meta.transcript_pruning?.applied).toBe(false);
     expect(events.some((row) => row.event === 'transcript_pruning_applied')).toBe(true);
+  });
+
+  it('uses one-step tier mode by skipping pass2 and passing prompt template override', async () => {
+    const events: EventRow[] = [];
+    const pass1Transcripts: string[] = [];
+    const pass2Transcripts: string[] = [];
+    const pass1PromptTemplatePaths: string[] = [];
+    const transcriptText = `BEGIN ${'x'.repeat(5200)} END`;
+    const pruningConfig: TranscriptPruningConfig = {
+      enabled: true,
+      budgetChars: 4500,
+      thresholds: [4500, 9000, 16000],
+      windows: [1, 4, 6, 8],
+      separator: '\n\n...\n\n',
+      minWindowChars: 120,
+    };
+    const deps = buildDeps({
+      transcriptText,
+      pruningConfig,
+      events,
+      pass1Transcripts,
+      pass2Transcripts,
+      pass1PromptTemplatePaths,
+      tierOneStepEnabled: true,
+      tierOneStepPromptTemplatePath: 'docs/golden_blueprint/golden_bp_prompt_contract_one_step_v1.md',
+    });
+    const service = createYouTubeBlueprintPipelineService(deps);
+
+    const result = await service.runYouTubePipeline({
+      runId: 'run-3',
+      videoId: 'tier123',
+      videoUrl: 'https://www.youtube.com/watch?v=tier123',
+      durationSeconds: 100,
+      generateReview: false,
+      generateBanner: false,
+      authToken: '',
+      generationTier: 'tier',
+      requestClass: 'background',
+      trace: {
+        db: { id: 'trace-db' },
+        userId: 'user-3',
+      },
+    });
+
+    expect(pass1Transcripts.length).toBeGreaterThan(0);
+    expect(pass2Transcripts.length).toBe(0);
+    expect(pass1PromptTemplatePaths[0]).toBe('docs/golden_blueprint/golden_bp_prompt_contract_one_step_v1.md');
+    expect(result.draft.summaryVariants.eli5).toBe(result.draft.summaryVariants.default);
+    expect(result.draft.eli5Steps.length).toBe(result.draft.steps.length);
+    expect(events.some((row) => row.event === 'pass2_transform_skipped_one_step')).toBe(true);
   });
 });

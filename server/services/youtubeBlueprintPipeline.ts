@@ -60,6 +60,8 @@ export function createYouTubeBlueprintPipelineService(deps: any) {
     mapPipelineError,
     canonicalSectionName,
     normalizeSummaryVariantText,
+    yt2bpTierOneStepEnabled = false,
+    yt2bpTierOneStepPromptTemplatePath = '',
     pruneTranscriptForGeneration = (pruningInput: { transcriptText: string }) => ({
       text: pruningInput.transcriptText,
       meta: {
@@ -222,6 +224,26 @@ async function runYouTubePipeline(input: {
     const client = createYouTubeGenerationLLMClient({
       generationTier: input.generationTier || 'free',
     });
+    const tierOneStepMode = Boolean(yt2bpTierOneStepEnabled && (input.generationTier || 'free') === 'tier');
+    const oneStepPromptTemplatePath = tierOneStepMode
+      ? (String(yt2bpTierOneStepPromptTemplatePath || '').trim() || undefined)
+      : undefined;
+    if (tierOneStepMode && traceContext.db && traceContext.userId) {
+      await safeGenerationTraceWrite({
+        runId: input.runId,
+        op: 'event_one_step_mode_enabled',
+        fn: async () => {
+          await appendGenerationEvent(traceContext.db as any, {
+            runId: input.runId,
+            event: 'one_step_mode_enabled',
+            payload: {
+              generation_tier: input.generationTier || 'free',
+              prompt_template_path: oneStepPromptTemplatePath || null,
+            },
+          });
+        },
+      });
+    }
     const promptRenderCounts: Record<string, number> = {};
     const generationModelEventCallback = (event: GenerationModelEvent) => {
       if (!traceContext.db || !traceContext.userId) return;
@@ -495,6 +517,7 @@ async function runYouTubePipeline(input: {
           videoTitle: input.videoId,
           transcriptSource: transcript.source,
           transcript: effectiveTranscriptText,
+          promptTemplatePath: oneStepPromptTemplatePath,
           additionalInstructions: safetyRetryHint || undefined,
         }, {
           onGenerationModelEvent: generationModelEventCallback,
@@ -915,6 +938,7 @@ async function runYouTubePipeline(input: {
           videoTitle: input.videoId,
           transcriptSource: transcript.source,
           transcript: effectiveTranscriptText,
+          promptTemplatePath: oneStepPromptTemplatePath,
           qualityIssueCodes: gateIssueCodes,
           qualityIssueDetails: gateIssueDetails,
           additionalInstructions: retryInstructions,
@@ -1276,93 +1300,7 @@ Keep section bullets concise:
     `[yt2bp] run_id=${input.runId} transcript_source=${transcript.source} transcript_chars=${effectiveTranscriptText.length}`
   );
 
-  try {
-    const pass1BlueprintJson = buildPass1BlueprintJson(draft);
-    const pass2 = await runWithProviderRetry(
-      {
-        providerKey: 'llm_generate_blueprint_eli5_transform',
-        db: serviceDb,
-        maxAttempts: providerRetryDefaults.llmAttempts,
-        timeoutMs: providerRetryDefaults.llmTimeoutMs,
-        baseDelayMs: 300,
-        jitterMs: 200,
-      },
-      async () => client.generateYouTubeBlueprintPass2Transform({
-        transcript: effectiveTranscriptText,
-        pass1BlueprintJson,
-      }, {
-        onGenerationModelEvent: generationModelEventCallback,
-        onGenerationPromptEvent: generationPromptEventCallback,
-        generationProfile: input.generationModelProfile,
-      }),
-    );
-    const candidateEli5Steps = (pass2.eli5_steps || [])
-      .map((step) => ({
-        name: String(step.name || '').trim(),
-        notes: String(step.notes || '').trim(),
-        timestamp: step.timestamp?.trim() || null,
-      }))
-      .filter((step) => step.name && step.notes);
-    const mergedEli5Steps = buildEli5Steps(draft.steps, candidateEli5Steps);
-    const summaryFromPass2 = normalizeSummaryVariantText(pass2.eli5_summary || '');
-    const summaryFromSteps = normalizeSummaryVariantText(
-      mergedEli5Steps.find((step) => canonicalSectionName(step.name) === 'summary')?.notes || '',
-    );
-    const mergedSummaryEli5 = summaryFromPass2 || summaryFromSteps || draft.summaryVariants.default;
-
-    const eli5Flattened = [
-      mergedSummaryEli5,
-      ...mergedEli5Steps.flatMap((step) => [step.name, step.notes, step.timestamp || '']),
-    ].filter(Boolean).join('\n').toLowerCase();
-    const eli5Safety = runSafetyChecks(eli5Flattened);
-    if (!eli5Safety.ok) {
-      if (yt2bpSafetyBlockEnabled) {
-        makePipelineError('SAFETY_BLOCKED', `Forbidden topics detected: ${eli5Safety.blockedTopics.join(', ')}`);
-      } else {
-        await bypassSafetyBlock({
-          stage: 'eli5_transform',
-          blockedTopics: eli5Safety.blockedTopics,
-          attempt: 1,
-          run: 1,
-          globalRun: 1,
-        });
-      }
-    }
-    const eli5Pii = runPiiChecks(eli5Flattened);
-    if (!eli5Pii.ok) {
-      makePipelineError('PII_BLOCKED', `PII detected: ${eli5Pii.matches.join(', ')}`);
-    }
-
-    draft = {
-      ...draft,
-      eli5Steps: mergedEli5Steps,
-      summaryVariants: {
-        ...draft.summaryVariants,
-        eli5: mergedSummaryEli5,
-      },
-    };
-
-    if (traceContext.db && traceContext.userId) {
-      await safeGenerationTraceWrite({
-        runId: input.runId,
-        op: 'event_pass2_transform_succeeded',
-        fn: async () => {
-          await appendGenerationEvent(traceContext.db as any, {
-            runId: input.runId,
-            event: 'pass2_transform_succeeded',
-            payload: {
-              eli5_step_count: mergedEli5Steps.length,
-              eli5_summary_chars: mergedSummaryEli5.length,
-            },
-          });
-        },
-      });
-    }
-  } catch (error) {
-    console.warn('[yt2bp_pass2_transform_failed]', JSON.stringify({
-      run_id: input.runId,
-      error: error instanceof Error ? error.message : String(error),
-    }));
+  if (tierOneStepMode) {
     draft = {
       ...draft,
       eli5Steps: draft.steps.map((step) => ({ ...step })),
@@ -1374,19 +1312,132 @@ Keep section bullets concise:
     if (traceContext.db && traceContext.userId) {
       await safeGenerationTraceWrite({
         runId: input.runId,
-        op: 'event_pass2_transform_failed',
+        op: 'event_pass2_transform_skipped',
         fn: async () => {
           await appendGenerationEvent(traceContext.db as any, {
             runId: input.runId,
-            level: 'warn',
-            event: 'pass2_transform_failed',
+            event: 'pass2_transform_skipped_one_step',
             payload: {
-              error: error instanceof Error ? error.message : String(error),
+              generation_tier: input.generationTier || 'free',
               fallback: 'default_copied_to_eli5',
             },
           });
         },
       });
+    }
+  } else {
+    try {
+      const pass1BlueprintJson = buildPass1BlueprintJson(draft);
+      const pass2 = await runWithProviderRetry(
+        {
+          providerKey: 'llm_generate_blueprint_eli5_transform',
+          db: serviceDb,
+          maxAttempts: providerRetryDefaults.llmAttempts,
+          timeoutMs: providerRetryDefaults.llmTimeoutMs,
+          baseDelayMs: 300,
+          jitterMs: 200,
+        },
+        async () => client.generateYouTubeBlueprintPass2Transform({
+          transcript: effectiveTranscriptText,
+          pass1BlueprintJson,
+        }, {
+          onGenerationModelEvent: generationModelEventCallback,
+          onGenerationPromptEvent: generationPromptEventCallback,
+          generationProfile: input.generationModelProfile,
+        }),
+      );
+      const candidateEli5Steps = (pass2.eli5_steps || [])
+        .map((step) => ({
+          name: String(step.name || '').trim(),
+          notes: String(step.notes || '').trim(),
+          timestamp: step.timestamp?.trim() || null,
+        }))
+        .filter((step) => step.name && step.notes);
+      const mergedEli5Steps = buildEli5Steps(draft.steps, candidateEli5Steps);
+      const summaryFromPass2 = normalizeSummaryVariantText(pass2.eli5_summary || '');
+      const summaryFromSteps = normalizeSummaryVariantText(
+        mergedEli5Steps.find((step) => canonicalSectionName(step.name) === 'summary')?.notes || '',
+      );
+      const mergedSummaryEli5 = summaryFromPass2 || summaryFromSteps || draft.summaryVariants.default;
+
+      const eli5Flattened = [
+        mergedSummaryEli5,
+        ...mergedEli5Steps.flatMap((step) => [step.name, step.notes, step.timestamp || '']),
+      ].filter(Boolean).join('\n').toLowerCase();
+      const eli5Safety = runSafetyChecks(eli5Flattened);
+      if (!eli5Safety.ok) {
+        if (yt2bpSafetyBlockEnabled) {
+          makePipelineError('SAFETY_BLOCKED', `Forbidden topics detected: ${eli5Safety.blockedTopics.join(', ')}`);
+        } else {
+          await bypassSafetyBlock({
+            stage: 'eli5_transform',
+            blockedTopics: eli5Safety.blockedTopics,
+            attempt: 1,
+            run: 1,
+            globalRun: 1,
+          });
+        }
+      }
+      const eli5Pii = runPiiChecks(eli5Flattened);
+      if (!eli5Pii.ok) {
+        makePipelineError('PII_BLOCKED', `PII detected: ${eli5Pii.matches.join(', ')}`);
+      }
+
+      draft = {
+        ...draft,
+        eli5Steps: mergedEli5Steps,
+        summaryVariants: {
+          ...draft.summaryVariants,
+          eli5: mergedSummaryEli5,
+        },
+      };
+
+      if (traceContext.db && traceContext.userId) {
+        await safeGenerationTraceWrite({
+          runId: input.runId,
+          op: 'event_pass2_transform_succeeded',
+          fn: async () => {
+            await appendGenerationEvent(traceContext.db as any, {
+              runId: input.runId,
+              event: 'pass2_transform_succeeded',
+              payload: {
+                eli5_step_count: mergedEli5Steps.length,
+                eli5_summary_chars: mergedSummaryEli5.length,
+              },
+            });
+          },
+        });
+      }
+    } catch (error) {
+      console.warn('[yt2bp_pass2_transform_failed]', JSON.stringify({
+        run_id: input.runId,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+      draft = {
+        ...draft,
+        eli5Steps: draft.steps.map((step) => ({ ...step })),
+        summaryVariants: {
+          ...draft.summaryVariants,
+          eli5: draft.summaryVariants.default,
+        },
+      };
+      if (traceContext.db && traceContext.userId) {
+        await safeGenerationTraceWrite({
+          runId: input.runId,
+          op: 'event_pass2_transform_failed',
+          fn: async () => {
+            await appendGenerationEvent(traceContext.db as any, {
+              runId: input.runId,
+              level: 'warn',
+              event: 'pass2_transform_failed',
+              payload: {
+                error: error instanceof Error ? error.message : String(error),
+                fallback: 'default_copied_to_eli5',
+              },
+            });
+          },
+        });
+      }
     }
   }
 
