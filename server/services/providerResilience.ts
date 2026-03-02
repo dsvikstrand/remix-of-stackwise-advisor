@@ -40,6 +40,8 @@ function defaultIsRetryable(error: unknown) {
     if (message.includes('rate limit')) return true;
     if (message.includes('timeout')) return true;
     if (message.includes('temporarily')) return true;
+    if (message.includes('fetch failed')) return true;
+    if (message.includes('networkerror') || message.includes('network error')) return true;
     if (message.includes('econnreset') || message.includes('etimedout')) return true;
   }
   return false;
