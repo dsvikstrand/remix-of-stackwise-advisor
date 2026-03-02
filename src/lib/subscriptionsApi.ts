@@ -258,6 +258,7 @@ export type IngestionJob = {
 
 export type ActiveIngestionJob = {
   job_id: string;
+  title?: string | null;
   scope: string;
   trigger: string;
   status: Extract<IngestionJobStatus, 'queued' | 'running'>;

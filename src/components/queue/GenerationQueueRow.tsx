@@ -33,31 +33,32 @@ export function GenerationQueueRow({
 }: GenerationQueueRowProps) {
   const failedCount = toFailedCount(job);
   const isQueued = job.status === 'queued';
+  const title = String(job.title || '').trim() || getGenerationQueueScopeLabel(job.scope);
+  const queuePositionText = job.queue_position == null
+    ? 'Position unavailable'
+    : `Position ~${job.queue_position}${compact || job.estimated_start_seconds == null ? '' : ` • ETA ~${job.estimated_start_seconds}s`}`;
 
   return (
     <div className={cn('rounded-lg border border-border/50 bg-background px-3 py-2.5', compact ? 'space-y-1.5' : 'space-y-2', className)}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium">{getGenerationQueueScopeLabel(job.scope)}</p>
+          <p className="truncate text-sm font-medium">{title}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {isQueued ? (
-              job.queue_position == null
-                ? 'Position unavailable'
-                : `Position ~${job.queue_position}${job.estimated_start_seconds == null ? '' : ` • ETA ~${job.estimated_start_seconds}s`}`
-            ) : 'Active now'}
+            {isQueued ? queuePositionText : 'Active now'}
           </p>
         </div>
         <Badge variant={getStatusVariant(job.status)} className="shrink-0">
           {getStatusLabel(job.status)}
         </Badge>
       </div>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-        <span>Inserted {job.inserted_count || 0}</span>
-        <span>Skipped {job.skipped_count || 0}</span>
-        <span>Failed {failedCount}</span>
-      </div>
+      {!compact ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+          <span>Inserted {job.inserted_count || 0}</span>
+          <span>Skipped {job.skipped_count || 0}</span>
+          <span>Failed {failedCount}</span>
+        </div>
+      ) : null}
       {action ? <div>{action}</div> : null}
     </div>
   );
 }
-

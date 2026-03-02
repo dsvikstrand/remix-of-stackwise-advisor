@@ -1,7 +1,7 @@
 import type express from 'express';
 import type { IngestionRouteDeps } from '../contracts/api/ingestion';
 
-const INGESTION_JOB_SELECT_COLUMNS = 'id, trigger, scope, status, started_at, finished_at, processed_count, inserted_count, skipped_count, error_code, error_message, attempts, max_attempts, next_run_at, lease_expires_at, trace_id, created_at, updated_at';
+const INGESTION_JOB_SELECT_COLUMNS = 'id, trigger, scope, status, started_at, finished_at, processed_count, inserted_count, skipped_count, error_code, error_message, attempts, max_attempts, next_run_at, lease_expires_at, trace_id, payload, created_at, updated_at';
 
 export type ActiveIngestionJobRow = {
   id: string;
@@ -20,6 +20,7 @@ export type ActiveIngestionJobRow = {
   next_run_at: string | null;
   lease_expires_at: string | null;
   trace_id: string | null;
+  payload?: unknown;
   created_at: string;
   updated_at: string;
 };
@@ -71,6 +72,17 @@ export function estimateStartSeconds(queueAheadCount: number, workerConcurrency:
   return Math.max(1, Math.ceil((normalizedAhead + 1) / normalizedConcurrency) * 4);
 }
 
+function extractJobTitle(payload: unknown) {
+  if (!payload || typeof payload !== 'object') return null;
+  const root = payload as { items?: unknown };
+  if (!Array.isArray(root.items) || root.items.length === 0) return null;
+  const firstItem = root.items[0];
+  if (!firstItem || typeof firstItem !== 'object') return null;
+  const item = firstItem as { title?: unknown; video_title?: unknown };
+  const title = String(item.title || item.video_title || '').trim();
+  return title || null;
+}
+
 export function buildActiveIngestionJobsPayload(input: {
   rows: ActiveIngestionJobRow[];
   queueAheadByJobId: Map<string, number>;
@@ -94,6 +106,7 @@ export function buildActiveIngestionJobsPayload(input: {
     if (row.status === 'running') {
       return {
         job_id: row.id,
+        title: extractJobTitle(row.payload),
         scope: row.scope,
         trigger: row.trigger,
         status: row.status,
@@ -120,6 +133,7 @@ export function buildActiveIngestionJobsPayload(input: {
 
     return {
       job_id: row.id,
+      title: extractJobTitle(row.payload),
       scope: row.scope,
       trigger: row.trigger,
       status: row.status,
