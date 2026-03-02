@@ -17,6 +17,16 @@ function buildDeps(input: {
   pass1Transcripts: string[];
   pass2Transcripts: string[];
   pass1PromptTemplatePaths: string[];
+  pass1Requests?: Array<{
+    qualityIssueCodes: string[];
+    qualityIssueDetails: string[];
+    additionalInstructions: string;
+  }>;
+  gateResults?: Array<{
+    pass: boolean;
+    issues: string[];
+    issueDetails: string[];
+  }>;
   tierOneStepEnabled?: boolean;
   tierOneStepPromptTemplatePath?: string;
 }) {
@@ -58,6 +68,11 @@ function buildDeps(input: {
       generateYouTubeBlueprint: async (request: { transcript: string; promptTemplatePath?: string }) => {
         input.pass1Transcripts.push(request.transcript);
         input.pass1PromptTemplatePaths.push(String(request.promptTemplatePath || ''));
+        input.pass1Requests?.push({
+          qualityIssueCodes: Array.isArray((request as any).qualityIssueCodes) ? (request as any).qualityIssueCodes : [],
+          qualityIssueDetails: Array.isArray((request as any).qualityIssueDetails) ? (request as any).qualityIssueDetails : [],
+          additionalInstructions: String((request as any).additionalInstructions || ''),
+        });
         return {
           title: 'T',
           description: 'D',
@@ -109,7 +124,12 @@ function buildDeps(input: {
     },
     scoreYt2bpQuality: async () => ({ ok: true, overall: 1, failures: [] }),
     scoreYt2bpContentSafety: async () => ({ ok: true, failedCriteria: [] }),
-    evaluateLlmNativeGate: () => ({ pass: true, issues: [], issueDetails: [] }),
+    evaluateLlmNativeGate: () => {
+      if (Array.isArray(input.gateResults) && input.gateResults.length > 0) {
+        return input.gateResults.shift();
+      }
+      return { pass: true, issues: [], issueDetails: [] };
+    },
     yt2bpOutputMode: 'llm_native',
     normalizeYouTubeDraftToGoldenV1: () => ({
       structureGate: { ok: true, issues: [] },
@@ -278,5 +298,63 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
     expect(result.draft.summaryVariants.eli5).toBe(result.draft.summaryVariants.default);
     expect(result.draft.eli5Steps.length).toBe(result.draft.steps.length);
     expect(events.some((row) => row.event === 'pass2_transform_skipped_one_step')).toBe(true);
+  });
+
+  it('hard-fails after max gate attempts and injects issues into retries', async () => {
+    const events: EventRow[] = [];
+    const pass1Transcripts: string[] = [];
+    const pass2Transcripts: string[] = [];
+    const pass1PromptTemplatePaths: string[] = [];
+    const pass1Requests: Array<{
+      qualityIssueCodes: string[];
+      qualityIssueDetails: string[];
+      additionalInstructions: string;
+    }> = [];
+    const transcriptText = `BEGIN ${'x'.repeat(2200)} END`;
+    const pruningConfig: TranscriptPruningConfig = {
+      enabled: true,
+      budgetChars: 4500,
+      thresholds: [4500, 9000, 16000],
+      windows: [1, 4, 6, 8],
+      separator: '\n\n...\n\n',
+      minWindowChars: 120,
+    };
+    const deps = buildDeps({
+      transcriptText,
+      pruningConfig,
+      events,
+      pass1Transcripts,
+      pass2Transcripts,
+      pass1PromptTemplatePaths,
+      pass1Requests,
+      gateResults: [
+        { pass: false, issues: ['SUMMARY_MISSING'], issueDetails: ['SUMMARY_MISSING section=summary'] },
+        { pass: false, issues: ['SUMMARY_MISSING'], issueDetails: ['SUMMARY_MISSING section=summary'] },
+        { pass: false, issues: ['SUMMARY_MISSING'], issueDetails: ['SUMMARY_MISSING section=summary'] },
+      ],
+    });
+    const service = createYouTubeBlueprintPipelineService(deps);
+
+    await expect(service.runYouTubePipeline({
+      runId: 'run-4',
+      videoId: 'gatefail123',
+      videoUrl: 'https://www.youtube.com/watch?v=gatefail123',
+      durationSeconds: 120,
+      generateReview: false,
+      generateBanner: false,
+      authToken: '',
+      requestClass: 'background',
+      trace: {
+        db: { id: 'trace-db' },
+        userId: 'user-4',
+      },
+    })).rejects.toThrow('stable blueprint');
+
+    expect(pass1Requests.length).toBe(3);
+    expect(pass1Requests[0].qualityIssueCodes).toEqual([]);
+    expect(pass1Requests[1].qualityIssueCodes).toContain('SUMMARY_MISSING');
+    expect(pass1Requests[2].qualityIssueCodes).toContain('SUMMARY_MISSING');
+    expect(pass2Transcripts.length).toBe(0);
+    expect(events.some((row) => row.event === 'gate_failed_terminal')).toBe(true);
   });
 });

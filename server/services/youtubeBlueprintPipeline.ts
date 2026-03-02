@@ -817,6 +817,9 @@ async function runYouTubePipeline(input: {
     tags: (draft.tags || []).map((tag) => String(tag || '').trim()).filter(Boolean).slice(0, 5),
   };
   const useDeterministicPostProcessing = yt2bpOutputMode === 'deterministic';
+  const qualityRetryBudget = Math.min(2, Math.max(0, Math.floor(Number(GOLDEN_QUALITY_MAX_RETRIES) || 0)));
+  const qualityAttemptBudget = 1 + qualityRetryBudget;
+  const terminalGateFailureMessage = 'We couldn’t generate a stable blueprint for this video right now. Please try another video or retry in a bit.';
   let qualityRetriesUsed = 0;
   let qualityFinalMode: 'direct' | 'retry_pass' | 'repaired_after_retry' | 'llm_native_direct' = useDeterministicPostProcessing
     ? 'direct'
@@ -876,7 +879,7 @@ async function runYouTubePipeline(input: {
       final_mode: gatePassed ? 'direct' : 'pending',
     }));
 
-    while (!gatePassed && qualityRetriesUsed < GOLDEN_QUALITY_MAX_RETRIES) {
+    while (!gatePassed && qualityRetriesUsed < qualityRetryBudget) {
       const retryAttempt = qualityRetriesUsed + 1;
       const previousOutput = JSON.stringify({
         title: draft.title,
@@ -918,7 +921,7 @@ async function runYouTubePipeline(input: {
 
       const retryInstructions = buildYouTubeQualityRetryInstructions({
         attempt: retryAttempt,
-        maxRetries: GOLDEN_QUALITY_MAX_RETRIES,
+        maxRetries: qualityRetryBudget,
         issueCodes: gateIssueCodes,
         issueDetails: gateIssueDetails,
         previousOutput,
@@ -1138,7 +1141,7 @@ async function runYouTubePipeline(input: {
       });
     }
 
-    while (!gatePassed && qualityRetriesUsed < GOLDEN_QUALITY_MAX_RETRIES) {
+    while (!gatePassed && qualityRetriesUsed < qualityRetryBudget) {
       const retryAttempt = qualityRetriesUsed + 1;
       const previousOutput = JSON.stringify({
         title: draft.title,
@@ -1180,7 +1183,7 @@ async function runYouTubePipeline(input: {
 
       const retryInstructions = `${buildYouTubeQualityRetryInstructions({
         attempt: retryAttempt,
-        maxRetries: GOLDEN_QUALITY_MAX_RETRIES,
+        maxRetries: qualityRetryBudget,
         issueCodes: gateIssueCodes,
         issueDetails: gateIssueDetails,
         previousOutput,
@@ -1295,6 +1298,41 @@ Keep section bullets concise:
       issue_details: gateIssueDetails.slice(0, 20),
       retries_used: qualityRetriesUsed,
     };
+  }
+
+  if (!gatePassed) {
+    console.log('[bp_quality_gate_failed_terminal]', JSON.stringify({
+      run_id: input.runId,
+      video_id: input.videoId,
+      output_mode: yt2bpOutputMode,
+      retries_used: qualityRetriesUsed,
+      attempt_budget: qualityAttemptBudget,
+      issues: gateIssueCodes.slice(0, 20),
+      issue_details: gateIssueDetails.slice(0, 20),
+      final_mode: qualityFinalMode,
+    }));
+    if (traceContext.db && traceContext.userId) {
+      await safeGenerationTraceWrite({
+        runId: input.runId,
+        op: 'event_gate_failed_terminal',
+        fn: async () => {
+          await appendGenerationEvent(traceContext.db as any, {
+            runId: input.runId,
+            level: 'warn',
+            event: 'gate_failed_terminal',
+            payload: {
+              output_mode: yt2bpOutputMode,
+              retries_used: qualityRetriesUsed,
+              attempt_budget: qualityAttemptBudget,
+              issues: gateIssueCodes.slice(0, 20),
+              issue_details: gateIssueDetails.slice(0, 20),
+              final_mode: qualityFinalMode,
+            },
+          });
+        },
+      });
+    }
+    makePipelineError('GENERATION_FAIL', terminalGateFailureMessage);
   }
   console.log(
     `[yt2bp] run_id=${input.runId} transcript_source=${transcript.source} transcript_chars=${effectiveTranscriptText.length}`

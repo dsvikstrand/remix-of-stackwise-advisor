@@ -154,6 +154,8 @@ function toYouTubeErrorMessage(errorCode: YouTubeToBlueprintErrorResponse['error
       return 'This generation tier is not enabled for your account.';
     case 'SAFETY_BLOCKED':
       return 'This video content could not be converted safely. Please try another video.';
+    case 'GENERATION_FAIL':
+      return 'We couldn’t generate a stable blueprint for this video right now. Please try another video or retry in a bit.';
     default:
       return GENERIC_FAILURE_TEXT;
   }
