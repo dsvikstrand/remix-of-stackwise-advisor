@@ -48,6 +48,8 @@ export function registerSourcePagesRouteHandlers(app: express.Express, deps: Sou
     generationMaxVideoSeconds,
     generationBlockUnknownDuration,
     generationDurationLookupTimeoutMs,
+    yt2bpClientTranscriptEnabled,
+    yt2bpClientTranscriptMaxChars,
     logUnlockEvent,
     normalizeSourcePageVideoGenerateItem,
     upsertSourceItemFromVideo,
@@ -711,6 +713,28 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       data: traceData,
     });
   }
+  if (normalizedItems.some((item) => item.transcript_text) && !yt2bpClientTranscriptEnabled) {
+    return res.status(503).json({
+      ok: false,
+      error_code: 'SERVICE_DISABLED',
+      message: 'Client transcript generation is temporarily disabled.',
+      data: traceData,
+    });
+  }
+  const oversizedTranscriptItem = normalizedItems.find(
+    (item) => item.transcript_text && item.transcript_text.length > yt2bpClientTranscriptMaxChars,
+  );
+  if (oversizedTranscriptItem) {
+    return res.status(422).json({
+      ok: false,
+      error_code: 'TRANSCRIPT_TOO_LARGE',
+      message: `Transcript exceeds max size (${yt2bpClientTranscriptMaxChars} chars).`,
+      data: {
+        ...traceData,
+        video_id: oversizedTranscriptItem.video_id,
+      },
+    });
+  }
 
   let existingByVideoId = new Map<string, SourcePageVideoExistingState>();
   try {
@@ -955,6 +979,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         video_url: item.video_url,
         title: item.title,
         duration_seconds: toDurationSeconds(item.duration_seconds),
+        transcript_text: item.transcript_text,
         reserved_cost: reservedCost,
         reserved_by_user_id: userId,
         unlock_origin: 'manual_unlock',

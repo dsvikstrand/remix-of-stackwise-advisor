@@ -304,6 +304,7 @@ export async function generateSourcePageVideos(input: {
     published_at?: string | null;
     thumbnail_url?: string | null;
     duration_seconds?: number | null;
+    transcript_text?: string | null;
   }>;
   requestedTier?: 'free' | 'tier';
 }) {

@@ -23,6 +23,7 @@ import {
   subscribeToSourcePage,
   unsubscribeFromSourcePage,
 } from '@/lib/sourcePagesApi';
+import { hydrateQueueItemsWithClientTranscripts } from '@/lib/clientTranscript';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
@@ -268,20 +269,31 @@ export default function SourcePage() {
   }, [user?.id, videoLibraryUnlockTracker.resume]);
 
   const videoLibraryGenerateMutation = useMutation({
-    mutationFn: (items: SourcePageVideoLibraryItem[]) => unlockSourcePageVideos({
-      platform,
-      externalId,
-      items: items.map((item) => ({
+    mutationFn: async (items: SourcePageVideoLibraryItem[]) => {
+      const hydrated = await hydrateQueueItemsWithClientTranscripts(items.map((item) => ({
         video_id: item.video_id,
         video_url: item.video_url,
         title: item.title,
         published_at: item.published_at,
         thumbnail_url: item.thumbnail_url,
         duration_seconds: item.duration_seconds,
-      })),
-      requestedTier,
-    }),
-    onSuccess: (data, _items, context) => {
+      })));
+      if (hydrated.ready.length === 0) {
+        throw new Error('Could not fetch transcript in browser for the selected videos.');
+      }
+      const data = await unlockSourcePageVideos({
+        platform,
+        externalId,
+        items: hydrated.ready,
+        requestedTier,
+      });
+      return {
+        data,
+        failedCount: hydrated.failed.length,
+      };
+    },
+    onSuccess: (result, _items, context) => {
+      const data = result.data;
       if (data.job_id) {
         videoLibraryUnlockTracker.start(data.job_id);
       } else {
@@ -295,6 +307,12 @@ export default function SourcePage() {
           ? `Queued ${data.queued_count}, ready ${data.ready_count}, in progress ${data.in_progress_count}, skipped existing ${data.skipped_existing_count}, blocked by length ${data.duration_blocked_count || 0}.`
           : `Ready ${data.ready_count}, in progress ${data.in_progress_count}, skipped existing ${data.skipped_existing_count}, blocked by length ${data.duration_blocked_count || 0}.`,
       });
+      if (result.failedCount > 0) {
+        toast({
+          title: 'Some videos were skipped',
+          description: `Skipped ${result.failedCount} selected video(s) because transcript fetch failed in your browser.`,
+        });
+      }
     },
     onError: (error, _items, context) => {
       toast({

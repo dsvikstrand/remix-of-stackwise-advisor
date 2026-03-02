@@ -12,6 +12,7 @@ import {
   type GenerationTier,
   type SubscriptionRefreshCandidate,
 } from '@/lib/subscriptionsApi';
+import { hydrateQueueItemsWithClientTranscripts } from '@/lib/clientTranscript';
 import { useGenerationTierAccess } from '@/hooks/useGenerationTierAccess';
 
 type RefreshSubscriptionsDialogProps = {
@@ -126,18 +127,33 @@ export function RefreshSubscriptionsDialog({
   const refreshGenerateMutation = useMutation({
     mutationFn: async (items: SubscriptionRefreshCandidate[]) => {
       if (!subscriptionsEnabled) throw new Error('Backend API is not configured.');
-      return generateSubscriptionRefreshBlueprints({
-        items,
+      const hydrated = await hydrateQueueItemsWithClientTranscripts(items);
+      if (hydrated.ready.length === 0) {
+        throw new Error('Could not fetch transcript in browser for the selected videos.');
+      }
+      const payload = await generateSubscriptionRefreshBlueprints({
+        items: hydrated.ready,
         requestedTier,
       });
+      return {
+        payload,
+        failedCount: hydrated.failed.length,
+      };
     },
-    onSuccess: (payload) => {
+    onSuccess: (result) => {
+      const payload = result.payload;
       invalidateSubscriptionViews();
       onQueued?.({ jobId: payload.job_id, queuedCount: payload.queued_count });
       toast({
         title: 'Background generation started',
         description: `Queued ${payload.queued_count} video(s). You can keep using the app while blueprints are generated.`,
       });
+      if (result.failedCount > 0) {
+        toast({
+          title: 'Some videos were skipped',
+          description: `Skipped ${result.failedCount} selected video(s) because transcript fetch failed in your browser.`,
+        });
+      }
       onOpenChange(false);
     },
     onError: (error) => {

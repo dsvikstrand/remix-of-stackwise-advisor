@@ -8,6 +8,7 @@ type CreateBlueprintFromVideoInput = {
   videoUrl: string;
   videoId: string;
   videoTitle?: string | null;
+  providedTranscriptText?: string | null;
   durationSeconds?: number | null;
   sourceTag:
     | 'subscription_auto'
@@ -53,6 +54,7 @@ export type BlueprintCreationDeps = {
     videoId: string;
     videoUrl: string;
     videoTitle?: string | null;
+    providedTranscriptText?: string | null;
     durationSeconds?: number | null;
     generateReview: boolean;
     generateBanner: boolean;
@@ -221,6 +223,7 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
         videoId: input.videoId,
         videoUrl: input.videoUrl,
         videoTitle: resolvedVideoTitle || input.videoId,
+        providedTranscriptText: String(input.providedTranscriptText || '').trim() || null,
         durationSeconds: input.durationSeconds ?? null,
         generateReview: false,
         generateBanner: false,

@@ -32,6 +32,7 @@ export type SearchVideoGenerateItem = {
   published_at?: string | null;
   thumbnail_url?: string | null;
   duration_seconds?: number | null;
+  transcript_text?: string | null;
 };
 
 export type SearchVideoGenerateResponse = {

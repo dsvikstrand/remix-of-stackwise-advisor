@@ -28,6 +28,7 @@ import {
   searchYouTube,
   type YouTubeSearchResult,
 } from '@/lib/youtubeSearchApi';
+import { hydrateQueueItemsWithClientTranscripts } from '@/lib/clientTranscript';
 import {
   ApiRequestError as ChannelSearchApiRequestError,
   searchYouTubeChannels,
@@ -574,18 +575,22 @@ export default function SearchPage() {
 
     setGenerating(target.video_id, true);
     try {
+      const hydrated = await hydrateQueueItemsWithClientTranscripts([
+        {
+          video_id: target.video_id,
+          video_url: target.video_url,
+          title: target.title,
+          channel_id: target.channel_id,
+          channel_title: target.channel_title || null,
+          channel_url: target.channel_url || null,
+          duration_seconds: target.duration_seconds ?? null,
+        },
+      ]);
+      if (hydrated.ready.length === 0) {
+        throw new Error('Could not fetch transcript in browser for this video.');
+      }
       const queued = await generateSearchVideos({
-        items: [
-          {
-            video_id: target.video_id,
-            video_url: target.video_url,
-            title: target.title,
-            channel_id: target.channel_id,
-            channel_title: target.channel_title || null,
-            channel_url: target.channel_url || null,
-            duration_seconds: target.duration_seconds ?? null,
-          },
-        ],
+        items: hydrated.ready,
         requestedTier,
       });
 

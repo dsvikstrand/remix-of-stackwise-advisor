@@ -345,6 +345,7 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
       published_at: item.published_at || null,
       thumbnail_url: item.thumbnail_url || null,
       duration_seconds: toDurationSeconds(item.duration_seconds),
+      transcript_text: item.transcript_text == null ? null : String(item.transcript_text || '').trim() || null,
     });
   }
   const dedupedItems = Array.from(dedupedMap.values());
@@ -355,6 +356,27 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
       error_code: 'NO_ELIGIBLE_ITEMS',
       message: 'No eligible videos found for active subscriptions',
       data: null,
+    });
+  }
+  if (dedupedItems.some((item) => item.transcript_text) && !deps.yt2bpClientTranscriptEnabled) {
+    return res.status(503).json({
+      ok: false,
+      error_code: 'SERVICE_DISABLED',
+      message: 'Client transcript generation is temporarily disabled.',
+      data: null,
+    });
+  }
+  const oversizedTranscriptItem = dedupedItems.find(
+    (item) => item.transcript_text && item.transcript_text.length > deps.yt2bpClientTranscriptMaxChars,
+  );
+  if (oversizedTranscriptItem) {
+    return res.status(422).json({
+      ok: false,
+      error_code: 'TRANSCRIPT_TOO_LARGE',
+      message: `Transcript exceeds max size (${deps.yt2bpClientTranscriptMaxChars} chars).`,
+      data: {
+        video_id: oversizedTranscriptItem.video_id,
+      },
     });
   }
   let allowedDurationItems = dedupedItems;

@@ -541,6 +541,7 @@ app.post(
         published_at: item.published_at == null ? null : String(item.published_at || '').trim() || null,
         thumbnail_url: item.thumbnail_url == null ? null : String(item.thumbnail_url || '').trim() || null,
         duration_seconds: toDurationSeconds(item.duration_seconds),
+        transcript_text: item.transcript_text == null ? null : String(item.transcript_text || '').trim() || null,
       });
     }
     const dedupedItems = Array.from(dedupedMap.values())
@@ -551,6 +552,27 @@ app.post(
         error_code: 'NO_ELIGIBLE_ITEMS',
         message: 'No eligible videos found for generation.',
         data: null,
+      });
+    }
+    if (dedupedItems.some((item) => item.transcript_text) && !yt2bpClientTranscriptEnabled) {
+      return res.status(503).json({
+        ok: false,
+        error_code: 'SERVICE_DISABLED',
+        message: 'Client transcript generation is temporarily disabled.',
+        data: null,
+      });
+    }
+    const oversizedTranscriptItem = dedupedItems.find(
+      (item) => item.transcript_text && item.transcript_text.length > yt2bpClientTranscriptMaxChars,
+    );
+    if (oversizedTranscriptItem) {
+      return res.status(422).json({
+        ok: false,
+        error_code: 'TRANSCRIPT_TOO_LARGE',
+        message: `Transcript exceeds max size (${yt2bpClientTranscriptMaxChars} chars).`,
+        data: {
+          video_id: oversizedTranscriptItem.video_id,
+        },
       });
     }
     let allowedItems = dedupedItems;

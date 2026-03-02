@@ -142,7 +142,7 @@ Required runtime variables:
 - `YT2BP_AUTH_LIMIT_PER_MIN`
 - `YT2BP_IP_LIMIT_PER_HOUR`
 - `YT2BP_CORE_TIMEOUT_MS` (default `120000`)
-- `YT2BP_CLIENT_TRANSCRIPT_ENABLED` (default `true`; allows direct endpoint to accept browser-supplied transcript text)
+- `YT2BP_CLIENT_TRANSCRIPT_ENABLED` (default `true`; allows direct + manual queue endpoints to accept browser-supplied transcript text)
 - `YT2BP_CLIENT_TRANSCRIPT_MAX_CHARS` (default `120000`; rejects oversized browser transcript payloads)
 - `YT2BP_TRANSCRIPT_PRUNE_ENABLED` (default `true`)
 - `YT2BP_TRANSCRIPT_PRUNE_BUDGET_CHARS` (default `4500`)

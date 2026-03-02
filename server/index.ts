@@ -981,6 +981,7 @@ const SourcePageVideosGenerateSchema = z.object({
       published_at: z.string().optional().nullable(),
       thumbnail_url: z.string().url().optional().nullable(),
       duration_seconds: z.number().int().min(0).nullable().optional(),
+      transcript_text: z.string().optional().nullable(),
     }),
   ).min(1).max(500),
   requested_tier: z.enum(['free', 'tier']).optional(),
@@ -998,6 +999,7 @@ const SearchVideosGenerateSchema = z.object({
       published_at: z.string().nullable().optional(),
       thumbnail_url: z.string().nullable().optional(),
       duration_seconds: z.number().int().min(0).nullable().optional(),
+      transcript_text: z.string().nullable().optional(),
     }),
   ).min(1).max(50),
   requested_tier: z.enum(['free', 'tier']).optional(),
@@ -2788,6 +2790,7 @@ type RefreshScanCandidate = {
   published_at: string | null;
   thumbnail_url: string | null;
   duration_seconds: number | null;
+  transcript_text: string | null;
 };
 
 type SourcePageVideoGenerateItem = {
@@ -2797,6 +2800,7 @@ type SourcePageVideoGenerateItem = {
   published_at: string | null;
   thumbnail_url: string | null;
   duration_seconds: number | null;
+  transcript_text: string | null;
 };
 
 type SearchVideoGenerateItem = {
@@ -2809,6 +2813,7 @@ type SearchVideoGenerateItem = {
   published_at: string | null;
   thumbnail_url: string | null;
   duration_seconds: number | null;
+  transcript_text: string | null;
 };
 
 type SourcePageVideoExistingState = {
@@ -2853,6 +2858,7 @@ type SourceUnlockQueueItem = {
   video_url: string;
   title: string;
   duration_seconds: number | null;
+  transcript_text: string | null;
   reserved_cost: number;
   reserved_by_user_id: string;
   unlock_origin: 'manual_unlock' | 'subscription_auto_unlock' | 'source_auto_unlock_retry';
@@ -3090,6 +3096,7 @@ function normalizeSourcePageVideoGenerateItem(raw: unknown): SourcePageVideoGene
     published_at?: unknown;
     thumbnail_url?: unknown;
     duration_seconds?: unknown;
+    transcript_text?: unknown;
   };
 
   const videoId = String(row.video_id || '').trim();
@@ -3098,6 +3105,7 @@ function normalizeSourcePageVideoGenerateItem(raw: unknown): SourcePageVideoGene
   const publishedAt = row.published_at == null ? null : String(row.published_at || '').trim() || null;
   const thumbnailUrl = row.thumbnail_url == null ? null : String(row.thumbnail_url || '').trim() || null;
   const durationSeconds = toDurationSeconds(row.duration_seconds);
+  const transcriptText = row.transcript_text == null ? null : String(row.transcript_text || '').trim() || null;
 
   if (!YOUTUBE_VIDEO_ID_REGEX.test(videoId)) return null;
   if (!title || !videoUrl) return null;
@@ -3112,6 +3120,7 @@ function normalizeSourcePageVideoGenerateItem(raw: unknown): SourcePageVideoGene
     published_at: publishedAt,
     thumbnail_url: thumbnailUrl,
     duration_seconds: durationSeconds,
+    transcript_text: transcriptText,
   };
 }
 
@@ -4029,6 +4038,7 @@ const RefreshSubscriptionsGenerateSchema = z.object({
       published_at: z.string().nullable().optional(),
       thumbnail_url: z.string().nullable().optional(),
       duration_seconds: z.number().int().min(0).nullable().optional(),
+      transcript_text: z.string().nullable().optional(),
     }),
   ).min(1).max(200),
   requested_tier: z.enum(['free', 'tier']).optional(),
@@ -4502,6 +4512,7 @@ async function processSearchVideoGenerateJob(input: {
           videoUrl: source.source_url,
           videoId: source.source_native_id,
           durationSeconds: item.duration_seconds,
+          providedTranscriptText: item.transcript_text,
           sourceTag: 'youtube_search_direct',
           primaryTier: input.generationTier,
         });
@@ -4513,6 +4524,8 @@ async function processSearchVideoGenerateJob(input: {
           userId: input.userId,
           videoUrl: source.source_url,
           videoId: source.source_native_id,
+          videoTitle: item.title,
+          providedTranscriptText: item.transcript_text,
           durationSeconds: item.duration_seconds,
           sourceTag: 'youtube_search_direct',
           sourceItemId: source.id,
@@ -4592,6 +4605,7 @@ async function processSearchVideoGenerateJob(input: {
               videoUrl: source.source_url,
               videoId: source.source_native_id,
               durationSeconds: item.duration_seconds,
+              providedTranscriptText: item.transcript_text,
               sourceTag: 'youtube_search_direct',
               primaryTier: input.generationTier,
             });
@@ -4676,6 +4690,7 @@ async function ensureMirrorVariantForQueueItem(input: {
   videoUrl: string;
   videoId: string;
   durationSeconds: number | null;
+  providedTranscriptText?: string | null;
   sourceTag: 'subscription_auto' | 'source_page_video_library' | 'youtube_search_direct';
   primaryTier: GenerationTier;
   subscriptionId?: string | null;
@@ -4687,6 +4702,7 @@ async function ensureMirrorVariantForQueueItem(input: {
       userId: input.userId,
       videoUrl: input.videoUrl,
       videoId: input.videoId,
+      providedTranscriptText: input.providedTranscriptText || null,
       durationSeconds: input.durationSeconds,
       sourceTag: input.sourceTag,
       sourceItemId: input.sourceItemId,
@@ -4821,6 +4837,7 @@ async function processManualRefreshGenerateJob(input: {
           videoUrl: source.source_url,
           videoId: source.source_native_id,
           durationSeconds: item.duration_seconds,
+          providedTranscriptText: item.transcript_text,
           sourceTag: 'subscription_auto',
           primaryTier: input.generationTier,
           subscriptionId: subscription.id,
@@ -4833,6 +4850,8 @@ async function processManualRefreshGenerateJob(input: {
           userId: input.userId,
           videoUrl: source.source_url,
           videoId: source.source_native_id,
+          videoTitle: item.title,
+          providedTranscriptText: item.transcript_text,
           durationSeconds: item.duration_seconds,
           sourceTag: 'subscription_auto',
           sourceItemId: source.id,
@@ -4927,6 +4946,7 @@ async function processManualRefreshGenerateJob(input: {
               videoUrl: source.source_url,
               videoId: source.source_native_id,
               durationSeconds: item.duration_seconds,
+              providedTranscriptText: item.transcript_text,
               sourceTag: 'subscription_auto',
               primaryTier: input.generationTier,
               subscriptionId: subscription.id,
@@ -5092,6 +5112,8 @@ async function processSourcePageVideoLibraryJob(input: {
         userId: input.userId,
         videoUrl: source.source_url,
         videoId: source.source_native_id,
+        videoTitle: item.title,
+        providedTranscriptText: item.transcript_text,
         durationSeconds: item.duration_seconds,
         sourceTag: 'source_page_video_library',
         sourceItemId: source.id,
@@ -5286,6 +5308,7 @@ async function processSourceItemUnlockGenerationJob(input: {
                 videoUrl: sourceForMirror.source_url,
                 videoId: sourceForMirror.source_native_id,
                 durationSeconds: item.duration_seconds,
+                providedTranscriptText: item.transcript_text,
                 sourceTag: 'source_page_video_library',
                 primaryTier: itemGenerationTier,
               });
@@ -5334,6 +5357,7 @@ async function processSourceItemUnlockGenerationJob(input: {
                 videoUrl: sourceForMirror.source_url,
                 videoId: sourceForMirror.source_native_id,
                 durationSeconds: item.duration_seconds,
+                providedTranscriptText: item.transcript_text,
                 sourceTag: 'source_page_video_library',
                 primaryTier: itemGenerationTier,
               });
@@ -5375,6 +5399,7 @@ async function processSourceItemUnlockGenerationJob(input: {
           videoUrl: sourceRow.source_url,
           videoId: sourceRow.source_native_id,
           durationSeconds: item.duration_seconds,
+          providedTranscriptText: item.transcript_text,
           sourceTag: 'source_page_video_library',
           primaryTier: itemGenerationTier,
         });
@@ -5386,6 +5411,8 @@ async function processSourceItemUnlockGenerationJob(input: {
           userId: input.userId,
           videoUrl: sourceRow.source_url,
           videoId: sourceRow.source_native_id,
+          videoTitle: item.title,
+          providedTranscriptText: item.transcript_text,
           durationSeconds: item.duration_seconds,
           sourceTag: 'source_page_video_library',
           sourceItemId: sourceRow.id,
@@ -5500,6 +5527,7 @@ async function processSourceItemUnlockGenerationJob(input: {
             videoUrl: sourceRowForMirror.source_url,
             videoId: sourceRowForMirror.source_native_id,
             durationSeconds: item.duration_seconds,
+            providedTranscriptText: item.transcript_text,
             sourceTag: 'source_page_video_library',
             primaryTier: itemGenerationTier,
           });
@@ -6262,6 +6290,7 @@ function normalizeSourceUnlockQueueItems(value: unknown): SourceUnlockQueueItem[
       video_url: videoUrl,
       title,
       duration_seconds: toDurationSeconds(row.duration_seconds),
+      transcript_text: row.transcript_text == null ? null : String(row.transcript_text || '').trim() || null,
       reserved_cost: Math.max(0, Number(row.reserved_cost || 0)),
       reserved_by_user_id: reservedByUserId,
       unlock_origin: unlockOrigin,
@@ -6924,6 +6953,8 @@ registerSourceSubscriptionsRoutes(app, {
   generationMaxVideoSeconds,
   generationBlockUnknownDuration,
   generationDurationLookupTimeoutMs,
+  yt2bpClientTranscriptEnabled,
+  yt2bpClientTranscriptMaxChars,
   recoverStaleIngestionJobs,
   getActiveManualRefreshJob,
   countQueueDepth,
@@ -6973,6 +7004,8 @@ registerSourcePagesRoutes(app, {
   generationMaxVideoSeconds,
   generationBlockUnknownDuration,
   generationDurationLookupTimeoutMs,
+  yt2bpClientTranscriptEnabled,
+  yt2bpClientTranscriptMaxChars,
   logUnlockEvent,
   normalizeSourcePageVideoGenerateItem,
   upsertSourceItemFromVideo,

@@ -18,6 +18,7 @@ export type RefreshScanCandidate = {
   published_at?: string | null;
   thumbnail_url?: string | null;
   duration_seconds?: number | null;
+  transcript_text?: string | null;
 };
 
 export type RefreshSubscriptionsScanInput = {
@@ -49,6 +50,8 @@ export type SourceSubscriptionsRouteDeps = {
   collectRefreshCandidatesForUser: any;
   RefreshSubscriptionsGenerateSchema: SafeParser<RefreshSubscriptionsGenerateInput>;
   refreshGenerateMaxItems: number;
+  yt2bpClientTranscriptEnabled: boolean;
+  yt2bpClientTranscriptMaxChars: number;
   generationDurationCapEnabled: boolean;
   generationMaxVideoSeconds: number;
   generationBlockUnknownDuration: boolean;
