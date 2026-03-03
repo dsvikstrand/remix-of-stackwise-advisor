@@ -250,4 +250,4 @@ Rewrite direction: enforce domain-native vocabulary and decision framing per top
 ## Final Job Recap
 
 Write a high-value blueprint in direct creator voice that feels human, useful, and discussion-worthy. Use transcript context as the only factual source, use Oracle POS references only for vibe calibration, include all required sections (`Summary`, `Takeaways`, `Bleup`, `Deep Dive`, `Practical Rules`, `Open Questions`) or expect eval failure with retry, follow the section contract exactly, ignore paid-promotion/sponsorship/affiliate transcript segments completely (no references, no namedrops, no warning text), and return strict JSON in the required shape.
-Tier one-step style hint: keep wording approachable (ELI15 vibe), avoid unnecessary technical jargon, and preserve transcript-grounded meaning and required structure exactly.
+One-step style hint: keep wording approachable (ELI15 vibe), avoid unnecessary technical jargon, and preserve transcript-grounded meaning and required structure exactly.

@@ -642,27 +642,9 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
     });
   }
   const requestedTier = normalizeRequestedGenerationTier(parsed.data.requested_tier);
-  const tierAccess = resolveGenerationTierAccess(userId);
-  const resolvedTier = resolveRequestedGenerationTier({
-    requestedTier,
-    access: tierAccess,
-  });
-  const dualGenerateEnabled = isDualGenerateEnabledForUser({
-    userId,
-    scope: 'queue',
-  });
-  const dualGenerateTiers = getDualGenerateTiers({
-    requestedTier: resolvedTier || tierAccess.defaultTier,
-    enabled: dualGenerateEnabled,
-  });
-  if (!resolvedTier) {
-    return res.status(403).json({
-      ok: false,
-      error_code: 'TIER_NOT_ALLOWED',
-      message: 'Requested generation tier is not allowed for this account.',
-      data: traceData,
-    });
-  }
+  const resolvedTier = 'tier' as const;
+  const dualGenerateEnabled = false;
+  const dualGenerateTiers = ['tier'] as const;
 
   const db = getAuthedSupabaseClient(authToken);
   if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: traceData });
@@ -1222,7 +1204,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       resolved_tier: resolvedTier,
       variant_status: 'queued',
       dual_generate_enabled: dualGenerateEnabled,
-      dual_generate_tiers: dualGenerateTiers,
+      dual_generate_tiers: Array.from(dualGenerateTiers),
       skipped_existing_count: duplicateRows.length,
       skipped_existing: duplicateRows.map((row) => ({
         video_id: row.item.video_id,

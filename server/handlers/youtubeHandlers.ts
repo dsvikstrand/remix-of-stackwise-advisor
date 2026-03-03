@@ -137,19 +137,7 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
   const authToken = (res.locals.authToken as string | undefined) ?? '';
   const requestedTier = normalizeRequestedGenerationTier(parsed.data.requested_tier);
-  const tierAccess = userId ? resolveGenerationTierAccess(userId) : { allowedTiers: ['free'], defaultTier: 'free', testModeEnabled: false };
-  const resolvedTier = resolveRequestedGenerationTier({
-    requestedTier,
-    access: tierAccess,
-  });
-  if (!resolvedTier) {
-    return res.status(403).json({
-      ok: false,
-      error_code: 'TIER_NOT_ALLOWED',
-      message: 'Requested generation tier is not allowed for this account.',
-      run_id: runId,
-    });
-  }
+  const resolvedTier = 'tier' as const;
   const generationModelProfile = resolveGenerationModelProfile(resolvedTier);
   let resolvedDurationSeconds: number | null = null;
   if (generationDurationCapEnabled) {
@@ -296,19 +284,15 @@ app.get('/api/generation/tier-access', async (_req, res) => {
   if (!userId) {
     return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
   }
-  const access = resolveGenerationTierAccess(userId);
   return res.json({
     ok: true,
     error_code: null,
     message: 'generation tier access',
     data: {
-      allowed_tiers: access.allowedTiers,
-      default_tier: access.defaultTier,
-      test_mode_enabled: access.testModeEnabled,
-      dual_generate_enabled: isDualGenerateEnabledForUser({
-        userId,
-        scope: 'queue',
-      }),
+      allowed_tiers: ['tier'],
+      default_tier: 'tier',
+      test_mode_enabled: false,
+      dual_generate_enabled: false,
     },
   });
 });
@@ -468,27 +452,9 @@ app.post(
       });
     }
     const requestedTier = normalizeRequestedGenerationTier(parsed.data.requested_tier);
-    const tierAccess = resolveGenerationTierAccess(userId);
-    const resolvedTier = resolveRequestedGenerationTier({
-      requestedTier,
-      access: tierAccess,
-    });
-    const dualGenerateEnabled = isDualGenerateEnabledForUser({
-      userId,
-      scope: 'queue',
-    });
-    const dualGenerateTiers = getDualGenerateTiers({
-      requestedTier: resolvedTier || tierAccess.defaultTier,
-      enabled: dualGenerateEnabled,
-    });
-    if (!resolvedTier) {
-      return res.status(403).json({
-        ok: false,
-        error_code: 'TIER_NOT_ALLOWED',
-        message: 'Requested generation tier is not allowed for this account.',
-        data: null,
-      });
-    }
+    const resolvedTier = 'tier' as const;
+    const dualGenerateEnabled = false;
+    const dualGenerateTiers = ['tier'] as const;
 
     if (parsed.data.items.length > sourceUnlockGenerateMaxItems) {
       return res.status(400).json({
@@ -657,7 +623,7 @@ app.post(
         resolved_tier: resolvedTier,
         variant_status: 'queued',
         dual_generate_enabled: dualGenerateEnabled,
-        dual_generate_tiers: dualGenerateTiers,
+        dual_generate_tiers: Array.from(dualGenerateTiers),
         duration_blocked_count: durationBlocked.length,
         duration_blocked: durationBlocked,
       },

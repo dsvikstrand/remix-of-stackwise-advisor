@@ -353,8 +353,10 @@ const generationTierTierProfile: GenerationModelProfile = {
   ),
 };
 
+const CANONICAL_GENERATION_TIER: GenerationTier = 'tier';
+
 function resolveGenerationModelProfile(tier: GenerationTier): GenerationModelProfile {
-  return tier === 'tier' ? generationTierTierProfile : generationTierFreeProfile;
+  return generationTierTierProfile;
 }
 
 const yt2bpTierOneStepEnabledRaw = String(process.env.YT2BP_TIER_ONE_STEP_ENABLED || 'false').trim().toLowerCase();
@@ -416,7 +418,7 @@ const codexTierProfile: CodexModelProfile = {
 };
 
 function resolveCodexModelProfile(tier: GenerationTier): CodexModelProfile {
-  return tier === 'tier' ? codexTierProfile : codexFreeProfile;
+  return codexTierProfile;
 }
 
 if (generationDurationCapEnabled && !youtubeDataApiKey && generationBlockUnknownDuration) {
@@ -4449,6 +4451,8 @@ async function processSearchVideoGenerateJob(input: {
   let processed = 0;
   let inserted = 0;
   let skipped = 0;
+  const dualGenerateEnabled = false;
+  const generationTier: GenerationTier = CANONICAL_GENERATION_TIER;
   const firstItemTitle = String(input.items[0]?.title || '').trim() || null;
   let firstBlueprintId: string | null = null;
   let firstBlueprintTitle: string | null = null;
@@ -4474,17 +4478,17 @@ async function processSearchVideoGenerateJob(input: {
       });
 
       const existingFeedItem = await getExistingFeedItem(db, input.userId, source.id);
-      if (existingFeedItem && !input.dualGenerateEnabled) {
+      if (existingFeedItem && !dualGenerateEnabled) {
         skipped += 1;
         continue;
       }
 
       const tryMirrorGeneration = async () => {
-        if (!input.dualGenerateEnabled) return;
+        if (!dualGenerateEnabled) return;
         mirrorAttemptedForItem = true;
         await ensureMirrorVariantForQueueItem({
           db,
-          enabled: input.dualGenerateEnabled,
+          enabled: dualGenerateEnabled,
           jobId: input.jobId,
           scope: 'search_video_generate',
           userId: input.userId,
@@ -4493,7 +4497,7 @@ async function processSearchVideoGenerateJob(input: {
           videoId: source.source_native_id,
           durationSeconds: item.duration_seconds,
           sourceTag: 'youtube_search_direct',
-          primaryTier: input.generationTier,
+          primaryTier: generationTier,
         });
       };
 
@@ -4508,7 +4512,7 @@ async function processSearchVideoGenerateJob(input: {
           sourceTag: 'youtube_search_direct',
           sourceItemId: source.id,
           subscriptionId: null,
-          generationTier: input.generationTier,
+          generationTier,
         });
       } catch (primaryError) {
         await tryMirrorGeneration();
@@ -4557,7 +4561,7 @@ async function processSearchVideoGenerateJob(input: {
       }
     } catch (error) {
       if (error instanceof BlueprintVariantInProgressError) {
-        if (!mirrorAttemptedForItem) {
+        if (!mirrorAttemptedForItem && dualGenerateEnabled) {
           try {
             const source = await upsertSourceItemFromVideo(db, {
               video: {
@@ -4575,7 +4579,7 @@ async function processSearchVideoGenerateJob(input: {
             });
             await ensureMirrorVariantForQueueItem({
               db,
-              enabled: input.dualGenerateEnabled,
+              enabled: dualGenerateEnabled,
               jobId: input.jobId,
               scope: 'search_video_generate',
               userId: input.userId,
@@ -4584,7 +4588,7 @@ async function processSearchVideoGenerateJob(input: {
               videoId: source.source_native_id,
               durationSeconds: item.duration_seconds,
               sourceTag: 'youtube_search_direct',
-              primaryTier: input.generationTier,
+              primaryTier: generationTier,
             });
           } catch {
             // no-op: preserve existing in-progress handling
@@ -4671,40 +4675,7 @@ async function ensureMirrorVariantForQueueItem(input: {
   primaryTier: GenerationTier;
   subscriptionId?: string | null;
 }) {
-  if (!input.enabled) return;
-  const mirrorTier = getOppositeGenerationTier(input.primaryTier);
-  try {
-    await createBlueprintFromVideo(input.db, {
-      userId: input.userId,
-      videoUrl: input.videoUrl,
-      videoId: input.videoId,
-      durationSeconds: input.durationSeconds,
-      sourceTag: input.sourceTag,
-      sourceItemId: input.sourceItemId,
-      subscriptionId: input.subscriptionId || null,
-      generationTier: mirrorTier,
-    });
-  } catch (error) {
-    if (error instanceof BlueprintVariantInProgressError) {
-      console.log('[queue_mirror_variant_in_progress]', JSON.stringify({
-        scope: input.scope,
-        job_id: input.jobId,
-        user_id: input.userId,
-        source_item_id: input.sourceItemId,
-        generation_tier: error.generationTier,
-        active_job_id: error.activeJobId,
-      }));
-      return;
-    }
-    console.log('[queue_mirror_variant_failed]', JSON.stringify({
-      scope: input.scope,
-      job_id: input.jobId,
-      user_id: input.userId,
-      source_item_id: input.sourceItemId,
-      generation_tier: mirrorTier,
-      error: error instanceof Error ? error.message : String(error),
-    }));
-  }
+  return;
 }
 
 async function processManualRefreshGenerateJob(input: {
@@ -4763,6 +4734,8 @@ async function processManualRefreshGenerateJob(input: {
     .in('id', subscriptionIds);
   if (subscriptionsError) throw subscriptionsError;
   const subscriptionById = new Map((subscriptions || []).map((row) => [row.id, row]));
+  const dualGenerateEnabled = false;
+  const generationTier: GenerationTier = CANONICAL_GENERATION_TIER;
 
   for (const item of input.items) {
     let mirrorAttemptedForItem = false;
@@ -4793,18 +4766,18 @@ async function processManualRefreshGenerateJob(input: {
       });
 
       const existingFeedItem = await getExistingFeedItem(db, input.userId, source.id);
-      if (existingFeedItem && !input.dualGenerateEnabled) {
+      if (existingFeedItem && !dualGenerateEnabled) {
         skipped += 1;
         recordCheckpointCandidate(item);
         continue;
       }
 
       const tryMirrorGeneration = async () => {
-        if (!input.dualGenerateEnabled) return;
+        if (!dualGenerateEnabled) return;
         mirrorAttemptedForItem = true;
         await ensureMirrorVariantForQueueItem({
           db,
-          enabled: input.dualGenerateEnabled,
+          enabled: dualGenerateEnabled,
           jobId: input.jobId,
           scope: 'manual_refresh_selection',
           userId: input.userId,
@@ -4813,7 +4786,7 @@ async function processManualRefreshGenerateJob(input: {
           videoId: source.source_native_id,
           durationSeconds: item.duration_seconds,
           sourceTag: 'subscription_auto',
-          primaryTier: input.generationTier,
+          primaryTier: generationTier,
           subscriptionId: subscription.id,
         });
       };
@@ -4829,7 +4802,7 @@ async function processManualRefreshGenerateJob(input: {
           sourceTag: 'subscription_auto',
           sourceItemId: source.id,
           subscriptionId: subscription.id,
-          generationTier: input.generationTier,
+          generationTier,
         });
       } catch (primaryError) {
         await tryMirrorGeneration();
@@ -4894,7 +4867,7 @@ async function processManualRefreshGenerateJob(input: {
       }));
     } catch (error) {
       if (error instanceof BlueprintVariantInProgressError) {
-        if (!mirrorAttemptedForItem) {
+        if (!mirrorAttemptedForItem && dualGenerateEnabled) {
           try {
             const source = await upsertSourceItemFromVideo(db, {
               video: {
@@ -4911,7 +4884,7 @@ async function processManualRefreshGenerateJob(input: {
             });
             await ensureMirrorVariantForQueueItem({
               db,
-              enabled: input.dualGenerateEnabled,
+              enabled: dualGenerateEnabled,
               jobId: input.jobId,
               scope: 'manual_refresh_selection',
               userId: input.userId,
@@ -4920,7 +4893,7 @@ async function processManualRefreshGenerateJob(input: {
               videoId: source.source_native_id,
               durationSeconds: item.duration_seconds,
               sourceTag: 'subscription_auto',
-              primaryTier: input.generationTier,
+              primaryTier: generationTier,
               subscriptionId: subscription.id,
             });
           } catch {
@@ -5223,10 +5196,7 @@ async function processSourceItemUnlockGenerationJob(input: {
   let firstBlueprintTitle: string | null = null;
   let notifyFailedCount = 0;
   const failures: Array<{ video_id: string; unlock_id: string; error_code: string; error: string }> = [];
-  const dualGenerateEnabled = isDualGenerateEnabledForUser({
-    userId: input.userId,
-    scope: 'queue',
-  }) || input.items.some((item) => Boolean(item.dual_generate_enabled));
+  const dualGenerateEnabled = false;
 
   for (const item of input.items) {
     let mirrorAttemptedForItem = false;
@@ -5237,7 +5207,7 @@ async function processSourceItemUnlockGenerationJob(input: {
       source_url: string;
       source_native_id: string;
     } | null = null;
-    const itemGenerationTier: GenerationTier = item.generation_tier === 'tier' ? 'tier' : input.generationTier;
+    const itemGenerationTier: GenerationTier = CANONICAL_GENERATION_TIER;
     processed += 1;
     try {
       const processingUnlock = await markUnlockProcessing(db, {
@@ -6385,24 +6355,18 @@ function resolveGenerationTierForUser(input: {
   userId: string;
   payloadTierRaw?: unknown;
 }): GenerationTier {
-  const access = resolveGenerationTierAccess(input.userId);
-  const requestedTier = normalizeRequestedGenerationTier(input.payloadTierRaw);
-  return resolveRequestedGenerationTier({
-    requestedTier,
-    access,
-  }) || access.defaultTier;
+  return CANONICAL_GENERATION_TIER;
 }
 
 function getOppositeGenerationTier(tier: GenerationTier): GenerationTier {
-  return tier === 'tier' ? 'free' : 'tier';
+  return CANONICAL_GENERATION_TIER;
 }
 
 function getDualGenerateTiers(input: {
   requestedTier: GenerationTier;
   enabled: boolean;
 }): GenerationTier[] {
-  if (!input.enabled) return [input.requestedTier];
-  return [input.requestedTier, getOppositeGenerationTier(input.requestedTier)];
+  return [CANONICAL_GENERATION_TIER];
 }
 
 function getRetryDelayForErrorCode(errorCode: string) {

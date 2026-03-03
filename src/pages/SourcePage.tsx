@@ -13,7 +13,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { config } from '@/config/runtime';
 import { ApiRequestError } from '@/lib/subscriptionsApi';
-import type { GenerationTier } from '@/lib/subscriptionsApi';
 import {
   type SourcePageVideoLibraryItem,
   getSourcePage,
@@ -30,7 +29,6 @@ import { getChannelIcon } from '@/lib/channelIcons';
 import { useSourceUnlockJobTracker } from '@/hooks/useSourceUnlockJobTracker';
 import { resolveEffectiveBanner } from '@/lib/bannerResolver';
 import { resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
-import { useGenerationTierAccess } from '@/hooks/useGenerationTierAccess';
 
 function getInitials(title: string, fallback: string) {
   const raw = title.trim() || fallback.trim();
@@ -92,8 +90,6 @@ function getSourceVideoLibraryErrorMessage(error: unknown, fallback: string) {
         return 'One or more selected videos exceed the 45-minute limit.';
       case 'VIDEO_DURATION_UNAVAILABLE':
         return 'Video length is unavailable for this video. Please try another one.';
-      case 'TIER_NOT_ALLOWED':
-        return 'This generation tier is not enabled for your account.';
       default:
         return error.message || fallback;
     }
@@ -114,7 +110,6 @@ export default function SourcePage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const backendEnabled = Boolean(config.agenticBackendUrl);
-  const generationTierAccessQuery = useGenerationTierAccess(Boolean(user && backendEnabled));
   const platform = String(params.platform || '').trim().toLowerCase();
   const externalId = String(params.externalId || '').trim();
   const isValidRoute = Boolean(platform && externalId);
@@ -189,8 +184,6 @@ export default function SourcePage() {
 
   const [selectedVideoIds, setSelectedVideoIds] = useState<Record<string, boolean>>({});
   const [optimisticUnlockingVideoIds, setOptimisticUnlockingVideoIds] = useState<Record<string, boolean>>({});
-  const [requestedTier, setRequestedTier] = useState<GenerationTier>('free');
-
   const sourceVideosQuery = useInfiniteQuery({
     queryKey: ['source-page-videos', platform, externalId, user?.id],
     enabled: backendEnabled && isValidRoute && Boolean(sourcePage) && Boolean(user),
@@ -208,15 +201,6 @@ export default function SourcePage() {
   });
 
   const sourceVideoItems = sourceVideosQuery.data?.pages.flatMap((page) => page.items) || [];
-  const allowedGenerationTiers = generationTierAccessQuery.data?.allowedTiers || ['free'];
-
-  useEffect(() => {
-    if (!user) return;
-    const defaultTier = generationTierAccessQuery.data?.defaultTier || 'free';
-    if (!allowedGenerationTiers.includes(requestedTier)) {
-      setRequestedTier(defaultTier);
-    }
-  }, [allowedGenerationTiers, generationTierAccessQuery.data?.defaultTier, requestedTier, user]);
   const sourceVideoRateLimited = sourceVideosQuery.error instanceof ApiRequestError
     && sourceVideosQuery.error.errorCode === 'RATE_LIMITED';
   const selectedSourceVideoItems = useMemo(
@@ -280,7 +264,6 @@ export default function SourcePage() {
           thumbnail_url: item.thumbnail_url,
           duration_seconds: item.duration_seconds,
         })),
-        requestedTier,
       });
       return {
         data,
@@ -475,32 +458,6 @@ export default function SourcePage() {
 
                   {user ? (
                     <>
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className="text-muted-foreground">Generation tier:</span>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={requestedTier === 'free' ? 'default' : 'outline'}
-                          className="h-7 px-2 text-xs"
-                          onClick={() => setRequestedTier('free')}
-                        >
-                          Free
-                        </Button>
-                        {allowedGenerationTiers.includes('tier') ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant={requestedTier === 'tier' ? 'default' : 'outline'}
-                            className="h-7 px-2 text-xs"
-                            onClick={() => setRequestedTier('tier')}
-                          >
-                            Tier
-                          </Button>
-                        ) : (
-                          <span className="text-muted-foreground">Tier locked</span>
-                        )}
-                      </div>
-
                       {!canUnlockSourceVideos ? (
                         <p className="text-xs text-muted-foreground">
                           Subscribe to this source to view unlock cost and activate blueprint generation.

@@ -260,27 +260,9 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
     });
   }
   const requestedTier = deps.normalizeRequestedGenerationTier(parsed.data.requested_tier);
-  const tierAccess = deps.resolveGenerationTierAccess(userId);
-  const resolvedTier = deps.resolveRequestedGenerationTier({
-    requestedTier,
-    access: tierAccess,
-  });
-  const dualGenerateEnabled = deps.isDualGenerateEnabledForUser({
-    userId,
-    scope: 'queue',
-  });
-  const dualGenerateTiers = deps.getDualGenerateTiers({
-    requestedTier: resolvedTier || tierAccess.defaultTier,
-    enabled: dualGenerateEnabled,
-  });
-  if (!resolvedTier) {
-    return res.status(403).json({
-      ok: false,
-      error_code: 'TIER_NOT_ALLOWED',
-      message: 'Requested generation tier is not allowed for this account.',
-      data: null,
-    });
-  }
+  const resolvedTier = 'tier' as const;
+  const dualGenerateEnabled = false;
+  const dualGenerateTiers = ['tier'] as const;
 
   const db = deps.getAuthedSupabaseClient(authToken);
   if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
@@ -480,7 +462,7 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
       resolved_tier: resolvedTier,
       variant_status: 'queued',
       dual_generate_enabled: dualGenerateEnabled,
-      dual_generate_tiers: dualGenerateTiers,
+      dual_generate_tiers: Array.from(dualGenerateTiers),
       duration_blocked_count: durationBlocked.length,
       duration_blocked: durationBlocked,
     },

@@ -14,7 +14,6 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User, LogOut, Settings, LifeBuoy, HelpCircle, Moon, Sun, Rss } from 'lucide-react';
 import { useAiCredits } from '@/hooks/useAiCredits';
-import { useGenerationTierAccess } from '@/hooks/useGenerationTierAccess';
 
 interface UserMenuProps {
   onOpenHelp?: () => void;
@@ -25,7 +24,6 @@ type ThemeMode = 'light' | 'dark';
 export function UserMenu({ onOpenHelp }: UserMenuProps) {
   const { user, profile, signOut, isLoading } = useAuth();
   const creditsQuery = useAiCredits(!!user);
-  const generationTierAccessQuery = useGenerationTierAccess(Boolean(user));
   const [theme, setTheme] = useState<ThemeMode>('light');
 
   useEffect(() => {
@@ -80,12 +78,8 @@ export function UserMenu({ onOpenHelp }: UserMenuProps) {
     : credits
     ? Math.min(100, Math.max(0, (credits.displayBalance / Math.max(1, credits.displayCapacity)) * 100))
     : 0;
-  const tierAccess = generationTierAccessQuery.data;
-  const hasTierAccess = Boolean(tierAccess?.allowedTiers.includes('tier'));
-  const generationTierLoading = generationTierAccessQuery.isLoading && !tierAccess;
-  const generationTierLabel = generationTierLoading ? 'Loading' : hasTierAccess ? 'Tier + Free' : 'Free only';
-  const generationTierBadgeLabel = generationTierLoading ? '...' : hasTierAccess ? 'Tier' : 'Free';
-  const generationTierBadgeVariant = generationTierLoading ? 'outline' : hasTierAccess ? 'default' : 'secondary';
+  const planLabel = 'Standard';
+  const planBadgeVariant = 'outline' as const;
 
   return (
     <DropdownMenu>
@@ -107,9 +101,9 @@ export function UserMenu({ onOpenHelp }: UserMenuProps) {
               {user.email}
             </p>
             <div className="pt-1 flex items-center gap-2">
-              <span className="text-[11px] leading-none text-muted-foreground">Generation</span>
-              <Badge variant={generationTierBadgeVariant} className="h-5 px-2 text-[10px] uppercase tracking-wide">
-                {generationTierBadgeLabel}
+              <span className="text-[11px] leading-none text-muted-foreground">Plan</span>
+              <Badge variant={planBadgeVariant} className="h-5 px-2 text-[10px] uppercase tracking-wide">
+                {planLabel}
               </Badge>
             </div>
           </div>
@@ -133,8 +127,8 @@ export function UserMenu({ onOpenHelp }: UserMenuProps) {
             />
           </div>
           <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-            <span>Generation tier</span>
-            <span>{generationTierLabel}{tierAccess?.testModeEnabled ? ' (test)' : ''}</span>
+            <span>Plan</span>
+            <span>{planLabel}</span>
           </div>
         </div>
         <DropdownMenuSeparator />

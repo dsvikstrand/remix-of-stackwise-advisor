@@ -39,7 +39,7 @@
   - `POST /api/source-pages/:platform/:externalId/subscribe` (auth)
   - `DELETE /api/source-pages/:platform/:externalId/subscribe` (auth)
   - Frontend trust status now resumes unlock jobs via `GET /api/ingestion/jobs/latest-mine?scope=source_item_unlock_generation` after reload.
-  - Tier test endpoints (auth):
+  - Legacy generation compatibility endpoints (auth):
     - `GET /api/generation/tier-access`
     - `GET /api/blueprints/:id/variants`
   - Notification inbox endpoints (auth):
@@ -217,19 +217,19 @@ Required runtime variables:
 - `TRANSCRIPT_THROTTLE_INTERACTIVE_MAX_WAIT_MS` (default `2000`)
 - `GENERATION_TIER_TEST_MODE_ENABLED` (default `false`)
 - `GENERATION_TIER_TIER_USER_IDS` (csv user ids that can request `tier`)
-- `GENERATION_TIER_FREE_USER_IDS` (optional csv free allowlist; others default free)
-- `GENERATION_TIER_FREE_MODEL` (default `gpt-5-mini`)
-- `GENERATION_TIER_FREE_FALLBACK_MODEL` (default follows `OPENAI_GENERATION_FALLBACK_MODEL`)
-- `GENERATION_TIER_FREE_REASONING_EFFORT` (default follows `OPENAI_GENERATION_REASONING_EFFORT`)
-- `GENERATION_TIER_TIER_MODEL` (default `gpt-5.2`)
+- `GENERATION_TIER_FREE_USER_IDS` (legacy compatibility only; runtime generation no longer branches on free vs tier quality)
+- `GENERATION_TIER_FREE_MODEL` (legacy compatibility only; runtime uses the canonical tier profile)
+- `GENERATION_TIER_FREE_FALLBACK_MODEL` (legacy compatibility only)
+- `GENERATION_TIER_FREE_REASONING_EFFORT` (legacy compatibility only)
+- `GENERATION_TIER_TIER_MODEL` (default `gpt-5.2`; canonical generation model profile)
 - `GENERATION_TIER_TIER_FALLBACK_MODEL` (default follows `OPENAI_GENERATION_FALLBACK_MODEL`)
 - `GENERATION_TIER_TIER_REASONING_EFFORT` (default `low`)
-- `YT2BP_TIER_ONE_STEP_ENABLED` (default `false`; when enabled, tier uses one-step prompt and skips pass2 transform)
+- `YT2BP_TIER_ONE_STEP_ENABLED` (legacy compatibility only; runtime now always uses the one-step pipeline)
 - `YT2BP_TIER_ONE_STEP_PROMPT_TEMPLATE_PATH` (default `docs/golden_blueprint/golden_bp_prompt_contract_one_step_v1.md`)
-- `GENERATION_TIER_DUAL_GENERATE_ENABLED` (default `false`; dev compare mode for queue surfaces)
-- `GENERATION_TIER_DUAL_GENERATE_USER_IDS` (csv user ids allowlisted for dual-generate mode)
-- `GENERATION_TIER_DUAL_GENERATE_SCOPE` (default `queue_only`)
-- `GENERATION_TIER_DUAL_GENERATE_CREDIT_MODE` (default `none`; queue-source unlock flow bypasses hold/settle/refund for dual-mode users)
+- `GENERATION_TIER_DUAL_GENERATE_ENABLED` (legacy compatibility only; runtime no longer dual-generates)
+- `GENERATION_TIER_DUAL_GENERATE_USER_IDS` (legacy compatibility only)
+- `GENERATION_TIER_DUAL_GENERATE_SCOPE` (legacy compatibility only)
+- `GENERATION_TIER_DUAL_GENERATE_CREDIT_MODE` (legacy compatibility only)
 - `USE_CODEX_FOR_GENERATION` (default `false`; experimental Codex-first generation path for YT2BP stages)
 - `CODEX_EXEC_PATH` (default `codex`)
 - `CODEX_EXEC_TIMEOUT_MS` (default `90000`)

@@ -9,7 +9,6 @@ import { ProfileHeader } from '@/components/profile/ProfileHeader';
 import { ProfileTabs } from '@/components/profile/ProfileTabs';
 import { FollowersList } from '@/components/profile/FollowersList';
 import { useUserProfile } from '@/hooks/useUserProfile';
-import { useGenerationTierAccess } from '@/hooks/useGenerationTierAccess';
 import { useToast } from '@/hooks/use-toast';
 import {
   ApiRequestError,
@@ -35,12 +34,8 @@ export default function UserProfile() {
 
   const isOwnProfile = user?.id === userId;
   const canViewProfile = profile?.is_public || isOwnProfile;
-  const generationTierAccessQuery = useGenerationTierAccess(Boolean(user && isOwnProfile));
-  const hasTierAccess = Boolean(generationTierAccessQuery.data?.allowedTiers.includes('tier'));
-  const generationTierLoading = generationTierAccessQuery.isLoading && !generationTierAccessQuery.data;
-  const generationTierLabel = generationTierLoading ? 'Loading' : hasTierAccess ? 'Tier + Free' : 'Free only';
-  const generationTierBadgeLabel = generationTierLoading ? '...' : hasTierAccess ? 'Tier' : 'Free';
-  const generationTierBadgeVariant = generationTierLoading ? 'outline' : hasTierAccess ? 'default' : 'secondary';
+  const planLabel = 'Standard';
+  const planBadgeVariant = 'outline' as const;
   const subscriptionsEnabled = Boolean(config.agenticBackendUrl);
   const refreshMutation = useMutation({
     mutationFn: async () => {
@@ -153,14 +148,11 @@ export default function UserProfile() {
                 <CardContent className="py-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="space-y-1">
-                      <p className="text-sm font-medium">Generation Tier</p>
-                      <p className="text-xs text-muted-foreground">
-                        {generationTierLabel}
-                        {generationTierAccessQuery.data?.testModeEnabled ? ' (test mode)' : ''}
-                      </p>
+                      <p className="text-sm font-medium">Plan</p>
+                      <p className="text-xs text-muted-foreground">{planLabel}</p>
                     </div>
-                    <Badge variant={generationTierBadgeVariant} className="uppercase tracking-wide">
-                      {generationTierBadgeLabel}
+                    <Badge variant={planBadgeVariant} className="uppercase tracking-wide">
+                      {planLabel}
                     </Badge>
                   </div>
                 </CardContent>

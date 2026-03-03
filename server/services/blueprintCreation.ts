@@ -143,7 +143,7 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
     let sourceThumbnailUrl: string | null = null;
     let resolvedVideoTitle: string | null = String(input.videoTitle || '').trim() || null;
     const normalizedSourceItemId = String(input.sourceItemId || '').trim();
-    const generationTier: GenerationTier = input.generationTier === 'tier' ? 'tier' : 'free';
+    const generationTier: GenerationTier = 'tier';
     const generationModelProfile = deps.resolveGenerationModelProfile(generationTier);
     let claimedVariant = false;
 

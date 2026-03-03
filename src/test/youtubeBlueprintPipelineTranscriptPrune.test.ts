@@ -215,7 +215,7 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
     expect(totalWords).toBeLessThanOrEqual(100);
   });
 
-  it('uses pruned transcript for pass1 and pass2 and emits pruning metadata', async () => {
+  it('uses pruned transcript for the canonical one-step pass and emits pruning metadata', async () => {
     const events: EventRow[] = [];
     const pass1Transcripts: string[] = [];
     const pass2Transcripts: string[] = [];
@@ -257,9 +257,8 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
     });
 
     expect(pass1Transcripts.length).toBeGreaterThan(0);
-    expect(pass2Transcripts.length).toBeGreaterThan(0);
+    expect(pass2Transcripts.length).toBe(0);
     expect(pass1Transcripts[0].length).toBeLessThanOrEqual(4500);
-    expect(pass2Transcripts[0].length).toBeLessThanOrEqual(4500);
     expect(result.meta.transcript_pruning?.applied).toBe(true);
     expect(result.meta.transcript_pruning?.pruned_chars).toBeLessThanOrEqual(4500);
     expect(events.some((row) => row.event === 'transcript_pruning_applied')).toBe(true);
@@ -305,12 +304,12 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
     });
 
     expect(pass1Transcripts[0]).toBe(transcriptText);
-    expect(pass2Transcripts[0]).toBe(transcriptText);
+    expect(pass2Transcripts.length).toBe(0);
     expect(result.meta.transcript_pruning?.applied).toBe(false);
     expect(events.some((row) => row.event === 'transcript_pruning_applied')).toBe(true);
   });
 
-  it('uses one-step tier mode by skipping pass2 and passing prompt template override', async () => {
+  it('uses the one-step prompt by default and skips pass2', async () => {
     const events: EventRow[] = [];
     const pass1Transcripts: string[] = [];
     const pass2Transcripts: string[] = [];
@@ -331,7 +330,6 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
       pass1Transcripts,
       pass2Transcripts,
       pass1PromptTemplatePaths,
-      tierOneStepEnabled: true,
       tierOneStepPromptTemplatePath: 'docs/golden_blueprint/golden_bp_prompt_contract_one_step_v1.md',
     });
     const service = createYouTubeBlueprintPipelineService(deps);
@@ -463,7 +461,7 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
     expect(pass1Requests[0].additionalInstructions).toContain('Return exactly 6 steps in this exact order and exact names:');
     expect(pass1Requests[1].additionalInstructions).toContain('Return exactly 6 steps in this exact order and exact names:');
     expect(pass1Requests[2].additionalInstructions).toContain('Return exactly 6 steps in this exact order and exact names:');
-    expect(pass2Transcripts.length).toBe(1);
+    expect(pass2Transcripts.length).toBe(0);
     expect(events.some((row) => row.event === 'gate_failed_terminal')).toBe(true);
     expect(events.some((row) => row.event === 'gate_published_anyway')).toBe(true);
     expect((result.meta as Record<string, unknown>).bp_structure_ok).toBe(false);

@@ -324,7 +324,6 @@ export async function listActiveMyIngestionJobs(input?: {
 
 export async function generateSubscriptionRefreshBlueprints(input: {
   items: SubscriptionRefreshCandidate[];
-  requestedTier?: GenerationTier;
 }) {
   const response = await apiRequest<{
     job_id: string;
@@ -345,7 +344,6 @@ export async function generateSubscriptionRefreshBlueprints(input: {
     method: 'POST',
     body: JSON.stringify({
       items: input.items,
-      requested_tier: input.requestedTier,
     }),
   });
   return response.data;

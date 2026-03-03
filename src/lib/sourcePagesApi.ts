@@ -305,7 +305,6 @@ export async function generateSourcePageVideos(input: {
     thumbnail_url?: string | null;
     duration_seconds?: number | null;
   }>;
-  requestedTier?: 'free' | 'tier';
 }) {
   return unlockSourcePageVideos(input);
 }
@@ -321,7 +320,6 @@ export async function unlockSourcePageVideos(input: {
     thumbnail_url?: string | null;
     duration_seconds?: number | null;
   }>;
-  requestedTier?: 'free' | 'tier';
 }) {
   const authHeader = await getRequiredAuthHeader();
   const response = await apiRequest<SourcePageVideoGenerateSummary>(
@@ -334,7 +332,6 @@ export async function unlockSourcePageVideos(input: {
       },
       body: JSON.stringify({
         items: input.items,
-        requested_tier: input.requestedTier,
       }),
     },
   );

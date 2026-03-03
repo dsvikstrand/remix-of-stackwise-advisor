@@ -18,8 +18,6 @@ import { apiFetch } from '@/lib/api';
 import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 import { BlueprintAnalysisView } from '@/components/blueprint/BlueprintAnalysisView';
 import { supabase } from '@/integrations/supabase/client';
-import { useGenerationTierAccess } from '@/hooks/useGenerationTierAccess';
-import type { GenerationTier } from '@/lib/subscriptionsApi';
 
 const YOUTUBE_ENDPOINT = getFunctionUrl('youtube-to-blueprint');
 const GENERIC_FAILURE_TEXT = 'Could not complete the blueprint. Please test another video.';
@@ -65,7 +63,6 @@ type YouTubeToBlueprintErrorResponse = {
     | 'GENERATION_FAIL'
     | 'SAFETY_BLOCKED'
     | 'PII_BLOCKED'
-    | 'TIER_NOT_ALLOWED'
     | 'RATE_LIMITED'
     | 'TRANSCRIPT_TOO_LARGE'
     | 'TIMEOUT';
@@ -78,7 +75,6 @@ type YouTubeToBlueprintRequest = {
   generate_review: boolean;
   generate_banner: boolean;
   source: 'youtube_mvp';
-  requested_tier?: GenerationTier;
 };
 
 function validateYouTubeInput(urlRaw: string) {
@@ -153,8 +149,6 @@ function toYouTubeErrorMessage(errorCode: YouTubeToBlueprintErrorResponse['error
       return 'Too many requests right now. Please wait a bit and try again.';
     case 'TRANSCRIPT_TOO_LARGE':
       return 'Transcript is too large for the current generation limit.';
-    case 'TIER_NOT_ALLOWED':
-      return 'This generation tier is not enabled for your account.';
     case 'SAFETY_BLOCKED':
       return 'This video content could not be converted safely. Please try another video.';
     case 'GENERATION_FAIL':
@@ -216,9 +210,6 @@ export default function YouTubeToBlueprint() {
   const createBlueprint = useCreateBlueprint();
 
   const [videoUrl, setVideoUrl] = useState('');
-  const generationTierAccessQuery = useGenerationTierAccess(Boolean(user));
-  const allowedGenerationTiers = generationTierAccessQuery.data?.allowedTiers || ['free'];
-  const [requestedTier, setRequestedTier] = useState<GenerationTier>('free');
   const [generateReview, setGenerateReview] = useState(false);
   const [generateBanner] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -241,14 +232,6 @@ export default function YouTubeToBlueprint() {
   const urlValidation = useMemo(() => validateYouTubeInput(videoUrl), [videoUrl]);
   const isPostProcessing = isGeneratingReview || isGeneratingBanner;
   const canSubmit = !isGenerating && !isPostProcessing && videoUrl.trim().length > 0 && urlValidation.ok;
-
-  useEffect(() => {
-    if (!user) return;
-    const defaultTier = generationTierAccessQuery.data?.defaultTier || 'free';
-    if (!allowedGenerationTiers.includes(requestedTier)) {
-      setRequestedTier(defaultTier);
-    }
-  }, [allowedGenerationTiers, generationTierAccessQuery.data?.defaultTier, requestedTier, user]);
 
   useEffect(() => {
     savedBlueprintIdRef.current = savedBlueprintId;
@@ -529,7 +512,6 @@ export default function YouTubeToBlueprint() {
       generate_review: false,
       generate_banner: false,
       source: 'youtube_mvp',
-      requested_tier: requestedTier,
     };
     setIsGenerating(true);
     startLoadingPhases([
@@ -782,32 +764,6 @@ export default function YouTubeToBlueprint() {
           <div className="flex items-center justify-between rounded-md border border-border/40 px-3 py-2">
             <Label htmlFor="yt-review" className="text-sm">Generate AI review</Label>
             <Switch id="yt-review" checked={generateReview} onCheckedChange={setGenerateReview} />
-          </div>
-
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-muted-foreground">Generation tier:</span>
-            <Button
-              type="button"
-              size="sm"
-              variant={requestedTier === 'free' ? 'default' : 'outline'}
-              className="h-7 px-2 text-xs"
-              onClick={() => setRequestedTier('free')}
-            >
-              Free
-            </Button>
-            {allowedGenerationTiers.includes('tier') ? (
-              <Button
-                type="button"
-                size="sm"
-                variant={requestedTier === 'tier' ? 'default' : 'outline'}
-                className="h-7 px-2 text-xs"
-                onClick={() => setRequestedTier('tier')}
-              >
-                Tier
-              </Button>
-            ) : (
-              <span className="text-muted-foreground">Tier locked</span>
-            )}
           </div>
 
           <Button onClick={submit} disabled={!canSubmit}>

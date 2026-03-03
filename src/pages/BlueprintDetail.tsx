@@ -1,7 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
-import { useQuery } from '@tanstack/react-query';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Badge } from '@/components/ui/badge';
@@ -25,7 +24,6 @@ import { normalizeTag } from '@/lib/tagging';
 import { supabase } from '@/integrations/supabase/client';
 import { resolveEffectiveBanner } from '@/lib/bannerResolver';
 import { splitSummaryIntoSlides } from '@/lib/summarySlides';
-import { listBlueprintVariants, type GenerationTier } from '@/lib/subscriptionsApi';
 
 type ItemValue = string | { name?: string; context?: string };
 type StepItem = { category?: string; name?: string; context?: string };
@@ -346,39 +344,7 @@ export default function BlueprintDetail() {
   const location = useLocation();
   const loggedBlueprintId = useRef<string | null>(null);
   const summaryVariants = parseSummaryVariants(blueprint?.selected_items);
-  const blueprintVariantsQuery = useQuery({
-    queryKey: ['blueprint-variants', blueprint?.id || 'none', user?.id || 'anon'],
-    enabled: Boolean(user && blueprint?.id),
-    staleTime: 30_000,
-    queryFn: async () => {
-      if (!blueprint?.id) return null;
-      return listBlueprintVariants(blueprint.id);
-    },
-  });
-  const readyVariantIds = useMemo(() => {
-    const map: Record<GenerationTier, string | null> = {
-      free: null,
-      tier: null,
-    };
-    const rows = blueprintVariantsQuery.data?.variants || [];
-    for (const row of rows) {
-      if (row.status !== 'ready') continue;
-      if (row.tier !== 'free' && row.tier !== 'tier') continue;
-      map[row.tier] = row.blueprint_id || null;
-    }
-    return map;
-  }, [blueprintVariantsQuery.data?.variants]);
-  const currentVariantTier = useMemo(() => {
-    const rows = blueprintVariantsQuery.data?.variants || [];
-    const byId = rows.find((row) => row.blueprint_id === blueprint?.id);
-    if (byId?.tier === 'free' || byId?.tier === 'tier') return byId.tier;
-    const selectedItems = blueprint?.selected_items && typeof blueprint.selected_items === 'object'
-      ? blueprint.selected_items as Record<string, unknown>
-      : null;
-    const tier = String(selectedItems?.generation_tier || '').trim().toLowerCase();
-    return tier === 'tier' ? 'tier' : tier === 'free' ? 'free' : null;
-  }, [blueprint?.id, blueprint?.selected_items, blueprintVariantsQuery.data?.variants]);
-  const hasVariantToggle = Boolean(readyVariantIds.free && readyVariantIds.tier);
+  const hasVariantToggle = false;
   const stepVariants = parseStepVariants(blueprint?.selected_items);
   const baseSteps = blueprint ? parseSteps(blueprint.steps) : [];
   const defaultVariantSteps = stepVariants.default.length > 0 ? stepVariants.default : baseSteps;
@@ -982,35 +948,6 @@ export default function BlueprintDetail() {
 
               {hasVariantToggle || useGoldenRender ? (
                 <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap">
-                  {hasVariantToggle ? (
-                    <>
-                      <span className="text-xs text-muted-foreground">Variant:</span>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={currentVariantTier === 'free' ? 'default' : 'outline'}
-                        className="h-7 px-2 text-xs"
-                        onClick={() => {
-                          const targetId = readyVariantIds.free;
-                          if (targetId && targetId !== blueprint.id) navigate(`/blueprint/${targetId}`);
-                        }}
-                      >
-                        Free
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={currentVariantTier === 'tier' ? 'default' : 'outline'}
-                        className="h-7 px-2 text-xs"
-                        onClick={() => {
-                          const targetId = readyVariantIds.tier;
-                          if (targetId && targetId !== blueprint.id) navigate(`/blueprint/${targetId}`);
-                        }}
-                      >
-                        Tier
-                      </Button>
-                    </>
-                  ) : null}
                   {useGoldenRender ? (
                     <div className="inline-flex items-center gap-1 rounded-full border border-border/40 bg-muted/20 p-1">
                       {summaryExpertiseLevels.map((level) => {

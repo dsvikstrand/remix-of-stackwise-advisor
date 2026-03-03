@@ -165,7 +165,6 @@ export async function searchYouTube(input: { q: string; limit?: number; pageToke
 
 export async function generateSearchVideos(input: {
   items: SearchVideoGenerateItem[];
-  requestedTier?: 'free' | 'tier';
 }) {
   const base = getApiBase();
   if (!base) {
@@ -181,7 +180,6 @@ export async function generateSearchVideos(input: {
     },
     body: JSON.stringify({
       items: input.items,
-      requested_tier: input.requestedTier,
     }),
   });
 
