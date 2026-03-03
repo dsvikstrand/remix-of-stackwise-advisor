@@ -5,6 +5,26 @@ import {
   type TranscriptResult,
   type TranscriptSegment,
 } from '../types';
+import { getYtToTextProxyRequestTools } from '../../services/webshareProxy';
+
+type YtToTextTranscriptItem = {
+  t?: unknown;
+  s?: unknown;
+  e?: unknown;
+};
+
+type YtToTextResponse = {
+  data?: {
+    transcripts?: YtToTextTranscriptItem[];
+  };
+};
+
+type YtToTextHttpResponse = {
+  status: number;
+  ok: boolean;
+  getHeader: (name: string) => string | null;
+  parseJson: () => Promise<YtToTextResponse | null>;
+};
 
 function toSeconds(input: unknown) {
   const n = Number(input);
@@ -41,16 +61,73 @@ async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   }
 }
 
-async function fetchOnce(videoId: string): Promise<TranscriptSegment[]> {
+function buildYtToTextRequestBody(videoId: string) {
+  return JSON.stringify({ video_id: videoId });
+}
+
+function buildYtToTextRequestHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'x-app-version': '1.0',
+    'x-source': 'tubetranscript',
+  };
+}
+
+function getHeaderValue(
+  headers: Record<string, string | string[] | undefined>,
+  name: string,
+) {
+  const value = headers[name.toLowerCase()];
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value) && value.length > 0) return value.join(', ');
+  return null;
+}
+
+async function requestViaFetch(videoId: string): Promise<YtToTextHttpResponse> {
   const response = await fetch('https://yt-to-text.com/api/v1/Subtitles', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-app-version': '1.0',
-      'x-source': 'tubetranscript',
-    },
-    body: JSON.stringify({ video_id: videoId }),
+    headers: buildYtToTextRequestHeaders(),
+    body: buildYtToTextRequestBody(videoId),
   });
+
+  return {
+    status: response.status,
+    ok: response.ok,
+    getHeader: (name) => response.headers.get(name),
+    parseJson: async () => response.json().catch(() => null) as Promise<YtToTextResponse | null>,
+  };
+}
+
+async function requestViaProxy(videoId: string): Promise<YtToTextHttpResponse> {
+  const proxyTools = getYtToTextProxyRequestTools();
+  if (!proxyTools) {
+    return requestViaFetch(videoId);
+  }
+
+  try {
+    const response = await proxyTools.request('https://yt-to-text.com/api/v1/Subtitles', {
+      method: 'POST',
+      headers: buildYtToTextRequestHeaders(),
+      body: buildYtToTextRequestBody(videoId),
+      dispatcher: proxyTools.dispatcher,
+    });
+
+    return {
+      status: response.statusCode,
+      ok: response.statusCode >= 200 && response.statusCode < 300,
+      getHeader: (name) => getHeaderValue(response.headers, name),
+      parseJson: async () => response.body.json().catch(() => null) as Promise<YtToTextResponse | null>,
+    };
+  } catch (error) {
+    const message = error instanceof Error && error.message
+      ? `Transcript provider proxy request failed: ${error.message}`
+      : 'Transcript provider proxy request failed.';
+    throw new TranscriptProviderError('TRANSCRIPT_FETCH_FAIL', message);
+  }
+}
+
+async function fetchOnce(videoId: string): Promise<TranscriptSegment[]> {
+  const response = await requestViaProxy(videoId);
 
   if (response.status === 403 || response.status === 404) {
     throw new TranscriptProviderError('NO_CAPTIONS', 'Transcript unavailable for this video. Please try another video.');
@@ -59,21 +136,21 @@ async function fetchOnce(videoId: string): Promise<TranscriptSegment[]> {
     throw new TranscriptProviderError(
       'RATE_LIMITED',
       'Transcript provider rate limited. Please retry shortly.',
-      { retryAfterSeconds: parseRetryAfterSeconds(response.headers.get('retry-after')) },
+      { retryAfterSeconds: parseRetryAfterSeconds(response.getHeader('retry-after')) },
     );
   }
   if (!response.ok) {
     throw new TranscriptProviderError('TRANSCRIPT_FETCH_FAIL', `Transcript provider returned HTTP ${response.status}.`);
   }
 
-  const payload = await response.json().catch(() => null) as any;
+  const payload = await response.parseJson();
   const raw = payload?.data?.transcripts;
   if (!Array.isArray(raw)) {
     throw new TranscriptProviderError('NO_CAPTIONS', 'Transcript unavailable for this video. Please try another video.');
   }
 
   const segments = raw
-    .map((item: any) => ({
+    .map((item) => ({
       text: typeof item?.t === 'string' ? normalizeTranscriptWhitespace(item.t) : '',
       startSec: toSeconds(item?.s),
       endSec: toSeconds(item?.e),
