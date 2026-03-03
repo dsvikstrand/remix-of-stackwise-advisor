@@ -980,6 +980,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         title: item.title,
         duration_seconds: toDurationSeconds(item.duration_seconds),
         transcript_text: item.transcript_text,
+        transcript_source: item.transcript_source,
         reserved_cost: reservedCost,
         reserved_by_user_id: userId,
         unlock_origin: 'manual_unlock',
@@ -1159,6 +1160,12 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
     });
   }
   const clientTranscriptCount = queueItems.filter((item) => Boolean(item.transcript_text)).length;
+  const clientTranscriptSourceCounts = queueItems.reduce<Record<'direct' | 'relay', number>>((acc, item) => {
+    if (!item.transcript_text) return acc;
+    const source = item.transcript_source === 'relay' ? 'relay' : 'direct';
+    acc[source] += 1;
+    return acc;
+  }, { direct: 0, relay: 0 });
   if (clientTranscriptCount > 0) {
     logUnlockEvent(
       'source_unlock_client_transcript_intake',
@@ -1166,6 +1173,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       {
         queued_count: queueItems.length,
         client_transcript_count: clientTranscriptCount,
+        client_transcript_source_counts: clientTranscriptSourceCounts,
       },
     );
   }
@@ -1258,6 +1266,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       queued_count: queueItems.length,
       client_transcript_used: clientTranscriptCount > 0,
       client_transcript_count: clientTranscriptCount,
+      client_transcript_source_counts: clientTranscriptSourceCounts,
       requested_tier: requestedTier || null,
       resolved_tier: resolvedTier,
       variant_status: 'queued',

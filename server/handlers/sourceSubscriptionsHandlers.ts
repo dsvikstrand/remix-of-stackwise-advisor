@@ -346,6 +346,7 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
       thumbnail_url: item.thumbnail_url || null,
       duration_seconds: toDurationSeconds(item.duration_seconds),
       transcript_text: item.transcript_text == null ? null : String(item.transcript_text || '').trim() || null,
+      transcript_source: item.transcript_source === 'relay' ? 'relay' : item.transcript_source === 'direct' ? 'direct' : null,
     });
   }
   const dedupedItems = Array.from(dedupedMap.values());
@@ -446,11 +447,18 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
     });
   }
   const clientTranscriptCount = allowedDurationItems.filter((item) => Boolean(item.transcript_text)).length;
+  const clientTranscriptSourceCounts = allowedDurationItems.reduce<Record<'direct' | 'relay', number>>((acc, item) => {
+    if (!item.transcript_text) return acc;
+    const source = item.transcript_source === 'relay' ? 'relay' : 'direct';
+    acc[source] += 1;
+    return acc;
+  }, { direct: 0, relay: 0 });
   if (clientTranscriptCount > 0) {
     console.log('[refresh_generate_client_transcript_intake]', JSON.stringify({
       user_id: userId,
       item_count: allowedDurationItems.length,
       client_transcript_count: clientTranscriptCount,
+      client_transcript_source_counts: clientTranscriptSourceCounts,
     }));
   }
 
@@ -509,6 +517,7 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
       queued_count: allowedDurationItems.length,
       client_transcript_used: clientTranscriptCount > 0,
       client_transcript_count: clientTranscriptCount,
+      client_transcript_source_counts: clientTranscriptSourceCounts,
       requested_tier: requestedTier || null,
       resolved_tier: resolvedTier,
       variant_status: 'queued',

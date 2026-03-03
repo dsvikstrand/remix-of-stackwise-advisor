@@ -10,6 +10,7 @@ export type YouTubeToBlueprintInput = {
   video_title?: string | null;
   duration_seconds?: number | null;
   transcript_text?: string | null;
+  transcript_source?: 'direct' | 'relay' | null;
   generate_review?: boolean;
   generate_banner?: boolean;
   source?: 'youtube_mvp';
@@ -28,6 +29,7 @@ export type SearchVideosGenerateInput = {
     thumbnail_url?: string | null;
     duration_seconds?: number | null;
     transcript_text?: string | null;
+    transcript_source?: 'direct' | 'relay' | null;
   }>;
   requested_tier?: 'free' | 'tier';
 };
