@@ -852,6 +852,7 @@ app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return next();
   if (req.path === '/api/health') return next();
   const isDebugSimulationRoute = /^\/api\/debug\/subscriptions\/[^/]+\/simulate-new-uploads$/.test(req.path);
+  const isDebugResetYtProxyRoute = req.method === 'POST' && req.path === '/api/debug/yt-to-text/reset-proxy';
   const isPublicProfileFeedRoute = /^\/api\/profile\/[^/]+\/feed$/.test(req.path);
   const isPublicSourcePageSearchRoute = req.method === 'GET' && req.path === '/api/source-pages/search';
   const isPublicSourcePageRoute = req.method === 'GET' && /^\/api\/source-pages\/[^/]+\/[^/]+$/.test(req.path);
@@ -868,6 +869,7 @@ app.use((req, res, next) => {
     || isPublicSourcePageSearchRoute
     || isPublicSourcePageRoute
     || isPublicSourcePageBlueprintFeedRoute
+    || (debugEndpointsEnabled && isDebugResetYtProxyRoute)
     || (debugEndpointsEnabled && isDebugSimulationRoute);
 
   if (!supabaseClient) {
