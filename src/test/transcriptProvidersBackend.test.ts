@@ -85,12 +85,19 @@ describe('transcript providers rate-limit mapping', () => {
     const mockFetch = vi.fn();
     global.fetch = mockFetch as unknown as typeof fetch;
 
-    await getTranscriptFromYtToText('video123');
+    const transcript = await getTranscriptFromYtToText('video123');
 
     expect(mockFetch).not.toHaveBeenCalled();
     expect(mockRequest).toHaveBeenCalledTimes(1);
     const requestInit = mockRequest.mock.calls[0]?.[1] as Record<string, unknown> | undefined;
     expect(requestInit?.dispatcher).toBeTruthy();
+    expect(transcript.transport).toMatchObject({
+      proxy_enabled: true,
+      proxy_mode: 'webshare_explicit',
+      proxy_selector: 'explicit',
+      proxy_selected_index: null,
+      proxy_host: '127.0.0.1',
+    });
   });
 
   it('selects one fixed Webshare direct proxy by zero-based index when the selector flag is enabled', async () => {
@@ -224,14 +231,22 @@ describe('transcript providers rate-limit mapping', () => {
     }));
     global.fetch = mockFetch as unknown as typeof fetch;
 
-    await getTranscriptFromYtToText('video123');
-    await getTranscriptFromYtToText('video456');
+    const firstTranscript = await getTranscriptFromYtToText('video123');
+    const secondTranscript = await getTranscriptFromYtToText('video456');
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
     expect(seenProxyConfigs).toHaveLength(1);
     expect(seenProxyConfigs[0]?.uri).toBe('http://10.0.0.3:6003/');
     expect(typeof seenProxyConfigs[0]?.token).toBe('string');
     expect(mockRequest).toHaveBeenCalledTimes(2);
+    expect(firstTranscript.transport).toMatchObject({
+      proxy_enabled: true,
+      proxy_mode: 'webshare_index',
+      proxy_selector: 'rand',
+      proxy_selected_index: 2,
+      proxy_host: '10.0.0.3',
+    });
+    expect(secondTranscript.transport).toEqual(firstTranscript.transport);
   });
 
   it('maps proxied yt_to_text HTTP 429 to RATE_LIMITED with retry-after seconds', async () => {
@@ -289,12 +304,19 @@ describe('transcript providers rate-limit mapping', () => {
     }));
     global.fetch = mockFetch as unknown as typeof fetch;
 
-    await getTranscriptFromYtToText('video123');
+    const transcript = await getTranscriptFromYtToText('video123');
 
     const requestInit = mockFetch.mock.calls[0]?.[1] as Record<string, unknown> | undefined;
     expect(requestInit).toBeTruthy();
     expect(requestInit?.dispatcher).toBeUndefined();
     expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(transcript.transport).toMatchObject({
+      proxy_enabled: false,
+      proxy_mode: 'direct',
+      proxy_selector: null,
+      proxy_selected_index: null,
+      proxy_host: null,
+    });
   });
 
   it('falls back to the explicit fixed proxy when the selected Webshare proxy index is out of range', async () => {

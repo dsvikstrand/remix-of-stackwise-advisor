@@ -13,11 +13,21 @@ export type TranscriptSegment = {
   endSec?: number;
 };
 
+export type TranscriptTransportMetadata = {
+  provider: TranscriptProvider;
+  proxy_enabled: boolean;
+  proxy_mode: 'direct' | 'webshare_explicit' | 'webshare_index';
+  proxy_selector: string | null;
+  proxy_selected_index: number | null;
+  proxy_host: string | null;
+};
+
 export type TranscriptResult = {
   text: string;
   source: string;
   confidence: number | null;
   segments?: TranscriptSegment[];
+  transport?: TranscriptTransportMetadata | null;
 };
 
 export type TranscriptProviderAdapter = {

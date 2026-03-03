@@ -13,6 +13,7 @@ This is optional and is controlled entirely by env vars. If the proxy toggle is 
 - `youtube_timedtext` and all other outbound app requests stay direct.
 - When proxying is enabled, the app uses a lower-level `undici.request(...)` path with a cached `ProxyAgent`.
 - When proxying is disabled, the app uses the normal `fetch(...)` path.
+- Created blueprints now persist transcript transport debug metadata under `selected_items.bp_transcript_transport`.
 
 Relevant code:
 

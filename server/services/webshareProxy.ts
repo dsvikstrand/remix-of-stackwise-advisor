@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import type { TranscriptTransportMetadata } from '../transcript/types';
 
 type ClosableDispatcher = {
   close?: () => Promise<void> | void;
@@ -29,11 +30,17 @@ export type UndiciRequestFn = (
 type YtToTextProxyRequestTools = {
   dispatcher: ClosableDispatcher;
   request: UndiciRequestFn;
+  transport: TranscriptTransportMetadata;
 };
 
 type ProxyConnectionConfig = {
   uri: string;
   token?: string;
+};
+
+type ResolvedProxyConnection = {
+  config: ProxyConnectionConfig;
+  transport: TranscriptTransportMetadata;
 };
 
 type WebshareProxyListRow = {
@@ -60,7 +67,7 @@ let didWarnIndexSelectorFailure = false;
 let cachedProxyAgentConstructor: ProxyAgentConstructor | null | undefined;
 let cachedUndiciRequestFn: UndiciRequestFn | null | undefined;
 let cachedIndexProxyConfigKey: string | null = null;
-let cachedIndexProxyConfigPromise: Promise<ProxyConnectionConfig | null> | null = null;
+let cachedIndexProxyConfigPromise: Promise<ResolvedProxyConnection | null> | null = null;
 let proxyAgentFactoryOverride: ProxyAgentConstructor | null | undefined;
 let undiciRequestOverride: UndiciRequestFn | null | undefined;
 
@@ -159,7 +166,7 @@ function buildProxyConnectionConfig(host: string, port: number, username: string
   } satisfies ProxyConnectionConfig;
 }
 
-function buildExplicitProxyConfig() {
+function buildExplicitProxyConfig(): ResolvedProxyConnection | null {
   const explicitProxyUrl = readEnv('WEBSHARE_PROXY_URL');
   if (explicitProxyUrl) {
     const parsed = new URL(explicitProxyUrl);
@@ -168,11 +175,21 @@ function buildExplicitProxyConfig() {
     parsed.username = '';
     parsed.password = '';
     return {
-      uri: parsed.toString(),
-      token: username || password
-        ? `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`
-        : undefined,
-    } satisfies ProxyConnectionConfig;
+      config: {
+        uri: parsed.toString(),
+        token: username || password
+          ? `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`
+          : undefined,
+      },
+      transport: {
+        provider: 'yt_to_text',
+        proxy_enabled: true,
+        proxy_mode: 'webshare_explicit',
+        proxy_selector: 'explicit',
+        proxy_selected_index: null,
+        proxy_host: parsed.hostname || null,
+      },
+    } satisfies ResolvedProxyConnection;
   }
 
   const host = readEnv('WEBSHARE_PROXY_HOST');
@@ -191,7 +208,17 @@ function buildExplicitProxyConfig() {
     return null;
   }
 
-  return buildProxyConnectionConfig(host, port, username, password);
+  return {
+    config: buildProxyConnectionConfig(host, port, username, password),
+    transport: {
+      provider: 'yt_to_text',
+      proxy_enabled: true,
+      proxy_mode: 'webshare_explicit',
+      proxy_selector: 'explicit',
+      proxy_selected_index: null,
+      proxy_host: host,
+    },
+  } satisfies ResolvedProxyConnection;
 }
 
 function isIndexSelectionEnabled() {
@@ -209,7 +236,7 @@ function parseSelectedProxyIndex(): SelectedProxyIndex | null {
   return value;
 }
 
-async function fetchIndexedProxyConfig(): Promise<ProxyConnectionConfig | null> {
+async function fetchIndexedProxyConfig(): Promise<ResolvedProxyConnection | null> {
   if (!isIndexSelectionEnabled()) return null;
 
   const apiKey = readEnv('WEBSHARE_API_KEY');
@@ -273,7 +300,17 @@ async function fetchIndexedProxyConfig(): Promise<ProxyConnectionConfig | null> 
         return null;
       }
 
-      return buildProxyConnectionConfig(host, port, username, password);
+      return {
+        config: buildProxyConnectionConfig(host, port, username, password),
+        transport: {
+          provider: 'yt_to_text',
+          proxy_enabled: true,
+          proxy_mode: 'webshare_index',
+          proxy_selector: String(proxyIndex),
+          proxy_selected_index: selectedRowIndex,
+          proxy_host: host,
+        },
+      } satisfies ResolvedProxyConnection;
     } catch (error) {
       const message = error instanceof Error && error.message
         ? error.message
@@ -286,7 +323,7 @@ async function fetchIndexedProxyConfig(): Promise<ProxyConnectionConfig | null> 
   return cachedIndexProxyConfigPromise;
 }
 
-async function resolveProxyConnectionConfig() {
+async function resolveProxyConnectionConfig(): Promise<ResolvedProxyConnection | null> {
   const indexedProxy = await fetchIndexedProxyConfig();
   if (indexedProxy) return indexedProxy;
   return buildExplicitProxyConfig();
@@ -297,22 +334,26 @@ export async function getYtToTextProxyRequestTools(): Promise<YtToTextProxyReque
     return null;
   }
 
-  const proxyConfig = await resolveProxyConnectionConfig();
-  if (!proxyConfig) return null;
+  const proxyConnection = await resolveProxyConnectionConfig();
+  if (!proxyConnection) return null;
 
   const ProxyAgent = getProxyAgentConstructor();
   const request = getUndiciRequestFunction();
   if (!ProxyAgent || !request) return null;
 
-  if (!cachedDispatcher || cachedProxyUrl !== proxyConfig.uri) {
-    cachedProxyUrl = proxyConfig.uri;
+  if (!cachedDispatcher || cachedProxyUrl !== proxyConnection.config.uri) {
+    cachedProxyUrl = proxyConnection.config.uri;
     cachedDispatcher = new ProxyAgent({
-      uri: proxyConfig.uri,
-      token: proxyConfig.token,
+      uri: proxyConnection.config.uri,
+      token: proxyConnection.config.token,
     });
   }
 
-  return { dispatcher: cachedDispatcher, request };
+  return {
+    dispatcher: cachedDispatcher,
+    request,
+    transport: proxyConnection.transport,
+  };
 }
 
 export async function resetYtToTextProxyDispatcher() {

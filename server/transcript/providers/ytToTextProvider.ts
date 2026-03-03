@@ -4,6 +4,7 @@ import {
   type TranscriptProviderAdapter,
   type TranscriptResult,
   type TranscriptSegment,
+  type TranscriptTransportMetadata,
 } from '../types';
 import { getYtToTextProxyRequestTools } from '../../services/webshareProxy';
 
@@ -24,6 +25,16 @@ type YtToTextHttpResponse = {
   ok: boolean;
   getHeader: (name: string) => string | null;
   parseJson: () => Promise<YtToTextResponse | null>;
+};
+
+type YtToTextRequestResult = {
+  response: YtToTextHttpResponse;
+  transport: TranscriptTransportMetadata;
+};
+
+type YtToTextFetchResult = {
+  segments: TranscriptSegment[];
+  transport: TranscriptTransportMetadata;
 };
 
 function toSeconds(input: unknown) {
@@ -98,10 +109,29 @@ async function requestViaFetch(videoId: string): Promise<YtToTextHttpResponse> {
   };
 }
 
-async function requestViaProxy(videoId: string): Promise<YtToTextHttpResponse> {
+function buildDirectTransportMetadata(): TranscriptTransportMetadata {
+  return {
+    provider: 'yt_to_text',
+    proxy_enabled: false,
+    proxy_mode: 'direct',
+    proxy_selector: null,
+    proxy_selected_index: null,
+    proxy_host: null,
+  };
+}
+
+async function requestViaFetchWithMetadata(videoId: string): Promise<YtToTextRequestResult> {
+  const response = await requestViaFetch(videoId);
+  return {
+    response,
+    transport: buildDirectTransportMetadata(),
+  };
+}
+
+async function requestViaProxy(videoId: string): Promise<YtToTextRequestResult> {
   const proxyTools = await getYtToTextProxyRequestTools();
   if (!proxyTools) {
-    return requestViaFetch(videoId);
+    return requestViaFetchWithMetadata(videoId);
   }
 
   try {
@@ -113,10 +143,13 @@ async function requestViaProxy(videoId: string): Promise<YtToTextHttpResponse> {
     });
 
     return {
-      status: response.statusCode,
-      ok: response.statusCode >= 200 && response.statusCode < 300,
-      getHeader: (name) => getHeaderValue(response.headers, name),
-      parseJson: async () => response.body.json().catch(() => null) as Promise<YtToTextResponse | null>,
+      response: {
+        status: response.statusCode,
+        ok: response.statusCode >= 200 && response.statusCode < 300,
+        getHeader: (name) => getHeaderValue(response.headers, name),
+        parseJson: async () => response.body.json().catch(() => null) as Promise<YtToTextResponse | null>,
+      },
+      transport: proxyTools.transport,
     };
   } catch (error) {
     const message = error instanceof Error && error.message
@@ -126,8 +159,8 @@ async function requestViaProxy(videoId: string): Promise<YtToTextHttpResponse> {
   }
 }
 
-async function fetchOnce(videoId: string): Promise<TranscriptSegment[]> {
-  const response = await requestViaProxy(videoId);
+async function fetchOnce(videoId: string): Promise<YtToTextFetchResult> {
+  const { response, transport } = await requestViaProxy(videoId);
 
   if (response.status === 403 || response.status === 404) {
     throw new TranscriptProviderError('NO_CAPTIONS', 'Transcript unavailable for this video. Please try another video.');
@@ -161,13 +194,16 @@ async function fetchOnce(videoId: string): Promise<TranscriptSegment[]> {
     throw new TranscriptProviderError('TRANSCRIPT_EMPTY', 'Transcript unavailable for this video. Please try another video.');
   }
 
-  return segments;
+  return {
+    segments,
+    transport,
+  };
 }
 
 export async function getTranscriptFromYtToText(videoId: string): Promise<TranscriptResult> {
   const call = async () => fetchOnce(videoId);
 
-  const segments = await withTimeout(
+  const { segments, transport } = await withTimeout(
     (async () => {
       try {
         return await call();
@@ -186,6 +222,7 @@ export async function getTranscriptFromYtToText(videoId: string): Promise<Transc
     source: 'yt_to_text_subtitles_v1',
     confidence: null,
     segments,
+    transport,
   };
 }
 

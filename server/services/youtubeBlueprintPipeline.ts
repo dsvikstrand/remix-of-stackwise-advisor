@@ -318,6 +318,7 @@ async function runYouTubePipeline(input: {
               chars: effectiveTranscriptText.length,
               raw_chars: rawTranscriptText.length,
               confidence: transcript.confidence,
+              transport: transcript.transport || null,
             },
           });
         },
@@ -1797,6 +1798,7 @@ Keep section bullets concise:
       meta: {
         transcript_source: transcript.source,
         confidence: transcript.confidence,
+        transcript_transport: transcript.transport || null,
         transcript_pruning: transcriptPruning?.meta || null,
         bp_output_mode: yt2bpOutputMode,
         bp_structure_ok: gatePassed,

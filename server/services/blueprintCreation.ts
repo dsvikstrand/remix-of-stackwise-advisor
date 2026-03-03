@@ -239,6 +239,10 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
         .map((tag) => deps.toTagSlug(String(tag || '').trim()))
         .filter(Boolean)
         .slice(0, 5);
+      const transcriptTransport = (() => {
+        const value = (result.meta as { transcript_transport?: unknown } | null)?.transcript_transport;
+        return value && typeof value === 'object' ? value : null;
+      })();
       const summaryWordCount = String(result.draft.description || '')
         .trim()
         .split(/\s+/)
@@ -287,6 +291,7 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
             bp_trace_version: String((result.meta as { bp_trace_version?: unknown } | null)?.bp_trace_version || 'yt2bp_trace_v2'),
             bp_run_id: result.run_id,
             bp_trace_source: 'generation_runs',
+            bp_transcript_transport: transcriptTransport,
           },
           banner_url: sourceThumbnailUrl,
           mix_notes: result.draft.notes || null,
