@@ -445,6 +445,14 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
       },
     });
   }
+  const clientTranscriptCount = allowedDurationItems.filter((item) => Boolean(item.transcript_text)).length;
+  if (clientTranscriptCount > 0) {
+    console.log('[refresh_generate_client_transcript_intake]', JSON.stringify({
+      user_id: userId,
+      item_count: allowedDurationItems.length,
+      client_transcript_count: clientTranscriptCount,
+    }));
+  }
 
   const queueDepth = await deps.countQueueDepth(serviceDb, { includeRunning: true });
   const userQueueDepth = await deps.countQueueDepth(serviceDb, { userId, includeRunning: true });
@@ -499,6 +507,8 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
       job_id: job.id,
       queue_depth: queueDepth + 1,
       queued_count: allowedDurationItems.length,
+      client_transcript_used: clientTranscriptCount > 0,
+      client_transcript_count: clientTranscriptCount,
       requested_tier: requestedTier || null,
       resolved_tier: resolvedTier,
       variant_status: 'queued',

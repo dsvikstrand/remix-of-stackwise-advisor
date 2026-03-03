@@ -12,7 +12,7 @@ import {
   type GenerationTier,
   type SubscriptionRefreshCandidate,
 } from '@/lib/subscriptionsApi';
-import { hydrateQueueItemsWithClientTranscripts } from '@/lib/clientTranscript';
+import { hydrateQueueItemsWithClientTranscripts, toClientTranscriptBatchErrorMessage } from '@/lib/clientTranscript';
 import { useGenerationTierAccess } from '@/hooks/useGenerationTierAccess';
 
 type RefreshSubscriptionsDialogProps = {
@@ -129,7 +129,12 @@ export function RefreshSubscriptionsDialog({
       if (!subscriptionsEnabled) throw new Error('Backend API is not configured.');
       const hydrated = await hydrateQueueItemsWithClientTranscripts(items);
       if (hydrated.ready.length === 0) {
-        throw new Error('Could not fetch transcript in browser for the selected videos.');
+        throw new Error(
+          toClientTranscriptBatchErrorMessage(
+            hydrated.failed,
+            'Could not fetch transcript in your browser for the selected videos.',
+          ),
+        );
       }
       const payload = await generateSubscriptionRefreshBlueprints({
         items: hydrated.ready,
@@ -138,6 +143,12 @@ export function RefreshSubscriptionsDialog({
       return {
         payload,
         failedCount: hydrated.failed.length,
+        failedMessage: hydrated.failed.length > 0
+          ? toClientTranscriptBatchErrorMessage(
+              hydrated.failed,
+              'Some selected videos could not fetch transcripts in your browser.',
+            )
+          : null,
       };
     },
     onSuccess: (result) => {
@@ -151,7 +162,7 @@ export function RefreshSubscriptionsDialog({
       if (result.failedCount > 0) {
         toast({
           title: 'Some videos were skipped',
-          description: `Skipped ${result.failedCount} selected video(s) because transcript fetch failed in your browser.`,
+          description: `Skipped ${result.failedCount} selected video(s). ${result.failedMessage || ''}`.trim(),
         });
       }
       onOpenChange(false);

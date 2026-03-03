@@ -641,6 +641,14 @@ app.post(
         },
       });
     }
+    const clientTranscriptCount = allowedItems.filter((item) => Boolean(item.transcript_text)).length;
+    if (clientTranscriptCount > 0) {
+      console.log('[search_generate_client_transcript_intake]', JSON.stringify({
+        user_id: userId,
+        item_count: allowedItems.length,
+        client_transcript_count: clientTranscriptCount,
+      }));
+    }
 
     const queueDepth = await countQueueDepth(serviceDb, { includeRunning: true });
     const userQueueDepth = await countQueueDepth(serviceDb, { userId, includeRunning: true });
@@ -697,6 +705,8 @@ app.post(
         queue_depth: queueDepth + 1,
         estimated_start_seconds: Math.max(1, Math.ceil((queueDepth + 1) / Math.max(1, workerConcurrency)) * 4),
         queued_count: allowedItems.length,
+        client_transcript_used: clientTranscriptCount > 0,
+        client_transcript_count: clientTranscriptCount,
         requested_tier: requestedTier || null,
         resolved_tier: resolvedTier,
         variant_status: 'queued',

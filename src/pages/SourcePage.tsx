@@ -23,7 +23,7 @@ import {
   subscribeToSourcePage,
   unsubscribeFromSourcePage,
 } from '@/lib/sourcePagesApi';
-import { hydrateQueueItemsWithClientTranscripts } from '@/lib/clientTranscript';
+import { hydrateQueueItemsWithClientTranscripts, toClientTranscriptBatchErrorMessage } from '@/lib/clientTranscript';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
@@ -279,7 +279,12 @@ export default function SourcePage() {
         duration_seconds: item.duration_seconds,
       })));
       if (hydrated.ready.length === 0) {
-        throw new Error('Could not fetch transcript in browser for the selected videos.');
+        throw new Error(
+          toClientTranscriptBatchErrorMessage(
+            hydrated.failed,
+            'Could not fetch transcript in your browser for the selected videos.',
+          ),
+        );
       }
       const data = await unlockSourcePageVideos({
         platform,
@@ -290,6 +295,12 @@ export default function SourcePage() {
       return {
         data,
         failedCount: hydrated.failed.length,
+        failedMessage: hydrated.failed.length > 0
+          ? toClientTranscriptBatchErrorMessage(
+              hydrated.failed,
+              'Some selected videos could not fetch transcripts in your browser.',
+            )
+          : null,
       };
     },
     onSuccess: (result, _items, context) => {
@@ -310,7 +321,7 @@ export default function SourcePage() {
       if (result.failedCount > 0) {
         toast({
           title: 'Some videos were skipped',
-          description: `Skipped ${result.failedCount} selected video(s) because transcript fetch failed in your browser.`,
+          description: `Skipped ${result.failedCount} selected video(s). ${result.failedMessage || ''}`.trim(),
         });
       }
     },

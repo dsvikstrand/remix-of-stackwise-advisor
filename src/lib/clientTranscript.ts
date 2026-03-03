@@ -20,6 +20,39 @@ export type ClientTranscriptHydrationFailure = {
   reason: string;
 };
 
+function normalizeClientTranscriptReason(raw: unknown) {
+  return String(raw || '').trim();
+}
+
+export function toClientTranscriptErrorMessage(raw: unknown, fallback = 'Could not fetch transcript in your browser right now.') {
+  const reason = normalizeClientTranscriptReason(raw);
+  if (!reason) return fallback;
+  if (reason === 'CLIENT_TRANSCRIPT_EMPTY') {
+    return 'Transcript came back empty for this video. Please try another video.';
+  }
+  if (reason === 'CLIENT_TRANSCRIPT_HTTP_404') {
+    return 'Transcript is unavailable for this video right now. Please try another video.';
+  }
+  if (reason === 'CLIENT_TRANSCRIPT_HTTP_403' || reason === 'CLIENT_TRANSCRIPT_HTTP_429') {
+    return 'Transcript service is busy right now. Please wait a bit and try again.';
+  }
+  if (reason.startsWith('CLIENT_TRANSCRIPT_HTTP_')) {
+    return 'Transcript service is unavailable right now. Please try again shortly.';
+  }
+  if (reason === 'Failed to fetch' || reason.includes('NetworkError') || reason.includes('Load failed')) {
+    return 'Could not reach the transcript service from your browser. Please check your connection and try again.';
+  }
+  return fallback;
+}
+
+export function toClientTranscriptBatchErrorMessage(
+  failures: ClientTranscriptHydrationFailure[],
+  fallback = 'Could not fetch transcript in your browser for the selected videos.',
+) {
+  if (!failures.length) return fallback;
+  return toClientTranscriptErrorMessage(failures[0]?.reason, fallback);
+}
+
 export async function fetchClientTranscriptForVideo(videoId: string): Promise<ClientTranscriptPayload> {
   const response = await fetch(CLIENT_TRANSCRIPT_ENDPOINT, {
     method: 'POST',
@@ -98,6 +131,14 @@ export async function hydrateQueueItemsWithClientTranscripts<
       reason: result.reason instanceof Error ? result.reason.message : String(result.reason || 'CLIENT_TRANSCRIPT_FAILED'),
     });
   });
+
+  if (items.length > 0) {
+    console.info('[client_transcript_hydration]', {
+      requested: items.length,
+      ready: ready.length,
+      failed: failed.length,
+    });
+  }
 
   return { ready, failed };
 }

@@ -40,6 +40,8 @@ export type SearchVideoGenerateResponse = {
   queue_depth: number;
   estimated_start_seconds: number;
   queued_count: number;
+  client_transcript_used?: boolean;
+  client_transcript_count?: number;
   requested_tier?: 'free' | 'tier' | null;
   resolved_tier?: 'free' | 'tier';
   variant_status?: 'queued' | 'generated' | 'ready' | 'in_progress';

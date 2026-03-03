@@ -1158,6 +1158,17 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       },
     });
   }
+  const clientTranscriptCount = queueItems.filter((item) => Boolean(item.transcript_text)).length;
+  if (clientTranscriptCount > 0) {
+    logUnlockEvent(
+      'source_unlock_client_transcript_intake',
+      { trace_id: traceId, user_id: userId, source_page_id: sourcePage.id },
+      {
+        queued_count: queueItems.length,
+        client_transcript_count: clientTranscriptCount,
+      },
+    );
+  }
 
   const queueDepth = await countQueueDepth(sourcePageDb, {
     scope: 'source_item_unlock_generation',
@@ -1245,6 +1256,8 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       queue_depth: queueDepth + 1,
       estimated_start_seconds: Math.max(1, Math.ceil((queueDepth + 1) / Math.max(1, workerConcurrency)) * 4),
       queued_count: queueItems.length,
+      client_transcript_used: clientTranscriptCount > 0,
+      client_transcript_count: clientTranscriptCount,
       requested_tier: requestedTier || null,
       resolved_tier: resolvedTier,
       variant_status: 'queued',
