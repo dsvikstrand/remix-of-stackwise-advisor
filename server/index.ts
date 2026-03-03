@@ -4478,6 +4478,7 @@ async function processSearchVideoGenerateJob(input: {
     let mirrorAttemptedForItem = false;
     processed += 1;
     try {
+      const providedTranscriptText = String(item.transcript_text || '').trim() || null;
       const source = await upsertSourceItemFromVideo(db, {
         video: {
           videoId: item.video_id,
@@ -4502,6 +4503,13 @@ async function processSearchVideoGenerateJob(input: {
       const tryMirrorGeneration = async () => {
         if (!input.dualGenerateEnabled) return;
         mirrorAttemptedForItem = true;
+        console.log('[search_video_generate_worker_mirror_transcript]', JSON.stringify({
+          job_id: input.jobId,
+          user_id: input.userId,
+          video_id: item.video_id,
+          has_transcript: Boolean(providedTranscriptText),
+          transcript_chars: providedTranscriptText ? providedTranscriptText.length : 0,
+        }));
         await ensureMirrorVariantForQueueItem({
           db,
           enabled: input.dualGenerateEnabled,
@@ -4512,7 +4520,7 @@ async function processSearchVideoGenerateJob(input: {
           videoUrl: source.source_url,
           videoId: source.source_native_id,
           durationSeconds: item.duration_seconds,
-          providedTranscriptText: item.transcript_text,
+          providedTranscriptText,
           sourceTag: 'youtube_search_direct',
           primaryTier: input.generationTier,
         });
@@ -4520,12 +4528,19 @@ async function processSearchVideoGenerateJob(input: {
 
       let generated: { blueprintId: string; runId: string; title: string } | null = null;
       try {
+        console.log('[search_video_generate_worker_primary_transcript]', JSON.stringify({
+          job_id: input.jobId,
+          user_id: input.userId,
+          video_id: item.video_id,
+          has_transcript: Boolean(providedTranscriptText),
+          transcript_chars: providedTranscriptText ? providedTranscriptText.length : 0,
+        }));
         generated = await createBlueprintFromVideo(db, {
           userId: input.userId,
           videoUrl: source.source_url,
           videoId: source.source_native_id,
           videoTitle: item.title,
-          providedTranscriptText: item.transcript_text,
+          providedTranscriptText,
           durationSeconds: item.duration_seconds,
           sourceTag: 'youtube_search_direct',
           sourceItemId: source.id,
@@ -4605,7 +4620,7 @@ async function processSearchVideoGenerateJob(input: {
               videoUrl: source.source_url,
               videoId: source.source_native_id,
               durationSeconds: item.duration_seconds,
-              providedTranscriptText: item.transcript_text,
+              providedTranscriptText,
               sourceTag: 'youtube_search_direct',
               primaryTier: input.generationTier,
             });
