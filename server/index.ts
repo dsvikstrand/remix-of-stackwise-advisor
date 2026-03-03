@@ -6385,6 +6385,7 @@ function normalizeRefreshScanCandidates(value: unknown): RefreshScanCandidate[] 
       published_at: row.published_at == null ? null : String(row.published_at || '').trim() || null,
       thumbnail_url: row.thumbnail_url == null ? null : String(row.thumbnail_url || '').trim() || null,
       duration_seconds: toDurationSeconds(row.duration_seconds),
+      transcript_text: row.transcript_text == null ? null : String(row.transcript_text || '').trim() || null,
     });
   }
   return rows;
@@ -6411,6 +6412,7 @@ function normalizeSearchVideoGenerateItems(value: unknown): SearchVideoGenerateI
       published_at: row.published_at == null ? null : String(row.published_at || '').trim() || null,
       thumbnail_url: row.thumbnail_url == null ? null : String(row.thumbnail_url || '').trim() || null,
       duration_seconds: toDurationSeconds(row.duration_seconds),
+      transcript_text: row.transcript_text == null ? null : String(row.transcript_text || '').trim() || null,
     });
   }
   return rows;
