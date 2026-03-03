@@ -19,7 +19,6 @@ export type RefreshScanCandidate = {
   thumbnail_url?: string | null;
   duration_seconds?: number | null;
   transcript_text?: string | null;
-  transcript_source?: 'direct' | 'relay' | null;
 };
 
 export type RefreshSubscriptionsScanInput = {

@@ -20,12 +20,6 @@ export const config = {
   /** Developer-facing UI elements (toasts/debug hints). */
   developerMode: toBool(import.meta.env.VITE_DEVELOPER_MODE, true),
 
-  /** Preferred transcript fetch path for manual browser hydration. */
-  clientTranscriptSource: toClientTranscriptSource(import.meta.env.VITE_CLIENT_TRANSCRIPT_SOURCE, 'direct'),
-
-  /** Optional temporary relay endpoint for developer transcript testing. */
-  clientTranscriptRelayUrl: toOptionalString(import.meta.env.VITE_CLIENT_TRANSCRIPT_RELAY_URL),
-
   /** Feature flags for phased bleuV1 rollout. */
   features: {
     myFeedV1: toBool(import.meta.env.VITE_FEATURE_MY_FEED_V1, true),
@@ -59,18 +53,6 @@ function toBool(raw: unknown, fallback: boolean) {
   const normalized = String(raw).trim().toLowerCase();
   if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
   if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
-  return fallback;
-}
-
-function toOptionalString(raw: unknown): string | null {
-  const normalized = String(raw || '').trim();
-  return normalized || null;
-}
-
-function toClientTranscriptSource(raw: unknown, fallback: 'direct' | 'relay'): 'direct' | 'relay' {
-  const normalized = String(raw || '').trim().toLowerCase();
-  if (normalized === 'relay') return 'relay';
-  if (normalized === 'direct') return 'direct';
   return fallback;
 }
 

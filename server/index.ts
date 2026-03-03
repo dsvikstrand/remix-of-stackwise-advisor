@@ -951,7 +951,6 @@ const YouTubeToBlueprintRequestSchema = z.object({
   video_title: z.string().min(1).max(300).optional().nullable(),
   duration_seconds: z.number().int().min(0).nullable().optional(),
   transcript_text: z.string().optional().nullable(),
-  transcript_source: z.enum(['direct', 'relay']).optional().nullable(),
   generate_review: z.boolean().default(false),
   generate_banner: z.boolean().default(false),
   source: z.literal('youtube_mvp').default('youtube_mvp'),
@@ -983,7 +982,6 @@ const SourcePageVideosGenerateSchema = z.object({
       thumbnail_url: z.string().url().optional().nullable(),
       duration_seconds: z.number().int().min(0).nullable().optional(),
       transcript_text: z.string().optional().nullable(),
-      transcript_source: z.enum(['direct', 'relay']).optional().nullable(),
     }),
   ).min(1).max(500),
   requested_tier: z.enum(['free', 'tier']).optional(),
@@ -1002,7 +1000,6 @@ const SearchVideosGenerateSchema = z.object({
       thumbnail_url: z.string().nullable().optional(),
       duration_seconds: z.number().int().min(0).nullable().optional(),
       transcript_text: z.string().nullable().optional(),
-      transcript_source: z.enum(['direct', 'relay']).nullable().optional(),
     }),
   ).min(1).max(50),
   requested_tier: z.enum(['free', 'tier']).optional(),
@@ -2794,7 +2791,6 @@ type RefreshScanCandidate = {
   thumbnail_url: string | null;
   duration_seconds: number | null;
   transcript_text: string | null;
-  transcript_source: 'direct' | 'relay' | null;
 };
 
 type SourcePageVideoGenerateItem = {
@@ -2805,7 +2801,6 @@ type SourcePageVideoGenerateItem = {
   thumbnail_url: string | null;
   duration_seconds: number | null;
   transcript_text: string | null;
-  transcript_source: 'direct' | 'relay' | null;
 };
 
 type SearchVideoGenerateItem = {
@@ -2819,7 +2814,6 @@ type SearchVideoGenerateItem = {
   thumbnail_url: string | null;
   duration_seconds: number | null;
   transcript_text: string | null;
-  transcript_source: 'direct' | 'relay' | null;
 };
 
 type SourcePageVideoExistingState = {
@@ -2865,7 +2859,6 @@ type SourceUnlockQueueItem = {
   title: string;
   duration_seconds: number | null;
   transcript_text: string | null;
-  transcript_source: 'direct' | 'relay' | null;
   reserved_cost: number;
   reserved_by_user_id: string;
   unlock_origin: 'manual_unlock' | 'subscription_auto_unlock' | 'source_auto_unlock_retry';
@@ -3104,7 +3097,6 @@ function normalizeSourcePageVideoGenerateItem(raw: unknown): SourcePageVideoGene
     thumbnail_url?: unknown;
     duration_seconds?: unknown;
     transcript_text?: unknown;
-    transcript_source?: unknown;
   };
 
   const videoId = String(row.video_id || '').trim();
@@ -3114,7 +3106,6 @@ function normalizeSourcePageVideoGenerateItem(raw: unknown): SourcePageVideoGene
   const thumbnailUrl = row.thumbnail_url == null ? null : String(row.thumbnail_url || '').trim() || null;
   const durationSeconds = toDurationSeconds(row.duration_seconds);
   const transcriptText = row.transcript_text == null ? null : String(row.transcript_text || '').trim() || null;
-  const transcriptSource = normalizeClientTranscriptSource(row.transcript_source);
 
   if (!YOUTUBE_VIDEO_ID_REGEX.test(videoId)) return null;
   if (!title || !videoUrl) return null;
@@ -3130,15 +3121,7 @@ function normalizeSourcePageVideoGenerateItem(raw: unknown): SourcePageVideoGene
     thumbnail_url: thumbnailUrl,
     duration_seconds: durationSeconds,
     transcript_text: transcriptText,
-    transcript_source: transcriptSource,
   };
-}
-
-function normalizeClientTranscriptSource(raw: unknown): 'direct' | 'relay' | null {
-  const normalized = String(raw || '').trim().toLowerCase();
-  if (normalized === 'relay') return 'relay';
-  if (normalized === 'direct') return 'direct';
-  return null;
 }
 
 async function loadExistingSourceVideoStateForUser(
@@ -4056,7 +4039,6 @@ const RefreshSubscriptionsGenerateSchema = z.object({
       thumbnail_url: z.string().nullable().optional(),
       duration_seconds: z.number().int().min(0).nullable().optional(),
       transcript_text: z.string().nullable().optional(),
-      transcript_source: z.enum(['direct', 'relay']).nullable().optional(),
     }),
   ).min(1).max(200),
   requested_tier: z.enum(['free', 'tier']).optional(),
@@ -6364,7 +6346,6 @@ function normalizeSourceUnlockQueueItems(value: unknown): SourceUnlockQueueItem[
       title,
       duration_seconds: toDurationSeconds(row.duration_seconds),
       transcript_text: row.transcript_text == null ? null : String(row.transcript_text || '').trim() || null,
-      transcript_source: normalizeClientTranscriptSource(row.transcript_source),
       reserved_cost: Math.max(0, Number(row.reserved_cost || 0)),
       reserved_by_user_id: reservedByUserId,
       unlock_origin: unlockOrigin,
@@ -6460,7 +6441,6 @@ function normalizeRefreshScanCandidates(value: unknown): RefreshScanCandidate[] 
       thumbnail_url: row.thumbnail_url == null ? null : String(row.thumbnail_url || '').trim() || null,
       duration_seconds: toDurationSeconds(row.duration_seconds),
       transcript_text: row.transcript_text == null ? null : String(row.transcript_text || '').trim() || null,
-      transcript_source: normalizeClientTranscriptSource(row.transcript_source),
     });
   }
   return rows;
@@ -6488,7 +6468,6 @@ function normalizeSearchVideoGenerateItems(value: unknown): SearchVideoGenerateI
       thumbnail_url: row.thumbnail_url == null ? null : String(row.thumbnail_url || '').trim() || null,
       duration_seconds: toDurationSeconds(row.duration_seconds),
       transcript_text: row.transcript_text == null ? null : String(row.transcript_text || '').trim() || null,
-      transcript_source: normalizeClientTranscriptSource(row.transcript_source),
     });
   }
   return rows;

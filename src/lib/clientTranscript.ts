@@ -1,14 +1,7 @@
-import { config } from '@/config/runtime';
-
 const CLIENT_TRANSCRIPT_ENDPOINT = 'https://yt-to-text.com/api/v1/Subtitles';
 
-export type ClientTranscriptSource = 'direct' | 'relay';
-
 type ClientTranscriptResponse = {
-  transcript_text?: string;
-  video_title?: string;
   title?: string;
-  duration_seconds?: number;
   durationSeconds?: number;
   data?: {
     transcripts?: Array<{ t?: string }>;
@@ -19,7 +12,6 @@ export type ClientTranscriptPayload = {
   transcript_text: string;
   video_title: string | null;
   duration_seconds: number | null;
-  transcript_source: ClientTranscriptSource;
 };
 
 export type ClientTranscriptHydrationFailure = {
@@ -27,31 +19,6 @@ export type ClientTranscriptHydrationFailure = {
   title: string;
   reason: string;
 };
-
-function resolveTranscriptEndpoint(input: { source: ClientTranscriptSource }): {
-  requestedSource: ClientTranscriptSource;
-  endpoint: string;
-  resolvedSource: ClientTranscriptSource;
-} {
-  if (input.source === 'relay') {
-    const relayUrl = String(config.clientTranscriptRelayUrl || '').trim();
-    if (relayUrl) {
-      return {
-        requestedSource: 'relay',
-        endpoint: relayUrl,
-        resolvedSource: 'relay',
-      };
-    }
-    console.warn('[client_transcript_relay_missing_url_fallback]', {
-      requested_source: 'relay',
-    });
-  }
-  return {
-    requestedSource: input.source,
-    endpoint: CLIENT_TRANSCRIPT_ENDPOINT,
-    resolvedSource: 'direct',
-  };
-}
 
 function normalizeClientTranscriptReason(raw: unknown) {
   return String(raw || '').trim();
@@ -136,34 +103,12 @@ async function fetchClientTranscriptFromEndpoint(
 }
 
 export async function fetchClientTranscriptForVideo(videoId: string): Promise<ClientTranscriptPayload> {
-  const preferredSource = config.clientTranscriptSource;
-  const preferredTarget = resolveTranscriptEndpoint({ source: preferredSource });
-  let activeSource: ClientTranscriptSource = preferredTarget.resolvedSource;
-  let payload: ClientTranscriptResponse | null = null;
-
-  try {
-    const preferredResponse = await fetchClientTranscriptFromEndpoint(preferredTarget.endpoint, videoId);
-    payload = preferredResponse.payload;
-  } catch (error) {
-    if (preferredTarget.resolvedSource === 'relay') {
-      console.warn('[client_transcript_relay_fallback]', {
-        video_id: videoId,
-        reason: error instanceof Error ? error.message : String(error),
-      });
-      const fallbackResponse = await fetchClientTranscriptFromEndpoint(CLIENT_TRANSCRIPT_ENDPOINT, videoId);
-      payload = fallbackResponse.payload;
-      activeSource = 'direct';
-    } else {
-      throw error;
-    }
-  }
-
-  const extracted = extractTranscriptPayload(payload);
+  const response = await fetchClientTranscriptFromEndpoint(CLIENT_TRANSCRIPT_ENDPOINT, videoId);
+  const extracted = extractTranscriptPayload(response.payload);
   return {
     transcript_text: extracted.transcriptText,
     video_title: extracted.videoTitle,
     duration_seconds: extracted.durationSeconds,
-    transcript_source: activeSource,
   };
 }
 
@@ -179,7 +124,6 @@ export async function hydrateQueueItemsWithClientTranscripts<
   ready: Array<T & {
     transcript_text: string;
     duration_seconds?: number | null;
-    transcript_source?: ClientTranscriptSource;
   }>;
   failed: ClientTranscriptHydrationFailure[];
 }> {
@@ -191,12 +135,11 @@ export async function hydrateQueueItemsWithClientTranscripts<
         title: transcript.video_title || item.title,
         duration_seconds: transcript.duration_seconds ?? item.duration_seconds ?? null,
         transcript_text: transcript.transcript_text,
-        transcript_source: transcript.transcript_source,
       };
     }),
   );
 
-  const ready: Array<T & { transcript_text: string; duration_seconds?: number | null; transcript_source?: ClientTranscriptSource }> = [];
+  const ready: Array<T & { transcript_text: string; duration_seconds?: number | null }> = [];
   const failed: ClientTranscriptHydrationFailure[] = [];
 
   settled.forEach((result, index) => {
@@ -213,17 +156,10 @@ export async function hydrateQueueItemsWithClientTranscripts<
   });
 
   if (items.length > 0) {
-    const sourceCounts = ready.reduce<Record<string, number>>((acc, item) => {
-      const source = String(item.transcript_source || 'unknown');
-      acc[source] = (acc[source] || 0) + 1;
-      return acc;
-    }, {});
     console.info('[client_transcript_hydration]', {
       requested: items.length,
       ready: ready.length,
       failed: failed.length,
-      preferred_source: config.clientTranscriptSource,
-      source_counts: sourceCounts,
     });
   }
 
