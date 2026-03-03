@@ -231,18 +231,22 @@ function parseSelectedProxyIndex(): SelectedProxyIndex | null {
   const raw = readEnv('YT_TO_TEXT_PROXY_INDEX');
   if (!raw) return 0;
   if (raw.toLowerCase() === 'rand') return 'rand';
+  if (raw.toLowerCase() === 'sample') return Math.floor(Math.random() * 10);
   const value = Number(raw);
   if (!Number.isInteger(value) || value < 0) return null;
   return value;
 }
 
-export function getYtToTextProxyDebugMode(): 'disabled' | 'explicit' | 'index' | 'rand' {
+export function getYtToTextProxyDebugMode(): 'disabled' | 'explicit' | 'index' | 'rand' | 'sample' {
   if (!isTruthyEnv(process.env.YT_TO_TEXT_USE_WEBSHARE_PROXY)) {
     return 'disabled';
   }
 
   if (isIndexSelectionEnabled()) {
-    return parseSelectedProxyIndex() === 'rand' ? 'rand' : 'index';
+    const raw = readEnv('YT_TO_TEXT_PROXY_INDEX').toLowerCase();
+    if (raw === 'rand') return 'rand';
+    if (raw === 'sample') return 'sample';
+    return 'index';
   }
 
   return 'explicit';

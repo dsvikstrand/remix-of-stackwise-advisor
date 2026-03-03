@@ -126,4 +126,22 @@ describe('debug yt_to_text proxy reset handler', () => {
       },
     });
   });
+
+  it('can report sample as the current selector mode', async () => {
+    const req = {} as never;
+    const res = createMockResponse();
+
+    await handleDebugResetYtProxy(req, res as never, createBaseDeps({
+      getYtToTextProxyDebugMode: () => 'sample',
+    }));
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        reset: true,
+        proxy_selector_mode: 'sample',
+      },
+    });
+  });
 });

@@ -166,7 +166,7 @@ Expected result:
 
 - JSON with `"ok": true`
 - `data.reset: true`
-- `data.proxy_selector_mode: "rand"` (or `index` / `explicit` depending on env)
+- `data.proxy_selector_mode: "rand"` (or `index` / `explicit` / `sample` depending on env)
 
 Run the round-robin proxy smoke on Oracle:
 

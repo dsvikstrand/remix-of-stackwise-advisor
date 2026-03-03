@@ -40,7 +40,7 @@ export type DebugSimulateSchema = {
   safeParse: (input: unknown) => ParseResult<DebugSimulatePayload>;
 };
 
-export type YtToTextProxyDebugMode = 'disabled' | 'explicit' | 'index' | 'rand';
+export type YtToTextProxyDebugMode = 'disabled' | 'explicit' | 'index' | 'rand' | 'sample';
 
 export type OpsRouteDeps = {
   isServiceRequestAuthorized: (req: express.Request) => boolean;
