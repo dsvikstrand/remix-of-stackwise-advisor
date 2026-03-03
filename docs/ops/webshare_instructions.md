@@ -51,6 +51,8 @@ The server code does not load `.env` automatically.
 
 That means updating `/home/ubuntu/remix-of-stackwise-advisor/.env` is not enough by itself. The shell that starts the server must export that file before launching `tsx server/index.ts`.
 
+The proxy implementation also depends on the `undici` package from `package.json`, so after pulling a new commit that changes proxy code, run `npm install` on Oracle before restarting.
+
 Safe pattern on Oracle:
 
 ```bash
