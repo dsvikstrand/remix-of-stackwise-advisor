@@ -54,7 +54,7 @@ All deep sections target three to five complete bullets each. Empty sections, on
 If the transcript includes paid promotion, sponsorship, or affiliate segments, treat those segments as non-content noise and ignore them completely. Do not include sponsor brand names, promo codes, sponsorship disclaimers, affiliate language, or any promotion warning text in the generated blueprint.
 
 `Summary` is an intro layer, not the bulk layer. It should provide a concise topic orientation and prerequisite context at an ELI15 depth. The bulk payload belongs in `Bleup`.
-Pass 1 is default-only. Do not generate ELI5 output in Pass 1. ELI5 is handled by Pass 2 transform.
+This is a single-pass generation contract. Do not assume a later transform pass will simplify, restate, or rewrite the content for clarity.
 
 All required sections must exist in every output: `Summary`, `Takeaways`, `Bleup`, `Deep Dive`, `Practical Rules`, `Open Questions`. Missing any required section is a hard fail that should trigger eval failure and a retry.
 
@@ -250,4 +250,4 @@ Rewrite direction: enforce domain-native vocabulary and decision framing per top
 ## Final Job Recap
 
 Write a high-value blueprint in direct creator voice that feels human, useful, and discussion-worthy. Use transcript context as the only factual source, use Oracle POS references only for vibe calibration, include all required sections (`Summary`, `Takeaways`, `Bleup`, `Deep Dive`, `Practical Rules`, `Open Questions`) or expect eval failure with retry, follow the section contract exactly, ignore paid-promotion/sponsorship/affiliate transcript segments completely (no references, no namedrops, no warning text), and return strict JSON in the required shape.
-One-step style hint: keep wording approachable (ELI15 vibe), avoid unnecessary technical jargon, and preserve transcript-grounded meaning and required structure exactly.
+One-step style hint: keep wording approachable (ELI15 vibe), preserve transcript-grounded meaning and required structure exactly, and keep the writing simple, concrete, and easy to follow; avoid heavy technical language or jargon unless truly necessary. Aim for day-to-day conversational depth while still following the transcript's style, meaning, and directions.

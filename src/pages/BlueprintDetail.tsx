@@ -373,14 +373,6 @@ export default function BlueprintDetail() {
     // Keep channel tags out of the hashtag row to preserve the "channel != hashtag" mental model.
     return blueprint.tags.filter((tag) => !curatedChannelTagSlugs.has(normalizeTag(tag.slug)));
   }, [blueprint?.tags, curatedChannelTagSlugs]);
-  const summaryExpertiseLevels = useMemo(
-    () => [
-      { key: 'eli5' as const, label: '😎', ariaLabel: 'ELI5' },
-      { key: 'default' as const, label: '🧐', ariaLabel: 'Default' },
-    ],
-    [],
-  );
-
   useEffect(() => {
     if (!blueprint?.id) return;
     if (loggedBlueprintId.current === blueprint.id) return;
@@ -945,35 +937,6 @@ export default function BlueprintDetail() {
                   <h1 className="text-2xl font-semibold leading-tight break-words">{blueprint.title}</h1>
                 </div>
               </div>
-
-              {hasVariantToggle || useGoldenRender ? (
-                <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap">
-                  {useGoldenRender ? (
-                    <div className="inline-flex items-center gap-1 rounded-full border border-border/40 bg-muted/20 p-1">
-                      {summaryExpertiseLevels.map((level) => {
-                        const active = summaryExpertiseLevel === level.key;
-                        const disabled = level.key === 'eli5' && !hasEli5Content;
-                        return (
-                          <Button
-                            key={level.key}
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className={`h-7 rounded-full px-2.5 text-xs ${active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'} ${disabled ? 'opacity-50 cursor-not-allowed hover:text-muted-foreground' : ''}`}
-                            onClick={() => setSummaryExpertiseLevel(level.key)}
-                            aria-pressed={active}
-                            aria-label={`Set summary level to ${level.ariaLabel}`}
-                            title={level.ariaLabel}
-                            disabled={disabled}
-                          >
-                            {level.label}
-                          </Button>
-                        );
-                      })}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
 
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 min-w-0">

@@ -20,6 +20,12 @@ export function cleanFeedPreview(raw: string): string {
   return compact.replace(/\s+/g, " ").trim();
 }
 
+function stripLeadingSummaryLabel(value: string): string {
+  return String(value || '')
+    .replace(/^summary(?:\s*[.:\-–—]\s*|\s+)/i, '')
+    .trim();
+}
+
 function pushPreviewSnippet(parts: string[], seen: Set<string>, value: unknown, limit: number) {
   if (parts.length >= limit) return;
   if (typeof value !== 'string') return;
@@ -122,7 +128,7 @@ export function buildFeedSummary({
   maxChars = 240,
 }: BuildFeedSummaryOptions): string {
   const source = cleanFeedPreview(primary || "") || cleanFeedPreview(secondary || "") || fallback;
-  const text = source.trim();
+  const text = stripLeadingSummaryLabel(source).trim() || source.trim();
   if (text.length <= maxChars) return text;
   return `${text.slice(0, maxChars).trim()}...`;
 }
