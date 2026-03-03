@@ -32,6 +32,10 @@ import {
   YouTubeSearchError,
 } from './services/youtubeSearch';
 import {
+  getYtToTextProxyDebugMode,
+  resetYtToTextProxyDispatcher,
+} from './services/webshareProxy';
+import {
   fetchYouTubeDurationMap,
   YouTubeDurationLookupError,
 } from './services/youtubeDuration';
@@ -7051,6 +7055,8 @@ registerOpsRoutes(app, {
   processAutoBannerQueue,
   debugEndpointsEnabled,
   debugSimulateSubscriptionRequestSchema: DebugSimulateSubscriptionRequestSchema,
+  resetYtToTextProxyDispatcher,
+  getYtToTextProxyDebugMode,
   syncSingleSubscription,
   markSubscriptionSyncError,
 });

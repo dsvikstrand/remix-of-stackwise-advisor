@@ -236,6 +236,18 @@ function parseSelectedProxyIndex(): SelectedProxyIndex | null {
   return value;
 }
 
+export function getYtToTextProxyDebugMode(): 'disabled' | 'explicit' | 'index' | 'rand' {
+  if (!isTruthyEnv(process.env.YT_TO_TEXT_USE_WEBSHARE_PROXY)) {
+    return 'disabled';
+  }
+
+  if (isIndexSelectionEnabled()) {
+    return parseSelectedProxyIndex() === 'rand' ? 'rand' : 'index';
+  }
+
+  return 'explicit';
+}
+
 async function fetchIndexedProxyConfig(): Promise<ResolvedProxyConnection | null> {
   if (!isIndexSelectionEnabled()) return null;
 

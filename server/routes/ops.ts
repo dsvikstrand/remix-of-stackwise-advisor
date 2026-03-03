@@ -2,6 +2,7 @@ import type express from 'express';
 import {
   handleAutoBannerJobsLatest,
   handleAutoBannerJobsTrigger,
+  handleDebugResetYtProxy,
   handleDebugSimulateNewUploads,
   handleIngestionJobsLatest,
   handleIngestionJobsTrigger,
@@ -22,6 +23,8 @@ export function registerOpsRoutes(app: express.Express, deps: OpsRouteDeps) {
   app.post('/api/auto-banner/jobs/trigger', (req, res) => handleAutoBannerJobsTrigger(req, res, deps));
 
   app.get('/api/auto-banner/jobs/latest', (req, res) => handleAutoBannerJobsLatest(req, res, deps));
+
+  app.post('/api/debug/yt-to-text/reset-proxy', (req, res) => handleDebugResetYtProxy(req, res, deps));
 
   app.post('/api/debug/subscriptions/:id/simulate-new-uploads', (req, res) => handleDebugSimulateNewUploads(req, res, deps));
 }

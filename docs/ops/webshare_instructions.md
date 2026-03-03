@@ -68,6 +68,12 @@ The server now loads `.env` and `.env.production` automatically at startup if th
 
 That means updating `/home/ubuntu/remix-of-stackwise-advisor/.env` is enough for the app and the transcript smoke script, as long as the process is restarted after the file changes.
 
+If you want to use the proxy pseudo-restart endpoint below, also set:
+
+```bash
+ENABLE_DEBUG_ENDPOINTS=true
+```
+
 The proxy implementation also depends on the `undici` package from `package.json`, so after pulling a new commit that changes proxy code, run `npm install` on Oracle before restarting.
 
 Safe pattern on Oracle:
@@ -146,6 +152,21 @@ Expected result:
 - JSON with `"ok": true`
 - provider `yt_to_text`
 - transcript text printed after the JSON block
+
+Reset the cached `rand` proxy choice without restarting Oracle:
+
+```bash
+curl -sS \
+  -X POST \
+  -H "x-service-token: $INGESTION_SERVICE_TOKEN" \
+  https://bapi.vdsai.cloud/api/debug/yt-to-text/reset-proxy
+```
+
+Expected result:
+
+- JSON with `"ok": true`
+- `data.reset: true`
+- `data.proxy_selector_mode: "rand"` (or `index` / `explicit` depending on env)
 
 Run the round-robin proxy smoke on Oracle:
 

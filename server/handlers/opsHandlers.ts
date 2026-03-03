@@ -361,6 +361,27 @@ export async function handleAutoBannerJobsLatest(req: express.Request, res: expr
   });
 }
 
+export async function handleDebugResetYtProxy(req: express.Request, res: express.Response, deps: OpsRouteDeps) {
+  if (!deps.debugEndpointsEnabled) {
+    return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Not found', data: null });
+  }
+  if (!deps.isServiceRequestAuthorized(req)) {
+    return res.status(401).json({ ok: false, error_code: 'SERVICE_AUTH_REQUIRED', message: 'Missing or invalid service token', data: null });
+  }
+
+  await deps.resetYtToTextProxyDispatcher();
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'yt_to_text proxy cache reset',
+    data: {
+      reset: true,
+      proxy_selector_mode: deps.getYtToTextProxyDebugMode(),
+    },
+  });
+}
+
 export async function handleDebugSimulateNewUploads(req: express.Request, res: express.Response, deps: OpsRouteDeps) {
   if (!deps.debugEndpointsEnabled) {
     return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Not found', data: null });
