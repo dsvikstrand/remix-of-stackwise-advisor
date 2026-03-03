@@ -5281,6 +5281,7 @@ async function processSourceItemUnlockGenerationJob(input: {
       source_url: string;
       source_native_id: string;
     } | null = null;
+    const providedTranscriptText = String(item.transcript_text || '').trim() || null;
     const itemGenerationTier: GenerationTier = item.generation_tier === 'tier' ? 'tier' : input.generationTier;
     processed += 1;
     try {
@@ -5313,6 +5314,14 @@ async function processSourceItemUnlockGenerationJob(input: {
               .eq('id', item.source_item_id)
               .maybeSingle();
             if (sourceForMirror?.id && sourceForMirror.source_url && sourceForMirror.source_native_id) {
+              console.log('[source_unlock_generation_worker_mirror_transcript]', JSON.stringify({
+                job_id: input.jobId,
+                user_id: input.userId,
+                video_id: item.video_id,
+                path: 'variant_in_progress_without_processing_unlock',
+                has_transcript: Boolean(providedTranscriptText),
+                transcript_chars: providedTranscriptText ? providedTranscriptText.length : 0,
+              }));
               await ensureMirrorVariantForQueueItem({
                 db,
                 enabled: true,
@@ -5323,7 +5332,7 @@ async function processSourceItemUnlockGenerationJob(input: {
                 videoUrl: sourceForMirror.source_url,
                 videoId: sourceForMirror.source_native_id,
                 durationSeconds: item.duration_seconds,
-                providedTranscriptText: item.transcript_text,
+                providedTranscriptText,
                 sourceTag: 'source_page_video_library',
                 primaryTier: itemGenerationTier,
               });
@@ -5362,6 +5371,14 @@ async function processSourceItemUnlockGenerationJob(input: {
               .eq('id', item.source_item_id)
               .maybeSingle();
             if (sourceForMirror?.id && sourceForMirror.source_url && sourceForMirror.source_native_id) {
+              console.log('[source_unlock_generation_worker_mirror_transcript]', JSON.stringify({
+                job_id: input.jobId,
+                user_id: input.userId,
+                video_id: item.video_id,
+                path: 'variant_in_progress_with_ready_processing_unlock',
+                has_transcript: Boolean(providedTranscriptText),
+                transcript_chars: providedTranscriptText ? providedTranscriptText.length : 0,
+              }));
               await ensureMirrorVariantForQueueItem({
                 db,
                 enabled: true,
@@ -5372,7 +5389,7 @@ async function processSourceItemUnlockGenerationJob(input: {
                 videoUrl: sourceForMirror.source_url,
                 videoId: sourceForMirror.source_native_id,
                 durationSeconds: item.duration_seconds,
-                providedTranscriptText: item.transcript_text,
+                providedTranscriptText,
                 sourceTag: 'source_page_video_library',
                 primaryTier: itemGenerationTier,
               });
@@ -5404,6 +5421,14 @@ async function processSourceItemUnlockGenerationJob(input: {
       const tryMirrorGeneration = async () => {
         if (!dualGenerateEnabled) return;
         mirrorAttemptedForItem = true;
+        console.log('[source_unlock_generation_worker_mirror_transcript]', JSON.stringify({
+          job_id: input.jobId,
+          user_id: input.userId,
+          video_id: item.video_id,
+          path: 'post_primary_or_fallback',
+          has_transcript: Boolean(providedTranscriptText),
+          transcript_chars: providedTranscriptText ? providedTranscriptText.length : 0,
+        }));
         await ensureMirrorVariantForQueueItem({
           db,
           enabled: dualGenerateEnabled,
@@ -5414,7 +5439,7 @@ async function processSourceItemUnlockGenerationJob(input: {
           videoUrl: sourceRow.source_url,
           videoId: sourceRow.source_native_id,
           durationSeconds: item.duration_seconds,
-          providedTranscriptText: item.transcript_text,
+          providedTranscriptText,
           sourceTag: 'source_page_video_library',
           primaryTier: itemGenerationTier,
         });
@@ -5422,12 +5447,19 @@ async function processSourceItemUnlockGenerationJob(input: {
 
       let generated: { blueprintId: string; runId: string; title: string } | null = null;
       try {
+        console.log('[source_unlock_generation_worker_primary_transcript]', JSON.stringify({
+          job_id: input.jobId,
+          user_id: input.userId,
+          video_id: item.video_id,
+          has_transcript: Boolean(providedTranscriptText),
+          transcript_chars: providedTranscriptText ? providedTranscriptText.length : 0,
+        }));
         generated = await createBlueprintFromVideo(db, {
           userId: input.userId,
           videoUrl: sourceRow.source_url,
           videoId: sourceRow.source_native_id,
           videoTitle: item.title,
-          providedTranscriptText: item.transcript_text,
+          providedTranscriptText,
           durationSeconds: item.duration_seconds,
           sourceTag: 'source_page_video_library',
           sourceItemId: sourceRow.id,
@@ -5532,6 +5564,14 @@ async function processSourceItemUnlockGenerationJob(input: {
     } catch (error) {
       if (error instanceof BlueprintVariantInProgressError) {
         if (sourceRowForMirror && !mirrorAttemptedForItem) {
+          console.log('[source_unlock_generation_worker_mirror_transcript]', JSON.stringify({
+            job_id: input.jobId,
+            user_id: input.userId,
+            video_id: item.video_id,
+            path: 'primary_variant_in_progress_catch',
+            has_transcript: Boolean(providedTranscriptText),
+            transcript_chars: providedTranscriptText ? providedTranscriptText.length : 0,
+          }));
           await ensureMirrorVariantForQueueItem({
             db,
             enabled: dualGenerateEnabled,
@@ -5542,7 +5582,7 @@ async function processSourceItemUnlockGenerationJob(input: {
             videoUrl: sourceRowForMirror.source_url,
             videoId: sourceRowForMirror.source_native_id,
             durationSeconds: item.duration_seconds,
-            providedTranscriptText: item.transcript_text,
+            providedTranscriptText,
             sourceTag: 'source_page_video_library',
             primaryTier: itemGenerationTier,
           });
