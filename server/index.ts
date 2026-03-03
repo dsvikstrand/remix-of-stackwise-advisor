@@ -224,18 +224,6 @@ const yt2bpSafetyBlockEnabled = (
   || yt2bpSafetyBlockEnabledRaw === 'on'
 );
 const yt2bpCoreTimeoutMs = clampInt(process.env.YT2BP_CORE_TIMEOUT_MS, 120_000, 30_000, 300_000);
-const yt2bpClientTranscriptEnabledRaw = String(process.env.YT2BP_CLIENT_TRANSCRIPT_ENABLED ?? 'true').trim().toLowerCase();
-const yt2bpClientTranscriptEnabled = !(
-  yt2bpClientTranscriptEnabledRaw === 'false'
-  || yt2bpClientTranscriptEnabledRaw === '0'
-  || yt2bpClientTranscriptEnabledRaw === 'off'
-);
-const yt2bpClientTranscriptMaxChars = clampInt(
-  process.env.YT2BP_CLIENT_TRANSCRIPT_MAX_CHARS,
-  120_000,
-  1_000,
-  1_000_000,
-);
 const ingestionServiceToken = String(process.env.INGESTION_SERVICE_TOKEN || '').trim();
 const ingestionMaxPerSubscription = Math.max(1, Number(process.env.INGESTION_MAX_PER_SUBSCRIPTION) || 5);
 const refreshScanCooldownMs = clampInt(process.env.REFRESH_SCAN_COOLDOWN_MS, 30_000, 5_000, 300_000);
@@ -948,9 +936,6 @@ const BannerRequestSchema = z.object({
 
 const YouTubeToBlueprintRequestSchema = z.object({
   video_url: z.string().min(1),
-  video_title: z.string().min(1).max(300).optional().nullable(),
-  duration_seconds: z.number().int().min(0).nullable().optional(),
-  transcript_text: z.string().optional().nullable(),
   generate_review: z.boolean().default(false),
   generate_banner: z.boolean().default(false),
   source: z.literal('youtube_mvp').default('youtube_mvp'),
@@ -981,7 +966,6 @@ const SourcePageVideosGenerateSchema = z.object({
       published_at: z.string().optional().nullable(),
       thumbnail_url: z.string().url().optional().nullable(),
       duration_seconds: z.number().int().min(0).nullable().optional(),
-      transcript_text: z.string().optional().nullable(),
     }),
   ).min(1).max(500),
   requested_tier: z.enum(['free', 'tier']).optional(),
@@ -999,7 +983,6 @@ const SearchVideosGenerateSchema = z.object({
       published_at: z.string().nullable().optional(),
       thumbnail_url: z.string().nullable().optional(),
       duration_seconds: z.number().int().min(0).nullable().optional(),
-      transcript_text: z.string().nullable().optional(),
     }),
   ).min(1).max(50),
   requested_tier: z.enum(['free', 'tier']).optional(),
@@ -1477,8 +1460,6 @@ registerYouTubeRoutes(app, {
   yt2bpAuthLimiter,
   yt2bpEnabled,
   yt2bpCoreTimeoutMs,
-  yt2bpClientTranscriptEnabled,
-  yt2bpClientTranscriptMaxChars,
   searchApiLimiter,
   sourceVideoUnlockBurstLimiter,
   sourceVideoUnlockSustainedLimiter,
@@ -2790,7 +2771,6 @@ type RefreshScanCandidate = {
   published_at: string | null;
   thumbnail_url: string | null;
   duration_seconds: number | null;
-  transcript_text: string | null;
 };
 
 type SourcePageVideoGenerateItem = {
@@ -2800,7 +2780,6 @@ type SourcePageVideoGenerateItem = {
   published_at: string | null;
   thumbnail_url: string | null;
   duration_seconds: number | null;
-  transcript_text: string | null;
 };
 
 type SearchVideoGenerateItem = {
@@ -2813,7 +2792,6 @@ type SearchVideoGenerateItem = {
   published_at: string | null;
   thumbnail_url: string | null;
   duration_seconds: number | null;
-  transcript_text: string | null;
 };
 
 type SourcePageVideoExistingState = {
@@ -2858,7 +2836,6 @@ type SourceUnlockQueueItem = {
   video_url: string;
   title: string;
   duration_seconds: number | null;
-  transcript_text: string | null;
   reserved_cost: number;
   reserved_by_user_id: string;
   unlock_origin: 'manual_unlock' | 'subscription_auto_unlock' | 'source_auto_unlock_retry';
@@ -3096,7 +3073,6 @@ function normalizeSourcePageVideoGenerateItem(raw: unknown): SourcePageVideoGene
     published_at?: unknown;
     thumbnail_url?: unknown;
     duration_seconds?: unknown;
-    transcript_text?: unknown;
   };
 
   const videoId = String(row.video_id || '').trim();
@@ -3105,7 +3081,6 @@ function normalizeSourcePageVideoGenerateItem(raw: unknown): SourcePageVideoGene
   const publishedAt = row.published_at == null ? null : String(row.published_at || '').trim() || null;
   const thumbnailUrl = row.thumbnail_url == null ? null : String(row.thumbnail_url || '').trim() || null;
   const durationSeconds = toDurationSeconds(row.duration_seconds);
-  const transcriptText = row.transcript_text == null ? null : String(row.transcript_text || '').trim() || null;
 
   if (!YOUTUBE_VIDEO_ID_REGEX.test(videoId)) return null;
   if (!title || !videoUrl) return null;
@@ -3120,7 +3095,6 @@ function normalizeSourcePageVideoGenerateItem(raw: unknown): SourcePageVideoGene
     published_at: publishedAt,
     thumbnail_url: thumbnailUrl,
     duration_seconds: durationSeconds,
-    transcript_text: transcriptText,
   };
 }
 
@@ -4038,7 +4012,6 @@ const RefreshSubscriptionsGenerateSchema = z.object({
       published_at: z.string().nullable().optional(),
       thumbnail_url: z.string().nullable().optional(),
       duration_seconds: z.number().int().min(0).nullable().optional(),
-      transcript_text: z.string().nullable().optional(),
     }),
   ).min(1).max(200),
   requested_tier: z.enum(['free', 'tier']).optional(),
@@ -4478,7 +4451,6 @@ async function processSearchVideoGenerateJob(input: {
     let mirrorAttemptedForItem = false;
     processed += 1;
     try {
-      const providedTranscriptText = String(item.transcript_text || '').trim() || null;
       const source = await upsertSourceItemFromVideo(db, {
         video: {
           videoId: item.video_id,
@@ -4503,13 +4475,6 @@ async function processSearchVideoGenerateJob(input: {
       const tryMirrorGeneration = async () => {
         if (!input.dualGenerateEnabled) return;
         mirrorAttemptedForItem = true;
-        console.log('[search_video_generate_worker_mirror_transcript]', JSON.stringify({
-          job_id: input.jobId,
-          user_id: input.userId,
-          video_id: item.video_id,
-          has_transcript: Boolean(providedTranscriptText),
-          transcript_chars: providedTranscriptText ? providedTranscriptText.length : 0,
-        }));
         await ensureMirrorVariantForQueueItem({
           db,
           enabled: input.dualGenerateEnabled,
@@ -4520,7 +4485,6 @@ async function processSearchVideoGenerateJob(input: {
           videoUrl: source.source_url,
           videoId: source.source_native_id,
           durationSeconds: item.duration_seconds,
-          providedTranscriptText,
           sourceTag: 'youtube_search_direct',
           primaryTier: input.generationTier,
         });
@@ -4528,19 +4492,11 @@ async function processSearchVideoGenerateJob(input: {
 
       let generated: { blueprintId: string; runId: string; title: string } | null = null;
       try {
-        console.log('[search_video_generate_worker_primary_transcript]', JSON.stringify({
-          job_id: input.jobId,
-          user_id: input.userId,
-          video_id: item.video_id,
-          has_transcript: Boolean(providedTranscriptText),
-          transcript_chars: providedTranscriptText ? providedTranscriptText.length : 0,
-        }));
         generated = await createBlueprintFromVideo(db, {
           userId: input.userId,
           videoUrl: source.source_url,
           videoId: source.source_native_id,
           videoTitle: item.title,
-          providedTranscriptText,
           durationSeconds: item.duration_seconds,
           sourceTag: 'youtube_search_direct',
           sourceItemId: source.id,
@@ -4620,7 +4576,6 @@ async function processSearchVideoGenerateJob(input: {
               videoUrl: source.source_url,
               videoId: source.source_native_id,
               durationSeconds: item.duration_seconds,
-              providedTranscriptText,
               sourceTag: 'youtube_search_direct',
               primaryTier: input.generationTier,
             });
@@ -4705,7 +4660,6 @@ async function ensureMirrorVariantForQueueItem(input: {
   videoUrl: string;
   videoId: string;
   durationSeconds: number | null;
-  providedTranscriptText?: string | null;
   sourceTag: 'subscription_auto' | 'source_page_video_library' | 'youtube_search_direct';
   primaryTier: GenerationTier;
   subscriptionId?: string | null;
@@ -4717,7 +4671,6 @@ async function ensureMirrorVariantForQueueItem(input: {
       userId: input.userId,
       videoUrl: input.videoUrl,
       videoId: input.videoId,
-      providedTranscriptText: input.providedTranscriptText || null,
       durationSeconds: input.durationSeconds,
       sourceTag: input.sourceTag,
       sourceItemId: input.sourceItemId,
@@ -4852,7 +4805,6 @@ async function processManualRefreshGenerateJob(input: {
           videoUrl: source.source_url,
           videoId: source.source_native_id,
           durationSeconds: item.duration_seconds,
-          providedTranscriptText: item.transcript_text,
           sourceTag: 'subscription_auto',
           primaryTier: input.generationTier,
           subscriptionId: subscription.id,
@@ -4866,7 +4818,6 @@ async function processManualRefreshGenerateJob(input: {
           videoUrl: source.source_url,
           videoId: source.source_native_id,
           videoTitle: item.title,
-          providedTranscriptText: item.transcript_text,
           durationSeconds: item.duration_seconds,
           sourceTag: 'subscription_auto',
           sourceItemId: source.id,
@@ -4961,7 +4912,6 @@ async function processManualRefreshGenerateJob(input: {
               videoUrl: source.source_url,
               videoId: source.source_native_id,
               durationSeconds: item.duration_seconds,
-              providedTranscriptText: item.transcript_text,
               sourceTag: 'subscription_auto',
               primaryTier: input.generationTier,
               subscriptionId: subscription.id,
@@ -5128,7 +5078,6 @@ async function processSourcePageVideoLibraryJob(input: {
         videoUrl: source.source_url,
         videoId: source.source_native_id,
         videoTitle: item.title,
-        providedTranscriptText: item.transcript_text,
         durationSeconds: item.duration_seconds,
         sourceTag: 'source_page_video_library',
         sourceItemId: source.id,
@@ -5281,7 +5230,6 @@ async function processSourceItemUnlockGenerationJob(input: {
       source_url: string;
       source_native_id: string;
     } | null = null;
-    const providedTranscriptText = String(item.transcript_text || '').trim() || null;
     const itemGenerationTier: GenerationTier = item.generation_tier === 'tier' ? 'tier' : input.generationTier;
     processed += 1;
     try {
@@ -5314,14 +5262,6 @@ async function processSourceItemUnlockGenerationJob(input: {
               .eq('id', item.source_item_id)
               .maybeSingle();
             if (sourceForMirror?.id && sourceForMirror.source_url && sourceForMirror.source_native_id) {
-              console.log('[source_unlock_generation_worker_mirror_transcript]', JSON.stringify({
-                job_id: input.jobId,
-                user_id: input.userId,
-                video_id: item.video_id,
-                path: 'variant_in_progress_without_processing_unlock',
-                has_transcript: Boolean(providedTranscriptText),
-                transcript_chars: providedTranscriptText ? providedTranscriptText.length : 0,
-              }));
               await ensureMirrorVariantForQueueItem({
                 db,
                 enabled: true,
@@ -5332,7 +5272,6 @@ async function processSourceItemUnlockGenerationJob(input: {
                 videoUrl: sourceForMirror.source_url,
                 videoId: sourceForMirror.source_native_id,
                 durationSeconds: item.duration_seconds,
-                providedTranscriptText,
                 sourceTag: 'source_page_video_library',
                 primaryTier: itemGenerationTier,
               });
@@ -5371,14 +5310,6 @@ async function processSourceItemUnlockGenerationJob(input: {
               .eq('id', item.source_item_id)
               .maybeSingle();
             if (sourceForMirror?.id && sourceForMirror.source_url && sourceForMirror.source_native_id) {
-              console.log('[source_unlock_generation_worker_mirror_transcript]', JSON.stringify({
-                job_id: input.jobId,
-                user_id: input.userId,
-                video_id: item.video_id,
-                path: 'variant_in_progress_with_ready_processing_unlock',
-                has_transcript: Boolean(providedTranscriptText),
-                transcript_chars: providedTranscriptText ? providedTranscriptText.length : 0,
-              }));
               await ensureMirrorVariantForQueueItem({
                 db,
                 enabled: true,
@@ -5389,7 +5320,6 @@ async function processSourceItemUnlockGenerationJob(input: {
                 videoUrl: sourceForMirror.source_url,
                 videoId: sourceForMirror.source_native_id,
                 durationSeconds: item.duration_seconds,
-                providedTranscriptText,
                 sourceTag: 'source_page_video_library',
                 primaryTier: itemGenerationTier,
               });
@@ -5421,14 +5351,6 @@ async function processSourceItemUnlockGenerationJob(input: {
       const tryMirrorGeneration = async () => {
         if (!dualGenerateEnabled) return;
         mirrorAttemptedForItem = true;
-        console.log('[source_unlock_generation_worker_mirror_transcript]', JSON.stringify({
-          job_id: input.jobId,
-          user_id: input.userId,
-          video_id: item.video_id,
-          path: 'post_primary_or_fallback',
-          has_transcript: Boolean(providedTranscriptText),
-          transcript_chars: providedTranscriptText ? providedTranscriptText.length : 0,
-        }));
         await ensureMirrorVariantForQueueItem({
           db,
           enabled: dualGenerateEnabled,
@@ -5439,7 +5361,6 @@ async function processSourceItemUnlockGenerationJob(input: {
           videoUrl: sourceRow.source_url,
           videoId: sourceRow.source_native_id,
           durationSeconds: item.duration_seconds,
-          providedTranscriptText,
           sourceTag: 'source_page_video_library',
           primaryTier: itemGenerationTier,
         });
@@ -5447,19 +5368,11 @@ async function processSourceItemUnlockGenerationJob(input: {
 
       let generated: { blueprintId: string; runId: string; title: string } | null = null;
       try {
-        console.log('[source_unlock_generation_worker_primary_transcript]', JSON.stringify({
-          job_id: input.jobId,
-          user_id: input.userId,
-          video_id: item.video_id,
-          has_transcript: Boolean(providedTranscriptText),
-          transcript_chars: providedTranscriptText ? providedTranscriptText.length : 0,
-        }));
         generated = await createBlueprintFromVideo(db, {
           userId: input.userId,
           videoUrl: sourceRow.source_url,
           videoId: sourceRow.source_native_id,
           videoTitle: item.title,
-          providedTranscriptText,
           durationSeconds: item.duration_seconds,
           sourceTag: 'source_page_video_library',
           sourceItemId: sourceRow.id,
@@ -5564,14 +5477,6 @@ async function processSourceItemUnlockGenerationJob(input: {
     } catch (error) {
       if (error instanceof BlueprintVariantInProgressError) {
         if (sourceRowForMirror && !mirrorAttemptedForItem) {
-          console.log('[source_unlock_generation_worker_mirror_transcript]', JSON.stringify({
-            job_id: input.jobId,
-            user_id: input.userId,
-            video_id: item.video_id,
-            path: 'primary_variant_in_progress_catch',
-            has_transcript: Boolean(providedTranscriptText),
-            transcript_chars: providedTranscriptText ? providedTranscriptText.length : 0,
-          }));
           await ensureMirrorVariantForQueueItem({
             db,
             enabled: dualGenerateEnabled,
@@ -5582,7 +5487,6 @@ async function processSourceItemUnlockGenerationJob(input: {
             videoUrl: sourceRowForMirror.source_url,
             videoId: sourceRowForMirror.source_native_id,
             durationSeconds: item.duration_seconds,
-            providedTranscriptText,
             sourceTag: 'source_page_video_library',
             primaryTier: itemGenerationTier,
           });
@@ -6345,7 +6249,6 @@ function normalizeSourceUnlockQueueItems(value: unknown): SourceUnlockQueueItem[
       video_url: videoUrl,
       title,
       duration_seconds: toDurationSeconds(row.duration_seconds),
-      transcript_text: row.transcript_text == null ? null : String(row.transcript_text || '').trim() || null,
       reserved_cost: Math.max(0, Number(row.reserved_cost || 0)),
       reserved_by_user_id: reservedByUserId,
       unlock_origin: unlockOrigin,
@@ -6440,7 +6343,6 @@ function normalizeRefreshScanCandidates(value: unknown): RefreshScanCandidate[] 
       published_at: row.published_at == null ? null : String(row.published_at || '').trim() || null,
       thumbnail_url: row.thumbnail_url == null ? null : String(row.thumbnail_url || '').trim() || null,
       duration_seconds: toDurationSeconds(row.duration_seconds),
-      transcript_text: row.transcript_text == null ? null : String(row.transcript_text || '').trim() || null,
     });
   }
   return rows;
@@ -6467,7 +6369,6 @@ function normalizeSearchVideoGenerateItems(value: unknown): SearchVideoGenerateI
       published_at: row.published_at == null ? null : String(row.published_at || '').trim() || null,
       thumbnail_url: row.thumbnail_url == null ? null : String(row.thumbnail_url || '').trim() || null,
       duration_seconds: toDurationSeconds(row.duration_seconds),
-      transcript_text: row.transcript_text == null ? null : String(row.transcript_text || '').trim() || null,
     });
   }
   return rows;
@@ -7010,8 +6911,6 @@ registerSourceSubscriptionsRoutes(app, {
   generationMaxVideoSeconds,
   generationBlockUnknownDuration,
   generationDurationLookupTimeoutMs,
-  yt2bpClientTranscriptEnabled,
-  yt2bpClientTranscriptMaxChars,
   recoverStaleIngestionJobs,
   getActiveManualRefreshJob,
   countQueueDepth,
@@ -7061,8 +6960,6 @@ registerSourcePagesRoutes(app, {
   generationMaxVideoSeconds,
   generationBlockUnknownDuration,
   generationDurationLookupTimeoutMs,
-  yt2bpClientTranscriptEnabled,
-  yt2bpClientTranscriptMaxChars,
   logUnlockEvent,
   normalizeSourcePageVideoGenerateItem,
   upsertSourceItemFromVideo,

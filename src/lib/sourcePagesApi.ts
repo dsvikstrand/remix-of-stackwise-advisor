@@ -90,8 +90,6 @@ export type SourcePageVideoLibraryPage = {
 export type SourcePageVideoGenerateSummary = {
   job_id: string | null;
   queued_count: number;
-  client_transcript_used?: boolean;
-  client_transcript_count?: number;
   requested_tier?: 'free' | 'tier' | null;
   resolved_tier?: 'free' | 'tier';
   variant_status?: 'queued' | 'generated' | 'ready' | 'in_progress';
@@ -306,7 +304,6 @@ export async function generateSourcePageVideos(input: {
     published_at?: string | null;
     thumbnail_url?: string | null;
     duration_seconds?: number | null;
-    transcript_text?: string | null;
   }>;
   requestedTier?: 'free' | 'tier';
 }) {
@@ -323,7 +320,6 @@ export async function unlockSourcePageVideos(input: {
     published_at?: string | null;
     thumbnail_url?: string | null;
     duration_seconds?: number | null;
-    transcript_text?: string | null;
   }>;
   requestedTier?: 'free' | 'tier';
 }) {

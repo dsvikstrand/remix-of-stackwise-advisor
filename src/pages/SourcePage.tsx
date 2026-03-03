@@ -23,7 +23,6 @@ import {
   subscribeToSourcePage,
   unsubscribeFromSourcePage,
 } from '@/lib/sourcePagesApi';
-import { hydrateQueueItemsWithClientTranscripts, toClientTranscriptBatchErrorMessage } from '@/lib/clientTranscript';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
@@ -270,37 +269,23 @@ export default function SourcePage() {
 
   const videoLibraryGenerateMutation = useMutation({
     mutationFn: async (items: SourcePageVideoLibraryItem[]) => {
-      const hydrated = await hydrateQueueItemsWithClientTranscripts(items.map((item) => ({
-        video_id: item.video_id,
-        video_url: item.video_url,
-        title: item.title,
-        published_at: item.published_at,
-        thumbnail_url: item.thumbnail_url,
-        duration_seconds: item.duration_seconds,
-      })));
-      if (hydrated.ready.length === 0) {
-        throw new Error(
-          toClientTranscriptBatchErrorMessage(
-            hydrated.failed,
-            'Could not fetch transcript in your browser for the selected videos.',
-          ),
-        );
-      }
       const data = await unlockSourcePageVideos({
         platform,
         externalId,
-        items: hydrated.ready,
+        items: items.map((item) => ({
+          video_id: item.video_id,
+          video_url: item.video_url,
+          title: item.title,
+          published_at: item.published_at,
+          thumbnail_url: item.thumbnail_url,
+          duration_seconds: item.duration_seconds,
+        })),
         requestedTier,
       });
       return {
         data,
-        failedCount: hydrated.failed.length,
-        failedMessage: hydrated.failed.length > 0
-          ? toClientTranscriptBatchErrorMessage(
-              hydrated.failed,
-              'Some selected videos could not fetch transcripts in your browser.',
-            )
-          : null,
+        failedCount: 0,
+        failedMessage: null,
       };
     },
     onSuccess: (result, _items, context) => {
@@ -318,12 +303,6 @@ export default function SourcePage() {
           ? `Queued ${data.queued_count}, ready ${data.ready_count}, in progress ${data.in_progress_count}, skipped existing ${data.skipped_existing_count}, blocked by length ${data.duration_blocked_count || 0}.`
           : `Ready ${data.ready_count}, in progress ${data.in_progress_count}, skipped existing ${data.skipped_existing_count}, blocked by length ${data.duration_blocked_count || 0}.`,
       });
-      if (result.failedCount > 0) {
-        toast({
-          title: 'Some videos were skipped',
-          description: `Skipped ${result.failedCount} selected video(s). ${result.failedMessage || ''}`.trim(),
-        });
-      }
     },
     onError: (error, _items, context) => {
       toast({

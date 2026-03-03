@@ -23,7 +23,6 @@ import type { GenerationTier } from '@/lib/subscriptionsApi';
 
 const YOUTUBE_ENDPOINT = getFunctionUrl('youtube-to-blueprint');
 const GENERIC_FAILURE_TEXT = 'Could not complete the blueprint. Please test another video.';
-const CLIENT_TRANSCRIPT_ENDPOINT = 'https://yt-to-text.com/api/v1/Subtitles';
 
 type YouTubeDraftStep = {
   name: string;
@@ -76,27 +75,10 @@ type YouTubeToBlueprintErrorResponse = {
 
 type YouTubeToBlueprintRequest = {
   video_url: string;
-  video_title?: string | null;
-  duration_seconds?: number | null;
-  transcript_text?: string | null;
   generate_review: boolean;
   generate_banner: boolean;
   source: 'youtube_mvp';
   requested_tier?: GenerationTier;
-};
-
-type ClientTranscriptResponse = {
-  title?: string;
-  durationSeconds?: number;
-  data?: {
-    transcripts?: Array<{ t?: string }>;
-  };
-};
-
-type ClientTranscriptResult = {
-  text: string;
-  videoTitle: string | null;
-  durationSeconds: number | null;
 };
 
 function validateYouTubeInput(urlRaw: string) {
@@ -123,60 +105,6 @@ function validateYouTubeInput(urlRaw: string) {
   } catch {
     return { ok: false as const, code: 'invalid' as const };
   }
-}
-
-function extractYouTubeVideoId(urlRaw: string) {
-  try {
-    const url = new URL(urlRaw.trim());
-    const host = url.hostname.replace(/^www\./, '');
-    if (host === 'youtube.com' || host === 'm.youtube.com') {
-      const id = url.searchParams.get('v') || '';
-      return /^[a-zA-Z0-9_-]{8,15}$/.test(id) ? id : null;
-    }
-    if (host === 'youtu.be') {
-      const id = url.pathname.replace(/^\/+/, '').split('/')[0] || '';
-      return /^[a-zA-Z0-9_-]{8,15}$/.test(id) ? id : null;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-async function fetchClientTranscript(videoId: string): Promise<ClientTranscriptResult> {
-  const response = await fetch(CLIENT_TRANSCRIPT_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-app-version': '1.0',
-      'x-source': 'tubetranscript',
-    },
-    body: JSON.stringify({ video_id: videoId }),
-  });
-  if (!response.ok) {
-    throw new Error(`CLIENT_TRANSCRIPT_HTTP_${response.status}`);
-  }
-  const payload = (await response.json().catch(() => null)) as ClientTranscriptResponse | null;
-  const transcriptRows = Array.isArray(payload?.data?.transcripts) ? payload?.data?.transcripts : [];
-  const text = transcriptRows
-    .map((row) => String(row?.t || '').trim())
-    .filter(Boolean)
-    .join(' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (!text) {
-    throw new Error('CLIENT_TRANSCRIPT_EMPTY');
-  }
-  const videoTitle = String(payload?.title || '').trim() || null;
-  const durationRaw = Number(payload?.durationSeconds);
-  const durationSeconds = Number.isFinite(durationRaw) && durationRaw > 0
-    ? Math.floor(durationRaw)
-    : null;
-  return {
-    text,
-    videoTitle,
-    durationSeconds,
-  };
 }
 
 function toBlueprintStepsForSave(steps: YouTubeDraftStep[]) {
@@ -606,7 +534,6 @@ export default function YouTubeToBlueprint() {
     setIsGenerating(true);
     startLoadingPhases([
       'Submitting video',
-      'Fetching transcript in browser',
       'Generating blueprint',
       'Applying quality and safety checks',
       'Core blueprint ready',
@@ -624,28 +551,6 @@ export default function YouTubeToBlueprint() {
     });
 
     try {
-      const videoId = extractYouTubeVideoId(videoUrl.trim());
-      if (!videoId) {
-        setErrorText('Please enter a valid YouTube single-video URL.');
-        setStageText('Generation failed');
-        return;
-      }
-      let clientTranscript: ClientTranscriptResult;
-      try {
-        clientTranscript = await fetchClientTranscript(videoId);
-      } catch (clientTranscriptError) {
-        console.log('[youtube_client_transcript_fetch_failed]', {
-          video_id: videoId,
-          error: clientTranscriptError instanceof Error ? clientTranscriptError.message : String(clientTranscriptError),
-        });
-        setErrorText('Could not fetch transcript in browser right now. Please try another video.');
-        setStageText('Generation failed');
-        return;
-      }
-      payload.transcript_text = clientTranscript.text;
-      payload.duration_seconds = clientTranscript.durationSeconds;
-      payload.video_title = clientTranscript.videoTitle;
-
       const response = await fetch(YOUTUBE_ENDPOINT, {
         method: 'POST',
         headers: {

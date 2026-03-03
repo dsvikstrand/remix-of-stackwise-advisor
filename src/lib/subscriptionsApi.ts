@@ -35,7 +35,6 @@ export type SubscriptionRefreshCandidate = {
   published_at: string | null;
   thumbnail_url: string | null;
   duration_seconds?: number | null;
-  transcript_text?: string | null;
 };
 
 type ApiEnvelope<T> = {
@@ -330,8 +329,6 @@ export async function generateSubscriptionRefreshBlueprints(input: {
   const response = await apiRequest<{
     job_id: string;
     queued_count: number;
-    client_transcript_used?: boolean;
-    client_transcript_count?: number;
     requested_tier?: GenerationTier | null;
     resolved_tier?: GenerationTier;
     variant_status?: 'queued' | 'generated' | 'ready' | 'in_progress';

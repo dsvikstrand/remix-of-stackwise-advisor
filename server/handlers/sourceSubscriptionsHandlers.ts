@@ -345,7 +345,6 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
       published_at: item.published_at || null,
       thumbnail_url: item.thumbnail_url || null,
       duration_seconds: toDurationSeconds(item.duration_seconds),
-      transcript_text: item.transcript_text == null ? null : String(item.transcript_text || '').trim() || null,
     });
   }
   const dedupedItems = Array.from(dedupedMap.values());
@@ -356,27 +355,6 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
       error_code: 'NO_ELIGIBLE_ITEMS',
       message: 'No eligible videos found for active subscriptions',
       data: null,
-    });
-  }
-  if (dedupedItems.some((item) => item.transcript_text) && !deps.yt2bpClientTranscriptEnabled) {
-    return res.status(503).json({
-      ok: false,
-      error_code: 'SERVICE_DISABLED',
-      message: 'Client transcript generation is temporarily disabled.',
-      data: null,
-    });
-  }
-  const oversizedTranscriptItem = dedupedItems.find(
-    (item) => item.transcript_text && item.transcript_text.length > deps.yt2bpClientTranscriptMaxChars,
-  );
-  if (oversizedTranscriptItem) {
-    return res.status(422).json({
-      ok: false,
-      error_code: 'TRANSCRIPT_TOO_LARGE',
-      message: `Transcript exceeds max size (${deps.yt2bpClientTranscriptMaxChars} chars).`,
-      data: {
-        video_id: oversizedTranscriptItem.video_id,
-      },
     });
   }
   let allowedDurationItems = dedupedItems;
@@ -445,15 +423,6 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
       },
     });
   }
-  const clientTranscriptCount = allowedDurationItems.filter((item) => Boolean(item.transcript_text)).length;
-  if (clientTranscriptCount > 0) {
-    console.log('[refresh_generate_client_transcript_intake]', JSON.stringify({
-      user_id: userId,
-      item_count: allowedDurationItems.length,
-      client_transcript_count: clientTranscriptCount,
-    }));
-  }
-
   const queueDepth = await deps.countQueueDepth(serviceDb, { includeRunning: true });
   const userQueueDepth = await deps.countQueueDepth(serviceDb, { userId, includeRunning: true });
   if (queueDepth >= deps.queueDepthHardLimit || userQueueDepth >= deps.queueDepthPerUserLimit) {
@@ -507,8 +476,6 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
       job_id: job.id,
       queue_depth: queueDepth + 1,
       queued_count: allowedDurationItems.length,
-      client_transcript_used: clientTranscriptCount > 0,
-      client_transcript_count: clientTranscriptCount,
       requested_tier: requestedTier || null,
       resolved_tier: resolvedTier,
       variant_status: 'queued',

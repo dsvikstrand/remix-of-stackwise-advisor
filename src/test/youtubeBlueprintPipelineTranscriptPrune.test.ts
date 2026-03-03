@@ -310,47 +310,6 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
     expect(events.some((row) => row.event === 'transcript_pruning_applied')).toBe(true);
   });
 
-  it('uses provided transcript text without calling transcript provider', async () => {
-    const events: EventRow[] = [];
-    const pass1Transcripts: string[] = [];
-    const pass2Transcripts: string[] = [];
-    const pass1PromptTemplatePaths: string[] = [];
-    const transcriptFetchCounter = { count: 0 };
-    const providedTranscriptText = 'CLIENT PROVIDED TRANSCRIPT';
-
-    const deps = buildDeps({
-      transcriptText: 'SHOULD_NOT_BE_USED',
-      pruningConfig: {
-        enabled: true,
-        budgetChars: 4500,
-        thresholds: [4500, 9000, 16000],
-        windowsByBucket: [1, 4, 6, 8],
-      },
-      events,
-      pass1Transcripts,
-      pass2Transcripts,
-      pass1PromptTemplatePaths,
-      transcriptFetchCounter,
-    });
-    const service = createYouTubeBlueprintPipelineService(deps);
-
-    const result = await service.runYouTubePipeline({
-      runId: 'run-provided-transcript',
-      videoId: 'video-provided',
-      videoUrl: 'https://www.youtube.com/watch?v=video-provided',
-      providedTranscriptText,
-      generateReview: false,
-      generateBanner: false,
-      authToken: '',
-      generationTier: 'free',
-    });
-
-    expect(transcriptFetchCounter.count).toBe(0);
-    expect(pass1Transcripts[0]).toContain('CLIENT PROVIDED TRANSCRIPT');
-    expect(pass2Transcripts[0]).toContain('CLIENT PROVIDED TRANSCRIPT');
-    expect(result.meta.transcript_source).toBe('client_supplied');
-  });
-
   it('uses one-step tier mode by skipping pass2 and passing prompt template override', async () => {
     const events: EventRow[] = [];
     const pass1Transcripts: string[] = [];

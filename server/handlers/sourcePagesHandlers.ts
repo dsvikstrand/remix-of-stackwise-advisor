@@ -48,8 +48,6 @@ export function registerSourcePagesRouteHandlers(app: express.Express, deps: Sou
     generationMaxVideoSeconds,
     generationBlockUnknownDuration,
     generationDurationLookupTimeoutMs,
-    yt2bpClientTranscriptEnabled,
-    yt2bpClientTranscriptMaxChars,
     logUnlockEvent,
     normalizeSourcePageVideoGenerateItem,
     upsertSourceItemFromVideo,
@@ -713,29 +711,6 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       data: traceData,
     });
   }
-  if (normalizedItems.some((item) => item.transcript_text) && !yt2bpClientTranscriptEnabled) {
-    return res.status(503).json({
-      ok: false,
-      error_code: 'SERVICE_DISABLED',
-      message: 'Client transcript generation is temporarily disabled.',
-      data: traceData,
-    });
-  }
-  const oversizedTranscriptItem = normalizedItems.find(
-    (item) => item.transcript_text && item.transcript_text.length > yt2bpClientTranscriptMaxChars,
-  );
-  if (oversizedTranscriptItem) {
-    return res.status(422).json({
-      ok: false,
-      error_code: 'TRANSCRIPT_TOO_LARGE',
-      message: `Transcript exceeds max size (${yt2bpClientTranscriptMaxChars} chars).`,
-      data: {
-        ...traceData,
-        video_id: oversizedTranscriptItem.video_id,
-      },
-    });
-  }
-
   let existingByVideoId = new Map<string, SourcePageVideoExistingState>();
   try {
     existingByVideoId = await loadExistingSourceVideoStateForUser(
@@ -979,7 +954,6 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         video_url: item.video_url,
         title: item.title,
         duration_seconds: toDurationSeconds(item.duration_seconds),
-        transcript_text: item.transcript_text,
         reserved_cost: reservedCost,
         reserved_by_user_id: userId,
         unlock_origin: 'manual_unlock',
@@ -1158,18 +1132,6 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       },
     });
   }
-  const clientTranscriptCount = queueItems.filter((item) => Boolean(item.transcript_text)).length;
-  if (clientTranscriptCount > 0) {
-    logUnlockEvent(
-      'source_unlock_client_transcript_intake',
-      { trace_id: traceId, user_id: userId, source_page_id: sourcePage.id },
-      {
-        queued_count: queueItems.length,
-        client_transcript_count: clientTranscriptCount,
-      },
-    );
-  }
-
   const queueDepth = await countQueueDepth(sourcePageDb, {
     scope: 'source_item_unlock_generation',
     includeRunning: true,
@@ -1256,8 +1218,6 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       queue_depth: queueDepth + 1,
       estimated_start_seconds: Math.max(1, Math.ceil((queueDepth + 1) / Math.max(1, workerConcurrency)) * 4),
       queued_count: queueItems.length,
-      client_transcript_used: clientTranscriptCount > 0,
-      client_transcript_count: clientTranscriptCount,
       requested_tier: requestedTier || null,
       resolved_tier: resolvedTier,
       variant_status: 'queued',

@@ -12,7 +12,6 @@ import {
   type GenerationTier,
   type SubscriptionRefreshCandidate,
 } from '@/lib/subscriptionsApi';
-import { hydrateQueueItemsWithClientTranscripts, toClientTranscriptBatchErrorMessage } from '@/lib/clientTranscript';
 import { useGenerationTierAccess } from '@/hooks/useGenerationTierAccess';
 
 type RefreshSubscriptionsDialogProps = {
@@ -127,29 +126,11 @@ export function RefreshSubscriptionsDialog({
   const refreshGenerateMutation = useMutation({
     mutationFn: async (items: SubscriptionRefreshCandidate[]) => {
       if (!subscriptionsEnabled) throw new Error('Backend API is not configured.');
-      const hydrated = await hydrateQueueItemsWithClientTranscripts(items);
-      if (hydrated.ready.length === 0) {
-        throw new Error(
-          toClientTranscriptBatchErrorMessage(
-            hydrated.failed,
-            'Could not fetch transcript in your browser for the selected videos.',
-          ),
-        );
-      }
       const payload = await generateSubscriptionRefreshBlueprints({
-        items: hydrated.ready,
+        items,
         requestedTier,
       });
-      return {
-        payload,
-        failedCount: hydrated.failed.length,
-        failedMessage: hydrated.failed.length > 0
-          ? toClientTranscriptBatchErrorMessage(
-              hydrated.failed,
-              'Some selected videos could not fetch transcripts in your browser.',
-            )
-          : null,
-      };
+      return { payload };
     },
     onSuccess: (result) => {
       const payload = result.payload;
@@ -159,12 +140,6 @@ export function RefreshSubscriptionsDialog({
         title: 'Background generation started',
         description: `Queued ${payload.queued_count} video(s). You can keep using the app while blueprints are generated.`,
       });
-      if (result.failedCount > 0) {
-        toast({
-          title: 'Some videos were skipped',
-          description: `Skipped ${result.failedCount} selected video(s). ${result.failedMessage || ''}`.trim(),
-        });
-      }
       onOpenChange(false);
     },
     onError: (error) => {

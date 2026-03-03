@@ -15,8 +15,6 @@ export function registerYouTubeRouteHandlers(app: express.Express, deps: YouTube
     yt2bpAuthLimiter,
     yt2bpEnabled,
     yt2bpCoreTimeoutMs,
-    yt2bpClientTranscriptEnabled,
-    yt2bpClientTranscriptMaxChars,
     searchApiLimiter,
     sourceVideoUnlockBurstLimiter,
     sourceVideoUnlockSustainedLimiter,
@@ -117,23 +115,6 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
   }
 
   const runId = `yt2bp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const providedTranscriptText = String(parsed.data.transcript_text || '').trim();
-  if (providedTranscriptText && !yt2bpClientTranscriptEnabled) {
-    return res.status(503).json({
-      ok: false,
-      error_code: 'SERVICE_DISABLED',
-      message: 'Client transcript generation is temporarily disabled.',
-      run_id: runId,
-    });
-  }
-  if (providedTranscriptText && providedTranscriptText.length > yt2bpClientTranscriptMaxChars) {
-    return res.status(422).json({
-      ok: false,
-      error_code: 'TRANSCRIPT_TOO_LARGE',
-      message: `Transcript exceeds max size (${yt2bpClientTranscriptMaxChars} chars).`,
-      run_id: runId,
-    });
-  }
   const adapter = getAdapterForUrl(parsed.data.video_url);
   if (!adapter) {
     return res.status(400).json({
@@ -170,7 +151,7 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
     });
   }
   const generationModelProfile = resolveGenerationModelProfile(resolvedTier);
-  let resolvedDurationSeconds: number | null = toDurationSeconds(parsed.data.duration_seconds);
+  let resolvedDurationSeconds: number | null = null;
   if (generationDurationCapEnabled) {
     try {
       if (resolvedDurationSeconds == null) {
@@ -256,8 +237,6 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
         runId,
         videoId: validatedUrl.sourceNativeId,
         videoUrl: parsed.data.video_url,
-        videoTitle: String(parsed.data.video_title || '').trim() || null,
-        providedTranscriptText: providedTranscriptText || null,
         durationSeconds: resolvedDurationSeconds,
         generateReview: false,
         generateBanner: parsed.data.generate_banner,
@@ -541,7 +520,6 @@ app.post(
         published_at: item.published_at == null ? null : String(item.published_at || '').trim() || null,
         thumbnail_url: item.thumbnail_url == null ? null : String(item.thumbnail_url || '').trim() || null,
         duration_seconds: toDurationSeconds(item.duration_seconds),
-        transcript_text: item.transcript_text == null ? null : String(item.transcript_text || '').trim() || null,
       });
     }
     const dedupedItems = Array.from(dedupedMap.values())
@@ -552,27 +530,6 @@ app.post(
         error_code: 'NO_ELIGIBLE_ITEMS',
         message: 'No eligible videos found for generation.',
         data: null,
-      });
-    }
-    if (dedupedItems.some((item) => item.transcript_text) && !yt2bpClientTranscriptEnabled) {
-      return res.status(503).json({
-        ok: false,
-        error_code: 'SERVICE_DISABLED',
-        message: 'Client transcript generation is temporarily disabled.',
-        data: null,
-      });
-    }
-    const oversizedTranscriptItem = dedupedItems.find(
-      (item) => item.transcript_text && item.transcript_text.length > yt2bpClientTranscriptMaxChars,
-    );
-    if (oversizedTranscriptItem) {
-      return res.status(422).json({
-        ok: false,
-        error_code: 'TRANSCRIPT_TOO_LARGE',
-        message: `Transcript exceeds max size (${yt2bpClientTranscriptMaxChars} chars).`,
-        data: {
-          video_id: oversizedTranscriptItem.video_id,
-        },
       });
     }
     let allowedItems = dedupedItems;
@@ -641,15 +598,6 @@ app.post(
         },
       });
     }
-    const clientTranscriptCount = allowedItems.filter((item) => Boolean(item.transcript_text)).length;
-    if (clientTranscriptCount > 0) {
-      console.log('[search_generate_client_transcript_intake]', JSON.stringify({
-        user_id: userId,
-        item_count: allowedItems.length,
-        client_transcript_count: clientTranscriptCount,
-      }));
-    }
-
     const queueDepth = await countQueueDepth(serviceDb, { includeRunning: true });
     const userQueueDepth = await countQueueDepth(serviceDb, { userId, includeRunning: true });
     if (queueDepth >= queueDepthHardLimit || userQueueDepth >= queueDepthPerUserLimit) {
@@ -705,8 +653,6 @@ app.post(
         queue_depth: queueDepth + 1,
         estimated_start_seconds: Math.max(1, Math.ceil((queueDepth + 1) / Math.max(1, workerConcurrency)) * 4),
         queued_count: allowedItems.length,
-        client_transcript_used: clientTranscriptCount > 0,
-        client_transcript_count: clientTranscriptCount,
         requested_tier: requestedTier || null,
         resolved_tier: resolvedTier,
         variant_status: 'queued',

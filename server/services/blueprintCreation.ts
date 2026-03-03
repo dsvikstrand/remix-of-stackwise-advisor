@@ -8,7 +8,6 @@ type CreateBlueprintFromVideoInput = {
   videoUrl: string;
   videoId: string;
   videoTitle?: string | null;
-  providedTranscriptText?: string | null;
   durationSeconds?: number | null;
   sourceTag:
     | 'subscription_auto'
@@ -54,7 +53,6 @@ export type BlueprintCreationDeps = {
     videoId: string;
     videoUrl: string;
     videoTitle?: string | null;
-    providedTranscriptText?: string | null;
     durationSeconds?: number | null;
     generateReview: boolean;
     generateBanner: boolean;
@@ -218,21 +216,11 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
       });
     }
     try {
-      const providedTranscriptText = String(input.providedTranscriptText || '').trim() || null;
-      console.log('[create_blueprint_input_transcript]', JSON.stringify({
-        user_id: input.userId,
-        video_id: input.videoId,
-        source_tag: input.sourceTag,
-        generation_tier: generationTier,
-        has_transcript: Boolean(providedTranscriptText),
-        transcript_chars: providedTranscriptText ? providedTranscriptText.length : 0,
-      }));
       const result = await deps.runYouTubePipeline({
         runId,
         videoId: input.videoId,
         videoUrl: input.videoUrl,
         videoTitle: resolvedVideoTitle || input.videoId,
-        providedTranscriptText,
         durationSeconds: input.durationSeconds ?? null,
         generateReview: false,
         generateBanner: false,
