@@ -99,7 +99,7 @@ async function requestViaFetch(videoId: string): Promise<YtToTextHttpResponse> {
 }
 
 async function requestViaProxy(videoId: string): Promise<YtToTextHttpResponse> {
-  const proxyTools = getYtToTextProxyRequestTools();
+  const proxyTools = await getYtToTextProxyRequestTools();
   if (!proxyTools) {
     return requestViaFetch(videoId);
   }

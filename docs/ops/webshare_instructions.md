@@ -9,6 +9,7 @@ This is optional and is controlled entirely by env vars. If the proxy toggle is 
 ## What Is Wired
 
 - `YT_TO_TEXT_USE_WEBSHARE_PROXY=true` enables proxying only for the `yt_to_text` provider.
+- `YT_TO_TEXT_PROXY_SELECT_BY_INDEX=true` can choose one fixed Webshare `direct` proxy by zero-based index.
 - `youtube_timedtext` and all other outbound app requests stay direct.
 - When proxying is enabled, the app uses a lower-level `undici.request(...)` path with a cached `ProxyAgent`.
 - When proxying is disabled, the app uses the normal `fetch(...)` path.
@@ -20,7 +21,9 @@ Relevant code:
 
 ## Required Env Vars
 
-Use either the split proxy fields or a full proxy URL.
+Use either the split proxy fields / URL, or the fixed selector-by-index mode.
+
+Explicit fixed proxy mode:
 
 Recommended split fields:
 
@@ -39,9 +42,22 @@ YT_TO_TEXT_USE_WEBSHARE_PROXY=true
 WEBSHARE_PROXY_URL=http://<username>:<password>@<host>:<port>
 ```
 
+Developer fixed selector-by-index mode:
+
+```bash
+YT_TO_TEXT_USE_WEBSHARE_PROXY=true
+YT_TO_TEXT_PROXY_SELECT_BY_INDEX=true
+YT_TO_TEXT_PROXY_INDEX=0
+WEBSHARE_API_KEY=<webshare_api_key>
+WEBSHARE_PLAN_ID=<webshare_plan_id>
+WEBSHARE_BASE_URL=https://proxy.webshare.io/api
+```
+
 Notes:
 
 - If `WEBSHARE_PROXY_URL` is set, it takes precedence.
+- If `YT_TO_TEXT_PROXY_SELECT_BY_INDEX=true`, the app tries to fetch the Webshare `direct` proxy list and select one fixed proxy by zero-based index.
+- If the selected index is invalid or the Webshare API lookup fails, the app falls back to the explicit fixed proxy config.
 - If the proxy toggle is on but the proxy config is incomplete, the app logs one warning and falls back to direct requests.
 - Keep using one fixed `direct` proxy entry if you want a stable exit IP.
 
@@ -92,6 +108,21 @@ Pick one entry and copy:
 
 Those values map directly to the split env vars above.
 
+If you want the app to choose by index instead, keep the same `WEBSHARE_API_KEY` and `WEBSHARE_PLAN_ID`, then set:
+
+```bash
+YT_TO_TEXT_PROXY_SELECT_BY_INDEX=true
+YT_TO_TEXT_PROXY_INDEX=0
+```
+
+That means:
+
+- `0` selects the first proxy in the returned direct list
+- `1` selects the second
+- `2` selects the third
+
+The chosen proxy stays fixed until the process restarts or the env changes.
+
 ## Oracle Smoke Test
 
 Run a direct transcript smoke on Oracle with the current `.env`:
@@ -114,6 +145,27 @@ Expected result:
 - provider `yt_to_text`
 - transcript text printed after the JSON block
 
+Run the round-robin proxy smoke on Oracle:
+
+```bash
+scp scripts/round_robin_webshare_smoke.ts oracle-free:/tmp/round_robin_webshare_smoke.ts
+ssh oracle-free '
+  export NVM_DIR="$HOME/.nvm" &&
+  . "$NVM_DIR/nvm.sh" &&
+  nvm use 20.20.0 >/dev/null &&
+  cd /home/ubuntu/remix-of-stackwise-advisor &&
+  WEBSHARE_API_KEY=... \
+  WEBSHARE_PLAN_ID=... \
+  tsx /tmp/round_robin_webshare_smoke.ts --count 10
+'
+```
+
+Expected result:
+
+- JSON summary with `rows`
+- one row per proxy in strict order
+- each row shows the observed `exit_ip`
+
 ## Local Smoke Test
 
 From this repo:
@@ -130,7 +182,7 @@ node --import tsx scripts/toy_fetch_transcript.ts \
 ## Quick Verification Checklist
 
 - `YT_TO_TEXT_USE_WEBSHARE_PROXY=true` is present in the runtime environment.
-- The proxy fields point to one valid `direct` Webshare proxy.
+- Either the proxy fields point to one valid `direct` Webshare proxy, or the selector-by-index settings are valid.
 - Oracle is using Node `20.20.0`.
 - The server was restarted after changing `.env`.
 - The smoke test returns `"ok": true`.
@@ -139,6 +191,8 @@ node --import tsx scripts/toy_fetch_transcript.ts \
 
 - `TRANSCRIPT_FETCH_FAIL` with a proxy-tunnel error:
   The proxy auth details are usually wrong, expired, or the proxy endpoint is invalid.
+- Selector-by-index is enabled, but the app still uses the explicit proxy:
+  The selected index may be out of range, or the Webshare API lookup failed, so the helper fell back to the explicit fixed proxy settings.
 - Proxy toggle is on, but traffic still looks direct:
   The running process was likely not restarted after `.env` changed, or the wrong `.env` file was edited.
 - `yt_to_text` works direct but fails through proxy:
