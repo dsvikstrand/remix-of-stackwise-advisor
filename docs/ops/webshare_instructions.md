@@ -47,7 +47,7 @@ Developer fixed selector-by-index mode:
 ```bash
 YT_TO_TEXT_USE_WEBSHARE_PROXY=true
 YT_TO_TEXT_PROXY_SELECT_BY_INDEX=true
-YT_TO_TEXT_PROXY_INDEX=0
+YT_TO_TEXT_PROXY_INDEX=rand
 WEBSHARE_API_KEY=<webshare_api_key>
 WEBSHARE_PLAN_ID=<webshare_plan_id>
 WEBSHARE_BASE_URL=https://proxy.webshare.io/api
@@ -56,7 +56,7 @@ WEBSHARE_BASE_URL=https://proxy.webshare.io/api
 Notes:
 
 - If `WEBSHARE_PROXY_URL` is set, it takes precedence.
-- If `YT_TO_TEXT_PROXY_SELECT_BY_INDEX=true`, the app tries to fetch the Webshare `direct` proxy list and select one fixed proxy by zero-based index.
+- If `YT_TO_TEXT_PROXY_SELECT_BY_INDEX=true`, the app tries to fetch the Webshare `direct` proxy list and select one fixed proxy by zero-based index, or by a one-time random choice when `YT_TO_TEXT_PROXY_INDEX=rand`.
 - If the selected index is invalid or the Webshare API lookup fails, the app falls back to the explicit fixed proxy config.
 - If the proxy toggle is on but the proxy config is incomplete, the app logs one warning and falls back to direct requests.
 - Keep using one fixed `direct` proxy entry if you want a stable exit IP.
@@ -112,7 +112,7 @@ If you want the app to choose by index instead, keep the same `WEBSHARE_API_KEY`
 
 ```bash
 YT_TO_TEXT_PROXY_SELECT_BY_INDEX=true
-YT_TO_TEXT_PROXY_INDEX=0
+YT_TO_TEXT_PROXY_INDEX=rand
 ```
 
 That means:
@@ -120,8 +120,9 @@ That means:
 - `0` selects the first proxy in the returned direct list
 - `1` selects the second
 - `2` selects the third
+- `rand` chooses one random usable proxy once when the process first resolves the selector
 
-The chosen proxy stays fixed until the process restarts or the env changes.
+The chosen proxy stays fixed until the process restarts or the proxy helper cache is reset.
 
 ## Oracle Smoke Test
 

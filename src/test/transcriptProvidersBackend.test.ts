@@ -159,6 +159,81 @@ describe('transcript providers rate-limit mapping', () => {
     expect(mockRequest).toHaveBeenCalledTimes(1);
   });
 
+  it('supports YT_TO_TEXT_PROXY_INDEX=rand by selecting one random proxy once and reusing it for the process', async () => {
+    process.env.YT_TO_TEXT_USE_WEBSHARE_PROXY = 'true';
+    process.env.YT_TO_TEXT_PROXY_SELECT_BY_INDEX = 'true';
+    process.env.YT_TO_TEXT_PROXY_INDEX = 'rand';
+    process.env.WEBSHARE_API_KEY = 'api_key';
+    process.env.WEBSHARE_PLAN_ID = 'plan_123';
+    process.env.WEBSHARE_BASE_URL = 'https://proxy.webshare.io/api';
+
+    vi.spyOn(Math, 'random').mockReturnValue(0.74);
+
+    const seenProxyConfigs: Array<{ uri?: string; token?: string }> = [];
+    setYtToTextProxyAgentFactoryForTests(class {
+      constructor(options: unknown) {
+        seenProxyConfigs.push(options as { uri?: string; token?: string });
+      }
+
+      destroy() {
+        return undefined;
+      }
+    });
+    const mockRequest = vi.fn(async () => ({
+      statusCode: 200,
+      headers: {},
+      body: {
+        json: async () => ({
+          data: {
+            transcripts: [
+              { t: 'Hello from random selection', s: 0, e: 1 },
+            ],
+          },
+        }),
+      },
+    }));
+    setYtToTextUndiciRequestForTests(mockRequest);
+
+    const mockFetch = vi.fn(async () => new Response(JSON.stringify({
+      results: [
+        {
+          proxy_address: '10.0.0.1',
+          port: 6001,
+          username: 'first_user',
+          password: 'first_pass',
+          valid: true,
+        },
+        {
+          proxy_address: '10.0.0.2',
+          port: 6002,
+          username: 'second_user',
+          password: 'second_pass',
+          valid: true,
+        },
+        {
+          proxy_address: '10.0.0.3',
+          port: 6003,
+          username: 'third_user',
+          password: 'third_pass',
+          valid: true,
+        },
+      ],
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }));
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    await getTranscriptFromYtToText('video123');
+    await getTranscriptFromYtToText('video456');
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(seenProxyConfigs).toHaveLength(1);
+    expect(seenProxyConfigs[0]?.uri).toBe('http://10.0.0.3:6003/');
+    expect(typeof seenProxyConfigs[0]?.token).toBe('string');
+    expect(mockRequest).toHaveBeenCalledTimes(2);
+  });
+
   it('maps proxied yt_to_text HTTP 429 to RATE_LIMITED with retry-after seconds', async () => {
     process.env.YT_TO_TEXT_USE_WEBSHARE_PROXY = 'true';
     process.env.WEBSHARE_PROXY_HOST = '127.0.0.1';

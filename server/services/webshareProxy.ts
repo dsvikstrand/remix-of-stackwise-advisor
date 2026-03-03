@@ -198,9 +198,12 @@ function isIndexSelectionEnabled() {
   return isTruthyEnv(process.env.YT_TO_TEXT_PROXY_SELECT_BY_INDEX);
 }
 
-function parseSelectedProxyIndex() {
+type SelectedProxyIndex = number | 'rand';
+
+function parseSelectedProxyIndex(): SelectedProxyIndex | null {
   const raw = readEnv('YT_TO_TEXT_PROXY_INDEX');
   if (!raw) return 0;
+  if (raw.toLowerCase() === 'rand') return 'rand';
   const value = Number(raw);
   if (!Number.isInteger(value) || value < 0) return null;
   return value;
@@ -250,14 +253,17 @@ async function fetchIndexedProxyConfig(): Promise<ProxyConnectionConfig | null> 
         warnIndexSelectorFailure('Webshare API returned no usable direct proxies.');
         return null;
       }
-      if (proxyIndex >= usableRows.length) {
+      const selectedRowIndex = proxyIndex === 'rand'
+        ? Math.floor(Math.random() * usableRows.length)
+        : proxyIndex;
+      if (selectedRowIndex >= usableRows.length) {
         warnIndexSelectorFailure(
           `YT_TO_TEXT_PROXY_INDEX=${proxyIndex} is out of range for the available Webshare direct proxy list.`,
         );
         return null;
       }
 
-      const selected = usableRows[proxyIndex];
+      const selected = usableRows[selectedRowIndex];
       const host = typeof selected?.proxy_address === 'string' ? selected.proxy_address.trim() : '';
       const port = Number(selected?.port);
       const username = typeof selected?.username === 'string' ? selected.username.trim() : '';
