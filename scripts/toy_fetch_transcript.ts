@@ -5,6 +5,7 @@
     TRANSCRIPT_PROVIDER=youtube_timedtext node --import tsx scripts/toy_fetch_transcript.ts --url "..." --with-timestamps
 */
 
+import '../server/loadEnv';
 import { getTranscriptForVideo, resolveTranscriptProvider } from '../server/transcript/getTranscript';
 import { TranscriptProviderError } from '../server/transcript/types';
 

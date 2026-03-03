@@ -45,11 +45,11 @@ Notes:
 - If the proxy toggle is on but the proxy config is incomplete, the app logs one warning and falls back to direct requests.
 - Keep using one fixed `direct` proxy entry if you want a stable exit IP.
 
-## Oracle Server Gotcha
+## Oracle Server Gotchas
 
-The server code does not load `.env` automatically.
+The server now loads `.env` and `.env.production` automatically at startup if those files exist in the repo root.
 
-That means updating `/home/ubuntu/remix-of-stackwise-advisor/.env` is not enough by itself. The shell that starts the server must export that file before launching `tsx server/index.ts`.
+That means updating `/home/ubuntu/remix-of-stackwise-advisor/.env` is enough for the app and the transcript smoke script, as long as the process is restarted after the file changes.
 
 The proxy implementation also depends on the `undici` package from `package.json`, so after pulling a new commit that changes proxy code, run `npm install` on Oracle before restarting.
 
@@ -61,9 +61,6 @@ ssh oracle-free '
   export NVM_DIR="$HOME/.nvm" &&
   . "$NVM_DIR/nvm.sh" &&
   nvm use 20.20.0 >/dev/null &&
-  set -a &&
-  . ./.env &&
-  set +a &&
   nohup tsx server/index.ts >/tmp/bleu-server.log 2>&1 < /dev/null &
 '
 ```
@@ -105,9 +102,6 @@ ssh oracle-free '
   export NVM_DIR="$HOME/.nvm" &&
   . "$NVM_DIR/nvm.sh" &&
   nvm use 20.20.0 >/dev/null &&
-  set -a &&
-  . ./.env &&
-  set +a &&
   TRANSCRIPT_PROVIDER=yt_to_text \
   node --import tsx scripts/toy_fetch_transcript.ts \
     --url "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
@@ -146,7 +140,7 @@ node --import tsx scripts/toy_fetch_transcript.ts \
 - `TRANSCRIPT_FETCH_FAIL` with a proxy-tunnel error:
   The proxy auth details are usually wrong, expired, or the proxy endpoint is invalid.
 - Proxy toggle is on, but traffic still looks direct:
-  The running process was likely started without exporting `.env`.
+  The running process was likely not restarted after `.env` changed, or the wrong `.env` file was edited.
 - `yt_to_text` works direct but fails through proxy:
   Re-check the selected Webshare proxy by testing it with `curl --proxy ... https://ipv4.webshare.io/`.
 - Oracle restart worked, but the old behavior remains:
@@ -157,4 +151,4 @@ node --import tsx scripts/toy_fetch_transcript.ts \
 - The Oracle repo path is `/home/ubuntu/remix-of-stackwise-advisor`.
 - The SSH alias is `oracle-free`.
 - This app currently uses a fixed Webshare proxy only for `yt_to_text`, not for all network traffic.
-- The most common gotcha is forgetting that `.env` must be exported into the shell before starting the server.
+- The most common gotchas are forgetting to restart after `.env` changes, or forgetting to run `npm install` on Oracle after pulling proxy-related dependency updates.
