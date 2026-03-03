@@ -52,6 +52,8 @@ jobs:
           VITE_AGENTIC_BACKEND_URL: https://bapi.vdsai.cloud
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_CLIENT_TRANSCRIPT_SOURCE: ${{ vars.VITE_CLIENT_TRANSCRIPT_SOURCE }}
+          VITE_CLIENT_TRANSCRIPT_RELAY_URL: ${{ vars.VITE_CLIENT_TRANSCRIPT_RELAY_URL }}
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v4
