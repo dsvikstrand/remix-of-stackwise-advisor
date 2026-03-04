@@ -950,7 +950,7 @@ export default function Wall() {
           <div className="px-3 sm:px-4">
             <div className="flex flex-wrap items-center gap-2">
               <Select value={activeLane} onValueChange={handleScopeSelect}>
-                <SelectTrigger className="h-9 w-auto min-w-0 px-2.5 [&>svg]:hidden">
+                <SelectTrigger className="h-9 w-auto min-w-0 border-input px-2.5 outline-none ring-0 transition-none [-webkit-tap-highlight-color:transparent] focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:ring-0 data-[state=open]:ring-offset-0 [&>svg]:hidden">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -967,7 +967,7 @@ export default function Wall() {
                 onValueChange={(value) => updateSearchParams({ sort: value as FeedSort })}
                 disabled={isForYouScope}
               >
-                <SelectTrigger className="h-9 w-auto min-w-0 px-2.5 [&>svg]:hidden">
+                <SelectTrigger className="h-9 w-auto min-w-0 border-input px-2.5 outline-none ring-0 transition-none [-webkit-tap-highlight-color:transparent] focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:ring-0 data-[state=open]:ring-offset-0 [&>svg]:hidden">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

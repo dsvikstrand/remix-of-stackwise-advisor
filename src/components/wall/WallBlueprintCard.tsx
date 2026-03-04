@@ -87,7 +87,7 @@ export function WallBlueprintCard({
     comments: commentsCount,
   });
   const channelColors = getChannelColorView(channelSlug);
-  const compactViewCount = formatCompactCount(viewCount);
+  const compactViewCount = formatCompactCount(viewCount) || '-';
 
   return (
     <div
@@ -160,12 +160,10 @@ export function WallBlueprintCard({
               >
                 <Heart className={`h-4 w-4 ${userLiked ? 'fill-current' : ''}`} />
               </Button>
-              {compactViewCount ? (
-                <span className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2 text-[11px] font-medium tracking-wide ${channelColors.surfaceClassName}`}>
-                  <Eye className="h-3.5 w-3.5" />
-                  {compactViewCount}
-                </span>
-              ) : null}
+              <span className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2 text-[11px] font-medium tracking-wide ${channelColors.surfaceClassName}`}>
+                {compactViewCount}
+                <Eye className="h-3.5 w-3.5" />
+              </span>
             </div>
             <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-foreground/75 shrink-0">
               <Link

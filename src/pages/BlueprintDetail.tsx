@@ -1063,7 +1063,7 @@ export default function BlueprintDetail() {
                 <h2 className="text-lg font-semibold">{commentView === 'youtube' ? 'Comments' : 'Bleu Comments'}</h2>
                 <div className="flex shrink-0 flex-nowrap items-center gap-2">
                   <Select value={commentView} onValueChange={(value) => setCommentView(value as 'youtube' | 'community')}>
-                    <SelectTrigger className="h-9 w-auto min-w-0 px-2.5 [&>svg]:hidden">
+                    <SelectTrigger className="h-9 w-auto min-w-0 border-input px-2.5 outline-none ring-0 transition-none [-webkit-tap-highlight-color:transparent] focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:ring-0 data-[state=open]:ring-offset-0 [&>svg]:hidden">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1082,7 +1082,7 @@ export default function BlueprintDetail() {
                       }
                     }}
                   >
-                    <SelectTrigger className="h-9 w-auto min-w-0 px-2.5 [&>svg]:hidden">
+                    <SelectTrigger className="h-9 w-auto min-w-0 border-input px-2.5 outline-none ring-0 transition-none [-webkit-tap-highlight-color:transparent] focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:ring-0 data-[state=open]:ring-offset-0 [&>svg]:hidden">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
