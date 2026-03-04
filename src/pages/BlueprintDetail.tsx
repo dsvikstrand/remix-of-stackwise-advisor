@@ -25,6 +25,7 @@ import { getCatalogChannelTagSlugs } from '@/lib/channelPostContext';
 import { normalizeTag } from '@/lib/tagging';
 import { supabase } from '@/integrations/supabase/client';
 import { resolveEffectiveBanner } from '@/lib/bannerResolver';
+import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities';
 import { splitSummaryIntoSlides } from '@/lib/summarySlides';
 import {
   buildBlueprintSectionsV1FromRenderSteps,
@@ -907,7 +908,7 @@ export default function BlueprintDetail() {
                   >
                     <ArrowLeft className="h-4 w-4" />
                   </Button>
-                  <h1 className="text-2xl font-semibold leading-tight break-words">{blueprint.title}</h1>
+                  <h1 className="text-2xl font-semibold leading-tight break-words">{decodeHtmlEntities(blueprint.title)}</h1>
                 </div>
               </div>
 

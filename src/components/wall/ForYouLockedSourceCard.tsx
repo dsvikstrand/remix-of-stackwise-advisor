@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities';
 import { formatRelativeShort } from '@/lib/timeFormat';
 
 const unlockCostFormatter = new Intl.NumberFormat(undefined, {
@@ -39,7 +40,8 @@ export function ForYouLockedSourceCard({
   onUnlock,
 }: ForYouLockedSourceCardProps) {
   const [showUnlockConfirm, setShowUnlockConfirm] = useState(false);
-  const sourceLabel = sourceChannelTitle || 'Subscribed source';
+  const sourceLabel = decodeHtmlEntities(sourceChannelTitle || 'Subscribed source');
+  const safeTitle = decodeHtmlEntities(title);
   const sourceInitials = sourceLabel
     .split(/\s+/)
     .filter(Boolean)
@@ -89,7 +91,7 @@ export function ForYouLockedSourceCard({
                   {sourceLabel}
                 </p>
               </div>
-              <h3 className="text-sm font-semibold leading-snug line-clamp-2">{title}</h3>
+                <h3 className="text-sm font-semibold leading-snug line-clamp-2">{safeTitle}</h3>
             </div>
             <span className="text-[11px] text-muted-foreground shrink-0">{formatRelativeShort(createdAt)}</span>
           </div>

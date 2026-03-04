@@ -9,6 +9,7 @@ import { getChannelIcon } from '@/lib/channelIcons';
 import { resolveEffectiveBanner } from '@/lib/bannerResolver';
 import { getHotnessView } from '@/lib/hotness';
 import { getChannelColorView } from '@/lib/channelColors';
+import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities';
 
 type WallBlueprintCardTag = {
   key: string;
@@ -88,6 +89,9 @@ export function WallBlueprintCard({
   });
   const channelColors = getChannelColorView(channelSlug);
   const compactViewCount = formatCompactCount(viewCount) || '-';
+  const safeTitle = decodeHtmlEntities(title);
+  const safeSummary = decodeHtmlEntities(summary);
+  const safeSourceName = sourceName ? decodeHtmlEntities(sourceName) : null;
 
   return (
     <div
@@ -119,7 +123,7 @@ export function WallBlueprintCard({
                   <AvatarImage src={sourceAvatarUrl || undefined} alt={sourceLabel} />
                   <AvatarFallback className="text-[8px]">{sourceInitials}</AvatarFallback>
                 </Avatar>
-                <p className="text-xs text-muted-foreground line-clamp-1">{sourceName}</p>
+                <p className="text-xs text-muted-foreground line-clamp-1">{safeSourceName}</p>
               </div>
               <span className="text-[11px] text-muted-foreground shrink-0">{createdLabel}</span>
             </div>
@@ -129,8 +133,8 @@ export function WallBlueprintCard({
             </div>
           )}
 
-          <h3 className="text-base font-semibold leading-tight">{title}</h3>
-          <p className="text-sm text-muted-foreground line-clamp-3">{summary}</p>
+          <h3 className="text-base font-semibold leading-tight">{safeTitle}</h3>
+          <p className="text-sm text-muted-foreground line-clamp-3">{safeSummary}</p>
 
           {tags.length > 0 && (
             <OneRowTagChips

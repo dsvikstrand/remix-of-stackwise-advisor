@@ -1,4 +1,5 @@
 import { fetchYouTubeDurationMap, YouTubeDurationLookupError } from './youtubeDuration';
+import { decodeHtmlEntities } from '../lib/decodeHtmlEntities';
 
 export type YouTubeSearchResult = {
   video_id: string;
@@ -63,10 +64,10 @@ export function normalizeYouTubeSearchItem(raw: unknown): YouTubeSearchResult | 
   return {
     video_id: videoId,
     video_url: `https://www.youtube.com/watch?v=${videoId}`,
-    title: String(item.snippet?.title || `Video ${videoId}`).trim(),
-    description: String(item.snippet?.description || '').trim(),
+    title: decodeHtmlEntities(String(item.snippet?.title || `Video ${videoId}`)).trim(),
+    description: decodeHtmlEntities(String(item.snippet?.description || '')).trim(),
     channel_id: channelId,
-    channel_title: String(item.snippet?.channelTitle || channelId).trim(),
+    channel_title: decodeHtmlEntities(String(item.snippet?.channelTitle || channelId)).trim(),
     channel_url: `https://www.youtube.com/channel/${channelId}`,
     thumbnail_url:
       item.snippet?.thumbnails?.high?.url
