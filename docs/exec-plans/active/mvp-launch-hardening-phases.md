@@ -187,6 +187,11 @@ g4) [todo] Confirm optional enrichment remains non-blocking to core generation.
 g5) [todo] Exit criteria:
 - upstream failures fail fast
 - transcript/provider instability no longer causes silent queue pileups
+g6) [have] Phase 4A implementation is now added in code:
+- low-priority worker-only scheduler for `blueprint_youtube_refresh`
+- queue-depth guardrails and per-cycle budgets
+- periodic view/comments refresh state with backoff persistence
+- page-load behavior unchanged (still stored-data only)
 
 ## Phase 5 - Queue Prioritization and Backpressure
 h1) [todo] Add or tighten queue priority rules.
@@ -251,7 +256,7 @@ l2) [have] The remaining phases improve launch quality and survivability but are
 m1) [have] Phase 1 - Completed (telemetry shipped, baseline captured)
 m2) [have] Phase 2 - Completed (`WORKER_CONCURRENCY=4` retained after under-load sample)
 m3) [have] Phase 3 - Completed (web/worker split deployed on Oracle)
-m4) [todo] Phase 4 - Not started
+m4) [have] Phase 4 - In progress (Phase 4A shipped in code; rollout verification pending)
 m5) [todo] Phase 5 - Not started
 m6) [todo] Phase 6 - Not started
 m7) [todo] Phase 7 - Not started

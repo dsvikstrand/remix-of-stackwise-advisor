@@ -142,6 +142,13 @@ export type BlueprintCreationDeps = {
     explicitVideoId?: string | null;
     explicitSourceItemId?: string | null;
   }) => Promise<void>;
+  registerBlueprintYouTubeRefreshState?: (input: {
+    db: DbClient;
+    runId: string;
+    blueprintId: string;
+    explicitVideoId?: string | null;
+    explicitSourceItemId?: string | null;
+  }) => Promise<void>;
 };
 
 export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
@@ -341,6 +348,24 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
             blueprint_id: blueprint.id,
             run_id: result.run_id,
             error: youtubeCommentsError instanceof Error ? youtubeCommentsError.message : String(youtubeCommentsError),
+          }));
+        }
+      }
+
+      if (deps.registerBlueprintYouTubeRefreshState) {
+        try {
+          await deps.registerBlueprintYouTubeRefreshState({
+            db,
+            runId: result.run_id,
+            blueprintId: blueprint.id,
+            explicitVideoId: input.videoId,
+            explicitSourceItemId: normalizedSourceItemId || null,
+          });
+        } catch (refreshRegisterError) {
+          console.log('[blueprint_youtube_refresh_register_failed]', JSON.stringify({
+            blueprint_id: blueprint.id,
+            run_id: result.run_id,
+            error: refreshRegisterError instanceof Error ? refreshRegisterError.message : String(refreshRegisterError),
           }));
         }
       }

@@ -136,7 +136,7 @@ import { createSourcePageAssetSweepService } from './services/sourcePageAssetSwe
 import { createAutoBannerQueueService } from './services/autoBannerQueue';
 import { createSourceSubscriptionSyncService } from './services/sourceSubscriptionSync';
 import { createBlueprintCreationService } from './services/blueprintCreation';
-import { createBlueprintYouTubeCommentsService } from './services/blueprintYoutubeComments';
+import { createBlueprintYouTubeCommentsService, type BlueprintYouTubeRefreshKind } from './services/blueprintYoutubeComments';
 import { createYouTubeBlueprintPipelineService } from './services/youtubeBlueprintPipeline';
 import {
   createGenerationTierAccessResolver,
@@ -256,6 +256,13 @@ const workerBatchSize = clampInt(process.env.WORKER_BATCH_SIZE, 10, 1, 200);
 const workerLeaseMs = clampInt(process.env.WORKER_LEASE_MS, 90_000, 5_000, 15 * 60_000);
 const workerHeartbeatMs = clampInt(process.env.WORKER_HEARTBEAT_MS, 10_000, 1_000, 5 * 60_000);
 const jobExecutionTimeoutMs = clampInt(process.env.JOB_EXECUTION_TIMEOUT_MS, 180_000, 5_000, 10 * 60_000);
+const youtubeRefreshEnabled = parseRuntimeFlag(process.env.YOUTUBE_REFRESH_ENABLED, true);
+const youtubeRefreshIntervalMinutes = clampInt(process.env.YOUTUBE_REFRESH_INTERVAL_MINUTES, 10, 1, 120);
+const youtubeRefreshQueueDepthGuard = clampInt(process.env.YOUTUBE_REFRESH_QUEUE_DEPTH_GUARD, 100, 1, 50_000);
+const youtubeRefreshViewMaxPerCycle = clampInt(process.env.YOUTUBE_REFRESH_VIEW_MAX_PER_CYCLE, 15, 0, 500);
+const youtubeRefreshCommentsMaxPerCycle = clampInt(process.env.YOUTUBE_REFRESH_COMMENTS_MAX_PER_CYCLE, 5, 0, 500);
+const youtubeRefreshViewIntervalHours = clampInt(process.env.YOUTUBE_REFRESH_VIEW_INTERVAL_HOURS, 12, 1, 24 * 14);
+const youtubeRefreshCommentsIntervalHours = clampInt(process.env.YOUTUBE_REFRESH_COMMENTS_INTERVAL_HOURS, 48, 1, 24 * 30);
 const unlockIntakeEnabledRaw = String(process.env.UNLOCK_INTAKE_ENABLED || 'true').trim().toLowerCase();
 const unlockIntakeEnabled = !(unlockIntakeEnabledRaw === 'false' || unlockIntakeEnabledRaw === '0' || unlockIntakeEnabledRaw === 'off');
 const sourceUnlockReservationSeconds = clampInt(process.env.SOURCE_UNLOCK_RESERVATION_SECONDS, 300, 60, 3600);
@@ -575,6 +582,7 @@ const QUEUED_INGESTION_SCOPES = [
   'source_auto_unlock_retry',
   'source_transcript_revalidate',
   'blueprint_youtube_enrichment',
+  'blueprint_youtube_refresh',
   'search_video_generate',
   'manual_refresh_selection',
   'all_active_subscriptions',
@@ -585,6 +593,7 @@ const queuedWorkerId = `ingestion-worker-${process.pid}`;
 let queuedWorkerTimer: ReturnType<typeof setTimeout> | null = null;
 let queuedWorkerRunning = false;
 let queuedWorkerRequested = false;
+let youtubeRefreshSchedulerTimer: ReturnType<typeof setTimeout> | null = null;
 
 function normalizeGateMode(raw: unknown, fallback: GateMode): GateMode {
   const normalized = String(raw || '').trim().toLowerCase();
@@ -2775,6 +2784,8 @@ async function maybeApplyAutoBannerPolicyAfterCreate(input: {
 
 const blueprintYouTubeCommentsService = createBlueprintYouTubeCommentsService({
   apiKey: youtubeDataApiKey,
+  refreshViewIntervalHours: youtubeRefreshViewIntervalHours,
+  refreshCommentsIntervalHours: youtubeRefreshCommentsIntervalHours,
 });
 
 const blueprintCreationService = createBlueprintCreationService({
@@ -2794,6 +2805,7 @@ const blueprintCreationService = createBlueprintCreationService({
   markVariantReady,
   markVariantFailed,
   enqueueBlueprintYouTubeEnrichment: enqueueBlueprintYouTubeEnrichmentJob,
+  registerBlueprintYouTubeRefreshState: blueprintYouTubeCommentsService.registerRefreshStateForBlueprint,
 });
 const { createBlueprintFromVideo } = blueprintCreationService;
 
@@ -2909,6 +2921,13 @@ type BlueprintYouTubeEnrichmentPayload = {
   run_id: string;
   blueprint_id: string;
   video_id: string | null;
+  source_item_id: string | null;
+};
+
+type BlueprintYouTubeRefreshPayload = {
+  blueprint_id: string;
+  refresh_kind: BlueprintYouTubeRefreshKind;
+  youtube_video_id: string;
   source_item_id: string | null;
 };
 
@@ -4003,6 +4022,41 @@ async function enqueueBlueprintYouTubeEnrichmentJob(input: {
     .single();
   if (jobError || !job?.id) {
     throw new Error(jobError?.message || 'Could not enqueue blueprint YouTube enrichment job.');
+  }
+  scheduleQueuedIngestionProcessing();
+  return {
+    job_id: job.id,
+  };
+}
+
+async function enqueueBlueprintYouTubeRefreshJob(input: {
+  db: ReturnType<typeof createClient>;
+  blueprintId: string;
+  refreshKind: BlueprintYouTubeRefreshKind;
+  youtubeVideoId: string;
+  sourceItemId?: string | null;
+}) {
+  const nowIso = new Date().toISOString();
+  const { data: job, error: jobError } = await input.db
+    .from('ingestion_jobs')
+    .insert({
+      trigger: 'service_cron',
+      scope: 'blueprint_youtube_refresh',
+      status: 'queued',
+      max_attempts: 1,
+      trace_id: null,
+      payload: {
+        blueprint_id: input.blueprintId,
+        refresh_kind: input.refreshKind,
+        youtube_video_id: input.youtubeVideoId,
+        source_item_id: input.sourceItemId == null ? null : String(input.sourceItemId || '').trim() || null,
+      } satisfies BlueprintYouTubeRefreshPayload,
+      next_run_at: nowIso,
+    })
+    .select('id')
+    .single();
+  if (jobError || !job?.id) {
+    throw new Error(jobError?.message || 'Could not enqueue blueprint YouTube refresh job.');
   }
   scheduleQueuedIngestionProcessing();
   return {
@@ -6383,6 +6437,26 @@ function normalizeBlueprintYouTubeEnrichmentPayload(value: unknown): BlueprintYo
   };
 }
 
+function normalizeBlueprintYouTubeRefreshPayload(value: unknown): BlueprintYouTubeRefreshPayload | null {
+  if (!value || typeof value !== 'object') return null;
+  const row = value as Record<string, unknown>;
+  const blueprintId = String(row.blueprint_id || '').trim();
+  const youtubeVideoId = String(row.youtube_video_id || '').trim();
+  const refreshKindRaw = String(row.refresh_kind || '').trim().toLowerCase();
+  const refreshKind: BlueprintYouTubeRefreshKind | null = refreshKindRaw === 'view_count'
+    ? 'view_count'
+    : refreshKindRaw === 'comments'
+      ? 'comments'
+      : null;
+  if (!blueprintId || !youtubeVideoId || !refreshKind) return null;
+  return {
+    blueprint_id: blueprintId,
+    refresh_kind: refreshKind,
+    youtube_video_id: youtubeVideoId,
+    source_item_id: row.source_item_id == null ? null : String(row.source_item_id || '').trim() || null,
+  };
+}
+
 function normalizeRefreshScanCandidates(value: unknown): RefreshScanCandidate[] {
   if (!Array.isArray(value)) return [];
   const rows: RefreshScanCandidate[] = [];
@@ -6728,6 +6802,34 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
           return;
         }
 
+        if (scope === 'blueprint_youtube_refresh') {
+          const refreshPayload = normalizeBlueprintYouTubeRefreshPayload(payload);
+          if (!refreshPayload) {
+            throw new Error('INVALID_BLUEPRINT_YOUTUBE_REFRESH_PAYLOAD');
+          }
+          await blueprintYouTubeCommentsService.executeRefresh({
+            db,
+            traceDb: db,
+            blueprintId: refreshPayload.blueprint_id,
+            kind: refreshPayload.refresh_kind,
+            youtubeVideoId: refreshPayload.youtube_video_id,
+            sourceItemId: refreshPayload.source_item_id,
+          });
+          await db.from('ingestion_jobs').update({
+            status: 'succeeded',
+            finished_at: new Date().toISOString(),
+            processed_count: 1,
+            inserted_count: 1,
+            skipped_count: 0,
+            lease_expires_at: null,
+            worker_id: null,
+            last_heartbeat_at: new Date().toISOString(),
+            error_code: null,
+            error_message: null,
+          }).eq('id', job.id);
+          return;
+        }
+
         if (scope === 'manual_refresh_selection') {
           const userId = String(payload.user_id || job.requested_by_user_id || '').trim();
           const items = normalizeRefreshScanCandidates(payload.items);
@@ -6897,6 +6999,109 @@ function scheduleQueuedIngestionProcessing(delayMs = 0) {
   queuedWorkerTimer = setTimeout(() => {
     queuedWorkerTimer = null;
     void runQueuedIngestionProcessing();
+  }, waitMs);
+}
+
+async function runYouTubeRefreshSchedulerCycle() {
+  if (!youtubeRefreshEnabled || !runIngestionWorker) return;
+  const db = getServiceSupabaseClient();
+  if (!db) return;
+
+  try {
+    const queueDepth = await countQueueDepth(db, {
+      statuses: ['queued', 'running'],
+      scopes: [...QUEUED_INGESTION_SCOPES],
+    });
+    if (queueDepth >= youtubeRefreshQueueDepthGuard) {
+      console.log('[youtube_refresh_scheduler_skipped]', JSON.stringify({
+        reason: 'QUEUE_DEPTH_GUARD',
+        queue_depth: queueDepth,
+        depth_guard: youtubeRefreshQueueDepthGuard,
+      }));
+      return;
+    }
+
+    const totalBudget = Math.max(0, youtubeRefreshViewMaxPerCycle + youtubeRefreshCommentsMaxPerCycle);
+    let enqueuedTotal = 0;
+
+    if (youtubeRefreshViewMaxPerCycle > 0 && enqueuedTotal < totalBudget) {
+      const viewCandidates = await blueprintYouTubeCommentsService.listDueRefreshCandidates({
+        db,
+        kind: 'view_count',
+        limit: Math.min(youtubeRefreshViewMaxPerCycle, totalBudget),
+      });
+      for (const candidate of viewCandidates) {
+        if (enqueuedTotal >= totalBudget) break;
+        const hasPending = await blueprintYouTubeCommentsService.hasPendingRefreshJob({
+          db,
+          blueprintId: candidate.blueprint_id,
+          kind: 'view_count',
+        });
+        if (hasPending) continue;
+        await enqueueBlueprintYouTubeRefreshJob({
+          db,
+          blueprintId: candidate.blueprint_id,
+          refreshKind: 'view_count',
+          youtubeVideoId: candidate.youtube_video_id,
+          sourceItemId: candidate.source_item_id,
+        });
+        enqueuedTotal += 1;
+      }
+    }
+
+    if (youtubeRefreshCommentsMaxPerCycle > 0 && enqueuedTotal < totalBudget) {
+      const commentsBudget = Math.min(
+        youtubeRefreshCommentsMaxPerCycle,
+        Math.max(0, totalBudget - enqueuedTotal),
+      );
+      const commentCandidates = await blueprintYouTubeCommentsService.listDueRefreshCandidates({
+        db,
+        kind: 'comments',
+        limit: commentsBudget,
+      });
+      for (const candidate of commentCandidates) {
+        if (enqueuedTotal >= totalBudget) break;
+        const hasPending = await blueprintYouTubeCommentsService.hasPendingRefreshJob({
+          db,
+          blueprintId: candidate.blueprint_id,
+          kind: 'comments',
+        });
+        if (hasPending) continue;
+        await enqueueBlueprintYouTubeRefreshJob({
+          db,
+          blueprintId: candidate.blueprint_id,
+          refreshKind: 'comments',
+          youtubeVideoId: candidate.youtube_video_id,
+          sourceItemId: candidate.source_item_id,
+        });
+        enqueuedTotal += 1;
+      }
+    }
+
+    console.log('[youtube_refresh_scheduler_cycle]', JSON.stringify({
+      enqueued_total: enqueuedTotal,
+      total_budget: totalBudget,
+      view_max_per_cycle: youtubeRefreshViewMaxPerCycle,
+      comments_max_per_cycle: youtubeRefreshCommentsMaxPerCycle,
+      queue_depth: queueDepth,
+    }));
+  } catch (error) {
+    console.log('[youtube_refresh_scheduler_failed]', JSON.stringify({
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+}
+
+function scheduleYouTubeRefreshScheduler(delayMs?: number) {
+  if (!youtubeRefreshEnabled || !runIngestionWorker) return;
+  if (youtubeRefreshSchedulerTimer) return;
+  const defaultDelayMs = Math.max(1, youtubeRefreshIntervalMinutes) * 60_000;
+  const waitMs = Math.max(0, Math.floor(delayMs ?? defaultDelayMs));
+  youtubeRefreshSchedulerTimer = setTimeout(() => {
+    youtubeRefreshSchedulerTimer = null;
+    void runYouTubeRefreshSchedulerCycle().finally(() => {
+      scheduleYouTubeRefreshScheduler();
+    });
   }, waitMs);
 }
 
@@ -7794,4 +7999,7 @@ if (runHttpServer) {
 
 if (runIngestionWorker) {
   scheduleQueuedIngestionProcessing(1500);
+  if (youtubeRefreshEnabled) {
+    scheduleYouTubeRefreshScheduler(1500);
+  }
 }

@@ -74,6 +74,22 @@ curl -sS https://bapi.vdsai.cloud/api/ingestion/jobs/latest \
 curl -sS https://bapi.vdsai.cloud/api/ops/queue/health \
   -H "x-service-token: $INGESTION_SERVICE_TOKEN"
 ```
+
+### YouTube metadata refresh scheduler (worker-only)
+- Purpose: periodically refresh stored `view_count` and YouTube comment snapshots without calling YouTube from page loads.
+- Queue scope: `blueprint_youtube_refresh` (low-priority, budgeted).
+- Default cadence: every `10` minutes.
+- Default per-cycle budget:
+  - view refresh jobs: `15`
+  - comments refresh jobs: `5`
+  - total: `20`
+- Queue safety guard: if queue depth is `>= 100`, scheduler skips enqueueing for that cycle.
+- Disable quickly:
+```bash
+# in /etc/agentic-backend.env
+YOUTUBE_REFRESH_ENABLED=false
+```
+- If the migration for `blueprint_youtube_refresh_state` has not been applied yet, scheduler operations no-op safely.
 - Latest auto-banner queue snapshot (service auth):
 ```bash
 curl -sS https://bapi.vdsai.cloud/api/auto-banner/jobs/latest \
@@ -204,6 +220,13 @@ Required runtime variables:
 - `UNLOCK_INTAKE_ENABLED` (default `true`, fast pause for new unlock intake)
 - `RUN_HTTP_SERVER` (default `true`; enable HTTP server in the current process)
 - `RUN_INGESTION_WORKER` (default `true`; enable queued ingestion worker in the current process)
+- `YOUTUBE_REFRESH_ENABLED` (default `true`; enables low-priority YouTube metadata refresh scheduler on worker)
+- `YOUTUBE_REFRESH_INTERVAL_MINUTES` (default `10`)
+- `YOUTUBE_REFRESH_QUEUE_DEPTH_GUARD` (default `100`; scheduler skips enqueueing when queue depth is high)
+- `YOUTUBE_REFRESH_VIEW_MAX_PER_CYCLE` (default `15`)
+- `YOUTUBE_REFRESH_COMMENTS_MAX_PER_CYCLE` (default `5`)
+- `YOUTUBE_REFRESH_VIEW_INTERVAL_HOURS` (default `12`)
+- `YOUTUBE_REFRESH_COMMENTS_INTERVAL_HOURS` (default `48`)
 - `QUEUE_DEPTH_HARD_LIMIT` (default `1000`)
 - `QUEUE_DEPTH_PER_USER_LIMIT` (default `50`)
 - `WORKER_CONCURRENCY` (default `2`)

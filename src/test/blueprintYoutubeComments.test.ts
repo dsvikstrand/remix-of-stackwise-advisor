@@ -103,4 +103,239 @@ describe('blueprint YouTube comments service', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     expect(viewCount).toBe(12345);
   });
+
+  it('registerRefreshStateForBlueprint no-ops when no video id can be resolved', async () => {
+    const generationRunsQuery = {
+      select: vi.fn(),
+      eq: vi.fn(),
+      order: vi.fn(),
+      limit: vi.fn(),
+      maybeSingle: vi.fn(async () => ({ data: { video_id: null }, error: null })),
+    } as any;
+    generationRunsQuery.select.mockReturnValue(generationRunsQuery);
+    generationRunsQuery.eq.mockReturnValue(generationRunsQuery);
+    generationRunsQuery.order.mockReturnValue(generationRunsQuery);
+    generationRunsQuery.limit.mockReturnValue(generationRunsQuery);
+
+    const upsertRefreshState = vi.fn(async () => ({ error: null }));
+
+    const db = {
+      from(table: string) {
+        if (table === 'generation_runs') return generationRunsQuery;
+        if (table === 'blueprint_youtube_refresh_state') {
+          return {
+            upsert: upsertRefreshState,
+          };
+        }
+        throw new Error(`Unexpected table: ${table}`);
+      },
+    };
+
+    const service = createBlueprintYouTubeCommentsService({
+      apiKey: 'youtube-key',
+      fetchImpl: vi.fn() as unknown as typeof fetch,
+    });
+
+    await service.registerRefreshStateForBlueprint({
+      db,
+      blueprintId: 'bp_1',
+    });
+
+    expect(upsertRefreshState).not.toHaveBeenCalled();
+  });
+
+  it('executeRefresh(view_count) marks skipped when source_item_id is missing', async () => {
+    const upsertRefreshState = vi.fn(async () => ({ error: null }));
+    const db = {
+      from(table: string) {
+        if (table === 'blueprint_youtube_refresh_state') {
+          return {
+            upsert: upsertRefreshState,
+          };
+        }
+        throw new Error(`Unexpected table: ${table}`);
+      },
+    };
+
+    const fetchImpl = vi.fn() as unknown as typeof fetch;
+    const service = createBlueprintYouTubeCommentsService({
+      apiKey: 'youtube-key',
+      fetchImpl,
+    });
+
+    await service.executeRefresh({
+      db,
+      blueprintId: 'bp_1',
+      kind: 'view_count',
+      youtubeVideoId: 'abc123def45',
+      sourceItemId: null,
+    });
+
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(upsertRefreshState).toHaveBeenCalledTimes(1);
+    const payload = upsertRefreshState.mock.calls[0][0] as Record<string, unknown>;
+    expect(payload.last_view_refresh_status).toBe('skipped');
+    expect(typeof payload.next_view_refresh_at).toBe('string');
+  });
+
+  it('executeRefresh(comments) stores top/new snapshots and updates refresh state', async () => {
+    const commentDeleteEq2 = vi.fn(async () => ({ error: null }));
+    const commentDeleteEq1 = vi.fn(() => ({ eq: commentDeleteEq2 }));
+    const commentsTable = {
+      delete: vi.fn(() => ({ eq: commentDeleteEq1 })),
+      insert: vi.fn(async () => ({ error: null })),
+    };
+    const upsertRefreshState = vi.fn(async () => ({ error: null }));
+
+    const db = {
+      from(table: string) {
+        if (table === 'blueprint_youtube_comments') return commentsTable;
+        if (table === 'blueprint_youtube_refresh_state') {
+          return {
+            upsert: upsertRefreshState,
+          };
+        }
+        throw new Error(`Unexpected table: ${table}`);
+      },
+    };
+
+    const fetchImpl = vi.fn(async (url: string) => {
+      const parsed = new URL(url);
+      const order = parsed.searchParams.get('order');
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          items: [
+            {
+              id: `${order}_comment`,
+              snippet: {
+                topLevelComment: {
+                  snippet: {
+                    textDisplay: `${order} comment`,
+                  },
+                },
+              },
+            },
+          ],
+        }),
+      };
+    }) as unknown as typeof fetch;
+
+    const service = createBlueprintYouTubeCommentsService({
+      apiKey: 'youtube-key',
+      fetchImpl,
+    });
+
+    await service.executeRefresh({
+      db,
+      blueprintId: 'bp_1',
+      kind: 'comments',
+      youtubeVideoId: 'abc123def45',
+      sourceItemId: 'src_1',
+    });
+
+    expect(commentsTable.insert).toHaveBeenCalledTimes(2);
+    expect(upsertRefreshState).toHaveBeenCalledTimes(1);
+    const payload = upsertRefreshState.mock.calls[0][0] as Record<string, unknown>;
+    expect(payload.last_comments_refresh_status).toBe('ok');
+    expect(payload.consecutive_comments_failures).toBe(0);
+  });
+
+  it('executeRefresh(comments) records failure and backoff without throwing', async () => {
+    const refreshSelectQuery = {
+      eq: vi.fn(),
+      maybeSingle: vi.fn(async () => ({ data: { consecutive_comments_failures: 1 }, error: null })),
+    } as any;
+    refreshSelectQuery.eq.mockReturnValue(refreshSelectQuery);
+    const refreshStateTable = {
+      select: vi.fn(() => refreshSelectQuery),
+      upsert: vi.fn(async () => ({ error: null })),
+    };
+
+    const db = {
+      from(table: string) {
+        if (table === 'blueprint_youtube_refresh_state') return refreshStateTable;
+        throw new Error(`Unexpected table: ${table}`);
+      },
+    };
+
+    const fetchImpl = vi.fn(async () => ({
+      ok: false,
+      status: 429,
+      json: async () => ({
+        error: {
+          message: 'quota exceeded',
+          errors: [{ reason: 'quotaExceeded' }],
+        },
+      }),
+    })) as unknown as typeof fetch;
+
+    const service = createBlueprintYouTubeCommentsService({
+      apiKey: 'youtube-key',
+      fetchImpl,
+    });
+
+    await expect(service.executeRefresh({
+      db,
+      blueprintId: 'bp_1',
+      kind: 'comments',
+      youtubeVideoId: 'abc123def45',
+      sourceItemId: 'src_1',
+    })).resolves.toBeUndefined();
+
+    expect(refreshStateTable.upsert).toHaveBeenCalledTimes(1);
+    const payload = refreshStateTable.upsert.mock.calls[0][0] as Record<string, unknown>;
+    expect(payload.last_comments_refresh_status).toBe('failed');
+    expect(payload.consecutive_comments_failures).toBe(2);
+    expect(typeof payload.next_comments_refresh_at).toBe('string');
+  });
+
+  it('hasPendingRefreshJob detects matching blueprint/kind payloads', async () => {
+    const pendingQuery = {
+      select: vi.fn(),
+      eq: vi.fn(),
+      in: vi.fn(),
+      limit: vi.fn(async () => ({
+        data: [
+          {
+            payload: {
+              blueprint_id: 'bp_1',
+              refresh_kind: 'comments',
+            },
+          },
+        ],
+        error: null,
+      })),
+    } as any;
+    pendingQuery.select.mockReturnValue(pendingQuery);
+    pendingQuery.eq.mockReturnValue(pendingQuery);
+    pendingQuery.in.mockReturnValue(pendingQuery);
+
+    const db = {
+      from(table: string) {
+        if (table === 'ingestion_jobs') return pendingQuery;
+        throw new Error(`Unexpected table: ${table}`);
+      },
+    };
+
+    const service = createBlueprintYouTubeCommentsService({
+      apiKey: 'youtube-key',
+      fetchImpl: vi.fn() as unknown as typeof fetch,
+    });
+
+    const isPendingComments = await service.hasPendingRefreshJob({
+      db,
+      blueprintId: 'bp_1',
+      kind: 'comments',
+    });
+    const isPendingViewCount = await service.hasPendingRefreshJob({
+      db,
+      blueprintId: 'bp_1',
+      kind: 'view_count',
+    });
+
+    expect(isPendingComments).toBe(true);
+    expect(isPendingViewCount).toBe(false);
+  });
 });

@@ -105,6 +105,75 @@ export type Database = {
           },
         ]
       }
+      blueprint_youtube_refresh_state: {
+        Row: {
+          blueprint_id: string
+          consecutive_comments_failures: number
+          consecutive_view_failures: number
+          created_at: string
+          enabled: boolean
+          last_comments_refresh_at: string | null
+          last_comments_refresh_status: string | null
+          last_error_message: string | null
+          last_view_refresh_at: string | null
+          last_view_refresh_status: string | null
+          next_comments_refresh_at: string | null
+          next_view_refresh_at: string | null
+          source_item_id: string | null
+          updated_at: string
+          youtube_video_id: string
+        }
+        Insert: {
+          blueprint_id: string
+          consecutive_comments_failures?: number
+          consecutive_view_failures?: number
+          created_at?: string
+          enabled?: boolean
+          last_comments_refresh_at?: string | null
+          last_comments_refresh_status?: string | null
+          last_error_message?: string | null
+          last_view_refresh_at?: string | null
+          last_view_refresh_status?: string | null
+          next_comments_refresh_at?: string | null
+          next_view_refresh_at?: string | null
+          source_item_id?: string | null
+          updated_at?: string
+          youtube_video_id: string
+        }
+        Update: {
+          blueprint_id?: string
+          consecutive_comments_failures?: number
+          consecutive_view_failures?: number
+          created_at?: string
+          enabled?: boolean
+          last_comments_refresh_at?: string | null
+          last_comments_refresh_status?: string | null
+          last_error_message?: string | null
+          last_view_refresh_at?: string | null
+          last_view_refresh_status?: string | null
+          next_comments_refresh_at?: string | null
+          next_view_refresh_at?: string | null
+          source_item_id?: string | null
+          updated_at?: string
+          youtube_video_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blueprint_youtube_refresh_state_blueprint_id_fkey"
+            columns: ["blueprint_id"]
+            isOneToOne: true
+            referencedRelation: "blueprints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blueprint_youtube_refresh_state_source_item_id_fkey"
+            columns: ["source_item_id"]
+            isOneToOne: false
+            referencedRelation: "source_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       blueprint_likes: {
         Row: {
           blueprint_id: string

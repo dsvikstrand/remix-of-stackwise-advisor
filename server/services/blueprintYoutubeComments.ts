@@ -3,6 +3,7 @@ import { appendGenerationEvent } from './generationTrace';
 type DbClient = any;
 
 export type YouTubeCommentSortMode = 'top' | 'new';
+export type BlueprintYouTubeRefreshKind = 'view_count' | 'comments';
 
 export type StoredBlueprintYouTubeComment = {
   source_comment_id: string;
@@ -15,10 +16,39 @@ export type StoredBlueprintYouTubeComment = {
 };
 
 const YOUTUBE_COMMENT_SNAPSHOT_LIMIT = 20;
+const DEFAULT_REFRESH_VIEW_INTERVAL_HOURS = 12;
+const DEFAULT_REFRESH_COMMENTS_INTERVAL_HOURS = 48;
+const VIEW_REFRESH_BACKOFF_HOURS = [6, 24, 48] as const;
+const COMMENTS_REFRESH_BACKOFF_HOURS = [24, 72, 168] as const;
+const RECENT_BLUEPRINT_WINDOW_DAYS = 7;
 const YOUTUBE_COMMENT_SORT_ORDER: Record<YouTubeCommentSortMode, 'relevance' | 'time'> = {
   top: 'relevance',
   new: 'time',
 };
+
+type BlueprintYouTubeRefreshCandidate = {
+  blueprint_id: string;
+  youtube_video_id: string;
+  source_item_id: string | null;
+  next_due_at: string | null;
+};
+
+function toFutureIsoFromHours(hours: number) {
+  const safeHours = Number.isFinite(hours) ? Math.max(1, Math.floor(hours)) : 1;
+  return new Date(Date.now() + safeHours * 60 * 60 * 1000).toISOString();
+}
+
+function getBackoffHours(level: number, values: readonly [number, number, number]) {
+  const normalizedLevel = Math.max(1, Math.floor(level || 1));
+  const index = Math.min(values.length - 1, normalizedLevel - 1);
+  return values[index];
+}
+
+function normalizeIntervalHours(raw: unknown, fallback: number) {
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(1, Math.floor(parsed));
+}
 
 function parseViewCount(payload: unknown) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
@@ -100,9 +130,19 @@ function normalizeCommentItems(payload: unknown): StoredBlueprintYouTubeComment[
 export function createBlueprintYouTubeCommentsService(input: {
   apiKey?: string | null;
   fetchImpl?: typeof fetch;
+  refreshViewIntervalHours?: number;
+  refreshCommentsIntervalHours?: number;
 }) {
   const apiKey = String(input.apiKey || '').trim();
   const fetchImpl = input.fetchImpl || fetch;
+  const refreshViewIntervalHours = normalizeIntervalHours(
+    input.refreshViewIntervalHours,
+    DEFAULT_REFRESH_VIEW_INTERVAL_HOURS,
+  );
+  const refreshCommentsIntervalHours = normalizeIntervalHours(
+    input.refreshCommentsIntervalHours,
+    DEFAULT_REFRESH_COMMENTS_INTERVAL_HOURS,
+  );
 
   async function resolveBlueprintYouTubeVideoId(args: {
     db: DbClient;
@@ -277,6 +317,438 @@ export function createBlueprintYouTubeCommentsService(input: {
     return Boolean(updatedRow?.id);
   }
 
+  async function appendRefreshEvent(args: {
+    traceDb?: DbClient | null;
+    runId?: string | null;
+    event: string;
+    level?: 'info' | 'warn' | 'error';
+    payload?: Record<string, unknown>;
+  }) {
+    if (!args.traceDb) return;
+    const runId = String(args.runId || '').trim();
+    if (!runId) return;
+    await appendGenerationEvent(args.traceDb, {
+      runId,
+      event: args.event,
+      level: args.level,
+      payload: args.payload,
+    });
+  }
+
+  async function upsertRefreshState(args: {
+    db: DbClient;
+    blueprintId: string;
+    videoId: string;
+    sourceItemId?: string | null;
+    patch: Record<string, unknown>;
+  }) {
+    const nowIso = new Date().toISOString();
+    const { error } = await args.db
+      .from('blueprint_youtube_refresh_state')
+      .upsert({
+        blueprint_id: args.blueprintId,
+        youtube_video_id: args.videoId,
+        source_item_id: args.sourceItemId == null ? null : String(args.sourceItemId || '').trim() || null,
+        updated_at: nowIso,
+        ...args.patch,
+      }, { onConflict: 'blueprint_id' });
+    if (error) {
+      if (isMissingRelationError(error, 'blueprint_youtube_refresh_state')) return;
+      throw error;
+    }
+  }
+
+  async function getRefreshFailureCount(args: {
+    db: DbClient;
+    blueprintId: string;
+    kind: BlueprintYouTubeRefreshKind;
+  }) {
+    const field = args.kind === 'view_count' ? 'consecutive_view_failures' : 'consecutive_comments_failures';
+    const { data, error } = await args.db
+      .from('blueprint_youtube_refresh_state')
+      .select(field)
+      .eq('blueprint_id', args.blueprintId)
+      .maybeSingle();
+    if (error) {
+      if (isMissingRelationError(error, 'blueprint_youtube_refresh_state')) return 0;
+      throw error;
+    }
+    const count = Number((data as Record<string, unknown> | null)?.[field] || 0);
+    return Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0;
+  }
+
+  async function registerRefreshStateForBlueprint(args: {
+    db: DbClient;
+    blueprintId: string;
+    runId?: string | null;
+    explicitVideoId?: string | null;
+    explicitSourceItemId?: string | null;
+  }) {
+    if (!apiKey) return;
+    const videoId = await resolveBlueprintYouTubeVideoId({
+      db: args.db,
+      blueprintId: args.blueprintId,
+      explicitVideoId: args.explicitVideoId,
+      runId: args.runId || null,
+    });
+    if (!videoId) return;
+
+    await upsertRefreshState({
+      db: args.db,
+      blueprintId: args.blueprintId,
+      videoId,
+      sourceItemId: args.explicitSourceItemId || null,
+      patch: {
+        enabled: true,
+        next_view_refresh_at: toFutureIsoFromHours(refreshViewIntervalHours),
+        next_comments_refresh_at: toFutureIsoFromHours(refreshCommentsIntervalHours),
+        last_error_message: null,
+      },
+    });
+  }
+
+  async function listDueRefreshCandidates(args: {
+    db: DbClient;
+    kind: BlueprintYouTubeRefreshKind;
+    limit: number;
+    recentWithinDays?: number;
+  }) {
+    if (!apiKey) return [] as BlueprintYouTubeRefreshCandidate[];
+    const limit = Math.max(1, Math.min(200, Math.floor(Number(args.limit) || 1)));
+    const dueColumn = args.kind === 'view_count' ? 'next_view_refresh_at' : 'next_comments_refresh_at';
+    const nowIso = new Date().toISOString();
+
+    const rowsByKey = new Map<string, BlueprintYouTubeRefreshCandidate>();
+    const tryAddRows = (rows: unknown[]) => {
+      for (const row of rows) {
+        if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+        const record = row as Record<string, unknown>;
+        const blueprintId = String(record.blueprint_id || '').trim();
+        const videoId = String(record.youtube_video_id || '').trim();
+        if (!blueprintId || !videoId || rowsByKey.has(blueprintId)) continue;
+        rowsByKey.set(blueprintId, {
+          blueprint_id: blueprintId,
+          youtube_video_id: videoId,
+          source_item_id: record.source_item_id == null ? null : String(record.source_item_id || '').trim() || null,
+          next_due_at: record[dueColumn] == null ? null : String(record[dueColumn] || '').trim() || null,
+        });
+      }
+    };
+
+    const dueQuery = await args.db
+      .from('blueprint_youtube_refresh_state')
+      .select(`blueprint_id,youtube_video_id,source_item_id,${dueColumn}`)
+      .eq('enabled', true)
+      .lte(dueColumn, nowIso)
+      .limit(Math.max(limit * 3, 30));
+    if (dueQuery.error) {
+      if (isMissingRelationError(dueQuery.error, 'blueprint_youtube_refresh_state')) return [] as BlueprintYouTubeRefreshCandidate[];
+      throw dueQuery.error;
+    }
+    tryAddRows(Array.isArray(dueQuery.data) ? dueQuery.data : []);
+
+    if (rowsByKey.size < limit) {
+      const nullQuery = await args.db
+        .from('blueprint_youtube_refresh_state')
+        .select(`blueprint_id,youtube_video_id,source_item_id,${dueColumn}`)
+        .eq('enabled', true)
+        .is(dueColumn, null)
+        .limit(Math.max(limit * 3, 30));
+      if (nullQuery.error) {
+        if (!isMissingRelationError(nullQuery.error, 'blueprint_youtube_refresh_state')) {
+          throw nullQuery.error;
+        }
+      } else {
+        tryAddRows(Array.isArray(nullQuery.data) ? nullQuery.data : []);
+      }
+    }
+
+    const candidates = [...rowsByKey.values()];
+    if (candidates.length === 0) return [];
+
+    const blueprintIds = candidates.map((row) => row.blueprint_id);
+    const createdById = new Map<string, number>();
+    const { data: blueprintRows, error: blueprintError } = await args.db
+      .from('blueprints')
+      .select('id,created_at')
+      .in('id', blueprintIds);
+    if (blueprintError) throw blueprintError;
+    for (const row of blueprintRows || []) {
+      const id = String((row as { id?: string }).id || '').trim();
+      const createdAt = Date.parse(String((row as { created_at?: string }).created_at || ''));
+      if (!id || Number.isNaN(createdAt)) continue;
+      createdById.set(id, createdAt);
+    }
+
+    const recentWithinDays = normalizeIntervalHours(args.recentWithinDays, RECENT_BLUEPRINT_WINDOW_DAYS);
+    const recentThresholdMs = Date.now() - recentWithinDays * 24 * 60 * 60 * 1000;
+    candidates.sort((a, b) => {
+      const aCreated = createdById.get(a.blueprint_id) ?? 0;
+      const bCreated = createdById.get(b.blueprint_id) ?? 0;
+      const aRecent = aCreated >= recentThresholdMs ? 1 : 0;
+      const bRecent = bCreated >= recentThresholdMs ? 1 : 0;
+      if (aRecent !== bRecent) return bRecent - aRecent;
+      const aDue = a.next_due_at ? Date.parse(a.next_due_at) : 0;
+      const bDue = b.next_due_at ? Date.parse(b.next_due_at) : 0;
+      if (aDue !== bDue) return aDue - bDue;
+      return aCreated - bCreated;
+    });
+
+    return candidates.slice(0, limit);
+  }
+
+  async function hasPendingRefreshJob(args: {
+    db: DbClient;
+    blueprintId: string;
+    kind: BlueprintYouTubeRefreshKind;
+  }) {
+    const { data, error } = await args.db
+      .from('ingestion_jobs')
+      .select('payload')
+      .eq('scope', 'blueprint_youtube_refresh')
+      .in('status', ['queued', 'running'])
+      .limit(200);
+    if (error) throw error;
+    for (const row of data || []) {
+      const payload = row?.payload;
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) continue;
+      const record = payload as Record<string, unknown>;
+      if (
+        String(record.blueprint_id || '').trim() === args.blueprintId
+        && String(record.refresh_kind || '').trim() === args.kind
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  async function executeRefresh(args: {
+    db: DbClient;
+    traceDb?: DbClient | null;
+    runId?: string | null;
+    blueprintId: string;
+    kind: BlueprintYouTubeRefreshKind;
+    youtubeVideoId: string;
+    sourceItemId?: string | null;
+  }) {
+    if (!apiKey) return;
+    const nowIso = new Date().toISOString();
+    const sourceItemId = String(args.sourceItemId || '').trim() || null;
+    const eventPayloadBase = {
+      refresh_kind: args.kind,
+      blueprint_id: args.blueprintId,
+      video_id: args.youtubeVideoId,
+    };
+
+    await appendRefreshEvent({
+      traceDb: args.traceDb,
+      runId: args.runId,
+      event: 'youtube_refresh_started',
+      payload: eventPayloadBase,
+    });
+    console.log('[youtube_refresh_started]', JSON.stringify(eventPayloadBase));
+
+    if (args.kind === 'view_count') {
+      if (!sourceItemId) {
+        await upsertRefreshState({
+          db: args.db,
+          blueprintId: args.blueprintId,
+          videoId: args.youtubeVideoId,
+          sourceItemId: null,
+          patch: {
+            last_view_refresh_status: 'skipped',
+            next_view_refresh_at: toFutureIsoFromHours(24),
+          },
+        });
+        await appendRefreshEvent({
+          traceDb: args.traceDb,
+          runId: args.runId,
+          event: 'youtube_refresh_succeeded',
+          payload: {
+            ...eventPayloadBase,
+            status: 'skipped',
+          },
+        });
+        console.log('[youtube_refresh_succeeded]', JSON.stringify({
+          ...eventPayloadBase,
+          status: 'skipped',
+        }));
+        return;
+      }
+
+      try {
+        const viewCount = await fetchYouTubeViewCount({ videoId: args.youtubeVideoId });
+        const storedOnSourceItem = await storeSourceItemViewCount({
+          db: args.db,
+          sourceItemId,
+          viewCount,
+        });
+        const status = storedOnSourceItem ? 'ok' : 'skipped';
+        await upsertRefreshState({
+          db: args.db,
+          blueprintId: args.blueprintId,
+          videoId: args.youtubeVideoId,
+          sourceItemId,
+          patch: {
+            last_view_refresh_at: nowIso,
+            last_view_refresh_status: status,
+            consecutive_view_failures: 0,
+            next_view_refresh_at: status === 'ok'
+              ? toFutureIsoFromHours(refreshViewIntervalHours)
+              : toFutureIsoFromHours(24),
+            last_error_message: null,
+          },
+        });
+        await appendRefreshEvent({
+          traceDb: args.traceDb,
+          runId: args.runId,
+          event: 'youtube_refresh_succeeded',
+          payload: {
+            ...eventPayloadBase,
+            status,
+            view_count: viewCount,
+            stored_on_source_item: storedOnSourceItem,
+          },
+        });
+        console.log('[youtube_refresh_succeeded]', JSON.stringify({
+          ...eventPayloadBase,
+          status,
+          view_count: viewCount,
+          stored_on_source_item: storedOnSourceItem,
+        }));
+      } catch (error) {
+        const previousFailures = await getRefreshFailureCount({
+          db: args.db,
+          blueprintId: args.blueprintId,
+          kind: 'view_count',
+        });
+        const nextFailures = previousFailures + 1;
+        const backoffHours = getBackoffHours(nextFailures, VIEW_REFRESH_BACKOFF_HOURS);
+        const message = error instanceof Error ? error.message : String(error);
+        await upsertRefreshState({
+          db: args.db,
+          blueprintId: args.blueprintId,
+          videoId: args.youtubeVideoId,
+          sourceItemId,
+          patch: {
+            last_view_refresh_status: 'failed',
+            consecutive_view_failures: nextFailures,
+            next_view_refresh_at: toFutureIsoFromHours(backoffHours),
+            last_error_message: message,
+          },
+        });
+        await appendRefreshEvent({
+          traceDb: args.traceDb,
+          runId: args.runId,
+          event: 'youtube_refresh_failed',
+          level: 'warn',
+          payload: {
+            ...eventPayloadBase,
+            error_message: message,
+            backoff_hours: backoffHours,
+          },
+        });
+        console.log('[youtube_refresh_failed]', JSON.stringify({
+          ...eventPayloadBase,
+          error_message: message,
+          backoff_hours: backoffHours,
+        }));
+      }
+      return;
+    }
+
+    try {
+      const topComments = await fetchYouTubeCommentSnapshot({
+        videoId: args.youtubeVideoId,
+        sortMode: 'top',
+      });
+      const newComments = await fetchYouTubeCommentSnapshot({
+        videoId: args.youtubeVideoId,
+        sortMode: 'new',
+      });
+      await storeBlueprintYouTubeComments({
+        db: args.db,
+        blueprintId: args.blueprintId,
+        videoId: args.youtubeVideoId,
+        sortMode: 'top',
+        comments: topComments,
+      });
+      await storeBlueprintYouTubeComments({
+        db: args.db,
+        blueprintId: args.blueprintId,
+        videoId: args.youtubeVideoId,
+        sortMode: 'new',
+        comments: newComments,
+      });
+      await upsertRefreshState({
+        db: args.db,
+        blueprintId: args.blueprintId,
+        videoId: args.youtubeVideoId,
+        sourceItemId,
+        patch: {
+          last_comments_refresh_at: nowIso,
+          last_comments_refresh_status: 'ok',
+          consecutive_comments_failures: 0,
+          next_comments_refresh_at: toFutureIsoFromHours(refreshCommentsIntervalHours),
+          last_error_message: null,
+        },
+      });
+      await appendRefreshEvent({
+        traceDb: args.traceDb,
+        runId: args.runId,
+        event: 'youtube_refresh_succeeded',
+        payload: {
+          ...eventPayloadBase,
+          top_count: topComments.length,
+          new_count: newComments.length,
+        },
+      });
+      console.log('[youtube_refresh_succeeded]', JSON.stringify({
+        ...eventPayloadBase,
+        top_count: topComments.length,
+        new_count: newComments.length,
+      }));
+    } catch (error) {
+      const previousFailures = await getRefreshFailureCount({
+        db: args.db,
+        blueprintId: args.blueprintId,
+        kind: 'comments',
+      });
+      const nextFailures = previousFailures + 1;
+      const backoffHours = getBackoffHours(nextFailures, COMMENTS_REFRESH_BACKOFF_HOURS);
+      const message = error instanceof Error ? error.message : String(error);
+      await upsertRefreshState({
+        db: args.db,
+        blueprintId: args.blueprintId,
+        videoId: args.youtubeVideoId,
+        sourceItemId,
+        patch: {
+          last_comments_refresh_status: 'failed',
+          consecutive_comments_failures: nextFailures,
+          next_comments_refresh_at: toFutureIsoFromHours(backoffHours),
+          last_error_message: message,
+        },
+      });
+      await appendRefreshEvent({
+        traceDb: args.traceDb,
+        runId: args.runId,
+        event: 'youtube_refresh_failed',
+        level: 'warn',
+        payload: {
+          ...eventPayloadBase,
+          error_message: message,
+          backoff_hours: backoffHours,
+        },
+      });
+      console.log('[youtube_refresh_failed]', JSON.stringify({
+        ...eventPayloadBase,
+        error_message: message,
+        backoff_hours: backoffHours,
+      }));
+    }
+  }
+
   async function populateForBlueprint(args: {
     db: DbClient;
     traceDb?: DbClient | null;
@@ -394,6 +866,10 @@ export function createBlueprintYouTubeCommentsService(input: {
     fetchYouTubeViewCount,
     storeBlueprintYouTubeComments,
     storeSourceItemViewCount,
+    registerRefreshStateForBlueprint,
+    listDueRefreshCandidates,
+    hasPendingRefreshJob,
+    executeRefresh,
     populateForBlueprint,
   };
 }
