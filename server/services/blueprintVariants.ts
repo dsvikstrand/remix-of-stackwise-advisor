@@ -349,21 +349,6 @@ export function createBlueprintVariantsService(deps: {
       sourceItemId = String(feedRow?.source_item_id || '').trim() || null;
     }
 
-    if (!sourceItemId) {
-      const { data: blueprintRow } = await db
-        .from('blueprints')
-        .select('selected_items')
-        .eq('id', normalizedBlueprintId)
-        .maybeSingle();
-      const selectedItems = blueprintRow?.selected_items && typeof blueprintRow.selected_items === 'object'
-        ? blueprintRow.selected_items as Record<string, unknown>
-        : null;
-      const sourceItemIdFromSelected = selectedItems && typeof selectedItems.source_item_id === 'string'
-        ? String(selectedItems.source_item_id || '').trim()
-        : '';
-      sourceItemId = sourceItemIdFromSelected || null;
-    }
-
     if (!sourceItemId) return null;
 
     const variants = await listVariantsForSourceItem(sourceItemId);

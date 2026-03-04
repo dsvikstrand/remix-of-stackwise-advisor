@@ -247,14 +247,6 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
         .map((tag) => deps.toTagSlug(String(tag || '').trim()))
         .filter(Boolean)
         .slice(0, 5);
-      const transcriptTransport = (() => {
-        const value = (result.meta as { transcript_transport?: unknown } | null)?.transcript_transport;
-        return value && typeof value === 'object' ? value : null;
-      })();
-      const summaryWordCount = String(result.draft.description || '')
-        .trim()
-        .split(/\s+/)
-        .filter(Boolean).length;
       const mappedDefaultSteps = deps.mapDraftStepsForBlueprint(result.draft.steps) as Array<{
         id?: string;
         title?: string;
@@ -277,32 +269,6 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
         title: result.draft.title,
         creator_user_id: input.userId,
         is_public: false,
-        selected_items: {
-          source: input.sourceTag,
-          source_item_id: normalizedSourceItemId || null,
-          generation_tier: generationTier,
-          run_id: result.run_id,
-          video_url: input.videoUrl,
-          bp_style: 'golden_v1',
-          bp_origin: 'youtube_pipeline',
-          bp_domain: 'deep',
-          summary_word_count: summaryWordCount,
-          bp_structure_ok: Boolean((result.meta as { bp_structure_ok?: unknown } | null)?.bp_structure_ok ?? true),
-          bp_structure_issues: Array.isArray((result.meta as { bp_structure_issues?: unknown } | null)?.bp_structure_issues)
-            ? (result.meta as { bp_structure_issues: unknown[] }).bp_structure_issues
-            : [],
-          bp_quality_ok: Boolean((result.meta as { bp_quality_ok?: unknown } | null)?.bp_quality_ok),
-          bp_quality_issues: Array.isArray((result.meta as { bp_quality_issues?: unknown } | null)?.bp_quality_issues)
-            ? (result.meta as { bp_quality_issues: unknown[] }).bp_quality_issues
-            : [],
-          bp_quality_retries_used: Number((result.meta as { bp_quality_retries_used?: unknown } | null)?.bp_quality_retries_used || 0),
-          bp_quality_final_mode: String((result.meta as { bp_quality_final_mode?: unknown } | null)?.bp_quality_final_mode || 'direct'),
-          bp_output_mode: String((result.meta as { bp_output_mode?: unknown } | null)?.bp_output_mode || deps.yt2bpOutputMode),
-          bp_trace_version: String((result.meta as { bp_trace_version?: unknown } | null)?.bp_trace_version || 'yt2bp_trace_v2'),
-          bp_run_id: result.run_id,
-          bp_trace_source: 'generation_runs',
-          bp_transcript_transport: transcriptTransport,
-        },
         banner_url: sourceThumbnailUrl,
         mix_notes: result.draft.notes || null,
         llm_review: result.review.summary || null,

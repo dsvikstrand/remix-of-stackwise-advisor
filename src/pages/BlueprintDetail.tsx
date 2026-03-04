@@ -30,12 +30,9 @@ import {
   parseBlueprintSectionsV1,
 } from '@/lib/blueprintSections';
 
-type ItemValue = string | { name?: string; context?: string };
 type StepItem = { category?: string; name?: string; context?: string };
 type BlueprintStep = { id?: string; title?: string; description?: string | null; items?: StepItem[] };
 type RenderStep = { id?: string; title: string; description: string; items: StepItem[] };
-type SummaryExpertiseLevel = 'default' | 'eli5';
-
 function extractYouTubeVideoId(url: string) {
   const raw = String(url || '').trim();
   if (!raw) return null;
@@ -61,63 +58,16 @@ function extractYouTubeVideoId(url: string) {
   return null;
 }
 
-function formatItem(item: ItemValue) {
-  if (typeof item === 'string') return item;
-  if (!item || typeof item !== 'object') return String(item);
-  const name = typeof item.name === 'string' ? item.name : 'Untitled';
-  const context = typeof item.context === 'string' && item.context.trim() ? item.context.trim() : '';
-  return context ? `${name} [${context}]` : name;
-}
-
 function formatStepItem(item: StepItem) {
   const name = typeof item.name === 'string' ? item.name : 'Untitled';
   const context = typeof item.context === 'string' && item.context.trim() ? item.context.trim() : '';
   return context ? `${name} [${context}]` : name;
 }
 
-function parseSelectedItems(selected: Json) {
-  if (!selected || typeof selected !== 'object' || Array.isArray(selected)) {
-    return [] as Array<[string, ItemValue[]]>;
-  }
-  return Object.entries(selected as Record<string, ItemValue[]>).filter(([, items]) => Array.isArray(items));
-}
-
-function parseSummaryVariants(selected: Json | null | undefined) {
-  const fallback: Record<SummaryExpertiseLevel, string> = {
-    default: '',
-    eli5: '',
-  };
-  if (!selected || typeof selected !== 'object' || Array.isArray(selected)) return fallback;
-  const payload = selected as Record<string, unknown>;
-  const variants = payload.bp_summary_variants;
-  if (!variants || typeof variants !== 'object' || Array.isArray(variants)) return fallback;
-  const map = variants as Record<string, unknown>;
-  return {
-    default: String(map.default || '').trim(),
-    eli5: String(map.eli5 || '').trim(),
-  };
-}
-
 function parseSteps(steps: Json) {
   if (!steps || typeof steps !== 'object') return [] as BlueprintStep[];
   if (!Array.isArray(steps)) return [] as BlueprintStep[];
   return steps.filter((step): step is BlueprintStep => !!step && typeof step === 'object');
-}
-
-function parseStepVariants(selected: Json | null | undefined) {
-  const fallback: Record<SummaryExpertiseLevel, BlueprintStep[]> = {
-    default: [],
-    eli5: [],
-  };
-  if (!selected || typeof selected !== 'object' || Array.isArray(selected)) return fallback;
-  const payload = selected as Record<string, unknown>;
-  const variants = payload.bp_step_variants;
-  if (!variants || typeof variants !== 'object' || Array.isArray(variants)) return fallback;
-  const map = variants as Record<string, Json>;
-  return {
-    default: parseSteps(map.default),
-    eli5: parseSteps(map.eli5),
-  };
 }
 
 function stripMarkdownImageTokens(text: string) {
@@ -312,17 +262,6 @@ function splitEmbeddedGoldenSections(step: RenderStep): RenderStep[] {
   return sections;
 }
 
-function isGoldenBlueprintExample(selectedItems: Json | null | undefined) {
-  if (!selectedItems || typeof selectedItems !== 'object' || Array.isArray(selectedItems)) return false;
-  const source = String((selectedItems as Record<string, unknown>).source || '').trim();
-  return source === 'golden_bp_examples_v1' || source === 'golden_bp_examples_v1_prev';
-}
-
-function isGoldenV1GeneratedBlueprint(selectedItems: Json | null | undefined) {
-  if (!selectedItems || typeof selectedItems !== 'object' || Array.isArray(selectedItems)) return false;
-  return String((selectedItems as Record<string, unknown>).bp_style || '').trim() === 'golden_v1';
-}
-
 function hasGoldenStructure(steps: BlueprintStep[]) {
   if (!Array.isArray(steps) || steps.length < 2) return false;
   const titles = steps.map((step) => normalizeHeadingKey(step.title || '')).filter(Boolean);
@@ -345,24 +284,16 @@ export default function BlueprintDetail() {
   const [interactiveSectionsExpanded, setInteractiveSectionsExpanded] = useState(false);
   const [takeawaysExpanded, setTakeawaysExpanded] = useState(false);
   const [activeInteractiveTab, setActiveInteractiveTab] = useState('');
-  const [summaryExpertiseLevel, setSummaryExpertiseLevel] = useState<SummaryExpertiseLevel>('eli5');
   const location = useLocation();
   const loggedBlueprintId = useRef<string | null>(null);
-  const summaryVariants = parseSummaryVariants(blueprint?.selected_items);
-  const hasVariantToggle = false;
-  const stepVariants = parseStepVariants(blueprint?.selected_items);
   const baseSteps = blueprint ? parseSteps(blueprint.steps) : [];
-  const defaultVariantSteps = stepVariants.default.length > 0 ? stepVariants.default : baseSteps;
-  const hasEli5StepVariant = stepVariants.eli5.length > 0;
-  const hasEli5SummaryVariant = Boolean(summaryVariants.eli5);
-  const hasEli5Content = hasEli5SummaryVariant || hasEli5StepVariant;
-  const steps = summaryExpertiseLevel === 'eli5' && hasEli5StepVariant
-    ? stepVariants.eli5
-    : defaultVariantSteps;
-  const isGoldenExample = isGoldenBlueprintExample(blueprint?.selected_items);
-  const isGoldenV1Generated = isGoldenV1GeneratedBlueprint(blueprint?.selected_items);
-  const isGoldenStructured = hasGoldenStructure(defaultVariantSteps);
-  const useGoldenRender = isGoldenExample || isGoldenV1Generated || isGoldenStructured;
+  const steps = baseSteps;
+  const storedGoldenSectionsSchema = useMemo(
+    () => parseBlueprintSectionsV1(blueprint?.sections_json),
+    [blueprint?.sections_json],
+  );
+  const isGoldenStructured = hasGoldenStructure(baseSteps);
+  const useGoldenRender = Boolean(storedGoldenSectionsSchema) || isGoldenStructured;
   const hasAiReview = !useGoldenRender && Boolean((blueprint?.llm_review || '').trim());
   const [sourceChannel, setSourceChannel] = useState<{
     title: string;
@@ -428,26 +359,6 @@ export default function BlueprintDetail() {
           .limit(1)
           .maybeSingle();
         sourceItemId = String(feedRow?.source_item_id || '').trim() || null;
-      }
-
-      if (!sourceItemId) {
-        const selectedItems =
-          blueprint.selected_items && typeof blueprint.selected_items === 'object'
-            ? (blueprint.selected_items as Record<string, unknown>)
-            : null;
-        const videoUrl = selectedItems && typeof selectedItems.video_url === 'string'
-          ? String(selectedItems.video_url || '').trim()
-          : '';
-        if (videoUrl) {
-          const { data: sourceByUrl } = await supabase
-            .from('source_items')
-            .select('id, created_at')
-            .eq('source_url', videoUrl)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          sourceItemId = String(sourceByUrl?.id || '').trim() || null;
-        }
       }
 
       if (!sourceItemId) {
@@ -566,13 +477,7 @@ export default function BlueprintDetail() {
     bannerUrl: blueprint?.banner_url || null,
     sourceThumbnailUrl: sourceChannel?.thumbnailUrl || null,
   });
-  const selectedItemsPayload =
-    blueprint?.selected_items && typeof blueprint.selected_items === 'object' && !Array.isArray(blueprint.selected_items)
-      ? (blueprint.selected_items as Record<string, unknown>)
-      : null;
-  const sourceVideoUrl = selectedItemsPayload && typeof selectedItemsPayload.video_url === 'string'
-    ? String(selectedItemsPayload.video_url || '').trim()
-    : '';
+  const sourceVideoUrl = String(sourceChannel?.url || '').trim();
   const youtubeVideoId = extractYouTubeVideoId(sourceVideoUrl);
   const youtubeEmbedUrl = youtubeVideoId
     ? `https://www.youtube-nocookie.com/embed/${youtubeVideoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1`
@@ -582,13 +487,9 @@ export default function BlueprintDetail() {
     ? steps.map((step, index) => normalizeGoldenStep(step, index))
     : [];
   const legacyDefaultGoldenSections = useGoldenRender
-    ? defaultVariantSteps.map((step, index) => normalizeGoldenStep(step, index))
+    ? baseSteps.map((step, index) => normalizeGoldenStep(step, index))
     : [];
   const useSectionsSchemaRender = useGoldenRender;
-  const storedGoldenSectionsSchema = useMemo(
-    () => parseBlueprintSectionsV1(blueprint?.sections_json),
-    [blueprint?.sections_json],
-  );
   const derivedGoldenSectionsSchema = useMemo(
     () =>
       useSectionsSchemaRender
@@ -633,17 +534,8 @@ export default function BlueprintDetail() {
     const key = normalizeHeadingKey(step.title);
     return isSummaryKey(key);
   });
-  useEffect(() => {
-    setSummaryExpertiseLevel(hasEli5Content ? 'eli5' : 'default');
-  }, [blueprint?.id, hasEli5Content]);
-
-  const summaryDefaultText = defaultTopSummarySection?.description || topSummarySection?.description || summaryVariants.default || '';
-  const summaryEli5Text = hasEli5SummaryVariant
-    ? (summaryVariants.eli5 || summaryDefaultText)
-    : (topSummarySection?.description || summaryDefaultText);
-  const selectedSummaryText = summaryExpertiseLevel === 'eli5'
-    ? summaryEli5Text || summaryDefaultText
-    : summaryDefaultText;
+  const summaryDefaultText = defaultTopSummarySection?.description || topSummarySection?.description || '';
+  const selectedSummaryText = summaryDefaultText;
   const bleupSection = visibleGoldenSections.find((step) => {
     const key = normalizeHeadingKey(step.title);
     return isBleupKey(key);
@@ -687,8 +579,6 @@ export default function BlueprintDetail() {
       };
       return rank(a) - rank(b);
     });
-  const selectedItemGroups = blueprint ? parseSelectedItems(blueprint.selected_items) : [];
-
   const renderGoldenGroup = (group: RenderStep[]) => {
     if (group.length === 0) return null;
     return (
@@ -1100,20 +990,6 @@ export default function BlueprintDetail() {
                                   ))}
                                 </div>
                               ) : null}
-                            </div>
-                          ))}
-                        </div>
-                      </>
-                    ) : selectedItemGroups.length > 0 ? (
-                      <>
-                        <h3 className="font-semibold">Selected items</h3>
-                        <div className="mt-2 space-y-2">
-                          {selectedItemGroups.map(([category, items]) => (
-                            <div key={category} className="rounded-md border border-border/40 p-3">
-                              <p className="text-sm font-medium">{category}</p>
-                              <p className="text-sm text-muted-foreground">
-                                {items.length > 0 ? items.map(formatItem).join(', ') : 'No items listed'}
-                              </p>
                             </div>
                           ))}
                         </div>

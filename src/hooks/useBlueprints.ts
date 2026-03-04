@@ -9,7 +9,7 @@ export interface BlueprintRow {
   inventory_id: string | null;
   creator_user_id: string;
   title: string;
-  selected_items: Json;
+  selected_items?: Json | null;
   steps: Json | null;
   sections_json?: Json | null;
   mix_notes: string | null;
@@ -67,6 +67,7 @@ interface UpdateBlueprintInput {
 }
 
 const BLUEPRINT_FIELDS = 'id, inventory_id, creator_user_id, title, selected_items, steps, mix_notes, review_prompt, banner_url, llm_review, is_public, likes_count, source_blueprint_id, created_at, updated_at';
+const BLUEPRINT_DETAIL_FIELDS = 'id, inventory_id, creator_user_id, title, steps, mix_notes, review_prompt, banner_url, llm_review, is_public, likes_count, source_blueprint_id, created_at, updated_at';
 
 function isMissingColumnError(error: unknown, column: string) {
   const e = error as any;
@@ -114,7 +115,7 @@ export function useBlueprint(blueprintId?: string) {
 
       const { data: blueprint, error } = await supabase
         .from('blueprints')
-        .select(BLUEPRINT_FIELDS)
+        .select(BLUEPRINT_DETAIL_FIELDS)
         .eq('id', blueprintId)
         .maybeSingle();
 

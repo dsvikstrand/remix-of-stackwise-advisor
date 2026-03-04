@@ -34,8 +34,8 @@ interface BlueprintPost {
   id: string;
   creator_user_id: string;
   title: string;
-  selected_items: Json;
   sections_json: Json | null;
+  steps: Json | null;
   llm_review: string | null;
   mix_notes: string | null;
   banner_url: string | null;
@@ -241,7 +241,7 @@ export default function Wall() {
       const limit = isYourChannelsScope || isSpecificChannelScope ? 140 : 90;
       let query = supabase
         .from('blueprints')
-        .select('id, creator_user_id, title, selected_items, sections_json, llm_review, mix_notes, banner_url, likes_count, created_at')
+        .select('id, creator_user_id, title, sections_json, steps, llm_review, mix_notes, banner_url, likes_count, created_at')
         .eq('is_public', true)
         .limit(limit);
 
@@ -1076,7 +1076,7 @@ export default function Wall() {
               <div className="divide-y divide-border/40">
                 {visiblePosts.map((post) => {
                   const blueprintPreview = buildBlueprintPreviewText({
-                    selectedItems: post.selected_items,
+                    steps: post.steps,
                   });
                   const preview = buildFeedSummary({
                     sectionsJson: post.sections_json,

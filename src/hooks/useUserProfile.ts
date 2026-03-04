@@ -44,7 +44,7 @@ export function useUserBlueprints(userId: string | undefined, limit = 4) {
 
       const { data, error } = await supabase
         .from('blueprints')
-        .select('id, title, selected_items, likes_count, created_at')
+        .select('id, title, likes_count, created_at')
         .eq('creator_user_id', userId)
         .eq('is_public', true)
         .order('created_at', { ascending: false })
@@ -78,7 +78,7 @@ export function useUserLikedBlueprints(userId: string | undefined, limit = 4) {
 
       const { data: blueprints, error: blueprintsError } = await supabase
         .from('blueprints')
-        .select('id, title, creator_user_id, selected_items, likes_count, created_at')
+        .select('id, title, creator_user_id, likes_count, created_at')
         .in('id', blueprintIds)
         .eq('is_public', true);
 
@@ -128,40 +128,6 @@ export function useUserLikedBlueprints(userId: string | undefined, limit = 4) {
           }
         });
       }
-
-      const selectedVideoUrls = new Set(
-        (blueprints || [])
-          .map((bp) => {
-            if (!bp.selected_items || typeof bp.selected_items !== 'object' || Array.isArray(bp.selected_items)) return '';
-            const selected = bp.selected_items as Record<string, unknown>;
-            return typeof selected.video_url === 'string' ? String(selected.video_url || '').trim() : '';
-          })
-          .filter(Boolean),
-      );
-      const { data: sourceByUrlRows } = selectedVideoUrls.size > 0
-        ? await supabase
-          .from('source_items')
-          .select('id, source_url, created_at')
-          .in('source_url', Array.from(selectedVideoUrls))
-          .order('created_at', { ascending: false })
-        : { data: [] as Array<{ id: string; source_url: string; created_at: string }> };
-      const sourceByUrl = new Map<string, string>();
-      (sourceByUrlRows || []).forEach((row) => {
-        const url = String(row.source_url || '').trim();
-        const id = String(row.id || '').trim();
-        if (!url || !id || sourceByUrl.has(url)) return;
-        sourceByUrl.set(url, id);
-      });
-
-      (blueprints || []).forEach((bp) => {
-        if (sourceItemIdByBlueprint.has(bp.id)) return;
-        if (!bp.selected_items || typeof bp.selected_items !== 'object' || Array.isArray(bp.selected_items)) return;
-        const selected = bp.selected_items as Record<string, unknown>;
-        const videoUrl = typeof selected.video_url === 'string' ? String(selected.video_url || '').trim() : '';
-        if (!videoUrl) return;
-        const sourceItemId = sourceByUrl.get(videoUrl);
-        if (sourceItemId) sourceItemIdByBlueprint.set(bp.id, sourceItemId);
-      });
 
       const sourceItemIds = Array.from(new Set(Array.from(sourceItemIdByBlueprint.values()).filter(Boolean)));
       const { data: sourceRows } = sourceItemIds.length > 0

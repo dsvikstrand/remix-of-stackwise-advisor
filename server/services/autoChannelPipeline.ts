@@ -9,6 +9,7 @@ import {
   labelChannelFromArtifact,
   type LlmChannelClassifierReason,
 } from './channelLabeler';
+import { countBlueprintSections, getBlueprintSummaryText } from './blueprintSections';
 
 type DbClient = ReturnType<typeof createClient>;
 
@@ -155,30 +156,12 @@ async function getBlueprintTagSlugs(db: DbClient, blueprintId: string): Promise<
   return Array.from(new Set(tagSlugs));
 }
 
-function getBlueprintSummary(rawSteps: unknown) {
-  if (!Array.isArray(rawSteps)) return '';
-  const sections: Array<{ name: string; notes: string }> = [];
-  for (const step of rawSteps) {
-    if (!step || typeof step !== 'object') continue;
-    const record = step as Record<string, unknown>;
-    const name = String(record.title || record.name || '').trim();
-    const notes = String(record.description || record.notes || '').trim();
-    if (!name && !notes) continue;
-    sections.push({ name, notes });
-    if (sections.length >= 12) break;
-  }
-  const preferred = sections.find((section) => /^summary\b/i.test(section.name)) || sections[0] || null;
-  const raw = String(preferred?.notes || '').trim();
-  const withoutLabel = raw.replace(/^summary\s*(—|-|:)?\s*/i, '').trim();
-  return withoutLabel.slice(0, 600);
-}
-
 export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): Promise<AutoChannelPipelineResult> {
   const resolver = input.resolver || new DeterministicAutoChannelResolver();
 
   const { data: blueprint, error: blueprintError } = await input.db
     .from('blueprints')
-    .select('id, title, llm_review, steps')
+    .select('id, title, llm_review, sections_json, steps')
     .eq('id', input.blueprintId)
     .maybeSingle();
   if (blueprintError || !blueprint) {
@@ -186,7 +169,11 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
   }
 
   const tagSlugs = await getBlueprintTagSlugs(input.db, input.blueprintId);
-  const summary = getBlueprintSummary(blueprint.steps);
+  const summary = getBlueprintSummaryText({
+    sectionsJson: blueprint.sections_json,
+    steps: blueprint.steps,
+    maxChars: 600,
+  });
   if (input.classifierMode === 'llm_labeler_v1') {
     console.log('[auto_channel_label_started]', JSON.stringify({
       blueprint_id: input.blueprintId,
@@ -257,7 +244,10 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
     throw new Error(candidateError?.message || 'Could not upsert channel candidate');
   }
 
-  const stepCount = Array.isArray(blueprint.steps) ? blueprint.steps.length : 0;
+  const stepCount = countBlueprintSections({
+    sectionsJson: blueprint.sections_json,
+    steps: blueprint.steps,
+  });
   const evaluation = evaluateCandidateForChannel(
     {
       title: blueprint.title,

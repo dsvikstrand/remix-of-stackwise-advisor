@@ -26,7 +26,7 @@ function BlueprintCard({
   commentCountByBlueprintId?: Record<string, number>;
 }) {
   const blueprintPreview = buildBlueprintPreviewText({
-    selectedItems: result.selectedItems,
+    steps: result.steps,
   });
   const summary = buildFeedSummary({
     sectionsJson: result.sectionsJson,

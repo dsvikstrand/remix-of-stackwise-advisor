@@ -299,7 +299,7 @@ export default function ChannelPage() {
                 <div className="divide-y divide-border/40 border-y border-border/40">
                   {posts.map((post) => {
                     const blueprintPreview = buildBlueprintPreviewText({
-                      selectedItems: post.selectedItems,
+                      steps: post.steps,
                     });
                     const preview = buildFeedSummary({
                       sectionsJson: post.sectionsJson,

@@ -123,7 +123,7 @@ export function registerTracingRoutes(app: express.Express, deps: TracingRouteDe
     try {
       const { data: blueprint, error: blueprintError } = await db
         .from('blueprints')
-        .select('id, creator_user_id, selected_items')
+        .select('id, creator_user_id')
         .eq('id', blueprintId)
         .maybeSingle();
       if (blueprintError) {
@@ -136,17 +136,7 @@ export function registerTracingRoutes(app: express.Express, deps: TracingRouteDe
         return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Blueprint not found', data: null });
       }
 
-      const selectedItems = blueprint.selected_items && typeof blueprint.selected_items === 'object' && !Array.isArray(blueprint.selected_items)
-        ? (blueprint.selected_items as Record<string, unknown>)
-        : null;
-      const selectedRunId = selectedItems
-        ? (String(selectedItems.bp_run_id || selectedItems.run_id || '').trim() || null)
-        : null;
-
       let run = await deps.getLatestGenerationRunByBlueprintId(db, blueprintId);
-      if (!run && selectedRunId) {
-        run = await deps.getGenerationRunByRunId(db, selectedRunId);
-      }
 
       if (run) {
         const includeEvents = parseIncludeEvents(req.query.include_events, true);
@@ -164,27 +154,6 @@ export function registerTracingRoutes(app: express.Express, deps: TracingRouteDe
             source: 'generation_runs',
             blueprint_id: blueprintId,
             ...formatGenerationTraceResponse(run, events),
-          },
-        });
-      }
-
-      const legacyTrace = selectedItems && selectedItems.bp_trace && typeof selectedItems.bp_trace === 'object'
-        ? (selectedItems.bp_trace as Record<string, unknown>)
-        : null;
-      if (legacyTrace) {
-        return res.json({
-          ok: true,
-          error_code: null,
-          message: 'blueprint generation trace (legacy)',
-          data: {
-            source: 'legacy_selected_items',
-            blueprint_id: blueprintId,
-            run_id: selectedRunId,
-            status: 'legacy',
-            trace_version: String(selectedItems?.bp_trace_version || legacyTrace.trace_version || '').trim() || null,
-            summary: legacyTrace,
-            events: [],
-            next_cursor: null,
           },
         });
       }

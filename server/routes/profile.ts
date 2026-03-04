@@ -98,7 +98,7 @@ export function registerProfileRoutes(app: express.Express, deps: ProfileRouteDe
         .select('id, source_channel_id, source_url, title, source_channel_title, thumbnail_url, metadata')
         .in('id', sourceIds),
       blueprintIds.length
-        ? db.from('blueprints').select('id, title, banner_url, llm_review, is_public, steps').in('id', blueprintIds)
+        ? db.from('blueprints').select('id, title, banner_url, llm_review, is_public, sections_json, steps').in('id', blueprintIds)
         : Promise.resolve({ data: [], error: null }),
       db
         .from('channel_candidates')
@@ -223,6 +223,7 @@ export function registerProfileRoutes(app: express.Express, deps: ProfileRouteDe
               id: blueprint.id,
               title: blueprint.title,
               bannerUrl: blueprint.banner_url,
+              sectionsJson: (blueprint as { sections_json?: unknown }).sections_json ?? null,
               llmReview: blueprint.llm_review,
               isPublic: blueprint.is_public,
               steps: blueprint.steps,

@@ -13,6 +13,7 @@ import type {
 } from '../contracts/api/sourcePages';
 import { fetchYouTubeDurationMap, YouTubeDurationLookupError } from '../services/youtubeDuration';
 import { splitByDurationPolicy, toDurationSeconds } from '../services/videoDurationPolicy';
+import { getBlueprintSummaryText } from '../services/blueprintSections';
 
 export function registerSourcePagesRouteHandlers(app: express.Express, deps: SourcePagesRouteDeps) {
   const {
@@ -141,20 +142,20 @@ function cleanSourcePageSummaryText(raw: string) {
 }
 
 function buildSourcePageSummary(input: {
+  sectionsJson?: unknown;
+  steps?: unknown;
   llmReview: string | null;
-  selectedItems: unknown;
   fallbackTitle: string;
   maxChars?: number;
 }) {
   const maxChars = Math.max(80, Math.min(320, Number(input.maxChars || 220)));
-  const selectedItems =
-    input.selectedItems && typeof input.selectedItems === 'object' ? input.selectedItems as Record<string, unknown> : null;
-  const selectedItemsOverview = selectedItems
-    ? [selectedItems.overview, selectedItems.description, selectedItems.notes]
-      .find((value) => typeof value === 'string' && String(value).trim().length > 0) || null
-    : null;
+  const schemaSummary = getBlueprintSummaryText({
+    sectionsJson: input.sectionsJson,
+    steps: input.steps,
+    maxChars,
+  });
   const candidate = cleanSourcePageSummaryText(
-    String(input.llmReview || selectedItemsOverview || input.fallbackTitle || ''),
+    String(schemaSummary || input.llmReview || input.fallbackTitle || ''),
   );
   if (!candidate) return 'Open to view the full step-by-step blueprint.';
   if (candidate.length <= maxChars) return candidate;
@@ -1455,7 +1456,7 @@ app.get('/api/source-pages/:platform/:externalId/blueprints', async (req, res) =
   const [{ data: blueprintRowsData, error: blueprintRowsError }, { data: tagRowsData, error: tagRowsError }] = await Promise.all([
     db
       .from('blueprints')
-      .select('id, title, llm_review, banner_url, selected_items, is_public')
+      .select('id, title, llm_review, banner_url, sections_json, steps, is_public')
       .in('id', blueprintIds),
     db
       .from('blueprint_tags')
@@ -1567,8 +1568,9 @@ app.get('/api/source-pages/:platform/:externalId/blueprints', async (req, res) =
         blueprint_id: row.blueprintId,
         title: String(blueprint.title || '').trim() || 'Untitled blueprint',
         summary: buildSourcePageSummary({
+          sectionsJson: blueprint.sections_json ?? null,
+          steps: blueprint.steps ?? null,
           llmReview: blueprint.llm_review || null,
-          selectedItems: blueprint.selected_items ?? null,
           fallbackTitle: String(blueprint.title || ''),
         }),
         banner_url: blueprint.banner_url || null,

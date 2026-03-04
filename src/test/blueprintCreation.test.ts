@@ -41,8 +41,8 @@ function createDbMock() {
   };
 }
 
-describe('blueprint creation transcript transport metadata', () => {
-  it('stores transcript transport metadata inside selected_items on the created blueprint', async () => {
+describe('blueprint creation canonical payload', () => {
+  it('writes schema content without legacy selected_items payload', async () => {
     const { db, getInsertedBlueprintPayload } = createDbMock();
     const service = createBlueprintCreationService({
       getServiceSupabaseClient: () => null,
@@ -114,19 +114,18 @@ describe('blueprint creation transcript transport metadata', () => {
     });
 
     const insertedPayload = getInsertedBlueprintPayload();
-    const selectedItems = (insertedPayload?.selected_items || null) as Record<string, unknown> | null;
-
     expect(result.blueprintId).toBe('bp_123');
     expect(insertedPayload?.steps).toBeUndefined();
-    expect((selectedItems || {}).bp_step_variants).toBeUndefined();
-    expect((selectedItems || {}).bp_summary_variants).toBeUndefined();
-    expect(selectedItems?.bp_transcript_transport).toEqual({
-      provider: 'yt_to_text',
-      proxy_enabled: true,
-      proxy_mode: 'webshare_index',
-      proxy_selector: 'rand',
-      proxy_selected_index: 4,
-      proxy_host: '10.0.0.5',
+    expect(insertedPayload?.selected_items).toBeUndefined();
+    expect(insertedPayload?.sections_json).toEqual({
+      schema_version: 'blueprint_sections_v1',
+      tags: [],
+      summary: { text: 'A short summary for testing.' },
+      takeaways: { bullets: ['One useful takeaway.'] },
+      storyline: { text: 'A short storyline block.' },
+      deep_dive: { bullets: ['A deep dive detail.'] },
+      practical_rules: { bullets: ['A practical rule.'] },
+      open_questions: { bullets: ['An open question.'] },
     });
   });
 });

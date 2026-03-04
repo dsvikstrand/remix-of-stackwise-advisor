@@ -37,6 +37,16 @@ export type DraftStepLike = {
   timestamp?: string | null;
 };
 
+function cleanSummaryText(raw: string) {
+  return String(raw || '')
+    .replace(/\s+/g, ' ')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/\*\*/g, '')
+    .replace(/__/g, '')
+    .replace(/`/g, '')
+    .trim();
+}
+
 function normalizeSectionKey(rawTitle: string) {
   return String(rawTitle || '')
     .trim()
@@ -113,6 +123,112 @@ export function buildBlueprintSectionsV1FromStoredSteps(input: {
       bullets: toBulletStrings(openQuestions.items),
     },
   };
+}
+
+export function parseBlueprintSectionsV1(input: unknown): BlueprintSectionsV1 | null {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  const value = input as Record<string, unknown>;
+  if (String(value.schema_version || '').trim() !== 'blueprint_sections_v1') return null;
+
+  const tags = Array.isArray(value.tags)
+    ? value.tags.map((tag) => String(tag || '').trim()).filter(Boolean)
+    : [];
+
+  const readTextSection = (key: string) => {
+    const section = value[key];
+    if (!section || typeof section !== 'object' || Array.isArray(section)) return null;
+    const text = String((section as Record<string, unknown>).text || '').trim();
+    return text ? { text } : null;
+  };
+
+  const readBulletSection = (key: string) => {
+    const section = value[key];
+    if (!section || typeof section !== 'object' || Array.isArray(section)) return null;
+    const bullets = Array.isArray((section as Record<string, unknown>).bullets)
+      ? ((section as Record<string, unknown>).bullets as unknown[])
+          .map((bullet) => String(bullet || '').trim())
+          .filter(Boolean)
+      : [];
+    return bullets.length > 0 ? { bullets } : null;
+  };
+
+  const summary = readTextSection('summary');
+  const takeaways = readBulletSection('takeaways');
+  const storyline = readTextSection('storyline');
+  const deepDive = readBulletSection('deep_dive');
+  const practicalRules = readBulletSection('practical_rules');
+  const openQuestions = readBulletSection('open_questions');
+
+  if (!summary || !takeaways || !storyline || !deepDive || !practicalRules || !openQuestions) {
+    return null;
+  }
+
+  return {
+    schema_version: 'blueprint_sections_v1',
+    tags,
+    summary,
+    takeaways,
+    storyline,
+    deep_dive: deepDive,
+    practical_rules: practicalRules,
+    open_questions: openQuestions,
+  };
+}
+
+export function getBlueprintSummaryText(input: {
+  sectionsJson?: unknown;
+  steps?: unknown;
+  maxChars?: number;
+}) {
+  const maxChars = Math.max(80, Math.min(600, Number(input.maxChars || 600)));
+  const parsedSections = parseBlueprintSectionsV1(input.sectionsJson);
+  const schemaSummary = cleanSummaryText(String(parsedSections?.summary.text || ''))
+    .replace(/^summary\s*(—|-|:)?\s*/i, '')
+    .trim();
+  if (schemaSummary) {
+    return schemaSummary.length <= maxChars
+      ? schemaSummary
+      : `${schemaSummary.slice(0, maxChars).trim()}...`;
+  }
+
+  const rawSteps = Array.isArray(input.steps) ? input.steps : [];
+  const sections: Array<{ name: string; notes: string }> = [];
+  for (const step of rawSteps) {
+    if (!step || typeof step !== 'object') continue;
+    const record = step as Record<string, unknown>;
+    const name = String(record.title || record.name || '').trim();
+    const notes = String(record.description || record.notes || '').trim();
+    if (!name && !notes) continue;
+    sections.push({ name, notes });
+    if (sections.length >= 12) break;
+  }
+  const preferred = sections.find((section) => /^summary\b/i.test(section.name)) || sections[0] || null;
+  const raw = cleanSummaryText(String(preferred?.notes || ''))
+    .replace(/^summary\s*(—|-|:)?\s*/i, '')
+    .trim();
+  if (!raw) return '';
+  return raw.length <= maxChars ? raw : `${raw.slice(0, maxChars).trim()}...`;
+}
+
+export function countBlueprintSections(input: {
+  sectionsJson?: unknown;
+  steps?: unknown;
+}) {
+  const parsedSections = parseBlueprintSectionsV1(input.sectionsJson);
+  if (parsedSections) {
+    return [
+      parsedSections.summary.text,
+      ...parsedSections.takeaways.bullets,
+      parsedSections.storyline.text,
+      ...parsedSections.deep_dive.bullets,
+      ...parsedSections.practical_rules.bullets,
+      ...parsedSections.open_questions.bullets,
+    ].filter((value) => String(value || '').trim()).length > 0
+      ? 6
+      : 0;
+  }
+
+  return Array.isArray(input.steps) ? input.steps.length : 0;
 }
 
 function formatBulletsAsNotes(items: string[]) {

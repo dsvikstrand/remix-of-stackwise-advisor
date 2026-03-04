@@ -1,5 +1,6 @@
 import type express from 'express';
 import type { ChannelsRouteDeps } from '../contracts/api/channels';
+import { countBlueprintSections } from '../services/blueprintSections';
 
 export function registerChannelCandidateRoutes(app: express.Express, deps: ChannelsRouteDeps) {
   app.post('/api/channel-candidates', async (req, res) => {
@@ -110,7 +111,7 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
 
     const { data: blueprint, error: blueprintError } = await db
       .from('blueprints')
-      .select('id, title, llm_review, steps')
+      .select('id, title, llm_review, sections_json, steps')
       .eq('id', feedItem.blueprint_id)
       .maybeSingle();
     if (blueprintError || !blueprint) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: blueprintError?.message || 'Blueprint missing', data: null });
@@ -123,7 +124,10 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
       .map((row) => (row.tags as { slug?: string } | null)?.slug || '')
       .filter(Boolean);
 
-    const stepCount = Array.isArray(blueprint.steps) ? blueprint.steps.length : 0;
+    const stepCount = countBlueprintSections({
+      sectionsJson: (blueprint as { sections_json?: unknown }).sections_json ?? null,
+      steps: blueprint.steps,
+    });
     const evaluation = deps.evaluateCandidateForChannel({
       title: blueprint.title,
       llmReview: blueprint.llm_review,
