@@ -76,4 +76,4 @@ Backend to Supabase
 ## Dependency Summary
 - Product behavior source of truth: `docs/app/product-spec.md`.
 - Architecture source of truth: `docs/architecture.md`.
-- Foundation execution plan: `docs/exec-plans/active/project-bleuv1-mvp-foundation.md`.
+- Foundation execution plan: `docs/exec-plans/active/on-pause/project-bleuv1-mvp-foundation.md`.

@@ -4,6 +4,13 @@ This folder is the control surface for moving from manual planning to multi-agen
 
 Current status: paused reference track. Manual iterative delivery is the active execution mode.
 
+## Reference Status
+- This pack is legacy reference-only and does not define active runtime execution.
+- Current active execution tracker: `docs/exec-plans/active/mvp-launch-hardening-phases.md`.
+- Paused strategy references:
+  - `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
+  - `docs/exec-plans/active/on-pause/project-bleuv1-mvp-foundation.md`
+
 ## Intent
 - Phase 1 (foundation): decision-locked descriptive contracts.
 - Phase 2 (executable): machine-actionable role/task/eval contracts.

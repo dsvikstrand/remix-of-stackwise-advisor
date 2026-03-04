@@ -41,7 +41,7 @@ Rules:
 Changes to must-ship scope require:
 1. update to `docs/app/product-spec.md`
 2. update to `docs/architecture.md`
-3. update to `docs/exec-plans/active/project-bleuv1-mvp-foundation.md`
+3. update to `docs/exec-plans/active/on-pause/project-bleuv1-mvp-foundation.md`
 
 ## Completion Criteria
 Scope lock is complete when:

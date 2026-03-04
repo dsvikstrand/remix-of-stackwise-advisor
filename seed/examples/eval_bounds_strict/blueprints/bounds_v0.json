@@ -1,8 +1,0 @@
-{
-  "version": 0,
-  "maxSteps": 20,
-  "maxStepTitleLen": 120,
-  "maxStepDescriptionLen": 800,
-  "maxItemsPerStep": 40
-}
-

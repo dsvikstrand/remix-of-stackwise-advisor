@@ -1,0 +1,15 @@
+{
+  "run": {
+    "run_id": "sub-source_page_video_library-1772471427490-sfc87h",
+    "created_at": "2026-03-02T17:10:27.639988+00:00",
+    "model_used": "gpt-5-mini",
+    "model_primary": "gpt-5-mini",
+    "quality_final_mode": "terminal_publish_anyway",
+    "source_scope": "source_page_video_library",
+    "source_tag": "source_page_video_library",
+    "video_id": "w84bL79hsio",
+    "video_url": "https://www.youtube.com/watch?v=w84bL79hsio"
+  },
+  "events_count": 21,
+  "prompt_events_count": 4
+}

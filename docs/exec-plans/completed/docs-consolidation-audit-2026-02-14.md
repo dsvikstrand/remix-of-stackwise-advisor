@@ -40,7 +40,6 @@ Status: `completed`
 | docs/references/index.md | references index | canonical | self | low |
 | docs/references/channel-taxonomy-v0.md | channel taxonomy reference | canonical | self | low |
 | docs/generated/index.md | generated-doc index | canonical | self | low |
-| docs/lovable/lovable_sql_add_generation_controls.md | lovable SQL note | canonical/reference | self | low |
 | docs/ops/normalization_loop_protocol.md | ops protocol | canonical | self | low |
 | docs/ops/yt2bp_runbook.md | production runbook | canonical | self | medium |
 | docs/_archive/legacy-ass-agentic/schemas/ass_eval_config_schema.md | schema contract | canonical | self | low |

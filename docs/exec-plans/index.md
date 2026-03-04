@@ -3,14 +3,14 @@
 This file is the authoritative active/completed registry for execution plans.
 
 ## Active
-- `docs/exec-plans/active/project-bleuv1-mvp-foundation.md`
-  Active manual iterative build plan for the remaining MVP work.
-- `docs/exec-plans/active/bleuv1-mvp-hardening-playbook.md`
-  Followable deep-dive hardening playbook (blind spots, MVP priorities, sprint sequence, and success metrics).
+- `docs/exec-plans/active/mvp-launch-hardening-phases.md`
+  Phase-by-phase execution checklist for queue, worker, dependency, and launch-day operational hardening.
 - `docs/exec-plans/tech-debt-tracker.md`
   Deferred work backlog and non-blocking engineering debt.
 
 ## Paused Reference (Not Active)
+- `docs/exec-plans/active/on-pause/project-bleuv1-mvp-foundation.md`
+- `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
 - `docs/_archive/legacy-ass-agentic/README.md`
 - `docs/_archive/legacy-ass-agentic/agentic/foundation/`
 - `docs/_archive/legacy-ass-agentic/agentic/executable/`
@@ -49,10 +49,12 @@ This file is the authoritative active/completed registry for execution plans.
 - Core identity lock: `docs/app/core-direction-lock.md`.
 - Legacy channels-first program: completed/archived.
 - `bleuV1` source-first umbrella program: completed.
-- `bleuV1` MVP build execution: manual iterative mode.
+- Current execution track: launch hardening phases + tech-debt tracker.
+- Manual iterative build strategy plans are paused reference docs.
 - Agentic orchestration: archived reference path.
 
 ## Rules
-- Keep only truly active docs in `active/`.
+- Keep actively executed plans at `docs/exec-plans/active/` root.
+- Keep paused plans under `docs/exec-plans/active/on-pause/`.
 - Move finished project plans into `completed/`.
 - Update this index whenever status changes.

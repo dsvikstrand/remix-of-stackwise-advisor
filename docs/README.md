@@ -13,18 +13,22 @@ This folder is the source of truth for product, architecture, planning, and oper
 2. `docs/architecture.md`
 3. `docs/app/product-spec.md`
 4. `docs/exec-plans/index.md`
-5. `docs/exec-plans/active/bleuv1-mvp-hardening-playbook.md`
-6. `docs/exec-plans/active/project-bleuv1-mvp-foundation.md`
-7. `docs/exec-plans/completed/bleuv1-manual-iteration-scheme.md`
-8. `docs/ops/yt2bp_runbook.md`
+5. `docs/exec-plans/active/mvp-launch-hardening-phases.md`
+6. `docs/exec-plans/tech-debt-tracker.md`
+7. `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
+8. `docs/exec-plans/active/on-pause/project-bleuv1-mvp-foundation.md`
+9. `docs/exec-plans/completed/bleuv1-manual-iteration-scheme.md`
+10. `docs/ops/yt2bp_runbook.md`
 
 ## Canonical Documents
 - Core direction lock: `docs/app/core-direction-lock.md`
 - Architecture: `docs/architecture.md`
 - Product behavior/spec: `docs/app/product-spec.md`
 - Execution registry (active/completed): `docs/exec-plans/index.md`
-- Program direction (`bleuV1`): `docs/exec-plans/active/bleuv1-mvp-hardening-playbook.md`
-- Active MVP build plan (manual): `docs/exec-plans/active/project-bleuv1-mvp-foundation.md`
+- Active launch hardening tracker: `docs/exec-plans/active/mvp-launch-hardening-phases.md`
+- Active engineering backlog tracker: `docs/exec-plans/tech-debt-tracker.md`
+- Paused strategy reference (`bleuV1`): `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
+- Paused MVP build reference plan: `docs/exec-plans/active/on-pause/project-bleuv1-mvp-foundation.md`
 - Completed stepwise execution scheme (reference): `docs/exec-plans/completed/bleuv1-manual-iteration-scheme.md`
 - YT2BP API contract (adapter v0): `docs/product-specs/yt2bp_v0_contract.md`
 - YT2BP runbook: `docs/ops/yt2bp_runbook.md`
@@ -43,7 +47,7 @@ This folder is the source of truth for product, architecture, planning, and oper
 - `docs/_archive/legacy-ass-agentic/` archived ASS/agentic reference contracts (not active runtime guidance)
 - `docs/architecture.md` system topology and invariants
 - `docs/design-docs/` technical design + diagrams
-- `docs/exec-plans/active/` currently active plans/program docs
+- `docs/exec-plans/active/` active execution docs (`active/on-pause/` holds paused reference plans)
 - `docs/exec-plans/completed/` closed plans and closure notes
 - `docs/ops/` runbooks and operational procedures
 - `docs/product-specs/` product contracts and scoped feature plans

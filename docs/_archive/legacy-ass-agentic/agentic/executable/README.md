@@ -2,6 +2,12 @@
 
 This pack converts foundation docs into machine-actionable contracts for agent role loops.
 
+## Reference Status
+- This executable pack is archived reference material.
+- Active runtime/docs governance lives in:
+  - `docs/exec-plans/active/mvp-launch-hardening-phases.md`
+  - `docs/exec-plans/index.md`
+
 ## Scope
 - Define deterministic planning and execution contracts.
 - Remove product ambiguity from task generation and evaluation.
@@ -12,6 +18,11 @@ This pack converts foundation docs into machine-actionable contracts for agent r
 2. Implementer
 3. Evaluator
 4. Integrator
+
+## Role Handoff And Gates
+- Planner -> Implementer handoff: queue scope + task schema + decision matrix are locked before implementation.
+- Implementer -> Evaluator handoff: interface/schema/state contracts must be explicit and testable.
+- Evaluator -> Integrator handoff: review-gate outcomes and stop/inspect policy determine release readiness.
 
 ## Read Order
 1. `docs/_archive/legacy-ass-agentic/agentic/executable/decision-matrix.md`

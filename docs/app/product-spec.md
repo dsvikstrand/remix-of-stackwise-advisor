@@ -305,5 +305,6 @@ n5) Reserve `enforce` mode for non-prod verification until dedicated rollout app
 ## Key References
 k1) Architecture: `docs/architecture.md`
 k2) Program + project status: `docs/exec-plans/index.md`
-k3) Active direction plan: `docs/exec-plans/active/bleuv1-mvp-hardening-playbook.md`
-k4) YT2BP contract: `docs/product-specs/yt2bp_v0_contract.md`
+k3) Active launch hardening plan: `docs/exec-plans/active/mvp-launch-hardening-phases.md`
+k4) Paused strategy reference: `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
+k5) YT2BP contract: `docs/product-specs/yt2bp_v0_contract.md`

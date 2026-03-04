@@ -225,7 +225,8 @@ Current production behavior note:
 - Product behavior:
   - `docs/app/product-spec.md`
 - Program direction:
-  - `docs/exec-plans/active/bleuv1-mvp-hardening-playbook.md`
+  - `docs/exec-plans/active/mvp-launch-hardening-phases.md`
+  - paused strategy reference: `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
 - Eval policy classes used today:
   - `llm_blueprint_quality_v0`
   - `llm_content_safety_grading_v0`
@@ -291,5 +292,5 @@ Current production behavior note:
 ## 8) Document Ownership
 - Canonical architecture doc: `docs/architecture.md`.
 - Product contract: `docs/app/product-spec.md`.
-- Active program plan: `docs/exec-plans/active/bleuv1-mvp-hardening-playbook.md`.
+- Active program plan: `docs/exec-plans/active/mvp-launch-hardening-phases.md`.
 - Freshness mapping: `docs/_freshness_map.json`.

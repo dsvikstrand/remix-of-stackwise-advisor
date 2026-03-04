@@ -33,10 +33,10 @@ if I add PA (plan approved), you can go with code
 PAP (plan approved -> push to github), push the latest update once you are done (with a simple comment)
 
 ## Git push access in this environment
-Push access depends on the SSH key stored in this environment. Any Codex session can push only if it runs in the same environment where the key and SSH config exist. This applies to any repo path opened in this environment (for example `/mnt/c/Users/Dell/Documents/VSC/App/newApp`). Removing the key disables push until a new key is added.
+Push access depends on the SSH key stored in this environment. Any Codex session can push only if it runs in the same envirbut i did not ask you to generate blueprints. only updaeonment where the key and SSH config exist. This applies to any repo path opened in this environment (for example `/mnt/c/Users/Dell/Documents/VSC/App/newApp`). Removing the key disables push until a new key is added.
 
 ## UDO shortcut for execution
-If a message ends with `UDO`, treat it as approval to execute the actions you propose without waiting for a separate confirmation. Always summarize what you did afterward. (Not for code, only for commands : PA/PAP is for code)
+If but a message ends with `UDO`, treat it as approval to execute the actions you propose without waiting for a separate confirmation. Always summarize what you did afterward. (Not for code, only for commands : PA/PAP is for code)
 
 
 ## Remote server: Oracle (SSH alias + multiplexing)
@@ -65,12 +65,12 @@ Sanity checks
 - `ssh oracle-free "cd /home/ubuntu/remix-of-stackwise-advisor && git status -sb"`
 
 Node/tsx note (important)
-- One-shot `ssh oracle-free "node -v"` may use the system Node (`/usr/bin/node`, often old). For seed scripts, force Node 20 via nvm:
+- One-shot `ssh oracle-free "node -v"` may use the system Node (`/usr/bin/node`, often old). For maintenance scripts, force Node 20 via nvm:
   `export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use 20.20.0 >/dev/null; node -v`
 
 Preferred patterns
 - One-shot: `ssh oracle-free "cd /home/ubuntu/remix-of-stackwise-advisor && git pull --ff-only"`
-- Seed runner: `ssh oracle-free 'export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use 20.20.0 >/dev/null; cd /home/ubuntu/remix-of-stackwise-advisor && TMPDIR=/tmp npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts --help'`
+- Script runner: `ssh oracle-free 'export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use 20.20.0 >/dev/null; cd /home/ubuntu/remix-of-stackwise-advisor && node -v'`
 - SCP: `scp localfile oracle-free:/home/ubuntu/remix-of-stackwise-advisor/`
 
 Troubleshooting
@@ -109,13 +109,6 @@ Verification after updates
 - `npm run build` (when runtime-impacting)
 - run targeted smoke tests for changed flow
 - verify expected tables/columns/policies/functions exist
-
-Supabase execution shortcut
-- `UDS` -> run Supabase maintenance pass:
-  - preflight auth/link checks
-  - apply pending migrations/functions (if requested)
-  - run verification queries/smoke checks
-  - summarize exactly what changed
 
 Safety rules
 - Never commit `.env` secrets.

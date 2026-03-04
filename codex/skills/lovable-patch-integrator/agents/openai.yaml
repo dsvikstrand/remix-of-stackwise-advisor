@@ -1,3 +1,0 @@
-interface:
-  display_name: "Lovable Patch Integrator"
-  short_description: "Apply Lovable unified diff patches to lovable-updates (build gate + commit + push)."

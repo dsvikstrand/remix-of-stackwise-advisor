@@ -1,0 +1,26 @@
+{
+  "blueprint_id": "5819c916-4625-494a-a031-46ef1f6e840d",
+  "run_id": "sub-source_page_video_library-1772471427490-sfc87h",
+  "source_scope": "source_page_video_library",
+  "source_tag": "source_page_video_library",
+  "video_id": "w84bL79hsio",
+  "video_url": "https://www.youtube.com/watch?v=w84bL79hsio",
+  "model_primary": "gpt-5-mini",
+  "model_used": "gpt-5-mini",
+  "quality_final_mode": "terminal_publish_anyway",
+  "prompt_event": {
+    "id": 2989,
+    "seq": 5,
+    "created_at": "2026-03-02T17:10:29.5706+00:00",
+    "render_index": 1,
+    "operation": "generateYouTubeBlueprint"
+  },
+  "transcript_chars": 4497,
+  "transcript_words": 782,
+  "extracted_at": "2026-03-02T17:48:25.739Z",
+  "extraction": {
+    "start_marker": "Source transcript context (ONLY factual source of truth):",
+    "end_marker": "## Known Slop Patterns and Rewrite Guidance",
+    "source": "generation_run_events.prompt_rendered.payload.prompt"
+  }
+}

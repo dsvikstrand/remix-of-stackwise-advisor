@@ -11,7 +11,7 @@ Track top MVP risks with owner, mitigation, and stop-and-inspect triggers.
 
 ## Playbook Links
 - Runtime incident baseline: `docs/ops/yt2bp_runbook.md`
-- Program tracker: `docs/exec-plans/active/project-bleuv1-mvp-foundation.md`
+- Program tracker: `docs/exec-plans/active/on-pause/project-bleuv1-mvp-foundation.md`
 - Gate rules: `docs/_archive/legacy-ass-agentic/agentic/foundation/gate-policy.md`
 
 ## Active Risks

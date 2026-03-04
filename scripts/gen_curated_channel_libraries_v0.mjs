@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const root = process.cwd();
-const outDir = path.join(root, 'seed', 'fixtures', 'curated_libraries_v0');
+const outDir = path.join(root, 'docs', 'generated', 'curated_libraries_v0');
 
 // Keep this file standalone (no TS build needed).
 const channelsCatalogPath = path.join(root, 'src', 'lib', 'channelsCatalog.ts');
@@ -107,6 +107,7 @@ const curated = channels
   .filter((c) => c.isJoinEnabled);
 
 const outputs = [];
+fs.mkdirSync(outDir, { recursive: true });
 for (const channel of curated) {
   const inventory = buildInventory(channel);
   outputs.push(inventory);

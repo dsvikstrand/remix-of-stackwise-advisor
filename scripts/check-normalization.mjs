@@ -44,19 +44,11 @@ for (const rel of rubricFiles) {
 }
 if (!failed) ok('rubric canonical+legacy alias checks passed');
 
-const builtinsRel = 'codex/skills/seed-blueprints/scripts/lib/eval/classes/builtins.ts';
-const builtins = fs.readFileSync(path.join(repoRoot, builtinsRel), 'utf8');
-if (!builtins.includes('rubric?.library || rubric?.inventory || {}')) {
-  fail(`${builtinsRel} missing runtime alias resolution for library/inventory rubric keys`);
-} else {
-  ok('runtime alias resolution exists in builtins');
-}
-
 const policyDocs = [
-  'docs/_archive/legacy-ass-agentic/design-docs/seed_ass_spec.md',
   'docs/app/product-spec.md',
-  'docs/_archive/legacy-ass-agentic/schemas/ass_eval_config_schema.md',
-  'docs/_archive/legacy-ass-agentic/schemas/eval_scorecard_schema.md',
+  'docs/architecture.md',
+  'docs/ops/yt2bp_runbook.md',
+  'docs/exec-plans/index.md',
 ];
 for (const rel of policyDocs) {
   if (!fs.existsSync(path.join(repoRoot, rel))) {

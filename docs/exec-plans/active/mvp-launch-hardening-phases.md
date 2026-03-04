@@ -7,7 +7,7 @@ a1) [todo] Execute launch hardening in a phase-by-phase sequence that can be che
 
 ## Scope
 b1) [have] This plan covers launch hardening for queue throughput, worker architecture, dependency resilience, launch controls, and backlog UX.
-b2) [have] This plan does not replace the broader strategic notes in `docs/exec-plans/active/bleuv1-mvp-hardening-playbook.md`.
+b2) [have] This plan does not replace the broader strategic notes in `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`.
 b3) [have] This plan is a practical execution tracker for the queue/reliability work discussed after the MVP feature pass.
 
 ## How To Use This Plan
@@ -223,16 +223,16 @@ g9) [have] Exit criteria:
 - transcript/provider instability no longer causes silent queue pileups
 
 ## Phase 5 - Queue Prioritization and Backpressure
-h1) [todo] Add or tighten queue priority rules.
-h2) [todo] Priority order target:
+h1) [have] Added and tightened queue priority rules.
+h2) [have] Priority order target implemented:
 - direct user-triggered generation
 - manual feed/search/source actions
 - background sync and enrichment
-h3) [todo] Improve overload behavior:
+h3) [have] Improved overload behavior:
 - clearer queue-full handling
 - graceful delay states
 - ability to suppress lower-priority work during spikes
-h4) [todo] Exit criteria:
+h4) [have] Exit criteria met:
 - core user-triggered actions remain responsive under heavy queue pressure
 h5) [have] Phase 5A implementation shipped in code:
 - queue priority tiers (`high`/`medium`/`low`) with tiered worker claims
