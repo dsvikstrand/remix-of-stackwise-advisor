@@ -114,7 +114,40 @@ export function buildBlueprintPreviewText({
   return `${text.slice(0, maxChars).trim()}...`;
 }
 
+function buildPreviewTextFromBlueprintSections(sectionsJson: unknown, maxChars: number): string | null {
+  if (!sectionsJson || typeof sectionsJson !== 'object' || Array.isArray(sectionsJson)) return null;
+  const raw = sectionsJson as Record<string, unknown>;
+  if (String(raw.schema_version || '').trim() !== 'blueprint_sections_v1') return null;
+
+  const summaryText = cleanFeedPreview(
+    raw.summary && typeof raw.summary === 'object' && !Array.isArray(raw.summary)
+      ? String((raw.summary as Record<string, unknown>).text || '')
+      : '',
+  );
+  const takeawayText = (() => {
+    const section = raw.takeaways;
+    if (!section || typeof section !== 'object' || Array.isArray(section)) return '';
+    const bullets = Array.isArray((section as Record<string, unknown>).bullets)
+      ? ((section as Record<string, unknown>).bullets as unknown[])
+          .map((bullet) => cleanFeedPreview(String(bullet || '')))
+          .filter(Boolean)
+      : [];
+    return bullets[0] || '';
+  })();
+  const storylineText = cleanFeedPreview(
+    raw.storyline && typeof raw.storyline === 'object' && !Array.isArray(raw.storyline)
+      ? String((raw.storyline as Record<string, unknown>).text || '')
+      : '',
+  );
+
+  const text = summaryText || takeawayText || storylineText;
+  if (!text) return null;
+  if (text.length <= maxChars) return text;
+  return `${text.slice(0, maxChars).trim()}...`;
+}
+
 interface BuildFeedSummaryOptions {
+  sectionsJson?: unknown;
   primary?: string | null;
   secondary?: string | null;
   fallback: string;
@@ -122,12 +155,16 @@ interface BuildFeedSummaryOptions {
 }
 
 export function buildFeedSummary({
+  sectionsJson,
   primary,
   secondary,
   fallback,
   maxChars = 240,
 }: BuildFeedSummaryOptions): string {
-  const source = cleanFeedPreview(primary || "") || cleanFeedPreview(secondary || "") || fallback;
+  const source = buildPreviewTextFromBlueprintSections(sectionsJson, maxChars)
+    || cleanFeedPreview(primary || "")
+    || cleanFeedPreview(secondary || "")
+    || fallback;
   const text = stripLeadingSummaryLabel(source).trim() || source.trim();
   if (text.length <= maxChars) return text;
   return `${text.slice(0, maxChars).trim()}...`;

@@ -9,6 +9,7 @@ export type ChannelFeedTab = 'top' | 'recent';
 export interface ChannelFeedPost {
   id: string;
   title: string;
+  sectionsJson: Json | null;
   llmReview: string | null;
   mixNotes: string | null;
   selectedItems: Json;
@@ -36,7 +37,7 @@ export function useChannelFeed({ channelSlug, tab, pageSize = 20 }: UseChannelFe
     queryFn: async (): Promise<ChannelFeedPost[]> => {
       const { data: blueprints, error } = await supabase
         .from('blueprints')
-        .select('id, title, selected_items, llm_review, mix_notes, likes_count, created_at')
+        .select('id, title, selected_items, sections_json, llm_review, mix_notes, likes_count, created_at')
         .eq('is_public', true)
         .order('created_at', { ascending: false })
         .limit(400);
@@ -73,6 +74,7 @@ export function useChannelFeed({ channelSlug, tab, pageSize = 20 }: UseChannelFe
         return {
           id: row.id,
           title: row.title,
+          sectionsJson: row.sections_json,
           llmReview: row.llm_review,
           mixNotes: row.mix_notes,
           selectedItems: row.selected_items,

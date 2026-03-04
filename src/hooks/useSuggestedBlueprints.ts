@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import type { BlueprintListItem, BlueprintRow } from './useBlueprintSearch';
 
-const BLUEPRINT_FIELDS = 'id, inventory_id, creator_user_id, title, selected_items, mix_notes, banner_url, llm_review, is_public, likes_count, created_at, updated_at';
+const BLUEPRINT_FIELDS = 'id, inventory_id, creator_user_id, title, selected_items, sections_json, mix_notes, banner_url, llm_review, is_public, likes_count, created_at, updated_at';
 
 export function useSuggestedBlueprints(limit = 6) {
   const { user } = useAuth();

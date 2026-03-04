@@ -521,6 +521,7 @@ export function MyFeedTimeline({
         const isUnlockable = item.state === 'my_feed_unlockable' && !blueprint;
         const isUnlocking = Boolean(item.source?.unlockInProgress) || Boolean(optimisticUnlockingItemIds[item.id]);
         const preview = buildFeedSummary({
+          sectionsJson: blueprint?.sectionsJson || null,
           primary: blueprint?.llmReview || null,
           secondary: (blueprint?.mixNotes || buildBlueprintPreviewText({ steps: blueprint?.steps })) || null,
           fallback: source?.title || 'Open blueprint to view full details.',

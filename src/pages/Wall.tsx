@@ -35,6 +35,7 @@ interface BlueprintPost {
   creator_user_id: string;
   title: string;
   selected_items: Json;
+  sections_json: Json | null;
   llm_review: string | null;
   mix_notes: string | null;
   banner_url: string | null;
@@ -77,6 +78,7 @@ type ForYouBlueprintItem = {
   sourceChannelTitle: string | null;
   sourceChannelAvatarUrl: string | null;
   sourceThumbnailUrl: string | null;
+  sectionsJson: Json | null;
   llmReview: string | null;
   mixNotes: string | null;
   steps: unknown;
@@ -239,7 +241,7 @@ export default function Wall() {
       const limit = isYourChannelsScope || isSpecificChannelScope ? 140 : 90;
       let query = supabase
         .from('blueprints')
-        .select('id, creator_user_id, title, selected_items, llm_review, mix_notes, banner_url, likes_count, created_at')
+        .select('id, creator_user_id, title, selected_items, sections_json, llm_review, mix_notes, banner_url, likes_count, created_at')
         .eq('is_public', true)
         .limit(limit);
 
@@ -543,6 +545,7 @@ export default function Wall() {
           sourceChannelTitle: item.source.sourceChannelTitle || null,
           sourceChannelAvatarUrl: item.source.sourceChannelAvatarUrl || null,
           sourceThumbnailUrl: item.source.thumbnailUrl || null,
+          sectionsJson: item.blueprint.sectionsJson || null,
           llmReview: item.blueprint.llmReview,
           mixNotes: item.blueprint.mixNotes,
           steps: item.blueprint.steps,
@@ -991,6 +994,7 @@ export default function Wall() {
                       steps: item.steps,
                     });
                     const summary = buildFeedSummary({
+                      sectionsJson: item.sectionsJson,
                       primary: item.llmReview,
                       secondary: item.mixNotes || blueprintPreview,
                       fallback: 'Open blueprint to view full details.',
@@ -1075,6 +1079,7 @@ export default function Wall() {
                     selectedItems: post.selected_items,
                   });
                   const preview = buildFeedSummary({
+                    sectionsJson: post.sections_json,
                     primary: post.llm_review,
                     secondary: post.mix_notes || blueprintPreview,
                     fallback: 'Open blueprint to view full details.',

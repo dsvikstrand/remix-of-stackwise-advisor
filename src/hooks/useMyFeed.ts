@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import type { Json } from '@/integrations/supabase/types';
 
 export interface MyFeedItemView {
   id: string;
@@ -28,6 +29,7 @@ export interface MyFeedItemView {
     creatorUserId: string | null;
     title: string;
     bannerUrl: string | null;
+    sectionsJson: Json | null;
     llmReview: string | null;
     mixNotes: string | null;
     isPublic: boolean;
@@ -83,7 +85,7 @@ export function useMyFeed(options?: { enabled?: boolean }) {
         blueprintIds.length
           ? supabase
             .from('blueprints')
-            .select('id, creator_user_id, title, banner_url, llm_review, mix_notes, is_public, steps')
+            .select('id, creator_user_id, title, banner_url, sections_json, llm_review, mix_notes, is_public, steps')
             .in('id', blueprintIds)
           : Promise.resolve({ data: [], error: null }),
         supabase
@@ -241,6 +243,7 @@ export function useMyFeed(options?: { enabled?: boolean }) {
               creatorUserId: blueprint.creator_user_id || null,
               title: blueprint.title,
                 bannerUrl: blueprint.banner_url,
+                sectionsJson: blueprint.sections_json ?? null,
                 llmReview: blueprint.llm_review,
                 mixNotes: blueprint.mix_notes,
                 isPublic: blueprint.is_public,

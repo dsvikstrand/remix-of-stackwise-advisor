@@ -29,6 +29,7 @@ function BlueprintCard({
     selectedItems: result.selectedItems,
   });
   const summary = buildFeedSummary({
+    sectionsJson: result.sectionsJson,
     primary: result.llmReview,
     secondary: result.mixNotes || blueprintPreview,
     fallback: 'Open blueprint to view full details.',

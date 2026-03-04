@@ -39,6 +39,7 @@ export function BlueprintCard({
     [blueprint.tags, curatedChannelTagSlugs],
   );
   const summary = buildFeedSummary({
+    sectionsJson: blueprint.sections_json,
     primary: blueprint.mix_notes,
     secondary: blueprint.inventory_title ? `From ${blueprint.inventory_title}` : null,
     fallback: blueprint.inventory_title ? `From ${blueprint.inventory_title}` : 'Community blueprint',

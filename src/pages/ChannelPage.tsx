@@ -302,6 +302,7 @@ export default function ChannelPage() {
                       selectedItems: post.selectedItems,
                     });
                     const preview = buildFeedSummary({
+                      sectionsJson: post.sectionsJson,
                       primary: post.llmReview,
                       secondary: post.mixNotes || blueprintPreview,
                       fallback: 'Open blueprint to view full details.',
