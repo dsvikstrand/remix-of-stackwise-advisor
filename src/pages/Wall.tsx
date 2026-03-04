@@ -196,6 +196,7 @@ export default function Wall() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [optimisticLane, setOptimisticLane] = useState<string | null>(null);
   const [selectedTagSlug, setSelectedTagSlug] = useState<string | null>(null);
   const [optimisticUnlockingSourceItemIds, setOptimisticUnlockingSourceItemIds] = useState<Record<string, boolean>>({});
   const { followedTags } = useTagFollows();
@@ -223,11 +224,12 @@ export default function Wall() {
   const isForYouScope = effectiveScope === SCOPE_FOR_YOU && !!user;
   const isYourChannelsScope = effectiveScope === SCOPE_YOUR_CHANNELS && !!user;
   const feedSort: FeedSort = isForYouScope ? 'latest' : requestedSort;
-  const activeLane = isForYouScope
+  const resolvedLane = isForYouScope
     ? SCOPE_FOR_YOU
     : isYourChannelsScope
       ? SCOPE_YOUR_CHANNELS
       : SCOPE_ALL;
+  const activeLane = optimisticLane ?? resolvedLane;
 
   const updateSearchParams = (updates: { scope?: string; sort?: FeedSort }) => {
     const next = new URLSearchParams(searchParams);
@@ -241,7 +243,16 @@ export default function Wall() {
     updateSearchParams({ sort: 'latest' });
   }, [isForYouScope, requestedSort]);
 
+  useEffect(() => {
+    if (!optimisticLane) return;
+    if (optimisticLane === resolvedLane || (!user && optimisticLane !== SCOPE_ALL)) {
+      setOptimisticLane(null);
+    }
+  }, [optimisticLane, resolvedLane, user]);
+
   const handleScopeSelect = (scope: string) => {
+    if (scope === activeLane) return;
+    setOptimisticLane(scope);
     const nextSort = scope === SCOPE_FOR_YOU ? 'latest' : feedSort;
     updateSearchParams({
       scope,
