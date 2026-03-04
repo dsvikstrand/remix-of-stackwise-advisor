@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { Heart } from 'lucide-react';
+import { Eye, Heart } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -92,16 +92,6 @@ export function WallBlueprintCard({
   const safeTitle = decodeHtmlEntities(title);
   const safeSummary = decodeHtmlEntities(summary);
   const safeSourceName = sourceName ? decodeHtmlEntities(sourceName) : null;
-  const tagItems = [
-    ...(compactViewCount
-      ? [{
-          key: `views-${compactViewCount}`,
-          label: compactViewCount,
-        }]
-      : []),
-    ...tags,
-  ];
-
   return (
     <div
       className="block cursor-pointer px-3 py-2.5 transition-colors hover:bg-muted/20"
@@ -145,16 +135,26 @@ export function WallBlueprintCard({
           <h3 className="text-base font-semibold leading-tight">{safeTitle}</h3>
           <p className="text-sm text-muted-foreground line-clamp-3">{safeSummary}</p>
 
-          {tagItems.length > 0 && (
-            <OneRowTagChips
-              className="flex flex-nowrap gap-1.5 overflow-hidden"
-              items={tagItems.map((tag) => ({
-                key: tag.key,
-                label: tag.label,
-                variant: 'outline',
-                className: 'text-xs transition-colors border bg-muted/40 text-muted-foreground border-border/60',
-              }))}
-            />
+          {(compactViewCount || tags.length > 0) && (
+            <div className="flex flex-nowrap items-center gap-1.5 overflow-hidden">
+              {compactViewCount ? (
+                <span className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full border bg-muted/40 px-2 text-xs text-muted-foreground border-border/60">
+                  <span>{compactViewCount}</span>
+                  <Eye className="h-3 w-3" />
+                </span>
+              ) : null}
+              {tags.length > 0 ? (
+                <OneRowTagChips
+                  className="min-w-0 flex-1 flex flex-nowrap gap-1.5 overflow-hidden"
+                  items={tags.map((tag) => ({
+                    key: tag.key,
+                    label: tag.label,
+                    variant: 'outline',
+                    className: 'text-xs transition-colors border bg-muted/40 text-muted-foreground border-border/60',
+                  }))}
+                />
+              ) : null}
+            </div>
           )}
 
           <div className="flex items-center justify-between gap-2 pt-1 text-xs text-muted-foreground">
