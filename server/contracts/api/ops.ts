@@ -54,6 +54,8 @@ export type OpsRouteDeps = {
   scheduleQueuedIngestionProcessing: () => void;
   queueDepthHardLimit: number;
   queueDepthPerUserLimit: number;
+  queuePriorityEnabled: boolean;
+  queueLowPrioritySuppressionDepth: number;
   workerConcurrency: number;
   workerBatchSize: number;
   workerLeaseMs: number;

@@ -176,15 +176,15 @@ f6) [have] Exit criteria:
 - queue spikes no longer directly choke API responsiveness
 
 ## Phase 4 - Dependency Resilience
-g1) [todo] Harden the transcript provider path.
-g2) [todo] Tighten:
+g1) [have] Hardened the transcript provider path.
+g2) [have] Tightened:
 - provider timeout behavior
 - retry limits
 - failure classification
 - backoff on repeated upstream failure
-g3) [todo] Harden YouTube API enrichment behavior under quota/rate-limit pressure.
-g4) [todo] Confirm optional enrichment remains non-blocking to core generation.
-g5) [todo] Exit criteria:
+g3) [have] Hardened YouTube API enrichment behavior under quota/rate-limit pressure.
+g4) [have] Confirmed optional enrichment remains non-blocking to core generation.
+g5) [have] Exit criteria achieved:
 - upstream failures fail fast
 - transcript/provider instability no longer causes silent queue pileups
 g6) [have] Phase 4A implementation is now added in code:
@@ -192,6 +192,35 @@ g6) [have] Phase 4A implementation is now added in code:
 - queue-depth guardrails and per-cycle budgets
 - periodic view/comments refresh state with backoff persistence
 - page-load behavior unchanged (still stored-data only)
+g7) [have] Phase 4A closeout verification captured on `2026-03-04`:
+- target blueprint: `f6b0aa1d-4b87-4f0d-a4d5-8c9de7027e0d`
+- forced-due smoke test executed by setting both `next_view_refresh_at` and `next_comments_refresh_at` to past timestamps
+- worker scheduler cycle enqueued `2` refresh jobs (`view_count` + `comments`)
+- both refresh jobs completed with `status=succeeded` and no error codes
+- refresh-state advanced as expected:
+  - `last_view_refresh_status=ok`
+  - `last_comments_refresh_status=ok`
+  - failure counters remained `0`
+  - next due timestamps moved forward to normal cadence windows
+- source metadata updated by refresh (`view_count` and `view_count_fetched_at` changed)
+g8) [have] Phase 4B closeout verification captured on `2026-03-04`:
+- deployed commit: `4fee142` (`Harden transcript fail-fast classification and retry behavior`)
+- production test case used a disposable queued unlock with terminal transcript outcome:
+  - `video_id`: `_qh1BDb-aaa`
+  - `source_item_id`: `666768ca-c076-45ba-b1e1-0a2843f28edf`
+  - `unlock_id`: `90c1fb8a-4f33-42c8-80be-232e8b44130d`
+  - `queue_job_id`: `978b20aa-060d-4548-9d7b-ccbd66ac3087`
+- observed terminal behavior:
+  - `error_code=ACCESS_DENIED`
+  - unlock moved to `transcript_status=confirmed_no_speech`
+  - `transcript_retry_after=null`
+  - `last_error_code=ACCESS_DENIED`
+- verified retry suppression:
+  - no matching `source_auto_unlock_retry` jobs were enqueued for that `source_item_id`
+  - worker logs include `transcript_confirmed_no_speech` with `"fail_fast": true`
+g9) [have] Exit criteria:
+- upstream failures fail fast
+- transcript/provider instability no longer causes silent queue pileups
 
 ## Phase 5 - Queue Prioritization and Backpressure
 h1) [todo] Add or tighten queue priority rules.
@@ -205,6 +234,14 @@ h3) [todo] Improve overload behavior:
 - ability to suppress lower-priority work during spikes
 h4) [todo] Exit criteria:
 - core user-triggered actions remain responsive under heavy queue pressure
+h5) [have] Phase 5A implementation shipped in code:
+- queue priority tiers (`high`/`medium`/`low`) with tiered worker claims
+- low-priority enqueue suppression under queue pressure
+- queue health response includes per-scope priority metadata
+- runbook/env knobs added for tier batch sizes and suppression threshold
+h6) [todo] Phase 5A closeout validation:
+- run one controlled backlog test and confirm high-tier scopes drain ahead of low-tier scopes
+- capture queue metrics before/after with `npm run metrics:queue -- --source journalctl --json`
 
 ## Phase 6 - Launch Controls and Safeguards
 i1) [todo] Add operational kill switches and launch toggles.
@@ -256,8 +293,8 @@ l2) [have] The remaining phases improve launch quality and survivability but are
 m1) [have] Phase 1 - Completed (telemetry shipped, baseline captured)
 m2) [have] Phase 2 - Completed (`WORKER_CONCURRENCY=4` retained after under-load sample)
 m3) [have] Phase 3 - Completed (web/worker split deployed on Oracle)
-m4) [have] Phase 4 - In progress (Phase 4A shipped in code; rollout verification pending)
-m5) [todo] Phase 5 - Not started
+m4) [have] Phase 4 - Completed (Phase 4A + Phase 4B shipped and closeout-verified)
+m5) [todo] Phase 5 - In progress (Phase 5A implemented; closeout validation pending)
 m6) [todo] Phase 6 - Not started
 m7) [todo] Phase 7 - Not started
 m8) [todo] Phase 8 - Not started
@@ -266,4 +303,4 @@ m8) [todo] Phase 8 - Not started
 n1) [todo] Update this file with measured outcomes after each phase.
 n2) [todo] Keep changes phase-scoped so regressions are easy to attribute.
 n3) [todo] Do not mix feature work into these phases unless it directly improves launch reliability.
-n4) [have] Phase 1 is complete and the first Phase 2 throughput change is deployed; the next action is to capture a meaningful post-change sample under real queue activity.
+n4) [have] Phase 1-4 are complete with recorded evidence; the next action is to implement Phase 6 launch controls and safeguards.

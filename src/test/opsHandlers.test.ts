@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { handleDebugResetYtProxy, handleQueueHealth } from '../../server/handlers/opsHandlers';
+import {
+  handleDebugResetYtProxy,
+  handleIngestionJobsTrigger,
+  handleQueueHealth,
+} from '../../server/handlers/opsHandlers';
 import type { OpsRouteDeps } from '../../server/contracts/api/ops';
 
 function createMockResponse() {
@@ -32,6 +36,8 @@ function createBaseDeps(overrides: Partial<OpsRouteDeps> = {}): OpsRouteDeps {
     scheduleQueuedIngestionProcessing: () => undefined,
     queueDepthHardLimit: 1000,
     queueDepthPerUserLimit: 50,
+    queuePriorityEnabled: true,
+    queueLowPrioritySuppressionDepth: 100,
     workerConcurrency: 1,
     workerBatchSize: 10,
     workerLeaseMs: 90_000,
@@ -121,6 +127,35 @@ function createQueueHealthDb(options?: {
                 error: options?.rowsError ?? null,
               });
             },
+          };
+        },
+      };
+    },
+  };
+}
+
+function createIngestionTriggerDbWithoutRunningJob() {
+  return {
+    from(table: string) {
+      if (table !== 'ingestion_jobs') {
+        throw new Error(`Unexpected table: ${table}`);
+      }
+      return {
+        select(_columns: string) {
+          return {
+            eq() {
+              return this;
+            },
+            in() {
+              return this;
+            },
+            order() {
+              return this;
+            },
+            limit() {
+              return this;
+            },
+            maybeSingle: async () => ({ data: null, error: null }),
           };
         },
       };
@@ -263,6 +298,7 @@ describe('queue health handler', () => {
           running: number;
           oldest_queued_age_ms: number | null;
           oldest_running_age_ms: number | null;
+          priority: string;
         }>;
       };
     };
@@ -275,6 +311,7 @@ describe('queue health handler', () => {
     expect(payload.data.by_scope.all_active_subscriptions).toMatchObject({
       queued: 1,
       running: 1,
+      priority: 'low',
     });
     expect(payload.data.by_scope.all_active_subscriptions.oldest_queued_age_ms).not.toBeNull();
     expect(payload.data.by_scope.all_active_subscriptions.oldest_running_age_ms).not.toBeNull();
@@ -283,6 +320,7 @@ describe('queue health handler', () => {
       running: 0,
       oldest_queued_age_ms: null,
       oldest_running_age_ms: null,
+      priority: 'high',
     });
   });
 
@@ -312,8 +350,32 @@ describe('queue health handler', () => {
             running: 0,
             oldest_queued_age_ms: null,
             oldest_running_age_ms: null,
+            priority: 'low',
           },
         },
+      },
+    });
+  });
+});
+
+describe('ingestion trigger handler', () => {
+  it('suppresses low-priority all_active_subscriptions enqueue when queue pressure threshold is hit', async () => {
+    const req = {} as never;
+    const res = createMockResponse();
+
+    await handleIngestionJobsTrigger(req, res as never, createBaseDeps({
+      getServiceSupabaseClient: () => createIngestionTriggerDbWithoutRunningJob(),
+      countQueueDepth: async () => 125,
+      queuePriorityEnabled: true,
+      queueLowPrioritySuppressionDepth: 100,
+    }));
+
+    expect(res.statusCode).toBe(202);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        suppressed: true,
+        scope: 'all_active_subscriptions',
       },
     });
   });

@@ -101,6 +101,13 @@ import {
   type IngestionJobRow,
 } from './services/ingestionQueue';
 import {
+  filterScopesByQueuePriorityTier,
+  getQueuePriorityTierForScope,
+  listQueuePriorityTiersInOrder,
+  shouldSuppressLowPriorityQueueScope,
+  type QueuePriorityTier,
+} from './services/queuePriority';
+import {
   createNotificationFromEvent,
   listNotificationsForUser,
   markAllNotificationsRead,
@@ -255,6 +262,26 @@ const ingestionLatestMineWindowMs = clampInt(process.env.INGESTION_LATEST_MINE_W
 const ingestionLatestMineMaxPerWindow = clampInt(process.env.INGESTION_LATEST_MINE_MAX_PER_WINDOW, 180, 30, 2_000);
 const queueDepthHardLimit = clampInt(process.env.QUEUE_DEPTH_HARD_LIMIT, 1000, 10, 200_000);
 const queueDepthPerUserLimit = clampInt(process.env.QUEUE_DEPTH_PER_USER_LIMIT, 50, 1, 10_000);
+const queuePriorityEnabled = parseRuntimeFlag(process.env.QUEUE_PRIORITY_ENABLED, true);
+const queueSweepHighBatch = clampInt(process.env.QUEUE_SWEEP_HIGH_BATCH, 10, 0, 200);
+const queueSweepMediumBatch = clampInt(
+  process.env.QUEUE_SWEEP_MEDIUM_BATCH,
+  5,
+  0,
+  200,
+);
+const queueSweepLowBatch = clampInt(
+  process.env.QUEUE_SWEEP_LOW_BATCH,
+  2,
+  0,
+  200,
+);
+const queueLowPrioritySuppressionDepth = clampInt(
+  process.env.QUEUE_LOW_PRIORITY_SUPPRESSION_DEPTH,
+  100,
+  0,
+  200_000,
+);
 const workerConcurrency = clampInt(process.env.WORKER_CONCURRENCY, 2, 1, 16);
 const workerBatchSize = clampInt(process.env.WORKER_BATCH_SIZE, 10, 1, 200);
 const workerLeaseMs = clampInt(process.env.WORKER_LEASE_MS, 90_000, 5_000, 15 * 60_000);
@@ -593,6 +620,38 @@ const QUEUED_INGESTION_SCOPES = [
   'all_active_subscriptions',
 ] as const;
 type QueuedIngestionScope = (typeof QUEUED_INGESTION_SCOPES)[number];
+
+function getQueueSweepConfigByTier(tier: QueuePriorityTier) {
+  if (tier === 'high') return queueSweepHighBatch;
+  if (tier === 'medium') return queueSweepMediumBatch;
+  return queueSweepLowBatch;
+}
+
+function getQueueSweepPlan() {
+  if (!queuePriorityEnabled) {
+    return [{
+      tier: 'high' as QueuePriorityTier,
+      scopes: [...QUEUED_INGESTION_SCOPES],
+      maxJobs: workerBatchSize,
+    }];
+  }
+
+  const plan = listQueuePriorityTiersInOrder().map((tier) => ({
+    tier,
+    scopes: filterScopesByQueuePriorityTier(QUEUED_INGESTION_SCOPES, tier),
+    maxJobs: getQueueSweepConfigByTier(tier),
+  })).filter((row) => row.scopes.length > 0 && row.maxJobs > 0);
+
+  if (plan.length > 0) {
+    return plan;
+  }
+
+  return [{
+    tier: 'high' as QueuePriorityTier,
+    scopes: [...QUEUED_INGESTION_SCOPES],
+    maxJobs: workerBatchSize,
+  }];
+}
 
 const queuedWorkerId = `ingestion-worker-${process.pid}`;
 let queuedWorkerTimer: ReturnType<typeof setTimeout> | null = null;
@@ -4012,6 +4071,30 @@ async function enqueueSourceTranscriptRevalidateJob(
   };
 }
 
+async function shouldSuppressLowPriorityEnqueue(input: {
+  db: ReturnType<typeof createClient>;
+  scope: QueuedIngestionScope;
+  context?: Record<string, unknown>;
+}) {
+  const queueDepth = await countQueueDepth(input.db, { includeRunning: true });
+  const suppressed = shouldSuppressLowPriorityQueueScope({
+    scope: input.scope,
+    queueDepth,
+    suppressionDepth: queueLowPrioritySuppressionDepth,
+    enabled: queuePriorityEnabled,
+  });
+  if (suppressed) {
+    console.log('[queue_low_priority_suppressed]', JSON.stringify({
+      scope: input.scope,
+      queue_depth: queueDepth,
+      suppression_depth: queueLowPrioritySuppressionDepth,
+      priority: getQueuePriorityTierForScope(input.scope),
+      ...(input.context || {}),
+    }));
+  }
+  return { suppressed, queueDepth };
+}
+
 async function enqueueBlueprintYouTubeEnrichmentJob(input: {
   db: ReturnType<typeof createClient>;
   traceDb?: ReturnType<typeof createClient> | null;
@@ -4021,6 +4104,21 @@ async function enqueueBlueprintYouTubeEnrichmentJob(input: {
   explicitSourceItemId?: string | null;
 }) {
   const writeDb = input.traceDb || input.db;
+  const suppression = await shouldSuppressLowPriorityEnqueue({
+    db: writeDb,
+    scope: 'blueprint_youtube_enrichment',
+    context: {
+      run_id: input.runId,
+      blueprint_id: input.blueprintId,
+    },
+  });
+  if (suppression.suppressed) {
+    return {
+      job_id: null,
+      suppressed: true,
+      queue_depth: suppression.queueDepth,
+    };
+  }
   const nowIso = new Date().toISOString();
   const { data: job, error: jobError } = await writeDb
     .from('ingestion_jobs')
@@ -4056,6 +4154,21 @@ async function enqueueBlueprintYouTubeRefreshJob(input: {
   youtubeVideoId: string;
   sourceItemId?: string | null;
 }) {
+  const suppression = await shouldSuppressLowPriorityEnqueue({
+    db: input.db,
+    scope: 'blueprint_youtube_refresh',
+    context: {
+      blueprint_id: input.blueprintId,
+      refresh_kind: input.refreshKind,
+    },
+  });
+  if (suppression.suppressed) {
+    return {
+      job_id: null,
+      suppressed: true,
+      queue_depth: suppression.queueDepth,
+    };
+  }
   const nowIso = new Date().toISOString();
   const { data: job, error: jobError } = await input.db
     .from('ingestion_jobs')
@@ -7005,15 +7118,21 @@ async function runQueuedIngestionProcessing() {
         }
       }
 
+      const sweepPlan = getQueueSweepPlan();
       while (true) {
-        const claimed = await claimQueuedIngestionJobs(db, {
-          scopes: [...QUEUED_INGESTION_SCOPES],
-          maxJobs: workerBatchSize,
-          workerId: queuedWorkerId,
-          leaseSeconds: Math.max(5, Math.ceil(workerLeaseMs / 1000)),
-        });
-        if (claimed.length === 0) break;
-        await processClaimedIngestionJobs(db, claimed);
+        let claimedAny = false;
+        for (const planEntry of sweepPlan) {
+          const claimed = await claimQueuedIngestionJobs(db, {
+            scopes: [...planEntry.scopes],
+            maxJobs: planEntry.maxJobs,
+            workerId: queuedWorkerId,
+            leaseSeconds: Math.max(5, Math.ceil(workerLeaseMs / 1000)),
+          });
+          if (claimed.length === 0) continue;
+          claimedAny = true;
+          await processClaimedIngestionJobs(db, claimed);
+        }
+        if (!claimedAny) break;
       }
     } while (queuedWorkerRequested);
   } catch (error) {
@@ -7079,14 +7198,16 @@ async function runYouTubeRefreshSchedulerCycle() {
           kind: 'view_count',
         });
         if (hasPending) continue;
-        await enqueueBlueprintYouTubeRefreshJob({
+        const enqueueResult = await enqueueBlueprintYouTubeRefreshJob({
           db,
           blueprintId: candidate.blueprint_id,
           refreshKind: 'view_count',
           youtubeVideoId: candidate.youtube_video_id,
           sourceItemId: candidate.source_item_id,
         });
-        enqueuedTotal += 1;
+        if (!enqueueResult.suppressed) {
+          enqueuedTotal += 1;
+        }
       }
     }
 
@@ -7108,14 +7229,16 @@ async function runYouTubeRefreshSchedulerCycle() {
           kind: 'comments',
         });
         if (hasPending) continue;
-        await enqueueBlueprintYouTubeRefreshJob({
+        const enqueueResult = await enqueueBlueprintYouTubeRefreshJob({
           db,
           blueprintId: candidate.blueprint_id,
           refreshKind: 'comments',
           youtubeVideoId: candidate.youtube_video_id,
           sourceItemId: candidate.source_item_id,
         });
-        enqueuedTotal += 1;
+        if (!enqueueResult.suppressed) {
+          enqueuedTotal += 1;
+        }
       }
     }
 
@@ -7365,6 +7488,8 @@ registerOpsRoutes(app, {
   scheduleQueuedIngestionProcessing,
   queueDepthHardLimit,
   queueDepthPerUserLimit,
+  queuePriorityEnabled,
+  queueLowPrioritySuppressionDepth,
   workerConcurrency,
   workerBatchSize,
   workerLeaseMs,

@@ -1,5 +1,9 @@
 import type express from 'express';
 import type { OpsRouteDeps } from '../contracts/api/ops';
+import {
+  getQueuePriorityTierForScope,
+  shouldSuppressLowPriorityQueueScope,
+} from '../services/queuePriority';
 
 export async function handleIngestionJobsTrigger(req: express.Request, res: express.Response, deps: OpsRouteDeps) {
   if (!deps.isServiceRequestAuthorized(req)) {
@@ -63,6 +67,34 @@ export async function handleIngestionJobsTrigger(req: express.Request, res: expr
       retry_after_seconds: 30,
       data: {
         queue_depth: queueDepth,
+      },
+    });
+  }
+
+  const suppressed = shouldSuppressLowPriorityQueueScope({
+    scope: 'all_active_subscriptions',
+    queueDepth,
+    suppressionDepth: deps.queueLowPrioritySuppressionDepth,
+    enabled: deps.queuePriorityEnabled,
+  });
+  if (suppressed) {
+    console.log('[queue_low_priority_suppressed]', JSON.stringify({
+      scope: 'all_active_subscriptions',
+      queue_depth: queueDepth,
+      suppression_depth: deps.queueLowPrioritySuppressionDepth,
+      priority: getQueuePriorityTierForScope('all_active_subscriptions'),
+      trigger: 'service_cron',
+      endpoint: '/api/ingestion/jobs/trigger',
+    }));
+    return res.status(202).json({
+      ok: true,
+      error_code: null,
+      message: 'low-priority ingestion enqueue suppressed due to queue pressure',
+      data: {
+        suppressed: true,
+        scope: 'all_active_subscriptions',
+        queue_depth: queueDepth,
+        suppression_depth: deps.queueLowPrioritySuppressionDepth,
       },
     });
   }
@@ -179,6 +211,7 @@ export async function handleQueueHealth(req: express.Request, res: express.Respo
     running: number;
     oldest_queued_age_ms: number | null;
     oldest_running_age_ms: number | null;
+    priority: string;
   }> = {};
   for (const scope of deps.queuedIngestionScopes) {
     byScope[scope] = {
@@ -186,6 +219,7 @@ export async function handleQueueHealth(req: express.Request, res: express.Respo
       running: 0,
       oldest_queued_age_ms: null,
       oldest_running_age_ms: null,
+      priority: getQueuePriorityTierForScope(scope),
     };
   }
   let oldestQueuedCreatedAt: string | null = null;

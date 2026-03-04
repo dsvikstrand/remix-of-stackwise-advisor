@@ -230,6 +230,11 @@ Required runtime variables:
 - `YOUTUBE_REFRESH_COMMENTS_INTERVAL_HOURS` (default `48`)
 - `QUEUE_DEPTH_HARD_LIMIT` (default `1000`)
 - `QUEUE_DEPTH_PER_USER_LIMIT` (default `50`)
+- `QUEUE_PRIORITY_ENABLED` (default `true`; worker claims high/medium/low scopes in priority order)
+- `QUEUE_SWEEP_HIGH_BATCH` (default `10`)
+- `QUEUE_SWEEP_MEDIUM_BATCH` (default `5`)
+- `QUEUE_SWEEP_LOW_BATCH` (default `2`)
+- `QUEUE_LOW_PRIORITY_SUPPRESSION_DEPTH` (default `100`; suppresses enqueue for low-priority scopes when queue depth is elevated)
 - `WORKER_CONCURRENCY` (default `2`)
 - `WORKER_BATCH_SIZE` (default `10`)
 - `WORKER_LEASE_MS` (default `90000`)
@@ -347,6 +352,11 @@ Safe defaults:
 - `RUN_INGESTION_WORKER=true`
 - `QUEUE_DEPTH_HARD_LIMIT=1000`
 - `QUEUE_DEPTH_PER_USER_LIMIT=50`
+- `QUEUE_PRIORITY_ENABLED=true`
+- `QUEUE_SWEEP_HIGH_BATCH=10`
+- `QUEUE_SWEEP_MEDIUM_BATCH=5`
+- `QUEUE_SWEEP_LOW_BATCH=2`
+- `QUEUE_LOW_PRIORITY_SUPPRESSION_DEPTH=100`
 - `WORKER_CONCURRENCY=2`
 - `WORKER_BATCH_SIZE=10`
 - `WORKER_LEASE_MS=90000`
