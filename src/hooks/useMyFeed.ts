@@ -104,23 +104,27 @@ export function useMyFeed(options?: { enabled?: boolean }) {
       const { data: tagRows } = blueprintIds.length
         ? await supabase
           .from('blueprint_tags')
-          .select('blueprint_id, tags(slug)')
+          .select('blueprint_id, tag_id')
           .in('blueprint_id', blueprintIds)
-        : { data: [] as Array<{ blueprint_id: string; tags: { slug: string } | { slug: string }[] | null }> };
+        : { data: [] as Array<{ blueprint_id: string; tag_id: string }> };
 
+      const tagIds = [...new Set((tagRows || []).map((row) => String(row.tag_id || '').trim()).filter(Boolean))];
+      const { data: tagsData } = tagIds.length > 0
+        ? await supabase
+          .from('tags')
+          .select('id, slug')
+          .in('id', tagIds)
+        : { data: [] as Array<{ id: string; slug: string }> };
+
+      const tagsMap = new Map((tagsData || []).map((tag) => [tag.id, String(tag.slug || '').trim()]));
       const tagsByBlueprint = new Map<string, string[]>();
       (tagRows || []).forEach((row) => {
-        const list = tagsByBlueprint.get(row.blueprint_id) || [];
-        if (Array.isArray(row.tags)) {
-          row.tags.forEach((tag) => {
-            if (tag && typeof tag === 'object' && 'slug' in tag) {
-              list.push(String((tag as { slug: string }).slug));
-            }
-          });
-        } else if (row.tags && typeof row.tags === 'object' && 'slug' in row.tags) {
-          list.push(String((row.tags as { slug: string }).slug));
-        }
-        tagsByBlueprint.set(row.blueprint_id, list);
+        const blueprintId = String(row.blueprint_id || '').trim();
+        const slug = tagsMap.get(String(row.tag_id || '').trim()) || '';
+        if (!blueprintId || !slug) return;
+        const list = tagsByBlueprint.get(blueprintId) || [];
+        list.push(slug);
+        tagsByBlueprint.set(blueprintId, list);
       });
 
       const sourceMap = new Map((sources || []).map((row) => [row.id, row]));
