@@ -136,6 +136,7 @@ import { createSourcePageAssetSweepService } from './services/sourcePageAssetSwe
 import { createAutoBannerQueueService } from './services/autoBannerQueue';
 import { createSourceSubscriptionSyncService } from './services/sourceSubscriptionSync';
 import { createBlueprintCreationService } from './services/blueprintCreation';
+import { createBlueprintYouTubeCommentsService } from './services/blueprintYoutubeComments';
 import { createYouTubeBlueprintPipelineService } from './services/youtubeBlueprintPipeline';
 import {
   createGenerationTierAccessResolver,
@@ -2766,6 +2767,9 @@ const blueprintCreationService = createBlueprintCreationService({
   claimVariantForGeneration,
   markVariantReady,
   markVariantFailed,
+  populateBlueprintYouTubeComments: createBlueprintYouTubeCommentsService({
+    apiKey: youtubeDataApiKey,
+  }).populateForBlueprint,
 });
 const { createBlueprintFromVideo } = blueprintCreationService;
 

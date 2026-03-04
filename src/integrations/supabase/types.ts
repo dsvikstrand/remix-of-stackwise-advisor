@@ -49,6 +49,62 @@ export type Database = {
           },
         ]
       }
+      blueprint_youtube_comments: {
+        Row: {
+          author_avatar_url: string | null
+          author_name: string | null
+          blueprint_id: string
+          content: string
+          created_at: string
+          display_order: number
+          fetched_at: string
+          id: string
+          like_count: number | null
+          published_at: string | null
+          sort_mode: string
+          source_comment_id: string
+          youtube_video_id: string
+        }
+        Insert: {
+          author_avatar_url?: string | null
+          author_name?: string | null
+          blueprint_id: string
+          content: string
+          created_at?: string
+          display_order: number
+          fetched_at?: string
+          id?: string
+          like_count?: number | null
+          published_at?: string | null
+          sort_mode: string
+          source_comment_id: string
+          youtube_video_id: string
+        }
+        Update: {
+          author_avatar_url?: string | null
+          author_name?: string | null
+          blueprint_id?: string
+          content?: string
+          created_at?: string
+          display_order?: number
+          fetched_at?: string
+          id?: string
+          like_count?: number | null
+          published_at?: string | null
+          sort_mode?: string
+          source_comment_id?: string
+          youtube_video_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blueprint_youtube_comments_blueprint_id_fkey"
+            columns: ["blueprint_id"]
+            isOneToOne: false
+            referencedRelation: "blueprints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       blueprint_likes: {
         Row: {
           blueprint_id: string

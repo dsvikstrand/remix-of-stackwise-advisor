@@ -134,6 +134,13 @@ export type BlueprintCreationDeps = {
     errorCode: string;
     errorMessage: string;
   }) => Promise<unknown>;
+  populateBlueprintYouTubeComments?: (input: {
+    db: DbClient;
+    traceDb?: DbClient | null;
+    runId: string;
+    blueprintId: string;
+    explicitVideoId?: string | null;
+  }) => Promise<void>;
 };
 
 export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
@@ -316,6 +323,24 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
             });
           },
         });
+      }
+
+      if (deps.populateBlueprintYouTubeComments) {
+        try {
+          await deps.populateBlueprintYouTubeComments({
+            db,
+            traceDb,
+            runId: result.run_id,
+            blueprintId: blueprint.id,
+            explicitVideoId: input.videoId,
+          });
+        } catch (youtubeCommentsError) {
+          console.log('[blueprint_youtube_comments_enrichment_failed]', JSON.stringify({
+            blueprint_id: blueprint.id,
+            run_id: result.run_id,
+            error: youtubeCommentsError instanceof Error ? youtubeCommentsError.message : String(youtubeCommentsError),
+          }));
+        }
       }
 
       return {

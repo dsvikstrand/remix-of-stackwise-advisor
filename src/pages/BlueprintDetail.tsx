@@ -12,6 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { BlueprintAnalysisView } from '@/components/blueprint/BlueprintAnalysisView';
 import { SummarySlides } from '@/components/blueprint/SummarySlides';
 import { useBlueprint, useBlueprintComments, useCreateBlueprintComment, useToggleBlueprintLike } from '@/hooks/useBlueprints';
+import { useBlueprintYoutubeComments } from '@/hooks/useBlueprintYoutubeComments';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Heart, Maximize2, Minimize2 } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
@@ -273,6 +274,8 @@ export default function BlueprintDetail() {
   const navigate = useNavigate();
   const { blueprintId } = useParams();
   const { data: blueprint, isLoading } = useBlueprint(blueprintId);
+  const [youtubeCommentSort, setYouTubeCommentSort] = useState<'top' | 'new'>('top');
+  const { data: youtubeComments, isLoading: youtubeCommentsLoading } = useBlueprintYoutubeComments(blueprintId, youtubeCommentSort);
   const { data: comments, isLoading: commentsLoading } = useBlueprintComments(blueprintId);
   const createComment = useCreateBlueprintComment();
   const toggleLike = useToggleBlueprintLike();
@@ -327,6 +330,7 @@ export default function BlueprintDetail() {
     setActiveInteractiveTab('');
     setIsBannerExpanded(false);
     setIsBannerVideoPlaying(false);
+    setYouTubeCommentSort('top');
   }, [blueprint?.id]);
 
   useEffect(() => {
@@ -1017,6 +1021,68 @@ export default function BlueprintDetail() {
             <section className="space-y-4">
               <div className="flex items-end justify-between gap-3">
                 <h2 className="text-lg font-semibold">Comments</h2>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={youtubeCommentSort === 'top' ? 'default' : 'outline'}
+                    onClick={() => setYouTubeCommentSort('top')}
+                  >
+                    Top
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={youtubeCommentSort === 'new' ? 'default' : 'outline'}
+                    onClick={() => setYouTubeCommentSort('new')}
+                  >
+                    New
+                  </Button>
+                </div>
+              </div>
+
+              {youtubeCommentsLoading ? (
+                <div className="space-y-3 border-y border-border/40 py-3">
+                  <Skeleton className="h-16 w-full" />
+                  <Skeleton className="h-16 w-full" />
+                  <Skeleton className="h-16 w-full" />
+                </div>
+              ) : youtubeComments && youtubeComments.length > 0 ? (
+                <div className="divide-y divide-border/40 border-y border-border/40">
+                  {youtubeComments.map((row) => (
+                    <div key={row.id} className="py-3">
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-8 w-8">
+                          <AvatarImage src={row.author_avatar_url || undefined} />
+                          <AvatarFallback>
+                            {(row.author_name || 'YT').slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="text-sm font-medium">
+                            {row.author_name || 'YouTube user'}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {row.published_at
+                              ? formatDistanceToNow(new Date(row.published_at), { addSuffix: true })
+                              : 'Unknown time'}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="mt-2 whitespace-pre-wrap text-sm">{row.content}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No source comments available.</p>
+              )}
+            </section>
+
+            <PageDivider />
+
+            <section className="space-y-4">
+              <div className="flex items-end justify-between gap-3">
+                <h2 className="text-lg font-semibold">Community Comments</h2>
               </div>
 
               <div className="space-y-2 border border-border/40 px-3 py-3">
