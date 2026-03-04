@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { runWithProviderRetry } from '../../server/services/providerResilience';
+import { TranscriptProviderError } from '../../server/transcript/types';
 
 describe('providerResilience', () => {
   it('retries plain fetch failed transport errors', async () => {
@@ -42,6 +43,28 @@ describe('providerResilience', () => {
         },
       ),
     ).rejects.toThrow('validation failed');
+
+    expect(attempts).toBe(1);
+  });
+
+  it('does not retry terminal transcript provider errors', async () => {
+    let attempts = 0;
+
+    await expect(
+      runWithProviderRetry(
+        {
+          providerKey: 'test_transcript_terminal_non_retryable',
+          timeoutMs: 5_000,
+          maxAttempts: 3,
+          baseDelayMs: 1,
+          jitterMs: 0,
+        },
+        async () => {
+          attempts += 1;
+          throw new TranscriptProviderError('VIDEO_UNAVAILABLE', 'Video unavailable');
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'VIDEO_UNAVAILABLE' });
 
     expect(attempts).toBe(1);
   });

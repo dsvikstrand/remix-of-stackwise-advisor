@@ -401,4 +401,24 @@ describe('transcript providers rate-limit mapping', () => {
     expect(((caught as TranscriptProviderError).retryAfterSeconds || 0) >= 1).toBe(true);
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
+
+  it('maps yt_to_text HTTP 404 to VIDEO_UNAVAILABLE', async () => {
+    global.fetch = vi.fn(async () => new Response(null, {
+      status: 404,
+    })) as unknown as typeof fetch;
+
+    await expect(getTranscriptFromYtToText('video123')).rejects.toMatchObject({
+      code: 'VIDEO_UNAVAILABLE',
+    });
+  });
+
+  it('maps youtube_timedtext metadata HTTP 403 to ACCESS_DENIED', async () => {
+    global.fetch = vi.fn(async () => new Response(null, {
+      status: 403,
+    })) as unknown as typeof fetch;
+
+    await expect(getTranscriptFromYouTubeTimedtext('video123')).rejects.toMatchObject({
+      code: 'ACCESS_DENIED',
+    });
+  });
 });

@@ -15,7 +15,11 @@ import { createCodexGenerationClient } from './llm/codexGenerationClient';
 import { CodexExecError, runCodexExec } from './llm/codexExec';
 import { consumeCredit, getCredits } from './credits';
 import { getTranscriptForVideo, probeTranscriptProviders } from './transcript/getTranscript';
-import { TranscriptProviderError } from './transcript/types';
+import {
+  TranscriptProviderError,
+  isRetryableTranscriptProviderErrorCode,
+  isTerminalTranscriptProviderErrorCode,
+} from './transcript/types';
 import { getAdapterForUrl } from './adapters/registry';
 import { evaluateCandidateForChannel } from './gates';
 import type { GateMode } from './gates/types';
@@ -291,6 +295,7 @@ const sourceTranscriptRetryDelayAttempt3Seconds = clampInt(
   24 * 3600,
 );
 const sourceTranscriptMaxAttempts = clampInt(process.env.SOURCE_TRANSCRIPT_MAX_ATTEMPTS, 3, 1, 10);
+const transcriptFailFastEnabled = parseRuntimeFlag(process.env.TRANSCRIPT_FAIL_FAST_ENABLED, true);
 const sourceUnlockExpiredSweepBatch = clampInt(process.env.SOURCE_UNLOCK_EXPIRED_SWEEP_BATCH, 100, 10, 1000);
 const sourceUnlockSweepsEnabledRaw = String(process.env.SOURCE_UNLOCK_SWEEPS_ENABLED || 'true').trim().toLowerCase();
 const sourceUnlockSweepsEnabled = !(sourceUnlockSweepsEnabledRaw === 'false' || sourceUnlockSweepsEnabledRaw === '0' || sourceUnlockSweepsEnabledRaw === 'off');
@@ -3335,7 +3340,8 @@ function toUnlockSnapshot(input: {
 
 function isPermanentNoTranscriptCode(code: string | null | undefined) {
   const normalized = String(code || '').trim().toUpperCase();
-  return normalized === 'NO_TRANSCRIPT_PERMANENT';
+  return normalized === 'NO_TRANSCRIPT_PERMANENT'
+    || isTerminalTranscriptProviderErrorCode(normalized);
 }
 
 function isTransientTranscriptUnavailableCode(code: string | null | undefined) {
@@ -3343,10 +3349,8 @@ function isTransientTranscriptUnavailableCode(code: string | null | undefined) {
   return normalized === 'TRANSCRIPT_EMPTY'
     || normalized === 'TRANSCRIPT_UNAVAILABLE'
     || normalized === 'NO_CAPTIONS'
-    || normalized === 'RATE_LIMITED'
-    || normalized === 'TIMEOUT'
-    || normalized === 'TRANSCRIPT_FETCH_FAIL'
-    || normalized === 'PROVIDER_FAIL';
+    || normalized === 'PROVIDER_FAIL'
+    || isRetryableTranscriptProviderErrorCode(normalized);
 }
 
 function normalizeTranscriptTruthStatus(value: unknown): TranscriptTruthStatus {
@@ -3374,6 +3378,9 @@ function isConfirmedNoTranscriptUnlock(unlock: SourceItemUnlockRow | null | unde
 
 function normalizeUnlockFailureCode(code: string | null | undefined) {
   const normalized = String(code || '').trim().toUpperCase();
+  if (isTerminalTranscriptProviderErrorCode(normalized)) {
+    return normalized;
+  }
   if (
     normalized === 'NO_CAPTIONS'
     || normalized === 'TRANSCRIPT_EMPTY'
@@ -3444,6 +3451,9 @@ async function classifyTranscriptFailureForUnlock(input: {
   rawErrorCode: string;
 }) : Promise<TranscriptFailureDecision> {
   const normalizedRawErrorCode = String(input.rawErrorCode || '').trim().toUpperCase();
+  const terminalFailFast =
+    transcriptFailFastEnabled
+    && isTerminalTranscriptProviderErrorCode(normalizedRawErrorCode);
   const nextAttemptCount = getUnlockTranscriptAttemptCount(input.unlock) + 1;
   let nextNoCaptionHits = getUnlockTranscriptNoCaptionHits(input.unlock);
   let transcriptStatus: TranscriptTruthStatus = 'transient_error';
@@ -3453,11 +3463,16 @@ async function classifyTranscriptFailureForUnlock(input: {
     normalized_raw_error_code: normalizedRawErrorCode || null,
   };
 
-  if (isTransientTranscriptUnavailableCode(normalizedRawErrorCode)) {
+  if (terminalFailFast) {
+    transcriptStatus = 'confirmed_no_speech';
+    retryAfterSeconds = 0;
+    probeMeta.fail_fast = true;
+    probeMeta.fail_fast_reason = normalizedRawErrorCode || 'UNKNOWN';
+  } else if (isTransientTranscriptUnavailableCode(normalizedRawErrorCode)) {
     transcriptStatus = 'retrying';
   }
 
-  if (normalizedRawErrorCode === 'NO_CAPTIONS') {
+  if (!terminalFailFast && normalizedRawErrorCode === 'NO_CAPTIONS') {
     logUnlockEvent('transcript_probe_started', { trace_id: input.traceId, unlock_id: input.unlock.id }, {
       video_id: input.videoId,
       attempt: nextAttemptCount,
@@ -3483,11 +3498,14 @@ async function classifyTranscriptFailureForUnlock(input: {
     });
   }
 
-  const confirmedPermanent = nextAttemptCount >= sourceTranscriptMaxAttempts
+  const confirmedByAttempts = nextAttemptCount >= sourceTranscriptMaxAttempts
     && nextNoCaptionHits >= sourceTranscriptMaxAttempts;
+  const confirmedPermanent = terminalFailFast || confirmedByAttempts;
   if (confirmedPermanent) {
     transcriptStatus = 'confirmed_no_speech';
-    finalErrorCode = 'NO_TRANSCRIPT_PERMANENT';
+    if (!terminalFailFast) {
+      finalErrorCode = 'NO_TRANSCRIPT_PERMANENT';
+    }
     retryAfterSeconds = 0;
   } else if (isTransientTranscriptUnavailableCode(normalizedRawErrorCode)) {
     finalErrorCode = 'TRANSCRIPT_UNAVAILABLE';
@@ -3511,6 +3529,8 @@ async function classifyTranscriptFailureForUnlock(input: {
       video_id: input.videoId,
       attempt: nextAttemptCount,
       no_caption_hits: nextNoCaptionHits,
+      final_error_code: finalErrorCode,
+      fail_fast: terminalFailFast,
     });
   } else if (retryAfterSeconds > 0) {
     logUnlockEvent('transcript_retry_scheduled', { trace_id: input.traceId, unlock_id: input.unlock.id }, {
@@ -5663,7 +5683,10 @@ async function processSourceItemUnlockGenerationJob(input: {
       let errorCode = normalizeUnlockFailureCode(rawErrorCode);
       let transcriptDecision: TranscriptFailureDecision | null = null;
 
-      if (isTransientTranscriptUnavailableCode(rawErrorCode)) {
+      if (
+        isTransientTranscriptUnavailableCode(rawErrorCode)
+        || (transcriptFailFastEnabled && isTerminalTranscriptProviderErrorCode(rawErrorCode))
+      ) {
         let unlockForDecision = processingUnlockRow;
         if (!unlockForDecision) {
           unlockForDecision = await getSourceItemUnlockBySourceItemId(db, item.source_item_id);
@@ -5823,6 +5846,7 @@ async function processSourceItemUnlockGenerationJob(input: {
         && (
           errorCode === 'TRANSCRIPT_UNAVAILABLE'
           || errorCode === 'NO_TRANSCRIPT_PERMANENT'
+          || isTerminalTranscriptProviderErrorCode(errorCode)
           || errorCode === 'VIDEO_TOO_LONG'
           || errorCode === 'VIDEO_DURATION_UNAVAILABLE'
         )
@@ -5830,6 +5854,8 @@ async function processSourceItemUnlockGenerationJob(input: {
         try {
           const decisionCode = errorCode === 'NO_TRANSCRIPT_PERMANENT'
             ? 'NO_TRANSCRIPT_PERMANENT_AUTO'
+            : isTerminalTranscriptProviderErrorCode(errorCode)
+              ? `${errorCode}_AUTO`
             : errorCode === 'VIDEO_TOO_LONG'
               ? 'VIDEO_TOO_LONG_AUTO'
               : errorCode === 'VIDEO_DURATION_UNAVAILABLE'
@@ -6160,11 +6186,14 @@ async function processSourceAutoUnlockRetryJob(input: {
   const transcriptAttempts = getUnlockTranscriptAttemptCount(unlock);
   const transcriptStatus = normalizeTranscriptTruthStatus(unlock.transcript_status);
   const shouldForceTerminalNoTranscript =
-    transcriptAttempts >= sourceTranscriptMaxAttempts
-    && (
-      transcriptStatus === 'retrying'
-      || transcriptStatus === 'transient_error'
-      || isTransientTranscriptUnavailableCode(unlock.last_error_code)
+    isTerminalTranscriptProviderErrorCode(unlock.last_error_code)
+    || (
+      transcriptAttempts >= sourceTranscriptMaxAttempts
+      && (
+        transcriptStatus === 'retrying'
+        || transcriptStatus === 'transient_error'
+        || isTransientTranscriptUnavailableCode(unlock.last_error_code)
+      )
     );
   if (shouldForceTerminalNoTranscript) {
     await db
@@ -6530,6 +6559,9 @@ function getDualGenerateTiers(input: {
 }
 
 function getRetryDelayForErrorCode(errorCode: string) {
+  if (isTerminalTranscriptProviderErrorCode(errorCode)) {
+    return 0;
+  }
   switch (errorCode) {
     case 'PROVIDER_DEGRADED':
       return 30;
@@ -6567,10 +6599,13 @@ function classifyQueuedJobError(error: unknown) {
     };
   }
   if (error instanceof TranscriptProviderError) {
+    const retryDelaySeconds = isRetryableTranscriptProviderErrorCode(error.code)
+      ? (error.retryAfterSeconds || getRetryDelayForErrorCode(error.code))
+      : 0;
     return {
       errorCode: error.code,
       message: error.message,
-      retryDelaySeconds: getRetryDelayForErrorCode(error.code),
+      retryDelaySeconds,
     };
   }
   if (error instanceof CodexExecError) {
@@ -6606,11 +6641,18 @@ function classifyQueuedJobError(error: unknown) {
     || providerCode === 'TRANSCRIPT_FETCH_FAIL'
     || providerCode === 'TRANSCRIPT_EMPTY'
     || providerCode === 'NO_CAPTIONS'
+    || providerCode === 'VIDEO_UNAVAILABLE'
+    || providerCode === 'ACCESS_DENIED'
   ) {
+    const retryDelaySeconds = (
+      isRetryableTranscriptProviderErrorCode(providerCode)
+        ? getRetryDelayForErrorCode(providerCode)
+        : 0
+    );
     return {
       errorCode: providerCode,
       message: error instanceof Error ? error.message : 'Transcript provider failed.',
-      retryDelaySeconds: getRetryDelayForErrorCode(providerCode),
+      retryDelaySeconds,
     };
   }
   const message = error instanceof Error ? error.message : String(error || 'Unknown job error');
@@ -6898,8 +6940,7 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
     });
   } catch (error) {
     const classified = classifyQueuedJobError(error);
-    const retriableDelaySeconds = getRetryDelayForErrorCode(classified.errorCode);
-    const nextRetryDelay = retriableDelaySeconds > 0 ? retriableDelaySeconds : classified.retryDelaySeconds;
+    const nextRetryDelay = Math.max(0, Math.floor(Number(classified.retryDelaySeconds) || 0));
     await failIngestionJob(db, {
       jobId: job.id,
       errorCode: classified.errorCode,
@@ -7369,6 +7410,8 @@ type PipelineErrorCode =
   | 'VIDEO_DURATION_UNAVAILABLE'
   | 'VIDEO_DURATION_POLICY_BLOCKED'
   | 'NO_CAPTIONS'
+  | 'VIDEO_UNAVAILABLE'
+  | 'ACCESS_DENIED'
   | 'PROVIDER_FAIL'
   | 'PROVIDER_DEGRADED'
   | 'TRANSCRIPT_EMPTY'

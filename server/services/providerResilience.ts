@@ -1,4 +1,4 @@
-import { TranscriptProviderError } from '../transcript/types';
+import { TranscriptProviderError, isRetryableTranscriptProviderErrorCode } from '../transcript/types';
 import { CodexExecError } from '../llm/codexExec';
 import {
   assertProviderAvailable,
@@ -33,7 +33,7 @@ function defaultIsRetryable(error: unknown) {
     return error.code === 'RATE_LIMITED' || error.code === 'TIMEOUT' || error.code === 'PROCESS_FAIL';
   }
   if (error instanceof TranscriptProviderError) {
-    return error.code === 'TRANSCRIPT_FETCH_FAIL' || error.code === 'TIMEOUT' || error.code === 'RATE_LIMITED';
+    return isRetryableTranscriptProviderErrorCode(error.code);
   }
   if (error instanceof Error) {
     const message = error.message.toLowerCase();

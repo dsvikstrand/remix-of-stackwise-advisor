@@ -202,6 +202,7 @@ Required runtime variables:
 - `SOURCE_TRANSCRIPT_RETRY_DELAY_ATTEMPT2_SECONDS` (default `900`)
 - `SOURCE_TRANSCRIPT_RETRY_DELAY_ATTEMPT3_SECONDS` (default `2700`)
 - `SOURCE_TRANSCRIPT_MAX_ATTEMPTS` (default `3`)
+- `TRANSCRIPT_FAIL_FAST_ENABLED` (default `true`; terminal transcript provider errors do not enter retry loops)
 - `SOURCE_UNLOCK_TRANSCRIPT_COOLDOWN_HOURS` (deprecated; explicit retry-after controls cooldown)
 - `SOURCE_UNLOCK_EXPIRED_SWEEP_BATCH` (default `100`)
 - `SOURCE_UNLOCK_SWEEPS_ENABLED` (default `true`)
@@ -325,6 +326,7 @@ Safe defaults:
 - `SOURCE_TRANSCRIPT_RETRY_DELAY_ATTEMPT2_SECONDS=900`
 - `SOURCE_TRANSCRIPT_RETRY_DELAY_ATTEMPT3_SECONDS=2700`
 - `SOURCE_TRANSCRIPT_MAX_ATTEMPTS=3`
+- `TRANSCRIPT_FAIL_FAST_ENABLED=true`
 - `SOURCE_UNLOCK_TRANSCRIPT_COOLDOWN_HOURS=6` (deprecated)
 - `SOURCE_UNLOCK_EXPIRED_SWEEP_BATCH=100`
 - `SOURCE_UNLOCK_SWEEPS_ENABLED=true`
@@ -512,6 +514,7 @@ ssh oracle-free 'sudo systemctl daemon-reload && sudo systemctl restart agentic-
 
 ### `NO_TRANSCRIPT_PERMANENT`
 - Meaning: video was confirmed as no-speech/no-usable-transcript after bounded retries, so it should not remain unlockable.
+- Also covers terminal transcript provider outcomes when fail-fast is enabled (`VIDEO_UNAVAILABLE`, `ACCESS_DENIED`).
 - Action:
   1) Inspect `source_item_unlocks` (`last_error_code`, `transcript_status`, `transcript_attempt_count`, `transcript_no_caption_hits`).
   2) Confirm `transcript_status='confirmed_no_speech'` before treating as permanent.

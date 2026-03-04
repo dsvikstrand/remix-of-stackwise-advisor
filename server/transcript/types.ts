@@ -2,10 +2,25 @@ export type TranscriptProvider = 'yt_to_text' | 'youtube_timedtext';
 
 export type TranscriptProviderErrorCode =
   | 'NO_CAPTIONS'
+  | 'VIDEO_UNAVAILABLE'
+  | 'ACCESS_DENIED'
   | 'TRANSCRIPT_FETCH_FAIL'
   | 'TRANSCRIPT_EMPTY'
   | 'RATE_LIMITED'
   | 'TIMEOUT';
+
+export function isRetryableTranscriptProviderErrorCode(code: TranscriptProviderErrorCode | string | null | undefined) {
+  const normalized = String(code || '').trim().toUpperCase();
+  return normalized === 'TRANSCRIPT_FETCH_FAIL'
+    || normalized === 'TIMEOUT'
+    || normalized === 'RATE_LIMITED';
+}
+
+export function isTerminalTranscriptProviderErrorCode(code: TranscriptProviderErrorCode | string | null | undefined) {
+  const normalized = String(code || '').trim().toUpperCase();
+  return normalized === 'VIDEO_UNAVAILABLE'
+    || normalized === 'ACCESS_DENIED';
+}
 
 export type TranscriptSegment = {
   text: string;

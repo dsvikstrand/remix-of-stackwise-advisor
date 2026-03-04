@@ -37,6 +37,16 @@ type YtToTextFetchResult = {
   transport: TranscriptTransportMetadata;
 };
 
+function mapYtToTextTerminalStatus(status: number) {
+  if (status === 404 || status === 410) {
+    return new TranscriptProviderError('VIDEO_UNAVAILABLE', 'This video is unavailable.');
+  }
+  if (status === 401 || status === 403) {
+    return new TranscriptProviderError('ACCESS_DENIED', 'Transcript access is denied for this video.');
+  }
+  return null;
+}
+
 function toSeconds(input: unknown) {
   const n = Number(input);
   return Number.isFinite(n) ? n : undefined;
@@ -162,9 +172,8 @@ async function requestViaProxy(videoId: string): Promise<YtToTextRequestResult> 
 async function fetchOnce(videoId: string): Promise<YtToTextFetchResult> {
   const { response, transport } = await requestViaProxy(videoId);
 
-  if (response.status === 403 || response.status === 404) {
-    throw new TranscriptProviderError('NO_CAPTIONS', 'Transcript unavailable for this video. Please try another video.');
-  }
+  const terminalStatusError = mapYtToTextTerminalStatus(response.status);
+  if (terminalStatusError) throw terminalStatusError;
   if (response.status === 429) {
     throw new TranscriptProviderError(
       'RATE_LIMITED',

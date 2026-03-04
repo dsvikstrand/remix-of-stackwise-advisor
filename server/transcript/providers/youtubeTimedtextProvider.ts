@@ -56,9 +56,21 @@ function extractTranscriptFromJson3(payload: any) {
   return normalizeTranscriptWhitespace(parts.join(' '));
 }
 
+function mapTimedtextListTerminalStatus(status: number) {
+  if (status === 404 || status === 410) {
+    return new TranscriptProviderError('VIDEO_UNAVAILABLE', 'This video is unavailable.');
+  }
+  if (status === 401 || status === 403) {
+    return new TranscriptProviderError('ACCESS_DENIED', 'Transcript access is denied for this video.');
+  }
+  return null;
+}
+
 async function fetchOnce(videoId: string): Promise<TranscriptResult> {
   const listUrl = `https://www.youtube.com/api/timedtext?type=list&v=${encodeURIComponent(videoId)}`;
   const listResponse = await fetch(listUrl);
+  const terminalListError = mapTimedtextListTerminalStatus(listResponse.status);
+  if (terminalListError) throw terminalListError;
   if (listResponse.status === 429) {
     throw new TranscriptProviderError(
       'RATE_LIMITED',
@@ -84,6 +96,9 @@ async function fetchOnce(videoId: string): Promise<TranscriptResult> {
   if (preferred.name) trackUrl.searchParams.set('name', preferred.name);
 
   const trackResponse = await fetch(trackUrl.toString());
+  if (trackResponse.status === 401 || trackResponse.status === 403) {
+    throw new TranscriptProviderError('ACCESS_DENIED', 'Transcript access is denied for this video.');
+  }
   if (trackResponse.status === 429) {
     throw new TranscriptProviderError(
       'RATE_LIMITED',
