@@ -246,7 +246,7 @@ export function createBlueprintYouTubeCommentsService(input: {
     viewCount: number | null;
   }) {
     const normalizedSourceItemId = String(args.sourceItemId || '').trim();
-    if (!normalizedSourceItemId || args.viewCount == null) return;
+    if (!normalizedSourceItemId || args.viewCount == null) return false;
 
     const { data: sourceRow, error: sourceError } = await args.db
       .from('source_items')
@@ -254,6 +254,7 @@ export function createBlueprintYouTubeCommentsService(input: {
       .eq('id', normalizedSourceItemId)
       .maybeSingle();
     if (sourceError) throw sourceError;
+    if (!sourceRow) return false;
 
     const currentMetadata =
       sourceRow?.metadata && typeof sourceRow.metadata === 'object' && !Array.isArray(sourceRow.metadata)
@@ -266,11 +267,14 @@ export function createBlueprintYouTubeCommentsService(input: {
       view_count_fetched_at: new Date().toISOString(),
     };
 
-    const { error: updateError } = await args.db
+    const { data: updatedRow, error: updateError } = await args.db
       .from('source_items')
       .update({ metadata: nextMetadata })
-      .eq('id', normalizedSourceItemId);
+      .eq('id', normalizedSourceItemId)
+      .select('id')
+      .maybeSingle();
     if (updateError) throw updateError;
+    return Boolean(updatedRow?.id);
   }
 
   async function populateForBlueprint(args: {
@@ -304,8 +308,9 @@ export function createBlueprintYouTubeCommentsService(input: {
     try {
       const viewCount = await fetchYouTubeViewCount({ videoId });
       const sourceItemId = String(args.explicitSourceItemId || '').trim();
+      let storedOnSourceItem = false;
       if (sourceItemId) {
-        await storeSourceItemViewCount({
+        storedOnSourceItem = await storeSourceItemViewCount({
           db: args.db,
           sourceItemId,
           viewCount,
@@ -318,7 +323,7 @@ export function createBlueprintYouTubeCommentsService(input: {
           payload: {
             video_id: videoId,
             view_count: viewCount,
-            stored_on_source_item: Boolean(sourceItemId && viewCount != null),
+            stored_on_source_item: storedOnSourceItem,
           },
         });
       }

@@ -329,7 +329,7 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
       if (deps.populateBlueprintYouTubeComments) {
         try {
           await deps.populateBlueprintYouTubeComments({
-            db,
+            db: traceDb || db,
             traceDb,
             runId: result.run_id,
             blueprintId: blueprint.id,
