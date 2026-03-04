@@ -318,9 +318,9 @@ export function useUpdateBlueprint() {
   });
 }
 
-export function useBlueprintComments(blueprintId?: string) {
+export function useBlueprintComments(blueprintId?: string, sortMode: 'top' | 'new' = 'new') {
   return useQuery({
-    queryKey: ['blueprint-comments', blueprintId],
+    queryKey: ['blueprint-comments', blueprintId, sortMode],
     enabled: !!blueprintId,
     queryFn: async () => {
       if (!blueprintId) return [] as Array<{
@@ -328,14 +328,24 @@ export function useBlueprintComments(blueprintId?: string) {
         content: string;
         created_at: string;
         user_id: string;
+        likes_count: number;
         profile: { display_name: string | null; avatar_url: string | null } | null;
       }>;
 
-      const { data: comments, error } = await supabase
+      let query = supabase
         .from('blueprint_comments')
-        .select('id, content, created_at, user_id')
-        .eq('blueprint_id', blueprintId)
-        .order('created_at', { ascending: false });
+        .select('id, content, created_at, user_id, likes_count')
+        .eq('blueprint_id', blueprintId);
+
+      if (sortMode === 'top') {
+        query = query
+          .order('likes_count', { ascending: false })
+          .order('created_at', { ascending: false });
+      } else {
+        query = query.order('created_at', { ascending: false });
+      }
+
+      const { data: comments, error } = await query;
 
       if (error) throw error;
 

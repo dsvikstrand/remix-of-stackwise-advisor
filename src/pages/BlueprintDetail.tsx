@@ -5,6 +5,7 @@ import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -305,8 +306,9 @@ export default function BlueprintDetail() {
   const { data: blueprint, isLoading } = useBlueprint(blueprintId);
   const [youtubeCommentSort, setYouTubeCommentSort] = useState<'top' | 'new'>('top');
   const [commentView, setCommentView] = useState<'youtube' | 'community'>('youtube');
+  const [communityCommentSort, setCommunityCommentSort] = useState<'top' | 'new'>('top');
   const { data: youtubeComments, isLoading: youtubeCommentsLoading } = useBlueprintYoutubeComments(blueprintId, youtubeCommentSort);
-  const { data: comments, isLoading: commentsLoading } = useBlueprintComments(blueprintId);
+  const { data: comments, isLoading: commentsLoading } = useBlueprintComments(blueprintId, communityCommentSort);
   const createComment = useCreateBlueprintComment();
   const toggleLike = useToggleBlueprintLike();
   const { toast } = useToast();
@@ -1060,42 +1062,34 @@ export default function BlueprintDetail() {
               <div className="flex items-end justify-between gap-3">
                 <h2 className="text-lg font-semibold">{commentView === 'youtube' ? 'Comments' : 'Bleu Comments'}</h2>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={commentView === 'youtube' ? 'default' : 'outline'}
-                    onClick={() => setCommentView('youtube')}
+                  <Select value={commentView} onValueChange={(value) => setCommentView(value as 'youtube' | 'community')}>
+                    <SelectTrigger className="h-9 w-[160px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="youtube">YouTube</SelectItem>
+                      <SelectItem value="community">Bleu</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={commentView === 'youtube' ? youtubeCommentSort : communityCommentSort}
+                    onValueChange={(value) => {
+                      const next = value as 'top' | 'new';
+                      if (commentView === 'youtube') {
+                        setYouTubeCommentSort(next);
+                      } else {
+                        setCommunityCommentSort(next);
+                      }
+                    }}
                   >
-                    Comments
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={commentView === 'community' ? 'default' : 'outline'}
-                    onClick={() => setCommentView('community')}
-                  >
-                    Bleu Comments
-                  </Button>
-                  {commentView === 'youtube' ? (
-                    <>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={youtubeCommentSort === 'top' ? 'default' : 'outline'}
-                        onClick={() => setYouTubeCommentSort('top')}
-                      >
-                        Top
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={youtubeCommentSort === 'new' ? 'default' : 'outline'}
-                        onClick={() => setYouTubeCommentSort('new')}
-                      >
-                        New
-                      </Button>
-                    </>
-                  ) : null}
+                    <SelectTrigger className="h-9 w-[120px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="top">Top</SelectItem>
+                      <SelectItem value="new">New</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
