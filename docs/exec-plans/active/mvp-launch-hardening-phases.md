@@ -14,6 +14,7 @@ b3) [have] This plan is a practical execution tracker for the queue/reliability 
 c1) [todo] Treat each phase as a distinct implementation and validation checkpoint.
 c2) [todo] Do not start the next phase until the previous phase has a measured outcome.
 c3) [todo] Prefer small, measurable changes over broad infrastructure rewrites.
+c4) [have] Phase 1 telemetry was shipped in commit `dd473b8` (`Add queue baseline telemetry and metrics`).
 
 ## Phase 1 - Baseline and Load Visibility
 d1) [todo] Define a realistic launch simulation target:
@@ -28,30 +29,45 @@ d2) [todo] Measure current baseline:
 - API latency during queue load
 - transcript failure rate
 - YouTube API failure rate
-d3) [todo] Add any missing minimal instrumentation needed to measure those values.
-d4) [todo] Record the baseline numbers in this file once collected.
-d5) [todo] Exit criteria:
+d3) [have] Minimal instrumentation for Phase 1 is now in place:
+- `GET /api/ops/queue/health` exposes queue-age metrics and per-scope oldest-age data
+- `npm run metrics:queue` parses queue-worker outcomes from logs
+d4) [have] Baseline numbers are now recorded in this file.
+d5) [have] Exit criteria:
 - current throughput and queue lag are measurable
 - the main bottleneck is confirmed with real numbers, not guesswork
 
 ### Phase 1 Baseline Capture
-d6) [todo] Baseline capture date:
-- `YYYY-MM-DD`
-d7) [todo] Sample commands:
-- `npm run metrics:queue -- --source journalctl --json`
-- `curl -sS http://127.0.0.1:8787/api/ops/queue/health -H "x-service-token: <INGESTION_SERVICE_TOKEN>"`
-d8) [todo] Record measured values:
-- `queue_depth`
-- `running_depth`
-- `oldest_queued_age_ms`
-- `oldest_running_age_ms`
-- `duration_median_ms`
-- `duration_p95_ms`
-- `jobs_per_minute_estimate`
-- `error_code_distribution`
-d9) [todo] Notes:
-- capture unusual backlog scopes
-- capture notable transcript/provider failure spikes
+d6) [have] Baseline capture date:
+- `2026-03-04`
+d7) [have] Oracle baseline commands:
+- `ssh oracle-free 'source /etc/agentic-backend.env >/dev/null 2>&1; curl -sS http://127.0.0.1:8787/api/ops/queue/health -H "x-service-token: $INGESTION_SERVICE_TOKEN"'`
+- `ssh oracle-free 'export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use 20.20.0 >/dev/null; cd /home/ubuntu/remix-of-stackwise-advisor && npm run metrics:queue -- --source journalctl --json'`
+d8) [have] Recorded measured values:
+- `snapshot_at`: `2026-03-04T15:40:42.703Z`
+- `queue_depth`: `0`
+- `running_depth`: `0`
+- `oldest_queued_age_ms`: `null`
+- `oldest_running_age_ms`: `null`
+- `duration_median_ms`: `13046.5`
+- `duration_p95_ms`: `45764`
+- `duration_max_ms`: `71676`
+- `jobs_per_minute_estimate`: `0.38`
+- `error_code_distribution`:
+  - `TRANSCRIPT_UNAVAILABLE: 2`
+- `scope_distribution`:
+  - `all_active_subscriptions: 104`
+  - `source_item_unlock_generation: 8`
+  - `source_auto_unlock_retry: 4`
+d9) [have] Notes:
+- Live queue snapshot was fully idle at the capture moment.
+- Historical throughput is low enough to justify a controlled concurrency increase as Phase 2.
+- Recent failures in the sampled window were transcript-related only.
+- The sampled workload was dominated by `all_active_subscriptions`, not direct user-triggered generation.
+d10) [have] Exit condition for Phase 1:
+- baseline snapshot is recorded here
+- one historical log sample is recorded here
+- Phase 2 starts only after those values are written down
 
 ## Phase 2 - Quick Throughput Wins
 e1) [todo] Increase worker throughput with minimal change first.
@@ -66,6 +82,38 @@ e4) [todo] Re-check:
 e5) [todo] Exit criteria:
 - backlog drains faster than baseline
 - API responsiveness does not materially regress
+
+### Phase 2 Execution Record
+e6) [have] First controlled change applied on Oracle:
+- `WORKER_CONCURRENCY: 2 -> 4`
+- runtime config is loaded from `/etc/agentic-backend.env`
+- deployed and verified on `2026-03-04`
+
+e7) [have] Post-change live verification:
+- `snapshot_at`: `2026-03-04T15:51:56.047Z`
+- `queue_depth`: `0`
+- `running_depth`: `0`
+- `oldest_queued_age_ms`: `null`
+- `oldest_running_age_ms`: `null`
+- `worker_concurrency`: `4`
+
+e8) [have] Post-change historical metrics sample:
+- `finished_count`: `114`
+- `failed_count`: `2`
+- `duration_median_ms`: `13167.5`
+- `duration_p95_ms`: `45764`
+- `duration_max_ms`: `71676`
+- `jobs_per_minute_estimate`: `0.38`
+
+e9) [have] Notes:
+- The live config change is active and verified.
+- The sampled historical metrics did not materially change yet because the queue was idle and no meaningful new load was applied after the change.
+- Oracle requires Node 20 for `npm run metrics:queue`; use the `nvm use 20.20.0` command path above instead of the system Node.
+
+e10) [todo] Exit condition for Phase 2:
+- run a fresh under-load sample after real queue activity
+- compare before/after against the Phase 1 baseline
+- then decide whether to keep `4`, test `6`, or move to Phase 3
 
 ## Phase 3 - Process Separation (Web vs Worker)
 f1) [todo] Split API serving from queue execution.
@@ -151,8 +199,8 @@ l1) [have] The most important pre-launch phases are:
 l2) [have] The remaining phases improve launch quality and survivability but are not all required before first launch.
 
 ## Current Tracking
-m1) [todo] Phase 1 - Not started
-m2) [todo] Phase 2 - Not started
+m1) [have] Phase 1 - Completed (telemetry shipped, baseline captured)
+m2) [todo] Phase 2 - In progress (`WORKER_CONCURRENCY=4` deployed; under-load re-measure pending)
 m3) [todo] Phase 3 - Not started
 m4) [todo] Phase 4 - Not started
 m5) [todo] Phase 5 - Not started
@@ -164,3 +212,4 @@ m8) [todo] Phase 8 - Not started
 n1) [todo] Update this file with measured outcomes after each phase.
 n2) [todo] Keep changes phase-scoped so regressions are easy to attribute.
 n3) [todo] Do not mix feature work into these phases unless it directly improves launch reliability.
+n4) [have] Phase 1 is complete and the first Phase 2 throughput change is deployed; the next action is to capture a meaningful post-change sample under real queue activity.
