@@ -6880,6 +6880,9 @@ async function runQueuedIngestionProcessing() {
     }));
   } finally {
     queuedWorkerRunning = false;
+    if (runIngestionWorker && !runHttpServer) {
+      scheduleQueuedIngestionProcessing(1500);
+    }
   }
 }
 
