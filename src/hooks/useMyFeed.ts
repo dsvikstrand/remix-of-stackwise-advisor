@@ -4,6 +4,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Json } from '@/integrations/supabase/types';
 
+function extractSchemaTagSlugs(sectionsJson: Json | null): string[] {
+  if (!sectionsJson || typeof sectionsJson !== 'object' || Array.isArray(sectionsJson)) return [];
+  const rawTags = (sectionsJson as { tags?: unknown }).tags;
+  if (!Array.isArray(rawTags)) return [];
+  return rawTags
+    .map((tag) => String(tag || '').trim())
+    .filter(Boolean);
+}
+
 export interface MyFeedItemView {
   id: string;
   state: string;
@@ -252,7 +261,11 @@ export function useMyFeed(options?: { enabled?: boolean }) {
                 mixNotes: blueprint.mix_notes,
                 isPublic: blueprint.is_public,
                 steps: blueprint.steps,
-                tags: tagsByBlueprint.get(blueprint.id) || [],
+                tags: (() => {
+                  const relationalTags = tagsByBlueprint.get(blueprint.id) || [];
+                  if (relationalTags.length > 0) return relationalTags;
+                  return extractSchemaTagSlugs(blueprint.sections_json ?? null);
+                })(),
               }
             : null,
           candidate: candidateMap.get(row.id) || null,
