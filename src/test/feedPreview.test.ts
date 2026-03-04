@@ -59,4 +59,24 @@ describe('feedPreview', () => {
 
     expect(summary).toBe('First takeaway bullet');
   });
+
+  it('uses the default fallback text when every upstream preview source is blank', () => {
+    const summary = buildFeedSummary({
+      sectionsJson: {
+        schema_version: 'blueprint_sections_v1',
+        tags: [],
+        summary: { text: '' },
+        takeaways: { bullets: [] },
+        storyline: { text: '' },
+        deep_dive: { bullets: [] },
+        practical_rules: { bullets: [] },
+        open_questions: { bullets: [] },
+      },
+      primary: '',
+      secondary: '',
+      fallback: '',
+    });
+
+    expect(summary).toBe('Open blueprint to view full details.');
+  });
 });

@@ -173,7 +173,7 @@ export function parseBlueprintSectionsV1(input: Json | null | undefined): Bluepr
     const section = value[key];
     if (!section || typeof section !== 'object' || Array.isArray(section)) return null;
     const text = String((section as Record<string, unknown>).text || '').trim();
-    return text ? { text } : null;
+    return { text };
   };
 
   const readBulletSection = (key: string) => {
@@ -184,7 +184,7 @@ export function parseBlueprintSectionsV1(input: Json | null | undefined): Bluepr
           .map((bullet) => String(bullet || '').trim())
           .filter(Boolean)
       : [];
-    return bullets.length > 0 ? { bullets } : null;
+    return { bullets };
   };
 
   const summary = readTextSection('summary');
@@ -194,18 +194,18 @@ export function parseBlueprintSectionsV1(input: Json | null | undefined): Bluepr
   const practicalRules = readBulletSection('practical_rules');
   const openQuestions = readBulletSection('open_questions');
 
-  if (!summary || !takeaways || !storyline || !deepDive || !practicalRules || !openQuestions) {
+  if (!summary && !takeaways && !storyline && !deepDive && !practicalRules && !openQuestions) {
     return null;
   }
 
   return {
     schema_version: 'blueprint_sections_v1',
     tags,
-    summary,
-    takeaways,
-    storyline,
-    deep_dive: deepDive,
-    practical_rules: practicalRules,
-    open_questions: openQuestions,
+    summary: summary || { text: '' },
+    takeaways: takeaways || { bullets: [] },
+    storyline: storyline || { text: '' },
+    deep_dive: deepDive || { bullets: [] },
+    practical_rules: practicalRules || { bullets: [] },
+    open_questions: openQuestions || { bullets: [] },
   };
 }

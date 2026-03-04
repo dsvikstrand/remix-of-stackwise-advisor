@@ -161,10 +161,11 @@ export function buildFeedSummary({
   fallback,
   maxChars = 240,
 }: BuildFeedSummaryOptions): string {
+  const safeFallback = cleanFeedPreview(fallback || '') || 'Open blueprint to view full details.';
   const source = buildPreviewTextFromBlueprintSections(sectionsJson, maxChars)
     || cleanFeedPreview(primary || "")
     || cleanFeedPreview(secondary || "")
-    || fallback;
+    || safeFallback;
   const text = stripLeadingSummaryLabel(source).trim() || source.trim();
   if (text.length <= maxChars) return text;
   return `${text.slice(0, maxChars).trim()}...`;

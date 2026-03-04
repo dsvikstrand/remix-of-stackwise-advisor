@@ -135,7 +135,7 @@ describe('blueprintSections', () => {
     ]);
   });
 
-  it('parses a stored blueprint_sections_v1 payload and rejects malformed payloads', () => {
+  it('parses a stored blueprint_sections_v1 payload, including partial schema payloads, and rejects malformed payloads', () => {
     const valid = parseBlueprintSectionsV1({
       schema_version: 'blueprint_sections_v1',
       tags: ['ai-tools-automation'],
@@ -146,15 +146,22 @@ describe('blueprintSections', () => {
       practical_rules: { bullets: ['Rule'] },
       open_questions: { bullets: ['Question'] },
     });
-    const invalid = parseBlueprintSectionsV1({
+    const partial = parseBlueprintSectionsV1({
       schema_version: 'blueprint_sections_v1',
       tags: ['ai-tools-automation'],
       summary: { text: 'Summary text' },
+    });
+    const invalid = parseBlueprintSectionsV1({
+      schema_version: 'blueprint_sections_v1',
+      tags: ['ai-tools-automation'],
     });
 
     expect(valid?.schema_version).toBe('blueprint_sections_v1');
     expect(valid?.tags).toEqual(['ai-tools-automation']);
     expect(valid?.storyline.text).toBe('Storyline text');
+    expect(partial?.summary.text).toBe('Summary text');
+    expect(partial?.takeaways.bullets).toEqual([]);
+    expect(partial?.storyline.text).toBe('');
     expect(invalid).toBeNull();
   });
 });
