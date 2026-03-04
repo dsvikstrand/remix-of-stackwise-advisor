@@ -110,19 +110,68 @@ e9) [have] Notes:
 - The sampled historical metrics did not materially change yet because the queue was idle and no meaningful new load was applied after the change.
 - Oracle requires Node 20 for `npm run metrics:queue`; use the `nvm use 20.20.0` command path above instead of the system Node.
 
-e10) [todo] Exit condition for Phase 2:
-- run a fresh under-load sample after real queue activity
-- compare before/after against the Phase 1 baseline
-- then decide whether to keep `4`, test `6`, or move to Phase 3
+e10) [have] Under-load post-change sample is now captured and representative enough to make a decision.
+e11) [have] Post-change under-load live snapshot:
+- `snapshot_at`: `2026-03-04T16:13:52.702Z`
+- `queue_depth`: `1`
+- `running_depth`: `0`
+- `oldest_queued_age_ms`: `250392`
+- `oldest_running_age_ms`: `null`
+- `worker_concurrency`: `4`
+- active queued scope:
+  - `source_auto_unlock_retry: queued=1`
+
+e12) [have] Post-change under-load historical metrics sample (since rollout):
+- `finished_count`: `11`
+- `failed_count`: `2`
+- `duration_median_ms`: `15102`
+- `duration_p95_ms`: `18533`
+- `duration_max_ms`: `18533`
+- `jobs_per_minute_estimate`: `0.62`
+- `error_code_distribution`:
+  - `TRANSCRIPT_UNAVAILABLE: 2`
+- `scope_distribution`:
+  - `all_active_subscriptions: 8`
+  - `source_auto_unlock_retry: 3`
+  - `source_item_unlock_generation: 2`
+
+e13) [have] Comparison vs Phase 1 baseline:
+- `jobs_per_minute_estimate`: `0.38 -> 0.62` (`+63%`)
+- `duration_median_ms`: `13046.5 -> 15102` (`+15.8%`)
+- `duration_p95_ms`: `45764 -> 18533` (`-59.5%`)
+- transcript-related failures remain present and unchanged in type (`TRANSCRIPT_UNAVAILABLE`)
+
+e14) [have] Decision:
+- keep `WORKER_CONCURRENCY=4`
+- do not test `6` yet
+- treat Phase 2 as successful enough to proceed to the next phase only if API responsiveness under queue load remains a concern
+
+e15) [have] Exit condition for Phase 2:
+- one real under-load sample is recorded
+- before/after comparison is recorded
+- the decision outcome is recorded here
 
 ## Phase 3 - Process Separation (Web vs Worker)
-f1) [todo] Split API serving from queue execution.
-f2) [todo] Introduce a dedicated worker process that runs queue work only.
-f3) [todo] Keep the same DB-backed queue and code paths; do not redesign the queue itself in this phase.
-f4) [todo] Confirm:
+f1) [have] Split API serving from queue execution.
+f2) [have] Introduced a dedicated worker process that runs queue work only.
+f3) [have] Kept the same DB-backed queue and code paths; no queue redesign was needed in this phase.
+f4) [have] Phase 3 rollout details:
+- code deployed with runtime role flags:
+  - `RUN_HTTP_SERVER`
+  - `RUN_INGESTION_WORKER`
+- combined mode remains available as rollback
+- `agentic-backend.service` now runs in web-only mode
+- `agentic-worker.service` now runs in worker-only mode
+- Oracle startup logs confirm:
+  - web: `runtime_mode=web_only`
+  - worker: `runtime_mode=worker_only`
+f5) [have] Validation:
 - API remains responsive while queue is busy
 - worker can run independently of web traffic
-f5) [todo] Exit criteria:
+ - web local `/api/ops/queue/health` reports `worker_running=false`
+ - public `/api/health` remains healthy after the split
+ - worker logs show queue activity without binding the public port
+f6) [have] Exit criteria:
 - web and worker are separately operable
 - queue spikes no longer directly choke API responsiveness
 
@@ -200,8 +249,8 @@ l2) [have] The remaining phases improve launch quality and survivability but are
 
 ## Current Tracking
 m1) [have] Phase 1 - Completed (telemetry shipped, baseline captured)
-m2) [todo] Phase 2 - In progress (`WORKER_CONCURRENCY=4` deployed; under-load re-measure pending)
-m3) [todo] Phase 3 - Not started
+m2) [have] Phase 2 - Completed (`WORKER_CONCURRENCY=4` retained after under-load sample)
+m3) [have] Phase 3 - Completed (web/worker split deployed on Oracle)
 m4) [todo] Phase 4 - Not started
 m5) [todo] Phase 5 - Not started
 m6) [todo] Phase 6 - Not started
