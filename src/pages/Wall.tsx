@@ -53,6 +53,25 @@ interface BlueprintPost {
   source_thumbnail_url?: string | null;
 }
 
+type WallBlueprintCardInput = {
+  id: string;
+  title: string;
+  sectionsJson: Json | null;
+  steps: unknown;
+  llmReview: string | null;
+  mixNotes: string | null;
+  bannerUrl: string | null;
+  createdAt: string;
+  sourceName: string | null;
+  sourceAvatarUrl: string | null;
+  sourceThumbnailUrl: string | null;
+  publishedChannelSlug: string | null;
+  tags: string[];
+  likesCount: number;
+  userLiked: boolean;
+  commentsCount: number;
+};
+
 type ForYouLockedItem = {
   kind: 'locked';
   feedItemId: string;
@@ -123,6 +142,37 @@ function getForYouErrorMessage(error: unknown, fallback: string) {
     return 'Could not resolve source video id for this item. Try opening it from Source Page.';
   }
   return error instanceof Error ? error.message : fallback;
+}
+
+function buildWallBlueprintCardProps(input: WallBlueprintCardInput) {
+  const fallbackChannelSlug = resolveChannelLabelForBlueprint(input.tags).replace(/^b\//, '');
+  const channelSlug = input.publishedChannelSlug || fallbackChannelSlug;
+  const blueprintPreview = buildBlueprintPreviewText({
+    steps: input.steps,
+  });
+  const summary = buildFeedSummary({
+    sectionsJson: input.sectionsJson,
+    primary: input.llmReview,
+    secondary: input.mixNotes || blueprintPreview,
+    fallback: 'Open blueprint to view full details.',
+    maxChars: 220,
+  });
+
+  return {
+    to: `/blueprint/${input.id}`,
+    title: input.title,
+    summary,
+    sourceName: input.sourceName,
+    sourceAvatarUrl: input.sourceAvatarUrl,
+    bannerUrl: input.bannerUrl,
+    sourceThumbnailUrl: input.sourceThumbnailUrl,
+    createdLabel: formatRelativeShort(input.createdAt),
+    channelSlug,
+    likesCount: input.likesCount,
+    userLiked: input.userLiked,
+    commentsCount: input.commentsCount,
+    tags: input.tags.map((tag) => ({ key: tag, label: tag })),
+  };
 }
 
 export default function Wall() {
@@ -988,38 +1038,32 @@ export default function Wall() {
                       );
                     }
 
-                    const fallbackChannelSlug = resolveChannelLabelForBlueprint(item.tags).replace(/^b\//, '');
-                    const channelSlug = item.publishedChannelSlug || fallbackChannelSlug;
-                    const blueprintPreview = buildBlueprintPreviewText({
-                      steps: item.steps,
-                    });
-                    const summary = buildFeedSummary({
-                      sectionsJson: item.sectionsJson,
-                      primary: item.llmReview,
-                      secondary: item.mixNotes || blueprintPreview,
-                      fallback: 'Open blueprint to view full details.',
-                      maxChars: 220,
-                    });
                     const likesCount = forYouStatsQuery.data?.likes[item.blueprintId] || 0;
                     const userLiked = Boolean(forYouStatsQuery.data?.likedIds.has(item.blueprintId));
                     const commentsCount = forYouStatsQuery.data?.comments[item.blueprintId] || 0;
+                    const cardProps = buildWallBlueprintCardProps({
+                      id: item.blueprintId,
+                      title: item.title,
+                      sectionsJson: item.sectionsJson,
+                      steps: item.steps,
+                      llmReview: item.llmReview,
+                      mixNotes: item.mixNotes,
+                      bannerUrl: item.bannerUrl,
+                      createdAt: item.createdAt,
+                      sourceName: item.sourceChannelTitle,
+                      sourceAvatarUrl: item.sourceChannelAvatarUrl,
+                      sourceThumbnailUrl: item.sourceThumbnailUrl,
+                      publishedChannelSlug: item.publishedChannelSlug,
+                      tags: item.tags,
+                      likesCount,
+                      userLiked,
+                      commentsCount,
+                    });
 
                     return (
                       <WallBlueprintCard
                         key={item.sourceItemId}
-                        to={`/blueprint/${item.blueprintId}`}
-                        title={item.title}
-                        summary={summary}
-                        sourceName={item.sourceChannelTitle}
-                        sourceAvatarUrl={item.sourceChannelAvatarUrl}
-                        bannerUrl={item.bannerUrl}
-                        sourceThumbnailUrl={item.sourceThumbnailUrl}
-                        createdLabel={formatRelativeShort(item.createdAt)}
-                        channelSlug={channelSlug}
-                        likesCount={likesCount}
-                        userLiked={userLiked}
-                        commentsCount={commentsCount}
-                        tags={item.tags.map((tag) => ({ key: tag, label: tag }))}
+                        {...cardProps}
                         onLike={(event) => {
                           event.preventDefault();
                           handleLike(item.blueprintId, userLiked);
@@ -1075,36 +1119,30 @@ export default function Wall() {
             ) : visiblePosts.length > 0 ? (
               <div className="divide-y divide-border/40">
                 {visiblePosts.map((post) => {
-                  const blueprintPreview = buildBlueprintPreviewText({
-                    steps: post.steps,
-                  });
-                  const preview = buildFeedSummary({
-                    sectionsJson: post.sections_json,
-                    primary: post.llm_review,
-                    secondary: post.mix_notes || blueprintPreview,
-                    fallback: 'Open blueprint to view full details.',
-                    maxChars: 220,
-                  });
-                  const fallbackChannelSlug = resolveChannelLabelForBlueprint(post.tags.map((tag) => tag.slug)).replace(/^b\//, '');
-                  const channelSlug = post.published_channel_slug || fallbackChannelSlug;
                   const commentsCount = commentCountsByBlueprintId[post.id] || 0;
+                  const cardProps = buildWallBlueprintCardProps({
+                    id: post.id,
+                    title: post.title,
+                    sectionsJson: post.sections_json,
+                    steps: post.steps,
+                    llmReview: post.llm_review,
+                    mixNotes: post.mix_notes,
+                    bannerUrl: post.banner_url,
+                    createdAt: post.created_at,
+                    sourceName: post.source_channel_title || null,
+                    sourceAvatarUrl: post.source_channel_avatar_url || null,
+                    sourceThumbnailUrl: post.source_thumbnail_url || null,
+                    publishedChannelSlug: post.published_channel_slug || null,
+                    tags: post.tags.map((tag) => tag.slug),
+                    likesCount: post.likes_count,
+                    userLiked: post.user_liked,
+                    commentsCount,
+                  });
 
                   return (
                     <WallBlueprintCard
                       key={post.id}
-                      to={`/blueprint/${post.id}`}
-                      title={post.title}
-                      summary={preview}
-                      sourceName={post.source_channel_title || null}
-                      sourceAvatarUrl={post.source_channel_avatar_url || null}
-                      bannerUrl={post.banner_url}
-                      sourceThumbnailUrl={post.source_thumbnail_url || null}
-                      createdLabel={formatRelativeShort(post.created_at)}
-                      channelSlug={channelSlug}
-                      likesCount={post.likes_count}
-                      userLiked={post.user_liked}
-                      commentsCount={commentsCount}
-                      tags={post.tags.map((tag) => ({ key: tag.id, label: tag.slug }))}
+                      {...cardProps}
                       onLike={(event) => {
                         event.preventDefault();
                         handleLike(post.id, post.user_liked);
