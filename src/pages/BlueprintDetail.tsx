@@ -1063,7 +1063,7 @@ export default function BlueprintDetail() {
                 <h2 className="text-lg font-semibold">{commentView === 'youtube' ? 'Comments' : 'Bleu Comments'}</h2>
                 <div className="flex shrink-0 flex-nowrap items-center gap-2">
                   <Select value={commentView} onValueChange={(value) => setCommentView(value as 'youtube' | 'community')}>
-                    <SelectTrigger className="h-9 w-[160px] [&>svg]:hidden">
+                    <SelectTrigger className="h-9 w-auto min-w-0 px-2.5 [&>svg]:hidden">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1082,7 +1082,7 @@ export default function BlueprintDetail() {
                       }
                     }}
                   >
-                    <SelectTrigger className="h-9 w-[120px] [&>svg]:hidden">
+                    <SelectTrigger className="h-9 w-auto min-w-0 px-2.5 [&>svg]:hidden">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
