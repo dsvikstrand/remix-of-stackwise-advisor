@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { handleDebugResetYtProxy } from '../../server/handlers/opsHandlers';
+import { handleDebugResetYtProxy, handleQueueHealth } from '../../server/handlers/opsHandlers';
 import type { OpsRouteDeps } from '../../server/contracts/api/ops';
 
 function createMockResponse() {
@@ -75,6 +75,59 @@ function createBaseDeps(overrides: Partial<OpsRouteDeps> = {}): OpsRouteDeps {
   };
 }
 
+function createQueueHealthDb(options?: {
+  staleLeaseCount?: number;
+  rows?: Array<{
+    scope: string;
+    status: 'queued' | 'running';
+    created_at?: string | null;
+    started_at?: string | null;
+  }>;
+  staleLeaseError?: { message: string } | null;
+  rowsError?: { message: string } | null;
+}) {
+  const staleLeaseCount = options?.staleLeaseCount ?? 0;
+  const rows = options?.rows ?? [];
+  return {
+    from(table: string) {
+      if (table !== 'ingestion_jobs') {
+        throw new Error(`Unexpected table: ${table}`);
+      }
+      return {
+        select(columns: string, opts?: { head?: boolean; count?: string }) {
+          if (opts?.head) {
+            return {
+              eq() {
+                return this;
+              },
+              not() {
+                return this;
+              },
+              lt: async () => ({
+                count: staleLeaseCount,
+                error: options?.staleLeaseError ?? null,
+              }),
+            };
+          }
+          expect(columns).toContain('scope');
+          expect(columns).toContain('status');
+          return {
+            in() {
+              return this;
+            },
+            async then(resolve: (value: unknown) => unknown) {
+              return resolve({
+                data: rows,
+                error: options?.rowsError ?? null,
+              });
+            },
+          };
+        },
+      };
+    },
+  };
+}
+
 describe('debug yt_to_text proxy reset handler', () => {
   it('returns 404 when debug endpoints are disabled', async () => {
     const req = {} as never;
@@ -141,6 +194,126 @@ describe('debug yt_to_text proxy reset handler', () => {
       data: {
         reset: true,
         proxy_selector_mode: 'sample',
+      },
+    });
+  });
+});
+
+describe('queue health handler', () => {
+  it('returns 401 when service auth is missing', async () => {
+    const req = {} as never;
+    const res = createMockResponse();
+
+    await handleQueueHealth(req, res as never, createBaseDeps({
+      isServiceRequestAuthorized: () => false,
+    }));
+
+    expect(res.statusCode).toBe(401);
+    expect(res.body).toMatchObject({
+      ok: false,
+      error_code: 'SERVICE_AUTH_REQUIRED',
+    });
+  });
+
+  it('returns 500 when the service client is unavailable', async () => {
+    const req = {} as never;
+    const res = createMockResponse();
+
+    await handleQueueHealth(req, res as never, createBaseDeps());
+
+    expect(res.statusCode).toBe(500);
+    expect(res.body).toMatchObject({
+      ok: false,
+      error_code: 'CONFIG_ERROR',
+    });
+  });
+
+  it('returns additive queue-age metrics and per-scope ages', async () => {
+    const req = {} as never;
+    const res = createMockResponse();
+    const now = Date.now();
+    const queuedIso = new Date(now - 5 * 60_000).toISOString();
+    const runningIso = new Date(now - 2 * 60_000).toISOString();
+
+    await handleQueueHealth(req, res as never, createBaseDeps({
+      getServiceSupabaseClient: () => createQueueHealthDb({
+        staleLeaseCount: 1,
+        rows: [
+          { scope: 'all_active_subscriptions', status: 'queued', created_at: queuedIso },
+          { scope: 'all_active_subscriptions', status: 'running', started_at: runningIso },
+        ],
+      }),
+      countQueueDepth: async (_db, input) => (input.includeRunning ? 3 : 1),
+      queuedIngestionScopes: ['all_active_subscriptions', 'search_video_generate'],
+      isQueuedIngestionScope: (scope) => scope === 'all_active_subscriptions' || scope === 'search_video_generate',
+      getProviderCircuitSnapshot: async () => ({ state: 'closed' }),
+    }));
+
+    expect(res.statusCode).toBe(200);
+    const payload = res.body as {
+      ok: boolean;
+      data: {
+        snapshot_at: string;
+        oldest_queued_created_at: string | null;
+        oldest_queued_age_ms: number | null;
+        oldest_running_started_at: string | null;
+        oldest_running_age_ms: number | null;
+        by_scope: Record<string, {
+          queued: number;
+          running: number;
+          oldest_queued_age_ms: number | null;
+          oldest_running_age_ms: number | null;
+        }>;
+      };
+    };
+    expect(payload.ok).toBe(true);
+    expect(payload.data.snapshot_at).toMatch(/T/);
+    expect(payload.data.oldest_queued_created_at).toBe(queuedIso);
+    expect(payload.data.oldest_running_started_at).toBe(runningIso);
+    expect(payload.data.oldest_queued_age_ms).not.toBeNull();
+    expect(payload.data.oldest_running_age_ms).not.toBeNull();
+    expect(payload.data.by_scope.all_active_subscriptions).toMatchObject({
+      queued: 1,
+      running: 1,
+    });
+    expect(payload.data.by_scope.all_active_subscriptions.oldest_queued_age_ms).not.toBeNull();
+    expect(payload.data.by_scope.all_active_subscriptions.oldest_running_age_ms).not.toBeNull();
+    expect(payload.data.by_scope.search_video_generate).toMatchObject({
+      queued: 0,
+      running: 0,
+      oldest_queued_age_ms: null,
+      oldest_running_age_ms: null,
+    });
+  });
+
+  it('returns null age fields when no queued or running jobs exist', async () => {
+    const req = {} as never;
+    const res = createMockResponse();
+
+    await handleQueueHealth(req, res as never, createBaseDeps({
+      getServiceSupabaseClient: () => createQueueHealthDb(),
+      countQueueDepth: async (_db, input) => (input.includeRunning ? 0 : 0),
+      queuedIngestionScopes: ['all_active_subscriptions'],
+      isQueuedIngestionScope: () => true,
+      getProviderCircuitSnapshot: async () => null,
+    }));
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        oldest_queued_created_at: null,
+        oldest_queued_age_ms: null,
+        oldest_running_started_at: null,
+        oldest_running_age_ms: null,
+        by_scope: {
+          all_active_subscriptions: {
+            queued: 0,
+            running: 0,
+            oldest_queued_age_ms: null,
+            oldest_running_age_ms: null,
+          },
+        },
       },
     });
   });

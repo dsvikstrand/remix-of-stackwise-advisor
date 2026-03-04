@@ -149,7 +149,8 @@ export async function handleQueueHealth(req: express.Request, res: express.Respo
   const db = deps.getServiceSupabaseClient();
   if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
 
-  const nowIso = new Date().toISOString();
+  const snapshotAt = new Date();
+  const nowIso = snapshotAt.toISOString();
   const [queuedDepth, runningDepth] = await Promise.all([
     deps.countQueueDepth(db, { includeRunning: false }),
     deps.countQueueDepth(db, { includeRunning: true }),
@@ -167,22 +168,70 @@ export async function handleQueueHealth(req: express.Request, res: express.Respo
 
   const { data: byScopeRows, error: byScopeError } = await db
     .from('ingestion_jobs')
-    .select('scope, status')
+    .select('scope, status, created_at, started_at')
     .in('status', ['queued', 'running'])
     .in('scope', [...deps.queuedIngestionScopes]);
   if (byScopeError) {
     return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: byScopeError.message, data: null });
   }
-  const byScope: Record<string, { queued: number; running: number }> = {};
+  const byScope: Record<string, {
+    queued: number;
+    running: number;
+    oldest_queued_age_ms: number | null;
+    oldest_running_age_ms: number | null;
+  }> = {};
   for (const scope of deps.queuedIngestionScopes) {
-    byScope[scope] = { queued: 0, running: 0 };
+    byScope[scope] = {
+      queued: 0,
+      running: 0,
+      oldest_queued_age_ms: null,
+      oldest_running_age_ms: null,
+    };
   }
+  let oldestQueuedCreatedAt: string | null = null;
+  let oldestQueuedAgeMs: number | null = null;
+  let oldestRunningStartedAt: string | null = null;
+  let oldestRunningAgeMs: number | null = null;
   for (const row of byScopeRows || []) {
-    const scope = String((row as { scope?: string }).scope || '').trim();
-    const status = String((row as { status?: string }).status || '').trim();
+    const normalized = row as {
+      scope?: string;
+      status?: string;
+      created_at?: string | null;
+      started_at?: string | null;
+    };
+    const scope = String(normalized.scope || '').trim();
+    const status = String(normalized.status || '').trim();
     if (!deps.isQueuedIngestionScope(scope)) continue;
-    if (status === 'queued') byScope[scope].queued += 1;
-    if (status === 'running') byScope[scope].running += 1;
+    if (status === 'queued') {
+      byScope[scope].queued += 1;
+      const createdAt = typeof normalized.created_at === 'string' ? normalized.created_at : null;
+      const createdAtMs = createdAt ? Date.parse(createdAt) : Number.NaN;
+      if (createdAt && Number.isFinite(createdAtMs)) {
+        const ageMs = Math.max(0, snapshotAt.getTime() - createdAtMs);
+        if (oldestQueuedAgeMs == null || ageMs > oldestQueuedAgeMs) {
+          oldestQueuedAgeMs = ageMs;
+          oldestQueuedCreatedAt = createdAt;
+        }
+        if (byScope[scope].oldest_queued_age_ms == null || ageMs > byScope[scope].oldest_queued_age_ms) {
+          byScope[scope].oldest_queued_age_ms = ageMs;
+        }
+      }
+    }
+    if (status === 'running') {
+      byScope[scope].running += 1;
+      const startedAt = typeof normalized.started_at === 'string' ? normalized.started_at : null;
+      const startedAtMs = startedAt ? Date.parse(startedAt) : Number.NaN;
+      if (startedAt && Number.isFinite(startedAtMs)) {
+        const ageMs = Math.max(0, snapshotAt.getTime() - startedAtMs);
+        if (oldestRunningAgeMs == null || ageMs > oldestRunningAgeMs) {
+          oldestRunningAgeMs = ageMs;
+          oldestRunningStartedAt = startedAt;
+        }
+        if (byScope[scope].oldest_running_age_ms == null || ageMs > byScope[scope].oldest_running_age_ms) {
+          byScope[scope].oldest_running_age_ms = ageMs;
+        }
+      }
+    }
   }
 
   const providerKeys = [
@@ -205,8 +254,13 @@ export async function handleQueueHealth(req: express.Request, res: express.Respo
     data: {
       worker_id: deps.queuedWorkerId,
       worker_running: deps.queuedWorkerRunning,
+      snapshot_at: nowIso,
       queue_depth: queuedDepth,
       running_depth: Math.max(0, runningDepth - queuedDepth),
+      oldest_queued_created_at: oldestQueuedCreatedAt,
+      oldest_queued_age_ms: oldestQueuedAgeMs,
+      oldest_running_started_at: oldestRunningStartedAt,
+      oldest_running_age_ms: oldestRunningAgeMs,
       stale_leases: Number(staleLeaseCount || 0),
       limits: {
         queue_depth_hard_limit: deps.queueDepthHardLimit,
