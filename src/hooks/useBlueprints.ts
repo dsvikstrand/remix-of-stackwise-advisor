@@ -11,6 +11,7 @@ export interface BlueprintRow {
   title: string;
   selected_items: Json;
   steps: Json | null;
+  sections_json?: Json | null;
   mix_notes: string | null;
   review_prompt: string | null;
   banner_url: string | null;
@@ -120,6 +121,20 @@ export function useBlueprint(blueprintId?: string) {
       if (error) throw error;
       if (!blueprint) return null;
 
+      let sectionsJson: Json | null = null;
+      const { data: sectionsData, error: sectionsError } = await supabase
+        .from('blueprints')
+        .select('sections_json')
+        .eq('id', blueprintId)
+        .maybeSingle();
+      if (sectionsError) {
+        if (!isMissingColumnError(sectionsError, 'sections_json')) {
+          throw sectionsError;
+        }
+      } else {
+        sectionsJson = sectionsData?.sections_json ?? null;
+      }
+
       const [tagRowsRes, likeRes, profileRes] = await Promise.all([
         supabase.from('blueprint_tags').select('tag_id').eq('blueprint_id', blueprintId),
         user
@@ -137,6 +152,7 @@ export function useBlueprint(blueprintId?: string) {
 
       return {
         ...(blueprint as BlueprintRow),
+        sections_json: sectionsJson,
         tags: tagsData || [],
         user_liked: userLiked,
         creator_profile: profileRes.data || null,

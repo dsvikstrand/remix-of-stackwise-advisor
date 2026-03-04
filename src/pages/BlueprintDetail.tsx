@@ -24,6 +24,11 @@ import { normalizeTag } from '@/lib/tagging';
 import { supabase } from '@/integrations/supabase/client';
 import { resolveEffectiveBanner } from '@/lib/bannerResolver';
 import { splitSummaryIntoSlides } from '@/lib/summarySlides';
+import {
+  buildBlueprintSectionsV1FromRenderSteps,
+  buildRenderBlocksFromBlueprintSections,
+  parseBlueprintSectionsV1,
+} from '@/lib/blueprintSections';
 
 type ItemValue = string | { name?: string; context?: string };
 type StepItem = { category?: string; name?: string; context?: string };
@@ -573,12 +578,47 @@ export default function BlueprintDetail() {
     ? `https://www.youtube-nocookie.com/embed/${youtubeVideoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1`
     : '';
   const hasInlineVideo = Boolean(youtubeEmbedUrl);
-  const goldenSections = useGoldenRender
+  const legacyGoldenSections = useGoldenRender
     ? steps.map((step, index) => normalizeGoldenStep(step, index))
     : [];
-  const defaultGoldenSections = useGoldenRender
+  const legacyDefaultGoldenSections = useGoldenRender
     ? defaultVariantSteps.map((step, index) => normalizeGoldenStep(step, index))
     : [];
+  const useSectionsSchemaRender = useGoldenRender;
+  const storedGoldenSectionsSchema = useMemo(
+    () => parseBlueprintSectionsV1(blueprint?.sections_json),
+    [blueprint?.sections_json],
+  );
+  const derivedGoldenSectionsSchema = useMemo(
+    () =>
+      useSectionsSchemaRender
+        ? buildBlueprintSectionsV1FromRenderSteps({
+            steps: legacyGoldenSections,
+            tags: blueprint?.tags.map((tag) => tag.slug) || [],
+          })
+        : null,
+    [blueprint?.tags, legacyGoldenSections, useSectionsSchemaRender],
+  );
+  const derivedDefaultGoldenSectionsSchema = useMemo(
+    () =>
+      useSectionsSchemaRender
+        ? buildBlueprintSectionsV1FromRenderSteps({
+            steps: legacyDefaultGoldenSections,
+            tags: blueprint?.tags.map((tag) => tag.slug) || [],
+          })
+        : null,
+    [blueprint?.tags, legacyDefaultGoldenSections, useSectionsSchemaRender],
+  );
+  const goldenSectionsSchema = storedGoldenSectionsSchema || derivedGoldenSectionsSchema;
+  const defaultGoldenSectionsSchema = storedGoldenSectionsSchema || derivedDefaultGoldenSectionsSchema;
+  const goldenSections = useMemo(
+    () => (goldenSectionsSchema ? buildRenderBlocksFromBlueprintSections(goldenSectionsSchema) : legacyGoldenSections),
+    [goldenSectionsSchema, legacyGoldenSections],
+  );
+  const defaultGoldenSections = useMemo(
+    () => (defaultGoldenSectionsSchema ? buildRenderBlocksFromBlueprintSections(defaultGoldenSectionsSchema) : legacyDefaultGoldenSections),
+    [defaultGoldenSectionsSchema, legacyDefaultGoldenSections],
+  );
   const defaultVisibleGoldenSections = defaultGoldenSections.filter((step) => normalizeHeadingKey(step.title) !== 'bottom line');
   const defaultTopSummarySection = defaultVisibleGoldenSections.find((step) => {
     const key = normalizeHeadingKey(step.title);

@@ -1,7 +1,14 @@
 import type { GenerationTier } from './generationTierAccess';
 import { BlueprintVariantInProgressError } from './blueprintVariants';
+import { buildBlueprintSectionsV1FromStoredSteps } from './blueprintSections';
 
 type DbClient = any;
+
+function isMissingColumnError(error: unknown, column: string) {
+  const e = error as { message?: unknown; details?: unknown; hint?: unknown } | null;
+  const hay = `${String(e?.message || '')} ${String(e?.details || '')} ${String(e?.hint || '')}`.toLowerCase();
+  return hay.includes('does not exist') && hay.includes(column.toLowerCase());
+}
 
 type CreateBlueprintFromVideoInput = {
   userId: string;
@@ -247,58 +254,88 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
         .trim()
         .split(/\s+/)
         .filter(Boolean).length;
+      const mappedDefaultSteps = deps.mapDraftStepsForBlueprint(result.draft.steps) as Array<{
+        id?: string;
+        title?: string;
+        description?: string | null;
+        items?: Array<{ name?: string | null }> | null;
+      }>;
+      const mappedEli5Steps = deps.mapDraftStepsForBlueprint(
+        Array.isArray(result.draft.eli5Steps) && result.draft.eli5Steps.length > 0
+          ? result.draft.eli5Steps
+          : result.draft.steps,
+      ) as Array<{
+        id?: string;
+        title?: string;
+        description?: string | null;
+        items?: Array<{ name?: string | null }> | null;
+      }>;
+      const sectionsJson = buildBlueprintSectionsV1FromStoredSteps({
+        steps: mappedDefaultSteps,
+        tags: draftTags,
+      });
 
-      const { data: blueprint, error: blueprintError } = await db
-        .from('blueprints')
-        .insert({
-          title: result.draft.title,
-          creator_user_id: input.userId,
-          is_public: false,
-          steps: deps.mapDraftStepsForBlueprint(result.draft.steps),
-          selected_items: {
-            source: input.sourceTag,
-            source_item_id: normalizedSourceItemId || null,
-            generation_tier: generationTier,
-            run_id: result.run_id,
-            video_url: input.videoUrl,
-            bp_style: 'golden_v1',
-            bp_origin: 'youtube_pipeline',
-            bp_domain: 'deep',
-            summary_word_count: summaryWordCount,
-            bp_structure_ok: Boolean((result.meta as { bp_structure_ok?: unknown } | null)?.bp_structure_ok ?? true),
-            bp_structure_issues: Array.isArray((result.meta as { bp_structure_issues?: unknown } | null)?.bp_structure_issues)
-              ? (result.meta as { bp_structure_issues: unknown[] }).bp_structure_issues
-              : [],
-            bp_quality_ok: Boolean((result.meta as { bp_quality_ok?: unknown } | null)?.bp_quality_ok),
-            bp_quality_issues: Array.isArray((result.meta as { bp_quality_issues?: unknown } | null)?.bp_quality_issues)
-              ? (result.meta as { bp_quality_issues: unknown[] }).bp_quality_issues
-              : [],
-            bp_quality_retries_used: Number((result.meta as { bp_quality_retries_used?: unknown } | null)?.bp_quality_retries_used || 0),
-            bp_quality_final_mode: String((result.meta as { bp_quality_final_mode?: unknown } | null)?.bp_quality_final_mode || 'direct'),
-            bp_output_mode: String((result.meta as { bp_output_mode?: unknown } | null)?.bp_output_mode || deps.yt2bpOutputMode),
-            bp_summary_variants: {
-              default: deps.normalizeSummaryVariantText(result.draft.summaryVariants?.default || ''),
-              eli5: deps.normalizeSummaryVariantText(result.draft.summaryVariants?.eli5 || ''),
-            },
-            bp_step_variants: {
-              default: deps.mapDraftStepsForBlueprint(result.draft.steps),
-              eli5: deps.mapDraftStepsForBlueprint(
-                Array.isArray(result.draft.eli5Steps) && result.draft.eli5Steps.length > 0
-                  ? result.draft.eli5Steps
-                  : result.draft.steps,
-              ),
-            },
-            bp_trace_version: String((result.meta as { bp_trace_version?: unknown } | null)?.bp_trace_version || 'yt2bp_trace_v2'),
-            bp_run_id: result.run_id,
-            bp_trace_source: 'generation_runs',
-            bp_transcript_transport: transcriptTransport,
+      const insertBlueprint = (payload: Record<string, unknown>) =>
+        db
+          .from('blueprints')
+          .insert(payload)
+          .select('id')
+          .single();
+
+      const baseInsertPayload = {
+        title: result.draft.title,
+        creator_user_id: input.userId,
+        is_public: false,
+        steps: mappedDefaultSteps,
+        selected_items: {
+          source: input.sourceTag,
+          source_item_id: normalizedSourceItemId || null,
+          generation_tier: generationTier,
+          run_id: result.run_id,
+          video_url: input.videoUrl,
+          bp_style: 'golden_v1',
+          bp_origin: 'youtube_pipeline',
+          bp_domain: 'deep',
+          summary_word_count: summaryWordCount,
+          bp_structure_ok: Boolean((result.meta as { bp_structure_ok?: unknown } | null)?.bp_structure_ok ?? true),
+          bp_structure_issues: Array.isArray((result.meta as { bp_structure_issues?: unknown } | null)?.bp_structure_issues)
+            ? (result.meta as { bp_structure_issues: unknown[] }).bp_structure_issues
+            : [],
+          bp_quality_ok: Boolean((result.meta as { bp_quality_ok?: unknown } | null)?.bp_quality_ok),
+          bp_quality_issues: Array.isArray((result.meta as { bp_quality_issues?: unknown } | null)?.bp_quality_issues)
+            ? (result.meta as { bp_quality_issues: unknown[] }).bp_quality_issues
+            : [],
+          bp_quality_retries_used: Number((result.meta as { bp_quality_retries_used?: unknown } | null)?.bp_quality_retries_used || 0),
+          bp_quality_final_mode: String((result.meta as { bp_quality_final_mode?: unknown } | null)?.bp_quality_final_mode || 'direct'),
+          bp_output_mode: String((result.meta as { bp_output_mode?: unknown } | null)?.bp_output_mode || deps.yt2bpOutputMode),
+          bp_summary_variants: {
+            default: deps.normalizeSummaryVariantText(result.draft.summaryVariants?.default || ''),
+            eli5: deps.normalizeSummaryVariantText(result.draft.summaryVariants?.eli5 || ''),
           },
-          banner_url: sourceThumbnailUrl,
-          mix_notes: result.draft.notes || null,
-          llm_review: result.review.summary || null,
-        })
-        .select('id')
-        .single();
+          bp_step_variants: {
+            default: mappedDefaultSteps,
+            eli5: mappedEli5Steps,
+          },
+          bp_trace_version: String((result.meta as { bp_trace_version?: unknown } | null)?.bp_trace_version || 'yt2bp_trace_v2'),
+          bp_run_id: result.run_id,
+          bp_trace_source: 'generation_runs',
+          bp_transcript_transport: transcriptTransport,
+        },
+        banner_url: sourceThumbnailUrl,
+        mix_notes: result.draft.notes || null,
+        llm_review: result.review.summary || null,
+      };
+
+      let blueprintInsert = await insertBlueprint({
+        ...baseInsertPayload,
+        sections_json: sectionsJson,
+      });
+
+      if (blueprintInsert.error && isMissingColumnError(blueprintInsert.error, 'sections_json')) {
+        blueprintInsert = await insertBlueprint(baseInsertPayload);
+      }
+
+      const { data: blueprint, error: blueprintError } = blueprintInsert;
       if (blueprintError) throw blueprintError;
 
       for (const tagSlug of draftTags) {

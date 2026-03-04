@@ -123,6 +123,7 @@ export type Database = {
           llm_review: string | null
           mix_notes: string | null
           review_prompt: string | null
+          sections_json: Json | null
           selected_items: Json
           source_blueprint_id: string | null
           steps: Json | null
@@ -140,6 +141,7 @@ export type Database = {
           llm_review?: string | null
           mix_notes?: string | null
           review_prompt?: string | null
+          sections_json?: Json | null
           selected_items?: Json
           source_blueprint_id?: string | null
           steps?: Json | null
@@ -157,6 +159,7 @@ export type Database = {
           llm_review?: string | null
           mix_notes?: string | null
           review_prompt?: string | null
+          sections_json?: Json | null
           selected_items?: Json
           source_blueprint_id?: string | null
           steps?: Json | null
