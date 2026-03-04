@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, Heart } from 'lucide-react';
+import { Heart } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -88,10 +88,19 @@ export function WallBlueprintCard({
     comments: commentsCount,
   });
   const channelColors = getChannelColorView(channelSlug);
-  const compactViewCount = formatCompactCount(viewCount) || '-';
+  const compactViewCount = formatCompactCount(viewCount);
   const safeTitle = decodeHtmlEntities(title);
   const safeSummary = decodeHtmlEntities(summary);
   const safeSourceName = sourceName ? decodeHtmlEntities(sourceName) : null;
+  const tagItems = [
+    ...(compactViewCount
+      ? [{
+          key: `views-${compactViewCount}`,
+          label: compactViewCount,
+        }]
+      : []),
+    ...tags,
+  ];
 
   return (
     <div
@@ -136,10 +145,10 @@ export function WallBlueprintCard({
           <h3 className="text-base font-semibold leading-tight">{safeTitle}</h3>
           <p className="text-sm text-muted-foreground line-clamp-3">{safeSummary}</p>
 
-          {tags.length > 0 && (
+          {tagItems.length > 0 && (
             <OneRowTagChips
               className="flex flex-nowrap gap-1.5 overflow-hidden"
-              items={tags.map((tag) => ({
+              items={tagItems.map((tag) => ({
                 key: tag.key,
                 label: tag.label,
                 variant: 'outline',
@@ -164,10 +173,6 @@ export function WallBlueprintCard({
               >
                 <Heart className={`h-4 w-4 ${userLiked ? 'fill-current' : ''}`} />
               </Button>
-              <span className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2 text-[11px] font-medium tracking-wide ${channelColors.surfaceClassName}`}>
-                {compactViewCount}
-                <Eye className="h-3.5 w-3.5" />
-              </span>
             </div>
             <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-foreground/75 shrink-0">
               <Link
