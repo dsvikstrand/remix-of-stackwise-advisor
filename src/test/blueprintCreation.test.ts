@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createBlueprintCreationService } from '../../server/services/blueprintCreation';
+import type { BlueprintSectionsV1 } from '../../server/services/blueprintSections';
 
 function createDbMock() {
   let insertedBlueprintPayload: Record<string, unknown> | null = null;
@@ -57,6 +58,16 @@ describe('blueprint creation transcript transport metadata', () => {
           ],
           notes: null,
           tags: [],
+          sectionsJson: {
+            schema_version: 'blueprint_sections_v1',
+            tags: [],
+            summary: { text: 'A short summary for testing.' },
+            takeaways: { bullets: ['One useful takeaway.'] },
+            storyline: { text: 'A short storyline block.' },
+            deep_dive: { bullets: ['A deep dive detail.'] },
+            practical_rules: { bullets: ['A practical rule.'] },
+            open_questions: { bullets: ['An open question.'] },
+          } satisfies BlueprintSectionsV1,
           summaryVariants: {
             default: 'Default summary',
             eli5: 'ELI5 summary',
@@ -106,6 +117,8 @@ describe('blueprint creation transcript transport metadata', () => {
     const selectedItems = (insertedPayload?.selected_items || null) as Record<string, unknown> | null;
 
     expect(result.blueprintId).toBe('bp_123');
+    expect(insertedPayload?.steps).toBeUndefined();
+    expect((selectedItems || {}).bp_step_variants).toBeUndefined();
     expect(selectedItems?.bp_transcript_transport).toEqual({
       provider: 'yt_to_text',
       proxy_enabled: true,

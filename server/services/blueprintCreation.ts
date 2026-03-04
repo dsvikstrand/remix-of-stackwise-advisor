@@ -261,16 +261,6 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
         description?: string | null;
         items?: Array<{ name?: string | null }> | null;
       }>;
-      const mappedEli5Steps = deps.mapDraftStepsForBlueprint(
-        Array.isArray(result.draft.eli5Steps) && result.draft.eli5Steps.length > 0
-          ? result.draft.eli5Steps
-          : result.draft.steps,
-      ) as Array<{
-        id?: string;
-        title?: string;
-        description?: string | null;
-        items?: Array<{ name?: string | null }> | null;
-      }>;
       const sectionsJson = result.draft.sectionsJson || buildBlueprintSectionsV1FromStoredSteps({
         steps: mappedDefaultSteps,
         tags: draftTags,
@@ -287,7 +277,6 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
         title: result.draft.title,
         creator_user_id: input.userId,
         is_public: false,
-        steps: mappedDefaultSteps,
         selected_items: {
           source: input.sourceTag,
           source_item_id: normalizedSourceItemId || null,
@@ -313,10 +302,6 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
             default: deps.normalizeSummaryVariantText(result.draft.summaryVariants?.default || ''),
             eli5: deps.normalizeSummaryVariantText(result.draft.summaryVariants?.eli5 || ''),
           },
-          bp_step_variants: {
-            default: mappedDefaultSteps,
-            eli5: mappedEli5Steps,
-          },
           bp_trace_version: String((result.meta as { bp_trace_version?: unknown } | null)?.bp_trace_version || 'yt2bp_trace_v2'),
           bp_run_id: result.run_id,
           bp_trace_source: 'generation_runs',
@@ -333,7 +318,10 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
       });
 
       if (blueprintInsert.error && isMissingColumnError(blueprintInsert.error, 'sections_json')) {
-        blueprintInsert = await insertBlueprint(baseInsertPayload);
+        blueprintInsert = await insertBlueprint({
+          ...baseInsertPayload,
+          steps: mappedDefaultSteps,
+        });
       }
 
       const { data: blueprint, error: blueprintError } = blueprintInsert;
