@@ -108,13 +108,32 @@ export interface YouTubeBlueprintPass2TransformRequest {
 
 export interface YouTubeBlueprintResult {
   title?: string;
-  description: string;
-  steps: YouTubeDraftStep[];
+  description?: string;
+  steps?: YouTubeDraftStep[];
   notes?: string | null;
   tags?: string[];
   summary_variants?: {
     default?: string | null;
     eli5?: string | null;
+  } | null;
+  schema_version?: 'blueprint_sections_v1';
+  summary?: {
+    text?: string | null;
+  } | null;
+  takeaways?: {
+    bullets?: string[] | null;
+  } | null;
+  storyline?: {
+    text?: string | null;
+  } | null;
+  deep_dive?: {
+    bullets?: string[] | null;
+  } | null;
+  practical_rules?: {
+    bullets?: string[] | null;
+  } | null;
+  open_questions?: {
+    bullets?: string[] | null;
   } | null;
 }
 

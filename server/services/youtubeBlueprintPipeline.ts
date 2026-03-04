@@ -3,6 +3,10 @@ import type {
   GenerationPromptEvent,
 } from '../llm/types';
 import type { GenerationTier } from './generationTierAccess';
+import {
+  buildLegacyDraftStepsFromBlueprintSections,
+  type BlueprintSectionsV1,
+} from './blueprintSections';
 
 type DbClient = any;
 
@@ -19,6 +23,7 @@ type YouTubeDraft = {
   eli5Steps: YouTubeDraftStep[];
   notes: string | null;
   tags: string[];
+  sectionsJson: BlueprintSectionsV1 | null;
   summaryVariants: {
     default: string;
     eli5: string;
@@ -561,6 +566,60 @@ async function runYouTubePipeline(input: {
   const passingCandidates: Array<{ draft: YouTubeDraft; overall: number }> = [];
 
   const toDraft = (rawDraft: Awaited<ReturnType<typeof client.generateYouTubeBlueprint>>): YouTubeDraft => {
+    const isSectionsPayload = rawDraft?.schema_version === 'blueprint_sections_v1'
+      && typeof rawDraft?.summary?.text === 'string'
+      && Array.isArray(rawDraft?.takeaways?.bullets)
+      && typeof rawDraft?.storyline?.text === 'string'
+      && Array.isArray(rawDraft?.deep_dive?.bullets)
+      && Array.isArray(rawDraft?.practical_rules?.bullets)
+      && Array.isArray(rawDraft?.open_questions?.bullets);
+
+    if (isSectionsPayload) {
+      const sectionsJson: BlueprintSectionsV1 = {
+        schema_version: 'blueprint_sections_v1',
+        tags: (rawDraft.tags || []).map((tag) => String(tag || '').trim()).filter(Boolean).slice(0, 8),
+        summary: {
+          text: String(rawDraft.summary?.text || '').trim(),
+        },
+        takeaways: {
+          bullets: (rawDraft.takeaways?.bullets || []).map((item) => String(item || '').trim()).filter(Boolean),
+        },
+        storyline: {
+          text: String(rawDraft.storyline?.text || '').trim(),
+        },
+        deep_dive: {
+          bullets: (rawDraft.deep_dive?.bullets || []).map((item) => String(item || '').trim()).filter(Boolean),
+        },
+        practical_rules: {
+          bullets: (rawDraft.practical_rules?.bullets || []).map((item) => String(item || '').trim()).filter(Boolean),
+        },
+        open_questions: {
+          bullets: (rawDraft.open_questions?.bullets || []).map((item) => String(item || '').trim()).filter(Boolean),
+        },
+      };
+      const normalizedSteps = buildLegacyDraftStepsFromBlueprintSections(sectionsJson)
+        .map((step) => ({
+          name: String(step.name || '').trim(),
+          notes: String(step.notes || '').trim(),
+          timestamp: step.timestamp?.trim() || null,
+        }))
+        .filter((step) => step.name && step.notes);
+      const summaryDefault = normalizeSummaryVariantText(sectionsJson.summary.text);
+      return {
+        title: resolvedVideoTitle,
+        description: summaryDefault || 'AI-generated blueprint from video transcript.',
+        steps: normalizedSteps,
+        eli5Steps: [],
+        notes: null,
+        tags: sectionsJson.tags,
+        sectionsJson,
+        summaryVariants: {
+          default: summaryDefault,
+          eli5: '',
+        },
+      };
+    }
+
     const normalizedSteps = (rawDraft.steps || [])
       .map((step) => ({
         name: step.name?.trim() || '',
@@ -579,6 +638,7 @@ async function runYouTubePipeline(input: {
       eli5Steps: [],
       notes: rawDraft.notes?.trim() || null,
       tags: (rawDraft.tags || []).map((tag) => tag.trim()).filter(Boolean).slice(0, 8),
+      sectionsJson: null,
       summaryVariants: {
         default: summaryDefault,
         eli5: '',

@@ -156,19 +156,30 @@ It should also explicitly require that any sponsorship, paid-promotion, or affil
 ## Response Format (Strict JSON Shape)
 
 The rendered prompt must include the required output shape and must reject non-JSON output.
-Title is assigned by backend from `VIDEO_TITLE`, so do not include a `title` field in model output.
+Title is assigned by backend from `VIDEO_TITLE`, so do not include a `title` field in model output. Generate the canonical `blueprint_sections_v1` contract directly. Do not return legacy `steps`, `summary_variants`, or `notes`.
 
 ```json
 {
-  "description": "string",
-  "summary_variants": {
-    "default": "string"
+  "schema_version": "blueprint_sections_v1",
+  "tags": ["string"],
+  "summary": {
+    "text": "string"
   },
-  "steps": [
-    { "name": "string", "notes": "string", "timestamp": "string|null" }
-  ],
-  "notes": "string|null",
-  "tags": ["string"]
+  "takeaways": {
+    "bullets": ["string"]
+  },
+  "storyline": {
+    "text": "string"
+  },
+  "deep_dive": {
+    "bullets": ["string"]
+  },
+  "practical_rules": {
+    "bullets": ["string"]
+  },
+  "open_questions": {
+    "bullets": ["string"]
+  }
 }
 ```
 

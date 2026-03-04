@@ -31,6 +31,12 @@ export type BlueprintSectionsV1 = {
   };
 };
 
+export type DraftStepLike = {
+  name?: string | null;
+  notes?: string | null;
+  timestamp?: string | null;
+};
+
 function normalizeSectionKey(rawTitle: string) {
   return String(rawTitle || '')
     .trim()
@@ -107,4 +113,51 @@ export function buildBlueprintSectionsV1FromStoredSteps(input: {
       bullets: toBulletStrings(openQuestions.items),
     },
   };
+}
+
+function formatBulletsAsNotes(items: string[]) {
+  return items
+    .map((item) => String(item || '').trim())
+    .filter(Boolean)
+    .map((item) => `- ${item}`)
+    .join('\n');
+}
+
+export function buildLegacyDraftStepsFromBlueprintSections(
+  input: BlueprintSectionsV1 | null | undefined,
+): DraftStepLike[] {
+  if (!input || input.schema_version !== 'blueprint_sections_v1') return [];
+
+  return [
+    {
+      name: 'Summary',
+      notes: String(input.summary?.text || '').trim(),
+      timestamp: null,
+    },
+    {
+      name: 'Takeaways',
+      notes: formatBulletsAsNotes(input.takeaways?.bullets || []),
+      timestamp: null,
+    },
+    {
+      name: 'Bleup',
+      notes: String(input.storyline?.text || '').trim(),
+      timestamp: null,
+    },
+    {
+      name: 'Deep Dive',
+      notes: formatBulletsAsNotes(input.deep_dive?.bullets || []),
+      timestamp: null,
+    },
+    {
+      name: 'Practical Rules',
+      notes: formatBulletsAsNotes(input.practical_rules?.bullets || []),
+      timestamp: null,
+    },
+    {
+      name: 'Open Questions',
+      notes: formatBulletsAsNotes(input.open_questions?.bullets || []),
+      timestamp: null,
+    },
+  ].filter((step) => String(step.notes || '').trim());
 }

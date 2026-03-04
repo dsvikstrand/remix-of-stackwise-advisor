@@ -1,6 +1,6 @@
 import type { GenerationTier } from './generationTierAccess';
 import { BlueprintVariantInProgressError } from './blueprintVariants';
-import { buildBlueprintSectionsV1FromStoredSteps } from './blueprintSections';
+import { buildBlueprintSectionsV1FromStoredSteps, type BlueprintSectionsV1 } from './blueprintSections';
 
 type DbClient = any;
 
@@ -85,6 +85,7 @@ export type BlueprintCreationDeps = {
       steps: Array<{ name: string; notes: string; timestamp: string | null }>;
       notes: string | null;
       tags: string[];
+      sectionsJson: BlueprintSectionsV1 | null;
       summaryVariants: {
         default: string;
         eli5: string;
@@ -270,7 +271,7 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
         description?: string | null;
         items?: Array<{ name?: string | null }> | null;
       }>;
-      const sectionsJson = buildBlueprintSectionsV1FromStoredSteps({
+      const sectionsJson = result.draft.sectionsJson || buildBlueprintSectionsV1FromStoredSteps({
         steps: mappedDefaultSteps,
         tags: draftTags,
       });

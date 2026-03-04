@@ -27,7 +27,7 @@ import {
   extractJson,
 } from './prompts';
 
-const YouTubeBlueprintValidator = z.object({
+const YouTubeBlueprintLegacyValidator = z.object({
   description: z.string(),
   notes: z.string().nullable().optional(),
   tags: z.array(z.string()).optional(),
@@ -43,6 +43,34 @@ const YouTubeBlueprintValidator = z.object({
     })
   ).min(1),
 });
+
+const YouTubeBlueprintSectionsValidator = z.object({
+  schema_version: z.literal('blueprint_sections_v1'),
+  tags: z.array(z.string()).optional(),
+  summary: z.object({
+    text: z.string(),
+  }),
+  takeaways: z.object({
+    bullets: z.array(z.string()),
+  }),
+  storyline: z.object({
+    text: z.string(),
+  }),
+  deep_dive: z.object({
+    bullets: z.array(z.string()),
+  }),
+  practical_rules: z.object({
+    bullets: z.array(z.string()),
+  }),
+  open_questions: z.object({
+    bullets: z.array(z.string()),
+  }),
+});
+
+const YouTubeBlueprintValidator = z.union([
+  YouTubeBlueprintLegacyValidator,
+  YouTubeBlueprintSectionsValidator,
+]);
 
 const YouTubeBlueprintPass2TransformValidator = z.object({
   eli5_steps: z.array(

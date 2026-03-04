@@ -55,13 +55,38 @@ export function createMockClient(): LLMClient {
     async generateYouTubeBlueprint(input: YouTubeBlueprintRequest, _options?: LLMGenerationOptions): Promise<YouTubeBlueprintResult> {
       return {
         title: `Blueprint from ${input.videoUrl}`,
-        description: 'Mock YouTube blueprint generated from transcript.',
-        notes: 'Mock notes.',
+        schema_version: 'blueprint_sections_v1',
         tags: ['youtube', 'guide'],
-        steps: [
-          { name: 'Step 1', notes: 'Review the key ideas in the video.', timestamp: null },
-          { name: 'Step 2', notes: 'Apply the main action item.', timestamp: null },
-        ],
+        summary: {
+          text: 'Mock YouTube blueprint generated from transcript.',
+        },
+        takeaways: {
+          bullets: [
+            'Review the key ideas in the video.',
+            'Apply the main action item.',
+          ],
+        },
+        storyline: {
+          text: 'This is a mock storyline block that summarizes the core progression.',
+        },
+        deep_dive: {
+          bullets: [
+            'Mock deep-dive detail one.',
+            'Mock deep-dive detail two.',
+          ],
+        },
+        practical_rules: {
+          bullets: [
+            'Use the video ideas as a practical checklist.',
+            'Keep implementation simple and consistent.',
+          ],
+        },
+        open_questions: {
+          bullets: [
+            'What is the best way to apply this in practice?',
+            'Which constraints matter most?',
+          ],
+        },
       };
     },
     async generateYouTubeBlueprintPass2Transform(
