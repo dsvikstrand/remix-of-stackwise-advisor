@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tag, Layers, Sparkles, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useTrendingTags } from '@/hooks/useExploreSearch';
@@ -924,42 +924,36 @@ export default function Wall() {
 
         <div className="space-y-3">
           <div className="px-3 sm:px-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="inline-flex rounded-md bg-muted/40 p-0.5">
-                {scopeLaneButtons.map((lane) => {
-                  const LaneIcon = lane.icon;
-                  const isActive = activeLane === lane.value;
-                  return (
-                    <Button
-                      key={lane.value}
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleScopeSelect(lane.value)}
-                      className={cn(
-                        'h-8 rounded-[6px] px-2.5 text-xs sm:text-sm',
-                        isActive
-                          ? 'bg-background text-foreground shadow-sm hover:bg-background'
-                          : 'text-muted-foreground hover:text-foreground',
-                      )}
-                    >
-                      <LaneIcon className="mr-1.5 h-3.5 w-3.5" />
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={activeLane} onValueChange={handleScopeSelect}>
+                <SelectTrigger className="h-9 w-[160px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {scopeLaneButtons.map((lane) => (
+                    <SelectItem key={lane.value} value={lane.value}>
                       {lane.label}
-                    </Button>
-                  );
-                })}
-              </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-              {!isForYouScope ? (
-                <Tabs value={feedSort} onValueChange={(v) => updateSearchParams({ sort: v as FeedSort })}>
-                  <TabsList className="h-9 w-full sm:w-fit rounded-md bg-muted/40 p-0.5">
-                    {SORT_TABS.map((tab) => (
-                      <TabsTrigger key={tab.value} value={tab.value} className="flex-1 sm:flex-none">
-                        {tab.label}
-                      </TabsTrigger>
-                    ))}
-                  </TabsList>
-                </Tabs>
-              ) : null}
+              <Select
+                value={feedSort}
+                onValueChange={(value) => updateSearchParams({ sort: value as FeedSort })}
+                disabled={isForYouScope}
+              >
+                <SelectTrigger className="h-9 w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SORT_TABS.map((tab) => (
+                    <SelectItem key={tab.value} value={tab.value}>
+                      {tab.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
