@@ -637,8 +637,10 @@ export default function BlueprintDetail() {
     setSummaryExpertiseLevel(hasEli5Content ? 'eli5' : 'default');
   }, [blueprint?.id, hasEli5Content]);
 
-  const summaryDefaultText = summaryVariants.default || defaultTopSummarySection?.description || topSummarySection?.description || '';
-  const summaryEli5Text = summaryVariants.eli5 || (summaryExpertiseLevel === 'eli5' ? (topSummarySection?.description || '') : '');
+  const summaryDefaultText = defaultTopSummarySection?.description || topSummarySection?.description || summaryVariants.default || '';
+  const summaryEli5Text = hasEli5SummaryVariant
+    ? (summaryVariants.eli5 || summaryDefaultText)
+    : (topSummarySection?.description || summaryDefaultText);
   const selectedSummaryText = summaryExpertiseLevel === 'eli5'
     ? summaryEli5Text || summaryDefaultText
     : summaryDefaultText;

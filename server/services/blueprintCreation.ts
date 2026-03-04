@@ -298,10 +298,6 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
           bp_quality_retries_used: Number((result.meta as { bp_quality_retries_used?: unknown } | null)?.bp_quality_retries_used || 0),
           bp_quality_final_mode: String((result.meta as { bp_quality_final_mode?: unknown } | null)?.bp_quality_final_mode || 'direct'),
           bp_output_mode: String((result.meta as { bp_output_mode?: unknown } | null)?.bp_output_mode || deps.yt2bpOutputMode),
-          bp_summary_variants: {
-            default: deps.normalizeSummaryVariantText(result.draft.summaryVariants?.default || ''),
-            eli5: deps.normalizeSummaryVariantText(result.draft.summaryVariants?.eli5 || ''),
-          },
           bp_trace_version: String((result.meta as { bp_trace_version?: unknown } | null)?.bp_trace_version || 'yt2bp_trace_v2'),
           bp_run_id: result.run_id,
           bp_trace_source: 'generation_runs',

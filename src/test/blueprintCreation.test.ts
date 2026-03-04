@@ -119,6 +119,7 @@ describe('blueprint creation transcript transport metadata', () => {
     expect(result.blueprintId).toBe('bp_123');
     expect(insertedPayload?.steps).toBeUndefined();
     expect((selectedItems || {}).bp_step_variants).toBeUndefined();
+    expect((selectedItems || {}).bp_summary_variants).toBeUndefined();
     expect(selectedItems?.bp_transcript_transport).toEqual({
       provider: 'yt_to_text',
       proxy_enabled: true,
