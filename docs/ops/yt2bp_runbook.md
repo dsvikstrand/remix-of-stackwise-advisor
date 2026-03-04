@@ -202,6 +202,8 @@ Required runtime variables:
 - `INGESTION_LATEST_MINE_WINDOW_MS` (default `60000`)
 - `INGESTION_LATEST_MINE_MAX_PER_WINDOW` (default `180`)
 - `UNLOCK_INTAKE_ENABLED` (default `true`, fast pause for new unlock intake)
+- `RUN_HTTP_SERVER` (default `true`; enable HTTP server in the current process)
+- `RUN_INGESTION_WORKER` (default `true`; enable queued ingestion worker in the current process)
 - `QUEUE_DEPTH_HARD_LIMIT` (default `1000`)
 - `QUEUE_DEPTH_PER_USER_LIMIT` (default `50`)
 - `WORKER_CONCURRENCY` (default `2`)
@@ -316,6 +318,8 @@ Safe defaults:
 - `INGESTION_LATEST_MINE_WINDOW_MS=60000`
 - `INGESTION_LATEST_MINE_MAX_PER_WINDOW=180`
 - `UNLOCK_INTAKE_ENABLED=true`
+- `RUN_HTTP_SERVER=true`
+- `RUN_INGESTION_WORKER=true`
 - `QUEUE_DEPTH_HARD_LIMIT=1000`
 - `QUEUE_DEPTH_PER_USER_LIMIT=50`
 - `WORKER_CONCURRENCY=2`
@@ -358,6 +362,61 @@ Safe defaults:
   1. create a fresh account and sign in.
   2. verify first authenticated navigation is redirected to `/welcome`.
   3. click `Skip for now` and verify redirect to `/wall`.
+
+## Web / worker split rollout
+- Combined mode remains the default:
+  - `RUN_HTTP_SERVER=true`
+  - `RUN_INGESTION_WORKER=true`
+- Recommended production split:
+  - `agentic-backend.service` (web):
+    - `RUN_HTTP_SERVER=true`
+    - `RUN_INGESTION_WORKER=false`
+  - `agentic-worker.service` (worker):
+    - `RUN_HTTP_SERVER=false`
+    - `RUN_INGESTION_WORKER=true`
+
+### Create worker service
+1. Copy the existing backend unit as a starting point:
+```bash
+ssh oracle-free 'sudo cp /etc/systemd/system/agentic-backend.service /etc/systemd/system/agentic-worker.service'
+```
+2. Edit `agentic-worker.service`:
+  - keep the same `WorkingDirectory`, `EnvironmentFile`, and start command
+  - add:
+    - `Environment=RUN_HTTP_SERVER=false`
+    - `Environment=RUN_INGESTION_WORKER=true`
+3. Edit `agentic-backend.service`:
+  - add:
+    - `Environment=RUN_HTTP_SERVER=true`
+    - `Environment=RUN_INGESTION_WORKER=false`
+4. Reload systemd and start the worker:
+```bash
+ssh oracle-free 'sudo systemctl daemon-reload && sudo systemctl enable --now agentic-worker.service && sudo systemctl restart agentic-backend.service'
+```
+
+### Verification
+```bash
+ssh oracle-free 'sudo systemctl status agentic-backend.service --no-pager'
+ssh oracle-free 'sudo systemctl status agentic-worker.service --no-pager'
+ssh oracle-free 'ss -ltnp | grep 8787 || true'
+ssh oracle-free 'sudo journalctl -u agentic-worker.service -n 100 --no-pager'
+```
+- The web service should bind `:8787`.
+- The worker service should not bind a port.
+- The worker service should log queue activity.
+
+### Rollback to combined mode
+1. Stop the worker:
+```bash
+ssh oracle-free 'sudo systemctl disable --now agentic-worker.service'
+```
+2. Remove or override the web unit flags back to combined mode:
+  - `RUN_HTTP_SERVER=true`
+  - `RUN_INGESTION_WORKER=true`
+3. Reload and restart:
+```bash
+ssh oracle-free 'sudo systemctl daemon-reload && sudo systemctl restart agentic-backend.service'
+```
   4. verify Home shows dismissible setup reminder card.
   5. complete import with at least one imported/reactivated channel and verify reminder no longer appears.
 - Existing-account check:

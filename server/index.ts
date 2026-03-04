@@ -305,6 +305,27 @@ const autoBannerTimeoutMs = clampInt(process.env.SUBSCRIPTION_AUTO_BANNER_TIMEOU
 const autoBannerBatchSize = clampInt(process.env.SUBSCRIPTION_AUTO_BANNER_BATCH_SIZE, 20, 1, 200);
 const autoBannerConcurrency = clampInt(process.env.SUBSCRIPTION_AUTO_BANNER_CONCURRENCY, 1, 1, 5);
 const autoBannerStaleRunningMs = clampInt(process.env.AUTO_BANNER_STALE_RUNNING_MS, 20 * 60 * 1000, 60_000, 24 * 60 * 60 * 1000);
+function parseRuntimeFlag(raw: string | undefined, fallback: boolean) {
+  const normalized = String(raw ?? (fallback ? 'true' : 'false')).trim().toLowerCase();
+  if (normalized === '0' || normalized === 'false' || normalized === 'off' || normalized === 'no') {
+    return false;
+  }
+  if (normalized === '1' || normalized === 'true' || normalized === 'on' || normalized === 'yes') {
+    return true;
+  }
+  return fallback;
+}
+const runHttpServer = parseRuntimeFlag(process.env.RUN_HTTP_SERVER, true);
+const runIngestionWorker = parseRuntimeFlag(process.env.RUN_INGESTION_WORKER, true);
+if (!runHttpServer && !runIngestionWorker) {
+  console.error('[agentic-backend] invalid runtime mode: both RUN_HTTP_SERVER and RUN_INGESTION_WORKER are disabled');
+  process.exit(1);
+}
+const runtimeMode = runHttpServer && runIngestionWorker
+  ? 'combined'
+  : runHttpServer
+    ? 'web_only'
+    : 'worker_only';
 const debugEndpointsEnabledRaw = String(process.env.ENABLE_DEBUG_ENDPOINTS || 'false').trim().toLowerCase();
 const debugEndpointsEnabled = debugEndpointsEnabledRaw === 'true' || debugEndpointsEnabledRaw === '1' || debugEndpointsEnabledRaw === 'on';
 const youtubeDataApiKey = String(process.env.YOUTUBE_DATA_API_KEY || '').trim();
@@ -7760,7 +7781,14 @@ async function uploadBannerToSupabase(imageBase64: string, contentType: string, 
   return typeof uploadData?.bannerUrl === 'string' ? uploadData.bannerUrl : null;
 }
 
-app.listen(port, () => {
-  console.log(`[agentic-backend] listening on :${port}`);
+console.log(`[agentic-backend] runtime_mode=${runtimeMode}`);
+
+if (runHttpServer) {
+  app.listen(port, () => {
+    console.log(`[agentic-backend] listening on :${port}`);
+  });
+}
+
+if (runIngestionWorker) {
   scheduleQueuedIngestionProcessing(1500);
-});
+}
