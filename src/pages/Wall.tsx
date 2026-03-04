@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { startTransition, useMemo, useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -197,6 +197,8 @@ export default function Wall() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [optimisticLane, setOptimisticLane] = useState<string | null>(null);
+  const [scopeSelectOpen, setScopeSelectOpen] = useState(false);
+  const pendingScopeRaf = useRef<number | null>(null);
   const [selectedTagSlug, setSelectedTagSlug] = useState<string | null>(null);
   const [optimisticUnlockingSourceItemIds, setOptimisticUnlockingSourceItemIds] = useState<Record<string, boolean>>({});
   const { followedTags } = useTagFollows();
@@ -250,13 +252,30 @@ export default function Wall() {
     }
   }, [optimisticLane, resolvedLane, user]);
 
+  useEffect(() => {
+    return () => {
+      if (pendingScopeRaf.current !== null) {
+        cancelAnimationFrame(pendingScopeRaf.current);
+      }
+    };
+  }, []);
+
   const handleScopeSelect = (scope: string) => {
+    setScopeSelectOpen(false);
     if (scope === activeLane) return;
     setOptimisticLane(scope);
     const nextSort = scope === SCOPE_FOR_YOU ? 'latest' : feedSort;
-    updateSearchParams({
-      scope,
-      sort: nextSort,
+    if (pendingScopeRaf.current !== null) {
+      cancelAnimationFrame(pendingScopeRaf.current);
+    }
+    pendingScopeRaf.current = requestAnimationFrame(() => {
+      startTransition(() => {
+        updateSearchParams({
+          scope,
+          sort: nextSort,
+        });
+      });
+      pendingScopeRaf.current = null;
     });
 
     logP3Event({
@@ -960,7 +979,7 @@ export default function Wall() {
         <div className="space-y-3">
           <div className="px-3 sm:px-4">
             <div className="flex flex-wrap items-center gap-2">
-              <Select value={activeLane} onValueChange={handleScopeSelect}>
+              <Select value={activeLane} onValueChange={handleScopeSelect} open={scopeSelectOpen} onOpenChange={setScopeSelectOpen}>
                 <SelectTrigger className="h-9 w-auto min-w-0 border-input px-2.5 outline-none ring-0 transition-none [-webkit-tap-highlight-color:transparent] focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:ring-0 data-[state=open]:ring-offset-0 [&>svg]:hidden">
                   <SelectValue />
                 </SelectTrigger>
