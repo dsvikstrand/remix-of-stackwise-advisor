@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { Heart } from 'lucide-react';
+import { Eye, Heart } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -28,9 +28,27 @@ type WallBlueprintCardProps = {
   likesCount: number;
   userLiked: boolean;
   commentsCount: number;
+  viewCount?: number | null;
   tags: WallBlueprintCardTag[];
   onLike: (event: MouseEvent<HTMLButtonElement>) => void;
 };
+
+function formatCompactCount(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value) || value < 0) return null;
+  if (value < 1000) return String(Math.floor(value));
+  const units = [
+    { threshold: 1_000_000_000, suffix: 'B' },
+    { threshold: 1_000_000, suffix: 'M' },
+    { threshold: 1_000, suffix: 'K' },
+  ];
+  for (const unit of units) {
+    if (value < unit.threshold) continue;
+    const scaled = value / unit.threshold;
+    const rounded = scaled >= 10 ? Math.round(scaled) : Math.round(scaled * 10) / 10;
+    return `${String(rounded).replace(/\.0$/, '')}${unit.suffix}`;
+  }
+  return String(Math.floor(value));
+}
 
 export function WallBlueprintCard({
   to,
@@ -45,6 +63,7 @@ export function WallBlueprintCard({
   likesCount,
   userLiked,
   commentsCount,
+  viewCount,
   tags,
   onLike,
 }: WallBlueprintCardProps) {
@@ -68,6 +87,7 @@ export function WallBlueprintCard({
     comments: commentsCount,
   });
   const channelColors = getChannelColorView(channelSlug);
+  const compactViewCount = formatCompactCount(viewCount);
 
   return (
     <div
@@ -140,6 +160,12 @@ export function WallBlueprintCard({
               >
                 <Heart className={`h-4 w-4 ${userLiked ? 'fill-current' : ''}`} />
               </Button>
+              {compactViewCount ? (
+                <span className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2 text-[11px] font-medium tracking-wide ${channelColors.surfaceClassName}`}>
+                  <Eye className="h-3.5 w-3.5" />
+                  {compactViewCount}
+                </span>
+              ) : null}
             </div>
             <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-foreground/75 shrink-0">
               <Link

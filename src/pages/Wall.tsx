@@ -51,6 +51,7 @@ interface BlueprintPost {
   source_channel_title?: string | null;
   source_channel_avatar_url?: string | null;
   source_thumbnail_url?: string | null;
+  source_view_count?: number | null;
 }
 
 type WallBlueprintCardInput = {
@@ -65,12 +66,25 @@ type WallBlueprintCardInput = {
   sourceName: string | null;
   sourceAvatarUrl: string | null;
   sourceThumbnailUrl: string | null;
+  viewCount: number | null;
   publishedChannelSlug: string | null;
   tags: string[];
   likesCount: number;
   userLiked: boolean;
   commentsCount: number;
 };
+
+function parseSourceViewCount(metadata: Record<string, unknown> | null) {
+  if (!metadata) return null;
+  const candidates = [metadata.view_count, metadata.viewCount];
+  for (const candidate of candidates) {
+    const numeric = Number(candidate);
+    if (Number.isFinite(numeric) && numeric >= 0) {
+      return Math.floor(numeric);
+    }
+  }
+  return null;
+}
 
 type ForYouLockedItem = {
   kind: 'locked';
@@ -97,6 +111,7 @@ type ForYouBlueprintItem = {
   sourceChannelTitle: string | null;
   sourceChannelAvatarUrl: string | null;
   sourceThumbnailUrl: string | null;
+  sourceViewCount: number | null;
   sectionsJson: Json | null;
   llmReview: string | null;
   mixNotes: string | null;
@@ -166,6 +181,7 @@ function buildWallBlueprintCardProps(input: WallBlueprintCardInput) {
     sourceAvatarUrl: input.sourceAvatarUrl,
     bannerUrl: input.bannerUrl,
     sourceThumbnailUrl: input.sourceThumbnailUrl,
+    viewCount: input.viewCount,
     createdLabel: formatRelativeShort(input.createdAt),
     channelSlug,
     likesCount: input.likesCount,
@@ -350,6 +366,7 @@ export default function Wall() {
       const sourceChannelTitleByBlueprint = new Map<string, { title: string | null; createdAtMs: number }>();
       const sourceChannelAvatarByBlueprint = new Map<string, { avatarUrl: string | null; createdAtMs: number }>();
       const sourceThumbnailByBlueprint = new Map<string, { thumbnailUrl: string | null; createdAtMs: number }>();
+      const sourceViewCountByBlueprint = new Map<string, { viewCount: number | null; createdAtMs: number }>();
       const feedItems = (feedItemsRes.data || []) as Array<{ id: string; blueprint_id: string; source_item_id: string; created_at: string }>;
       const feedItemIds = feedItems.map((row) => row.id);
       const blueprintIdByFeedItemId = new Map(feedItems.map((row) => [row.id, row.blueprint_id]));
@@ -413,6 +430,7 @@ export default function Wall() {
               || sourcePageAvatarByExternalId.get(String(row.source_channel_id || '').trim())
               || null,
             thumbnailUrl: String(row.thumbnail_url || '').trim() || null,
+            viewCount: parseSourceViewCount(metadata),
           }] as const;
         }),
       );
@@ -450,7 +468,7 @@ export default function Wall() {
 
       for (const row of feedItems) {
         const blueprintId = row.blueprint_id;
-        const sourceInfo = sourceItemsMap.get(row.source_item_id) || { title: null, avatarUrl: null, thumbnailUrl: null };
+        const sourceInfo = sourceItemsMap.get(row.source_item_id) || { title: null, avatarUrl: null, thumbnailUrl: null, viewCount: null };
         const createdAtMs = Number.isFinite(Date.parse(row.created_at)) ? Date.parse(row.created_at) : 0;
         const existingTitle = sourceChannelTitleByBlueprint.get(blueprintId);
         if (!existingTitle || createdAtMs > existingTitle.createdAtMs) {
@@ -463,6 +481,10 @@ export default function Wall() {
         const existingThumbnail = sourceThumbnailByBlueprint.get(blueprintId);
         if (!existingThumbnail || createdAtMs > existingThumbnail.createdAtMs) {
           sourceThumbnailByBlueprint.set(blueprintId, { thumbnailUrl: sourceInfo.thumbnailUrl, createdAtMs });
+        }
+        const existingViewCount = sourceViewCountByBlueprint.get(blueprintId);
+        if (!existingViewCount || createdAtMs > existingViewCount.createdAtMs) {
+          sourceViewCountByBlueprint.set(blueprintId, { viewCount: sourceInfo.viewCount, createdAtMs });
         }
       }
 
@@ -481,6 +503,7 @@ export default function Wall() {
         source_channel_title: sourceChannelTitleByBlueprint.get(blueprint.id)?.title || null,
         source_channel_avatar_url: sourceChannelAvatarByBlueprint.get(blueprint.id)?.avatarUrl || null,
         source_thumbnail_url: sourceThumbnailByBlueprint.get(blueprint.id)?.thumbnailUrl || null,
+        source_view_count: sourceViewCountByBlueprint.get(blueprint.id)?.viewCount ?? null,
       })) as BlueprintPost[];
 
       if (isSpecificChannelScope && scopedChannel) {
@@ -595,6 +618,7 @@ export default function Wall() {
           sourceChannelTitle: item.source.sourceChannelTitle || null,
           sourceChannelAvatarUrl: item.source.sourceChannelAvatarUrl || null,
           sourceThumbnailUrl: item.source.thumbnailUrl || null,
+          sourceViewCount: item.source.viewCount ?? null,
           sectionsJson: item.blueprint.sectionsJson || null,
           llmReview: item.blueprint.llmReview,
           mixNotes: item.blueprint.mixNotes,
@@ -1047,6 +1071,7 @@ export default function Wall() {
                       sourceName: item.sourceChannelTitle,
                       sourceAvatarUrl: item.sourceChannelAvatarUrl,
                       sourceThumbnailUrl: item.sourceThumbnailUrl,
+                      viewCount: item.sourceViewCount,
                       publishedChannelSlug: item.publishedChannelSlug,
                       tags: item.tags,
                       likesCount,
@@ -1126,6 +1151,7 @@ export default function Wall() {
                     sourceName: post.source_channel_title || null,
                     sourceAvatarUrl: post.source_channel_avatar_url || null,
                     sourceThumbnailUrl: post.source_thumbnail_url || null,
+                    viewCount: post.source_view_count ?? null,
                     publishedChannelSlug: post.published_channel_slug || null,
                     tags: post.tags.map((tag) => tag.slug),
                     likesCount: post.likes_count,

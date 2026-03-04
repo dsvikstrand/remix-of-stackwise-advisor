@@ -13,6 +13,18 @@ function extractSchemaTagSlugs(sectionsJson: Json | null): string[] {
     .filter(Boolean);
 }
 
+function parseSourceViewCount(metadata: Record<string, unknown> | null) {
+  if (!metadata) return null;
+  const candidates = [metadata.view_count, metadata.viewCount];
+  for (const candidate of candidates) {
+    const numeric = Number(candidate);
+    if (Number.isFinite(numeric) && numeric >= 0) {
+      return Math.floor(numeric);
+    }
+  }
+  return null;
+}
+
 export interface MyFeedItemView {
   id: string;
   state: string;
@@ -28,6 +40,7 @@ export interface MyFeedItemView {
     sourceChannelAvatarUrl: string | null;
     thumbnailUrl: string | null;
     channelBannerUrl: string | null;
+    viewCount: number | null;
     unlockStatus: 'available' | 'reserved' | 'processing' | 'ready' | null;
     unlockCost: number | null;
     unlockInProgress: boolean;
@@ -236,6 +249,7 @@ export function useMyFeed(options?: { enabled?: boolean }) {
                   && 'channel_banner_url' in source.metadata
                     ? String((source.metadata as Record<string, unknown>).channel_banner_url || '') || null
                     : null,
+                viewCount: parseSourceViewCount(sourceMetadata),
                 unlockStatus:
                   sourceUnlock?.status === 'available'
                   || sourceUnlock?.status === 'reserved'
