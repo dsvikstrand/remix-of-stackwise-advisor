@@ -926,7 +926,7 @@ export default function Wall() {
           <div className="px-3 sm:px-4">
             <div className="flex flex-wrap items-center gap-2">
               <Select value={activeLane} onValueChange={handleScopeSelect}>
-                <SelectTrigger className="h-9 w-[160px]">
+                <SelectTrigger className="h-9 w-[160px] [&>svg]:hidden">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -943,7 +943,7 @@ export default function Wall() {
                 onValueChange={(value) => updateSearchParams({ sort: value as FeedSort })}
                 disabled={isForYouScope}
               >
-                <SelectTrigger className="h-9 w-[140px]">
+                <SelectTrigger className="h-9 w-[140px] [&>svg]:hidden">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

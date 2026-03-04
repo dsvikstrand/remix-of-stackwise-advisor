@@ -1059,11 +1059,11 @@ export default function BlueprintDetail() {
             <PageDivider />
 
             <section className="space-y-4">
-              <div className="flex items-end justify-between gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <h2 className="text-lg font-semibold">{commentView === 'youtube' ? 'Comments' : 'Bleu Comments'}</h2>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex shrink-0 flex-nowrap items-center gap-2">
                   <Select value={commentView} onValueChange={(value) => setCommentView(value as 'youtube' | 'community')}>
-                    <SelectTrigger className="h-9 w-[160px]">
+                    <SelectTrigger className="h-9 w-[160px] [&>svg]:hidden">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1082,7 +1082,7 @@ export default function BlueprintDetail() {
                       }
                     }}
                   >
-                    <SelectTrigger className="h-9 w-[120px]">
+                    <SelectTrigger className="h-9 w-[120px] [&>svg]:hidden">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
