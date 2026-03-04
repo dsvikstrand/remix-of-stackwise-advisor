@@ -239,9 +239,27 @@ h5) [have] Phase 5A implementation shipped in code:
 - low-priority enqueue suppression under queue pressure
 - queue health response includes per-scope priority metadata
 - runbook/env knobs added for tier batch sizes and suppression threshold
-h6) [todo] Phase 5A closeout validation:
-- run one controlled backlog test and confirm high-tier scopes drain ahead of low-tier scopes
-- capture queue metrics before/after with `npm run metrics:queue -- --source journalctl --json`
+h6) [have] Phase 5A closeout validation captured on `2026-03-04`:
+- controlled suppression smoke test executed on Oracle with a deterministic low-priority queue-depth probe
+- test runtime override:
+  - `QUEUE_PRIORITY_ENABLED=true`
+  - `QUEUE_LOW_PRIORITY_SUPPRESSION_DEPTH=1`
+- trigger result from `POST /api/ingestion/jobs/trigger`:
+  - `message: "low-priority ingestion enqueue suppressed due to queue pressure"`
+  - `data.suppressed: true`
+  - `data.scope: "all_active_subscriptions"`
+  - `data.queue_depth: 1`
+  - `data.suppression_depth: 1`
+- backend journal evidence:
+  - `[queue_low_priority_suppressed]` logged with `scope=all_active_subscriptions`, `queue_depth=1`, `priority=low`
+- queue priority metadata remains visible in `/api/ops/queue/health` (`by_scope.*.priority`)
+- cleanup completed after test:
+  - temporary systemd override removed
+  - backend + worker services restarted into normal config
+  - local and public health checks returned `ok=true`
+h7) [todo] Optional Phase 5B follow-up (not required for Phase 5A closeout):
+- run a longer mixed-scope backlog sample and record tier-drain ordering under sustained load
+- capture post-change throughput snapshot with `npm run metrics:queue -- --source journalctl --json`
 
 ## Phase 6 - Launch Controls and Safeguards
 i1) [todo] Add operational kill switches and launch toggles.
@@ -294,7 +312,7 @@ m1) [have] Phase 1 - Completed (telemetry shipped, baseline captured)
 m2) [have] Phase 2 - Completed (`WORKER_CONCURRENCY=4` retained after under-load sample)
 m3) [have] Phase 3 - Completed (web/worker split deployed on Oracle)
 m4) [have] Phase 4 - Completed (Phase 4A + Phase 4B shipped and closeout-verified)
-m5) [todo] Phase 5 - In progress (Phase 5A implemented; closeout validation pending)
+m5) [have] Phase 5 - Completed (Phase 5A implemented and closeout-verified)
 m6) [todo] Phase 6 - Not started
 m7) [todo] Phase 7 - Not started
 m8) [todo] Phase 8 - Not started
