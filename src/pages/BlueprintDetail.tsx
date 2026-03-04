@@ -336,13 +336,6 @@ export default function BlueprintDetail() {
   }, [blueprint?.id]);
 
   useEffect(() => {
-    if (youtubeCommentsLoading) return;
-    if (commentView === 'youtube' && (!youtubeComments || youtubeComments.length === 0)) {
-      setCommentView('community');
-    }
-  }, [commentView, youtubeCommentsLoading, youtubeComments]);
-
-  useEffect(() => {
     let cancelled = false;
     async function loadSourceChannel() {
       setIsSourceChannelResolved(false);
