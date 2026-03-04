@@ -59,6 +59,35 @@ function extractYouTubeVideoId(url: string) {
   return null;
 }
 
+function parseSourceViewCount(metadata: Record<string, unknown> | null) {
+  if (!metadata) return null;
+  const candidates = [metadata.view_count, metadata.viewCount];
+  for (const candidate of candidates) {
+    const numeric = Number(candidate);
+    if (Number.isFinite(numeric) && numeric >= 0) {
+      return Math.floor(numeric);
+    }
+  }
+  return null;
+}
+
+function formatCompactCount(value: number | null) {
+  if (value == null || !Number.isFinite(value) || value < 0) return null;
+  if (value < 1000) return String(Math.floor(value));
+  const units = [
+    { threshold: 1_000_000_000, suffix: 'B' },
+    { threshold: 1_000_000, suffix: 'M' },
+    { threshold: 1_000, suffix: 'K' },
+  ];
+  for (const unit of units) {
+    if (value < unit.threshold) continue;
+    const scaled = value / unit.threshold;
+    const rounded = scaled >= 10 ? Math.round(scaled) : Math.round(scaled * 10) / 10;
+    return `${String(rounded).replace(/\\.0$/, '')}${unit.suffix}`;
+  }
+  return String(Math.floor(value));
+}
+
 function formatStepItem(item: StepItem) {
   const name = typeof item.name === 'string' ? item.name : 'Untitled';
   const context = typeof item.context === 'string' && item.context.trim() ? item.context.trim() : '';
@@ -304,6 +333,7 @@ export default function BlueprintDetail() {
     url: string | null;
     avatarUrl: string | null;
     thumbnailUrl: string | null;
+    viewCount: number | null;
   } | null>(null);
   const [sourceChannelLookupFailed, setSourceChannelLookupFailed] = useState(false);
   const [isSourceChannelResolved, setIsSourceChannelResolved] = useState(false);
@@ -431,11 +461,13 @@ export default function BlueprintDetail() {
         sourceExternalAvatarUrl = sourcePageByExternal?.avatar_url || null;
       }
       if (!cancelled) {
+        const viewCount = parseSourceViewCount(sourceMetadata);
         setSourceChannel({
           title: channelTitle || source.title || 'Source channel',
           url: source.source_url || null,
           avatarUrl: sourcePageAvatarUrl || metadataChannelAvatarUrl || sourceExternalAvatarUrl || null,
           thumbnailUrl: String(source.thumbnail_url || '').trim() || null,
+          viewCount,
         });
         setSourceChannelLookupFailed(false);
         setIsSourceChannelResolved(true);
@@ -483,6 +515,7 @@ export default function BlueprintDetail() {
     bannerUrl: blueprint?.banner_url || null,
     sourceThumbnailUrl: sourceChannel?.thumbnailUrl || null,
   });
+  const compactSourceViewCount = formatCompactCount(sourceChannel?.viewCount ?? null);
   const sourceVideoUrl = String(sourceChannel?.url || '').trim();
   const youtubeVideoId = extractYouTubeVideoId(sourceVideoUrl);
   const youtubeEmbedUrl = youtubeVideoId
@@ -892,9 +925,12 @@ export default function BlueprintDetail() {
                     {sourceChannel?.title || (isSourceChannelResolved && sourceChannelLookupFailed ? (blueprint.creator_profile?.display_name || 'Anonymous') : 'Source')}
                   </span>
                 </div>
-                <span className="text-xs text-muted-foreground shrink-0">
-                  {formatDistanceToNow(new Date(blueprint.created_at), { addSuffix: true })}
-                </span>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
+                  {compactSourceViewCount ? (
+                    <span>{compactSourceViewCount} views</span>
+                  ) : null}
+                  <span>{formatDistanceToNow(new Date(blueprint.created_at), { addSuffix: true })}</span>
+                </div>
               </div>
 
               <div className="flex items-start justify-between gap-3">

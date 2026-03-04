@@ -140,6 +140,7 @@ export type BlueprintCreationDeps = {
     runId: string;
     blueprintId: string;
     explicitVideoId?: string | null;
+    explicitSourceItemId?: string | null;
   }) => Promise<void>;
 };
 
@@ -333,6 +334,7 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
             runId: result.run_id,
             blueprintId: blueprint.id,
             explicitVideoId: input.videoId,
+            explicitSourceItemId: normalizedSourceItemId || null,
           });
         } catch (youtubeCommentsError) {
           console.log('[blueprint_youtube_comments_enrichment_failed]', JSON.stringify({

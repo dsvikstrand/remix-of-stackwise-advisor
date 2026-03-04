@@ -20,6 +20,19 @@ const YOUTUBE_COMMENT_SORT_ORDER: Record<YouTubeCommentSortMode, 'relevance' | '
   new: 'time',
 };
 
+function parseViewCount(payload: unknown) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+  const root = payload as Record<string, unknown>;
+  const items = Array.isArray(root.items) ? root.items : [];
+  const first = items[0];
+  if (!first || typeof first !== 'object' || Array.isArray(first)) return null;
+  const snippet = (first as Record<string, unknown>).statistics;
+  if (!snippet || typeof snippet !== 'object' || Array.isArray(snippet)) return null;
+  const raw = Number((snippet as Record<string, unknown>).viewCount);
+  if (!Number.isFinite(raw)) return null;
+  return Math.max(0, Math.floor(raw));
+}
+
 function isMissingRelationError(error: unknown, relation: string) {
   const e = error as { message?: unknown; details?: unknown; hint?: unknown } | null;
   const hay = `${String(e?.message || '')} ${String(e?.details || '')} ${String(e?.hint || '')}`.toLowerCase();
@@ -156,6 +169,32 @@ export function createBlueprintYouTubeCommentsService(input: {
     return normalizeCommentItems(payload);
   }
 
+  async function fetchYouTubeViewCount(args: {
+    videoId: string;
+  }) {
+    if (!apiKey) return null;
+    const url = new URL('https://www.googleapis.com/youtube/v3/videos');
+    url.searchParams.set('part', 'statistics');
+    url.searchParams.set('id', args.videoId);
+    url.searchParams.set('maxResults', '1');
+    url.searchParams.set('key', apiKey);
+
+    const response = await fetchImpl(url.toString(), {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      const reason = extractApiErrorReason(payload);
+      throw new Error(`youtube_video_stats_http_${response.status}${reason ? `:${reason}` : ''}`);
+    }
+
+    return parseViewCount(payload);
+  }
+
   async function storeBlueprintYouTubeComments(args: {
     db: DbClient;
     blueprintId: string;
@@ -201,12 +240,46 @@ export function createBlueprintYouTubeCommentsService(input: {
     }
   }
 
+  async function storeSourceItemViewCount(args: {
+    db: DbClient;
+    sourceItemId: string;
+    viewCount: number | null;
+  }) {
+    const normalizedSourceItemId = String(args.sourceItemId || '').trim();
+    if (!normalizedSourceItemId || args.viewCount == null) return;
+
+    const { data: sourceRow, error: sourceError } = await args.db
+      .from('source_items')
+      .select('metadata')
+      .eq('id', normalizedSourceItemId)
+      .maybeSingle();
+    if (sourceError) throw sourceError;
+
+    const currentMetadata =
+      sourceRow?.metadata && typeof sourceRow.metadata === 'object' && !Array.isArray(sourceRow.metadata)
+        ? (sourceRow.metadata as Record<string, unknown>)
+        : {};
+
+    const nextMetadata = {
+      ...currentMetadata,
+      view_count: args.viewCount,
+      view_count_fetched_at: new Date().toISOString(),
+    };
+
+    const { error: updateError } = await args.db
+      .from('source_items')
+      .update({ metadata: nextMetadata })
+      .eq('id', normalizedSourceItemId);
+    if (updateError) throw updateError;
+  }
+
   async function populateForBlueprint(args: {
     db: DbClient;
     traceDb?: DbClient | null;
     runId: string;
     blueprintId: string;
     explicitVideoId?: string | null;
+    explicitSourceItemId?: string | null;
   }) {
     if (!apiKey) return;
 
@@ -226,6 +299,41 @@ export function createBlueprintYouTubeCommentsService(input: {
           video_id: videoId,
         },
       });
+    }
+
+    try {
+      const viewCount = await fetchYouTubeViewCount({ videoId });
+      const sourceItemId = String(args.explicitSourceItemId || '').trim();
+      if (sourceItemId) {
+        await storeSourceItemViewCount({
+          db: args.db,
+          sourceItemId,
+          viewCount,
+        });
+      }
+      if (args.traceDb) {
+        await appendGenerationEvent(args.traceDb, {
+          runId: args.runId,
+          event: 'youtube_video_stats_fetched',
+          payload: {
+            video_id: videoId,
+            view_count: viewCount,
+            stored_on_source_item: Boolean(sourceItemId && viewCount != null),
+          },
+        });
+      }
+    } catch (error) {
+      if (args.traceDb) {
+        await appendGenerationEvent(args.traceDb, {
+          runId: args.runId,
+          level: 'warn',
+          event: 'youtube_video_stats_fetch_failed',
+          payload: {
+            video_id: videoId,
+            error_message: error instanceof Error ? error.message : String(error),
+          },
+        });
+      }
     }
 
     let topCount = 0;
@@ -278,7 +386,9 @@ export function createBlueprintYouTubeCommentsService(input: {
   return {
     resolveBlueprintYouTubeVideoId,
     fetchYouTubeCommentSnapshot,
+    fetchYouTubeViewCount,
     storeBlueprintYouTubeComments,
+    storeSourceItemViewCount,
     populateForBlueprint,
   };
 }

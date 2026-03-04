@@ -74,4 +74,33 @@ describe('blueprint YouTube comments service', () => {
 
     expect(comments).toEqual([]);
   });
+
+  it('extracts the YouTube video view count from the statistics response', async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        items: [
+          {
+            id: 'abc123def45',
+            statistics: {
+              viewCount: '12345',
+            },
+          },
+        ],
+      }),
+    })) as unknown as typeof fetch;
+
+    const service = createBlueprintYouTubeCommentsService({
+      apiKey: 'youtube-key',
+      fetchImpl,
+    });
+
+    const viewCount = await service.fetchYouTubeViewCount({
+      videoId: 'abc123def45',
+    });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(viewCount).toBe(12345);
+  });
 });
