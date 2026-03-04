@@ -107,6 +107,7 @@ export interface YouTubeBlueprintPass2TransformRequest {
 }
 
 export interface YouTubeBlueprintResult {
+  raw_response?: unknown;
   title?: string;
   description?: string;
   steps?: YouTubeDraftStep[];

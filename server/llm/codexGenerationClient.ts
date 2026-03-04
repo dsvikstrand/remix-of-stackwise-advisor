@@ -226,7 +226,10 @@ export function createCodexGenerationClient(input: {
         options,
         parse: (rawText) => {
           const parsed = JSON.parse(extractJson(String(rawText || '').trim()));
-          return YouTubeBlueprintValidator.parse(parsed);
+          return {
+            ...YouTubeBlueprintValidator.parse(parsed),
+            raw_response: rawText,
+          };
         },
         fallback: () => getFallbackClient().generateYouTubeBlueprint(request, options),
       });

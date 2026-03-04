@@ -104,6 +104,10 @@ function buildDeps(input: {
             default: 'summary',
             eli5: null,
           },
+          raw_response: JSON.stringify({
+            title: 'T',
+            description: 'D',
+          }),
         };
       },
       generateYouTubeBlueprintPass2Transform: async (request: { transcript: string }) => {
@@ -355,6 +359,7 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
     expect(pass1PromptTemplatePaths[0]).toBe('docs/golden_blueprint/golden_bp_prompt_contract_one_step_v1.md');
     expect(result.draft.summaryVariants.eli5).toBe(result.draft.summaryVariants.default);
     expect(result.draft.eli5Steps.length).toBe(result.draft.steps.length);
+    expect(events.some((row) => row.event === 'model_raw_output_captured')).toBe(true);
     expect(events.some((row) => row.event === 'pass2_transform_skipped_one_step')).toBe(true);
   });
 

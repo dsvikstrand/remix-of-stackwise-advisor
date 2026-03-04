@@ -57,6 +57,7 @@ describe('codex generation client', () => {
     expect(result.description).toBe('codex');
     expect(result.steps).toHaveLength(1);
     expect(result.steps[0]?.name).toBe('A');
+    expect(result.raw_response).toContain('"description":"codex"');
   });
 
   it('falls back to API client when codex fails', async () => {

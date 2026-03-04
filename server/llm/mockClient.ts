@@ -53,7 +53,7 @@ export function createMockClient(): LLMClient {
       };
     },
     async generateYouTubeBlueprint(input: YouTubeBlueprintRequest, _options?: LLMGenerationOptions): Promise<YouTubeBlueprintResult> {
-      return {
+      const payload: YouTubeBlueprintResult = {
         title: `Blueprint from ${input.videoUrl}`,
         schema_version: 'blueprint_sections_v1',
         tags: ['youtube', 'guide'],
@@ -87,6 +87,10 @@ export function createMockClient(): LLMClient {
             'Which constraints matter most?',
           ],
         },
+      };
+      return {
+        ...payload,
+        raw_response: JSON.stringify(payload),
       };
     },
     async generateYouTubeBlueprintPass2Transform(

@@ -334,7 +334,10 @@ export function createOpenAIClient(): LLMClient {
         throw new Error('No output text from OpenAI');
       }
       const parsed = JSON.parse(extractJson(outputText));
-      return YouTubeBlueprintValidator.parse(parsed);
+      return {
+        ...YouTubeBlueprintValidator.parse(parsed),
+        raw_response: outputText,
+      };
     },
     async generateYouTubeBlueprintPass2Transform(
       input: YouTubeBlueprintPass2TransformRequest,

@@ -50,6 +50,50 @@ function countWords(value: string) {
   return splitWords(value).length;
 }
 
+function normalizeRawGenerationOutput(raw: unknown, maxChars = 16000) {
+  let format: 'none' | 'text' | 'json' = 'none';
+  let text = '';
+
+  if (typeof raw === 'string') {
+    format = 'text';
+    text = raw.trim();
+  } else if (raw != null) {
+    format = 'json';
+    try {
+      text = JSON.stringify(raw);
+    } catch {
+      text = String(raw).trim();
+      format = 'text';
+    }
+  }
+
+  const chars = text.length;
+  if (!text) {
+    return {
+      text: '',
+      chars: 0,
+      truncated: false,
+      format,
+    };
+  }
+
+  if (chars <= maxChars) {
+    return {
+      text,
+      chars,
+      truncated: false,
+      format,
+    };
+  }
+
+  return {
+    text: text.slice(0, maxChars),
+    chars,
+    truncated: true,
+    format,
+  };
+}
+
 export function clampTakeawaysNotesToWordBudget(input: {
   notes: string;
   maxWords?: number;
@@ -740,6 +784,35 @@ async function runYouTubePipeline(input: {
     }
     return nextDraft;
   };
+  const captureRawOutputEvent = async (eventInput: {
+    rawResponse: unknown;
+    attempt: number;
+    run: number;
+    globalRun: number;
+  }) => {
+    if (!traceContext.db || !traceContext.userId) return;
+    const normalized = normalizeRawGenerationOutput(eventInput.rawResponse);
+    if (!normalized.text) return;
+    await safeGenerationTraceWrite({
+      runId: input.runId,
+      op: 'event_model_raw_output_captured',
+      fn: async () => {
+        await appendGenerationEvent(traceContext.db as any, {
+          runId: input.runId,
+          event: 'model_raw_output_captured',
+          payload: {
+            attempt: eventInput.attempt,
+            run: eventInput.run,
+            global_run: eventInput.globalRun,
+            raw_output: normalized.text,
+            raw_output_chars: normalized.chars,
+            raw_output_truncated: normalized.truncated,
+            raw_output_format: normalized.format,
+          },
+        });
+      },
+    });
+  };
   for (let attempt = 1; attempt <= qualityAttempts; attempt += 1) {
     let safetyRetryHint = '';
     let attemptRunCount = 0;
@@ -769,6 +842,12 @@ async function runYouTubePipeline(input: {
           generationProfile: input.generationModelProfile,
         }),
       );
+      await captureRawOutputEvent({
+        rawResponse: rawDraft?.raw_response,
+        attempt,
+        run: attemptRunCount,
+        globalRun: globalRunIndex,
+      });
       const draft = toDraft(rawDraft);
 
       if (!draft.steps.length) {
@@ -1196,6 +1275,12 @@ async function runYouTubePipeline(input: {
           generationProfile: input.generationModelProfile,
         }),
       );
+      await captureRawOutputEvent({
+        rawResponse: retryRawDraft?.raw_response,
+        attempt: retryAttempt,
+        run: 1,
+        globalRun: retryAttempt,
+      });
       const retryDraft = toDraft(retryRawDraft);
       const retryFlattened = flattenDraftText(retryDraft);
       const retrySafety = runSafetyChecks(retryFlattened);
@@ -1464,6 +1549,12 @@ Keep section bullets concise:
           generationProfile: input.generationModelProfile,
         }),
       );
+      await captureRawOutputEvent({
+        rawResponse: retryRawDraft?.raw_response,
+        attempt: retryAttempt,
+        run: 1,
+        globalRun: retryAttempt,
+      });
 
       const retryDraft = toDraft(retryRawDraft);
       const retryFlattened = flattenDraftText(retryDraft);
