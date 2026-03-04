@@ -553,6 +553,7 @@ const QUEUED_INGESTION_SCOPES = [
   'source_item_unlock_generation',
   'source_auto_unlock_retry',
   'source_transcript_revalidate',
+  'blueprint_youtube_enrichment',
   'search_video_generate',
   'manual_refresh_selection',
   'all_active_subscriptions',
@@ -2751,6 +2752,10 @@ async function maybeApplyAutoBannerPolicyAfterCreate(input: {
   }
 }
 
+const blueprintYouTubeCommentsService = createBlueprintYouTubeCommentsService({
+  apiKey: youtubeDataApiKey,
+});
+
 const blueprintCreationService = createBlueprintCreationService({
   getServiceSupabaseClient,
   safeGenerationTraceWrite,
@@ -2767,9 +2772,7 @@ const blueprintCreationService = createBlueprintCreationService({
   claimVariantForGeneration,
   markVariantReady,
   markVariantFailed,
-  populateBlueprintYouTubeComments: createBlueprintYouTubeCommentsService({
-    apiKey: youtubeDataApiKey,
-  }).populateForBlueprint,
+  enqueueBlueprintYouTubeEnrichment: enqueueBlueprintYouTubeEnrichmentJob,
 });
 const { createBlueprintFromVideo } = blueprintCreationService;
 
@@ -2879,6 +2882,13 @@ type SourceTranscriptRevalidatePayload = {
   video_id: string;
   video_url: string;
   title: string;
+};
+
+type BlueprintYouTubeEnrichmentPayload = {
+  run_id: string;
+  blueprint_id: string;
+  video_id: string | null;
+  source_item_id: string | null;
 };
 
 const YOUTUBE_VIDEO_ID_REGEX = /^[a-zA-Z0-9_-]{8,15}$/;
@@ -3939,6 +3949,43 @@ async function enqueueSourceTranscriptRevalidateJob(
     enqueued: true as const,
     job_id: job.id,
     trace_id: traceId,
+  };
+}
+
+async function enqueueBlueprintYouTubeEnrichmentJob(input: {
+  db: ReturnType<typeof createClient>;
+  traceDb?: ReturnType<typeof createClient> | null;
+  runId: string;
+  blueprintId: string;
+  explicitVideoId?: string | null;
+  explicitSourceItemId?: string | null;
+}) {
+  const writeDb = input.traceDb || input.db;
+  const nowIso = new Date().toISOString();
+  const { data: job, error: jobError } = await writeDb
+    .from('ingestion_jobs')
+    .insert({
+      trigger: 'service_cron',
+      scope: 'blueprint_youtube_enrichment',
+      status: 'queued',
+      max_attempts: 3,
+      trace_id: input.runId,
+      payload: {
+        run_id: input.runId,
+        blueprint_id: input.blueprintId,
+        video_id: input.explicitVideoId == null ? null : String(input.explicitVideoId || '').trim() || null,
+        source_item_id: input.explicitSourceItemId == null ? null : String(input.explicitSourceItemId || '').trim() || null,
+      } satisfies BlueprintYouTubeEnrichmentPayload,
+      next_run_at: nowIso,
+    })
+    .select('id')
+    .single();
+  if (jobError || !job?.id) {
+    throw new Error(jobError?.message || 'Could not enqueue blueprint YouTube enrichment job.');
+  }
+  scheduleQueuedIngestionProcessing();
+  return {
+    job_id: job.id,
   };
 }
 
@@ -6301,6 +6348,20 @@ function normalizeSourceTranscriptRevalidatePayload(value: unknown): SourceTrans
   };
 }
 
+function normalizeBlueprintYouTubeEnrichmentPayload(value: unknown): BlueprintYouTubeEnrichmentPayload | null {
+  if (!value || typeof value !== 'object') return null;
+  const row = value as Record<string, unknown>;
+  const runId = String(row.run_id || '').trim();
+  const blueprintId = String(row.blueprint_id || '').trim();
+  if (!runId || !blueprintId) return null;
+  return {
+    run_id: runId,
+    blueprint_id: blueprintId,
+    video_id: row.video_id == null ? null : String(row.video_id || '').trim() || null,
+    source_item_id: row.source_item_id == null ? null : String(row.source_item_id || '').trim() || null,
+  };
+}
+
 function normalizeRefreshScanCandidates(value: unknown): RefreshScanCandidate[] {
   if (!Array.isArray(value)) return [];
   const rows: RefreshScanCandidate[] = [];
@@ -6615,6 +6676,34 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
             payload: revalidatePayload,
             traceId,
           });
+          return;
+        }
+
+        if (scope === 'blueprint_youtube_enrichment') {
+          const enrichmentPayload = normalizeBlueprintYouTubeEnrichmentPayload(payload);
+          if (!enrichmentPayload) {
+            throw new Error('INVALID_BLUEPRINT_YOUTUBE_ENRICHMENT_PAYLOAD');
+          }
+          await blueprintYouTubeCommentsService.populateForBlueprint({
+            db,
+            traceDb: db,
+            runId: enrichmentPayload.run_id,
+            blueprintId: enrichmentPayload.blueprint_id,
+            explicitVideoId: enrichmentPayload.video_id,
+            explicitSourceItemId: enrichmentPayload.source_item_id,
+          });
+          await db.from('ingestion_jobs').update({
+            status: 'succeeded',
+            finished_at: new Date().toISOString(),
+            processed_count: 1,
+            inserted_count: 1,
+            skipped_count: 0,
+            lease_expires_at: null,
+            worker_id: null,
+            last_heartbeat_at: new Date().toISOString(),
+            error_code: null,
+            error_message: null,
+          }).eq('id', job.id);
           return;
         }
 

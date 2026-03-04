@@ -44,6 +44,7 @@ function createDbMock() {
 describe('blueprint creation canonical payload', () => {
   it('writes schema content without legacy selected_items payload', async () => {
     const { db, getInsertedBlueprintPayload } = createDbMock();
+    const enqueueBlueprintYouTubeEnrichment = vi.fn(async () => undefined);
     const service = createBlueprintCreationService({
       getServiceSupabaseClient: () => null,
       safeGenerationTraceWrite: async () => undefined,
@@ -104,6 +105,7 @@ describe('blueprint creation canonical payload', () => {
       claimVariantForGeneration: vi.fn(),
       markVariantReady: async () => undefined,
       markVariantFailed: async () => undefined,
+      enqueueBlueprintYouTubeEnrichment,
     });
 
     const result = await service.createBlueprintFromVideo(db as never, {
@@ -127,9 +129,17 @@ describe('blueprint creation canonical payload', () => {
       practical_rules: { bullets: ['A practical rule.'] },
       open_questions: { bullets: ['An open question.'] },
     });
+    expect(enqueueBlueprintYouTubeEnrichment).toHaveBeenCalledWith({
+      blueprintId: 'bp_123',
+      db,
+      traceDb: null,
+      runId: result.runId,
+      explicitVideoId: 'dQw4w9WgXcQ',
+      explicitSourceItemId: null,
+    });
   });
 
-  it('does not fail blueprint creation when YouTube comment enrichment fails', async () => {
+  it('does not fail blueprint creation when YouTube enrichment enqueue fails', async () => {
     const { db } = createDbMock();
     const service = createBlueprintCreationService({
       getServiceSupabaseClient: () => null,
@@ -181,7 +191,7 @@ describe('blueprint creation canonical payload', () => {
       claimVariantForGeneration: vi.fn(),
       markVariantReady: async () => undefined,
       markVariantFailed: async () => undefined,
-      populateBlueprintYouTubeComments: async () => {
+      enqueueBlueprintYouTubeEnrichment: async () => {
         throw new Error('fetch failed');
       },
     });
