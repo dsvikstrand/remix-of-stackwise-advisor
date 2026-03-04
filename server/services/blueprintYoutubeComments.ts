@@ -64,9 +64,16 @@ function parseViewCount(payload: unknown) {
 }
 
 function isMissingRelationError(error: unknown, relation: string) {
-  const e = error as { message?: unknown; details?: unknown; hint?: unknown } | null;
+  const e = error as { code?: unknown; message?: unknown; details?: unknown; hint?: unknown } | null;
   const hay = `${String(e?.message || '')} ${String(e?.details || '')} ${String(e?.hint || '')}`.toLowerCase();
-  return hay.includes('does not exist') && hay.includes(relation.toLowerCase());
+  const code = String(e?.code || '').trim().toUpperCase();
+  if (code === '42P01' || code === 'PGRST205') {
+    return hay.includes(relation.toLowerCase()) || hay.includes(relation.replace(/^public\./i, '').toLowerCase());
+  }
+  return (
+    (hay.includes('does not exist') || hay.includes('could not find the table'))
+    && (hay.includes(relation.toLowerCase()) || hay.includes(relation.replace(/^public\./i, '').toLowerCase()))
+  );
 }
 
 function extractApiErrorReason(payload: unknown) {
