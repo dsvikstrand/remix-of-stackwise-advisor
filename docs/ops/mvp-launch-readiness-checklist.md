@@ -22,9 +22,9 @@ a5) [todo] Evidence must be concrete:
 b1) [have] Release candidate backend SHA: `f98114d68bf6d46fba4b1da815c5fdc20221212c`
 b2) [have] Release candidate frontend SHA: `f98114d68bf6d46fba4b1da815c5fdc20221212c`
 b3) [have] Latest migration watermark: `20260305174500`
-b4) [todo] P0 open count: `1`
+b4) [todo] P0 open count: `0`
 b5) [todo] P1 open count: `4`
-b6) [todo] Current launch recommendation: `NO-GO` (`P0-6` frontend legal deep-link proof remains open).
+b6) [todo] Current launch recommendation: `GO (P0 cleared)`.
 
 ## P0 Critical (Must Complete Before Launch)
 
@@ -113,7 +113,7 @@ g8) [have] Evidence: `Canonical mapper usage verified across Search/SourcePage/W
 h1) [todo] Risk: `high`
 h2) [todo] Owner: `david`
 h3) [todo] Target date: `2026-03-09`
-h4) [todo] Status: `in progress`
+h4) [have] Status: `done`
 h5) [todo] Scope:
 - Terms and Privacy pages/routes exist and are reachable from auth surface
 h6) [todo] Verification:
@@ -121,7 +121,7 @@ h6) [todo] Verification:
 - links on `/auth` resolve correctly
 h7) [todo] Pass criteria:
 - non-placeholder legal baseline content is live
-h8) [todo] Evidence: `Production deep-link checks currently return HTTP 404 on GitHub Pages routes (/terms, /privacy, /auth); blocker recorded (o34-o35).`
+h8) [have] Evidence: `Browser deep-link proof captured via Playwright for /terms, /privacy, /auth (o36-o38).`
 
 ## P1 Useful (Strongly Recommended Before Launch)
 
@@ -244,8 +244,11 @@ o30) [have] `2026-03-05T14:55:35Z` - `P0-4` - `queue-health snapshot during paus
 o31) [have] `2026-03-05T14:55:35Z` - `P0-4` - `recover drill proof` - `UNLOCK_INTAKE_ENABLED=true + restart; same generate endpoint returned background unlock generation started (job_id=7fac6886-ae0e-4ddf-a645-5e0c1b4bd0bb)` - `david`
 o32) [have] `2026-03-05T14:55:35Z` - `P0-5` - `cross-surface canonical error-copy wiring proof` - `rg confirms getLaunchErrorCopy imports/calls in Search.tsx, SourcePage.tsx, Wall.tsx, MyFeedTimeline.tsx` - `david`
 o33) [have] `2026-03-05T14:55:35Z` - `P0-5` - `copy normalization behavior proof` - `npm run test -- src/test/launchErrorCopy.test.ts => 1 file passed, 2 tests passed` - `david`
-o34) [todo] `2026-03-05T14:55:35Z` - `P0-6` - `frontend production legal deep-link check failed` - `HEAD https://dsvikstrand.github.io/remix-of-stackwise-advisor/{terms,privacy,auth} => HTTP/2 404` - `david`
+o34) [have] `2026-03-05T14:55:35Z` - `P0-6` - `transport-level deep-link check context` - `HEAD https://dsvikstrand.github.io/remix-of-stackwise-advisor/{terms,privacy,auth} => HTTP/2 404 (GitHub Pages SPA fallback path)` - `david`
 o35) [have] `2026-03-05T14:55:35Z` - `P0-6` - `root frontend host is reachable` - `HEAD https://dsvikstrand.github.io/remix-of-stackwise-advisor/ => HTTP/2 200` - `david`
+o36) [have] `2026-03-05T15:22:09Z` - `P0-6` - `browser deep-link proof /terms` - `npx playwright screenshot --wait-for-selector "text=Terms of Service" https://dsvikstrand.github.io/remix-of-stackwise-advisor/terms /tmp/bleu-p0-6-proof/terms.png => selector matched, screenshot captured` - `david`
+o37) [have] `2026-03-05T15:22:09Z` - `P0-6` - `browser deep-link proof /privacy` - `npx playwright screenshot --wait-for-selector "text=Privacy Policy" https://dsvikstrand.github.io/remix-of-stackwise-advisor/privacy /tmp/bleu-p0-6-proof/privacy.png => selector matched, screenshot captured` - `david`
+o38) [have] `2026-03-05T15:22:09Z` - `P0-6` - `browser deep-link proof /auth` - `npx playwright screenshot --wait-for-selector "text=Sign in to create blueprints" https://dsvikstrand.github.io/remix-of-stackwise-advisor/auth /tmp/bleu-p0-6-proof/auth.png => selector matched, screenshot captured` - `david`
 
 ## Deferred (Not Launch Gate)
 p1) [have] P2 modularization and post-launch optimizations are intentionally out of launch gate.

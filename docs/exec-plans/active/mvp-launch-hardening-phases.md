@@ -23,13 +23,13 @@ c5) [have] Service-auth queue visibility blocker resolved on `2026-03-05`:
 - queue-health and latest-ingestion evidence were captured successfully and appended to checklist Evidence Log (`o11-o13`)
 c6) [have] Launch gate closeout pass (A8/A9) status:
 - P0-1 and P0-2 parity evidence are done in checklist.
-- P0-3/P0-4/P0-5 now have production-closeout evidence and are marked done.
-- P0-6 remains the only open P0 blocker.
+- P0-3/P0-4/P0-5/P0-6 now have production-closeout evidence and are marked done.
+- Launch checklist snapshot now reports `P0 open count: 0` and `GO (P0 cleared)`.
 c7) [have] A9 P0 evidence closeout update on `2026-03-05`:
 - P0-3 is now closed with sidecar fail-safe proof (`CREDITS_UNAVAILABLE`) and production non-impact evidence (`o25-o28`).
 - P0-4 is now closed with deterministic paused-endpoint rejection and recovery proof (`o29-o31`).
 - P0-5 is now closed with canonical mapper cross-surface wiring and dedicated test evidence (`o32-o33`).
-- P0-6 remains open due frontend deep-link behavior on GitHub Pages (`/terms`, `/privacy`, `/auth` return HTTP 404 on direct access; see `o34-o35`).
+- P0-6 is now closed with browser-level deep-link proof on deployed frontend routes (`/terms`, `/privacy`, `/auth`; see `o36-o38`).
 
 ## How To Use This Plan
 d1) [todo] Treat each phase as a distinct implementation and validation checkpoint.
