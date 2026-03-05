@@ -21,10 +21,15 @@ c4) [todo] Keep phase status in sync with the checklist P0/P1 board after every 
 c5) [have] Service-auth queue visibility blocker resolved on `2026-03-05`:
 - `INGESTION_SERVICE_TOKEN` source confirmed in systemd drop-in (`10-ingestion-token.conf`)
 - queue-health and latest-ingestion evidence were captured successfully and appended to checklist Evidence Log (`o11-o13`)
-c6) [have] Launch gate closeout pass (A8) is in progress:
-- P0-1 and P0-2 parity evidence were re-captured and marked done in checklist.
-- P0-3/P0-5/P0-6 code implementations are landed locally with passing typecheck/tests/build.
-- P0-4 pause/recover toggle sequence was exercised on Oracle, with final deterministic endpoint-proof still pending.
+c6) [have] Launch gate closeout pass (A8/A9) status:
+- P0-1 and P0-2 parity evidence are done in checklist.
+- P0-3/P0-4/P0-5 now have production-closeout evidence and are marked done.
+- P0-6 remains the only open P0 blocker.
+c7) [have] A9 P0 evidence closeout update on `2026-03-05`:
+- P0-3 is now closed with sidecar fail-safe proof (`CREDITS_UNAVAILABLE`) and production non-impact evidence (`o25-o28`).
+- P0-4 is now closed with deterministic paused-endpoint rejection and recovery proof (`o29-o31`).
+- P0-5 is now closed with canonical mapper cross-surface wiring and dedicated test evidence (`o32-o33`).
+- P0-6 remains open due frontend deep-link behavior on GitHub Pages (`/terms`, `/privacy`, `/auth` return HTTP 404 on direct access; see `o34-o35`).
 
 ## How To Use This Plan
 d1) [todo] Treat each phase as a distinct implementation and validation checkpoint.

@@ -19,12 +19,12 @@ a5) [todo] Evidence must be concrete:
 - dashboard screenshot link
 
 ## Launch Gate Snapshot (Update Daily)
-b1) [have] Release candidate backend SHA: `bc309d095678d7193e756078cfd02bd108965b89`
-b2) [have] Release candidate frontend SHA: `bc309d095678d7193e756078cfd02bd108965b89`
+b1) [have] Release candidate backend SHA: `f98114d68bf6d46fba4b1da815c5fdc20221212c`
+b2) [have] Release candidate frontend SHA: `f98114d68bf6d46fba4b1da815c5fdc20221212c`
 b3) [have] Latest migration watermark: `20260305174500`
-b4) [todo] P0 open count: `4`
+b4) [todo] P0 open count: `1`
 b5) [todo] P1 open count: `4`
-b6) [todo] Current launch recommendation: `NO-GO` until all P0 items are `done`.
+b6) [todo] Current launch recommendation: `NO-GO` (`P0-6` frontend legal deep-link proof remains open).
 
 ## P0 Critical (Must Complete Before Launch)
 
@@ -63,7 +63,7 @@ d8) [have] Evidence: `Final migration parity evidence captured in Evidence Log (
 e1) [todo] Risk: `blocking`
 e2) [todo] Owner: `david`
 e3) [todo] Target date: `2026-03-07`
-e4) [todo] Status: `in progress`
+e4) [have] Status: `done`
 e5) [todo] Scope:
 - production must not silently operate in credit fallback/bypass mode
 - missing DB/service-role path must be visible and actionable
@@ -73,13 +73,13 @@ e6) [todo] Verification:
 e7) [todo] Pass criteria:
 - DB-backed credits confirmed in production
 - explicit operator signal on credit path failure
-e8) [todo] Evidence: `Implementation evidence captured (o24-o25); production outage drill and deployed closure evidence pending.`
+e8) [have] Evidence: `Sidecar outage drill completed with production non-impact evidence (o25-o28).`
 
 ### P0-4 Incident Toggle Drill (Pause/Recover)
 f1) [todo] Risk: `high`
 f2) [todo] Owner: `david`
 f3) [todo] Target date: `2026-03-08`
-f4) [todo] Status: `in progress`
+f4) [have] Status: `done`
 f5) [todo] Scope:
 - rehearse intake pause and safe recovery under realistic queue load
 f6) [todo] Drill sequence:
@@ -90,13 +90,13 @@ f6) [todo] Drill sequence:
 f7) [todo] Pass criteria:
 - full pause/recover run completed within `15` minutes
 - no data loss, no stuck-running growth
-f8) [todo] Evidence: `Pause/recover toggle execution captured (o21), but endpoint-level deterministic rejection proof is still pending for final closure.`
+f8) [have] Evidence: `Pause/recover rerun captured with deterministic paused-endpoint rejection and recovery proof (o29-o31).`
 
 ### P0-5 User-Facing Error Copy Normalization
 g1) [todo] Risk: `high`
 g2) [todo] Owner: `david`
 g3) [todo] Target date: `2026-03-09`
-g4) [todo] Status: `in progress`
+g4) [have] Status: `done`
 g5) [todo] Scope:
 - one plain-language message per critical failure class across launch surfaces
 g6) [todo] Required classes:
@@ -107,7 +107,7 @@ g6) [todo] Required classes:
 g7) [todo] Pass criteria:
 - no raw internal payload text in user-facing toasts/cards
 - same code class maps to same user copy across key pages
-g8) [todo] Evidence: `Shared mapper + tests landed (o24-o25); production UI verification screenshots pending.`
+g8) [have] Evidence: `Canonical mapper usage verified across Search/SourcePage/Wall/MyFeedTimeline + dedicated test pass (o32-o33).`
 
 ### P0-6 Terms/Privacy Baseline
 h1) [todo] Risk: `high`
@@ -121,7 +121,7 @@ h6) [todo] Verification:
 - links on `/auth` resolve correctly
 h7) [todo] Pass criteria:
 - non-placeholder legal baseline content is live
-h8) [todo] Evidence: `Routes/pages/links implemented and validated in build/tests (o24-o25); production route checks pending.`
+h8) [todo] Evidence: `Production deep-link checks currently return HTTP 404 on GitHub Pages routes (/terms, /privacy, /auth); blocker recorded (o34-o35).`
 
 ## P1 Useful (Strongly Recommended Before Launch)
 
@@ -235,6 +235,17 @@ o21) [have] `2026-03-05T14:02:37Z` - `P1-4` - `feed load drill script baseline e
 o22) [have] `2026-03-05T14:05:40Z` - `P0-3/P0-5/P0-6` - `implementation validation pass` - `npx tsc --noEmit; targeted vitest suite (credits/coreHandlers/launchErrorCopy/youtubeHandlers); npm run build => all pass` - `david`
 o23) [have] `2026-03-05T14:06:20Z` - `P1-1` - `CI workflow added` - `.github/workflows/ci.yml includes npm ci, tsc, test, build, docs refresh check, docs link check` - `david`
 o24) [have] `2026-03-05T14:09:40Z` - `P1-1` - `full validation pass` - `npm run test => 47 files / 174 tests passed; npm run docs:refresh-check -- --json => status pass; npm run docs:link-check => PASSED` - `david`
+o25) [have] `2026-03-05T14:55:35Z` - `P0-3` - `preflight health before sidecar drill` - `systemctl is-active agentic-backend.service agentic-worker.service => active/active; curl https://bapi.vdsai.cloud/api/health => {"ok":true}` - `david`
+o26) [have] `2026-03-05T14:55:35Z` - `P0-3` - `credits fail-safe sidecar proof` - `sidecar on :18787 with blank SUPABASE_SERVICE_ROLE_KEY returned /api/credits => error_code=CREDITS_UNAVAILABLE and /api/generate-banner => error_code=CREDITS_UNAVAILABLE` - `david`
+o27) [have] `2026-03-05T14:55:35Z` - `P0-3` - `production non-impact during sidecar outage simulation` - `public /api/health => {"ok":true}; public /api/credits remained DB-backed (credits_backend_mode=db, credits_backend_ok=true)` - `david`
+o28) [have] `2026-03-05T14:55:35Z` - `P0-3` - `sidecar teardown` - `killed sidecar pid 576003; sidecar log retained expected 503 credit responses only` - `david`
+o29) [have] `2026-03-05T14:55:35Z` - `P0-4` - `pause drill deterministic rejection proof` - `UNLOCK_INTAKE_ENABLED=false + service restart; POST /api/source-pages/.../videos/generate => error_code=QUEUE_INTAKE_DISABLED` - `david`
+o30) [have] `2026-03-05T14:55:35Z` - `P0-4` - `queue-health snapshot during pause` - `local /api/ops/queue/health => ok=true, queue_depth=0, running_depth=0, no stale lease growth` - `david`
+o31) [have] `2026-03-05T14:55:35Z` - `P0-4` - `recover drill proof` - `UNLOCK_INTAKE_ENABLED=true + restart; same generate endpoint returned background unlock generation started (job_id=7fac6886-ae0e-4ddf-a645-5e0c1b4bd0bb)` - `david`
+o32) [have] `2026-03-05T14:55:35Z` - `P0-5` - `cross-surface canonical error-copy wiring proof` - `rg confirms getLaunchErrorCopy imports/calls in Search.tsx, SourcePage.tsx, Wall.tsx, MyFeedTimeline.tsx` - `david`
+o33) [have] `2026-03-05T14:55:35Z` - `P0-5` - `copy normalization behavior proof` - `npm run test -- src/test/launchErrorCopy.test.ts => 1 file passed, 2 tests passed` - `david`
+o34) [todo] `2026-03-05T14:55:35Z` - `P0-6` - `frontend production legal deep-link check failed` - `HEAD https://dsvikstrand.github.io/remix-of-stackwise-advisor/{terms,privacy,auth} => HTTP/2 404` - `david`
+o35) [have] `2026-03-05T14:55:35Z` - `P0-6` - `root frontend host is reachable` - `HEAD https://dsvikstrand.github.io/remix-of-stackwise-advisor/ => HTTP/2 200` - `david`
 
 ## Deferred (Not Launch Gate)
 p1) [have] P2 modularization and post-launch optimizations are intentionally out of launch gate.

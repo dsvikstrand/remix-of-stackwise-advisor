@@ -1,7 +1,10 @@
 import { createRoot } from "react-dom/client";
 import "./index.css";
-import { hasRequiredFrontendEnv, getMissingFrontendEnvKeys } from "@/config/runtime";
+import { config, hasRequiredFrontendEnv, getMissingFrontendEnvKeys } from "@/config/runtime";
 import { RuntimeConfigError } from "@/components/shared/RuntimeConfigError";
+import { restoreSpaRedirect } from "@/lib/restoreSpaRedirect";
+
+restoreSpaRedirect(config.basePath);
 
 const root = createRoot(document.getElementById("root")!);
 
