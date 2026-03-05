@@ -93,6 +93,7 @@ a71) [have] Daily generation cap policy is active for blueprint generation attem
 a72) [have] Launch gate hardening adds explicit credit outage semantics (`CREDITS_UNAVAILABLE`) and `/api/credits` backend-health visibility fields (`credits_backend_mode`, `credits_backend_ok`, `credits_backend_error`).
 a73) [have] Launch legal baseline routes are now first-class (`/terms`, `/privacy`) and linked from auth surface.
 a74) [have] Launch error-copy normalization is centralized through shared frontend mapping for critical failure classes across Search/Source/Wall/My Feed.
+a75) [have] Source-page search uptime hardening: opportunistic source-page asset sweep is wired safely so `/api/source-pages/search` cannot crash backend runtime.
 
 ## Core Model
 b1) `Source Item`

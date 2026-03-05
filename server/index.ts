@@ -7487,6 +7487,7 @@ registerSourcePagesRoutes(app, {
   buildSourcePagePath,
   normalizeSourcePagePlatform,
   getSourcePageByPlatformExternalId,
+  runSourcePageAssetSweep,
   needsSourcePageAssetHydration,
   hydrateSourcePageAssetsForRow,
   youtubeDataApiKey,

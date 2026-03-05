@@ -91,6 +91,9 @@ curl -sS https://bapi.vdsai.cloud/api/ops/queue/health \
 YOUTUBE_REFRESH_ENABLED=false
 ```
 - If the migration for `blueprint_youtube_refresh_state` has not been applied yet, scheduler operations no-op safely.
+- Source-page search stability note:
+  - `/api/source-pages/search` may run opportunistic source-page asset sweep.
+  - if this route ever causes process restarts, verify route dependency wiring for `runSourcePageAssetSweep` in source-page route registration.
 - Latest auto-banner queue snapshot (service auth):
 ```bash
 curl -sS https://bapi.vdsai.cloud/api/auto-banner/jobs/latest \

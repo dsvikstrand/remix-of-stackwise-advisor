@@ -159,6 +159,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Explicit credit-backend fail-safe path is active for generation-dependent flows (`CREDITS_UNAVAILABLE`, HTTP `503`).
 - Launch-critical error copy is centralized via shared frontend mapper for core generation surfaces.
 - Legal baseline routes (`/terms`, `/privacy`) are part of runtime IA.
+- Source-page search crash fix landed for opportunistic asset-sweep dependency wiring (`/api/source-pages/search` process safety).
 - Baseline CI workflow and feed-load drill script are present:
   - `.github/workflows/ci.yml`
   - `scripts/feed_load_drill.mjs`

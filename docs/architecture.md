@@ -95,6 +95,7 @@
     - `GET /api/source-pages/:platform/:externalId` (public-readable source page + follower count + viewer subscription state)
     - `GET /api/source-pages/search` (public-readable source lookup for Explore; app source pages only)
       - includes opportunistic lazy hydration for missing source avatar/banner assets on legacy backfilled rows.
+      - handler dependency wiring is required for opportunistic sweep path so search remains process-safe under runtime errors.
     - `GET /api/source-pages/:platform/:externalId/blueprints` (public-readable source blueprint feed, deduped by `source_item_id`, cursor-paginated via `next_cursor`, additive `source_thumbnail_url` per item)
     - `GET /api/source-pages/:platform/:externalId/videos` (auth-only source video-library listing with duplicate state flags for requester and `kind=full|shorts` filter)
       - list limiter policy: burst `4/15s` + sustained `40/10m` per user/IP.

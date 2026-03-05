@@ -65,6 +65,7 @@ Status: `canonical`
 47. Notifications MVP scope is intentionally narrow: notify on comment replies and generation terminal outcomes, surfaced in a header bell inbox with read/read-all controls and an event-mapper backend contract for future expansion.
 48. Launch gate hardening requires explicit credit-backend outage behavior (`CREDITS_UNAVAILABLE`, HTTP `503`) and must not silently fail-open credit-dependent flows.
 49. Launch-critical UX copy for generation failures must be normalized via shared frontend mapping (no raw backend/internal payload leakage on key surfaces).
+50. Source-page read surfaces must fail safely: opportunistic asset-sweep hooks are allowed, but missing dependency wiring must never crash API process uptime.
 
 ## Core user journey
 1. Subscribe to a YouTube channel or search/select a video.

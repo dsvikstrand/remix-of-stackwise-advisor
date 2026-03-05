@@ -116,7 +116,7 @@ Use this section as the runtime context envelope for generation input. The goal 
 The input should always carry two explicit sources. First source is transcript truth context, represented with placeholders like `<VIDEO_URL>`, `<VIDEO_TITLE>`, `<TRANSCRIPT_SOURCE>`, and `<SOURCE_TRANSCRIPT_CONTEXT>` (full transcript or approved excerpt window). Second source is vibe calibration context, represented with placeholders like `<POSITIVE_REFERENCE_PATHS>` and `<POSITIVE_REFERENCE_EXCERPTS>`, where references point to one canonical POS folder.
 
 Canonical POS folder paths:
-- Local repo path: `docs/golden_blueprint/reddit/clean/pos`
+- Local repo path: `reddit/clean/pos`
 - Oracle live path: `/home/ubuntu/remix-of-stackwise-advisor/docs/golden_blueprint/reddit/clean/pos`
 
 For this phase, include all available POS examples by default. Pass selected references as `<POSITIVE_REFERENCE_PATHS>` and inject their full text as `<POSITIVE_REFERENCE_EXCERPTS>`.

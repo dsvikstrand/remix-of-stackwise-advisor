@@ -8,8 +8,8 @@
 
 ## Data Reviewed
 
-- Positive set: `docs/golden_blueprint/reddit/clean/pos`
-- Negative set: `docs/golden_blueprint/reddit/clean/neg`
+- Positive set: `reddit/clean/pos`
+- Negative set: `reddit/clean/neg`
 
 ## Method (Lightweight)
 

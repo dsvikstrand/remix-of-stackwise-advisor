@@ -16,6 +16,7 @@ a3) [have] Canonical docs and active plan registry are in good shape and checks 
 a4) [have] Primary architecture risk is concentration of logic in very large files (`server/index.ts`, `src/pages/Wall.tsx`, `src/pages/Subscriptions.tsx`, `src/pages/SourcePage.tsx`).
 a4b) [have] Launch gate execution board is active at `docs/ops/mvp-launch-readiness-checklist.md` (P0/P1 with owner/date/status/evidence).
 a4c) [have] Launch hardening now includes explicit credit-backend fail-safe semantics (`CREDITS_UNAVAILABLE`), shared error-copy mapping, and baseline legal routes (`/terms`, `/privacy`).
+a4d) [have] Runtime hotfix applied: source-page search no longer crashes backend when opportunistic asset-sweep wiring is present in route deps.
 a5) [todo] Improve user trust around unlock/credit transitions and async processing visibility.
 a6) [todo] Reduce terminology ambiguity between personal stream, followed channels, source pages, and channel taxonomy.
 
