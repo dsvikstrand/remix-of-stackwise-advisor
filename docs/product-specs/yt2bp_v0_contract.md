@@ -184,3 +184,7 @@
 - Instruction-security runtime checks (`llm_instruction_security_v0` is planned only).
 - Contract-breaking schema changes.
 - Direct channel publication from YT2BP call path.
+
+## Related Endpoint Addendum (2026-03-05)
+- This contract still excludes comments-refresh control endpoints.
+- Manual YouTube source-comment refresh is handled by `POST /api/blueprints/:id/youtube-comments/refresh` with cooldown/backpressure guards.

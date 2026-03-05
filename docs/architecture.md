@@ -299,3 +299,12 @@ Current production behavior note:
 - Product contract: `docs/app/product-spec.md`.
 - Active program plan: `docs/exec-plans/active/mvp-launch-hardening-phases.md`.
 - Freshness mapping: `docs/_freshness_map.json`.
+
+## 9) YouTube Metadata Refresh Policy (2026-03-05)
+- Queue scope remains `blueprint_youtube_refresh` (worker-only).
+- `view_count` remains periodic by configured interval.
+- Comment snapshots are no longer recurring periodic refresh:
+  - auto at `+15m`
+  - auto at `+24h`
+  - then manual trigger endpoint with per-blueprint cooldown.
+- Frontend still renders from stored data; page loads do not call YouTube directly.

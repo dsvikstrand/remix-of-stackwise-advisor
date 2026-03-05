@@ -154,6 +154,12 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     resolveGenerationModelProfile: () => ({ model: 'o4-mini', fallbackModel: 'o4-mini', reasoningEffort: 'low' }),
     resolveVariantOrReady: vi.fn(async () => null),
     findVariantsByBlueprintId: vi.fn(async () => ({ sourceItemId: null, variants: [] })),
+    requestManualBlueprintYouTubeCommentsRefresh: vi.fn(async () => ({
+      ok: true,
+      status: 'queued',
+      cooldown_until: null,
+      queue_depth: 0,
+    })),
     ...overrides,
   } as any;
 }
@@ -184,6 +190,65 @@ describe('youtube handlers', () => {
     expect(res.body).toMatchObject({
       ok: false,
       error_code: 'CREDITS_UNAVAILABLE',
+    });
+  });
+
+  it('returns cooldown error when manual YouTube comments refresh is on cooldown', async () => {
+    const app = createMockApp();
+    const requestManualBlueprintYouTubeCommentsRefresh = vi.fn(async () => ({
+      ok: false as const,
+      code: 'COMMENTS_REFRESH_COOLDOWN_ACTIVE' as const,
+      retry_at: '2026-03-06T10:00:00.000Z',
+    }));
+    registerYouTubeRouteHandlers(app as any, createDeps({
+      requestManualBlueprintYouTubeCommentsRefresh,
+    }));
+
+    const handler = app.handlers['POST /api/blueprints/:id/youtube-comments/refresh'];
+    const req = {
+      params: { id: '00000000-0000-0000-0000-000000000999' },
+      body: {},
+    } as any;
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(requestManualBlueprintYouTubeCommentsRefresh).toHaveBeenCalledTimes(1);
+    expect(res.statusCode).toBe(429);
+    expect(res.body).toMatchObject({
+      ok: false,
+      error_code: 'COMMENTS_REFRESH_COOLDOWN_ACTIVE',
+    });
+  });
+
+  it('queues manual YouTube comments refresh request', async () => {
+    const app = createMockApp();
+    const requestManualBlueprintYouTubeCommentsRefresh = vi.fn(async () => ({
+      ok: true as const,
+      status: 'queued' as const,
+      cooldown_until: '2026-03-06T10:00:00.000Z',
+      queue_depth: 2,
+    }));
+    registerYouTubeRouteHandlers(app as any, createDeps({
+      requestManualBlueprintYouTubeCommentsRefresh,
+    }));
+
+    const handler = app.handlers['POST /api/blueprints/:id/youtube-comments/refresh'];
+    const req = {
+      params: { id: '00000000-0000-0000-0000-000000000999' },
+      body: {},
+    } as any;
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(requestManualBlueprintYouTubeCommentsRefresh).toHaveBeenCalledTimes(1);
+    expect(res.statusCode).toBe(202);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        status: 'queued',
+      },
     });
   });
 });

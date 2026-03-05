@@ -30,6 +30,9 @@ c7) [have] A9 P0 evidence closeout update on `2026-03-05`:
 - P0-4 is now closed with deterministic paused-endpoint rejection and recovery proof (`o29-o31`).
 - P0-5 is now closed with canonical mapper cross-surface wiring and dedicated test evidence (`o32-o33`).
 - P0-6 is now closed with browser-level deep-link proof on deployed frontend routes (`/terms`, `/privacy`, `/auth`; see `o36-o38`).
+c8) [have] P1-1 evidence refresh on `2026-03-05`:
+- CI Gate run `#5` on commit `b31c663` passed after docs-link cleanup (`o39`).
+- `P1-1` remains in progress until branch-protection required-check enforcement evidence is captured (`o40`).
 
 ## How To Use This Plan
 d1) [todo] Treat each phase as a distinct implementation and validation checkpoint.
@@ -242,6 +245,10 @@ g8) [have] Phase 4B closeout verification captured on `2026-03-04`:
 g9) [have] Exit criteria:
 - upstream failures fail fast
 - transcript/provider instability no longer causes silent queue pileups
+g10) [have] Comments refresh policy updated (`2026-03-05`) to quota-safer lifecycle:
+- auto at `+15m`
+- auto at `+24h`
+- then manual-only refresh via blueprint endpoint with `24h` per-blueprint cooldown
 
 ## Phase 5 - Queue Prioritization and Backpressure
 h1) [have] Added and tightened queue priority rules.

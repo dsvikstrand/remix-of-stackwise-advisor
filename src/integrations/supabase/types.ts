@@ -108,11 +108,15 @@ export type Database = {
       blueprint_youtube_refresh_state: {
         Row: {
           blueprint_id: string
+          comments_auto_stage: number
+          comments_manual_cooldown_until: string | null
           consecutive_comments_failures: number
           consecutive_view_failures: number
           created_at: string
           enabled: boolean
           last_comments_refresh_at: string | null
+          last_comments_manual_refresh_at: string | null
+          last_comments_manual_triggered_by: string | null
           last_comments_refresh_status: string | null
           last_error_message: string | null
           last_view_refresh_at: string | null
@@ -125,10 +129,14 @@ export type Database = {
         }
         Insert: {
           blueprint_id: string
+          comments_auto_stage?: number
+          comments_manual_cooldown_until?: string | null
           consecutive_comments_failures?: number
           consecutive_view_failures?: number
           created_at?: string
           enabled?: boolean
+          last_comments_manual_refresh_at?: string | null
+          last_comments_manual_triggered_by?: string | null
           last_comments_refresh_at?: string | null
           last_comments_refresh_status?: string | null
           last_error_message?: string | null
@@ -142,10 +150,14 @@ export type Database = {
         }
         Update: {
           blueprint_id?: string
+          comments_auto_stage?: number
+          comments_manual_cooldown_until?: string | null
           consecutive_comments_failures?: number
           consecutive_view_failures?: number
           created_at?: string
           enabled?: boolean
+          last_comments_manual_refresh_at?: string | null
+          last_comments_manual_triggered_by?: string | null
           last_comments_refresh_at?: string | null
           last_comments_refresh_status?: string | null
           last_error_message?: string | null

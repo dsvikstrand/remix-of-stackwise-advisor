@@ -154,4 +154,15 @@ export type YouTubeRouteDeps = {
   resolveGenerationModelProfile: any;
   resolveVariantOrReady: any;
   findVariantsByBlueprintId: any;
+  requestManualBlueprintYouTubeCommentsRefresh: (input: {
+    db: any;
+    blueprintId: string;
+    requestedByUserId: string;
+  }) => Promise<
+    | { ok: true; status: 'queued' | 'already_pending'; cooldown_until: string | null; queue_depth: number | null }
+    | { ok: false; code: 'BLUEPRINT_YOUTUBE_REFRESH_NOT_AVAILABLE' }
+    | { ok: false; code: 'COMMENTS_REFRESH_AUTO_BOOTSTRAP_PENDING'; retry_at: string | null }
+    | { ok: false; code: 'COMMENTS_REFRESH_COOLDOWN_ACTIVE'; retry_at: string | null }
+    | { ok: false; code: 'COMMENTS_REFRESH_QUEUE_GUARDED'; retry_after_seconds: number; queue_depth: number }
+  >;
 };

@@ -80,6 +80,10 @@ curl -sS https://bapi.vdsai.cloud/api/ops/queue/health \
 - Purpose: periodically refresh stored `view_count` and YouTube comment snapshots without calling YouTube from page loads.
 - Queue scope: `blueprint_youtube_refresh` (low-priority, budgeted).
 - Default cadence: every `10` minutes.
+- Comments policy:
+  - auto refresh once at `+15m` after blueprint registration
+  - auto refresh once at `+24h` after blueprint registration
+  - then manual refresh only (`POST /api/blueprints/:id/youtube-comments/refresh`) with per-blueprint `24h` cooldown
 - Default per-cycle budget:
   - view refresh jobs: `15`
   - comments refresh jobs: `5`
@@ -237,7 +241,9 @@ Required runtime variables:
 - `YOUTUBE_REFRESH_VIEW_MAX_PER_CYCLE` (default `15`)
 - `YOUTUBE_REFRESH_COMMENTS_MAX_PER_CYCLE` (default `5`)
 - `YOUTUBE_REFRESH_VIEW_INTERVAL_HOURS` (default `12`)
-- `YOUTUBE_REFRESH_COMMENTS_INTERVAL_HOURS` (default `48`)
+- `YOUTUBE_COMMENTS_AUTO_FIRST_DELAY_MINUTES` (default `15`)
+- `YOUTUBE_COMMENTS_AUTO_SECOND_DELAY_HOURS` (default `24`)
+- `YOUTUBE_COMMENTS_MANUAL_COOLDOWN_HOURS` (default `24`)
 - `YOUTUBE_SEARCH_CACHE_ENABLED` (default `true`; enables cache-first behavior for `/api/youtube-search` and `/api/youtube-channel-search`)
 - `YOUTUBE_SEARCH_CACHE_TTL_SECONDS` (default `600`; fresh TTL for video search cache)
 - `YOUTUBE_CHANNEL_SEARCH_CACHE_TTL_SECONDS` (default `900`; fresh TTL for channel search cache)

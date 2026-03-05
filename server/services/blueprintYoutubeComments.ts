@@ -4,6 +4,7 @@ type DbClient = any;
 
 export type YouTubeCommentSortMode = 'top' | 'new';
 export type BlueprintYouTubeRefreshKind = 'view_count' | 'comments';
+export type BlueprintYouTubeRefreshTrigger = 'auto' | 'manual';
 
 export type StoredBlueprintYouTubeComment = {
   source_comment_id: string;
@@ -17,7 +18,9 @@ export type StoredBlueprintYouTubeComment = {
 
 const YOUTUBE_COMMENT_SNAPSHOT_LIMIT = 20;
 const DEFAULT_REFRESH_VIEW_INTERVAL_HOURS = 12;
-const DEFAULT_REFRESH_COMMENTS_INTERVAL_HOURS = 48;
+const DEFAULT_COMMENTS_AUTO_FIRST_DELAY_MINUTES = 15;
+const DEFAULT_COMMENTS_AUTO_SECOND_DELAY_HOURS = 24;
+const DEFAULT_COMMENTS_MANUAL_COOLDOWN_HOURS = 24;
 const VIEW_REFRESH_BACKOFF_HOURS = [6, 24, 48] as const;
 const COMMENTS_REFRESH_BACKOFF_HOURS = [24, 72, 168] as const;
 const RECENT_BLUEPRINT_WINDOW_DAYS = 7;
@@ -31,11 +34,29 @@ type BlueprintYouTubeRefreshCandidate = {
   youtube_video_id: string;
   source_item_id: string | null;
   next_due_at: string | null;
+  comments_auto_stage?: number;
+};
+
+export type BlueprintYouTubeRefreshState = {
+  blueprint_id: string;
+  youtube_video_id: string;
+  source_item_id: string | null;
+  enabled: boolean;
+  comments_auto_stage: number;
+  next_comments_refresh_at: string | null;
+  comments_manual_cooldown_until: string | null;
+  last_comments_manual_refresh_at: string | null;
+  last_comments_manual_triggered_by: string | null;
 };
 
 function toFutureIsoFromHours(hours: number) {
   const safeHours = Number.isFinite(hours) ? Math.max(1, Math.floor(hours)) : 1;
   return new Date(Date.now() + safeHours * 60 * 60 * 1000).toISOString();
+}
+
+function toFutureIsoFromMinutes(minutes: number) {
+  const safeMinutes = Number.isFinite(minutes) ? Math.max(1, Math.floor(minutes)) : 1;
+  return new Date(Date.now() + safeMinutes * 60 * 1000).toISOString();
 }
 
 function getBackoffHours(level: number, values: readonly [number, number, number]) {
@@ -138,7 +159,9 @@ export function createBlueprintYouTubeCommentsService(input: {
   apiKey?: string | null;
   fetchImpl?: typeof fetch;
   refreshViewIntervalHours?: number;
-  refreshCommentsIntervalHours?: number;
+  commentsAutoFirstDelayMinutes?: number;
+  commentsAutoSecondDelayHours?: number;
+  commentsManualCooldownHours?: number;
 }) {
   const apiKey = String(input.apiKey || '').trim();
   const fetchImpl = input.fetchImpl || fetch;
@@ -146,9 +169,17 @@ export function createBlueprintYouTubeCommentsService(input: {
     input.refreshViewIntervalHours,
     DEFAULT_REFRESH_VIEW_INTERVAL_HOURS,
   );
-  const refreshCommentsIntervalHours = normalizeIntervalHours(
-    input.refreshCommentsIntervalHours,
-    DEFAULT_REFRESH_COMMENTS_INTERVAL_HOURS,
+  const commentsAutoFirstDelayMinutes = normalizeIntervalHours(
+    input.commentsAutoFirstDelayMinutes,
+    DEFAULT_COMMENTS_AUTO_FIRST_DELAY_MINUTES,
+  );
+  const commentsAutoSecondDelayHours = normalizeIntervalHours(
+    input.commentsAutoSecondDelayHours,
+    DEFAULT_COMMENTS_AUTO_SECOND_DELAY_HOURS,
+  );
+  const commentsManualCooldownHours = normalizeIntervalHours(
+    input.commentsManualCooldownHours,
+    DEFAULT_COMMENTS_MANUAL_COOLDOWN_HOURS,
   );
 
   async function resolveBlueprintYouTubeVideoId(args: {
@@ -384,6 +415,117 @@ export function createBlueprintYouTubeCommentsService(input: {
     return Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0;
   }
 
+  function normalizeAutoStage(raw: unknown) {
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return 0;
+    return Math.min(2, Math.max(0, Math.floor(parsed)));
+  }
+
+  async function getRefreshStateForBlueprint(args: {
+    db: DbClient;
+    blueprintId: string;
+  }) {
+    const { data, error } = await args.db
+      .from('blueprint_youtube_refresh_state')
+      .select(
+        [
+          'blueprint_id',
+          'youtube_video_id',
+          'source_item_id',
+          'enabled',
+          'comments_auto_stage',
+          'next_comments_refresh_at',
+          'comments_manual_cooldown_until',
+          'last_comments_manual_refresh_at',
+          'last_comments_manual_triggered_by',
+        ].join(','),
+      )
+      .eq('blueprint_id', args.blueprintId)
+      .maybeSingle();
+    if (error) {
+      if (isMissingRelationError(error, 'blueprint_youtube_refresh_state')) return null;
+      throw error;
+    }
+    if (!data) return null;
+    return {
+      blueprint_id: String(data.blueprint_id || '').trim(),
+      youtube_video_id: String(data.youtube_video_id || '').trim(),
+      source_item_id: data.source_item_id == null ? null : String(data.source_item_id || '').trim() || null,
+      enabled: Boolean(data.enabled),
+      comments_auto_stage: normalizeAutoStage((data as Record<string, unknown>).comments_auto_stage),
+      next_comments_refresh_at: (data as Record<string, unknown>).next_comments_refresh_at == null
+        ? null
+        : String((data as Record<string, unknown>).next_comments_refresh_at || '').trim() || null,
+      comments_manual_cooldown_until: data.comments_manual_cooldown_until == null
+        ? null
+        : String(data.comments_manual_cooldown_until || '').trim() || null,
+      last_comments_manual_refresh_at: data.last_comments_manual_refresh_at == null
+        ? null
+        : String(data.last_comments_manual_refresh_at || '').trim() || null,
+      last_comments_manual_triggered_by: (data as Record<string, unknown>).last_comments_manual_triggered_by == null
+        ? null
+        : String((data as Record<string, unknown>).last_comments_manual_triggered_by || '').trim() || null,
+    } satisfies BlueprintYouTubeRefreshState;
+  }
+
+  async function claimManualCommentsRefreshCooldown(args: {
+    db: DbClient;
+    blueprintId: string;
+    triggeredByUserId: string;
+    previousCooldownUntil: string | null;
+  }) {
+    const nowIso = new Date().toISOString();
+    const cooldownUntil = toFutureIsoFromHours(commentsManualCooldownHours);
+    let query = args.db
+      .from('blueprint_youtube_refresh_state')
+      .update({
+        comments_manual_cooldown_until: cooldownUntil,
+        last_comments_manual_refresh_at: nowIso,
+        last_comments_manual_triggered_by: args.triggeredByUserId,
+        updated_at: nowIso,
+      })
+      .eq('blueprint_id', args.blueprintId)
+      .eq('enabled', true);
+    if (args.previousCooldownUntil) {
+      query = query.eq('comments_manual_cooldown_until', args.previousCooldownUntil);
+    } else {
+      query = query.is('comments_manual_cooldown_until', null);
+    }
+    const { data, error } = await query.select('blueprint_id').maybeSingle();
+    if (error) {
+      if (isMissingRelationError(error, 'blueprint_youtube_refresh_state')) return { claimed: false as const, cooldownUntil: null };
+      throw error;
+    }
+    if (!data?.blueprint_id) {
+      return { claimed: false as const, cooldownUntil: null };
+    }
+    return {
+      claimed: true as const,
+      cooldownUntil,
+    };
+  }
+
+  async function releaseManualCommentsRefreshCooldown(args: {
+    db: DbClient;
+    blueprintId: string;
+    expectedCooldownUntil: string;
+    previousCooldownUntil: string | null;
+    previousManualRefreshAt: string | null;
+    previousManualTriggeredBy: string | null;
+  }) {
+    const nowIso = new Date().toISOString();
+    await args.db
+      .from('blueprint_youtube_refresh_state')
+      .update({
+        comments_manual_cooldown_until: args.previousCooldownUntil,
+        last_comments_manual_refresh_at: args.previousManualRefreshAt,
+        last_comments_manual_triggered_by: args.previousManualTriggeredBy,
+        updated_at: nowIso,
+      })
+      .eq('blueprint_id', args.blueprintId)
+      .eq('comments_manual_cooldown_until', args.expectedCooldownUntil);
+  }
+
   async function registerRefreshStateForBlueprint(args: {
     db: DbClient;
     blueprintId: string;
@@ -408,7 +550,9 @@ export function createBlueprintYouTubeCommentsService(input: {
       patch: {
         enabled: true,
         next_view_refresh_at: toFutureIsoFromHours(refreshViewIntervalHours),
-        next_comments_refresh_at: toFutureIsoFromHours(refreshCommentsIntervalHours),
+        next_comments_refresh_at: toFutureIsoFromMinutes(commentsAutoFirstDelayMinutes),
+        comments_auto_stage: 0,
+        comments_manual_cooldown_until: null,
         last_error_message: null,
       },
     });
@@ -438,13 +582,20 @@ export function createBlueprintYouTubeCommentsService(input: {
           youtube_video_id: videoId,
           source_item_id: record.source_item_id == null ? null : String(record.source_item_id || '').trim() || null,
           next_due_at: record[dueColumn] == null ? null : String(record[dueColumn] || '').trim() || null,
+          ...(args.kind === 'comments'
+            ? { comments_auto_stage: normalizeAutoStage(record.comments_auto_stage) }
+            : {}),
         });
       }
     };
 
+    const dueColumnSelect = args.kind === 'comments'
+      ? `blueprint_id,youtube_video_id,source_item_id,${dueColumn},comments_auto_stage`
+      : `blueprint_id,youtube_video_id,source_item_id,${dueColumn}`;
+
     const dueQuery = await args.db
       .from('blueprint_youtube_refresh_state')
-      .select(`blueprint_id,youtube_video_id,source_item_id,${dueColumn}`)
+      .select(dueColumnSelect)
       .eq('enabled', true)
       .lte(dueColumn, nowIso)
       .limit(Math.max(limit * 3, 30));
@@ -457,7 +608,7 @@ export function createBlueprintYouTubeCommentsService(input: {
     if (rowsByKey.size < limit) {
       const nullQuery = await args.db
         .from('blueprint_youtube_refresh_state')
-        .select(`blueprint_id,youtube_video_id,source_item_id,${dueColumn}`)
+        .select(dueColumnSelect)
         .eq('enabled', true)
         .is(dueColumn, null)
         .limit(Math.max(limit * 3, 30));
@@ -470,7 +621,11 @@ export function createBlueprintYouTubeCommentsService(input: {
       }
     }
 
-    const candidates = [...rowsByKey.values()];
+    const candidates = [...rowsByKey.values()].filter((row) => {
+      if (args.kind !== 'comments') return true;
+      const commentsAutoStage = normalizeAutoStage((row as Record<string, unknown>).comments_auto_stage);
+      return commentsAutoStage < 2;
+    });
     if (candidates.length === 0) return [];
 
     const blueprintIds = candidates.map((row) => row.blueprint_id);
@@ -536,14 +691,17 @@ export function createBlueprintYouTubeCommentsService(input: {
     runId?: string | null;
     blueprintId: string;
     kind: BlueprintYouTubeRefreshKind;
+    trigger?: BlueprintYouTubeRefreshTrigger;
     youtubeVideoId: string;
     sourceItemId?: string | null;
+    triggeredByUserId?: string | null;
   }) {
     if (!apiKey) return;
     const nowIso = new Date().toISOString();
     const sourceItemId = String(args.sourceItemId || '').trim() || null;
     const eventPayloadBase = {
       refresh_kind: args.kind,
+      refresh_trigger: args.trigger || 'auto',
       blueprint_id: args.blueprintId,
       video_id: args.youtubeVideoId,
     };
@@ -666,6 +824,10 @@ export function createBlueprintYouTubeCommentsService(input: {
     }
 
     try {
+      const refreshState = await getRefreshStateForBlueprint({
+        db: args.db,
+        blueprintId: args.blueprintId,
+      });
       const topComments = await fetchYouTubeCommentSnapshot({
         videoId: args.youtubeVideoId,
         sortMode: 'top',
@@ -688,6 +850,15 @@ export function createBlueprintYouTubeCommentsService(input: {
         sortMode: 'new',
         comments: newComments,
       });
+      const nowIsoNext = new Date().toISOString();
+      const trigger = args.trigger === 'manual' ? 'manual' : 'auto';
+      const currentAutoStage = normalizeAutoStage(refreshState?.comments_auto_stage);
+      const nextAutoStage = trigger === 'manual'
+        ? currentAutoStage
+        : (currentAutoStage <= 0 ? 1 : 2);
+      const nextCommentsRefreshAt = trigger === 'manual'
+        ? null
+        : (nextAutoStage >= 2 ? null : toFutureIsoFromHours(commentsAutoSecondDelayHours));
       await upsertRefreshState({
         db: args.db,
         blueprintId: args.blueprintId,
@@ -697,7 +868,15 @@ export function createBlueprintYouTubeCommentsService(input: {
           last_comments_refresh_at: nowIso,
           last_comments_refresh_status: 'ok',
           consecutive_comments_failures: 0,
-          next_comments_refresh_at: toFutureIsoFromHours(refreshCommentsIntervalHours),
+          comments_auto_stage: nextAutoStage,
+          next_comments_refresh_at: nextCommentsRefreshAt,
+          ...(trigger === 'manual'
+            ? {
+                last_comments_manual_refresh_at: nowIsoNext,
+                comments_manual_cooldown_until: toFutureIsoFromHours(commentsManualCooldownHours),
+                last_comments_manual_triggered_by: args.triggeredByUserId || null,
+              }
+            : {}),
           last_error_message: null,
         },
       });
@@ -725,6 +904,7 @@ export function createBlueprintYouTubeCommentsService(input: {
       const nextFailures = previousFailures + 1;
       const backoffHours = getBackoffHours(nextFailures, COMMENTS_REFRESH_BACKOFF_HOURS);
       const message = error instanceof Error ? error.message : String(error);
+      const trigger = args.trigger === 'manual' ? 'manual' : 'auto';
       await upsertRefreshState({
         db: args.db,
         blueprintId: args.blueprintId,
@@ -733,7 +913,16 @@ export function createBlueprintYouTubeCommentsService(input: {
         patch: {
           last_comments_refresh_status: 'failed',
           consecutive_comments_failures: nextFailures,
-          next_comments_refresh_at: toFutureIsoFromHours(backoffHours),
+          next_comments_refresh_at: trigger === 'manual'
+            ? null
+            : toFutureIsoFromHours(backoffHours),
+          ...(trigger === 'manual'
+            ? {
+                comments_manual_cooldown_until: toFutureIsoFromHours(commentsManualCooldownHours),
+                last_comments_manual_refresh_at: nowIso,
+                last_comments_manual_triggered_by: args.triggeredByUserId || null,
+              }
+            : {}),
           last_error_message: message,
         },
       });
@@ -874,6 +1063,9 @@ export function createBlueprintYouTubeCommentsService(input: {
     storeBlueprintYouTubeComments,
     storeSourceItemViewCount,
     registerRefreshStateForBlueprint,
+    getRefreshStateForBlueprint,
+    claimManualCommentsRefreshCooldown,
+    releaseManualCommentsRefreshCooldown,
     listDueRefreshCandidates,
     hasPendingRefreshJob,
     executeRefresh,

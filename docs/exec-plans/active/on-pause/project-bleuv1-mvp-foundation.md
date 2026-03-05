@@ -184,3 +184,6 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 1. Remaining MVP work is shipped through manual iterations without identity drift.
 2. Core product contract remains stable and understandable in one sentence.
 3. Deferred automation work can be resumed later without blocking MVP delivery.
+
+## Snapshot Note (2026-03-05)
+1. Comment freshness for YouTube-backed blueprints now uses bounded bootstrap auto-refresh (`+15m`, `+24h`) plus manual cooldown-gated refresh.

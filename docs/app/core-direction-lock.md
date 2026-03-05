@@ -90,3 +90,7 @@ Status: `canonical`
 - Active execution tracker: `docs/exec-plans/active/mvp-launch-hardening-phases.md`
 - Paused strategy playbook: `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
 - Runbook: `docs/ops/yt2bp_runbook.md`
+
+## Latest Update (2026-03-05)
+1. YouTube source comments keep stored-snapshot UX; no live page-load fetches were introduced.
+2. Refresh policy is bootstrap-first (`+15m`, `+24h`) then user-triggered manual refresh with per-blueprint cooldown.

@@ -104,6 +104,7 @@ export function registerYouTubeRouteHandlers(app: express.Express, deps: YouTube
     resolveGenerationModelProfile,
     resolveVariantOrReady,
     findVariantsByBlueprintId,
+    requestManualBlueprintYouTubeCommentsRefresh,
   } = deps;
 app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt2bpAuthLimiter, async (req, res) => {
   if (!yt2bpEnabled) {
@@ -378,6 +379,83 @@ app.get('/api/blueprints/:id/variants', async (req, res) => {
       ok: false,
       error_code: 'READ_FAILED',
       message,
+      data: null,
+    });
+  }
+});
+
+app.post('/api/blueprints/:id/youtube-comments/refresh', async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  if (!userId) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+  const blueprintId = String(req.params.id || '').trim();
+  if (!blueprintId) {
+    return res.status(400).json({ ok: false, error_code: 'INVALID_INPUT', message: 'Blueprint id required.', data: null });
+  }
+  const db = getServiceSupabaseClient();
+  if (!db) {
+    return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+  }
+
+  try {
+    const result = await requestManualBlueprintYouTubeCommentsRefresh({
+      db,
+      blueprintId,
+      requestedByUserId: userId,
+    });
+    if (result.ok) {
+      return res.status(202).json({
+        ok: true,
+        error_code: null,
+        message: result.status === 'already_pending' ? 'comments refresh already pending' : 'comments refresh queued',
+        data: {
+          status: result.status,
+          cooldown_until: result.cooldown_until,
+          queue_depth: result.queue_depth,
+        },
+      });
+    }
+
+    if (result.code === 'COMMENTS_REFRESH_COOLDOWN_ACTIVE') {
+      return res.status(429).json({
+        ok: false,
+        error_code: 'COMMENTS_REFRESH_COOLDOWN_ACTIVE',
+        message: 'Please try again tomorrow.',
+        retry_at: result.retry_at,
+        data: null,
+      });
+    }
+    if (result.code === 'COMMENTS_REFRESH_AUTO_BOOTSTRAP_PENDING') {
+      return res.status(409).json({
+        ok: false,
+        error_code: 'COMMENTS_REFRESH_AUTO_BOOTSTRAP_PENDING',
+        message: 'Automatic source comment updates are still in progress for this blueprint.',
+        retry_at: result.retry_at,
+        data: null,
+      });
+    }
+    if (result.code === 'COMMENTS_REFRESH_QUEUE_GUARDED') {
+      return res.status(429).json({
+        ok: false,
+        error_code: 'COMMENTS_REFRESH_QUEUE_GUARDED',
+        message: 'Comments refresh queue is busy. Please retry shortly.',
+        retry_after_seconds: result.retry_after_seconds,
+        queue_depth: result.queue_depth,
+        data: null,
+      });
+    }
+    return res.status(404).json({
+      ok: false,
+      error_code: 'BLUEPRINT_YOUTUBE_REFRESH_NOT_AVAILABLE',
+      message: 'No source comments available for this blueprint.',
+      data: null,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error_code: 'COMMENTS_REFRESH_FAILED',
+      message: error instanceof Error ? error.message : 'Could not request comments refresh.',
       data: null,
     });
   }

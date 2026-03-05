@@ -153,7 +153,11 @@ import { createSourcePageAssetSweepService } from './services/sourcePageAssetSwe
 import { createAutoBannerQueueService } from './services/autoBannerQueue';
 import { createSourceSubscriptionSyncService } from './services/sourceSubscriptionSync';
 import { createBlueprintCreationService } from './services/blueprintCreation';
-import { createBlueprintYouTubeCommentsService, type BlueprintYouTubeRefreshKind } from './services/blueprintYoutubeComments';
+import {
+  createBlueprintYouTubeCommentsService,
+  type BlueprintYouTubeRefreshKind,
+  type BlueprintYouTubeRefreshTrigger,
+} from './services/blueprintYoutubeComments';
 import { createYouTubeBlueprintPipelineService } from './services/youtubeBlueprintPipeline';
 import {
   createGenerationTierAccessResolver,
@@ -309,7 +313,9 @@ const youtubeRefreshQueueDepthGuard = clampInt(process.env.YOUTUBE_REFRESH_QUEUE
 const youtubeRefreshViewMaxPerCycle = clampInt(process.env.YOUTUBE_REFRESH_VIEW_MAX_PER_CYCLE, 15, 0, 500);
 const youtubeRefreshCommentsMaxPerCycle = clampInt(process.env.YOUTUBE_REFRESH_COMMENTS_MAX_PER_CYCLE, 5, 0, 500);
 const youtubeRefreshViewIntervalHours = clampInt(process.env.YOUTUBE_REFRESH_VIEW_INTERVAL_HOURS, 12, 1, 24 * 14);
-const youtubeRefreshCommentsIntervalHours = clampInt(process.env.YOUTUBE_REFRESH_COMMENTS_INTERVAL_HOURS, 48, 1, 24 * 30);
+const youtubeCommentsAutoFirstDelayMinutes = clampInt(process.env.YOUTUBE_COMMENTS_AUTO_FIRST_DELAY_MINUTES, 15, 1, 24 * 60);
+const youtubeCommentsAutoSecondDelayHours = clampInt(process.env.YOUTUBE_COMMENTS_AUTO_SECOND_DELAY_HOURS, 24, 1, 24 * 30);
+const youtubeCommentsManualCooldownHours = clampInt(process.env.YOUTUBE_COMMENTS_MANUAL_COOLDOWN_HOURS, 24, 1, 24 * 30);
 const unlockIntakeEnabledRaw = String(process.env.UNLOCK_INTAKE_ENABLED || 'true').trim().toLowerCase();
 const unlockIntakeEnabled = !(unlockIntakeEnabledRaw === 'false' || unlockIntakeEnabledRaw === '0' || unlockIntakeEnabledRaw === 'off');
 const sourceUnlockReservationSeconds = clampInt(process.env.SOURCE_UNLOCK_RESERVATION_SECONDS, 300, 60, 3600);
@@ -1698,6 +1704,7 @@ registerYouTubeRoutes(app, {
   resolveGenerationModelProfile,
   resolveVariantOrReady: (variantInput: any) => resolveVariantOrReady(variantInput),
   findVariantsByBlueprintId: (variantInput: any) => findVariantsByBlueprintId(variantInput),
+  requestManualBlueprintYouTubeCommentsRefresh,
 });
 
 async function fetchYouTubeChannelAssetMap(input: {
@@ -2905,7 +2912,9 @@ async function maybeApplyAutoBannerPolicyAfterCreate(input: {
 const blueprintYouTubeCommentsService = createBlueprintYouTubeCommentsService({
   apiKey: youtubeDataApiKey,
   refreshViewIntervalHours: youtubeRefreshViewIntervalHours,
-  refreshCommentsIntervalHours: youtubeRefreshCommentsIntervalHours,
+  commentsAutoFirstDelayMinutes: youtubeCommentsAutoFirstDelayMinutes,
+  commentsAutoSecondDelayHours: youtubeCommentsAutoSecondDelayHours,
+  commentsManualCooldownHours: youtubeCommentsManualCooldownHours,
 });
 
 const blueprintCreationService = createBlueprintCreationService({
@@ -3048,6 +3057,7 @@ type BlueprintYouTubeEnrichmentPayload = {
 type BlueprintYouTubeRefreshPayload = {
   blueprint_id: string;
   refresh_kind: BlueprintYouTubeRefreshKind;
+  refresh_trigger: BlueprintYouTubeRefreshTrigger;
   youtube_video_id: string;
   source_item_id: string | null;
 };
@@ -4233,8 +4243,10 @@ async function enqueueBlueprintYouTubeRefreshJob(input: {
   db: ReturnType<typeof createClient>;
   blueprintId: string;
   refreshKind: BlueprintYouTubeRefreshKind;
+  refreshTrigger?: BlueprintYouTubeRefreshTrigger;
   youtubeVideoId: string;
   sourceItemId?: string | null;
+  requestedByUserId?: string | null;
 }) {
   const suppression = await shouldSuppressLowPriorityEnqueue({
     db: input.db,
@@ -4242,6 +4254,7 @@ async function enqueueBlueprintYouTubeRefreshJob(input: {
     context: {
       blueprint_id: input.blueprintId,
       refresh_kind: input.refreshKind,
+      refresh_trigger: input.refreshTrigger || 'auto',
     },
   });
   if (suppression.suppressed) {
@@ -4255,14 +4268,16 @@ async function enqueueBlueprintYouTubeRefreshJob(input: {
   const { data: job, error: jobError } = await input.db
     .from('ingestion_jobs')
     .insert({
-      trigger: 'service_cron',
+      trigger: input.refreshTrigger === 'manual' ? 'user_sync' : 'service_cron',
       scope: 'blueprint_youtube_refresh',
       status: 'queued',
+      requested_by_user_id: input.requestedByUserId || null,
       max_attempts: 1,
       trace_id: null,
       payload: {
         blueprint_id: input.blueprintId,
         refresh_kind: input.refreshKind,
+        refresh_trigger: input.refreshTrigger || 'auto',
         youtube_video_id: input.youtubeVideoId,
         source_item_id: input.sourceItemId == null ? null : String(input.sourceItemId || '').trim() || null,
       } satisfies BlueprintYouTubeRefreshPayload,
@@ -4277,6 +4292,146 @@ async function enqueueBlueprintYouTubeRefreshJob(input: {
   return {
     job_id: job.id,
   };
+}
+
+type ManualBlueprintYouTubeCommentsRefreshResult =
+  | { ok: true; status: 'queued' | 'already_pending'; cooldown_until: string | null; queue_depth: number | null }
+  | { ok: false; code: 'BLUEPRINT_YOUTUBE_REFRESH_NOT_AVAILABLE' }
+  | { ok: false; code: 'COMMENTS_REFRESH_AUTO_BOOTSTRAP_PENDING'; retry_at: string | null }
+  | { ok: false; code: 'COMMENTS_REFRESH_COOLDOWN_ACTIVE'; retry_at: string | null }
+  | { ok: false; code: 'COMMENTS_REFRESH_QUEUE_GUARDED'; retry_after_seconds: number; queue_depth: number };
+
+async function requestManualBlueprintYouTubeCommentsRefresh(input: {
+  db: ReturnType<typeof createClient>;
+  blueprintId: string;
+  requestedByUserId: string;
+}) : Promise<ManualBlueprintYouTubeCommentsRefreshResult> {
+  const blueprintId = String(input.blueprintId || '').trim();
+  const requestedByUserId = String(input.requestedByUserId || '').trim();
+  if (!blueprintId || !requestedByUserId) {
+    return { ok: false, code: 'BLUEPRINT_YOUTUBE_REFRESH_NOT_AVAILABLE' };
+  }
+
+  await blueprintYouTubeCommentsService.registerRefreshStateForBlueprint({
+    db: input.db,
+    blueprintId,
+  });
+  const refreshState = await blueprintYouTubeCommentsService.getRefreshStateForBlueprint({
+    db: input.db,
+    blueprintId,
+  });
+  if (!refreshState || !refreshState.enabled || !refreshState.youtube_video_id) {
+    return { ok: false, code: 'BLUEPRINT_YOUTUBE_REFRESH_NOT_AVAILABLE' };
+  }
+
+  const nowMs = Date.now();
+  if (refreshState.comments_auto_stage < 2) {
+    return {
+      ok: false,
+      code: 'COMMENTS_REFRESH_AUTO_BOOTSTRAP_PENDING',
+      retry_at: refreshState.next_comments_refresh_at || null,
+    };
+  }
+
+  const cooldownMs = refreshState.comments_manual_cooldown_until
+    ? Date.parse(refreshState.comments_manual_cooldown_until)
+    : Number.NaN;
+  if (Number.isFinite(cooldownMs) && cooldownMs > nowMs) {
+    return {
+      ok: false,
+      code: 'COMMENTS_REFRESH_COOLDOWN_ACTIVE',
+      retry_at: refreshState.comments_manual_cooldown_until,
+    };
+  }
+
+  const hasPending = await blueprintYouTubeCommentsService.hasPendingRefreshJob({
+    db: input.db,
+    blueprintId,
+    kind: 'comments',
+  });
+  if (hasPending) {
+    return {
+      ok: true,
+      status: 'already_pending',
+      cooldown_until: refreshState.comments_manual_cooldown_until,
+      queue_depth: null,
+    };
+  }
+
+  const queueDepth = await countQueueDepth(input.db, {
+    statuses: ['queued', 'running'],
+    scopes: [...QUEUED_INGESTION_SCOPES],
+  });
+  if (queueDepth >= youtubeRefreshQueueDepthGuard) {
+    return {
+      ok: false,
+      code: 'COMMENTS_REFRESH_QUEUE_GUARDED',
+      retry_after_seconds: 60,
+      queue_depth: queueDepth,
+    };
+  }
+
+  const claimedCooldown = await blueprintYouTubeCommentsService.claimManualCommentsRefreshCooldown({
+    db: input.db,
+    blueprintId,
+    triggeredByUserId: requestedByUserId,
+    previousCooldownUntil: refreshState.comments_manual_cooldown_until,
+  });
+  if (!claimedCooldown.claimed || !claimedCooldown.cooldownUntil) {
+    const latestState = await blueprintYouTubeCommentsService.getRefreshStateForBlueprint({
+      db: input.db,
+      blueprintId,
+    });
+    return {
+      ok: false,
+      code: 'COMMENTS_REFRESH_COOLDOWN_ACTIVE',
+      retry_at: latestState?.comments_manual_cooldown_until || null,
+    };
+  }
+
+  try {
+    const enqueueResult = await enqueueBlueprintYouTubeRefreshJob({
+      db: input.db,
+      blueprintId,
+      refreshKind: 'comments',
+      refreshTrigger: 'manual',
+      requestedByUserId,
+      youtubeVideoId: refreshState.youtube_video_id,
+      sourceItemId: refreshState.source_item_id,
+    });
+    if (enqueueResult.suppressed) {
+      await blueprintYouTubeCommentsService.releaseManualCommentsRefreshCooldown({
+        db: input.db,
+        blueprintId,
+        expectedCooldownUntil: claimedCooldown.cooldownUntil,
+        previousCooldownUntil: refreshState.comments_manual_cooldown_until,
+        previousManualRefreshAt: refreshState.last_comments_manual_refresh_at,
+        previousManualTriggeredBy: refreshState.last_comments_manual_triggered_by,
+      });
+      return {
+        ok: false,
+        code: 'COMMENTS_REFRESH_QUEUE_GUARDED',
+        retry_after_seconds: 60,
+        queue_depth: enqueueResult.queue_depth ?? queueDepth,
+      };
+    }
+    return {
+      ok: true,
+      status: 'queued',
+      cooldown_until: claimedCooldown.cooldownUntil,
+      queue_depth: queueDepth,
+    };
+  } catch {
+    await blueprintYouTubeCommentsService.releaseManualCommentsRefreshCooldown({
+      db: input.db,
+      blueprintId,
+      expectedCooldownUntil: claimedCooldown.cooldownUntil,
+      previousCooldownUntil: refreshState.comments_manual_cooldown_until,
+      previousManualRefreshAt: refreshState.last_comments_manual_refresh_at,
+      previousManualTriggeredBy: refreshState.last_comments_manual_triggered_by,
+    });
+    throw new Error('Could not enqueue manual YouTube comments refresh.');
+  }
 }
 
 async function seedSourceTranscriptRevalidateJobs(
@@ -6672,10 +6827,13 @@ function normalizeBlueprintYouTubeRefreshPayload(value: unknown): BlueprintYouTu
     : refreshKindRaw === 'comments'
       ? 'comments'
       : null;
+  const refreshTriggerRaw = String(row.refresh_trigger || '').trim().toLowerCase();
+  const refreshTrigger: BlueprintYouTubeRefreshTrigger = refreshTriggerRaw === 'manual' ? 'manual' : 'auto';
   if (!blueprintId || !youtubeVideoId || !refreshKind) return null;
   return {
     blueprint_id: blueprintId,
     refresh_kind: refreshKind,
+    refresh_trigger: refreshTrigger,
     youtube_video_id: youtubeVideoId,
     source_item_id: row.source_item_id == null ? null : String(row.source_item_id || '').trim() || null,
   };
@@ -7062,8 +7220,10 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
             traceDb: db,
             blueprintId: refreshPayload.blueprint_id,
             kind: refreshPayload.refresh_kind,
+            trigger: refreshPayload.refresh_trigger,
             youtubeVideoId: refreshPayload.youtube_video_id,
             sourceItemId: refreshPayload.source_item_id,
+            triggeredByUserId: job.requested_by_user_id || null,
           });
           await db.from('ingestion_jobs').update({
             status: 'succeeded',
@@ -7297,6 +7457,7 @@ async function runYouTubeRefreshSchedulerCycle() {
           db,
           blueprintId: candidate.blueprint_id,
           refreshKind: 'view_count',
+          refreshTrigger: 'auto',
           youtubeVideoId: candidate.youtube_video_id,
           sourceItemId: candidate.source_item_id,
         });
@@ -7328,6 +7489,7 @@ async function runYouTubeRefreshSchedulerCycle() {
           db,
           blueprintId: candidate.blueprint_id,
           refreshKind: 'comments',
+          refreshTrigger: 'auto',
           youtubeVideoId: candidate.youtube_video_id,
           sourceItemId: candidate.source_item_id,
         });

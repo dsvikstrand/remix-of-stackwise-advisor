@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Badge } from '@/components/ui/badge';
@@ -13,7 +14,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { BlueprintAnalysisView } from '@/components/blueprint/BlueprintAnalysisView';
 import { SummarySlides } from '@/components/blueprint/SummarySlides';
 import { useBlueprint, useBlueprintComments, useCreateBlueprintComment, useToggleBlueprintLike } from '@/hooks/useBlueprints';
-import { useBlueprintYoutubeComments } from '@/hooks/useBlueprintYoutubeComments';
+import {
+  BlueprintYoutubeCommentsRefreshError,
+  requestBlueprintYoutubeCommentsRefresh,
+  useBlueprintYoutubeComments,
+} from '@/hooks/useBlueprintYoutubeComments';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Heart, Maximize2, Minimize2 } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
@@ -309,12 +314,59 @@ export default function BlueprintDetail() {
   const [commentView, setCommentView] = useState<'youtube' | 'community'>('youtube');
   const [communityCommentSort, setCommunityCommentSort] = useState<'top' | 'new'>('top');
   const { data: youtubeComments, isLoading: youtubeCommentsLoading } = useBlueprintYoutubeComments(blueprintId, youtubeCommentSort);
+  const queryClient = useQueryClient();
   const { data: comments, isLoading: commentsLoading } = useBlueprintComments(blueprintId, communityCommentSort);
   const createComment = useCreateBlueprintComment();
   const toggleLike = useToggleBlueprintLike();
   const { toast } = useToast();
   const { user } = useAuth();
   const [comment, setComment] = useState('');
+  const youtubeCommentsRefresh = useMutation({
+    mutationFn: async () => {
+      if (!blueprintId) throw new Error('Blueprint id is missing.');
+      return requestBlueprintYoutubeCommentsRefresh(blueprintId);
+    },
+    onSuccess: async (result) => {
+      if (!blueprintId) return;
+      toast({
+        title: result.status === 'already_pending' ? 'Refresh already in progress' : 'Comments refresh started',
+        description: result.status === 'already_pending'
+          ? 'A refresh job is already queued for this blueprint.'
+          : 'Source comments will update once the background job completes.',
+      });
+      await queryClient.invalidateQueries({ queryKey: ['blueprint-youtube-comments', blueprintId] });
+    },
+    onError: (error) => {
+      const refreshError = error instanceof BlueprintYoutubeCommentsRefreshError ? error : null;
+      const code = String(refreshError?.code || '').trim().toUpperCase();
+      if (code === 'COMMENTS_REFRESH_COOLDOWN_ACTIVE') {
+        toast({
+          title: 'Cooldown active',
+          description: 'Please try again tomorrow.',
+        });
+        return;
+      }
+      if (code === 'COMMENTS_REFRESH_AUTO_BOOTSTRAP_PENDING') {
+        toast({
+          title: 'Automatic refresh pending',
+          description: 'This blueprint is still in its automatic comment refresh window.',
+        });
+        return;
+      }
+      if (code === 'COMMENTS_REFRESH_QUEUE_GUARDED') {
+        toast({
+          title: 'Queue busy',
+          description: 'Comments refresh queue is busy. Please retry shortly.',
+        });
+        return;
+      }
+      toast({
+        title: 'Refresh failed',
+        description: refreshError?.message || (error instanceof Error ? error.message : 'Please try again.'),
+        variant: 'destructive',
+      });
+    },
+  });
   const [isBannerExpanded, setIsBannerExpanded] = useState(false);
   const [isBannerVideoPlaying, setIsBannerVideoPlaying] = useState(false);
   const [interactiveSectionsExpanded, setInteractiveSectionsExpanded] = useState(false);
@@ -1063,6 +1115,18 @@ export default function BlueprintDetail() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <h2 className="text-lg font-semibold">{commentView === 'youtube' ? 'Comments' : 'Bleu Comments'}</h2>
                 <div className="flex shrink-0 flex-nowrap items-center gap-2">
+                  {commentView === 'youtube' ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-9 px-3"
+                      onClick={() => youtubeCommentsRefresh.mutate()}
+                      disabled={youtubeCommentsRefresh.isPending}
+                    >
+                      {youtubeCommentsRefresh.isPending ? 'Refreshing...' : 'Refresh'}
+                    </Button>
+                  ) : null}
                   <Select value={commentView} onValueChange={(value) => setCommentView(value as 'youtube' | 'community')}>
                     <SelectTrigger className="h-9 w-auto min-w-0 border-input px-2.5 outline-none ring-0 transition-none [-webkit-tap-highlight-color:transparent] focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:ring-0 data-[state=open]:ring-offset-0 [&>svg]:hidden">
                       <SelectValue />

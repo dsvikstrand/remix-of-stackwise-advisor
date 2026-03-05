@@ -85,3 +85,9 @@ j1) [todo] `npm run test`
 j2) [todo] `npm run build`
 j3) [todo] `npm run docs:refresh-check -- --json`
 j4) [todo] `npm run docs:link-check`
+
+## Snapshot Note (2026-03-05)
+k1) [have] YouTube comments refresh moved to bootstrap+manual model:
+- auto `+15m`
+- auto `+24h`
+- manual endpoint after that with per-blueprint cooldown
