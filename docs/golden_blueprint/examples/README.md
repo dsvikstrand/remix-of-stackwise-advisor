@@ -5,15 +5,15 @@ This folder contains one example blueprint per transcript, mapped to the selecte
 ## Mapping
 
 - `example_bp_ai_paper_slop.md`
-  - Transcript: `../transcripts/AI_Paper_Slop_---_Evaluating_AGENTSmd_Are_Repository-Level_Context_Files_Helpful_for_Coding_Agents.txt`
+  - Transcript file: `AI_Paper_Slop_---_Evaluating_AGENTSmd_Are_Repository-Level_Context_Files_Helpful_for_Coding_Agents.txt` (local transcript set)
   - Layout: `A — Fast Value Brief`
 
 - `example_bp_thomas_de_lauer.md`
-  - Transcript: `../transcripts/Thomas_DeLauer_---_4g_of_This_Amino_Build_More_Muscle_than_Any_Other_Compound.txt`
+  - Transcript file: `Thomas_DeLauer_---_4g_of_This_Amino_Build_More_Muscle_than_Any_Other_Compound.txt` (local transcript set)
   - Layout: `B — Deep Dive Operator`
 
 - `example_bp_italian_sausage_chowder.md`
-  - Transcript: `../transcripts/The_Bleu_Channel_---_ITALIAN_SAUSAGE_CHOWDER.txt`
+  - Transcript file: `The_Bleu_Channel_---_ITALIAN_SAUSAGE_CHOWDER.txt` (local transcript set)
   - Layout: `C — Action Playbook`
 
 ## Notes
