@@ -3,8 +3,8 @@
 This file is the authoritative active/completed registry for execution plans.
 
 ## Active
-- `docs/exec-plans/active/mvp-launch-hardening-phases.md`
-  Phase-by-phase execution checklist for queue, worker, dependency, and launch-day operational hardening.
+- `docs/exec-plans/active/mvp-readiness-review-followup.md`
+  Current active launch-hardening checklist for launch blockers, quota/cost controls, and targeted MVP-readiness follow-up.
 - `docs/ops/mvp-launch-readiness-checklist.md`
   MVP launch execution board and go/no-go gate (P0 critical + P1 useful hardening).
 - `docs/exec-plans/tech-debt-tracker.md`
@@ -36,6 +36,8 @@ This file is the authoritative active/completed registry for execution plans.
   Completed: full docs inventory/classification and deprecated-stub removal.
 - `docs/exec-plans/completed/bleuv1-refactor-a3-parity-checklist.md`
   Completed: backend-first no-behavior-drift parity contract, including final Phase 4 validation evidence.
+- `docs/exec-plans/completed/mvp-launch-hardening-phases.md`
+  Completed: earlier phase-by-phase launch hardening program retained as reference/history.
 - `docs/exec-plans/completed/bleuv1-refactor-a3-route-map-current.md`
   Completed: final modular route-distribution snapshot (`53` routes, `0` direct registrations in `server/index.ts`).
 - `docs/exec-plans/completed/bleuv1-refactor-a3-route-map-baseline.md`

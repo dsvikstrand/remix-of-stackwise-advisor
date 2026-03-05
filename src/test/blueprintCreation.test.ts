@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createBlueprintCreationService } from '../../server/services/blueprintCreation';
 import type { BlueprintSectionsV1 } from '../../server/services/blueprintSections';
-import { DailyGenerationCapReachedError } from '../../server/services/generationDailyCap';
 
 function createDbMock() {
   let insertedBlueprintPayload: Record<string, unknown> | null = null;
@@ -47,15 +46,6 @@ describe('blueprint creation canonical payload', () => {
     const { db, getInsertedBlueprintPayload } = createDbMock();
     const enqueueBlueprintYouTubeEnrichment = vi.fn(async () => undefined);
     const registerBlueprintYouTubeRefreshState = vi.fn(async () => undefined);
-    const consumeGenerationDailyCap = vi.fn(async () => ({
-      enabled: true,
-      bypass: false,
-      limit: 5,
-      used: 1,
-      remaining: 4,
-      usageDay: '2026-03-05',
-      resetAt: '2026-03-06T00:00:00.000Z',
-    }));
     const service = createBlueprintCreationService({
       getServiceSupabaseClient: () => null,
       safeGenerationTraceWrite: async () => undefined,
@@ -118,7 +108,6 @@ describe('blueprint creation canonical payload', () => {
       markVariantFailed: async () => undefined,
       enqueueBlueprintYouTubeEnrichment,
       registerBlueprintYouTubeRefreshState,
-      consumeGenerationDailyCap,
     });
 
     const result = await service.createBlueprintFromVideo(db as never, {
@@ -157,25 +146,10 @@ describe('blueprint creation canonical payload', () => {
       explicitVideoId: 'dQw4w9WgXcQ',
       explicitSourceItemId: null,
     });
-    expect(consumeGenerationDailyCap).toHaveBeenCalledTimes(1);
-    expect(consumeGenerationDailyCap).toHaveBeenCalledWith({
-      db,
-      userId: 'user_123',
-      units: 1,
-    });
   });
 
   it('does not fail blueprint creation when YouTube metadata follow-up hooks fail', async () => {
     const { db } = createDbMock();
-    const consumeGenerationDailyCap = vi.fn(async () => ({
-      enabled: true,
-      bypass: false,
-      limit: 5,
-      used: 1,
-      remaining: 4,
-      usageDay: '2026-03-05',
-      resetAt: '2026-03-06T00:00:00.000Z',
-    }));
     const service = createBlueprintCreationService({
       getServiceSupabaseClient: () => null,
       safeGenerationTraceWrite: async () => undefined,
@@ -232,7 +206,6 @@ describe('blueprint creation canonical payload', () => {
       registerBlueprintYouTubeRefreshState: async () => {
         throw new Error('refresh register failed');
       },
-      consumeGenerationDailyCap,
     });
 
     const result = await service.createBlueprintFromVideo(db as never, {
@@ -243,59 +216,5 @@ describe('blueprint creation canonical payload', () => {
     });
 
     expect(result.blueprintId).toBe('bp_123');
-    expect(consumeGenerationDailyCap).toHaveBeenCalledTimes(1);
-  });
-
-  it('surfaces daily cap-denied error and skips pipeline execution', async () => {
-    const { db } = createDbMock();
-    const runYouTubePipeline = vi.fn(async () => {
-      throw new Error('pipeline should not run when daily cap is denied');
-    });
-    const consumeGenerationDailyCap = vi.fn(async () => {
-      throw new DailyGenerationCapReachedError({
-        enabled: true,
-        bypass: false,
-        limit: 5,
-        used: 5,
-        remaining: 0,
-        usageDay: '2026-03-05',
-        resetAt: '2026-03-06T00:00:00.000Z',
-      });
-    });
-    const service = createBlueprintCreationService({
-      getServiceSupabaseClient: () => null,
-      safeGenerationTraceWrite: async () => undefined,
-      startGenerationRun: async () => undefined,
-      runYouTubePipeline,
-      toTagSlug: (value) => value,
-      mapDraftStepsForBlueprint: (steps) => steps as unknown[],
-      normalizeSummaryVariantText: (value) => value,
-      yt2bpOutputMode: 'llm_native',
-      ensureTagId: async () => 'tag_123',
-      attachBlueprintToRun: async () => undefined,
-      youtubeVideoIdRegex: /^[a-zA-Z0-9_-]{11}$/,
-      resolveGenerationModelProfile: () => ({
-        model: 'o4-mini',
-        fallbackModel: 'o4-mini',
-        reasoningEffort: 'low' as const,
-      }),
-      claimVariantForGeneration: vi.fn(),
-      markVariantReady: async () => undefined,
-      markVariantFailed: async () => undefined,
-      consumeGenerationDailyCap,
-    });
-
-    await expect(
-      service.createBlueprintFromVideo(db as never, {
-        userId: 'user_123',
-        videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-        videoId: 'dQw4w9WgXcQ',
-        sourceTag: 'manual_refresh_generate',
-      }),
-    ).rejects.toMatchObject({
-      code: 'DAILY_GENERATION_CAP_REACHED',
-    });
-    expect(consumeGenerationDailyCap).toHaveBeenCalledTimes(1);
-    expect(runYouTubePipeline).not.toHaveBeenCalled();
   });
 });

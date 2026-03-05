@@ -10,7 +10,7 @@ export function getFriendlyErrorMessage(error: unknown, fallback: string) {
     || normalized.includes('credits used')
     || normalized.includes('insufficient credits')
   ) {
-    return 'You do not have enough credits right now. Wait for refill and try again.';
+    return 'You do not have enough credits right now. Wait for the next daily reset and try again.';
   }
   if (normalized.includes('capacity') || normalized.includes('at capacity')) {
     return 'High AI activity. Please try again in a minute.';

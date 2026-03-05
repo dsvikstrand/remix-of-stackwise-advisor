@@ -72,7 +72,7 @@ a50) [have] Source Pages foundation is active: YouTube channels are now represen
 a51) [have] Subscription surfaces now deep-link to Source Pages, while legacy `/api/source-subscriptions*` contracts remain active for compatibility.
 a52) [have] Source page reads now lazily hydrate missing avatar/banner assets for legacy backfilled rows, so first open can populate visuals without requiring re-subscribe.
 a53) [have] Source pages now expose a public, deduped blueprint feed (`latest + load more`) via `GET /api/source-pages/:platform/:externalId/blueprints`, and `/s/:platform/:externalId` renders Home-style read-only blueprint cards.
-a54) [have] Source pages now include an auth-only `Video Library` section for back-catalog generation (`GET /videos`, `POST /videos/unlock`, legacy alias `POST /videos/generate`) with async queue execution and duplicate skip visibility.
+a54) [have] Source pages now include a subscriber-only `Video Library` section for back-catalog generation (`GET /videos`, `POST /videos/unlock`, legacy alias `POST /videos/generate`) with async queue execution and duplicate skip visibility.
 a55) [have] Shared source-video unlock model is active for new source-page generation: one generation per source video can be reused across subscribers.
 a56) [have] Credit model now uses refill wallets (decimal balance) instead of daily reset counters (`10.000` cap, `+1.000 / 6 min` default).
 a57) [have] Subscription auto-ingestion now writes unlockable My Feed rows (`my_feed_unlockable`) for new uploads instead of immediately generating blueprints.
@@ -85,7 +85,7 @@ a63) [have] Home now includes a first-time dismissible scope helper clarifying `
 a64) [have] Unlock backend now runs reliability sweeps (expired/stale/orphan recovery) with structured traceable logs, and unlock/generate responses include additive `trace_id`.
 a65) [have] Unlock/manual/service ingestion execution is now enqueue-first with durable DB lease claiming (no in-request `setImmediate` worker path).
 a66) [have] Service operations now include `GET /api/ops/queue/health` for queue depth, stale leases, and provider circuit snapshots.
-a67) [have] Subscription rows now support `auto_unlock_enabled` (default `true`) so new uploads can auto-attempt shared unlock generation when eligible subscribers have credits.
+a67) [have] Subscription rows now support `auto_unlock_enabled` (default `true`) so new uploads can auto-attempt source unlock generation when eligible subscribers have credits; subscriber-shared auto billing remains active follow-up work.
 a68) [have] YouTube-source blueprints now use thumbnail-first banners across cards and detail views; legacy source-linked rows are backfilled to thumbnails and source flows bypass auto-banner enqueue.
 a69) [have] Notifications MVP now emits reply and generation-terminal notifications and surfaces them through an auth inbox bell in the app header.
 a70) [have] Generation duration policy is available for MVP hardening (default off): max video length gate (`45m`), unknown-duration blocking, no-charge-on-policy-block, and partial-accept batch queueing with blocked-item details.
@@ -270,8 +270,8 @@ si36) auth endpoint: `POST /api/source-pages/:platform/:externalId/subscribe` (i
 si37) auth endpoint: `DELETE /api/source-pages/:platform/:externalId/subscribe` (unsubscribe parity + subscription notice cleanup).
 si38) compatibility note: legacy `POST/GET/PATCH/DELETE /api/source-subscriptions*` remains live while Source Pages rollout expands.
 si39) public/auth endpoint: `GET /api/source-pages/:platform/:externalId/blueprints?limit=<1..24>&cursor=<opaque?>` (public channel-published feed for the source page, deduped by `source_item_id` with `next_cursor` pagination; includes additive `source_thumbnail_url` fallback per item).
-si40) auth endpoint: `GET /api/source-pages/:platform/:externalId/videos?page_token=<optional>&limit=<1..25>&kind=<full|shorts>` (source-page video-library listing for signed-in users, includes duplicate flags per row; shorts threshold is `<=60s`).
-si41) auth endpoint: `POST /api/source-pages/:platform/:externalId/videos/unlock` (reserves credits, starts shared unlock generation queue, returns `job_id` + ready/in-progress/insufficient summary buckets + additive `trace_id`).
+si40) auth endpoint: `GET /api/source-pages/:platform/:externalId/videos?page_token=<optional>&limit=<1..25>&kind=<full|shorts>` (source-page video-library listing for subscribed signed-in users, includes duplicate flags per row; shorts threshold is `<=60s`).
+si41) auth endpoint: `POST /api/source-pages/:platform/:externalId/videos/unlock` (subscriber-only manual unlock route; reserves credits, starts unlock generation queue, returns `job_id` + ready/in-progress/insufficient summary buckets + additive `trace_id`).
 si42) compatibility alias: `POST /api/source-pages/:platform/:externalId/videos/generate` routes to unlock flow in this phase and mirrors additive `trace_id`.
 si43) `GET /api/source-pages/:platform/:externalId/videos` now includes unlock metadata per row (`unlock_status`, `unlock_cost`, `unlock_in_progress`, `ready_blueprint_id`).
 si44) `GET /api/credits` now returns refill-wallet fields (`balance`, `capacity`, `refill_rate_per_sec`, `seconds_to_full`) alongside compatibility fields (`remaining`, `limit`, `resetAt`).
@@ -300,7 +300,7 @@ si65) auth endpoint: `GET /api/notifications?limit=<1..50>&cursor=<opaque?>` ret
 si66) auth endpoint: `POST /api/notifications/:id/read` marks one notification read.
 si67) auth endpoint: `POST /api/notifications/read-all` marks all unread notifications read.
 si68) comment reply notifications are produced by DB trigger on `wall_comments` reply inserts (self-replies ignored; dedupe key is `comment_reply:<reply_comment_id>`).
-si69) generation surfaces may return `429 DAILY_GENERATION_CAP_REACHED` when the user has consumed the daily free-generation window.
+si69) generation surfaces are gated by the daily credit wallet (`free=3.00`, `plus=20.00`, reset `00:00 UTC`, no rollover); insufficient balance returns launch-safe credit denial copy.
 si70) YouTube comment snapshots for blueprints now follow a bounded lifecycle: auto refresh at `+15m` and `+24h`, then manual-only refresh with per-blueprint cooldown.
 si71) manual source-comment refresh endpoint is `POST /api/blueprints/:id/youtube-comments/refresh`; cooldown denials return `COMMENTS_REFRESH_COOLDOWN_ACTIVE`.
 
@@ -314,6 +314,6 @@ n5) Reserve `enforce` mode for non-prod verification until dedicated rollout app
 ## Key References
 k1) Architecture: `docs/architecture.md`
 k2) Program + project status: `docs/exec-plans/index.md`
-k3) Active launch hardening plan: `docs/exec-plans/active/mvp-launch-hardening-phases.md`
+k3) Active launch hardening plan: `docs/exec-plans/active/mvp-readiness-review-followup.md`
 k4) Paused strategy reference: `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
 k5) YT2BP contract: `docs/product-specs/yt2bp_v0_contract.md`

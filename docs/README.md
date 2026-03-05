@@ -13,19 +13,21 @@ This folder is the source of truth for product, architecture, planning, and oper
 2. `docs/architecture.md`
 3. `docs/app/product-spec.md`
 4. `docs/exec-plans/index.md`
-5. `docs/exec-plans/active/mvp-launch-hardening-phases.md`
+5. `docs/exec-plans/active/mvp-readiness-review-followup.md`
 6. `docs/exec-plans/tech-debt-tracker.md`
 7. `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
 8. `docs/exec-plans/active/on-pause/project-bleuv1-mvp-foundation.md`
-9. `docs/exec-plans/completed/bleuv1-manual-iteration-scheme.md`
-10. `docs/ops/yt2bp_runbook.md`
+9. `docs/exec-plans/completed/mvp-launch-hardening-phases.md`
+10. `docs/exec-plans/completed/bleuv1-manual-iteration-scheme.md`
+11. `docs/ops/yt2bp_runbook.md`
 
 ## Canonical Documents
 - Core direction lock: `docs/app/core-direction-lock.md`
 - Architecture: `docs/architecture.md`
 - Product behavior/spec: `docs/app/product-spec.md`
 - Execution registry (active/completed): `docs/exec-plans/index.md`
-- Active launch hardening tracker: `docs/exec-plans/active/mvp-launch-hardening-phases.md`
+- Active launch hardening tracker: `docs/exec-plans/active/mvp-readiness-review-followup.md`
+- Completed launch hardening phases (reference): `docs/exec-plans/completed/mvp-launch-hardening-phases.md`
 - Active engineering backlog tracker: `docs/exec-plans/tech-debt-tracker.md`
 - Paused strategy reference (`bleuV1`): `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
 - Paused MVP build reference plan: `docs/exec-plans/active/on-pause/project-bleuv1-mvp-foundation.md`

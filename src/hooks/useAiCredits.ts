@@ -9,6 +9,10 @@ export type CreditsResponse = {
   bypass?: boolean;
   balance?: number;
   capacity?: number;
+  daily_grant?: number;
+  next_reset_at?: string;
+  seconds_to_reset?: number;
+  plan?: 'free' | 'plus' | 'admin' | string | null;
   refill_rate_per_sec?: number;
   seconds_to_full?: number;
   generation_daily_limit?: number | null;
@@ -45,21 +49,21 @@ function formatDurationShort(totalSeconds: number) {
 function toAiCreditsView(credits: CreditsResponse): AiCreditsView {
   const displayBalance = Number(credits.balance ?? credits.remaining ?? 0);
   const displayCapacity = Math.max(0.001, Number(credits.capacity ?? credits.limit ?? 0));
-  const refillRate = Math.max(0, Number(credits.refill_rate_per_sec ?? 0));
-  const atCapacity = !credits.bypass && displayBalance >= displayCapacity - 0.0005;
-  const secondsPerCredit = refillRate > 0 ? Math.max(1, Math.ceil(1 / refillRate)) : null;
+  const secondsPerCredit = Number.isFinite(Number(credits.seconds_to_reset))
+    ? Math.max(0, Math.floor(Number(credits.seconds_to_reset)))
+    : null;
   const secondsToNextCredit = credits.bypass
     ? null
-    : atCapacity
+    : displayBalance >= displayCapacity - 0.0005
       ? 0
       : secondsPerCredit;
   const nextRefillLabel = credits.bypass
     ? 'Unlimited'
-    : atCapacity
+    : secondsPerCredit === 0
       ? 'Full'
       : secondsToNextCredit === null
-        ? 'Refill unknown'
-        : `+1 in ${formatDurationShort(secondsToNextCredit)}`;
+        ? 'Reset unknown'
+        : `Reset in ${formatDurationShort(secondsToNextCredit)}`;
 
   return {
     ...credits,
@@ -77,32 +81,29 @@ function toFallbackCreditsFromWallet(wallet: {
   last_refill_at: string;
 }): CreditsResponse {
   const nowMs = Date.now();
-  const lastMs = Number.isFinite(Date.parse(wallet.last_refill_at)) ? Date.parse(wallet.last_refill_at) : nowMs;
-  const elapsedSeconds = Math.max(0, (nowMs - lastMs) / 1000);
-  const refilledBalance = Math.min(
-    wallet.capacity,
-    Math.max(0, wallet.balance + elapsedSeconds * Math.max(0, wallet.refill_rate_per_sec)),
-  );
-  const remainingToFull = Math.max(0, wallet.capacity - refilledBalance);
-  const secondsToFull = wallet.refill_rate_per_sec > 0
-    ? Math.ceil(remainingToFull / wallet.refill_rate_per_sec)
-    : 0;
+  const nextReset = new Date();
+  nextReset.setUTCHours(24, 0, 0, 0);
+  const secondsToReset = Math.max(0, Math.ceil((nextReset.getTime() - nowMs) / 1000));
 
   return {
-    remaining: refilledBalance,
+    remaining: wallet.balance,
     limit: wallet.capacity,
-    resetAt: new Date(nowMs + Math.max(0, secondsToFull) * 1000).toISOString(),
+    resetAt: nextReset.toISOString(),
     bypass: false,
-    balance: refilledBalance,
+    balance: wallet.balance,
     capacity: wallet.capacity,
+    daily_grant: wallet.capacity,
+    next_reset_at: nextReset.toISOString(),
+    seconds_to_reset: secondsToReset,
+    plan: null,
     refill_rate_per_sec: wallet.refill_rate_per_sec,
-    seconds_to_full: Math.max(0, secondsToFull),
-    generation_daily_limit: null,
-    generation_daily_effective_limit: null,
-    generation_daily_used: null,
-    generation_daily_remaining: null,
-    generation_daily_reset_at: null,
-    generation_daily_bypass: null,
+    seconds_to_full: 0,
+    generation_daily_limit: wallet.capacity,
+    generation_daily_effective_limit: wallet.capacity,
+    generation_daily_used: Math.max(0, Number((wallet.capacity - wallet.balance).toFixed(2))),
+    generation_daily_remaining: wallet.balance,
+    generation_daily_reset_at: nextReset.toISOString(),
+    generation_daily_bypass: false,
     generation_plan: null,
   };
 }
@@ -177,8 +178,8 @@ export function useAiCredits(enabled: boolean) {
     queryKey: ['ai-credits'],
     queryFn: fetchCredits,
     enabled,
-    staleTime: 15_000,
-    refetchInterval: 15_000,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
     select: toAiCreditsView,
   });
 }

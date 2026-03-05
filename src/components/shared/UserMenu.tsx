@@ -78,12 +78,16 @@ export function UserMenu({ onOpenHelp }: UserMenuProps) {
     : credits
     ? Math.min(100, Math.max(0, (credits.displayBalance / Math.max(1, credits.displayCapacity)) * 100))
     : 0;
-  const planLabel = 'Standard';
+  const planLabel = credits?.plan === 'plus'
+    ? 'Plus'
+    : credits?.plan === 'admin'
+      ? 'Admin'
+      : 'Free';
   const planBadgeVariant = 'outline' as const;
-  const hasDailyGenerationCap = Number.isFinite(Number(credits?.generation_daily_limit))
-    && Number(credits?.generation_daily_limit) > 0;
-  const dailyGenerationUsed = Math.max(0, Number(credits?.generation_daily_used || 0));
-  const dailyGenerationLimit = Math.max(0, Number(credits?.generation_daily_limit || 0));
+  const hasDailyCredits = Number.isFinite(Number(credits?.daily_grant))
+    && Number(credits?.daily_grant) > 0;
+  const dailyCreditsUsed = Math.max(0, Number(credits?.generation_daily_used || 0));
+  const dailyCreditsGrant = Math.max(0, Number(credits?.daily_grant || credits?.generation_daily_limit || 0));
 
   return (
     <DropdownMenu>
@@ -134,10 +138,16 @@ export function UserMenu({ onOpenHelp }: UserMenuProps) {
             <span>Plan</span>
             <span>{planLabel}</span>
           </div>
-          {hasDailyGenerationCap ? (
+          {hasDailyCredits ? (
             <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
-              <span>Generations today</span>
-              <span>{dailyGenerationUsed}/{dailyGenerationLimit}</span>
+              <span>Used today</span>
+              <span>{dailyCreditsUsed.toFixed(2)}/{dailyCreditsGrant.toFixed(2)}</span>
+            </div>
+          ) : null}
+          {credits && !credits.bypass ? (
+            <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+              <span>Reset</span>
+              <span>{credits.nextRefillLabel}</span>
             </div>
           ) : null}
         </div>

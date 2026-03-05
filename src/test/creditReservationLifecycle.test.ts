@@ -4,16 +4,17 @@ import { createMockSupabase } from './helpers/mockSupabase';
 
 describe('credit reservation lifecycle', () => {
   it('keeps hold/settle/refund idempotent by idempotency key', async () => {
+    const nowIso = new Date().toISOString();
     const db = createMockSupabase({
       user_credit_wallets: [
         {
           user_id: 'user_1',
-          balance: 10,
-          capacity: 10,
+          balance: 3,
+          capacity: 3,
           refill_rate_per_sec: 0,
-          last_refill_at: '2026-02-20T10:00:00.000Z',
-          created_at: '2026-02-20T10:00:00.000Z',
-          updated_at: '2026-02-20T10:00:00.000Z',
+          last_refill_at: nowIso,
+          created_at: nowIso,
+          updated_at: nowIso,
         },
       ],
       credit_ledger: [],
@@ -45,7 +46,7 @@ describe('credit reservation lifecycle', () => {
     expect(holdB.ok).toBe(true);
     if (holdA.ok && holdB.ok) {
       expect(holdA.ledger_id).toBe(holdB.ledger_id);
-      expect(holdB.wallet.balance).toBeCloseTo(9, 3);
+      expect(holdB.wallet.balance).toBeCloseTo(2, 2);
     }
 
     const settleA = await settleReservation(db, {
@@ -78,7 +79,7 @@ describe('credit reservation lifecycle', () => {
       },
     });
     const balanceAfterRefundA = Number((refundA.wallet as { balance: number }).balance || 0);
-    expect(balanceAfterRefundA).toBeCloseTo(10, 3);
+    expect(balanceAfterRefundA).toBeCloseTo(3, 2);
 
     const refundB = await refundReservation(db, {
       userId: 'user_1',
@@ -90,7 +91,7 @@ describe('credit reservation lifecycle', () => {
       },
     });
     const balanceAfterRefundB = Number((refundB.wallet as { balance: number }).balance || 0);
-    expect(balanceAfterRefundB).toBeCloseTo(10, 3);
+    expect(balanceAfterRefundB).toBeCloseTo(3, 2);
 
     const holdRows = db.state.credit_ledger.filter((row: any) => row.entry_type === 'hold');
     const settleRows = db.state.credit_ledger.filter((row: any) => row.entry_type === 'settle');
@@ -101,4 +102,3 @@ describe('credit reservation lifecycle', () => {
     expect(holdRows[0]?.metadata?.trace_id).toBe('ut_credit_1');
   });
 });
-

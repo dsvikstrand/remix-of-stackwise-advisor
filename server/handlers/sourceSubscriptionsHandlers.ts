@@ -405,29 +405,24 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
       },
     });
   }
-  try {
-    const dailyStatus = await deps.getGenerationDailyCapStatus({
-      db: serviceDb,
-      userId,
-    });
-    if (!dailyStatus?.bypass && Number(dailyStatus?.remaining || 0) <= 0) {
-      return res.status(429).json({
+  const creditCheck = await deps.consumeCredit(userId, {
+    reasonCode: 'MANUAL_REFRESH_SELECTION',
+  });
+  if (!creditCheck.ok) {
+    if (creditCheck.reason === 'service' || String(creditCheck.errorCode || '').trim().toUpperCase() === 'CREDITS_UNAVAILABLE') {
+      return res.status(503).json({
         ok: false,
-        error_code: 'DAILY_GENERATION_CAP_REACHED',
-        message: 'Daily generation cap reached. Please retry after reset.',
-        data: {
-          generation_daily_limit: Number(dailyStatus.limit || 0),
-          generation_daily_used: Number(dailyStatus.used || 0),
-          generation_daily_remaining: Number(dailyStatus.remaining || 0),
-          generation_daily_reset_at: dailyStatus.resetAt || null,
-        },
+        error_code: 'CREDITS_UNAVAILABLE',
+        message: 'Credits backend unavailable.',
+        data: null,
       });
     }
-  } catch (dailyCapError) {
-    return res.status(500).json({
+    return res.status(429).json({
       ok: false,
-      error_code: 'GENERATION_DAILY_CAP_UNAVAILABLE',
-      message: dailyCapError instanceof Error ? dailyCapError.message : 'Daily generation cap check failed.',
+      error_code: 'INSUFFICIENT_CREDITS',
+      message: creditCheck.reason === 'global'
+        ? 'We’re at capacity right now. Please try again in a few minutes.'
+        : 'Insufficient credits right now. Please wait for the next daily reset and try again.',
       data: null,
     });
   }

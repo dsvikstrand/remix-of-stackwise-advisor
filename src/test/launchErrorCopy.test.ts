@@ -6,12 +6,17 @@ describe('launchErrorCopy', () => {
     expect(getLaunchErrorCopy({
       errorCode: 'INSUFFICIENT_CREDITS',
       fallback: 'fallback',
-    })).toBe('Insufficient credits right now. Please wait for refill and try again.');
+    })).toBe('Insufficient credits right now. Please wait for the next daily reset and try again.');
 
     expect(getLaunchErrorCopy({
       errorCode: 'DAILY_GENERATION_CAP_REACHED',
       fallback: 'fallback',
-    })).toBe('Daily generation cap reached. Please try again after reset.');
+    })).toBe('No daily credits remain right now. Please try again after reset.');
+
+    expect(getLaunchErrorCopy({
+      errorCode: 'SOURCE_PAGE_SUBSCRIPTION_REQUIRED',
+      fallback: 'fallback',
+    })).toBe('Subscribe to this source before using its Video Library.');
 
     expect(getLaunchErrorCopy({
       errorCode: 'TRANSCRIPT_UNAVAILABLE',

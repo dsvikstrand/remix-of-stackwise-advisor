@@ -2933,7 +2933,6 @@ const blueprintCreationService = createBlueprintCreationService({
   claimVariantForGeneration,
   markVariantReady,
   markVariantFailed,
-  consumeGenerationDailyCap: generationDailyCapService.consume,
   enqueueBlueprintYouTubeEnrichment: enqueueBlueprintYouTubeEnrichmentJob,
   registerBlueprintYouTubeRefreshState: blueprintYouTubeCommentsService.registerRefreshStateForBlueprint,
 });
@@ -7639,6 +7638,7 @@ registerSourceSubscriptionsRoutes(app, {
   isDualGenerateEnabledForUser,
   getDualGenerateTiers,
   resolveVariantOrReady,
+  consumeCredit,
   getGenerationDailyCapStatus: generationDailyCapService.getStatus,
 });
 
@@ -7684,6 +7684,7 @@ registerSourcePagesRoutes(app, {
   reserveUnlock,
   sourceUnlockReservationSeconds,
   reserveCredits,
+  refundReservation,
   buildUnlockLedgerIdempotencyKey,
   failUnlock,
   attachReservationLedger,

@@ -91,6 +91,7 @@ export type SourcePagesRouteDeps = {
   reserveUnlock: any;
   sourceUnlockReservationSeconds: number;
   reserveCredits: any;
+  refundReservation: any;
   buildUnlockLedgerIdempotencyKey: any;
   failUnlock: any;
   attachReservationLedger: any;

@@ -29,97 +29,97 @@ b6) [todo] Current launch recommendation: `GO (P0 cleared)`.
 ## P0 Critical (Must Complete Before Launch)
 
 ### P0-1 Deployment Parity Guard
-c1) [todo] Risk: `blocking`
-c2) [todo] Owner: `david`
-c3) [todo] Target date: `2026-03-06`
+c1) [have] Risk: `blocking`
+c2) [have] Owner: `david`
+c3) [have] Target date: `2026-03-06`
 c4) [have] Status: `done`
-c5) [todo] Scope:
+c5) [have] Scope:
 - backend and frontend release SHAs must match planned release commit set
 - no deploy drift between Oracle and GitHub `main`
-c6) [todo] Verification:
+c6) [have] Verification:
 - `ssh oracle-free "cd /home/ubuntu/remix-of-stackwise-advisor && git rev-parse HEAD"`
 - compare with release SHA recorded in this file
-c7) [todo] Pass criteria:
+c7) [have] Pass criteria:
 - exact SHA match
 - smoke routes return expected status
 c8) [have] Evidence: `Final parity evidence captured in Evidence Log (o14-o17).`
 
 ### P0-2 Migration Parity Guard
-d1) [todo] Risk: `blocking`
-d2) [todo] Owner: `david`
-d3) [todo] Target date: `2026-03-06`
+d1) [have] Risk: `blocking`
+d2) [have] Owner: `david`
+d3) [have] Target date: `2026-03-06`
 d4) [have] Status: `done`
-d5) [todo] Scope:
+d5) [have] Scope:
 - production DB schema matches required migration level for release
-d6) [todo] Verification:
+d6) [have] Verification:
 - `npx supabase migration list`
 - confirm latest required migration IDs are applied in production
-d7) [todo] Pass criteria:
+d7) [have] Pass criteria:
 - no pending required migration for release
 - no runtime schema errors on critical flows
 d8) [have] Evidence: `Final migration parity evidence captured in Evidence Log (o16).`
 
 ### P0-3 Credit Fail-Safe (No Silent Fail-Open)
-e1) [todo] Risk: `blocking`
-e2) [todo] Owner: `david`
-e3) [todo] Target date: `2026-03-07`
+e1) [have] Risk: `blocking`
+e2) [have] Owner: `david`
+e3) [have] Target date: `2026-03-07`
 e4) [have] Status: `done`
-e5) [todo] Scope:
+e5) [have] Scope:
 - production must not silently operate in credit fallback/bypass mode
 - missing DB/service-role path must be visible and actionable
-e6) [todo] Verification:
+e6) [have] Verification:
 - startup/runtime validation check recorded in release notes
 - `/api/credits` verified with real DB-backed values on production
-e7) [todo] Pass criteria:
+e7) [have] Pass criteria:
 - DB-backed credits confirmed in production
 - explicit operator signal on credit path failure
 e8) [have] Evidence: `Sidecar outage drill completed with production non-impact evidence (o25-o28).`
 
 ### P0-4 Incident Toggle Drill (Pause/Recover)
-f1) [todo] Risk: `high`
-f2) [todo] Owner: `david`
-f3) [todo] Target date: `2026-03-08`
+f1) [have] Risk: `high`
+f2) [have] Owner: `david`
+f3) [have] Target date: `2026-03-08`
 f4) [have] Status: `done`
-f5) [todo] Scope:
+f5) [have] Scope:
 - rehearse intake pause and safe recovery under realistic queue load
-f6) [todo] Drill sequence:
+f6) [have] Drill sequence:
 - set `UNLOCK_INTAKE_ENABLED=false`
 - verify deterministic rejection code for new intake
 - recover queue health
 - set `UNLOCK_INTAKE_ENABLED=true`
-f7) [todo] Pass criteria:
+f7) [have] Pass criteria:
 - full pause/recover run completed within `15` minutes
 - no data loss, no stuck-running growth
 f8) [have] Evidence: `Pause/recover rerun captured with deterministic paused-endpoint rejection and recovery proof (o29-o31).`
 
 ### P0-5 User-Facing Error Copy Normalization
-g1) [todo] Risk: `high`
-g2) [todo] Owner: `david`
-g3) [todo] Target date: `2026-03-09`
+g1) [have] Risk: `high`
+g2) [have] Owner: `david`
+g3) [have] Target date: `2026-03-09`
 g4) [have] Status: `done`
-g5) [todo] Scope:
+g5) [have] Scope:
 - one plain-language message per critical failure class across launch surfaces
-g6) [todo] Required classes:
+g6) [have] Required classes:
 - insufficient credits
 - transcript unavailable
 - rate limited
 - queue backpressure / generic retry
-g7) [todo] Pass criteria:
+g7) [have] Pass criteria:
 - no raw internal payload text in user-facing toasts/cards
 - same code class maps to same user copy across key pages
 g8) [have] Evidence: `Canonical mapper usage verified across Search/SourcePage/Wall/MyFeedTimeline + dedicated test pass (o32-o33).`
 
 ### P0-6 Terms/Privacy Baseline
-h1) [todo] Risk: `high`
-h2) [todo] Owner: `david`
-h3) [todo] Target date: `2026-03-09`
+h1) [have] Risk: `high`
+h2) [have] Owner: `david`
+h3) [have] Target date: `2026-03-09`
 h4) [have] Status: `done`
-h5) [todo] Scope:
+h5) [have] Scope:
 - Terms and Privacy pages/routes exist and are reachable from auth surface
-h6) [todo] Verification:
+h6) [have] Verification:
 - route checks in production build
 - links on `/auth` resolve correctly
-h7) [todo] Pass criteria:
+h7) [have] Pass criteria:
 - non-placeholder legal baseline content is live
 h8) [have] Evidence: `Browser deep-link proof captured via Playwright for /terms, /privacy, /auth (o36-o38).`
 
@@ -249,9 +249,11 @@ o35) [have] `2026-03-05T14:55:35Z` - `P0-6` - `root frontend host is reachable` 
 o36) [have] `2026-03-05T15:22:09Z` - `P0-6` - `browser deep-link proof /terms` - `npx playwright screenshot --wait-for-selector "text=Terms of Service" https://dsvikstrand.github.io/remix-of-stackwise-advisor/terms /tmp/bleu-p0-6-proof/terms.png => selector matched, screenshot captured` - `david`
 o37) [have] `2026-03-05T15:22:09Z` - `P0-6` - `browser deep-link proof /privacy` - `npx playwright screenshot --wait-for-selector "text=Privacy Policy" https://dsvikstrand.github.io/remix-of-stackwise-advisor/privacy /tmp/bleu-p0-6-proof/privacy.png => selector matched, screenshot captured` - `david`
 o38) [have] `2026-03-05T15:22:09Z` - `P0-6` - `browser deep-link proof /auth` - `npx playwright screenshot --wait-for-selector "text=Sign in to create blueprints" https://dsvikstrand.github.io/remix-of-stackwise-advisor/auth /tmp/bleu-p0-6-proof/auth.png => selector matched, screenshot captured` - `david`
+o39) [have] `2026-03-05T15:28:54Z` - `P1-1` - `CI Gate rerun passed after docs-link fix` - `GitHub Actions CI Gate #5 for commit b31c663 completed with conclusion=success` - `david`
+o40) [todo] `2026-03-05T15:28:54Z` - `P1-1` - `branch-protection required-check evidence pending` - `Need repository-settings proof that required checks block merge to main` - `david`
 
 ## Deferred (Not Launch Gate)
 p1) [have] P2 modularization and post-launch optimizations are intentionally out of launch gate.
 p2) [have] Track those in:
 - `docs/exec-plans/tech-debt-tracker.md`
-- `docs/exec-plans/active/mvp-launch-hardening-phases.md` (phases 7/8 and later)
+- `docs/exec-plans/completed/mvp-launch-hardening-phases.md` (historical phases 7/8 and later)

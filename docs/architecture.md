@@ -59,7 +59,7 @@
   - Source page surface in `src/pages/SourcePage.tsx` at `/s/:platform/:externalId`:
     - public-readable source header (avatar/title/follower count + source link)
     - authenticated subscribe/unsubscribe actions
-    - authenticated `Video Library` section for creator back-catalog selection (`select -> unlock -> async generation`) with two filters: `Full videos` and `Shorts` (`<=60s` threshold).
+    - subscriber-only `Video Library` section for creator back-catalog selection (`select -> unlock -> async generation`) with two filters: `Full videos` and `Shorts` (`<=60s` threshold).
     - source blueprint feed is now live: public-only channel-published cards, deduped by source video (`source_item_id`), newest-first, with `Load more` cursor pagination.
     - source feed cards are Home-style read-only (`open blueprint` on card click, no like/comment/share controls in this step).
     - reload-resume trust behavior: active unlock jobs are restored from `GET /api/ingestion/jobs/latest-mine?scope=source_item_unlock_generation`.
@@ -73,7 +73,7 @@
     - marks completion only after successful import (`imported` or `reactivated` > 0)
     - skip path records non-blocking onboarding state.
   - User menu includes a direct `Subscriptions` shortcut to `/subscriptions`; profile tab keeps a lightweight owner-only list with `Unsubscribe`.
-  - User menu credit panel shows refill timing (`next +1`) plus latest wallet ledger activity summary when available.
+  - User menu credit panel shows daily reset timing plus latest wallet ledger activity summary when available.
   - Header now includes an auth-only notifications bell inbox (reply + generation terminal notifications with read/read-all actions).
   - Legal baseline routes are first-class in runtime (`/terms`, `/privacy`) and linked from auth.
 - Backend:
@@ -97,9 +97,9 @@
       - includes opportunistic lazy hydration for missing source avatar/banner assets on legacy backfilled rows.
       - handler dependency wiring is required for opportunistic sweep path so search remains process-safe under runtime errors.
     - `GET /api/source-pages/:platform/:externalId/blueprints` (public-readable source blueprint feed, deduped by `source_item_id`, cursor-paginated via `next_cursor`, additive `source_thumbnail_url` per item)
-    - `GET /api/source-pages/:platform/:externalId/videos` (auth-only source video-library listing with duplicate state flags for requester and `kind=full|shorts` filter)
+    - `GET /api/source-pages/:platform/:externalId/videos` (auth-only, subscriber-only source video-library listing with duplicate state flags for requester and `kind=full|shorts` filter)
       - list limiter policy: burst `4/15s` + sustained `40/10m` per user/IP.
-    - `POST /api/source-pages/:platform/:externalId/videos/unlock` (auth-only shared unlock + queue start for selected source-library videos, ingestion scope `source_item_unlock_generation`)
+    - `POST /api/source-pages/:platform/:externalId/videos/unlock` (auth-only, subscriber-only manual unlock + queue start for selected source-library videos, ingestion scope `source_item_unlock_generation`)
       - unlock limiter policy: burst `8/10s` + sustained `120/10m` per user/IP.
       - response now includes additive `data.trace_id` for end-to-end unlock tracing.
       - queue guardrails: `QUEUE_DEPTH_HARD_LIMIT`, `QUEUE_DEPTH_PER_USER_LIMIT`; overflow returns `QUEUE_BACKPRESSURE` with `retry_after_seconds`.
@@ -184,7 +184,7 @@
    - unsubscribe removes that user-scoped notice card while preserving other My Feed blueprint items.
 4. Subscription sync after checkpoint:
    - new uploads create unlockable feed rows (`my_feed_unlockable`) instead of immediate generation.
-   - new uploads can auto-attempt unlock generation when eligible subscribers are available (`auto_unlock_enabled=true`), prioritizing the current subscriber first, then sampling up to 3 users and stopping on first successful credit hold.
+   - new uploads can auto-attempt unlock generation when eligible subscribers are available (`auto_unlock_enabled=true`); subscriber-shared auto billing remains tracked in the active hardening follow-up.
    - if auto-attempt fails due temporary credit availability, backend enqueues bounded retry jobs (`source_auto_unlock_retry`) before falling back to manual unlock-only state.
    - unlock cards can be activated by one user; successful generation fans out shared blueprint linkage to subscribed users for that source item.
    - source unlock pricing uses `1 / active_subscribers` (clamped and rounded), with hold -> settle/refund ledger flow.
@@ -230,7 +230,8 @@ Current production behavior note:
 - Product behavior:
   - `docs/app/product-spec.md`
 - Program direction:
-  - `docs/exec-plans/active/mvp-launch-hardening-phases.md`
+  - `docs/exec-plans/active/mvp-readiness-review-followup.md`
+  - `docs/exec-plans/completed/mvp-launch-hardening-phases.md`
   - paused strategy reference: `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
 - Eval policy classes used today:
   - `llm_blueprint_quality_v0`
@@ -297,7 +298,7 @@ Current production behavior note:
 ## 8) Document Ownership
 - Canonical architecture doc: `docs/architecture.md`.
 - Product contract: `docs/app/product-spec.md`.
-- Active program plan: `docs/exec-plans/active/mvp-launch-hardening-phases.md`.
+- Active program plan: `docs/exec-plans/active/mvp-readiness-review-followup.md`.
 - Freshness mapping: `docs/_freshness_map.json`.
 
 ## 9) YouTube Metadata Refresh Policy (2026-03-05)

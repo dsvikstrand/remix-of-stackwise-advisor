@@ -35,11 +35,6 @@ function pruneGlobal(nowMs: number) {
   state.global.timestamps = state.global.timestamps.filter((ts) => nowMs - ts <= GLOBAL_WINDOW_MS);
 }
 
-function nextResetAtFromWallet(secondsToFull: number) {
-  const seconds = Math.max(0, Number(secondsToFull || 0));
-  return new Date(Date.now() + seconds * 1000).toISOString();
-}
-
 function normalizeErrorMessage(error: unknown, fallback: string) {
   const message = error instanceof Error ? error.message : String(error || '').trim();
   return message || fallback;
@@ -69,10 +64,14 @@ export async function getCredits(userId: string) {
     return {
       remaining: wallet.balance,
       limit: wallet.capacity,
-      resetAt: nextResetAtFromWallet(wallet.seconds_to_full),
+      resetAt: wallet.next_reset_at,
       bypass: wallet.bypass,
       balance: wallet.balance,
       capacity: wallet.capacity,
+      daily_grant: wallet.daily_grant,
+      next_reset_at: wallet.next_reset_at,
+      seconds_to_reset: wallet.seconds_to_reset,
+      plan: wallet.plan,
       refill_rate_per_sec: wallet.refill_rate_per_sec,
       seconds_to_full: wallet.seconds_to_full,
       credits_backend_mode: wallet.bypass ? 'bypass' : 'db',
@@ -80,8 +79,17 @@ export async function getCredits(userId: string) {
       credits_backend_error: null,
       credits_backend_defaults: {
         capacity: defaults.capacity,
+        daily_grant_free: defaults.daily_grant_free,
+        daily_grant_plus: defaults.daily_grant_plus,
         refill_rate_per_sec: defaults.refill_rate_per_sec,
       },
+      generation_daily_limit: wallet.daily_grant,
+      generation_daily_effective_limit: wallet.daily_grant,
+      generation_daily_used: Math.max(0, Number((wallet.daily_grant - wallet.balance).toFixed(2))),
+      generation_daily_remaining: wallet.balance,
+      generation_daily_reset_at: wallet.next_reset_at,
+      generation_daily_bypass: wallet.bypass,
+      generation_plan: wallet.plan,
     };
   } catch (error) {
     throwCreditsUnavailable(normalizeErrorMessage(error, 'Failed to read credits wallet.'));
@@ -147,7 +155,10 @@ export async function consumeCredit(
       reason: 'user' as const,
       remaining: consumed.wallet.balance,
       limit: consumed.wallet.capacity,
-      resetAt: nextResetAtFromWallet(consumed.wallet.seconds_to_full),
+      resetAt: consumed.wallet.next_reset_at,
+      dailyGrant: consumed.wallet.daily_grant,
+      nextResetAt: consumed.wallet.next_reset_at,
+      plan: consumed.wallet.plan,
       balance: consumed.wallet.balance,
       capacity: consumed.wallet.capacity,
       refill_rate_per_sec: consumed.wallet.refill_rate_per_sec,
@@ -162,8 +173,11 @@ export async function consumeCredit(
     ok: true as const,
     remaining: wallet.balance,
     limit: wallet.capacity,
-    resetAt: nextResetAtFromWallet(wallet.seconds_to_full),
+    resetAt: wallet.next_reset_at,
     bypass: wallet.bypass,
+    dailyGrant: wallet.daily_grant,
+    nextResetAt: wallet.next_reset_at,
+    plan: wallet.plan,
     balance: wallet.balance,
     capacity: wallet.capacity,
     refill_rate_per_sec: wallet.refill_rate_per_sec,

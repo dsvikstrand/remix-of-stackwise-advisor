@@ -58,6 +58,8 @@ function getSourcePageErrorMessage(error: unknown, fallback: string) {
         return 'This source platform is not supported yet.';
       case 'AUTH_REQUIRED':
         return 'Sign in required.';
+      case 'SOURCE_PAGE_SUBSCRIPTION_REQUIRED':
+        return 'Subscribe to this source to use its Video Library.';
       default:
         return error.message || fallback;
     }
@@ -70,6 +72,7 @@ function getSourceVideoLibraryErrorMessage(error: unknown, fallback: string) {
     switch (error.errorCode) {
       case 'AUTH_REQUIRED':
         return 'Sign in required.';
+      case 'SOURCE_PAGE_SUBSCRIPTION_REQUIRED':
       case 'RATE_LIMITED':
       case 'INSUFFICIENT_CREDITS':
       case 'DAILY_GENERATION_CAP_REACHED':

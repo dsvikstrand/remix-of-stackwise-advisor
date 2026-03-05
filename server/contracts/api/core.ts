@@ -8,6 +8,9 @@ export type CreditCheck = {
   remaining?: number;
   limit?: number;
   resetAt?: string | null;
+  dailyGrant?: number | null;
+  nextResetAt?: string | null;
+  plan?: 'free' | 'plus' | 'admin' | string | null;
   errorCode?: string;
   message?: string;
 };

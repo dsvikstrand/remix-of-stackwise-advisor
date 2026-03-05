@@ -553,7 +553,7 @@ export default function SearchPage() {
     if (!hasEnoughCredits) {
       toast({
         title: 'Not enough credits',
-        description: 'Wait for refill, then try again.',
+        description: 'Wait for the next daily reset, then try again.',
         variant: 'destructive',
       });
       return;

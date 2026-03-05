@@ -25,11 +25,13 @@ type LedgerRow = {
 };
 
 const DEFAULT_CAPACITY = clampNumber(process.env.CREDIT_WALLET_CAPACITY, 10, 1, 10_000);
-const DEFAULT_REFILL_SECONDS_PER_CREDIT = clampNumber(process.env.CREDIT_REFILL_SECONDS_PER_CREDIT, 360, 1, 86_400);
-const DEFAULT_REFILL_RATE_PER_SEC = round6(1 / DEFAULT_REFILL_SECONDS_PER_CREDIT);
-const DEFAULT_INITIAL_BALANCE = round3(Math.min(
+const FREE_DAILY_GRANT = clampNumber(process.env.CREDIT_WALLET_FREE_DAILY_GRANT, 3, 0.01, 10_000);
+const PLUS_DAILY_GRANT = clampNumber(process.env.CREDIT_WALLET_PLUS_DAILY_GRANT, 20, 0.01, 10_000);
+const ADMIN_DAILY_GRANT = clampNumber(process.env.CREDIT_WALLET_ADMIN_DAILY_GRANT, PLUS_DAILY_GRANT, 0.01, 10_000);
+const DEFAULT_REFILL_RATE_PER_SEC = 0;
+const DEFAULT_INITIAL_BALANCE = round2(Math.min(
   DEFAULT_CAPACITY,
-  clampNumber(process.env.CREDIT_WALLET_INITIAL_BALANCE, DEFAULT_CAPACITY, 0, DEFAULT_CAPACITY),
+  clampNumber(process.env.CREDIT_WALLET_INITIAL_BALANCE, FREE_DAILY_GRANT, 0, DEFAULT_CAPACITY),
 ));
 const CREDITS_BYPASS = /^(1|true|yes)$/i.test(process.env.AI_CREDITS_BYPASS ?? '');
 
@@ -39,8 +41,8 @@ function clampNumber(raw: unknown, fallback: number, min: number, max: number) {
   return Math.min(max, Math.max(min, parsed));
 }
 
-function round3(value: number) {
-  return Math.round(value * 1000) / 1000;
+function round2(value: number) {
+  return Math.round(value * 100) / 100;
 }
 
 function round6(value: number) {
@@ -57,31 +59,70 @@ function getNowIso() {
   return new Date().toISOString();
 }
 
-function computeRefilledBalance(input: {
-  balance: number;
-  capacity: number;
-  refillRatePerSec: number;
-  lastRefillAt: string;
-  nowIso: string;
-}) {
-  const lastMs = Date.parse(input.lastRefillAt);
-  const nowMs = Date.parse(input.nowIso);
-  if (!Number.isFinite(lastMs) || !Number.isFinite(nowMs) || nowMs <= lastMs) {
-    const clamped = round3(Math.min(input.capacity, Math.max(0, input.balance)));
-    return {
-      balance: clamped,
-      changed: clamped !== round3(input.balance),
-      elapsedSeconds: 0,
-    };
+function computeDailyWindow(nowMs: number) {
+  const now = new Date(nowMs);
+  const windowStart = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+    0,
+    0,
+    0,
+    0,
+  ));
+  const nextReset = new Date(windowStart.getTime());
+  nextReset.setUTCDate(nextReset.getUTCDate() + 1);
+  return {
+    windowStartIso: windowStart.toISOString(),
+    nextResetIso: nextReset.toISOString(),
+    usageDay: windowStart.toISOString().slice(0, 10),
+    secondsToReset: Math.max(0, Math.ceil((nextReset.getTime() - nowMs) / 1000)),
+  };
+}
+
+function isBeforeWindow(lastRefillAt: string, windowStartIso: string) {
+  const lastMs = Date.parse(lastRefillAt);
+  const windowStartMs = Date.parse(windowStartIso);
+  if (!Number.isFinite(windowStartMs)) return false;
+  if (!Number.isFinite(lastMs)) return true;
+  return lastMs < windowStartMs;
+}
+
+type WalletEntitlement = {
+  plan: 'free' | 'plus' | 'admin';
+  dailyGrant: number;
+  bypass: boolean;
+};
+
+async function resolveWalletEntitlement(db: DbClient, userId: string): Promise<WalletEntitlement> {
+  const fallback: WalletEntitlement = {
+    plan: 'free',
+    dailyGrant: round2(FREE_DAILY_GRANT),
+    bypass: CREDITS_BYPASS,
+  };
+  if (!db || typeof (db as { rpc?: unknown }).rpc !== 'function') {
+    return fallback;
   }
 
-  const elapsedSeconds = Math.max(0, (nowMs - lastMs) / 1000);
-  const refilled = round3(Math.min(input.capacity, input.balance + elapsedSeconds * input.refillRatePerSec));
-  return {
-    balance: refilled,
-    changed: refilled !== round3(input.balance),
-    elapsedSeconds,
-  };
+  try {
+    const { data, error } = await db.rpc('get_generation_plan_for_user', {
+      p_user_id: userId,
+    });
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    const normalizedPlan = String((row as { plan?: unknown } | null)?.plan || 'free').trim().toLowerCase();
+    const plan = normalizedPlan === 'admin' ? 'admin' : normalizedPlan === 'plus' ? 'plus' : 'free';
+    const override = Number((row as { daily_limit_override?: unknown } | null)?.daily_limit_override);
+    const defaultGrant = plan === 'plus' ? PLUS_DAILY_GRANT : plan === 'admin' ? ADMIN_DAILY_GRANT : FREE_DAILY_GRANT;
+    const dailyGrant = round2(Number.isFinite(override) && override >= 0 ? override : defaultGrant);
+    return {
+      plan,
+      dailyGrant,
+      bypass: CREDITS_BYPASS || plan === 'admin',
+    };
+  } catch {
+    return fallback;
+  }
 }
 
 async function getLedgerByIdempotencyKey(db: DbClient, idempotencyKey: string) {
@@ -103,6 +144,10 @@ export type CreditWalletSnapshot = {
   refill_rate_per_sec: number;
   last_refill_at: string;
   seconds_to_full: number;
+  daily_grant: number;
+  next_reset_at: string;
+  seconds_to_reset: number;
+  plan: 'free' | 'plus' | 'admin';
   bypass: boolean;
 };
 
@@ -131,15 +176,17 @@ export type CreditLedgerContext = {
 };
 
 async function ensureWalletRow(db: DbClient, userId: string) {
-  const nowIso = getNowIso();
+  const nowMs = Date.now();
+  const { windowStartIso } = computeDailyWindow(nowMs);
+  const entitlement = await resolveWalletEntitlement(db, userId);
   const { error } = await db
     .from('user_credit_wallets')
     .upsert({
       user_id: userId,
-      balance: DEFAULT_INITIAL_BALANCE,
-      capacity: DEFAULT_CAPACITY,
+      balance: entitlement.dailyGrant || DEFAULT_INITIAL_BALANCE,
+      capacity: entitlement.dailyGrant || DEFAULT_CAPACITY,
       refill_rate_per_sec: DEFAULT_REFILL_RATE_PER_SEC,
-      last_refill_at: nowIso,
+      last_refill_at: windowStartIso,
     }, { onConflict: 'user_id', ignoreDuplicates: true });
   if (error) throw error;
 }
@@ -159,37 +206,44 @@ async function updateWalletRefill(db: DbClient, input: {
   fromLastRefillAt: string;
   fromBalance: number;
   nextBalance: number;
+  nextCapacity: number;
   nowIso: string;
 }) {
   const { data, error } = await db
     .from('user_credit_wallets')
     .update({
-      balance: round3(input.nextBalance),
+      balance: round2(input.nextBalance),
+      capacity: round2(input.nextCapacity),
+      refill_rate_per_sec: DEFAULT_REFILL_RATE_PER_SEC,
       last_refill_at: input.nowIso,
     })
     .eq('user_id', input.userId)
     .eq('last_refill_at', input.fromLastRefillAt)
-    .eq('balance', round3(input.fromBalance))
+    .eq('balance', round2(input.fromBalance))
     .select('user_id, balance, capacity, refill_rate_per_sec, last_refill_at')
     .maybeSingle();
   if (error) throw error;
   return (data || null) as WalletRow | null;
 }
 
-function toSnapshot(row: WalletRow): CreditWalletSnapshot {
-  const balance = round3(asNumber(row.balance));
-  const capacity = round3(asNumber(row.capacity, DEFAULT_CAPACITY));
+function toSnapshot(row: WalletRow, entitlement: WalletEntitlement): CreditWalletSnapshot {
+  const nowMs = Date.now();
+  const dailyWindow = computeDailyWindow(nowMs);
+  const balance = round2(asNumber(row.balance));
+  const capacity = round2(asNumber(row.capacity, entitlement.dailyGrant || DEFAULT_CAPACITY));
   const refillRate = round6(asNumber(row.refill_rate_per_sec, DEFAULT_REFILL_RATE_PER_SEC));
-  const remainingToFull = Math.max(0, capacity - balance);
-  const secondsToFull = refillRate > 0 ? Math.ceil(remainingToFull / refillRate) : Number.MAX_SAFE_INTEGER;
   return {
     user_id: row.user_id,
     balance,
     capacity,
     refill_rate_per_sec: refillRate,
     last_refill_at: row.last_refill_at,
-    seconds_to_full: Number.isFinite(secondsToFull) ? secondsToFull : 0,
-    bypass: CREDITS_BYPASS,
+    seconds_to_full: 0,
+    daily_grant: round2(entitlement.dailyGrant),
+    next_reset_at: dailyWindow.nextResetIso,
+    seconds_to_reset: dailyWindow.secondsToReset,
+    plan: entitlement.plan,
+    bypass: entitlement.bypass,
   };
 }
 
@@ -200,39 +254,33 @@ async function refreshWallet(db: DbClient, userId: string) {
     throw new Error('WALLET_NOT_FOUND');
   }
 
-  if (CREDITS_BYPASS) {
-    return {
-      row,
-      snapshot: {
-        ...toSnapshot({
-          ...row,
-          balance: row.capacity,
-        }),
-        bypass: true,
-      } satisfies CreditWalletSnapshot,
-    };
-  }
-
+  let entitlement = await resolveWalletEntitlement(db, userId);
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const nowIso = getNowIso();
-    const currentBalance = round3(asNumber(row.balance));
-    const capacity = round3(asNumber(row.capacity, DEFAULT_CAPACITY));
-    const refillRatePerSec = round6(asNumber(row.refill_rate_per_sec, DEFAULT_REFILL_RATE_PER_SEC));
-    const refill = computeRefilledBalance({
-      balance: currentBalance,
-      capacity,
-      refillRatePerSec,
-      lastRefillAt: row.last_refill_at,
-      nowIso,
-    });
+    const dailyWindow = computeDailyWindow(Date.now());
+    const currentBalance = round2(asNumber(row.balance));
+    const currentCapacity = round2(asNumber(row.capacity, entitlement.dailyGrant || DEFAULT_CAPACITY));
+    const targetCapacity = round2(entitlement.dailyGrant);
+    const shouldReset = isBeforeWindow(row.last_refill_at, dailyWindow.windowStartIso);
+    const nextBalance = shouldReset
+      ? targetCapacity
+      : round2(Math.min(targetCapacity, Math.max(0, currentBalance)));
+    const balanceChanged = nextBalance !== currentBalance;
+    const capacityChanged = currentCapacity !== targetCapacity;
 
-    if (!refill.changed) {
+    if (!balanceChanged && !capacityChanged && row.last_refill_at === dailyWindow.windowStartIso) {
+      return {
+        row,
+        snapshot: toSnapshot(row, entitlement),
+      };
+    }
+    if (!balanceChanged && !capacityChanged && !shouldReset) {
       return {
         row,
         snapshot: toSnapshot({
           ...row,
-          balance: refill.balance,
-        }),
+          capacity: targetCapacity,
+        }, entitlement),
       };
     }
 
@@ -240,21 +288,23 @@ async function refreshWallet(db: DbClient, userId: string) {
       userId,
       fromLastRefillAt: row.last_refill_at,
       fromBalance: currentBalance,
-      nextBalance: refill.balance,
-      nowIso,
+      nextBalance,
+      nowIso: shouldReset ? dailyWindow.windowStartIso : nowIso,
+      nextCapacity: targetCapacity,
     });
 
     if (updated) {
       row = updated;
       return {
         row,
-        snapshot: toSnapshot(updated),
+        snapshot: toSnapshot(updated, entitlement),
       };
     }
 
     const latest = await getWalletRow(db, userId);
     if (latest) {
       row = latest;
+      entitlement = await resolveWalletEntitlement(db, userId);
       continue;
     }
   }
@@ -262,7 +312,7 @@ async function refreshWallet(db: DbClient, userId: string) {
   row = (await getWalletRow(db, userId)) as WalletRow;
   return {
     row,
-    snapshot: toSnapshot(row),
+    snapshot: toSnapshot(row, entitlement),
   };
 }
 
@@ -278,7 +328,7 @@ async function insertLedgerEntry(db: DbClient, input: {
     .from('credit_ledger')
     .insert({
       user_id: input.userId,
-      delta: round3(input.delta),
+      delta: round2(input.delta),
       entry_type: input.entryType,
       reason_code: input.reasonCode,
       source_item_id: input.context?.source_item_id || null,
@@ -315,7 +365,7 @@ export async function reserveCredits(db: DbClient, input: {
   context?: CreditLedgerContext;
 }): Promise<CreditReserveResult> {
   const userId = String(input.userId || '').trim();
-  const amount = round3(Math.max(0, Number(input.amount || 0)));
+  const amount = round2(Math.max(0, Number(input.amount || 0)));
   if (!userId) throw new Error('AUTH_REQUIRED');
   if (!(amount > 0)) throw new Error('INVALID_RESERVE_AMOUNT');
 
@@ -336,7 +386,7 @@ export async function reserveCredits(db: DbClient, input: {
     return {
       ok: true,
       ledger_id: existingLedger.id,
-      reserved_amount: Math.abs(round3(asNumber(existingLedger.delta))),
+      reserved_amount: Math.abs(round2(asNumber(existingLedger.delta))),
       wallet,
       bypass: false,
     };
@@ -345,7 +395,7 @@ export async function reserveCredits(db: DbClient, input: {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const refreshed = await refreshWallet(db, userId);
     const currentRow = refreshed.row;
-    const currentBalance = round3(asNumber(currentRow.balance));
+    const currentBalance = round2(asNumber(currentRow.balance));
 
     if (currentBalance < amount) {
       return {
@@ -357,7 +407,7 @@ export async function reserveCredits(db: DbClient, input: {
     }
 
     const nowIso = getNowIso();
-    const nextBalance = round3(currentBalance - amount);
+    const nextBalance = round2(currentBalance - amount);
     const { data: updatedWallet, error: updateError } = await db
       .from('user_credit_wallets')
       .update({
@@ -374,6 +424,7 @@ export async function reserveCredits(db: DbClient, input: {
     if (!updatedWallet) continue;
 
     try {
+      const entitlement = await resolveWalletEntitlement(db, userId);
       const ledger = await insertLedgerEntry(db, {
         userId,
         delta: -amount,
@@ -383,7 +434,7 @@ export async function reserveCredits(db: DbClient, input: {
         context: input.context,
       });
 
-      const wallet = toSnapshot(updatedWallet as WalletRow);
+      const wallet = toSnapshot(updatedWallet as WalletRow, entitlement);
       return {
         ok: true,
         ledger_id: ledger.id,
@@ -395,7 +446,7 @@ export async function reserveCredits(db: DbClient, input: {
       await db
         .from('user_credit_wallets')
         .update({
-          balance: round3(nextBalance + amount),
+          balance: round2(nextBalance + amount),
           last_refill_at: nowIso,
         })
         .eq('user_id', userId)
@@ -423,7 +474,7 @@ export async function settleReservation(db: DbClient, input: {
   reasonCode: string;
   context?: CreditLedgerContext;
 }) {
-  const amount = round3(Math.max(0, Number(input.amount || 0)));
+  const amount = round2(Math.max(0, Number(input.amount || 0)));
   if (!(amount >= 0)) throw new Error('INVALID_SETTLE_AMOUNT');
   if (CREDITS_BYPASS) {
     return { bypass: true, ledger_id: null };
@@ -457,7 +508,7 @@ export async function refundReservation(db: DbClient, input: {
   reasonCode: string;
   context?: CreditLedgerContext;
 }) {
-  const amount = round3(Math.max(0, Number(input.amount || 0)));
+  const amount = round2(Math.max(0, Number(input.amount || 0)));
   if (!(amount > 0)) throw new Error('INVALID_REFUND_AMOUNT');
 
   if (CREDITS_BYPASS) {
@@ -480,10 +531,10 @@ export async function refundReservation(db: DbClient, input: {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const refreshed = await refreshWallet(db, input.userId);
     const row = refreshed.row;
-    const balance = round3(asNumber(row.balance));
-    const capacity = round3(asNumber(row.capacity));
+    const balance = round2(asNumber(row.balance));
+    const capacity = round2(asNumber(row.capacity));
     const nowIso = getNowIso();
-    const nextBalance = round3(Math.min(capacity, balance + amount));
+    const nextBalance = round2(Math.min(capacity, balance + amount));
 
     const { data: updated, error: updateError } = await db
       .from('user_credit_wallets')
@@ -500,6 +551,7 @@ export async function refundReservation(db: DbClient, input: {
     if (updateError) throw updateError;
     if (!updated) continue;
 
+    const entitlement = await resolveWalletEntitlement(db, input.userId);
     const ledger = await insertLedgerEntry(db, {
       userId: input.userId,
       delta: amount,
@@ -512,7 +564,7 @@ export async function refundReservation(db: DbClient, input: {
     return {
       bypass: false,
       ledger_id: ledger.id,
-      wallet: toSnapshot(updated as WalletRow),
+      wallet: toSnapshot(updated as WalletRow, entitlement),
     };
   }
 
@@ -526,7 +578,7 @@ export async function consumeFlatCredit(db: DbClient, input: {
   idempotencyKey: string;
   context?: CreditLedgerContext;
 }): Promise<CreditReserveResult> {
-  const amount = round3(Math.max(0.001, Number(input.amount ?? 1)));
+  const amount = round2(Math.max(0.01, Number(input.amount ?? 1)));
   const hold = await reserveCredits(db, {
     userId: input.userId,
     amount,
@@ -550,7 +602,10 @@ export async function consumeFlatCredit(db: DbClient, input: {
 
 export function getWalletDefaults() {
   return {
-    capacity: DEFAULT_CAPACITY,
+    capacity: round2(FREE_DAILY_GRANT),
+    daily_grant_free: round2(FREE_DAILY_GRANT),
+    daily_grant_plus: round2(PLUS_DAILY_GRANT),
+    daily_grant_admin: round2(ADMIN_DAILY_GRANT),
     refill_rate_per_sec: DEFAULT_REFILL_RATE_PER_SEC,
     initial_balance: DEFAULT_INITIAL_BALANCE,
     bypass: CREDITS_BYPASS,

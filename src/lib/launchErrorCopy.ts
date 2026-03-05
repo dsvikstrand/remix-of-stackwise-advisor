@@ -1,6 +1,7 @@
 export type LaunchErrorCode =
   | 'INSUFFICIENT_CREDITS'
   | 'DAILY_GENERATION_CAP_REACHED'
+  | 'SOURCE_PAGE_SUBSCRIPTION_REQUIRED'
   | 'TRANSCRIPT_UNAVAILABLE'
   | 'NO_TRANSCRIPT_PERMANENT'
   | 'RATE_LIMITED'
@@ -21,9 +22,11 @@ export function getLaunchErrorCopy(input: {
 }) {
   switch (normalizeCode(input.errorCode)) {
     case 'INSUFFICIENT_CREDITS':
-      return 'Insufficient credits right now. Please wait for refill and try again.';
+      return 'Insufficient credits right now. Please wait for the next daily reset and try again.';
     case 'DAILY_GENERATION_CAP_REACHED':
-      return 'Daily generation cap reached. Please try again after reset.';
+      return 'No daily credits remain right now. Please try again after reset.';
+    case 'SOURCE_PAGE_SUBSCRIPTION_REQUIRED':
+      return 'Subscribe to this source before using its Video Library.';
     case 'TRANSCRIPT_UNAVAILABLE':
       return 'Transcript unavailable right now. Please try again in a few minutes.';
     case 'NO_TRANSCRIPT_PERMANENT':
