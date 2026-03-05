@@ -79,6 +79,8 @@ function getSourceVideoLibraryErrorMessage(error: unknown, fallback: string) {
         return 'Could not start unlock generation for selected videos.';
       case 'INSUFFICIENT_CREDITS':
         return 'Not enough credits right now.';
+      case 'DAILY_GENERATION_CAP_REACHED':
+        return 'Daily generation cap reached. Please try again after reset.';
       case 'SOURCE_PAGE_NOT_FOUND':
         return 'Source page not found.';
       case 'TRANSCRIPT_UNAVAILABLE':

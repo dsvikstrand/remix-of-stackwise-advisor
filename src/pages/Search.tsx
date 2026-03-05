@@ -124,6 +124,8 @@ function toGenerateErrorMessage(errorCode?: string | null) {
       return 'Insufficient credits right now. Please wait for refill and try again.';
     case 'QUEUE_BACKPRESSURE':
       return 'Generation queue is busy. Please retry shortly.';
+    case 'DAILY_GENERATION_CAP_REACHED':
+      return 'Daily generation cap reached. Please try again after reset.';
     case 'NO_TRANSCRIPT_PERMANENT':
       return 'Transcript unavailable for this video. Please try another one.';
     case 'TRANSCRIPT_UNAVAILABLE':

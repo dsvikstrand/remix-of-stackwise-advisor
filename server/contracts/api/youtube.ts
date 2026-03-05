@@ -81,6 +81,8 @@ export type YouTubeRouteDeps = {
   YouTubeSubscriptionsImportSchema: SafeParser<YouTubeSubscriptionsImportInput>;
   getAdapterForUrl: any;
   consumeCredit: any;
+  consumeGenerationDailyCap: any;
+  getGenerationDailyCapStatus: any;
   getServiceSupabaseClient: any;
   withTimeout: any;
   runYouTubePipeline: any;

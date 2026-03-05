@@ -10,6 +10,18 @@ export type CreditCheck = {
   resetAt?: string | null;
 };
 
+export type GenerationDailyCapStatus = {
+  enabled: boolean;
+  plan: 'free' | 'plus' | 'admin';
+  bypass: boolean;
+  limit: number;
+  effectiveLimit: number | null;
+  used: number;
+  remaining: number;
+  usageDay: string;
+  resetAt: string;
+};
+
 type AnalyzeBlueprintSelectedItemInput =
   | string
   | {
@@ -52,6 +64,11 @@ export type CoreLLMClient = {
 export type CoreRouteDeps = {
   creditsReadLimiter: express.RequestHandler;
   getCredits: (userId: string) => Promise<unknown>;
+  getServiceSupabaseClient: () => any;
+  getGenerationDailyCapStatus: (input: {
+    db: any | null;
+    userId: string;
+  }) => Promise<GenerationDailyCapStatus>;
   blueprintReviewSchema: SafeParser<AnalyzeBlueprintInput>;
   bannerRequestSchema: SafeParser<BannerInput>;
   consumeCredit: (userId: string, input: { reasonCode: string }) => Promise<CreditCheck>;

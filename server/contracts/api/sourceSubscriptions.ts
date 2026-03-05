@@ -67,4 +67,5 @@ export type SourceSubscriptionsRouteDeps = {
   isDualGenerateEnabledForUser: any;
   getDualGenerateTiers: any;
   resolveVariantOrReady: any;
+  getGenerationDailyCapStatus: any;
 };

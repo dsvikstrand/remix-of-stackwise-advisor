@@ -50,6 +50,8 @@ export function registerYouTubeRouteHandlers(app: express.Express, deps: YouTube
     YouTubeSubscriptionsImportSchema,
     getAdapterForUrl,
     consumeCredit,
+    consumeGenerationDailyCap,
+    getGenerationDailyCapStatus,
     getServiceSupabaseClient,
     withTimeout,
     runYouTubePipeline,
@@ -213,6 +215,35 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
     }
   }
   if (userId) {
+    try {
+      await consumeGenerationDailyCap({
+        db: getServiceSupabaseClient(),
+        userId,
+        units: 1,
+      });
+    } catch (error) {
+      const capCode = String((error as { code?: unknown } | null)?.code || '').trim().toUpperCase();
+      if (capCode === 'DAILY_GENERATION_CAP_REACHED') {
+        const details = (error as { details?: Record<string, unknown> } | null)?.details || {};
+        return res.status(429).json({
+          ok: false,
+          error_code: 'DAILY_GENERATION_CAP_REACHED',
+          message: 'Daily generation cap reached. Please retry after reset.',
+          generation_daily_limit: Number(details.limit || 0) || null,
+          generation_daily_used: Number(details.used || 0) || null,
+          generation_daily_remaining: Number(details.remaining || 0) || 0,
+          generation_daily_reset_at: String(details.resetAt || '').trim() || null,
+          run_id: runId,
+        });
+      }
+      return res.status(500).json({
+        ok: false,
+        error_code: 'GENERATION_DAILY_CAP_UNAVAILABLE',
+        message: error instanceof Error ? error.message : 'Daily generation cap check failed.',
+        run_id: runId,
+      });
+    }
+
     const creditCheck = await consumeCredit(userId, {
       reasonCode: 'YOUTUBE_TO_BLUEPRINT',
     });
@@ -737,6 +768,32 @@ app.post(
         },
       });
     }
+    try {
+      const dailyStatus = await getGenerationDailyCapStatus({
+        db: serviceDb,
+        userId,
+      });
+      if (!dailyStatus?.bypass && Number(dailyStatus?.remaining || 0) <= 0) {
+        return res.status(429).json({
+          ok: false,
+          error_code: 'DAILY_GENERATION_CAP_REACHED',
+          message: 'Daily generation cap reached. Please retry after reset.',
+          generation_daily_limit: Number(dailyStatus.limit || 0),
+          generation_daily_used: Number(dailyStatus.used || 0),
+          generation_daily_remaining: Number(dailyStatus.remaining || 0),
+          generation_daily_reset_at: dailyStatus.resetAt || null,
+          data: null,
+        });
+      }
+    } catch (dailyCapError) {
+      return res.status(500).json({
+        ok: false,
+        error_code: 'GENERATION_DAILY_CAP_UNAVAILABLE',
+        message: dailyCapError instanceof Error ? dailyCapError.message : 'Daily generation cap check failed.',
+        data: null,
+      });
+    }
+
     const queueDepth = await countQueueDepth(serviceDb, { includeRunning: true });
     const userQueueDepth = await countQueueDepth(serviceDb, { userId, includeRunning: true });
     if (queueDepth >= queueDepthHardLimit || userQueueDepth >= queueDepthPerUserLimit) {

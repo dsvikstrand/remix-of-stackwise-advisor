@@ -50,6 +50,9 @@ function getUnlockActionErrorMessage(error: unknown, fallback: string) {
     if (error.errorCode === 'INSUFFICIENT_CREDITS') {
       return 'Not enough credits right now.';
     }
+    if (error.errorCode === 'DAILY_GENERATION_CAP_REACHED') {
+      return 'Daily generation cap reached. Please try again after reset.';
+    }
     if (error.errorCode === 'RATE_LIMITED') {
       return 'Too many unlock requests, retry shortly.';
     }

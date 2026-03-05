@@ -277,6 +277,11 @@ i2) [todo] Target controls:
 i3) [todo] Document exactly how to use these controls during launch.
 i4) [todo] Exit criteria:
 - you can reduce system load without emergency code edits
+i5) [have] Free-user daily generation cap guard is now implemented (`5/day` default, global UTC rollover, allowlist bypass), including:
+- central enforcement across direct + queued generation paths
+- additive visibility in `/api/credits`
+- stable denial code `DAILY_GENERATION_CAP_REACHED`
+i6) [todo] Remaining Phase 6 focus is launch tuning + operator playbook for cap values and bypass procedures.
 
 ## Phase 7 - Launch-Day UX for Delay and Recovery
 j1) [todo] Make backlog and delay states explicit in the UI.
@@ -318,6 +323,7 @@ m2) [have] Phase 2 - Completed (`WORKER_CONCURRENCY=4` retained after under-load
 m3) [have] Phase 3 - Completed (web/worker split deployed on Oracle)
 m4) [have] Phase 4 - Completed (Phase 4A + Phase 4B shipped and closeout-verified)
 m5) [have] Phase 5 - Completed (Phase 5A implemented and closeout-verified)
+m6) [todo] Phase 6 - In progress (daily cap implemented; launch-toggle/operator playbook still pending)
 m6) [todo] Phase 6 - Not started
 m7) [todo] Phase 7 - Not started
 m8) [todo] Phase 8 - Not started

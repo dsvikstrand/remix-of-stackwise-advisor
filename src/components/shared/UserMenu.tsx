@@ -80,6 +80,10 @@ export function UserMenu({ onOpenHelp }: UserMenuProps) {
     : 0;
   const planLabel = 'Standard';
   const planBadgeVariant = 'outline' as const;
+  const hasDailyGenerationCap = Number.isFinite(Number(credits?.generation_daily_limit))
+    && Number(credits?.generation_daily_limit) > 0;
+  const dailyGenerationUsed = Math.max(0, Number(credits?.generation_daily_used || 0));
+  const dailyGenerationLimit = Math.max(0, Number(credits?.generation_daily_limit || 0));
 
   return (
     <DropdownMenu>
@@ -130,6 +134,12 @@ export function UserMenu({ onOpenHelp }: UserMenuProps) {
             <span>Plan</span>
             <span>{planLabel}</span>
           </div>
+          {hasDailyGenerationCap ? (
+            <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+              <span>Generations today</span>
+              <span>{dailyGenerationUsed}/{dailyGenerationLimit}</span>
+            </div>
+          ) : null}
         </div>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>

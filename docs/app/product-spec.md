@@ -89,6 +89,7 @@ a67) [have] Subscription rows now support `auto_unlock_enabled` (default `true`)
 a68) [have] YouTube-source blueprints now use thumbnail-first banners across cards and detail views; legacy source-linked rows are backfilled to thumbnails and source flows bypass auto-banner enqueue.
 a69) [have] Notifications MVP now emits reply and generation-terminal notifications and surfaces them through an auth inbox bell in the app header.
 a70) [have] Generation duration policy is available for MVP hardening (default off): max video length gate (`45m`), unknown-duration blocking, no-charge-on-policy-block, and partial-accept batch queueing with blocked-item details.
+a71) [have] Daily generation cap policy is active for blueprint generation attempts with global UTC rollover: `free` default (`5/day`), `plus` higher cap (env-configured), and `admin` bypass.
 
 ## Core Model
 b1) `Source Item`
@@ -270,6 +271,7 @@ si41) auth endpoint: `POST /api/source-pages/:platform/:externalId/videos/unlock
 si42) compatibility alias: `POST /api/source-pages/:platform/:externalId/videos/generate` routes to unlock flow in this phase and mirrors additive `trace_id`.
 si43) `GET /api/source-pages/:platform/:externalId/videos` now includes unlock metadata per row (`unlock_status`, `unlock_cost`, `unlock_in_progress`, `ready_blueprint_id`).
 si44) `GET /api/credits` now returns refill-wallet fields (`balance`, `capacity`, `refill_rate_per_sec`, `seconds_to_full`) alongside compatibility fields (`remaining`, `limit`, `resetAt`).
+si44b) `GET /api/credits` also returns additive daily-generation-cap fields (`generation_daily_limit`, `generation_daily_used`, `generation_daily_remaining`, `generation_daily_reset_at`, `generation_daily_bypass`) for UI/support visibility.
 si45) source-page video-library unlock worker scope is `source_item_unlock_generation` (single generation per source video, shared fan-out to subscribed users).
 si46) source-page video-library list rate policy: burst `4/15s` plus sustained `40/10m` per user/IP (reduce accidental 429 on normal tab-switch/load-more while keeping abuse guardrails).
 si47) source-page video-library unlock/generate rate policy: burst `8/10s` plus sustained `120/10m` per user/IP (credit balance remains the primary generation throttle).
@@ -294,6 +296,7 @@ si65) auth endpoint: `GET /api/notifications?limit=<1..50>&cursor=<opaque?>` ret
 si66) auth endpoint: `POST /api/notifications/:id/read` marks one notification read.
 si67) auth endpoint: `POST /api/notifications/read-all` marks all unread notifications read.
 si68) comment reply notifications are produced by DB trigger on `wall_comments` reply inserts (self-replies ignored; dedupe key is `comment_reply:<reply_comment_id>`).
+si69) generation surfaces may return `429 DAILY_GENERATION_CAP_REACHED` when the user has consumed the daily free-generation window.
 
 ## Next Milestone (Hardening)
 n1) Keep legacy manual gate behavior stable with `CHANNEL_GATES_MODE=bypass` while auto-channel path uses `AUTO_CHANNEL_GATE_MODE`.

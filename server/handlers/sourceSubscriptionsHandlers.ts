@@ -405,6 +405,33 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
       },
     });
   }
+  try {
+    const dailyStatus = await deps.getGenerationDailyCapStatus({
+      db: serviceDb,
+      userId,
+    });
+    if (!dailyStatus?.bypass && Number(dailyStatus?.remaining || 0) <= 0) {
+      return res.status(429).json({
+        ok: false,
+        error_code: 'DAILY_GENERATION_CAP_REACHED',
+        message: 'Daily generation cap reached. Please retry after reset.',
+        data: {
+          generation_daily_limit: Number(dailyStatus.limit || 0),
+          generation_daily_used: Number(dailyStatus.used || 0),
+          generation_daily_remaining: Number(dailyStatus.remaining || 0),
+          generation_daily_reset_at: dailyStatus.resetAt || null,
+        },
+      });
+    }
+  } catch (dailyCapError) {
+    return res.status(500).json({
+      ok: false,
+      error_code: 'GENERATION_DAILY_CAP_UNAVAILABLE',
+      message: dailyCapError instanceof Error ? dailyCapError.message : 'Daily generation cap check failed.',
+      data: null,
+    });
+  }
+
   const queueDepth = await deps.countQueueDepth(serviceDb, { includeRunning: true });
   const userQueueDepth = await deps.countQueueDepth(serviceDb, { userId, includeRunning: true });
   if (queueDepth >= deps.queueDepthHardLimit || userQueueDepth >= deps.queueDepthPerUserLimit) {

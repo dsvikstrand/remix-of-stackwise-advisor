@@ -1113,6 +1113,54 @@ export type Database = {
         }
         Relationships: []
       }
+      user_generation_entitlements: {
+        Row: {
+          created_at: string
+          daily_limit_override: number | null
+          plan: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          daily_limit_override?: number | null
+          plan?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          daily_limit_override?: number | null
+          plan?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_generation_daily_usage: {
+        Row: {
+          created_at: string
+          updated_at: string
+          usage_day: string
+          used_count: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          updated_at?: string
+          usage_day: string
+          used_count?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          updated_at?: string
+          usage_day?: string
+          used_count?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_feed_items: {
         Row: {
           blueprint_id: string | null
@@ -1407,12 +1455,64 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      consume_generation_daily_quota: {
+        Args: {
+          p_limit: number
+          p_reset_hour_utc?: number
+          p_units: number
+          p_user_id: string
+        }
+        Returns: {
+          allowed: boolean
+          limit_count: number
+          remaining_count: number
+          reset_at: string
+          usage_day: string
+          used_count: number
+        }[]
+      }
+      get_generation_plan_for_user: {
+        Args: {
+          p_user_id: string
+        }
+        Returns: {
+          daily_limit_override: number | null
+          plan: string
+        }[]
+      }
+      get_generation_daily_quota_status: {
+        Args: {
+          p_limit: number
+          p_reset_hour_utc?: number
+          p_user_id: string
+        }
+        Returns: {
+          limit_count: number
+          remaining_count: number
+          reset_at: string
+          usage_day: string
+          used_count: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
         Returns: boolean
+      }
+      set_generation_plan_by_email: {
+        Args: {
+          p_daily_limit_override?: number
+          p_email: string
+          p_plan: string
+        }
+        Returns: {
+          daily_limit_override: number | null
+          email: string
+          plan: string
+          user_id: string
+        }[]
       }
     }
     Enums: {

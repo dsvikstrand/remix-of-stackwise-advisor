@@ -216,6 +216,12 @@ Required runtime variables:
 - `SOURCE_VIDEO_UNLOCK_SUSTAINED_MAX` (default `120`)
 - `CREDITS_READ_WINDOW_MS` (default `60000`)
 - `CREDITS_READ_MAX_PER_WINDOW` (default `180`)
+- `GENERATION_DAILY_CAP_ENABLED` (default `true`; enables free-user daily generation cap enforcement)
+- `GENERATION_DAILY_CAP_FREE_LIMIT` (default `5`; generation attempts per global window for non-bypass users)
+- `GENERATION_DAILY_CAP_PLUS_LIMIT` (default `25`; higher daily cap for `plus` entitlement users)
+- `GENERATION_DAILY_CAP_RESET_HOUR_UTC` (default `0`; global rollover hour in UTC)
+- `GENERATION_DAILY_CAP_BYPASS_USER_IDS` (csv user ids; bypass cap until billing entitlements are active)
+- `GENERATION_DAILY_CAP_FAIL_OPEN` (default `false`; if true, missing cap DB objects fail open instead of denying generation)
 - `INGESTION_LATEST_MINE_WINDOW_MS` (default `60000`)
 - `INGESTION_LATEST_MINE_MAX_PER_WINDOW` (default `180`)
 - `UNLOCK_INTAKE_ENABLED` (default `true`, fast pause for new unlock intake)
@@ -484,6 +490,27 @@ ssh oracle-free 'sudo systemctl daemon-reload && sudo systemctl restart agentic-
   2) Check whether rate limit is endpoint limiter or transcript throttle (`retry_after_seconds` present on YT2BP responses).
   3) Temporarily raise limits only if operationally justified.
   4) Keep hourly cap as abuse guard.
+
+### `DAILY_GENERATION_CAP_REACHED`
+- Meaning: user has exhausted the current free daily generation window.
+- Action:
+  1) Check `/api/credits` fields (`generation_daily_limit`, `generation_daily_used`, `generation_daily_remaining`, `generation_daily_reset_at`, `generation_daily_bypass`).
+  2) Confirm rollover config (`GENERATION_DAILY_CAP_RESET_HOUR_UTC`) in `/etc/agentic-backend.env`.
+  3) For bypass users, confirm membership in `GENERATION_DAILY_CAP_BYPASS_USER_IDS` and restart services after env updates.
+
+#### Set user generation entitlement (service role SQL)
+- Set `admin` (no daily cap):
+```sql
+select * from public.set_generation_plan_by_email('david.vikstrand@gmail.com', 'admin', null);
+```
+- Set `plus` (uses `GENERATION_DAILY_CAP_PLUS_LIMIT` unless overridden):
+```sql
+select * from public.set_generation_plan_by_email('user@example.com', 'plus', null);
+```
+- Set custom override:
+```sql
+select * from public.set_generation_plan_by_email('user@example.com', 'plus', 100);
+```
 
 ### `TIMEOUT`
 - Meaning: pipeline exceeded max timeout.

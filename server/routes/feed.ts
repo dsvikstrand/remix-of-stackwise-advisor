@@ -108,10 +108,22 @@ export function registerFeedRoutes(app: express.Express, deps: FeedRouteDeps) {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      const errorCode = String((error as { code?: unknown } | null)?.code || '').trim().toUpperCase();
       await db.from('user_feed_items').update({
         state: 'my_feed_pending_accept',
-        last_decision_code: 'GENERATION_FAILED',
+        last_decision_code: errorCode || 'GENERATION_FAILED',
       }).eq('id', feedItem.id).eq('user_id', userId);
+
+      if (errorCode === 'DAILY_GENERATION_CAP_REACHED') {
+        return res.status(429).json({
+          ok: false,
+          error_code: 'DAILY_GENERATION_CAP_REACHED',
+          message,
+          data: {
+            user_feed_item_id: feedItem.id,
+          },
+        });
+      }
 
       return res.status(500).json({
         ok: false,

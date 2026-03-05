@@ -38,6 +38,10 @@ import {
 import { createYouTubeSearchCacheService } from './services/youtubeSearchCache';
 import { createYouTubeQuotaGuardService } from './services/youtubeQuotaGuard';
 import {
+  createGenerationDailyCapService,
+  readGenerationDailyCapConfigFromEnv,
+} from './services/generationDailyCap';
+import {
   getYtToTextProxyDebugMode,
   resetYtToTextProxyDispatcher,
 } from './services/webshareProxy';
@@ -266,6 +270,8 @@ const youtubeSearchDegradeEnabled = parseRuntimeFlag(process.env.YOUTUBE_SEARCH_
 const youtubeGlobalLiveCallsPerMinute = clampInt(process.env.YOUTUBE_GLOBAL_LIVE_CALLS_PER_MIN, 60, 1, 20_000);
 const youtubeGlobalLiveCallsPerDay = clampInt(process.env.YOUTUBE_GLOBAL_LIVE_CALLS_PER_DAY, 20_000, 1, 5_000_000);
 const youtubeGlobalCooldownSeconds = clampInt(process.env.YOUTUBE_GLOBAL_COOLDOWN_SECONDS, 600, 5, 24 * 3600);
+const generationDailyCapConfig = readGenerationDailyCapConfigFromEnv(process.env);
+const generationDailyCapService = createGenerationDailyCapService(generationDailyCapConfig);
 const creditsReadWindowMs = clampInt(process.env.CREDITS_READ_WINDOW_MS, 60_000, 10_000, 10 * 60_000);
 const creditsReadMaxPerWindow = clampInt(process.env.CREDITS_READ_MAX_PER_WINDOW, 180, 30, 2_000);
 const ingestionLatestMineWindowMs = clampInt(process.env.INGESTION_LATEST_MINE_WINDOW_MS, 60_000, 10_000, 10 * 60_000);
@@ -1567,6 +1573,8 @@ async function scoreYt2bpContentSafety(
 registerCoreRoutes(app, {
   creditsReadLimiter,
   getCredits,
+  getGenerationDailyCapStatus: generationDailyCapService.getStatus,
+  getServiceSupabaseClient,
   blueprintReviewSchema: BlueprintReviewSchema,
   bannerRequestSchema: BannerRequestSchema,
   consumeCredit,
@@ -1636,6 +1644,8 @@ registerYouTubeRoutes(app, {
   YouTubeSubscriptionsImportSchema,
   getAdapterForUrl,
   consumeCredit,
+  consumeGenerationDailyCap: generationDailyCapService.consume,
+  getGenerationDailyCapStatus: generationDailyCapService.getStatus,
   getServiceSupabaseClient,
   withTimeout,
   runYouTubePipeline: (pipelineInput: any) => runYouTubePipeline(pipelineInput),
@@ -2914,6 +2924,7 @@ const blueprintCreationService = createBlueprintCreationService({
   claimVariantForGeneration,
   markVariantReady,
   markVariantFailed,
+  consumeGenerationDailyCap: generationDailyCapService.consume,
   enqueueBlueprintYouTubeEnrichment: enqueueBlueprintYouTubeEnrichmentJob,
   registerBlueprintYouTubeRefreshState: blueprintYouTubeCommentsService.registerRefreshStateForBlueprint,
 });
@@ -6816,6 +6827,13 @@ function classifyQueuedJobError(error: unknown) {
       retryDelaySeconds: getRetryDelayForErrorCode(error.errorCode),
     };
   }
+  if (String((error as { code?: string } | null)?.code || '').trim().toUpperCase() === 'DAILY_GENERATION_CAP_REACHED') {
+    return {
+      errorCode: 'DAILY_GENERATION_CAP_REACHED',
+      message: error instanceof Error ? error.message : 'Daily generation cap reached.',
+      retryDelaySeconds: 0,
+    };
+  }
   const providerCode = String((error as { code?: string } | null)?.code || '').trim().toUpperCase();
   if (providerCode === 'PROVIDER_DEGRADED') {
     return {
@@ -7459,6 +7477,7 @@ registerSourceSubscriptionsRoutes(app, {
   isDualGenerateEnabledForUser,
   getDualGenerateTiers,
   resolveVariantOrReady,
+  getGenerationDailyCapStatus: generationDailyCapService.getStatus,
 });
 
 registerSourcePagesRoutes(app, {

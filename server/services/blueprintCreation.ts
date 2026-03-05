@@ -1,6 +1,7 @@
 import type { GenerationTier } from './generationTierAccess';
 import { BlueprintVariantInProgressError } from './blueprintVariants';
 import { buildBlueprintSectionsV1FromStoredSteps, type BlueprintSectionsV1 } from './blueprintSections';
+import { DAILY_GENERATION_CAP_ERROR_CODE } from './generationDailyCap';
 
 type DbClient = any;
 
@@ -149,6 +150,11 @@ export type BlueprintCreationDeps = {
     explicitVideoId?: string | null;
     explicitSourceItemId?: string | null;
   }) => Promise<void>;
+  consumeGenerationDailyCap: (input: {
+    db: DbClient | null;
+    userId: string;
+    units?: number;
+  }) => Promise<unknown>;
 };
 
 export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
@@ -216,6 +222,12 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
     if (!sourceThumbnailUrl && deps.youtubeVideoIdRegex.test(String(input.videoId || '').trim())) {
       sourceThumbnailUrl = `https://i.ytimg.com/vi/${String(input.videoId || '').trim()}/hqdefault.jpg`;
     }
+
+    await deps.consumeGenerationDailyCap({
+      db,
+      userId: input.userId,
+      units: 1,
+    });
 
     const runId = `sub-${input.sourceTag}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const traceDb = deps.getServiceSupabaseClient();
@@ -377,7 +389,11 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
       };
     } catch (error) {
       if (normalizedSourceItemId && claimedVariant && !(error instanceof BlueprintVariantInProgressError)) {
-        const rawErrorCode = String((error as { errorCode?: unknown } | null)?.errorCode || '').trim() || 'GENERATION_FAILED';
+        const rawErrorCode = String(
+          (error as { errorCode?: unknown; code?: unknown } | null)?.errorCode
+            || (error as { errorCode?: unknown; code?: unknown } | null)?.code
+            || '',
+        ).trim() || 'GENERATION_FAILED';
         const rawErrorMessage = error instanceof Error ? error.message : String(error);
         try {
           await deps.markVariantFailed({
@@ -393,6 +409,13 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
             error: variantError instanceof Error ? variantError.message : String(variantError),
           }));
         }
+      }
+      if (
+        error
+        && typeof error === 'object'
+        && String((error as { code?: unknown }).code || '').trim().toUpperCase() === DAILY_GENERATION_CAP_ERROR_CODE
+      ) {
+        throw error;
       }
       throw error;
     }

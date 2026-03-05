@@ -2,6 +2,7 @@ import type express from 'express';
 import type {
   AnalyzeBlueprintNormalizedPayload,
   CoreRouteDeps,
+  GenerationDailyCapStatus,
 } from '../contracts/api/core';
 
 export function handleHealth(_req: express.Request, res: express.Response, _deps: CoreRouteDeps) {
@@ -13,8 +14,29 @@ export async function handleCredits(_req: express.Request, res: express.Response
   if (!userId) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  const credits = await deps.getCredits(userId);
-  return res.json(credits);
+  const credits = await deps.getCredits(userId) as Record<string, unknown>;
+  let dailyStatus: GenerationDailyCapStatus | null = null;
+  try {
+    dailyStatus = await deps.getGenerationDailyCapStatus({
+      db: deps.getServiceSupabaseClient(),
+      userId,
+    });
+  } catch (error) {
+    console.log('[generation_daily_cap_status_failed]', JSON.stringify({
+      user_id: userId,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+  return res.json({
+    ...credits,
+    generation_daily_limit: dailyStatus?.effectiveLimit ?? null,
+    generation_daily_effective_limit: dailyStatus?.effectiveLimit ?? null,
+    generation_daily_used: dailyStatus?.used ?? null,
+    generation_daily_remaining: dailyStatus?.remaining ?? null,
+    generation_daily_reset_at: dailyStatus?.resetAt ?? null,
+    generation_daily_bypass: dailyStatus?.bypass ?? null,
+    generation_plan: dailyStatus?.plan ?? null,
+  });
 }
 
 export async function handleAnalyzeBlueprint(req: express.Request, res: express.Response, deps: CoreRouteDeps) {

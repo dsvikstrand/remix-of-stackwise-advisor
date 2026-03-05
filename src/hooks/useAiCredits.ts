@@ -11,6 +11,13 @@ export type CreditsResponse = {
   capacity?: number;
   refill_rate_per_sec?: number;
   seconds_to_full?: number;
+  generation_daily_limit?: number | null;
+  generation_daily_effective_limit?: number | null;
+  generation_daily_used?: number | null;
+  generation_daily_remaining?: number | null;
+  generation_daily_reset_at?: string | null;
+  generation_daily_bypass?: boolean | null;
+  generation_plan?: 'free' | 'plus' | 'admin' | string | null;
 };
 
 export type AiCreditsView = CreditsResponse & {
@@ -87,6 +94,13 @@ function toFallbackCreditsFromWallet(wallet: {
     capacity: wallet.capacity,
     refill_rate_per_sec: wallet.refill_rate_per_sec,
     seconds_to_full: Math.max(0, secondsToFull),
+    generation_daily_limit: null,
+    generation_daily_effective_limit: null,
+    generation_daily_used: null,
+    generation_daily_remaining: null,
+    generation_daily_reset_at: null,
+    generation_daily_bypass: null,
+    generation_plan: null,
   };
 }
 
