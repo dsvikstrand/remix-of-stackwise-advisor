@@ -1508,10 +1508,10 @@ export type Database = {
           p_plan: string
         }
         Returns: {
-          daily_limit_override: number | null
-          email: string
-          plan: string
-          user_id: string
+          result_daily_limit_override: number | null
+          result_email: string
+          result_plan: string
+          result_user_id: string
         }[]
       }
     }
