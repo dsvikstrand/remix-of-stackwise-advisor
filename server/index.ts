@@ -321,6 +321,28 @@ const sourceTranscriptRetryDelayAttempt3Seconds = clampInt(
   30,
   24 * 3600,
 );
+const transcriptAccessDeniedRetryEnabled = parseRuntimeFlag(
+  process.env.TRANSCRIPT_ACCESS_DENIED_RETRY_ENABLED,
+  true,
+);
+const sourceTranscriptAccessDeniedRetryDelayAttempt1Seconds = clampInt(
+  process.env.SOURCE_TRANSCRIPT_ACCESS_DENIED_RETRY_DELAY_ATTEMPT1_SECONDS,
+  120,
+  5,
+  24 * 3600,
+);
+const sourceTranscriptAccessDeniedRetryDelayAttempt2Seconds = clampInt(
+  process.env.SOURCE_TRANSCRIPT_ACCESS_DENIED_RETRY_DELAY_ATTEMPT2_SECONDS,
+  900,
+  5,
+  24 * 3600,
+);
+const sourceTranscriptAccessDeniedRetryDelayAttempt3Seconds = clampInt(
+  process.env.SOURCE_TRANSCRIPT_ACCESS_DENIED_RETRY_DELAY_ATTEMPT3_SECONDS,
+  7200,
+  5,
+  24 * 3600,
+);
 const sourceTranscriptMaxAttempts = clampInt(process.env.SOURCE_TRANSCRIPT_MAX_ATTEMPTS, 3, 1, 10);
 const transcriptFailFastEnabled = parseRuntimeFlag(process.env.TRANSCRIPT_FAIL_FAST_ENABLED, true);
 const sourceUnlockExpiredSweepBatch = clampInt(process.env.SOURCE_UNLOCK_EXPIRED_SWEEP_BATCH, 100, 10, 1000);
@@ -3400,16 +3422,27 @@ function toUnlockSnapshot(input: {
 function isPermanentNoTranscriptCode(code: string | null | undefined) {
   const normalized = String(code || '').trim().toUpperCase();
   return normalized === 'NO_TRANSCRIPT_PERMANENT'
-    || isTerminalTranscriptProviderErrorCode(normalized);
+    || isTerminalTranscriptProviderErrorCodeForUnlock(normalized);
 }
 
 function isTransientTranscriptUnavailableCode(code: string | null | undefined) {
   const normalized = String(code || '').trim().toUpperCase();
+  if (transcriptAccessDeniedRetryEnabled && normalized === 'ACCESS_DENIED') {
+    return true;
+  }
   return normalized === 'TRANSCRIPT_EMPTY'
     || normalized === 'TRANSCRIPT_UNAVAILABLE'
     || normalized === 'NO_CAPTIONS'
     || normalized === 'PROVIDER_FAIL'
     || isRetryableTranscriptProviderErrorCode(normalized);
+}
+
+function isTerminalTranscriptProviderErrorCodeForUnlock(code: string | null | undefined) {
+  const normalized = String(code || '').trim().toUpperCase();
+  if (transcriptAccessDeniedRetryEnabled && normalized === 'ACCESS_DENIED') {
+    return false;
+  }
+  return isTerminalTranscriptProviderErrorCode(normalized);
 }
 
 function normalizeTranscriptTruthStatus(value: unknown): TranscriptTruthStatus {
@@ -3437,8 +3470,11 @@ function isConfirmedNoTranscriptUnlock(unlock: SourceItemUnlockRow | null | unde
 
 function normalizeUnlockFailureCode(code: string | null | undefined) {
   const normalized = String(code || '').trim().toUpperCase();
-  if (isTerminalTranscriptProviderErrorCode(normalized)) {
+  if (isTerminalTranscriptProviderErrorCodeForUnlock(normalized)) {
     return normalized;
+  }
+  if (normalized === 'ACCESS_DENIED' && transcriptAccessDeniedRetryEnabled) {
+    return 'TRANSCRIPT_UNAVAILABLE';
   }
   if (
     normalized === 'NO_CAPTIONS'
@@ -3458,6 +3494,17 @@ function getTranscriptRetryDelaySecondsForAttempt(attemptCount: number) {
   if (normalizedAttempt <= 1) return sourceTranscriptRetryDelayAttempt1Seconds;
   if (normalizedAttempt === 2) return sourceTranscriptRetryDelayAttempt2Seconds;
   return sourceTranscriptRetryDelayAttempt3Seconds;
+}
+
+function getTranscriptRetryDelaySecondsForErrorCode(code: string | null | undefined, attemptCount: number) {
+  const normalized = String(code || '').trim().toUpperCase();
+  const normalizedAttempt = Math.max(1, Math.floor(Number(attemptCount) || 1));
+  if (transcriptAccessDeniedRetryEnabled && normalized === 'ACCESS_DENIED') {
+    if (normalizedAttempt <= 1) return sourceTranscriptAccessDeniedRetryDelayAttempt1Seconds;
+    if (normalizedAttempt === 2) return sourceTranscriptAccessDeniedRetryDelayAttempt2Seconds;
+    return sourceTranscriptAccessDeniedRetryDelayAttempt3Seconds;
+  }
+  return getTranscriptRetryDelaySecondsForAttempt(normalizedAttempt);
 }
 
 function getTranscriptRetryAfterSeconds(unlock: SourceItemUnlockRow | null) {
@@ -3512,12 +3559,12 @@ async function classifyTranscriptFailureForUnlock(input: {
   const normalizedRawErrorCode = String(input.rawErrorCode || '').trim().toUpperCase();
   const terminalFailFast =
     transcriptFailFastEnabled
-    && isTerminalTranscriptProviderErrorCode(normalizedRawErrorCode);
+    && isTerminalTranscriptProviderErrorCodeForUnlock(normalizedRawErrorCode);
   const nextAttemptCount = getUnlockTranscriptAttemptCount(input.unlock) + 1;
   let nextNoCaptionHits = getUnlockTranscriptNoCaptionHits(input.unlock);
   let transcriptStatus: TranscriptTruthStatus = 'transient_error';
   let finalErrorCode = normalizeUnlockFailureCode(normalizedRawErrorCode);
-  let retryAfterSeconds = getTranscriptRetryDelaySecondsForAttempt(nextAttemptCount);
+  let retryAfterSeconds = getTranscriptRetryDelaySecondsForErrorCode(normalizedRawErrorCode, nextAttemptCount);
   const probeMeta: Record<string, unknown> = {
     normalized_raw_error_code: normalizedRawErrorCode || null,
   };
@@ -3568,7 +3615,7 @@ async function classifyTranscriptFailureForUnlock(input: {
     retryAfterSeconds = 0;
   } else if (isTransientTranscriptUnavailableCode(normalizedRawErrorCode)) {
     finalErrorCode = 'TRANSCRIPT_UNAVAILABLE';
-    retryAfterSeconds = getTranscriptRetryDelaySecondsForAttempt(nextAttemptCount);
+    retryAfterSeconds = getTranscriptRetryDelaySecondsForErrorCode(normalizedRawErrorCode, nextAttemptCount);
   }
 
   await input.db
@@ -5798,7 +5845,7 @@ async function processSourceItemUnlockGenerationJob(input: {
 
       if (
         isTransientTranscriptUnavailableCode(rawErrorCode)
-        || (transcriptFailFastEnabled && isTerminalTranscriptProviderErrorCode(rawErrorCode))
+        || (transcriptFailFastEnabled && isTerminalTranscriptProviderErrorCodeForUnlock(rawErrorCode))
       ) {
         let unlockForDecision = processingUnlockRow;
         if (!unlockForDecision) {
@@ -5959,7 +6006,7 @@ async function processSourceItemUnlockGenerationJob(input: {
         && (
           errorCode === 'TRANSCRIPT_UNAVAILABLE'
           || errorCode === 'NO_TRANSCRIPT_PERMANENT'
-          || isTerminalTranscriptProviderErrorCode(errorCode)
+          || isTerminalTranscriptProviderErrorCodeForUnlock(errorCode)
           || errorCode === 'VIDEO_TOO_LONG'
           || errorCode === 'VIDEO_DURATION_UNAVAILABLE'
         )
@@ -5967,7 +6014,7 @@ async function processSourceItemUnlockGenerationJob(input: {
         try {
           const decisionCode = errorCode === 'NO_TRANSCRIPT_PERMANENT'
             ? 'NO_TRANSCRIPT_PERMANENT_AUTO'
-            : isTerminalTranscriptProviderErrorCode(errorCode)
+            : isTerminalTranscriptProviderErrorCodeForUnlock(errorCode)
               ? `${errorCode}_AUTO`
             : errorCode === 'VIDEO_TOO_LONG'
               ? 'VIDEO_TOO_LONG_AUTO'
@@ -6299,7 +6346,7 @@ async function processSourceAutoUnlockRetryJob(input: {
   const transcriptAttempts = getUnlockTranscriptAttemptCount(unlock);
   const transcriptStatus = normalizeTranscriptTruthStatus(unlock.transcript_status);
   const shouldForceTerminalNoTranscript =
-    isTerminalTranscriptProviderErrorCode(unlock.last_error_code)
+    isTerminalTranscriptProviderErrorCodeForUnlock(unlock.last_error_code)
     || (
       transcriptAttempts >= sourceTranscriptMaxAttempts
       && (
@@ -6672,10 +6719,12 @@ function getDualGenerateTiers(input: {
 }
 
 function getRetryDelayForErrorCode(errorCode: string) {
-  if (isTerminalTranscriptProviderErrorCode(errorCode)) {
+  if (isTerminalTranscriptProviderErrorCodeForUnlock(errorCode)) {
     return 0;
   }
   switch (errorCode) {
+    case 'ACCESS_DENIED':
+      return getTranscriptRetryDelaySecondsForErrorCode('ACCESS_DENIED', 1);
     case 'PROVIDER_DEGRADED':
       return 30;
     case 'PROVIDER_FAIL':
@@ -6712,7 +6761,10 @@ function classifyQueuedJobError(error: unknown) {
     };
   }
   if (error instanceof TranscriptProviderError) {
-    const retryDelaySeconds = isRetryableTranscriptProviderErrorCode(error.code)
+    const retryDelaySeconds = (
+      isRetryableTranscriptProviderErrorCode(error.code)
+      || (transcriptAccessDeniedRetryEnabled && String(error.code || '').trim().toUpperCase() === 'ACCESS_DENIED')
+    )
       ? (error.retryAfterSeconds || getRetryDelayForErrorCode(error.code))
       : 0;
     return {
@@ -6759,6 +6811,7 @@ function classifyQueuedJobError(error: unknown) {
   ) {
     const retryDelaySeconds = (
       isRetryableTranscriptProviderErrorCode(providerCode)
+        || (transcriptAccessDeniedRetryEnabled && providerCode === 'ACCESS_DENIED')
         ? getRetryDelayForErrorCode(providerCode)
         : 0
     );
