@@ -56,6 +56,7 @@ export type SourcePagesRouteDeps = {
   buildSourcePagePath: any;
   normalizeSourcePagePlatform: any;
   getSourcePageByPlatformExternalId: any;
+  runSourcePageAssetSweep: any;
   needsSourcePageAssetHydration: any;
   hydrateSourcePageAssetsForRow: any;
   youtubeDataApiKey: string;

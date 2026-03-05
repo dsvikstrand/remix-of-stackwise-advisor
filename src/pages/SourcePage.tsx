@@ -29,6 +29,7 @@ import { getChannelIcon } from '@/lib/channelIcons';
 import { useSourceUnlockJobTracker } from '@/hooks/useSourceUnlockJobTracker';
 import { resolveEffectiveBanner } from '@/lib/bannerResolver';
 import { resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
+import { getLaunchErrorCopy } from '@/lib/launchErrorCopy';
 
 function getInitials(title: string, fallback: string) {
   const raw = title.trim() || fallback.trim();
@@ -70,23 +71,23 @@ function getSourceVideoLibraryErrorMessage(error: unknown, fallback: string) {
       case 'AUTH_REQUIRED':
         return 'Sign in required.';
       case 'RATE_LIMITED':
-        return 'Too many unlock requests, retry shortly.';
+      case 'INSUFFICIENT_CREDITS':
+      case 'DAILY_GENERATION_CAP_REACHED':
+      case 'TRANSCRIPT_UNAVAILABLE':
+      case 'NO_TRANSCRIPT_PERMANENT':
+      case 'QUEUE_BACKPRESSURE':
+      case 'QUEUE_INTAKE_DISABLED':
+      case 'SOURCE_PAGE_NOT_FOUND':
+        return getLaunchErrorCopy({
+          errorCode: error.errorCode,
+          fallback,
+        });
       case 'SOURCE_VIDEO_LIST_FAILED':
         return 'Could not load source videos right now.';
       case 'SOURCE_VIDEO_GENERATE_INVALID_INPUT':
         return 'Select one or more valid videos to generate.';
       case 'SOURCE_VIDEO_GENERATE_FAILED':
         return 'Could not start unlock generation for selected videos.';
-      case 'INSUFFICIENT_CREDITS':
-        return 'Not enough credits right now.';
-      case 'DAILY_GENERATION_CAP_REACHED':
-        return 'Daily generation cap reached. Please try again after reset.';
-      case 'SOURCE_PAGE_NOT_FOUND':
-        return 'Source page not found.';
-      case 'TRANSCRIPT_UNAVAILABLE':
-        return 'Only videos with speech can be generated. If this video has speech, please try again in a few minutes.';
-      case 'NO_TRANSCRIPT_PERMANENT':
-        return 'No transcript is available for this video.';
       case 'VIDEO_TOO_LONG':
       case 'VIDEO_DURATION_POLICY_BLOCKED':
         return 'One or more selected videos exceed the 45-minute limit.';

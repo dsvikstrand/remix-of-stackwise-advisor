@@ -10,18 +10,34 @@ b1) [have] This plan covers launch hardening for queue throughput, worker archit
 b2) [have] This plan does not replace the broader strategic notes in `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`.
 b3) [have] This plan is a practical execution tracker for the queue/reliability work discussed after the MVP feature pass.
 
+## Launch Gate Control
+c1) [have] MVP launch go/no-go is controlled by `docs/ops/mvp-launch-readiness-checklist.md`.
+c2) [have] This phase file tracks implementation sequencing and evidence, not final launch authorization.
+c3) [have] Checklist sync milestone completed on `2026-03-05`:
+- P0/P1 owner/date/status fields are filled
+- baseline command evidence bundle is appended in checklist Evidence Log
+- launch snapshot reflects current SHA and migration watermark
+c4) [todo] Keep phase status in sync with the checklist P0/P1 board after every material change.
+c5) [have] Service-auth queue visibility blocker resolved on `2026-03-05`:
+- `INGESTION_SERVICE_TOKEN` source confirmed in systemd drop-in (`10-ingestion-token.conf`)
+- queue-health and latest-ingestion evidence were captured successfully and appended to checklist Evidence Log (`o11-o13`)
+c6) [have] Launch gate closeout pass (A8) is in progress:
+- P0-1 and P0-2 parity evidence were re-captured and marked done in checklist.
+- P0-3/P0-5/P0-6 code implementations are landed locally with passing typecheck/tests/build.
+- P0-4 pause/recover toggle sequence was exercised on Oracle, with final deterministic endpoint-proof still pending.
+
 ## How To Use This Plan
-c1) [todo] Treat each phase as a distinct implementation and validation checkpoint.
-c2) [todo] Do not start the next phase until the previous phase has a measured outcome.
-c3) [todo] Prefer small, measurable changes over broad infrastructure rewrites.
-c4) [have] Phase 1 telemetry was shipped in commit `dd473b8` (`Add queue baseline telemetry and metrics`).
+d1) [todo] Treat each phase as a distinct implementation and validation checkpoint.
+d2) [todo] Do not start the next phase until the previous phase has a measured outcome.
+d3) [todo] Prefer small, measurable changes over broad infrastructure rewrites.
+d4) [have] Phase 1 telemetry was shipped in commit `dd473b8` (`Add queue baseline telemetry and metrics`).
 
 ## Phase 1 - Baseline and Load Visibility
-d1) [todo] Define a realistic launch simulation target:
+e1) [todo] Define a realistic launch simulation target:
 - `1000` signups
 - `1000` blueprint generations in one day
 - `100` queued blueprint jobs at once
-d2) [todo] Measure current baseline:
+e2) [todo] Measure current baseline:
 - median generation duration
 - p95 generation duration
 - queue depth growth
@@ -29,21 +45,21 @@ d2) [todo] Measure current baseline:
 - API latency during queue load
 - transcript failure rate
 - YouTube API failure rate
-d3) [have] Minimal instrumentation for Phase 1 is now in place:
+e3) [have] Minimal instrumentation for Phase 1 is now in place:
 - `GET /api/ops/queue/health` exposes queue-age metrics and per-scope oldest-age data
 - `npm run metrics:queue` parses queue-worker outcomes from logs
-d4) [have] Baseline numbers are now recorded in this file.
-d5) [have] Exit criteria:
+e4) [have] Baseline numbers are now recorded in this file.
+e5) [have] Exit criteria:
 - current throughput and queue lag are measurable
 - the main bottleneck is confirmed with real numbers, not guesswork
 
 ### Phase 1 Baseline Capture
-d6) [have] Baseline capture date:
+e6) [have] Baseline capture date:
 - `2026-03-04`
-d7) [have] Oracle baseline commands:
+e7) [have] Oracle baseline commands:
 - `ssh oracle-free 'source /etc/agentic-backend.env >/dev/null 2>&1; curl -sS http://127.0.0.1:8787/api/ops/queue/health -H "x-service-token: $INGESTION_SERVICE_TOKEN"'`
 - `ssh oracle-free 'export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use 20.20.0 >/dev/null; cd /home/ubuntu/remix-of-stackwise-advisor && npm run metrics:queue -- --source journalctl --json'`
-d8) [have] Recorded measured values:
+e8) [have] Recorded measured values:
 - `snapshot_at`: `2026-03-04T15:40:42.703Z`
 - `queue_depth`: `0`
 - `running_depth`: `0`
@@ -59,12 +75,12 @@ d8) [have] Recorded measured values:
   - `all_active_subscriptions: 104`
   - `source_item_unlock_generation: 8`
   - `source_auto_unlock_retry: 4`
-d9) [have] Notes:
+e9) [have] Notes:
 - Live queue snapshot was fully idle at the capture moment.
 - Historical throughput is low enough to justify a controlled concurrency increase as Phase 2.
 - Recent failures in the sampled window were transcript-related only.
 - The sampled workload was dominated by `all_active_subscriptions`, not direct user-triggered generation.
-d10) [have] Exit condition for Phase 1:
+e10) [have] Exit condition for Phase 1:
 - baseline snapshot is recorded here
 - one historical log sample is recorded here
 - Phase 2 starts only after those values are written down
@@ -309,27 +325,28 @@ k4) [todo] Exit criteria:
 - next operational investment is based on observed data, not forecast guesses
 
 ## Priority Order Before MVP Launch
-l1) [have] The most important pre-launch phases are:
+m1) [have] The most important pre-launch phases are:
 - Phase 1
 - Phase 2
 - Phase 3
 - at least part of Phase 4
 - at least part of Phase 6
-l2) [have] The remaining phases improve launch quality and survivability but are not all required before first launch.
+m2) [have] The remaining phases improve launch quality and survivability but are not all required before first launch.
+m3) [have] Launch release gating must be read from `docs/ops/mvp-launch-readiness-checklist.md` P0/P1 status.
 
 ## Current Tracking
-m1) [have] Phase 1 - Completed (telemetry shipped, baseline captured)
-m2) [have] Phase 2 - Completed (`WORKER_CONCURRENCY=4` retained after under-load sample)
-m3) [have] Phase 3 - Completed (web/worker split deployed on Oracle)
-m4) [have] Phase 4 - Completed (Phase 4A + Phase 4B shipped and closeout-verified)
-m5) [have] Phase 5 - Completed (Phase 5A implemented and closeout-verified)
-m6) [todo] Phase 6 - In progress (daily cap implemented; launch-toggle/operator playbook still pending)
-m6) [todo] Phase 6 - Not started
-m7) [todo] Phase 7 - Not started
-m8) [todo] Phase 8 - Not started
+n1) [have] Phase 1 - Completed (telemetry shipped, baseline captured)
+n2) [have] Phase 2 - Completed (`WORKER_CONCURRENCY=4` retained after under-load sample)
+n3) [have] Phase 3 - Completed (web/worker split deployed on Oracle)
+n4) [have] Phase 4 - Completed (Phase 4A + Phase 4B shipped and closeout-verified)
+n5) [have] Phase 5 - Completed (Phase 5A implemented and closeout-verified)
+n6) [todo] Phase 6 - In progress (daily cap implemented; launch-toggle/operator playbook and drill evidence pending)
+n7) [todo] Phase 7 - Deferred until after P0/P1 launch gate items are complete
+n8) [todo] Phase 8 - Deferred until post-launch data review window
+n9) [have] A7 operationalization Phase A/B is complete (governance metadata + first evidence bundle captured in checklist).
 
 ## Validation Notes
-n1) [todo] Update this file with measured outcomes after each phase.
-n2) [todo] Keep changes phase-scoped so regressions are easy to attribute.
-n3) [todo] Do not mix feature work into these phases unless it directly improves launch reliability.
-n4) [have] Phase 1-4 are complete with recorded evidence; the next action is to implement Phase 6 launch controls and safeguards.
+o1) [todo] Update this file with measured outcomes after each phase.
+o2) [todo] Keep changes phase-scoped so regressions are easy to attribute.
+o3) [todo] Do not mix feature work into these phases unless it directly improves launch reliability.
+o4) [have] Phase 1-5 are complete with recorded evidence; immediate focus is checklist P0/P1 closeout + Phase 6 launch controls.

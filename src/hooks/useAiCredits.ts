@@ -18,6 +18,9 @@ export type CreditsResponse = {
   generation_daily_reset_at?: string | null;
   generation_daily_bypass?: boolean | null;
   generation_plan?: 'free' | 'plus' | 'admin' | string | null;
+  credits_backend_mode?: 'db' | 'bypass' | 'unavailable' | string;
+  credits_backend_ok?: boolean;
+  credits_backend_error?: string | null;
 };
 
 export type AiCreditsView = CreditsResponse & {
@@ -137,24 +140,35 @@ async function fetchCredits(): Promise<CreditsResponse> {
   }
 
   const url = `${config.agenticBackendUrl!.replace(/\/$/, '')}/api/credits`;
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 8_000);
   try {
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 8_000);
     const response = await fetch(url, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
       signal: controller.signal,
     });
-    window.clearTimeout(timeoutId);
 
     if (!response.ok) {
-      throw new Error('Unable to load credits');
+      let errorCode = '';
+      let message = 'Unable to load credits';
+      try {
+        const payload = await response.json() as { error_code?: string; error?: string; message?: string };
+        errorCode = String(payload.error_code || '').trim().toUpperCase();
+        message = String(payload.message || payload.error || message);
+      } catch {
+        // Ignore json parse failures and keep fallback message.
+      }
+      if (errorCode === 'CREDITS_UNAVAILABLE') {
+        throw new Error('CREDITS_UNAVAILABLE');
+      }
+      throw new Error(message);
     }
 
-    return response.json();
-  } catch {
-    return fetchCreditsFromWalletFallback();
+    return await response.json();
+  } finally {
+    window.clearTimeout(timeoutId);
   }
 }
 

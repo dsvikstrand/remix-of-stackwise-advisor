@@ -10,6 +10,7 @@ type UsageState = {
 
 const GLOBAL_WINDOW_MS = Number(process.env.AI_GLOBAL_WINDOW_MS) || 10 * 60 * 1000;
 const GLOBAL_MAX = Number(process.env.AI_GLOBAL_MAX) || 25;
+const CREDITS_UNAVAILABLE_ERROR_CODE = 'CREDITS_UNAVAILABLE' as const;
 
 const supabaseUrl = String(process.env.SUPABASE_URL || '').trim();
 const serviceRoleKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
@@ -39,27 +40,29 @@ function nextResetAtFromWallet(secondsToFull: number) {
   return new Date(Date.now() + seconds * 1000).toISOString();
 }
 
-function fallbackResetAt() {
-  return new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+function normalizeErrorMessage(error: unknown, fallback: string) {
+  const message = error instanceof Error ? error.message : String(error || '').trim();
+  return message || fallback;
 }
 
-function getFallbackCredits() {
-  const defaults = getWalletDefaults();
-  return {
-    remaining: defaults.capacity,
-    limit: defaults.capacity,
-    resetAt: fallbackResetAt(),
-    bypass: true,
-    balance: defaults.capacity,
-    capacity: defaults.capacity,
-    refill_rate_per_sec: defaults.refill_rate_per_sec,
-    seconds_to_full: 0,
-  };
+export class CreditsUnavailableError extends Error {
+  readonly code = CREDITS_UNAVAILABLE_ERROR_CODE;
+  constructor(message = 'Credits backend unavailable.') {
+    super(message);
+    this.name = 'CreditsUnavailableError';
+  }
+}
+
+function throwCreditsUnavailable(message: string): never {
+  throw new CreditsUnavailableError(message);
 }
 
 export async function getCredits(userId: string) {
   const db = getServiceClient();
-  if (!db) return getFallbackCredits();
+  const defaults = getWalletDefaults();
+  if (!db) {
+    throwCreditsUnavailable('SUPABASE_SERVICE_ROLE_KEY is missing for credits backend.');
+  }
 
   try {
     const wallet = await getWallet(db, userId);
@@ -72,9 +75,16 @@ export async function getCredits(userId: string) {
       capacity: wallet.capacity,
       refill_rate_per_sec: wallet.refill_rate_per_sec,
       seconds_to_full: wallet.seconds_to_full,
+      credits_backend_mode: wallet.bypass ? 'bypass' : 'db',
+      credits_backend_ok: true,
+      credits_backend_error: null,
+      credits_backend_defaults: {
+        capacity: defaults.capacity,
+        refill_rate_per_sec: defaults.refill_rate_per_sec,
+      },
     };
-  } catch {
-    return getFallbackCredits();
+  } catch (error) {
+    throwCreditsUnavailable(normalizeErrorMessage(error, 'Failed to read credits wallet.'));
   }
 }
 
@@ -90,8 +100,10 @@ export async function consumeCredit(
   const db = getServiceClient();
   if (!db) {
     return {
-      ok: true as const,
-      ...(await getCredits(userId)),
+      ok: false as const,
+      reason: 'service' as const,
+      errorCode: CREDITS_UNAVAILABLE_ERROR_CODE,
+      message: 'Credits backend unavailable.',
     };
   }
 
@@ -111,13 +123,23 @@ export async function consumeCredit(
   const reasonCode = String(input?.reasonCode || 'AI_FLAT').trim() || 'AI_FLAT';
   const idempotencyKey = String(input?.idempotencyKey || `${reasonCode}:${userId}:${randomUUID()}`).trim();
 
-  const consumed = await consumeFlatCredit(db, {
-    userId,
-    amount,
-    reasonCode,
-    idempotencyKey,
-    context: input?.context,
-  });
+  let consumed;
+  try {
+    consumed = await consumeFlatCredit(db, {
+      userId,
+      amount,
+      reasonCode,
+      idempotencyKey,
+      context: input?.context,
+    });
+  } catch (error) {
+    return {
+      ok: false as const,
+      reason: 'service' as const,
+      errorCode: CREDITS_UNAVAILABLE_ERROR_CODE,
+      message: normalizeErrorMessage(error, 'Credits backend unavailable.'),
+    };
+  }
 
   if (!consumed.ok) {
     return {

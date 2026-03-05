@@ -39,6 +39,7 @@ import {
 } from '@/lib/youtubeChannelVideosApi';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { PageMain, PageRoot, PageSection } from '@/components/layout/Page';
+import { getLaunchErrorCopy } from '@/lib/launchErrorCopy';
 
 const DEFAULT_SEARCH_LIMIT = 10;
 const GENERATE_BLUEPRINT_COST = 1;
@@ -121,17 +122,16 @@ const CHANNEL_QUICK_TAG_BANK = [
 function toGenerateErrorMessage(errorCode?: string | null) {
   switch (errorCode) {
     case 'INSUFFICIENT_CREDITS':
-      return 'Insufficient credits right now. Please wait for refill and try again.';
     case 'QUEUE_BACKPRESSURE':
-      return 'Generation queue is busy. Please retry shortly.';
+    case 'QUEUE_INTAKE_DISABLED':
     case 'DAILY_GENERATION_CAP_REACHED':
-      return 'Daily generation cap reached. Please try again after reset.';
     case 'NO_TRANSCRIPT_PERMANENT':
-      return 'Transcript unavailable for this video. Please try another one.';
     case 'TRANSCRIPT_UNAVAILABLE':
-      return 'Transcript temporarily unavailable. Please try again in a few minutes.';
     case 'RATE_LIMITED':
-      return 'Too many requests right now. Please retry shortly.';
+      return getLaunchErrorCopy({
+        errorCode,
+        fallback: 'Could not generate blueprint right now. Please try again.',
+      });
     case 'VIDEO_TOO_LONG':
     case 'VIDEO_DURATION_POLICY_BLOCKED':
       return 'This video exceeds the 45-minute generation limit.';

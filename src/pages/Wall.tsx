@@ -29,6 +29,7 @@ import { unlockSourcePageVideos } from '@/lib/sourcePagesApi';
 import { WallBlueprintCard } from '@/components/wall/WallBlueprintCard';
 import { ForYouLockedSourceCard } from '@/components/wall/ForYouLockedSourceCard';
 import { useSourceUnlockJobTracker } from '@/hooks/useSourceUnlockJobTracker';
+import { getLaunchErrorCopy } from '@/lib/launchErrorCopy';
 
 interface BlueprintPost {
   id: string;
@@ -136,23 +137,11 @@ const SCOPE_ALL = 'all';
 
 function getForYouErrorMessage(error: unknown, fallback: string) {
   if (error instanceof ApiRequestError) {
-    if (error.errorCode === 'INSUFFICIENT_CREDITS') {
-      return 'Not enough credits to unlock this blueprint yet.';
-    }
-    if (error.errorCode === 'DAILY_GENERATION_CAP_REACHED') {
-      return 'Daily generation cap reached. Please try again after reset.';
-    }
-    if (error.errorCode === 'RATE_LIMITED') {
-      return 'Too many unlock requests, retry shortly.';
-    }
-    if (error.errorCode === 'SOURCE_PAGE_NOT_FOUND') {
-      return 'Source page missing for this item. Try opening the source first.';
-    }
-    if (error.errorCode === 'TRANSCRIPT_UNAVAILABLE') {
-      return 'Could not unlock this video right now. Please try again in a few minutes.';
-    }
-    if (error.errorCode === 'NO_TRANSCRIPT_PERMANENT') {
-      return 'This video cannot be unlocked right now.';
+    if (error.errorCode) {
+      return getLaunchErrorCopy({
+        errorCode: error.errorCode,
+        fallback: error.message || fallback,
+      });
     }
     return error.message || fallback;
   }

@@ -5,6 +5,17 @@ export type SourcePageVideoExistingState = any;
 export type SearchVideoGenerateItem = any;
 export type UserYouTubeConnectionRow = any;
 
+export type YouTubeCreditCheck = {
+  ok: boolean;
+  reason?: 'global' | 'user' | 'service' | string;
+  retryAfterSeconds?: number;
+  remaining?: number;
+  limit?: number;
+  resetAt?: string | null;
+  errorCode?: string;
+  message?: string;
+};
+
 export type YouTubeToBlueprintInput = {
   video_url: string;
   generate_review?: boolean;
@@ -80,7 +91,15 @@ export type YouTubeRouteDeps = {
   YouTubeConnectionStartSchema: SafeParser<YouTubeConnectionStartInput>;
   YouTubeSubscriptionsImportSchema: SafeParser<YouTubeSubscriptionsImportInput>;
   getAdapterForUrl: any;
-  consumeCredit: any;
+  consumeCredit: (
+    userId: string,
+    input?: {
+      amount?: number;
+      reasonCode?: string;
+      idempotencyKey?: string;
+      context?: Record<string, unknown>;
+    },
+  ) => Promise<YouTubeCreditCheck>;
   consumeGenerationDailyCap: any;
   getGenerationDailyCapStatus: any;
   getServiceSupabaseClient: any;

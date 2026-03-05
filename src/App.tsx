@@ -21,6 +21,8 @@ import BlueprintDetail from "./pages/BlueprintDetail";
 import YouTubeToBlueprint from "./pages/YouTubeToBlueprint";
 import GenerationQueue from "./pages/GenerationQueue";
 import About from "./pages/About";
+import Terms from "./pages/Terms";
+import Privacy from "./pages/Privacy";
 import NotFound from "./pages/NotFound";
 import { RequireAuth } from "@/components/shared/RequireAuth";
 import { config } from "@/config/runtime";
@@ -68,6 +70,8 @@ const App = () => (
             <Route path="/u/:userId" element={<UserProfile />} />
             <Route path="/tags" element={<Navigate to="/channels" replace />} />
             <Route path="/about" element={<About />} />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/privacy" element={<Privacy />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

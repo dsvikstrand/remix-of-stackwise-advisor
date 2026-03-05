@@ -5,6 +5,7 @@
 - Runtime host: Oracle (`oracle-free`)
 - Service unit: `agentic-backend.service`
 - Primary owner: app backend maintainers
+- Launch gate source of truth: `docs/ops/mvp-launch-readiness-checklist.md` (P0/P1 owner/date/status/evidence board).
 
 ## bleuV1 source-first integration context
 - YT2BP remains the ingestion/generation entrypoint only.
@@ -497,6 +498,19 @@ ssh oracle-free 'sudo systemctl daemon-reload && sudo systemctl restart agentic-
   1) Check `/api/credits` fields (`generation_daily_limit`, `generation_daily_used`, `generation_daily_remaining`, `generation_daily_reset_at`, `generation_daily_bypass`).
   2) Confirm rollover config (`GENERATION_DAILY_CAP_RESET_HOUR_UTC`) in `/etc/agentic-backend.env`.
   3) For bypass users, confirm membership in `GENERATION_DAILY_CAP_BYPASS_USER_IDS` and restart services after env updates.
+
+### `CREDITS_UNAVAILABLE`
+- Meaning: backend credit service path is unavailable (for example missing/invalid service-role path or credit RPC failure).
+- Action:
+  1) Check `/api/credits` directly; confirm payload fields:
+     - `credits_backend_mode`
+     - `credits_backend_ok`
+     - `credits_backend_error`
+  2) Confirm `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are present in `/etc/agentic-backend.env`.
+  3) Confirm bypass state intentionally:
+     - `AI_CREDITS_BYPASS=true` is emergency-only and should not be left on unintentionally.
+  4) Restart backend/worker after env correction and re-check `/api/credits`.
+  5) Verify generation endpoints now return normal credit outcomes (not `CREDITS_UNAVAILABLE`).
 
 #### Set user generation entitlement (service role SQL)
 - Set `admin` (no daily cap):

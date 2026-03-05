@@ -20,6 +20,7 @@
     "metrics:yt2bp": "node scripts/yt2bp_metrics_from_logs.mjs",
     "metrics:queue": "node scripts/queue_metrics_from_logs.mjs",
     "metrics:channels": "node scripts/channels_metrics_from_supabase.mjs",
+    "drill:feed": "node scripts/feed_load_drill.mjs",
     "seed:channels:tags": "node scripts/seed_curated_channel_tags.mjs",
     "docs:refresh-check": "node scripts/docs-refresh-check.mjs",
     "docs:link-check": "node scripts/docs-link-check.mjs"

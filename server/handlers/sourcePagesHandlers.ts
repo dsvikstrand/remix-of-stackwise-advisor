@@ -23,6 +23,7 @@ export function registerSourcePagesRouteHandlers(app: express.Express, deps: Sou
     buildSourcePagePath,
     normalizeSourcePagePlatform,
     getSourcePageByPlatformExternalId,
+    runSourcePageAssetSweep,
     needsSourcePageAssetHydration,
     hydrateSourcePageAssetsForRow,
     youtubeDataApiKey,

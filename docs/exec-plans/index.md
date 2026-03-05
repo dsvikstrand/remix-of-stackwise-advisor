@@ -5,6 +5,8 @@ This file is the authoritative active/completed registry for execution plans.
 ## Active
 - `docs/exec-plans/active/mvp-launch-hardening-phases.md`
   Phase-by-phase execution checklist for queue, worker, dependency, and launch-day operational hardening.
+- `docs/ops/mvp-launch-readiness-checklist.md`
+  MVP launch execution board and go/no-go gate (P0 critical + P1 useful hardening).
 - `docs/exec-plans/tech-debt-tracker.md`
   Deferred work backlog and non-blocking engineering debt.
 
@@ -50,6 +52,7 @@ This file is the authoritative active/completed registry for execution plans.
 - Legacy channels-first program: completed/archived.
 - `bleuV1` source-first umbrella program: completed.
 - Current execution track: launch hardening phases + tech-debt tracker.
+- Launch authorization gate: `docs/ops/mvp-launch-readiness-checklist.md`.
 - Manual iterative build strategy plans are paused reference docs.
 - Agentic orchestration: archived reference path.
 

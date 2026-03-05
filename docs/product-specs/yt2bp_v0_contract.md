@@ -60,6 +60,7 @@
 - 2026-02-20 note: ingestion worker hardening adds queue lease/retry metadata on `ingestion_jobs` and service queue-health endpoint `GET /api/ops/queue/health`; additive and outside this endpoint envelope.
 - 2026-02-21 note: permanent no-transcript unlock failures normalize to `NO_TRANSCRIPT_PERMANENT` (legacy `NO_CAPTIONS` compatibility), and associated unlockable feed cards are suppressed; additive and outside this endpoint envelope.
 - 2026-02-21 note: transcript truth hardening in source unlock flows now treats `NO_CAPTIONS` as retryable/ambiguous until bounded confirmation retries mark permanent `NO_TRANSCRIPT_PERMANENT`; historical permanent rows are revalidated asynchronously. This remains additive and outside this endpoint envelope.
+- 2026-03-05 note: credit backend fail-safe hardening adds explicit `CREDITS_UNAVAILABLE` handling (HTTP `503`) for credit-dependent YT2BP attempts; this is additive to the existing error envelope.
 
 ## Request
 ```json
@@ -117,6 +118,7 @@
 - `TRANSCRIPT_EMPTY` -> `422`
 - `PROVIDER_FAIL` -> `502`
 - `PROVIDER_DEGRADED` -> `503`
+- `CREDITS_UNAVAILABLE` -> `503`
 - `TIMEOUT` -> `504`
 - `RATE_LIMITED` -> `429`
 - `SAFETY_BLOCKED` -> `422`

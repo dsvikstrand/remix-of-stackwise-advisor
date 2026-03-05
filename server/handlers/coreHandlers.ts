@@ -14,7 +14,22 @@ export async function handleCredits(_req: express.Request, res: express.Response
   if (!userId) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  const credits = await deps.getCredits(userId) as Record<string, unknown>;
+  let credits: Record<string, unknown>;
+  try {
+    credits = await deps.getCredits(userId) as Record<string, unknown>;
+  } catch (error) {
+    const errorCode = String((error as { code?: unknown } | null)?.code || '').trim().toUpperCase();
+    if (errorCode === 'CREDITS_UNAVAILABLE') {
+      return res.status(503).json({
+        error: 'Credits backend unavailable.',
+        error_code: 'CREDITS_UNAVAILABLE',
+        credits_backend_mode: 'unavailable',
+        credits_backend_ok: false,
+        credits_backend_error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    throw error;
+  }
   let dailyStatus: GenerationDailyCapStatus | null = null;
   try {
     dailyStatus = await deps.getGenerationDailyCapStatus({
@@ -52,6 +67,12 @@ export async function handleAnalyzeBlueprint(req: express.Request, res: express.
     reasonCode: 'BLUEPRINT_REVIEW',
   });
   if (!creditCheck.ok) {
+    if (creditCheck.reason === 'service' || String(creditCheck.errorCode || '').trim().toUpperCase() === 'CREDITS_UNAVAILABLE') {
+      return res.status(503).json({
+        error: 'Credits backend unavailable.',
+        error_code: 'CREDITS_UNAVAILABLE',
+      });
+    }
     if (creditCheck.reason === 'global') {
       return res.status(429).json({
         error: 'We\'re at capacity right now. Please try again in a few minutes.',
@@ -128,6 +149,12 @@ export async function handleGenerateBanner(req: express.Request, res: express.Re
     reasonCode: 'BANNER_GENERATE',
   });
   if (!creditCheck.ok) {
+    if (creditCheck.reason === 'service' || String(creditCheck.errorCode || '').trim().toUpperCase() === 'CREDITS_UNAVAILABLE') {
+      return res.status(503).json({
+        error: 'Credits backend unavailable.',
+        error_code: 'CREDITS_UNAVAILABLE',
+      });
+    }
     if (creditCheck.reason === 'global') {
       return res.status(429).json({
         error: 'We\'re at capacity right now. Please try again in a few minutes.',

@@ -90,6 +90,9 @@ a68) [have] YouTube-source blueprints now use thumbnail-first banners across car
 a69) [have] Notifications MVP now emits reply and generation-terminal notifications and surfaces them through an auth inbox bell in the app header.
 a70) [have] Generation duration policy is available for MVP hardening (default off): max video length gate (`45m`), unknown-duration blocking, no-charge-on-policy-block, and partial-accept batch queueing with blocked-item details.
 a71) [have] Daily generation cap policy is active for blueprint generation attempts with global UTC rollover: `free` default (`5/day`), `plus` higher cap (env-configured), and `admin` bypass.
+a72) [have] Launch gate hardening adds explicit credit outage semantics (`CREDITS_UNAVAILABLE`) and `/api/credits` backend-health visibility fields (`credits_backend_mode`, `credits_backend_ok`, `credits_backend_error`).
+a73) [have] Launch legal baseline routes are now first-class (`/terms`, `/privacy`) and linked from auth surface.
+a74) [have] Launch error-copy normalization is centralized through shared frontend mapping for critical failure classes across Search/Source/Wall/My Feed.
 
 ## Core Model
 b1) `Source Item`

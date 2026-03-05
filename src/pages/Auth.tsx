@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -268,7 +268,10 @@ export default function Auth() {
         
         <CardFooter className="text-center text-sm text-muted-foreground">
           <p className="w-full">
-            By signing up, you agree to our Terms of Service and Privacy Policy.
+            By signing up, you agree to our{' '}
+            <Link to="/terms" className="underline hover:text-foreground">Terms of Service</Link>
+            {' '}and{' '}
+            <Link to="/privacy" className="underline hover:text-foreground">Privacy Policy</Link>.
           </p>
         </CardFooter>
       </Card>

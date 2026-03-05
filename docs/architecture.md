@@ -75,6 +75,7 @@
   - User menu includes a direct `Subscriptions` shortcut to `/subscriptions`; profile tab keeps a lightweight owner-only list with `Unsubscribe`.
   - User menu credit panel shows refill timing (`next +1`) plus latest wallet ledger activity summary when available.
   - Header now includes an auth-only notifications bell inbox (reply + generation terminal notifications with read/read-all actions).
+  - Legal baseline routes are first-class in runtime (`/terms`, `/privacy`) and linked from auth.
 - Backend:
   - Express server in `server/index.ts`.
   - Backend refactor a3 is completed with no behavior drift:
@@ -127,6 +128,9 @@
       - enqueue-only path for `all_active_subscriptions` scope; durable worker claim/lease executes outside request lifecycle.
     - `GET /api/ingestion/jobs/latest` (service auth, latest job snapshot)
     - `GET /api/ops/queue/health` (service auth, queue depth/stale lease/provider circuit snapshot)
+    - credit path fail-safe:
+      - credit backend outages return explicit `CREDITS_UNAVAILABLE` (`503`) for credit-dependent actions.
+      - `/api/credits` exposes additive backend-health fields (`credits_backend_mode`, `credits_backend_ok`, `credits_backend_error`).
     - `POST /api/auto-banner/jobs/trigger` (service auth, queue worker + cap rebalance)
     - `GET /api/auto-banner/jobs/latest` (service auth, queue snapshot)
     - `POST /api/debug/subscriptions/:id/simulate-new-uploads` (debug-only, service auth + `ENABLE_DEBUG_ENDPOINTS=true`; middleware allows service-token access without bearer user auth)

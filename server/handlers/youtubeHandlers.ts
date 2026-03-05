@@ -248,6 +248,14 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
       reasonCode: 'YOUTUBE_TO_BLUEPRINT',
     });
     if (!creditCheck.ok) {
+      if (creditCheck.reason === 'service' || String(creditCheck.errorCode || '').trim().toUpperCase() === 'CREDITS_UNAVAILABLE') {
+        return res.status(503).json({
+          ok: false,
+          error_code: 'CREDITS_UNAVAILABLE',
+          message: 'Credits backend unavailable.',
+          run_id: runId,
+        });
+      }
       return res.status(429).json({
         ok: false,
         error_code: 'GENERATION_FAIL',

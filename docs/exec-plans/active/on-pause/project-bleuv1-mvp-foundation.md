@@ -15,6 +15,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 3. User approves with `PA`.
 4. Assistant implements and validates.
 5. Assistant reports outcomes and follow-up options.
+6. Launch-critical closeout is tracked in `docs/ops/mvp-launch-readiness-checklist.md` (authoritative P0/P1 board).
 
 ## Operating Mode
 - Active mode: manual iterative execution.
@@ -153,6 +154,14 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 4. Docs link check passes:
 - `npm run docs:link-check`
 5. Additional validation is run when change risk requires it.
+
+## Launch Hardening Snapshot
+- Explicit credit-backend fail-safe path is active for generation-dependent flows (`CREDITS_UNAVAILABLE`, HTTP `503`).
+- Launch-critical error copy is centralized via shared frontend mapper for core generation surfaces.
+- Legal baseline routes (`/terms`, `/privacy`) are part of runtime IA.
+- Baseline CI workflow and feed-load drill script are present:
+  - `.github/workflows/ci.yml`
+  - `scripts/feed_load_drill.mjs`
 
 ## Checkpoint Policy (Manual)
 - CP1: identity/scope changes (one-line promise, in/out-of-scope shifts).

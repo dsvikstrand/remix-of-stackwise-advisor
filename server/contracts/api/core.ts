@@ -3,11 +3,13 @@ import type { SafeParser } from './shared';
 
 export type CreditCheck = {
   ok: boolean;
-  reason?: 'global' | string;
+  reason?: 'global' | 'user' | 'service' | string;
   retryAfterSeconds?: number;
   remaining?: number;
   limit?: number;
   resetAt?: string | null;
+  errorCode?: string;
+  message?: string;
 };
 
 export type GenerationDailyCapStatus = {
