@@ -260,6 +260,11 @@ h6) [have] Phase 5A closeout validation captured on `2026-03-04`:
 h7) [todo] Optional Phase 5B follow-up (not required for Phase 5A closeout):
 - run a longer mixed-scope backlog sample and record tier-drain ordering under sustained load
 - capture post-change throughput snapshot with `npm run metrics:queue -- --source journalctl --json`
+h8) [have] Search quota hardening implementation added in code (cache-first + global budget guard):
+- new cache table + service for `/api/youtube-search` and `/api/youtube-channel-search`
+- stale-serve fallback when global live-call budget is constrained
+- global cooldown path after provider `RATE_LIMITED` responses
+- env knobs + runbook documentation added for tuning and launch safety
 
 ## Phase 6 - Launch Controls and Safeguards
 i1) [todo] Add operational kill switches and launch toggles.

@@ -174,6 +174,45 @@ export type Database = {
           },
         ]
       }
+      blueprint_youtube_search_cache: {
+        Row: {
+          cache_key: string
+          created_at: string
+          expires_at: string
+          fetched_at: string
+          kind: string
+          last_served_at: string | null
+          page_token: string | null
+          query: string
+          response_json: Json
+          updated_at: string
+        }
+        Insert: {
+          cache_key: string
+          created_at?: string
+          expires_at: string
+          fetched_at?: string
+          kind: string
+          last_served_at?: string | null
+          page_token?: string | null
+          query: string
+          response_json: Json
+          updated_at?: string
+        }
+        Update: {
+          cache_key?: string
+          created_at?: string
+          expires_at?: string
+          fetched_at?: string
+          kind?: string
+          last_served_at?: string | null
+          page_token?: string | null
+          query?: string
+          response_json?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       blueprint_likes: {
         Row: {
           blueprint_id: string
@@ -1240,6 +1279,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      youtube_quota_state: {
+        Row: {
+          cooldown_until: string | null
+          created_at: string
+          day_started_at: string | null
+          last_403_at: string | null
+          last_429_at: string | null
+          live_calls_day: number
+          live_calls_window: number
+          provider: string
+          updated_at: string
+          window_started_at: string | null
+        }
+        Insert: {
+          cooldown_until?: string | null
+          created_at?: string
+          day_started_at?: string | null
+          last_403_at?: string | null
+          last_429_at?: string | null
+          live_calls_day?: number
+          live_calls_window?: number
+          provider: string
+          updated_at?: string
+          window_started_at?: string | null
+        }
+        Update: {
+          cooldown_until?: string | null
+          created_at?: string
+          day_started_at?: string | null
+          last_403_at?: string | null
+          last_429_at?: string | null
+          live_calls_day?: number
+          live_calls_window?: number
+          provider?: string
+          updated_at?: string
+          window_started_at?: string | null
+        }
+        Relationships: []
       }
       wall_comments: {
         Row: {

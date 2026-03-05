@@ -35,6 +35,8 @@ import {
   searchYouTubeVideos,
   YouTubeSearchError,
 } from './services/youtubeSearch';
+import { createYouTubeSearchCacheService } from './services/youtubeSearchCache';
+import { createYouTubeQuotaGuardService } from './services/youtubeQuotaGuard';
 import {
   getYtToTextProxyDebugMode,
   resetYtToTextProxyDispatcher,
@@ -256,6 +258,14 @@ const sourceVideoUnlockSustainedWindowMs = clampInt(process.env.SOURCE_VIDEO_UNL
 const sourceVideoUnlockSustainedMax = clampInt(process.env.SOURCE_VIDEO_UNLOCK_SUSTAINED_MAX, 120, 10, 2_000);
 const searchApiWindowMs = clampInt(process.env.SEARCH_API_WINDOW_MS, 60_000, 10_000, 10 * 60_000);
 const searchApiMax = clampInt(process.env.SEARCH_API_MAX, 180, 20, 5_000);
+const youtubeSearchCacheEnabled = parseRuntimeFlag(process.env.YOUTUBE_SEARCH_CACHE_ENABLED, true);
+const youtubeSearchCacheTtlSeconds = clampInt(process.env.YOUTUBE_SEARCH_CACHE_TTL_SECONDS, 600, 10, 24 * 3600);
+const youtubeChannelSearchCacheTtlSeconds = clampInt(process.env.YOUTUBE_CHANNEL_SEARCH_CACHE_TTL_SECONDS, 900, 10, 24 * 3600);
+const youtubeSearchStaleMaxSeconds = clampInt(process.env.YOUTUBE_SEARCH_STALE_MAX_SECONDS, 86_400, 0, 7 * 24 * 3600);
+const youtubeSearchDegradeEnabled = parseRuntimeFlag(process.env.YOUTUBE_SEARCH_DEGRADE_ENABLED, true);
+const youtubeGlobalLiveCallsPerMinute = clampInt(process.env.YOUTUBE_GLOBAL_LIVE_CALLS_PER_MIN, 60, 1, 20_000);
+const youtubeGlobalLiveCallsPerDay = clampInt(process.env.YOUTUBE_GLOBAL_LIVE_CALLS_PER_DAY, 20_000, 1, 5_000_000);
+const youtubeGlobalCooldownSeconds = clampInt(process.env.YOUTUBE_GLOBAL_COOLDOWN_SECONDS, 600, 5, 24 * 3600);
 const creditsReadWindowMs = clampInt(process.env.CREDITS_READ_WINDOW_MS, 60_000, 10_000, 10 * 60_000);
 const creditsReadMaxPerWindow = clampInt(process.env.CREDITS_READ_MAX_PER_WINDOW, 180, 30, 2_000);
 const ingestionLatestMineWindowMs = clampInt(process.env.INGESTION_LATEST_MINE_WINDOW_MS, 60_000, 10_000, 10 * 60_000);
@@ -1580,6 +1590,10 @@ const {
   findVariantsByBlueprintId,
   resolveVariantOrReady,
 } = blueprintVariantsService;
+const youtubeSearchCacheService = createYouTubeSearchCacheService();
+const youtubeQuotaGuardService = createYouTubeQuotaGuardService({
+  providerKey: 'youtube_data_api',
+});
 
 registerYouTubeRoutes(app, {
   yt2bpIpHourlyLimiter,
@@ -1597,6 +1611,14 @@ registerYouTubeRoutes(app, {
   youtubeImportLimiter,
   youtubeDisconnectLimiter,
   youtubeDataApiKey,
+  youtubeSearchCacheEnabled,
+  youtubeSearchCacheTtlSeconds,
+  youtubeChannelSearchCacheTtlSeconds,
+  youtubeSearchStaleMaxSeconds,
+  youtubeSearchDegradeEnabled,
+  youtubeGlobalLiveCallsPerMinute,
+  youtubeGlobalLiveCallsPerDay,
+  youtubeGlobalCooldownSeconds,
   sourceUnlockGenerateMaxItems,
   generationDurationCapEnabled,
   generationMaxVideoSeconds,
@@ -1623,6 +1645,8 @@ registerYouTubeRoutes(app, {
   searchYouTubeVideos,
   loadExistingSourceVideoStateForUser,
   YouTubeSearchError,
+  youtubeSearchCacheService,
+  youtubeQuotaGuardService,
   countQueueDepth,
   emitGenerationStartedNotification,
   getGenerationNotificationLinkPath,

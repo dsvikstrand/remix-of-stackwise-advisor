@@ -56,6 +56,14 @@ export type YouTubeRouteDeps = {
   youtubeImportLimiter: express.RequestHandler;
   youtubeDisconnectLimiter: express.RequestHandler;
   youtubeDataApiKey: string;
+  youtubeSearchCacheEnabled: boolean;
+  youtubeSearchCacheTtlSeconds: number;
+  youtubeChannelSearchCacheTtlSeconds: number;
+  youtubeSearchStaleMaxSeconds: number;
+  youtubeSearchDegradeEnabled: boolean;
+  youtubeGlobalLiveCallsPerMinute: number;
+  youtubeGlobalLiveCallsPerDay: number;
+  youtubeGlobalCooldownSeconds: number;
   sourceUnlockGenerateMaxItems: number;
   queueDepthHardLimit: number;
   queueDepthPerUserLimit: number;
@@ -82,6 +90,8 @@ export type YouTubeRouteDeps = {
   searchYouTubeVideos: any;
   loadExistingSourceVideoStateForUser: any;
   YouTubeSearchError: any;
+  youtubeSearchCacheService: any;
+  youtubeQuotaGuardService: any;
   countQueueDepth: any;
   emitGenerationStartedNotification: any;
   getGenerationNotificationLinkPath: any;

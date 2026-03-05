@@ -25,6 +25,14 @@ export function registerYouTubeRouteHandlers(app: express.Express, deps: YouTube
     youtubeImportLimiter,
     youtubeDisconnectLimiter,
     youtubeDataApiKey,
+    youtubeSearchCacheEnabled,
+    youtubeSearchCacheTtlSeconds,
+    youtubeChannelSearchCacheTtlSeconds,
+    youtubeSearchStaleMaxSeconds,
+    youtubeSearchDegradeEnabled,
+    youtubeGlobalLiveCallsPerMinute,
+    youtubeGlobalLiveCallsPerDay,
+    youtubeGlobalCooldownSeconds,
     sourceUnlockGenerateMaxItems,
     generationDurationCapEnabled,
     generationMaxVideoSeconds,
@@ -51,6 +59,8 @@ export function registerYouTubeRouteHandlers(app: express.Express, deps: YouTube
     searchYouTubeVideos,
     loadExistingSourceVideoStateForUser,
     YouTubeSearchError,
+    youtubeSearchCacheService,
+    youtubeQuotaGuardService,
     countQueueDepth,
     emitGenerationStartedNotification,
     getGenerationNotificationLinkPath,
@@ -365,6 +375,127 @@ app.get('/api/youtube-search', searchApiLimiter, async (req, res) => {
   const pageToken = typeof req.query.page_token === 'string' ? req.query.page_token.trim() : '';
   const db = getAuthedSupabaseClient(authToken);
   if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+  const serviceDb = getServiceSupabaseClient();
+
+  const normalizeCachedPayload = (value: unknown) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return { results: [] as any[], nextPageToken: null as string | null };
+    }
+    const row = value as Record<string, unknown>;
+    const results = Array.isArray(row.results) ? row.results : [];
+    const nextPageTokenValue = row.nextPageToken;
+    return {
+      results,
+      nextPageToken: typeof nextPageTokenValue === 'string' ? nextPageTokenValue : null,
+    };
+  };
+
+  const attachExistingState = async (results: any[]) => {
+    let existingByVideoId = new Map<string, SourcePageVideoExistingState>();
+    try {
+      existingByVideoId = await loadExistingSourceVideoStateForUser(
+        db,
+        userId,
+        results.map((row) => String(row?.video_id || '').trim()).filter(Boolean),
+      );
+    } catch (existingError) {
+      console.log('[youtube_search_existing_state_failed]', JSON.stringify({
+        user_id: userId,
+        error: existingError instanceof Error ? existingError.message : String(existingError),
+      }));
+    }
+    return results.map((row) => {
+      const videoId = String(row?.video_id || '').trim();
+      const existing = existingByVideoId.get(videoId);
+      return {
+        ...row,
+        already_exists_for_user: Boolean(existing?.already_exists_for_user),
+        existing_blueprint_id: existing?.existing_blueprint_id || null,
+        existing_feed_item_id: existing?.existing_feed_item_id || null,
+      };
+    });
+  };
+
+  let cacheHit: any = null;
+  if (youtubeSearchCacheEnabled && serviceDb && youtubeSearchCacheService?.readCache) {
+    try {
+      cacheHit = await youtubeSearchCacheService.readCache({
+        db: serviceDb,
+        enabled: youtubeSearchCacheEnabled,
+        kind: 'video_search',
+        query,
+        limit,
+        pageToken: pageToken || null,
+        staleMaxSeconds: youtubeSearchStaleMaxSeconds,
+      });
+    } catch (cacheError) {
+      console.log('[youtube_search_cache_read_failed]', JSON.stringify({
+        query,
+        page_token: pageToken || null,
+        error: cacheError instanceof Error ? cacheError.message : String(cacheError),
+      }));
+    }
+  }
+
+  if (cacheHit?.source === 'fresh') {
+    const cached = normalizeCachedPayload(cacheHit.response);
+    const results = await attachExistingState(cached.results);
+    return res.json({
+      ok: true,
+      error_code: null,
+      message: 'youtube search complete',
+      data: {
+        results,
+        next_page_token: cached.nextPageToken,
+        cache: {
+          source: 'fresh',
+          age_seconds: cacheHit.ageSeconds ?? null,
+        },
+      },
+    });
+  }
+
+  if (youtubeSearchDegradeEnabled && serviceDb && youtubeQuotaGuardService?.checkAndConsume) {
+    try {
+      const quotaDecision = await youtubeQuotaGuardService.checkAndConsume({
+        db: serviceDb,
+        maxPerMinute: youtubeGlobalLiveCallsPerMinute,
+        maxPerDay: youtubeGlobalLiveCallsPerDay,
+      });
+      if (!quotaDecision.allowed) {
+        if (cacheHit?.source === 'stale') {
+          const cached = normalizeCachedPayload(cacheHit.response);
+          const results = await attachExistingState(cached.results);
+          return res.json({
+            ok: true,
+            error_code: null,
+            message: 'youtube search complete',
+            data: {
+              results,
+              next_page_token: cached.nextPageToken,
+              cache: {
+                source: 'stale',
+                age_seconds: cacheHit.ageSeconds ?? null,
+              },
+            },
+          });
+        }
+        return res.status(429).json({
+          ok: false,
+          error_code: 'RATE_LIMITED',
+          message: 'Search is cooling down. Please retry shortly.',
+          retry_after_seconds: quotaDecision.retryAfterSeconds ?? null,
+          data: null,
+        });
+      }
+    } catch (quotaError) {
+      console.log('[youtube_search_quota_guard_failed]', JSON.stringify({
+        query,
+        page_token: pageToken || null,
+        error: quotaError instanceof Error ? quotaError.message : String(quotaError),
+      }));
+    }
+  }
 
   try {
     const result = await searchYouTubeVideos({
@@ -373,18 +504,29 @@ app.get('/api/youtube-search', searchApiLimiter, async (req, res) => {
       limit,
       pageToken: pageToken || undefined,
     });
-    let existingByVideoId = new Map<string, SourcePageVideoExistingState>();
-    try {
-      existingByVideoId = await loadExistingSourceVideoStateForUser(
-        db,
-        userId,
-        result.results.map((row) => row.video_id),
-      );
-    } catch (existingError) {
-      console.log('[youtube_search_existing_state_failed]', JSON.stringify({
-        user_id: userId,
-        error: existingError instanceof Error ? existingError.message : String(existingError),
-      }));
+    const results = await attachExistingState(result.results);
+    if (youtubeSearchCacheEnabled && serviceDb && youtubeSearchCacheService?.writeCache) {
+      try {
+        await youtubeSearchCacheService.writeCache({
+          db: serviceDb,
+          enabled: youtubeSearchCacheEnabled,
+          kind: 'video_search',
+          query,
+          limit,
+          pageToken: pageToken || null,
+          response: {
+            results: result.results,
+            nextPageToken: result.nextPageToken || null,
+          },
+          ttlSeconds: youtubeSearchCacheTtlSeconds,
+        });
+      } catch (cacheWriteError) {
+        console.log('[youtube_search_cache_write_failed]', JSON.stringify({
+          query,
+          page_token: pageToken || null,
+          error: cacheWriteError instanceof Error ? cacheWriteError.message : String(cacheWriteError),
+        }));
+      }
     }
 
     return res.json({
@@ -392,19 +534,49 @@ app.get('/api/youtube-search', searchApiLimiter, async (req, res) => {
       error_code: null,
       message: 'youtube search complete',
       data: {
-        results: result.results.map((row) => {
-          const existing = existingByVideoId.get(row.video_id);
-          return {
-            ...row,
-            already_exists_for_user: Boolean(existing?.already_exists_for_user),
-            existing_blueprint_id: existing?.existing_blueprint_id || null,
-            existing_feed_item_id: existing?.existing_feed_item_id || null,
-          };
-        }),
+        results,
         next_page_token: result.nextPageToken,
+        cache: {
+          source: 'live',
+          age_seconds: 0,
+        },
       },
     });
   } catch (error) {
+    if (error instanceof YouTubeSearchError && error.code === 'RATE_LIMITED' && serviceDb && youtubeQuotaGuardService?.markQuotaLimited) {
+      try {
+        await youtubeQuotaGuardService.markQuotaLimited({
+          db: serviceDb,
+          statusCode: 429,
+          cooldownSeconds: youtubeGlobalCooldownSeconds,
+        });
+      } catch (quotaMarkError) {
+        console.log('[youtube_search_quota_mark_failed]', JSON.stringify({
+          query,
+          page_token: pageToken || null,
+          error: quotaMarkError instanceof Error ? quotaMarkError.message : String(quotaMarkError),
+        }));
+      }
+    }
+
+    if (cacheHit?.source === 'stale') {
+      const cached = normalizeCachedPayload(cacheHit.response);
+      const results = await attachExistingState(cached.results);
+      return res.json({
+        ok: true,
+        error_code: null,
+        message: 'youtube search complete',
+        data: {
+          results,
+          next_page_token: cached.nextPageToken,
+          cache: {
+            source: 'stale',
+            age_seconds: cacheHit.ageSeconds ?? null,
+          },
+        },
+      });
+    }
+
     if (error instanceof YouTubeSearchError) {
       const status = error.code === 'INVALID_QUERY'
         ? 400
@@ -417,6 +589,7 @@ app.get('/api/youtube-search', searchApiLimiter, async (req, res) => {
         ok: false,
         error_code: error.code,
         message: error.message,
+        retry_after_seconds: error.code === 'RATE_LIMITED' ? youtubeGlobalCooldownSeconds : undefined,
         data: null,
       });
     }
@@ -659,6 +832,99 @@ app.get('/api/youtube-channel-search', searchApiLimiter, async (req, res) => {
   const rawLimit = typeof req.query.limit === 'string' ? Number(req.query.limit) : undefined;
   const limit = clampYouTubeChannelSearchLimit(rawLimit, 10);
   const pageToken = typeof req.query.page_token === 'string' ? req.query.page_token.trim() : '';
+  const serviceDb = getServiceSupabaseClient();
+
+  const normalizeCachedPayload = (value: unknown) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return { results: [] as any[], nextPageToken: null as string | null };
+    }
+    const row = value as Record<string, unknown>;
+    const results = Array.isArray(row.results) ? row.results : [];
+    const nextPageTokenValue = row.nextPageToken;
+    return {
+      results,
+      nextPageToken: typeof nextPageTokenValue === 'string' ? nextPageTokenValue : null,
+    };
+  };
+
+  let cacheHit: any = null;
+  if (youtubeSearchCacheEnabled && serviceDb && youtubeSearchCacheService?.readCache) {
+    try {
+      cacheHit = await youtubeSearchCacheService.readCache({
+        db: serviceDb,
+        enabled: youtubeSearchCacheEnabled,
+        kind: 'channel_search',
+        query,
+        limit,
+        pageToken: pageToken || null,
+        staleMaxSeconds: youtubeSearchStaleMaxSeconds,
+      });
+    } catch (cacheError) {
+      console.log('[youtube_channel_search_cache_read_failed]', JSON.stringify({
+        query,
+        page_token: pageToken || null,
+        error: cacheError instanceof Error ? cacheError.message : String(cacheError),
+      }));
+    }
+  }
+
+  if (cacheHit?.source === 'fresh') {
+    const cached = normalizeCachedPayload(cacheHit.response);
+    return res.json({
+      ok: true,
+      error_code: null,
+      message: 'youtube channel search complete',
+      data: {
+        results: cached.results,
+        next_page_token: cached.nextPageToken,
+        cache: {
+          source: 'fresh',
+          age_seconds: cacheHit.ageSeconds ?? null,
+        },
+      },
+    });
+  }
+
+  if (youtubeSearchDegradeEnabled && serviceDb && youtubeQuotaGuardService?.checkAndConsume) {
+    try {
+      const quotaDecision = await youtubeQuotaGuardService.checkAndConsume({
+        db: serviceDb,
+        maxPerMinute: youtubeGlobalLiveCallsPerMinute,
+        maxPerDay: youtubeGlobalLiveCallsPerDay,
+      });
+      if (!quotaDecision.allowed) {
+        if (cacheHit?.source === 'stale') {
+          const cached = normalizeCachedPayload(cacheHit.response);
+          return res.json({
+            ok: true,
+            error_code: null,
+            message: 'youtube channel search complete',
+            data: {
+              results: cached.results,
+              next_page_token: cached.nextPageToken,
+              cache: {
+                source: 'stale',
+                age_seconds: cacheHit.ageSeconds ?? null,
+              },
+            },
+          });
+        }
+        return res.status(429).json({
+          ok: false,
+          error_code: 'RATE_LIMITED',
+          message: 'Search is cooling down. Please retry shortly.',
+          retry_after_seconds: quotaDecision.retryAfterSeconds ?? null,
+          data: null,
+        });
+      }
+    } catch (quotaError) {
+      console.log('[youtube_channel_search_quota_guard_failed]', JSON.stringify({
+        query,
+        page_token: pageToken || null,
+        error: quotaError instanceof Error ? quotaError.message : String(quotaError),
+      }));
+    }
+  }
 
   try {
     const result = await searchYouTubeChannels({
@@ -667,6 +933,29 @@ app.get('/api/youtube-channel-search', searchApiLimiter, async (req, res) => {
       limit,
       pageToken: pageToken || undefined,
     });
+    if (youtubeSearchCacheEnabled && serviceDb && youtubeSearchCacheService?.writeCache) {
+      try {
+        await youtubeSearchCacheService.writeCache({
+          db: serviceDb,
+          enabled: youtubeSearchCacheEnabled,
+          kind: 'channel_search',
+          query,
+          limit,
+          pageToken: pageToken || null,
+          response: {
+            results: result.results,
+            nextPageToken: result.nextPageToken || null,
+          },
+          ttlSeconds: youtubeChannelSearchCacheTtlSeconds,
+        });
+      } catch (cacheWriteError) {
+        console.log('[youtube_channel_search_cache_write_failed]', JSON.stringify({
+          query,
+          page_token: pageToken || null,
+          error: cacheWriteError instanceof Error ? cacheWriteError.message : String(cacheWriteError),
+        }));
+      }
+    }
 
     return res.json({
       ok: true,
@@ -675,9 +964,46 @@ app.get('/api/youtube-channel-search', searchApiLimiter, async (req, res) => {
       data: {
         results: result.results,
         next_page_token: result.nextPageToken,
+        cache: {
+          source: 'live',
+          age_seconds: 0,
+        },
       },
     });
   } catch (error) {
+    if (error instanceof YouTubeChannelSearchError && error.code === 'RATE_LIMITED' && serviceDb && youtubeQuotaGuardService?.markQuotaLimited) {
+      try {
+        await youtubeQuotaGuardService.markQuotaLimited({
+          db: serviceDb,
+          statusCode: 429,
+          cooldownSeconds: youtubeGlobalCooldownSeconds,
+        });
+      } catch (quotaMarkError) {
+        console.log('[youtube_channel_search_quota_mark_failed]', JSON.stringify({
+          query,
+          page_token: pageToken || null,
+          error: quotaMarkError instanceof Error ? quotaMarkError.message : String(quotaMarkError),
+        }));
+      }
+    }
+
+    if (cacheHit?.source === 'stale') {
+      const cached = normalizeCachedPayload(cacheHit.response);
+      return res.json({
+        ok: true,
+        error_code: null,
+        message: 'youtube channel search complete',
+        data: {
+          results: cached.results,
+          next_page_token: cached.nextPageToken,
+          cache: {
+            source: 'stale',
+            age_seconds: cacheHit.ageSeconds ?? null,
+          },
+        },
+      });
+    }
+
     if (error instanceof YouTubeChannelSearchError) {
       const status = error.code === 'INVALID_QUERY'
         ? 400
@@ -690,6 +1016,7 @@ app.get('/api/youtube-channel-search', searchApiLimiter, async (req, res) => {
         ok: false,
         error_code: error.code,
         message: error.message,
+        retry_after_seconds: error.code === 'RATE_LIMITED' ? youtubeGlobalCooldownSeconds : undefined,
         data: null,
       });
     }
