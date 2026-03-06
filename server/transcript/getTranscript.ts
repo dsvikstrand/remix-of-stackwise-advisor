@@ -3,7 +3,6 @@ export {
   getTranscriptForVideoWithProvider,
   getTranscriptForVideo,
   probeTranscriptProviders,
-  getTranscriptProviderDebug,
   normalizeTranscriptProviderErrorCode,
   createTranscriptService,
 } from './transcriptService';
@@ -13,3 +12,5 @@ export type {
   TranscriptProbeResult,
   TranscriptServiceDeps,
 } from './transcriptService';
+
+export { getTranscriptProviderDebug } from './types';
