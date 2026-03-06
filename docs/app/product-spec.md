@@ -5,6 +5,7 @@
 
 ## Core Direction Lock
 - Canonical identity lock: `docs/app/core-direction-lock.md`.
+- Canonical feed model: `docs/app/mvp-feed-and-channel-model.md`.
 - Primary MVP journey: source input -> `My Feed` -> auto channel evaluation/publish.
 - Library/inventory routes are compatibility-only and not part of the core user journey.
 
@@ -77,11 +78,11 @@ a55) [have] Shared source-video unlock model is active for new source-page gener
 a56) [have] Credit model now uses a daily credit wallet with UTC reset (`free=3.00`, `plus=20.00`, `admin` bypass, no rollover) instead of refill semantics.
 a57) [have] Subscription auto-ingestion now writes unlockable My Feed rows (`my_feed_unlockable`) for new uploads instead of immediately generating blueprints.
 a58) [have] Source-video unlock throttling now uses soft request caps (burst+sustained) instead of hard cooldown, and frontend credit meter refreshes immediately after unlock actions.
-a59) [have] `/wall` scope split is active: `For You` is now the subscribed-source stream (locked + unlocked), while `Your channels` keeps the previous followed-channel ranking behavior.
+a59) [have] Feed lane contract is now locked explicitly: `For You` is the personal source-driven lane, `Joined` is the joined-channel published lane, and `All` is the global published blueprint lane.
 a60) [have] Explore search now supports `Sources` results (app Source Pages only), with dedicated filter and grouped section in `All` results.
 a61) [have] Unlock activity status is now unified across Home `For You`, Source Page `Video Library`, and `My Feed` with shared job-resume behavior (`latest-mine` scope: `source_item_unlock_generation`).
 a62) [have] Credits dropdown now reads lazily on open, surfaces daily reset timing, and avoids background polling from the always-mounted header UI.
-a63) [have] Home now includes a first-time dismissible scope helper clarifying `For You` vs `Your channels`.
+a63) [have] Home scope helper/copy is part of the feed-lane clarity work, but the canonical contract now lives in `docs/app/mvp-feed-and-channel-model.md`.
 a64) [have] Unlock backend now runs reliability sweeps (expired/stale/orphan recovery) with structured traceable logs, and unlock/generate responses include additive `trace_id`.
 a65) [have] Unlock/manual/service ingestion execution is now enqueue-first with durable DB lease claiming (no in-request `setImmediate` worker path).
 a66) [have] Service operations now include `GET /api/ops/queue/health` for queue depth, work-item backlog, stale leases, and provider circuit snapshots.
@@ -115,9 +116,9 @@ b3) `User Insight/Remix` (secondary content type)
 b4) Feed surfaces
 - `My Feed`: personal timeline for all imported items and auto-channel outcomes.
 - `Home` (`/wall`) scopes:
-  - `For You` (auth-only): subscribed-source stream, latest-first, includes unlockable cards and unlocked blueprint cards.
-  - `Your channels` (auth-only): followed-channel ranked lane (previous `For You` behavior).
-  - `All Channels` + `b/<slug>` scopes: public channel-lane views.
+  - `For You` (auth-only): personal source-driven stream, latest-first, includes locked subscribed-source items plus ready blueprint cards for subscribed-source items and personally unlocked items.
+  - `Joined` (auth-only): published-blueprint feed filtered to Bleu channels the user has joined.
+  - `All` + `b/<slug>` scopes: public published-blueprint feeds across all channels or one channel scope.
 
 b5) Subscription behavior (MVP simplified)
 - UI behavior is auto-only.
@@ -167,6 +168,11 @@ c7) Subscription notice flow:
 - notice canonical key: `subscription:youtube:<channel_id>`.
 - notice cards are informational and have no Accept/Skip or channel submit controls.
 - notice cards open details on click and include `Unsubscribe` with confirm; unsubscribe removes the notice card from My Feed for that user/channel.
+c8) Feed lane publication rules:
+- `For You` is the only lane that may contain locked items.
+- `Joined` contains only generated and published blueprint cards from joined Bleu channels.
+- `All` contains only generated and published blueprint cards across all Bleu channels.
+- A manually unlocked blueprint from a non-subscribed source appears in that user’s `For You`, but future videos from that source do not appear there unless the user later subscribes.
 
 ## Product Principles
 p1) Source-first content supply (not creator-first posting).
@@ -201,7 +207,7 @@ f12) New accounts can optionally complete source setup at `/welcome` before norm
 
 ## Route and IA Snapshot
 r1) [have] Home: `/`
-r2) [have] Home feed: `/wall`
+r2) [have] Home feed: `/wall` (`For You`, `Joined`, `All`)
 r3) [have] Explore: `/explore`
 r4) [have] Channels index: `/channels`
 r5) [have] Channel page: `/b/:channelSlug`
@@ -319,6 +325,7 @@ si67) auth endpoint: `POST /api/notifications/read-all` marks all unread notific
 si68) comment reply notifications are produced by DB trigger on `wall_comments` reply inserts (self-replies ignored; dedupe key is `comment_reply:<reply_comment_id>`).
 si69) generation surfaces are gated by the daily credit wallet (`free=3.00`, `plus=20.00`, reset `00:00 UTC`, no rollover); manual routes queue only the affordable new-item prefix and return launch-safe credit denial/skip copy.
 si69a) admin entitlement bypass applies at actual reservation/settle/refund time for both manual generation and shared auto-unlock paths; admin users are not meant to remain `unlockable` solely because displayed wallet balance is depleted.
+si69b) canonical feed-lane semantics are defined in `docs/app/mvp-feed-and-channel-model.md`; implementation should treat `For You` as the only locked lane, `Joined` as joined-channel published discovery, and `All` as the global published blueprint stream.
 si70) YouTube comment snapshots for blueprints now follow a bounded lifecycle: auto refresh at `+15m` and `+24h`, then manual-only refresh with per-blueprint cooldown.
 si71) manual source-comment refresh endpoint is `POST /api/blueprints/:id/youtube-comments/refresh`; cooldown denials return `COMMENTS_REFRESH_COOLDOWN_ACTIVE`.
 
@@ -331,8 +338,9 @@ n5) Reserve `enforce` mode for non-prod verification until dedicated rollout app
 
 ## Key References
 k1) Architecture: `docs/architecture.md`
-k2) Program + project status: `docs/exec-plans/index.md`
-k3) Active launch-proof tail: `docs/exec-plans/active/mvp-launch-proof-tail.md`
-k4) Completed hardening implementation plan: `docs/exec-plans/completed/mvp-readiness-review-followup.md`
-k4) Paused strategy reference: `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
-k5) YT2BP contract: `docs/product-specs/yt2bp_v0_contract.md`
+k2) Feed model: `docs/app/mvp-feed-and-channel-model.md`
+k3) Program + project status: `docs/exec-plans/index.md`
+k4) Active launch-proof tail: `docs/exec-plans/active/mvp-launch-proof-tail.md`
+k5) Completed hardening implementation plan: `docs/exec-plans/completed/mvp-readiness-review-followup.md`
+k6) Paused strategy reference: `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
+k7) YT2BP contract: `docs/product-specs/yt2bp_v0_contract.md`

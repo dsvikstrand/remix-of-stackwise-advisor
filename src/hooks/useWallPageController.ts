@@ -27,7 +27,8 @@ const SORT_TABS = [
 type FeedSort = (typeof SORT_TABS)[number]['value'];
 
 const SCOPE_FOR_YOU = 'for-you';
-const SCOPE_YOUR_CHANNELS = 'your-channels';
+const SCOPE_JOINED = 'joined';
+const SCOPE_JOINED_ALIAS = 'your-channels';
 const SCOPE_ALL = 'all';
 
 function getForYouErrorMessage(error: unknown, fallback: string) {
@@ -62,7 +63,7 @@ export function useWallPageController() {
     () =>
       new Set([
         SCOPE_FOR_YOU,
-        SCOPE_YOUR_CHANNELS,
+        SCOPE_JOINED,
         SCOPE_ALL,
         ...CHANNELS_CATALOG
           .filter((channel) => channel.status === 'active')
@@ -71,20 +72,21 @@ export function useWallPageController() {
     [],
   );
   const scopeParam = (searchParams.get('scope') || '').trim();
+  const normalizedScopeParam = scopeParam === SCOPE_JOINED_ALIAS ? SCOPE_JOINED : scopeParam;
   const sortParam = (searchParams.get('sort') || '').trim();
   const defaultScope = user ? SCOPE_FOR_YOU : SCOPE_ALL;
-  const feedScope = scopeValues.has(scopeParam) ? scopeParam : defaultScope;
+  const feedScope = scopeValues.has(normalizedScopeParam) ? normalizedScopeParam : defaultScope;
   const requestedSort: FeedSort = sortParam === 'trending' ? 'trending' : 'latest';
 
-  const isPersonalScope = feedScope === SCOPE_FOR_YOU || feedScope === SCOPE_YOUR_CHANNELS;
+  const isPersonalScope = feedScope === SCOPE_FOR_YOU || feedScope === SCOPE_JOINED;
   const effectiveScope = !user && isPersonalScope ? SCOPE_ALL : feedScope;
   const isForYouScope = effectiveScope === SCOPE_FOR_YOU && !!user;
-  const isYourChannelsScope = effectiveScope === SCOPE_YOUR_CHANNELS && !!user;
+  const isJoinedScope = effectiveScope === SCOPE_JOINED && !!user;
   const feedSort: FeedSort = isForYouScope ? 'latest' : requestedSort;
   const resolvedLane = isForYouScope
     ? SCOPE_FOR_YOU
-    : isYourChannelsScope
-      ? SCOPE_YOUR_CHANNELS
+    : isJoinedScope
+      ? SCOPE_JOINED
       : SCOPE_ALL;
   const activeLane = optimisticLane ?? resolvedLane;
 
@@ -99,6 +101,11 @@ export function useWallPageController() {
     if (!isForYouScope || requestedSort !== 'trending') return;
     updateSearchParams({ sort: 'latest' });
   }, [isForYouScope, requestedSort]);
+
+  useEffect(() => {
+    if (scopeParam !== SCOPE_JOINED_ALIAS) return;
+    updateSearchParams({ scope: SCOPE_JOINED, sort: requestedSort });
+  }, [scopeParam, requestedSort]);
 
   useEffect(() => {
     if (!optimisticLane) return;
@@ -395,13 +402,13 @@ export function useWallPageController() {
     likeMutation.mutate({ blueprintId, liked: currentlyLiked });
   };
 
-  const showZeroJoinYourChannelsCta = !!user && isYourChannelsScope && joinedCuratedCount === 0;
+  const showZeroJoinCta = !!user && isJoinedScope && joinedCuratedCount === 0;
   const scopeLaneButtons = useMemo(
     () =>
       user
         ? [
             { value: SCOPE_FOR_YOU, label: 'For You' },
-            { value: SCOPE_YOUR_CHANNELS, label: 'Joined' },
+            { value: SCOPE_JOINED, label: 'Joined' },
             { value: SCOPE_ALL, label: 'All' },
           ]
         : [
@@ -411,7 +418,7 @@ export function useWallPageController() {
   );
 
   useEffect(() => {
-    if (!showZeroJoinYourChannelsCta) return;
+    if (!showZeroJoinCta) return;
     logOncePerSession('p3_wall_zero_join_cta_impression', () => {
       logP3Event({
         eventName: 'wall_zero_join_cta_impression',
@@ -423,7 +430,7 @@ export function useWallPageController() {
         },
       });
     });
-  }, [effectiveScope, showZeroJoinYourChannelsCta, user]);
+  }, [effectiveScope, showZeroJoinCta, user]);
 
   const visiblePosts = useMemo(() => {
     if (!posts) return [];
@@ -443,13 +450,14 @@ export function useWallPageController() {
     effectiveScope,
     feedSort,
     isForYouScope,
-    isYourChannelsScope,
+    isJoinedScope,
     isForYouLoading,
     isForYouError,
     isBlueprintFeedLoading,
     blueprintFeedError,
     selectedTagSlug,
-    showZeroJoinYourChannelsCta,
+    joinedCuratedCount,
+    showZeroJoinCta,
     scopeSelectOpen,
     scopeLaneButtons,
     popularTags,

@@ -15,6 +15,17 @@ Status: `canonical`
 ## One-line promise
 `bleuV1` gives you an automated feed of bite-sized blueprints from the media you follow, with automatic channel publishing for eligible items.
 
+## Feed Model Lock
+- Canonical feed model reference:
+  - `docs/app/mvp-feed-and-channel-model.md`
+- Home lanes are locked for MVP as:
+  - `For You`: personal source-driven lane with locked + unlocked items
+  - `Joined`: auth-only published-blueprint lane filtered by joined Bleu channels
+  - `All`: global published-blueprint aggregation across Bleu channels
+- Locked items belong only in `For You`.
+- `Joined` and `All` contain only generated and published blueprints.
+- Source subscriptions and Bleu channel joins are separate concepts and must stay separate in product language and implementation.
+
 ## Locked core (MVP)
 1. Source-first product identity.
 2. YouTube is the only required adapter in MVP.
@@ -44,35 +55,39 @@ Status: `canonical`
 26. Credit policy is a daily UTC-reset wallet (`free=3.00`, `plus=20.00`, no rollover) with reserve-first manual billing, settle at first model dispatch, and release on pre-generation failure.
 27. Backend OpenAI SDK loading is lazy at call time; startup-critical backend modules must not depend on top-level `openai` ESM imports on Oracle.
 28. Source-page unlock request control is soft-limited (burst+sustained) with credits as the primary user-facing throttle; strict unlock cooldown is not used.
-29. Home scope split is fixed for MVP: `For You` is the subscribed-source stream (locked + unlocked, latest-only) and `Your channels` preserves the followed-channel ranking lane.
-30. Unlock status visibility must be consistent across Home, Source Page, and My Feed using a shared activity/status pattern with reload-resume support.
-31. Credits panel should load lazily on open, show daily reset timing, and keep debit/refund visibility without background polling from always-mounted UI.
-32. Home should provide first-time scope clarity (`For You` vs `Your channels`) with dismissible helper copy.
-33. Unlock backend reliability uses safe auto-fix sweeps (expired/stale/orphan recovery) with idempotent refund/fail transitions; no destructive cleanup.
-34. Unlock/generate responses must include additive `trace_id` and unlock lifecycle logs must propagate that trace through request -> queue/job -> terminal outcome.
-35. Unlock/manual/service generation execution is queue-first with durable DB claim+lease workers, bounded retries, and queue backpressure/intake controls (Oracle + Supabase only).
-36. Subscription rows include `auto_unlock_enabled` (default `true`) and only new incoming subscription videos can auto-attempt unlock generation; runtime auto billing is funded-subscriber shared-cost with participant snapshotting, fixed-point funded-subset selection, bounded retries, and admin-bypass-safe funding, while historical locked backlog is not auto-processed.
-37. Transcript-unavailable unlocks must not hard-fail user trust flows: manual unlock returns deterministic `TRANSCRIPT_UNAVAILABLE` with retry timing and auto-unlock retries are deferred with cooldown.
-38. Read-heavy status endpoints (`/api/credits`, `/api/ingestion/jobs/latest-mine`) must use dedicated soft read limits and be excluded from generic global limiter paths to avoid accidental unlock UX 429 spikes.
-39. Unlock queue items carry explicit `unlock_origin` metadata (`manual_unlock`, `subscription_auto_unlock`, `source_auto_unlock_retry`) for recovery and traceability.
-40. Profile workspace tabs are locked to `Feed / Comments / Liked`; subscriptions management remains a dedicated page (`/subscriptions`) and not a profile tab.
-41. Blueprint feed cards are interaction-minimal in MVP (like/comment only; no share action button).
-42. Subscription sync must skip pre-release YouTube premieres (`upcoming`) so unreleased videos do not appear as unlock cards before publish.
-43. If a sync batch contains skipped upcoming premieres, subscription checkpoint advancement is held for that run to avoid missing those videos once they release.
-44. Permanent no-transcript source videos (`NO_TRANSCRIPT_PERMANENT` / legacy `NO_CAPTIONS`) must not remain as unlockable feed cards; only transient transcript-unavailable cases may retry.
-45. YouTube-source banners are thumbnail-first across feed/detail/source surfaces: source flows should write/use thumbnail URLs (stored source thumbnail or deterministic `ytimg` fallback) and should not rely on auto-banner queueing.
-46. Transcript truth classification must avoid one-shot permanence: ambiguous `NO_CAPTIONS` failures stay retryable until bounded multi-attempt confirmation marks `NO_TRANSCRIPT_PERMANENT` and hides the item from unlock surfaces.
-47. Auto subscription transcript failures must stay silent on feed surfaces: retry with bounded backoff and suppress locked cards until success; speech-guidance warnings are reserved for explicit Source Page `+Add` attempts.
-48. Notifications MVP scope is intentionally narrow: notify on comment replies and generation terminal outcomes, surfaced in a header bell inbox with read/read-all controls and an event-mapper backend contract for future expansion.
-49. Launch gate hardening requires explicit credit-backend outage behavior (`CREDITS_UNAVAILABLE`, HTTP `503`) and must not silently fail-open credit-dependent flows.
-50. Launch-critical UX copy for generation failures must be normalized via shared frontend mapping (no raw backend/internal payload leakage on key surfaces).
-51. Source-page read surfaces must fail safely: opportunistic asset-sweep hooks are allowed, but missing dependency wiring must never crash API process uptime.
+29. Home feed contract is fixed for MVP:
+    - `For You` is the subscribed-source lane plus personally unlocked blueprints, latest-first, and may contain locked + unlocked items.
+    - `Joined` is the auth-only published-blueprint lane filtered by joined Bleu channels.
+    - `All` is the global published-blueprint aggregation across Bleu channels.
+30. A manually unlocked blueprint from a non-subscribed source must appear in that user’s `For You`, but future videos from that source do not enter `For You` unless the user subscribes.
+31. Unlock status visibility must be consistent across Home, Source Page, and My Feed using a shared activity/status pattern with reload-resume support.
+32. Credits panel should load lazily on open, show daily reset timing, and keep debit/refund visibility without background polling from always-mounted UI.
+33. Home should provide first-time scope clarity (`For You`, `Joined`, and `All`) with dismissible helper copy where needed.
+34. Unlock backend reliability uses safe auto-fix sweeps (expired/stale/orphan recovery) with idempotent refund/fail transitions; no destructive cleanup.
+35. Unlock/generate responses must include additive `trace_id` and unlock lifecycle logs must propagate that trace through request -> queue/job -> terminal outcome.
+36. Unlock/manual/service generation execution is queue-first with durable DB claim+lease workers, bounded retries, and queue backpressure/intake controls (Oracle + Supabase only).
+37. Subscription rows include `auto_unlock_enabled` (default `true`) and only new incoming subscription videos can auto-attempt unlock generation; runtime auto billing is funded-subscriber shared-cost with participant snapshotting, fixed-point funded-subset selection, bounded retries, and admin-bypass-safe funding, while historical locked backlog is not auto-processed.
+38. Transcript-unavailable unlocks must not hard-fail user trust flows: manual unlock returns deterministic `TRANSCRIPT_UNAVAILABLE` with retry timing and auto-unlock retries are deferred with cooldown.
+39. Read-heavy status endpoints (`/api/credits`, `/api/ingestion/jobs/latest-mine`) must use dedicated soft read limits and be excluded from generic global limiter paths to avoid accidental unlock UX 429 spikes.
+40. Unlock queue items carry explicit `unlock_origin` metadata (`manual_unlock`, `subscription_auto_unlock`, `source_auto_unlock_retry`) for recovery and traceability.
+41. Profile workspace tabs are locked to `Feed / Comments / Liked`; subscriptions management remains a dedicated page (`/subscriptions`) and not a profile tab.
+42. Blueprint feed cards are interaction-minimal in MVP (like/comment only; no share action button).
+43. Subscription sync must skip pre-release YouTube premieres (`upcoming`) so unreleased videos do not appear as unlock cards before publish.
+44. If a sync batch contains skipped upcoming premieres, subscription checkpoint advancement is held for that run to avoid missing those videos once they release.
+45. Permanent no-transcript source videos (`NO_TRANSCRIPT_PERMANENT` / legacy `NO_CAPTIONS`) must not remain as unlockable feed cards; only transient transcript-unavailable cases may retry.
+46. YouTube-source banners are thumbnail-first across feed/detail/source surfaces: source flows should write/use thumbnail URLs (stored source thumbnail or deterministic `ytimg` fallback) and should not rely on auto-banner queueing.
+47. Transcript truth classification must avoid one-shot permanence: ambiguous `NO_CAPTIONS` failures stay retryable until bounded multi-attempt confirmation marks `NO_TRANSCRIPT_PERMANENT` and hides the item from unlock surfaces.
+48. Auto subscription transcript failures must stay silent on feed surfaces: retry with bounded backoff and suppress locked cards until success; speech-guidance warnings are reserved for explicit Source Page `+Add` attempts.
+49. Notifications MVP scope is intentionally narrow: notify on comment replies and generation terminal outcomes, surfaced in a header bell inbox with read/read-all controls and an event-mapper backend contract for future expansion.
+50. Launch gate hardening requires explicit credit-backend outage behavior (`CREDITS_UNAVAILABLE`, HTTP `503`) and must not silently fail-open credit-dependent flows.
+51. Launch-critical UX copy for generation failures must be normalized via shared frontend mapping (no raw backend/internal payload leakage on key surfaces).
+52. Source-page read surfaces must fail safely: opportunistic asset-sweep hooks are allowed, but missing dependency wiring must never crash API process uptime.
 
 ## Core user journey
 1. Subscribe to a YouTube channel or search/select a video.
 2. Generate/import blueprint into `My Feed`.
 3. System auto-evaluates and posts eligible blueprints to channels.
-4. Engage through community interactions in Home lanes (`For You`, `Your channels`, and channel scopes).
+4. Engage through community interactions in Home lanes (`For You`, `Joined`, `All`, and channel scopes).
 5. Use profile workspace (`/u/:userId`) tabs `Feed / Comments / Liked` for personal history; `/my-feed` remains a compatibility/direct route.
 
 ## What is not core right now
@@ -87,6 +102,7 @@ Status: `canonical`
 
 ## Canonical references
 - Product: `docs/app/product-spec.md`
+- Feed model: `docs/app/mvp-feed-and-channel-model.md`
 - Architecture: `docs/architecture.md`
 - Active proof-only tracker: `docs/exec-plans/active/mvp-launch-proof-tail.md`
 - Completed implementation tracker: `docs/exec-plans/completed/mvp-readiness-review-followup.md`
@@ -100,3 +116,4 @@ Status: `canonical`
 4. Search/manual-refresh/source-page generation now share backend preflight helpers for subscription access, duplicate classification, reservation-prefix handling, and queue admission without changing public route contracts.
 5. `Subscriptions` and `Wall` page orchestration now compose dedicated frontend controller hooks, keeping render behavior stable while removing route/query/mutation ownership from the page files themselves.
 6. `Wall` no longer assembles feed rows through browser-side Supabase fan-out; it consumes backend-shaped feed endpoints for both public lanes and `For You`.
+7. Feed lane contract is now explicit and canonical in `docs/app/mvp-feed-and-channel-model.md`: `For You` is the only locked lane, `Joined` is joined-channel published discovery, and `All` is the global published blueprint stream.

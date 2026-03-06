@@ -4,6 +4,7 @@ import { listWallBlueprintFeed, listWallForYouFeed } from '../services/wallFeed'
 
 function normalizeScope(value: unknown) {
   const scope = String(value || '').trim().toLowerCase();
+  if (scope === 'your-channels') return 'joined';
   return scope || 'all';
 }
 

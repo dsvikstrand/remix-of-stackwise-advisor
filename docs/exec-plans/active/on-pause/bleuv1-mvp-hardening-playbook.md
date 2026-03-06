@@ -15,6 +15,7 @@ a1) [have] Core source-first loop is live: source subscriptions -> unlock/genera
 a2) [have] Source Pages, Source Video Library, shared unlock, daily credit wallets, onboarding, and Explore source search are implemented.
 a3) [have] Canonical docs and active plan registry are in good shape and checks are passing.
 a4) [have] Primary architecture risk remains concentrated in a few large files, but recent cleanup has already extracted the runtime bootstrap plus the main `Subscriptions` and `Wall` page orchestrators into dedicated controller modules/hooks.
+a4j) [have] Home/feed product semantics are now locked in `docs/app/mvp-feed-and-channel-model.md`: `For You` is source-driven and may contain locked items, `Joined` is the joined-channel published discovery lane, and `All` is the global published-blueprint lane.
 a4b) [have] Launch gate execution board is active at `docs/ops/mvp-launch-readiness-checklist.md` (P0/P1 with owner/date/status/evidence).
 a4c) [have] Launch hardening now includes explicit credit-backend fail-safe semantics (`CREDITS_UNAVAILABLE`), shared error-copy mapping, and baseline legal routes (`/terms`, `/privacy`).
 a4d) [have] Runtime hotfix applied: source-page search no longer crashes backend when opportunistic asset-sweep wiring is present in route deps.
@@ -54,7 +55,7 @@ d5) [todo] Add runtime health dashboard script for unlock throughput, failure ra
 ## Blind Spots To Fix
 e1) [todo] Async unlock feedback can still feel uncertain if job visibility is delayed or too hidden.
 e2) [todo] Credits can appear "stuck" if debit/refill updates are not immediate and explicit.
-e3) [todo] Scope language on Home (`For You` vs `Your channels`) can be misread without concise helper copy.
+e3) [todo] Scope language on Home (`For You` vs `Joined`) can still be misread without concise helper copy.
 e4) [todo] Source/channel naming overlap can confuse non-technical users without consistent glossary phrasing.
 e5) [todo] Legacy copy traces (`inventory/libraries`) should be removed from high-traffic screens to avoid identity drift.
 

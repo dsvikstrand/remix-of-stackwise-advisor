@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
-import { matchesChannelByTags, resolvePrimaryChannelFromTags } from '@/lib/channelMapping';
 
 export type ChannelFeedTab = 'top' | 'recent';
 
@@ -46,6 +45,24 @@ export function useChannelFeed({ channelSlug, tab, pageSize = 20 }: UseChannelFe
       if (!blueprints || blueprints.length === 0) return [];
 
       const blueprintIds = blueprints.map((row) => row.id);
+      const { data: feedItems, error: feedItemsError } = await supabase
+        .from('user_feed_items')
+        .select('id, blueprint_id, created_at')
+        .in('blueprint_id', blueprintIds);
+
+      if (feedItemsError) throw feedItemsError;
+
+      const feedItemIds = (feedItems || []).map((row) => row.id);
+      const { data: candidateRows, error: candidateError } = feedItemIds.length > 0
+        ? await supabase
+            .from('channel_candidates')
+            .select('user_feed_item_id, channel_slug, status, created_at')
+            .eq('status', 'published')
+            .in('user_feed_item_id', feedItemIds)
+            .order('created_at', { ascending: false })
+        : { data: [], error: null };
+
+      if (candidateError) throw candidateError;
 
       const { data: tagRows, error: tagError } = await supabase
         .from('blueprint_tags')
@@ -69,8 +86,22 @@ export function useChannelFeed({ channelSlug, tab, pageSize = 20 }: UseChannelFe
         tagsByBlueprintId.set(row.blueprint_id, list);
       });
 
+      const blueprintIdByFeedItemId = new Map((feedItems || []).map((row) => [row.id, row.blueprint_id]));
+      const publishedChannelByBlueprintId = new Map<string, { slug: string; createdAtMs: number }>();
+      (candidateRows || []).forEach((row) => {
+        const blueprintId = blueprintIdByFeedItemId.get(row.user_feed_item_id);
+        const channelSlug = String(row.channel_slug || '').trim().toLowerCase();
+        if (!blueprintId || !channelSlug) return;
+        const createdAtMs = Number.isFinite(Date.parse(row.created_at)) ? Date.parse(row.created_at) : 0;
+        const existing = publishedChannelByBlueprintId.get(blueprintId);
+        if (!existing || createdAtMs > existing.createdAtMs || (createdAtMs === existing.createdAtMs && channelSlug < existing.slug)) {
+          publishedChannelByBlueprintId.set(blueprintId, { slug: channelSlug, createdAtMs });
+        }
+      });
+
       const hydrated = blueprints.map((row) => {
         const tags = tagsByBlueprintId.get(row.id) || [];
+        const publishedChannelSlug = publishedChannelByBlueprintId.get(row.id)?.slug || null;
         return {
           id: row.id,
           title: row.title,
@@ -81,11 +112,11 @@ export function useChannelFeed({ channelSlug, tab, pageSize = 20 }: UseChannelFe
           likesCount: row.likes_count,
           createdAt: row.created_at,
           tags,
-          primaryChannelSlug: resolvePrimaryChannelFromTags(tags),
+          primaryChannelSlug: publishedChannelSlug || '',
         };
       });
 
-      return hydrated.filter((row) => matchesChannelByTags(channelSlug, row.tags));
+      return hydrated.filter((row) => row.primaryChannelSlug === channelSlug);
     },
     staleTime: 30_000,
   });

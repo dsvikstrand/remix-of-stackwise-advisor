@@ -50,6 +50,10 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Keep imported blueprint detail attribution source-first (show source channel when present, hide default edit CTA in MVP UI).
 - Profile privacy default migration: new profiles default to public (`profiles.is_public=true`), existing profiles unchanged.
 - Main nav IA is simplified to `Home / Channels / Explore`, with search/create moved to the header `Create` action.
+- Home feed semantics are now locked to `For You / Joined / All`:
+  - `For You` is source-driven and may contain locked items.
+  - `Joined` is a strict filter of published blueprints from Bleu channels the user has joined.
+  - `All` is the global published-blueprint aggregation.
 - Core high-traffic copy is harmonized to current source-first behavior (`Home`, `Create`, auto-channel publish) and legacy manual-post phrasing is removed.
 - Landing cold-user pass adds value-first hero positioning, proof/use-case blocks, and curated fallback content so front-door sections never render empty.
 - Frontend bootstrap now guards missing Supabase env with explicit configuration UX instead of a blank page.

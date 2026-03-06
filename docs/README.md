@@ -8,6 +8,7 @@ This folder is the source of truth for product, architecture, planning, and oper
 - Post-launch debt: `docs/exec-plans/tech-debt-tracker.md`
 - Canonical product/runtime truth:
   - `docs/app/core-direction-lock.md`
+  - `docs/app/mvp-feed-and-channel-model.md`
   - `docs/app/product-spec.md`
   - `docs/architecture.md`
 
@@ -22,9 +23,10 @@ This folder is the source of truth for product, architecture, planning, and oper
 2. `docs/exec-plans/active/mvp-launch-proof-tail.md`
 3. `docs/exec-plans/tech-debt-tracker.md`
 4. `docs/app/core-direction-lock.md`
-5. `docs/app/product-spec.md`
-6. `docs/architecture.md`
-7. `docs/exec-plans/index.md`
+5. `docs/app/mvp-feed-and-channel-model.md`
+6. `docs/app/product-spec.md`
+7. `docs/architecture.md`
+8. `docs/exec-plans/index.md`
 
 ## Primary Planning Surfaces
 - Launch gate board: `docs/ops/mvp-launch-readiness-checklist.md`
@@ -33,6 +35,7 @@ This folder is the source of truth for product, architecture, planning, and oper
 
 ## Canonical Runtime Documents
 - Core direction lock: `docs/app/core-direction-lock.md`
+- Feed model: `docs/app/mvp-feed-and-channel-model.md`
 - Product behavior/spec: `docs/app/product-spec.md`
 - Architecture: `docs/architecture.md`
 - Execution registry: `docs/exec-plans/index.md`

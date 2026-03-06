@@ -3,6 +3,7 @@
 ## 1) Intent And Boundaries
 - Direction lock reference:
   - `docs/app/core-direction-lock.md`
+  - `docs/app/mvp-feed-and-channel-model.md`
 - Reference status:
   - legacy ASS/agentic seeding docs are archived under `docs/_archive/legacy-ass-agentic/README.md`
   - those artifacts are historical-only and do not define current runtime architecture contracts
@@ -10,9 +11,9 @@
   - Source-first blueprint app.
   - Personal unfiltered feed (`My Feed`) as primary lane.
   - Home feed (`/wall`) as split lane:
-    - `For You` (auth): subscribed-source stream with locked + unlocked items, latest-first.
-    - `Your channels` (auth): followed-channel ranked stream (legacy `For You` behavior).
-    - public channel scopes (`All Channels`, `b/<slug>`) unchanged.
+    - `For You` (auth): personal source-driven stream with locked + unlocked items, latest-first.
+    - `Joined` (auth): published-blueprint stream filtered by joined Bleu channels.
+    - `All` + `b/<slug>`: public published-blueprint discovery scopes.
 - Current adapter baseline:
   - YouTube adapter is production-ready for direct URL generation and subscription ingestion.
 - Non-goals in current MVP:
@@ -48,6 +49,10 @@
   - Auth-only discovery UI in `src/pages/Search.tsx` for YouTube query results and one-click generate.
   - Live feed/community surfaces in `src/pages/MyFeed.tsx`, `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
     - `Wall` now loads backend-hydrated feed responses for both public lanes and `For You` instead of reconstructing feed rows through browser-side Supabase fan-out.
+    - `Wall` feed contract is:
+      - `For You`: the only lane that may contain locked items; built from subscribed-source content plus personally unlocked blueprints.
+      - `Joined`: generated/published blueprints filtered by joined Bleu channels.
+      - `All`: generated/published blueprints across all Bleu channels.
     - `Wall` route/scope/query/mutation orchestration now lives in a dedicated frontend controller hook, keeping the page file render-focused.
   - `My Feed` blueprint rows use channel-feed-like visual cards, open detail on card click, and use footer status labels (`Posted to <Channel>`, `Publishing...`, or `In My Feed`) with a unified `Blueprint` badge.
     - unlock activity status now uses a shared frontend tracker and compact status card across Home `For You`, Source Page `Video Library`, and `My Feed`.
@@ -203,6 +208,7 @@
      - all participant holds settle at first OpenAI dispatch and release on pre-generation failure
    - if auto-attempt fails due temporary credit availability, backend enqueues bounded retry jobs (`source_auto_unlock_retry`) before falling back to manual unlock-only state.
    - unlock cards can be activated by one user; successful generation fans out shared blueprint linkage to subscribed users for that source item.
+   - a manually unlocked blueprint from a non-subscribed source may still appear in that user’s `For You`; future videos from that source do not enter `For You` automatically unless the user later subscribes.
    - manual source-page generation uses reserve -> settle/release billing at `1.00` credit per new blueprint intent.
   - auto-ingest path enables review generation by default.
   - YouTube generation now normalizes output into Golden BP v1 section structure by default (`Lightning Takeaways`, flowing `Summary`, then domain-adapted structured sections) and writes additive metadata markers (`selected_items.bp_style = golden_v1`, `bp_origin = youtube_pipeline`).

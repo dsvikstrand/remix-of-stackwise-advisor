@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 const GLOSSARY: Record<string, string> = {
   inventory: 'Legacy term from earlier builds. The current MVP focuses on source-first blueprint generation.',
   blueprint: 'A bite-sized, step-by-step summary generated from source content, optionally remixed by users.',
-  wall: 'Home: For You is your subscribed-source lane (latest, locked + unlocked), and Your channels is your followed-channel lane (latest/trending).',
+  wall: 'Home: For You is your source-driven lane (locked + unlocked), Joined is your joined-channel discovery lane, and All is the global published blueprint lane.',
   tag: 'A label that helps organize and discover content.',
   remix: 'A user-edited insight variant attached to an imported blueprint.',
 };

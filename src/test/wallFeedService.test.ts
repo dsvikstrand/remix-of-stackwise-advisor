@@ -76,6 +76,7 @@ describe('wall feed service', () => {
       ],
       channel_candidates: [
         { user_feed_item_id: 'ufi_1', channel_slug: 'fitness-training', status: 'published', created_at: '2026-03-06T10:02:00.000Z' },
+        { user_feed_item_id: 'ufi_2', channel_slug: 'cooking-home-kitchen', status: 'published', created_at: '2026-03-06T09:02:00.000Z' },
       ],
       blueprint_comments: [
         { blueprint_id: 'bp_1' },
@@ -103,7 +104,7 @@ describe('wall feed service', () => {
     });
   });
 
-  it('prioritizes followed-tag posts in your-channels scope and filters specific channel scopes', async () => {
+  it('filters joined lane and channel scopes by published channel slug only', async () => {
     const db = createMockSupabase({
       blueprints: [
         {
@@ -132,10 +133,24 @@ describe('wall feed service', () => {
           created_at: '2026-03-06T09:00:00.000Z',
           is_public: true,
         },
+        {
+          id: 'bp_3',
+          creator_user_id: 'creator_3',
+          title: 'Unpublished Blueprint',
+          sections_json: null,
+          steps: null,
+          llm_review: null,
+          mix_notes: null,
+          banner_url: null,
+          likes_count: 0,
+          created_at: '2026-03-06T08:00:00.000Z',
+          is_public: true,
+        },
       ],
       blueprint_tags: [
         { blueprint_id: 'bp_1', tag_id: 'tag_fit' },
         { blueprint_id: 'bp_2', tag_id: 'tag_cook' },
+        { blueprint_id: 'bp_3', tag_id: 'tag_fit' },
       ],
       tags: [
         { id: 'tag_fit', slug: 'fitness-training' },
@@ -144,8 +159,27 @@ describe('wall feed service', () => {
       profiles: [
         { user_id: 'creator_1', display_name: 'Creator 1', avatar_url: null },
         { user_id: 'creator_2', display_name: 'Creator 2', avatar_url: null },
+        { user_id: 'creator_3', display_name: 'Creator 3', avatar_url: null },
       ],
-      user_feed_items: [],
+      user_feed_items: [
+        { id: 'ufi_1', blueprint_id: 'bp_1', source_item_id: 'source_1', created_at: '2026-03-06T10:01:00.000Z' },
+        { id: 'ufi_2', blueprint_id: 'bp_2', source_item_id: 'source_2', created_at: '2026-03-06T09:01:00.000Z' },
+        { id: 'ufi_3', blueprint_id: 'bp_3', source_item_id: 'source_3', created_at: '2026-03-06T08:01:00.000Z' },
+      ],
+      source_items: [
+        { id: 'source_1', source_page_id: 'page_1', source_channel_id: 'channel_1', source_channel_title: 'Channel 1', thumbnail_url: null, metadata: null },
+        { id: 'source_2', source_page_id: 'page_2', source_channel_id: 'channel_2', source_channel_title: 'Channel 2', thumbnail_url: null, metadata: null },
+        { id: 'source_3', source_page_id: 'page_3', source_channel_id: 'channel_3', source_channel_title: 'Channel 3', thumbnail_url: null, metadata: null },
+      ],
+      source_pages: [
+        { id: 'page_1', external_id: 'channel_1', platform: 'youtube', avatar_url: null },
+        { id: 'page_2', external_id: 'channel_2', platform: 'youtube', avatar_url: null },
+        { id: 'page_3', external_id: 'channel_3', platform: 'youtube', avatar_url: null },
+      ],
+      channel_candidates: [
+        { user_feed_item_id: 'ufi_1', channel_slug: 'fitness-training', status: 'published', created_at: '2026-03-06T10:02:00.000Z' },
+        { user_feed_item_id: 'ufi_2', channel_slug: 'cooking-home-kitchen', status: 'published', created_at: '2026-03-06T09:02:00.000Z' },
+      ],
       tag_follows: [
         { user_id: 'viewer_1', tag_id: 'tag_fit' },
       ],
@@ -153,11 +187,11 @@ describe('wall feed service', () => {
 
     const joined = await listWallBlueprintFeed({
       db,
-      scope: 'your-channels',
+      scope: 'joined',
       sort: 'latest',
       viewerUserId: 'viewer_1',
     });
-    expect(joined.map((item) => item.id)).toEqual(['bp_1', 'bp_2']);
+    expect(joined.map((item) => item.id)).toEqual(['bp_1']);
 
     const scoped = await listWallBlueprintFeed({
       db,
@@ -166,6 +200,67 @@ describe('wall feed service', () => {
       viewerUserId: 'viewer_1',
     });
     expect(scoped.map((item) => item.id)).toEqual(['bp_1']);
+
+    const all = await listWallBlueprintFeed({
+      db,
+      scope: 'all',
+      sort: 'latest',
+      viewerUserId: 'viewer_1',
+    });
+    expect(all.map((item) => item.id)).toEqual(['bp_1', 'bp_2']);
+
+    const alias = await listWallBlueprintFeed({
+      db,
+      scope: 'your-channels',
+      sort: 'latest',
+      viewerUserId: 'viewer_1',
+    });
+    expect(alias.map((item) => item.id)).toEqual(['bp_1']);
+  });
+
+  it('returns an empty joined feed when the user has not joined any channels', async () => {
+    const db = createMockSupabase({
+      blueprints: [
+        {
+          id: 'bp_1',
+          creator_user_id: 'creator_1',
+          title: 'Fitness Blueprint',
+          sections_json: null,
+          steps: null,
+          llm_review: null,
+          mix_notes: null,
+          banner_url: null,
+          likes_count: 0,
+          created_at: '2026-03-06T10:00:00.000Z',
+          is_public: true,
+        },
+      ],
+      profiles: [
+        { user_id: 'creator_1', display_name: 'Creator 1', avatar_url: null },
+      ],
+      user_feed_items: [
+        { id: 'ufi_1', blueprint_id: 'bp_1', source_item_id: 'source_1', created_at: '2026-03-06T10:01:00.000Z' },
+      ],
+      source_items: [
+        { id: 'source_1', source_page_id: 'page_1', source_channel_id: 'channel_1', source_channel_title: 'Channel 1', thumbnail_url: null, metadata: null },
+      ],
+      source_pages: [
+        { id: 'page_1', external_id: 'channel_1', platform: 'youtube', avatar_url: null },
+      ],
+      channel_candidates: [
+        { user_feed_item_id: 'ufi_1', channel_slug: 'fitness-training', status: 'published', created_at: '2026-03-06T10:02:00.000Z' },
+      ],
+      tag_follows: [],
+    }) as any;
+
+    const joined = await listWallBlueprintFeed({
+      db,
+      scope: 'joined',
+      sort: 'latest',
+      viewerUserId: 'viewer_1',
+    });
+
+    expect(joined).toEqual([]);
   });
 
   it('applies trending cutoff and sort ordering', async () => {
@@ -184,7 +279,22 @@ describe('wall feed service', () => {
         { user_id: 'creator_2', display_name: 'Creator 2', avatar_url: null },
         { user_id: 'creator_3', display_name: 'Creator 3', avatar_url: null },
       ],
-      user_feed_items: [],
+      user_feed_items: [
+        { id: 'ufi_trending_1', blueprint_id: 'bp_high_recent', source_item_id: 'source_1', created_at: recentHigh },
+        { id: 'ufi_trending_2', blueprint_id: 'bp_low_recent', source_item_id: 'source_2', created_at: recentLow },
+      ],
+      source_items: [
+        { id: 'source_1', source_page_id: 'page_1', source_channel_id: 'channel_1', source_channel_title: 'Channel 1', thumbnail_url: null, metadata: null },
+        { id: 'source_2', source_page_id: 'page_2', source_channel_id: 'channel_2', source_channel_title: 'Channel 2', thumbnail_url: null, metadata: null },
+      ],
+      source_pages: [
+        { id: 'page_1', external_id: 'channel_1', platform: 'youtube', avatar_url: null },
+        { id: 'page_2', external_id: 'channel_2', platform: 'youtube', avatar_url: null },
+      ],
+      channel_candidates: [
+        { user_feed_item_id: 'ufi_trending_1', channel_slug: 'fitness-training', status: 'published', created_at: recentHigh },
+        { user_feed_item_id: 'ufi_trending_2', channel_slug: 'cooking-home-kitchen', status: 'published', created_at: recentLow },
+      ],
     }) as any;
 
     const items = await listWallBlueprintFeed({
@@ -346,6 +456,107 @@ describe('wall feed service', () => {
     expect(items[0]).toMatchObject({
       kind: 'locked',
       sourceItemId: 'source_1',
+    });
+  });
+
+  it('includes personally unlocked blueprint rows from non-subscribed sources but not future locked rows from that source', async () => {
+    const db = createMockSupabase({
+      user_feed_items: [
+        {
+          id: 'ufi_personal_blueprint',
+          user_id: 'viewer_1',
+          source_item_id: 'source_manual_blueprint',
+          blueprint_id: 'bp_manual',
+          state: 'channel_published',
+          last_decision_code: null,
+          created_at: '2026-03-06T10:00:00.000Z',
+        },
+        {
+          id: 'ufi_future_locked',
+          user_id: 'viewer_1',
+          source_item_id: 'source_future_locked',
+          blueprint_id: null,
+          state: 'my_feed_unlockable',
+          last_decision_code: null,
+          created_at: '2026-03-06T09:00:00.000Z',
+        },
+      ],
+      source_items: [
+        {
+          id: 'source_manual_blueprint',
+          source_channel_id: 'channel_outside',
+          source_page_id: 'page_outside',
+          source_url: 'https://youtube.com/watch?v=manual',
+          title: 'Manual Unlock',
+          source_channel_title: 'Outside Channel',
+          thumbnail_url: 'https://thumb/manual.jpg',
+          metadata: null,
+        },
+        {
+          id: 'source_future_locked',
+          source_channel_id: 'channel_outside',
+          source_page_id: 'page_outside',
+          source_url: 'https://youtube.com/watch?v=future',
+          title: 'Future Upload',
+          source_channel_title: 'Outside Channel',
+          thumbnail_url: 'https://thumb/future.jpg',
+          metadata: null,
+        },
+      ],
+      blueprints: [
+        {
+          id: 'bp_manual',
+          creator_user_id: 'another_user',
+          title: 'Shared Blueprint',
+          banner_url: 'https://banner/manual.jpg',
+          sections_json: { tags: ['ai-tools-automation'] },
+          llm_review: 'Review',
+          mix_notes: null,
+          is_public: true,
+          steps: [],
+          likes_count: 0,
+        },
+      ],
+      channel_candidates: [
+        {
+          id: 'candidate_manual',
+          user_feed_item_id: 'ufi_personal_blueprint',
+          channel_slug: 'ai-tools-automation',
+          status: 'published',
+          created_at: '2026-03-06T10:01:00.000Z',
+        },
+      ],
+      source_item_unlocks: [
+        {
+          source_item_id: 'source_future_locked',
+          status: 'available',
+          estimated_cost: 1,
+          blueprint_id: null,
+          last_error_code: null,
+          transcript_status: null,
+        },
+      ],
+      blueprint_likes: [],
+      blueprint_comments: [],
+      user_source_subscriptions: [],
+      source_pages: [
+        { id: 'page_outside', external_id: 'channel_outside', platform: 'youtube', avatar_url: 'https://avatar/outside.jpg' },
+      ],
+    }) as any;
+
+    const items = await listWallForYouFeed({
+      db,
+      userId: 'viewer_1',
+      normalizeTranscriptTruthStatus: () => '',
+      limit: 10,
+    });
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      kind: 'blueprint',
+      blueprintId: 'bp_manual',
+      sourceItemId: 'source_manual_blueprint',
+      sourceChannelTitle: 'Outside Channel',
     });
   });
 });

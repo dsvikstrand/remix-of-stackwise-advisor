@@ -172,7 +172,7 @@ export default function Explore() {
 
             {!!user && followedSlugs.size > 0 && (
               <section>
-                <p className="text-sm font-medium text-muted-foreground mb-3">Your Channels</p>
+                <p className="text-sm font-medium text-muted-foreground mb-3">Joined Channels</p>
                 {followedTrendingChannels.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {followedTrendingChannels.map((tag) => (
@@ -187,7 +187,7 @@ export default function Explore() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">Your channels will appear here as activity updates.</p>
+                  <p className="text-sm text-muted-foreground">Joined channels will appear here as activity updates.</p>
                 )}
               </section>
             )}

@@ -142,3 +142,4 @@ i2) [todo] Full validation bundle for any substantial phase:
 j1) [todo] Move this plan to `completed/` when:
 - the four cleanup phases are either finished or explicitly deferred
 - remaining long-tail leftovers are tracked only in `docs/exec-plans/tech-debt-tracker.md`
+before we fix this. lets fully break down how "ip"

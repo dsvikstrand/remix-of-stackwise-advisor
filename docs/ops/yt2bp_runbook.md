@@ -17,6 +17,10 @@
 
 ## bleuV1 source-first integration context
 - YT2BP remains the ingestion/generation entrypoint only.
+- Home/feed contract now follows the canonical model in `docs/app/mvp-feed-and-channel-model.md`:
+  - `For You` is the only source-driven lane and the only lane that may contain locked items.
+  - `Joined` is auth-only and shows only published blueprints from Bleu channels the viewer has joined.
+  - `All` is the global published-blueprint lane across all Bleu channels.
 - Personal-first routing is now expected:
   - generated draft is saved to `My Feed` (`user_feed_items.state = my_feed_published` for direct/manual paths, `my_feed_unlockable` for new subscription uploads).
   - channel visibility is handled by auto-channel pipeline when enabled.

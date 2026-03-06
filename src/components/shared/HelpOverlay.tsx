@@ -34,13 +34,13 @@ const FEATURE_CARDS = [
     title: 'Tags',
     description: 'Tags connect the community. Follow them to tailor what you see.',
     icon: Tag,
-    bullets: ['Follow tags you like', 'See trends in Your channels', 'Stay focused on your goals'],
+    bullets: ['Join channels you like', 'Shape the Joined feed', 'Stay focused on your goals'],
   },
   {
     title: 'Community',
-    description: 'Home has two lanes: For You (subscribed sources) and Your channels (followed channels).',
+    description: 'Home has three lanes: For You, Joined, and All.',
     icon: Users,
-    bullets: ['For You = latest source stream', 'Your channels = followed-channel lane', 'Vote and comment on open blueprints'],
+    bullets: ['For You = source-driven stream', 'Joined = joined-channel discovery', 'All = global published blueprint feed'],
   },
 ];
 
@@ -79,7 +79,7 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                     <p className="text-sm text-muted-foreground leading-relaxed">
                       Here’s the goal: turn source content into actionable blueprints you can consume
                       in bite-sized form. My Feed is your personal intake lane, and Home gives you
-                      For You (latest subscribed-source stream) plus Your channels (followed channels, latest/trending) after quality checks.
+                      For You (locked + unlocked source-driven items), Joined (published blueprints from channels you joined), and All (the global published blueprint stream) after quality checks.
                       You can remix insights, auto-publish keeps useful items moving,
                       and community feedback helps surface the best content.
                     </p>

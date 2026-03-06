@@ -1,5 +1,4 @@
 import { CHANNELS_CATALOG } from '../../src/lib/channelsCatalog';
-import { matchesChannelByTags } from '../../src/lib/channelMapping';
 import type { Json } from '../../src/integrations/supabase/types';
 
 type DbClient = {
@@ -8,7 +7,7 @@ type DbClient = {
 
 type FeedSort = 'latest' | 'trending';
 
-export type WallFeedScope = 'all' | 'your-channels' | string;
+export type WallFeedScope = 'all' | 'joined' | string;
 
 export type WallBlueprintFeedItem = {
   id: string;
@@ -72,6 +71,21 @@ export type WallForYouItem =
       userLiked: boolean;
       commentsCount: number;
     };
+
+const JOINED_SCOPE_ALIAS = 'your-channels';
+const CANONICAL_JOINED_SCOPE = 'joined';
+const CHANNEL_TAG_SLUG_TO_CHANNEL_SLUG = new Map(
+  CHANNELS_CATALOG
+    .filter((channel) => channel.isJoinEnabled && channel.status === 'active')
+    .map((channel) => [channel.tagSlug, channel.slug] as const),
+);
+
+function normalizeWallFeedScope(scope: WallFeedScope) {
+  const normalized = String(scope || '').trim().toLowerCase();
+  if (!normalized) return 'all';
+  if (normalized === JOINED_SCOPE_ALIAS) return CANONICAL_JOINED_SCOPE;
+  return normalized;
+}
 
 function extractSchemaTagSlugs(sectionsJson: Json | null): string[] {
   if (!sectionsJson || typeof sectionsJson !== 'object' || Array.isArray(sectionsJson)) return [];
@@ -244,15 +258,16 @@ export async function listWallBlueprintFeed(input: {
   sort: FeedSort;
   viewerUserId?: string | null;
 }) {
-  const { db, scope, sort, viewerUserId } = input;
+  const { db, sort, viewerUserId } = input;
+  const scope = normalizeWallFeedScope(input.scope);
   const scopedChannel =
-    scope !== 'all' && scope !== 'your-channels'
+    scope !== 'all' && scope !== CANONICAL_JOINED_SCOPE
       ? CHANNELS_CATALOG.find((channel) => channel.slug === scope)
       : null;
   const isSpecificChannelScope = !!scopedChannel;
-  const isYourChannelsScope = scope === 'your-channels' && !!viewerUserId;
+  const isJoinedScope = scope === CANONICAL_JOINED_SCOPE && !!viewerUserId;
 
-  const limit = isYourChannelsScope || isSpecificChannelScope ? 140 : 90;
+  const limit = isJoinedScope || isSpecificChannelScope ? 140 : 90;
   let query = db
     .from('blueprints')
     .select('id, creator_user_id, title, sections_json, steps, llm_review, mix_notes, banner_url, likes_count, created_at')
@@ -324,11 +339,20 @@ export async function listWallBlueprintFeed(input: {
     created_at: string;
   }>);
 
-  let followTagIds = new Set<string>();
-  if (isYourChannelsScope && viewerUserId) {
+  let joinedChannelSlugs = new Set<string>();
+  if (isJoinedScope && viewerUserId) {
     const followsRes = await db.from('tag_follows').select('tag_id').eq('user_id', viewerUserId);
     if (followsRes.error) throw followsRes.error;
-    followTagIds = new Set((followsRes.data || []).map((row: any) => row.tag_id));
+    const followedTagIds = [...new Set((followsRes.data || []).map((row: any) => String(row.tag_id || '').trim()).filter(Boolean))];
+    if (followedTagIds.length > 0) {
+      const followedTagsRes = await db.from('tags').select('id, slug').in('id', followedTagIds);
+      if (followedTagsRes.error) throw followedTagsRes.error;
+      joinedChannelSlugs = new Set(
+        (followedTagsRes.data || [])
+          .map((row: any) => CHANNEL_TAG_SLUG_TO_CHANNEL_SLUG.get(String(row.slug || '').trim()) || null)
+          .filter(Boolean),
+      );
+    }
   }
 
   const hydrated = blueprints.map((blueprint: any) => ({
@@ -343,31 +367,18 @@ export async function listWallBlueprintFeed(input: {
     source_view_count: feedItemMaps.sourceViewCountByBlueprint.get(blueprint.id)?.viewCount ?? null,
     comments_count: commentsCountByBlueprint[blueprint.id] || 0,
   })) as WallBlueprintFeedItem[];
+  const publishedOnly = hydrated.filter((post) => Boolean(String(post.published_channel_slug || '').trim()));
 
   if (isSpecificChannelScope && scopedChannel) {
-    return hydrated.filter((post) => {
-      if (post.published_channel_slug) {
-        return post.published_channel_slug === scopedChannel.slug;
-      }
-      return matchesChannelByTags(scopedChannel.slug, post.tags.map((tag) => tag.slug));
-    });
+    return publishedOnly.filter((post) => post.published_channel_slug === scopedChannel.slug);
   }
 
-  if (isYourChannelsScope) {
-    if (followTagIds.size === 0) return hydrated;
-    const joinedChannelPosts: WallBlueprintFeedItem[] = [];
-    const globalFillPosts: WallBlueprintFeedItem[] = [];
-    hydrated.forEach((post) => {
-      if (post.tags.some((tag) => followTagIds.has(tag.id))) {
-        joinedChannelPosts.push(post);
-      } else {
-        globalFillPosts.push(post);
-      }
-    });
-    return [...joinedChannelPosts, ...globalFillPosts];
+  if (isJoinedScope) {
+    if (joinedChannelSlugs.size === 0) return [] as WallBlueprintFeedItem[];
+    return publishedOnly.filter((post) => joinedChannelSlugs.has(String(post.published_channel_slug || '').trim()));
   }
 
-  return hydrated;
+  return publishedOnly;
 }
 
 export async function listWallForYouFeed(input: {
@@ -511,11 +522,8 @@ export async function listWallForYouFeed(input: {
     const isSubscribedSource =
       (sourcePageId && activeSourcePageIds.has(sourcePageId))
       || (sourceChannelId && activeSourceChannelIds.has(sourceChannelId));
-    const isGeneratedByUser = Boolean(
-      blueprint
-      && String(blueprint.creator_user_id || '').trim() === userId,
-    );
-    if (!isSubscribedSource && !isGeneratedByUser) continue;
+    const hasBlueprintForUserRow = Boolean(blueprint);
+    if (!isSubscribedSource && !hasBlueprintForUserRow) continue;
 
     if (blueprint) {
       items.push({

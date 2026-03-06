@@ -82,13 +82,14 @@ export default function Wall() {
     effectiveScope,
     feedSort,
     isForYouScope,
-    isYourChannelsScope,
+    isJoinedScope,
     isForYouLoading,
     isForYouError,
     isBlueprintFeedLoading,
     blueprintFeedError,
     selectedTagSlug,
-    showZeroJoinYourChannelsCta,
+    joinedCuratedCount,
+    showZeroJoinCta,
     scopeSelectOpen,
     scopeLaneButtons,
     popularTags,
@@ -121,7 +122,7 @@ export default function Wall() {
             <p className="text-sm font-semibold text-primary uppercase tracking-wide">Home</p>
             <h1 className="text-2xl font-semibold">Live blueprint stream</h1>
             <p className="text-sm text-muted-foreground">
-              For You unlocks what you follow. Your channels keeps you in the loop.
+              For You follows your sources. Joined filters the channels you care about.
             </p>
           </div>
         </section>
@@ -189,12 +190,12 @@ export default function Wall() {
               </div>
             )}
 
-            {showZeroJoinYourChannelsCta && (
+            {showZeroJoinCta && (
               <div className="mb-3 mx-3 sm:mx-4 border border-border/40 px-3 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm font-semibold">Join channels to shape this lane</p>
                   <p className="text-xs text-muted-foreground">
-                    Follow channels to personalize this lane.
+                    Joined only shows published blueprints from channels you have joined.
                   </p>
                 </div>
                 <Button asChild size="sm">
@@ -367,7 +368,7 @@ export default function Wall() {
                 <CardContent>
                   <div className="flex flex-col items-center gap-4">
                     <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
-                      {isYourChannelsScope ? (
+                      {isJoinedScope ? (
                         <Tag className="h-8 w-8 text-muted-foreground" />
                       ) : (
                         <Layers className="h-8 w-8 text-muted-foreground" />
@@ -375,16 +376,22 @@ export default function Wall() {
                     </div>
                     <div>
                       <h3 className="font-semibold">
-                        {isYourChannelsScope ? 'Personalize your channels lane' : 'No blueprints yet'}
+                        {isJoinedScope
+                          ? joinedCuratedCount > 0
+                            ? 'No joined-channel blueprints yet'
+                            : 'Personalize your joined feed'
+                          : 'No blueprints yet'}
                       </h3>
                       <p className="text-sm text-muted-foreground mt-1">
-                        {isYourChannelsScope
-                          ? 'Join channels to see prioritized blueprints here.'
+                        {isJoinedScope
+                          ? joinedCuratedCount > 0
+                            ? 'Your joined channels do not have published blueprints here yet.'
+                            : 'Join channels to see published blueprints from topics you care about.'
                           : 'Be the first to share a blueprint.'}
                       </p>
                     </div>
 
-                    {isYourChannelsScope && popularTags.length > 0 && (
+                    {isJoinedScope && popularTags.length > 0 && (
                       <div className="space-y-3 w-full max-w-md">
                         {!user && (
                           <div className="flex flex-col items-center gap-2">
@@ -415,7 +422,7 @@ export default function Wall() {
                       </div>
                     )}
 
-                    {!isYourChannelsScope && (
+                    {!isJoinedScope && (
                       <div className="flex gap-2">
                         <Link to="/youtube">
                           <Button>Pull from YouTube</Button>

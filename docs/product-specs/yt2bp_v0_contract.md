@@ -68,6 +68,7 @@
 - 2026-03-05 note: source-page search uptime fix (opportunistic asset-sweep dependency wiring) is outside this endpoint and does not alter the YT2BP contract envelope.
 - 2026-03-06 note: backend maintainability refactor extracted shared generation preflight helpers for Search/source-page/manual-refresh flows into `server/services/generationPreflight.ts`; additive and outside the YT2BP envelope.
 - 2026-03-06 note: backend composition cleanup extracted runtime mode resolution, queued worker lifecycle, and YouTube refresh scheduler lifecycle into dedicated services; additive and outside the YT2BP endpoint envelope.
+- 2026-03-06 note: Home feed semantics now treat `Joined` as the canonical joined-channel discovery lane, keep `For You` as the only source-driven locked/unlocked lane, and restrict `All`/channel scopes to published-channel blueprints only; additive and outside the YT2BP endpoint envelope.
 
 ## Request
 ```json
