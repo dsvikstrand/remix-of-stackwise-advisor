@@ -2,8 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 type DbClient = SupabaseClient<any, 'public', any>;
 
-const MIN_UNLOCK_COST = 0.05;
-const MAX_UNLOCK_COST = 1.0;
+const MANUAL_UNLOCK_COST = 1.0;
 const UNLOCK_COST_SCALE = 1000;
 
 function round3(value: number) {
@@ -20,7 +19,7 @@ export type SourceUnlockStatus = 'available' | 'reserved' | 'processing' | 'read
 export type UnlockTranscriptStatus = 'unknown' | 'retrying' | 'confirmed_no_speech' | 'transient_error';
 
 const unlockSelect =
-  'id, source_item_id, source_page_id, status, estimated_cost, reserved_by_user_id, reservation_expires_at, reserved_ledger_id, blueprint_id, job_id, last_error_code, last_error_message, transcript_status, transcript_attempt_count, transcript_no_caption_hits, transcript_last_probe_at, transcript_retry_after, transcript_probe_meta, created_at, updated_at';
+  'id, source_item_id, source_page_id, status, estimated_cost, reserved_by_user_id, reservation_expires_at, reserved_ledger_id, auto_unlock_intent_id, blueprint_id, job_id, last_error_code, last_error_message, transcript_status, transcript_attempt_count, transcript_no_caption_hits, transcript_last_probe_at, transcript_retry_after, transcript_probe_meta, created_at, updated_at';
 
 export type SourceItemUnlockRow = {
   id: string;
@@ -31,6 +30,7 @@ export type SourceItemUnlockRow = {
   reserved_by_user_id: string | null;
   reservation_expires_at: string | null;
   reserved_ledger_id: string | null;
+  auto_unlock_intent_id?: string | null;
   blueprint_id: string | null;
   job_id: string | null;
   last_error_code: string | null;
@@ -46,9 +46,8 @@ export type SourceItemUnlockRow = {
 };
 
 export function computeUnlockCost(activeSubscriberCount: number) {
-  const normalizedCount = Math.max(1, Math.floor(Number(activeSubscriberCount) || 1));
-  const raw = 1 / normalizedCount;
-  return round3(Math.max(MIN_UNLOCK_COST, Math.min(MAX_UNLOCK_COST, raw)));
+  void activeSubscriberCount;
+  return round3(MANUAL_UNLOCK_COST);
 }
 
 async function readUnlockBySourceItemId(db: DbClient, sourceItemId: string) {
@@ -178,6 +177,7 @@ async function transitionToAvailable(db: DbClient, unlock: SourceItemUnlockRow) 
       reserved_by_user_id: null,
       reservation_expires_at: null,
       reserved_ledger_id: null,
+      auto_unlock_intent_id: null,
     })
     .eq('id', unlock.id)
     .eq('updated_at', unlock.updated_at)
@@ -237,6 +237,7 @@ export async function reserveUnlock(db: DbClient, input: {
       estimated_cost: round3(input.estimatedCost),
       reserved_by_user_id: userId,
       reservation_expires_at: reservationExpiresAt,
+      auto_unlock_intent_id: unlock.auto_unlock_intent_id || null,
       last_error_code: null,
       last_error_message: null,
     })
@@ -277,6 +278,29 @@ export async function attachReservationLedger(db: DbClient, input: {
       estimated_cost: round3(input.amount),
       status: 'reserved',
       reserved_by_user_id: input.userId,
+      auto_unlock_intent_id: null,
+    })
+    .eq('id', input.unlockId)
+    .select(unlockSelect)
+    .single();
+  if (error) throw error;
+  return data as SourceItemUnlockRow;
+}
+
+export async function attachAutoUnlockIntent(db: DbClient, input: {
+  unlockId: string;
+  userId: string;
+  intentId: string | null;
+  amount: number;
+}) {
+  const { data, error } = await db
+    .from('source_item_unlocks')
+    .update({
+      auto_unlock_intent_id: input.intentId,
+      estimated_cost: round3(input.amount),
+      status: 'reserved',
+      reserved_by_user_id: input.userId,
+      reserved_ledger_id: null,
     })
     .eq('id', input.unlockId)
     .select(unlockSelect)
@@ -322,6 +346,7 @@ export async function completeUnlock(db: DbClient, input: {
       reserved_by_user_id: null,
       reservation_expires_at: null,
       reserved_ledger_id: null,
+      auto_unlock_intent_id: null,
       last_error_code: null,
       last_error_message: null,
     })
@@ -353,6 +378,7 @@ export async function failUnlock(db: DbClient, input: {
       reserved_by_user_id: null,
       reservation_expires_at: null,
       reserved_ledger_id: null,
+      auto_unlock_intent_id: null,
       job_id: null,
       last_error_code: String(input.errorCode || '').slice(0, 120) || 'UNLOCK_GENERATION_FAILED',
       last_error_message: String(input.errorMessage || '').slice(0, 500),

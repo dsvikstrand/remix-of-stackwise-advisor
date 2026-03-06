@@ -52,9 +52,10 @@
   - `GET /api/profile/:userId/feed` (optional auth; public profiles readable, private profiles owner-only)
 - Subscription auto-unlock policy:
   - `user_source_subscriptions.auto_unlock_enabled` defaults to `true` for existing and new rows.
-  - new subscription uploads auto-attempt shared unlock generation by prioritizing the current subscriber first, then sampling up to 3 eligible subscribers (`is_active=true`, `auto_unlock_enabled=true`) and stopping on first successful hold + enqueue.
-  - if all sampled users fail credit reserve, backend enqueues bounded `source_auto_unlock_retry` jobs so unlock can complete after credit refill.
-  - if sampled users cannot reserve credits, item remains `my_feed_unlockable` for manual unlock.
+  - runtime policy is funded-subscriber shared-cost auto generation: one `1.00` credit event per source video, split across the funded auto-enabled subscriber snapshot for that release.
+  - funded subset selection uses deterministic fixed-point recomputation at reservation time; remainder cents go to the lowest stable user ids.
+  - if eligible users fail credit reserve, backend enqueues bounded `source_auto_unlock_retry` jobs so unlock can complete after credit refill.
+  - if no eligible/funded users can reserve credits, item remains `my_feed_unlockable` for manual unlock.
 
 ## Health checks
 - Local service health:
@@ -202,7 +203,6 @@ Required runtime variables:
 - `CREDIT_REFILL_SECONDS_PER_CREDIT` (default `360`)
 - `SOURCE_UNLOCK_RESERVATION_SECONDS` (default `300`)
 - `SOURCE_UNLOCK_GENERATE_MAX_ITEMS` (default `100`)
-- `SOURCE_AUTO_UNLOCK_SAMPLE_SIZE` (default `3`)
 - `SOURCE_AUTO_UNLOCK_RETRY_DELAY_SECONDS` (default `90`)
 - `SOURCE_AUTO_UNLOCK_RETRY_MAX_ATTEMPTS` (default `3`)
 - `SOURCE_TRANSCRIPT_RETRY_DELAY_SECONDS` (default `300`)
@@ -224,12 +224,11 @@ Required runtime variables:
 - `SOURCE_VIDEO_UNLOCK_SUSTAINED_MAX` (default `120`)
 - `CREDITS_READ_WINDOW_MS` (default `60000`)
 - `CREDITS_READ_MAX_PER_WINDOW` (default `180`)
-- `GENERATION_DAILY_CAP_ENABLED` (default `true`; enables free-user daily generation cap enforcement)
-- `GENERATION_DAILY_CAP_FREE_LIMIT` (default `5`; generation attempts per global window for non-bypass users)
-- `GENERATION_DAILY_CAP_PLUS_LIMIT` (default `25`; higher daily cap for `plus` entitlement users)
-- `GENERATION_DAILY_CAP_RESET_HOUR_UTC` (default `0`; global rollover hour in UTC)
-- `GENERATION_DAILY_CAP_BYPASS_USER_IDS` (csv user ids; bypass cap until billing entitlements are active)
-- `GENERATION_DAILY_CAP_FAIL_OPEN` (default `false`; if true, missing cap DB objects fail open instead of denying generation)
+- `CREDIT_WALLET_FREE_DAILY_GRANT` (default `3.00`; daily grant for free users at `00:00 UTC`)
+- `CREDIT_WALLET_PLUS_DAILY_GRANT` (default `20.00`; daily grant for plus users at `00:00 UTC`)
+- `CREDIT_WALLET_ADMIN_DAILY_GRANT` (default `20.00`; admin grant/bypass baseline)
+- `CREDIT_WALLET_INITIAL_BALANCE` (default follows free daily grant for new rows)
+- `AI_CREDITS_BYPASS` (default `false`; if true, credit-dependent routes fail open for billing but still return wallet-shaped responses)
 - `INGESTION_LATEST_MINE_WINDOW_MS` (default `60000`)
 - `INGESTION_LATEST_MINE_MAX_PER_WINDOW` (default `180`)
 - `UNLOCK_INTAKE_ENABLED` (default `true`, fast pause for new unlock intake)
@@ -347,7 +346,6 @@ Safe defaults:
 - `CREDIT_REFILL_SECONDS_PER_CREDIT=360`
 - `SOURCE_UNLOCK_RESERVATION_SECONDS=300`
 - `SOURCE_UNLOCK_GENERATE_MAX_ITEMS=100`
-- `SOURCE_AUTO_UNLOCK_SAMPLE_SIZE=3`
 - `SOURCE_AUTO_UNLOCK_RETRY_DELAY_SECONDS=90`
 - `SOURCE_AUTO_UNLOCK_RETRY_MAX_ATTEMPTS=3`
 - `SOURCE_TRANSCRIPT_RETRY_DELAY_SECONDS=300`
@@ -501,12 +499,15 @@ ssh oracle-free 'sudo systemctl daemon-reload && sudo systemctl restart agentic-
   3) Temporarily raise limits only if operationally justified.
   4) Keep hourly cap as abuse guard.
 
-### `DAILY_GENERATION_CAP_REACHED`
-- Meaning: user has exhausted the current free daily generation window.
+### `INSUFFICIENT_CREDITS`
+- Meaning: user has exhausted the current daily credit wallet for their plan or cannot afford the requested new work items.
 - Action:
-  1) Check `/api/credits` fields (`generation_daily_limit`, `generation_daily_used`, `generation_daily_remaining`, `generation_daily_reset_at`, `generation_daily_bypass`).
-  2) Confirm rollover config (`GENERATION_DAILY_CAP_RESET_HOUR_UTC`) in `/etc/agentic-backend.env`.
-  3) For bypass users, confirm membership in `GENERATION_DAILY_CAP_BYPASS_USER_IDS` and restart services after env updates.
+  1) Check `/api/credits` fields (`daily_grant`, `balance`, `capacity`, `next_reset_at`, `plan`, plus compatibility `generation_daily_*` fields if needed).
+  2) Confirm wallet grant config in `/etc/agentic-backend.env`:
+     - `CREDIT_WALLET_FREE_DAILY_GRANT`
+     - `CREDIT_WALLET_PLUS_DAILY_GRANT`
+     - `CREDIT_WALLET_ADMIN_DAILY_GRANT`
+  3) For bypass/admin users, confirm entitlement row and `AI_CREDITS_BYPASS` state, then restart services after env updates.
 
 ### `CREDITS_UNAVAILABLE`
 - Meaning: backend credit service path is unavailable (for example missing/invalid service-role path or credit RPC failure).
@@ -522,11 +523,11 @@ ssh oracle-free 'sudo systemctl daemon-reload && sudo systemctl restart agentic-
   5) Verify generation endpoints now return normal credit outcomes (not `CREDITS_UNAVAILABLE`).
 
 #### Set user generation entitlement (service role SQL)
-- Set `admin` (no daily cap):
+- Set `admin` (wallet bypass / operator access):
 ```sql
 select * from public.set_generation_plan_by_email('david.vikstrand@gmail.com', 'admin', null);
 ```
-- Set `plus` (uses `GENERATION_DAILY_CAP_PLUS_LIMIT` unless overridden):
+- Set `plus` (uses `CREDIT_WALLET_PLUS_DAILY_GRANT` unless overridden):
 ```sql
 select * from public.set_generation_plan_by_email('user@example.com', 'plus', null);
 ```

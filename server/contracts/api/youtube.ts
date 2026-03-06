@@ -144,6 +144,7 @@ export type YouTubeRouteDeps = {
   markSubscriptionSyncError: any;
   upsertSubscriptionNoticeSourceItem: any;
   insertFeedItem: any;
+  upsertSourceItemFromVideo: any;
   decryptToken: any;
   revokeYouTubeToken: any;
   resolveGenerationTierAccess: any;

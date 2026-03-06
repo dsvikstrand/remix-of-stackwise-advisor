@@ -6,11 +6,11 @@ describe('source unlock pricing', () => {
     expect(computeUnlockCost(1)).toBe(1);
   });
 
-  it('rounds inverse cost to 3 decimals', () => {
-    expect(computeUnlockCost(3)).toBe(0.333);
+  it('keeps manual unlocks at 1.000 for shared assets', () => {
+    expect(computeUnlockCost(3)).toBe(1);
   });
 
-  it('respects minimum floor', () => {
-    expect(computeUnlockCost(1000)).toBe(0.05);
+  it('ignores subscriber count for manual display cost', () => {
+    expect(computeUnlockCost(1000)).toBe(1);
   });
 });

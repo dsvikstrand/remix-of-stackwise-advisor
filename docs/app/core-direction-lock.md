@@ -41,7 +41,7 @@ Status: `canonical`
 23. Source-page Video Library filter UX is two-tab in MVP (`Full videos` and `Shorts`), with shorts classified by duration threshold `<=60s`.
 24. Source-page Video Library list traffic uses dual guardrails in backend (burst + sustained per-user/IP) so normal tab/list interaction is smooth while abuse remains capped.
 25. Shared source-video unlock is the default generation model for new source-page requests: one source item can be generated once and reused across subscribers.
-26. Credit policy is refill-based (`capacity + regen`) with hold-first unlock reservations, settle-on-success, and refund-on-failure/expiry.
+26. Credit policy is a daily UTC-reset wallet (`free=3.00`, `plus=20.00`, no rollover) with reserve-first manual billing, settle at first model dispatch, and release on pre-generation failure.
 27. Source-page unlock request control is soft-limited (burst+sustained) with credits as the primary user-facing throttle; strict unlock cooldown is not used.
 28. Home scope split is fixed for MVP: `For You` is the subscribed-source stream (locked + unlocked, latest-only) and `Your channels` preserves the followed-channel ranking lane.
 29. Unlock status visibility must be consistent across Home, Source Page, and My Feed using a shared activity/status pattern with reload-resume support.
@@ -50,7 +50,7 @@ Status: `canonical`
 32. Unlock backend reliability uses safe auto-fix sweeps (expired/stale/orphan recovery) with idempotent refund/fail transitions; no destructive cleanup.
 33. Unlock/generate responses must include additive `trace_id` and unlock lifecycle logs must propagate that trace through request -> queue/job -> terminal outcome.
 34. Unlock/manual/service generation execution is queue-first with durable DB claim+lease workers, bounded retries, and queue backpressure/intake controls (Oracle + Supabase only).
-35. Subscription rows include `auto_unlock_enabled` (default `true`) and only new incoming subscription videos can auto-attempt unlock generation by prioritizing the current subscriber, then sampling eligible subscribers with bounded retry jobs; historical locked backlog is not auto-processed.
+35. Subscription rows include `auto_unlock_enabled` (default `true`) and only new incoming subscription videos can auto-attempt unlock generation; runtime auto billing is funded-subscriber shared-cost with participant snapshotting, fixed-point funded-subset selection, and bounded retries, while historical locked backlog is not auto-processed.
 36. Transcript-unavailable unlocks must not hard-fail user trust flows: manual unlock returns deterministic `TRANSCRIPT_UNAVAILABLE` with retry timing and auto-unlock retries are deferred with cooldown.
 37. Read-heavy status endpoints (`/api/credits`, `/api/ingestion/jobs/latest-mine`) must use dedicated soft read limits and be excluded from generic global limiter paths to avoid accidental unlock UX 429 spikes.
 38. Unlock queue items carry explicit `unlock_origin` metadata (`manual_unlock`, `subscription_auto_unlock`, `source_auto_unlock_retry`) for recovery and traceability.

@@ -102,6 +102,7 @@
     - `POST /api/source-pages/:platform/:externalId/videos/unlock` (auth-only, subscriber-only manual unlock + queue start for selected source-library videos, ingestion scope `source_item_unlock_generation`)
       - unlock limiter policy: burst `8/10s` + sustained `120/10m` per user/IP.
       - response now includes additive `data.trace_id` for end-to-end unlock tracing.
+      - manual unlock pricing is fixed at `1.00` credit for new blueprint work; duplicates/ready/in-progress rows short-circuit as no-charge.
       - queue guardrails: `QUEUE_DEPTH_HARD_LIMIT`, `QUEUE_DEPTH_PER_USER_LIMIT`; overflow returns `QUEUE_BACKPRESSURE` with `retry_after_seconds`.
     - `POST /api/source-pages/:platform/:externalId/videos/generate` (compatibility alias to unlock flow)
       - alias mirrors unlock response contract, including additive `data.trace_id`.
@@ -143,7 +144,7 @@
   - Gate runtime mode switch: `CHANNEL_GATES_MODE = bypass | shadow | enforce` (default `bypass`).
 - Data:
   - Supabase is system of record for blueprints, tags, follows, likes/comments, telemetry.
-  - `bleuV1` extension: source-item canonical tables + user feed item tables + subscription/ingestion job tables + auto-banner policy/queue tables + refill-credit/unlock tables.
+  - `bleuV1` extension: source-item canonical tables + user feed item tables + subscription/ingestion job tables + auto-banner policy/queue tables + daily-credit/unlock tables.
   - source-identity foundation: `source_pages` table and FK links from `user_source_subscriptions` + `source_items` via `source_page_id`.
   - shared unlock foundation: `source_item_unlocks` (status/cost/reservation/ready blueprint) + `user_credit_wallets` + immutable `credit_ledger`.
   - notifications foundation: `notifications` table with owner-read/update RLS and dedupe key support (`user_id + dedupe_key`).
@@ -184,10 +185,15 @@
    - unsubscribe removes that user-scoped notice card while preserving other My Feed blueprint items.
 4. Subscription sync after checkpoint:
    - new uploads create unlockable feed rows (`my_feed_unlockable`) instead of immediate generation.
-   - new uploads can auto-attempt unlock generation when eligible subscribers are available (`auto_unlock_enabled=true`); subscriber-shared auto billing remains tracked in the active hardening follow-up.
+   - new uploads can auto-attempt unlock generation when eligible subscribers are available (`auto_unlock_enabled=true`).
+   - runtime auto billing is canonical shared-cost:
+     - one source video maps to one canonical auto intent
+     - subscribed + `auto_unlock_enabled=true` users are snapshotted at release detection
+     - funded subset selection uses deterministic fixed-point share recomputation at reservation time
+     - all participant holds settle at first OpenAI dispatch and release on pre-generation failure
    - if auto-attempt fails due temporary credit availability, backend enqueues bounded retry jobs (`source_auto_unlock_retry`) before falling back to manual unlock-only state.
    - unlock cards can be activated by one user; successful generation fans out shared blueprint linkage to subscribed users for that source item.
-   - source unlock pricing uses `1 / active_subscribers` (clamped and rounded), with hold -> settle/refund ledger flow.
+   - manual source-page generation uses reserve -> settle/release billing at `1.00` credit per new blueprint intent.
   - auto-ingest path enables review generation by default.
   - YouTube generation now normalizes output into Golden BP v1 section structure by default (`Lightning Takeaways`, flowing `Summary`, then domain-adapted structured sections) and writes additive metadata markers (`selected_items.bp_style = golden_v1`, `bp_origin = youtube_pipeline`).
    - YouTube source flows use thumbnail-first banner assignment (`blueprints.banner_url` from source thumbnail) and bypass auto-banner enqueue.
@@ -204,6 +210,8 @@
      - active-job lock (`JOB_ALREADY_RUNNING`) for manual generation
      - failed item cooldown (6h) via `refresh_video_attempts` so noisy failures do not reappear immediately.
      - successful manual generation advances subscription checkpoint forward to prevent future auto-poll duplicates.
+     - duplicate/ready/in-progress candidates are classified before charge, and only the affordable new-item prefix is enqueued.
+     - queued manual items carry reservation metadata so workers settle at first OpenAI generation dispatch and release on pre-generation failure/duplicate collapse.
      - frontend restores active manual refresh status after reload via `GET /api/ingestion/jobs/latest-mine`.
    - stale running ingestion jobs are recovered before new service/manual trigger paths execute (`STALE_RUNNING_RECOVERY`).
 5. Optional user remix/insight.

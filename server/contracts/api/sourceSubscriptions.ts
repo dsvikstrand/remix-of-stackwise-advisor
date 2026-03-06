@@ -41,6 +41,7 @@ export type SourceSubscriptionsRouteDeps = {
   markSubscriptionSyncError: any;
   upsertSubscriptionNoticeSourceItem: any;
   insertFeedItem: any;
+  upsertSourceItemFromVideo: any;
   buildSourcePagePath: any;
   cleanupSubscriptionNoticeForChannel: any;
   refreshScanLimiter: express.RequestHandler;

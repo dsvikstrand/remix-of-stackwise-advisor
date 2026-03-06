@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { refundReservation } from './creditWallet';
+import { releaseAutoUnlockIntent } from './autoUnlockBilling';
 import {
   failUnlock,
   findExpiredReservedUnlocks,
@@ -27,6 +28,7 @@ type UnlockReliabilityDeps = {
   listRunningUnlockJobs: (db: DbClient, limit: number, staleBeforeIso: string) => Promise<UnlockJobRow[]>;
   countActiveUnlockLinksForJobs: (db: DbClient, jobIds: string[]) => Promise<Map<string, number>>;
   markJobsFailed: (db: DbClient, input: { jobIds: string[]; errorCode: string; errorMessage: string }) => Promise<number>;
+  releaseAutoUnlockIntent: typeof releaseAutoUnlockIntent;
 };
 
 export type UnlockSweepResult = {
@@ -56,7 +58,7 @@ export type RunUnlockReliabilitySweepsInput = {
 };
 
 const unlockSelect =
-  'id, source_item_id, source_page_id, status, estimated_cost, reserved_by_user_id, reservation_expires_at, reserved_ledger_id, blueprint_id, job_id, last_error_code, last_error_message, created_at, updated_at';
+  'id, source_item_id, source_page_id, status, estimated_cost, reserved_by_user_id, reservation_expires_at, reserved_ledger_id, auto_unlock_intent_id, blueprint_id, job_id, last_error_code, last_error_message, created_at, updated_at';
 
 function toMs(iso: string | null | undefined) {
   if (!iso) return null;
@@ -194,6 +196,7 @@ const defaultDeps: UnlockReliabilityDeps = {
   listRunningUnlockJobs,
   countActiveUnlockLinksForJobs,
   markJobsFailed,
+  releaseAutoUnlockIntent,
 };
 
 let lastRunAtMs = 0;
@@ -273,7 +276,15 @@ export async function runUnlockReliabilitySweeps(
     expiredCandidates = expiredUnlocks.length;
     for (const unlock of expiredUnlocks) {
       const amount = Math.max(0, Number(unlock.estimated_cost || 0));
-      if (shouldRefundUnlock(unlock)) {
+      const autoIntentId = String(unlock.auto_unlock_intent_id || '').trim() || null;
+      if (autoIntentId) {
+        await deps.releaseAutoUnlockIntent(db, {
+          intentId: autoIntentId,
+          reasonCode: 'UNLOCK_RESERVATION_EXPIRED_RECOVERED',
+          lastErrorCode: 'UNLOCK_RESERVATION_EXPIRED_RECOVERED',
+          lastErrorMessage: 'Recovered expired auto-unlock reservation.',
+        });
+      } else if (shouldRefundUnlock(unlock)) {
         await deps.refundReservation(db, {
           userId: String(unlock.reserved_by_user_id || '').trim(),
           amount,
@@ -332,7 +343,15 @@ export async function runUnlockReliabilitySweeps(
       if (!staleReason) continue;
 
       const amount = Math.max(0, Number(unlock.estimated_cost || 0));
-      if (shouldRefundUnlock(unlock)) {
+      const autoIntentId = String(unlock.auto_unlock_intent_id || '').trim() || null;
+      if (autoIntentId) {
+        await deps.releaseAutoUnlockIntent(db, {
+          intentId: autoIntentId,
+          reasonCode: 'UNLOCK_PROCESSING_STALE_RECOVERED',
+          lastErrorCode: 'UNLOCK_PROCESSING_STALE_RECOVERED',
+          lastErrorMessage: `Recovered stale processing auto-unlock (${staleReason}).`,
+        });
+      } else if (shouldRefundUnlock(unlock)) {
         await deps.refundReservation(db, {
           userId: String(unlock.reserved_by_user_id || '').trim(),
           amount,

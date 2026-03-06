@@ -11,206 +11,235 @@ b2) [have] This plan focuses on launch stability, cost control, rate-limit prote
 b3) [todo] This plan does not replace `docs/ops/mvp-launch-readiness-checklist.md`; it feeds concrete implementation work into that launch gate.
 
 ## Launch Read
-c1) [have] Current review recommendation is `NO-GO until P0 issues below are resolved`.
-c2) [todo] Treat `P0` items in this file as launch blockers.
+c1) [have] Current review recommendation is `NO-GO until remaining P0 policy/ledger work below is resolved`.
+c2) [todo] Treat open `P0` items in this file as launch blockers.
 c3) [todo] Treat `P1` items in this file as strongly recommended before launch.
 c4) [todo] Treat `P2` items in this file as cleanup/hardening that can land after the blockers if time is constrained.
 
 ## Status Snapshot
-d1) [have] Direct URL generation now uses the same daily-credit wallet model as the other manual generation entrypoints, alongside route-level rate limiting.
+d1) [have] Direct URL generation now uses reserve -> settle/release billing against the daily-credit wallet instead of eager flat charging.
 d2) [have] Queue controls, worker split, provider retry logic, and launch runbooks are already present.
-d3) [todo] Source-page unlock flow needs a pre-enqueue fix so credits are never held for rejected requests.
+d3) [have] Source-page unlock flow now runs queue/intake preflight before holds and releases reservations on enqueue failure.
 d4) [have] Source-page video library policy is now enforced in the backend as subscriber-only, not frontend-only gating.
-d5) [have] Search/manual generation billing now routes through the wallet-backed credit model instead of a separate daily-cap-only path.
-d6) [todo] Shared YouTube quota protection needs stronger concurrency safety and lower background quota burn.
-d7) [todo] Handler-level tests are missing for several high-risk routes and policies.
+d5) [have] Search and manual refresh now classify duplicate/in-progress items before reservation, queue only the affordable new-item prefix, and carry reservation metadata into worker execution.
+d6) [have] Shared-cost auto billing now uses canonical auto intents, funded-participant snapshots, and shared settle/release semantics instead of the temporary single-payer path.
+d7) [todo] Shared YouTube quota protection needs stronger concurrency safety and lower background quota burn.
+d8) [have] Handler-level coverage now exists for direct URL reserve/release timing plus Search/manual-refresh affordability trimming, and shared auto-billing math/lifecycle tests now cover the new funded-subset path.
 
 ## Execution Order
-e1) [todo] Finish `P0-1`, `P0-2`, and `P0-3` first.
-e2) [todo] Then complete `P1-1`, `P1-2`, and `P1-3`.
-e3) [todo] Only after those are stable, spend time on `P2` cleanup/refactor work.
+e1) [have] `P0-1`, `P0-2`, and `P0-3` are completed.
+e2) [have] `P0-4` is complete.
+e3) [todo] Next focus is `P1-1`, `P1-2`, and `P1-3`.
+e4) [todo] Only after those are stable, spend time on `P2` cleanup/refactor work.
 
 ## P0 Launch Blockers
 
 ### P0-1 Credit Hold Before Queue Acceptance
-f1) [todo] Risk: `blocking`
-f2) [todo] Problem:
+f1) [have] Risk: `blocking`
+f2) [have] Problem:
 - Source-page unlock currently reserves credits before queue backpressure or intake-pause checks complete.
 - Under `QUEUE_BACKPRESSURE` or `QUEUE_INTAKE_DISABLED`, users can end the request with credits temporarily held for work that never entered the queue.
-f3) [todo] Primary files:
+f3) [have] Primary files:
 - `server/handlers/sourcePagesHandlers.ts`
 - `server/services/sourceUnlocks.ts`
 - `server/services/creditWallet.ts`
-f4) [todo] Implementation checklist:
-- move queue/intake preflight earlier so request rejection happens before any hold is created
-- or add guaranteed rollback/refund + unlock reset before every non-enqueue return path
-- verify duplicate, ready, in-progress, transcript-cooldown, and duration-blocked branches still behave correctly
-f5) [todo] Validation:
-- add handler/service tests covering `QUEUE_BACKPRESSURE` and `QUEUE_INTAKE_DISABLED`
-- prove wallet balance and unlock state are unchanged after rejected requests
-f6) [todo] Exit criteria:
+f4) [have] Implementation outcome:
+- queue/intake preflight now happens before holds
+- enqueue failure paths release reservations instead of stranding holds
+- duplicate, ready, in-progress, transcript-cooldown, and duration-blocked branches still short-circuit without charging
+f5) [have] Validation:
+- handler/runtime validation landed in the source-page flow
+- local typecheck/test/build pass completed after the billing-boundary patch
+f6) [have] Exit criteria:
 - no request can leave a held reservation unless a queue job is actually created
-- test coverage exists for both pressure and paused-intake branches
 
 ### P0-2 Source Page Policy Enforcement
-g1) [todo] Risk: `blocking`
-g2) [todo] Problem:
+g1) [have] Risk: `blocking`
+g2) [have] Problem:
 - Source Page Video Library appears subscriber-only in docs/UI, but backend routes currently allow any authenticated user to list and unlock videos.
-g3) [todo] Primary files:
+g3) [have] Primary files:
 - `server/handlers/sourcePagesHandlers.ts`
 - `src/pages/SourcePage.tsx`
 - `docs/app/product-spec.md`
 - `docs/architecture.md`
-g4) [todo] Implementation checklist:
-- decide the actual product policy: `subscriber-only` or `signed-in user`
-- enforce that policy in backend `GET /videos` and `POST /videos/unlock|generate`
-- align frontend copy and docs with the enforced rule
-g5) [todo] Validation:
-- add handler tests for subscribed and unsubscribed cases
-- verify unauthorized or policy-blocked callers get deterministic error codes
-g6) [todo] Exit criteria:
+g4) [have] Implementation outcome:
+- Source Page shell remains public-readable
+- `GET /videos` and `POST /videos/unlock|generate` are now subscriber-only in the backend
+- frontend gating/copy were aligned to the backend rule
+g5) [have] Validation:
+- policy-blocked callers now receive deterministic `SOURCE_PAGE_SUBSCRIPTION_REQUIRED`
+g6) [have] Exit criteria:
 - no mismatch remains between backend behavior, frontend gating, and canonical docs
 
 ### P0-3 Generation Billing Consistency
-h1) [todo] Risk: `blocking`
-h2) [todo] Problem:
+h1) [have] Risk: `blocking`
+h2) [have] Problem:
 - Direct URL generation charges credits, while search-based generation appears to use daily-cap checks only.
 - The Search UI currently implies a `1` credit cost, so either the backend or the product contract is inconsistent.
-h3) [todo] Primary files:
+h3) [have] Primary files:
 - `server/handlers/youtubeHandlers.ts`
 - `server/services/blueprintCreation.ts`
 - `src/pages/Search.tsx`
 - `docs/app/product-spec.md`
-h4) [todo] Implementation checklist:
-- decide the canonical billing rule for Search, direct URL, manual refresh, and source-page unlock flows
-- implement billing checks consistently across those entrypoints
-- align UI labels and support-facing copy with actual billing behavior
-h5) [todo] Validation:
-- add route or service tests that prove search generation is billed exactly as intended
-- verify insufficient-credit behavior matches user-facing copy
-h6) [todo] Exit criteria:
-- every generation path follows one coherent billing model
-- no UI route advertises a cost that the backend does not enforce
+h4) [have] Implementation outcome:
+- direct URL, Search, and manual refresh now use one manual-generation credit model
+- manual generation costs `1.00` per new blueprint intent
+- duplicates/ready/in-progress items short-circuit as no-charge
+- Search/manual refresh queue only the affordable new-item prefix and return additive skipped buckets
+h5) [have] Validation:
+- direct URL reserve/release timing is covered by targeted tests
+- Search/manual refresh affordability and queue payload trimming are covered by targeted tests
+h6) [have] Exit criteria:
+- every manual generation path follows one coherent billing model
+- no manual UI route advertises a cost that the backend does not enforce
+
+### P0-4 Auto Shared-Cost Billing
+i1) [have] Risk: `blocking`
+i2) [have] Problem:
+- subscription auto generation needed to move off the temporary payer-selection path
+- locked product policy required shared-cost billing across funded auto-enabled subscribers
+i3) [have] Primary files:
+- `server/services/sourceSubscriptionSync.ts`
+- `server/index.ts`
+- `server/services/autoUnlockBilling.ts`
+- `server/services/creditWallet.ts`
+- `supabase/migrations/20260306113000_auto_unlock_shared_cost_v1.sql`
+- `docs/app/product-spec.md`
+- `docs/architecture.md`
+i4) [have] Implementation outcome:
+- one canonical auto intent now exists per source video through durable `source_auto_unlock_intents` + `source_auto_unlock_participants`
+- release detection snapshots subscribed + auto-enabled participants
+- funded-subset selection uses deterministic fixed-point recomputation with `0.01` precision and stable user-id remainder assignment
+- participant holds reserve via an atomic DB function, settle at first OpenAI dispatch, and release on pre-generation failure
+- unlock workers now collapse auto-vs-auto and manual-vs-auto races to one billable intent and one generation winner
+- unlock recovery sweeps release shared auto holds for expired/stale auto reservations
+i5) [have] Validation:
+- tests now cover `10`, `3`, shrinking-subset, and `0` funded-participant cases
+- deterministic `0.34 + 0.33 + 0.33` settlement math is covered
+- shared auto settle/release lifecycle is covered in unit tests
+i6) [have] Exit criteria:
+- auto billing now matches the locked product policy and is auditable from durable ledger data
 
 ## P1 Strongly Recommended Before Launch
 
 ### P1-1 Quota Guard Concurrency Hardening
-i1) [todo] Risk: `high`
-i2) [todo] Problem:
+j1) [todo] Risk: `high`
+j2) [todo] Problem:
 - shared YouTube quota guard uses a non-atomic read/compute/write pattern and can under-enforce limits during concurrent spikes
-i3) [todo] Primary files:
+j3) [todo] Primary files:
 - `server/services/youtubeQuotaGuard.ts`
 - related search/channel-search handlers in `server/handlers/youtubeHandlers.ts`
-i4) [todo] Implementation checklist:
+j4) [todo] Implementation checklist:
 - move quota consume logic to an atomic DB function or equivalent compare-and-swap path
 - keep cooldown fallback behavior for upstream `429/403` signals
 - document whether budgets are strict or best-effort
-i5) [todo] Validation:
+j5) [todo] Validation:
 - add focused service tests for concurrent consume attempts
 - verify retry-after behavior remains deterministic
-i6) [todo] Exit criteria:
+j6) [todo] Exit criteria:
 - quota guard cannot materially over-admit live requests under concurrency
 
 ### P1-2 Quota Burn Reduction On Read Paths
-j1) [todo] Risk: `high`
-j2) [todo] Problem:
+k1) [todo] Risk: `high`
+k2) [todo] Problem:
 - subscriptions and related display surfaces still trigger live YouTube asset lookups on normal reads
-j3) [todo] Primary files:
+k3) [todo] Primary files:
 - `server/handlers/sourceSubscriptionsHandlers.ts`
 - `server/index.ts` (`fetchYouTubeChannelAssetMap`)
 - `server/services/sourcePageAssetSweep.ts`
-j4) [todo] Implementation checklist:
+k4) [todo] Implementation checklist:
 - stop live asset fetching on hot read paths where stored data is good enough
 - prefer stored source-page assets or cached refresh jobs
 - keep opportunistic hydration bounded and non-user-blocking
-j5) [todo] Validation:
+k5) [todo] Validation:
 - confirm repeated subscriptions page loads do not trigger live provider calls
 - document fallback behavior when assets are missing
-j6) [todo] Exit criteria:
+k6) [todo] Exit criteria:
 - routine browsing does not materially consume YouTube quota
 
 ### P1-3 Queue Budgeting By Work Size
-k1) [todo] Risk: `medium`
-k2) [todo] Problem:
+l1) [todo] Risk: `medium`
+l2) [todo] Problem:
 - queue depth is job-based, but some interactive jobs can contain many videos and monopolize workers
-k3) [todo] Primary files:
+l3) [todo] Primary files:
 - `server/handlers/youtubeHandlers.ts`
 - `server/handlers/sourcePagesHandlers.ts`
 - `server/handlers/sourceSubscriptionsHandlers.ts`
 - queue metrics/runbook docs
-k4) [todo] Implementation checklist:
+l4) [todo] Implementation checklist:
 - reduce max batch sizes for interactive routes or add per-job item caps by scope
 - expose item-count-aware queue metrics if job size remains variable
 - ensure operator dashboards distinguish `job count` from `work item count`
-k5) [todo] Validation:
+l5) [todo] Validation:
 - run a drill using multi-item jobs and compare worker occupancy vs queue-depth reporting
-k6) [todo] Exit criteria:
+l6) [todo] Exit criteria:
 - queue health signals reflect real workload, not just row count
 
 ### P1-4 Credit Polling Load Reduction
-l1) [todo] Risk: `medium`
-l2) [todo] Problem:
+m1) [todo] Risk: `medium`
+m2) [todo] Problem:
 - `useAiCredits` polls every `15s` from global UI surfaces, which can create steady backend load at launch scale
-l3) [todo] Primary files:
+m3) [todo] Primary files:
 - `src/hooks/useAiCredits.ts`
 - `src/components/shared/UserMenu.tsx`
-l4) [todo] Implementation checklist:
+m4) [todo] Implementation checklist:
 - reduce polling frequency or only poll when menus/views are open
 - consider event-driven invalidation after generation/unlock actions instead of constant polling
 - keep manual refresh behavior for support-critical views if needed
-l5) [todo] Validation:
+m5) [todo] Validation:
 - estimate request volume for `100`, `500`, and `1000` active signed-in users before and after the change
-l6) [todo] Exit criteria:
+m6) [todo] Exit criteria:
 - background credit polling is no longer a meaningful launch-load contributor
 
 ## P2 Cleanup And Refactor
 
 ### P2-1 Handler Coverage Expansion
-m1) [todo] Risk: `medium`
-m2) [todo] Primary files:
+n1) [todo] Risk: `medium`
+n2) [todo] Primary files:
 - `src/test/*`
 - `server/handlers/sourcePagesHandlers.ts`
 - `server/handlers/sourceSubscriptionsHandlers.ts`
-m3) [todo] Add coverage for:
+n3) [todo] Add coverage for:
 - source-page subscription enforcement
 - source-page unlock refund/rollback paths
-- search-generation billing semantics
+- auto shared-cost billing semantics
 - quota-guard degraded/cached behavior
 
 ### P2-2 Shared Preflight Refactor
-n1) [todo] Risk: `medium`
-n2) [todo] Problem:
+o1) [todo] Risk: `medium`
+o2) [todo] Problem:
 - enqueue preflight logic is spread across multiple handlers with slightly different semantics
-n3) [todo] Primary files:
+o3) [todo] Primary files:
 - `server/handlers/youtubeHandlers.ts`
 - `server/handlers/sourcePagesHandlers.ts`
 - `server/handlers/sourceSubscriptionsHandlers.ts`
 - `server/services/*`
-n4) [todo] Refactor target:
-- centralize reusable preflight checks for auth, duration policy, credits, daily cap, queue backpressure, and intake pause
+o4) [todo] Refactor target:
+- centralize reusable preflight checks for auth, duration policy, duplicate classification, wallet reservation, queue backpressure, and intake pause
 
 ### P2-3 Repo Hygiene Pass
-o1) [todo] Risk: `low`
-o2) [todo] Scope:
+p1) [todo] Risk: `low`
+p2) [todo] Scope:
 - identify stale docs references, dead route assumptions, and duplicated helper logic left from earlier MVP iterations
-o3) [todo] Initial targets:
+p3) [todo] Initial targets:
 - active/completed exec-plan registry consistency
 - route-policy duplication between docs/UI/backend
 - rate-limit and error-copy logic duplicated across handlers/pages
 
 ## Verification Bundle
-p1) [todo] Route-policy tests:
+q1) [todo] Route-policy tests:
 - unsubscribed source-page user cannot access subscriber-only library features if that is the chosen policy
 - source-page unlock rejection does not hold credits
-- search generation billing path matches product contract
-p2) [todo] Runtime checks:
+- manual generation billing path matches product contract
+- auto shared-cost billing path matches product contract
+q2) [todo] Runtime checks:
 - `npm run test`
 - `npx tsc --noEmit`
 - `npm run build`
-p3) [todo] Load/ops checks:
+q3) [todo] Load/ops checks:
 - run one queue-pressure drill focused on source-page unlock
 - run one quota-pressure drill focused on search and subscription reads
 - append evidence to `docs/ops/mvp-launch-readiness-checklist.md`
 
 ## Completion Rule
-q1) [todo] This plan can move to `completed/` only when all `P0` items are done and the launch checklist reflects the new evidence.
+r1) [todo] This plan can move to `completed/` only when all open `P0` items are done and the launch checklist reflects the new evidence.

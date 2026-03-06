@@ -74,7 +74,7 @@ a52) [have] Source page reads now lazily hydrate missing avatar/banner assets fo
 a53) [have] Source pages now expose a public, deduped blueprint feed (`latest + load more`) via `GET /api/source-pages/:platform/:externalId/blueprints`, and `/s/:platform/:externalId` renders Home-style read-only blueprint cards.
 a54) [have] Source pages now include a subscriber-only `Video Library` section for back-catalog generation (`GET /videos`, `POST /videos/unlock`, legacy alias `POST /videos/generate`) with async queue execution and duplicate skip visibility.
 a55) [have] Shared source-video unlock model is active for new source-page generation: one generation per source video can be reused across subscribers.
-a56) [have] Credit model now uses refill wallets (decimal balance) instead of daily reset counters (`10.000` cap, `+1.000 / 6 min` default).
+a56) [have] Credit model now uses a daily credit wallet with UTC reset (`free=3.00`, `plus=20.00`, `admin` bypass, no rollover) instead of refill semantics.
 a57) [have] Subscription auto-ingestion now writes unlockable My Feed rows (`my_feed_unlockable`) for new uploads instead of immediately generating blueprints.
 a58) [have] Source-video unlock throttling now uses soft request caps (burst+sustained) instead of hard cooldown, and frontend credit meter refreshes immediately after unlock actions.
 a59) [have] `/wall` scope split is active: `For You` is now the subscribed-source stream (locked + unlocked), while `Your channels` keeps the previous followed-channel ranking behavior.
@@ -85,11 +85,11 @@ a63) [have] Home now includes a first-time dismissible scope helper clarifying `
 a64) [have] Unlock backend now runs reliability sweeps (expired/stale/orphan recovery) with structured traceable logs, and unlock/generate responses include additive `trace_id`.
 a65) [have] Unlock/manual/service ingestion execution is now enqueue-first with durable DB lease claiming (no in-request `setImmediate` worker path).
 a66) [have] Service operations now include `GET /api/ops/queue/health` for queue depth, stale leases, and provider circuit snapshots.
-a67) [have] Subscription rows now support `auto_unlock_enabled` (default `true`) so new uploads can auto-attempt source unlock generation when eligible subscribers have credits; subscriber-shared auto billing remains active follow-up work.
+a67) [have] Subscription rows now support `auto_unlock_enabled` (default `true`) so new uploads can auto-attempt source unlock generation through the funded-subscriber shared-cost billing model.
 a68) [have] YouTube-source blueprints now use thumbnail-first banners across cards and detail views; legacy source-linked rows are backfilled to thumbnails and source flows bypass auto-banner enqueue.
 a69) [have] Notifications MVP now emits reply and generation-terminal notifications and surfaces them through an auth inbox bell in the app header.
 a70) [have] Generation duration policy is available for MVP hardening (default off): max video length gate (`45m`), unknown-duration blocking, no-charge-on-policy-block, and partial-accept batch queueing with blocked-item details.
-a71) [have] Daily generation cap policy is active for blueprint generation attempts with global UTC rollover: `free` default (`5/day`), `plus` higher cap (env-configured), and `admin` bypass.
+a71) [have] Manual generation surfaces are now gated by the daily credit wallet, with duplicate/in-progress requests short-circuited before charge and pre-generation failures released automatically.
 a72) [have] Launch gate hardening adds explicit credit outage semantics (`CREDITS_UNAVAILABLE`) and `/api/credits` backend-health visibility fields (`credits_backend_mode`, `credits_backend_ok`, `credits_backend_error`).
 a73) [have] Launch legal baseline routes are now first-class (`/terms`, `/privacy`) and linked from auth surface.
 a74) [have] Launch error-copy normalization is centralized through shared frontend mapping for critical failure classes across Search/Source/Wall/My Feed.
@@ -119,11 +119,19 @@ b5) Subscription behavior (MVP simplified)
 - UI behavior is auto-only.
 - On subscribe, backend sets a checkpoint (`last_seen_published_at` / `last_seen_video_id`) without ingesting historical uploads.
 - Future uploads after checkpoint ingest to unlockable rows (`my_feed_unlockable`) with shared unlock metadata.
-- Shared unlock pricing for source videos is subscriber-based: `cost = clamp(round(1 / active_subscribers, 3), 0.050..1.000)`.
-- Unlock debit policy is hold-first, settle-on-success, refund-on-failure/expiry.
+- Manual generation pricing is fixed: any explicit new blueprint generation intent costs `1.00` credit.
+- Manual debit policy is reserve-first, settle at first OpenAI generation dispatch, and release on pre-generation failure/duplicate short-circuit.
 - Auto-unlock toggle defaults to enabled (`auto_unlock_enabled=true`) for existing and new subscriptions.
-- New subscription uploads can auto-attempt unlock generation by prioritizing the current subscriber first, then sampling up to 3 eligible subscribers (`is_active=true`, `auto_unlock_enabled=true`) and stopping on first successful hold+enqueue.
-- If no eligible user can pay at that moment, backend schedules bounded auto-retries so cards can still unlock without manual action when credits refill.
+- Locked auto-billing policy is shared-cost:
+  - one canonical auto-generation intent per new source video
+  - participant snapshot = subscribed + `auto_unlock_enabled=true` users at release-detection time
+  - total auto cost is `1.00` credit split across the funded subset using the fixed-point affordability rule and `0.01` wallet precision
+  - if no funded subset remains, the video stays locked for later manual generation
+- Runtime now uses the shared-cost auto model directly:
+  - one canonical auto intent per source video
+  - one `1.00` total auto charge split across the funded participant subset
+  - participant shares reserve on job acceptance, settle at first OpenAI dispatch, and release on pre-generation failure
+  - post-settlement retries are non-billable
 - Auto-ingested subscription items run review generation by default.
 - YouTube-source generation is thumbnail-first:
   - source flows write `blueprints.banner_url` from source thumbnail (stored or deterministic `ytimg` fallback).
@@ -226,7 +234,7 @@ d5) [have] Scheduled/user-triggered ingestion jobs + trace table (`ingestion_job
 d6) [have] Auto-banner policy + queue tables (`channel_default_banners`, `auto_banner_jobs`).
 d7) [have] Onboarding state table for new-user YouTube setup (`user_youtube_onboarding`).
 d8) [have] Source-page foundation tables/links (`source_pages`, `user_source_subscriptions.source_page_id`, `source_items.source_page_id`).
-d9) [have] Refill-credit + unlock tables (`user_credit_wallets`, `credit_ledger`, `source_item_unlocks`).
+d9) [have] Daily-credit + unlock tables (`user_credit_wallets`, `credit_ledger`, `source_item_unlocks`).
 
 ## Subscription Interfaces (MVP)
 si1) `POST /api/source-subscriptions` with `{ channel_input, mode? }` (`mode` accepted but ignored/coerced to `auto` in MVP path)
@@ -271,11 +279,11 @@ si37) auth endpoint: `DELETE /api/source-pages/:platform/:externalId/subscribe` 
 si38) compatibility note: legacy `POST/GET/PATCH/DELETE /api/source-subscriptions*` remains live while Source Pages rollout expands.
 si39) public/auth endpoint: `GET /api/source-pages/:platform/:externalId/blueprints?limit=<1..24>&cursor=<opaque?>` (public channel-published feed for the source page, deduped by `source_item_id` with `next_cursor` pagination; includes additive `source_thumbnail_url` fallback per item).
 si40) auth endpoint: `GET /api/source-pages/:platform/:externalId/videos?page_token=<optional>&limit=<1..25>&kind=<full|shorts>` (source-page video-library listing for subscribed signed-in users, includes duplicate flags per row; shorts threshold is `<=60s`).
-si41) auth endpoint: `POST /api/source-pages/:platform/:externalId/videos/unlock` (subscriber-only manual unlock route; reserves credits, starts unlock generation queue, returns `job_id` + ready/in-progress/insufficient summary buckets + additive `trace_id`).
+si41) auth endpoint: `POST /api/source-pages/:platform/:externalId/videos/unlock` (subscriber-only manual unlock route; reserves `1.00` credit only for new work, starts unlock generation queue, returns `job_id` + ready/in-progress/unaffordable summary buckets + additive `trace_id`).
 si42) compatibility alias: `POST /api/source-pages/:platform/:externalId/videos/generate` routes to unlock flow in this phase and mirrors additive `trace_id`.
 si43) `GET /api/source-pages/:platform/:externalId/videos` now includes unlock metadata per row (`unlock_status`, `unlock_cost`, `unlock_in_progress`, `ready_blueprint_id`).
-si44) `GET /api/credits` now returns refill-wallet fields (`balance`, `capacity`, `refill_rate_per_sec`, `seconds_to_full`) alongside compatibility fields (`remaining`, `limit`, `resetAt`).
-si44b) `GET /api/credits` also returns additive daily-generation-cap fields (`generation_daily_limit`, `generation_daily_used`, `generation_daily_remaining`, `generation_daily_reset_at`, `generation_daily_bypass`) for UI/support visibility.
+si44) `GET /api/credits` now returns daily-wallet fields (`balance`, `capacity`, `daily_grant`, `next_reset_at`, `seconds_to_reset`, `plan`) alongside compatibility fields (`remaining`, `limit`, `resetAt`).
+si44b) `GET /api/credits` keeps additive compatibility fields (`generation_daily_limit`, `generation_daily_used`, `generation_daily_remaining`, `generation_daily_reset_at`, `generation_daily_bypass`) while old daily-cap UI assumptions are phased out.
 si45) source-page video-library unlock worker scope is `source_item_unlock_generation` (single generation per source video, shared fan-out to subscribed users).
 si46) source-page video-library list rate policy: burst `4/15s` plus sustained `40/10m` per user/IP (reduce accidental 429 on normal tab-switch/load-more while keeping abuse guardrails).
 si47) source-page video-library unlock/generate rate policy: burst `8/10s` plus sustained `120/10m` per user/IP (credit balance remains the primary generation throttle).
@@ -300,7 +308,7 @@ si65) auth endpoint: `GET /api/notifications?limit=<1..50>&cursor=<opaque?>` ret
 si66) auth endpoint: `POST /api/notifications/:id/read` marks one notification read.
 si67) auth endpoint: `POST /api/notifications/read-all` marks all unread notifications read.
 si68) comment reply notifications are produced by DB trigger on `wall_comments` reply inserts (self-replies ignored; dedupe key is `comment_reply:<reply_comment_id>`).
-si69) generation surfaces are gated by the daily credit wallet (`free=3.00`, `plus=20.00`, reset `00:00 UTC`, no rollover); insufficient balance returns launch-safe credit denial copy.
+si69) generation surfaces are gated by the daily credit wallet (`free=3.00`, `plus=20.00`, reset `00:00 UTC`, no rollover); manual routes queue only the affordable new-item prefix and return launch-safe credit denial/skip copy.
 si70) YouTube comment snapshots for blueprints now follow a bounded lifecycle: auto refresh at `+15m` and `+24h`, then manual-only refresh with per-blueprint cooldown.
 si71) manual source-comment refresh endpoint is `POST /api/blueprints/:id/youtube-comments/refresh`; cooldown denials return `COMMENTS_REFRESH_COOLDOWN_ACTIVE`.
 

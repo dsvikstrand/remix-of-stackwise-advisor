@@ -96,14 +96,14 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Step 20 source-page Video Library adds auth-only creator backlog listing (`GET /videos`) and async selected generation (`POST /videos/generate`) on `/s/:platform/:externalId` with duplicate skip visibility and job status polling.
 - Step 20 follow-up adds two-tab list filters in Video Library (`Full videos` and `Shorts`), with shorts classified as `<=60s`.
 - Step 20 safety follow-up tunes source-page list limiter policy to burst+sustained guardrails and frontend caching to avoid normal-flow 429 churn.
-- Step 21 shared unlock + refill credits adds wallet/ledger economics (`user_credit_wallets`, `credit_ledger`) plus source-video unlock state (`source_item_unlocks`) for one-generation-per-source-item.
+- Step 21 shared unlock + daily credit wallet adds wallet/ledger economics (`user_credit_wallets`, `credit_ledger`) plus source-video unlock state (`source_item_unlocks`) for one-generation-per-source-item.
 - Step 21 source-page generation endpoint is now `POST /videos/unlock` (with `/videos/generate` compatibility alias), and subscription new uploads now land as `my_feed_unlockable` cards instead of immediate generation.
 - Step 21 follow-up removes strict unlock cooldown in favor of soft request caps (`8/10s` burst + `120/10m` sustained) and immediate credit cache refresh after unlock actions.
 - Step 22 Home scope split repurposes `/wall` `For You` to subscribed-source mixed stream (locked + unlocked) and adds `Your channels` as the unchanged followed-channel ranked lane.
 - Step 23 trust pass adds shared unlock activity cards (Home/Source Page/My Feed), reload-resume unlock tracking, user-menu credit refill/ledger transparency, and a dismissible Home scope helper strip.
 - Step 24 backend hardening adds unlock reliability sweeps (expired/stale/orphan recovery), additive unlock `trace_id` response contract, and service-level idempotency/race tests.
 - Step 24 scale follow-up shifts unlock/manual/service generation to enqueue-only worker execution with DB claim+lease heartbeat semantics, queue backpressure controls, provider retry/circuit guards, and service queue health endpoint (`GET /api/ops/queue/health`).
-- Step 25 subscription auto-unlock v1 adds per-subscription `auto_unlock_enabled` (default `true`), prioritizes the current subscriber, then samples up to 3 eligible subscribers for new-video auto-attempts, and runs bounded `source_auto_unlock_retry` attempts when credits are temporarily unavailable.
+- Step 25 subscription auto-unlock v1 adds per-subscription `auto_unlock_enabled` (default `true`) and bounded `source_auto_unlock_retry` attempts; funded-subscriber shared-cost billing remains the active follow-up for this area.
 - Step 26 thumbnail-first banner cutover sets source YouTube banner rendering to thumbnails across Wall/Feed/Explore/Detail/Source Page, backfills old source-linked blueprints, and bypasses source auto-banner enqueue paths.
 - Step 27 notifications MVP adds reply + generation-terminal notification events and ships an auth header bell inbox with read/read-all actions.
 - Added service-ops endpoint `GET /api/ingestion/jobs/latest` for latest ingestion status checks.
@@ -187,3 +187,4 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 
 ## Snapshot Note (2026-03-05)
 1. Comment freshness for YouTube-backed blueprints now uses bounded bootstrap auto-refresh (`+15m`, `+24h`) plus manual cooldown-gated refresh.
+2. Manual generation billing now uses reserve -> settle/release semantics with duplicate/no-charge short-circuiting and affordable-prefix queueing for Search/manual refresh.

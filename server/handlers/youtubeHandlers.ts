@@ -7,6 +7,14 @@ import type {
 } from '../contracts/api/youtube';
 import { fetchYouTubeDurationMap, YouTubeDurationLookupError } from '../services/youtubeDuration';
 import { splitByDurationPolicy, toDurationSeconds } from '../services/videoDurationPolicy';
+import {
+  MANUAL_GENERATION_CREDIT_COST,
+  buildManualGenerationReservation,
+  releaseManualGeneration,
+  reserveManualGeneration,
+  reserveManualGenerationPrefix,
+  settleManualGeneration,
+} from '../services/manualGenerationBilling';
 
 export function registerYouTubeRouteHandlers(app: express.Express, deps: YouTubeRouteDeps) {
   const {
@@ -94,6 +102,7 @@ export function registerYouTubeRouteHandlers(app: express.Express, deps: YouTube
     markSubscriptionSyncError,
     upsertSubscriptionNoticeSourceItem,
     insertFeedItem,
+    upsertSourceItemFromVideo,
     decryptToken,
     revokeYouTubeToken,
     resolveGenerationTierAccess,
@@ -215,32 +224,52 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
       throw error;
     }
   }
-  if (userId) {
-    const creditCheck = await consumeCredit(userId, {
-      reasonCode: 'YOUTUBE_TO_BLUEPRINT',
+  const traceDb = getServiceSupabaseClient();
+  if (!traceDb) {
+    return res.status(500).json({
+      ok: false,
+      error_code: 'CONFIG_ERROR',
+      message: 'Service role client not configured',
+      run_id: runId,
     });
-    if (!creditCheck.ok) {
-      if (creditCheck.reason === 'service' || String(creditCheck.errorCode || '').trim().toUpperCase() === 'CREDITS_UNAVAILABLE') {
-        return res.status(503).json({
-          ok: false,
-          error_code: 'CREDITS_UNAVAILABLE',
-          message: 'Credits backend unavailable.',
-          run_id: runId,
-        });
-      }
+  }
+
+  const manualReservation = userId
+    ? buildManualGenerationReservation({
+      scope: 'youtube_to_blueprint',
+      userId,
+      requestId: runId,
+      videoId: validatedUrl.sourceNativeId,
+      metadata: {
+        source: 'youtube_to_blueprint_api',
+        requested_tier: requestedTier || null,
+      },
+      amount: MANUAL_GENERATION_CREDIT_COST,
+    })
+    : null;
+  let creditSettled = false;
+  if (manualReservation) {
+    let hold;
+    try {
+      hold = await reserveManualGeneration(traceDb, manualReservation);
+    } catch (error) {
+      return res.status(503).json({
+        ok: false,
+        error_code: 'CREDITS_UNAVAILABLE',
+        message: error instanceof Error ? error.message : 'Credits backend unavailable.',
+        run_id: runId,
+      });
+    }
+    if (!hold.ok) {
       return res.status(429).json({
         ok: false,
         error_code: 'GENERATION_FAIL',
-        message: creditCheck.reason === 'global'
-          ? 'We’re at capacity right now. Please try again in a few minutes.'
-          : 'Insufficient credits right now. Please wait for the next daily reset and try again.',
+        message: 'Insufficient credits right now. Please wait for the next daily reset and try again.',
         run_id: runId,
       });
     }
   }
-
   try {
-    const traceDb = getServiceSupabaseClient();
     const result = await withTimeout(
       runYouTubePipeline({
         runId,
@@ -259,9 +288,20 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
           sourceScope: 'youtube_to_blueprint_api',
           sourceTag: 'youtube_to_blueprint_api',
         },
+        onBeforeFirstModelDispatch: manualReservation
+          ? async () => {
+            if (creditSettled) return;
+            await settleManualGeneration(traceDb, manualReservation);
+            creditSettled = true;
+          }
+          : undefined,
       }),
       yt2bpCoreTimeoutMs
     );
+    if (manualReservation && !creditSettled) {
+      await settleManualGeneration(traceDb, manualReservation);
+      creditSettled = true;
+    }
     return res.json({
       ...result,
       requested_tier: requestedTier || null,
@@ -270,6 +310,18 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
       variant_status: 'generated',
     });
   } catch (error) {
+    if (manualReservation && !creditSettled) {
+      try {
+        await releaseManualGeneration(traceDb, manualReservation);
+      } catch (releaseError) {
+        console.log('[youtube_to_blueprint_credit_release_failed]', JSON.stringify({
+          user_id: userId,
+          video_id: validatedUrl.sourceNativeId,
+          run_id: runId,
+          error: releaseError instanceof Error ? releaseError.message : String(releaseError),
+        }));
+      }
+    }
     const known = mapPipelineError(error);
     if (known) {
       res.locals.bucketErrorCode = known.error_code;
@@ -825,39 +877,175 @@ app.post(
         },
       });
     }
-    const creditCheck = await consumeCredit(userId, {
-      reasonCode: 'SEARCH_VIDEO_GENERATE',
-    });
-    if (!creditCheck.ok) {
-      if (creditCheck.reason === 'service' || String(creditCheck.errorCode || '').trim().toUpperCase() === 'CREDITS_UNAVAILABLE') {
-        return res.status(503).json({
-          ok: false,
-          error_code: 'CREDITS_UNAVAILABLE',
-          message: 'Credits backend unavailable.',
-          data: null,
-        });
-      }
-      return res.status(429).json({
+    const skippedExisting: Array<{ video_id: string; title: string; blueprint_id: string | null }> = [];
+    const inProgress: Array<{ video_id: string; title: string }> = [];
+    const billableItems: Array<SearchVideoGenerateItem & { source_item_id: string }> = [];
+    let existingByVideoId = new Map<string, SourcePageVideoExistingState>();
+    try {
+      existingByVideoId = await loadExistingSourceVideoStateForUser(
+        db,
+        userId,
+        allowedItems.map((item) => item.video_id),
+      );
+    } catch (error) {
+      return res.status(400).json({
         ok: false,
-        error_code: 'INSUFFICIENT_CREDITS',
-        message: creditCheck.reason === 'global'
-          ? 'We’re at capacity right now. Please try again in a few minutes.'
-          : 'Insufficient credits right now. Please wait for the next daily reset and try again.',
+        error_code: 'READ_FAILED',
+        message: error instanceof Error ? error.message : 'Could not resolve duplicate state.',
         data: null,
       });
     }
 
-    const queueDepth = await countQueueDepth(serviceDb, { includeRunning: true });
-    const userQueueDepth = await countQueueDepth(serviceDb, { userId, includeRunning: true });
-    if (queueDepth >= queueDepthHardLimit || userQueueDepth >= queueDepthPerUserLimit) {
-      return res.status(429).json({
+    for (const item of allowedItems) {
+      const existing = existingByVideoId.get(item.video_id);
+      if (existing?.already_exists_for_user) {
+        skippedExisting.push({
+          video_id: item.video_id,
+          title: item.title,
+          blueprint_id: existing.existing_blueprint_id || null,
+        });
+        continue;
+      }
+
+      const source = await upsertSourceItemFromVideo(serviceDb, {
+        video: {
+          videoId: item.video_id,
+          title: item.title,
+          url: item.video_url,
+          publishedAt: item.published_at || null,
+          thumbnailUrl: item.thumbnail_url || null,
+          durationSeconds: item.duration_seconds,
+        },
+        channelId: item.channel_id,
+        channelTitle: item.channel_title || null,
+        sourcePageId: null,
+      });
+
+      const variantState = await resolveVariantOrReady({
+        sourceItemId: source.id,
+        generationTier: resolvedTier,
+      });
+      if (variantState?.state === 'ready' && variantState.blueprintId) {
+        await insertFeedItem(db, {
+          userId,
+          sourceItemId: source.id,
+          blueprintId: variantState.blueprintId,
+          state: 'my_feed_published',
+        });
+        skippedExisting.push({
+          video_id: item.video_id,
+          title: item.title,
+          blueprint_id: variantState.blueprintId,
+        });
+        continue;
+      }
+      if (variantState?.state === 'in_progress') {
+        inProgress.push({
+          video_id: item.video_id,
+          title: item.title,
+        });
+        continue;
+      }
+
+      billableItems.push({
+        ...item,
+        source_item_id: source.id,
+      });
+    }
+
+    let queueDepth = 0;
+    let userQueueDepth = 0;
+    if (billableItems.length > 0) {
+      queueDepth = await countQueueDepth(serviceDb, { includeRunning: true });
+      userQueueDepth = await countQueueDepth(serviceDb, { userId, includeRunning: true });
+      if (queueDepth >= queueDepthHardLimit || userQueueDepth >= queueDepthPerUserLimit) {
+        return res.status(429).json({
+          ok: false,
+          error_code: 'QUEUE_BACKPRESSURE',
+          message: 'Generation queue is busy. Please retry shortly.',
+          retry_after_seconds: 30,
+          data: {
+            queue_depth: queueDepth,
+            user_queue_depth: userQueueDepth,
+          },
+        });
+      }
+    }
+
+    const requestId = `search-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const reservationInput = billableItems.map((item, index) => ({
+      item,
+      reservation: buildManualGenerationReservation({
+        scope: 'search_video_generate',
+        userId,
+        requestId: `${requestId}:${index}`,
+        videoId: item.video_id,
+        sourceItemId: item.source_item_id,
+        metadata: {
+          source: 'youtube_search_generate',
+          channel_id: item.channel_id,
+        },
+      }),
+    }));
+    let reservationResult;
+    try {
+      reservationResult = await reserveManualGenerationPrefix({
+        db: serviceDb,
+        items: reservationInput,
+      });
+    } catch (error) {
+      return res.status(503).json({
         ok: false,
-        error_code: 'QUEUE_BACKPRESSURE',
-        message: 'Generation queue is busy. Please retry shortly.',
-        retry_after_seconds: 30,
+        error_code: 'CREDITS_UNAVAILABLE',
+        message: error instanceof Error ? error.message : 'Credits backend unavailable.',
+        data: null,
+      });
+    }
+    const skippedUnaffordable = reservationResult.skippedUnaffordable.map(({ item, required, balance }) => ({
+      video_id: item.video_id,
+      title: item.title,
+      required,
+      balance,
+    }));
+    const queuedItems = reservationResult.reserved.map(({ item, reservation }) => ({
+      ...item,
+      reservation,
+    }));
+
+    if (queuedItems.length === 0) {
+      if (durationBlocked.length > 0 && skippedExisting.length === 0 && inProgress.length === 0 && skippedUnaffordable.length === 0) {
+        return res.status(422).json({
+          ok: false,
+          error_code: 'VIDEO_DURATION_POLICY_BLOCKED',
+          message: 'All selected videos are blocked by duration policy.',
+          data: {
+            duration_blocked_count: durationBlocked.length,
+            duration_blocked: durationBlocked,
+          },
+        });
+      }
+      return res.status(200).json({
+        ok: true,
+        error_code: null,
+        message: 'No new generation queued.',
         data: {
+          job_id: null,
           queue_depth: queueDepth,
-          user_queue_depth: userQueueDepth,
+          estimated_start_seconds: 0,
+          queued_count: 0,
+          requested_tier: requestedTier || null,
+          resolved_tier: resolvedTier,
+          variant_status: 'no_new_work',
+          dual_generate_enabled: dualGenerateEnabled,
+          dual_generate_tiers: Array.from(dualGenerateTiers),
+          duration_blocked_count: durationBlocked.length,
+          duration_blocked: durationBlocked,
+          skipped_existing_count: skippedExisting.length,
+          skipped_existing: skippedExisting,
+          in_progress_count: inProgress.length,
+          in_progress: inProgress,
+          skipped_unaffordable_count: skippedUnaffordable.length,
+          skipped_unaffordable: skippedUnaffordable,
         },
       });
     }
@@ -871,7 +1059,7 @@ app.post(
         requested_by_user_id: userId,
         payload: {
           user_id: userId,
-          items: allowedItems,
+          items: queuedItems,
           generation_tier: resolvedTier,
         },
         next_run_at: new Date().toISOString(),
@@ -879,6 +1067,9 @@ app.post(
       .select('id')
       .single();
     if (jobCreateError) {
+      for (const item of queuedItems) {
+        await releaseManualGeneration(serviceDb, item.reservation);
+      }
       return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: jobCreateError.message, data: null });
     }
 
@@ -886,8 +1077,8 @@ app.post(
       userId,
       jobId: job.id,
       scope: 'search_video_generate',
-      queuedCount: allowedItems.length,
-      itemTitle: allowedItems[0]?.title || null,
+      queuedCount: queuedItems.length,
+      itemTitle: queuedItems[0]?.title || null,
       linkPath: getGenerationNotificationLinkPath({ scope: 'search_video_generate' }),
     });
 
@@ -901,7 +1092,7 @@ app.post(
         job_id: job.id,
         queue_depth: queueDepth + 1,
         estimated_start_seconds: Math.max(1, Math.ceil((queueDepth + 1) / Math.max(1, workerConcurrency)) * 4),
-        queued_count: allowedItems.length,
+        queued_count: queuedItems.length,
         requested_tier: requestedTier || null,
         resolved_tier: resolvedTier,
         variant_status: 'queued',
@@ -909,6 +1100,12 @@ app.post(
         dual_generate_tiers: Array.from(dualGenerateTiers),
         duration_blocked_count: durationBlocked.length,
         duration_blocked: durationBlocked,
+        skipped_existing_count: skippedExisting.length,
+        skipped_existing: skippedExisting,
+        in_progress_count: inProgress.length,
+        in_progress: inProgress,
+        skipped_unaffordable_count: skippedUnaffordable.length,
+        skipped_unaffordable: skippedUnaffordable,
       },
     });
   },

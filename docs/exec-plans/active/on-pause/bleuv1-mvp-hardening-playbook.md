@@ -11,13 +11,13 @@ a00) [have] Use this playbook for strategic priority framing and use the ops che
 
 ## Current State Snapshot
 a1) [have] Core source-first loop is live: source subscriptions -> unlock/generate -> blueprint -> channel/home visibility.
-a2) [have] Source Pages, Source Video Library, shared unlock, refill credits, onboarding, and Explore source search are implemented.
+a2) [have] Source Pages, Source Video Library, shared unlock, daily credit wallets, onboarding, and Explore source search are implemented.
 a3) [have] Canonical docs and active plan registry are in good shape and checks are passing.
 a4) [have] Primary architecture risk is concentration of logic in very large files (`server/index.ts`, `src/pages/Wall.tsx`, `src/pages/Subscriptions.tsx`, `src/pages/SourcePage.tsx`).
 a4b) [have] Launch gate execution board is active at `docs/ops/mvp-launch-readiness-checklist.md` (P0/P1 with owner/date/status/evidence).
 a4c) [have] Launch hardening now includes explicit credit-backend fail-safe semantics (`CREDITS_UNAVAILABLE`), shared error-copy mapping, and baseline legal routes (`/terms`, `/privacy`).
 a4d) [have] Runtime hotfix applied: source-page search no longer crashes backend when opportunistic asset-sweep wiring is present in route deps.
-a5) [todo] Improve user trust around unlock/credit transitions and async processing visibility.
+a5) [todo] Improve user trust around shared-cost auto billing transitions and async processing visibility.
 a6) [todo] Reduce terminology ambiguity between personal stream, followed channels, source pages, and channel taxonomy.
 
 ## MVP Priorities
@@ -91,3 +91,4 @@ k1) [have] YouTube comments refresh moved to bootstrap+manual model:
 - auto `+15m`
 - auto `+24h`
 - manual endpoint after that with per-blueprint cooldown
+k2) [have] Manual generation billing now uses reserve -> settle/release semantics against the daily credit wallet; shared-cost auto billing remains the main open ledger hardening item.

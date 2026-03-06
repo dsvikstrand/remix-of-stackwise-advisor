@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { registerYouTubeRouteHandlers } from '../../server/handlers/youtubeHandlers';
+import { createMockSupabase } from './helpers/mockSupabase';
 
 function createMockResponse() {
   const response = {
@@ -144,6 +145,11 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     markSubscriptionSyncError: vi.fn(async () => undefined),
     upsertSubscriptionNoticeSourceItem: vi.fn(async () => undefined),
     insertFeedItem: vi.fn(async () => undefined),
+    upsertSourceItemFromVideo: vi.fn(async (_db, input: any) => ({
+      id: `source_${String(input?.video?.videoId || 'x')}`,
+      source_url: input?.video?.url || '',
+      source_native_id: input?.video?.videoId || '',
+    })),
     decryptToken: (value: string) => value,
     revokeYouTubeToken: vi.fn(async () => undefined),
     resolveGenerationTierAccess: () => ({ allowedTiers: ['tier'], defaultTier: 'tier', testModeEnabled: false }),
@@ -191,6 +197,128 @@ describe('youtube handlers', () => {
       ok: false,
       error_code: 'CREDITS_UNAVAILABLE',
     });
+  });
+
+  it('releases direct URL credit hold when generation fails before first model dispatch', async () => {
+    const serviceDb = createMockSupabase({
+      user_credit_wallets: [{
+        user_id: '00000000-0000-0000-0000-000000000001',
+        balance: 3,
+        capacity: 3,
+        refill_rate_per_sec: 0,
+        last_refill_at: new Date().toISOString(),
+      }],
+    });
+    const app = createMockApp();
+    registerYouTubeRouteHandlers(app as any, createDeps({
+      getServiceSupabaseClient: () => serviceDb,
+      runYouTubePipeline: vi.fn(async () => {
+        throw new Error('TRANSCRIPT_FAILED');
+      }),
+      mapPipelineError: () => ({
+        error_code: 'PROVIDER_FAIL',
+        message: 'Provider failed',
+      }),
+    }));
+
+    const handler = app.handlers['POST /api/youtube-to-blueprint'];
+    const req = {
+      body: {
+        video_url: 'https://www.youtube.com/watch?v=abc123def45',
+        generate_banner: false,
+      },
+    } as any;
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(502);
+    expect(serviceDb.state.user_credit_wallets[0].balance).toBe(3);
+    expect(serviceDb.state.credit_ledger.map((row: any) => row.entry_type)).toEqual(['hold', 'refund']);
+  });
+
+  it('settles direct URL credit on first model dispatch', async () => {
+    const serviceDb = createMockSupabase({
+      user_credit_wallets: [{
+        user_id: '00000000-0000-0000-0000-000000000001',
+        balance: 3,
+        capacity: 3,
+        refill_rate_per_sec: 0,
+        last_refill_at: new Date().toISOString(),
+      }],
+    });
+    const app = createMockApp();
+    registerYouTubeRouteHandlers(app as any, createDeps({
+      getServiceSupabaseClient: () => serviceDb,
+      runYouTubePipeline: vi.fn(async ({ onBeforeFirstModelDispatch }: any) => {
+        await onBeforeFirstModelDispatch?.();
+        return { ok: true, run_id: 'run_1' };
+      }),
+    }));
+
+    const handler = app.handlers['POST /api/youtube-to-blueprint'];
+    const req = {
+      body: {
+        video_url: 'https://www.youtube.com/watch?v=abc123def45',
+        generate_banner: false,
+      },
+    } as any;
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(serviceDb.state.user_credit_wallets[0].balance).toBe(2);
+    expect(serviceDb.state.credit_ledger.map((row: any) => row.entry_type)).toEqual(['hold', 'settle']);
+  });
+
+  it('queues only the affordable prefix for search generation and reports skipped counts', async () => {
+    const authDb = createMockSupabase({
+      ingestion_jobs: [],
+    });
+    const serviceDb = createMockSupabase({
+      user_credit_wallets: [{
+        user_id: '00000000-0000-0000-0000-000000000001',
+        balance: 3,
+        capacity: 3,
+        refill_rate_per_sec: 0,
+        last_refill_at: new Date().toISOString(),
+      }],
+    });
+    const app = createMockApp();
+    const items = Array.from({ length: 5 }, (_, index) => ({
+      video_id: `video_${index + 1}`,
+      video_url: `https://youtube.com/watch?v=video_${index + 1}`,
+      title: `Video ${index + 1}`,
+      channel_id: 'channel_1',
+    }));
+    registerYouTubeRouteHandlers(app as any, createDeps({
+      getAuthedSupabaseClient: () => authDb,
+      getServiceSupabaseClient: () => serviceDb,
+      SearchVideosGenerateSchema: { safeParse: () => ({ success: true, data: { items } }) },
+      loadExistingSourceVideoStateForUser: vi.fn(async () => new Map()),
+      resolveVariantOrReady: vi.fn(async () => null),
+    }));
+
+    const handler = app.handlers['POST /api/search/videos/generate'];
+    const req = { body: { items } } as any;
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(202);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        queued_count: 3,
+        skipped_unaffordable_count: 2,
+        skipped_existing_count: 0,
+        in_progress_count: 0,
+      },
+    });
+    expect(authDb.state.ingestion_jobs).toHaveLength(1);
+    expect(authDb.state.ingestion_jobs[0].payload.items).toHaveLength(3);
+    expect(serviceDb.state.credit_ledger.filter((row: any) => row.entry_type === 'hold')).toHaveLength(3);
   });
 
   it('returns cooldown error when manual YouTube comments refresh is on cooldown', async () => {

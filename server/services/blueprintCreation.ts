@@ -25,12 +25,14 @@ type CreateBlueprintFromVideoInput = {
   sourceItemId?: string | null;
   subscriptionId?: string | null;
   generationTier?: GenerationTier;
+  onBeforeFirstModelDispatch?: () => Promise<void>;
 };
 
 type CreateBlueprintFromVideoResult = {
   blueprintId: string;
   runId: string;
   title: string;
+  creationState: 'generated' | 'ready_existing';
 };
 
 export type BlueprintCreationDeps = {
@@ -76,6 +78,7 @@ export type BlueprintCreationDeps = {
       sourceScope?: string | null;
       sourceTag?: string | null;
     };
+    onBeforeFirstModelDispatch?: () => Promise<void>;
   }) => Promise<{
     run_id: string;
     draft: {
@@ -188,6 +191,7 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
             blueprintId: existingBlueprint.id,
             runId: `variant-ready-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             title: String(existingBlueprint.title || '').trim() || 'Blueprint',
+            creationState: 'ready_existing',
           };
         }
       }
@@ -256,6 +260,7 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
           sourceScope,
           sourceTag: input.sourceTag,
         },
+        onBeforeFirstModelDispatch: input.onBeforeFirstModelDispatch,
       });
       const draftTags = (result.draft.tags || [])
         .map((tag) => deps.toTagSlug(String(tag || '').trim()))
@@ -373,6 +378,7 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
         blueprintId: blueprint.id,
         runId: result.run_id,
         title: result.draft.title,
+        creationState: 'generated',
       };
     } catch (error) {
       if (normalizedSourceItemId && claimedVariant && !(error instanceof BlueprintVariantInProgressError)) {

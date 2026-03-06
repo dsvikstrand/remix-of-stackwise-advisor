@@ -242,6 +242,7 @@ async function runYouTubePipeline(input: {
     sourceScope?: string | null;
     sourceTag?: string | null;
   };
+  onBeforeFirstModelDispatch?: () => Promise<void>;
 }) {
   const startedAt = Date.now();
   const normalizeBlueprintTitle = (raw: unknown) => {
@@ -389,6 +390,12 @@ async function runYouTubePipeline(input: {
     const client = createYouTubeGenerationLLMClient({
       generationTier: normalizedGenerationTier,
     });
+    let firstModelDispatchNotified = false;
+    const notifyBeforeFirstModelDispatch = async () => {
+      if (firstModelDispatchNotified) return;
+      firstModelDispatchNotified = true;
+      await input.onBeforeFirstModelDispatch?.();
+    };
     const oneStepPromptTemplatePath = String(yt2bpTierOneStepPromptTemplatePath || '').trim() || undefined;
     if (traceContext.db && traceContext.userId) {
       await safeGenerationTraceWrite({
@@ -829,18 +836,21 @@ async function runYouTubePipeline(input: {
           baseDelayMs: 300,
           jitterMs: 200,
         },
-        async () => client.generateYouTubeBlueprint({
-          videoUrl: input.videoUrl,
-          videoTitle: input.videoTitle || input.videoId,
-          transcriptSource: transcript.source,
-          transcript: effectiveTranscriptText,
-          promptTemplatePath: oneStepPromptTemplatePath,
-          additionalInstructions: withStructureHint(safetyRetryHint || undefined),
-        }, {
-          onGenerationModelEvent: generationModelEventCallback,
-          onGenerationPromptEvent: generationPromptEventCallback,
-          generationProfile: input.generationModelProfile,
-        }),
+        async () => {
+          await notifyBeforeFirstModelDispatch();
+          return client.generateYouTubeBlueprint({
+            videoUrl: input.videoUrl,
+            videoTitle: input.videoTitle || input.videoId,
+            transcriptSource: transcript.source,
+            transcript: effectiveTranscriptText,
+            promptTemplatePath: oneStepPromptTemplatePath,
+            additionalInstructions: withStructureHint(safetyRetryHint || undefined),
+          }, {
+            onGenerationModelEvent: generationModelEventCallback,
+            onGenerationPromptEvent: generationPromptEventCallback,
+            generationProfile: input.generationModelProfile,
+          });
+        },
       );
       await captureRawOutputEvent({
         rawResponse: rawDraft?.raw_response,
@@ -1260,20 +1270,23 @@ async function runYouTubePipeline(input: {
           baseDelayMs: 300,
           jitterMs: 200,
         },
-        async () => client.generateYouTubeBlueprint({
-          videoUrl: input.videoUrl,
-          videoTitle: input.videoTitle || input.videoId,
-          transcriptSource: transcript.source,
-          transcript: effectiveTranscriptText,
-          promptTemplatePath: oneStepPromptTemplatePath,
-          qualityIssueCodes: promptIssueCodes,
-          qualityIssueDetails: promptIssueDetails,
-          additionalInstructions: withStructureHint(retryInstructions),
-        }, {
-          onGenerationModelEvent: generationModelEventCallback,
-          onGenerationPromptEvent: generationPromptEventCallback,
-          generationProfile: input.generationModelProfile,
-        }),
+        async () => {
+          await notifyBeforeFirstModelDispatch();
+          return client.generateYouTubeBlueprint({
+            videoUrl: input.videoUrl,
+            videoTitle: input.videoTitle || input.videoId,
+            transcriptSource: transcript.source,
+            transcript: effectiveTranscriptText,
+            promptTemplatePath: oneStepPromptTemplatePath,
+            qualityIssueCodes: promptIssueCodes,
+            qualityIssueDetails: promptIssueDetails,
+            additionalInstructions: withStructureHint(retryInstructions),
+          }, {
+            onGenerationModelEvent: generationModelEventCallback,
+            onGenerationPromptEvent: generationPromptEventCallback,
+            generationProfile: input.generationModelProfile,
+          });
+        },
       );
       await captureRawOutputEvent({
         rawResponse: retryRawDraft?.raw_response,
@@ -1535,19 +1548,22 @@ Keep section bullets concise:
           baseDelayMs: 300,
           jitterMs: 200,
         },
-        async () => client.generateYouTubeBlueprint({
-          videoUrl: input.videoUrl,
-          videoTitle: input.videoTitle || input.videoId,
-          transcriptSource: transcript.source,
-          transcript: effectiveTranscriptText,
-          qualityIssueCodes: promptIssueCodes,
-          qualityIssueDetails: promptIssueDetails,
-          additionalInstructions: withStructureHint(retryInstructions),
-        }, {
-          onGenerationModelEvent: generationModelEventCallback,
-          onGenerationPromptEvent: generationPromptEventCallback,
-          generationProfile: input.generationModelProfile,
-        }),
+        async () => {
+          await notifyBeforeFirstModelDispatch();
+          return client.generateYouTubeBlueprint({
+            videoUrl: input.videoUrl,
+            videoTitle: input.videoTitle || input.videoId,
+            transcriptSource: transcript.source,
+            transcript: effectiveTranscriptText,
+            qualityIssueCodes: promptIssueCodes,
+            qualityIssueDetails: promptIssueDetails,
+            additionalInstructions: withStructureHint(retryInstructions),
+          }, {
+            onGenerationModelEvent: generationModelEventCallback,
+            onGenerationPromptEvent: generationPromptEventCallback,
+            generationProfile: input.generationModelProfile,
+          });
+        },
       );
       await captureRawOutputEvent({
         rawResponse: retryRawDraft?.raw_response,

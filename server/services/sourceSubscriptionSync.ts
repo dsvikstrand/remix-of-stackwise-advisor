@@ -104,13 +104,12 @@ export type SourceSubscriptionSyncDeps = {
       durationSeconds?: number | null;
     };
     unlock: { status: string };
-    estimatedUnlockCost: number;
-    preferredPayerUserId: string;
     trigger: 'user_sync' | 'service_cron' | 'subscription_create' | 'debug_simulation' | 'youtube_import';
   }) => Promise<{
     queued: boolean;
     reason: string;
-    payer_user_id?: string | null;
+    auto_intent_id?: string | null;
+    owner_user_id?: string | null;
     job_id?: string | null;
     trace_id?: string | null;
   }>;
@@ -127,7 +126,7 @@ export type SourceSubscriptionSyncDeps = {
       title: string;
       duration_seconds: number | null;
       trigger: 'user_sync' | 'service_cron' | 'subscription_create' | 'debug_simulation' | 'youtube_import';
-      preferred_payer_user_id: string;
+      auto_intent_id?: string | null;
     },
   ) => Promise<{ enqueued: boolean; job_id: string | null; next_run_at: string | null }>;
   getSourceItemUnlockBySourceItemId: (db: DbClient, sourceItemId: string) => Promise<unknown>;
@@ -335,8 +334,6 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
               durationSeconds,
             },
             unlock,
-            estimatedUnlockCost,
-            preferredPayerUserId: subscription.user_id,
             trigger: options.trigger,
           });
 
@@ -363,7 +360,7 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
                 title: video.title,
                 duration_seconds: durationSeconds,
                 trigger: options.trigger,
-                preferred_payer_user_id: subscription.user_id,
+                auto_intent_id: autoAttempt?.auto_intent_id || null,
               });
 
               console.log('[subscription_auto_unlock_retry_scheduled]', JSON.stringify({
@@ -403,7 +400,8 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
               user_id: subscription.user_id,
               source_item_id: source.id,
               source_channel_id: subscription.source_channel_id,
-              payer_user_id: autoAttempt.payer_user_id,
+              owner_user_id: autoAttempt.owner_user_id,
+              auto_intent_id: autoAttempt.auto_intent_id,
               job_id: autoAttempt.job_id,
               trace_id: autoAttempt.trace_id,
               trigger: options.trigger,

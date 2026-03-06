@@ -6,6 +6,11 @@ import type {
 } from '../contracts/api/sourceSubscriptions';
 import { fetchYouTubeDurationMap, YouTubeDurationLookupError } from '../services/youtubeDuration';
 import { splitByDurationPolicy, toDurationSeconds } from '../services/videoDurationPolicy';
+import {
+  buildManualGenerationReservation,
+  releaseManualGeneration,
+  reserveManualGenerationPrefix,
+} from '../services/manualGenerationBilling';
 
 export async function handleCreateSourceSubscription(req: express.Request, res: express.Response, deps: SourceSubscriptionsRouteDeps) {
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
@@ -405,39 +410,149 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
       },
     });
   }
-  const creditCheck = await deps.consumeCredit(userId, {
-    reasonCode: 'MANUAL_REFRESH_SELECTION',
-  });
-  if (!creditCheck.ok) {
-    if (creditCheck.reason === 'service' || String(creditCheck.errorCode || '').trim().toUpperCase() === 'CREDITS_UNAVAILABLE') {
-      return res.status(503).json({
-        ok: false,
-        error_code: 'CREDITS_UNAVAILABLE',
-        message: 'Credits backend unavailable.',
-        data: null,
+  const skippedExisting: Array<{ video_id: string; title: string; blueprint_id: string | null }> = [];
+  const inProgress: Array<{ video_id: string; title: string }> = [];
+  const billableItems: Array<RefreshScanCandidate & { source_item_id: string }> = [];
+
+  for (const item of allowedDurationItems) {
+    const source = await deps.upsertSourceItemFromVideo(serviceDb, {
+      video: {
+        videoId: item.video_id,
+        title: item.title,
+        url: item.video_url,
+        publishedAt: item.published_at || null,
+        thumbnailUrl: item.thumbnail_url || null,
+        durationSeconds: item.duration_seconds,
+      },
+      channelId: item.source_channel_id,
+      channelTitle: item.source_channel_title || null,
+      sourcePageId: null,
+    });
+
+    const variantState = await deps.resolveVariantOrReady({
+      sourceItemId: source.id,
+      generationTier: resolvedTier,
+    });
+    if (variantState?.state === 'ready' && variantState.blueprintId) {
+      await deps.insertFeedItem(db, {
+        userId,
+        sourceItemId: source.id,
+        blueprintId: variantState.blueprintId,
+        state: 'my_feed_published',
       });
+      skippedExisting.push({
+        video_id: item.video_id,
+        title: item.title,
+        blueprint_id: variantState.blueprintId,
+      });
+      continue;
     }
-    return res.status(429).json({
-      ok: false,
-      error_code: 'INSUFFICIENT_CREDITS',
-      message: creditCheck.reason === 'global'
-        ? 'We’re at capacity right now. Please try again in a few minutes.'
-        : 'Insufficient credits right now. Please wait for the next daily reset and try again.',
-      data: null,
+    if (variantState?.state === 'in_progress') {
+      inProgress.push({
+        video_id: item.video_id,
+        title: item.title,
+      });
+      continue;
+    }
+
+    billableItems.push({
+      ...item,
+      source_item_id: source.id,
     });
   }
 
-  const queueDepth = await deps.countQueueDepth(serviceDb, { includeRunning: true });
-  const userQueueDepth = await deps.countQueueDepth(serviceDb, { userId, includeRunning: true });
-  if (queueDepth >= deps.queueDepthHardLimit || userQueueDepth >= deps.queueDepthPerUserLimit) {
-    return res.status(429).json({
+  let queueDepth = 0;
+  let userQueueDepth = 0;
+  if (billableItems.length > 0) {
+    queueDepth = await deps.countQueueDepth(serviceDb, { includeRunning: true });
+    userQueueDepth = await deps.countQueueDepth(serviceDb, { userId, includeRunning: true });
+    if (queueDepth >= deps.queueDepthHardLimit || userQueueDepth >= deps.queueDepthPerUserLimit) {
+      return res.status(429).json({
+        ok: false,
+        error_code: 'QUEUE_BACKPRESSURE',
+        message: 'Generation queue is busy. Please retry shortly.',
+        retry_after_seconds: 30,
+        data: {
+          queue_depth: queueDepth,
+          user_queue_depth: userQueueDepth,
+        },
+      });
+    }
+  }
+
+  const requestId = `refresh-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  let reservationResult;
+  try {
+    reservationResult = await reserveManualGenerationPrefix({
+      db: serviceDb,
+      items: billableItems.map((item, index) => ({
+        item,
+        reservation: buildManualGenerationReservation({
+          scope: 'manual_refresh_selection',
+          userId,
+          requestId: `${requestId}:${index}`,
+          videoId: item.video_id,
+          sourceItemId: item.source_item_id,
+          metadata: {
+            source: 'manual_refresh_selection',
+            subscription_id: item.subscription_id,
+            source_channel_id: item.source_channel_id,
+          },
+        }),
+      })),
+    });
+  } catch (error) {
+    return res.status(503).json({
       ok: false,
-      error_code: 'QUEUE_BACKPRESSURE',
-      message: 'Generation queue is busy. Please retry shortly.',
-      retry_after_seconds: 30,
+      error_code: 'CREDITS_UNAVAILABLE',
+      message: error instanceof Error ? error.message : 'Credits backend unavailable.',
+      data: null,
+    });
+  }
+  const skippedUnaffordable = reservationResult.skippedUnaffordable.map(({ item, required, balance }) => ({
+    video_id: item.video_id,
+    title: item.title,
+    required,
+    balance,
+  }));
+  const queuedItems = reservationResult.reserved.map(({ item, reservation }) => ({
+    ...item,
+    reservation,
+  }));
+
+  if (queuedItems.length === 0) {
+    if (durationBlocked.length > 0 && skippedExisting.length === 0 && inProgress.length === 0 && skippedUnaffordable.length === 0) {
+      return res.status(422).json({
+        ok: false,
+        error_code: 'VIDEO_DURATION_POLICY_BLOCKED',
+        message: 'All selected videos are blocked by duration policy.',
+        data: {
+          duration_blocked_count: durationBlocked.length,
+          duration_blocked: durationBlocked,
+        },
+      });
+    }
+    return res.status(200).json({
+      ok: true,
+      error_code: null,
+      message: 'No new generation queued.',
       data: {
+        job_id: null,
         queue_depth: queueDepth,
-        user_queue_depth: userQueueDepth,
+        queued_count: 0,
+        requested_tier: requestedTier || null,
+        resolved_tier: resolvedTier,
+        variant_status: 'no_new_work',
+        dual_generate_enabled: dualGenerateEnabled,
+        dual_generate_tiers: Array.from(dualGenerateTiers),
+        duration_blocked_count: durationBlocked.length,
+        duration_blocked: durationBlocked,
+        skipped_existing_count: skippedExisting.length,
+        skipped_existing: skippedExisting,
+        in_progress_count: inProgress.length,
+        in_progress: inProgress,
+        skipped_unaffordable_count: skippedUnaffordable.length,
+        skipped_unaffordable: skippedUnaffordable,
       },
     });
   }
@@ -448,17 +563,20 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
       trigger: 'user_sync',
       scope: 'manual_refresh_selection',
       status: 'queued',
-        requested_by_user_id: userId,
-        payload: {
-          user_id: userId,
-          generation_tier: resolvedTier,
-          items: allowedDurationItems,
-        },
-        next_run_at: new Date().toISOString(),
-      })
+      requested_by_user_id: userId,
+      payload: {
+        user_id: userId,
+        generation_tier: resolvedTier,
+        items: queuedItems,
+      },
+      next_run_at: new Date().toISOString(),
+    })
     .select('id')
     .single();
   if (jobCreateError) {
+    for (const item of queuedItems) {
+      await releaseManualGeneration(serviceDb, item.reservation);
+    }
     return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: jobCreateError.message, data: null });
   }
 
@@ -466,8 +584,8 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
     userId,
     jobId: job.id,
     scope: 'manual_refresh_selection',
-    queuedCount: allowedDurationItems.length,
-    itemTitle: allowedDurationItems[0]?.title || null,
+    queuedCount: queuedItems.length,
+    itemTitle: queuedItems[0]?.title || null,
     linkPath: deps.getGenerationNotificationLinkPath({ scope: 'manual_refresh_selection' }),
   });
   deps.scheduleQueuedIngestionProcessing();
@@ -479,7 +597,7 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
     data: {
       job_id: job.id,
       queue_depth: queueDepth + 1,
-      queued_count: allowedDurationItems.length,
+      queued_count: queuedItems.length,
       requested_tier: requestedTier || null,
       resolved_tier: resolvedTier,
       variant_status: 'queued',
@@ -487,6 +605,12 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
       dual_generate_tiers: Array.from(dualGenerateTiers),
       duration_blocked_count: durationBlocked.length,
       duration_blocked: durationBlocked,
+      skipped_existing_count: skippedExisting.length,
+      skipped_existing: skippedExisting,
+      in_progress_count: inProgress.length,
+      in_progress: inProgress,
+      skipped_unaffordable_count: skippedUnaffordable.length,
+      skipped_unaffordable: skippedUnaffordable,
     },
   });
 }

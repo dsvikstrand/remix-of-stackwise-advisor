@@ -80,6 +80,7 @@ import {
   normalizeSourcePagePlatform,
 } from './services/sourcePages';
 import {
+  attachAutoUnlockIntent,
   attachReservationLedger,
   completeUnlock,
   computeUnlockCost,
@@ -93,6 +94,17 @@ import {
   type SourceItemUnlockRow,
 } from './services/sourceUnlocks';
 import { refundReservation, reserveCredits, settleReservation } from './services/creditWallet';
+import {
+  releaseManualGeneration,
+  settleManualGeneration,
+  type ManualGenerationReservation,
+} from './services/manualGenerationBilling';
+import {
+  markAutoUnlockIntentReady,
+  releaseAutoUnlockIntent,
+  reserveAutoUnlockIntent,
+  settleAutoUnlockIntent,
+} from './services/autoUnlockBilling';
 import { runUnlockReliabilitySweeps } from './services/unlockReliabilitySweeps';
 import { createUnlockTraceId, logUnlockEvent } from './services/unlockTrace';
 import { ProviderCircuitOpenError, getProviderCircuitSnapshot } from './services/providerCircuit';
@@ -320,7 +332,6 @@ const unlockIntakeEnabledRaw = String(process.env.UNLOCK_INTAKE_ENABLED || 'true
 const unlockIntakeEnabled = !(unlockIntakeEnabledRaw === 'false' || unlockIntakeEnabledRaw === '0' || unlockIntakeEnabledRaw === 'off');
 const sourceUnlockReservationSeconds = clampInt(process.env.SOURCE_UNLOCK_RESERVATION_SECONDS, 300, 60, 3600);
 const sourceUnlockGenerateMaxItems = clampInt(process.env.SOURCE_UNLOCK_GENERATE_MAX_ITEMS, 100, 1, 500);
-const sourceAutoUnlockSampleSize = clampInt(process.env.SOURCE_AUTO_UNLOCK_SAMPLE_SIZE, 3, 1, 10);
 const sourceAutoUnlockRetryDelaySeconds = clampInt(process.env.SOURCE_AUTO_UNLOCK_RETRY_DELAY_SECONDS, 90, 10, 3600);
 const sourceAutoUnlockRetryMaxAttempts = clampInt(process.env.SOURCE_AUTO_UNLOCK_RETRY_MAX_ATTEMPTS, 3, 1, 10);
 const sourceTranscriptRetryDelayAttempt1Seconds = clampInt(
@@ -1694,6 +1705,7 @@ registerYouTubeRoutes(app, {
   markSubscriptionSyncError,
   upsertSubscriptionNoticeSourceItem,
   insertFeedItem,
+  upsertSourceItemFromVideo,
   decryptToken,
   revokeYouTubeToken,
   resolveGenerationTierAccess,
@@ -2949,6 +2961,8 @@ type RefreshScanCandidate = {
   published_at: string | null;
   thumbnail_url: string | null;
   duration_seconds: number | null;
+  source_item_id?: string | null;
+  reservation?: ManualGenerationReservation | null;
 };
 
 type SourcePageVideoGenerateItem = {
@@ -2970,6 +2984,8 @@ type SearchVideoGenerateItem = {
   published_at: string | null;
   thumbnail_url: string | null;
   duration_seconds: number | null;
+  source_item_id?: string | null;
+  reservation?: ManualGenerationReservation | null;
 };
 
 type SourcePageVideoExistingState = {
@@ -3016,6 +3032,7 @@ type SourceUnlockQueueItem = {
   duration_seconds: number | null;
   reserved_cost: number;
   reserved_by_user_id: string;
+  auto_intent_id?: string | null;
   unlock_origin: 'manual_unlock' | 'subscription_auto_unlock' | 'source_auto_unlock_retry';
   generation_tier?: GenerationTier | null;
   dual_generate_enabled?: boolean | null;
@@ -3031,7 +3048,7 @@ type SourceAutoUnlockRetryPayload = {
   title: string;
   duration_seconds: number | null;
   trigger: 'user_sync' | 'service_cron' | 'subscription_create' | 'debug_simulation' | 'youtube_import';
-  preferred_payer_user_id: string | null;
+  auto_intent_id?: string | null;
   generation_tier?: GenerationTier | null;
 };
 
@@ -3453,7 +3470,9 @@ function toUnlockSnapshot(input: {
   }
 
   const status = unlock.status;
-  const cost = Math.max(0, Number(unlock.estimated_cost || input.fallbackCost));
+  const cost = status === 'ready'
+    ? Math.max(0, Number(unlock.estimated_cost || input.fallbackCost))
+    : Math.max(0, Number(input.fallbackCost));
   return {
     unlock_status: status,
     unlock_cost: cost,
@@ -3701,33 +3720,6 @@ async function classifyTranscriptFailureForUnlock(input: {
   };
 }
 
-function sampleRandomWithoutReplacement(values: string[], maxCount: number) {
-  const unique = Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)));
-  for (let i = unique.length - 1; i > 0; i -= 1) {
-    const swapIndex = Math.floor(Math.random() * (i + 1));
-    [unique[i], unique[swapIndex]] = [unique[swapIndex], unique[i]];
-  }
-  return unique.slice(0, Math.max(0, Math.min(maxCount, unique.length)));
-}
-
-function prioritizeAutoUnlockCandidates(input: {
-  values: string[];
-  preferredUserId?: string | null;
-  maxCount: number;
-}) {
-  const preferredUserId = String(input.preferredUserId || '').trim();
-  const sampled = sampleRandomWithoutReplacement(input.values, input.values.length);
-  if (!preferredUserId) {
-    return sampled.slice(0, Math.max(0, Math.min(input.maxCount, sampled.length)));
-  }
-
-  const preferredIncluded = sampled.includes(preferredUserId);
-  const ordered = preferredIncluded
-    ? [preferredUserId, ...sampled.filter((value) => value !== preferredUserId)]
-    : sampled;
-  return ordered.slice(0, Math.max(0, Math.min(input.maxCount, ordered.length)));
-}
-
 function buildUnlockLedgerIdempotencyKey(input: {
   unlockId: string;
   userId: string;
@@ -3752,7 +3744,8 @@ type AutoUnlockAttemptReason =
 type AutoUnlockAttemptResult =
   | {
     queued: true;
-    payer_user_id: string;
+    auto_intent_id: string;
+    owner_user_id: string;
     job_id: string;
     trace_id: string;
   }
@@ -3811,8 +3804,6 @@ async function attemptAutoUnlockForSourceItem(input: {
   sourceChannelTitle: string | null;
   video: YouTubeFeedVideo;
   unlock: SourceItemUnlockRow;
-  estimatedUnlockCost: number;
-  preferredPayerUserId?: string | null;
   trigger: 'user_sync' | 'service_cron' | 'subscription_create' | 'debug_simulation' | 'youtube_import';
 }): Promise<AutoUnlockAttemptResult> {
   const db = getServiceSupabaseClient();
@@ -3840,211 +3831,183 @@ async function attemptAutoUnlockForSourceItem(input: {
     sourcePageId: input.sourcePageId,
     sourceChannelId,
   });
-  const sampledUsers = prioritizeAutoUnlockCandidates({
-    values: eligibleUsers,
-    preferredUserId: input.preferredPayerUserId,
-    maxCount: sourceAutoUnlockSampleSize,
-  });
-  if (sampledUsers.length === 0) {
+  if (eligibleUsers.length === 0) {
     return { queued: false as const, reason: 'NO_ELIGIBLE_USERS' as const };
   }
 
-  let currentUnlock = input.unlock;
-  let sawInsufficientCredits = false;
-  for (const payerUserId of sampledUsers) {
-    const dualGenerateEnabled = isDualGenerateEnabledForUser({
-      userId: payerUserId,
-      scope: 'queue',
-    });
-    const reserveResult = await reserveUnlock(db, {
-      unlock: currentUnlock,
-      userId: payerUserId,
-      estimatedCost: input.estimatedUnlockCost,
-      reservationSeconds: sourceUnlockReservationSeconds,
-    });
+  const reservation = await reserveAutoUnlockIntent(db, {
+    sourceItemId,
+    sourcePageId: input.sourcePageId,
+    unlockId: input.unlock.id,
+    sourceChannelId,
+    eligibleUserIds: eligibleUsers,
+    trigger: input.trigger,
+    videoId: input.video.videoId,
+  });
+  if (reservation.state === 'empty_funded_set') {
+    return { queued: false as const, reason: 'NO_ELIGIBLE_CREDITS' as const };
+  }
+  if (reservation.state === 'invalid_source_item' || !reservation.intent) {
+    return { queued: false as const, reason: 'INVALID_SOURCE' as const };
+  }
 
-    if (reserveResult.state === 'ready') {
-      return { queued: false as const, reason: 'ALREADY_READY' as const };
-    }
-    if (reserveResult.state === 'in_progress') {
-      return { queued: false as const, reason: 'ALREADY_IN_PROGRESS' as const };
-    }
+  const autoIntent = reservation.intent;
+  if (autoIntent.status === 'ready') {
+    return { queued: false as const, reason: 'ALREADY_READY' as const };
+  }
+  if (!reservation.reservedNow && autoIntent.status === 'reserved') {
+    return { queued: false as const, reason: 'ALREADY_IN_PROGRESS' as const };
+  }
 
-    let reservedUnlock = reserveResult.unlock;
-    const reservedCost = dualGenerateEnabled
-      ? 0
-      : Math.max(0.001, Number(reservedUnlock.estimated_cost || input.estimatedUnlockCost));
-    if (!dualGenerateEnabled) {
-      const hold = await reserveCredits(db, {
-        userId: payerUserId,
-        amount: reservedCost,
-        idempotencyKey: buildUnlockLedgerIdempotencyKey({
-          unlockId: reservedUnlock.id,
-          userId: payerUserId,
-          action: 'hold',
-        }),
-        reasonCode: 'UNLOCK_HOLD',
-        context: {
-          source_item_id: sourceItemId,
-          source_page_id: input.sourcePageId,
-          unlock_id: reservedUnlock.id,
-          metadata: {
-            source: 'subscription_auto_unlock',
-            video_id: input.video.videoId,
-          },
-        },
-      });
-
-      if (!hold.ok) {
-        sawInsufficientCredits = true;
-        await failUnlock(db, {
-          unlockId: reservedUnlock.id,
-          errorCode: 'INSUFFICIENT_CREDITS',
-          errorMessage: 'Auto-unlock payer has insufficient credits.',
-        });
-        const reloaded = await getSourceItemUnlockBySourceItemId(db, sourceItemId);
-        if (!reloaded || reloaded.status !== 'available') {
-          return { queued: false as const, reason: 'UNLOCK_NOT_AVAILABLE' as const };
-        }
-        currentUnlock = reloaded;
-        continue;
-      }
-
-      reservedUnlock = await attachReservationLedger(db, {
-        unlockId: reservedUnlock.id,
-        userId: payerUserId,
-        ledgerId: hold.ledger_id || null,
-        amount: hold.reserved_amount,
+  const ownerUserId = String(autoIntent.intent_owner_user_id || '').trim();
+  if (!ownerUserId) {
+    if (reservation.reservedNow) {
+      await releaseAutoUnlockIntent(db, {
+        intentId: autoIntent.id,
+        reasonCode: 'AUTO_UNLOCK_OWNER_MISSING',
+        lastErrorCode: 'AUTO_UNLOCK_OWNER_MISSING',
+        lastErrorMessage: 'Auto-unlock intent owner missing.',
       });
     }
+    return { queued: false as const, reason: 'NO_ELIGIBLE_CREDITS' as const };
+  }
 
-    const queueDepth = await countQueueDepth(db, {
-      scope: 'source_item_unlock_generation',
-      includeRunning: true,
-    });
-    const userQueueDepth = await countQueueDepth(db, {
-      scope: 'source_item_unlock_generation',
-      userId: payerUserId,
-      includeRunning: true,
-    });
-    if (!unlockIntakeEnabled || queueDepth >= queueDepthHardLimit || userQueueDepth >= queueDepthPerUserLimit) {
-      if (reservedCost > 0) {
-        await refundReservation(db, {
-          userId: payerUserId,
-          amount: reservedCost,
-          idempotencyKey: buildUnlockLedgerIdempotencyKey({
-            unlockId: reservedUnlock.id,
-            userId: payerUserId,
-            action: 'refund',
-          }),
-          reasonCode: 'UNLOCK_REFUND',
-          context: {
-            source_item_id: sourceItemId,
-            source_page_id: input.sourcePageId,
-            unlock_id: reservedUnlock.id,
-            metadata: {
-              source: 'subscription_auto_unlock',
-              error_code: !unlockIntakeEnabled ? 'QUEUE_INTAKE_DISABLED' : 'QUEUE_BACKPRESSURE',
-            },
-          },
-        });
-      }
-      await failUnlock(db, {
-        unlockId: reservedUnlock.id,
-        errorCode: !unlockIntakeEnabled ? 'QUEUE_INTAKE_DISABLED' : 'QUEUE_BACKPRESSURE',
-        errorMessage: !unlockIntakeEnabled
+  const reserveResult = await reserveUnlock(db, {
+    unlock: input.unlock,
+    userId: ownerUserId,
+    estimatedCost: computeUnlockCost(1),
+    reservationSeconds: sourceUnlockReservationSeconds,
+  });
+
+  if (reserveResult.state === 'ready') {
+    if (reservation.reservedNow) {
+      await releaseAutoUnlockIntent(db, {
+        intentId: autoIntent.id,
+        reasonCode: 'AUTO_UNLOCK_ALREADY_READY',
+      });
+    }
+    return { queued: false as const, reason: 'ALREADY_READY' as const };
+  }
+  if (reserveResult.state === 'in_progress') {
+    if (reservation.reservedNow) {
+      await releaseAutoUnlockIntent(db, {
+        intentId: autoIntent.id,
+        reasonCode: 'AUTO_UNLOCK_ALREADY_IN_PROGRESS',
+      });
+    }
+    return { queued: false as const, reason: 'ALREADY_IN_PROGRESS' as const };
+  }
+
+  let reservedUnlock = reserveResult.unlock;
+  reservedUnlock = await attachAutoUnlockIntent(db, {
+    unlockId: reservedUnlock.id,
+    userId: ownerUserId,
+    intentId: autoIntent.id,
+    amount: computeUnlockCost(1),
+  });
+
+  const queueDepth = await countQueueDepth(db, {
+    scope: 'source_item_unlock_generation',
+    includeRunning: true,
+  });
+  const ownerQueueDepth = await countQueueDepth(db, {
+    scope: 'source_item_unlock_generation',
+    userId: ownerUserId,
+    includeRunning: true,
+  });
+
+  if (!unlockIntakeEnabled || queueDepth >= queueDepthHardLimit || ownerQueueDepth >= queueDepthPerUserLimit) {
+    if (reservation.reservedNow) {
+      await releaseAutoUnlockIntent(db, {
+        intentId: autoIntent.id,
+        reasonCode: !unlockIntakeEnabled ? 'QUEUE_INTAKE_DISABLED' : 'QUEUE_BACKPRESSURE',
+        lastErrorCode: !unlockIntakeEnabled ? 'QUEUE_INTAKE_DISABLED' : 'QUEUE_BACKPRESSURE',
+        lastErrorMessage: !unlockIntakeEnabled
           ? 'Unlock intake is temporarily paused.'
           : 'Unlock queue is currently busy.',
       });
-      return { queued: false as const, reason: !unlockIntakeEnabled ? 'QUEUE_DISABLED' as const : 'QUEUE_BACKPRESSURE' as const };
     }
-
-    const traceId = createUnlockTraceId();
-    const payerGenerationTier = resolveGenerationTierForUser({
-      userId: payerUserId,
+    await failUnlock(db, {
+      unlockId: reservedUnlock.id,
+      errorCode: !unlockIntakeEnabled ? 'QUEUE_INTAKE_DISABLED' : 'QUEUE_BACKPRESSURE',
+      errorMessage: !unlockIntakeEnabled
+        ? 'Unlock intake is temporarily paused.'
+        : 'Unlock queue is currently busy.',
     });
-    const { data: job, error: jobError } = await db
-      .from('ingestion_jobs')
-      .insert({
-        trigger: input.trigger === 'service_cron' ? 'service_cron' : 'user_sync',
-        scope: 'source_item_unlock_generation',
-        status: 'queued',
-        requested_by_user_id: payerUserId,
-        trace_id: traceId,
-        payload: {
-          user_id: payerUserId,
-          trace_id: traceId,
-          generation_tier: payerGenerationTier,
-          items: [{
-            unlock_id: reservedUnlock.id,
-            source_item_id: sourceItemId,
-            source_page_id: input.sourcePageId,
-            source_channel_id: sourceChannelId,
-            source_channel_title: input.sourceChannelTitle,
-            video_id: input.video.videoId,
-            video_url: input.video.url,
-            title: input.video.title,
-            duration_seconds: toDurationSeconds((input.video as { durationSeconds?: unknown }).durationSeconds),
-            reserved_cost: reservedCost,
-            reserved_by_user_id: payerUserId,
-            unlock_origin: 'subscription_auto_unlock',
-            generation_tier: payerGenerationTier,
-            dual_generate_enabled: dualGenerateEnabled,
-          } satisfies SourceUnlockQueueItem],
-        },
-        next_run_at: new Date().toISOString(),
-      })
-      .select('id')
-      .single();
+    return { queued: false as const, reason: !unlockIntakeEnabled ? 'QUEUE_DISABLED' as const : 'QUEUE_BACKPRESSURE' as const };
+  }
 
-    if (jobError || !job?.id) {
-      if (reservedCost > 0) {
-        await refundReservation(db, {
-          userId: payerUserId,
-          amount: reservedCost,
-          idempotencyKey: buildUnlockLedgerIdempotencyKey({
-            unlockId: reservedUnlock.id,
-            userId: payerUserId,
-            action: 'refund',
-          }),
-          reasonCode: 'UNLOCK_REFUND',
-          context: {
-            source_item_id: sourceItemId,
-            source_page_id: input.sourcePageId,
-            unlock_id: reservedUnlock.id,
-            metadata: {
-              source: 'subscription_auto_unlock',
-              error_code: 'QUEUE_INSERT_FAILED',
-            },
-          },
-        });
-      }
-      await failUnlock(db, {
-        unlockId: reservedUnlock.id,
-        errorCode: 'SOURCE_VIDEO_GENERATE_FAILED',
-        errorMessage: jobError?.message || 'Could not enqueue auto-unlock job.',
-      });
-      const reloaded = await getSourceItemUnlockBySourceItemId(db, sourceItemId);
-      if (!reloaded || reloaded.status !== 'available') {
-        return { queued: false as const, reason: 'UNLOCK_NOT_AVAILABLE' as const };
-      }
-      currentUnlock = reloaded;
-      continue;
-    }
-
-    scheduleQueuedIngestionProcessing();
-    return {
-      queued: true as const,
-      payer_user_id: payerUserId,
-      job_id: job.id,
+  const traceId = createUnlockTraceId();
+  const ownerGenerationTier = resolveGenerationTierForUser({
+    userId: ownerUserId,
+  });
+  const { data: job, error: jobError } = await db
+    .from('ingestion_jobs')
+    .insert({
+      trigger: input.trigger === 'service_cron' ? 'service_cron' : 'user_sync',
+      scope: 'source_item_unlock_generation',
+      status: 'queued',
+      requested_by_user_id: ownerUserId,
       trace_id: traceId,
-    };
+      payload: {
+        user_id: ownerUserId,
+        trace_id: traceId,
+        generation_tier: ownerGenerationTier,
+        items: [{
+          unlock_id: reservedUnlock.id,
+          source_item_id: sourceItemId,
+          source_page_id: input.sourcePageId,
+          source_channel_id: sourceChannelId,
+          source_channel_title: input.sourceChannelTitle,
+          video_id: input.video.videoId,
+          video_url: input.video.url,
+          title: input.video.title,
+          duration_seconds: toDurationSeconds((input.video as { durationSeconds?: unknown }).durationSeconds),
+          reserved_cost: 0,
+          reserved_by_user_id: ownerUserId,
+          auto_intent_id: autoIntent.id,
+          unlock_origin: reservation.reservedNow ? 'subscription_auto_unlock' : 'source_auto_unlock_retry',
+          generation_tier: ownerGenerationTier,
+          dual_generate_enabled: false,
+        } satisfies SourceUnlockQueueItem],
+      },
+      next_run_at: new Date().toISOString(),
+    })
+    .select('id')
+    .single();
+
+  if (jobError || !job?.id) {
+    if (reservation.reservedNow) {
+      await releaseAutoUnlockIntent(db, {
+        intentId: autoIntent.id,
+        reasonCode: 'QUEUE_INSERT_FAILED',
+        lastErrorCode: 'QUEUE_INSERT_FAILED',
+        lastErrorMessage: jobError?.message || 'Could not enqueue auto-unlock job.',
+      });
+    }
+    await failUnlock(db, {
+      unlockId: reservedUnlock.id,
+      errorCode: 'SOURCE_VIDEO_GENERATE_FAILED',
+      errorMessage: jobError?.message || 'Could not enqueue auto-unlock job.',
+    });
+    return { queued: false as const, reason: 'UNLOCK_NOT_AVAILABLE' as const };
   }
 
-  if (sawInsufficientCredits) {
-    return { queued: false as const, reason: 'NO_ELIGIBLE_CREDITS' as const };
-  }
-  return { queued: false as const, reason: 'UNLOCK_NOT_AVAILABLE' as const };
+  await db
+    .from('source_auto_unlock_intents')
+    .update({
+      job_id: job.id,
+    })
+    .eq('id', autoIntent.id);
+
+  scheduleQueuedIngestionProcessing();
+  return {
+    queued: true as const,
+    auto_intent_id: autoIntent.id,
+    owner_user_id: ownerUserId,
+    job_id: job.id,
+    trace_id: traceId,
+  };
 }
 
 async function hasPendingSourceAutoUnlockRetryJob(
@@ -4075,16 +4038,14 @@ async function enqueueSourceAutoUnlockRetryJob(
   }
 
   const nextRunAt = new Date(Date.now() + sourceAutoUnlockRetryDelaySeconds * 1000).toISOString();
-  const retryGenerationTier = input.preferred_payer_user_id
-    ? resolveGenerationTierForUser({ userId: input.preferred_payer_user_id })
-    : 'free';
+  const retryGenerationTier = 'free';
   const { data: job, error: jobError } = await db
     .from('ingestion_jobs')
     .insert({
       trigger: input.trigger === 'service_cron' ? 'service_cron' : 'user_sync',
       scope: 'source_auto_unlock_retry',
       status: 'queued',
-      requested_by_user_id: input.preferred_payer_user_id || null,
+      requested_by_user_id: null,
       max_attempts: sourceAutoUnlockRetryMaxAttempts,
       payload: {
         ...input,
@@ -4955,6 +4916,17 @@ async function processSearchVideoGenerateJob(input: {
 
   for (const item of input.items) {
     let mirrorAttemptedForItem = false;
+    const reservation = item.reservation || null;
+    let reservationSettled = false;
+    const settleReservationOnce = async () => {
+      if (!reservation || reservationSettled) return;
+      await settleManualGeneration(db, reservation);
+      reservationSettled = true;
+    };
+    const releaseReservationIfPending = async () => {
+      if (!reservation || reservationSettled) return;
+      await releaseManualGeneration(db, reservation);
+    };
     processed += 1;
     try {
       const source = await upsertSourceItemFromVideo(db, {
@@ -4974,6 +4946,7 @@ async function processSearchVideoGenerateJob(input: {
 
       const existingFeedItem = await getExistingFeedItem(db, input.userId, source.id);
       if (existingFeedItem && !dualGenerateEnabled) {
+        await releaseReservationIfPending();
         skipped += 1;
         continue;
       }
@@ -5008,6 +4981,7 @@ async function processSearchVideoGenerateJob(input: {
           sourceItemId: source.id,
           subscriptionId: null,
           generationTier,
+          onBeforeFirstModelDispatch: settleReservationOnce,
         });
       } catch (primaryError) {
         await tryMirrorGeneration();
@@ -5016,8 +4990,12 @@ async function processSearchVideoGenerateJob(input: {
 
       await tryMirrorGeneration();
       if (!generated) throw new Error('PRIMARY_GENERATION_MISSING');
+      if (generated.creationState === 'ready_existing') {
+        await releaseReservationIfPending();
+      }
 
       if (existingFeedItem) {
+        await releaseReservationIfPending();
         skipped += 1;
         continue;
       }
@@ -5056,6 +5034,7 @@ async function processSearchVideoGenerateJob(input: {
       }
     } catch (error) {
       if (error instanceof BlueprintVariantInProgressError) {
+        await releaseReservationIfPending();
         if (!mirrorAttemptedForItem && dualGenerateEnabled) {
           try {
             const source = await upsertSourceItemFromVideo(db, {
@@ -5100,6 +5079,7 @@ async function processSearchVideoGenerateJob(input: {
         }));
         continue;
       }
+      await releaseReservationIfPending();
       const message = error instanceof Error ? error.message : String(error);
       const errorCode = error instanceof PipelineError
         ? error.errorCode
@@ -5234,13 +5214,26 @@ async function processManualRefreshGenerateJob(input: {
 
   for (const item of input.items) {
     let mirrorAttemptedForItem = false;
+    const reservation = item.reservation || null;
+    let reservationSettled = false;
+    const settleReservationOnce = async () => {
+      if (!reservation || reservationSettled) return;
+      await settleManualGeneration(db, reservation);
+      reservationSettled = true;
+    };
+    const releaseReservationIfPending = async () => {
+      if (!reservation || reservationSettled) return;
+      await releaseManualGeneration(db, reservation);
+    };
     processed += 1;
     const subscription = subscriptionById.get(item.subscription_id);
     if (!subscription) {
+      await releaseReservationIfPending();
       skipped += 1;
       continue;
     }
     if (subscription.source_channel_id !== item.source_channel_id) {
+      await releaseReservationIfPending();
       skipped += 1;
       continue;
     }
@@ -5262,6 +5255,7 @@ async function processManualRefreshGenerateJob(input: {
 
       const existingFeedItem = await getExistingFeedItem(db, input.userId, source.id);
       if (existingFeedItem && !dualGenerateEnabled) {
+        await releaseReservationIfPending();
         skipped += 1;
         recordCheckpointCandidate(item);
         continue;
@@ -5298,6 +5292,7 @@ async function processManualRefreshGenerateJob(input: {
           sourceItemId: source.id,
           subscriptionId: subscription.id,
           generationTier,
+          onBeforeFirstModelDispatch: settleReservationOnce,
         });
       } catch (primaryError) {
         await tryMirrorGeneration();
@@ -5306,8 +5301,12 @@ async function processManualRefreshGenerateJob(input: {
 
       await tryMirrorGeneration();
       if (!generated) throw new Error('PRIMARY_GENERATION_MISSING');
+      if (generated.creationState === 'ready_existing') {
+        await releaseReservationIfPending();
+      }
 
       if (existingFeedItem) {
+        await releaseReservationIfPending();
         skipped += 1;
         recordCheckpointCandidate(item);
         continue;
@@ -5362,6 +5361,7 @@ async function processManualRefreshGenerateJob(input: {
       }));
     } catch (error) {
       if (error instanceof BlueprintVariantInProgressError) {
+        await releaseReservationIfPending();
         if (!mirrorAttemptedForItem && dualGenerateEnabled) {
           try {
             const source = await upsertSourceItemFromVideo(db, {
@@ -5407,6 +5407,7 @@ async function processManualRefreshGenerateJob(input: {
         }));
         continue;
       }
+      await releaseReservationIfPending();
       const message = error instanceof Error ? error.message : String(error);
       const errorCode = error instanceof PipelineError
         ? error.errorCode
@@ -5703,6 +5704,40 @@ async function processSourceItemUnlockGenerationJob(input: {
       source_native_id: string;
     } | null = null;
     const itemGenerationTier: GenerationTier = CANONICAL_GENERATION_TIER;
+    const autoIntentId = String(item.auto_intent_id || '').trim() || null;
+    let autoIntentSettled = false;
+    let autoIntentReleased = false;
+    const settleAutoIntentOnce = async () => {
+      if (!autoIntentId || autoIntentSettled || autoIntentReleased) return;
+      const settled = await settleAutoUnlockIntent(db, {
+        intentId: autoIntentId,
+        jobId: input.jobId,
+        traceId: input.traceId,
+      });
+      if (settled.intent?.status === 'settled' || settled.intent?.status === 'ready') {
+        autoIntentSettled = true;
+      }
+    };
+    const releaseAutoIntentIfPending = async (releaseInput: {
+      reasonCode: string;
+      blueprintId?: string | null;
+      lastErrorCode?: string | null;
+      lastErrorMessage?: string | null;
+    }) => {
+      if (!autoIntentId || autoIntentSettled || autoIntentReleased) return;
+      const released = await releaseAutoUnlockIntent(db, {
+        intentId: autoIntentId,
+        reasonCode: releaseInput.reasonCode,
+        blueprintId: releaseInput.blueprintId || null,
+        jobId: input.jobId,
+        traceId: input.traceId,
+        lastErrorCode: releaseInput.lastErrorCode || null,
+        lastErrorMessage: releaseInput.lastErrorMessage || null,
+      });
+      if (released.intent?.status === 'released') {
+        autoIntentReleased = true;
+      }
+    };
     processed += 1;
     try {
       const processingUnlock = await markUnlockProcessing(db, {
@@ -5721,6 +5756,10 @@ async function processSourceItemUnlockGenerationJob(input: {
         });
         if (variantState.state === 'ready' && variantState.blueprintId) {
           if (!dualGenerateEnabled) {
+            await releaseAutoIntentIfPending({
+              reasonCode: 'AUTO_UNLOCK_ALREADY_READY',
+              blueprintId: variantState.blueprintId,
+            });
             skipped += 1;
             continue;
           }
@@ -5749,6 +5788,11 @@ async function processSourceItemUnlockGenerationJob(input: {
               });
             }
           }
+          await releaseAutoIntentIfPending({
+            reasonCode: 'AUTO_UNLOCK_ALREADY_IN_PROGRESS',
+            lastErrorCode: 'ALREADY_IN_PROGRESS',
+            lastErrorMessage: 'Variant generation already in progress.',
+          });
           skipped += 1;
           continue;
         }
@@ -5757,6 +5801,9 @@ async function processSourceItemUnlockGenerationJob(input: {
         } else if (current?.status === 'ready' && current.blueprint_id) {
           skipUnlockSettlement = true;
         } else {
+          await releaseAutoIntentIfPending({
+            reasonCode: 'AUTO_UNLOCK_SKIPPED_NO_PROCESSING_UNLOCK',
+          });
           skipped += 1;
           continue;
         }
@@ -5769,6 +5816,10 @@ async function processSourceItemUnlockGenerationJob(input: {
         });
         if (variantState.state === 'ready' && variantState.blueprintId) {
           if (!dualGenerateEnabled) {
+            await releaseAutoIntentIfPending({
+              reasonCode: 'AUTO_UNLOCK_ALREADY_READY',
+              blueprintId: variantState.blueprintId,
+            });
             skipped += 1;
             continue;
           }
@@ -5797,6 +5848,11 @@ async function processSourceItemUnlockGenerationJob(input: {
               });
             }
           }
+          await releaseAutoIntentIfPending({
+            reasonCode: 'AUTO_UNLOCK_ALREADY_IN_PROGRESS',
+            lastErrorCode: 'ALREADY_IN_PROGRESS',
+            lastErrorMessage: 'Variant generation already in progress.',
+          });
           skipped += 1;
           continue;
         }
@@ -5850,6 +5906,7 @@ async function processSourceItemUnlockGenerationJob(input: {
           sourceItemId: sourceRow.id,
           subscriptionId: null,
           generationTier: itemGenerationTier,
+          onBeforeFirstModelDispatch: autoIntentId ? settleAutoIntentOnce : undefined,
         });
       } catch (primaryError) {
         await tryMirrorGeneration();
@@ -5857,6 +5914,12 @@ async function processSourceItemUnlockGenerationJob(input: {
       }
       await tryMirrorGeneration();
       if (!generated) throw new Error('PRIMARY_GENERATION_MISSING');
+      if (generated.creationState === 'ready_existing') {
+        await releaseAutoIntentIfPending({
+          reasonCode: 'AUTO_UNLOCK_ALREADY_READY',
+          blueprintId: generated.blueprintId,
+        });
+      }
 
       const feedRows = await attachBlueprintToSubscribedUsers(db, {
         sourceItemId: sourceRow.id,
@@ -5927,6 +5990,18 @@ async function processSourceItemUnlockGenerationJob(input: {
           });
         }
       }
+      if (autoIntentId) {
+        if (!autoIntentSettled) {
+          await settleAutoIntentOnce();
+        }
+        if (!autoIntentReleased) {
+          await markAutoUnlockIntentReady(db, {
+            intentId: autoIntentId,
+            blueprintId: generated.blueprintId,
+            jobId: input.jobId,
+          });
+        }
+      }
 
       inserted += 1;
       if (!firstBlueprintId) firstBlueprintId = generated.blueprintId;
@@ -5964,6 +6039,11 @@ async function processSourceItemUnlockGenerationJob(input: {
           });
         }
         skipped += 1;
+        await releaseAutoIntentIfPending({
+          reasonCode: 'AUTO_UNLOCK_ALREADY_IN_PROGRESS',
+          lastErrorCode: 'ALREADY_IN_PROGRESS',
+          lastErrorMessage: 'Variant generation already in progress.',
+        });
         if (processingUnlockRow) {
           try {
             if (item.reserved_cost > 0) {
@@ -6134,6 +6214,12 @@ async function processSourceItemUnlockGenerationJob(input: {
         );
       }
 
+      await releaseAutoIntentIfPending({
+        reasonCode: errorCode,
+        lastErrorCode: errorCode,
+        lastErrorMessage: message,
+      });
+
       if (processingUnlockRow) {
         try {
           if (item.reserved_cost > 0) {
@@ -6243,7 +6329,7 @@ async function processSourceItemUnlockGenerationJob(input: {
             title: item.title,
             duration_seconds: item.duration_seconds,
             trigger: 'service_cron',
-            preferred_payer_user_id: item.reserved_by_user_id,
+            auto_intent_id: item.auto_intent_id || null,
           });
           logUnlockEvent(
             'auto_transcript_retry_scheduled',
@@ -6598,8 +6684,6 @@ async function processSourceAutoUnlockRetryJob(input: {
       durationSeconds: input.payload.duration_seconds,
     },
     unlock,
-    estimatedUnlockCost,
-    preferredPayerUserId: input.payload.preferred_payer_user_id || null,
     trigger: input.payload.trigger,
   });
 
@@ -6677,7 +6761,8 @@ async function processSourceAutoUnlockRetryJob(input: {
     {
       queued: true,
       unlock_job_id: attempt.job_id,
-      payer_user_id: attempt.payer_user_id,
+      owner_user_id: attempt.owner_user_id,
+      auto_intent_id: attempt.auto_intent_id,
       unlock_trace_id: attempt.trace_id,
     },
   );
@@ -6732,6 +6817,7 @@ function normalizeSourceUnlockQueueItems(value: unknown): SourceUnlockQueueItem[
       duration_seconds: toDurationSeconds(row.duration_seconds),
       reserved_cost: Math.max(0, Number(row.reserved_cost || 0)),
       reserved_by_user_id: reservedByUserId,
+      auto_intent_id: String(row.auto_intent_id || '').trim() || null,
       unlock_origin: unlockOrigin,
       generation_tier: generationTier,
       dual_generate_enabled: Boolean(row.dual_generate_enabled),
@@ -6749,7 +6835,7 @@ function normalizeSourceAutoUnlockRetryPayload(value: unknown): SourceAutoUnlock
   const videoUrl = String(row.video_url || '').trim();
   const title = String(row.title || '').trim();
   const triggerRaw = String(row.trigger || '').trim();
-  const preferredPayerUserId = String(row.preferred_payer_user_id || '').trim() || null;
+  const autoIntentId = String(row.auto_intent_id || '').trim() || null;
   if (!sourceItemId || !sourceChannelId || !videoId || !videoUrl || !title) return null;
 
   let trigger: SourceAutoUnlockRetryPayload['trigger'] = 'user_sync';
@@ -6773,7 +6859,7 @@ function normalizeSourceAutoUnlockRetryPayload(value: unknown): SourceAutoUnlock
     title,
     duration_seconds: toDurationSeconds(row.duration_seconds),
     trigger,
-    preferred_payer_user_id: preferredPayerUserId,
+    auto_intent_id: autoIntentId,
     generation_tier: normalizeRequestedGenerationTier(row.generation_tier),
   };
 }
@@ -6838,6 +6924,31 @@ function normalizeBlueprintYouTubeRefreshPayload(value: unknown): BlueprintYouTu
   };
 }
 
+function normalizeManualGenerationReservation(value: unknown): ManualGenerationReservation | null {
+  if (!value || typeof value !== 'object') return null;
+  const row = value as Record<string, unknown>;
+  const userId = String(row.userId || '').trim();
+  const holdIdempotencyKey = String(row.holdIdempotencyKey || '').trim();
+  const settleIdempotencyKey = String(row.settleIdempotencyKey || '').trim();
+  const releaseIdempotencyKey = String(row.releaseIdempotencyKey || '').trim();
+  const reasonCodeBase = String(row.reasonCodeBase || '').trim();
+  const amount = Math.max(0, Number(row.amount || 0));
+  if (!userId || !holdIdempotencyKey || !settleIdempotencyKey || !releaseIdempotencyKey || !reasonCodeBase || !(amount > 0)) {
+    return null;
+  }
+  const contextRaw = row.context;
+  const context = contextRaw && typeof contextRaw === 'object' ? contextRaw as ManualGenerationReservation['context'] : undefined;
+  return {
+    userId,
+    amount,
+    holdIdempotencyKey,
+    settleIdempotencyKey,
+    releaseIdempotencyKey,
+    reasonCodeBase,
+    context,
+  };
+}
+
 function normalizeRefreshScanCandidates(value: unknown): RefreshScanCandidate[] {
   if (!Array.isArray(value)) return [];
   const rows: RefreshScanCandidate[] = [];
@@ -6861,6 +6972,8 @@ function normalizeRefreshScanCandidates(value: unknown): RefreshScanCandidate[] 
       published_at: row.published_at == null ? null : String(row.published_at || '').trim() || null,
       thumbnail_url: row.thumbnail_url == null ? null : String(row.thumbnail_url || '').trim() || null,
       duration_seconds: toDurationSeconds(row.duration_seconds),
+      source_item_id: row.source_item_id == null ? null : String(row.source_item_id || '').trim() || null,
+      reservation: normalizeManualGenerationReservation(row.reservation),
     });
   }
   return rows;
@@ -6887,6 +7000,8 @@ function normalizeSearchVideoGenerateItems(value: unknown): SearchVideoGenerateI
       published_at: row.published_at == null ? null : String(row.published_at || '').trim() || null,
       thumbnail_url: row.thumbnail_url == null ? null : String(row.thumbnail_url || '').trim() || null,
       duration_seconds: toDurationSeconds(row.duration_seconds),
+      source_item_id: row.source_item_id == null ? null : String(row.source_item_id || '').trim() || null,
+      reservation: normalizeManualGenerationReservation(row.reservation),
     });
   }
   return rows;
@@ -7612,6 +7727,7 @@ registerSourceSubscriptionsRoutes(app, {
   markSubscriptionSyncError,
   upsertSubscriptionNoticeSourceItem,
   insertFeedItem,
+  upsertSourceItemFromVideo,
   buildSourcePagePath,
   cleanupSubscriptionNoticeForChannel,
   refreshScanLimiter,
