@@ -1,4 +1,5 @@
 import type { GenerationTier } from './generationTierAccess';
+import { DAILY_GENERATION_CAP_ERROR_CODE } from './generationDailyCap';
 import { BlueprintVariantInProgressError } from './blueprintVariants';
 import { buildBlueprintSectionsV1FromStoredSteps, type BlueprintSectionsV1 } from './blueprintSections';
 type DbClient = any;

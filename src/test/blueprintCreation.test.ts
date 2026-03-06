@@ -217,4 +217,45 @@ describe('blueprint creation canonical payload', () => {
 
     expect(result.blueprintId).toBe('bp_123');
   });
+
+  it('rethrows daily generation cap errors without masking them behind a reference error', async () => {
+    const { db } = createDbMock();
+    const service = createBlueprintCreationService({
+      getServiceSupabaseClient: () => null,
+      safeGenerationTraceWrite: async () => undefined,
+      startGenerationRun: async () => undefined,
+      runYouTubePipeline: async () => {
+        const error = new Error('Daily generation cap reached.');
+        (error as Error & { code?: string }).code = 'DAILY_GENERATION_CAP_REACHED';
+        throw error;
+      },
+      toTagSlug: (value) => value,
+      mapDraftStepsForBlueprint: (steps) => steps as unknown[],
+      normalizeSummaryVariantText: (value) => value,
+      yt2bpOutputMode: 'llm_native',
+      ensureTagId: async () => 'tag_123',
+      attachBlueprintToRun: async () => undefined,
+      youtubeVideoIdRegex: /^[a-zA-Z0-9_-]{11}$/,
+      resolveGenerationModelProfile: () => ({
+        model: 'o4-mini',
+        fallbackModel: 'o4-mini',
+        reasoningEffort: 'low' as const,
+      }),
+      claimVariantForGeneration: vi.fn(),
+      markVariantReady: async () => undefined,
+      markVariantFailed: async () => undefined,
+      enqueueBlueprintYouTubeEnrichment: async () => undefined,
+      registerBlueprintYouTubeRefreshState: async () => undefined,
+    });
+
+    await expect(service.createBlueprintFromVideo(db as never, {
+      userId: 'user_123',
+      videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      videoId: 'dQw4w9WgXcQ',
+      sourceTag: 'manual_refresh_generate',
+    })).rejects.toMatchObject({
+      code: 'DAILY_GENERATION_CAP_REACHED',
+      message: 'Daily generation cap reached.',
+    });
+  });
 });
