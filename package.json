@@ -21,6 +21,8 @@
     "metrics:queue": "node scripts/queue_metrics_from_logs.mjs",
     "metrics:channels": "node scripts/channels_metrics_from_supabase.mjs",
     "drill:feed": "node scripts/feed_load_drill.mjs",
+    "test:playwright:preflight": "playwright test -c playwright.preflight.config.ts",
+    "test:playwright:p1-oauth": "playwright test -c playwright.p1-oauth.config.ts",
     "seed:channels:tags": "node scripts/seed_curated_channel_tags.mjs",
     "docs:refresh-check": "node scripts/docs-refresh-check.mjs",
     "docs:link-check": "node scripts/docs-link-check.mjs"
@@ -83,6 +85,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
+    "@playwright/test": "^1.58.2",
     "@testing-library/jest-dom": "^6.6.0",
     "@types/cors": "^2.8.18",
     "@types/express": "^4.17.23",
