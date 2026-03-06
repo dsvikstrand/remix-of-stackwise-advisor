@@ -101,4 +101,48 @@ describe('credit reservation lifecycle', () => {
     expect(refundRows).toHaveLength(1);
     expect(holdRows[0]?.metadata?.trace_id).toBe('ut_credit_1');
   });
+
+  it('treats null entitlement overrides as plan defaults during wallet refresh', async () => {
+    const staleIso = '2026-03-05T23:55:00.000Z';
+    const db = createMockSupabase({
+      user_credit_wallets: [
+        {
+          user_id: 'user_2',
+          balance: 10,
+          capacity: 10,
+          refill_rate_per_sec: 0,
+          last_refill_at: staleIso,
+          created_at: staleIso,
+          updated_at: staleIso,
+        },
+      ],
+      credit_ledger: [],
+    }, {
+      rpcs: {
+        get_generation_plan_for_user: () => ({
+          data: [{ plan: 'free', daily_limit_override: null }],
+          error: null,
+        }),
+      },
+    }) as any;
+
+    const hold = await reserveCredits(db, {
+      userId: 'user_2',
+      amount: 1,
+      idempotencyKey: 'hold_user_2',
+      reasonCode: 'SEARCH_VIDEO_GENERATE_HOLD',
+      context: {
+        metadata: {
+          probe: true,
+        },
+      },
+    });
+
+    expect(hold.ok).toBe(true);
+    if (hold.ok) {
+      expect(hold.wallet.capacity).toBe(3);
+      expect(hold.wallet.daily_grant).toBe(3);
+      expect(hold.wallet.balance).toBe(2);
+    }
+  });
 });

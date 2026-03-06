@@ -112,9 +112,17 @@ async function resolveWalletEntitlement(db: DbClient, userId: string): Promise<W
     const row = Array.isArray(data) ? data[0] : data;
     const normalizedPlan = String((row as { plan?: unknown } | null)?.plan || 'free').trim().toLowerCase();
     const plan = normalizedPlan === 'admin' ? 'admin' : normalizedPlan === 'plus' ? 'plus' : 'free';
-    const override = Number((row as { daily_limit_override?: unknown } | null)?.daily_limit_override);
+    const overrideValue = (row as { daily_limit_override?: unknown } | null)?.daily_limit_override;
+    const overrideRaw = (
+      overrideValue === null
+      || overrideValue === undefined
+      || String(overrideValue).trim() === ''
+    )
+      ? NaN
+      : Number(overrideValue);
+    const override = Number.isFinite(overrideRaw) ? overrideRaw : null;
     const defaultGrant = plan === 'plus' ? PLUS_DAILY_GRANT : plan === 'admin' ? ADMIN_DAILY_GRANT : FREE_DAILY_GRANT;
-    const dailyGrant = round2(Number.isFinite(override) && override >= 0 ? override : defaultGrant);
+    const dailyGrant = round2(override != null && override >= 0 ? override : defaultGrant);
     return {
       plan,
       dailyGrant,
