@@ -78,6 +78,7 @@
   - Legal baseline routes are first-class in runtime (`/terms`, `/privacy`) and linked from auth.
 - Backend:
   - Express server in `server/index.ts`.
+  - OpenAI SDK runtime loading is lazy (`server/llm/openaiRuntime.ts`) so Oracle backend startup does not depend on top-level `openai` ESM import resolution.
   - Backend refactor a3 is completed with no behavior drift:
     - route registration is fully modular (`53` API routes across `server/routes/*` / route-domain modules)
     - `server/index.ts` has `0` direct `app.*` route registrations and now acts as composition/bootstrap only

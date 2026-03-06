@@ -7,10 +7,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import OpenAI from 'openai';
 import { z } from 'zod';
 import { createLLMClient, createLLMClientForPurpose } from './llm/client';
 import { createOpenAIClient } from './llm/openaiClient';
+import { getOpenAIConstructor } from './llm/openaiRuntime';
 import { createCodexGenerationClient } from './llm/codexGenerationClient';
 import { CodexExecError, runCodexExec } from './llm/codexExec';
 import { consumeCredit, getCredits } from './credits';
@@ -1423,6 +1423,7 @@ async function scoreYt2bpQualityWithOpenAI(
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY is not set');
 
+  const OpenAI = getOpenAIConstructor();
   const client = new OpenAI({ apiKey });
   const response = await client.responses.create({
     model: config.judge_model,
@@ -1504,6 +1505,7 @@ async function scoreYt2bpContentSafetyWithOpenAI(
 }> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY is not set');
+  const OpenAI = getOpenAIConstructor();
   const client = new OpenAI({ apiKey });
 
   const response = await client.responses.create({

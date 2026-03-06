@@ -12,6 +12,8 @@
 - Service unit: `agentic-backend.service`
 - Primary owner: app backend maintainers
 - Launch gate source of truth: `docs/ops/mvp-launch-readiness-checklist.md` (P0/P1 owner/date/status/evidence board).
+- Runtime import note:
+  - backend OpenAI SDK usage is lazy-loaded at call time; avoid reintroducing top-level `import OpenAI from "openai"` in backend startup files because Oracle `tsx` can stall before the HTTP listener binds.
 
 ## bleuV1 source-first integration context
 - YT2BP remains the ingestion/generation entrypoint only.

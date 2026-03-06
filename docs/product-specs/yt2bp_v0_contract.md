@@ -58,6 +58,7 @@
 - 2026-03-06 note: credit-refresh hardening makes `/api/credits` lazy/on-demand from header UI instead of background polling; this is additive and outside the YT2BP endpoint envelope.
 - 2026-02-20 note: subscription new-upload ingest now writes unlockable feed rows (`my_feed_unlockable`) before generation; this lifecycle change is outside this endpoint envelope.
 - 2026-03-06 note: subscription rows now include `auto_unlock_enabled` (default `true`) and new-upload auto-attempt flow uses canonical shared-cost auto intents with funded-participant snapshots and bounded retries; additive and outside this endpoint envelope.
+- 2026-03-06 note: backend OpenAI SDK loading is lazy at call time to keep Oracle startup independent from top-level `openai` ESM imports; additive and outside this endpoint envelope.
 - 2026-02-20 note: unlock reliability sweeps (expired/stale/orphan recovery) run in source-video routes and service cron trigger path; additive and outside this endpoint envelope.
 - 2026-02-20 note: unlock/generate responses now include additive `trace_id` and unlock lifecycle logs propagate the same correlation ID; additive and outside this endpoint envelope.
 - 2026-02-20 note: ingestion worker hardening adds queue lease/retry metadata on `ingestion_jobs` and service queue-health endpoint `GET /api/ops/queue/health`; additive and outside this endpoint envelope.

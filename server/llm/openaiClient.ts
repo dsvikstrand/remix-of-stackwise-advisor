@@ -1,4 +1,3 @@
-import OpenAI from 'openai';
 import { z } from 'zod';
 import type {
   BannerRequest,
@@ -26,6 +25,7 @@ import {
   buildYouTubeBlueprintUserPrompt,
   extractJson,
 } from './prompts';
+import { getOpenAIConstructor } from './openaiRuntime';
 
 const YouTubeBlueprintLegacyValidator = z.object({
   description: z.string(),
@@ -141,6 +141,7 @@ export function createOpenAIClient(): LLMClient {
   const imageModel = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1';
   const imageSize = process.env.OPENAI_IMAGE_SIZE || '1536x1024';
   const imageQuality = process.env.OPENAI_IMAGE_QUALITY || 'low';
+  const OpenAI = getOpenAIConstructor();
   const client = new OpenAI({ apiKey });
 
   async function runGenerationRequest(input: {

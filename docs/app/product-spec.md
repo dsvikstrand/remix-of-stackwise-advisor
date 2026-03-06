@@ -123,6 +123,7 @@ b5) Subscription behavior (MVP simplified)
 - Future uploads after checkpoint ingest to unlockable rows (`my_feed_unlockable`) with shared unlock metadata.
 - Manual generation pricing is fixed: any explicit new blueprint generation intent costs `1.00` credit.
 - Manual debit policy is reserve-first, settle at first OpenAI generation dispatch, and release on pre-generation failure/duplicate short-circuit.
+- Backend runtime hardening: OpenAI SDK construction is lazy-loaded at call time so backend startup does not depend on top-level `openai` ESM import success on Oracle.
 - Auto-unlock toggle defaults to enabled (`auto_unlock_enabled=true`) for existing and new subscriptions.
 - Locked auto-billing policy is shared-cost:
   - one canonical auto-generation intent per new source video
