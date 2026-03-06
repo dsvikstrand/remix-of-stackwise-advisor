@@ -82,3 +82,12 @@ f1) [have] This suite is strong automation evidence for callback routing, query-
 f2) [todo] Final launch signoff still requires at least:
 - one real iPhone Safari pass
 - one real Android Chrome pass
+
+## Handoff To Manual Signoff
+g1) [have] The automated suite reduces the real-device task to four quick checks:
+- iPhone Safari success on `/subscriptions`
+- iPhone Safari error on `/subscriptions`
+- Android Chrome success on `/subscriptions`
+- Android Chrome error on `/subscriptions`
+
+g2) [have] Use `docs/ops/p1-1-p1-2-verification-runbook.md` for the exact manual checklist and evidence fields.

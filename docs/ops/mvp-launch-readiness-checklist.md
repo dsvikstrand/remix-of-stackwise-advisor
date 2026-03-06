@@ -154,6 +154,9 @@ j6) [todo] Pass criteria:
 j7) [todo] Evidence: `Playwright callback-evidence suite is now captured for /subscriptions on iPhone/Android emulation and recorded in o58; final real-device Safari/Chrome matrix rows are still pending before closure.`
 j8) [have] Runbook:
 - `docs/ops/p1-1-p1-2-verification-runbook.md` defines the minimum device/browser matrix, the `/subscriptions` and `/welcome` callback flows, and the exact evidence fields to record.
+j9) [todo] Final required rows:
+- iPhone Safari success + error on `/subscriptions`
+- Android Chrome success + error on `/subscriptions`
 
 ### P1-3 Queue and Incident Visibility Bundle
 k1) [todo] Risk: `medium`
@@ -273,6 +276,8 @@ o55) [have] `2026-03-06T10:40:44Z` - `P1-4` - `browser lazy-credit-refresh proof
 o56) [have] `2026-03-06T10:43:00Z` - `P1-4` - `authenticated frontend burst across Home/Wall/My Feed stayed clean` - `headless Playwright reused signed-in session for 6 concurrent visits across /, /wall, /my-feed on deployed frontend; observed 32 backend API responses with status_distribution 200=32, api_non_ok_count=0, page_error_count=0` - `david`
 o57) [have] `2026-03-06T16:35:00Z` - `P1-1/P1-2` - `verification runbook prepared and runtime paths reviewed` - `A dedicated runbook now captures the GitHub ruleset/PR proof steps plus the mobile callback matrix; current shell still lacks GitHub settings access (gh unavailable), while the YouTube OAuth start/callback flow and frontend callback consumers were reviewed before device-matrix execution` - `david`
 o58) [have] `2026-03-06T18:20:00Z` - `P1-2` - `Playwright callback evidence suite passed for subscriptions path` - `npm run test:playwright:p1-oauth => 6 passed, 1 skipped in 44.1s; iPhone and Android emulation both proved /subscriptions callback param cleanup and success/error UI states, while /welcome recorded an explicit skip because the test account was not in a stable onboarding-visible state` - `david`
+o59) [todo] `P1-2` - `real-device iPhone Safari matrix row pending` - `Need one successful and one denied /subscriptions callback run on iPhone Safari with screenshot/recording evidence` - `david`
+o60) [todo] `P1-2` - `real-device Android Chrome matrix row pending` - `Need one successful and one denied /subscriptions callback run on Android Chrome with screenshot/recording evidence` - `david`
 
 ## Deferred (Not Launch Gate)
 p1) [have] P2 modularization and post-launch optimizations are intentionally out of launch gate.

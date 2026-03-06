@@ -147,12 +147,58 @@ o1) [todo] Checklist evidence line should include:
 - any failure codes observed
 - screenshot or screen recording path if available
 
+### Fast Real-Device Execution
+p1) [todo] Use the deployed frontend:
+- `https://dsvikstrand.github.io/remix-of-stackwise-advisor/`
+
+p2) [todo] Required final rows:
+- iPhone Safari -> `/subscriptions`
+- Android Chrome -> `/subscriptions`
+
+p3) [todo] Exact execution steps per device:
+- sign in with the designated test account
+- open `/subscriptions`
+- tap `Connect YouTube`
+- complete one successful Google OAuth run
+- confirm return route is still `/subscriptions`
+- confirm `YouTube connected` appears
+- confirm `yt_connect` and `yt_code` are removed from the URL after hydration
+
+p4) [todo] Error-path execution per device:
+- start `Connect YouTube`
+- deny/cancel at Google
+- confirm return route is still `/subscriptions`
+- confirm `YouTube connect failed` appears
+- confirm `yt_connect` and `yt_code` are removed from the URL after hydration
+
+p5) [todo] Record these exact fields for each device row:
+- date/time
+- device/browser
+- flow (`subscriptions success`, `subscriptions error`)
+- actual landing route
+- session present (`yes/no`)
+- params cleared (`yes/no`)
+- success/failure toast shown (`yes/no`)
+- screenshot path or screen recording path
+- notes / error code
+
+p6) [todo] Practical capture recommendation:
+- one screenshot after successful return on `/subscriptions`
+- one screenshot after denied return on `/subscriptions`
+- optional short screen recording if the browser/app handoff is unstable
+
+p7) [todo] Pass rule for final signoff:
+- both iPhone Safari and Android Chrome pass success and error flows on `/subscriptions`
+- no wrong-route landing
+- no stuck callback params
+- no lost session after callback
+
 ## Recommended Execution Order
-p1) [todo] First close `P1-1` from GitHub settings because it is fast and not code-dependent.
-p2) [todo] Then run `P1-2` on iPhone Safari and Android Chrome.
-p3) [todo] If both pass, decide whether the optional browsers are worth the extra time before launch.
+q1) [todo] First close `P1-1` from GitHub settings because it is fast and not code-dependent.
+q2) [todo] Then run `P1-2` on iPhone Safari and Android Chrome using the fast real-device execution block above.
+q3) [todo] If both pass, decide whether the optional browsers are worth the extra time before launch.
 
 ## Completion Rule
-q1) [todo] This runbook can move to historical reference once:
+r1) [todo] This runbook can move to historical reference once:
 - `P1-1` branch-protection proof is recorded in the checklist
 - `P1-2` mobile callback matrix evidence is recorded in the checklist
