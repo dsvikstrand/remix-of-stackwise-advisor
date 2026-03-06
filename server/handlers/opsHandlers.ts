@@ -203,7 +203,7 @@ export async function handleQueueHealth(req: express.Request, res: express.Respo
 
   const { data: byScopeRows, error: byScopeError } = await db
     .from('ingestion_jobs')
-    .select('scope, status, payload, created_at, started_at')
+    .select('scope, status, payload, created_at, started_at, lease_expires_at, last_heartbeat_at')
     .in('status', ['queued', 'running'])
     .in('scope', [...deps.queuedIngestionScopes]);
   if (byScopeError) {
@@ -233,12 +233,17 @@ export async function handleQueueHealth(req: express.Request, res: express.Respo
   let oldestQueuedAgeMs: number | null = null;
   let oldestRunningStartedAt: string | null = null;
   let oldestRunningAgeMs: number | null = null;
+  const localWorkerRunning = deps.getQueuedWorkerRunning();
+  const runningHeartbeatFreshMs = Math.max(deps.workerHeartbeatMs * 3, deps.workerLeaseMs);
+  let activeRunningJobs = 0;
   for (const row of byScopeRows || []) {
     const normalized = row as {
       scope?: string;
       status?: string;
       created_at?: string | null;
       started_at?: string | null;
+      lease_expires_at?: string | null;
+      last_heartbeat_at?: string | null;
     };
     const scope = String(normalized.scope || '').trim();
     const status = String(normalized.status || '').trim();
@@ -284,8 +289,19 @@ export async function handleQueueHealth(req: express.Request, res: express.Respo
           byScope[scope].oldest_running_age_ms = ageMs;
         }
       }
+      const leaseExpiresAt = typeof normalized.lease_expires_at === 'string' ? normalized.lease_expires_at : null;
+      const leaseExpiresAtMs = leaseExpiresAt ? Date.parse(leaseExpiresAt) : Number.NaN;
+      const heartbeatAt = typeof normalized.last_heartbeat_at === 'string' ? normalized.last_heartbeat_at : null;
+      const heartbeatAtMs = heartbeatAt ? Date.parse(heartbeatAt) : Number.NaN;
+      const hasFreshLease = leaseExpiresAt && Number.isFinite(leaseExpiresAtMs) && leaseExpiresAtMs > snapshotAt.getTime();
+      const hasFreshHeartbeat = heartbeatAt && Number.isFinite(heartbeatAtMs)
+        && (snapshotAt.getTime() - heartbeatAtMs) <= runningHeartbeatFreshMs;
+      if (hasFreshLease || hasFreshHeartbeat) {
+        activeRunningJobs += 1;
+      }
     }
   }
+  const workerRunning = activeRunningJobs > 0;
 
   const providerKeys = [
     'transcript',
@@ -306,7 +322,9 @@ export async function handleQueueHealth(req: express.Request, res: express.Respo
     message: 'queue health',
     data: {
       worker_id: deps.queuedWorkerId,
-      worker_running: deps.queuedWorkerRunning,
+      worker_running: workerRunning,
+      local_worker_running: localWorkerRunning,
+      runtime_mode: deps.runtimeMode,
       snapshot_at: nowIso,
       queue_depth: queuedDepth,
       running_depth: Math.max(0, runningDepth - queuedDepth),

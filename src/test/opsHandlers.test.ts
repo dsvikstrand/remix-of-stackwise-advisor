@@ -47,7 +47,8 @@ function createBaseDeps(overrides: Partial<OpsRouteDeps> = {}): OpsRouteDeps {
     workerHeartbeatMs: 10_000,
     jobExecutionTimeoutMs: 180_000,
     queuedWorkerId: 'worker_1',
-    queuedWorkerRunning: true,
+    getQueuedWorkerRunning: () => true,
+    runtimeMode: 'combined',
     queuedIngestionScopes: ['all_active_subscriptions'],
     isQueuedIngestionScope: () => true,
     getProviderCircuitSnapshot: async () => ({}),
@@ -92,6 +93,8 @@ function createQueueHealthDb(options?: {
     payload?: Record<string, unknown> | null;
     created_at?: string | null;
     started_at?: string | null;
+    lease_expires_at?: string | null;
+    last_heartbeat_at?: string | null;
   }>;
   staleLeaseError?: { message: string } | null;
   rowsError?: { message: string } | null;
@@ -122,6 +125,8 @@ function createQueueHealthDb(options?: {
           expect(columns).toContain('scope');
           expect(columns).toContain('status');
           expect(columns).toContain('payload');
+          expect(columns).toContain('lease_expires_at');
+          expect(columns).toContain('last_heartbeat_at');
           return {
             in() {
               return this;
@@ -280,7 +285,14 @@ describe('queue health handler', () => {
         staleLeaseCount: 1,
         rows: [
           { scope: 'all_active_subscriptions', status: 'queued', payload: null, created_at: queuedIso },
-          { scope: 'all_active_subscriptions', status: 'running', payload: null, started_at: runningIso },
+          {
+            scope: 'all_active_subscriptions',
+            status: 'running',
+            payload: null,
+            started_at: runningIso,
+            lease_expires_at: new Date(now + 60_000).toISOString(),
+            last_heartbeat_at: new Date(now - 5_000).toISOString(),
+          },
           { scope: 'search_video_generate', status: 'queued', payload: { items: [{}, {}, {}] }, created_at: queuedIso },
         ],
       }),
@@ -304,6 +316,9 @@ describe('queue health handler', () => {
       ok: boolean;
       data: {
         snapshot_at: string;
+        worker_running: boolean;
+        local_worker_running: boolean;
+        runtime_mode: string;
         oldest_queued_created_at: string | null;
         oldest_queued_age_ms: number | null;
         oldest_running_started_at: string | null;
@@ -323,6 +338,9 @@ describe('queue health handler', () => {
     };
     expect(payload.ok).toBe(true);
     expect(payload.data.snapshot_at).toMatch(/T/);
+    expect(payload.data.worker_running).toBe(true);
+    expect(payload.data.local_worker_running).toBe(true);
+    expect(payload.data.runtime_mode).toBe('combined');
     expect(payload.data.queue_work_items).toBe(4);
     expect(payload.data.running_work_items).toBe(1);
     expect(payload.data.oldest_queued_created_at).toBe(queuedIso);
@@ -366,6 +384,7 @@ describe('queue health handler', () => {
     expect(res.body).toMatchObject({
       ok: true,
       data: {
+        worker_running: false,
         oldest_queued_created_at: null,
         oldest_queued_age_ms: null,
         oldest_running_started_at: null,
@@ -383,6 +402,76 @@ describe('queue health handler', () => {
             priority: 'low',
           },
         },
+      },
+    });
+  });
+
+  it('reports worker_running from fresh running jobs even when the local web process is not a worker', async () => {
+    const req = {} as never;
+    const res = createMockResponse();
+    const now = Date.now();
+
+    await handleQueueHealth(req, res as never, createBaseDeps({
+      getServiceSupabaseClient: () => createQueueHealthDb({
+        rows: [
+          {
+            scope: 'search_video_generate',
+            status: 'running',
+            payload: { items: [{}, {}, {}] },
+            started_at: new Date(now - 10_000).toISOString(),
+            lease_expires_at: new Date(now + 30_000).toISOString(),
+            last_heartbeat_at: new Date(now - 2_000).toISOString(),
+          },
+        ],
+      }),
+      countQueueDepth: async (_db, input) => (
+        Array.isArray(input.statuses) && input.statuses.includes('running')
+          ? 1
+          : 0
+      ),
+      countQueueWorkItems: async (_db, input) => (
+        Array.isArray(input.statuses) && input.statuses[0] === 'running' ? 3 : 0
+      ),
+      queuedIngestionScopes: ['search_video_generate'],
+      isQueuedIngestionScope: (scope) => scope === 'search_video_generate',
+      getQueuedWorkerRunning: () => false,
+      runtimeMode: 'web_only',
+      getProviderCircuitSnapshot: async () => ({ state: 'closed' }),
+    }));
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        worker_running: true,
+        local_worker_running: false,
+        runtime_mode: 'web_only',
+        running_depth: 1,
+        running_work_items: 3,
+      },
+    });
+  });
+
+  it('does not report worker_running from a stale local snapshot in web-only mode without fresh running jobs', async () => {
+    const req = {} as never;
+    const res = createMockResponse();
+
+    await handleQueueHealth(req, res as never, createBaseDeps({
+      getServiceSupabaseClient: () => createQueueHealthDb(),
+      countQueueDepth: async () => 0,
+      countQueueWorkItems: async () => 0,
+      getQueuedWorkerRunning: () => true,
+      runtimeMode: 'web_only',
+      getProviderCircuitSnapshot: async () => ({ state: 'closed' }),
+    }));
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        worker_running: false,
+        local_worker_running: true,
+        runtime_mode: 'web_only',
       },
     });
   });

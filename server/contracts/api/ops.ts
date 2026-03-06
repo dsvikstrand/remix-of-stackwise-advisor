@@ -65,7 +65,8 @@ export type OpsRouteDeps = {
   workerHeartbeatMs: number;
   jobExecutionTimeoutMs: number;
   queuedWorkerId: string;
-  queuedWorkerRunning: boolean;
+  getQueuedWorkerRunning: () => boolean;
+  runtimeMode: 'combined' | 'web_only' | 'worker_only';
   queuedIngestionScopes: readonly string[];
   isQueuedIngestionScope: (scope: string) => boolean;
   getProviderCircuitSnapshot: (db: DbClient, providerKey: string) => Promise<unknown>;

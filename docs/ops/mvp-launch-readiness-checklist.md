@@ -19,9 +19,9 @@ a5) [todo] Evidence must be concrete:
 - dashboard screenshot link
 
 ## Launch Gate Snapshot (Update Daily)
-b1) [have] Release candidate backend SHA: `f98114d68bf6d46fba4b1da815c5fdc20221212c`
-b2) [have] Release candidate frontend SHA: `f98114d68bf6d46fba4b1da815c5fdc20221212c`
-b3) [have] Latest migration watermark: `20260306113000`
+b1) [have] Release candidate backend SHA: `13e9da13590335046bad9f0c0db16e2ac7d53046`
+b2) [have] Release candidate frontend SHA: `13e9da13590335046bad9f0c0db16e2ac7d53046`
+b3) [have] Latest migration watermark: `20260306143000`
 b4) [todo] P0 open count: `0`
 b5) [todo] P1 open count: `4`
 b6) [todo] Current launch recommendation: `GO (P0 cleared)`.
@@ -164,7 +164,7 @@ k6) [todo] Required checks:
 - transcript/provider failure distribution via metrics scripts
 k7) [todo] Pass criteria:
 - operator can classify load state in under `5` minutes
-k8) [todo] Evidence: `Baseline + refreshed queue/ingestion/metrics evidence captured (o11-o13, o18-o20). Weighted queue-health implementation evidence captured (o45-o46). 5-minute timed operator classification drill evidence still pending.`
+k8) [todo] Evidence: `Baseline + refreshed queue/ingestion/metrics evidence captured (o11-o13, o18-o20). Weighted queue-health implementation evidence captured (o45-o46). Live production weighted queue drill evidence captured after deploy/hotfix (o50-o51). 5-minute timed operator classification drill evidence and worker_running flag follow-up still pending.`
 
 ### P1-4 Feed Query Load Drill
 l1) [todo] Risk: `medium`
@@ -176,7 +176,7 @@ l5) [todo] Scope:
 l6) [todo] Pass criteria:
 - no critical DB/API saturation during drill window
 - clear tuning actions captured if saturation appears
-l7) [todo] Evidence: `Drill script implemented and initial public probe captured (o22); lazy credit-refresh implementation evidence captured (o47-o48); auth-surface drill and saturation decision log pending.`
+l7) [todo] Evidence: `Drill script implemented and initial public probe captured (o22); lazy credit-refresh implementation evidence captured (o47-o48); production credit-path hotfix restored /api/credits after deploy regression (o49); frontend auth-surface drill and browser-network lazy-refresh proof still pending.`
 
 ## Execution Cadence
 m1) [todo] Daily (10 min):
@@ -259,6 +259,9 @@ o45) [have] `2026-03-06T11:40:00Z` - `P1-3` - `weighted queue admission landed` 
 o46) [have] `2026-03-06T11:40:00Z` - `P1-3` - `interactive queue caps reduced to launch-safe defaults` - `SEARCH_GENERATE_MAX_ITEMS=20, SOURCE_UNLOCK_GENERATE_MAX_ITEMS=20, REFRESH_GENERATE_MAX_ITEMS=10; weighted backpressure tests added for Search and manual refresh` - `david`
 o47) [have] `2026-03-06T11:40:00Z` - `P1-4` - `global credits polling removed from always-mounted user menu` - `useAiCredits now defaults to one-shot fetch with no interval; UserMenu fetches only while menu is open; Search remains one-shot plus explicit invalidation; npm run build => exit 0 (chunk size warning only)` - `david`
 o48) [have] `2026-03-06T11:40:00Z` - `P1-4` - `background credit-load estimate reduced` - `steady-state /api/credits background volume changed from about 100/500/1000 requests per minute at 100/500/1000 signed-in users (60s global menu poll) to 0 steady-state requests per minute with menu-closed lazy loading` - `david`
+o49) [have] `2026-03-06T14:30:00Z` - `P1-4` - `production credit-path hotfix deployed and verified` - `pushed/deployed 13e9da13590335046bad9f0c0db16e2ac7d53046; curl /api/credits with two real bearer tokens => 200 with remaining=3, daily_grant=3, capacity=3, credits_backend_mode=db, credits_backend_ok=true` - `david`
+o50) [have] `2026-03-06T14:37:00Z` - `P1-3` - `live weighted queue drill proved running work-item visibility` - `two authenticated POST /api/search/videos/generate requests with 3 items each => 202 responses with queue_work_items=3/user_queue_work_items=3; immediate /api/ops/queue/health => queue_depth=0, running_depth=2, running_work_items=6, search_video_generate.running_work_items=6` - `david`
+o51) [todo] `2026-03-06T14:37:00Z` - `P1-3` - `worker_running flag inconsistent with active running work` - `same queue-health snapshot reported worker_running=false while running_depth=2 and running_work_items=6; needs handler/state follow-up before calling queue observability fully complete` - `david`
 
 ## Deferred (Not Launch Gate)
 p1) [have] P2 modularization and post-launch optimizations are intentionally out of launch gate.

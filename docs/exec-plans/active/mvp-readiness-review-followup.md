@@ -11,9 +11,9 @@ b2) [have] This plan focuses on launch stability, cost control, rate-limit prote
 b3) [todo] This plan does not replace `docs/ops/mvp-launch-readiness-checklist.md`; it feeds concrete implementation work into that launch gate.
 
 ## Launch Read
-c1) [have] Current review recommendation is `NO-GO until remaining P0 policy/ledger work below is resolved`.
-c2) [todo] Treat open `P0` items in this file as launch blockers.
-c3) [todo] Treat `P1` items in this file as strongly recommended before launch.
+c1) [have] Current review recommendation is `GO for code-path blockers; remaining launch work is checklist evidence capture plus P1/P2 follow-up`.
+c2) [have] `P0` implementation blockers in this file are resolved.
+c3) [todo] Treat remaining checklist evidence gaps and open `P1` drill items as the last pre-launch proof work.
 c4) [todo] Treat `P2` items in this file as cleanup/hardening that can land after the blockers if time is constrained.
 
 ## Status Snapshot
@@ -30,7 +30,9 @@ d8) [have] Handler-level coverage now exists for direct URL reserve/release timi
 e1) [have] `P0-1`, `P0-2`, and `P0-3` are completed.
 e2) [have] `P0-4` is complete.
 e3) [have] `P1-1`, `P1-2`, `P1-3`, and `P1-4` are implemented and locally validated.
-e4) [todo] Remaining launch work is now concentrated in checklist evidence capture plus `P2` cleanup/refactor work.
+e4) [have] Production now runs `13e9da13590335046bad9f0c0db16e2ac7d53046`, including the credit-override hotfix that restored `/api/credits` and credit-backed generation after the `5c16f60` regression.
+e5) [have] Live production queue drills now prove the new work-item metrics are wired through route responses and `/api/ops/queue/health`.
+e6) [todo] Remaining launch work is now concentrated in checklist evidence capture, the `worker_running=false` observability inconsistency, and `P2` cleanup/refactor work.
 
 ## P0 Launch Blockers
 
@@ -182,8 +184,10 @@ l5) [have] Validation:
 - queue work-item helper coverage landed in `src/test/ingestionQueueWorkItems.test.ts`
 - handler tests now cover weighted backpressure on Search and manual refresh flows plus additive queue work-item metadata
 - local typecheck/test/build pass completed after the weighted-budget patch
+- production drill on `2026-03-06` showed two authenticated 3-item Search jobs producing `running_depth=2`, `running_work_items=6`, and `search_video_generate.running_work_items=6`
 l6) [have] Exit criteria:
 - queue health signals now reflect both row depth and real queued work size for supported scopes
+- remaining follow-up: `worker_running` still reported `false` during the same live drill and should be treated as an observability bug, not as evidence failure on work-item counting
 
 ### P1-4 Credit Polling Load Reduction
 m1) [have] Risk: `medium`
@@ -203,6 +207,7 @@ m5) [have] Validation:
 - `src/test/useAiCredits.test.ts` now covers the no-poll default behavior
 - local request-volume estimate dropped from roughly `100/500/1000` background `/api/credits` requests per minute at `100/500/1000` signed-in users to `0` steady-state menu-closed polling requests per minute
 - local typecheck/test/build pass completed after the lazy-refresh patch
+- production credit-path hotfix verification on `2026-03-06` restored `/api/credits` to `200` responses with `credits_backend_mode=db` and correct daily-grant values for two real accounts
 m6) [have] Exit criteria:
 - background credit refresh is now lazy/on-demand rather than a constant global poll source
 
