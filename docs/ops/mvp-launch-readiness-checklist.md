@@ -138,7 +138,7 @@ i5) [todo] Required checks:
 - `npm run docs:link-check`
 i6) [todo] Pass criteria:
 - merge to `main` is blocked on required checks
-i7) [todo] Evidence: `Baseline command bundle + workflow implementation evidence captured (o7-o10, o23-o24); branch-protection merge-block evidence pending.`
+i7) [todo] Evidence: `Baseline command bundle + workflow implementation evidence captured (o7-o10, o23-o24), and public GitHub Actions page confirms CI Gate workflow is active on main (o61); authenticated ruleset / PR merge-block proof is still pending.`
 i8) [have] Runbook:
 - `docs/ops/p1-1-p1-2-verification-runbook.md` now captures the exact GitHub settings / PR proof steps and evidence template needed to close this item.
 
@@ -151,11 +151,10 @@ j5) [todo] Scope:
 - validate connect/import callback reliability on mobile browsers
 j6) [todo] Pass criteria:
 - returns to intended context consistently for tested browsers
-j7) [todo] Evidence: `Playwright callback-evidence suite is now captured for /subscriptions on iPhone/Android emulation and recorded in o58; final real-device Safari/Chrome matrix rows are still pending before closure.`
+j7) [todo] Evidence: `Playwright callback-evidence suite is now captured for /subscriptions on iPhone/Android emulation and recorded in o58; real-device iPhone Safari is now confirmed in o59, and Android Chrome remains the only open matrix row before closure.`
 j8) [have] Runbook:
 - `docs/ops/p1-1-p1-2-verification-runbook.md` defines the minimum device/browser matrix, the `/subscriptions` and `/welcome` callback flows, and the exact evidence fields to record.
 j9) [todo] Final required rows:
-- iPhone Safari success + error on `/subscriptions`
 - Android Chrome success + error on `/subscriptions`
 
 ### P1-3 Queue and Incident Visibility Bundle
@@ -276,11 +275,15 @@ o55) [have] `2026-03-06T10:40:44Z` - `P1-4` - `browser lazy-credit-refresh proof
 o56) [have] `2026-03-06T10:43:00Z` - `P1-4` - `authenticated frontend burst across Home/Wall/My Feed stayed clean` - `headless Playwright reused signed-in session for 6 concurrent visits across /, /wall, /my-feed on deployed frontend; observed 32 backend API responses with status_distribution 200=32, api_non_ok_count=0, page_error_count=0` - `david`
 o57) [have] `2026-03-06T16:35:00Z` - `P1-1/P1-2` - `verification runbook prepared and runtime paths reviewed` - `A dedicated runbook now captures the GitHub ruleset/PR proof steps plus the mobile callback matrix; current shell still lacks GitHub settings access (gh unavailable), while the YouTube OAuth start/callback flow and frontend callback consumers were reviewed before device-matrix execution` - `david`
 o58) [have] `2026-03-06T18:20:00Z` - `P1-2` - `Playwright callback evidence suite passed for subscriptions path` - `npm run test:playwright:p1-oauth => 6 passed, 1 skipped in 44.1s; iPhone and Android emulation both proved /subscriptions callback param cleanup and success/error UI states, while /welcome recorded an explicit skip because the test account was not in a stable onboarding-visible state` - `david`
-o59) [todo] `P1-2` - `real-device iPhone Safari matrix row pending` - `Need one successful and one denied /subscriptions callback run on iPhone Safari with screenshot/recording evidence` - `david`
+o59) [have] `2026-03-06T19:05:00Z` - `P1-2` - `real-device iPhone Safari subscriptions callback flows passed` - `Manual device validation confirmed success and denied /subscriptions YouTube OAuth flows both passed on iPhone Safari; landing route stayed /subscriptions, session remained present, and callback params were cleared after return` - `david`
 o60) [todo] `P1-2` - `real-device Android Chrome matrix row pending` - `Need one successful and one denied /subscriptions callback run on Android Chrome with screenshot/recording evidence` - `david`
+o61) [have] `2026-03-06T19:20:00Z` - `P1-1` - `public GitHub Actions surface confirms CI Gate workflow is active on main` - `Public Actions page for dsvikstrand/remix-of-stackwise-advisor shows workflow "CI Gate" and recent successful runs on main for commits 4ef5f9f, 78ead6c, and b8b94a3; however, this shell still lacks authenticated ruleset / PR merge-block access needed for final branch-protection proof` - `david`
 
 ## Deferred (Not Launch Gate)
 p1) [have] P2 modularization and post-launch optimizations are intentionally out of launch gate.
 p2) [have] Track those in:
 - `docs/exec-plans/tech-debt-tracker.md`
 - `docs/exec-plans/completed/mvp-launch-hardening-phases.md` (historical phases 7/8 and later)
+p3) [have] Post-launch execution order is now explicitly defined in:
+- `docs/exec-plans/active/mvp-readiness-review-followup.md`
+- `P2-A Coverage -> P2-B Shared Preflight -> P2-C Hygiene`

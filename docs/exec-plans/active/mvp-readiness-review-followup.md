@@ -32,7 +32,7 @@ e2) [have] `P0-4` is complete.
 e3) [have] `P1-1`, `P1-2`, `P1-3`, and `P1-4` are implemented and locally validated.
 e4) [have] Production now runs `13e9da13590335046bad9f0c0db16e2ac7d53046`, including the credit-override hotfix that restored `/api/credits` and credit-backed generation after the `5c16f60` regression.
 e5) [have] Live production queue drills now prove the new work-item metrics are wired through route responses and `/api/ops/queue/health`.
-e6) [todo] Remaining launch work is now concentrated in `P1-1` branch-protection evidence, `P1-2` real-device mobile OAuth callback validation, and `P2` cleanup/refactor work.
+e6) [todo] Remaining launch work is now concentrated in `P1-1` branch-protection evidence, `P1-2` Android Chrome real-device OAuth callback validation, and `P2` cleanup/refactor work.
 e7) [have] `docs/ops/p1-1-p1-2-verification-runbook.md` now captures the exact verification steps, device/browser matrix, and evidence templates for the final `P1-1` / `P1-2` closure work.
 e8) [have] `docs/ops/playwright-p1-2-callback-evidence.md` now captures repeatable Playwright evidence for the `/subscriptions` callback path on iPhone/Android emulation, while explicitly leaving real-device Safari/Chrome signoff as the remaining `P1-2` gap.
 
@@ -219,7 +219,12 @@ m6) [have] Exit criteria:
 
 ## P2 Cleanup And Refactor
 
-### P2-1 Handler Coverage Expansion
+Status:
+- [have] `P2` is intentionally outside the launch gate.
+- [todo] `P2` should be executed as a post-launch program in three phases: `P2-A Coverage`, `P2-B Shared Preflight`, `P2-C Hygiene`.
+- [todo] Recommended order is confidence first, then consolidation, then cleanup.
+
+### P2-A Coverage Expansion
 n1) [todo] Risk: `medium`
 n2) [todo] Primary files:
 - `src/test/*`
@@ -230,8 +235,14 @@ n3) [todo] Add coverage for:
 - source-page unlock refund/rollback paths
 - auto shared-cost billing semantics
 - quota-guard degraded/cached behavior
+n4) [todo] Why first:
+- expands confidence before structural refactors
+- protects later cleanup from behavioral drift
+n5) [todo] Exit criteria:
+- the highest-risk launch-era handler flows have direct regression coverage
+- the next refactor phase can proceed with tighter guardrails
 
-### P2-2 Shared Preflight Refactor
+### P2-B Shared Preflight Refactor
 o1) [todo] Risk: `medium`
 o2) [todo] Problem:
 - enqueue preflight logic is spread across multiple handlers with slightly different semantics
@@ -242,8 +253,14 @@ o3) [todo] Primary files:
 - `server/services/*`
 o4) [todo] Refactor target:
 - centralize reusable preflight checks for auth, duration policy, duplicate classification, wallet reservation, queue backpressure, and intake pause
+o5) [todo] Why second:
+- this is the main maintainability win
+- it is safer once broader handler coverage exists
+o6) [todo] Exit criteria:
+- handler-specific drift is reduced
+- shared preflight rules live in one reusable service surface with no intended behavior change
 
-### P2-3 Repo Hygiene Pass
+### P2-C Repo Hygiene Pass
 p1) [todo] Risk: `low`
 p2) [todo] Scope:
 - identify stale docs references, dead route assumptions, and duplicated helper logic left from earlier MVP iterations
@@ -251,6 +268,12 @@ p3) [todo] Initial targets:
 - active/completed exec-plan registry consistency
 - route-policy duplication between docs/UI/backend
 - rate-limit and error-copy logic duplicated across handlers/pages
+p4) [todo] Why last:
+- the cleanup targets are easier to identify once coverage and preflight consolidation settle
+- this avoids spending time on cosmetic cleanup before the larger structural work lands
+p5) [todo] Exit criteria:
+- obvious stale references and duplicated helper logic are removed or explicitly tracked elsewhere
+- docs, backend policy, and frontend assumptions are materially easier to reason about
 
 ## Verification Bundle
 q1) [todo] Route-policy tests:
@@ -267,5 +290,15 @@ q3) [todo] Load/ops checks:
 - run one quota-pressure drill focused on search and subscription reads
 - append evidence to `docs/ops/mvp-launch-readiness-checklist.md`
 
+## Recommended Post-Launch Execution Order
+r1) [todo] `Phase 1: P2-A Coverage`
+- add regression tests before structural changes
+
+r2) [todo] `Phase 2: P2-B Shared Preflight`
+- consolidate queue/intake/billing preflight semantics
+
+r3) [todo] `Phase 3: P2-C Hygiene`
+- clean stale references and duplicated helper logic after the refactor settles
+
 ## Completion Rule
-r1) [todo] This plan can move to `completed/` only when the launch checklist reflects the new queue/load evidence and the remaining launch-gate items outside this review are closed.
+s1) [todo] This plan can move to `completed/` only when the launch checklist reflects the new queue/load evidence and the remaining launch-gate items outside this review are closed.
