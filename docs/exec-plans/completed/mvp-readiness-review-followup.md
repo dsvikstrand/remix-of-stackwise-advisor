@@ -1,20 +1,20 @@
 # MVP Readiness Review Follow-up
 
-Status: `active`
+Status: `completed`
 
 ## Goal
-a1) [todo] Keep one active engineering program for MVP hardening work that sits beside, but does not replace, the launch checklist.
+a1) [have] This plan completed the main MVP hardening implementation program beside the launch checklist.
 
 ## Scope
 b1) [have] This plan is derived from the repository review completed on `2026-03-05`.
 b2) [have] This plan focuses on launch stability, cost control, rate-limit protection, queue behavior, and repo-risk cleanup.
-b3) [have] This plan is the only active implementation program beyond `docs/ops/mvp-launch-readiness-checklist.md`.
-b4) [have] This plan answers `What is the current engineering program?` and `What is P2 and what order do we do it in?`
+b3) [have] This plan was the main implementation program beyond `docs/ops/mvp-launch-readiness-checklist.md`.
+b4) [have] The remaining proof-only tail now lives in `docs/exec-plans/active/mvp-launch-proof-tail.md`.
 
 ## Launch Read
 c1) [have] Current review recommendation is `GO for code-path blockers; remaining launch work is checklist evidence capture plus P1/P2 follow-up`.
 c2) [have] `P0` implementation blockers in this file are resolved.
-c3) [todo] Treat remaining checklist evidence gaps and open `P1` drill items as the last pre-launch proof work.
+c3) [have] Remaining checklist evidence gaps and open `P1` proof items were split into a smaller active tail plan.
 c4) [have] Treat `P2` items in this file as the explicit post-launch execution path, not as launch-gate work.
 
 ## Status Snapshot
@@ -311,4 +311,4 @@ r3) [have] `Phase 3: P2-C Hygiene`
 - docs and obvious policy drift were cleaned after the refactor settled
 
 ## Completion Rule
-s1) [todo] Keep this plan active until the remaining `P1-1` / `P1-2` checklist gaps are either closed or explicitly deferred for launch.
+s1) [have] This plan is complete because the remaining `P1-1` / `P1-2` proof work now lives in `docs/exec-plans/active/mvp-launch-proof-tail.md`.

@@ -4,7 +4,7 @@ Status: `supporting-reference`
 
 ## Doc Role
 a0) [have] This is a supporting setup/findings note, not a primary planning surface.
-a00) [have] Use `docs/ops/mvp-launch-readiness-checklist.md` for launch status and `docs/exec-plans/active/mvp-readiness-review-followup.md` for active implementation sequencing.
+a00) [have] Use `docs/ops/mvp-launch-readiness-checklist.md` for launch status, `docs/exec-plans/active/mvp-launch-proof-tail.md` for the remaining active proof work, and `docs/exec-plans/completed/mvp-readiness-review-followup.md` for the completed implementation program.
 
 ## Goal
 a1) [todo] Build a small Playwright preflight harness that prepares the repo for the real `P1-1` / `P1-2` launch verification work.

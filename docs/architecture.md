@@ -243,7 +243,8 @@ Current production behavior note:
 - Product behavior:
   - `docs/app/product-spec.md`
 - Program direction:
-  - `docs/exec-plans/active/mvp-readiness-review-followup.md`
+  - `docs/exec-plans/active/mvp-launch-proof-tail.md`
+  - `docs/exec-plans/completed/mvp-readiness-review-followup.md`
   - `docs/exec-plans/completed/mvp-launch-hardening-phases.md`
   - paused strategy reference: `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
 - Eval policy classes used today:
@@ -313,7 +314,8 @@ Current production behavior note:
 ## 8) Document Ownership
 - Canonical architecture doc: `docs/architecture.md`.
 - Product contract: `docs/app/product-spec.md`.
-- Active program plan: `docs/exec-plans/active/mvp-readiness-review-followup.md`.
+- Active proof tail plan: `docs/exec-plans/active/mvp-launch-proof-tail.md`.
+- Completed implementation plan: `docs/exec-plans/completed/mvp-readiness-review-followup.md`.
 - Freshness mapping: `docs/_freshness_map.json`.
 
 ## 9) YouTube Metadata Refresh Policy (2026-03-05)

@@ -8,6 +8,8 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 ## Execution Scheme Reference
 - Primary sequence and progress tracker:
   - `docs/exec-plans/completed/bleuv1-manual-iteration-scheme.md` (historical sequence)
+- Current cleanup/scalability follow-up:
+  - `docs/exec-plans/active/repo-cleanup-and-scale-readiness-plan.md`
 
 ## Active Delivery Protocol
 1. User proposes a concrete update.

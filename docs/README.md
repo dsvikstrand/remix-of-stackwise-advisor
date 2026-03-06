@@ -4,7 +4,7 @@ This folder is the source of truth for product, architecture, planning, and oper
 
 ## MVP Navigation
 - Launch gate: `docs/ops/mvp-launch-readiness-checklist.md`
-- Current implementation program: `docs/exec-plans/active/mvp-readiness-review-followup.md`
+- Current active launch-proof tail: `docs/exec-plans/active/mvp-launch-proof-tail.md`
 - Post-launch debt: `docs/exec-plans/tech-debt-tracker.md`
 - Canonical product/runtime truth:
   - `docs/app/core-direction-lock.md`
@@ -19,7 +19,7 @@ This folder is the source of truth for product, architecture, planning, and oper
 
 ## Read Order For Current MVP Work
 1. `docs/ops/mvp-launch-readiness-checklist.md`
-2. `docs/exec-plans/active/mvp-readiness-review-followup.md`
+2. `docs/exec-plans/active/mvp-launch-proof-tail.md`
 3. `docs/exec-plans/tech-debt-tracker.md`
 4. `docs/app/core-direction-lock.md`
 5. `docs/app/product-spec.md`
@@ -28,7 +28,7 @@ This folder is the source of truth for product, architecture, planning, and oper
 
 ## Primary Planning Surfaces
 - Launch gate board: `docs/ops/mvp-launch-readiness-checklist.md`
-- Active implementation program: `docs/exec-plans/active/mvp-readiness-review-followup.md`
+- Active implementation program: `docs/exec-plans/active/mvp-launch-proof-tail.md`
 - Durable post-launch debt: `docs/exec-plans/tech-debt-tracker.md`
 
 ## Canonical Runtime Documents

@@ -1,5 +1,6 @@
 import type express from 'express';
 import type { ParseResult } from './shared';
+import type { BackendRuntimeMode } from '../../services/runtimeConfig';
 
 type DbClient = any;
 
@@ -66,7 +67,7 @@ export type OpsRouteDeps = {
   jobExecutionTimeoutMs: number;
   queuedWorkerId: string;
   getQueuedWorkerRunning: () => boolean;
-  runtimeMode: 'combined' | 'web_only' | 'worker_only';
+  runtimeMode: BackendRuntimeMode;
   queuedIngestionScopes: readonly string[];
   isQueuedIngestionScope: (scope: string) => boolean;
   getProviderCircuitSnapshot: (db: DbClient, providerKey: string) => Promise<unknown>;

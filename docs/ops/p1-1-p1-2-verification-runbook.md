@@ -5,7 +5,7 @@ Status: `supporting-runbook`
 ## Doc Role
 a0) [have] This is a supporting runbook, not a primary planning surface.
 a00) [have] Launch status still lives in `docs/ops/mvp-launch-readiness-checklist.md`.
-a000) [have] Active implementation sequencing lives in `docs/exec-plans/active/mvp-readiness-review-followup.md`.
+a000) [have] Active proof-only tail lives in `docs/exec-plans/active/mvp-launch-proof-tail.md`, while the completed hardening program lives in `docs/exec-plans/completed/mvp-readiness-review-followup.md`.
 
 ## Goal
 a1) [todo] Close the last two pre-launch checklist items:

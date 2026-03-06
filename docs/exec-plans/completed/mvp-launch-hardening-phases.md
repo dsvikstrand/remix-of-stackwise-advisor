@@ -5,7 +5,7 @@ Status: `completed`
 ## Reference Status
 a0) [have] This file is historical reference only.
 a00) [have] Current launch-gate truth lives in `docs/ops/mvp-launch-readiness-checklist.md`.
-a000) [have] Current active implementation sequencing lives in `docs/exec-plans/active/mvp-readiness-review-followup.md`.
+a000) [have] Current active proof-only sequencing lives in `docs/exec-plans/active/mvp-launch-proof-tail.md`, and the completed implementation program lives in `docs/exec-plans/completed/mvp-readiness-review-followup.md`.
 
 ## Goal
 a1) [todo] Execute launch hardening in a phase-by-phase sequence that can be checked off without mixing operational work with unrelated product work.

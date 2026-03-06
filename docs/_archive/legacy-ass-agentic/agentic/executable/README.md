@@ -5,7 +5,7 @@ This pack converts foundation docs into machine-actionable contracts for agent r
 ## Reference Status
 - This executable pack is archived reference material.
 - Active runtime/docs governance lives in:
-  - `docs/exec-plans/active/mvp-readiness-review-followup.md`
+  - `docs/exec-plans/completed/mvp-readiness-review-followup.md`
   - `docs/exec-plans/index.md`
 
 ## Scope

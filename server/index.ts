@@ -37,6 +37,9 @@ import {
 } from './services/youtubeSearch';
 import { createYouTubeSearchCacheService } from './services/youtubeSearchCache';
 import { createYouTubeQuotaGuardService } from './services/youtubeQuotaGuard';
+import { createQueuedIngestionWorkerController } from './services/queuedIngestionWorkerController';
+import { readBackendRuntimeConfig } from './services/runtimeConfig';
+import { createYouTubeRefreshSchedulerController } from './services/youtubeRefreshSchedulerController';
 import {
   createGenerationDailyCapService,
   readGenerationDailyCapConfigFromEnv,
@@ -403,27 +406,15 @@ const autoBannerTimeoutMs = clampInt(process.env.SUBSCRIPTION_AUTO_BANNER_TIMEOU
 const autoBannerBatchSize = clampInt(process.env.SUBSCRIPTION_AUTO_BANNER_BATCH_SIZE, 20, 1, 200);
 const autoBannerConcurrency = clampInt(process.env.SUBSCRIPTION_AUTO_BANNER_CONCURRENCY, 1, 1, 5);
 const autoBannerStaleRunningMs = clampInt(process.env.AUTO_BANNER_STALE_RUNNING_MS, 20 * 60 * 1000, 60_000, 24 * 60 * 60 * 1000);
-function parseRuntimeFlag(raw: string | undefined, fallback: boolean) {
-  const normalized = String(raw ?? (fallback ? 'true' : 'false')).trim().toLowerCase();
-  if (normalized === '0' || normalized === 'false' || normalized === 'off' || normalized === 'no') {
-    return false;
+const runtimeConfig = (() => {
+  try {
+    return readBackendRuntimeConfig(process.env);
+  } catch {
+    console.error('[agentic-backend] invalid runtime mode: both RUN_HTTP_SERVER and RUN_INGESTION_WORKER are disabled');
+    process.exit(1);
   }
-  if (normalized === '1' || normalized === 'true' || normalized === 'on' || normalized === 'yes') {
-    return true;
-  }
-  return fallback;
-}
-const runHttpServer = parseRuntimeFlag(process.env.RUN_HTTP_SERVER, true);
-const runIngestionWorker = parseRuntimeFlag(process.env.RUN_INGESTION_WORKER, true);
-if (!runHttpServer && !runIngestionWorker) {
-  console.error('[agentic-backend] invalid runtime mode: both RUN_HTTP_SERVER and RUN_INGESTION_WORKER are disabled');
-  process.exit(1);
-}
-const runtimeMode = runHttpServer && runIngestionWorker
-  ? 'combined'
-  : runHttpServer
-    ? 'web_only'
-    : 'worker_only';
+})();
+const { runHttpServer, runIngestionWorker, runtimeMode } = runtimeConfig;
 const debugEndpointsEnabledRaw = String(process.env.ENABLE_DEBUG_ENDPOINTS || 'false').trim().toLowerCase();
 const debugEndpointsEnabled = debugEndpointsEnabledRaw === 'true' || debugEndpointsEnabledRaw === '1' || debugEndpointsEnabledRaw === 'on';
 const youtubeDataApiKey = String(process.env.YOUTUBE_DATA_API_KEY || '').trim();
@@ -713,10 +704,6 @@ function getQueueSweepPlan() {
 }
 
 const queuedWorkerId = `ingestion-worker-${process.pid}`;
-let queuedWorkerTimer: ReturnType<typeof setTimeout> | null = null;
-let queuedWorkerRunning = false;
-let queuedWorkerRequested = false;
-let youtubeRefreshSchedulerTimer: ReturnType<typeof setTimeout> | null = null;
 
 function normalizeGateMode(raw: unknown, fallback: GateMode): GateMode {
   const normalized = String(raw || '').trim().toLowerCase();
@@ -7470,73 +7457,35 @@ async function processClaimedIngestionJobs(db: ReturnType<typeof createClient>, 
   await Promise.all(workers);
 }
 
-async function runQueuedIngestionProcessing() {
-  if (queuedWorkerRunning) {
-    queuedWorkerRequested = true;
-    return;
-  }
-  const db = getServiceSupabaseClient();
-  if (!db) return;
-
-  queuedWorkerRunning = true;
-  try {
-    do {
-      queuedWorkerRequested = false;
-      await runUnlockSweeps(db, { mode: 'cron', force: true });
-      for (const scope of QUEUED_INGESTION_SCOPES) {
-        const recovered = await recoverStaleIngestionJobs(db, { scope });
-        if (recovered.length > 0) {
-          console.log('[ingestion_stale_recovered]', JSON.stringify({
-            worker_id: queuedWorkerId,
-            scope,
-            recovered_count: recovered.length,
-            recovered_job_ids: recovered.map((row) => row.id),
-          }));
-        }
-      }
-
-      const sweepPlan = getQueueSweepPlan();
-      while (true) {
-        let claimedAny = false;
-        for (const planEntry of sweepPlan) {
-          const claimed = await claimQueuedIngestionJobs(db, {
-            scopes: [...planEntry.scopes],
-            maxJobs: planEntry.maxJobs,
-            workerId: queuedWorkerId,
-            leaseSeconds: Math.max(5, Math.ceil(workerLeaseMs / 1000)),
-          });
-          if (claimed.length === 0) continue;
-          claimedAny = true;
-          await processClaimedIngestionJobs(db, claimed);
-        }
-        if (!claimedAny) break;
-      }
-    } while (queuedWorkerRequested);
-  } catch (error) {
+const queuedIngestionWorkerController = createQueuedIngestionWorkerController({
+  getServiceSupabaseClient,
+  runUnlockSweeps,
+  recoverStaleIngestionJobs,
+  queuedIngestionScopes: QUEUED_INGESTION_SCOPES,
+  queuedWorkerId,
+  workerLeaseMs,
+  getQueueSweepPlan,
+  claimQueuedIngestionJobs,
+  processClaimedIngestionJobs,
+  shouldAutoReschedule: () => runIngestionWorker && !runHttpServer,
+  onRecoveredJobs: ({ scope, recoveredJobs, workerId }) => {
+    console.log('[ingestion_stale_recovered]', JSON.stringify({
+      worker_id: workerId,
+      scope,
+      recovered_count: recoveredJobs.length,
+      recovered_job_ids: recoveredJobs.map((row) => row.id),
+    }));
+  },
+  onWorkerFailure: ({ workerId, error }) => {
     console.log('[ingestion_queue_worker_failed]', JSON.stringify({
-      worker_id: queuedWorkerId,
+      worker_id: workerId,
       error: error instanceof Error ? error.message : String(error),
     }));
-  } finally {
-    queuedWorkerRunning = false;
-    if (runIngestionWorker && !runHttpServer) {
-      scheduleQueuedIngestionProcessing(1500);
-    }
-  }
-}
+  },
+});
 
 function scheduleQueuedIngestionProcessing(delayMs = 0) {
-  if (queuedWorkerRunning) {
-    queuedWorkerRequested = true;
-    return;
-  }
-
-  if (queuedWorkerTimer) return;
-  const waitMs = Math.max(0, Math.floor(delayMs));
-  queuedWorkerTimer = setTimeout(() => {
-    queuedWorkerTimer = null;
-    void runQueuedIngestionProcessing();
-  }, waitMs);
+  queuedIngestionWorkerController.schedule(delayMs);
 }
 
 async function runYouTubeRefreshSchedulerCycle() {
@@ -7635,17 +7584,15 @@ async function runYouTubeRefreshSchedulerCycle() {
   }
 }
 
+const youtubeRefreshSchedulerController = createYouTubeRefreshSchedulerController({
+  enabled: youtubeRefreshEnabled,
+  runIngestionWorker,
+  intervalMinutes: youtubeRefreshIntervalMinutes,
+  runCycle: runYouTubeRefreshSchedulerCycle,
+});
+
 function scheduleYouTubeRefreshScheduler(delayMs?: number) {
-  if (!youtubeRefreshEnabled || !runIngestionWorker) return;
-  if (youtubeRefreshSchedulerTimer) return;
-  const defaultDelayMs = Math.max(1, youtubeRefreshIntervalMinutes) * 60_000;
-  const waitMs = Math.max(0, Math.floor(delayMs ?? defaultDelayMs));
-  youtubeRefreshSchedulerTimer = setTimeout(() => {
-    youtubeRefreshSchedulerTimer = null;
-    void runYouTubeRefreshSchedulerCycle().finally(() => {
-      scheduleYouTubeRefreshScheduler();
-    });
-  }, waitMs);
+  youtubeRefreshSchedulerController.schedule(delayMs);
 }
 
 const sourceSubscriptionSyncService = createSourceSubscriptionSyncService({
@@ -7890,7 +7837,7 @@ registerOpsRoutes(app, {
   workerHeartbeatMs,
   jobExecutionTimeoutMs,
   queuedWorkerId,
-  getQueuedWorkerRunning: () => queuedWorkerRunning,
+  getQueuedWorkerRunning: () => queuedIngestionWorkerController.getRunning(),
   runtimeMode,
   queuedIngestionScopes: QUEUED_INGESTION_SCOPES,
   isQueuedIngestionScope,
@@ -8561,8 +8508,8 @@ if (runHttpServer) {
 }
 
 if (runIngestionWorker) {
-  scheduleQueuedIngestionProcessing(1500);
+  queuedIngestionWorkerController.start(1500);
   if (youtubeRefreshEnabled) {
-    scheduleYouTubeRefreshScheduler(1500);
+    youtubeRefreshSchedulerController.start(1500);
   }
 }

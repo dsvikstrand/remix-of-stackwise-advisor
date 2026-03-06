@@ -3,7 +3,7 @@
 ## Doc Role
 - Supporting operational runbook only; not a primary MVP planning surface.
 - Launch gate status lives in `docs/ops/mvp-launch-readiness-checklist.md`.
-- Active implementation sequencing lives in `docs/exec-plans/active/mvp-readiness-review-followup.md`.
+- Active proof-only tail lives in `docs/exec-plans/active/mvp-launch-proof-tail.md`; completed implementation sequencing lives in `docs/exec-plans/completed/mvp-readiness-review-followup.md`.
 - Post-launch debt lives in `docs/exec-plans/tech-debt-tracker.md`.
 
 ## Purpose and ownership

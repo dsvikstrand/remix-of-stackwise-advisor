@@ -5,12 +5,14 @@ This file is the authoritative active/completed registry for execution plans.
 ## Primary Planning Surfaces
 - `docs/ops/mvp-launch-readiness-checklist.md`
   Launch-gate board. This is the only file that answers `Are we launch-ready?` and `What P0/P1 items are still open?`
-- `docs/exec-plans/active/mvp-readiness-review-followup.md`
-  Current active implementation program beyond the checklist. This is the only file that answers `What is the current engineering program?` and `What is P2?`
+- `docs/exec-plans/active/mvp-launch-proof-tail.md`
+  Current active proof-only tail beyond the checklist. This is the only file that answers `What launch-proof work is still open right now?`
 - `docs/exec-plans/tech-debt-tracker.md`
   Durable post-launch cleanup/debt board. This is the only file that answers `What survives after launch as cleanup or debt?`
 
 ## Active Reference Support
+- `docs/exec-plans/active/repo-cleanup-and-scale-readiness-plan.md`
+  Active post-launch cleanup/scalability plan for backend composition, frontend page orchestration, compatibility pruning, and repo hygiene.
 - `docs/ops/p1-1-p1-2-verification-runbook.md`
   Supporting runbook for the remaining P1 verification work.
 - `docs/ops/playwright-p1-2-callback-evidence.md`
@@ -48,6 +50,8 @@ This file is the authoritative active/completed registry for execution plans.
   Completed: backend-first no-behavior-drift parity contract, including final Phase 4 validation evidence.
 - `docs/exec-plans/completed/mvp-launch-hardening-phases.md`
   Completed: earlier phase-by-phase launch hardening program retained as reference/history.
+- `docs/exec-plans/completed/mvp-readiness-review-followup.md`
+  Completed: main MVP readiness implementation program, including P0/P1 hardening and P2 cleanup/refactor execution.
 - `docs/exec-plans/completed/bleuv1-refactor-a3-route-map-current.md`
   Completed: final modular route-distribution snapshot (`53` routes, `0` direct registrations in `server/index.ts`).
 - `docs/exec-plans/completed/bleuv1-refactor-a3-route-map-baseline.md`
@@ -64,7 +68,8 @@ This file is the authoritative active/completed registry for execution plans.
 - Legacy channels-first program: completed/archived.
 - `bleuV1` source-first umbrella program: completed.
 - Current launch authorization gate: `docs/ops/mvp-launch-readiness-checklist.md`.
-- Current implementation program beyond the gate: `docs/exec-plans/active/mvp-readiness-review-followup.md`.
+- Current active proof tail beyond the gate: `docs/exec-plans/active/mvp-launch-proof-tail.md`.
+- Current active cleanup/scalability plan: `docs/exec-plans/active/repo-cleanup-and-scale-readiness-plan.md`.
 - Current post-launch debt board: `docs/exec-plans/tech-debt-tracker.md`.
 - Manual iterative build strategy plans are paused reference docs.
 - Agentic orchestration: archived reference path.

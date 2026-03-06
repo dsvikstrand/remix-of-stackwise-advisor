@@ -6,7 +6,7 @@ Current status: paused reference track. Manual iterative delivery is the active 
 
 ## Reference Status
 - This pack is legacy reference-only and does not define active runtime execution.
-- Current active execution tracker: `docs/exec-plans/active/mvp-readiness-review-followup.md`.
+- Completed MVP readiness implementation tracker: `docs/exec-plans/completed/mvp-readiness-review-followup.md`.
 - Paused strategy references:
   - `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
   - `docs/exec-plans/active/on-pause/project-bleuv1-mvp-foundation.md`
