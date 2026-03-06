@@ -25,7 +25,6 @@ export function registerSourcePagesRouteHandlers(app: express.Express, deps: Sou
     getSourcePageByPlatformExternalId,
     runSourcePageAssetSweep,
     needsSourcePageAssetHydration,
-    hydrateSourcePageAssetsForRow,
     youtubeDataApiKey,
     getUserSubscriptionStateForSourcePage,
     sourceVideoListBurstLimiter,
@@ -357,19 +356,10 @@ app.get('/api/source-pages/:platform/:externalId', async (req, res) => {
     });
   }
 
-  // Opportunistic lazy hydration: older backfilled rows can miss avatar/banner
-  // until a subscribe/import rewrite occurs. Fill once on read when possible.
+  // Keep reads provider-safe: return stored/null assets immediately and let
+  // the bounded background sweep refresh legacy rows later.
   if (needsSourcePageAssetHydration(sourcePage) && youtubeDataApiKey) {
-    try {
-      const hydration = await hydrateSourcePageAssetsForRow(db, sourcePage as SourcePageAssetRecord);
-      sourcePage = hydration.sourcePage as typeof sourcePage;
-    } catch (assetError) {
-      console.log('[source_page_assets_lookup_failed]', JSON.stringify({
-        source_page_id: sourcePage.id,
-        source_channel_id: sourcePage.external_id,
-        error: assetError instanceof Error ? assetError.message : String(assetError),
-      }));
-    }
+    void runSourcePageAssetSweep(db, { mode: 'opportunistic' });
   }
 
   const { count: linkedFollowerCount, error: linkedFollowerCountError } = await db

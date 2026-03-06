@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { handleRefreshGenerate } from '../../server/handlers/sourceSubscriptionsHandlers';
+import {
+  handleListSourceSubscriptions,
+  handleRefreshGenerate,
+} from '../../server/handlers/sourceSubscriptionsHandlers';
 import { createMockSupabase } from './helpers/mockSupabase';
 
 function createResponse() {
@@ -28,6 +31,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     resolveYouTubeChannel: vi.fn(),
     youtubeDataApiKey: '',
     fetchYouTubeChannelAssetMap: vi.fn(async () => new Map()),
+    runSourcePageAssetSweep: vi.fn(async () => null),
     ensureSourcePageFromYouTubeChannel: vi.fn(),
     syncSingleSubscription: vi.fn(),
     markSubscriptionSyncError: vi.fn(),
@@ -69,6 +73,107 @@ function createDeps(overrides: Record<string, unknown> = {}) {
 }
 
 describe('source subscription refresh generate handler', () => {
+  it('reads subscription avatars from stored source page metadata without live YouTube fetches', async () => {
+    const authDb = createMockSupabase({
+      user_source_subscriptions: [{
+        id: 'sub_1',
+        user_id: '00000000-0000-0000-0000-000000000001',
+        source_type: 'youtube',
+        source_channel_id: 'channel_1',
+        source_channel_url: 'https://youtube.com/channel/channel_1',
+        source_channel_title: 'Channel 1',
+        source_page_id: 'page_1',
+        is_active: true,
+        updated_at: '2026-03-06T10:00:00.000Z',
+      }],
+    });
+    const serviceDb = createMockSupabase({
+      source_pages: [{
+        id: 'page_1',
+        platform: 'youtube',
+        external_id: 'channel_1',
+        avatar_url: 'https://img.example.com/channel_1.jpg',
+        banner_url: 'https://img.example.com/channel_1-banner.jpg',
+      }],
+    });
+    const fetchYouTubeChannelAssetMap = vi.fn(async () => {
+      throw new Error('should not be called');
+    });
+    const runSourcePageAssetSweep = vi.fn(async () => null);
+    const req = {} as any;
+    const res = createResponse();
+    const deps = createDeps({
+      getAuthedSupabaseClient: () => authDb,
+      getServiceSupabaseClient: () => serviceDb,
+      fetchYouTubeChannelAssetMap,
+      runSourcePageAssetSweep,
+    });
+
+    await handleListSourceSubscriptions(req, res as any, deps);
+
+    expect(res.statusCode).toBe(200);
+    expect(fetchYouTubeChannelAssetMap).not.toHaveBeenCalled();
+    expect(runSourcePageAssetSweep).not.toHaveBeenCalled();
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: [{
+        id: 'sub_1',
+        source_channel_avatar_url: 'https://img.example.com/channel_1.jpg',
+        source_page_path: '/s/youtube/x',
+      }],
+    });
+  });
+
+  it('tolerates missing stored source page assets and schedules a bounded sweep', async () => {
+    const authDb = createMockSupabase({
+      user_source_subscriptions: [{
+        id: 'sub_1',
+        user_id: '00000000-0000-0000-0000-000000000001',
+        source_type: 'youtube',
+        source_channel_id: 'channel_1',
+        source_channel_url: 'https://youtube.com/channel/channel_1',
+        source_channel_title: 'Channel 1',
+        source_page_id: 'page_1',
+        is_active: true,
+        updated_at: '2026-03-06T10:00:00.000Z',
+      }],
+    });
+    const serviceDb = createMockSupabase({
+      source_pages: [{
+        id: 'page_1',
+        platform: 'youtube',
+        external_id: 'channel_1',
+        avatar_url: null,
+        banner_url: null,
+      }],
+    });
+    const fetchYouTubeChannelAssetMap = vi.fn(async () => {
+      throw new Error('should not be called');
+    });
+    const runSourcePageAssetSweep = vi.fn(async () => null);
+    const req = {} as any;
+    const res = createResponse();
+    const deps = createDeps({
+      getAuthedSupabaseClient: () => authDb,
+      getServiceSupabaseClient: () => serviceDb,
+      fetchYouTubeChannelAssetMap,
+      runSourcePageAssetSweep,
+    });
+
+    await handleListSourceSubscriptions(req, res as any, deps);
+
+    expect(res.statusCode).toBe(200);
+    expect(fetchYouTubeChannelAssetMap).not.toHaveBeenCalled();
+    expect(runSourcePageAssetSweep).toHaveBeenCalledTimes(1);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: [{
+        id: 'sub_1',
+        source_channel_avatar_url: null,
+      }],
+    });
+  });
+
   it('queues only the affordable prefix and reports skipped_unaffordable_count', async () => {
     const authDb = createMockSupabase({
       user_source_subscriptions: [{

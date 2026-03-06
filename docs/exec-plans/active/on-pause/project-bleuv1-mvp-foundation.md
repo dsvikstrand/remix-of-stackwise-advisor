@@ -31,6 +31,10 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 6. Legacy manual gate runtime remains `CHANNEL_GATES_MODE=bypass`; auto-channel path uses `AUTO_CHANNEL_GATE_MODE`.
 
 ## Current Workstreams
+### W0 - Runtime Baseline
+- Supabase target alignment is corrected to `qgqqavaogicecvhopgan`.
+- Shared auto-unlock schema migration watermark is now `20260306113000`.
+
 ### W1 - My Feed As First-Class Surface
 - Introduce/finish personal unfiltered feed lane behavior.
 - Keep `My Feed` as a profile-oriented workspace surface (profile `Feed` tab) instead of a top-nav primary.

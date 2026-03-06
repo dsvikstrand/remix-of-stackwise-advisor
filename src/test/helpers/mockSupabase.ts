@@ -254,7 +254,12 @@ class QueryBuilder {
   }
 }
 
-export function createMockSupabase(initialTables?: Partial<TablesState>) {
+export function createMockSupabase(
+  initialTables?: Partial<TablesState>,
+  options?: {
+    rpcs?: Record<string, (args: any, state: TablesState) => Promise<{ data: any; error: any }> | { data: any; error: any }>;
+  },
+) {
   const state: TablesState = {
     user_credit_wallets: [],
     credit_ledger: [],
@@ -265,10 +270,29 @@ export function createMockSupabase(initialTables?: Partial<TablesState>) {
     ...(initialTables || {}),
   };
 
-  return {
+  const client: Record<string, any> = {
     state,
     from(tableName: string) {
       return new QueryBuilder(tableName, state);
     },
   };
+
+  if (options?.rpcs) {
+    client.rpc = (name: string, args: any) => {
+      const handler = options.rpcs?.[name];
+      if (!handler) {
+        return Promise.resolve({
+          data: null,
+          error: makeError(`RPC ${name} not found`, 'PGRST202'),
+        });
+      }
+      try {
+        return Promise.resolve(handler(args, state));
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    };
+  }
+
+  return client;
 }

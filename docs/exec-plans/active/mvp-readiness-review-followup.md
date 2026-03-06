@@ -23,13 +23,13 @@ d3) [have] Source-page unlock flow now runs queue/intake preflight before holds 
 d4) [have] Source-page video library policy is now enforced in the backend as subscriber-only, not frontend-only gating.
 d5) [have] Search and manual refresh now classify duplicate/in-progress items before reservation, queue only the affordable new-item prefix, and carry reservation metadata into worker execution.
 d6) [have] Shared-cost auto billing now uses canonical auto intents, funded-participant snapshots, and shared settle/release semantics instead of the temporary single-payer path.
-d7) [todo] Shared YouTube quota protection needs stronger concurrency safety and lower background quota burn.
+d7) [have] Shared YouTube quota protection now uses an atomic DB consume path and routine subscription/source-page reads no longer spend live YouTube asset quota.
 d8) [have] Handler-level coverage now exists for direct URL reserve/release timing plus Search/manual-refresh affordability trimming, and shared auto-billing math/lifecycle tests now cover the new funded-subset path.
 
 ## Execution Order
 e1) [have] `P0-1`, `P0-2`, and `P0-3` are completed.
 e2) [have] `P0-4` is complete.
-e3) [todo] Next focus is `P1-1`, `P1-2`, and `P1-3`.
+e3) [todo] Next focus is `P1-3` and `P1-4`.
 e4) [todo] Only after those are stable, spend time on `P2` cleanup/refactor work.
 
 ## P0 Launch Blockers
@@ -117,44 +117,49 @@ i5) [have] Validation:
 - tests now cover `10`, `3`, shrinking-subset, and `0` funded-participant cases
 - deterministic `0.34 + 0.33 + 0.33` settlement math is covered
 - shared auto settle/release lifecycle is covered in unit tests
+- Supabase migration `20260306113000_auto_unlock_shared_cost_v1.sql` is applied on linked project `qgqqavaogicecvhopgan`
+- post-apply introspection confirms `source_auto_unlock_intents`, `source_auto_unlock_participants`, `source_item_unlocks.auto_unlock_intent_id`, and `reserve_source_auto_unlock_intent`
 i6) [have] Exit criteria:
 - auto billing now matches the locked product policy and is auditable from durable ledger data
 
 ## P1 Strongly Recommended Before Launch
 
 ### P1-1 Quota Guard Concurrency Hardening
-j1) [todo] Risk: `high`
-j2) [todo] Problem:
+j1) [have] Risk: `high`
+j2) [have] Problem:
 - shared YouTube quota guard uses a non-atomic read/compute/write pattern and can under-enforce limits during concurrent spikes
-j3) [todo] Primary files:
+j3) [have] Primary files:
 - `server/services/youtubeQuotaGuard.ts`
+- `supabase/migrations/20260306143000_youtube_quota_atomic_consume_v1.sql`
 - related search/channel-search handlers in `server/handlers/youtubeHandlers.ts`
-j4) [todo] Implementation checklist:
-- move quota consume logic to an atomic DB function or equivalent compare-and-swap path
-- keep cooldown fallback behavior for upstream `429/403` signals
-- document whether budgets are strict or best-effort
-j5) [todo] Validation:
-- add focused service tests for concurrent consume attempts
-- verify retry-after behavior remains deterministic
-j6) [todo] Exit criteria:
+j4) [have] Implementation outcome:
+- quota consume now runs through `public.consume_youtube_quota_budget(...)`, which locks the provider row, resets minute/day windows atomically, honors active cooldowns, and increments counters only on allow
+- `checkAndConsume()` now delegates to the DB function and preserves fail-open behavior only for missing-schema / missing-RPC environments
+- `markQuotaLimited()` remains the cooldown write path for upstream `403/429`
+j5) [have] Validation:
+- quota guard service tests now cover the RPC path and missing-function fail-open behavior
+- Supabase migration `20260306143000_youtube_quota_atomic_consume_v1.sql` is applied on linked project `qgqqavaogicecvhopgan`
+- local typecheck/test/build pass completed after the provider-safety patch
+j6) [have] Exit criteria:
 - quota guard cannot materially over-admit live requests under concurrency
 
 ### P1-2 Quota Burn Reduction On Read Paths
-k1) [todo] Risk: `high`
-k2) [todo] Problem:
+k1) [have] Risk: `high`
+k2) [have] Problem:
 - subscriptions and related display surfaces still trigger live YouTube asset lookups on normal reads
-k3) [todo] Primary files:
+k3) [have] Primary files:
 - `server/handlers/sourceSubscriptionsHandlers.ts`
+- `server/handlers/sourcePagesHandlers.ts`
 - `server/index.ts` (`fetchYouTubeChannelAssetMap`)
 - `server/services/sourcePageAssetSweep.ts`
-k4) [todo] Implementation checklist:
-- stop live asset fetching on hot read paths where stored data is good enough
-- prefer stored source-page assets or cached refresh jobs
-- keep opportunistic hydration bounded and non-user-blocking
-k5) [todo] Validation:
-- confirm repeated subscriptions page loads do not trigger live provider calls
-- document fallback behavior when assets are missing
-k6) [todo] Exit criteria:
+k4) [have] Implementation outcome:
+- `GET /api/source-subscriptions` now reads `source_channel_avatar_url` from stored `source_pages` metadata and never blocks on live YouTube asset fetches
+- missing/stale source-page assets now fall back to `null` on read and trigger only the bounded background source-page asset sweep
+- source-page reads no longer do inline asset hydration; they return stored/null metadata immediately and rely on the sweep for later repair
+k5) [have] Validation:
+- handler tests now prove subscription reads do not call `fetchYouTubeChannelAssetMap`
+- handler tests now cover the missing-asset fallback path plus bounded sweep scheduling
+k6) [have] Exit criteria:
 - routine browsing does not materially consume YouTube quota
 
 ### P1-3 Queue Budgeting By Work Size

@@ -94,6 +94,7 @@ a72) [have] Launch gate hardening adds explicit credit outage semantics (`CREDIT
 a73) [have] Launch legal baseline routes are now first-class (`/terms`, `/privacy`) and linked from auth surface.
 a74) [have] Launch error-copy normalization is centralized through shared frontend mapping for critical failure classes across Search/Source/Wall/My Feed.
 a75) [have] Source-page search uptime hardening: opportunistic source-page asset sweep is wired safely so `/api/source-pages/search` cannot crash backend runtime.
+a76) [have] Supabase repo target is aligned to project `qgqqavaogicecvhopgan`, and shared auto-unlock schema migration `20260306113000_auto_unlock_shared_cost_v1.sql` is applied remotely.
 
 ## Core Model
 b1) `Source Item`
@@ -251,7 +252,8 @@ si11) service-ops endpoint: `GET /api/ingestion/jobs/latest` (service auth; late
 si11b) service-ops endpoint: `GET /api/ops/queue/health` (service auth; queue depth/stale lease/provider circuit state snapshot)
 si12) YouTube search endpoint: `GET /api/youtube-search?q=<query>&limit=<1..25>&page_token=<optional>`
 si13) YouTube channel search endpoint: `GET /api/youtube-channel-search?q=<query>&limit=<1..25>&page_token=<optional>`
-si14) `GET /api/source-subscriptions` now includes optional `source_channel_avatar_url` per subscription row (derived from YouTube API; no schema change).
+si13b) Shared YouTube live-call budgeting now uses an atomic backend quota consume path; when the quota schema is present, retry timing comes from the DB decision rather than app-side best-effort counters.
+si14) `GET /api/source-subscriptions` now includes optional `source_channel_avatar_url` per subscription row from stored `source_pages` metadata; normal reads do not block on live YouTube API asset fetches.
 si15) service-ops endpoint: `POST /api/auto-banner/jobs/trigger` (service auth; processes queue + cap rebalance)
 si16) service-ops endpoint: `GET /api/auto-banner/jobs/latest` (service auth; queue snapshot)
 si17) Backend core timeout control: `YT2BP_CORE_TIMEOUT_MS` (applies to `/api/youtube-to-blueprint` request budget).

@@ -21,7 +21,7 @@ a5) [todo] Evidence must be concrete:
 ## Launch Gate Snapshot (Update Daily)
 b1) [have] Release candidate backend SHA: `f98114d68bf6d46fba4b1da815c5fdc20221212c`
 b2) [have] Release candidate frontend SHA: `f98114d68bf6d46fba4b1da815c5fdc20221212c`
-b3) [have] Latest migration watermark: `20260305174500`
+b3) [have] Latest migration watermark: `20260306113000`
 b4) [todo] P0 open count: `0`
 b5) [todo] P1 open count: `4`
 b6) [todo] Current launch recommendation: `GO (P0 cleared)`.
@@ -57,7 +57,7 @@ d6) [have] Verification:
 d7) [have] Pass criteria:
 - no pending required migration for release
 - no runtime schema errors on critical flows
-d8) [have] Evidence: `Final migration parity evidence captured in Evidence Log (o16).`
+d8) [have] Evidence: `Final migration parity evidence captured in Evidence Log (o16, o41-o42).`
 
 ### P0-3 Credit Fail-Safe (No Silent Fail-Open)
 e1) [have] Risk: `blocking`
@@ -251,6 +251,10 @@ o37) [have] `2026-03-05T15:22:09Z` - `P0-6` - `browser deep-link proof /privacy`
 o38) [have] `2026-03-05T15:22:09Z` - `P0-6` - `browser deep-link proof /auth` - `npx playwright screenshot --wait-for-selector "text=Sign in to create blueprints" https://dsvikstrand.github.io/remix-of-stackwise-advisor/auth /tmp/bleu-p0-6-proof/auth.png => selector matched, screenshot captured` - `david`
 o39) [have] `2026-03-05T15:28:54Z` - `P1-1` - `CI Gate rerun passed after docs-link fix` - `GitHub Actions CI Gate #5 for commit b31c663 completed with conclusion=success` - `david`
 o40) [todo] `2026-03-05T15:28:54Z` - `P1-1` - `branch-protection required-check evidence pending` - `Need repository-settings proof that required checks block merge to main` - `david`
+o41) [have] `2026-03-06T08:13:00Z` - `P0-2` - `migration parity advanced to shared auto-unlock schema` - `npx supabase db push applied 20260306113000_auto_unlock_shared_cost_v1.sql to project qgqqavaogicecvhopgan` - `david`
+o42) [have] `2026-03-06T08:14:00Z` - `P0-2` - `post-push migration/schema verification` - `npx supabase migration list => local/remote watermark 20260306113000 matches; supabase gen types --linked shows source_auto_unlock_intents, source_auto_unlock_participants, auto_unlock_intent_id, reserve_source_auto_unlock_intent` - `david`
+o43) [have] `2026-03-06T09:18:00Z` - `Provider Safety` - `atomic YouTube quota consume migration applied` - `npx supabase db push applied 20260306143000_youtube_quota_atomic_consume_v1.sql; npx supabase migration list now shows local/remote watermark 20260306143000` - `david`
+o44) [have] `2026-03-06T09:18:00Z` - `Provider Safety` - `hot subscription/source-page reads moved off live asset fetches` - `GET /api/source-subscriptions now serves stored source_pages avatars and source-page reads trigger only bounded background sweep; npm run test => 50 files / 195 tests passed` - `david`
 
 ## Deferred (Not Launch Gate)
 p1) [have] P2 modularization and post-launch optimizations are intentionally out of launch gate.

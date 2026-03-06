@@ -17,6 +17,12 @@ type QuotaStateRow = {
   cooldown_until: string | null;
 };
 
+type QuotaRpcRow = {
+  allowed?: boolean | null;
+  reason?: string | null;
+  retry_after_seconds?: number | null;
+};
+
 function isMissingRelationError(error: unknown, relation: string) {
   const e = error as { code?: unknown; message?: unknown; details?: unknown; hint?: unknown } | null;
   const hay = `${String(e?.message || '')} ${String(e?.details || '')} ${String(e?.hint || '')}`.toLowerCase();
@@ -28,6 +34,16 @@ function isMissingRelationError(error: unknown, relation: string) {
     (hay.includes('does not exist') || hay.includes('could not find the table'))
     && (hay.includes(relation.toLowerCase()) || hay.includes(relation.replace(/^public\./i, '').toLowerCase()))
   );
+}
+
+function isMissingRpcError(error: unknown, rpcName: string) {
+  const e = error as { code?: unknown; message?: unknown; details?: unknown; hint?: unknown } | null;
+  const hay = `${String(e?.message || '')} ${String(e?.details || '')} ${String(e?.hint || '')}`.toLowerCase();
+  const code = String(e?.code || '').trim().toUpperCase();
+  if (code === '42883' || code === 'PGRST202') {
+    return hay.includes(rpcName.toLowerCase()) || hay.includes('function');
+  }
+  return hay.includes(rpcName.toLowerCase()) && hay.includes('does not exist');
 }
 
 function secondsUntil(targetMs: number, nowMs: number) {
@@ -140,6 +156,7 @@ export function createYouTubeQuotaGuardService(input?: {
 }) {
   const providerKey = String(input?.providerKey || 'youtube_data_api').trim();
   const TABLE_NAME = 'youtube_quota_state';
+  const RPC_NAME = 'consume_youtube_quota_budget';
 
   async function checkAndConsume(args: {
     db: DbClient | null;
@@ -148,70 +165,31 @@ export function createYouTubeQuotaGuardService(input?: {
   }): Promise<YouTubeQuotaDecision> {
     if (!args.db) return { allowed: true, reason: null, retryAfterSeconds: null };
 
-    const nowIso = new Date().toISOString();
-    const upsertResult = await args.db
-      .from(TABLE_NAME)
-      .upsert({
-        provider: providerKey,
-        window_started_at: nowIso,
-        live_calls_window: 0,
-        live_calls_day: 0,
-        day_started_at: nowIso.slice(0, 10),
-        updated_at: nowIso,
-      }, {
-        onConflict: 'provider',
+    if (typeof args.db.rpc === 'function') {
+      const { data, error } = await args.db.rpc(RPC_NAME, {
+        p_provider: providerKey,
+        p_max_per_minute: Math.max(1, Math.floor(Number(args.maxPerMinute) || 1)),
+        p_max_per_day: Math.max(1, Math.floor(Number(args.maxPerDay) || 1)),
       });
-    if (upsertResult.error && !isMissingRelationError(upsertResult.error, TABLE_NAME)) {
-      throw upsertResult.error;
-    }
-    if (upsertResult.error && isMissingRelationError(upsertResult.error, TABLE_NAME)) {
-      return { allowed: true, reason: null, retryAfterSeconds: null };
-    }
-
-    const { data, error } = await args.db
-      .from(TABLE_NAME)
-      .select('provider, window_started_at, live_calls_window, live_calls_day, day_started_at, cooldown_until')
-      .eq('provider', providerKey)
-      .maybeSingle();
-    if (error) {
-      if (isMissingRelationError(error, TABLE_NAME)) {
+      if (error) {
+        if (isMissingRelationError(error, TABLE_NAME) || isMissingRpcError(error, RPC_NAME)) {
+          return { allowed: true, reason: null, retryAfterSeconds: null };
+        }
+        throw error;
+      }
+      const row = (Array.isArray(data) ? data[0] : data) as QuotaRpcRow | null;
+      if (!row || typeof row.allowed !== 'boolean') {
         return { allowed: true, reason: null, retryAfterSeconds: null };
       }
-      throw error;
-    }
-    if (!data) {
-      return { allowed: true, reason: null, retryAfterSeconds: null };
-    }
-
-    const row = data as QuotaStateRow;
-    const evaluated = applyQuotaDecision({
-      nowMs: Date.now(),
-      state: {
-        windowStartedAt: row.window_started_at || null,
-        liveCallsWindow: Number(row.live_calls_window || 0),
-        liveCallsDay: Number(row.live_calls_day || 0),
-        dayStartedAt: row.day_started_at || null,
-        cooldownUntil: row.cooldown_until || null,
-      },
-      maxPerMinute: args.maxPerMinute,
-      maxPerDay: args.maxPerDay,
-    });
-
-    const { error: updateError } = await args.db
-      .from(TABLE_NAME)
-      .update({
-        window_started_at: evaluated.nextState.windowStartedAt,
-        live_calls_window: evaluated.nextState.liveCallsWindow,
-        live_calls_day: evaluated.nextState.liveCallsDay,
-        day_started_at: evaluated.nextState.dayStartedAt,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('provider', providerKey);
-    if (updateError && !isMissingRelationError(updateError, TABLE_NAME)) {
-      throw updateError;
+      const reason = String(row.reason || '').trim();
+      return {
+        allowed: row.allowed,
+        reason: row.allowed ? null : (reason === 'cooldown' || reason === 'minute_budget' || reason === 'day_budget' ? reason : null),
+        retryAfterSeconds: row.retry_after_seconds == null ? null : Math.max(1, Math.floor(Number(row.retry_after_seconds) || 0)),
+      };
     }
 
-    return evaluated.decision;
+    return { allowed: true, reason: null, retryAfterSeconds: null };
   }
 
   async function markQuotaLimited(args: {

@@ -36,6 +36,7 @@ export type SourceSubscriptionsRouteDeps = {
   resolveYouTubeChannel: any;
   youtubeDataApiKey: string;
   fetchYouTubeChannelAssetMap: any;
+  runSourcePageAssetSweep?: any;
   ensureSourcePageFromYouTubeChannel: any;
   syncSingleSubscription: any;
   markSubscriptionSyncError: any;

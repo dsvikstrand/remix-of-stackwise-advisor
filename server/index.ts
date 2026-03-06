@@ -7722,6 +7722,7 @@ registerSourceSubscriptionsRoutes(app, {
   resolveYouTubeChannel,
   youtubeDataApiKey,
   fetchYouTubeChannelAssetMap,
+  runSourcePageAssetSweep,
   ensureSourcePageFromYouTubeChannel,
   syncSingleSubscription,
   markSubscriptionSyncError,

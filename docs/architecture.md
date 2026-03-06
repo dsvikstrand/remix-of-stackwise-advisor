@@ -84,9 +84,10 @@
     - route/domain contracts are centralized under `server/contracts/api/*` as canonical typing surfaces
     - extracted route-heavy logic is split into `server/handlers/*` (active domains) and orchestration services under `server/services/*`
   - `/api/youtube-to-blueprint` generation pipeline.
+  - shared YouTube live-call budgeting now uses atomic DB-backed quota consumption (`consume_youtube_quota_budget`) so search/channel-search admission is strict when the schema is present and fail-open only for missing-schema environments.
   - subscription ingestion APIs:
     - `POST|GET|PATCH|DELETE /api/source-subscriptions`
-      - `GET` enriches rows with optional `source_channel_avatar_url` from YouTube API (no DB write path required)
+      - `GET` returns optional `source_channel_avatar_url` from stored `source_pages` metadata and never blocks on live YouTube asset fetches
       - rows now carry `source_page_id` and `source_page_path` when resolvable.
       - rows now include `auto_unlock_enabled` (default `true`) and `PATCH` accepts `auto_unlock_enabled` updates.
       - `POST` notice insertion stores channel avatar + optional banner metadata for My Feed notice-card rendering
@@ -94,7 +95,7 @@
       - `DELETE` deactivates subscription and removes user-scoped `subscription_notice` feed row for that channel
     - `GET /api/source-pages/:platform/:externalId` (public-readable source page + follower count + viewer subscription state)
     - `GET /api/source-pages/search` (public-readable source lookup for Explore; app source pages only)
-      - includes opportunistic lazy hydration for missing source avatar/banner assets on legacy backfilled rows.
+      - reads return stored/null source avatar assets immediately and can trigger the bounded background asset sweep opportunistically.
       - handler dependency wiring is required for opportunistic sweep path so search remains process-safe under runtime errors.
     - `GET /api/source-pages/:platform/:externalId/blueprints` (public-readable source blueprint feed, deduped by `source_item_id`, cursor-paginated via `next_cursor`, additive `source_thumbnail_url` per item)
     - `GET /api/source-pages/:platform/:externalId/videos` (auth-only, subscriber-only source video-library listing with duplicate state flags for requester and `kind=full|shorts` filter)
@@ -144,6 +145,7 @@
   - Gate runtime mode switch: `CHANNEL_GATES_MODE = bypass | shadow | enforce` (default `bypass`).
 - Data:
   - Supabase is system of record for blueprints, tags, follows, likes/comments, telemetry.
+  - Linked Supabase project for this repo is `qgqqavaogicecvhopgan`; shared auto-unlock schema migration watermark is `20260306113000`.
   - `bleuV1` extension: source-item canonical tables + user feed item tables + subscription/ingestion job tables + auto-banner policy/queue tables + daily-credit/unlock tables.
   - source-identity foundation: `source_pages` table and FK links from `user_source_subscriptions` + `source_items` via `source_page_id`.
   - shared unlock foundation: `source_item_unlocks` (status/cost/reservation/ready blueprint) + `user_credit_wallets` + immutable `credit_ledger`.

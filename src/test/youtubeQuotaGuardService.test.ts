@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { applyQuotaDecision } from '../../server/services/youtubeQuotaGuard';
+import { applyQuotaDecision, createYouTubeQuotaGuardService } from '../../server/services/youtubeQuotaGuard';
+import { createMockSupabase } from './helpers/mockSupabase';
 
 describe('youtubeQuotaGuard service helpers', () => {
   it('allows and increments counters when under budget', () => {
@@ -80,5 +81,53 @@ describe('youtubeQuotaGuard service helpers', () => {
     expect(result.decision.allowed).toBe(true);
     expect(result.nextState.liveCallsDay).toBe(1);
     expect(result.nextState.dayStartedAt).toBe('2026-03-06');
+  });
+
+  it('uses the atomic quota RPC when available', async () => {
+    const db = createMockSupabase({}, {
+      rpcs: {
+        consume_youtube_quota_budget: ({ p_provider, p_max_per_minute, p_max_per_day }) => ({
+          data: [{
+            allowed: false,
+            reason: 'minute_budget',
+            retry_after_seconds: 12,
+            provider: p_provider,
+            max_per_minute: p_max_per_minute,
+            max_per_day: p_max_per_day,
+          }],
+          error: null,
+        }),
+      },
+    }) as any;
+    const service = createYouTubeQuotaGuardService();
+
+    const decision = await service.checkAndConsume({
+      db,
+      maxPerMinute: 60,
+      maxPerDay: 20_000,
+    });
+
+    expect(decision).toEqual({
+      allowed: false,
+      reason: 'minute_budget',
+      retryAfterSeconds: 12,
+    });
+  });
+
+  it('fails open when the atomic quota RPC is missing', async () => {
+    const db = createMockSupabase() as any;
+    const service = createYouTubeQuotaGuardService();
+
+    const decision = await service.checkAndConsume({
+      db,
+      maxPerMinute: 60,
+      maxPerDay: 20_000,
+    });
+
+    expect(decision).toEqual({
+      allowed: true,
+      reason: null,
+      retryAfterSeconds: null,
+    });
   });
 });

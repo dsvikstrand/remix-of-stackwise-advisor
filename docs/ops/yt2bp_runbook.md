@@ -735,7 +735,7 @@ Expected behavior:
 - first subscribe sets checkpoint only (no old-video prefill).
 - one `subscription_notice` feed item is inserted for this user/channel.
 - future uploads are ingested automatically.
-- subscription rows returned by `GET /api/source-subscriptions` may include `source_channel_avatar_url` (read-time enrichment from YouTube API).
+- subscription rows returned by `GET /api/source-subscriptions` may include `source_channel_avatar_url` from stored `source_pages` metadata; missing avatars return `null` and should not trigger live YouTube asset fetches on the request path.
 - `subscription_notice` source metadata may include `channel_banner_url` for notice-card backgrounds.
 - unsubscribing (`DELETE /api/source-subscriptions/:id`) removes the user-scoped notice card from My Feed for that channel.
 - subscription auto-ingest generation runs with review enabled and banner disabled by default.
