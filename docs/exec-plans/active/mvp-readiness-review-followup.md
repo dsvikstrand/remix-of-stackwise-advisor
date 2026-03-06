@@ -33,6 +33,7 @@ e3) [have] `P1-1`, `P1-2`, `P1-3`, and `P1-4` are implemented and locally valida
 e4) [have] Production now runs `13e9da13590335046bad9f0c0db16e2ac7d53046`, including the credit-override hotfix that restored `/api/credits` and credit-backed generation after the `5c16f60` regression.
 e5) [have] Live production queue drills now prove the new work-item metrics are wired through route responses and `/api/ops/queue/health`.
 e6) [todo] Remaining launch work is now concentrated in `P1-1` branch-protection evidence, `P1-2` mobile OAuth callback validation, and `P2` cleanup/refactor work.
+e7) [have] `docs/ops/p1-1-p1-2-verification-runbook.md` now captures the exact verification steps, device/browser matrix, and evidence templates for the final `P1-1` / `P1-2` closure work.
 
 ## P0 Launch Blockers
 

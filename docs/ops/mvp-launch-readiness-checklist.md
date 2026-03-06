@@ -139,17 +139,21 @@ i5) [todo] Required checks:
 i6) [todo] Pass criteria:
 - merge to `main` is blocked on required checks
 i7) [todo] Evidence: `Baseline command bundle + workflow implementation evidence captured (o7-o10, o23-o24); branch-protection merge-block evidence pending.`
+i8) [have] Runbook:
+- `docs/ops/p1-1-p1-2-verification-runbook.md` now captures the exact GitHub settings / PR proof steps and evidence template needed to close this item.
 
 ### P1-2 Mobile OAuth Callback Matrix
 j1) [todo] Risk: `medium`
 j2) [todo] Owner: `david`
 j3) [todo] Target date: `2026-03-11`
-j4) [todo] Status: `not started`
+j4) [todo] Status: `in progress`
 j5) [todo] Scope:
 - validate connect/import callback reliability on mobile browsers
 j6) [todo] Pass criteria:
 - returns to intended context consistently for tested browsers
-j7) [todo] Evidence: `Pending mobile callback matrix run records (browser/device table).`
+j7) [todo] Evidence: `Mobile callback matrix execution still pending; runbook and runtime-path review are captured in o57 and docs/ops/p1-1-p1-2-verification-runbook.md.`
+j8) [have] Runbook:
+- `docs/ops/p1-1-p1-2-verification-runbook.md` defines the minimum device/browser matrix, the `/subscriptions` and `/welcome` callback flows, and the exact evidence fields to record.
 
 ### P1-3 Queue and Incident Visibility Bundle
 k1) [todo] Risk: `medium`
@@ -267,6 +271,7 @@ o53) [have] `2026-03-06T10:28:56Z` - `P1-3` - `timed operator classification dri
 o54) [have] `2026-03-06T10:34:24Z` - `P1-4` - `authenticated API feed/auth drill completed without critical saturation` - `npm run drill:feed -- --base-url https://bapi.vdsai.cloud --urls /api/credits,/api/profile/09d58bdd-0bd8-40e1-9c9f-0429049d9c16/feed --requests 120 --concurrency 8 --auth-token <fresh-account1-token> --json => requests_succeeded=119, requests_failed=1, latency_p95_ms=1038, status_distribution: 200=119/429=1` - `david`
 o55) [have] `2026-03-06T10:40:44Z` - `P1-4` - `browser lazy-credit-refresh proof captured on deployed frontend` - `headless Playwright login on https://dsvikstrand.github.io/remix-of-stackwise-advisor => wall menu-closed idle 70s observed 0 /api/credits requests; opening UserMenu triggered 1 /api/credits request (200); navigating to /search triggered 1 /api/credits request; subsequent 70s search idle observed 0 additional /api/credits requests` - `david`
 o56) [have] `2026-03-06T10:43:00Z` - `P1-4` - `authenticated frontend burst across Home/Wall/My Feed stayed clean` - `headless Playwright reused signed-in session for 6 concurrent visits across /, /wall, /my-feed on deployed frontend; observed 32 backend API responses with status_distribution 200=32, api_non_ok_count=0, page_error_count=0` - `david`
+o57) [have] `2026-03-06T16:35:00Z` - `P1-1/P1-2` - `verification runbook prepared and runtime paths reviewed` - `A dedicated runbook now captures the GitHub ruleset/PR proof steps plus the mobile callback matrix; current shell still lacks GitHub settings access (gh unavailable), while the YouTube OAuth start/callback flow and frontend callback consumers were reviewed before device-matrix execution` - `david`
 
 ## Deferred (Not Launch Gate)
 p1) [have] P2 modularization and post-launch optimizations are intentionally out of launch gate.
