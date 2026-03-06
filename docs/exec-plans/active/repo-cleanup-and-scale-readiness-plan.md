@@ -52,25 +52,31 @@ d5) [have] Completion notes:
 - `server/index.ts` still owns route registration and queue job processing semantics, but no longer owns long-lived worker/scheduler timer state directly
 
 ### C2 Frontend Page-Orchestrator Cleanup
-e1) [todo] Goal:
+e1) [have] Goal:
 - reduce page-level spaghetti in high-churn surfaces by extracting hooks/helpers, not redesigning UX
 
-e2) [todo] Primary files:
+e2) [have] Primary files:
 - `src/pages/Subscriptions.tsx`
 - `src/pages/Wall.tsx`
 - `src/pages/BlueprintDetail.tsx`
 - `src/pages/SourcePage.tsx`
 
-e3) [todo] Targets:
-- extract subscription page OAuth/import/refresh orchestration into focused hooks
-- extract `Wall` feed composition + unlock/status orchestration into focused hooks/selectors
+e3) [have] Targets completed:
+- subscription page OAuth/import/refresh orchestration now lives in `src/hooks/useSubscriptionsPageController.ts`
+- `Wall` feed scope/query/mutation orchestration now lives in `src/hooks/useWallPageController.ts`
+- page render files now compose hooks instead of owning the full state/query/mutation model inline
+
+e4) [todo] Remaining target:
 - extract `BlueprintDetail` source-channel lookup/render-prep logic into reusable helpers/hooks
 - keep route/component contracts stable while reducing in-component state/query/mutation sprawl
 
-e4) [todo] Success criteria:
-- page files are materially smaller
-- async orchestration is split from render-heavy JSX
-- tests or smoke checks cover the extracted hooks/helpers where practical
+e5) [have] Completion notes:
+- `Subscriptions.tsx` no longer owns the YouTube OAuth callback, import flow, refresh-job lifecycle, and subscription action orchestration directly
+- `Wall.tsx` no longer owns scope/query/mutation orchestration directly and now composes the backend feed path through a page controller hook
+- no UI contracts or backend API contracts were intentionally changed during the extraction
+
+e6) [todo] Deferred item:
+- `BlueprintDetail.tsx` remains intentionally deferred while local user-owned edits are present in that file
 
 ### C3 Compatibility-Layer Pruning
 f1) [todo] Goal:
@@ -113,7 +119,7 @@ g4) [todo] Success criteria:
 h1) [todo] `Phase 1: C1 Backend Composition`
 - highest maintainability payoff and the biggest single hotspot
 
-h2) [todo] `Phase 2: C2 Frontend Page-Orchestrators`
+h2) [have] `Phase 2: C2 Frontend Page-Orchestrators`
 - extract page-level orchestration once backend composition is calmer
 
 h3) [todo] `Phase 3: C3 Compatibility Pruning`

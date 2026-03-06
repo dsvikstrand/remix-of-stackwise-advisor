@@ -98,3 +98,5 @@ Status: `canonical`
 2. Refresh policy is bootstrap-first (`+15m`, `+24h`) then user-triggered manual refresh with per-blueprint cooldown.
 3. Supabase project targeting is aligned to `qgqqavaogicecvhopgan`, and shared auto-unlock schema migrations `20260306113000` and `20260306170000` are applied there.
 4. Search/manual-refresh/source-page generation now share backend preflight helpers for subscription access, duplicate classification, reservation-prefix handling, and queue admission without changing public route contracts.
+5. `Subscriptions` and `Wall` page orchestration now compose dedicated frontend controller hooks, keeping render behavior stable while removing route/query/mutation ownership from the page files themselves.
+6. `Wall` no longer assembles feed rows through browser-side Supabase fan-out; it consumes backend-shaped feed endpoints for both public lanes and `For You`.

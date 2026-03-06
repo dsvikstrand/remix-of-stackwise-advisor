@@ -14,7 +14,7 @@ a000) [have] Current active cleanup/scalability follow-up now lives in `docs/exe
 a1) [have] Core source-first loop is live: source subscriptions -> unlock/generate -> blueprint -> channel/home visibility.
 a2) [have] Source Pages, Source Video Library, shared unlock, daily credit wallets, onboarding, and Explore source search are implemented.
 a3) [have] Canonical docs and active plan registry are in good shape and checks are passing.
-a4) [have] Primary architecture risk is concentration of logic in very large files (`server/index.ts`, `src/pages/Wall.tsx`, `src/pages/Subscriptions.tsx`, `src/pages/SourcePage.tsx`).
+a4) [have] Primary architecture risk remains concentrated in a few large files, but recent cleanup has already extracted the runtime bootstrap plus the main `Subscriptions` and `Wall` page orchestrators into dedicated controller modules/hooks.
 a4b) [have] Launch gate execution board is active at `docs/ops/mvp-launch-readiness-checklist.md` (P0/P1 with owner/date/status/evidence).
 a4c) [have] Launch hardening now includes explicit credit-backend fail-safe semantics (`CREDITS_UNAVAILABLE`), shared error-copy mapping, and baseline legal routes (`/terms`, `/privacy`).
 a4d) [have] Runtime hotfix applied: source-page search no longer crashes backend when opportunistic asset-sweep wiring is present in route deps.
@@ -46,7 +46,7 @@ c6) [have] Notifications MVP foundation is live (`comment_reply`, `generation_su
 
 ### P2 - Maintainability and Scale-readiness
 d1) [todo] Split `server/index.ts` into route modules (`source pages`, `subscriptions`, `unlock/credits`, `ingestion jobs`).
-d2) [todo] Extract large page orchestration logic from `Wall`, `Subscriptions`, and `SourcePage` into smaller hooks/components.
+d2) [todo] Continue page orchestration cleanup from the new controller-hook baseline, with `BlueprintDetail` and `SourcePage` still the main remaining frontend hotspots.
 d3) [todo] Incrementally tighten TypeScript strictness for touched modules.
 d4) [todo] Add CI PR gate for `test`, `build`, and docs checks before merge.
 d5) [todo] Add runtime health dashboard script for unlock throughput, failure rates, and queue latency.

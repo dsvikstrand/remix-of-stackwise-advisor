@@ -96,6 +96,8 @@ a74) [have] Launch error-copy normalization is centralized through shared fronte
 a75) [have] Source-page search uptime hardening: opportunistic source-page asset sweep is wired safely so `/api/source-pages/search` cannot crash backend runtime.
 a76) [have] Supabase repo target is aligned to project `qgqqavaogicecvhopgan`, and shared auto-unlock schema migration `20260306113000_auto_unlock_shared_cost_v1.sql` is applied remotely.
 a77) [have] Search, source-page unlock, and subscription manual-refresh flows now share typed backend preflight helpers for duplicate classification, queue admission, and manual reservation-prefix handling without changing route response contracts.
+a78) [have] `/subscriptions` now composes its OAuth/import/refresh orchestration through a dedicated frontend controller hook instead of keeping that state/query/mutation model inline in the page component.
+a79) [have] `/wall` now consumes backend-shaped feed endpoints for both public lanes and `For You`, and its scope/query/mutation orchestration is composed through a dedicated frontend controller hook rather than browser-side multi-table hydration.
 
 ## Core Model
 b1) `Source Item`

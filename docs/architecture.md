@@ -47,7 +47,9 @@
     - banner prompt path is constrained to visual-only output (no readable text/typography/logos/watermarks).
   - Auth-only discovery UI in `src/pages/Search.tsx` for YouTube query results and one-click generate.
   - Live feed/community surfaces in `src/pages/MyFeed.tsx`, `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
-    - `My Feed` blueprint rows use channel-feed-like visual cards, open detail on card click, and use footer status labels (`Posted to <Channel>`, `Publishing...`, or `In My Feed`) with a unified `Blueprint` badge.
+    - `Wall` now loads backend-hydrated feed responses for both public lanes and `For You` instead of reconstructing feed rows through browser-side Supabase fan-out.
+    - `Wall` route/scope/query/mutation orchestration now lives in a dedicated frontend controller hook, keeping the page file render-focused.
+  - `My Feed` blueprint rows use channel-feed-like visual cards, open detail on card click, and use footer status labels (`Posted to <Channel>`, `Publishing...`, or `In My Feed`) with a unified `Blueprint` badge.
     - unlock activity status now uses a shared frontend tracker and compact status card across Home `For You`, Source Page `Video Library`, and `My Feed`.
     - `My Feed` subscription notices render avatar and optional banner background; card click opens a details popup with confirm-gated `Unsubscribe`.
     - subscription notice details popup is intentionally minimal (relative time + unsubscribe only).
@@ -55,6 +57,7 @@
   - Blueprint detail in `src/pages/BlueprintDetail.tsx` now prefers source-channel attribution for imported YouTube blueprints and hides edit CTA in default MVP UI.
   - Blueprint detail renders `Summary` as swipeable slides when content is chunkable (3-4 chunks) and keeps non-summary sections in standard text blocks.
   - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: popup channel search + subscribe + active-list `Unsubscribe`; aggregate health summary hidden for user clarity; row avatars shown when available).
+    - page-level OAuth/import/manual-refresh orchestration now lives in a dedicated frontend controller hook so the route component primarily owns rendering.
     - per-row `Auto unlock` toggle (`auto_unlock_enabled`) controls whether that subscription participates in new-video auto unlock attempts.
   - Source page surface in `src/pages/SourcePage.tsx` at `/s/:platform/:externalId`:
     - public-readable source header (avatar/title/follower count + source link)
