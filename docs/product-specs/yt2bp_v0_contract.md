@@ -53,6 +53,7 @@
 - 2026-02-21 note: source-linked YouTube banners now use thumbnail-first assignment/backfill and source-generation paths bypass auto-banner enqueue; additive and outside this endpoint envelope.
 - 2026-02-20 note: source-page unlock route guard is soft-limited (`8/10s` burst + `120/10m` sustained) and no longer uses hard unlock cooldown; additive and outside this endpoint envelope.
 - 2026-03-06 note: daily-credit wallet model (`user_credit_wallets`, `credit_ledger`, `/api/credits` daily grant/reset fields) is additive and outside this endpoint envelope.
+- 2026-03-06 note: admin entitlement bypass now applies to concrete wallet reservation paths and shared auto-unlock funding, and no longer depends on wallet balance alone; additive and outside this endpoint envelope.
 - 2026-03-06 note: queue realism hardening adds weighted queue admission and additive `queue_work_items` queue-health fields; this is additive and outside the YT2BP endpoint envelope.
 - 2026-03-06 note: credit-refresh hardening makes `/api/credits` lazy/on-demand from header UI instead of background polling; this is additive and outside the YT2BP endpoint envelope.
 - 2026-02-20 note: subscription new-upload ingest now writes unlockable feed rows (`my_feed_unlockable`) before generation; this lifecycle change is outside this endpoint envelope.

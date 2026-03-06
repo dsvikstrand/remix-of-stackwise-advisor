@@ -60,6 +60,7 @@
   - `user_source_subscriptions.auto_unlock_enabled` defaults to `true` for existing and new rows.
   - runtime policy is funded-subscriber shared-cost auto generation: one `1.00` credit event per source video, split across the funded auto-enabled subscriber snapshot for that release.
   - funded subset selection uses deterministic fixed-point recomputation at reservation time; remainder cents go to the lowest stable user ids.
+  - admin entitlement users participate as bypass-funded users and should not be excluded solely due to wallet balance.
   - if eligible users fail credit reserve, backend enqueues bounded `source_auto_unlock_retry` jobs so unlock can complete after credit refill.
   - if no eligible/funded users can reserve credits, item remains `my_feed_unlockable` for manual unlock.
 
@@ -518,7 +519,7 @@ ssh oracle-free 'sudo systemctl daemon-reload && sudo systemctl restart agentic-
      - `CREDIT_WALLET_FREE_DAILY_GRANT`
      - `CREDIT_WALLET_PLUS_DAILY_GRANT`
      - `CREDIT_WALLET_ADMIN_DAILY_GRANT`
-  3) For bypass/admin users, confirm entitlement row and `AI_CREDITS_BYPASS` state, then restart services after env updates.
+  3) For admin users, confirm entitlement row first; `AI_CREDITS_BYPASS` is only the global fail-open flag and should not be required for normal admin bypass behavior.
 
 ### `CREDITS_UNAVAILABLE`
 - Meaning: backend credit service path is unavailable (for example missing/invalid service-role path or credit RPC failure).

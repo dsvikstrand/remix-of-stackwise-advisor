@@ -195,6 +195,7 @@
      - one source video maps to one canonical auto intent
      - subscribed + `auto_unlock_enabled=true` users are snapshotted at release detection
      - funded subset selection uses deterministic fixed-point share recomputation at reservation time
+     - admin entitlement users are treated as bypass-funded participants during reservation
      - all participant holds settle at first OpenAI dispatch and release on pre-generation failure
    - if auto-attempt fails due temporary credit availability, backend enqueues bounded retry jobs (`source_auto_unlock_retry`) before falling back to manual unlock-only state.
    - unlock cards can be activated by one user; successful generation fans out shared blueprint linkage to subscribed users for that source item.

@@ -64,8 +64,14 @@ export type AutoUnlockReservationResult =
     intent: null;
     participants: [];
     snapshotCount: number;
-    fundedCount: 0;
+      fundedCount: 0;
   };
+
+type FundingCandidate = {
+  userId: string;
+  balance: number;
+  bypass?: boolean;
+};
 
 function round2(value: number) {
   return Math.round(value * 100) / 100;
@@ -122,13 +128,14 @@ function normalizeParticipantRow(row: any): AutoUnlockParticipantRow {
   };
 }
 
-export function computeAutoUnlockFundedShares(input: Array<{ userId: string; balance: number }>) {
+export function computeAutoUnlockFundedShares(input: FundingCandidate[]) {
   const normalized = Array.from(
     new Map(
       input
         .map((row) => ({
           userId: String(row.userId || '').trim(),
           balanceCents: Math.max(0, Math.floor(Math.round(asNumber(row.balance) * 100))),
+          bypass: Boolean(row.bypass),
         }))
         .filter((row) => row.userId)
         .sort((left, right) => left.userId.localeCompare(right.userId))
@@ -142,7 +149,7 @@ export function computeAutoUnlockFundedShares(input: Array<{ userId: string; bal
     const leftover = AUTO_UNLOCK_TOTAL_CENTS - (base * working.length);
     const next = working.filter((row, index) => {
       const shareCents = base + (index < leftover ? 1 : 0);
-      return row.balanceCents >= shareCents;
+      return row.bypass || row.balanceCents >= shareCents;
     });
     if (next.length === 0) {
       return {
@@ -213,19 +220,43 @@ export async function listAutoUnlockParticipants(db: DbClient, intentId: string)
   return (data || []).map((row: any) => normalizeParticipantRow(row));
 }
 
-async function getWalletBalancesForUsers(db: DbClient, userIds: string[]) {
+async function getFundingEligibilityForUsers(db: DbClient, userIds: string[]) {
   const normalizedUserIds = Array.from(new Set(userIds.map((value) => String(value || '').trim()).filter(Boolean)));
-  if (normalizedUserIds.length === 0) return new Map<string, number>();
+  if (normalizedUserIds.length === 0) return new Map<string, { balance: number; bypass: boolean }>();
   const { data, error } = await db
     .from('user_credit_wallets')
     .select('user_id, balance')
     .in('user_id', normalizedUserIds);
   if (error) throw error;
-  const result = new Map<string, number>();
+  const result = new Map<string, { balance: number; bypass: boolean }>();
   for (const row of data || []) {
     const userId = String(row.user_id || '').trim();
     if (!userId) continue;
-    result.set(userId, round2(asNumber(row.balance)));
+    result.set(userId, {
+      balance: round2(asNumber(row.balance)),
+      bypass: false,
+    });
+  }
+
+  if (typeof db?.rpc === 'function') {
+    for (const userId of normalizedUserIds) {
+      try {
+        const { data: planData, error: planError } = await db.rpc('get_generation_plan_for_user', {
+          p_user_id: userId,
+        });
+        if (planError) throw planError;
+        const row = Array.isArray(planData) ? planData[0] : planData;
+        const normalizedPlan = String((row as { plan?: unknown } | null)?.plan || 'free').trim().toLowerCase();
+        const plan = normalizedPlan === 'admin' ? 'admin' : normalizedPlan === 'plus' ? 'plus' : 'free';
+        const current = result.get(userId) || { balance: 0, bypass: false };
+        result.set(userId, {
+          ...current,
+          bypass: plan === 'admin',
+        });
+      } catch {
+        // Keep fallback balance-only behavior when entitlement lookup is unavailable.
+      }
+    }
   }
   return result;
 }
@@ -239,11 +270,12 @@ async function createFallbackAutoUnlockIntent(db: DbClient, input: {
   trigger: string;
   videoId: string;
 }) {
-  const balances = await getWalletBalancesForUsers(db, input.eligibleUserIds);
+  const funding = await getFundingEligibilityForUsers(db, input.eligibleUserIds);
   const computed = computeAutoUnlockFundedShares(
     input.eligibleUserIds.map((userId) => ({
       userId,
-      balance: balances.get(userId) ?? 0,
+      balance: funding.get(userId)?.balance ?? 0,
+      bypass: funding.get(userId)?.bypass ?? false,
     })),
   );
 
@@ -427,8 +459,15 @@ export async function reserveAutoUnlockIntent(db: DbClient, input: {
         fundedCount: Math.max(0, Math.floor(asNumber(row?.funded_count, intent.funded_count))),
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (!/reserve_source_auto_unlock_intent/i.test(message) && !/rpc/i.test(message)) {
+      const message = error instanceof Error
+        ? error.message
+        : String((error as { message?: unknown } | null)?.message || error);
+      const code = String((error as { code?: unknown } | null)?.code || '').trim();
+      if (
+        !/reserve_source_auto_unlock_intent/i.test(message)
+        && !/rpc/i.test(message)
+        && code !== 'PGRST202'
+      ) {
         throw error;
       }
     }

@@ -145,4 +145,48 @@ describe('credit reservation lifecycle', () => {
       expect(hold.wallet.balance).toBe(2);
     }
   });
+
+  it('bypasses wallet reservation for admin entitlement users', async () => {
+    const nowIso = new Date().toISOString();
+    const db = createMockSupabase({
+      user_credit_wallets: [
+        {
+          user_id: 'admin_1',
+          balance: 0,
+          capacity: 20,
+          refill_rate_per_sec: 0,
+          last_refill_at: nowIso,
+          created_at: nowIso,
+          updated_at: nowIso,
+        },
+      ],
+      credit_ledger: [],
+    }, {
+      rpcs: {
+        get_generation_plan_for_user: () => ({
+          data: [{ plan: 'admin', daily_limit_override: null }],
+          error: null,
+        }),
+      },
+    }) as any;
+
+    const hold = await reserveCredits(db, {
+      userId: 'admin_1',
+      amount: 1,
+      idempotencyKey: 'hold_admin_1',
+      reasonCode: 'UNLOCK_HOLD',
+      context: {
+        unlock_id: 'unlock_admin_1',
+      },
+    });
+
+    expect(hold.ok).toBe(true);
+    if (hold.ok) {
+      expect(hold.bypass).toBe(true);
+      expect(hold.ledger_id).toBeNull();
+      expect(hold.wallet.balance).toBe(0);
+    }
+    expect(db.state.credit_ledger).toHaveLength(0);
+    expect(Number(db.state.user_credit_wallets[0]?.balance || 0)).toBe(0);
+  });
 });

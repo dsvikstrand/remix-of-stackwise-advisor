@@ -99,6 +99,39 @@ describe('auto unlock billing', () => {
     expect(db.state.source_auto_unlock_intents).toHaveLength(0);
   });
 
+  it('treats admin entitlement users as funded even with zero wallet balance', async () => {
+    const db = createMockSupabase({
+      user_credit_wallets: [
+        makeWallet('admin_user', 0),
+      ],
+      credit_ledger: [],
+      source_auto_unlock_intents: [],
+      source_auto_unlock_participants: [],
+    }, {
+      rpcs: {
+        get_generation_plan_for_user: ({ p_user_id }: { p_user_id: string }) => ({
+          data: [{ plan: p_user_id === 'admin_user' ? 'admin' : 'free', daily_limit_override: null }],
+          error: null,
+        }),
+      },
+    }) as any;
+
+    const reserved = await reserveAutoUnlockIntent(db, {
+      sourceItemId: 'source_admin',
+      sourcePageId: 'page_admin',
+      unlockId: 'unlock_admin',
+      sourceChannelId: 'channel_admin',
+      eligibleUserIds: ['admin_user'],
+      trigger: 'service_cron',
+      videoId: 'video_admin',
+    });
+
+    expect(reserved.state).toBe('reserved');
+    expect(reserved.intent?.intent_owner_user_id).toBe('admin_user');
+    expect(db.state.credit_ledger).toHaveLength(0);
+    expect(Number(db.state.user_credit_wallets[0]?.balance || 0)).toBe(0);
+  });
+
   it('reserves and releases shared auto charges in the fallback path', async () => {
     const db = createMockSupabase({
       user_credit_wallets: [

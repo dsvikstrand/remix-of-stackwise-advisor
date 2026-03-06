@@ -110,6 +110,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Step 24 backend hardening adds unlock reliability sweeps (expired/stale/orphan recovery), additive unlock `trace_id` response contract, and service-level idempotency/race tests.
 - Step 24 scale follow-up shifts unlock/manual/service generation to enqueue-only worker execution with DB claim+lease heartbeat semantics, queue backpressure controls, provider retry/circuit guards, and service queue health endpoint (`GET /api/ops/queue/health`).
 - Step 25 subscription auto-unlock v1 adds per-subscription `auto_unlock_enabled` (default `true`) and bounded `source_auto_unlock_retry` attempts; funded-subscriber shared-cost billing is now active through canonical auto intents and participant snapshots.
+- Step 25a admin entitlement bypass now applies to concrete wallet reservation and shared auto-unlock funding, not only to displayed credit status.
 - Step 26 queue realism hardening adds weighted queue admission (`queue_work_items` limits) and exposes row-count plus work-item backlog through `GET /api/ops/queue/health`.
 - Step 27 credit-load hardening makes `useAiCredits` lazy by default, fetches header credits only while the menu is open, and relies on explicit `['ai-credits']` invalidation after billable actions.
 - Step 28 thumbnail-first banner cutover sets source YouTube banner rendering to thumbnails across Wall/Feed/Explore/Detail/Source Page, backfills old source-linked blueprints, and bypasses source auto-banner enqueue paths.

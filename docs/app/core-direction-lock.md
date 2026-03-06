@@ -50,7 +50,7 @@ Status: `canonical`
 32. Unlock backend reliability uses safe auto-fix sweeps (expired/stale/orphan recovery) with idempotent refund/fail transitions; no destructive cleanup.
 33. Unlock/generate responses must include additive `trace_id` and unlock lifecycle logs must propagate that trace through request -> queue/job -> terminal outcome.
 34. Unlock/manual/service generation execution is queue-first with durable DB claim+lease workers, bounded retries, and queue backpressure/intake controls (Oracle + Supabase only).
-35. Subscription rows include `auto_unlock_enabled` (default `true`) and only new incoming subscription videos can auto-attempt unlock generation; runtime auto billing is funded-subscriber shared-cost with participant snapshotting, fixed-point funded-subset selection, and bounded retries, while historical locked backlog is not auto-processed.
+35. Subscription rows include `auto_unlock_enabled` (default `true`) and only new incoming subscription videos can auto-attempt unlock generation; runtime auto billing is funded-subscriber shared-cost with participant snapshotting, fixed-point funded-subset selection, bounded retries, and admin-bypass-safe funding, while historical locked backlog is not auto-processed.
 36. Transcript-unavailable unlocks must not hard-fail user trust flows: manual unlock returns deterministic `TRANSCRIPT_UNAVAILABLE` with retry timing and auto-unlock retries are deferred with cooldown.
 37. Read-heavy status endpoints (`/api/credits`, `/api/ingestion/jobs/latest-mine`) must use dedicated soft read limits and be excluded from generic global limiter paths to avoid accidental unlock UX 429 spikes.
 38. Unlock queue items carry explicit `unlock_origin` metadata (`manual_unlock`, `subscription_auto_unlock`, `source_auto_unlock_retry`) for recovery and traceability.
@@ -95,5 +95,5 @@ Status: `canonical`
 ## Latest Update (2026-03-05)
 1. YouTube source comments keep stored-snapshot UX; no live page-load fetches were introduced.
 2. Refresh policy is bootstrap-first (`+15m`, `+24h`) then user-triggered manual refresh with per-blueprint cooldown.
-3. Supabase project targeting is aligned to `qgqqavaogicecvhopgan`, and shared auto-unlock schema migration `20260306113000` is applied there.
+3. Supabase project targeting is aligned to `qgqqavaogicecvhopgan`, and shared auto-unlock schema migrations `20260306113000` and `20260306170000` are applied there.
 4. Search/manual-refresh/source-page generation now share backend preflight helpers for subscription access, duplicate classification, reservation-prefix handling, and queue admission without changing public route contracts.

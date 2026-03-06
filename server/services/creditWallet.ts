@@ -377,7 +377,8 @@ export async function reserveCredits(db: DbClient, input: {
   if (!userId) throw new Error('AUTH_REQUIRED');
   if (!(amount > 0)) throw new Error('INVALID_RESERVE_AMOUNT');
 
-  if (CREDITS_BYPASS) {
+  const entitlement = await resolveWalletEntitlement(db, userId);
+  if (entitlement.bypass) {
     const wallet = await getWallet(db, userId);
     return {
       ok: true,
@@ -484,7 +485,8 @@ export async function settleReservation(db: DbClient, input: {
 }) {
   const amount = round2(Math.max(0, Number(input.amount || 0)));
   if (!(amount >= 0)) throw new Error('INVALID_SETTLE_AMOUNT');
-  if (CREDITS_BYPASS) {
+  const entitlement = await resolveWalletEntitlement(db, input.userId);
+  if (entitlement.bypass) {
     return { bypass: true, ledger_id: null };
   }
 
@@ -519,7 +521,8 @@ export async function refundReservation(db: DbClient, input: {
   const amount = round2(Math.max(0, Number(input.amount || 0)));
   if (!(amount > 0)) throw new Error('INVALID_REFUND_AMOUNT');
 
-  if (CREDITS_BYPASS) {
+  const entitlement = await resolveWalletEntitlement(db, input.userId);
+  if (entitlement.bypass) {
     return {
       bypass: true,
       ledger_id: null,

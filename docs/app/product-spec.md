@@ -128,6 +128,7 @@ b5) Subscription behavior (MVP simplified)
   - one canonical auto-generation intent per new source video
   - participant snapshot = subscribed + `auto_unlock_enabled=true` users at release-detection time
   - total auto cost is `1.00` credit split across the funded subset using the fixed-point affordability rule and `0.01` wallet precision
+  - admin entitlement users count as bypass-funded participants and must not be excluded solely because wallet balance is `0`
   - if no funded subset remains, the video stays locked for later manual generation
 - Runtime now uses the shared-cost auto model directly:
   - one canonical auto intent per source video
@@ -314,6 +315,7 @@ si66) auth endpoint: `POST /api/notifications/:id/read` marks one notification r
 si67) auth endpoint: `POST /api/notifications/read-all` marks all unread notifications read.
 si68) comment reply notifications are produced by DB trigger on `wall_comments` reply inserts (self-replies ignored; dedupe key is `comment_reply:<reply_comment_id>`).
 si69) generation surfaces are gated by the daily credit wallet (`free=3.00`, `plus=20.00`, reset `00:00 UTC`, no rollover); manual routes queue only the affordable new-item prefix and return launch-safe credit denial/skip copy.
+si69a) admin entitlement bypass applies at actual reservation/settle/refund time for both manual generation and shared auto-unlock paths; admin users are not meant to remain `unlockable` solely because displayed wallet balance is depleted.
 si70) YouTube comment snapshots for blueprints now follow a bounded lifecycle: auto refresh at `+15m` and `+24h`, then manual-only refresh with per-blueprint cooldown.
 si71) manual source-comment refresh endpoint is `POST /api/blueprints/:id/youtube-comments/refresh`; cooldown denials return `COMMENTS_REFRESH_COOLDOWN_ACTIVE`.
 
