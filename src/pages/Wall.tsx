@@ -17,12 +17,10 @@ import { useTagFollows } from '@/hooks/useTagFollows';
 import type { Json } from '@/integrations/supabase/types';
 import { buildBlueprintPreviewText, buildFeedSummary } from '@/lib/feedPreview';
 import { formatRelativeShort } from '@/lib/timeFormat';
-import { matchesChannelByTags, resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
+import { resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
 import { normalizeTag } from '@/lib/tagging';
 import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
 import { logOncePerSession, logP3Event } from '@/lib/telemetry';
-import { cn } from '@/lib/utils';
-import { useMyFeed } from '@/hooks/useMyFeed';
 import { extractYouTubeVideoId } from '@/lib/sourceIdentity';
 import { ApiRequestError } from '@/lib/subscriptionsApi';
 import { unlockSourcePageVideos } from '@/lib/sourcePagesApi';
@@ -30,30 +28,10 @@ import { WallBlueprintCard } from '@/components/wall/WallBlueprintCard';
 import { ForYouLockedSourceCard } from '@/components/wall/ForYouLockedSourceCard';
 import { useSourceUnlockJobTracker } from '@/hooks/useSourceUnlockJobTracker';
 import { getLaunchErrorCopy } from '@/lib/launchErrorCopy';
+import { getWallFeed, getWallForYouFeed, type WallFeedItem, type WallForYouItem } from '@/lib/wallApi';
 
-interface BlueprintPost {
-  id: string;
-  creator_user_id: string;
-  title: string;
-  sections_json: Json | null;
-  steps: Json | null;
-  llm_review: string | null;
-  mix_notes: string | null;
-  banner_url: string | null;
-  likes_count: number;
-  created_at: string;
-  profile: {
-    display_name: string | null;
-    avatar_url: string | null;
-  };
-  tags: { id: string; slug: string }[];
-  user_liked: boolean;
-  published_channel_slug?: string | null;
-  source_channel_title?: string | null;
-  source_channel_avatar_url?: string | null;
-  source_thumbnail_url?: string | null;
-  source_view_count?: number | null;
-}
+type ForYouLockedItem = Extract<WallForYouItem, { kind: 'locked' }>;
+type ForYouBlueprintItem = Extract<WallForYouItem, { kind: 'blueprint' }>;
 
 type WallBlueprintCardInput = {
   id: string;
@@ -74,55 +52,6 @@ type WallBlueprintCardInput = {
   userLiked: boolean;
   commentsCount: number;
 };
-
-function parseSourceViewCount(metadata: Record<string, unknown> | null) {
-  if (!metadata) return null;
-  const candidates = [metadata.view_count, metadata.viewCount];
-  for (const candidate of candidates) {
-    const numeric = Number(candidate);
-    if (Number.isFinite(numeric) && numeric >= 0) {
-      return Math.floor(numeric);
-    }
-  }
-  return null;
-}
-
-type ForYouLockedItem = {
-  kind: 'locked';
-  feedItemId: string;
-  sourceItemId: string;
-  createdAt: string;
-  title: string;
-  sourceChannelTitle: string | null;
-  sourceChannelAvatarUrl: string | null;
-  sourceUrl: string;
-  unlockCost: number;
-  sourcePageId: string | null;
-  sourceChannelId: string | null;
-  unlockInProgress: boolean;
-};
-
-type ForYouBlueprintItem = {
-  kind: 'blueprint';
-  feedItemId: string;
-  sourceItemId: string;
-  createdAt: string;
-  blueprintId: string;
-  title: string;
-  sourceChannelTitle: string | null;
-  sourceChannelAvatarUrl: string | null;
-  sourceThumbnailUrl: string | null;
-  sourceViewCount: number | null;
-  sectionsJson: Json | null;
-  llmReview: string | null;
-  mixNotes: string | null;
-  steps: unknown;
-  bannerUrl: string | null;
-  tags: string[];
-  publishedChannelSlug: string | null;
-};
-
-type ForYouStreamItem = ForYouLockedItem | ForYouBlueprintItem;
 
 const SORT_TABS = [
   { value: 'latest', label: 'Latest' },
@@ -314,410 +243,59 @@ export default function Wall() {
     });
   };
 
-  const wallQueryKey = ['wall-blueprints', effectiveScope, feedSort, user?.id] as const;
-
-  const { data: posts, isLoading: isBlueprintFeedLoading, error: blueprintFeedError } = useQuery({
-    queryKey: wallQueryKey,
+  const wallFeedQuery = useQuery({
+    queryKey: ['wall-feed', effectiveScope, feedSort, user?.id || 'anon'],
     enabled: !isForYouScope,
-    queryFn: async () => {
-      const scopedChannel =
-        effectiveScope !== SCOPE_ALL && effectiveScope !== SCOPE_FOR_YOU && effectiveScope !== SCOPE_YOUR_CHANNELS
-          ? CHANNELS_CATALOG.find((channel) => channel.slug === effectiveScope)
-          : null;
-      const isSpecificChannelScope = !!scopedChannel;
-
-      const limit = isYourChannelsScope || isSpecificChannelScope ? 140 : 90;
-      let query = supabase
-        .from('blueprints')
-        .select('id, creator_user_id, title, sections_json, steps, llm_review, mix_notes, banner_url, likes_count, created_at')
-        .eq('is_public', true)
-        .limit(limit);
-
-      if (feedSort === 'trending') {
-        const cutoff = new Date();
-        cutoff.setDate(cutoff.getDate() - 3);
-        query = query
-          .gte('created_at', cutoff.toISOString())
-          .order('likes_count', { ascending: false })
-          .order('created_at', { ascending: false });
-      } else {
-        query = query.order('created_at', { ascending: false });
-      }
-
-      const { data: blueprints, error } = await query;
-      if (error) throw error;
-      if (!blueprints || blueprints.length === 0) return [] as BlueprintPost[];
-
-      const blueprintIds = blueprints.map((row) => row.id);
-      const userIds = [...new Set(blueprints.map((row) => row.creator_user_id))];
-
-      const [tagsRes, likesRes, profilesRes, feedItemsRes] = await Promise.all([
-        supabase.from('blueprint_tags').select('blueprint_id, tag_id').in('blueprint_id', blueprintIds),
-        user
-          ? supabase.from('blueprint_likes').select('blueprint_id').eq('user_id', user.id).in('blueprint_id', blueprintIds)
-          : Promise.resolve({ data: [] as { blueprint_id: string }[] }),
-        supabase.from('profiles').select('user_id, display_name, avatar_url').in('user_id', userIds),
-        supabase
-          .from('user_feed_items')
-          .select('id, blueprint_id, source_item_id, created_at')
-          .in('blueprint_id', blueprintIds),
-      ]);
-
-      const tagRows = tagsRes.data || [];
-      const tagIds = [...new Set(tagRows.map((row) => row.tag_id))];
-      const { data: tagsData } = tagIds.length > 0
-        ? await supabase.from('tags').select('id, slug').in('id', tagIds)
-        : { data: [] as { id: string; slug: string }[] };
-
-      const tagsMap = new Map((tagsData || []).map((tag) => [tag.id, tag]));
-      const blueprintTags = new Map<string, { id: string; slug: string }[]>();
-
-      tagRows.forEach((row) => {
-        const tag = tagsMap.get(row.tag_id);
-        if (!tag) return;
-        const list = blueprintTags.get(row.blueprint_id) || [];
-        list.push(tag);
-        blueprintTags.set(row.blueprint_id, list);
-      });
-
-      const likedIds = new Set((likesRes.data || []).map((row) => row.blueprint_id));
-      const profilesMap = new Map((profilesRes.data || []).map((profile) => [profile.user_id, profile]));
-      if (feedItemsRes.error) throw feedItemsRes.error;
-
-      const publishedChannelByBlueprint = new Map<string, { slug: string; createdAtMs: number }>();
-      const sourceChannelTitleByBlueprint = new Map<string, { title: string | null; createdAtMs: number }>();
-      const sourceChannelAvatarByBlueprint = new Map<string, { avatarUrl: string | null; createdAtMs: number }>();
-      const sourceThumbnailByBlueprint = new Map<string, { thumbnailUrl: string | null; createdAtMs: number }>();
-      const sourceViewCountByBlueprint = new Map<string, { viewCount: number | null; createdAtMs: number }>();
-      const feedItems = (feedItemsRes.data || []) as Array<{ id: string; blueprint_id: string; source_item_id: string; created_at: string }>;
-      const feedItemIds = feedItems.map((row) => row.id);
-      const blueprintIdByFeedItemId = new Map(feedItems.map((row) => [row.id, row.blueprint_id]));
-      const sourceItemIds = [...new Set(feedItems.map((row) => String(row.source_item_id || '').trim()).filter(Boolean))];
-
-      const { data: sourceItemsData, error: sourceItemsError } = sourceItemIds.length > 0
-        ? await supabase
-          .from('source_items')
-          .select('id, source_page_id, source_channel_id, source_channel_title, thumbnail_url, metadata')
-          .in('id', sourceItemIds)
-        : { data: [], error: null };
-      if (sourceItemsError) throw sourceItemsError;
-
-      const sourcePageIds = [...new Set((sourceItemsData || []).map((row) => String(row.source_page_id || '').trim()).filter(Boolean))];
-      const sourceChannelIds = [...new Set((sourceItemsData || []).map((row) => String(row.source_channel_id || '').trim()).filter(Boolean))];
-      const { data: sourcePagesData, error: sourcePagesError } = sourcePageIds.length > 0
-        ? await supabase
-          .from('source_pages')
-          .select('id, avatar_url')
-          .in('id', sourcePageIds)
-        : { data: [], error: null };
-      if (sourcePagesError) throw sourcePagesError;
-      const { data: sourcePagesByExternalData, error: sourcePagesByExternalError } = sourceChannelIds.length > 0
-        ? await supabase
-          .from('source_pages')
-          .select('external_id, avatar_url')
-          .eq('platform', 'youtube')
-          .in('external_id', sourceChannelIds)
-        : { data: [], error: null };
-      if (sourcePagesByExternalError) throw sourcePagesByExternalError;
-      const sourcePageAvatarById = new Map((sourcePagesData || []).map((row) => [row.id, row.avatar_url || null]));
-      const sourcePageAvatarByExternalId = new Map((sourcePagesByExternalData || []).map((row) => [row.external_id, row.avatar_url || null]));
-
-      const sourceItemsMap = new Map(
-        (sourceItemsData || []).map((row) => {
-          const metadata =
-            row.metadata && typeof row.metadata === 'object' && row.metadata !== null
-              ? (row.metadata as Record<string, unknown>)
-              : null;
-          const metadataSourceTitle =
-            metadata && typeof metadata.source_channel_title === 'string'
-              ? String(metadata.source_channel_title || '').trim() || null
-              : (
-                metadata && typeof metadata.channel_title === 'string'
-                  ? String(metadata.channel_title || '').trim() || null
-                  : null
-              );
-          const metadataSourceAvatarUrl =
-            metadata && typeof metadata.source_channel_avatar_url === 'string'
-              ? String(metadata.source_channel_avatar_url || '').trim() || null
-              : (
-                metadata && typeof metadata.channel_avatar_url === 'string'
-                  ? String(metadata.channel_avatar_url || '').trim() || null
-                  : null
-              );
-          return [row.id, {
-            title: row.source_channel_title || metadataSourceTitle || null,
-            avatarUrl:
-              metadataSourceAvatarUrl
-              || sourcePageAvatarById.get(String(row.source_page_id || '').trim())
-              || sourcePageAvatarByExternalId.get(String(row.source_channel_id || '').trim())
-              || null,
-            thumbnailUrl: String(row.thumbnail_url || '').trim() || null,
-            viewCount: parseSourceViewCount(metadata),
-          }] as const;
-        }),
-      );
-      let publishedCandidateRows: Array<{
-        channel_slug: string;
-        created_at: string;
-        user_feed_item_id: string;
-      }> = [];
-
-      if (feedItemIds.length > 0) {
-        const { data: candidatesData, error: candidatesError } = await supabase
-          .from('channel_candidates')
-          .select('channel_slug, created_at, user_feed_item_id')
-          .eq('status', 'published')
-          .in('user_feed_item_id', feedItemIds);
-        if (candidatesError) throw candidatesError;
-        publishedCandidateRows = (candidatesData || []) as Array<{
-          channel_slug: string;
-          created_at: string;
-          user_feed_item_id: string;
-        }>;
-      }
-
-      for (const row of publishedCandidateRows) {
-        const blueprintId = blueprintIdByFeedItemId.get(row.user_feed_item_id);
-        const channelSlug = String(row.channel_slug || '').trim().toLowerCase();
-        if (!blueprintId || !channelSlug) continue;
-
-        const createdAtMs = Number.isFinite(Date.parse(row.created_at)) ? Date.parse(row.created_at) : 0;
-        const existing = publishedChannelByBlueprint.get(blueprintId);
-        if (!existing || createdAtMs > existing.createdAtMs || (createdAtMs === existing.createdAtMs && channelSlug < existing.slug)) {
-          publishedChannelByBlueprint.set(blueprintId, { slug: channelSlug, createdAtMs });
-        }
-      }
-
-      for (const row of feedItems) {
-        const blueprintId = row.blueprint_id;
-        const sourceInfo = sourceItemsMap.get(row.source_item_id) || { title: null, avatarUrl: null, thumbnailUrl: null, viewCount: null };
-        const createdAtMs = Number.isFinite(Date.parse(row.created_at)) ? Date.parse(row.created_at) : 0;
-        const existingTitle = sourceChannelTitleByBlueprint.get(blueprintId);
-        if (!existingTitle || createdAtMs > existingTitle.createdAtMs) {
-          sourceChannelTitleByBlueprint.set(blueprintId, { title: sourceInfo.title, createdAtMs });
-        }
-        const existingAvatar = sourceChannelAvatarByBlueprint.get(blueprintId);
-        if (!existingAvatar || createdAtMs > existingAvatar.createdAtMs) {
-          sourceChannelAvatarByBlueprint.set(blueprintId, { avatarUrl: sourceInfo.avatarUrl, createdAtMs });
-        }
-        const existingThumbnail = sourceThumbnailByBlueprint.get(blueprintId);
-        if (!existingThumbnail || createdAtMs > existingThumbnail.createdAtMs) {
-          sourceThumbnailByBlueprint.set(blueprintId, { thumbnailUrl: sourceInfo.thumbnailUrl, createdAtMs });
-        }
-        const existingViewCount = sourceViewCountByBlueprint.get(blueprintId);
-        if (!existingViewCount || createdAtMs > existingViewCount.createdAtMs) {
-          sourceViewCountByBlueprint.set(blueprintId, { viewCount: sourceInfo.viewCount, createdAtMs });
-        }
-      }
-
-      let followTagIds = new Set<string>();
-      if (isYourChannelsScope && user) {
-        const followsRes = await supabase.from('tag_follows').select('tag_id').eq('user_id', user.id);
-        followTagIds = new Set((followsRes.data || []).map((row) => row.tag_id));
-      }
-
-      const hydrated = blueprints.map((blueprint) => ({
-        ...blueprint,
-        profile: profilesMap.get(blueprint.creator_user_id) || { display_name: null, avatar_url: null },
-        tags: blueprintTags.get(blueprint.id) || [],
-        user_liked: likedIds.has(blueprint.id),
-        published_channel_slug: publishedChannelByBlueprint.get(blueprint.id)?.slug || null,
-        source_channel_title: sourceChannelTitleByBlueprint.get(blueprint.id)?.title || null,
-        source_channel_avatar_url: sourceChannelAvatarByBlueprint.get(blueprint.id)?.avatarUrl || null,
-        source_thumbnail_url: sourceThumbnailByBlueprint.get(blueprint.id)?.thumbnailUrl || null,
-        source_view_count: sourceViewCountByBlueprint.get(blueprint.id)?.viewCount ?? null,
-      })) as BlueprintPost[];
-
-      if (isSpecificChannelScope && scopedChannel) {
-        return hydrated.filter((post) => {
-          if (post.published_channel_slug) {
-            return post.published_channel_slug === scopedChannel.slug;
-          }
-          return matchesChannelByTags(scopedChannel.slug, post.tags.map((tag) => tag.slug));
-        });
-      }
-
-      if (isYourChannelsScope) {
-        if (followTagIds.size === 0) return hydrated;
-
-        const joinedChannelPosts: BlueprintPost[] = [];
-        const globalFillPosts: BlueprintPost[] = [];
-
-        hydrated.forEach((post) => {
-          if (post.tags.some((tag) => followTagIds.has(tag.id))) {
-            joinedChannelPosts.push(post);
-          } else {
-            globalFillPosts.push(post);
-          }
-        });
-
-        return [...joinedChannelPosts, ...globalFillPosts];
-      }
-
-      return hydrated;
-    },
+    queryFn: async () => getWallFeed({ scope: effectiveScope, sort: feedSort }),
   });
 
-  const postIds = useMemo(() => (posts || []).map((post) => post.id), [posts]);
-
-  const { data: commentCountsByBlueprintId = {} } = useQuery({
-    queryKey: ['wall-blueprint-comment-counts', postIds],
-    enabled: !isForYouScope && postIds.length > 0,
-    staleTime: 30_000,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('blueprint_comments')
-        .select('blueprint_id')
-        .in('blueprint_id', postIds);
-
-      if (error) throw error;
-
-      return (data || []).reduce<Record<string, number>>((acc, row) => {
-        acc[row.blueprint_id] = (acc[row.blueprint_id] || 0) + 1;
-        return acc;
-      }, {});
-    },
-  });
-
-  const myFeedQuery = useMyFeed({ enabled: isForYouScope });
-
-  const forYouSubscriptionsQuery = useQuery({
-    queryKey: ['wall-for-you-subscriptions', user?.id],
+  const forYouQuery = useQuery({
+    queryKey: ['wall-for-you', user?.id || 'anon'],
     enabled: isForYouScope && !!user,
-    queryFn: async () => {
-      if (!user) return [] as Array<{ source_page_id: string | null; source_channel_id: string | null }>;
-      const { data, error } = await supabase
-        .from('user_source_subscriptions')
-        .select('source_page_id, source_channel_id')
-        .eq('user_id', user.id)
-        .eq('is_active', true);
-      if (error) throw error;
-      return (data || []) as Array<{ source_page_id: string | null; source_channel_id: string | null }>;
-    },
+    queryFn: async () => getWallForYouFeed(),
   });
 
-  const forYouStream = useMemo(() => {
-    if (!isForYouScope || !myFeedQuery.data || !forYouSubscriptionsQuery.data) return [] as ForYouStreamItem[];
+  const posts = wallFeedQuery.data || [];
+  const forYouStream = useMemo(
+    () =>
+      (forYouQuery.data || []).map((item) => (
+        item.kind === 'locked'
+          ? {
+              ...item,
+              unlockInProgress: item.unlockInProgress || Boolean(optimisticUnlockingSourceItemIds[item.sourceItemId]),
+            }
+          : item
+      )) as WallForYouItem[],
+    [forYouQuery.data, optimisticUnlockingSourceItemIds],
+  );
 
-    const activeSourcePageIds = new Set(
-      forYouSubscriptionsQuery.data
-        .map((row) => String(row.source_page_id || '').trim())
-        .filter(Boolean),
-    );
-    const activeSourceChannelIds = new Set(
-      forYouSubscriptionsQuery.data
-        .map((row) => String(row.source_channel_id || '').trim())
-        .filter(Boolean),
-    );
-
-    const items: ForYouStreamItem[] = [];
-
-    myFeedQuery.data.forEach((item) => {
-      if (!item.source) return;
-      if (item.state === 'subscription_notice') return;
-
-      const sourcePageId = String(item.source.sourcePageId || '').trim();
-      const sourceChannelId = String(item.source.sourceChannelId || '').trim();
-      const isSubscribedSource =
-        (sourcePageId && activeSourcePageIds.has(sourcePageId))
-        || (sourceChannelId && activeSourceChannelIds.has(sourceChannelId));
-      const isGeneratedByUser = Boolean(
-        item.blueprint
-        && user
-        && String(item.blueprint.creatorUserId || '').trim() === user.id,
-      );
-
-      if (!isSubscribedSource && !isGeneratedByUser) return;
-
-      if (item.blueprint) {
-        items.push({
-          kind: 'blueprint',
-          feedItemId: item.id,
-          sourceItemId: item.source.id,
-          createdAt: item.createdAt,
-          blueprintId: item.blueprint.id,
-          title: item.blueprint.title,
-          sourceChannelTitle: item.source.sourceChannelTitle || null,
-          sourceChannelAvatarUrl: item.source.sourceChannelAvatarUrl || null,
-          sourceThumbnailUrl: item.source.thumbnailUrl || null,
-          sourceViewCount: item.source.viewCount ?? null,
-          sectionsJson: item.blueprint.sectionsJson || null,
-          llmReview: item.blueprint.llmReview,
-          mixNotes: item.blueprint.mixNotes,
-          steps: item.blueprint.steps,
-          bannerUrl: item.blueprint.bannerUrl,
-          tags: item.blueprint.tags,
-          publishedChannelSlug: item.candidate?.status === 'published' ? item.candidate.channelSlug : null,
-        });
-        return;
-      }
-
-      items.push({
-        kind: 'locked',
-        feedItemId: item.id,
-        sourceItemId: item.source.id,
-        createdAt: item.createdAt,
-        title: item.source.title,
-        sourceChannelTitle: item.source.sourceChannelTitle,
-        sourceChannelAvatarUrl: item.source.sourceChannelAvatarUrl || null,
-        sourceUrl: item.source.sourceUrl,
-        unlockCost: Number(item.source.unlockCost || 0),
-        sourcePageId: item.source.sourcePageId,
-        sourceChannelId: item.source.sourceChannelId,
-        unlockInProgress: Boolean(item.source.unlockInProgress) || Boolean(optimisticUnlockingSourceItemIds[item.source.id]),
+  const updateWallLikeCaches = (blueprintId: string, nextLiked: boolean) => {
+    queryClient.setQueriesData({ queryKey: ['wall-feed'] }, (current: unknown) => {
+      if (!Array.isArray(current)) return current;
+      return current.map((item) => {
+        const post = item as WallFeedItem;
+        if (post.id !== blueprintId) return post;
+        return {
+          ...post,
+          user_liked: nextLiked,
+          likes_count: Math.max(0, Number(post.likes_count || 0) + (nextLiked ? 1 : -1)),
+        } satisfies WallFeedItem;
       });
     });
 
-    return items;
-  }, [isForYouScope, myFeedQuery.data, forYouSubscriptionsQuery.data, optimisticUnlockingSourceItemIds]);
-
-  const forYouBlueprintIds = useMemo(
-    () => forYouStream.filter((item): item is ForYouBlueprintItem => item.kind === 'blueprint').map((item) => item.blueprintId),
-    [forYouStream],
-  );
-
-  const forYouStatsQuery = useQuery({
-    queryKey: ['wall-for-you-blueprint-stats', user?.id, forYouBlueprintIds],
-    enabled: isForYouScope && !!user && forYouBlueprintIds.length > 0,
-    queryFn: async () => {
-      const [{ data: blueprintRows, error: blueprintError }, { data: likedRows, error: likedError }, { data: commentRows, error: commentError }] = await Promise.all([
-        supabase
-          .from('blueprints')
-          .select('id, likes_count')
-          .in('id', forYouBlueprintIds),
-        supabase
-          .from('blueprint_likes')
-          .select('blueprint_id')
-          .eq('user_id', user!.id)
-          .in('blueprint_id', forYouBlueprintIds),
-        supabase
-          .from('blueprint_comments')
-          .select('blueprint_id')
-          .in('blueprint_id', forYouBlueprintIds),
-      ]);
-
-      if (blueprintError) throw blueprintError;
-      if (likedError) throw likedError;
-      if (commentError) throw commentError;
-
-      const likes = (blueprintRows || []).reduce<Record<string, number>>((acc, row) => {
-        acc[row.id] = Number(row.likes_count || 0);
-        return acc;
-      }, {});
-
-      const likedIds = new Set((likedRows || []).map((row) => row.blueprint_id));
-      const comments = (commentRows || []).reduce<Record<string, number>>((acc, row) => {
-        acc[row.blueprint_id] = (acc[row.blueprint_id] || 0) + 1;
-        return acc;
-      }, {});
-
-      return {
-        likes,
-        likedIds,
-        comments,
-      };
-    },
-  });
+    queryClient.setQueriesData({ queryKey: ['wall-for-you'] }, (current: unknown) => {
+      if (!Array.isArray(current)) return current;
+      return current.map((item) => {
+        const row = item as WallForYouItem;
+        if (row.kind !== 'blueprint' || row.blueprintId !== blueprintId) return row;
+        return {
+          ...row,
+          userLiked: nextLiked,
+          likesCount: Math.max(0, Number(row.likesCount || 0) + (nextLiked ? 1 : -1)),
+        } satisfies ForYouBlueprintItem;
+      });
+    });
+  };
 
   const likeMutation = useMutation({
     mutationFn: async ({ blueprintId, liked }: { blueprintId: string; liked: boolean }) => {
@@ -729,11 +307,8 @@ export default function Wall() {
         await supabase.from('blueprint_likes').insert({ blueprint_id: blueprintId, user_id: user.id });
       }
     },
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['wall-blueprints'] }),
-        queryClient.invalidateQueries({ queryKey: ['wall-for-you-blueprint-stats'] }),
-      ]);
+    onSuccess: async (_result, variables) => {
+      updateWallLikeCaches(variables.blueprintId, !variables.liked);
     },
     onError: () => {
       toast({
@@ -751,9 +326,7 @@ export default function Wall() {
     onTerminal: (job) => {
       setOptimisticUnlockingSourceItemIds({});
       void Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] }),
-        queryClient.invalidateQueries({ queryKey: ['wall-blueprints'] }),
-        queryClient.invalidateQueries({ queryKey: ['wall-for-you-blueprint-stats'] }),
+        queryClient.invalidateQueries({ queryKey: ['wall-for-you', user?.id || 'anon'] }),
         queryClient.invalidateQueries({ queryKey: ['ai-credits'] }),
       ]);
 
@@ -847,8 +420,7 @@ export default function Wall() {
 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['ai-credits'] }),
-        queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] }),
-        queryClient.invalidateQueries({ queryKey: ['wall-blueprints'] }),
+        queryClient.invalidateQueries({ queryKey: ['wall-for-you', user?.id || 'anon'] }),
       ]);
     },
     onError: (error, item) => {
@@ -926,8 +498,10 @@ export default function Wall() {
     return posts.filter((post) => post.tags.some((tag) => tag.slug === selectedTagSlug));
   }, [posts, selectedTagSlug]);
 
-  const isForYouLoading = isForYouScope && (myFeedQuery.isLoading || forYouSubscriptionsQuery.isLoading);
-  const isForYouError = isForYouScope && (myFeedQuery.isError || forYouSubscriptionsQuery.isError || forYouStatsQuery.isError);
+  const isForYouLoading = isForYouScope && forYouQuery.isLoading;
+  const isForYouError = isForYouScope && forYouQuery.isError;
+  const isBlueprintFeedLoading = !isForYouScope && wallFeedQuery.isLoading;
+  const blueprintFeedError = !isForYouScope ? wallFeedQuery.error : null;
 
   if (authLoading) {
     return (
@@ -1077,10 +651,6 @@ export default function Wall() {
                         />
                       );
                     }
-
-                    const likesCount = forYouStatsQuery.data?.likes[item.blueprintId] || 0;
-                    const userLiked = Boolean(forYouStatsQuery.data?.likedIds.has(item.blueprintId));
-                    const commentsCount = forYouStatsQuery.data?.comments[item.blueprintId] || 0;
                     const cardProps = buildWallBlueprintCardProps({
                       id: item.blueprintId,
                       title: item.title,
@@ -1096,9 +666,9 @@ export default function Wall() {
                       viewCount: item.sourceViewCount,
                       publishedChannelSlug: item.publishedChannelSlug,
                       tags: item.tags,
-                      likesCount,
-                      userLiked,
-                      commentsCount,
+                      likesCount: item.likesCount,
+                      userLiked: item.userLiked,
+                      commentsCount: item.commentsCount,
                     });
 
                     return (
@@ -1107,7 +677,7 @@ export default function Wall() {
                         {...cardProps}
                         onLike={(event) => {
                           event.preventDefault();
-                          handleLike(item.blueprintId, userLiked);
+                          handleLike(item.blueprintId, item.userLiked);
                         }}
                       />
                     );
@@ -1158,41 +728,40 @@ export default function Wall() {
                 </CardContent>
               </Card>
             ) : visiblePosts.length > 0 ? (
-              <div className="divide-y divide-border/40">
-                {visiblePosts.map((post) => {
-                  const commentsCount = commentCountsByBlueprintId[post.id] || 0;
-                  const cardProps = buildWallBlueprintCardProps({
-                    id: post.id,
-                    title: post.title,
-                    sectionsJson: post.sections_json,
-                    steps: post.steps,
-                    llmReview: post.llm_review,
-                    mixNotes: post.mix_notes,
-                    bannerUrl: post.banner_url,
-                    createdAt: post.created_at,
-                    sourceName: post.source_channel_title || null,
-                    sourceAvatarUrl: post.source_channel_avatar_url || null,
-                    sourceThumbnailUrl: post.source_thumbnail_url || null,
-                    viewCount: post.source_view_count ?? null,
-                    publishedChannelSlug: post.published_channel_slug || null,
-                    tags: post.tags.map((tag) => tag.slug),
-                    likesCount: post.likes_count,
-                    userLiked: post.user_liked,
-                    commentsCount,
-                  });
+                <div className="divide-y divide-border/40">
+                  {visiblePosts.map((post) => {
+                    const cardProps = buildWallBlueprintCardProps({
+                      id: post.id,
+                      title: post.title,
+                      sectionsJson: post.sections_json,
+                      steps: post.steps,
+                      llmReview: post.llm_review,
+                      mixNotes: post.mix_notes,
+                      bannerUrl: post.banner_url,
+                      createdAt: post.created_at,
+                      sourceName: post.source_channel_title || null,
+                      sourceAvatarUrl: post.source_channel_avatar_url || null,
+                      sourceThumbnailUrl: post.source_thumbnail_url || null,
+                      viewCount: post.source_view_count ?? null,
+                      publishedChannelSlug: post.published_channel_slug || null,
+                      tags: post.tags.map((tag) => tag.slug),
+                      likesCount: post.likes_count,
+                      userLiked: post.user_liked,
+                      commentsCount: post.comments_count,
+                    });
 
-                  return (
-                    <WallBlueprintCard
-                      key={post.id}
-                      {...cardProps}
-                      onLike={(event) => {
-                        event.preventDefault();
-                        handleLike(post.id, post.user_liked);
-                      }}
-                    />
-                  );
-                })}
-              </div>
+                    return (
+                      <WallBlueprintCard
+                        key={post.id}
+                        {...cardProps}
+                        onLike={(event) => {
+                          event.preventDefault();
+                          handleLike(post.id, post.user_liked);
+                        }}
+                      />
+                    );
+                  })}
+                </div>
             ) : (
               <Card className="text-center py-12 mx-3 sm:mx-4">
                 <CardContent>

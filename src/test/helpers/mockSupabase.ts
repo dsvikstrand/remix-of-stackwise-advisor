@@ -124,6 +124,11 @@ class QueryBuilder {
     return this;
   }
 
+  gte(field: string, value: any) {
+    this.filters.push((row) => row[field] >= value);
+    return this;
+  }
+
   order(field: string, options?: { ascending?: boolean }) {
     this.orderRules.push({
       field,

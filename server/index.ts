@@ -203,6 +203,7 @@ import { registerOpsRoutes } from './routes/ops';
 import { registerYouTubeRoutes } from './routes/youtube';
 import { registerSourceSubscriptionsRoutes } from './routes/sourceSubscriptions';
 import { registerSourcePagesRoutes } from './routes/sourcePages';
+import { registerWallRoutes } from './routes/wall';
 
 const app = express();
 const port = Number(process.env.PORT) || 8787;
@@ -1593,6 +1594,11 @@ registerCoreRoutes(app, {
 });
 
 registerProfileRoutes(app, {
+  getServiceSupabaseClient,
+  normalizeTranscriptTruthStatus,
+});
+
+registerWallRoutes(app, {
   getServiceSupabaseClient,
   normalizeTranscriptTruthStatus,
 });
