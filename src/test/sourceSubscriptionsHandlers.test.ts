@@ -55,8 +55,11 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     recoverStaleIngestionJobs: vi.fn(async () => []),
     getActiveManualRefreshJob: vi.fn(async () => null),
     countQueueDepth: vi.fn(async () => 0),
+    countQueueWorkItems: vi.fn(async () => 0),
     queueDepthHardLimit: 1000,
     queueDepthPerUserLimit: 50,
+    queueWorkItemsHardLimit: 250,
+    queueWorkItemsPerUserLimit: 40,
     emitGenerationStartedNotification: vi.fn(async () => undefined),
     getGenerationNotificationLinkPath: () => '/feed',
     scheduleQueuedIngestionProcessing: vi.fn(() => undefined),
@@ -220,6 +223,8 @@ describe('source subscription refresh generate handler', () => {
       ok: true,
       data: {
         queued_count: 3,
+        queue_work_items: 3,
+        user_queue_work_items: 3,
         skipped_unaffordable_count: 2,
         skipped_existing_count: 0,
         in_progress_count: 0,
@@ -228,5 +233,61 @@ describe('source subscription refresh generate handler', () => {
     expect(authDb.state.ingestion_jobs).toHaveLength(1);
     expect(authDb.state.ingestion_jobs[0].payload.items).toHaveLength(3);
     expect(serviceDb.state.credit_ledger.filter((row: any) => row.entry_type === 'hold')).toHaveLength(3);
+  });
+
+  it('rejects refresh generation when work-item budget would overflow', async () => {
+    const authDb = createMockSupabase({
+      user_source_subscriptions: [{
+        id: 'sub_1',
+        user_id: '00000000-0000-0000-0000-000000000001',
+        source_channel_id: 'channel_1',
+        is_active: true,
+      }],
+      ingestion_jobs: [],
+    });
+    const serviceDb = createMockSupabase({
+      user_credit_wallets: [{
+        user_id: '00000000-0000-0000-0000-000000000001',
+        balance: 5,
+        capacity: 5,
+        refill_rate_per_sec: 0,
+        last_refill_at: new Date().toISOString(),
+      }],
+    });
+    const items = Array.from({ length: 2 }, (_, index) => ({
+      subscription_id: 'sub_1',
+      source_channel_id: 'channel_1',
+      source_channel_title: 'Channel 1',
+      source_channel_url: 'https://youtube.com/channel/channel_1',
+      video_id: `video_${index + 1}`,
+      video_url: `https://youtube.com/watch?v=video_${index + 1}`,
+      title: `Video ${index + 1}`,
+    }));
+
+    const req = {
+      body: { items },
+    } as any;
+    const res = createResponse();
+    const deps = createDeps({
+      getAuthedSupabaseClient: () => authDb,
+      getServiceSupabaseClient: () => serviceDb,
+      RefreshSubscriptionsGenerateSchema: { safeParse: () => ({ success: true, data: { items } }) },
+      countQueueDepth: vi.fn(async () => 1),
+      countQueueWorkItems: vi.fn(async () => 39),
+      queueWorkItemsPerUserLimit: 40,
+    });
+
+    await handleRefreshGenerate(req, res as any, deps);
+
+    expect(res.statusCode).toBe(429);
+    expect(res.body).toMatchObject({
+      ok: false,
+      error_code: 'QUEUE_BACKPRESSURE',
+      data: {
+        queue_work_items: 39,
+        user_queue_work_items: 39,
+      },
+    });
+    expect(serviceDb.state.credit_ledger.map((row: any) => row.entry_type)).toEqual(['hold', 'hold', 'refund', 'refund']);
   });
 });

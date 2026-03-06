@@ -58,8 +58,11 @@ export type SourceSubscriptionsRouteDeps = {
   recoverStaleIngestionJobs: any;
   getActiveManualRefreshJob: any;
   countQueueDepth: any;
+  countQueueWorkItems: any;
   queueDepthHardLimit: number;
   queueDepthPerUserLimit: number;
+  queueWorkItemsHardLimit: number;
+  queueWorkItemsPerUserLimit: number;
   emitGenerationStartedNotification: any;
   getGenerationNotificationLinkPath: any;
   scheduleQueuedIngestionProcessing: any;

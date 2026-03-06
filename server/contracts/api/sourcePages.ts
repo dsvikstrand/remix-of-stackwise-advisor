@@ -97,9 +97,12 @@ export type SourcePagesRouteDeps = {
   attachReservationLedger: any;
   markUnlockProcessing: any;
   countQueueDepth: any;
+  countQueueWorkItems: any;
   unlockIntakeEnabled: boolean;
   queueDepthHardLimit: number;
   queueDepthPerUserLimit: number;
+  queueWorkItemsHardLimit: number;
+  queueWorkItemsPerUserLimit: number;
   workerConcurrency: number;
   emitGenerationStartedNotification: any;
   getGenerationNotificationLinkPath: any;

@@ -49,11 +49,14 @@ export type OpsRouteDeps = {
   runUnlockSweeps: (db: DbClient, input: { mode: 'cron' | 'opportunistic' | 'manual'; force?: boolean; traceId?: string }) => Promise<void>;
   runSourcePageAssetSweep: (db: DbClient, input: { mode: 'cron' | 'opportunistic' | 'manual'; force?: boolean; traceId?: string }) => Promise<unknown>;
   seedSourceTranscriptRevalidateJobs: (db: DbClient, limit: number) => Promise<{ scanned: number; enqueued: number }>;
-  countQueueDepth: (db: DbClient, input: { includeRunning: boolean; userId?: string }) => Promise<number>;
+  countQueueDepth: (db: DbClient, input: { includeRunning?: boolean; userId?: string; statuses?: string[] }) => Promise<number>;
+  countQueueWorkItems: (db: DbClient, input: { includeRunning?: boolean; userId?: string; statuses?: string[] }) => Promise<number>;
   createUnlockTraceId: () => string;
   scheduleQueuedIngestionProcessing: () => void;
   queueDepthHardLimit: number;
   queueDepthPerUserLimit: number;
+  queueWorkItemsHardLimit: number;
+  queueWorkItemsPerUserLimit: number;
   queuePriorityEnabled: boolean;
   queueLowPrioritySuppressionDepth: number;
   workerConcurrency: number;

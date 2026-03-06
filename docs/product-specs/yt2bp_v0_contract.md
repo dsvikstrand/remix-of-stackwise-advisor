@@ -53,8 +53,10 @@
 - 2026-02-21 note: source-linked YouTube banners now use thumbnail-first assignment/backfill and source-generation paths bypass auto-banner enqueue; additive and outside this endpoint envelope.
 - 2026-02-20 note: source-page unlock route guard is soft-limited (`8/10s` burst + `120/10m` sustained) and no longer uses hard unlock cooldown; additive and outside this endpoint envelope.
 - 2026-03-06 note: daily-credit wallet model (`user_credit_wallets`, `credit_ledger`, `/api/credits` daily grant/reset fields) is additive and outside this endpoint envelope.
+- 2026-03-06 note: queue realism hardening adds weighted queue admission and additive `queue_work_items` queue-health fields; this is additive and outside the YT2BP endpoint envelope.
+- 2026-03-06 note: credit-refresh hardening makes `/api/credits` lazy/on-demand from header UI instead of background polling; this is additive and outside the YT2BP endpoint envelope.
 - 2026-02-20 note: subscription new-upload ingest now writes unlockable feed rows (`my_feed_unlockable`) before generation; this lifecycle change is outside this endpoint envelope.
-- 2026-02-20 note: subscription rows now include `auto_unlock_enabled` (default `true`) and new-upload auto-attempt flow that prioritizes the current subscriber, then samples up to 3 eligible subscribers with bounded retries for shared unlock generation; additive and outside this endpoint envelope.
+- 2026-03-06 note: subscription rows now include `auto_unlock_enabled` (default `true`) and new-upload auto-attempt flow uses canonical shared-cost auto intents with funded-participant snapshots and bounded retries; additive and outside this endpoint envelope.
 - 2026-02-20 note: unlock reliability sweeps (expired/stale/orphan recovery) run in source-video routes and service cron trigger path; additive and outside this endpoint envelope.
 - 2026-02-20 note: unlock/generate responses now include additive `trace_id` and unlock lifecycle logs propagate the same correlation ID; additive and outside this endpoint envelope.
 - 2026-02-20 note: ingestion worker hardening adds queue lease/retry metadata on `ingestion_jobs` and service queue-health endpoint `GET /api/ops/queue/health`; additive and outside this endpoint envelope.
@@ -167,6 +169,7 @@
 - Notifications inbox flows (`/api/notifications*`) and event emission for replies/generation terminal outcomes are intentionally outside this endpoint contract.
 - Service queue operations (`POST /api/ingestion/jobs/trigger`, `GET /api/ingestion/jobs/latest`, `GET /api/ops/queue/health`) are intentionally outside this endpoint contract.
 - Daily-credit wallet and source-unlock persistence (`user_credit_wallets`, `credit_ledger`, `source_item_unlocks`, `/api/credits`) are intentionally outside this endpoint contract.
+- Queue-work-item budgeting and queue-health work-size reporting (`queue_work_items`, `running_work_items`, per-scope work-item fields) are intentionally outside this endpoint contract.
 - Read limiter policy for `/api/credits` and `/api/ingestion/jobs/latest-mine` is intentionally outside this endpoint contract.
 - Subscription `auto_unlock_enabled` toggle and shared-cost auto-unlock intent billing/retry behavior for new-upload shared unlock are intentionally outside this endpoint contract.
 - Unlock reliability sweep behavior and unlock trace correlation (`trace_id`) are intentionally outside this endpoint contract.

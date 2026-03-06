@@ -114,6 +114,7 @@ import { createCodexLane } from './services/codexLane';
 import {
   claimQueuedIngestionJobs,
   countQueueDepth,
+  countQueueWorkItems,
   failIngestionJob,
   touchIngestionJobLease,
   type IngestionJobRow,
@@ -267,7 +268,7 @@ const ingestionServiceToken = String(process.env.INGESTION_SERVICE_TOKEN || '').
 const ingestionMaxPerSubscription = Math.max(1, Number(process.env.INGESTION_MAX_PER_SUBSCRIPTION) || 5);
 const refreshScanCooldownMs = clampInt(process.env.REFRESH_SCAN_COOLDOWN_MS, 30_000, 5_000, 300_000);
 const refreshGenerateCooldownMs = clampInt(process.env.REFRESH_GENERATE_COOLDOWN_MS, 120_000, 10_000, 900_000);
-const refreshGenerateMaxItems = clampInt(process.env.REFRESH_GENERATE_MAX_ITEMS, 20, 1, 200);
+const refreshGenerateMaxItems = clampInt(process.env.REFRESH_GENERATE_MAX_ITEMS, 10, 1, 200);
 const sourceVideoListBurstWindowMs = clampInt(process.env.SOURCE_VIDEO_LIST_BURST_WINDOW_MS, 15_000, 5_000, 300_000);
 const sourceVideoListBurstMax = clampInt(process.env.SOURCE_VIDEO_LIST_BURST_MAX, 4, 1, 20);
 const sourceVideoListSustainedWindowMs = clampInt(process.env.SOURCE_VIDEO_LIST_SUSTAINED_WINDOW_MS, 10 * 60_000, 60_000, 60 * 60_000);
@@ -294,6 +295,8 @@ const ingestionLatestMineWindowMs = clampInt(process.env.INGESTION_LATEST_MINE_W
 const ingestionLatestMineMaxPerWindow = clampInt(process.env.INGESTION_LATEST_MINE_MAX_PER_WINDOW, 180, 30, 2_000);
 const queueDepthHardLimit = clampInt(process.env.QUEUE_DEPTH_HARD_LIMIT, 1000, 10, 200_000);
 const queueDepthPerUserLimit = clampInt(process.env.QUEUE_DEPTH_PER_USER_LIMIT, 50, 1, 10_000);
+const queueWorkItemsHardLimit = clampInt(process.env.QUEUE_WORK_ITEMS_HARD_LIMIT, 250, 1, 200_000);
+const queueWorkItemsPerUserLimit = clampInt(process.env.QUEUE_WORK_ITEMS_PER_USER_LIMIT, 40, 1, 10_000);
 const queuePriorityEnabled = parseRuntimeFlag(process.env.QUEUE_PRIORITY_ENABLED, true);
 const queueSweepHighBatch = clampInt(process.env.QUEUE_SWEEP_HIGH_BATCH, 10, 0, 200);
 const queueSweepMediumBatch = clampInt(
@@ -331,7 +334,8 @@ const youtubeCommentsManualCooldownHours = clampInt(process.env.YOUTUBE_COMMENTS
 const unlockIntakeEnabledRaw = String(process.env.UNLOCK_INTAKE_ENABLED || 'true').trim().toLowerCase();
 const unlockIntakeEnabled = !(unlockIntakeEnabledRaw === 'false' || unlockIntakeEnabledRaw === '0' || unlockIntakeEnabledRaw === 'off');
 const sourceUnlockReservationSeconds = clampInt(process.env.SOURCE_UNLOCK_RESERVATION_SECONDS, 300, 60, 3600);
-const sourceUnlockGenerateMaxItems = clampInt(process.env.SOURCE_UNLOCK_GENERATE_MAX_ITEMS, 100, 1, 500);
+const searchGenerateMaxItems = clampInt(process.env.SEARCH_GENERATE_MAX_ITEMS, 20, 1, 200);
+const sourceUnlockGenerateMaxItems = clampInt(process.env.SOURCE_UNLOCK_GENERATE_MAX_ITEMS, 20, 1, 500);
 const sourceAutoUnlockRetryDelaySeconds = clampInt(process.env.SOURCE_AUTO_UNLOCK_RETRY_DELAY_SECONDS, 90, 10, 3600);
 const sourceAutoUnlockRetryMaxAttempts = clampInt(process.env.SOURCE_AUTO_UNLOCK_RETRY_MAX_ATTEMPTS, 3, 1, 10);
 const sourceTranscriptRetryDelayAttempt1Seconds = clampInt(
@@ -1644,6 +1648,7 @@ registerYouTubeRoutes(app, {
   youtubeGlobalLiveCallsPerMinute,
   youtubeGlobalLiveCallsPerDay,
   youtubeGlobalCooldownSeconds,
+  searchGenerateMaxItems,
   sourceUnlockGenerateMaxItems,
   generationDurationCapEnabled,
   generationMaxVideoSeconds,
@@ -1651,6 +1656,8 @@ registerYouTubeRoutes(app, {
   generationDurationLookupTimeoutMs,
   queueDepthHardLimit,
   queueDepthPerUserLimit,
+  queueWorkItemsHardLimit,
+  queueWorkItemsPerUserLimit,
   workerConcurrency,
   youtubeOAuthStateTtlSeconds,
   youtubeImportMaxChannels,
@@ -1675,6 +1682,7 @@ registerYouTubeRoutes(app, {
   youtubeSearchCacheService,
   youtubeQuotaGuardService,
   countQueueDepth,
+  countQueueWorkItems,
   emitGenerationStartedNotification,
   getGenerationNotificationLinkPath,
   scheduleQueuedIngestionProcessing,
@@ -7744,8 +7752,11 @@ registerSourceSubscriptionsRoutes(app, {
   recoverStaleIngestionJobs,
   getActiveManualRefreshJob,
   countQueueDepth,
+  countQueueWorkItems,
   queueDepthHardLimit,
   queueDepthPerUserLimit,
+  queueWorkItemsHardLimit,
+  queueWorkItemsPerUserLimit,
   emitGenerationStartedNotification,
   getGenerationNotificationLinkPath,
   scheduleQueuedIngestionProcessing,
@@ -7807,9 +7818,12 @@ registerSourcePagesRoutes(app, {
   attachReservationLedger,
   markUnlockProcessing,
   countQueueDepth,
+  countQueueWorkItems,
   unlockIntakeEnabled,
   queueDepthHardLimit,
   queueDepthPerUserLimit,
+  queueWorkItemsHardLimit,
+  queueWorkItemsPerUserLimit,
   workerConcurrency,
   emitGenerationStartedNotification,
   getGenerationNotificationLinkPath,
@@ -7861,10 +7875,13 @@ registerOpsRoutes(app, {
   runSourcePageAssetSweep,
   seedSourceTranscriptRevalidateJobs,
   countQueueDepth,
+  countQueueWorkItems,
   createUnlockTraceId,
   scheduleQueuedIngestionProcessing,
   queueDepthHardLimit,
   queueDepthPerUserLimit,
+  queueWorkItemsHardLimit,
+  queueWorkItemsPerUserLimit,
   queuePriorityEnabled,
   queueLowPrioritySuppressionDepth,
   workerConcurrency,

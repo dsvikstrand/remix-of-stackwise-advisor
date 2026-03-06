@@ -246,7 +246,10 @@ export default function SearchPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const searchEnabled = Boolean(config.agenticBackendUrl);
-  const creditsQuery = useAiCredits(Boolean(user));
+  const creditsQuery = useAiCredits({
+    enabled: Boolean(user),
+    refetchIntervalMs: false,
+  });
 
   const [queryInput, setQueryInput] = useState('');
   const [submittedQuery, setSubmittedQuery] = useState('');

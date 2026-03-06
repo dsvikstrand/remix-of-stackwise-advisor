@@ -130,7 +130,7 @@
     - `POST /api/ingestion/jobs/trigger` (service auth)
       - enqueue-only path for `all_active_subscriptions` scope; durable worker claim/lease executes outside request lifecycle.
     - `GET /api/ingestion/jobs/latest` (service auth, latest job snapshot)
-    - `GET /api/ops/queue/health` (service auth, queue depth/stale lease/provider circuit snapshot)
+    - `GET /api/ops/queue/health` (service auth, queue depth + work-item backlog + stale lease/provider circuit snapshot)
     - credit path fail-safe:
       - credit backend outages return explicit `CREDITS_UNAVAILABLE` (`503`) for credit-dependent actions.
       - `/api/credits` exposes additive backend-health fields (`credits_backend_mode`, `credits_backend_ok`, `credits_backend_error`).
@@ -287,7 +287,9 @@ Current production behavior note:
   - Logs-first triage in `docs/ops/yt2bp_runbook.md`.
   - Feature/env toggles for fast rollback.
   - Transcript-unavailable path uses silent auto-retries with bounded backoff (`5m -> 15m -> 45m` by default) and only surfaces speech guidance on explicit Source Page `+Add` attempts.
-  - Read-path polling endpoints (`/api/credits`, `/api/ingestion/jobs/latest-mine`) use dedicated limiter buckets, separated from global API limiter.
+  - Read-path endpoints (`/api/credits`, `/api/ingestion/jobs/latest-mine`) use dedicated limiter buckets, separated from global API limiter.
+  - Credit UI refresh is lazy-by-default: the always-mounted header menu fetches only while open, and generation flows rely on explicit `['ai-credits']` invalidation rather than constant polling.
+  - Queue health now exposes both row-count and work-item backlog so multi-item jobs cannot hide behind a low job count.
   - Frontend feed-card surfaces are intentionally low-action in MVP (like/comment only), reducing non-core interaction noise.
   - Subscription checkpoint advancement is intentionally held on runs with skipped upcoming premieres to avoid missing release ingestion.
   - Transcript truth model now separates ambiguous transcript failures from confirmed no-speech videos:

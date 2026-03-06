@@ -67,9 +67,12 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     youtubeGlobalLiveCallsPerMinute: 60,
     youtubeGlobalLiveCallsPerDay: 20000,
     youtubeGlobalCooldownSeconds: 600,
+    searchGenerateMaxItems: 20,
     sourceUnlockGenerateMaxItems: 100,
     queueDepthHardLimit: 1000,
     queueDepthPerUserLimit: 50,
+    queueWorkItemsHardLimit: 250,
+    queueWorkItemsPerUserLimit: 40,
     workerConcurrency: 4,
     generationDurationCapEnabled: false,
     generationMaxVideoSeconds: 2700,
@@ -115,6 +118,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     youtubeSearchCacheService: null,
     youtubeQuotaGuardService: null,
     countQueueDepth: vi.fn(async () => 0),
+    countQueueWorkItems: vi.fn(async () => 0),
     emitGenerationStartedNotification: vi.fn(async () => undefined),
     getGenerationNotificationLinkPath: () => '/wall',
     scheduleQueuedIngestionProcessing: vi.fn(() => undefined),
@@ -311,6 +315,8 @@ describe('youtube handlers', () => {
       ok: true,
       data: {
         queued_count: 3,
+        queue_work_items: 3,
+        user_queue_work_items: 3,
         skipped_unaffordable_count: 2,
         skipped_existing_count: 0,
         in_progress_count: 0,
@@ -319,6 +325,80 @@ describe('youtube handlers', () => {
     expect(authDb.state.ingestion_jobs).toHaveLength(1);
     expect(authDb.state.ingestion_jobs[0].payload.items).toHaveLength(3);
     expect(serviceDb.state.credit_ledger.filter((row: any) => row.entry_type === 'hold')).toHaveLength(3);
+  });
+
+  it('rejects search generate requests above the route cap', async () => {
+    const app = createMockApp();
+    const items = Array.from({ length: 21 }, (_, index) => ({
+      video_id: `video_${index + 1}`,
+      video_url: `https://youtube.com/watch?v=video_${index + 1}`,
+      title: `Video ${index + 1}`,
+      channel_id: 'channel_1',
+    }));
+    registerYouTubeRouteHandlers(app as any, createDeps({
+      SearchVideosGenerateSchema: { safeParse: () => ({ success: true, data: { items } }) },
+    }));
+
+    const handler = app.handlers['POST /api/search/videos/generate'];
+    const req = { body: { items } } as any;
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({
+      ok: false,
+      error_code: 'MAX_ITEMS_EXCEEDED',
+    });
+  });
+
+  it('rejects search generate when work-item budget would overflow', async () => {
+    const authDb = createMockSupabase({
+      ingestion_jobs: [],
+    });
+    const serviceDb = createMockSupabase({
+      user_credit_wallets: [{
+        user_id: '00000000-0000-0000-0000-000000000001',
+        balance: 10,
+        capacity: 10,
+        refill_rate_per_sec: 0,
+        last_refill_at: new Date().toISOString(),
+      }],
+    });
+    const app = createMockApp();
+    const items = Array.from({ length: 2 }, (_, index) => ({
+      video_id: `video_${index + 1}`,
+      video_url: `https://youtube.com/watch?v=video_${index + 1}`,
+      title: `Video ${index + 1}`,
+      channel_id: 'channel_1',
+    }));
+    registerYouTubeRouteHandlers(app as any, createDeps({
+      getAuthedSupabaseClient: () => authDb,
+      getServiceSupabaseClient: () => serviceDb,
+      SearchVideosGenerateSchema: { safeParse: () => ({ success: true, data: { items } }) },
+      loadExistingSourceVideoStateForUser: vi.fn(async () => new Map()),
+      resolveVariantOrReady: vi.fn(async () => null),
+      countQueueDepth: vi.fn(async () => 1),
+      countQueueWorkItems: vi.fn(async () => 39),
+      queueWorkItemsPerUserLimit: 40,
+    }));
+
+    const handler = app.handlers['POST /api/search/videos/generate'];
+    const req = { body: { items } } as any;
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(429);
+    expect(res.body).toMatchObject({
+      ok: false,
+      error_code: 'QUEUE_BACKPRESSURE',
+      data: {
+        queue_work_items: 39,
+        user_queue_work_items: 39,
+      },
+    });
+    expect(serviceDb.state.credit_ledger.map((row: any) => row.entry_type)).toEqual(['hold', 'hold', 'refund', 'refund']);
   });
 
   it('returns cooldown error when manual YouTube comments refresh is on cooldown', async () => {

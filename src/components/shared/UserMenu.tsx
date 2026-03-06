@@ -23,7 +23,11 @@ type ThemeMode = 'light' | 'dark';
 
 export function UserMenu({ onOpenHelp }: UserMenuProps) {
   const { user, profile, signOut, isLoading } = useAuth();
-  const creditsQuery = useAiCredits(!!user);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const creditsQuery = useAiCredits({
+    enabled: Boolean(user && menuOpen),
+    refetchIntervalMs: false,
+  });
   const [theme, setTheme] = useState<ThemeMode>('light');
 
   useEffect(() => {
@@ -90,7 +94,7 @@ export function UserMenu({ onOpenHelp }: UserMenuProps) {
   const dailyCreditsGrant = Math.max(0, Number(credits?.daily_grant || credits?.generation_daily_limit || 0));
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-9 w-9 rounded-full">
           <Avatar className="h-9 w-9">

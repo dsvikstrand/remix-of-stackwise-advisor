@@ -28,6 +28,13 @@ export type IngestionJobRow = {
   updated_at: string;
 };
 
+type QueueDepthFilter = {
+  scope?: string;
+  userId?: string;
+  includeRunning?: boolean;
+  statuses?: string[];
+};
+
 function clampInt(raw: unknown, fallback: number, min: number, max: number) {
   const parsed = Number(raw);
   if (!Number.isFinite(parsed)) return fallback;
@@ -73,8 +80,13 @@ export async function countQueueDepth(db: DbClient, input?: {
   scope?: string;
   userId?: string;
   includeRunning?: boolean;
+  statuses?: string[];
 }) {
-  const statuses = input?.includeRunning ? ['queued', 'running'] : ['queued'];
+  const statuses = Array.isArray(input?.statuses) && input?.statuses.length > 0
+    ? input.statuses
+    : input?.includeRunning
+      ? ['queued', 'running']
+      : ['queued'];
   let query = db
     .from('ingestion_jobs')
     .select('id', { head: true, count: 'exact' })
@@ -86,6 +98,61 @@ export async function countQueueDepth(db: DbClient, input?: {
   const { count, error } = await query;
   if (error) throw error;
   return Number(count || 0);
+}
+
+export function getQueuedJobWorkItemCount(input: {
+  scope: string;
+  payload: Record<string, unknown> | null | undefined;
+}) {
+  const scope = String(input.scope || '').trim();
+  const payload = input.payload && typeof input.payload === 'object'
+    ? input.payload as Record<string, unknown>
+    : null;
+  const itemCount = Array.isArray(payload?.items) ? payload.items.length : 0;
+
+  if (
+    scope === 'source_item_unlock_generation'
+    || scope === 'manual_refresh_selection'
+    || scope === 'search_video_generate'
+  ) {
+    return Math.max(0, itemCount);
+  }
+
+  if (
+    scope === 'all_active_subscriptions'
+    || scope === 'source_auto_unlock_retry'
+    || scope === 'source_transcript_revalidate'
+    || scope === 'blueprint_youtube_enrichment'
+    || scope === 'blueprint_youtube_refresh'
+  ) {
+    return 1;
+  }
+
+  return 0;
+}
+
+export async function countQueueWorkItems(db: DbClient, input?: QueueDepthFilter) {
+  const statuses = Array.isArray(input?.statuses) && input?.statuses.length > 0
+    ? input.statuses
+    : input?.includeRunning
+      ? ['queued', 'running']
+      : ['queued'];
+  let query = db
+    .from('ingestion_jobs')
+    .select('scope, payload')
+    .in('status', statuses);
+
+  if (input?.scope) query = query.eq('scope', input.scope);
+  if (input?.userId) query = query.eq('requested_by_user_id', input.userId);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []).reduce((total: number, row: any) => (
+    total + getQueuedJobWorkItemCount({
+      scope: String(row?.scope || ''),
+      payload: (row?.payload && typeof row.payload === 'object') ? row.payload as Record<string, unknown> : null,
+    })
+  ), 0);
 }
 
 export async function failIngestionJob(db: DbClient, input: {

@@ -29,8 +29,8 @@ d8) [have] Handler-level coverage now exists for direct URL reserve/release timi
 ## Execution Order
 e1) [have] `P0-1`, `P0-2`, and `P0-3` are completed.
 e2) [have] `P0-4` is complete.
-e3) [todo] Next focus is `P1-3` and `P1-4`.
-e4) [todo] Only after those are stable, spend time on `P2` cleanup/refactor work.
+e3) [have] `P1-1`, `P1-2`, `P1-3`, and `P1-4` are implemented and locally validated.
+e4) [todo] Remaining launch work is now concentrated in checklist evidence capture plus `P2` cleanup/refactor work.
 
 ## P0 Launch Blockers
 
@@ -163,38 +163,48 @@ k6) [have] Exit criteria:
 - routine browsing does not materially consume YouTube quota
 
 ### P1-3 Queue Budgeting By Work Size
-l1) [todo] Risk: `medium`
-l2) [todo] Problem:
+l1) [have] Risk: `medium`
+l2) [have] Problem:
 - queue depth is job-based, but some interactive jobs can contain many videos and monopolize workers
-l3) [todo] Primary files:
+l3) [have] Primary files:
 - `server/handlers/youtubeHandlers.ts`
 - `server/handlers/sourcePagesHandlers.ts`
 - `server/handlers/sourceSubscriptionsHandlers.ts`
+- `server/handlers/opsHandlers.ts`
+- `server/services/ingestionQueue.ts`
 - queue metrics/runbook docs
-l4) [todo] Implementation checklist:
-- reduce max batch sizes for interactive routes or add per-job item caps by scope
-- expose item-count-aware queue metrics if job size remains variable
-- ensure operator dashboards distinguish `job count` from `work item count`
-l5) [todo] Validation:
-- run a drill using multi-item jobs and compare worker occupancy vs queue-depth reporting
-l6) [todo] Exit criteria:
-- queue health signals reflect real workload, not just row count
+l4) [have] Implementation outcome:
+- queue admission now uses dual thresholds: existing row-depth limits plus `QUEUE_WORK_ITEMS_HARD_LIMIT=250` and `QUEUE_WORK_ITEMS_PER_USER_LIMIT=40`
+- interactive route caps are now reduced to `SEARCH_GENERATE_MAX_ITEMS=20`, `SOURCE_UNLOCK_GENERATE_MAX_ITEMS=20`, and `REFRESH_GENERATE_MAX_ITEMS=10`
+- Search, Source Page, and manual refresh responses now return additive `queue_work_items` and `user_queue_work_items`
+- `GET /api/ops/queue/health` now reports additive top-level and per-scope work-item metrics alongside existing row-based fields
+l5) [have] Validation:
+- queue work-item helper coverage landed in `src/test/ingestionQueueWorkItems.test.ts`
+- handler tests now cover weighted backpressure on Search and manual refresh flows plus additive queue work-item metadata
+- local typecheck/test/build pass completed after the weighted-budget patch
+l6) [have] Exit criteria:
+- queue health signals now reflect both row depth and real queued work size for supported scopes
 
 ### P1-4 Credit Polling Load Reduction
-m1) [todo] Risk: `medium`
-m2) [todo] Problem:
-- `useAiCredits` polls every `15s` from global UI surfaces, which can create steady backend load at launch scale
-m3) [todo] Primary files:
+m1) [have] Risk: `medium`
+m2) [have] Problem:
+- always-mounted UI surfaces were still refreshing `/api/credits` in the background, creating avoidable steady read load at launch scale
+m3) [have] Primary files:
 - `src/hooks/useAiCredits.ts`
 - `src/components/shared/UserMenu.tsx`
-m4) [todo] Implementation checklist:
-- reduce polling frequency or only poll when menus/views are open
-- consider event-driven invalidation after generation/unlock actions instead of constant polling
-- keep manual refresh behavior for support-critical views if needed
-m5) [todo] Validation:
-- estimate request volume for `100`, `500`, and `1000` active signed-in users before and after the change
-m6) [todo] Exit criteria:
-- background credit polling is no longer a meaningful launch-load contributor
+- `src/pages/Search.tsx`
+- `src/components/subscriptions/RefreshSubscriptionsDialog.tsx`
+m4) [have] Implementation outcome:
+- `useAiCredits` now defaults to one-shot fetch with no polling unless a caller opts in explicitly
+- `UserMenu` now fetches credits only while the dropdown is open for a signed-in user
+- Search still performs a one-shot load on mount for credit-aware generation UI, then relies on explicit invalidation after credit-changing actions
+- manual refresh queue success now invalidates `['ai-credits']` so wallet state refresh stays event-driven
+m5) [have] Validation:
+- `src/test/useAiCredits.test.ts` now covers the no-poll default behavior
+- local request-volume estimate dropped from roughly `100/500/1000` background `/api/credits` requests per minute at `100/500/1000` signed-in users to `0` steady-state menu-closed polling requests per minute
+- local typecheck/test/build pass completed after the lazy-refresh patch
+m6) [have] Exit criteria:
+- background credit refresh is now lazy/on-demand rather than a constant global poll source
 
 ## P2 Cleanup And Refactor
 
@@ -247,4 +257,4 @@ q3) [todo] Load/ops checks:
 - append evidence to `docs/ops/mvp-launch-readiness-checklist.md`
 
 ## Completion Rule
-r1) [todo] This plan can move to `completed/` only when all open `P0` items are done and the launch checklist reflects the new evidence.
+r1) [todo] This plan can move to `completed/` only when the launch checklist reflects the new queue/load evidence and the remaining launch-gate items outside this review are closed.

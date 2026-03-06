@@ -18,6 +18,8 @@ a4b) [have] Launch gate execution board is active at `docs/ops/mvp-launch-readin
 a4c) [have] Launch hardening now includes explicit credit-backend fail-safe semantics (`CREDITS_UNAVAILABLE`), shared error-copy mapping, and baseline legal routes (`/terms`, `/privacy`).
 a4d) [have] Runtime hotfix applied: source-page search no longer crashes backend when opportunistic asset-sweep wiring is present in route deps.
 a4e) [have] Shared auto-unlock schema is now applied on the linked Supabase project (`qgqqavaogicecvhopgan`, migration watermark `20260306113000`).
+a4f) [have] Queue admission now uses weighted work-item limits in addition to row depth, and ops queue health reports both row counts and work-item backlog.
+a4g) [have] Credit refresh is now lazy by default: the header user menu fetches credits only while open, and Search relies on one-shot reads plus explicit invalidation after billable actions.
 a5) [todo] Improve user trust around shared-cost auto billing transitions and async processing visibility.
 a6) [todo] Reduce terminology ambiguity between personal stream, followed channels, source pages, and channel taxonomy.
 
@@ -92,4 +94,6 @@ k1) [have] YouTube comments refresh moved to bootstrap+manual model:
 - auto `+15m`
 - auto `+24h`
 - manual endpoint after that with per-blueprint cooldown
-k2) [have] Manual generation billing now uses reserve -> settle/release semantics against the daily credit wallet; shared-cost auto billing remains the main open ledger hardening item.
+k2) [have] Manual generation billing now uses reserve -> settle/release semantics against the daily credit wallet, and shared-cost auto billing is active for funded auto-enabled subscribers.
+k3) [have] Queue realism hardening is in place: weighted queue-work-item limits gate interactive multi-item jobs and `GET /api/ops/queue/health` now reports work-item backlog.
+k4) [have] Credit-load hardening is in place: `useAiCredits` no longer polls globally, the always-mounted user menu is lazy-on-open, and post-action wallet freshness is event-driven.

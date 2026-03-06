@@ -63,9 +63,12 @@ export function registerSourcePagesRouteHandlers(app: express.Express, deps: Sou
     attachReservationLedger,
     markUnlockProcessing,
     countQueueDepth,
+    countQueueWorkItems,
     unlockIntakeEnabled,
     queueDepthHardLimit,
     queueDepthPerUserLimit,
+    queueWorkItemsHardLimit,
+    queueWorkItemsPerUserLimit,
     workerConcurrency,
     emitGenerationStartedNotification,
     getGenerationNotificationLinkPath,
@@ -769,6 +772,10 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
   const estimatedUnlockCost = 1;
 
   const queueItems: SourceUnlockQueueItem[] = [];
+  let queueDepth = 0;
+  let userQueueDepth = 0;
+  let queueWorkItems = 0;
+  let userQueueWorkItems = 0;
   const inProgressRows: Array<{ video_id: string; title: string }> = [];
   const readyRows: Array<{ video_id: string; title: string; blueprint_id: string | null }> = [];
   const insufficientRows: Array<{ video_id: string; title: string; required: number; balance: number }> = [];
@@ -831,18 +838,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
     }
   }
 
-  let queueDepth = 0;
-  let userQueueDepth = 0;
   if (eligibleCandidateRows.length > 0) {
-    queueDepth = await countQueueDepth(sourcePageDb, {
-      scope: 'source_item_unlock_generation',
-      includeRunning: true,
-    });
-    userQueueDepth = await countQueueDepth(sourcePageDb, {
-      scope: 'source_item_unlock_generation',
-      userId,
-      includeRunning: true,
-    });
     if (!unlockIntakeEnabled) {
       return res.status(503).json({
         ok: false,
@@ -850,20 +846,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         message: 'Unlock intake is temporarily paused.',
         data: {
           ...traceData,
-          queue_depth: queueDepth,
-        },
-      });
-    }
-    if (queueDepth >= queueDepthHardLimit || userQueueDepth >= queueDepthPerUserLimit) {
-      return res.status(429).json({
-        ok: false,
-        error_code: 'QUEUE_BACKPRESSURE',
-        message: 'Unlock queue is busy. Please retry shortly.',
-        retry_after_seconds: 30,
-        data: {
-          ...traceData,
-          queue_depth: queueDepth,
-          user_queue_depth: userQueueDepth,
+          queue_depth: 0,
         },
       });
     }
@@ -1190,6 +1173,73 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       },
     });
   }
+
+  queueDepth = await countQueueDepth(sourcePageDb, {
+    scope: 'source_item_unlock_generation',
+    includeRunning: true,
+  });
+  userQueueDepth = await countQueueDepth(sourcePageDb, {
+    scope: 'source_item_unlock_generation',
+    userId,
+    includeRunning: true,
+  });
+  queueWorkItems = await countQueueWorkItems(sourcePageDb, {
+    scope: 'source_item_unlock_generation',
+    includeRunning: true,
+  });
+  userQueueWorkItems = await countQueueWorkItems(sourcePageDb, {
+    scope: 'source_item_unlock_generation',
+    userId,
+    includeRunning: true,
+  });
+  const wouldExceedQueueDepth = queueDepth >= queueDepthHardLimit || userQueueDepth >= queueDepthPerUserLimit;
+  const wouldExceedWorkItems = (queueWorkItems + queueItems.length) > queueWorkItemsHardLimit
+    || (userQueueWorkItems + queueItems.length) > queueWorkItemsPerUserLimit;
+  if (wouldExceedQueueDepth || wouldExceedWorkItems) {
+    for (const item of queueItems) {
+      if (item.reserved_cost > 0) {
+        await refundReservation(sourcePageDb, {
+          userId: item.reserved_by_user_id,
+          amount: item.reserved_cost,
+          idempotencyKey: buildUnlockLedgerIdempotencyKey({
+            unlockId: item.unlock_id,
+            userId: item.reserved_by_user_id,
+            action: 'refund',
+          }),
+          reasonCode: 'UNLOCK_REFUND',
+          context: {
+            source_item_id: item.source_item_id,
+            source_page_id: item.source_page_id,
+            unlock_id: item.unlock_id,
+            metadata: {
+              source: 'source_page_video_library',
+              error_code: 'QUEUE_BACKPRESSURE',
+              trace_id: traceId,
+            },
+          },
+        });
+      }
+      await failUnlock(sourcePageDb, {
+        unlockId: item.unlock_id,
+        errorCode: 'QUEUE_BACKPRESSURE',
+        errorMessage: 'Unlock queue is busy. Please retry shortly.',
+      });
+    }
+    return res.status(429).json({
+      ok: false,
+      error_code: 'QUEUE_BACKPRESSURE',
+      message: 'Unlock queue is busy. Please retry shortly.',
+      retry_after_seconds: 30,
+      data: {
+        ...traceData,
+        queue_depth: queueDepth,
+        user_queue_depth: userQueueDepth,
+        queue_work_items: queueWorkItems,
+        user_queue_work_items: userQueueWorkItems,
+      },
+    });
+  }
+
   const { data: job, error: jobCreateError } = await db
     .from('ingestion_jobs')
     .insert({
@@ -1269,6 +1319,8 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       ...traceData,
       job_id: job.id,
       queue_depth: queueDepth + 1,
+      queue_work_items: queueWorkItems + queueItems.length,
+      user_queue_work_items: userQueueWorkItems + queueItems.length,
       estimated_start_seconds: Math.max(1, Math.ceil((queueDepth + 1) / Math.max(1, workerConcurrency)) * 4),
       queued_count: queueItems.length,
       requested_tier: requestedTier || null,

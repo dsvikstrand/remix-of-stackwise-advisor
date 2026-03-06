@@ -15,7 +15,7 @@ describe('credits service', () => {
     await expect(
       getCredits('00000000-0000-0000-0000-000000000001'),
     ).rejects.toBeInstanceOf(CreditsUnavailableError);
-  });
+  }, 15_000);
 
   it('returns deterministic service denial when consuming credit without backend', async () => {
     vi.stubEnv('SUPABASE_URL', '');

@@ -32,10 +32,13 @@ function createBaseDeps(overrides: Partial<OpsRouteDeps> = {}): OpsRouteDeps {
     runSourcePageAssetSweep: async () => null,
     seedSourceTranscriptRevalidateJobs: async () => ({ scanned: 0, enqueued: 0 }),
     countQueueDepth: async () => 0,
+    countQueueWorkItems: async () => 0,
     createUnlockTraceId: () => 'trace_123',
     scheduleQueuedIngestionProcessing: () => undefined,
     queueDepthHardLimit: 1000,
     queueDepthPerUserLimit: 50,
+    queueWorkItemsHardLimit: 250,
+    queueWorkItemsPerUserLimit: 40,
     queuePriorityEnabled: true,
     queueLowPrioritySuppressionDepth: 100,
     workerConcurrency: 1,
@@ -86,6 +89,7 @@ function createQueueHealthDb(options?: {
   rows?: Array<{
     scope: string;
     status: 'queued' | 'running';
+    payload?: Record<string, unknown> | null;
     created_at?: string | null;
     started_at?: string | null;
   }>;
@@ -117,6 +121,7 @@ function createQueueHealthDb(options?: {
           }
           expect(columns).toContain('scope');
           expect(columns).toContain('status');
+          expect(columns).toContain('payload');
           return {
             in() {
               return this;
@@ -274,11 +279,21 @@ describe('queue health handler', () => {
       getServiceSupabaseClient: () => createQueueHealthDb({
         staleLeaseCount: 1,
         rows: [
-          { scope: 'all_active_subscriptions', status: 'queued', created_at: queuedIso },
-          { scope: 'all_active_subscriptions', status: 'running', started_at: runningIso },
+          { scope: 'all_active_subscriptions', status: 'queued', payload: null, created_at: queuedIso },
+          { scope: 'all_active_subscriptions', status: 'running', payload: null, started_at: runningIso },
+          { scope: 'search_video_generate', status: 'queued', payload: { items: [{}, {}, {}] }, created_at: queuedIso },
         ],
       }),
-      countQueueDepth: async (_db, input) => (input.includeRunning ? 3 : 1),
+      countQueueDepth: async (_db, input) => (
+        Array.isArray(input.statuses) && input.statuses.includes('running')
+          ? 3
+          : 2
+      ),
+      countQueueWorkItems: async (_db, input) => (
+        Array.isArray(input.statuses) && input.statuses.length === 1 && input.statuses[0] === 'running'
+          ? 1
+          : 4
+      ),
       queuedIngestionScopes: ['all_active_subscriptions', 'search_video_generate'],
       isQueuedIngestionScope: (scope) => scope === 'all_active_subscriptions' || scope === 'search_video_generate',
       getProviderCircuitSnapshot: async () => ({ state: 'closed' }),
@@ -293,9 +308,13 @@ describe('queue health handler', () => {
         oldest_queued_age_ms: number | null;
         oldest_running_started_at: string | null;
         oldest_running_age_ms: number | null;
+        queue_work_items: number;
+        running_work_items: number;
         by_scope: Record<string, {
           queued: number;
           running: number;
+          queued_work_items: number;
+          running_work_items: number;
           oldest_queued_age_ms: number | null;
           oldest_running_age_ms: number | null;
           priority: string;
@@ -304,6 +323,8 @@ describe('queue health handler', () => {
     };
     expect(payload.ok).toBe(true);
     expect(payload.data.snapshot_at).toMatch(/T/);
+    expect(payload.data.queue_work_items).toBe(4);
+    expect(payload.data.running_work_items).toBe(1);
     expect(payload.data.oldest_queued_created_at).toBe(queuedIso);
     expect(payload.data.oldest_running_started_at).toBe(runningIso);
     expect(payload.data.oldest_queued_age_ms).not.toBeNull();
@@ -311,17 +332,21 @@ describe('queue health handler', () => {
     expect(payload.data.by_scope.all_active_subscriptions).toMatchObject({
       queued: 1,
       running: 1,
+      queued_work_items: 1,
+      running_work_items: 1,
       priority: 'low',
     });
     expect(payload.data.by_scope.all_active_subscriptions.oldest_queued_age_ms).not.toBeNull();
     expect(payload.data.by_scope.all_active_subscriptions.oldest_running_age_ms).not.toBeNull();
     expect(payload.data.by_scope.search_video_generate).toMatchObject({
-      queued: 0,
+      queued: 1,
       running: 0,
-      oldest_queued_age_ms: null,
-      oldest_running_age_ms: null,
+      queued_work_items: 3,
+      running_work_items: 0,
       priority: 'high',
     });
+    expect(payload.data.by_scope.search_video_generate.oldest_queued_age_ms).not.toBeNull();
+    expect(payload.data.by_scope.search_video_generate.oldest_running_age_ms).toBeNull();
   });
 
   it('returns null age fields when no queued or running jobs exist', async () => {
@@ -330,7 +355,8 @@ describe('queue health handler', () => {
 
     await handleQueueHealth(req, res as never, createBaseDeps({
       getServiceSupabaseClient: () => createQueueHealthDb(),
-      countQueueDepth: async (_db, input) => (input.includeRunning ? 0 : 0),
+      countQueueDepth: async () => 0,
+      countQueueWorkItems: async () => 0,
       queuedIngestionScopes: ['all_active_subscriptions'],
       isQueuedIngestionScope: () => true,
       getProviderCircuitSnapshot: async () => null,
@@ -344,10 +370,14 @@ describe('queue health handler', () => {
         oldest_queued_age_ms: null,
         oldest_running_started_at: null,
         oldest_running_age_ms: null,
+        queue_work_items: 0,
+        running_work_items: 0,
         by_scope: {
           all_active_subscriptions: {
             queued: 0,
             running: 0,
+            queued_work_items: 0,
+            running_work_items: 0,
             oldest_queued_age_ms: null,
             oldest_running_age_ms: null,
             priority: 'low',

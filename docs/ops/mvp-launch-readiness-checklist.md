@@ -157,14 +157,14 @@ k2) [todo] Owner: `david`
 k3) [todo] Target date: `2026-03-11`
 k4) [todo] Status: `in progress`
 k5) [todo] Scope:
-- establish launch-day command bundle and thresholds used by operators
+- establish launch-day command bundle and thresholds used by operators, now including row-count and work-item queue visibility
 k6) [todo] Required checks:
 - queue depth and stale lease via `/api/ops/queue/health`
 - latest ingestion states via `/api/ingestion/jobs/latest`
 - transcript/provider failure distribution via metrics scripts
 k7) [todo] Pass criteria:
 - operator can classify load state in under `5` minutes
-k8) [todo] Evidence: `Baseline + refreshed queue/ingestion/metrics evidence captured (o11-o13, o18-o20). 5-minute timed operator classification drill evidence still pending.`
+k8) [todo] Evidence: `Baseline + refreshed queue/ingestion/metrics evidence captured (o11-o13, o18-o20). Weighted queue-health implementation evidence captured (o45-o46). 5-minute timed operator classification drill evidence still pending.`
 
 ### P1-4 Feed Query Load Drill
 l1) [todo] Risk: `medium`
@@ -172,11 +172,11 @@ l2) [todo] Owner: `david`
 l3) [todo] Target date: `2026-03-12`
 l4) [todo] Status: `in progress`
 l5) [todo] Scope:
-- run one realistic front-end traffic burst against Home/Wall/My Feed query paths
+- run one realistic front-end traffic burst against Home/Wall/My Feed query paths and keep background read load low while those surfaces are active
 l6) [todo] Pass criteria:
 - no critical DB/API saturation during drill window
 - clear tuning actions captured if saturation appears
-l7) [todo] Evidence: `Drill script implemented and initial public probe captured (o22); auth-surface drill and saturation decision log pending.`
+l7) [todo] Evidence: `Drill script implemented and initial public probe captured (o22); lazy credit-refresh implementation evidence captured (o47-o48); auth-surface drill and saturation decision log pending.`
 
 ## Execution Cadence
 m1) [todo] Daily (10 min):
@@ -255,6 +255,10 @@ o41) [have] `2026-03-06T08:13:00Z` - `P0-2` - `migration parity advanced to shar
 o42) [have] `2026-03-06T08:14:00Z` - `P0-2` - `post-push migration/schema verification` - `npx supabase migration list => local/remote watermark 20260306113000 matches; supabase gen types --linked shows source_auto_unlock_intents, source_auto_unlock_participants, auto_unlock_intent_id, reserve_source_auto_unlock_intent` - `david`
 o43) [have] `2026-03-06T09:18:00Z` - `Provider Safety` - `atomic YouTube quota consume migration applied` - `npx supabase db push applied 20260306143000_youtube_quota_atomic_consume_v1.sql; npx supabase migration list now shows local/remote watermark 20260306143000` - `david`
 o44) [have] `2026-03-06T09:18:00Z` - `Provider Safety` - `hot subscription/source-page reads moved off live asset fetches` - `GET /api/source-subscriptions now serves stored source_pages avatars and source-page reads trigger only bounded background sweep; npm run test => 50 files / 195 tests passed` - `david`
+o45) [have] `2026-03-06T11:40:00Z` - `P1-3` - `weighted queue admission landed` - `Search/source-page/manual-refresh queue admission now enforces row depth plus work-item limits (hard=250, per-user=40); ops queue health now exposes queue_work_items and per-scope queued_work_items/running_work_items; npm run test => 52 files / 202 tests passed` - `david`
+o46) [have] `2026-03-06T11:40:00Z` - `P1-3` - `interactive queue caps reduced to launch-safe defaults` - `SEARCH_GENERATE_MAX_ITEMS=20, SOURCE_UNLOCK_GENERATE_MAX_ITEMS=20, REFRESH_GENERATE_MAX_ITEMS=10; weighted backpressure tests added for Search and manual refresh` - `david`
+o47) [have] `2026-03-06T11:40:00Z` - `P1-4` - `global credits polling removed from always-mounted user menu` - `useAiCredits now defaults to one-shot fetch with no interval; UserMenu fetches only while menu is open; Search remains one-shot plus explicit invalidation; npm run build => exit 0 (chunk size warning only)` - `david`
+o48) [have] `2026-03-06T11:40:00Z` - `P1-4` - `background credit-load estimate reduced` - `steady-state /api/credits background volume changed from about 100/500/1000 requests per minute at 100/500/1000 signed-in users (60s global menu poll) to 0 steady-state requests per minute with menu-closed lazy loading` - `david`
 
 ## Deferred (Not Launch Gate)
 p1) [have] P2 modularization and post-launch optimizations are intentionally out of launch gate.

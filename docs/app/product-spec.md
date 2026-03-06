@@ -80,11 +80,11 @@ a58) [have] Source-video unlock throttling now uses soft request caps (burst+sus
 a59) [have] `/wall` scope split is active: `For You` is now the subscribed-source stream (locked + unlocked), while `Your channels` keeps the previous followed-channel ranking behavior.
 a60) [have] Explore search now supports `Sources` results (app Source Pages only), with dedicated filter and grouped section in `All` results.
 a61) [have] Unlock activity status is now unified across Home `For You`, Source Page `Video Library`, and `My Feed` with shared job-resume behavior (`latest-mine` scope: `source_item_unlock_generation`).
-a62) [have] Credits dropdown now surfaces refill timing (`next +1`) and latest ledger activity summary for clearer unlock debit/refund visibility.
+a62) [have] Credits dropdown now reads lazily on open, surfaces daily reset timing, and avoids background polling from the always-mounted header UI.
 a63) [have] Home now includes a first-time dismissible scope helper clarifying `For You` vs `Your channels`.
 a64) [have] Unlock backend now runs reliability sweeps (expired/stale/orphan recovery) with structured traceable logs, and unlock/generate responses include additive `trace_id`.
 a65) [have] Unlock/manual/service ingestion execution is now enqueue-first with durable DB lease claiming (no in-request `setImmediate` worker path).
-a66) [have] Service operations now include `GET /api/ops/queue/health` for queue depth, stale leases, and provider circuit snapshots.
+a66) [have] Service operations now include `GET /api/ops/queue/health` for queue depth, work-item backlog, stale leases, and provider circuit snapshots.
 a67) [have] Subscription rows now support `auto_unlock_enabled` (default `true`) so new uploads can auto-attempt source unlock generation through the funded-subscriber shared-cost billing model.
 a68) [have] YouTube-source blueprints now use thumbnail-first banners across cards and detail views; legacy source-linked rows are backfilled to thumbnails and source flows bypass auto-banner enqueue.
 a69) [have] Notifications MVP now emits reply and generation-terminal notifications and surfaces them through an auth inbox bell in the app header.
@@ -261,7 +261,7 @@ si18) user endpoint: `POST /api/source-subscriptions/refresh-scan` (scan active 
 si19) user endpoint: `POST /api/source-subscriptions/refresh-generate` (enqueue selected videos for async background blueprint generation)
 si20) user endpoint: `GET /api/ingestion/jobs/:id` (owner-scoped status for manual refresh background jobs)
 si21) `POST /api/source-subscriptions/refresh-generate` returns `409 JOB_ALREADY_RUNNING` if a manual refresh job is already active for the user.
-si22) `POST /api/source-subscriptions/refresh-generate` returns `400 MAX_ITEMS_EXCEEDED` if selected item count exceeds `20`.
+si22) `POST /api/source-subscriptions/refresh-generate` returns `400 MAX_ITEMS_EXCEEDED` if selected item count exceeds `10`.
 si23) refresh candidate cooldown table is active: `refresh_video_attempts` (tracks failed manual refresh attempts with retry hold window).
 si24) user endpoint: `GET /api/ingestion/jobs/latest-mine?scope=manual_refresh_selection` (restore active manual-refresh status after page reload).
 si24b) job status endpoints now include additive retry/lease metadata (`attempts`, `max_attempts`, `next_run_at`, `lease_expires_at`, `trace_id`).
@@ -286,6 +286,7 @@ si42) compatibility alias: `POST /api/source-pages/:platform/:externalId/videos/
 si43) `GET /api/source-pages/:platform/:externalId/videos` now includes unlock metadata per row (`unlock_status`, `unlock_cost`, `unlock_in_progress`, `ready_blueprint_id`).
 si44) `GET /api/credits` now returns daily-wallet fields (`balance`, `capacity`, `daily_grant`, `next_reset_at`, `seconds_to_reset`, `plan`) alongside compatibility fields (`remaining`, `limit`, `resetAt`).
 si44b) `GET /api/credits` keeps additive compatibility fields (`generation_daily_limit`, `generation_daily_used`, `generation_daily_remaining`, `generation_daily_reset_at`, `generation_daily_bypass`) while old daily-cap UI assumptions are phased out.
+si44c) frontend credit refresh is now lazy-by-default: the always-mounted user menu fetches only while open, Search performs one initial read for credit-aware generation UI, and post-action freshness comes from explicit `['ai-credits']` invalidation instead of constant polling.
 si45) source-page video-library unlock worker scope is `source_item_unlock_generation` (single generation per source video, shared fan-out to subscribed users).
 si46) source-page video-library list rate policy: burst `4/15s` plus sustained `40/10m` per user/IP (reduce accidental 429 on normal tab-switch/load-more while keeping abuse guardrails).
 si47) source-page video-library unlock/generate rate policy: burst `8/10s` plus sustained `120/10m` per user/IP (credit balance remains the primary generation throttle).
@@ -295,6 +296,7 @@ si50) unlock trace propagation contract: `trace_id` is emitted in unlock respons
 si51) transcript-unavailable unlock handling is deterministic: manual unlock returns `TRANSCRIPT_UNAVAILABLE` + `retry_after_seconds`, no credit hold is created, and auto-unlock retries are deferred via `source_auto_unlock_retry`.
 si52) source-page unlock queue payload now includes additive `unlock_origin` (`manual_unlock|subscription_auto_unlock|source_auto_unlock_retry`) for durable worker/retry semantics.
 si53) read endpoints `GET /api/credits` and `GET /api/ingestion/jobs/latest-mine` are protected by dedicated high-ceiling read limiters and are excluded from generic global limiter handling to prevent UI polling collisions.
+si53b) `GET /api/ops/queue/health` now reports additive work-size fields (`queue_work_items`, `running_work_items`, per-scope `queued_work_items`, per-scope `running_work_items`) so operator decisions are not based on job rows alone.
 si54) profile tabs contract: owner and public profile tabs are `Feed`, `Comments`, `Liked` (subscriptions tab removed from profile surface).
 si55) locked source cards use compact credit label format (`<n> cr`) and remove `Open source` action on feed cards.
 si56) blueprint list cards in wall/channel/explore remove the share icon action (like/comment remain unchanged).

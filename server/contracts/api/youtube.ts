@@ -75,9 +75,12 @@ export type YouTubeRouteDeps = {
   youtubeGlobalLiveCallsPerMinute: number;
   youtubeGlobalLiveCallsPerDay: number;
   youtubeGlobalCooldownSeconds: number;
+  searchGenerateMaxItems: number;
   sourceUnlockGenerateMaxItems: number;
   queueDepthHardLimit: number;
   queueDepthPerUserLimit: number;
+  queueWorkItemsHardLimit: number;
+  queueWorkItemsPerUserLimit: number;
   workerConcurrency: number;
   generationDurationCapEnabled: boolean;
   generationMaxVideoSeconds: number;
@@ -114,6 +117,7 @@ export type YouTubeRouteDeps = {
   youtubeSearchCacheService: any;
   youtubeQuotaGuardService: any;
   countQueueDepth: any;
+  countQueueWorkItems: any;
   emitGenerationStartedNotification: any;
   getGenerationNotificationLinkPath: any;
   scheduleQueuedIngestionProcessing: any;

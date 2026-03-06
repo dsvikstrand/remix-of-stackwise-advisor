@@ -107,9 +107,11 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Step 23 trust pass adds shared unlock activity cards (Home/Source Page/My Feed), reload-resume unlock tracking, user-menu credit refill/ledger transparency, and a dismissible Home scope helper strip.
 - Step 24 backend hardening adds unlock reliability sweeps (expired/stale/orphan recovery), additive unlock `trace_id` response contract, and service-level idempotency/race tests.
 - Step 24 scale follow-up shifts unlock/manual/service generation to enqueue-only worker execution with DB claim+lease heartbeat semantics, queue backpressure controls, provider retry/circuit guards, and service queue health endpoint (`GET /api/ops/queue/health`).
-- Step 25 subscription auto-unlock v1 adds per-subscription `auto_unlock_enabled` (default `true`) and bounded `source_auto_unlock_retry` attempts; funded-subscriber shared-cost billing remains the active follow-up for this area.
-- Step 26 thumbnail-first banner cutover sets source YouTube banner rendering to thumbnails across Wall/Feed/Explore/Detail/Source Page, backfills old source-linked blueprints, and bypasses source auto-banner enqueue paths.
-- Step 27 notifications MVP adds reply + generation-terminal notification events and ships an auth header bell inbox with read/read-all actions.
+- Step 25 subscription auto-unlock v1 adds per-subscription `auto_unlock_enabled` (default `true`) and bounded `source_auto_unlock_retry` attempts; funded-subscriber shared-cost billing is now active through canonical auto intents and participant snapshots.
+- Step 26 queue realism hardening adds weighted queue admission (`queue_work_items` limits) and exposes row-count plus work-item backlog through `GET /api/ops/queue/health`.
+- Step 27 credit-load hardening makes `useAiCredits` lazy by default, fetches header credits only while the menu is open, and relies on explicit `['ai-credits']` invalidation after billable actions.
+- Step 28 thumbnail-first banner cutover sets source YouTube banner rendering to thumbnails across Wall/Feed/Explore/Detail/Source Page, backfills old source-linked blueprints, and bypasses source auto-banner enqueue paths.
+- Step 29 notifications MVP adds reply + generation-terminal notification events and ships an auth header bell inbox with read/read-all actions.
 - Added service-ops endpoint `GET /api/ingestion/jobs/latest` for latest ingestion status checks.
 - Added user endpoint `GET /api/ingestion/jobs/:id` for owner-scoped manual refresh progress.
 - Added user endpoint `GET /api/ingestion/jobs/latest-mine` for owner-scoped latest refresh-job restore after page reload.
@@ -138,6 +140,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
   - profile tabs simplified to `Feed / Comments / Liked` and share icons removed from blueprint list cards.
   - locked source cards use compact credit labels and no longer show `Open source` in feed contexts.
   - profile refresh flow now returns to profile after subscriptions refresh terminal status.
+  - user-menu credits no longer poll in the background; Search is the only page-level surface that intentionally does a one-shot credit read outside the menu.
 - Subscription sync premiere guard:
   - unreleased YouTube premieres (`upcoming`) are skipped before lock-card creation.
   - runs that skip upcoming premieres hold checkpoint advance for that run to prevent missing post-release ingestion.
@@ -192,3 +195,5 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 ## Snapshot Note (2026-03-05)
 1. Comment freshness for YouTube-backed blueprints now uses bounded bootstrap auto-refresh (`+15m`, `+24h`) plus manual cooldown-gated refresh.
 2. Manual generation billing now uses reserve -> settle/release semantics with duplicate/no-charge short-circuiting and affordable-prefix queueing for Search/manual refresh.
+3. Queue admission now counts real work size (`queue_work_items`) for interactive multi-item jobs instead of relying on job rows alone.
+4. Credit refresh is now lazy/on-demand instead of background polling from always-mounted header UI.

@@ -45,7 +45,7 @@ Status: `canonical`
 27. Source-page unlock request control is soft-limited (burst+sustained) with credits as the primary user-facing throttle; strict unlock cooldown is not used.
 28. Home scope split is fixed for MVP: `For You` is the subscribed-source stream (locked + unlocked, latest-only) and `Your channels` preserves the followed-channel ranking lane.
 29. Unlock status visibility must be consistent across Home, Source Page, and My Feed using a shared activity/status pattern with reload-resume support.
-30. Credits panel should show both refill timing and latest wallet activity summary so debit/refund changes are user-auditable.
+30. Credits panel should load lazily on open, show daily reset timing, and keep debit/refund visibility without background polling from always-mounted UI.
 31. Home should provide first-time scope clarity (`For You` vs `Your channels`) with dismissible helper copy.
 32. Unlock backend reliability uses safe auto-fix sweeps (expired/stale/orphan recovery) with idempotent refund/fail transitions; no destructive cleanup.
 33. Unlock/generate responses must include additive `trace_id` and unlock lifecycle logs must propagate that trace through request -> queue/job -> terminal outcome.

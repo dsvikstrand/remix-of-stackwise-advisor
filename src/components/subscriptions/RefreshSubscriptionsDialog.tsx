@@ -69,6 +69,7 @@ export function RefreshSubscriptionsDialog({
   const invalidateSubscriptionViews = () => {
     queryClient.invalidateQueries({ queryKey: ['source-subscriptions', userId] });
     queryClient.invalidateQueries({ queryKey: ['my-feed-items', userId] });
+    queryClient.invalidateQueries({ queryKey: ['ai-credits'] });
   };
 
   const refreshScanMutation = useMutation({
@@ -141,7 +142,7 @@ export function RefreshSubscriptionsDialog({
         if (error.errorCode === 'MAX_ITEMS_EXCEEDED') {
           toast({
             title: 'Selection too large',
-            description: 'Select up to 20 videos per generation run.',
+            description: 'Select up to 10 videos per generation run.',
             variant: 'destructive',
           });
           return;
@@ -181,10 +182,10 @@ export function RefreshSubscriptionsDialog({
 
   const handleStartBackgroundGeneration = () => {
     if (selectedRefreshItems.length === 0) return;
-    if (selectedRefreshItems.length > 20) {
+    if (selectedRefreshItems.length > 10) {
       toast({
         title: 'Selection too large',
-        description: 'Select up to 20 videos per generation run.',
+        description: 'Select up to 10 videos per generation run.',
         variant: 'destructive',
       });
       return;

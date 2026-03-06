@@ -555,25 +555,6 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
     });
   }
 
-  let queueDepth = 0;
-  let userQueueDepth = 0;
-  if (billableItems.length > 0) {
-    queueDepth = await deps.countQueueDepth(serviceDb, { includeRunning: true });
-    userQueueDepth = await deps.countQueueDepth(serviceDb, { userId, includeRunning: true });
-    if (queueDepth >= deps.queueDepthHardLimit || userQueueDepth >= deps.queueDepthPerUserLimit) {
-      return res.status(429).json({
-        ok: false,
-        error_code: 'QUEUE_BACKPRESSURE',
-        message: 'Generation queue is busy. Please retry shortly.',
-        retry_after_seconds: 30,
-        data: {
-          queue_depth: queueDepth,
-          user_queue_depth: userQueueDepth,
-        },
-      });
-    }
-  }
-
   const requestId = `refresh-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   let reservationResult;
   try {
@@ -613,6 +594,36 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
     ...item,
     reservation,
   }));
+  let queueDepth = 0;
+  let userQueueDepth = 0;
+  let queueWorkItems = 0;
+  let userQueueWorkItems = 0;
+  if (queuedItems.length > 0) {
+    queueDepth = await deps.countQueueDepth(serviceDb, { includeRunning: true });
+    userQueueDepth = await deps.countQueueDepth(serviceDb, { userId, includeRunning: true });
+    queueWorkItems = await deps.countQueueWorkItems(serviceDb, { includeRunning: true });
+    userQueueWorkItems = await deps.countQueueWorkItems(serviceDb, { userId, includeRunning: true });
+    const wouldExceedQueueDepth = queueDepth >= deps.queueDepthHardLimit || userQueueDepth >= deps.queueDepthPerUserLimit;
+    const wouldExceedWorkItems = (queueWorkItems + queuedItems.length) > deps.queueWorkItemsHardLimit
+      || (userQueueWorkItems + queuedItems.length) > deps.queueWorkItemsPerUserLimit;
+    if (wouldExceedQueueDepth || wouldExceedWorkItems) {
+      for (const item of queuedItems) {
+        await releaseManualGeneration(serviceDb, item.reservation);
+      }
+      return res.status(429).json({
+        ok: false,
+        error_code: 'QUEUE_BACKPRESSURE',
+        message: 'Generation queue is busy. Please retry shortly.',
+        retry_after_seconds: 30,
+        data: {
+          queue_depth: queueDepth,
+          user_queue_depth: userQueueDepth,
+          queue_work_items: queueWorkItems,
+          user_queue_work_items: userQueueWorkItems,
+        },
+      });
+    }
+  }
 
   if (queuedItems.length === 0) {
     if (durationBlocked.length > 0 && skippedExisting.length === 0 && inProgress.length === 0 && skippedUnaffordable.length === 0) {
@@ -630,10 +641,12 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
       ok: true,
       error_code: null,
       message: 'No new generation queued.',
-      data: {
-        job_id: null,
-        queue_depth: queueDepth,
-        queued_count: 0,
+        data: {
+          job_id: null,
+          queue_depth: queueDepth,
+          queue_work_items: queueWorkItems,
+          user_queue_work_items: userQueueWorkItems,
+          queued_count: 0,
         requested_tier: requestedTier || null,
         resolved_tier: resolvedTier,
         variant_status: 'no_new_work',
@@ -688,10 +701,12 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
     ok: true,
     error_code: null,
     message: 'background generation started',
-    data: {
-      job_id: job.id,
-      queue_depth: queueDepth + 1,
-      queued_count: queuedItems.length,
+      data: {
+        job_id: job.id,
+        queue_depth: queueDepth + 1,
+        queue_work_items: queueWorkItems + queuedItems.length,
+        user_queue_work_items: userQueueWorkItems + queuedItems.length,
+        queued_count: queuedItems.length,
       requested_tier: requestedTier || null,
       resolved_tier: resolvedTier,
       variant_status: 'queued',

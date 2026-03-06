@@ -34,6 +34,11 @@ export type AiCreditsView = CreditsResponse & {
   nextRefillLabel: string;
 };
 
+export type UseAiCreditsOptions = {
+  enabled: boolean;
+  refetchIntervalMs?: number | false;
+};
+
 function formatDurationShort(totalSeconds: number) {
   const seconds = Math.max(0, Math.floor(totalSeconds));
   const minutes = Math.floor(seconds / 60);
@@ -173,13 +178,19 @@ async function fetchCredits(): Promise<CreditsResponse> {
   }
 }
 
-export function useAiCredits(enabled: boolean) {
+export function getAiCreditsRefetchIntervalMs(input?: number | false) {
+  if (input === false || input == null) return false;
+  const parsed = Math.max(0, Math.floor(Number(input) || 0));
+  return parsed > 0 ? parsed : false;
+}
+
+export function useAiCredits(options: UseAiCreditsOptions) {
   return useQuery({
     queryKey: ['ai-credits'],
     queryFn: fetchCredits,
-    enabled,
+    enabled: options.enabled,
     staleTime: 60_000,
-    refetchInterval: 60_000,
+    refetchInterval: getAiCreditsRefetchIntervalMs(options.refetchIntervalMs),
     select: toAiCreditsView,
   });
 }

@@ -4,6 +4,7 @@ import {
   getQueuePriorityTierForScope,
   shouldSuppressLowPriorityQueueScope,
 } from '../services/queuePriority';
+import { getQueuedJobWorkItemCount } from '../services/ingestionQueue';
 
 export async function handleIngestionJobsTrigger(req: express.Request, res: express.Response, deps: OpsRouteDeps) {
   if (!deps.isServiceRequestAuthorized(req)) {
@@ -183,9 +184,11 @@ export async function handleQueueHealth(req: express.Request, res: express.Respo
 
   const snapshotAt = new Date();
   const nowIso = snapshotAt.toISOString();
-  const [queuedDepth, runningDepth] = await Promise.all([
-    deps.countQueueDepth(db, { includeRunning: false }),
-    deps.countQueueDepth(db, { includeRunning: true }),
+  const [queuedDepth, runningDepth, queuedWorkItems, runningWorkItems] = await Promise.all([
+    deps.countQueueDepth(db, { statuses: ['queued'] }),
+    deps.countQueueDepth(db, { statuses: ['queued', 'running'] }),
+    deps.countQueueWorkItems(db, { statuses: ['queued'] }),
+    deps.countQueueWorkItems(db, { statuses: ['running'] }),
   ]);
 
   const { count: staleLeaseCount, error: staleLeaseError } = await db
@@ -200,7 +203,7 @@ export async function handleQueueHealth(req: express.Request, res: express.Respo
 
   const { data: byScopeRows, error: byScopeError } = await db
     .from('ingestion_jobs')
-    .select('scope, status, created_at, started_at')
+    .select('scope, status, payload, created_at, started_at')
     .in('status', ['queued', 'running'])
     .in('scope', [...deps.queuedIngestionScopes]);
   if (byScopeError) {
@@ -209,6 +212,8 @@ export async function handleQueueHealth(req: express.Request, res: express.Respo
   const byScope: Record<string, {
     queued: number;
     running: number;
+    queued_work_items: number;
+    running_work_items: number;
     oldest_queued_age_ms: number | null;
     oldest_running_age_ms: number | null;
     priority: string;
@@ -217,6 +222,8 @@ export async function handleQueueHealth(req: express.Request, res: express.Respo
     byScope[scope] = {
       queued: 0,
       running: 0,
+      queued_work_items: 0,
+      running_work_items: 0,
       oldest_queued_age_ms: null,
       oldest_running_age_ms: null,
       priority: getQueuePriorityTierForScope(scope),
@@ -238,6 +245,12 @@ export async function handleQueueHealth(req: express.Request, res: express.Respo
     if (!deps.isQueuedIngestionScope(scope)) continue;
     if (status === 'queued') {
       byScope[scope].queued += 1;
+      byScope[scope].queued_work_items += getQueuedJobWorkItemCount({
+        scope,
+        payload: ((row as { payload?: unknown }).payload && typeof (row as { payload?: unknown }).payload === 'object')
+          ? (row as { payload?: Record<string, unknown> }).payload || null
+          : null,
+      });
       const createdAt = typeof normalized.created_at === 'string' ? normalized.created_at : null;
       const createdAtMs = createdAt ? Date.parse(createdAt) : Number.NaN;
       if (createdAt && Number.isFinite(createdAtMs)) {
@@ -253,6 +266,12 @@ export async function handleQueueHealth(req: express.Request, res: express.Respo
     }
     if (status === 'running') {
       byScope[scope].running += 1;
+      byScope[scope].running_work_items += getQueuedJobWorkItemCount({
+        scope,
+        payload: ((row as { payload?: unknown }).payload && typeof (row as { payload?: unknown }).payload === 'object')
+          ? (row as { payload?: Record<string, unknown> }).payload || null
+          : null,
+      });
       const startedAt = typeof normalized.started_at === 'string' ? normalized.started_at : null;
       const startedAtMs = startedAt ? Date.parse(startedAt) : Number.NaN;
       if (startedAt && Number.isFinite(startedAtMs)) {
@@ -291,6 +310,8 @@ export async function handleQueueHealth(req: express.Request, res: express.Respo
       snapshot_at: nowIso,
       queue_depth: queuedDepth,
       running_depth: Math.max(0, runningDepth - queuedDepth),
+      queue_work_items: queuedWorkItems,
+      running_work_items: runningWorkItems,
       oldest_queued_created_at: oldestQueuedCreatedAt,
       oldest_queued_age_ms: oldestQueuedAgeMs,
       oldest_running_started_at: oldestRunningStartedAt,
@@ -299,6 +320,8 @@ export async function handleQueueHealth(req: express.Request, res: express.Respo
       limits: {
         queue_depth_hard_limit: deps.queueDepthHardLimit,
         queue_depth_per_user_limit: deps.queueDepthPerUserLimit,
+        queue_work_items_hard_limit: deps.queueWorkItemsHardLimit,
+        queue_work_items_per_user_limit: deps.queueWorkItemsPerUserLimit,
         worker_concurrency: deps.workerConcurrency,
         worker_batch_size: deps.workerBatchSize,
         worker_lease_ms: deps.workerLeaseMs,

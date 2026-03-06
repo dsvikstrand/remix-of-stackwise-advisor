@@ -76,6 +76,11 @@ curl -sS https://bapi.vdsai.cloud/api/ingestion/jobs/latest \
 curl -sS https://bapi.vdsai.cloud/api/ops/queue/health \
   -H "x-service-token: $INGESTION_SERVICE_TOKEN"
 ```
+- Queue-health fields to inspect first:
+  - `queue_depth` / `running_depth`
+  - `queue_work_items` / `running_work_items`
+  - per-scope `queued` vs `queued_work_items`
+  - per-scope `running` vs `running_work_items`
 
 ### YouTube metadata refresh scheduler (worker-only)
 - Purpose: periodically refresh stored `view_count` and YouTube comment snapshots without calling YouTube from page loads.
@@ -188,7 +193,7 @@ Required runtime variables:
 - `INGESTION_MAX_PER_SUBSCRIPTION` (default `5`)
 - `REFRESH_SCAN_COOLDOWN_MS` (default `30000`)
 - `REFRESH_GENERATE_COOLDOWN_MS` (default `120000`)
-- `REFRESH_GENERATE_MAX_ITEMS` (default `20`)
+- `REFRESH_GENERATE_MAX_ITEMS` (default `10`)
 - `REFRESH_FAILURE_COOLDOWN_HOURS` (default `6`)
 - `INGESTION_STALE_RUNNING_MS` (default `1800000`)
 - `SUBSCRIPTION_AUTO_BANNER_MODE` (`off|async|sync`, compatibility/non-source paths)
@@ -331,7 +336,7 @@ Safe defaults:
 - `INGESTION_MAX_PER_SUBSCRIPTION=5`
 - `REFRESH_SCAN_COOLDOWN_MS=30000`
 - `REFRESH_GENERATE_COOLDOWN_MS=120000`
-- `REFRESH_GENERATE_MAX_ITEMS=20`
+- `REFRESH_GENERATE_MAX_ITEMS=10`
 - `REFRESH_FAILURE_COOLDOWN_HOURS=6`
 - `INGESTION_STALE_RUNNING_MS=1800000`
 - `SUBSCRIPTION_AUTO_BANNER_MODE=off`
@@ -568,9 +573,9 @@ select * from public.set_generation_plan_by_email('user@example.com', 'plus', 10
 ### `INSUFFICIENT_CREDITS`
 - Meaning: user wallet could not reserve enough credits for source-video unlock.
 - Action:
-  1) Check `/api/credits` response fields (`balance`, `capacity`, `refill_rate_per_sec`, `seconds_to_full`).
+  1) Check `/api/credits` response fields (`balance`, `capacity`, `daily_grant`, `next_reset_at`, `plan`).
   2) Confirm wallet env defaults are set as expected (`CREDIT_WALLET_*`).
-  3) Verify user has active subscriptions on the source page (cost is subscriber-based and can drop as followers increase).
+  3) Verify user has active subscriptions on the source page.
   4) Verify `credit_ledger` latest rows for the user (`hold/refund/settle`) match expected unlock attempts.
 
 ### `UNLOCK_RESERVATION_EXPIRED` or `UNLOCK_GENERATION_FAILED`

@@ -41,6 +41,7 @@ export function registerYouTubeRouteHandlers(app: express.Express, deps: YouTube
     youtubeGlobalLiveCallsPerMinute,
     youtubeGlobalLiveCallsPerDay,
     youtubeGlobalCooldownSeconds,
+    searchGenerateMaxItems,
     sourceUnlockGenerateMaxItems,
     generationDurationCapEnabled,
     generationMaxVideoSeconds,
@@ -72,6 +73,9 @@ export function registerYouTubeRouteHandlers(app: express.Express, deps: YouTube
     youtubeSearchCacheService,
     youtubeQuotaGuardService,
     countQueueDepth,
+    countQueueWorkItems,
+    queueWorkItemsHardLimit,
+    queueWorkItemsPerUserLimit,
     emitGenerationStartedNotification,
     getGenerationNotificationLinkPath,
     scheduleQueuedIngestionProcessing,
@@ -769,11 +773,11 @@ app.post(
     const dualGenerateEnabled = false;
     const dualGenerateTiers = ['tier'] as const;
 
-    if (parsed.data.items.length > sourceUnlockGenerateMaxItems) {
+    if (parsed.data.items.length > searchGenerateMaxItems) {
       return res.status(400).json({
         ok: false,
         error_code: 'MAX_ITEMS_EXCEEDED',
-        message: `Select up to ${sourceUnlockGenerateMaxItems} videos per generation run.`,
+        message: `Select up to ${searchGenerateMaxItems} videos per generation run.`,
         data: null,
       });
     }
@@ -953,25 +957,6 @@ app.post(
       });
     }
 
-    let queueDepth = 0;
-    let userQueueDepth = 0;
-    if (billableItems.length > 0) {
-      queueDepth = await countQueueDepth(serviceDb, { includeRunning: true });
-      userQueueDepth = await countQueueDepth(serviceDb, { userId, includeRunning: true });
-      if (queueDepth >= queueDepthHardLimit || userQueueDepth >= queueDepthPerUserLimit) {
-        return res.status(429).json({
-          ok: false,
-          error_code: 'QUEUE_BACKPRESSURE',
-          message: 'Generation queue is busy. Please retry shortly.',
-          retry_after_seconds: 30,
-          data: {
-            queue_depth: queueDepth,
-            user_queue_depth: userQueueDepth,
-          },
-        });
-      }
-    }
-
     const requestId = `search-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const reservationInput = billableItems.map((item, index) => ({
       item,
@@ -1011,6 +996,37 @@ app.post(
       ...item,
       reservation,
     }));
+    let queueDepth = 0;
+    let userQueueDepth = 0;
+    let queueWorkItems = 0;
+    let userQueueWorkItems = 0;
+
+    if (queuedItems.length > 0) {
+      queueDepth = await countQueueDepth(serviceDb, { includeRunning: true });
+      userQueueDepth = await countQueueDepth(serviceDb, { userId, includeRunning: true });
+      queueWorkItems = await countQueueWorkItems(serviceDb, { includeRunning: true });
+      userQueueWorkItems = await countQueueWorkItems(serviceDb, { userId, includeRunning: true });
+      const wouldExceedQueueDepth = queueDepth >= queueDepthHardLimit || userQueueDepth >= queueDepthPerUserLimit;
+      const wouldExceedWorkItems = (queueWorkItems + queuedItems.length) > queueWorkItemsHardLimit
+        || (userQueueWorkItems + queuedItems.length) > queueWorkItemsPerUserLimit;
+      if (wouldExceedQueueDepth || wouldExceedWorkItems) {
+        for (const item of queuedItems) {
+          await releaseManualGeneration(serviceDb, item.reservation);
+        }
+        return res.status(429).json({
+          ok: false,
+          error_code: 'QUEUE_BACKPRESSURE',
+          message: 'Generation queue is busy. Please retry shortly.',
+          retry_after_seconds: 30,
+          data: {
+            queue_depth: queueDepth,
+            user_queue_depth: userQueueDepth,
+            queue_work_items: queueWorkItems,
+            user_queue_work_items: userQueueWorkItems,
+          },
+        });
+      }
+    }
 
     if (queuedItems.length === 0) {
       if (durationBlocked.length > 0 && skippedExisting.length === 0 && inProgress.length === 0 && skippedUnaffordable.length === 0) {
@@ -1031,6 +1047,8 @@ app.post(
         data: {
           job_id: null,
           queue_depth: queueDepth,
+          queue_work_items: queueWorkItems,
+          user_queue_work_items: userQueueWorkItems,
           estimated_start_seconds: 0,
           queued_count: 0,
           requested_tier: requestedTier || null,
@@ -1088,11 +1106,13 @@ app.post(
       ok: true,
       error_code: null,
       message: 'background generation started',
-      data: {
-        job_id: job.id,
-        queue_depth: queueDepth + 1,
-        estimated_start_seconds: Math.max(1, Math.ceil((queueDepth + 1) / Math.max(1, workerConcurrency)) * 4),
-        queued_count: queuedItems.length,
+        data: {
+          job_id: job.id,
+          queue_depth: queueDepth + 1,
+          queue_work_items: queueWorkItems + queuedItems.length,
+          user_queue_work_items: userQueueWorkItems + queuedItems.length,
+          estimated_start_seconds: Math.max(1, Math.ceil((queueDepth + 1) / Math.max(1, workerConcurrency)) * 4),
+          queued_count: queuedItems.length,
         requested_tier: requestedTier || null,
         resolved_tier: resolvedTier,
         variant_status: 'queued',
