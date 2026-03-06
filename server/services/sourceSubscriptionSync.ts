@@ -2,6 +2,43 @@ import { classifyVideoDuration, toDurationSeconds } from './videoDurationPolicy'
 
 type DbClient = any;
 
+function formatUnknownError(error: unknown) {
+  if (error instanceof Error) {
+    const base = {
+      message: error.message,
+    } as Record<string, unknown>;
+    const code = String((error as { code?: unknown } | null)?.code || '').trim();
+    const details = String((error as { details?: unknown } | null)?.details || '').trim();
+    const hint = String((error as { hint?: unknown } | null)?.hint || '').trim();
+    const stack = String(error.stack || '').trim();
+    if (code) base.code = code;
+    if (details) base.details = details;
+    if (hint) base.hint = hint;
+    if (stack) base.stack = stack;
+    return base;
+  }
+
+  if (error && typeof error === 'object') {
+    const e = error as { message?: unknown; code?: unknown; details?: unknown; hint?: unknown; stack?: unknown } | null;
+    const payload = {
+      message: String(e?.message || error),
+    } as Record<string, unknown>;
+    const code = String(e?.code || '').trim();
+    const details = String(e?.details || '').trim();
+    const hint = String(e?.hint || '').trim();
+    const stack = String(e?.stack || '').trim();
+    if (code) payload.code = code;
+    if (details) payload.details = details;
+    if (hint) payload.hint = hint;
+    if (stack) payload.stack = stack;
+    return payload;
+  }
+
+  return {
+    message: String(error),
+  };
+}
+
 type SyncSubscriptionResult = {
   processed: number;
   inserted: number;
@@ -415,7 +452,7 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
             source_item_id: source.id,
             source_channel_id: subscription.source_channel_id,
             trigger: options.trigger,
-            error: autoUnlockError instanceof Error ? autoUnlockError.message : String(autoUnlockError),
+            error: formatUnknownError(autoUnlockError),
           }));
         }
       }
