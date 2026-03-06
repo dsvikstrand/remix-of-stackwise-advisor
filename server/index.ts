@@ -38,7 +38,7 @@ import {
 import { createYouTubeSearchCacheService } from './services/youtubeSearchCache';
 import { createYouTubeQuotaGuardService } from './services/youtubeQuotaGuard';
 import { createQueuedIngestionWorkerController } from './services/queuedIngestionWorkerController';
-import { readBackendRuntimeConfig } from './services/runtimeConfig';
+import { parseRuntimeFlag, readBackendRuntimeConfig } from './services/runtimeConfig';
 import { createYouTubeRefreshSchedulerController } from './services/youtubeRefreshSchedulerController';
 import {
   createGenerationDailyCapService,
