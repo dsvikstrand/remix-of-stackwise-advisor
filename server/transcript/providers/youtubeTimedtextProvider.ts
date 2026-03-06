@@ -2,8 +2,26 @@ import {
   TranscriptProviderError,
   normalizeTranscriptWhitespace,
   type TranscriptProviderAdapter,
+  type TranscriptProviderDebug,
   type TranscriptResult,
 } from '../types';
+
+function buildProviderDebug(input: {
+  status?: number | null;
+  retryAfterSeconds?: number | null;
+  responseExcerpt?: string | null;
+  providerErrorCode?: string | null;
+  stage?: string | null;
+}): TranscriptProviderDebug {
+  return {
+    provider: 'youtube_timedtext',
+    stage: input.stage || null,
+    http_status: input.status ?? null,
+    retry_after_seconds: input.retryAfterSeconds ?? null,
+    provider_error_code: input.providerErrorCode ?? null,
+    response_excerpt: input.responseExcerpt ?? null,
+  };
+}
 
 function decodeHtml(text: string) {
   return text
@@ -69,23 +87,55 @@ function mapTimedtextListTerminalStatus(status: number) {
 async function fetchOnce(videoId: string): Promise<TranscriptResult> {
   const listUrl = `https://www.youtube.com/api/timedtext?type=list&v=${encodeURIComponent(videoId)}`;
   const listResponse = await fetch(listUrl);
+  const listRetryAfterSeconds = parseRetryAfterSeconds(listResponse.headers.get('retry-after'));
+  const listXml = await listResponse.text();
   const terminalListError = mapTimedtextListTerminalStatus(listResponse.status);
-  if (terminalListError) throw terminalListError;
+  if (terminalListError) {
+    terminalListError.providerDebug = buildProviderDebug({
+      stage: 'track_list',
+      status: listResponse.status,
+      retryAfterSeconds: listRetryAfterSeconds,
+      providerErrorCode: terminalListError.code,
+      responseExcerpt: listXml,
+    });
+    throw terminalListError;
+  }
   if (listResponse.status === 429) {
     throw new TranscriptProviderError(
       'RATE_LIMITED',
       'Transcript provider rate limited. Please retry shortly.',
-      { retryAfterSeconds: parseRetryAfterSeconds(listResponse.headers.get('retry-after')) },
+      {
+        retryAfterSeconds: listRetryAfterSeconds,
+        providerDebug: buildProviderDebug({
+          stage: 'track_list',
+          status: listResponse.status,
+          retryAfterSeconds: listRetryAfterSeconds,
+          providerErrorCode: 'RATE_LIMITED',
+          responseExcerpt: listXml,
+        }),
+      },
     );
   }
   if (!listResponse.ok) {
-    throw new TranscriptProviderError('TRANSCRIPT_FETCH_FAIL', 'Could not fetch transcript metadata.');
+    throw new TranscriptProviderError('TRANSCRIPT_FETCH_FAIL', 'Could not fetch transcript metadata.', {
+      providerDebug: buildProviderDebug({
+        stage: 'track_list',
+        status: listResponse.status,
+        retryAfterSeconds: listRetryAfterSeconds,
+        responseExcerpt: listXml,
+      }),
+    });
   }
-
-  const listXml = await listResponse.text();
   const tracks = parseCaptionTracks(listXml);
   if (tracks.length === 0) {
-    throw new TranscriptProviderError('NO_CAPTIONS', 'Transcript unavailable for this video. Please try another video.');
+    throw new TranscriptProviderError('NO_CAPTIONS', 'Transcript unavailable for this video. Please try another video.', {
+      providerDebug: buildProviderDebug({
+        stage: 'track_list',
+        status: listResponse.status,
+        providerErrorCode: 'NO_CAPTIONS',
+        responseExcerpt: listXml,
+      }),
+    });
   }
 
   const preferred = tracks.find((track) => track.lang.startsWith('en')) || tracks[0];
@@ -96,24 +146,63 @@ async function fetchOnce(videoId: string): Promise<TranscriptResult> {
   if (preferred.name) trackUrl.searchParams.set('name', preferred.name);
 
   const trackResponse = await fetch(trackUrl.toString());
+  const trackRetryAfterSeconds = parseRetryAfterSeconds(trackResponse.headers.get('retry-after'));
+  const trackText = await trackResponse.text();
   if (trackResponse.status === 401 || trackResponse.status === 403) {
-    throw new TranscriptProviderError('ACCESS_DENIED', 'Transcript access is denied for this video.');
+    throw new TranscriptProviderError('ACCESS_DENIED', 'Transcript access is denied for this video.', {
+      providerDebug: buildProviderDebug({
+        stage: 'track_content',
+        status: trackResponse.status,
+        retryAfterSeconds: trackRetryAfterSeconds,
+        providerErrorCode: 'ACCESS_DENIED',
+        responseExcerpt: trackText,
+      }),
+    });
   }
   if (trackResponse.status === 429) {
     throw new TranscriptProviderError(
       'RATE_LIMITED',
       'Transcript provider rate limited. Please retry shortly.',
-      { retryAfterSeconds: parseRetryAfterSeconds(trackResponse.headers.get('retry-after')) },
+      {
+        retryAfterSeconds: trackRetryAfterSeconds,
+        providerDebug: buildProviderDebug({
+          stage: 'track_content',
+          status: trackResponse.status,
+          retryAfterSeconds: trackRetryAfterSeconds,
+          providerErrorCode: 'RATE_LIMITED',
+          responseExcerpt: trackText,
+        }),
+      },
     );
   }
   if (!trackResponse.ok) {
-    throw new TranscriptProviderError('TRANSCRIPT_FETCH_FAIL', 'Could not fetch transcript content.');
+    throw new TranscriptProviderError('TRANSCRIPT_FETCH_FAIL', 'Could not fetch transcript content.', {
+      providerDebug: buildProviderDebug({
+        stage: 'track_content',
+        status: trackResponse.status,
+        retryAfterSeconds: trackRetryAfterSeconds,
+        responseExcerpt: trackText,
+      }),
+    });
   }
 
-  const payload = await trackResponse.json().catch(() => null);
+  const payload = (() => {
+    try {
+      return JSON.parse(trackText);
+    } catch {
+      return null;
+    }
+  })();
   const text = extractTranscriptFromJson3(payload);
   if (!text) {
-    throw new TranscriptProviderError('TRANSCRIPT_EMPTY', 'Transcript unavailable for this video. Please try another video.');
+    throw new TranscriptProviderError('TRANSCRIPT_EMPTY', 'Transcript unavailable for this video. Please try another video.', {
+      providerDebug: buildProviderDebug({
+        stage: 'track_content',
+        status: trackResponse.status,
+        providerErrorCode: 'TRANSCRIPT_EMPTY',
+        responseExcerpt: trackText,
+      }),
+    });
   }
 
   return {

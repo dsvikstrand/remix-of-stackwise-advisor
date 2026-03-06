@@ -52,6 +52,13 @@ describe('transcript providers rate-limit mapping', () => {
     expect(caught).toBeInstanceOf(TranscriptProviderError);
     expect((caught as TranscriptProviderError).code).toBe('RATE_LIMITED');
     expect((caught as TranscriptProviderError).retryAfterSeconds).toBe(12);
+    expect((caught as TranscriptProviderError).providerDebug).toMatchObject({
+      provider: 'yt_to_text',
+      stage: 'subtitles',
+      http_status: 429,
+      retry_after_seconds: 12,
+      provider_error_code: 'RATE_LIMITED',
+    });
   });
 
   it('uses the lower-level undici request path for yt_to_text when the Webshare proxy toggle is enabled', async () => {
@@ -409,6 +416,12 @@ describe('transcript providers rate-limit mapping', () => {
 
     await expect(getTranscriptFromYtToText('video123')).rejects.toMatchObject({
       code: 'VIDEO_UNAVAILABLE',
+      providerDebug: {
+        provider: 'yt_to_text',
+        stage: 'subtitles',
+        http_status: 404,
+        provider_error_code: 'VIDEO_UNAVAILABLE',
+      },
     });
   });
 
@@ -419,6 +432,12 @@ describe('transcript providers rate-limit mapping', () => {
 
     await expect(getTranscriptFromYouTubeTimedtext('video123')).rejects.toMatchObject({
       code: 'ACCESS_DENIED',
+      providerDebug: {
+        provider: 'youtube_timedtext',
+        stage: 'track_list',
+        http_status: 403,
+        provider_error_code: 'ACCESS_DENIED',
+      },
     });
   });
 });

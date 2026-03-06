@@ -1,5 +1,14 @@
 export type TranscriptProvider = 'yt_to_text' | 'youtube_timedtext';
 
+export type TranscriptProviderDebug = {
+  provider: TranscriptProvider;
+  stage?: string | null;
+  http_status?: number | null;
+  retry_after_seconds?: number | null;
+  provider_error_code?: string | null;
+  response_excerpt?: string | null;
+};
+
 export type TranscriptProviderErrorCode =
   | 'NO_CAPTIONS'
   | 'VIDEO_UNAVAILABLE'
@@ -53,11 +62,15 @@ export type TranscriptProviderAdapter = {
 export class TranscriptProviderError extends Error {
   code: TranscriptProviderErrorCode;
   retryAfterSeconds: number | null;
+  providerDebug: TranscriptProviderDebug | null;
 
   constructor(
     code: TranscriptProviderErrorCode,
     message: string,
-    options?: { retryAfterSeconds?: number | null },
+    options?: {
+      retryAfterSeconds?: number | null;
+      providerDebug?: TranscriptProviderDebug | null;
+    },
   ) {
     super(message);
     this.code = code;
@@ -65,9 +78,42 @@ export class TranscriptProviderError extends Error {
     this.retryAfterSeconds = Number.isFinite(retryAfterRaw) && retryAfterRaw > 0
       ? Math.max(1, Math.ceil(retryAfterRaw))
       : null;
+    this.providerDebug = sanitizeTranscriptProviderDebug(options?.providerDebug || null);
   }
 }
 
 export function normalizeTranscriptWhitespace(text: string) {
   return text.replace(/\s+/g, ' ').trim();
+}
+
+function sanitizeExcerpt(value: unknown, maxChars = 300) {
+  const normalized = normalizeTranscriptWhitespace(String(value || ''));
+  if (!normalized) return null;
+  return normalized.length > maxChars
+    ? `${normalized.slice(0, maxChars)}...`
+    : normalized;
+}
+
+export function sanitizeTranscriptProviderDebug(input: TranscriptProviderDebug | null | undefined) {
+  if (!input) return null;
+  if (input.provider !== 'yt_to_text' && input.provider !== 'youtube_timedtext') return null;
+  const httpStatus = Number(input.http_status);
+  const retryAfterSeconds = Number(input.retry_after_seconds);
+  return {
+    provider: input.provider,
+    stage: String(input.stage || '').trim() || null,
+    http_status: Number.isFinite(httpStatus) ? httpStatus : null,
+    retry_after_seconds: Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+      ? Math.max(1, Math.ceil(retryAfterSeconds))
+      : null,
+    provider_error_code: String(input.provider_error_code || '').trim() || null,
+    response_excerpt: sanitizeExcerpt(input.response_excerpt),
+  } satisfies TranscriptProviderDebug;
+}
+
+export function getTranscriptProviderDebug(error: unknown) {
+  if (error instanceof TranscriptProviderError) {
+    return sanitizeTranscriptProviderDebug(error.providerDebug);
+  }
+  return null;
 }

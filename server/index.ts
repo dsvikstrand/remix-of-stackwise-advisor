@@ -16,6 +16,7 @@ import { CodexExecError, runCodexExec } from './llm/codexExec';
 import { consumeCredit, getCredits } from './credits';
 import { getTranscriptForVideo, probeTranscriptProviders } from './transcript/getTranscript';
 import {
+  getTranscriptProviderDebug,
   TranscriptProviderError,
   isRetryableTranscriptProviderErrorCode,
   isTerminalTranscriptProviderErrorCode,
@@ -3621,6 +3622,7 @@ async function classifyTranscriptFailureForUnlock(input: {
   videoId: string;
   traceId: string;
   rawErrorCode: string;
+  rawError?: unknown;
 }) : Promise<TranscriptFailureDecision> {
   const normalizedRawErrorCode = String(input.rawErrorCode || '').trim().toUpperCase();
   const terminalFailFast =
@@ -3634,6 +3636,10 @@ async function classifyTranscriptFailureForUnlock(input: {
   const probeMeta: Record<string, unknown> = {
     normalized_raw_error_code: normalizedRawErrorCode || null,
   };
+  const providerDebug = getTranscriptProviderDebug(input.rawError);
+  if (providerDebug) {
+    probeMeta.provider_debug = providerDebug;
+  }
 
   if (terminalFailFast) {
     transcriptStatus = 'confirmed_no_speech';
@@ -6132,6 +6138,7 @@ async function processSourceItemUnlockGenerationJob(input: {
               videoId: item.video_id,
               traceId: input.traceId,
               rawErrorCode,
+              rawError: error,
             });
             errorCode = transcriptDecision.finalErrorCode;
           } catch (decisionError) {

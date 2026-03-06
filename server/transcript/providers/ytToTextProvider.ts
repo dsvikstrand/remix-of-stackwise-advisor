@@ -2,6 +2,7 @@ import {
   TranscriptProviderError,
   normalizeTranscriptWhitespace,
   type TranscriptProviderAdapter,
+  type TranscriptProviderDebug,
   type TranscriptResult,
   type TranscriptSegment,
   type TranscriptTransportMetadata,
@@ -25,6 +26,7 @@ type YtToTextHttpResponse = {
   ok: boolean;
   getHeader: (name: string) => string | null;
   parseJson: () => Promise<YtToTextResponse | null>;
+  parseText: () => Promise<string>;
 };
 
 type YtToTextRequestResult = {
@@ -104,18 +106,51 @@ function getHeaderValue(
   return null;
 }
 
+function buildProviderDebug(input: {
+  status?: number | null;
+  retryAfterSeconds?: number | null;
+  responseExcerpt?: string | null;
+  providerErrorCode?: string | null;
+  stage?: string | null;
+}): TranscriptProviderDebug {
+  return {
+    provider: 'yt_to_text',
+    stage: input.stage || null,
+    http_status: input.status ?? null,
+    retry_after_seconds: input.retryAfterSeconds ?? null,
+    provider_error_code: input.providerErrorCode ?? null,
+    response_excerpt: input.responseExcerpt ?? null,
+  };
+}
+
 async function requestViaFetch(videoId: string): Promise<YtToTextHttpResponse> {
   const response = await fetch('https://yt-to-text.com/api/v1/Subtitles', {
     method: 'POST',
     headers: buildYtToTextRequestHeaders(),
     body: buildYtToTextRequestBody(videoId),
   });
+  let cachedText: string | null | undefined;
+
+  const parseText = async () => {
+    if (typeof cachedText === 'string') return cachedText;
+    cachedText = await response.text().catch(() => '') || '';
+    return cachedText;
+  };
 
   return {
     status: response.status,
     ok: response.ok,
     getHeader: (name) => response.headers.get(name),
-    parseJson: async () => response.json().catch(() => null) as Promise<YtToTextResponse | null>,
+    parseJson: async () => {
+      const text = await parseText();
+      if (!text) return null;
+      try {
+        return JSON.parse(text) as YtToTextResponse;
+      } catch {
+        return null;
+      }
+    },
+    parseText,
   };
 }
 
@@ -158,6 +193,13 @@ async function requestViaProxy(videoId: string): Promise<YtToTextRequestResult> 
         ok: response.statusCode >= 200 && response.statusCode < 300,
         getHeader: (name) => getHeaderValue(response.headers, name),
         parseJson: async () => response.body.json().catch(() => null) as Promise<YtToTextResponse | null>,
+        parseText: async () => {
+          if (typeof response.body.text === 'function') {
+            return response.body.text().catch(() => '') as Promise<string>;
+          }
+          const parsed = await response.body.json().catch(() => null);
+          return parsed ? JSON.stringify(parsed) : '';
+        },
       },
       transport: proxyTools.transport,
     };
@@ -165,30 +207,69 @@ async function requestViaProxy(videoId: string): Promise<YtToTextRequestResult> 
     const message = error instanceof Error && error.message
       ? `Transcript provider proxy request failed: ${error.message}`
       : 'Transcript provider proxy request failed.';
-    throw new TranscriptProviderError('TRANSCRIPT_FETCH_FAIL', message);
+    throw new TranscriptProviderError('TRANSCRIPT_FETCH_FAIL', message, {
+      providerDebug: buildProviderDebug({
+        stage: 'request',
+        providerErrorCode: String((error as { code?: unknown } | null)?.code || '').trim() || null,
+        responseExcerpt: error instanceof Error ? error.message : String(error),
+      }),
+    });
   }
 }
 
 async function fetchOnce(videoId: string): Promise<YtToTextFetchResult> {
   const { response, transport } = await requestViaProxy(videoId);
+  const retryAfterSeconds = parseRetryAfterSeconds(response.getHeader('retry-after'));
+  const responseText = !response.ok ? await response.parseText() : '';
 
   const terminalStatusError = mapYtToTextTerminalStatus(response.status);
-  if (terminalStatusError) throw terminalStatusError;
+  if (terminalStatusError) {
+    terminalStatusError.providerDebug = buildProviderDebug({
+      stage: 'subtitles',
+      status: response.status,
+      retryAfterSeconds,
+      providerErrorCode: terminalStatusError.code,
+      responseExcerpt: responseText,
+    });
+    throw terminalStatusError;
+  }
   if (response.status === 429) {
     throw new TranscriptProviderError(
       'RATE_LIMITED',
       'Transcript provider rate limited. Please retry shortly.',
-      { retryAfterSeconds: parseRetryAfterSeconds(response.getHeader('retry-after')) },
+      {
+        retryAfterSeconds,
+        providerDebug: buildProviderDebug({
+          stage: 'subtitles',
+          status: response.status,
+          retryAfterSeconds,
+          providerErrorCode: 'RATE_LIMITED',
+          responseExcerpt: responseText,
+        }),
+      },
     );
   }
   if (!response.ok) {
-    throw new TranscriptProviderError('TRANSCRIPT_FETCH_FAIL', `Transcript provider returned HTTP ${response.status}.`);
+    throw new TranscriptProviderError('TRANSCRIPT_FETCH_FAIL', `Transcript provider returned HTTP ${response.status}.`, {
+      providerDebug: buildProviderDebug({
+        stage: 'subtitles',
+        status: response.status,
+        retryAfterSeconds,
+        responseExcerpt: responseText,
+      }),
+    });
   }
 
   const payload = await response.parseJson();
   const raw = payload?.data?.transcripts;
   if (!Array.isArray(raw)) {
-    throw new TranscriptProviderError('NO_CAPTIONS', 'Transcript unavailable for this video. Please try another video.');
+    throw new TranscriptProviderError('NO_CAPTIONS', 'Transcript unavailable for this video. Please try another video.', {
+      providerDebug: buildProviderDebug({
+        stage: 'subtitles',
+        status: response.status,
+        providerErrorCode: 'NO_CAPTIONS',
+      }),
+    });
   }
 
   const segments = raw
@@ -200,7 +281,13 @@ async function fetchOnce(videoId: string): Promise<YtToTextFetchResult> {
     .filter((segment: TranscriptSegment) => segment.text.length > 0);
 
   if (!segments.length) {
-    throw new TranscriptProviderError('TRANSCRIPT_EMPTY', 'Transcript unavailable for this video. Please try another video.');
+    throw new TranscriptProviderError('TRANSCRIPT_EMPTY', 'Transcript unavailable for this video. Please try another video.', {
+      providerDebug: buildProviderDebug({
+        stage: 'subtitles',
+        status: response.status,
+        providerErrorCode: 'TRANSCRIPT_EMPTY',
+      }),
+    });
   }
 
   return {

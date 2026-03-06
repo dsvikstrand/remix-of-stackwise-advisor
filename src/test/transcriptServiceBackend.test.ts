@@ -50,8 +50,8 @@ describe('transcript service modularity (backend)', () => {
 
     const result = await service.probeTranscriptProviders('video123');
     expect(result.providers).toEqual([
-      { provider: 'yt_to_text', ok: true, error_code: null },
-      { provider: 'youtube_timedtext', ok: false, error_code: 'NO_CAPTIONS' },
+      { provider: 'yt_to_text', ok: true, error_code: null, provider_debug: null },
+      { provider: 'youtube_timedtext', ok: false, error_code: 'NO_CAPTIONS', provider_debug: null },
     ]);
     expect(result.any_success).toBe(true);
     expect(result.all_no_captions).toBe(false);
@@ -81,8 +81,8 @@ describe('transcript service modularity (backend)', () => {
 
     const result = await service.probeTranscriptProviders('video123');
     expect(result.providers).toEqual([
-      { provider: 'yt_to_text', ok: false, error_code: 'NO_CAPTIONS' },
-      { provider: 'youtube_timedtext', ok: false, error_code: 'NO_CAPTIONS' },
+      { provider: 'yt_to_text', ok: false, error_code: 'NO_CAPTIONS', provider_debug: null },
+      { provider: 'youtube_timedtext', ok: false, error_code: 'NO_CAPTIONS', provider_debug: null },
     ]);
     expect(result.any_success).toBe(false);
     expect(result.all_no_captions).toBe(true);
@@ -115,11 +115,13 @@ describe('transcript service modularity (backend)', () => {
       provider: 'yt_to_text',
       ok: false,
       error_code: 'TRANSCRIPT_FETCH_FAIL',
+      provider_debug: null,
     });
     expect(result.providers[1]).toEqual({
       provider: 'youtube_timedtext',
       ok: false,
       error_code: 'NO_CAPTIONS',
+      provider_debug: null,
     });
     expect(result.any_success).toBe(false);
     expect(result.all_no_captions).toBe(false);
@@ -152,6 +154,7 @@ describe('transcript service modularity (backend)', () => {
       provider: 'yt_to_text',
       ok: false,
       error_code: 'RATE_LIMITED',
+      provider_debug: null,
     });
     expect(result.any_success).toBe(false);
     expect(result.all_no_captions).toBe(false);
@@ -181,10 +184,53 @@ describe('transcript service modularity (backend)', () => {
 
     const result = await service.probeTranscriptProviders('video123');
     expect(result.providers).toEqual([
-      { provider: 'yt_to_text', ok: false, error_code: 'VIDEO_UNAVAILABLE' },
-      { provider: 'youtube_timedtext', ok: false, error_code: 'ACCESS_DENIED' },
+      { provider: 'yt_to_text', ok: false, error_code: 'VIDEO_UNAVAILABLE', provider_debug: null },
+      { provider: 'youtube_timedtext', ok: false, error_code: 'ACCESS_DENIED', provider_debug: null },
     ]);
     expect(result.any_success).toBe(false);
     expect(result.all_no_captions).toBe(false);
+  });
+
+  it('preserves sanitized provider debug metadata in probe results', async () => {
+    const providers: TranscriptProviderAdapter[] = [
+      {
+        id: 'yt_to_text',
+        getTranscript: async () => {
+          throw new TranscriptProviderError('ACCESS_DENIED', 'Access denied', {
+            providerDebug: {
+              provider: 'yt_to_text',
+              stage: 'subtitles',
+              http_status: 403,
+              retry_after_seconds: 12,
+              provider_error_code: 'ACCESS_DENIED',
+              response_excerpt: '<html>denied denied denied</html>',
+            },
+          });
+        },
+      },
+    ];
+
+    const service = createTranscriptService({
+      listProvidersForProbe: () => providers,
+      getProviderById: (providerId) => providers.find((row) => row.id === providerId) || null,
+      timeoutMs: 1000,
+    });
+
+    const result = await service.probeTranscriptProviders('video123');
+    expect(result.providers).toEqual([
+      {
+        provider: 'yt_to_text',
+        ok: false,
+        error_code: 'ACCESS_DENIED',
+        provider_debug: {
+          provider: 'yt_to_text',
+          stage: 'subtitles',
+          http_status: 403,
+          retry_after_seconds: 12,
+          provider_error_code: 'ACCESS_DENIED',
+          response_excerpt: '<html>denied denied denied</html>',
+        },
+      },
+    ]);
   });
 });

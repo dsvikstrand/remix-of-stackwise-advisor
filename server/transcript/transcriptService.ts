@@ -1,9 +1,11 @@
 import { getTranscriptProvider, listTranscriptProvidersForProbe } from './providerRegistry';
 import {
+  getTranscriptProviderDebug,
   TranscriptProviderError,
   type TranscriptProvider,
   type TranscriptProviderAdapter,
   type TranscriptProviderErrorCode,
+  type TranscriptProviderDebug,
   type TranscriptResult,
 } from './types';
 
@@ -11,6 +13,7 @@ export type TranscriptProbeProviderResult = {
   provider: TranscriptProvider;
   ok: boolean;
   error_code: TranscriptProviderErrorCode | null;
+  provider_debug?: TranscriptProviderDebug | null;
 };
 
 export type TranscriptProbeResult = {
@@ -90,12 +93,14 @@ export function createTranscriptService(partialDeps: Partial<TranscriptServiceDe
           provider: provider.id,
           ok: true,
           error_code: null,
+          provider_debug: null,
         });
       } catch (error) {
         providers.push({
           provider: provider.id,
           ok: false,
           error_code: normalizeTranscriptProviderErrorCode(error),
+          provider_debug: getTranscriptProviderDebug(error),
         });
       }
     }
@@ -126,4 +131,3 @@ export const {
   getTranscriptForVideo,
   probeTranscriptProviders,
 } = transcriptService;
-
