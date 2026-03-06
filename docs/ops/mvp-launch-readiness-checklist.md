@@ -23,7 +23,7 @@ b1) [have] Release candidate backend SHA: `13e9da13590335046bad9f0c0db16e2ac7d53
 b2) [have] Release candidate frontend SHA: `13e9da13590335046bad9f0c0db16e2ac7d53046`
 b3) [have] Latest migration watermark: `20260306143000`
 b4) [todo] P0 open count: `0`
-b5) [todo] P1 open count: `4`
+b5) [todo] P1 open count: `2`
 b6) [todo] Current launch recommendation: `GO (P0 cleared)`.
 
 ## P0 Critical (Must Complete Before Launch)
@@ -155,7 +155,7 @@ j7) [todo] Evidence: `Pending mobile callback matrix run records (browser/device
 k1) [todo] Risk: `medium`
 k2) [todo] Owner: `david`
 k3) [todo] Target date: `2026-03-11`
-k4) [todo] Status: `in progress`
+k4) [have] Status: `done`
 k5) [todo] Scope:
 - establish launch-day command bundle and thresholds used by operators, now including row-count and work-item queue visibility
 k6) [todo] Required checks:
@@ -164,19 +164,19 @@ k6) [todo] Required checks:
 - transcript/provider failure distribution via metrics scripts
 k7) [todo] Pass criteria:
 - operator can classify load state in under `5` minutes
-k8) [todo] Evidence: `Baseline + refreshed queue/ingestion/metrics evidence captured (o11-o13, o18-o20). Weighted queue-health implementation evidence captured (o45-o46). Live production weighted queue drill evidence captured after deploy/hotfix and worker_running fix verification captured (o50-o52). 5-minute timed operator classification drill evidence still pending.`
+k8) [have] Evidence: `Baseline + refreshed queue/ingestion/metrics evidence captured (o11-o13, o18-o20). Weighted queue-health implementation evidence captured (o45-o46). Live production weighted queue drill evidence captured after deploy/hotfix and worker_running fix verification captured (o50-o52). Timed operator classification drill closed in under 5 minutes (o53).`
 
 ### P1-4 Feed Query Load Drill
 l1) [todo] Risk: `medium`
 l2) [todo] Owner: `david`
 l3) [todo] Target date: `2026-03-12`
-l4) [todo] Status: `in progress`
+l4) [have] Status: `done`
 l5) [todo] Scope:
 - run one realistic front-end traffic burst against Home/Wall/My Feed query paths and keep background read load low while those surfaces are active
 l6) [todo] Pass criteria:
 - no critical DB/API saturation during drill window
 - clear tuning actions captured if saturation appears
-l7) [todo] Evidence: `Drill script implemented and initial public probe captured (o22); lazy credit-refresh implementation evidence captured (o47-o48); production credit-path hotfix restored /api/credits after deploy regression (o49); frontend auth-surface drill and browser-network lazy-refresh proof still pending.`
+l7) [have] Evidence: `Drill script implemented and initial public probe captured (o22); lazy credit-refresh implementation evidence captured (o47-o48); production credit-path hotfix restored /api/credits after deploy regression (o49); authenticated API drill, browser lazy-refresh proof, and authenticated frontend burst evidence captured (o54-o56).`
 
 ## Execution Cadence
 m1) [todo] Daily (10 min):
@@ -263,6 +263,10 @@ o49) [have] `2026-03-06T14:30:00Z` - `P1-4` - `production credit-path hotfix dep
 o50) [have] `2026-03-06T14:37:00Z` - `P1-3` - `live weighted queue drill proved running work-item visibility` - `two authenticated POST /api/search/videos/generate requests with 3 items each => 202 responses with queue_work_items=3/user_queue_work_items=3; immediate /api/ops/queue/health => queue_depth=0, running_depth=2, running_work_items=6, search_video_generate.running_work_items=6` - `david`
 o51) [have] `2026-03-06T15:24:00Z` - `P1-3` - `worker_running health semantics fixed` - `queue health now computes worker_running from fresh running-job lease/heartbeat state and exposes additive local_worker_running/runtime_mode; targeted ops handler tests + typecheck + build passed before deploy` - `david`
 o52) [have] `2026-03-06T15:24:00Z` - `P1-3` - `production queue health now reports running workers correctly` - `pushed/deployed 6df22ceb8c1905726c390bacccdf7b40317c8785; during live all_active_subscriptions run, /api/ops/queue/health => worker_running=true, local_worker_running=true, runtime_mode=web_only, running_depth=1, running_work_items=1; after completion => worker_running=false and running_depth=0` - `david`
+o53) [have] `2026-03-06T10:28:56Z` - `P1-3` - `timed operator classification drill completed under 5 minutes` - `triggered /api/ingestion/jobs/trigger => queued job 96fb2e5c-7ee4-40ae-834a-fe3d8a65defe; reviewed /api/ops/queue/health, /api/ingestion/jobs/latest, and npm run metrics:queue on Oracle; classified state as healthy/low backlog with no stale leases, latest job succeeded in ~14s, queue metrics median=13253ms p95=19018ms, failure bucket limited to ASYNC_JOB_FAILED=2 historical jobs` - `david`
+o54) [have] `2026-03-06T10:34:24Z` - `P1-4` - `authenticated API feed/auth drill completed without critical saturation` - `npm run drill:feed -- --base-url https://bapi.vdsai.cloud --urls /api/credits,/api/profile/09d58bdd-0bd8-40e1-9c9f-0429049d9c16/feed --requests 120 --concurrency 8 --auth-token <fresh-account1-token> --json => requests_succeeded=119, requests_failed=1, latency_p95_ms=1038, status_distribution: 200=119/429=1` - `david`
+o55) [have] `2026-03-06T10:40:44Z` - `P1-4` - `browser lazy-credit-refresh proof captured on deployed frontend` - `headless Playwright login on https://dsvikstrand.github.io/remix-of-stackwise-advisor => wall menu-closed idle 70s observed 0 /api/credits requests; opening UserMenu triggered 1 /api/credits request (200); navigating to /search triggered 1 /api/credits request; subsequent 70s search idle observed 0 additional /api/credits requests` - `david`
+o56) [have] `2026-03-06T10:43:00Z` - `P1-4` - `authenticated frontend burst across Home/Wall/My Feed stayed clean` - `headless Playwright reused signed-in session for 6 concurrent visits across /, /wall, /my-feed on deployed frontend; observed 32 backend API responses with status_distribution 200=32, api_non_ok_count=0, page_error_count=0` - `david`
 
 ## Deferred (Not Launch Gate)
 p1) [have] P2 modularization and post-launch optimizations are intentionally out of launch gate.

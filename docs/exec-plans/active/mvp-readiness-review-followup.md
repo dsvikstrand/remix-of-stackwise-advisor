@@ -32,7 +32,7 @@ e2) [have] `P0-4` is complete.
 e3) [have] `P1-1`, `P1-2`, `P1-3`, and `P1-4` are implemented and locally validated.
 e4) [have] Production now runs `13e9da13590335046bad9f0c0db16e2ac7d53046`, including the credit-override hotfix that restored `/api/credits` and credit-backed generation after the `5c16f60` regression.
 e5) [have] Live production queue drills now prove the new work-item metrics are wired through route responses and `/api/ops/queue/health`.
-e6) [todo] Remaining launch work is now concentrated in checklist evidence capture and `P2` cleanup/refactor work.
+e6) [todo] Remaining launch work is now concentrated in `P1-1` branch-protection evidence, `P1-2` mobile OAuth callback validation, and `P2` cleanup/refactor work.
 
 ## P0 Launch Blockers
 
@@ -186,6 +186,7 @@ l5) [have] Validation:
 - local typecheck/test/build pass completed after the weighted-budget patch
 - production drill on `2026-03-06` showed two authenticated 3-item Search jobs producing `running_depth=2`, `running_work_items=6`, and `search_video_generate.running_work_items=6`
 - production follow-up deploy on `2026-03-06` fixed `worker_running` to derive from fresh running-job lease/heartbeat state and verified `worker_running=true` during a live `all_active_subscriptions` run, then `false` again after completion
+- timed operator drill on `2026-03-06` classified queue state in under `5` minutes using `/api/ops/queue/health`, `/api/ingestion/jobs/latest`, and `npm run metrics:queue`
 l6) [have] Exit criteria:
 - queue health signals now reflect both row depth and real queued work size for supported scopes
 
@@ -208,6 +209,9 @@ m5) [have] Validation:
 - local request-volume estimate dropped from roughly `100/500/1000` background `/api/credits` requests per minute at `100/500/1000` signed-in users to `0` steady-state menu-closed polling requests per minute
 - local typecheck/test/build pass completed after the lazy-refresh patch
 - production credit-path hotfix verification on `2026-03-06` restored `/api/credits` to `200` responses with `credits_backend_mode=db` and correct daily-grant values for two real accounts
+- authenticated API drill on `2026-03-06` completed with `119/120` successful responses, `latency_p95_ms=1038`, and no critical saturation
+- headless browser proof on deployed frontend showed `0` `/api/credits` requests during a `70s` menu-closed wall idle window, `1` request when the menu opened, `1` request on Search mount, and `0` additional requests during a subsequent `70s` Search idle window
+- authenticated headless frontend burst across `/`, `/wall`, and `/my-feed` produced `32` backend API responses, all `200`, with `0` page errors
 m6) [have] Exit criteria:
 - background credit refresh is now lazy/on-demand rather than a constant global poll source
 
