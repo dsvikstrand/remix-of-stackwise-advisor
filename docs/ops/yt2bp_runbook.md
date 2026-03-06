@@ -1,5 +1,11 @@
 # YT2BP Runbook
 
+## Doc Role
+- Supporting operational runbook only; not a primary MVP planning surface.
+- Launch gate status lives in `docs/ops/mvp-launch-readiness-checklist.md`.
+- Active implementation sequencing lives in `docs/exec-plans/active/mvp-readiness-review-followup.md`.
+- Post-launch debt lives in `docs/exec-plans/tech-debt-tracker.md`.
+
 ## Purpose and ownership
 - Service: YouTube to Blueprint (`/api/youtube-to-blueprint`)
 - Runtime host: Oracle (`oracle-free`)

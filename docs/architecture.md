@@ -105,6 +105,9 @@
       - response now includes additive `data.trace_id` for end-to-end unlock tracing.
       - manual unlock pricing is fixed at `1.00` credit for new blueprint work; duplicates/ready/in-progress rows short-circuit as no-charge.
       - queue guardrails: `QUEUE_DEPTH_HARD_LIMIT`, `QUEUE_DEPTH_PER_USER_LIMIT`; overflow returns `QUEUE_BACKPRESSURE` with `retry_after_seconds`.
+    - shared handler preflight helpers now live in `server/services/generationPreflight.ts`:
+      - Search/manual-refresh/source-page routes reuse typed helpers for duplicate/ready/in-progress classification, reservation-prefix handling, source-page subscription access, and queue/work-item admission reads.
+      - direct URL generation remains intentionally separate because it does not use queue admission.
     - `POST /api/source-pages/:platform/:externalId/videos/generate` (compatibility alias to unlock flow)
       - alias mirrors unlock response contract, including additive `data.trace_id`.
     - `POST /api/source-pages/:platform/:externalId/subscribe` (auth-only, idempotent source-page subscribe)

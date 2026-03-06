@@ -6,13 +6,14 @@ Scope: launch-critical and near-term useful hardening for MVP release safety.
 ## Source of Truth
 a1) [have] This file is the single execution board for MVP launch readiness.
 a2) [todo] Keep only `P0` and `P1` items active here.
-a3) [todo] Any launch-related PR must update this file in the same change set.
-a4) [todo] A checklist item can be marked `done` only when all four fields are filled:
+a3) [have] `P2` does not live here. Track active post-launch execution in `docs/exec-plans/active/mvp-readiness-review-followup.md` and durable debt in `docs/exec-plans/tech-debt-tracker.md`.
+a4) [todo] Any launch-related PR must update this file in the same change set.
+a5) [todo] A checklist item can be marked `done` only when all four fields are filled:
 - `Owner`
 - `Target date`
 - `Status`
 - `Evidence`
-a5) [todo] Evidence must be concrete:
+a6) [todo] Evidence must be concrete:
 - command output
 - PR link
 - timestamped runbook note
@@ -281,9 +282,11 @@ o61) [have] `2026-03-06T19:20:00Z` - `P1-1` - `public GitHub Actions surface con
 
 ## Deferred (Not Launch Gate)
 p1) [have] P2 modularization and post-launch optimizations are intentionally out of launch gate.
-p2) [have] Track those in:
-- `docs/exec-plans/tech-debt-tracker.md`
-- `docs/exec-plans/completed/mvp-launch-hardening-phases.md` (historical phases 7/8 and later)
-p3) [have] Post-launch execution order is now explicitly defined in:
+p2) [have] Active P2 sequencing lives in:
 - `docs/exec-plans/active/mvp-readiness-review-followup.md`
 - `P2-A Coverage -> P2-B Shared Preflight -> P2-C Hygiene`
+p3) [have] Durable post-launch debt lives in:
+- `docs/exec-plans/tech-debt-tracker.md`
+p4) [have] The first P2 pass is implemented; only long-tail post-launch debt remains in the tracker.
+p5) [have] Older launch phase files are historical reference only:
+- `docs/exec-plans/completed/mvp-launch-hardening-phases.md`

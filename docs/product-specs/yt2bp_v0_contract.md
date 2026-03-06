@@ -64,6 +64,7 @@
 - 2026-02-21 note: transcript truth hardening in source unlock flows now treats `NO_CAPTIONS` as retryable/ambiguous until bounded confirmation retries mark permanent `NO_TRANSCRIPT_PERMANENT`; historical permanent rows are revalidated asynchronously. This remains additive and outside this endpoint envelope.
 - 2026-03-05 note: credit backend fail-safe hardening adds explicit `CREDITS_UNAVAILABLE` handling (HTTP `503`) for credit-dependent YT2BP attempts; this is additive to the existing error envelope.
 - 2026-03-05 note: source-page search uptime fix (opportunistic asset-sweep dependency wiring) is outside this endpoint and does not alter the YT2BP contract envelope.
+- 2026-03-06 note: backend maintainability refactor extracted shared generation preflight helpers for Search/source-page/manual-refresh flows into `server/services/generationPreflight.ts`; additive and outside the YT2BP envelope.
 
 ## Request
 ```json

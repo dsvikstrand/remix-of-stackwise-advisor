@@ -327,6 +327,79 @@ describe('youtube handlers', () => {
     expect(serviceDb.state.credit_ledger.filter((row: any) => row.entry_type === 'hold')).toHaveLength(3);
   });
 
+  it('keeps duplicate and in-progress buckets stable for mixed search generation results', async () => {
+    const authDb = createMockSupabase({
+      ingestion_jobs: [],
+    });
+    const serviceDb = createMockSupabase({
+      user_credit_wallets: [{
+        user_id: '00000000-0000-0000-0000-000000000001',
+        balance: 5,
+        capacity: 5,
+        refill_rate_per_sec: 0,
+        last_refill_at: new Date().toISOString(),
+      }],
+    });
+    const app = createMockApp();
+    const items = [
+      {
+        video_id: 'video_dup',
+        video_url: 'https://youtube.com/watch?v=video_dup',
+        title: 'Duplicate Video',
+        channel_id: 'channel_1',
+      },
+      {
+        video_id: 'video_progress',
+        video_url: 'https://youtube.com/watch?v=video_progress',
+        title: 'Progress Video',
+        channel_id: 'channel_1',
+      },
+      {
+        video_id: 'video_new',
+        video_url: 'https://youtube.com/watch?v=video_new',
+        title: 'New Video',
+        channel_id: 'channel_1',
+      },
+    ];
+    registerYouTubeRouteHandlers(app as any, createDeps({
+      getAuthedSupabaseClient: () => authDb,
+      getServiceSupabaseClient: () => serviceDb,
+      SearchVideosGenerateSchema: { safeParse: () => ({ success: true, data: { items } }) },
+      loadExistingSourceVideoStateForUser: vi.fn(async () => new Map([
+        ['video_dup', {
+          already_exists_for_user: true,
+          existing_blueprint_id: 'bp_dup',
+          existing_feed_item_id: 'feed_dup',
+        }],
+      ])),
+      resolveVariantOrReady: vi.fn(async ({ sourceItemId }: { sourceItemId: string }) => {
+        if (sourceItemId === 'source_video_progress') {
+          return { state: 'in_progress' };
+        }
+        return null;
+      }),
+    }));
+
+    const handler = app.handlers['POST /api/search/videos/generate'];
+    const req = { body: { items } } as any;
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(202);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        queued_count: 1,
+        skipped_existing_count: 1,
+        in_progress_count: 1,
+        skipped_unaffordable_count: 0,
+      },
+    });
+    expect(authDb.state.ingestion_jobs).toHaveLength(1);
+    expect(authDb.state.ingestion_jobs[0].payload.items).toHaveLength(1);
+  });
+
   it('rejects search generate requests above the route cap', async () => {
     const app = createMockApp();
     const items = Array.from({ length: 21 }, (_, index) => ({

@@ -3,18 +3,19 @@
 Status: `active`
 
 ## Goal
-a1) [todo] Convert the MVP-readiness review into a concrete launch-hardening checklist that can be executed in priority order without mixing blockers, cost controls, and cleanup work.
+a1) [todo] Keep one active engineering program for MVP hardening work that sits beside, but does not replace, the launch checklist.
 
 ## Scope
 b1) [have] This plan is derived from the repository review completed on `2026-03-05`.
 b2) [have] This plan focuses on launch stability, cost control, rate-limit protection, queue behavior, and repo-risk cleanup.
-b3) [todo] This plan does not replace `docs/ops/mvp-launch-readiness-checklist.md`; it feeds concrete implementation work into that launch gate.
+b3) [have] This plan is the only active implementation program beyond `docs/ops/mvp-launch-readiness-checklist.md`.
+b4) [have] This plan answers `What is the current engineering program?` and `What is P2 and what order do we do it in?`
 
 ## Launch Read
 c1) [have] Current review recommendation is `GO for code-path blockers; remaining launch work is checklist evidence capture plus P1/P2 follow-up`.
 c2) [have] `P0` implementation blockers in this file are resolved.
 c3) [todo] Treat remaining checklist evidence gaps and open `P1` drill items as the last pre-launch proof work.
-c4) [todo] Treat `P2` items in this file as cleanup/hardening that can land after the blockers if time is constrained.
+c4) [have] Treat `P2` items in this file as the explicit post-launch execution path, not as launch-gate work.
 
 ## Status Snapshot
 d1) [have] Direct URL generation now uses reserve -> settle/release billing against the daily-credit wallet instead of eager flat charging.
@@ -25,6 +26,7 @@ d5) [have] Search and manual refresh now classify duplicate/in-progress items be
 d6) [have] Shared-cost auto billing now uses canonical auto intents, funded-participant snapshots, and shared settle/release semantics instead of the temporary single-payer path.
 d7) [have] Shared YouTube quota protection now uses an atomic DB consume path and routine subscription/source-page reads no longer spend live YouTube asset quota.
 d8) [have] Handler-level coverage now exists for direct URL reserve/release timing plus Search/manual-refresh affordability trimming, and shared auto-billing math/lifecycle tests now cover the new funded-subset path.
+d9) [have] `P2` backend/test/docs work landed: source-page handler coverage exists, shared generation preflight helpers are in place, and only long-tail post-launch cleanup remains in the debt tracker.
 
 ## Execution Order
 e1) [have] `P0-1`, `P0-2`, and `P0-3` are completed.
@@ -32,7 +34,7 @@ e2) [have] `P0-4` is complete.
 e3) [have] `P1-1`, `P1-2`, `P1-3`, and `P1-4` are implemented and locally validated.
 e4) [have] Production now runs `13e9da13590335046bad9f0c0db16e2ac7d53046`, including the credit-override hotfix that restored `/api/credits` and credit-backed generation after the `5c16f60` regression.
 e5) [have] Live production queue drills now prove the new work-item metrics are wired through route responses and `/api/ops/queue/health`.
-e6) [todo] Remaining launch work is now concentrated in `P1-1` branch-protection evidence, `P1-2` Android Chrome real-device OAuth callback validation, and `P2` cleanup/refactor work.
+e6) [todo] Remaining launch work is now concentrated in `P1-1` branch-protection evidence and `P1-2` Android Chrome real-device OAuth callback validation.
 e7) [have] `docs/ops/p1-1-p1-2-verification-runbook.md` now captures the exact verification steps, device/browser matrix, and evidence templates for the final `P1-1` / `P1-2` closure work.
 e8) [have] `docs/ops/playwright-p1-2-callback-evidence.md` now captures repeatable Playwright evidence for the `/subscriptions` callback path on iPhone/Android emulation, while explicitly leaving real-device Safari/Chrome signoff as the remaining `P1-2` gap.
 
@@ -221,84 +223,92 @@ m6) [have] Exit criteria:
 
 Status:
 - [have] `P2` is intentionally outside the launch gate.
-- [todo] `P2` should be executed as a post-launch program in three phases: `P2-A Coverage`, `P2-B Shared Preflight`, `P2-C Hygiene`.
-- [todo] Recommended order is confidence first, then consolidation, then cleanup.
+- [have] This section is the only active `P2` source of truth.
+- [have] `P2` was executed in three phases: `P2-A Coverage`, `P2-B Shared Preflight`, `P2-C Hygiene`.
+- [have] Recommended order stayed intact: confidence first, then consolidation, then cleanup.
+- [have] Remaining follow-up work now lives in `docs/exec-plans/tech-debt-tracker.md`.
 
 ### P2-A Coverage Expansion
-n1) [todo] Risk: `medium`
-n2) [todo] Primary files:
+n1) [have] Risk: `medium`
+n2) [have] Primary files:
 - `src/test/*`
 - `server/handlers/sourcePagesHandlers.ts`
 - `server/handlers/sourceSubscriptionsHandlers.ts`
-n3) [todo] Add coverage for:
+n3) [have] Implementation outcome:
 - source-page subscription enforcement
 - source-page unlock refund/rollback paths
 - auto shared-cost billing semantics
 - quota-guard degraded/cached behavior
-n4) [todo] Why first:
+n4) [have] Validation:
+- new `src/test/sourcePagesHandlers.test.ts` now covers subscriber-only library access, unlock denial, queue rejection cleanup, and duplicate/in-progress no-charge stability
+- `src/test/sourceSubscriptionsHandlers.test.ts` and `src/test/youtubeHandlers.test.ts` now cover mixed duplicate/new/in-progress classification and additive queue result buckets
+- `src/test/autoUnlockBilling.test.ts` now covers empty-funded-set retry safety and settled-intent non-billable retry behavior
+- `src/test/youtubeQuotaGuardService.test.ts` now covers missing-RPC fail-open behavior plus explicit cooldown and minute-window reset timing
+n5) [have] Why first:
 - expands confidence before structural refactors
 - protects later cleanup from behavioral drift
-n5) [todo] Exit criteria:
+n6) [have] Exit criteria:
 - the highest-risk launch-era handler flows have direct regression coverage
 - the next refactor phase can proceed with tighter guardrails
 
 ### P2-B Shared Preflight Refactor
-o1) [todo] Risk: `medium`
-o2) [todo] Problem:
+o1) [have] Risk: `medium`
+o2) [have] Problem:
 - enqueue preflight logic is spread across multiple handlers with slightly different semantics
-o3) [todo] Primary files:
+o3) [have] Primary files:
 - `server/handlers/youtubeHandlers.ts`
 - `server/handlers/sourcePagesHandlers.ts`
 - `server/handlers/sourceSubscriptionsHandlers.ts`
-- `server/services/*`
-o4) [todo] Refactor target:
+- `server/services/generationPreflight.ts`
+o4) [have] Implementation outcome:
 - centralize reusable preflight checks for auth, duration policy, duplicate classification, wallet reservation, queue backpressure, and intake pause
-o5) [todo] Why second:
+- Search/manual-refresh now share classification, reservation-prefix, queue-count, queue-admission, and additive result-bucket helpers
+- source-page routes now share subscription access resolution plus queue-admission helpers
+- handler ownership stayed split and route contracts remained stable
+o5) [have] Why second:
 - this is the main maintainability win
 - it is safer once broader handler coverage exists
-o6) [todo] Exit criteria:
+o6) [have] Exit criteria:
 - handler-specific drift is reduced
 - shared preflight rules live in one reusable service surface with no intended behavior change
 
 ### P2-C Repo Hygiene Pass
-p1) [todo] Risk: `low`
-p2) [todo] Scope:
+p1) [have] Risk: `low`
+p2) [have] Scope:
 - identify stale docs references, dead route assumptions, and duplicated helper logic left from earlier MVP iterations
-p3) [todo] Initial targets:
+p3) [have] Implementation outcome:
 - active/completed exec-plan registry consistency
 - route-policy duplication between docs/UI/backend
 - rate-limit and error-copy logic duplicated across handlers/pages
-p4) [todo] Why last:
+p4) [have] Why last:
 - the cleanup targets are easier to identify once coverage and preflight consolidation settle
 - this avoids spending time on cosmetic cleanup before the larger structural work lands
-p5) [todo] Exit criteria:
+p5) [have] Exit criteria:
 - obvious stale references and duplicated helper logic are removed or explicitly tracked elsewhere
 - docs, backend policy, and frontend assumptions are materially easier to reason about
 
 ## Verification Bundle
-q1) [todo] Route-policy tests:
+q1) [have] Route-policy tests:
 - unsubscribed source-page user cannot access subscriber-only library features if that is the chosen policy
 - source-page unlock rejection does not hold credits
 - manual generation billing path matches product contract
 - auto shared-cost billing path matches product contract
-q2) [todo] Runtime checks:
+q2) [have] Runtime checks:
 - `npm run test`
 - `npx tsc --noEmit`
 - `npm run build`
-q3) [todo] Load/ops checks:
-- run one queue-pressure drill focused on source-page unlock
-- run one quota-pressure drill focused on search and subscription reads
-- append evidence to `docs/ops/mvp-launch-readiness-checklist.md`
+q3) [have] Load/ops checks:
+- launch-era queue and quota drills were already captured in `docs/ops/mvp-launch-readiness-checklist.md`, so `P2` stayed scoped to backend/test/docs without reopening launch-gate operations work
 
 ## Recommended Post-Launch Execution Order
-r1) [todo] `Phase 1: P2-A Coverage`
-- add regression tests before structural changes
+r1) [have] `Phase 1: P2-A Coverage`
+- regression tests landed before structural changes
 
-r2) [todo] `Phase 2: P2-B Shared Preflight`
-- consolidate queue/intake/billing preflight semantics
+r2) [have] `Phase 2: P2-B Shared Preflight`
+- queue/intake/classification/reservation helpers now live in `server/services/generationPreflight.ts`
 
-r3) [todo] `Phase 3: P2-C Hygiene`
-- clean stale references and duplicated helper logic after the refactor settles
+r3) [have] `Phase 3: P2-C Hygiene`
+- docs and obvious policy drift were cleaned after the refactor settled
 
 ## Completion Rule
-s1) [todo] This plan can move to `completed/` only when the launch checklist reflects the new queue/load evidence and the remaining launch-gate items outside this review are closed.
+s1) [todo] Keep this plan active until the remaining `P1-1` / `P1-2` checklist gaps are either closed or explicitly deferred for launch.

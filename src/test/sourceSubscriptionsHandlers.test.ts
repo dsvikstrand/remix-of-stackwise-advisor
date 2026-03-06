@@ -235,6 +235,90 @@ describe('source subscription refresh generate handler', () => {
     expect(serviceDb.state.credit_ledger.filter((row: any) => row.entry_type === 'hold')).toHaveLength(3);
   });
 
+  it('keeps skipped_existing and in_progress buckets stable for mixed manual refresh results', async () => {
+    const authDb = createMockSupabase({
+      user_source_subscriptions: [{
+        id: 'sub_1',
+        user_id: '00000000-0000-0000-0000-000000000001',
+        source_channel_id: 'channel_1',
+        is_active: true,
+      }],
+      ingestion_jobs: [],
+    });
+    const serviceDb = createMockSupabase({
+      user_credit_wallets: [{
+        user_id: '00000000-0000-0000-0000-000000000001',
+        balance: 5,
+        capacity: 5,
+        refill_rate_per_sec: 0,
+        last_refill_at: new Date().toISOString(),
+      }],
+    });
+    const items = [
+      {
+        subscription_id: 'sub_1',
+        source_channel_id: 'channel_1',
+        source_channel_title: 'Channel 1',
+        source_channel_url: 'https://youtube.com/channel/channel_1',
+        video_id: 'video_ready',
+        video_url: 'https://youtube.com/watch?v=video_ready',
+        title: 'Ready Video',
+      },
+      {
+        subscription_id: 'sub_1',
+        source_channel_id: 'channel_1',
+        source_channel_title: 'Channel 1',
+        source_channel_url: 'https://youtube.com/channel/channel_1',
+        video_id: 'video_progress',
+        video_url: 'https://youtube.com/watch?v=video_progress',
+        title: 'Progress Video',
+      },
+      {
+        subscription_id: 'sub_1',
+        source_channel_id: 'channel_1',
+        source_channel_title: 'Channel 1',
+        source_channel_url: 'https://youtube.com/channel/channel_1',
+        video_id: 'video_new',
+        video_url: 'https://youtube.com/watch?v=video_new',
+        title: 'New Video',
+      },
+    ];
+
+    const req = {
+      body: { items },
+    } as any;
+    const res = createResponse();
+    const deps = createDeps({
+      getAuthedSupabaseClient: () => authDb,
+      getServiceSupabaseClient: () => serviceDb,
+      RefreshSubscriptionsGenerateSchema: { safeParse: () => ({ success: true, data: { items } }) },
+      resolveVariantOrReady: vi.fn(async ({ sourceItemId }: { sourceItemId: string }) => {
+        if (sourceItemId === 'source_video_ready') {
+          return { state: 'ready', blueprintId: 'bp_ready' };
+        }
+        if (sourceItemId === 'source_video_progress') {
+          return { state: 'in_progress' };
+        }
+        return null;
+      }),
+    });
+
+    await handleRefreshGenerate(req, res as any, deps);
+
+    expect(res.statusCode).toBe(202);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        queued_count: 1,
+        skipped_existing_count: 1,
+        in_progress_count: 1,
+        skipped_unaffordable_count: 0,
+      },
+    });
+    expect(authDb.state.ingestion_jobs).toHaveLength(1);
+    expect(authDb.state.ingestion_jobs[0].payload.items).toHaveLength(1);
+  });
+
   it('rejects refresh generation when work-item budget would overflow', async () => {
     const authDb = createMockSupabase({
       user_source_subscriptions: [{

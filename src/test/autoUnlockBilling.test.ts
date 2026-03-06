@@ -68,6 +68,37 @@ describe('auto unlock billing', () => {
     expect(result.participants).toEqual([]);
   });
 
+  it('returns empty_funded_set when reservation-time balances cannot fund the intent', async () => {
+    const db = createMockSupabase({
+      user_credit_wallets: [
+        makeWallet('user_a', 0.2),
+        makeWallet('user_b', 0.2),
+        makeWallet('user_c', 0.2),
+      ],
+      credit_ledger: [],
+      source_auto_unlock_intents: [],
+      source_auto_unlock_participants: [],
+    }) as any;
+
+    const reserved = await reserveAutoUnlockIntent(db, {
+      sourceItemId: 'source_empty',
+      sourcePageId: 'page_empty',
+      unlockId: 'unlock_empty',
+      sourceChannelId: 'channel_empty',
+      eligibleUserIds: ['user_a', 'user_b', 'user_c'],
+      trigger: 'service_cron',
+      videoId: 'video_empty',
+    });
+
+    expect(reserved).toMatchObject({
+      state: 'empty_funded_set',
+      reservedNow: false,
+      fundedCount: 0,
+    });
+    expect(db.state.credit_ledger).toHaveLength(0);
+    expect(db.state.source_auto_unlock_intents).toHaveLength(0);
+  });
+
   it('reserves and releases shared auto charges in the fallback path', async () => {
     const db = createMockSupabase({
       user_credit_wallets: [
@@ -144,5 +175,51 @@ describe('auto unlock billing', () => {
     expect(settledA.intent?.status).toBe('settled');
     expect(settledB.settledCount).toBe(0);
     expect(db.state.credit_ledger.filter((row: any) => row.reason_code === 'AUTO_UNLOCK_SETTLE')).toHaveLength(2);
+  });
+
+  it('treats a settled existing intent as non-billable on retry', async () => {
+    const db = createMockSupabase({
+      user_credit_wallets: [
+        makeWallet('user_a', 1),
+        makeWallet('user_b', 1),
+      ],
+      credit_ledger: [],
+      source_auto_unlock_intents: [],
+      source_auto_unlock_participants: [],
+    }) as any;
+
+    const first = await reserveAutoUnlockIntent(db, {
+      sourceItemId: 'source_retry',
+      sourcePageId: 'page_retry',
+      unlockId: 'unlock_retry',
+      sourceChannelId: 'channel_retry',
+      eligibleUserIds: ['user_b', 'user_a'],
+      trigger: 'service_cron',
+      videoId: 'video_retry',
+    });
+    expect(first.state).toBe('reserved');
+
+    await settleAutoUnlockIntent(db, {
+      intentId: first.intent!.id,
+      blueprintId: 'bp_retry',
+      jobId: 'job_retry',
+      traceId: 'trace_retry',
+    });
+
+    const ledgerCountBeforeRetry = db.state.credit_ledger.length;
+    const retried = await reserveAutoUnlockIntent(db, {
+      sourceItemId: 'source_retry',
+      sourcePageId: 'page_retry',
+      unlockId: 'unlock_retry',
+      sourceChannelId: 'channel_retry',
+      eligibleUserIds: ['user_a', 'user_b'],
+      trigger: 'source_auto_unlock_retry',
+      videoId: 'video_retry',
+    });
+
+    expect(retried.state).toBe('existing_intent');
+    expect(retried.reservedNow).toBe(false);
+    expect(retried.intent?.status).toBe('settled');
+    expect(db.state.credit_ledger).toHaveLength(ledgerCountBeforeRetry);
   });
 });

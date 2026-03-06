@@ -20,6 +20,7 @@ a4d) [have] Runtime hotfix applied: source-page search no longer crashes backend
 a4e) [have] Shared auto-unlock schema is now applied on the linked Supabase project (`qgqqavaogicecvhopgan`, migration watermark `20260306113000`).
 a4f) [have] Queue admission now uses weighted work-item limits in addition to row depth, and ops queue health reports both row counts and work-item backlog.
 a4g) [have] Credit refresh is now lazy by default: the header user menu fetches credits only while open, and Search relies on one-shot reads plus explicit invalidation after billable actions.
+a4h) [have] Backend maintainability pass extracted shared generation preflight helpers and expanded regression coverage around source-page policy, shared auto billing, and quota degraded paths.
 a5) [todo] Improve user trust around shared-cost auto billing transitions and async processing visibility.
 a6) [todo] Reduce terminology ambiguity between personal stream, followed channels, source pages, and channel taxonomy.
 

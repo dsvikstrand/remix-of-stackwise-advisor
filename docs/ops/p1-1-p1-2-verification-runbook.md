@@ -1,6 +1,11 @@
 # P1-1 / P1-2 Verification Runbook
 
-Status: `active`
+Status: `supporting-runbook`
+
+## Doc Role
+a0) [have] This is a supporting runbook, not a primary planning surface.
+a00) [have] Launch status still lives in `docs/ops/mvp-launch-readiness-checklist.md`.
+a000) [have] Active implementation sequencing lives in `docs/exec-plans/active/mvp-readiness-review-followup.md`.
 
 ## Goal
 a1) [todo] Close the last two pre-launch checklist items:
@@ -36,6 +41,7 @@ e4) [todo] Capture one screenshot showing the required checks list.
 e5) [todo] Create a tiny temporary PR from a throwaway branch and confirm merge is blocked until checks pass.
 e6) [todo] Capture one screenshot of the PR showing required checks / blocked merge state.
 e7) [todo] Close the test PR if it exists only for verification.
+e8) [have] Public preflight already confirms the repo exposes the `CI Gate` workflow and recent successful runs on `main`, so the remaining proof is specifically settings/ruleset + PR merge gating, not workflow existence.
 
 ### Evidence Template
 f1) [todo] Checklist evidence line should include:

@@ -14,6 +14,11 @@ import type {
 import { fetchYouTubeDurationMap, YouTubeDurationLookupError } from '../services/youtubeDuration';
 import { splitByDurationPolicy, toDurationSeconds } from '../services/videoDurationPolicy';
 import { getBlueprintSummaryText } from '../services/blueprintSections';
+import {
+  readQueueAdmissionCounts,
+  resolveSourcePageSubscriptionAccess,
+  wouldExceedQueueAdmission,
+} from '../services/generationPreflight';
 
 export function registerSourcePagesRouteHandlers(app: express.Express, deps: SourcePagesRouteDeps) {
   const {
@@ -182,36 +187,6 @@ function scoreSourcePageSearchRow(row: SourcePageSearchRow, normalizedQuery: str
   return 9;
 }
 
-async function resolveSourcePageSubscriptionAccess(input: {
-  db: any;
-  userId: string;
-  sourcePageId: string;
-  sourceChannelId: string;
-}) {
-  const subscriptionState = await getUserSubscriptionStateForSourcePage(input.db, {
-    userId: input.userId,
-    sourcePageId: input.sourcePageId,
-  });
-  if (subscriptionState?.subscribed) {
-    return {
-      subscribed: true,
-      subscription_id: subscriptionState.subscription_id || null,
-    };
-  }
-
-  const { data: fallbackSub } = await input.db
-    .from('user_source_subscriptions')
-    .select('id, is_active')
-    .eq('user_id', input.userId)
-    .eq('source_type', 'youtube')
-    .eq('source_channel_id', input.sourceChannelId)
-    .maybeSingle();
-  return {
-    subscribed: Boolean(fallbackSub?.is_active),
-    subscription_id: fallbackSub?.is_active ? fallbackSub.id : null,
-  };
-}
-
 app.get('/api/source-pages/search', async (req, res) => {
   const rawQuery = String(req.query.q || '').trim();
   if (rawQuery.length < 2) {
@@ -335,30 +310,6 @@ app.get('/api/source-pages/:platform/:externalId', async (req, res) => {
     });
   }
 
-  try {
-    const access = await resolveSourcePageSubscriptionAccess({
-      db,
-      userId,
-      sourcePageId: sourcePage.id,
-      sourceChannelId: sourcePage.external_id,
-    });
-    if (!access.subscribed) {
-      return res.status(403).json({
-        ok: false,
-        error_code: 'SOURCE_PAGE_SUBSCRIPTION_REQUIRED',
-        message: 'Subscribe to this source to browse its video library.',
-        data: null,
-      });
-    }
-  } catch (error) {
-    return res.status(400).json({
-      ok: false,
-      error_code: 'READ_FAILED',
-      message: error instanceof Error ? error.message : 'Could not resolve source subscription.',
-      data: null,
-    });
-  }
-
   // Keep reads provider-safe: return stored/null assets immediately and let
   // the bounded background sweep refresh legacy rows later.
   if (needsSourcePageAssetHydration(sourcePage) && youtubeDataApiKey) {
@@ -395,6 +346,7 @@ app.get('/api/source-pages/:platform/:externalId', async (req, res) => {
         userId,
         sourcePageId: sourcePage.id,
         sourceChannelId: sourcePage.external_id,
+        getUserSubscriptionStateForSourcePage,
       });
       subscribed = access.subscribed;
       subscriptionId = access.subscription_id;
@@ -489,6 +441,31 @@ app.get(
       ok: false,
       error_code: 'SOURCE_PAGE_NOT_FOUND',
       message: 'Source page not found.',
+      data: null,
+    });
+  }
+
+  try {
+    const access = await resolveSourcePageSubscriptionAccess({
+      db,
+      userId,
+      sourcePageId: sourcePage.id,
+      sourceChannelId: sourcePage.external_id,
+      getUserSubscriptionStateForSourcePage,
+    });
+    if (!access.subscribed) {
+      return res.status(403).json({
+        ok: false,
+        error_code: 'SOURCE_PAGE_SUBSCRIPTION_REQUIRED',
+        message: 'Subscribe to this source to browse its video library.',
+        data: null,
+      });
+    }
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: error instanceof Error ? error.message : 'Could not resolve source subscription.',
       data: null,
     });
   }
@@ -711,6 +688,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       userId,
       sourcePageId: sourcePage.id,
       sourceChannelId: sourcePage.external_id,
+      getUserSubscriptionStateForSourcePage,
     });
     if (!access.subscribed) {
       return res.status(403).json({
@@ -872,7 +850,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         sourceItemId: source.id,
         generationTier: resolvedTier,
       });
-      if (variantState.state === 'ready') {
+      if (variantState?.state === 'ready') {
         readyRows.push({
           video_id: item.video_id,
           title: item.title,
@@ -880,7 +858,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         });
         continue;
       }
-      if (variantState.state === 'in_progress') {
+      if (variantState?.state === 'in_progress') {
         inProgressRows.push({
           video_id: item.video_id,
           title: item.title,
@@ -1174,28 +1152,26 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
     });
   }
 
-  queueDepth = await countQueueDepth(sourcePageDb, {
-    scope: 'source_item_unlock_generation',
-    includeRunning: true,
-  });
-  userQueueDepth = await countQueueDepth(sourcePageDb, {
-    scope: 'source_item_unlock_generation',
+  const queueCounts = await readQueueAdmissionCounts({
+    db: sourcePageDb,
     userId,
-    includeRunning: true,
-  });
-  queueWorkItems = await countQueueWorkItems(sourcePageDb, {
     scope: 'source_item_unlock_generation',
-    includeRunning: true,
+    countQueueDepth,
+    countQueueWorkItems,
   });
-  userQueueWorkItems = await countQueueWorkItems(sourcePageDb, {
-    scope: 'source_item_unlock_generation',
-    userId,
-    includeRunning: true,
+  queueDepth = queueCounts.queue_depth;
+  userQueueDepth = queueCounts.user_queue_depth;
+  queueWorkItems = queueCounts.queue_work_items;
+  userQueueWorkItems = queueCounts.user_queue_work_items;
+  const queueAdmission = wouldExceedQueueAdmission({
+    counts: queueCounts,
+    newWorkItems: queueItems.length,
+    queueDepthHardLimit,
+    queueDepthPerUserLimit,
+    queueWorkItemsHardLimit,
+    queueWorkItemsPerUserLimit,
   });
-  const wouldExceedQueueDepth = queueDepth >= queueDepthHardLimit || userQueueDepth >= queueDepthPerUserLimit;
-  const wouldExceedWorkItems = (queueWorkItems + queueItems.length) > queueWorkItemsHardLimit
-    || (userQueueWorkItems + queueItems.length) > queueWorkItemsPerUserLimit;
-  if (wouldExceedQueueDepth || wouldExceedWorkItems) {
+  if (queueAdmission.blocked) {
     for (const item of queueItems) {
       if (item.reserved_cost > 0) {
         await refundReservation(sourcePageDb, {

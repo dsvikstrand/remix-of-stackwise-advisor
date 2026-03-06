@@ -12,9 +12,15 @@ import {
   buildManualGenerationReservation,
   releaseManualGeneration,
   reserveManualGeneration,
-  reserveManualGenerationPrefix,
   settleManualGeneration,
 } from '../services/manualGenerationBilling';
+import {
+  buildManualGenerationResultBuckets,
+  classifyManualGenerationCandidates,
+  readQueueAdmissionCounts,
+  reserveManualGenerationWorkPrefix,
+  wouldExceedQueueAdmission,
+} from '../services/generationPreflight';
 
 export function registerYouTubeRouteHandlers(app: express.Express, deps: YouTubeRouteDeps) {
   const {
@@ -882,8 +888,6 @@ app.post(
       });
     }
     const skippedExisting: Array<{ video_id: string; title: string; blueprint_id: string | null }> = [];
-    const inProgress: Array<{ video_id: string; title: string }> = [];
-    const billableItems: Array<SearchVideoGenerateItem & { source_item_id: string }> = [];
     let existingByVideoId = new Map<string, SourcePageVideoExistingState>();
     try {
       existingByVideoId = await loadExistingSourceVideoStateForUser(
@@ -900,18 +904,27 @@ app.post(
       });
     }
 
-    for (const item of allowedItems) {
+    const nonExistingItems = allowedItems.filter((item) => {
       const existing = existingByVideoId.get(item.video_id);
-      if (existing?.already_exists_for_user) {
-        skippedExisting.push({
-          video_id: item.video_id,
-          title: item.title,
-          blueprint_id: existing.existing_blueprint_id || null,
-        });
-        continue;
-      }
+      if (!existing?.already_exists_for_user) return true;
+      skippedExisting.push({
+        video_id: item.video_id,
+        title: item.title,
+        blueprint_id: existing.existing_blueprint_id || null,
+      });
+      return false;
+    });
 
-      const source = await upsertSourceItemFromVideo(serviceDb, {
+    const {
+      ready,
+      inProgress,
+      billable: billableItems,
+    } = await classifyManualGenerationCandidates({
+      items: nonExistingItems,
+      generationTier: resolvedTier,
+      getVideoId: (item) => item.video_id,
+      getTitle: (item) => item.title,
+      upsertSourceItem: async (item) => upsertSourceItemFromVideo(serviceDb, {
         video: {
           videoId: item.video_id,
           title: item.title,
@@ -923,39 +936,21 @@ app.post(
         channelId: item.channel_id,
         channelTitle: item.channel_title || null,
         sourcePageId: null,
-      });
-
-      const variantState = await resolveVariantOrReady({
-        sourceItemId: source.id,
-        generationTier: resolvedTier,
-      });
-      if (variantState?.state === 'ready' && variantState.blueprintId) {
+      }),
+      resolveVariantOrReady: ({ sourceItemId, generationTier }) => resolveVariantOrReady({
+        sourceItemId,
+        generationTier,
+      }),
+      onReady: async ({ sourceItemId, blueprintId }) => {
         await insertFeedItem(db, {
           userId,
-          sourceItemId: source.id,
-          blueprintId: variantState.blueprintId,
+          sourceItemId,
+          blueprintId,
           state: 'my_feed_published',
         });
-        skippedExisting.push({
-          video_id: item.video_id,
-          title: item.title,
-          blueprint_id: variantState.blueprintId,
-        });
-        continue;
-      }
-      if (variantState?.state === 'in_progress') {
-        inProgress.push({
-          video_id: item.video_id,
-          title: item.title,
-        });
-        continue;
-      }
-
-      billableItems.push({
-        ...item,
-        source_item_id: source.id,
-      });
-    }
+      },
+    });
+    skippedExisting.push(...ready);
 
     const requestId = `search-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const reservationInput = billableItems.map((item, index) => ({
@@ -974,9 +969,15 @@ app.post(
     }));
     let reservationResult;
     try {
-      reservationResult = await reserveManualGenerationPrefix({
+      reservationResult = await reserveManualGenerationWorkPrefix({
         db: serviceDb,
         items: reservationInput,
+        mapSkippedUnaffordable: ({ item, required, balance }) => ({
+          video_id: item.video_id,
+          title: item.title,
+          required,
+          balance,
+        }),
       });
     } catch (error) {
       return res.status(503).json({
@@ -986,12 +987,7 @@ app.post(
         data: null,
       });
     }
-    const skippedUnaffordable = reservationResult.skippedUnaffordable.map(({ item, required, balance }) => ({
-      video_id: item.video_id,
-      title: item.title,
-      required,
-      balance,
-    }));
+    const skippedUnaffordable = reservationResult.skippedUnaffordable;
     const queuedItems = reservationResult.reserved.map(({ item, reservation }) => ({
       ...item,
       reservation,
@@ -1002,14 +998,25 @@ app.post(
     let userQueueWorkItems = 0;
 
     if (queuedItems.length > 0) {
-      queueDepth = await countQueueDepth(serviceDb, { includeRunning: true });
-      userQueueDepth = await countQueueDepth(serviceDb, { userId, includeRunning: true });
-      queueWorkItems = await countQueueWorkItems(serviceDb, { includeRunning: true });
-      userQueueWorkItems = await countQueueWorkItems(serviceDb, { userId, includeRunning: true });
-      const wouldExceedQueueDepth = queueDepth >= queueDepthHardLimit || userQueueDepth >= queueDepthPerUserLimit;
-      const wouldExceedWorkItems = (queueWorkItems + queuedItems.length) > queueWorkItemsHardLimit
-        || (userQueueWorkItems + queuedItems.length) > queueWorkItemsPerUserLimit;
-      if (wouldExceedQueueDepth || wouldExceedWorkItems) {
+      const queueCounts = await readQueueAdmissionCounts({
+        db: serviceDb,
+        userId,
+        countQueueDepth,
+        countQueueWorkItems,
+      });
+      queueDepth = queueCounts.queue_depth;
+      userQueueDepth = queueCounts.user_queue_depth;
+      queueWorkItems = queueCounts.queue_work_items;
+      userQueueWorkItems = queueCounts.user_queue_work_items;
+      const queueAdmission = wouldExceedQueueAdmission({
+        counts: queueCounts,
+        newWorkItems: queuedItems.length,
+        queueDepthHardLimit,
+        queueDepthPerUserLimit,
+        queueWorkItemsHardLimit,
+        queueWorkItemsPerUserLimit,
+      });
+      if (queueAdmission.blocked) {
         for (const item of queuedItems) {
           await releaseManualGeneration(serviceDb, item.reservation);
         }
@@ -1056,14 +1063,12 @@ app.post(
           variant_status: 'no_new_work',
           dual_generate_enabled: dualGenerateEnabled,
           dual_generate_tiers: Array.from(dualGenerateTiers),
-          duration_blocked_count: durationBlocked.length,
-          duration_blocked: durationBlocked,
-          skipped_existing_count: skippedExisting.length,
-          skipped_existing: skippedExisting,
-          in_progress_count: inProgress.length,
-          in_progress: inProgress,
-          skipped_unaffordable_count: skippedUnaffordable.length,
-          skipped_unaffordable: skippedUnaffordable,
+          ...buildManualGenerationResultBuckets({
+            durationBlocked,
+            skippedExisting,
+            inProgress,
+            skippedUnaffordable,
+          }),
         },
       });
     }
@@ -1118,14 +1123,12 @@ app.post(
         variant_status: 'queued',
         dual_generate_enabled: dualGenerateEnabled,
         dual_generate_tiers: Array.from(dualGenerateTiers),
-        duration_blocked_count: durationBlocked.length,
-        duration_blocked: durationBlocked,
-        skipped_existing_count: skippedExisting.length,
-        skipped_existing: skippedExisting,
-        in_progress_count: inProgress.length,
-        in_progress: inProgress,
-        skipped_unaffordable_count: skippedUnaffordable.length,
-        skipped_unaffordable: skippedUnaffordable,
+        ...buildManualGenerationResultBuckets({
+          durationBlocked,
+          skippedExisting,
+          inProgress,
+          skippedUnaffordable,
+        }),
       },
     });
   },

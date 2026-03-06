@@ -95,3 +95,4 @@ Status: `canonical`
 1. YouTube source comments keep stored-snapshot UX; no live page-load fetches were introduced.
 2. Refresh policy is bootstrap-first (`+15m`, `+24h`) then user-triggered manual refresh with per-blueprint cooldown.
 3. Supabase project targeting is aligned to `qgqqavaogicecvhopgan`, and shared auto-unlock schema migration `20260306113000` is applied there.
+4. Search/manual-refresh/source-page generation now share backend preflight helpers for subscription access, duplicate classification, reservation-prefix handling, and queue admission without changing public route contracts.

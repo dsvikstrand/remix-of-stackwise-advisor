@@ -9,8 +9,14 @@ import { splitByDurationPolicy, toDurationSeconds } from '../services/videoDurat
 import {
   buildManualGenerationReservation,
   releaseManualGeneration,
-  reserveManualGenerationPrefix,
 } from '../services/manualGenerationBilling';
+import {
+  buildManualGenerationResultBuckets,
+  classifyManualGenerationCandidates,
+  readQueueAdmissionCounts,
+  reserveManualGenerationWorkPrefix,
+  wouldExceedQueueAdmission,
+} from '../services/generationPreflight';
 
 type StoredSourcePageAssetRow = {
   id: string;
@@ -504,12 +510,16 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
       },
     });
   }
-  const skippedExisting: Array<{ video_id: string; title: string; blueprint_id: string | null }> = [];
-  const inProgress: Array<{ video_id: string; title: string }> = [];
-  const billableItems: Array<RefreshScanCandidate & { source_item_id: string }> = [];
-
-  for (const item of allowedDurationItems) {
-    const source = await deps.upsertSourceItemFromVideo(serviceDb, {
+  const {
+    ready: skippedExisting,
+    inProgress,
+    billable: billableItems,
+  } = await classifyManualGenerationCandidates({
+    items: allowedDurationItems,
+    generationTier: resolvedTier,
+    getVideoId: (item) => item.video_id,
+    getTitle: (item) => item.title,
+    upsertSourceItem: async (item) => deps.upsertSourceItemFromVideo(serviceDb, {
       video: {
         videoId: item.video_id,
         title: item.title,
@@ -521,44 +531,25 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
       channelId: item.source_channel_id,
       channelTitle: item.source_channel_title || null,
       sourcePageId: null,
-    });
-
-    const variantState = await deps.resolveVariantOrReady({
-      sourceItemId: source.id,
-      generationTier: resolvedTier,
-    });
-    if (variantState?.state === 'ready' && variantState.blueprintId) {
+    }),
+    resolveVariantOrReady: ({ sourceItemId, generationTier }) => deps.resolveVariantOrReady({
+      sourceItemId,
+      generationTier,
+    }),
+    onReady: async ({ sourceItemId, blueprintId }) => {
       await deps.insertFeedItem(db, {
         userId,
-        sourceItemId: source.id,
-        blueprintId: variantState.blueprintId,
+        sourceItemId,
+        blueprintId,
         state: 'my_feed_published',
       });
-      skippedExisting.push({
-        video_id: item.video_id,
-        title: item.title,
-        blueprint_id: variantState.blueprintId,
-      });
-      continue;
-    }
-    if (variantState?.state === 'in_progress') {
-      inProgress.push({
-        video_id: item.video_id,
-        title: item.title,
-      });
-      continue;
-    }
-
-    billableItems.push({
-      ...item,
-      source_item_id: source.id,
-    });
-  }
+    },
+  });
 
   const requestId = `refresh-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   let reservationResult;
   try {
-    reservationResult = await reserveManualGenerationPrefix({
+    reservationResult = await reserveManualGenerationWorkPrefix({
       db: serviceDb,
       items: billableItems.map((item, index) => ({
         item,
@@ -575,6 +566,12 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
           },
         }),
       })),
+      mapSkippedUnaffordable: ({ item, required, balance }) => ({
+        video_id: item.video_id,
+        title: item.title,
+        required,
+        balance,
+      }),
     });
   } catch (error) {
     return res.status(503).json({
@@ -584,12 +581,7 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
       data: null,
     });
   }
-  const skippedUnaffordable = reservationResult.skippedUnaffordable.map(({ item, required, balance }) => ({
-    video_id: item.video_id,
-    title: item.title,
-    required,
-    balance,
-  }));
+  const skippedUnaffordable = reservationResult.skippedUnaffordable;
   const queuedItems = reservationResult.reserved.map(({ item, reservation }) => ({
     ...item,
     reservation,
@@ -599,14 +591,25 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
   let queueWorkItems = 0;
   let userQueueWorkItems = 0;
   if (queuedItems.length > 0) {
-    queueDepth = await deps.countQueueDepth(serviceDb, { includeRunning: true });
-    userQueueDepth = await deps.countQueueDepth(serviceDb, { userId, includeRunning: true });
-    queueWorkItems = await deps.countQueueWorkItems(serviceDb, { includeRunning: true });
-    userQueueWorkItems = await deps.countQueueWorkItems(serviceDb, { userId, includeRunning: true });
-    const wouldExceedQueueDepth = queueDepth >= deps.queueDepthHardLimit || userQueueDepth >= deps.queueDepthPerUserLimit;
-    const wouldExceedWorkItems = (queueWorkItems + queuedItems.length) > deps.queueWorkItemsHardLimit
-      || (userQueueWorkItems + queuedItems.length) > deps.queueWorkItemsPerUserLimit;
-    if (wouldExceedQueueDepth || wouldExceedWorkItems) {
+    const queueCounts = await readQueueAdmissionCounts({
+      db: serviceDb,
+      userId,
+      countQueueDepth: deps.countQueueDepth,
+      countQueueWorkItems: deps.countQueueWorkItems,
+    });
+    queueDepth = queueCounts.queue_depth;
+    userQueueDepth = queueCounts.user_queue_depth;
+    queueWorkItems = queueCounts.queue_work_items;
+    userQueueWorkItems = queueCounts.user_queue_work_items;
+    const queueAdmission = wouldExceedQueueAdmission({
+      counts: queueCounts,
+      newWorkItems: queuedItems.length,
+      queueDepthHardLimit: deps.queueDepthHardLimit,
+      queueDepthPerUserLimit: deps.queueDepthPerUserLimit,
+      queueWorkItemsHardLimit: deps.queueWorkItemsHardLimit,
+      queueWorkItemsPerUserLimit: deps.queueWorkItemsPerUserLimit,
+    });
+    if (queueAdmission.blocked) {
       for (const item of queuedItems) {
         await releaseManualGeneration(serviceDb, item.reservation);
       }
@@ -637,30 +640,28 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
         },
       });
     }
-    return res.status(200).json({
-      ok: true,
-      error_code: null,
-      message: 'No new generation queued.',
+      return res.status(200).json({
+        ok: true,
+        error_code: null,
+        message: 'No new generation queued.',
         data: {
           job_id: null,
           queue_depth: queueDepth,
           queue_work_items: queueWorkItems,
           user_queue_work_items: userQueueWorkItems,
           queued_count: 0,
-        requested_tier: requestedTier || null,
-        resolved_tier: resolvedTier,
-        variant_status: 'no_new_work',
-        dual_generate_enabled: dualGenerateEnabled,
-        dual_generate_tiers: Array.from(dualGenerateTiers),
-        duration_blocked_count: durationBlocked.length,
-        duration_blocked: durationBlocked,
-        skipped_existing_count: skippedExisting.length,
-        skipped_existing: skippedExisting,
-        in_progress_count: inProgress.length,
-        in_progress: inProgress,
-        skipped_unaffordable_count: skippedUnaffordable.length,
-        skipped_unaffordable: skippedUnaffordable,
-      },
+          requested_tier: requestedTier || null,
+          resolved_tier: resolvedTier,
+          variant_status: 'no_new_work',
+          dual_generate_enabled: dualGenerateEnabled,
+          dual_generate_tiers: Array.from(dualGenerateTiers),
+          ...buildManualGenerationResultBuckets({
+            durationBlocked,
+            skippedExisting,
+            inProgress,
+            skippedUnaffordable,
+          }),
+        },
     });
   }
 
@@ -701,25 +702,23 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
     ok: true,
     error_code: null,
     message: 'background generation started',
-      data: {
-        job_id: job.id,
-        queue_depth: queueDepth + 1,
-        queue_work_items: queueWorkItems + queuedItems.length,
-        user_queue_work_items: userQueueWorkItems + queuedItems.length,
-        queued_count: queuedItems.length,
+    data: {
+      job_id: job.id,
+      queue_depth: queueDepth + 1,
+      queue_work_items: queueWorkItems + queuedItems.length,
+      user_queue_work_items: userQueueWorkItems + queuedItems.length,
+      queued_count: queuedItems.length,
       requested_tier: requestedTier || null,
       resolved_tier: resolvedTier,
       variant_status: 'queued',
       dual_generate_enabled: dualGenerateEnabled,
       dual_generate_tiers: Array.from(dualGenerateTiers),
-      duration_blocked_count: durationBlocked.length,
-      duration_blocked: durationBlocked,
-      skipped_existing_count: skippedExisting.length,
-      skipped_existing: skippedExisting,
-      in_progress_count: inProgress.length,
-      in_progress: inProgress,
-      skipped_unaffordable_count: skippedUnaffordable.length,
-      skipped_unaffordable: skippedUnaffordable,
+      ...buildManualGenerationResultBuckets({
+        durationBlocked,
+        skippedExisting,
+        inProgress,
+        skippedUnaffordable,
+      }),
     },
   });
 }

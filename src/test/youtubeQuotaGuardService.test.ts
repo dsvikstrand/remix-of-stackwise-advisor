@@ -40,7 +40,7 @@ describe('youtubeQuotaGuard service helpers', () => {
 
     expect(result.decision.allowed).toBe(false);
     expect(result.decision.reason).toBe('cooldown');
-    expect(result.decision.retryAfterSeconds).toBeGreaterThan(0);
+    expect(result.decision.retryAfterSeconds).toBe(300);
   });
 
   it('blocks when minute budget is exhausted', () => {
@@ -81,6 +81,26 @@ describe('youtubeQuotaGuard service helpers', () => {
     expect(result.decision.allowed).toBe(true);
     expect(result.nextState.liveCallsDay).toBe(1);
     expect(result.nextState.dayStartedAt).toBe('2026-03-06');
+  });
+
+  it('resets minute window counters after sixty seconds elapse', () => {
+    const nowMs = Date.parse('2026-03-05T10:01:01.000Z');
+    const result = applyQuotaDecision({
+      nowMs,
+      state: {
+        windowStartedAt: '2026-03-05T10:00:00.000Z',
+        liveCallsWindow: 60,
+        liveCallsDay: 100,
+        dayStartedAt: '2026-03-05',
+        cooldownUntil: null,
+      },
+      maxPerMinute: 60,
+      maxPerDay: 20_000,
+    });
+
+    expect(result.decision.allowed).toBe(true);
+    expect(result.nextState.liveCallsWindow).toBe(1);
+    expect(result.nextState.liveCallsDay).toBe(101);
   });
 
   it('uses the atomic quota RPC when available', async () => {

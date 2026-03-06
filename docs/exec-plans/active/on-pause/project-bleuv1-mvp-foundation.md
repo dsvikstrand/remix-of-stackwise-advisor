@@ -112,6 +112,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Step 27 credit-load hardening makes `useAiCredits` lazy by default, fetches header credits only while the menu is open, and relies on explicit `['ai-credits']` invalidation after billable actions.
 - Step 28 thumbnail-first banner cutover sets source YouTube banner rendering to thumbnails across Wall/Feed/Explore/Detail/Source Page, backfills old source-linked blueprints, and bypasses source auto-banner enqueue paths.
 - Step 29 notifications MVP adds reply + generation-terminal notification events and ships an auth header bell inbox with read/read-all actions.
+- Step 30 maintainability pass expands backend regression coverage and extracts shared generation preflight helpers (`server/services/generationPreflight.ts`) for Search/source-page/manual-refresh flows without changing public route contracts.
 - Added service-ops endpoint `GET /api/ingestion/jobs/latest` for latest ingestion status checks.
 - Added user endpoint `GET /api/ingestion/jobs/:id` for owner-scoped manual refresh progress.
 - Added user endpoint `GET /api/ingestion/jobs/latest-mine` for owner-scoped latest refresh-job restore after page reload.

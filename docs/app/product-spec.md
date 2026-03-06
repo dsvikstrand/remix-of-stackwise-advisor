@@ -95,6 +95,7 @@ a73) [have] Launch legal baseline routes are now first-class (`/terms`, `/privac
 a74) [have] Launch error-copy normalization is centralized through shared frontend mapping for critical failure classes across Search/Source/Wall/My Feed.
 a75) [have] Source-page search uptime hardening: opportunistic source-page asset sweep is wired safely so `/api/source-pages/search` cannot crash backend runtime.
 a76) [have] Supabase repo target is aligned to project `qgqqavaogicecvhopgan`, and shared auto-unlock schema migration `20260306113000_auto_unlock_shared_cost_v1.sql` is applied remotely.
+a77) [have] Search, source-page unlock, and subscription manual-refresh flows now share typed backend preflight helpers for duplicate classification, queue admission, and manual reservation-prefix handling without changing route response contracts.
 
 ## Core Model
 b1) `Source Item`

@@ -2,38 +2,53 @@
 
 This folder is the source of truth for product, architecture, planning, and operations.
 
+## MVP Navigation
+- Launch gate: `docs/ops/mvp-launch-readiness-checklist.md`
+- Current implementation program: `docs/exec-plans/active/mvp-readiness-review-followup.md`
+- Post-launch debt: `docs/exec-plans/tech-debt-tracker.md`
+- Canonical product/runtime truth:
+  - `docs/app/core-direction-lock.md`
+  - `docs/app/product-spec.md`
+  - `docs/architecture.md`
+
 ## Delivery Mode
 - Active: manual iterative build loop.
 - Protocol: propose update -> planning pass -> `PA` -> implement + evaluate.
 - Agentic orchestration docs are reference material and not the active execution path.
 - Historical plan/reference docs may describe superseded intermediate states. Current runtime truth is always anchored in canonical docs below.
 
-## Read Order For Current Work
-1. `docs/app/core-direction-lock.md`
-2. `docs/architecture.md`
-3. `docs/app/product-spec.md`
-4. `docs/exec-plans/index.md`
-5. `docs/exec-plans/active/mvp-readiness-review-followup.md`
-6. `docs/exec-plans/tech-debt-tracker.md`
-7. `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
-8. `docs/exec-plans/active/on-pause/project-bleuv1-mvp-foundation.md`
-9. `docs/exec-plans/completed/mvp-launch-hardening-phases.md`
-10. `docs/exec-plans/completed/bleuv1-manual-iteration-scheme.md`
-11. `docs/ops/yt2bp_runbook.md`
+## Read Order For Current MVP Work
+1. `docs/ops/mvp-launch-readiness-checklist.md`
+2. `docs/exec-plans/active/mvp-readiness-review-followup.md`
+3. `docs/exec-plans/tech-debt-tracker.md`
+4. `docs/app/core-direction-lock.md`
+5. `docs/app/product-spec.md`
+6. `docs/architecture.md`
+7. `docs/exec-plans/index.md`
 
-## Canonical Documents
+## Primary Planning Surfaces
+- Launch gate board: `docs/ops/mvp-launch-readiness-checklist.md`
+- Active implementation program: `docs/exec-plans/active/mvp-readiness-review-followup.md`
+- Durable post-launch debt: `docs/exec-plans/tech-debt-tracker.md`
+
+## Canonical Runtime Documents
 - Core direction lock: `docs/app/core-direction-lock.md`
-- Architecture: `docs/architecture.md`
 - Product behavior/spec: `docs/app/product-spec.md`
-- Execution registry (active/completed): `docs/exec-plans/index.md`
-- Active launch hardening tracker: `docs/exec-plans/active/mvp-readiness-review-followup.md`
-- Completed launch hardening phases (reference): `docs/exec-plans/completed/mvp-launch-hardening-phases.md`
-- Active engineering backlog tracker: `docs/exec-plans/tech-debt-tracker.md`
+- Architecture: `docs/architecture.md`
+- Execution registry: `docs/exec-plans/index.md`
+
+## Supporting Runbooks And Evidence
+- P1-1 / P1-2 verification runbook: `docs/ops/p1-1-p1-2-verification-runbook.md`
+- Playwright callback evidence: `docs/ops/playwright-p1-2-callback-evidence.md`
+- Playwright preflight notes: `docs/ops/playwright-preflight-notes.md`
+- YT2BP runbook: `docs/ops/yt2bp_runbook.md`
+- YT2BP API contract (adapter v0): `docs/product-specs/yt2bp_v0_contract.md`
+
+## Historical Reference
+- Completed launch hardening phases: `docs/exec-plans/completed/mvp-launch-hardening-phases.md`
+- Completed stepwise execution scheme: `docs/exec-plans/completed/bleuv1-manual-iteration-scheme.md`
 - Paused strategy reference (`bleuV1`): `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
 - Paused MVP build reference plan: `docs/exec-plans/active/on-pause/project-bleuv1-mvp-foundation.md`
-- Completed stepwise execution scheme (reference): `docs/exec-plans/completed/bleuv1-manual-iteration-scheme.md`
-- YT2BP API contract (adapter v0): `docs/product-specs/yt2bp_v0_contract.md`
-- YT2BP runbook: `docs/ops/yt2bp_runbook.md`
 
 ## Interpretation Rule
 - If a detailed plan/reference file conflicts with canonical docs, follow canonical docs.

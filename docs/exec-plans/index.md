@@ -2,13 +2,23 @@
 
 This file is the authoritative active/completed registry for execution plans.
 
-## Active
-- `docs/exec-plans/active/mvp-readiness-review-followup.md`
-  Current active launch-hardening checklist for launch blockers, quota/cost controls, and targeted MVP-readiness follow-up.
+## Primary Planning Surfaces
 - `docs/ops/mvp-launch-readiness-checklist.md`
-  MVP launch execution board and go/no-go gate (P0 critical + P1 useful hardening).
+  Launch-gate board. This is the only file that answers `Are we launch-ready?` and `What P0/P1 items are still open?`
+- `docs/exec-plans/active/mvp-readiness-review-followup.md`
+  Current active implementation program beyond the checklist. This is the only file that answers `What is the current engineering program?` and `What is P2?`
 - `docs/exec-plans/tech-debt-tracker.md`
-  Deferred work backlog and non-blocking engineering debt.
+  Durable post-launch cleanup/debt board. This is the only file that answers `What survives after launch as cleanup or debt?`
+
+## Active Reference Support
+- `docs/ops/p1-1-p1-2-verification-runbook.md`
+  Supporting runbook for the remaining P1 verification work.
+- `docs/ops/playwright-p1-2-callback-evidence.md`
+  Supporting automation evidence for P1-2.
+- `docs/ops/playwright-preflight-notes.md`
+  Supporting Playwright setup/findings for later callback verification.
+- `docs/ops/yt2bp_runbook.md`
+  Operational runbook for the YouTube-to-Blueprint service.
 
 ## Paused Reference (Not Active)
 - `docs/exec-plans/active/on-pause/project-bleuv1-mvp-foundation.md`
@@ -53,8 +63,9 @@ This file is the authoritative active/completed registry for execution plans.
 - Core identity lock: `docs/app/core-direction-lock.md`.
 - Legacy channels-first program: completed/archived.
 - `bleuV1` source-first umbrella program: completed.
-- Current execution track: launch hardening phases + tech-debt tracker.
-- Launch authorization gate: `docs/ops/mvp-launch-readiness-checklist.md`.
+- Current launch authorization gate: `docs/ops/mvp-launch-readiness-checklist.md`.
+- Current implementation program beyond the gate: `docs/exec-plans/active/mvp-readiness-review-followup.md`.
+- Current post-launch debt board: `docs/exec-plans/tech-debt-tracker.md`.
 - Manual iterative build strategy plans are paused reference docs.
 - Agentic orchestration: archived reference path.
 
