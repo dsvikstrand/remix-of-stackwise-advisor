@@ -263,6 +263,100 @@ describe('wall feed service', () => {
     expect(joined).toEqual([]);
   });
 
+  it('batches tag lookups so joined and channel scopes do not fail on large tag sets', async () => {
+    const tagRows = Array.from({ length: 81 }, (_, index) => ({
+      id: `tag_${index + 1}`,
+      slug: index === 0 ? 'fitness-training' : `extra-tag-${index + 1}`,
+    }));
+    const blueprints = Array.from({ length: 81 }, (_, index) => ({
+      id: `bp_${index + 1}`,
+      creator_user_id: `creator_${index + 1}`,
+      title: `Blueprint ${index + 1}`,
+      sections_json: null,
+      steps: null,
+      llm_review: null,
+      mix_notes: null,
+      banner_url: null,
+      likes_count: 0,
+      created_at: `2026-03-06T${String((index % 10) + 10).padStart(2, '0')}:00:00.000Z`,
+      is_public: true,
+    }));
+    const baseDb = createMockSupabase({
+      blueprints,
+      blueprint_tags: blueprints.map((blueprint, index) => ({
+        blueprint_id: blueprint.id,
+        tag_id: tagRows[index].id,
+      })),
+      tags: tagRows,
+      profiles: blueprints.map((blueprint, index) => ({
+        user_id: blueprint.creator_user_id,
+        display_name: `Creator ${index + 1}`,
+        avatar_url: null,
+      })),
+      user_feed_items: blueprints.map((blueprint, index) => ({
+        id: `ufi_${index + 1}`,
+        blueprint_id: blueprint.id,
+        source_item_id: `source_${index + 1}`,
+        created_at: blueprint.created_at,
+      })),
+      source_items: blueprints.map((_, index) => ({
+        id: `source_${index + 1}`,
+        source_page_id: `page_${index + 1}`,
+        source_channel_id: `channel_${index + 1}`,
+        source_channel_title: `Channel ${index + 1}`,
+        thumbnail_url: null,
+        metadata: null,
+      })),
+      source_pages: blueprints.map((_, index) => ({
+        id: `page_${index + 1}`,
+        external_id: `channel_${index + 1}`,
+        platform: 'youtube',
+        avatar_url: null,
+      })),
+      channel_candidates: blueprints.map((_, index) => ({
+        user_feed_item_id: `ufi_${index + 1}`,
+        channel_slug: index === 0 ? 'fitness-training' : 'ai-tools-automation',
+        status: 'published',
+        created_at: `2026-03-06T${String((index % 10) + 10).padStart(2, '0')}:05:00.000Z`,
+      })),
+      tag_follows: [
+        { user_id: 'viewer_1', tag_id: 'tag_1' },
+      ],
+    }) as any;
+
+    const db = {
+      from(table: string) {
+        const builder = baseDb.from(table);
+        if (table === 'tags') {
+          const originalIn = builder.in.bind(builder);
+          builder.in = (field: string, values: unknown[]) => {
+            if (Array.isArray(values) && values.length > 80) {
+              throw new Error('tag lookup overflow');
+            }
+            return originalIn(field, values);
+          };
+        }
+        return builder;
+      },
+    } as any;
+
+    const joined = await listWallBlueprintFeed({
+      db,
+      scope: 'joined',
+      sort: 'latest',
+      viewerUserId: 'viewer_1',
+    });
+    expect(joined.map((item) => item.id)).toEqual(['bp_1']);
+
+    const scoped = await listWallBlueprintFeed({
+      db,
+      scope: 'fitness-training',
+      sort: 'latest',
+      viewerUserId: 'viewer_1',
+    });
+    expect(scoped.map((item) => item.id)).toEqual(['bp_1']);
+  });
+
   it('applies trending cutoff and sort ordering', async () => {
     const now = new Date();
     const recentHigh = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();

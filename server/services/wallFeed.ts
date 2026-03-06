@@ -79,12 +79,23 @@ const CHANNEL_TAG_SLUG_TO_CHANNEL_SLUG = new Map(
     .filter((channel) => channel.isJoinEnabled && channel.status === 'active')
     .map((channel) => [channel.tagSlug, channel.slug] as const),
 );
+const TAG_LOOKUP_BATCH_SIZE = 80;
 
 function normalizeWallFeedScope(scope: WallFeedScope) {
   const normalized = String(scope || '').trim().toLowerCase();
   if (!normalized) return 'all';
   if (normalized === JOINED_SCOPE_ALIAS) return CANONICAL_JOINED_SCOPE;
   return normalized;
+}
+
+function chunkValues<T>(values: T[], size: number) {
+  if (!Array.isArray(values) || values.length === 0) return [] as T[][];
+  const normalizedSize = Math.max(1, Math.floor(Number(size) || 1));
+  const chunks: T[][] = [];
+  for (let index = 0; index < values.length; index += normalizedSize) {
+    chunks.push(values.slice(index, index + normalizedSize));
+  }
+  return chunks;
 }
 
 function extractSchemaTagSlugs(sectionsJson: Json | null): string[] {
@@ -310,10 +321,12 @@ export async function listWallBlueprintFeed(input: {
 
   const tagRows = tagsRes.data || [];
   const tagIds = [...new Set(tagRows.map((row: any) => row.tag_id).filter(Boolean))];
-  const { data: tagsData, error: tagsError } = tagIds.length > 0
-    ? await db.from('tags').select('id, slug').in('id', tagIds)
-    : { data: [], error: null };
-  if (tagsError) throw tagsError;
+  const tagsData: Array<{ id: string; slug: string }> = [];
+  for (const batch of chunkValues(tagIds, TAG_LOOKUP_BATCH_SIZE)) {
+    const { data, error: tagsError } = await db.from('tags').select('id, slug').in('id', batch);
+    if (tagsError) throw tagsError;
+    tagsData.push(...((data || []) as Array<{ id: string; slug: string }>));
+  }
 
   const tagsMap = new Map((tagsData || []).map((tag: any) => [tag.id, tag]));
   const blueprintTags = new Map<string, { id: string; slug: string }[]>();
