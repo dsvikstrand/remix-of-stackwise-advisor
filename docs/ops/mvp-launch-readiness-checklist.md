@@ -164,7 +164,7 @@ k6) [todo] Required checks:
 - transcript/provider failure distribution via metrics scripts
 k7) [todo] Pass criteria:
 - operator can classify load state in under `5` minutes
-k8) [todo] Evidence: `Baseline + refreshed queue/ingestion/metrics evidence captured (o11-o13, o18-o20). Weighted queue-health implementation evidence captured (o45-o46). Live production weighted queue drill evidence captured after deploy/hotfix (o50-o51). 5-minute timed operator classification drill evidence and worker_running flag follow-up still pending.`
+k8) [todo] Evidence: `Baseline + refreshed queue/ingestion/metrics evidence captured (o11-o13, o18-o20). Weighted queue-health implementation evidence captured (o45-o46). Live production weighted queue drill evidence captured after deploy/hotfix and worker_running fix verification captured (o50-o52). 5-minute timed operator classification drill evidence still pending.`
 
 ### P1-4 Feed Query Load Drill
 l1) [todo] Risk: `medium`
@@ -261,7 +261,8 @@ o47) [have] `2026-03-06T11:40:00Z` - `P1-4` - `global credits polling removed fr
 o48) [have] `2026-03-06T11:40:00Z` - `P1-4` - `background credit-load estimate reduced` - `steady-state /api/credits background volume changed from about 100/500/1000 requests per minute at 100/500/1000 signed-in users (60s global menu poll) to 0 steady-state requests per minute with menu-closed lazy loading` - `david`
 o49) [have] `2026-03-06T14:30:00Z` - `P1-4` - `production credit-path hotfix deployed and verified` - `pushed/deployed 13e9da13590335046bad9f0c0db16e2ac7d53046; curl /api/credits with two real bearer tokens => 200 with remaining=3, daily_grant=3, capacity=3, credits_backend_mode=db, credits_backend_ok=true` - `david`
 o50) [have] `2026-03-06T14:37:00Z` - `P1-3` - `live weighted queue drill proved running work-item visibility` - `two authenticated POST /api/search/videos/generate requests with 3 items each => 202 responses with queue_work_items=3/user_queue_work_items=3; immediate /api/ops/queue/health => queue_depth=0, running_depth=2, running_work_items=6, search_video_generate.running_work_items=6` - `david`
-o51) [todo] `2026-03-06T14:37:00Z` - `P1-3` - `worker_running flag inconsistent with active running work` - `same queue-health snapshot reported worker_running=false while running_depth=2 and running_work_items=6; needs handler/state follow-up before calling queue observability fully complete` - `david`
+o51) [have] `2026-03-06T15:24:00Z` - `P1-3` - `worker_running health semantics fixed` - `queue health now computes worker_running from fresh running-job lease/heartbeat state and exposes additive local_worker_running/runtime_mode; targeted ops handler tests + typecheck + build passed before deploy` - `david`
+o52) [have] `2026-03-06T15:24:00Z` - `P1-3` - `production queue health now reports running workers correctly` - `pushed/deployed 6df22ceb8c1905726c390bacccdf7b40317c8785; during live all_active_subscriptions run, /api/ops/queue/health => worker_running=true, local_worker_running=true, runtime_mode=web_only, running_depth=1, running_work_items=1; after completion => worker_running=false and running_depth=0` - `david`
 
 ## Deferred (Not Launch Gate)
 p1) [have] P2 modularization and post-launch optimizations are intentionally out of launch gate.

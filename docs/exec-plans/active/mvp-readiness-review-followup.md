@@ -32,7 +32,7 @@ e2) [have] `P0-4` is complete.
 e3) [have] `P1-1`, `P1-2`, `P1-3`, and `P1-4` are implemented and locally validated.
 e4) [have] Production now runs `13e9da13590335046bad9f0c0db16e2ac7d53046`, including the credit-override hotfix that restored `/api/credits` and credit-backed generation after the `5c16f60` regression.
 e5) [have] Live production queue drills now prove the new work-item metrics are wired through route responses and `/api/ops/queue/health`.
-e6) [todo] Remaining launch work is now concentrated in checklist evidence capture, the `worker_running=false` observability inconsistency, and `P2` cleanup/refactor work.
+e6) [todo] Remaining launch work is now concentrated in checklist evidence capture and `P2` cleanup/refactor work.
 
 ## P0 Launch Blockers
 
@@ -185,9 +185,9 @@ l5) [have] Validation:
 - handler tests now cover weighted backpressure on Search and manual refresh flows plus additive queue work-item metadata
 - local typecheck/test/build pass completed after the weighted-budget patch
 - production drill on `2026-03-06` showed two authenticated 3-item Search jobs producing `running_depth=2`, `running_work_items=6`, and `search_video_generate.running_work_items=6`
+- production follow-up deploy on `2026-03-06` fixed `worker_running` to derive from fresh running-job lease/heartbeat state and verified `worker_running=true` during a live `all_active_subscriptions` run, then `false` again after completion
 l6) [have] Exit criteria:
 - queue health signals now reflect both row depth and real queued work size for supported scopes
-- remaining follow-up: `worker_running` still reported `false` during the same live drill and should be treated as an observability bug, not as evidence failure on work-item counting
 
 ### P1-4 Credit Polling Load Reduction
 m1) [have] Risk: `medium`
