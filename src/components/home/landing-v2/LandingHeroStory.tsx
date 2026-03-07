@@ -43,21 +43,30 @@ function BackgroundGlyph({
     'absolute items-center justify-center will-change-transform pointer-events-none',
     sizeClassName,
     glyph.depth === 'near' ? 'z-[1]' : glyph.depth === 'mid' ? 'z-0' : 'z-0',
+    'w-[var(--glyph-w-mobile)] h-[var(--glyph-h-mobile)] md:w-[var(--glyph-w)] md:h-[var(--glyph-h)]',
   );
+
+  const mobileWidth = glyph.mobileSize && glyph.mobileSize > 0 ? glyph.mobileSize : glyph.size;
+  const mobileHeight = glyph.shape === 'capsule' ? Math.max(16, Math.round(mobileWidth * 0.3)) : mobileWidth;
+  const desktopHeight = glyph.shape === 'capsule' ? Math.max(20, Math.round(glyph.size * 0.3)) : glyph.size;
 
   const style = reducedMotion
     ? {
         left: glyph.left,
         top: glyph.top,
-        width: glyph.size,
-        height: glyph.shape === 'capsule' ? Math.max(20, Math.round(glyph.size * 0.3)) : glyph.size,
+        '--glyph-w-mobile': `${mobileWidth}px`,
+        '--glyph-h-mobile': `${mobileHeight}px`,
+        '--glyph-w': `${glyph.size}px`,
+        '--glyph-h': `${desktopHeight}px`,
         opacity: glyph.opacityRange?.[0] ?? 0.22,
       }
     : {
         left: glyph.left,
         top: glyph.top,
-        width: glyph.size,
-        height: glyph.shape === 'capsule' ? Math.max(20, Math.round(glyph.size * 0.3)) : glyph.size,
+        '--glyph-w-mobile': `${mobileWidth}px`,
+        '--glyph-h-mobile': `${mobileHeight}px`,
+        '--glyph-w': `${glyph.size}px`,
+        '--glyph-h': `${desktopHeight}px`,
         x,
         y,
         rotate,
@@ -169,14 +178,6 @@ function BackgroundArt({
         className="absolute inset-0 bg-[radial-gradient(circle,hsl(var(--primary)/0.09)_1px,transparent_1px)] [background-size:22px_22px]"
         style={reducedMotion ? { opacity: 0.42 } : { opacity: gridOpacity }}
       />
-      {LANDING_BACKGROUND_GLYPHS.map((glyph) => (
-        <BackgroundGlyph
-          key={glyph.id}
-          glyph={glyph}
-          progress={smoothProgress}
-          reducedMotion={reducedMotion}
-        />
-      ))}
       {orbs.map((orb, index) => (
         <m.div
           key={index}
@@ -198,6 +199,14 @@ function BackgroundArt({
             : { opacity: haloOpacity, scale: haloScale }
         }
       />
+      {LANDING_BACKGROUND_GLYPHS.map((glyph) => (
+        <BackgroundGlyph
+          key={glyph.id}
+          glyph={glyph}
+          progress={smoothProgress}
+          reducedMotion={reducedMotion}
+        />
+      ))}
     </div>
   );
 }
