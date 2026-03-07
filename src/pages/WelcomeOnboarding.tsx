@@ -732,7 +732,7 @@ export default function WelcomeOnboarding() {
             <div className="space-y-1">
               <p className="text-sm font-medium">Welcome</p>
               {!hasImportedSubscriptions ? (
-                <p className="text-xs text-muted-foreground">Import at least one subscription to continue.</p>
+                <p className="text-xs text-muted-foreground">Please join atleast one channel to contineu.</p>
               ) : joinedChannelCount <= 0 ? (
                 <p className="text-xs text-muted-foreground">Join at least one channel to continue.</p>
               ) : (
