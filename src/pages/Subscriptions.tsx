@@ -56,13 +56,8 @@ export default function Subscriptions() {
     activeRefreshJobId,
     queuedRefreshCount,
     subscriptionsQuery,
-    youtubeConnectionQuery,
-    youtubeConnection,
-    youtubeConnectionErrorMessage,
-    startYouTubeConnectMutation,
     youtubeImportPreviewMutation,
     youtubeImportMutation,
-    youtubeDisconnectMutation,
     channelSearchMutation,
     createMutation,
     refreshJobQuery,
@@ -80,13 +75,10 @@ export default function Subscriptions() {
     setSubscriptionFilterQuery,
     setYouTubeImportFilterQuery,
     handleAddSubscriptionDialogChange,
-    handleOpenYouTubeImport,
     handleYouTubeImportDialogChange,
     toggleYouTubeImportChannel,
     handleYouTubeImportSelectAll,
     handleYouTubeImportClearSelection,
-    handleDisconnectYouTube,
-    handleStartYouTubeConnect,
     handleChannelSearchSubmit,
     handleChannelSearchLoadMore,
     handleSubscribeFromSearch,
@@ -105,9 +97,9 @@ export default function Subscriptions() {
         <PageSection>
           <div className="space-y-2">
             <p className="text-sm font-semibold text-primary uppercase tracking-wide">Subscriptions</p>
-            <h1 className="text-2xl font-semibold">Manage YouTube source subscriptions</h1>
+            <h1 className="text-2xl font-semibold">Follow creators and build your feed</h1>
             <p className="text-sm text-muted-foreground">
-              Add channels here. New uploads from active subscriptions will land in My Feed automatically.
+              Search and add creators manually first. If you want a faster start later, Bleu can import creators from a public YouTube subscription list.
             </p>
             {!subscriptionsEnabled ? (
               <p className="text-xs text-muted-foreground">
@@ -119,7 +111,13 @@ export default function Subscriptions() {
 
         <Card className="border-border/40">
           <CardContent className="space-y-3">
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-foreground">Add creators manually</p>
+                <p className="text-xs text-muted-foreground">
+                  This is the standard MVP path. Search for creators and subscribe in one click.
+                </p>
+              </div>
               <Button
                 size="sm"
                 onClick={() => handleAddSubscriptionDialogChange(true)}
@@ -128,76 +126,51 @@ export default function Subscriptions() {
                 Add Subscription
               </Button>
             </div>
-            {!subscriptionsEnabled ? (
-              <p className="text-sm text-muted-foreground">Connect requires `VITE_AGENTIC_BACKEND_URL`.</p>
-            ) : youtubeConnectionQuery.isLoading ? (
+            <div className="rounded-2xl border border-border/50 bg-muted/20 p-4">
               <div className="space-y-2">
-                <Skeleton className="h-5 w-48" />
-                <Skeleton className="h-9 w-40" />
+                <p className="text-sm font-medium text-foreground">Import from public YouTube subscriptions</p>
+                <p className="text-sm text-muted-foreground">
+                  This works only if your YouTube subscription list is public. Direct YouTube account connection is not part of the public MVP path right now.
+                </p>
               </div>
-            ) : youtubeConnectionQuery.error ? (
-              <p className="text-sm text-destructive">
-                {youtubeConnectionErrorMessage}
-              </p>
-            ) : youtubeConnection?.connected ? (
-              <>
-                <div className="flex items-center gap-3">
-                  {youtubeConnection.channel_avatar_url ? (
-                    <img
-                      src={youtubeConnection.channel_avatar_url}
-                      alt={youtubeConnection.channel_title || 'YouTube channel'}
-                      className="h-10 w-10 rounded-full border border-border/40 object-cover"
-                    />
-                  ) : (
-                    <div className="h-10 w-10 rounded-full border border-border/40 bg-muted text-xs font-semibold flex items-center justify-center">
-                      YT
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {youtubeConnection.channel_title || 'Connected YouTube account'}
-                    </p>
+              <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+                <div className="space-y-3 text-sm text-muted-foreground">
+                  <div className="flex gap-3">
+                    <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">1</span>
+                    <p>Make your YouTube subscription list public temporarily.</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">2</span>
+                    <p>Paste your channel URL or <span className="font-medium text-foreground/90">@handle</span>.</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">3</span>
+                    <p>Bleup imports the visible creators you already follow.</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">4</span>
+                    <p>You can switch subscriptions back to private afterward.</p>
                   </div>
                 </div>
-
-                {youtubeConnection.needs_reauth ? (
-                  <p className="text-xs text-destructive">
-                    Authorization expired. Reconnect YouTube to continue importing.
+                <div className="space-y-3 rounded-xl border border-border/50 bg-background/80 p-3">
+                  <label className="space-y-2 text-sm">
+                    <span className="font-medium text-foreground">Your YouTube channel</span>
+                    <Input
+                      value=""
+                      readOnly
+                      placeholder="https://www.youtube.com/@yourhandle"
+                      className="bg-muted/40"
+                    />
+                  </label>
+                  <Button size="sm" disabled className="w-full">
+                    Import public subscriptions
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Coming next. Use manual creator add for now.
                   </p>
-                ) : null}
-
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    onClick={handleOpenYouTubeImport}
-                    disabled={youtubeImportPreviewMutation.isPending || youtubeImportMutation.isPending || youtubeConnection.needs_reauth}
-                  >
-                    Import from YouTube
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleDisconnectYouTube}
-                    disabled={youtubeDisconnectMutation.isPending}
-                  >
-                    {youtubeDisconnectMutation.isPending ? 'Disconnecting...' : 'Disconnect'}
-                  </Button>
                 </div>
-              </>
-            ) : (
-              <>
-                <p className="text-sm text-muted-foreground">
-                  Connect your YouTube account to import subscriptions in bulk.
-                </p>
-                <Button
-                  size="sm"
-                  onClick={handleStartYouTubeConnect}
-                  disabled={startYouTubeConnectMutation.isPending}
-                >
-                  {startYouTubeConnectMutation.isPending ? 'Connecting...' : 'Connect YouTube'}
-                </Button>
-              </>
-            )}
+              </div>
+            </div>
           </CardContent>
         </Card>
 

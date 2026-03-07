@@ -210,25 +210,27 @@ export function LandingProofSections({ isSignedIn, onFinalCtaClick }: LandingPro
 
       <section className="grid gap-6 rounded-[2rem] border border-border/50 bg-gradient-to-br from-background via-card/70 to-accent/15 px-6 py-8 shadow-soft lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-center lg:px-8">
         <div className="space-y-3">
-          <p className="text-sm font-semibold uppercase tracking-[0.22em] text-primary">Connect YouTube</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.22em] text-primary">Import creators</p>
           <h2 className="text-3xl font-black tracking-tight text-foreground sm:text-4xl">
-            Import the creators you already follow.
+            Import creators from your public YouTube subscriptions.
           </h2>
           <p className="text-base leading-relaxed text-muted-foreground">
-            Bleu can connect to your YouTube account so it can import the creators you already follow and help set up
-            your personal feed faster. The connection is optional, read-only, and meant for creator import and feed
-            personalization.
+            Manual creator add is the default path. If you want a faster start, make your YouTube subscriptions public
+            temporarily and Bleup can import the creators you already follow without requiring direct account
+            connection in the public MVP path.
           </p>
         </div>
         <div className="rounded-[1.5rem] border border-border/50 bg-background/85 p-5 shadow-soft">
           <div className="space-y-4">
             <div className="inline-flex rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-              What this does
+              Public-subscriptions path
             </div>
             <div className="space-y-3 text-sm text-muted-foreground">
-              <p>Reads your YouTube subscriptions so Bleu can import the creators you already follow.</p>
-              <p>Uses that creator list to help personalize your feed and speed up setup.</p>
-              <p>Does not post to YouTube or change your YouTube account.</p>
+              <p>1. Make your YouTube subscription list public temporarily.</p>
+              <p>2. Paste your channel URL or <span className="font-medium text-foreground/90">@handle</span>.</p>
+              <p>3. Bleup imports the visible creators you already follow.</p>
+              <p>4. You can switch subscriptions back to private afterward.</p>
+              <p className="text-xs">This works only if your YouTube subscription list is public.</p>
             </div>
           </div>
         </div>
