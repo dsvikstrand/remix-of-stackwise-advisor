@@ -27,11 +27,37 @@ function BackgroundGlyph({
   progress: ReturnType<typeof useSpring>;
   reducedMotion: boolean;
 }) {
-  const x = useTransform(progress, [0, 1], glyph.xRange);
-  const y = useTransform(progress, [0, 1], glyph.yRange);
-  const rotate = useTransform(progress, [0, 1], glyph.rotateRange ?? [0, 0]);
-  const scale = useTransform(progress, [0, 1], glyph.scaleRange ?? [1, 1]);
-  const opacity = useTransform(progress, [0, 1], glyph.opacityRange ?? [0.18, 0.3]);
+  const progressStops = glyph.progressStops ?? [0, 1];
+
+  const normalizeOutput = (values: number[] | undefined, fallback: number) => {
+    if (!values || values.length === 0) {
+      return Array.from({ length: progressStops.length }, () => fallback);
+    }
+
+    if (values.length === progressStops.length) {
+      return values;
+    }
+
+    if (values.length === 1) {
+      return Array.from({ length: progressStops.length }, () => values[0]);
+    }
+
+    if (values.length === 2 && progressStops.length === 3) {
+      return [values[0], (values[0] + values[1]) / 2, values[1]];
+    }
+
+    if (values.length < progressStops.length) {
+      return [...values, ...Array.from({ length: progressStops.length - values.length }, () => values[values.length - 1])];
+    }
+
+    return values.slice(0, progressStops.length);
+  };
+
+  const x = useTransform(progress, progressStops, normalizeOutput(glyph.xRange, 0));
+  const y = useTransform(progress, progressStops, normalizeOutput(glyph.yRange, 0));
+  const rotate = useTransform(progress, progressStops, normalizeOutput(glyph.rotateRange, 0));
+  const scale = useTransform(progress, progressStops, normalizeOutput(glyph.scaleRange, 1));
+  const opacity = useTransform(progress, progressStops, normalizeOutput(glyph.opacityRange, 0.22));
 
   const sizeClassName = glyph.mobileSize === 0
     ? 'hidden md:flex'
@@ -58,7 +84,7 @@ function BackgroundGlyph({
         '--glyph-h-mobile': `${mobileHeight}px`,
         '--glyph-w': `${glyph.size}px`,
         '--glyph-h': `${desktopHeight}px`,
-        opacity: glyph.opacityRange?.[0] ?? 0.22,
+        opacity: normalizeOutput(glyph.opacityRange, 0.22)[0],
       }
     : {
         left: glyph.left,
@@ -252,7 +278,7 @@ export function LandingHeroStory({
                     initial={{ opacity: 0, y: prefersReducedMotion ? 0 : 18 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: prefersReducedMotion ? 0 : -18 }}
-                    transition={{ duration: 0.45, ease: 'easeOut' }}
+                    transition={{ duration: prefersReducedMotion ? 0 : 0.2, ease: [0.22, 1, 0.36, 1] }}
                     className="absolute inset-0 space-y-5"
                   >
                     <p className="text-sm font-semibold uppercase tracking-[0.25em] text-primary/80">{scene.eyebrow}</p>
@@ -311,7 +337,7 @@ export function LandingHeroStory({
                     initial={{ opacity: 0, y: prefersReducedMotion ? 0 : 20, scale: prefersReducedMotion ? 1 : 0.98 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: prefersReducedMotion ? 0 : -20, scale: prefersReducedMotion ? 1 : 1.02 }}
-                    transition={{ duration: 0.45, ease: 'easeOut' }}
+                    transition={{ duration: prefersReducedMotion ? 0 : 0.2, ease: [0.22, 1, 0.36, 1] }}
                     className={cn('absolute inset-0 w-full rounded-[2rem] border border-white/50 bg-white/35 p-2 shadow-soft-xl backdrop-blur-sm', scene.accentClass)}
                   >
                     <LandingDemoScene variant={scene.demoVariant} onOpenDemo={onDemoCtaClick} />

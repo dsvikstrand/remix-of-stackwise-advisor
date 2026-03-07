@@ -39,11 +39,12 @@ export interface LandingBackgroundGlyph {
   depth: 'far' | 'mid' | 'near';
   toneClassName: string;
   desktopOnly?: boolean;
-  xRange: [number, number];
-  yRange: [number, number];
-  rotateRange?: [number, number];
-  scaleRange?: [number, number];
-  opacityRange?: [number, number];
+  progressStops?: number[];
+  xRange: number[];
+  yRange: number[];
+  rotateRange?: number[];
+  scaleRange?: number[];
+  opacityRange?: number[];
 }
 
 export const LANDING_STORY_SCENES: LandingStoryScene[] = [
@@ -152,10 +153,11 @@ export const LANDING_BACKGROUND_GLYPHS: LandingBackgroundGlyph[] = [
     mobileSize: 32,
     depth: 'far',
     toneClassName: 'text-orange-500/86 drop-shadow-[0_0_18px_rgba(249,115,22,0.22)]',
-    xRange: [0, 56],
-    yRange: [0, -12],
-    rotateRange: [-18, 18],
-    opacityRange: [0.58, 0.9],
+    progressStops: [0, 0.45, 1],
+    xRange: [0, 24, 56],
+    yRange: [0, -14, 10],
+    rotateRange: [-18, -4, 18],
+    opacityRange: [0.58, 0.82, 0.9],
   },
   {
     id: 'glyph-capsule-top',
@@ -166,10 +168,11 @@ export const LANDING_BACKGROUND_GLYPHS: LandingBackgroundGlyph[] = [
     mobileSize: 108,
     depth: 'far',
     toneClassName: 'bg-amber-200/92 shadow-[0_0_84px_rgba(252,211,77,0.34)]',
-    xRange: [0, 208],
-    yRange: [0, 12],
-    rotateRange: [-12, 12],
-    opacityRange: [0.52, 0.82],
+    progressStops: [0, 0.45, 1],
+    xRange: [0, 118, 238],
+    yRange: [0, 24, -4],
+    rotateRange: [-10, 2, 14],
+    opacityRange: [0.56, 0.76, 0.84],
   },
   {
     id: 'glyph-circle-east',
@@ -181,11 +184,12 @@ export const LANDING_BACKGROUND_GLYPHS: LandingBackgroundGlyph[] = [
     depth: 'mid',
     toneClassName: 'bg-primary/62 shadow-[0_0_60px_rgba(168,85,247,0.28)]',
     desktopOnly: true,
-    xRange: [0, -124],
-    yRange: [0, 18],
-    rotateRange: [0, 0],
-    scaleRange: [0.94, 1.16],
-    opacityRange: [0.48, 0.74],
+    progressStops: [0, 0.5, 1],
+    xRange: [0, -54, -108],
+    yRange: [0, 34, 12],
+    rotateRange: [0, 4, -2],
+    scaleRange: [0.94, 1.08, 1.16],
+    opacityRange: [0.5, 0.68, 0.74],
   },
   {
     id: 'glyph-diamond-west',
@@ -196,11 +200,12 @@ export const LANDING_BACKGROUND_GLYPHS: LandingBackgroundGlyph[] = [
     mobileSize: 48,
     depth: 'mid',
     toneClassName: 'bg-orange-300/88 shadow-[0_0_56px_rgba(245,158,11,0.4)]',
-    xRange: [0, 66],
-    yRange: [0, -52],
-    rotateRange: [20, -32],
-    scaleRange: [0.94, 1.12],
-    opacityRange: [0.5, 0.82],
+    progressStops: [0, 0.42, 1],
+    xRange: [0, 34, 82],
+    yRange: [0, -46, -86],
+    rotateRange: [20, -6, -32],
+    scaleRange: [0.94, 1.04, 1.12],
+    opacityRange: [0.52, 0.72, 0.82],
   },
   {
     id: 'glyph-circle-southwest',
@@ -211,25 +216,11 @@ export const LANDING_BACKGROUND_GLYPHS: LandingBackgroundGlyph[] = [
     mobileSize: 36,
     depth: 'far',
     toneClassName: 'bg-rose-200/82 shadow-[0_0_42px_rgba(251,113,133,0.24)]',
-    xRange: [0, 54],
-    yRange: [0, -18],
-    scaleRange: [0.9, 1.08],
-    opacityRange: [0.44, 0.66],
-  },
-  {
-    id: 'glyph-capsule-right',
-    shape: 'capsule',
-    left: '94%',
-    top: '28%',
-    size: 152,
-    mobileSize: 0,
-    depth: 'mid',
-    toneClassName: 'bg-orange-200/84 shadow-[0_0_44px_rgba(251,146,60,0.26)]',
-    desktopOnly: true,
-    xRange: [0, -40],
-    yRange: [0, 126],
-    rotateRange: [12, -18],
-    opacityRange: [0.46, 0.68],
+    progressStops: [0, 0.5, 1],
+    xRange: [0, 18, 42],
+    yRange: [0, -12, -22],
+    scaleRange: [0.92, 1.02, 1.08],
+    opacityRange: [0.44, 0.58, 0.66],
   },
   {
     id: 'glyph-cross-southeast',
@@ -240,9 +231,10 @@ export const LANDING_BACKGROUND_GLYPHS: LandingBackgroundGlyph[] = [
     mobileSize: 28,
     depth: 'near',
     toneClassName: 'text-primary/82 drop-shadow-[0_0_14px_rgba(168,85,247,0.18)]',
-    xRange: [0, -64],
-    yRange: [0, 18],
-    rotateRange: [12, -18],
-    opacityRange: [0.52, 0.84],
+    progressStops: [0, 0.46, 1],
+    xRange: [0, -118, -236],
+    yRange: [0, -28, 10],
+    rotateRange: [12, -4, -18],
+    opacityRange: [0.52, 0.76, 0.84],
   },
 ];
