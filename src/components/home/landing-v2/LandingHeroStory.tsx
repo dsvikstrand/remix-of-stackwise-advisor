@@ -2,7 +2,7 @@ import type { RefObject } from 'react';
 import { Link } from 'react-router-dom';
 import { useEffect } from 'react';
 import { LazyMotion, domAnimation, AnimatePresence, m, useMotionValue, useSpring, useTransform } from 'framer-motion';
-import { ArrowRight, Compass, Sparkles, Plus } from 'lucide-react';
+import { ArrowRight, Compass, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { LANDING_BACKGROUND_GLYPHS, LANDING_STORY_SCENES, type LandingBackgroundGlyph } from '@/lib/landingStory';
@@ -38,21 +38,17 @@ function BackgroundGlyph({
     'absolute items-center justify-center will-change-transform pointer-events-none',
     sizeClassName,
     glyph.depth === 'near' ? 'z-[1]' : glyph.depth === 'mid' ? 'z-0' : 'z-0',
-    'w-[var(--glyph-w-mobile)] h-[var(--glyph-h-mobile)] md:w-[var(--glyph-w)] md:h-[var(--glyph-h)]',
+    'w-[var(--glyph-w-mobile)] h-[var(--glyph-w-mobile)] md:w-[var(--glyph-w)] md:h-[var(--glyph-w)]',
   );
 
   const mobileWidth = glyph.mobileSize && glyph.mobileSize > 0 ? glyph.mobileSize : glyph.size;
-  const mobileHeight = glyph.shape === 'capsule' ? Math.max(16, Math.round(mobileWidth * 0.3)) : mobileWidth;
-  const desktopHeight = glyph.shape === 'capsule' ? Math.max(20, Math.round(glyph.size * 0.3)) : glyph.size;
 
   const style = reducedMotion
     ? {
         left: glyph.left,
         top: glyph.top,
         '--glyph-w-mobile': `${mobileWidth}px`,
-        '--glyph-h-mobile': `${mobileHeight}px`,
         '--glyph-w': `${glyph.size}px`,
-        '--glyph-h': `${desktopHeight}px`,
         opacity: glyph.startOpacity ?? 0.22,
         transform: `rotate(${glyph.startRotate ?? 0}deg) scale(${glyph.startScale ?? 1})`,
       }
@@ -60,65 +56,17 @@ function BackgroundGlyph({
         left: 0,
         top: 0,
         '--glyph-w-mobile': `${mobileWidth}px`,
-        '--glyph-h-mobile': `${mobileHeight}px`,
         '--glyph-w': `${glyph.size}px`,
-        '--glyph-h': `${desktopHeight}px`,
         opacity: glyph.startOpacity ?? 0.22,
       };
 
-  if (glyph.shape === 'circle') {
-    return (
-      <div
-        aria-hidden="true"
-        ref={setGlyphRef(glyph.id)}
-        className={cn(sharedClasses, 'rounded-full blur-[1px]', glyph.toneClassName)}
-        style={style}
-      />
-    );
-  }
-
-  if (glyph.shape === 'diamond') {
-    return (
-      <div aria-hidden="true" ref={setGlyphRef(glyph.id)} className={sharedClasses} style={style}>
-        <div className={cn('h-full w-full rotate-45 rounded-[1.15rem] blur-[0.2px]', glyph.toneClassName)} />
-      </div>
-    );
-  }
-
-  if (glyph.shape === 'capsule') {
-    return (
-      <div
-        aria-hidden="true"
-        ref={setGlyphRef(glyph.id)}
-        className={cn(sharedClasses, 'rounded-full blur-[0.4px]', glyph.toneClassName)}
-        style={style}
-      />
-    );
-  }
-
-  if (glyph.shape === 'ring') {
-    return (
-      <div
-        aria-hidden="true"
-        ref={setGlyphRef(glyph.id)}
-        className={cn(sharedClasses, 'rounded-full bg-transparent', glyph.toneClassName)}
-        style={style}
-      />
-    );
-  }
-
-  if (glyph.shape === 'cross') {
-    return (
-      <div aria-hidden="true" ref={setGlyphRef(glyph.id)} className={sharedClasses} style={style}>
-        <Plus className={cn('h-full w-full', glyph.toneClassName)} strokeWidth={1.55} />
-      </div>
-    );
-  }
-
   return (
-    <div aria-hidden="true" ref={setGlyphRef(glyph.id)} className={sharedClasses} style={style}>
-      <Sparkles className={cn('h-full w-full', glyph.toneClassName)} strokeWidth={1.4} />
-    </div>
+    <div
+      aria-hidden="true"
+      ref={setGlyphRef(glyph.id)}
+      className={cn(sharedClasses, 'rounded-full blur-[1px]', glyph.toneClassName)}
+      style={style}
+    />
   );
 }
 
