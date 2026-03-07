@@ -64,9 +64,12 @@ function BackgroundGlyph({
     <div
       aria-hidden="true"
       ref={setGlyphRef(glyph.id)}
-      className={cn(sharedClasses, 'rounded-full blur-[1px]', glyph.toneClassName)}
+      className={cn(sharedClasses, 'relative overflow-hidden rounded-full blur-[0.25px]', glyph.toneClassName)}
       style={style}
-    />
+    >
+      <div className="absolute inset-[10%] rounded-full border border-white/40 opacity-70" />
+      <div className="absolute inset-[22%] rounded-full bg-white/10" />
+    </div>
   );
 }
 
