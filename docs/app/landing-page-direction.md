@@ -25,8 +25,9 @@
 - [have] Layer 1: cinematic sticky hero with four scroll beats, evolving background art, and curated app demos.
 - [have] Layer 2: grounded proof sections for:
   - `How Bleu works`
-  - `For You / Joined / All`
+  - curated blueprint preview
   - `Why Bleu is useful`
+  - explicit YouTube import explainer
   - final CTA
 
 ## Motion Rules
@@ -61,6 +62,7 @@
 - [have] Cinematic hero + curated product scenes are implemented on `/`.
 - [have] Scroll-synced geometric background motion is implemented for the hero via perimeter-safe SVG rails.
 - [have] Signed-in and signed-out CTA variants are implemented.
+- [have] Landing proof sections now explicitly explain the optional YouTube import flow so public visitors and reviewers can understand why Google/YouTube access exists.
 - [todo] Add the first-timer tour after the landing page settles.
 - [todo] Add more contextual helper copy inside the product after the landing page settles.
 - [todo] Review conversion and scroll-depth analytics after live usage.

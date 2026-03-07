@@ -47,6 +47,7 @@ This folder is the source of truth for product, architecture, planning, and oper
 - P1-1 / P1-2 verification runbook: `docs/ops/p1-1-p1-2-verification-runbook.md`
 - Playwright callback evidence: `docs/ops/playwright-p1-2-callback-evidence.md`
 - Playwright preflight notes: `docs/ops/playwright-preflight-notes.md`
+- Google OAuth verification checklist: `docs/ops/google-oauth-verification-checklist.md`
 - YT2BP runbook: `docs/ops/yt2bp_runbook.md`
 - YT2BP API contract (adapter v0): `docs/product-specs/yt2bp_v0_contract.md`
 

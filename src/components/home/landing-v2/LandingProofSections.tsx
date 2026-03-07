@@ -208,6 +208,32 @@ export function LandingProofSections({ isSignedIn, onFinalCtaClick }: LandingPro
         </div>
       </section>
 
+      <section className="grid gap-6 rounded-[2rem] border border-border/50 bg-gradient-to-br from-background via-card/70 to-accent/15 px-6 py-8 shadow-soft lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-center lg:px-8">
+        <div className="space-y-3">
+          <p className="text-sm font-semibold uppercase tracking-[0.22em] text-primary">Connect YouTube</p>
+          <h2 className="text-3xl font-black tracking-tight text-foreground sm:text-4xl">
+            Import the creators you already follow.
+          </h2>
+          <p className="text-base leading-relaxed text-muted-foreground">
+            Bleu can connect to your YouTube account so it can import the creators you already follow and help set up
+            your personal feed faster. The connection is optional, read-only, and meant for creator import and feed
+            personalization.
+          </p>
+        </div>
+        <div className="rounded-[1.5rem] border border-border/50 bg-background/85 p-5 shadow-soft">
+          <div className="space-y-4">
+            <div className="inline-flex rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+              What this does
+            </div>
+            <div className="space-y-3 text-sm text-muted-foreground">
+              <p>Reads your YouTube subscriptions so Bleu can import the creators you already follow.</p>
+              <p>Uses that creator list to help personalize your feed and speed up setup.</p>
+              <p>Does not post to YouTube or change your YouTube account.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="overflow-hidden rounded-[2rem] border border-border/50 bg-gradient-to-br from-card via-card to-accent/25 shadow-soft-xl">
         <div className="grid gap-8 px-6 py-10 md:grid-cols-[minmax(0,1fr)_auto] md:px-10 md:py-12">
           <div className="space-y-3">
