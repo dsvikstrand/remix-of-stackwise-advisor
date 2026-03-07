@@ -71,7 +71,7 @@ export function LandingProofSections({ isSignedIn, onFinalCtaClick }: LandingPro
             See what a blueprint actually looks like.
           </h2>
           <p className="text-base leading-relaxed text-muted-foreground">
-            Bleu is easiest to understand when you see the output. This demo card shows the kind of structure a user gets back after a video turns into a blueprint.
+            Bleu is easiest to understand when you see the output. These are curated examples from real blueprint generations, shown in a compact preview format.
           </p>
           <div className="flex items-center gap-2 pt-2">
             <Button type="button" variant="outline" size="icon" aria-label="Previous blueprint" onClick={showPreviousBlueprint}>
@@ -96,19 +96,28 @@ export function LandingProofSections({ isSignedIn, onFinalCtaClick }: LandingPro
           </div>
         </div>
         <div className="rounded-[2rem] border border-border/50 bg-gradient-to-br from-card via-card to-accent/20 p-3 shadow-soft-xl">
-          <Card className="rounded-[1.75rem] border-border/50 bg-background/90 shadow-none">
-            <CardContent className="space-y-6 p-6">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="space-y-2">
-                  <div className="inline-flex rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-                    {activeBlueprint.channel}
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-semibold tracking-tight text-foreground">{activeBlueprint.title}</h3>
-                    <p className="mt-1 text-sm text-muted-foreground">{activeBlueprint.creator}</p>
-                  </div>
+            <Card className="rounded-[1.75rem] border-border/50 bg-background/90 shadow-none">
+              <CardContent className="space-y-6 p-6">
+                <div className="overflow-hidden rounded-[1.35rem] border border-border/50 bg-muted/20">
+                  <img
+                    src={activeBlueprint.thumbnailUrl}
+                    alt={activeBlueprint.title}
+                    className="aspect-video w-full object-cover"
+                    loading="lazy"
+                  />
                 </div>
-                <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
+
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="space-y-2">
+                    <div className="inline-flex rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+                      {activeBlueprint.channel}
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-semibold tracking-tight text-foreground">{activeBlueprint.title}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">From {activeBlueprint.creator}</p>
+                    </div>
+                  </div>
+                  <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
                   {activeBlueprint.statsLabel}
                 </span>
               </div>

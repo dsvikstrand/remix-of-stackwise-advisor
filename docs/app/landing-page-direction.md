@@ -13,7 +13,7 @@
 - [have] Secondary signed-in CTA: `Open Home`.
 - [have] Visual tone: editorial premium.
 - [have] Motion level: moderate cinematic, not full scroll hijack.
-- [have] Demo style: curated mock scenes, not live feed data.
+- [have] Demo style: curated real blueprint examples and guided mock scenes, not live feed data.
 
 ## Story Structure
 - [have] Beat 1: `YouTube is full of value. Most of it gets buried.`
