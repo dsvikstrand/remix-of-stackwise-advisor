@@ -14,6 +14,18 @@ function ensureMotionPathPlugin() {
   motionPathRegistered = true;
 }
 
+function getStoryFadeMultiplier(progress: number) {
+  if (progress <= 0.6) {
+    return 1;
+  }
+
+  if (progress <= 0.85) {
+    return 1 - ((progress - 0.6) / 0.25) * 0.7;
+  }
+
+  return Math.max(0.08, 0.3 - ((progress - 0.85) / 0.15) * 0.22);
+}
+
 interface LandingHeroGlyphMotionOptions {
   glyphs: LandingBackgroundGlyph[];
   progress: number;
@@ -59,6 +71,7 @@ export function useLandingHeroGlyphMotion({
 
     const isDesktop = window.matchMedia('(min-width: 768px)').matches;
     const boundedProgress = Math.min(Math.max(progress, 0), 1);
+    const storyFadeMultiplier = getStoryFadeMultiplier(boundedProgress);
 
     for (const glyph of glyphs) {
       const node = glyphRefs.current[glyph.id];
@@ -75,7 +88,8 @@ export function useLandingHeroGlyphMotion({
       const pathProgress = start + (end - start) * boundedProgress;
       const rotation = (glyph.startRotate ?? 0) + ((glyph.endRotate ?? glyph.startRotate ?? 0) - (glyph.startRotate ?? 0)) * boundedProgress;
       const scale = (glyph.startScale ?? 1) + ((glyph.endScale ?? glyph.startScale ?? 1) - (glyph.startScale ?? 1)) * boundedProgress;
-      const opacity = (glyph.startOpacity ?? 0.5) + ((glyph.endOpacity ?? glyph.startOpacity ?? 0.5) - (glyph.startOpacity ?? 0.5)) * boundedProgress;
+      const baseOpacity = (glyph.startOpacity ?? 0.5) + ((glyph.endOpacity ?? glyph.startOpacity ?? 0.5) - (glyph.startOpacity ?? 0.5)) * boundedProgress;
+      const opacity = baseOpacity * storyFadeMultiplier;
 
       gsap.to(node, {
         duration: 0.16,
