@@ -17,6 +17,8 @@
     "test:watch": "vitest",
     "check:normalization": "node scripts/check-normalization.mjs",
     "smoke:yt2bp": "node scripts/yt2bp_smoke.mjs",
+    "smoke:release": "node scripts/release_smoke.mjs",
+    "release:metadata": "node scripts/write_release_metadata.mjs",
     "metrics:yt2bp": "node scripts/yt2bp_metrics_from_logs.mjs",
     "metrics:queue": "node scripts/queue_metrics_from_logs.mjs",
     "metrics:channels": "node scripts/channels_metrics_from_supabase.mjs",

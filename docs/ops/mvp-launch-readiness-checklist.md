@@ -20,8 +20,8 @@ a6) [todo] Evidence must be concrete:
 - dashboard screenshot link
 
 ## Launch Gate Snapshot (Update Daily)
-b1) [have] Release candidate backend SHA: `13e9da13590335046bad9f0c0db16e2ac7d53046`
-b2) [have] Release candidate frontend SHA: `13e9da13590335046bad9f0c0db16e2ac7d53046`
+b1) [todo] Release candidate backend SHA: `set per release`
+b2) [todo] Release candidate frontend SHA: `set per release and verify via /release.json`
 b3) [have] Latest migration watermark: `20260306143000`
 b4) [todo] P0 open count: `0`
 b5) [todo] P1 open count: `2`
@@ -39,9 +39,11 @@ c5) [have] Scope:
 - no deploy drift between Oracle and GitHub `main`
 c6) [have] Verification:
 - `ssh oracle-free "cd /home/ubuntu/remix-of-stackwise-advisor && git rev-parse HEAD"`
+- `curl -sS https://dsvikstrand.github.io/remix-of-stackwise-advisor/release.json`
 - compare with release SHA recorded in this file
 c7) [have] Pass criteria:
 - exact SHA match
+- frontend `release.json.release_sha` matches the backend release SHA
 - smoke routes return expected status
 c8) [have] Evidence: `Final parity evidence captured in Evidence Log (o14-o17).`
 
@@ -199,13 +201,17 @@ m3) [todo] Governance rule:
 
 ## Verification Command Bundle
 n1) [todo] Release parity:
+- `export RELEASE_SHA="$(git rev-parse HEAD)"`
 - `ssh oracle-free "cd /home/ubuntu/remix-of-stackwise-advisor && git rev-parse HEAD"`
+- `curl -sS https://dsvikstrand.github.io/remix-of-stackwise-advisor/release.json`
 n2) [todo] Migration parity:
 - `npx supabase migration list`
 n3) [todo] Health:
 - `curl -sS https://bapi.vdsai.cloud/api/health`
 n4) [todo] Queue health:
 - `curl -sS https://bapi.vdsai.cloud/api/ops/queue/health -H "x-service-token: $INGESTION_SERVICE_TOKEN"`
+n4a) [todo] Release smoke:
+- `npm run smoke:release -- --api-base-url https://api.bleup.app --frontend-base-url https://dsvikstrand.github.io/remix-of-stackwise-advisor --release-sha "$RELEASE_SHA"`
 n5) [todo] Tests:
 - `npm run test`
 n6) [todo] Build:

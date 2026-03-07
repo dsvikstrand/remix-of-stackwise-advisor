@@ -161,10 +161,6 @@ ssh oracle-free 'sudo systemctl restart agentic-backend.service'
 ```bash
 ssh oracle-free 'sudo journalctl -u agentic-backend.service -n 200 --no-pager'
 ```
-- Pull + restart:
-```bash
-ssh oracle-free 'cd /home/ubuntu/remix-of-stackwise-advisor && git pull --ff-only && sudo systemctl restart agentic-backend.service'
-```
 - Canonical runtime config:
 ```bash
 ssh oracle-free 'sudo ls -l /etc/agentic-backend.env'
@@ -173,6 +169,40 @@ ssh oracle-free 'sudo ls -l /etc/agentic-backend.env'
   - live backend app config comes from `/etc/agentic-backend.env`
   - repo-root `.env` / `.env.production` are local/dev-only and must not be used for Oracle production boot
   - the only expected remaining backend systemd drop-in is the Node path helper
+
+## Release contract (backend first)
+- Release rule:
+  - push code to `main`
+  - capture one explicit `release_sha`
+  - deploy Oracle backend to that SHA first
+  - run backend smoke checks
+  - publish the frontend for that same `release_sha`
+  - verify parity with backend `HEAD` and frontend `/release.json`
+- Capture the release SHA locally:
+```bash
+export RELEASE_SHA="$(git rev-parse HEAD)"
+```
+- Backend deploy to the expected SHA:
+```bash
+ssh oracle-free "cd /home/ubuntu/remix-of-stackwise-advisor && git fetch origin main && git checkout main && git pull --ff-only origin main && test \"\$(git rev-parse HEAD)\" = \"$RELEASE_SHA\" && sudo systemctl restart agentic-backend.service"
+```
+- Backend smoke on Oracle:
+```bash
+ssh oracle-free 'set -a; . /etc/agentic-backend.env; set +a; cd /home/ubuntu/remix-of-stackwise-advisor && npm run smoke:release -- --api-base-url http://127.0.0.1:8787 --service-token "$INGESTION_SERVICE_TOKEN"'
+```
+- Frontend publish:
+  - GitHub -> `Actions` -> `Deploy Frontend Release`
+  - choose branch `main`
+  - set `release_sha=$RELEASE_SHA`
+  - run the workflow manually
+- Public parity check after the frontend publish finishes:
+```bash
+npm run smoke:release -- --api-base-url https://api.bleup.app --frontend-base-url https://dsvikstrand.github.io/remix-of-stackwise-advisor --release-sha "$RELEASE_SHA"
+```
+- Frontend parity proof endpoint:
+```bash
+curl -sS https://dsvikstrand.github.io/remix-of-stackwise-advisor/release.json
+```
 
 ## Environment checklist
 Required runtime variables:
@@ -670,7 +700,11 @@ ssh oracle-free 'sudo systemctl restart agentic-backend.service'
 ```
 
 ## Post-deploy confidence checks
-- Repro smoke:
+- Release smoke:
+```bash
+npm run smoke:release -- --api-base-url https://api.bleup.app --frontend-base-url https://dsvikstrand.github.io/remix-of-stackwise-advisor --release-sha "$RELEASE_SHA"
+```
+- YT2BP repro smoke:
 ```bash
 npm run smoke:yt2bp -- --base-url https://bapi.vdsai.cloud
 ```
