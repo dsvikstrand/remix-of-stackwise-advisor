@@ -39,7 +39,6 @@ function BackgroundGlyph({
       ? 'hidden md:flex'
       : 'flex';
 
-  const mobileSize = glyph.mobileSize && glyph.mobileSize > 0 ? glyph.mobileSize : glyph.size;
   const sharedClasses = cn(
     'absolute items-center justify-center will-change-transform pointer-events-none',
     sizeClassName,
@@ -50,25 +49,21 @@ function BackgroundGlyph({
     ? {
         left: glyph.left,
         top: glyph.top,
-        width: mobileSize,
-        height: mobileSize,
+        width: glyph.size,
+        height: glyph.shape === 'capsule' ? Math.max(20, Math.round(glyph.size * 0.3)) : glyph.size,
         opacity: glyph.opacityRange?.[0] ?? 0.22,
       }
     : {
         left: glyph.left,
         top: glyph.top,
-        width: mobileSize,
-        height: mobileSize,
+        width: glyph.size,
+        height: glyph.shape === 'capsule' ? Math.max(20, Math.round(glyph.size * 0.3)) : glyph.size,
         x,
         y,
         rotate,
         scale,
         opacity,
       };
-
-  const desktopStyle = glyph.mobileSize && glyph.mobileSize > 0 && glyph.mobileSize !== glyph.size
-    ? { width: glyph.size, height: glyph.size }
-    : undefined;
 
   if (glyph.shape === 'circle') {
     return (
@@ -83,10 +78,7 @@ function BackgroundGlyph({
   if (glyph.shape === 'diamond') {
     return (
       <m.div aria-hidden="true" className={sharedClasses} style={style}>
-        <div
-          className={cn('h-full w-full rotate-45 rounded-[1.15rem] blur-[0.2px]', glyph.toneClassName)}
-          style={desktopStyle}
-        />
+        <div className={cn('h-full w-full rotate-45 rounded-[1.15rem] blur-[0.2px]', glyph.toneClassName)} />
       </m.div>
     );
   }
@@ -96,11 +88,7 @@ function BackgroundGlyph({
       <m.div
         aria-hidden="true"
         className={cn(sharedClasses, 'rounded-full blur-[0.4px]', glyph.toneClassName)}
-        style={{
-          ...style,
-          height: Math.max(18, Math.round(mobileSize * 0.28)),
-          width: mobileSize,
-        }}
+        style={style}
       />
     );
   }
@@ -142,32 +130,32 @@ function BackgroundArt({
     progressValue.set(scrollProgress);
   }, [progressValue, scrollProgress]);
 
-  const haloOpacity = useTransform(smoothProgress, [0, 0.4, 1], [0.22, 0.38, 0.28]);
-  const haloScale = useTransform(smoothProgress, [0, 0.5, 1], [1, 1.08, 0.98]);
+  const haloOpacity = useTransform(smoothProgress, [0, 0.4, 1], [0.24, 0.42, 0.32]);
+  const haloScale = useTransform(smoothProgress, [0, 0.5, 1], [1, 1.1, 1]);
   const gridOpacity = useTransform(smoothProgress, [0, 0.5, 1], [0.42, 0.52, 0.45]);
   const backdropShift = useTransform(smoothProgress, [0, 1], ['0%', '2.5%']);
 
   const orbs = [
     {
-      className: 'left-[4%] top-[14%] h-44 w-44 md:h-72 md:w-72 bg-primary/16',
-      x: useTransform(smoothProgress, [0, 1], [-14, 36]),
-      y: useTransform(smoothProgress, [0, 1], [0, -30]),
-      scale: useTransform(smoothProgress, [0, 1], [1, 1.08]),
-      opacity: useTransform(smoothProgress, [0, 1], [0.58, 0.72]),
+      className: 'left-[-6%] top-[10%] h-52 w-52 md:h-80 md:w-80 bg-primary/18',
+      x: useTransform(smoothProgress, [0, 1], [-36, 56]),
+      y: useTransform(smoothProgress, [0, 1], [10, -44]),
+      scale: useTransform(smoothProgress, [0, 1], [1, 1.12]),
+      opacity: useTransform(smoothProgress, [0, 1], [0.54, 0.72]),
     },
     {
-      className: 'right-[8%] top-[18%] h-52 w-52 md:h-80 md:w-80 bg-amber-200/32',
-      x: useTransform(smoothProgress, [0, 1], [22, -18]),
-      y: useTransform(smoothProgress, [0, 1], [-6, 20]),
-      scale: useTransform(smoothProgress, [0, 1], [1.02, 1.12]),
-      opacity: useTransform(smoothProgress, [0, 1], [0.42, 0.56]),
+      className: 'right-[4%] top-[12%] h-56 w-56 md:h-84 md:w-84 bg-amber-200/34',
+      x: useTransform(smoothProgress, [0, 1], [46, -42]),
+      y: useTransform(smoothProgress, [0, 1], [-12, 34]),
+      scale: useTransform(smoothProgress, [0, 1], [1.04, 1.14]),
+      opacity: useTransform(smoothProgress, [0, 1], [0.38, 0.56]),
     },
     {
-      className: 'left-[18%] bottom-[10%] h-44 w-44 md:h-64 md:w-64 bg-orange-200/24',
-      x: useTransform(smoothProgress, [0, 1], [-18, 12]),
-      y: useTransform(smoothProgress, [0, 1], [18, -24]),
-      scale: useTransform(smoothProgress, [0, 1], [0.96, 1.04]),
-      opacity: useTransform(smoothProgress, [0, 1], [0.22, 0.36]),
+      className: 'left-[10%] bottom-[8%] h-48 w-48 md:h-72 md:w-72 bg-orange-200/26',
+      x: useTransform(smoothProgress, [0, 1], [-24, 30]),
+      y: useTransform(smoothProgress, [0, 1], [28, -34]),
+      scale: useTransform(smoothProgress, [0, 1], [0.98, 1.08]),
+      opacity: useTransform(smoothProgress, [0, 1], [0.18, 0.34]),
     },
   ];
 
@@ -240,7 +228,7 @@ export function LandingHeroStory({
                 <Sparkles className="h-3.5 w-3.5" />
                 Better than watching everything
               </div>
-              <div className="relative mt-6 min-h-[18rem] sm:min-h-[19rem] md:min-h-[21rem]">
+              <div className="relative mt-6 min-h-[27rem] sm:min-h-[31rem] md:min-h-[38rem] lg:min-h-[42rem]">
                 <AnimatePresence initial={false}>
                   <m.div
                     key={scene.id}
@@ -299,7 +287,7 @@ export function LandingHeroStory({
             </div>
 
             <div className="flex items-center justify-center">
-              <div className="relative w-full min-h-[31rem] md:min-h-[35rem]">
+              <div className="relative w-full min-h-[31rem] md:min-h-[35rem] lg:min-h-[38rem]">
                 <AnimatePresence initial={false}>
                   <m.div
                     key={scene.id}
