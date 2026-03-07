@@ -1,8 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   handleListSourceSubscriptions,
+  handlePreviewPublicYouTubeSubscriptions,
   handleRefreshGenerate,
 } from '../../server/handlers/sourceSubscriptionsHandlers';
+import {
+  YouTubeChannelLookupError,
+  YouTubePublicSubscriptionsError,
+} from '../../server/services/youtubeSubscriptions';
 import { createMockSupabase } from './helpers/mockSupabase';
 
 function createResponse() {
@@ -29,7 +34,9 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     getAuthedSupabaseClient: () => null,
     getServiceSupabaseClient: () => null,
     resolveYouTubeChannel: vi.fn(),
+    resolvePublicYouTubeChannel: vi.fn(),
     youtubeDataApiKey: '',
+    fetchPublicYouTubeSubscriptions: vi.fn(async () => ({ items: [], truncated: false })),
     fetchYouTubeChannelAssetMap: vi.fn(async () => new Map()),
     runSourcePageAssetSweep: vi.fn(async () => null),
     ensureSourcePageFromYouTubeChannel: vi.fn(),
@@ -42,6 +49,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     })),
     buildSourcePagePath: () => '/s/youtube/x',
     cleanupSubscriptionNoticeForChannel: vi.fn(),
+    publicYouTubePreviewLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
     refreshScanLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
     refreshGenerateLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
     RefreshSubscriptionsScanSchema: { safeParse: () => ({ success: false }) },
@@ -76,6 +84,146 @@ function createDeps(overrides: Record<string, unknown> = {}) {
 }
 
 describe('source subscription refresh generate handler', () => {
+  it('previews public YouTube subscriptions with existing subscription state', async () => {
+    const authDb = createMockSupabase({
+      user_source_subscriptions: [
+        {
+          source_channel_id: 'creator_active',
+          is_active: true,
+          user_id: '00000000-0000-0000-0000-000000000001',
+          source_type: 'youtube',
+        },
+        {
+          source_channel_id: 'creator_inactive',
+          is_active: false,
+          user_id: '00000000-0000-0000-0000-000000000001',
+          source_type: 'youtube',
+        },
+      ],
+    });
+    const req = {
+      body: { channel_input: '@example' },
+    } as any;
+    const res = createResponse();
+    const deps = createDeps({
+      youtubeDataApiKey: 'yt-key',
+      getAuthedSupabaseClient: () => authDb,
+      resolvePublicYouTubeChannel: vi.fn(async () => ({
+        channelId: 'source_channel',
+        channelTitle: 'Source Channel',
+        channelUrl: 'https://www.youtube.com/channel/source_channel',
+      })),
+      fetchPublicYouTubeSubscriptions: vi.fn(async () => ({
+        items: [
+          {
+            channelId: 'creator_active',
+            channelTitle: 'Creator Active',
+            channelUrl: 'https://www.youtube.com/channel/creator_active',
+            thumbnailUrl: 'https://img.example.com/a.jpg',
+          },
+          {
+            channelId: 'creator_inactive',
+            channelTitle: 'Creator Inactive',
+            channelUrl: 'https://www.youtube.com/channel/creator_inactive',
+            thumbnailUrl: null,
+          },
+          {
+            channelId: 'creator_new',
+            channelTitle: 'Creator New',
+            channelUrl: 'https://www.youtube.com/channel/creator_new',
+            thumbnailUrl: null,
+          },
+        ],
+        truncated: true,
+      })),
+    });
+
+    await handlePreviewPublicYouTubeSubscriptions(req, res as any, deps);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        source_channel_id: 'source_channel',
+        source_channel_title: 'Source Channel',
+        source_channel_url: 'https://www.youtube.com/channel/source_channel',
+        creators_total: 3,
+        truncated: true,
+        creators: [
+          {
+            channel_id: 'creator_active',
+            already_active: true,
+            already_exists_inactive: false,
+          },
+          {
+            channel_id: 'creator_inactive',
+            already_active: false,
+            already_exists_inactive: true,
+          },
+          {
+            channel_id: 'creator_new',
+            already_active: false,
+            already_exists_inactive: false,
+          },
+        ],
+      },
+    });
+  });
+
+  it('maps private public subscription previews to a structured 403 error', async () => {
+    const authDb = createMockSupabase({});
+    const req = {
+      body: { channel_input: '@private' },
+    } as any;
+    const res = createResponse();
+    const deps = createDeps({
+      youtubeDataApiKey: 'yt-key',
+      getAuthedSupabaseClient: () => authDb,
+      resolvePublicYouTubeChannel: vi.fn(async () => ({
+        channelId: 'source_channel',
+        channelTitle: 'Private Source',
+        channelUrl: 'https://www.youtube.com/channel/source_channel',
+      })),
+      fetchPublicYouTubeSubscriptions: vi.fn(async () => {
+        throw new YouTubePublicSubscriptionsError(
+          'PUBLIC_SUBSCRIPTIONS_PRIVATE',
+          'The channel subscriptions are private or inaccessible.',
+        );
+      }),
+    });
+
+    await handlePreviewPublicYouTubeSubscriptions(req, res as any, deps);
+
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toMatchObject({
+      ok: false,
+      error_code: 'PUBLIC_SUBSCRIPTIONS_PRIVATE',
+    });
+  });
+
+  it('maps official channel lookup misses to a structured 404 error', async () => {
+    const authDb = createMockSupabase({});
+    const req = {
+      body: { channel_input: '@missing' },
+    } as any;
+    const res = createResponse();
+    const deps = createDeps({
+      youtubeDataApiKey: 'yt-key',
+      getAuthedSupabaseClient: () => authDb,
+      resolvePublicYouTubeChannel: vi.fn(async () => {
+        throw new YouTubeChannelLookupError('CHANNEL_NOT_FOUND', 'Could not find that YouTube channel.');
+      }),
+    });
+
+    await handlePreviewPublicYouTubeSubscriptions(req, res as any, deps);
+
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toMatchObject({
+      ok: false,
+      error_code: 'PUBLIC_IMPORT_CHANNEL_NOT_FOUND',
+    });
+  });
+
   it('reads subscription avatars from stored source page metadata without live YouTube fetches', async () => {
     const authDb = createMockSupabase({
       user_source_subscriptions: [{

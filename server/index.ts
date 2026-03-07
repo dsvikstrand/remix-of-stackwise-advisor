@@ -25,9 +25,11 @@ import { getAdapterForUrl } from './adapters/registry';
 import { evaluateCandidateForChannel } from './gates';
 import type { GateMode } from './gates/types';
 import {
+  fetchPublicYouTubeSubscriptions,
   fetchYouTubeFeed,
   fetchYouTubeVideoStates,
   isNewerThanCheckpoint,
+  resolvePublicYouTubeChannel,
   resolveYouTubeChannel,
   type YouTubeFeedVideo,
 } from './services/youtubeSubscriptions';
@@ -946,6 +948,15 @@ const youtubeConnectStartLimiter = rateLimit({
 });
 
 const youtubePreviewLimiter = rateLimit({
+  windowMs: 30_000,
+  max: 1,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req, res) => getUserOrIpRateLimitKey(req, res),
+  handler: (req, res) => youtubeConnectionRateLimitHandler('preview', req, res),
+});
+
+const publicYouTubePreviewLimiter = rateLimit({
   windowMs: 30_000,
   max: 1,
   standardHeaders: true,
@@ -7690,7 +7701,9 @@ registerSourceSubscriptionsRoutes(app, {
   getAuthedSupabaseClient,
   getServiceSupabaseClient,
   resolveYouTubeChannel,
+  resolvePublicYouTubeChannel,
   youtubeDataApiKey,
+  fetchPublicYouTubeSubscriptions,
   fetchYouTubeChannelAssetMap,
   runSourcePageAssetSweep,
   ensureSourcePageFromYouTubeChannel,
@@ -7701,6 +7714,7 @@ registerSourceSubscriptionsRoutes(app, {
   upsertSourceItemFromVideo,
   buildSourcePagePath,
   cleanupSubscriptionNoticeForChannel,
+  publicYouTubePreviewLimiter,
   refreshScanLimiter,
   refreshGenerateLimiter,
   RefreshSubscriptionsScanSchema,

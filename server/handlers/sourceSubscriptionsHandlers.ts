@@ -4,6 +4,10 @@ import type {
   SourceSubscriptionsRouteDeps,
   SyncSubscriptionResult,
 } from '../contracts/api/sourceSubscriptions';
+import {
+  YouTubeChannelLookupError,
+  YouTubePublicSubscriptionsError,
+} from '../services/youtubeSubscriptions';
 import { fetchYouTubeDurationMap, YouTubeDurationLookupError } from '../services/youtubeDuration';
 import { splitByDurationPolicy, toDurationSeconds } from '../services/videoDurationPolicy';
 import {
@@ -24,6 +28,8 @@ type StoredSourcePageAssetRow = {
   avatar_url: string | null;
   banner_url: string | null;
 };
+
+const PUBLIC_YOUTUBE_PREVIEW_MAX_ITEMS = 150;
 
 async function loadStoredSourcePageAssets(
   db: any,
@@ -90,6 +96,53 @@ async function loadStoredSourcePageAssets(
     byPageId,
     byChannelId,
     needsSweep,
+  };
+}
+
+function mapPublicYouTubePreviewError(error: unknown) {
+  if (error instanceof YouTubeChannelLookupError) {
+    if (error.code === 'CHANNEL_NOT_FOUND') {
+      return {
+        status: 404,
+        error_code: 'PUBLIC_IMPORT_CHANNEL_NOT_FOUND',
+        message: 'Could not find that YouTube channel.',
+      };
+    }
+
+    return {
+      status: 503,
+      error_code: 'PUBLIC_IMPORT_UNAVAILABLE',
+      message: error.message || 'Could not resolve YouTube channel.',
+    };
+  }
+
+  if (error instanceof YouTubePublicSubscriptionsError) {
+    if (error.code === 'PUBLIC_IMPORT_CHANNEL_NOT_FOUND') {
+      return {
+        status: 404,
+        error_code: 'PUBLIC_IMPORT_CHANNEL_NOT_FOUND',
+        message: 'Could not find that YouTube channel.',
+      };
+    }
+    if (error.code === 'PUBLIC_SUBSCRIPTIONS_PRIVATE') {
+      return {
+        status: 403,
+        error_code: 'PUBLIC_SUBSCRIPTIONS_PRIVATE',
+        message: 'The channel subscriptions are private or inaccessible.',
+      };
+    }
+
+    return {
+      status: 503,
+      error_code: 'PUBLIC_IMPORT_UNAVAILABLE',
+      message: error.message || 'Could not fetch public YouTube subscriptions.',
+    };
+  }
+
+  return {
+    status: 503,
+    error_code: 'PUBLIC_IMPORT_UNAVAILABLE',
+    message: error instanceof Error ? error.message : 'Could not fetch public YouTube subscriptions.',
   };
 }
 
@@ -227,6 +280,109 @@ export async function handleCreateSourceSubscription(req: express.Request, res: 
       },
       source_page: sourcePage,
       sync,
+    },
+  });
+}
+
+export async function handlePreviewPublicYouTubeSubscriptions(
+  req: express.Request,
+  res: express.Response,
+  deps: SourceSubscriptionsRouteDeps,
+) {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const authToken = (res.locals.authToken as string | undefined) ?? '';
+  if (!userId || !authToken) {
+    return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+  }
+
+  const channelInput = String((req.body as { channel_input?: string } | null)?.channel_input || '').trim();
+  if (!channelInput) {
+    return res.status(400).json({ ok: false, error_code: 'INVALID_INPUT', message: 'channel_input required', data: null });
+  }
+
+  if (!deps.youtubeDataApiKey) {
+    return res.status(503).json({
+      ok: false,
+      error_code: 'PUBLIC_IMPORT_UNAVAILABLE',
+      message: 'Public YouTube import is not configured.',
+      data: null,
+    });
+  }
+
+  const db = deps.getAuthedSupabaseClient(authToken);
+  if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+  let resolved;
+  try {
+    resolved = await deps.resolvePublicYouTubeChannel({
+      channelInput,
+      apiKey: deps.youtubeDataApiKey,
+    });
+  } catch (error) {
+    const mapped = mapPublicYouTubePreviewError(error);
+    return res.status(mapped.status).json({ ok: false, error_code: mapped.error_code, message: mapped.message, data: null });
+  }
+
+  let preview;
+  try {
+    preview = await deps.fetchPublicYouTubeSubscriptions({
+      apiKey: deps.youtubeDataApiKey,
+      channelId: resolved.channelId,
+      maxItems: PUBLIC_YOUTUBE_PREVIEW_MAX_ITEMS,
+    });
+  } catch (error) {
+    const mapped = mapPublicYouTubePreviewError(error);
+    return res.status(mapped.status).json({ ok: false, error_code: mapped.error_code, message: mapped.message, data: null });
+  }
+
+  const channelIds = preview.items
+    .map((item: { channelId?: string | null }) => String(item.channelId || '').trim())
+    .filter(Boolean);
+
+  const { data: existing, error: existingError } = channelIds.length === 0
+    ? { data: [] as Array<{ source_channel_id: string; is_active: boolean }>, error: null }
+    : await db
+      .from('user_source_subscriptions')
+      .select('source_channel_id, is_active')
+      .eq('user_id', userId)
+      .eq('source_type', 'youtube')
+      .in('source_channel_id', channelIds);
+  if (existingError) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: existingError.message,
+      data: null,
+    });
+  }
+
+  const existingByChannelId = new Map(
+    (existing || []).map((row) => [String(row.source_channel_id || '').trim(), row.is_active]),
+  );
+
+  return res.json({
+    ok: true,
+    error_code: null,
+    message: 'public youtube subscriptions preview',
+    data: {
+      source_channel_id: resolved.channelId,
+      source_channel_title: resolved.channelTitle,
+      source_channel_url: resolved.channelUrl,
+      creators_total: preview.items.length,
+      truncated: Boolean(preview.truncated),
+      creators: preview.items.map((item: {
+        channelId: string;
+        channelTitle: string;
+        channelUrl: string;
+        thumbnailUrl: string | null;
+      }) => ({
+        channel_id: item.channelId,
+        channel_title: item.channelTitle,
+        channel_url: item.channelUrl,
+        thumbnail_url: item.thumbnailUrl,
+        already_active: existingByChannelId.get(item.channelId) === true,
+        already_exists_inactive: existingByChannelId.get(item.channelId) === false,
+      })),
     },
   });
 }

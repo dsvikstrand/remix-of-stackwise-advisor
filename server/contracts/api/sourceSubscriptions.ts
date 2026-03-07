@@ -30,11 +30,35 @@ export type RefreshSubscriptionsGenerateInput = {
   requested_tier?: 'free' | 'tier';
 };
 
+export type PublicYouTubeSubscriptionsPreviewInput = {
+  channel_input: string;
+};
+
+export type PublicYouTubeSubscriptionPreviewItem = {
+  channel_id: string;
+  channel_title: string;
+  channel_url: string;
+  thumbnail_url: string | null;
+  already_active: boolean;
+  already_exists_inactive: boolean;
+};
+
+export type PublicYouTubeSubscriptionsPreviewResult = {
+  source_channel_id: string;
+  source_channel_title: string | null;
+  source_channel_url: string;
+  creators_total: number;
+  truncated: boolean;
+  creators: PublicYouTubeSubscriptionPreviewItem[];
+};
+
 export type SourceSubscriptionsRouteDeps = {
   getAuthedSupabaseClient: any;
   getServiceSupabaseClient: any;
   resolveYouTubeChannel: any;
+  resolvePublicYouTubeChannel: any;
   youtubeDataApiKey: string;
+  fetchPublicYouTubeSubscriptions: any;
   fetchYouTubeChannelAssetMap: any;
   runSourcePageAssetSweep?: any;
   ensureSourcePageFromYouTubeChannel: any;
@@ -45,6 +69,7 @@ export type SourceSubscriptionsRouteDeps = {
   upsertSourceItemFromVideo: any;
   buildSourcePagePath: any;
   cleanupSubscriptionNoticeForChannel: any;
+  publicYouTubePreviewLimiter: express.RequestHandler;
   refreshScanLimiter: express.RequestHandler;
   refreshGenerateLimiter: express.RequestHandler;
   RefreshSubscriptionsScanSchema: SafeParser<RefreshSubscriptionsScanInput>;

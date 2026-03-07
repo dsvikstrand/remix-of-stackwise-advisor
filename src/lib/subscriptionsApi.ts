@@ -24,6 +24,37 @@ export type SourceSubscription = {
   updated_at: string;
 };
 
+export type PublicYouTubeSubscriptionPreviewItem = {
+  channel_id: string;
+  channel_title: string;
+  channel_url: string;
+  thumbnail_url: string | null;
+  already_active: boolean;
+  already_exists_inactive: boolean;
+};
+
+export type PublicYouTubeSubscriptionsPreviewResult = {
+  source_channel_id: string;
+  source_channel_title: string | null;
+  source_channel_url: string;
+  creators_total: number;
+  truncated: boolean;
+  creators: PublicYouTubeSubscriptionPreviewItem[];
+};
+
+export type PublicYouTubeSubscriptionsImportResult = {
+  requested_count: number;
+  imported_count: number;
+  reactivated_count: number;
+  already_active_count: number;
+  failed_count: number;
+  failures: Array<{
+    channel_id: string;
+    error_code: string;
+    error: string;
+  }>;
+};
+
 export type SubscriptionRefreshCandidate = {
   subscription_id: string;
   source_channel_id: string;
@@ -164,6 +195,73 @@ export async function createSourceSubscription(input: { channelInput: string; mo
   });
 
   return response.data;
+}
+
+export async function previewPublicYouTubeSubscriptions(input: { channelInput: string }) {
+  const channelInput = String(input.channelInput || '').trim();
+  if (!channelInput) {
+    throw new ApiRequestError(400, 'Paste a YouTube channel URL or @handle.', 'INVALID_INPUT');
+  }
+
+  const response = await apiRequest<PublicYouTubeSubscriptionsPreviewResult>('/source-subscriptions/public-youtube-preview', {
+    method: 'POST',
+    body: JSON.stringify({
+      channel_input: channelInput,
+    }),
+  });
+  return response.data;
+}
+
+export async function importPublicYouTubeSubscriptions(input: {
+  creators: PublicYouTubeSubscriptionPreviewItem[];
+}) {
+  const creators = Array.isArray(input.creators) ? input.creators : [];
+  if (creators.length === 0) {
+    throw new ApiRequestError(400, 'Select at least one creator to import.', 'YT_IMPORT_EMPTY_SELECTION');
+  }
+
+  const failures: PublicYouTubeSubscriptionsImportResult['failures'] = [];
+  let importedCount = 0;
+  let reactivatedCount = 0;
+  let alreadyActiveCount = 0;
+
+  for (const creator of creators) {
+    const channelId = String(creator.channel_id || '').trim();
+    if (!channelId) continue;
+
+    if (creator.already_active) {
+      alreadyActiveCount += 1;
+      continue;
+    }
+
+    try {
+      await createSourceSubscription({
+        channelInput: creator.channel_url || channelId,
+      });
+      if (creator.already_exists_inactive) {
+        reactivatedCount += 1;
+      } else {
+        importedCount += 1;
+      }
+    } catch (error) {
+      failures.push({
+        channel_id: channelId,
+        error_code: error instanceof ApiRequestError
+          ? (error.errorCode || 'IMPORT_FAILED')
+          : 'IMPORT_FAILED',
+        error: error instanceof Error ? error.message : 'Could not import this creator.',
+      });
+    }
+  }
+
+  return {
+    requested_count: creators.length,
+    imported_count: importedCount,
+    reactivated_count: reactivatedCount,
+    already_active_count: alreadyActiveCount,
+    failed_count: failures.length,
+    failures,
+  } as PublicYouTubeSubscriptionsImportResult;
 }
 
 export async function updateSourceSubscription(input: {

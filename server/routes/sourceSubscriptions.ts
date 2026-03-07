@@ -4,6 +4,7 @@ import {
   handleDeleteSourceSubscription,
   handleListSourceSubscriptions,
   handlePatchSourceSubscription,
+  handlePreviewPublicYouTubeSubscriptions,
   handleRefreshGenerate,
   handleRefreshScan,
   handleSyncSourceSubscription,
@@ -14,6 +15,9 @@ export function registerSourceSubscriptionsRoutes(app: express.Express, deps: So
   app.post('/api/source-subscriptions', (req, res) => handleCreateSourceSubscription(req, res, deps));
 
   app.get('/api/source-subscriptions', (req, res) => handleListSourceSubscriptions(req, res, deps));
+
+  app.post('/api/source-subscriptions/public-youtube-preview', deps.publicYouTubePreviewLimiter, (req, res) =>
+    handlePreviewPublicYouTubeSubscriptions(req, res, deps));
 
   app.post('/api/source-subscriptions/refresh-scan', deps.refreshScanLimiter, (req, res) => handleRefreshScan(req, res, deps));
 

@@ -10,7 +10,12 @@ import {
   deactivateSourceSubscription,
   getIngestionJob,
   getLatestMyIngestionJob,
+  importPublicYouTubeSubscriptions,
   listSourceSubscriptions,
+  previewPublicYouTubeSubscriptions,
+  type PublicYouTubeSubscriptionPreviewItem,
+  type PublicYouTubeSubscriptionsImportResult,
+  type PublicYouTubeSubscriptionsPreviewResult,
   type IngestionJobStatus,
   type SourceSubscription,
   updateSourceSubscription,
@@ -82,6 +87,31 @@ function getYouTubeConnectionErrorMessage(error: unknown, fallback: string) {
     }
   }
   return error instanceof Error ? error.message : fallback;
+}
+
+function getPublicYouTubePreviewErrorCode(error: unknown) {
+  if (error instanceof ApiRequestError) {
+    return error.errorCode || null;
+  }
+  return null;
+}
+
+function getPublicYouTubePreviewErrorMessage(error: unknown) {
+  if (error instanceof ApiRequestError) {
+    switch (error.errorCode) {
+      case 'INVALID_INPUT':
+        return 'Paste a YouTube channel URL or @handle.';
+      case 'PUBLIC_IMPORT_CHANNEL_NOT_FOUND':
+        return "We couldn't find that YouTube channel. Check the URL or @handle and try again.";
+      case 'PUBLIC_SUBSCRIPTIONS_PRIVATE':
+        return "We couldn't read this account's subscriptions.";
+      case 'RATE_LIMITED':
+        return error.message || 'Please wait a moment before trying again.';
+      default:
+        return error.message || 'Could not load public YouTube subscriptions.';
+    }
+  }
+  return error instanceof Error ? error.message : 'Could not load public YouTube subscriptions.';
 }
 
 function sanitizeRefreshReturnPath(value: string | null) {
@@ -187,6 +217,13 @@ export function useSubscriptionsPageController() {
   const [subscribingChannelIds, setSubscribingChannelIds] = useState<Record<string, boolean>>({});
   const [pendingRows, setPendingRows] = useState<Record<string, boolean>>({});
   const [subscriptionFilterQuery, setSubscriptionFilterQuery] = useState('');
+  const [publicYouTubeChannelInput, setPublicYouTubeChannelInput] = useState('');
+  const [publicYouTubePreview, setPublicYouTubePreview] = useState<PublicYouTubeSubscriptionsPreviewResult | null>(null);
+  const [publicYouTubePreviewFilterQuery, setPublicYouTubePreviewFilterQuery] = useState('');
+  const [publicYouTubePreviewSelected, setPublicYouTubePreviewSelected] = useState<Record<string, boolean>>({});
+  const [publicYouTubePreviewError, setPublicYouTubePreviewError] = useState<string | null>(null);
+  const [publicYouTubePreviewErrorCode, setPublicYouTubePreviewErrorCode] = useState<string | null>(null);
+  const [publicYouTubeImportSummary, setPublicYouTubeImportSummary] = useState<PublicYouTubeSubscriptionsImportResult | null>(null);
   const [isYouTubeImportOpen, setIsYouTubeImportOpen] = useState(false);
   const [youTubeImportFilterQuery, setYouTubeImportFilterQuery] = useState('');
   const [youTubeImportResults, setYouTubeImportResults] = useState<YouTubeImportPreviewItem[]>([]);
@@ -292,6 +329,84 @@ export function useSubscriptionsPageController() {
     queryKey: ['source-subscriptions', user?.id],
     enabled: Boolean(user) && subscriptionsEnabled,
     queryFn: listSourceSubscriptions,
+  });
+
+  const publicYouTubePreviewMutation = useMutation({
+    mutationFn: async (inputRaw: string) => {
+      const input = inputRaw.trim();
+      if (!subscriptionsEnabled) throw new Error('Backend API is not configured.');
+      return previewPublicYouTubeSubscriptions({ channelInput: input });
+    },
+    onMutate: () => {
+      setPublicYouTubePreview(null);
+      setPublicYouTubePreviewSelected({});
+      setPublicYouTubePreviewFilterQuery('');
+      setPublicYouTubePreviewError(null);
+      setPublicYouTubePreviewErrorCode(null);
+      setPublicYouTubeImportSummary(null);
+    },
+    onSuccess: (payload) => {
+      setPublicYouTubePreview(payload);
+      setPublicYouTubePreviewError(null);
+      setPublicYouTubePreviewErrorCode(null);
+      const nextSelected: Record<string, boolean> = {};
+      for (const creator of payload.creators || []) {
+        nextSelected[creator.channel_id] = false;
+      }
+      setPublicYouTubePreviewSelected(nextSelected);
+    },
+    onError: (error) => {
+      setPublicYouTubePreview(null);
+      setPublicYouTubePreviewSelected({});
+      setPublicYouTubeImportSummary(null);
+      setPublicYouTubePreviewErrorCode(getPublicYouTubePreviewErrorCode(error));
+      setPublicYouTubePreviewError(getPublicYouTubePreviewErrorMessage(error));
+    },
+  });
+
+  const publicYouTubeImportMutation = useMutation({
+    mutationFn: async (creators: PublicYouTubeSubscriptionPreviewItem[]) => {
+      if (!subscriptionsEnabled) throw new Error('Backend API is not configured.');
+      return importPublicYouTubeSubscriptions({ creators });
+    },
+    onSuccess: (result, creators) => {
+      setPublicYouTubeImportSummary(result);
+      setPublicYouTubePreviewSelected({});
+      invalidateSubscriptionViews();
+
+      const failedIds = new Set(result.failures.map((failure) => failure.channel_id));
+      const importedIds = new Set(
+        creators
+          .map((creator) => String(creator.channel_id || '').trim())
+          .filter((channelId) => channelId && !failedIds.has(channelId)),
+      );
+      setPublicYouTubePreview((previous) => {
+        if (!previous) return previous;
+        return {
+          ...previous,
+          creators: previous.creators.map((creator) => {
+            if (!importedIds.has(creator.channel_id)) return creator;
+            return {
+              ...creator,
+              already_active: true,
+              already_exists_inactive: false,
+            };
+          }),
+        };
+      });
+
+      toast({
+        title: 'Import complete',
+        description: `Imported ${result.imported_count}, reactivated ${result.reactivated_count}, already active ${result.already_active_count}, failed ${result.failed_count}.`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Import failed',
+        description: getPublicYouTubePreviewErrorMessage(error),
+        variant: 'destructive',
+      });
+    },
   });
 
   const youtubeConnectionQuery = useQuery({
@@ -497,6 +612,33 @@ export function useSubscriptionsPageController() {
     });
   }, [updateSubscriptionMutation, withRowPending]);
 
+  const handlePublicYouTubePreviewSubmit = useCallback((event: FormEvent) => {
+    event.preventDefault();
+    publicYouTubePreviewMutation.mutate(publicYouTubeChannelInput);
+  }, [publicYouTubeChannelInput, publicYouTubePreviewMutation]);
+
+  const togglePublicYouTubePreviewCreator = useCallback((channelId: string, checked: boolean) => {
+    setPublicYouTubePreviewSelected((previous) => ({
+      ...previous,
+      [channelId]: checked,
+    }));
+  }, []);
+
+  const handlePublicYouTubePreviewSelectAll = useCallback(() => {
+    setPublicYouTubePreviewSelected((previous) => {
+      const next = { ...previous };
+      for (const creator of publicYouTubePreview?.creators || []) {
+        if (creator.already_active) continue;
+        next[creator.channel_id] = true;
+      }
+      return next;
+    });
+  }, [publicYouTubePreview]);
+
+  const handlePublicYouTubePreviewClearSelection = useCallback(() => {
+    setPublicYouTubePreviewSelected({});
+  }, []);
+
   const handleOpenYouTubeImport = useCallback(() => {
     setIsYouTubeImportOpen(true);
     setYouTubeImportSummary(null);
@@ -602,6 +744,7 @@ export function useSubscriptionsPageController() {
   }, [handleAddSubscriptionDialogChange, runSubscribe, setSubscribing, subscribingChannelIds, subscriptionsEnabled]);
 
   const subscriptions = subscriptionsQuery.data || [];
+  const publicYouTubePreviewCreators = publicYouTubePreview?.creators || [];
   const youtubeConnection = youtubeConnectionQuery.data;
   const activeSubscriptions = useMemo(
     () => subscriptions.filter((subscription) => subscription.is_active),
@@ -626,6 +769,30 @@ export function useSubscriptionsPageController() {
       })
       .map((entry) => entry.subscription);
   }, [activeSubscriptions, normalizedSubscriptionFilterQuery]);
+  const selectedPublicYouTubeCreators = useMemo(
+    () =>
+      publicYouTubePreviewCreators.filter((creator) => publicYouTubePreviewSelected[creator.channel_id]),
+    [publicYouTubePreviewCreators, publicYouTubePreviewSelected],
+  );
+  const normalizedPublicYouTubePreviewFilterQuery = useMemo(
+    () => normalizeYouTubeImportFilterQuery(publicYouTubePreviewFilterQuery),
+    [publicYouTubePreviewFilterQuery],
+  );
+  const filteredPublicYouTubePreviewCreators = useMemo(() => {
+    if (!normalizedPublicYouTubePreviewFilterQuery) return publicYouTubePreviewCreators;
+    return publicYouTubePreviewCreators
+      .map((item, index) => ({
+        item,
+        index,
+        rank: getYouTubeImportFilterRank(item, normalizedPublicYouTubePreviewFilterQuery),
+      }))
+      .filter((entry) => Number.isFinite(entry.rank))
+      .sort((left, right) => {
+        if (left.rank !== right.rank) return left.rank - right.rank;
+        return left.index - right.index;
+      })
+      .map((entry) => entry.item);
+  }, [normalizedPublicYouTubePreviewFilterQuery, publicYouTubePreviewCreators]);
   const selectedYouTubeImportChannels = useMemo(
     () =>
       youTubeImportResults
@@ -684,6 +851,18 @@ export function useSubscriptionsPageController() {
     }
     youtubeImportMutation.mutate(selectedYouTubeImportChannels);
   }, [selectedYouTubeImportChannels, toast, youtubeImportMutation]);
+
+  const handleImportSelectedPublicYouTubeCreators = useCallback(() => {
+    if (selectedPublicYouTubeCreators.length === 0) {
+      toast({
+        title: 'No creators selected',
+        description: 'Select one or more creators to import.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    publicYouTubeImportMutation.mutate(selectedPublicYouTubeCreators);
+  }, [publicYouTubeImportMutation, selectedPublicYouTubeCreators, toast]);
 
   useEffect(() => {
     const job = refreshJobQuery.data;
@@ -764,6 +943,13 @@ export function useSubscriptionsPageController() {
     channelSearchNextToken,
     channelSearchError,
     subscriptionFilterQuery,
+    publicYouTubeChannelInput,
+    publicYouTubePreview,
+    publicYouTubePreviewFilterQuery,
+    publicYouTubePreviewSelected,
+    publicYouTubePreviewError,
+    publicYouTubePreviewErrorCode,
+    publicYouTubeImportSummary,
     isYouTubeImportOpen,
     youTubeImportFilterQuery,
     youTubeImportResults,
@@ -775,6 +961,8 @@ export function useSubscriptionsPageController() {
     activeRefreshJobId,
     queuedRefreshCount,
     subscriptionsQuery,
+    publicYouTubePreviewMutation,
+    publicYouTubeImportMutation,
     youtubeConnectionQuery,
     youtubeConnection,
     youtubeConnectionErrorMessage,
@@ -786,7 +974,9 @@ export function useSubscriptionsPageController() {
     createMutation,
     refreshJobQuery,
     filteredActiveSubscriptions,
+    filteredPublicYouTubePreviewCreators,
     filteredYouTubeImportResults,
+    selectedPublicYouTubeCreators,
     selectedYouTubeImportChannels,
     refreshJobStatus,
     refreshJobInserted,
@@ -797,8 +987,14 @@ export function useSubscriptionsPageController() {
     isRowPending,
     setChannelSearchQuery,
     setSubscriptionFilterQuery,
+    setPublicYouTubeChannelInput,
+    setPublicYouTubePreviewFilterQuery,
     setYouTubeImportFilterQuery,
     handleAddSubscriptionDialogChange,
+    handlePublicYouTubePreviewSubmit,
+    togglePublicYouTubePreviewCreator,
+    handlePublicYouTubePreviewSelectAll,
+    handlePublicYouTubePreviewClearSelection,
     handleOpenYouTubeImport,
     handleYouTubeImportDialogChange,
     toggleYouTubeImportChannel,
@@ -809,6 +1005,7 @@ export function useSubscriptionsPageController() {
     handleChannelSearchSubmit,
     handleChannelSearchLoadMore,
     handleSubscribeFromSearch,
+    handleImportSelectedPublicYouTubeCreators,
     handleImportSelectedChannels,
     handleRefreshDialogChange,
     handleRefreshQueued,

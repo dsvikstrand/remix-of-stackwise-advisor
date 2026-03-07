@@ -4,6 +4,42 @@ export type ResolvedYouTubeChannel = {
   channelTitle: string | null;
 };
 
+export type PublicYouTubeSubscriptionPreviewItem = {
+  channelId: string;
+  channelTitle: string;
+  channelUrl: string;
+  thumbnailUrl: string | null;
+};
+
+export type PublicYouTubeSubscriptionsPreview = {
+  items: PublicYouTubeSubscriptionPreviewItem[];
+  truncated: boolean;
+};
+
+export class YouTubeChannelLookupError extends Error {
+  code: 'CHANNEL_NOT_FOUND' | 'CHANNEL_LOOKUP_UNAVAILABLE';
+
+  constructor(
+    code: 'CHANNEL_NOT_FOUND' | 'CHANNEL_LOOKUP_UNAVAILABLE',
+    message: string,
+  ) {
+    super(message);
+    this.code = code;
+  }
+}
+
+export class YouTubePublicSubscriptionsError extends Error {
+  code: 'PUBLIC_IMPORT_CHANNEL_NOT_FOUND' | 'PUBLIC_SUBSCRIPTIONS_PRIVATE' | 'PUBLIC_IMPORT_UNAVAILABLE';
+
+  constructor(
+    code: 'PUBLIC_IMPORT_CHANNEL_NOT_FOUND' | 'PUBLIC_SUBSCRIPTIONS_PRIVATE' | 'PUBLIC_IMPORT_UNAVAILABLE',
+    message: string,
+  ) {
+    super(message);
+    this.code = code;
+  }
+}
+
 export type YouTubeFeedVideo = {
   videoId: string;
   title: string;
@@ -44,6 +80,10 @@ function getCanonicalChannelUrl(channelId: string) {
   return `https://www.youtube.com/channel/${channelId}`;
 }
 
+function normalizeHandleValue(value: string) {
+  return value.trim().replace(/^@+/, '');
+}
+
 function toYouTubeUrl(input: string): string | null {
   const raw = input.trim();
   if (!raw) return null;
@@ -64,6 +104,56 @@ function toYouTubeUrl(input: string): string | null {
   } catch {
     return null;
   }
+}
+
+type OfficialChannelLookup =
+  | { kind: 'id'; value: string }
+  | { kind: 'forHandle'; value: string }
+  | { kind: 'forUsername'; value: string };
+
+function toOfficialChannelLookup(input: string): OfficialChannelLookup | null {
+  const raw = String(input || '').trim();
+  if (!raw) return null;
+
+  if (CHANNEL_ID_RE.test(raw)) {
+    return { kind: 'id', value: raw };
+  }
+
+  if (HANDLE_RE.test(raw)) {
+    const handle = normalizeHandleValue(raw);
+    if (!handle) return null;
+    return { kind: 'forHandle', value: handle };
+  }
+
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+
+  const host = url.hostname.replace(/^www\./, '').toLowerCase();
+  if (host !== 'youtube.com' && host !== 'm.youtube.com') return null;
+
+  const parts = url.pathname.split('/').filter(Boolean);
+  const first = String(parts[0] || '').trim();
+  const second = String(parts[1] || '').trim();
+
+  if (first.startsWith('@')) {
+    const handle = normalizeHandleValue(first);
+    if (!handle) return null;
+    return { kind: 'forHandle', value: handle };
+  }
+
+  if (first === 'channel' && CHANNEL_ID_RE.test(second)) {
+    return { kind: 'id', value: second };
+  }
+
+  if (first === 'user' && second) {
+    return { kind: 'forUsername', value: second };
+  }
+
+  return null;
 }
 
 async function fetchHtml(url: string): Promise<string> {
@@ -271,6 +361,197 @@ export async function resolveYouTubeChannel(input: string): Promise<ResolvedYouT
     channelId,
     channelUrl: getCanonicalChannelUrl(channelId),
     channelTitle: feed.channelTitle || channelTitle,
+  };
+}
+
+export async function resolvePublicYouTubeChannel(input: {
+  channelInput: string;
+  apiKey: string;
+}): Promise<ResolvedYouTubeChannel> {
+  const apiKey = String(input.apiKey || '').trim();
+  const lookup = toOfficialChannelLookup(input.channelInput);
+  if (!lookup) {
+    throw new YouTubeChannelLookupError(
+      'CHANNEL_NOT_FOUND',
+      'Could not resolve YouTube channel from the provided input.',
+    );
+  }
+  if (!apiKey) {
+    throw new YouTubeChannelLookupError(
+      'CHANNEL_LOOKUP_UNAVAILABLE',
+      'YouTube public import is not configured.',
+    );
+  }
+
+  const url = new URL('https://www.googleapis.com/youtube/v3/channels');
+  url.searchParams.set('part', 'snippet');
+  url.searchParams.set('fields', 'items(id,snippet/title)');
+  url.searchParams.set('key', apiKey);
+
+  if (lookup.kind === 'id') {
+    url.searchParams.set('id', lookup.value);
+  } else if (lookup.kind === 'forHandle') {
+    url.searchParams.set('forHandle', lookup.value);
+  } else {
+    url.searchParams.set('forUsername', lookup.value);
+  }
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      'User-Agent': 'bleuv1-subscriptions/1.0 (+https://api.bleup.app)',
+      Accept: 'application/json',
+    },
+  });
+
+  const json = (await response.json().catch(() => null)) as
+    | {
+        items?: Array<{
+          id?: string | null;
+          snippet?: {
+            title?: string | null;
+          } | null;
+        }>;
+        error?: {
+          message?: string | null;
+        } | null;
+      }
+    | null;
+
+  if (!response.ok) {
+    throw new YouTubeChannelLookupError(
+      'CHANNEL_LOOKUP_UNAVAILABLE',
+      json?.error?.message ?? 'Failed to resolve YouTube channel.',
+    );
+  }
+
+  const row = Array.isArray(json?.items) ? json?.items?.[0] : null;
+  const channelId = String(row?.id || '').trim();
+  if (!channelId || !CHANNEL_ID_RE.test(channelId)) {
+    throw new YouTubeChannelLookupError(
+      'CHANNEL_NOT_FOUND',
+      'Could not find that YouTube channel.',
+    );
+  }
+
+  return {
+    channelId,
+    channelUrl: getCanonicalChannelUrl(channelId),
+    channelTitle: row?.snippet?.title?.trim() || null,
+  };
+}
+
+export async function fetchPublicYouTubeSubscriptions(input: {
+  apiKey: string;
+  channelId: string;
+  maxItems?: number;
+}): Promise<PublicYouTubeSubscriptionsPreview> {
+  const maxItems = Math.max(1, Math.min(input.maxItems ?? 150, 200));
+  const creators: PublicYouTubeSubscriptionPreviewItem[] = [];
+  const seenChannelIds = new Set<string>();
+  let nextPageToken: string | undefined;
+  let truncated = false;
+
+  while (creators.length < maxItems) {
+    const remaining = Math.max(1, Math.min(50, maxItems - creators.length));
+    const url = new URL('https://www.googleapis.com/youtube/v3/subscriptions');
+    url.searchParams.set('part', 'snippet');
+    url.searchParams.set('channelId', input.channelId);
+    url.searchParams.set('maxResults', String(remaining));
+    url.searchParams.set('key', input.apiKey);
+    if (nextPageToken) {
+      url.searchParams.set('pageToken', nextPageToken);
+    }
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        'User-Agent': 'bleuv1-subscriptions/1.0 (+https://api.bleup.app)',
+        Accept: 'application/json',
+      },
+    });
+
+    const json = (await response.json().catch(() => null)) as
+      | {
+          items?: Array<{
+            snippet?: {
+              title?: string | null;
+              resourceId?: { channelId?: string | null } | null;
+              thumbnails?: {
+                high?: { url?: string | null } | null;
+                medium?: { url?: string | null } | null;
+                default?: { url?: string | null } | null;
+              } | null;
+            } | null;
+          }>;
+          nextPageToken?: string | null;
+          error?: {
+            errors?: Array<{ reason?: string | null }>;
+            message?: string | null;
+          };
+        }
+      | null;
+
+    if (!response.ok) {
+      const reason = json?.error?.errors?.[0]?.reason ?? null;
+      if (
+        response.status === 404 &&
+        reason === 'subscriberNotFound'
+      ) {
+        throw new YouTubePublicSubscriptionsError(
+          'PUBLIC_IMPORT_CHANNEL_NOT_FOUND',
+          'Could not find that YouTube channel.',
+        );
+      }
+      if (
+        response.status === 403 &&
+        (reason === 'subscriptionForbidden' || reason === 'forbidden')
+      ) {
+        throw new YouTubePublicSubscriptionsError(
+          'PUBLIC_SUBSCRIPTIONS_PRIVATE',
+          'The channel subscriptions are private or inaccessible.',
+        );
+      }
+
+      throw new YouTubePublicSubscriptionsError(
+        'PUBLIC_IMPORT_UNAVAILABLE',
+        json?.error?.message ?? 'Failed to fetch public YouTube subscriptions.',
+      );
+    }
+
+    const items = Array.isArray(json?.items) ? json.items : [];
+    for (const item of items) {
+      const channelId = item.snippet?.resourceId?.channelId?.trim();
+      const channelTitle = item.snippet?.title?.trim();
+      if (!channelId || !channelTitle || seenChannelIds.has(channelId)) {
+        continue;
+      }
+
+      seenChannelIds.add(channelId);
+      creators.push({
+        channelId,
+        channelTitle,
+        channelUrl: getCanonicalChannelUrl(channelId),
+        thumbnailUrl:
+          item.snippet?.thumbnails?.high?.url ??
+          item.snippet?.thumbnails?.medium?.url ??
+          item.snippet?.thumbnails?.default?.url ??
+          null,
+      });
+
+      if (creators.length >= maxItems) {
+        truncated = Boolean(json?.nextPageToken);
+        break;
+      }
+    }
+
+    nextPageToken = json?.nextPageToken ?? undefined;
+    if (truncated || !nextPageToken || items.length === 0) {
+      break;
+    }
+  }
+
+  return {
+    items: creators,
+    truncated,
   };
 }
 
