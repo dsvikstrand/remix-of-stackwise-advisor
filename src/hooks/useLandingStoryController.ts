@@ -44,21 +44,6 @@ export function useLandingStoryController() {
     [activeSceneIndex],
   );
 
-  useEffect(() => {
-    if (!activeScene) return;
-    if (viewedScenesRef.current.has(activeScene.id)) return;
-    viewedScenesRef.current.add(activeScene.id);
-    void logMvpEvent({
-      eventName: 'landing_story_step_view',
-      userId: user?.id,
-      path: window.location.pathname,
-      metadata: {
-        step_id: activeScene.id,
-        step_index: activeSceneIndex,
-      },
-    });
-  }, [activeScene, activeSceneIndex, user?.id]);
-
   const logHeroCta = (slot: 'primary' | 'secondary' | 'tertiary') => {
     void logMvpEvent({
       eventName: 'landing_hero_cta_click',
@@ -96,6 +81,20 @@ export function useLandingStoryController() {
     });
   };
 
+  const logSceneView = (sceneId: string, sceneIndex: number) => {
+    if (viewedScenesRef.current.has(sceneId)) return;
+    viewedScenesRef.current.add(sceneId);
+    void logMvpEvent({
+      eventName: 'landing_story_step_view',
+      userId: user?.id,
+      path: window.location.pathname,
+      metadata: {
+        step_id: sceneId,
+        step_index: sceneIndex,
+      },
+    });
+  };
+
   return {
     containerRef,
     scrollProgress,
@@ -106,5 +105,6 @@ export function useLandingStoryController() {
     logHeroCta,
     logFinalCta,
     logDemoCta,
+    logSceneView,
   };
 }

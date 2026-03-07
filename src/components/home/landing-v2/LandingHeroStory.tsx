@@ -1,9 +1,10 @@
 import type { RefObject } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useEffect } from 'react';
 import { LazyMotion, domAnimation, AnimatePresence, m, useMotionValue, useSpring, useTransform } from 'framer-motion';
-import { ArrowRight, Compass, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Compass, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '@/components/ui/carousel';
 import { cn } from '@/lib/utils';
 import { LANDING_BACKGROUND_GLYPHS, LANDING_STORY_SCENES, type LandingBackgroundGlyph } from '@/lib/landingStory';
 import { LandingDemoScene } from '@/components/home/landing-v2/LandingDemoScene';
@@ -16,7 +17,55 @@ interface LandingHeroStoryProps {
   isSignedIn: boolean;
   onHeroCtaClick: (slot: 'primary' | 'secondary' | 'tertiary') => void;
   onDemoCtaClick: (variant: 'signal' | 'blueprint' | 'lanes' | 'community') => void;
+  onSceneView: (sceneId: string, sceneIndex: number) => void;
   prefersReducedMotion: boolean;
+}
+
+function HeroCtaRail({
+  isSignedIn,
+  onHeroCtaClick,
+}: {
+  isSignedIn: boolean;
+  onHeroCtaClick: (slot: 'primary' | 'secondary' | 'tertiary') => void;
+}) {
+  return (
+    <div className="mt-8 flex flex-wrap items-center gap-3">
+      {isSignedIn ? (
+        <>
+          <Button asChild size="lg" className="gap-2" onClick={() => onHeroCtaClick('primary')}>
+            <Link to="/search">
+              Open Create
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+          <Button asChild size="lg" variant="outline" className="gap-2" onClick={() => onHeroCtaClick('secondary')}>
+            <Link to="/wall">
+              Open Home
+              <Compass className="h-4 w-4" />
+            </Link>
+          </Button>
+          <Button asChild size="lg" variant="ghost" onClick={() => onHeroCtaClick('tertiary')}>
+            <a href="#how-it-works">See how it works</a>
+          </Button>
+        </>
+      ) : (
+        <>
+          <Button asChild size="lg" className="gap-2" onClick={() => onHeroCtaClick('primary')}>
+            <Link to="/youtube">
+              Try a video
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+          <Button asChild size="lg" variant="outline" onClick={() => onHeroCtaClick('secondary')}>
+            <a href="#how-it-works">See how it works</a>
+          </Button>
+          <Button asChild size="lg" variant="ghost" onClick={() => onHeroCtaClick('tertiary')}>
+            <Link to="/auth">Sign in to save your feed</Link>
+          </Button>
+        </>
+      )}
+    </div>
+  );
 }
 
 function BackgroundGlyph({
@@ -26,7 +75,7 @@ function BackgroundGlyph({
 }: {
   glyph: LandingBackgroundGlyph;
   reducedMotion: boolean;
-  setGlyphRef: ReturnType<typeof useLandingHeroGlyphMotion>['setGlyphRef'];
+  setGlyphRef: (id: string) => (node: HTMLDivElement | null) => void;
 }) {
   const sizeClassName = glyph.mobileSize === 0
     ? 'hidden md:flex'
@@ -37,7 +86,7 @@ function BackgroundGlyph({
   const sharedClasses = cn(
     'absolute items-center justify-center will-change-transform pointer-events-none',
     sizeClassName,
-    glyph.depth === 'near' ? 'z-[1]' : glyph.depth === 'mid' ? 'z-0' : 'z-0',
+    glyph.depth === 'near' ? 'z-[1]' : 'z-0',
     'w-[var(--glyph-w-mobile)] h-[var(--glyph-w-mobile)] md:w-[var(--glyph-w)] md:h-[var(--glyph-w)]',
   );
 
@@ -199,109 +248,236 @@ function BackgroundArt({
   );
 }
 
-export function LandingHeroStory({
+function MobileBackgroundArt() {
+  const mobileGlyphs = useMemo(
+    () => [
+      LANDING_BACKGROUND_GLYPHS[0],
+      LANDING_BACKGROUND_GLYPHS[1],
+      LANDING_BACKGROUND_GLYPHS[3],
+    ].filter(Boolean),
+    [],
+  );
+
+  const noopSetGlyphRef = () => () => undefined;
+
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.08),transparent_44%),linear-gradient(180deg,hsl(var(--background))_0%,hsl(35_45%_96%)_45%,hsl(var(--background))_100%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle,hsl(var(--primary)/0.08)_1px,transparent_1px)] [background-size:18px_18px] opacity-35" />
+      <div aria-hidden="true" className="absolute left-[-10%] top-[6%] h-36 w-36 rounded-full bg-primary/12 blur-3xl" />
+      <div aria-hidden="true" className="absolute right-[-8%] top-[18%] h-40 w-40 rounded-full bg-amber-200/18 blur-3xl" />
+      {mobileGlyphs.map((glyph) => (
+        <BackgroundGlyph
+          key={glyph.id}
+          glyph={glyph}
+          reducedMotion
+          setGlyphRef={noopSetGlyphRef}
+        />
+      ))}
+    </div>
+  );
+}
+
+function DesktopLandingHeroStory({
   containerRef,
   activeSceneIndex,
   scrollProgress,
   isSignedIn,
   onHeroCtaClick,
   onDemoCtaClick,
+  onSceneView,
   prefersReducedMotion,
 }: LandingHeroStoryProps) {
   const scene = LANDING_STORY_SCENES[activeSceneIndex] ?? LANDING_STORY_SCENES[0];
 
-  return (
-    <LazyMotion features={domAnimation}>
-      <section ref={containerRef} className="relative h-[185svh] md:h-[210svh]">
-        <div className="sticky top-16 flex min-h-[calc(100svh-4rem)] items-center overflow-hidden border-b border-border/40">
-          <BackgroundArt
-            sceneIndex={activeSceneIndex}
-            scrollProgress={scrollProgress}
-            reducedMotion={prefersReducedMotion}
-          />
-          <div className="relative mx-auto grid w-full max-w-7xl gap-10 px-4 py-10 md:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] md:px-6 lg:px-10">
-            <div className="flex min-h-[28rem] flex-col justify-center">
-              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-primary/20 bg-white/70 px-3 py-1 text-xs font-medium uppercase tracking-[0.22em] text-primary backdrop-blur">
-                <Sparkles className="h-3.5 w-3.5" />
-                Better than watching everything
-              </div>
-              <div className="relative mt-6 min-h-[27rem] sm:min-h-[31rem] md:min-h-[38rem] lg:min-h-[42rem]">
-                <AnimatePresence initial={false}>
-                  <m.div
-                    key={scene.id}
-                    initial={{ opacity: 0, y: prefersReducedMotion ? 0 : 18 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: prefersReducedMotion ? 0 : -18 }}
-                    transition={{ duration: prefersReducedMotion ? 0 : 0.2, ease: [0.22, 1, 0.36, 1] }}
-                    className="absolute inset-0 space-y-5"
-                  >
-                    <p className="text-sm font-semibold uppercase tracking-[0.25em] text-primary/80">{scene.eyebrow}</p>
-                    <h1 className="max-w-3xl text-4xl font-black tracking-tight text-balance text-foreground sm:text-5xl md:text-6xl xl:text-7xl">
-                      {scene.headline}
-                    </h1>
-                    <p className="max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-                      {scene.subheadline}
-                    </p>
-                  </m.div>
-                </AnimatePresence>
-              </div>
-              <div className="mt-8 flex flex-wrap items-center gap-3">
-                {isSignedIn ? (
-                  <>
-                    <Button asChild size="lg" className="gap-2" onClick={() => onHeroCtaClick('primary')}>
-                      <Link to="/search">
-                        Open Create
-                        <ArrowRight className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                    <Button asChild size="lg" variant="outline" className="gap-2" onClick={() => onHeroCtaClick('secondary')}>
-                      <Link to="/wall">
-                        Open Home
-                        <Compass className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                    <Button asChild size="lg" variant="ghost" onClick={() => onHeroCtaClick('tertiary')}>
-                      <a href="#how-it-works">See how it works</a>
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button asChild size="lg" className="gap-2" onClick={() => onHeroCtaClick('primary')}>
-                      <Link to="/youtube">
-                        Try a video
-                        <ArrowRight className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                    <Button asChild size="lg" variant="outline" onClick={() => onHeroCtaClick('secondary')}>
-                      <a href="#how-it-works">See how it works</a>
-                    </Button>
-                    <Button asChild size="lg" variant="ghost" onClick={() => onHeroCtaClick('tertiary')}>
-                      <Link to="/auth">Sign in to save your feed</Link>
-                    </Button>
-                  </>
-                )}
-              </div>
-            </div>
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!window.matchMedia('(min-width: 768px)').matches) return;
+    onSceneView(scene.id, activeSceneIndex);
+  }, [activeSceneIndex, onSceneView, scene.id]);
 
-            <div className="flex items-center justify-center">
-              <div className="relative w-full min-h-[31rem] md:min-h-[35rem] lg:min-h-[38rem]">
-                <AnimatePresence initial={false}>
-                  <m.div
-                    key={scene.id}
-                    initial={{ opacity: 0, y: prefersReducedMotion ? 0 : 20, scale: prefersReducedMotion ? 1 : 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: prefersReducedMotion ? 0 : -20, scale: prefersReducedMotion ? 1 : 1.02 }}
-                    transition={{ duration: prefersReducedMotion ? 0 : 0.2, ease: [0.22, 1, 0.36, 1] }}
-                    className={cn('absolute inset-0 w-full rounded-[2rem] border border-white/50 bg-white/35 p-2 shadow-soft-xl backdrop-blur-sm', scene.accentClass)}
-                  >
-                    <LandingDemoScene variant={scene.demoVariant} onOpenDemo={onDemoCtaClick} />
-                  </m.div>
-                </AnimatePresence>
-              </div>
+  return (
+    <section ref={containerRef} className="relative hidden h-[185svh] md:block md:h-[210svh]">
+      <div className="sticky top-16 flex min-h-[calc(100svh-4rem)] items-center overflow-hidden border-b border-border/40">
+        <BackgroundArt
+          sceneIndex={activeSceneIndex}
+          scrollProgress={scrollProgress}
+          reducedMotion={prefersReducedMotion}
+        />
+        <div className="relative mx-auto grid w-full max-w-7xl gap-10 px-4 py-10 md:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] md:px-6 lg:px-10">
+          <div className="flex min-h-[28rem] flex-col justify-center">
+            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-primary/20 bg-white/70 px-3 py-1 text-xs font-medium uppercase tracking-[0.22em] text-primary backdrop-blur">
+              <Sparkles className="h-3.5 w-3.5" />
+              Better than watching everything
+            </div>
+            <div className="relative mt-6 min-h-[27rem] sm:min-h-[31rem] md:min-h-[38rem] lg:min-h-[42rem]">
+              <AnimatePresence initial={false}>
+                <m.div
+                  key={scene.id}
+                  initial={{ opacity: 0, y: prefersReducedMotion ? 0 : 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: prefersReducedMotion ? 0 : -18 }}
+                  transition={{ duration: prefersReducedMotion ? 0 : 0.2, ease: [0.22, 1, 0.36, 1] }}
+                  className="absolute inset-0 space-y-5"
+                >
+                  <p className="text-sm font-semibold uppercase tracking-[0.25em] text-primary/80">{scene.eyebrow}</p>
+                  <h1 className="max-w-3xl text-4xl font-black tracking-tight text-balance text-foreground sm:text-5xl md:text-6xl xl:text-7xl">
+                    {scene.headline}
+                  </h1>
+                  <p className="max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+                    {scene.subheadline}
+                  </p>
+                </m.div>
+              </AnimatePresence>
+            </div>
+            <HeroCtaRail isSignedIn={isSignedIn} onHeroCtaClick={onHeroCtaClick} />
+          </div>
+
+          <div className="flex items-center justify-center">
+            <div className="relative w-full min-h-[31rem] md:min-h-[35rem] lg:min-h-[38rem]">
+              <AnimatePresence initial={false}>
+                <m.div
+                  key={scene.id}
+                  initial={{ opacity: 0, y: prefersReducedMotion ? 0 : 20, scale: prefersReducedMotion ? 1 : 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: prefersReducedMotion ? 0 : -20, scale: prefersReducedMotion ? 1 : 1.02 }}
+                  transition={{ duration: prefersReducedMotion ? 0 : 0.2, ease: [0.22, 1, 0.36, 1] }}
+                  className={cn('absolute inset-0 w-full rounded-[2rem] border border-white/50 bg-white/35 p-2 shadow-soft-xl backdrop-blur-sm', scene.accentClass)}
+                >
+                  <LandingDemoScene variant={scene.demoVariant} onOpenDemo={onDemoCtaClick} />
+                </m.div>
+              </AnimatePresence>
             </div>
           </div>
         </div>
-      </section>
+      </div>
+    </section>
+  );
+}
+
+function MobileLandingHeroStory({
+  isSignedIn,
+  onHeroCtaClick,
+  onDemoCtaClick,
+  onSceneView,
+}: Pick<LandingHeroStoryProps, 'isSignedIn' | 'onHeroCtaClick' | 'onDemoCtaClick' | 'onSceneView'>) {
+  const [api, setApi] = useState<CarouselApi>();
+  const [activeSceneIndex, setActiveSceneIndex] = useState(0);
+  const activeScene = LANDING_STORY_SCENES[activeSceneIndex] ?? LANDING_STORY_SCENES[0];
+
+  useEffect(() => {
+    if (!api) return;
+
+    const syncSelection = () => {
+      setActiveSceneIndex(api.selectedScrollSnap());
+    };
+
+    syncSelection();
+    api.on('select', syncSelection);
+    api.on('reInit', syncSelection);
+
+    return () => {
+      api.off('select', syncSelection);
+      api.off('reInit', syncSelection);
+    };
+  }, [api]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!window.matchMedia('(max-width: 767px)').matches) return;
+    onSceneView(activeScene.id, activeSceneIndex);
+  }, [activeScene.id, activeSceneIndex, onSceneView]);
+
+  return (
+    <section className="relative overflow-hidden border-b border-border/40 md:hidden">
+      <MobileBackgroundArt />
+      <div className="relative mx-auto w-full max-w-xl px-4 py-8">
+        <div className="inline-flex w-fit items-center gap-2 rounded-full border border-primary/20 bg-white/70 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-primary backdrop-blur">
+          <Sparkles className="h-3.5 w-3.5" />
+          Better than watching everything
+        </div>
+
+        <Carousel
+          setApi={setApi}
+          opts={{ align: 'start', loop: false }}
+          className="mt-6"
+        >
+          <CarouselContent className="-ml-0">
+            {LANDING_STORY_SCENES.map((scene) => (
+              <CarouselItem key={scene.id} className="pl-0">
+                <div className="space-y-6">
+                  <div className="space-y-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.25em] text-primary/80">{scene.eyebrow}</p>
+                    <h1 className="text-4xl font-black tracking-tight text-balance text-foreground sm:text-5xl">
+                      {scene.headline}
+                    </h1>
+                    <p className="text-base leading-relaxed text-muted-foreground">
+                      {scene.subheadline}
+                    </p>
+                  </div>
+
+                  <div className={cn('rounded-[2rem] border border-white/50 bg-white/35 p-2 shadow-soft-xl backdrop-blur-sm', scene.accentClass)}>
+                    <LandingDemoScene variant={scene.demoVariant} onOpenDemo={onDemoCtaClick} />
+                  </div>
+
+                  <HeroCtaRail isSignedIn={isSignedIn} onHeroCtaClick={onHeroCtaClick} />
+                </div>
+              </CarouselItem>
+            ))}
+          </CarouselContent>
+        </Carousel>
+
+        <div className="mt-6 flex items-center justify-between gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label="Previous landing slide"
+            onClick={() => api?.scrollPrev()}
+            disabled={!api?.canScrollPrev()}
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div className="flex items-center gap-2">
+            {LANDING_STORY_SCENES.map((scene, index) => (
+              <button
+                key={scene.id}
+                type="button"
+                aria-label={`Open landing slide ${index + 1}`}
+                onClick={() => api?.scrollTo(index)}
+                className={cn(
+                  'h-2.5 rounded-full transition-all',
+                  index === activeSceneIndex ? 'w-8 bg-primary' : 'w-2.5 bg-primary/25 hover:bg-primary/40',
+                )}
+              />
+            ))}
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label="Next landing slide"
+            onClick={() => api?.scrollNext()}
+            disabled={!api?.canScrollNext()}
+          >
+            <ArrowRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export function LandingHeroStory(props: LandingHeroStoryProps) {
+  return (
+    <LazyMotion features={domAnimation}>
+      <DesktopLandingHeroStory {...props} />
+      <MobileLandingHeroStory
+        isSignedIn={props.isSignedIn}
+        onHeroCtaClick={props.onHeroCtaClick}
+        onDemoCtaClick={props.onDemoCtaClick}
+        onSceneView={props.onSceneView}
+      />
     </LazyMotion>
   );
 }

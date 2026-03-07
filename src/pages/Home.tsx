@@ -17,6 +17,7 @@ export default function Home() {
     logHeroCta,
     logFinalCta,
     logDemoCta,
+    logSceneView,
   } = useLandingStoryController();
 
   const bodyClassName = useMemo(
@@ -36,6 +37,7 @@ export default function Home() {
           isSignedIn={isSignedIn}
           onHeroCtaClick={logHeroCta}
           onDemoCtaClick={logDemoCta}
+          onSceneView={logSceneView}
           prefersReducedMotion={prefersReducedMotion}
         />
         <LandingProofSections
