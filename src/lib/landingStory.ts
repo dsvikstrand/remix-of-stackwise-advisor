@@ -73,7 +73,7 @@ export const LANDING_STORY_SCENES: LandingStoryScene[] = [
   {
     id: 'sources-and-topics',
     eyebrow: 'Personalized discovery',
-    headline: 'Follow sources. Join topics. Skip the noise.',
+    headline: "Get your favorite creators' new videos as ready-to-scan blueprints.",
     subheadline:
       'For You stays source-driven. Joined keeps you in the loop on the topics you actually care about.',
     demoVariant: 'lanes',
