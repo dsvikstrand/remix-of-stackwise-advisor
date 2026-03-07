@@ -367,7 +367,7 @@ export default function WelcomeOnboarding() {
     if (connectStatus === 'success') {
       toast({
         title: 'YouTube connected',
-        description: 'Now import channels to complete setup.',
+        description: 'Import channels now or continue by joining one Bleu channel.',
       });
       if (subscriptionsEnabled && !previewMutation.isPending && !importMutation.isPending) {
         previewMutation.mutate();
@@ -437,9 +437,7 @@ export default function WelcomeOnboarding() {
         })),
     [previewRows, previewSelected],
   );
-  const successfulImports = Number(importSummary?.imported_count || 0) + Number(importSummary?.reactivated_count || 0);
-  const hasImportedSubscriptions = successfulImports > 0;
-  const canFinishOnboarding = hasImportedSubscriptions && joinedChannelCount > 0;
+  const canFinishOnboarding = joinedChannelCount > 0;
   const normalizedPreviewFilterQuery = useMemo(
     () => normalizeImportFilterQuery(previewFilterQuery),
     [previewFilterQuery],
@@ -731,9 +729,7 @@ export default function WelcomeOnboarding() {
           <CardContent className="p-4 flex flex-wrap items-center justify-between gap-2">
             <div className="space-y-1">
               <p className="text-sm font-medium">Welcome</p>
-              {!hasImportedSubscriptions ? (
-                <p className="text-xs text-muted-foreground">Please join atleast one channel to contineu.</p>
-              ) : joinedChannelCount <= 0 ? (
+              {joinedChannelCount <= 0 ? (
                 <p className="text-xs text-muted-foreground">Join at least one channel to continue.</p>
               ) : (
                 <p className="text-xs text-muted-foreground">You're all set. Continue to your feed.</p>
