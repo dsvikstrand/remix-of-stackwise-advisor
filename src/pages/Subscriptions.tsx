@@ -462,7 +462,7 @@ export default function Subscriptions() {
                   placeholder="Filter subscriptions..."
                   className="h-9"
                 />
-                {activeSubscriptions.length === 0 ? (
+                {filteredActiveSubscriptions.length === 0 && !subscriptionFilterQuery.trim() ? (
                   <p className="text-sm text-muted-foreground">No subscriptions yet.</p>
                 ) : filteredActiveSubscriptions.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
