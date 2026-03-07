@@ -18,7 +18,7 @@
 ## Story Structure
 - [have] Beat 1: `YouTube is full of value. Most of it gets buried.`
 - [have] Beat 2: `Bleu turns long videos into blueprints you can scan in seconds.`
-- [have] Beat 3: `Follow sources. Join topics. Skip the noise.`
+- [have] Beat 3: `Get your favorite creators' new videos as blueprints.`
 - [have] Beat 4: `Find the best new videos without spending hours watching everything.`
 
 ## Page Structure

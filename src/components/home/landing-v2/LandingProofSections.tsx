@@ -1,18 +1,37 @@
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, BookOpenText, Layers3, Search, Sparkles, Users } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookOpenText, PlaySquare, Search, Sparkles, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { LANDING_HOW_IT_WORKS, LANDING_LANE_CARDS, LANDING_VALUE_POINTS } from '@/lib/landingStory';
+import { LANDING_BLUEPRINT_PREVIEWS, LANDING_HOW_IT_WORKS, LANDING_VALUE_POINTS } from '@/lib/landingStory';
 
 interface LandingProofSectionsProps {
   isSignedIn: boolean;
   onFinalCtaClick: (slot: 'primary' | 'secondary') => void;
 }
 
-const STEP_ICONS = [Search, BookOpenText, Layers3];
+const STEP_ICONS = [Search, BookOpenText, PlaySquare];
 const VALUE_ICONS = [Sparkles, Search, Users];
 
 export function LandingProofSections({ isSignedIn, onFinalCtaClick }: LandingProofSectionsProps) {
+  const [activeBlueprintIndex, setActiveBlueprintIndex] = useState(0);
+  const activeBlueprint = useMemo(
+    () => LANDING_BLUEPRINT_PREVIEWS[activeBlueprintIndex] ?? LANDING_BLUEPRINT_PREVIEWS[0],
+    [activeBlueprintIndex],
+  );
+
+  const showPreviousBlueprint = () => {
+    setActiveBlueprintIndex((current) =>
+      current === 0 ? LANDING_BLUEPRINT_PREVIEWS.length - 1 : current - 1,
+    );
+  };
+
+  const showNextBlueprint = () => {
+    setActiveBlueprintIndex((current) =>
+      current === LANDING_BLUEPRINT_PREVIEWS.length - 1 ? 0 : current + 1,
+    );
+  };
+
   return (
     <div className="mx-auto w-full max-w-7xl space-y-20 px-4 py-20 md:px-6 lg:px-10">
       <section id="how-it-works" className="space-y-6">
@@ -22,7 +41,7 @@ export function LandingProofSections({ isSignedIn, onFinalCtaClick }: LandingPro
             A better way to keep up with valuable YouTube.
           </h2>
           <p className="text-base leading-relaxed text-muted-foreground">
-            Bleu is built around a simple loop: follow strong sources, generate the useful version, and browse by topic when you want wider discovery.
+            Bleu is built around a simple loop: follow strong creators, generate the useful version, and browse by topic when you want wider discovery.
           </p>
         </div>
         <div className="grid gap-4 md:grid-cols-3">
@@ -45,30 +64,73 @@ export function LandingProofSections({ isSignedIn, onFinalCtaClick }: LandingPro
         </div>
       </section>
 
-      <section className="space-y-6">
-        <div className="max-w-2xl space-y-3">
-          <p className="text-sm font-semibold uppercase tracking-[0.22em] text-primary">The three lanes</p>
+      <section className="grid gap-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-center">
+        <div className="max-w-xl space-y-4">
+          <p className="text-sm font-semibold uppercase tracking-[0.22em] text-primary">Blueprint preview</p>
           <h2 className="text-3xl font-black tracking-tight text-foreground sm:text-4xl">
-            One app, three ways to keep up.
+            See what a blueprint actually looks like.
           </h2>
           <p className="text-base leading-relaxed text-muted-foreground">
-            For You is personal. Joined is interest-driven. All is the full published blueprint stream.
+            Bleu is easiest to understand when you see the output. This demo card shows the kind of structure a user gets back after a video turns into a blueprint.
           </p>
+          <div className="flex items-center gap-2 pt-2">
+            <Button type="button" variant="outline" size="icon" aria-label="Previous blueprint" onClick={showPreviousBlueprint}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <Button type="button" variant="outline" size="icon" aria-label="Next blueprint" onClick={showNextBlueprint}>
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+            <div className="ml-2 flex items-center gap-2">
+              {LANDING_BLUEPRINT_PREVIEWS.map((preview, index) => (
+                <button
+                  key={preview.id}
+                  type="button"
+                  aria-label={`Open ${preview.title}`}
+                  onClick={() => setActiveBlueprintIndex(index)}
+                  className={`h-2.5 rounded-full transition-all ${
+                    index === activeBlueprintIndex ? 'w-8 bg-primary' : 'w-2.5 bg-primary/25 hover:bg-primary/40'
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
         </div>
-        <div className="grid gap-4 lg:grid-cols-3">
-          {LANDING_LANE_CARDS.map((lane) => (
-            <Card key={lane.id} className="rounded-3xl border-border/50 bg-card/70 shadow-soft">
-              <CardContent className="space-y-4 p-6">
-                <div className="flex items-center justify-between">
-                  <p className="text-xl font-semibold text-foreground">{lane.title}</p>
-                  <span className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-primary">
-                    {lane.stateLabel}
-                  </span>
+        <div className="rounded-[2rem] border border-border/50 bg-gradient-to-br from-card via-card to-accent/20 p-3 shadow-soft-xl">
+          <Card className="rounded-[1.75rem] border-border/50 bg-background/90 shadow-none">
+            <CardContent className="space-y-6 p-6">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-2">
+                  <div className="inline-flex rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+                    {activeBlueprint.channel}
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-semibold tracking-tight text-foreground">{activeBlueprint.title}</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">{activeBlueprint.creator}</p>
+                  </div>
                 </div>
-                <p className="text-sm leading-relaxed text-muted-foreground">{lane.description}</p>
-              </CardContent>
-            </Card>
-          ))}
+                <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
+                  {activeBlueprint.statsLabel}
+                </span>
+              </div>
+
+              <div className="rounded-2xl border border-border/50 bg-accent/30 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Summary</p>
+                <p className="mt-2 text-sm leading-relaxed text-foreground/90">{activeBlueprint.summary}</p>
+              </div>
+
+              <div className="rounded-2xl border border-border/50 bg-background p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Takeaways</p>
+                <div className="mt-3 space-y-2">
+                  {activeBlueprint.takeaways.map((takeaway) => (
+                    <div key={takeaway} className="flex items-start gap-3 text-sm text-foreground/90">
+                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
+                      <span>{takeaway}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </section>
 

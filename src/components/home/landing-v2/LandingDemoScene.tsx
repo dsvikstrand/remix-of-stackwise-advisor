@@ -121,7 +121,7 @@ function LanesScene({ onOpenDemo }: { onOpenDemo: (variant: LandingDemoVariant) 
                   <Lock className="h-4 w-4 text-primary" />
                   Unlock available
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">New video from a source you follow.</p>
+                <p className="mt-1 text-xs text-muted-foreground">New video from a creator you follow.</p>
               </div>
               <div className="rounded-xl border border-border/40 bg-background p-3">
                 <div className="flex items-center gap-2 text-sm font-semibold">

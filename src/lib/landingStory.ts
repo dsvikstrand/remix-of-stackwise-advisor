@@ -16,17 +16,20 @@ export interface LandingStep {
   description: string;
 }
 
-export interface LandingLaneCard {
-  id: string;
-  title: string;
-  description: string;
-  stateLabel: string;
-}
-
 export interface LandingValuePoint {
   id: string;
   title: string;
   description: string;
+}
+
+export interface LandingBlueprintPreview {
+  id: string;
+  title: string;
+  creator: string;
+  channel: string;
+  summary: string;
+  takeaways: string[];
+  statsLabel: string;
 }
 
 export interface LandingBackgroundGlyph {
@@ -75,7 +78,7 @@ export const LANDING_STORY_SCENES: LandingStoryScene[] = [
     eyebrow: 'Personalized discovery',
     headline: "Get your favorite creators' new videos as blueprints.",
     subheadline:
-      'For You stays source-driven. Joined keeps you in the loop on the topics you actually care about.',
+      'For You stays creator-driven. Joined keeps you in the loop on the topics you actually care about.',
     demoVariant: 'lanes',
     accentClass: 'from-primary/20 via-rose-200/20 to-amber-100/30',
   },
@@ -93,8 +96,8 @@ export const LANDING_STORY_SCENES: LandingStoryScene[] = [
 export const LANDING_HOW_IT_WORKS: LandingStep[] = [
   {
     id: 'follow',
-    title: 'Follow the right sources',
-    description: 'Subscribe to creators you trust so their new uploads land in For You.',
+    title: 'Follow the right creators',
+    description: 'Follow creators you trust so their new uploads land in For You.',
   },
   {
     id: 'generate',
@@ -108,27 +111,6 @@ export const LANDING_HOW_IT_WORKS: LandingStep[] = [
   },
 ];
 
-export const LANDING_LANE_CARDS: LandingLaneCard[] = [
-  {
-    id: 'for-you',
-    title: 'For You',
-    description: 'Your source-driven lane. It can contain locked items and ready blueprints.',
-    stateLabel: 'locked + ready',
-  },
-  {
-    id: 'joined',
-    title: 'Joined',
-    description: 'A filtered published feed for the Bleu channels you joined.',
-    stateLabel: 'published only',
-  },
-  {
-    id: 'all',
-    title: 'All',
-    description: 'The global published blueprint feed across all Bleu channels.',
-    stateLabel: 'published only',
-  },
-];
-
 export const LANDING_VALUE_POINTS: LandingValuePoint[] = [
   {
     id: 'consume-less',
@@ -137,13 +119,46 @@ export const LANDING_VALUE_POINTS: LandingValuePoint[] = [
   },
   {
     id: 'discover-better',
-    title: 'Discover better sources',
-    description: 'Use channels and community signals to find videos you would not have discovered from subscriptions alone.',
+    title: 'Discover better creators',
+    description: 'Use channels and community signals to find videos you would not have discovered from follows alone.',
   },
   {
     id: 'reuse-what-works',
     title: 'Keep what is worth revisiting',
     description: 'Turn the best videos into reusable notes, routines, and shared reference points.',
+  },
+];
+
+export const LANDING_BLUEPRINT_PREVIEWS: LandingBlueprintPreview[] = [
+  {
+    id: 'creator-energy',
+    title: 'How to keep steady energy through the week',
+    creator: 'Thomas DeLauer',
+    channel: 'nutrition-meal-planning',
+    summary:
+      'A compact blueprint that turns one long video into the main explanation, the practical rules, and the parts that matter most.',
+    takeaways: ['Eat in repeatable patterns', 'Anchor meals around protein', 'Notice what actually changes your energy'],
+    statsLabel: '7 min scan',
+  },
+  {
+    id: 'creator-workflow',
+    title: 'Best AI stack for solo creators right now',
+    creator: 'Low Level',
+    channel: 'ai-tools-automation',
+    summary:
+      'A minimal blueprint card that captures the stack, why each tool matters, and what a creator should test first.',
+    takeaways: ['Use one workflow, not ten tools', 'Automate the repetitive parts', 'Keep the stack small enough to maintain'],
+    statsLabel: '5 min scan',
+  },
+  {
+    id: 'creator-training',
+    title: 'Build a recovery routine that actually sticks',
+    creator: 'Jeff Nippard',
+    channel: 'fitness-training',
+    summary:
+      'A clean demo blueprint showing how Bleu condenses the useful parts into a format you can revisit later without replaying the whole video.',
+    takeaways: ['Recovery is scheduled, not guessed', 'Small habits beat perfect routines', 'Track what helps you recover faster'],
+    statsLabel: '6 min scan',
   },
 ];
 
