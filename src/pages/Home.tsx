@@ -10,6 +10,7 @@ export default function Home() {
   const { user } = useAuth();
   const {
     containerRef,
+    scrollProgress,
     activeSceneIndex,
     prefersReducedMotion,
     isSignedIn,
@@ -30,6 +31,7 @@ export default function Home() {
       <main>
         <LandingHeroStory
           containerRef={containerRef}
+          scrollProgress={scrollProgress}
           activeSceneIndex={activeSceneIndex}
           isSignedIn={isSignedIn}
           onHeroCtaClick={logHeroCta}
