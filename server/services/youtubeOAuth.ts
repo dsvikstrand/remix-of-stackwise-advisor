@@ -165,7 +165,7 @@ export async function fetchYouTubeOAuthAccountProfile(accessToken: string): Prom
   const response = await fetch(url.toString(), {
     headers: {
       Authorization: `Bearer ${token}`,
-      'User-Agent': 'bleuv1-youtube-oauth/1.0 (+https://bapi.vdsai.cloud)',
+      'User-Agent': 'bleuv1-youtube-oauth/1.0 (+https://api.bleup.app)',
     },
   });
   const json = await response.json().catch(() => null) as {

@@ -111,7 +111,7 @@ export async function searchYouTubeVideos(input: {
 
   const response = await fetch(url.toString(), {
     headers: {
-      'User-Agent': 'bleuv1-youtube-search/1.0 (+https://bapi.vdsai.cloud)',
+      'User-Agent': 'bleuv1-youtube-search/1.0 (+https://api.bleup.app)',
       Accept: 'application/json',
     },
   });
@@ -149,7 +149,7 @@ export async function searchYouTubeVideos(input: {
       const durationMap = await fetchYouTubeDurationMap({
         apiKey,
         videoIds: results.map((row) => row.video_id),
-        userAgent: 'bleuv1-youtube-search/1.0 (+https://bapi.vdsai.cloud)',
+        userAgent: 'bleuv1-youtube-search/1.0 (+https://api.bleup.app)',
       });
       results = results.map((row) => ({
         ...row,

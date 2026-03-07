@@ -179,7 +179,7 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
           apiKey: youtubeDataApiKey,
           videoIds: [validatedUrl.sourceNativeId],
           timeoutMs: generationDurationLookupTimeoutMs,
-          userAgent: 'bleuv1-youtube-direct-generate/1.0 (+https://bapi.vdsai.cloud)',
+          userAgent: 'bleuv1-youtube-direct-generate/1.0 (+https://api.bleup.app)',
         });
         resolvedDurationSeconds = durationMap.get(validatedUrl.sourceNativeId) ?? null;
       }
@@ -836,7 +836,7 @@ app.post(
           apiKey: youtubeDataApiKey,
           videoIds: dedupedItems.filter((row) => row.duration_seconds == null).map((row) => row.video_id),
           timeoutMs: generationDurationLookupTimeoutMs,
-          userAgent: 'bleuv1-search-generate/1.0 (+https://bapi.vdsai.cloud)',
+          userAgent: 'bleuv1-search-generate/1.0 (+https://api.bleup.app)',
         });
         const normalizedWithDuration = dedupedItems.map((item) => ({
           ...item,

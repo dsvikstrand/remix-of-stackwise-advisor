@@ -88,7 +88,7 @@ async function fetchChannelSubscriberMap(input: {
 
     const response = await fetch(url.toString(), {
       headers: {
-        'User-Agent': 'bleuv1-youtube-channel-search/1.0 (+https://bapi.vdsai.cloud)',
+        'User-Agent': 'bleuv1-youtube-channel-search/1.0 (+https://api.bleup.app)',
         Accept: 'application/json',
       },
     });
@@ -156,7 +156,7 @@ export async function searchYouTubeChannels(input: {
 
   const response = await fetch(url.toString(), {
     headers: {
-      'User-Agent': 'bleuv1-youtube-channel-search/1.0 (+https://bapi.vdsai.cloud)',
+      'User-Agent': 'bleuv1-youtube-channel-search/1.0 (+https://api.bleup.app)',
       Accept: 'application/json',
     },
   });

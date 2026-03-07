@@ -280,7 +280,7 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
             apiKey: deps.youtubeDataApiKey,
             videoIds: missingDurationIds,
             timeoutMs: deps.generationDurationLookupTimeoutMs,
-            userAgent: 'bleuv1-subscription-auto/1.0 (+https://bapi.vdsai.cloud)',
+            userAgent: 'bleuv1-subscription-auto/1.0 (+https://api.bleup.app)',
           });
           for (const videoId of missingDurationIds) {
             durationByVideoId.set(videoId, fetchedDurations.get(videoId) ?? null);

@@ -50,7 +50,7 @@ export async function fetchYouTubeUserSubscriptions(input: {
     const response = await fetch(url.toString(), {
       headers: {
         Authorization: `Bearer ${accessToken}`,
-        'User-Agent': 'bleuv1-youtube-subscriptions/1.0 (+https://bapi.vdsai.cloud)',
+        'User-Agent': 'bleuv1-youtube-subscriptions/1.0 (+https://api.bleup.app)',
       },
     });
 

@@ -69,7 +69,7 @@ function toYouTubeUrl(input: string): string | null {
 async function fetchHtml(url: string): Promise<string> {
   const response = await fetch(url, {
     headers: {
-      'User-Agent': 'bleuv1-subscriptions/1.0 (+https://bapi.vdsai.cloud)',
+      'User-Agent': 'bleuv1-subscriptions/1.0 (+https://api.bleup.app)',
       'Accept-Language': 'en-US,en;q=0.9',
     },
   });
@@ -104,7 +104,7 @@ function extractTitleFromHtml(html: string): string | null {
 export async function fetchYouTubeFeed(channelId: string, maxItems = 15): Promise<{ channelTitle: string | null; videos: YouTubeFeedVideo[] }> {
   const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`;
   const response = await fetch(feedUrl, {
-    headers: { 'User-Agent': 'bleuv1-subscriptions/1.0 (+https://bapi.vdsai.cloud)' },
+    headers: { 'User-Agent': 'bleuv1-subscriptions/1.0 (+https://api.bleup.app)' },
   });
   if (!response.ok) {
     throw new Error(`FEED_FETCH_FAILED:${response.status}`);
@@ -167,7 +167,7 @@ export async function fetchYouTubeVideoStates(input: {
 
     const response = await fetch(url.toString(), {
       headers: {
-        'User-Agent': 'bleuv1-subscriptions/1.0 (+https://bapi.vdsai.cloud)',
+        'User-Agent': 'bleuv1-subscriptions/1.0 (+https://api.bleup.app)',
         Accept: 'application/json',
       },
     });

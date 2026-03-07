@@ -317,7 +317,7 @@ async function runYouTubePipeline(input: {
       videoId: input.videoId,
       videoTitle: null,
       durationSeconds: input.durationSeconds ?? null,
-      userAgent: 'bleuv1-youtube-pipeline/1.0 (+https://bapi.vdsai.cloud)',
+      userAgent: 'bleuv1-youtube-pipeline/1.0 (+https://api.bleup.app)',
     });
     if (traceContext.db && traceContext.userId) {
       await safeGenerationTraceWrite({

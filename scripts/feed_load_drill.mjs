@@ -2,7 +2,7 @@
 
 function parseArgs(argv) {
   const options = {
-    baseUrl: 'https://bapi.vdsai.cloud',
+    baseUrl: 'https://api.bleup.app',
     urls: ['/wall', '/my-feed', '/api/credits', '/api/ingestion/jobs/latest-mine'],
     requests: 120,
     concurrency: 8,

@@ -459,7 +459,7 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
         apiKey: deps.youtubeDataApiKey,
         videoIds: dedupedItems.filter((item) => item.duration_seconds == null).map((item) => item.video_id),
         timeoutMs: deps.generationDurationLookupTimeoutMs,
-        userAgent: 'bleuv1-refresh-generate/1.0 (+https://bapi.vdsai.cloud)',
+        userAgent: 'bleuv1-refresh-generate/1.0 (+https://api.bleup.app)',
       });
       const withResolvedDurations = dedupedItems.map((item) => ({
         ...item,

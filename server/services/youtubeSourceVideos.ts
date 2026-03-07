@@ -127,7 +127,7 @@ export async function listYouTubeSourceVideos(input: {
 
   const response = await fetch(url.toString(), {
     headers: {
-      'User-Agent': 'bleuv1-youtube-source-videos/1.0 (+https://bapi.vdsai.cloud)',
+      'User-Agent': 'bleuv1-youtube-source-videos/1.0 (+https://api.bleup.app)',
       Accept: 'application/json',
     },
   });
@@ -165,7 +165,7 @@ export async function listYouTubeSourceVideos(input: {
       const durationMap = await fetchYouTubeDurationMap({
         apiKey,
         videoIds: results.map((item) => item.video_id),
-        userAgent: 'bleuv1-youtube-source-videos/1.0 (+https://bapi.vdsai.cloud)',
+        userAgent: 'bleuv1-youtube-source-videos/1.0 (+https://api.bleup.app)',
       });
       results = results.map((item) => ({
         ...item,

@@ -776,7 +776,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         apiKey: youtubeDataApiKey,
         videoIds: candidateRows.filter((row) => row.duration_seconds == null).map((row) => row.video_id),
         timeoutMs: generationDurationLookupTimeoutMs,
-        userAgent: 'bleuv1-source-page-unlock/1.0 (+https://bapi.vdsai.cloud)',
+        userAgent: 'bleuv1-source-page-unlock/1.0 (+https://api.bleup.app)',
       });
       const withResolvedDurations = candidateRows.map((item) => ({
         ...item,

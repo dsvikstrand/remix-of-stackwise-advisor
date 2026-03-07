@@ -49,7 +49,7 @@ export async function fetchYouTubeDurationMap(input: {
     return durationMap;
   }
 
-  const userAgent = String(input.userAgent || '').trim() || 'bleuv1-youtube-duration/1.0 (+https://bapi.vdsai.cloud)';
+  const userAgent = String(input.userAgent || '').trim() || 'bleuv1-youtube-duration/1.0 (+https://api.bleup.app)';
   const batchSize = 50;
   for (let offset = 0; offset < uniqueVideoIds.length; offset += batchSize) {
     const ids = uniqueVideoIds.slice(offset, offset + batchSize);

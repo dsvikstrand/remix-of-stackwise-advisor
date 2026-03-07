@@ -1752,7 +1752,7 @@ async function fetchYouTubeChannelAssetMap(input: {
 
     const response = await fetch(url.toString(), {
       headers: {
-      'User-Agent': 'bleuv1-youtube-channel-assets/1.0 (+https://bapi.vdsai.cloud)',
+      'User-Agent': 'bleuv1-youtube-channel-assets/1.0 (+https://api.bleup.app)',
       Accept: 'application/json',
     },
     });
@@ -4725,7 +4725,7 @@ async function collectRefreshCandidatesForUser(db: ReturnType<typeof createClien
       blockUnknown: generationBlockUnknownDuration,
       apiKey: youtubeDataApiKey,
       lookupTimeoutMs: generationDurationLookupTimeoutMs,
-      userAgent: 'bleuv1-subscription-refresh-scan/1.0 (+https://bapi.vdsai.cloud)',
+      userAgent: 'bleuv1-subscription-refresh-scan/1.0 (+https://api.bleup.app)',
       items: candidates,
     });
     candidates = split.allowed.map((item) => ({
