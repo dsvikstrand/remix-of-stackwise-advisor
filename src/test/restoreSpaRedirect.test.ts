@@ -1,12 +1,12 @@
 import { describe, expect, it, beforeEach, vi, afterEach } from 'vitest';
 import { restoreSpaRedirect } from '@/lib/restoreSpaRedirect';
 
-const BASE_PATH = '/remix-of-stackwise-advisor/';
+const BASE_PATH = '/';
 
 describe('restoreSpaRedirect', () => {
   beforeEach(() => {
     sessionStorage.clear();
-    window.history.replaceState(null, '', '/remix-of-stackwise-advisor/');
+    window.history.replaceState(null, '', '/');
   });
 
   afterEach(() => {
@@ -14,12 +14,12 @@ describe('restoreSpaRedirect', () => {
   });
 
   it('restores a valid base-path redirect and clears storage key', () => {
-    sessionStorage.setItem('redirect', '/remix-of-stackwise-advisor/terms?from=404#top');
+    sessionStorage.setItem('redirect', '/terms?from=404#top');
 
     const result = restoreSpaRedirect(BASE_PATH);
 
     expect(result).toEqual({ restored: true, reason: 'restored' });
-    expect(window.location.pathname).toBe('/remix-of-stackwise-advisor/terms');
+    expect(window.location.pathname).toBe('/terms');
     expect(window.location.search).toBe('?from=404');
     expect(window.location.hash).toBe('#top');
     expect(sessionStorage.getItem('redirect')).toBeNull();
@@ -31,17 +31,17 @@ describe('restoreSpaRedirect', () => {
     const result = restoreSpaRedirect(BASE_PATH);
 
     expect(result).toEqual({ restored: false, reason: 'invalid_value' });
-    expect(window.location.pathname).toBe('/remix-of-stackwise-advisor/');
+    expect(window.location.pathname).toBe('/');
     expect(sessionStorage.getItem('redirect')).toBeNull();
   });
 
   it('ignores redirect outside base path and clears storage key', () => {
     sessionStorage.setItem('redirect', '/other-app/privacy');
 
-    const result = restoreSpaRedirect(BASE_PATH);
+    const result = restoreSpaRedirect('/app/');
 
     expect(result).toEqual({ restored: false, reason: 'outside_base_path' });
-    expect(window.location.pathname).toBe('/remix-of-stackwise-advisor/');
+    expect(window.location.pathname).toBe('/');
     expect(sessionStorage.getItem('redirect')).toBeNull();
   });
 

@@ -4,8 +4,7 @@ import path from "path";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  const basePath =
-    process.env.VITE_BASE_PATH || (mode === "development" ? "/" : "/remix-of-stackwise-advisor/");
+  const basePath = process.env.VITE_BASE_PATH || "/";
 
   return {
     base: basePath,

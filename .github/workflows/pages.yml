@@ -19,9 +19,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set build base path
-        run: echo "VITE_BASE_PATH=/remix-of-stackwise-advisor/" >> $GITHUB_ENV
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -48,7 +45,7 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          VITE_BASE_PATH: ${{ env.VITE_BASE_PATH }}
+          VITE_BASE_PATH: /
           VITE_AGENTIC_BACKEND_URL: https://bapi.vdsai.cloud
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}

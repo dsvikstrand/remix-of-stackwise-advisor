@@ -7,14 +7,8 @@
     <script>
       (function () {
         var path = window.location.pathname;
-        var repoBase = '/remix-of-stackwise-advisor';
-        var agenticBase = repoBase + '/agentic-backend';
-        var targetBase = path.startsWith(agenticBase + '/') || path === agenticBase
-          ? agenticBase
-          : repoBase;
-
         sessionStorage.setItem('redirect', path + window.location.search + window.location.hash);
-        window.location.replace(targetBase + '/');
+        window.location.replace('/');
       })();
     </script>
   </head>
