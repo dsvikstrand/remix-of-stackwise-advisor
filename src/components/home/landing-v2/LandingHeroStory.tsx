@@ -112,9 +112,17 @@ function BackgroundGlyph({
     );
   }
 
+  if (glyph.shape === 'cross') {
+    return (
+      <m.div aria-hidden="true" className={sharedClasses} style={style}>
+        <Plus className={cn('h-full w-full', glyph.toneClassName)} strokeWidth={1.55} />
+      </m.div>
+    );
+  }
+
   return (
     <m.div aria-hidden="true" className={sharedClasses} style={style}>
-      <Plus className={cn('h-full w-full', glyph.toneClassName)} strokeWidth={1.5} />
+      <Sparkles className={cn('h-full w-full', glyph.toneClassName)} strokeWidth={1.4} />
     </m.div>
   );
 }
@@ -139,7 +147,7 @@ function BackgroundArt({
     progressValue.set(scrollProgress);
   }, [progressValue, scrollProgress]);
 
-  const haloOpacity = useTransform(smoothProgress, [0, 0.4, 1], [0.24, 0.42, 0.32]);
+  const haloOpacity = useTransform(smoothProgress, [0, 0.4, 1], [0.18, 0.3, 0.22]);
   const haloScale = useTransform(smoothProgress, [0, 0.5, 1], [1, 1.1, 1]);
   const gridOpacity = useTransform(smoothProgress, [0, 0.5, 1], [0.42, 0.52, 0.45]);
   const backdropShift = useTransform(smoothProgress, [0, 1], ['0%', '2.5%']);
@@ -192,10 +200,10 @@ function BackgroundArt({
       ))}
       <m.div
         aria-hidden="true"
-        className="absolute inset-x-[14%] top-[36%] h-52 rounded-full bg-white/40 blur-[120px]"
+        className="absolute inset-x-[18%] top-[40%] h-44 rounded-full bg-white/26 blur-[110px]"
         style={
           reducedMotion
-            ? { opacity: 0.28 + sceneIndex * 0.02 }
+            ? { opacity: 0.18 + sceneIndex * 0.02 }
             : { opacity: haloOpacity, scale: haloScale }
         }
       />
