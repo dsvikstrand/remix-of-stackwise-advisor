@@ -26,6 +26,7 @@ a4h) [have] Oracle runtime hardening now also depends on lazy backend OpenAI loa
 a4h) [have] Backend maintainability pass extracted shared generation preflight helpers and expanded regression coverage around source-page policy, shared auto billing, and quota degraded paths.
 a4i) [have] Admin entitlement bypass now applies to concrete credit reservation and shared auto-unlock funding, preventing auto rows from remaining `unlockable` solely due to zero wallet balance.
 a4k) [have] Oracle MVP production runtime is now intentionally single-service combined mode (`agentic-backend.service` with HTTP + background work together); dedicated split worker topology is deferred beyond the current MVP load target.
+a4l) [have] Oracle backend config source is now conceptually locked to `/etc/agentic-backend.env`; repo-root `.env` is local-only fallback for non-systemd runs and `.env.production` is no longer part of backend bootstrap.
 a5) [todo] Improve user trust around shared-cost auto billing transitions and async processing visibility.
 a6) [todo] Reduce terminology ambiguity between personal stream, followed channels, source pages, and channel taxonomy.
 

@@ -3,7 +3,11 @@ import path from 'node:path';
 
 let didLoadEnv = false;
 
-function loadEnvFileIfPresent(filePath: string) {
+export function shouldLoadProjectEnv(env: NodeJS.ProcessEnv = process.env) {
+  return String(env.INVOCATION_ID || '').trim() === '';
+}
+
+export function loadEnvFileIfPresent(filePath: string, env: NodeJS.ProcessEnv = process.env) {
   if (!fs.existsSync(filePath)) return;
   const raw = fs.readFileSync(filePath, 'utf8');
   raw.split(/\r?\n/).forEach((line) => {
@@ -16,17 +20,23 @@ function loadEnvFileIfPresent(filePath: string) {
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
       value = value.slice(1, -1);
     }
-    if (!(key in process.env)) process.env[key] = value;
+    if (!Object.prototype.hasOwnProperty.call(env, key)) env[key] = value;
   });
 }
 
-export function loadProjectEnv() {
+export function loadProjectEnv(input: { root?: string; env?: NodeJS.ProcessEnv } = {}) {
   if (didLoadEnv) return;
   didLoadEnv = true;
 
-  const root = process.cwd();
-  loadEnvFileIfPresent(path.join(root, '.env'));
-  loadEnvFileIfPresent(path.join(root, '.env.production'));
+  const env = input.env || process.env;
+  if (!shouldLoadProjectEnv(env)) return;
+
+  const root = input.root || process.cwd();
+  loadEnvFileIfPresent(path.join(root, '.env'), env);
+}
+
+export function resetProjectEnvLoaderForTests() {
+  didLoadEnv = false;
 }
 
 loadProjectEnv();

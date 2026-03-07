@@ -64,9 +64,9 @@ Notes:
 
 ## Oracle Server Gotchas
 
-The server now loads `.env` and `.env.production` automatically at startup if those files exist in the repo root.
+The production backend should not boot from repo-root `.env` files on Oracle.
 
-That means updating `/home/ubuntu/remix-of-stackwise-advisor/.env` is enough for the app and the transcript smoke script, as long as the process is restarted after the file changes.
+Use `/etc/agentic-backend.env` as the canonical runtime config source for the live service, then restart `agentic-backend.service`.
 
 If you want to use the proxy pseudo-restart endpoint below, also set:
 

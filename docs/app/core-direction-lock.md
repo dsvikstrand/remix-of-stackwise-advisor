@@ -83,6 +83,7 @@ Status: `canonical`
 51. Launch-critical UX copy for generation failures must be normalized via shared frontend mapping (no raw backend/internal payload leakage on key surfaces).
 52. Source-page read surfaces must fail safely: opportunistic asset-sweep hooks are allowed, but missing dependency wiring must never crash API process uptime.
 53. Oracle MVP production runtime is single-service combined mode (`agentic-backend.service` with HTTP + background work together); dedicated split worker topology is deferred until a later scale pass proves it necessary.
+54. Oracle backend runtime config is locked to `/etc/agentic-backend.env`; repo-root `.env` is local-only fallback for non-systemd runs and backend bootstrap must not depend on `.env.production`.
 
 ## Core user journey
 1. Subscribe to a YouTube channel or search/select a video.
@@ -119,3 +120,4 @@ Status: `canonical`
 6. `Wall` no longer assembles feed rows through browser-side Supabase fan-out; it consumes backend-shaped feed endpoints for both public lanes and `For You`.
 7. Feed lane contract is now explicit and canonical in `docs/app/mvp-feed-and-channel-model.md`: `For You` is the only locked lane, `Joined` is joined-channel published discovery, and `All` is the global published blueprint stream.
 8. Oracle runtime now treats `RUN_INGESTION_WORKER=true` as the keep-alive background-work switch even in combined mode, so queue polling and YouTube refresh scheduling no longer depend on a separate worker service for MVP production.
+9. Backend env bootstrap now loads repo-root `.env` only for non-systemd local runs; Oracle production uses `/etc/agentic-backend.env` as the canonical app-config source and backend startup no longer reads `.env.production`.

@@ -49,7 +49,6 @@ server/data/
 .env
 .env.*
 !.env.example
-!.env.production
 
 # Eval method run artifacts (local/runtime outputs)
 eval/methods/**/artifacts/

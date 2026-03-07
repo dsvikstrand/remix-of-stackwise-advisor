@@ -165,6 +165,14 @@ ssh oracle-free 'sudo journalctl -u agentic-backend.service -n 200 --no-pager'
 ```bash
 ssh oracle-free 'cd /home/ubuntu/remix-of-stackwise-advisor && git pull --ff-only && sudo systemctl restart agentic-backend.service'
 ```
+- Canonical runtime config:
+```bash
+ssh oracle-free 'sudo ls -l /etc/agentic-backend.env'
+```
+- Runtime source-of-truth rule:
+  - live backend app config comes from `/etc/agentic-backend.env`
+  - repo-root `.env` / `.env.production` are local/dev-only and must not be used for Oracle production boot
+  - the only expected remaining backend systemd drop-in is the Node path helper
 
 ## Environment checklist
 Required runtime variables:
@@ -446,6 +454,7 @@ Safe defaults:
   - `agentic-backend.service` runs in combined mode:
     - `RUN_HTTP_SERVER=true`
     - `RUN_INGESTION_WORKER=true`
+    - values live in `/etc/agentic-backend.env`
   - `agentic-worker.service` stays disabled unless an explicit later scale pass re-enables the split-runtime topology
 
 ### Optional later split
@@ -499,6 +508,7 @@ ssh oracle-free 'sudo systemctl disable --now agentic-worker.service'
 ```bash
 ssh oracle-free 'sudo systemctl daemon-reload && sudo systemctl restart agentic-backend.service'
 ```
+4. Confirm the combined-mode flags are present in `/etc/agentic-backend.env`.
   4. verify Home shows dismissible setup reminder card.
   5. complete import with at least one imported/reactivated channel and verify reminder no longer appears.
 - Existing-account check:
