@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { LANDING_BACKGROUND_GLYPHS, LANDING_STORY_SCENES, type LandingBackgroundGlyph } from '@/lib/landingStory';
 import { LandingDemoScene } from '@/components/home/landing-v2/LandingDemoScene';
+import { useLandingHeroGlyphMotion } from '@/hooks/useLandingHeroGlyphMotion';
 
 interface LandingHeroStoryProps {
   containerRef: RefObject<HTMLDivElement>;
@@ -20,45 +21,13 @@ interface LandingHeroStoryProps {
 
 function BackgroundGlyph({
   glyph,
-  progress,
   reducedMotion,
+  setGlyphRef,
 }: {
   glyph: LandingBackgroundGlyph;
-  progress: ReturnType<typeof useSpring>;
   reducedMotion: boolean;
+  setGlyphRef: ReturnType<typeof useLandingHeroGlyphMotion>['setGlyphRef'];
 }) {
-  const progressStops = glyph.progressStops ?? [0, 1];
-
-  const normalizeOutput = (values: number[] | undefined, fallback: number) => {
-    if (!values || values.length === 0) {
-      return Array.from({ length: progressStops.length }, () => fallback);
-    }
-
-    if (values.length === progressStops.length) {
-      return values;
-    }
-
-    if (values.length === 1) {
-      return Array.from({ length: progressStops.length }, () => values[0]);
-    }
-
-    if (values.length === 2 && progressStops.length === 3) {
-      return [values[0], (values[0] + values[1]) / 2, values[1]];
-    }
-
-    if (values.length < progressStops.length) {
-      return [...values, ...Array.from({ length: progressStops.length - values.length }, () => values[values.length - 1])];
-    }
-
-    return values.slice(0, progressStops.length);
-  };
-
-  const x = useTransform(progress, progressStops, normalizeOutput(glyph.xRange, 0));
-  const y = useTransform(progress, progressStops, normalizeOutput(glyph.yRange, 0));
-  const rotate = useTransform(progress, progressStops, normalizeOutput(glyph.rotateRange, 0));
-  const scale = useTransform(progress, progressStops, normalizeOutput(glyph.scaleRange, 1));
-  const opacity = useTransform(progress, progressStops, normalizeOutput(glyph.opacityRange, 0.22));
-
   const sizeClassName = glyph.mobileSize === 0
     ? 'hidden md:flex'
     : glyph.desktopOnly
@@ -84,26 +53,24 @@ function BackgroundGlyph({
         '--glyph-h-mobile': `${mobileHeight}px`,
         '--glyph-w': `${glyph.size}px`,
         '--glyph-h': `${desktopHeight}px`,
-        opacity: normalizeOutput(glyph.opacityRange, 0.22)[0],
+        opacity: glyph.startOpacity ?? 0.22,
+        transform: `rotate(${glyph.startRotate ?? 0}deg) scale(${glyph.startScale ?? 1})`,
       }
     : {
-        left: glyph.left,
-        top: glyph.top,
+        left: 0,
+        top: 0,
         '--glyph-w-mobile': `${mobileWidth}px`,
         '--glyph-h-mobile': `${mobileHeight}px`,
         '--glyph-w': `${glyph.size}px`,
         '--glyph-h': `${desktopHeight}px`,
-        x,
-        y,
-        rotate,
-        scale,
-        opacity,
+        opacity: glyph.startOpacity ?? 0.22,
       };
 
   if (glyph.shape === 'circle') {
     return (
-      <m.div
+      <div
         aria-hidden="true"
+        ref={setGlyphRef(glyph.id)}
         className={cn(sharedClasses, 'rounded-full blur-[1px]', glyph.toneClassName)}
         style={style}
       />
@@ -112,16 +79,17 @@ function BackgroundGlyph({
 
   if (glyph.shape === 'diamond') {
     return (
-      <m.div aria-hidden="true" className={sharedClasses} style={style}>
+      <div aria-hidden="true" ref={setGlyphRef(glyph.id)} className={sharedClasses} style={style}>
         <div className={cn('h-full w-full rotate-45 rounded-[1.15rem] blur-[0.2px]', glyph.toneClassName)} />
-      </m.div>
+      </div>
     );
   }
 
   if (glyph.shape === 'capsule') {
     return (
-      <m.div
+      <div
         aria-hidden="true"
+        ref={setGlyphRef(glyph.id)}
         className={cn(sharedClasses, 'rounded-full blur-[0.4px]', glyph.toneClassName)}
         style={style}
       />
@@ -130,8 +98,9 @@ function BackgroundGlyph({
 
   if (glyph.shape === 'ring') {
     return (
-      <m.div
+      <div
         aria-hidden="true"
+        ref={setGlyphRef(glyph.id)}
         className={cn(sharedClasses, 'rounded-full bg-transparent', glyph.toneClassName)}
         style={style}
       />
@@ -140,16 +109,16 @@ function BackgroundGlyph({
 
   if (glyph.shape === 'cross') {
     return (
-      <m.div aria-hidden="true" className={sharedClasses} style={style}>
+      <div aria-hidden="true" ref={setGlyphRef(glyph.id)} className={sharedClasses} style={style}>
         <Plus className={cn('h-full w-full', glyph.toneClassName)} strokeWidth={1.55} />
-      </m.div>
+      </div>
     );
   }
 
   return (
-    <m.div aria-hidden="true" className={sharedClasses} style={style}>
+    <div aria-hidden="true" ref={setGlyphRef(glyph.id)} className={sharedClasses} style={style}>
       <Sparkles className={cn('h-full w-full', glyph.toneClassName)} strokeWidth={1.4} />
-    </m.div>
+    </div>
   );
 }
 
@@ -167,6 +136,11 @@ function BackgroundArt({
     stiffness: 140,
     damping: 28,
     mass: 0.32,
+  });
+  const { setGlyphRef, setDesktopPathRef, setMobilePathRef } = useLandingHeroGlyphMotion({
+    glyphs: LANDING_BACKGROUND_GLYPHS,
+    progress: scrollProgress,
+    reducedMotion,
   });
 
   useEffect(() => {
@@ -204,6 +178,35 @@ function BackgroundArt({
 
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      <svg
+        aria-hidden="true"
+        className="absolute inset-0 h-full w-full overflow-visible"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+      >
+        <g opacity="0" pointerEvents="none">
+          {LANDING_BACKGROUND_GLYPHS.map((glyph) => (
+            <path
+              key={`${glyph.id}-desktop`}
+              ref={setDesktopPathRef(glyph.id)}
+              d={glyph.desktopPath}
+              fill="none"
+              stroke="none"
+            />
+          ))}
+          {LANDING_BACKGROUND_GLYPHS.map((glyph) =>
+            glyph.mobilePath ? (
+              <path
+                key={`${glyph.id}-mobile`}
+                ref={setMobilePathRef(glyph.id)}
+                d={glyph.mobilePath}
+                fill="none"
+                stroke="none"
+              />
+            ) : null,
+          )}
+        </g>
+      </svg>
       <m.div
         className="absolute inset-0 bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.10),transparent_42%),linear-gradient(180deg,hsl(var(--background))_0%,hsl(35_50%_95%)_40%,hsl(var(--background))_100%)]"
         style={reducedMotion ? undefined : { y: backdropShift }}
@@ -237,8 +240,8 @@ function BackgroundArt({
         <BackgroundGlyph
           key={glyph.id}
           glyph={glyph}
-          progress={smoothProgress}
           reducedMotion={reducedMotion}
+          setGlyphRef={setGlyphRef}
         />
       ))}
     </div>

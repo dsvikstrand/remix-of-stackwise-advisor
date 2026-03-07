@@ -32,7 +32,8 @@
 ## Motion Rules
 - [have] Use transform/opacity motion only for the core story transitions.
 - [have] Keep the background animated but subordinate to the copy and demo frames.
-- [have] Hero background geometry follows deterministic scroll-linked paths and reverses cleanly when the user scrolls back up.
+- [have] Hero background geometry follows deterministic perimeter-safe SVG rails and reverses cleanly when the user scrolls back up.
+- [have] The hero keeps `framer-motion` for text/demo transitions and uses GSAP path motion only for the background glyph layer.
 - [have] Decorative motion stays behind the copy/demo safe zones and uses a small fixed set of shapes rather than random particle noise.
 - [have] Support `prefers-reduced-motion`.
 - [have] Mobile keeps the same narrative but with lighter transforms and a shorter sticky section.
@@ -58,7 +59,7 @@
 ## Progress
 - [have] Landing V2 prototype direction is locked.
 - [have] Cinematic hero + curated product scenes are implemented on `/`.
-- [have] Scroll-synced geometric background motion is implemented for the hero.
+- [have] Scroll-synced geometric background motion is implemented for the hero via perimeter-safe SVG rails.
 - [have] Signed-in and signed-out CTA variants are implemented.
 - [todo] Add the first-timer tour after the landing page settles.
 - [todo] Add more contextual helper copy inside the product after the landing page settles.

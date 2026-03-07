@@ -39,12 +39,16 @@ export interface LandingBackgroundGlyph {
   depth: 'far' | 'mid' | 'near';
   toneClassName: string;
   desktopOnly?: boolean;
-  progressStops?: number[];
-  xRange: number[];
-  yRange: number[];
-  rotateRange?: number[];
-  scaleRange?: number[];
-  opacityRange?: number[];
+  desktopPath: string;
+  mobilePath?: string;
+  startProgress?: number;
+  endProgress?: number;
+  startRotate?: number;
+  endRotate?: number;
+  startScale?: number;
+  endScale?: number;
+  startOpacity?: number;
+  endOpacity?: number;
 }
 
 export const LANDING_STORY_SCENES: LandingStoryScene[] = [
@@ -153,11 +157,16 @@ export const LANDING_BACKGROUND_GLYPHS: LandingBackgroundGlyph[] = [
     mobileSize: 32,
     depth: 'far',
     toneClassName: 'text-orange-500/86 drop-shadow-[0_0_18px_rgba(249,115,22,0.22)]',
-    progressStops: [0, 0.45, 1],
-    xRange: [0, 24, 56],
-    yRange: [0, -14, 10],
-    rotateRange: [-18, -4, 18],
-    opacityRange: [0.58, 0.82, 0.9],
+    desktopPath: 'M 3 15 C 4 11, 7 8, 12 10',
+    mobilePath: 'M 5 18 C 6 14, 8 12, 12 13',
+    startProgress: 0.04,
+    endProgress: 0.62,
+    startRotate: -18,
+    endRotate: 18,
+    startScale: 0.96,
+    endScale: 1.08,
+    startOpacity: 0.62,
+    endOpacity: 0.9,
   },
   {
     id: 'glyph-capsule-top',
@@ -168,11 +177,16 @@ export const LANDING_BACKGROUND_GLYPHS: LandingBackgroundGlyph[] = [
     mobileSize: 108,
     depth: 'far',
     toneClassName: 'bg-amber-200/92 shadow-[0_0_84px_rgba(252,211,77,0.34)]',
-    progressStops: [0, 0.45, 1],
-    xRange: [0, 118, 238],
-    yRange: [0, 24, -4],
-    rotateRange: [-10, 2, 14],
-    opacityRange: [0.56, 0.76, 0.84],
+    desktopPath: 'M 18 7 C 34 2, 54 13, 78 6',
+    mobilePath: 'M 12 8 C 20 5, 29 11, 40 7',
+    startProgress: 0.04,
+    endProgress: 0.96,
+    startRotate: -10,
+    endRotate: 12,
+    startScale: 0.98,
+    endScale: 1.06,
+    startOpacity: 0.58,
+    endOpacity: 0.84,
   },
   {
     id: 'glyph-circle-east',
@@ -184,12 +198,15 @@ export const LANDING_BACKGROUND_GLYPHS: LandingBackgroundGlyph[] = [
     depth: 'mid',
     toneClassName: 'bg-primary/62 shadow-[0_0_60px_rgba(168,85,247,0.28)]',
     desktopOnly: true,
-    progressStops: [0, 0.5, 1],
-    xRange: [0, -54, -108],
-    yRange: [0, 34, 12],
-    rotateRange: [0, 4, -2],
-    scaleRange: [0.94, 1.08, 1.16],
-    opacityRange: [0.5, 0.68, 0.74],
+    desktopPath: 'M 97 14 C 94 10, 88 18, 76 24 C 71 27, 74 33, 80 32',
+    startProgress: 0.02,
+    endProgress: 0.98,
+    startRotate: -2,
+    endRotate: 6,
+    startScale: 0.96,
+    endScale: 1.12,
+    startOpacity: 0.52,
+    endOpacity: 0.76,
   },
   {
     id: 'glyph-diamond-west',
@@ -200,12 +217,16 @@ export const LANDING_BACKGROUND_GLYPHS: LandingBackgroundGlyph[] = [
     mobileSize: 48,
     depth: 'mid',
     toneClassName: 'bg-orange-300/88 shadow-[0_0_56px_rgba(245,158,11,0.4)]',
-    progressStops: [0, 0.42, 1],
-    xRange: [0, 34, 82],
-    yRange: [0, -46, -86],
-    rotateRange: [20, -6, -32],
-    scaleRange: [0.94, 1.04, 1.12],
-    opacityRange: [0.52, 0.72, 0.82],
+    desktopPath: 'M 5 84 C 8 88, 15 84, 21 76 C 24 72, 26 68, 29 66',
+    mobilePath: 'M 6 84 C 9 86, 14 82, 19 76',
+    startProgress: 0.06,
+    endProgress: 0.7,
+    startRotate: 18,
+    endRotate: -26,
+    startScale: 0.96,
+    endScale: 1.1,
+    startOpacity: 0.56,
+    endOpacity: 0.82,
   },
   {
     id: 'glyph-circle-southwest',
@@ -216,11 +237,14 @@ export const LANDING_BACKGROUND_GLYPHS: LandingBackgroundGlyph[] = [
     mobileSize: 36,
     depth: 'far',
     toneClassName: 'bg-rose-200/82 shadow-[0_0_42px_rgba(251,113,133,0.24)]',
-    progressStops: [0, 0.5, 1],
-    xRange: [0, 18, 42],
-    yRange: [0, -12, -22],
-    scaleRange: [0.92, 1.02, 1.08],
-    opacityRange: [0.44, 0.58, 0.66],
+    desktopPath: 'M 64 92 C 72 96, 84 92, 93 88',
+    mobilePath: 'M 62 92 C 70 94, 78 91, 86 88',
+    startProgress: 0.08,
+    endProgress: 0.58,
+    startScale: 0.92,
+    endScale: 1.06,
+    startOpacity: 0.44,
+    endOpacity: 0.66,
   },
   {
     id: 'glyph-cross-southeast',
@@ -231,10 +255,15 @@ export const LANDING_BACKGROUND_GLYPHS: LandingBackgroundGlyph[] = [
     mobileSize: 28,
     depth: 'near',
     toneClassName: 'text-primary/82 drop-shadow-[0_0_14px_rgba(168,85,247,0.18)]',
-    progressStops: [0, 0.46, 1],
-    xRange: [0, -118, -236],
-    yRange: [0, -28, 10],
-    rotateRange: [12, -4, -18],
-    opacityRange: [0.52, 0.76, 0.84],
+    desktopPath: 'M 88 86 C 84 84, 80 83, 76 84',
+    mobilePath: 'M 82 84 C 78 83, 74 83, 70 84',
+    startProgress: 0.06,
+    endProgress: 0.32,
+    startRotate: 10,
+    endRotate: -16,
+    startScale: 0.96,
+    endScale: 1.04,
+    startOpacity: 0.56,
+    endOpacity: 0.82,
   },
 ];
