@@ -188,7 +188,7 @@ ssh oracle-free "cd /home/ubuntu/remix-of-stackwise-advisor && git fetch origin 
 ```
 - Backend smoke on Oracle:
 ```bash
-ssh oracle-free 'set -a; . /etc/agentic-backend.env; set +a; cd /home/ubuntu/remix-of-stackwise-advisor && npm run smoke:release -- --api-base-url http://127.0.0.1:8787 --service-token "$INGESTION_SERVICE_TOKEN"'
+ssh oracle-free 'export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use 20.20.0 >/dev/null; set -a; . /etc/agentic-backend.env; set +a; cd /home/ubuntu/remix-of-stackwise-advisor && npm run smoke:release -- --api-base-url http://127.0.0.1:8787 --service-token "$INGESTION_SERVICE_TOKEN"'
 ```
 - Frontend publish:
   - GitHub -> `Actions` -> `Deploy Frontend Release`
