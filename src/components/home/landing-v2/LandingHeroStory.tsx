@@ -397,37 +397,7 @@ function MobileLandingHeroStory({
           Better than watching everything
         </div>
 
-        <Carousel
-          setApi={setApi}
-          opts={{ align: 'start', loop: false }}
-          className="mt-6"
-        >
-          <CarouselContent className="-ml-0">
-            {LANDING_STORY_SCENES.map((scene) => (
-              <CarouselItem key={scene.id} className="pl-0">
-                <div className="space-y-6">
-                  <div className="space-y-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.25em] text-primary/80">{scene.eyebrow}</p>
-                    <h1 className="text-4xl font-black tracking-tight text-balance text-foreground sm:text-5xl">
-                      {scene.headline}
-                    </h1>
-                    <p className="text-base leading-relaxed text-muted-foreground">
-                      {scene.subheadline}
-                    </p>
-                  </div>
-
-                  <div className={cn('rounded-[2rem] border border-white/50 bg-white/35 p-2 shadow-soft-xl backdrop-blur-sm', scene.accentClass)}>
-                    <LandingDemoScene variant={scene.demoVariant} onOpenDemo={onDemoCtaClick} />
-                  </div>
-
-                  <HeroCtaRail isSignedIn={isSignedIn} onHeroCtaClick={onHeroCtaClick} />
-                </div>
-              </CarouselItem>
-            ))}
-          </CarouselContent>
-        </Carousel>
-
-        <div className="mt-6 flex items-center justify-between gap-3">
+        <div className="mt-5 flex items-center justify-between gap-3">
           <Button
             type="button"
             variant="outline"
@@ -463,6 +433,36 @@ function MobileLandingHeroStory({
             <ArrowRight className="h-4 w-4" />
           </Button>
         </div>
+
+        <Carousel
+          setApi={setApi}
+          opts={{ align: 'start', loop: false }}
+          className="mt-6"
+        >
+          <CarouselContent className="-ml-0">
+            {LANDING_STORY_SCENES.map((scene) => (
+              <CarouselItem key={scene.id} className="pl-0">
+                <div className="space-y-6">
+                  <div className="space-y-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.25em] text-primary/80">{scene.eyebrow}</p>
+                    <h1 className="text-4xl font-black tracking-tight text-balance text-foreground sm:text-5xl">
+                      {scene.headline}
+                    </h1>
+                    <p className="text-base leading-relaxed text-muted-foreground">
+                      {scene.subheadline}
+                    </p>
+                  </div>
+
+                  <div className={cn('rounded-[2rem] border border-white/50 bg-white/35 p-2 shadow-soft-xl backdrop-blur-sm', scene.accentClass)}>
+                    <LandingDemoScene variant={scene.demoVariant} onOpenDemo={onDemoCtaClick} />
+                  </div>
+
+                  <HeroCtaRail isSignedIn={isSignedIn} onHeroCtaClick={onHeroCtaClick} />
+                </div>
+              </CarouselItem>
+            ))}
+          </CarouselContent>
+        </Carousel>
       </div>
     </section>
   );
