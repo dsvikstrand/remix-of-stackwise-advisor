@@ -69,6 +69,7 @@
 - 2026-03-06 note: backend maintainability refactor extracted shared generation preflight helpers for Search/source-page/manual-refresh flows into `server/services/generationPreflight.ts`; additive and outside the YT2BP envelope.
 - 2026-03-06 note: backend composition cleanup extracted runtime mode resolution, queued worker lifecycle, and YouTube refresh scheduler lifecycle into dedicated services; additive and outside the YT2BP endpoint envelope.
 - 2026-03-06 note: Home feed semantics now treat `Joined` as the canonical joined-channel discovery lane, keep `For You` as the only source-driven locked/unlocked lane, and restrict `All`/channel scopes to published-channel blueprints only; additive and outside the YT2BP endpoint envelope.
+- 2026-03-07 note: Oracle MVP production runtime now treats combined mode (`agentic-backend.service` with `RUN_INGESTION_WORKER=true`) as the canonical queue/scheduler keep-alive path; split worker topology remains deferred and this does not alter the YT2BP endpoint envelope.
 
 ## Request
 ```json
@@ -176,6 +177,7 @@
 - Daily-credit wallet and source-unlock persistence (`user_credit_wallets`, `credit_ledger`, `source_item_unlocks`, `/api/credits`) are intentionally outside this endpoint contract.
 - Queue-work-item budgeting and queue-health work-size reporting (`queue_work_items`, `running_work_items`, per-scope work-item fields) are intentionally outside this endpoint contract.
 - Backend runtime bootstrap composition (`server/services/runtimeConfig.ts`, queued worker controller, YouTube refresh scheduler controller) is intentionally outside this endpoint contract.
+- Oracle single-service combined runtime policy for queue/scheduler keep-alive is intentionally outside this endpoint contract.
 - Read limiter policy for `/api/credits` and `/api/ingestion/jobs/latest-mine` is intentionally outside this endpoint contract.
 - Subscription `auto_unlock_enabled` toggle and shared-cost auto-unlock intent billing/retry behavior for new-upload shared unlock are intentionally outside this endpoint contract.
 - Unlock reliability sweep behavior and unlock trace correlation (`trace_id`) are intentionally outside this endpoint contract.

@@ -21,12 +21,12 @@ describe('queued ingestion worker controller', () => {
       queuedIngestionScopes: ['search_video_generate'],
       queuedWorkerId: 'worker_1',
       workerLeaseMs: 90_000,
+      keepAliveEnabled: false,
       getQueueSweepPlan: () => [{ scopes: ['search_video_generate'], maxJobs: 2 }],
       claimQueuedIngestionJobs: vi.fn()
         .mockResolvedValueOnce([{ id: 'job_1' }])
         .mockResolvedValueOnce([]),
       processClaimedIngestionJobs,
-      shouldAutoReschedule: () => false,
     });
 
     controller.schedule();
@@ -60,10 +60,10 @@ describe('queued ingestion worker controller', () => {
       queuedIngestionScopes: ['search_video_generate'],
       queuedWorkerId: 'worker_1',
       workerLeaseMs: 90_000,
+      keepAliveEnabled: false,
       getQueueSweepPlan: () => [{ scopes: ['search_video_generate'], maxJobs: 2 }],
       claimQueuedIngestionJobs,
       processClaimedIngestionJobs,
-      shouldAutoReschedule: () => false,
     });
 
     controller.schedule();
@@ -74,24 +74,53 @@ describe('queued ingestion worker controller', () => {
     expect(claimQueuedIngestionJobs).toHaveBeenCalledTimes(3);
   });
 
-  it('auto-reschedules after a run in worker-only mode', async () => {
+  it('keeps polling after a run when combined-mode background work is enabled', async () => {
+    const runUnlockSweeps = vi.fn(async () => undefined);
     const controller = createQueuedIngestionWorkerController({
       getServiceSupabaseClient: () => ({ tag: 'db' }),
-      runUnlockSweeps: vi.fn(async () => undefined),
+      runUnlockSweeps,
       recoverStaleIngestionJobs: vi.fn(async () => []),
       queuedIngestionScopes: ['all_active_subscriptions'],
       queuedWorkerId: 'worker_1',
       workerLeaseMs: 90_000,
+      keepAliveEnabled: true,
       getQueueSweepPlan: () => [{ scopes: ['all_active_subscriptions'], maxJobs: 1 }],
       claimQueuedIngestionJobs: vi.fn(async () => []),
       processClaimedIngestionJobs: vi.fn(async () => undefined),
-      shouldAutoReschedule: () => true,
     });
 
     controller.start(0);
     await vi.advanceTimersByTimeAsync(0);
 
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(1);
     expect(vi.getTimerCount()).toBe(1);
     expect(controller.getRunning()).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1500);
+
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(2);
+    expect(vi.getTimerCount()).toBe(1);
+  });
+
+  it('does not keep polling when background work is disabled in web-only mode', async () => {
+    const runUnlockSweeps = vi.fn(async () => undefined);
+    const controller = createQueuedIngestionWorkerController({
+      getServiceSupabaseClient: () => ({ tag: 'db' }),
+      runUnlockSweeps,
+      recoverStaleIngestionJobs: vi.fn(async () => []),
+      queuedIngestionScopes: ['all_active_subscriptions'],
+      queuedWorkerId: 'worker_1',
+      workerLeaseMs: 90_000,
+      keepAliveEnabled: false,
+      getQueueSweepPlan: () => [{ scopes: ['all_active_subscriptions'], maxJobs: 1 }],
+      claimQueuedIngestionJobs: vi.fn(async () => []),
+      processClaimedIngestionJobs: vi.fn(async () => undefined),
+    });
+
+    controller.start(0);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

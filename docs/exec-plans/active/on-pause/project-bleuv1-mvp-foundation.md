@@ -36,6 +36,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 ### W0 - Runtime Baseline
 - Supabase target alignment is corrected to `qgqqavaogicecvhopgan`.
 - Shared auto-unlock schema migration watermark is now `20260306113000`.
+- Oracle MVP runtime has since been simplified to single-service combined mode (`agentic-backend.service` owns HTTP + background work); any split web/worker assumptions in this paused plan are historical reference only.
 
 ### W1 - My Feed As First-Class Surface
 - Introduce/finish personal unfiltered feed lane behavior.

@@ -84,15 +84,19 @@
   - User menu credit panel shows daily reset timing plus latest wallet ledger activity summary when available.
   - Header now includes an auth-only notifications bell inbox (reply + generation terminal notifications with read/read-all actions).
   - Legal baseline routes are first-class in runtime (`/terms`, `/privacy`) and linked from auth.
-- Backend:
-  - Express server in `server/index.ts`.
-  - OpenAI SDK runtime loading is lazy (`server/llm/openaiRuntime.ts`) so Oracle backend startup does not depend on top-level `openai` ESM import resolution.
-  - Backend refactor a3 is completed with no behavior drift:
-    - route registration is fully modular (`53` API routes across `server/routes/*` / route-domain modules)
-    - `server/index.ts` has `0` direct `app.*` route registrations and now acts as composition/bootstrap only
-    - route/domain contracts are centralized under `server/contracts/api/*` as canonical typing surfaces
-    - extracted route-heavy logic is split into `server/handlers/*` (active domains) and orchestration services under `server/services/*`
-  - `/api/youtube-to-blueprint` generation pipeline.
+  - Backend:
+    - Express server in `server/index.ts`.
+    - OpenAI SDK runtime loading is lazy (`server/llm/openaiRuntime.ts`) so Oracle backend startup does not depend on top-level `openai` ESM import resolution.
+    - Backend refactor a3 is completed with no behavior drift:
+      - route registration is fully modular (`53` API routes across `server/routes/*` / route-domain modules)
+      - `server/index.ts` has `0` direct `app.*` route registrations and now acts as composition/bootstrap only
+      - route/domain contracts are centralized under `server/contracts/api/*` as canonical typing surfaces
+      - extracted route-heavy logic is split into `server/handlers/*` (active domains) and orchestration services under `server/services/*`
+    - Oracle MVP production runtime is single-service combined mode:
+      - `agentic-backend.service` owns both HTTP serving and background queue/scheduler work
+      - `RUN_INGESTION_WORKER=true` is the background-work keep-alive switch in combined mode
+      - `agentic-worker.service` remains a deferred scale path, not the current production contract
+    - `/api/youtube-to-blueprint` generation pipeline.
   - shared YouTube live-call budgeting now uses atomic DB-backed quota consumption (`consume_youtube_quota_budget`) so search/channel-search admission is strict when the schema is present and fail-open only for missing-schema environments.
   - subscription ingestion APIs:
     - `POST|GET|PATCH|DELETE /api/source-subscriptions`

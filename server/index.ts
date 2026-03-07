@@ -7490,10 +7490,11 @@ const queuedIngestionWorkerController = createQueuedIngestionWorkerController({
   queuedIngestionScopes: QUEUED_INGESTION_SCOPES,
   queuedWorkerId,
   workerLeaseMs,
+  keepAliveEnabled: runIngestionWorker,
+  keepAliveDelayMs: 1500,
   getQueueSweepPlan,
   claimQueuedIngestionJobs,
   processClaimedIngestionJobs,
-  shouldAutoReschedule: () => runIngestionWorker && !runHttpServer,
   onRecoveredJobs: ({ scope, recoveredJobs, workerId }) => {
     console.log('[ingestion_stale_recovered]', JSON.stringify({
       worker_id: workerId,

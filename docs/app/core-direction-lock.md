@@ -82,6 +82,7 @@ Status: `canonical`
 50. Launch gate hardening requires explicit credit-backend outage behavior (`CREDITS_UNAVAILABLE`, HTTP `503`) and must not silently fail-open credit-dependent flows.
 51. Launch-critical UX copy for generation failures must be normalized via shared frontend mapping (no raw backend/internal payload leakage on key surfaces).
 52. Source-page read surfaces must fail safely: opportunistic asset-sweep hooks are allowed, but missing dependency wiring must never crash API process uptime.
+53. Oracle MVP production runtime is single-service combined mode (`agentic-backend.service` with HTTP + background work together); dedicated split worker topology is deferred until a later scale pass proves it necessary.
 
 ## Core user journey
 1. Subscribe to a YouTube channel or search/select a video.
@@ -117,3 +118,4 @@ Status: `canonical`
 5. `Subscriptions` and `Wall` page orchestration now compose dedicated frontend controller hooks, keeping render behavior stable while removing route/query/mutation ownership from the page files themselves.
 6. `Wall` no longer assembles feed rows through browser-side Supabase fan-out; it consumes backend-shaped feed endpoints for both public lanes and `For You`.
 7. Feed lane contract is now explicit and canonical in `docs/app/mvp-feed-and-channel-model.md`: `For You` is the only locked lane, `Joined` is joined-channel published discovery, and `All` is the global published blueprint stream.
+8. Oracle runtime now treats `RUN_INGESTION_WORKER=true` as the keep-alive background-work switch even in combined mode, so queue polling and YouTube refresh scheduling no longer depend on a separate worker service for MVP production.

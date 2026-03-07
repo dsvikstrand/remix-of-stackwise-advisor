@@ -442,7 +442,14 @@ Safe defaults:
 - Combined mode remains the default:
   - `RUN_HTTP_SERVER=true`
   - `RUN_INGESTION_WORKER=true`
-- Recommended production split:
+- Current MVP production recommendation:
+  - `agentic-backend.service` runs in combined mode:
+    - `RUN_HTTP_SERVER=true`
+    - `RUN_INGESTION_WORKER=true`
+  - `agentic-worker.service` stays disabled unless an explicit later scale pass re-enables the split-runtime topology
+
+### Optional later split
+- Deferred until needed beyond the MVP target:
   - `agentic-backend.service` (web):
     - `RUN_HTTP_SERVER=true`
     - `RUN_INGESTION_WORKER=false`

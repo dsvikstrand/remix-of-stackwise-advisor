@@ -13,6 +13,8 @@ This file is the authoritative active/completed registry for execution plans.
 ## Active Reference Support
 - `docs/exec-plans/active/repo-cleanup-and-scale-readiness-plan.md`
   Active post-launch cleanup/scalability plan for backend composition, frontend page orchestration, compatibility pruning, and repo hygiene.
+- `docs/exec-plans/active/mvp-runtime-simplification-plan.md`
+  Active MVP runtime/deploy simplification plan for the single-service Oracle setup.
 - `docs/ops/p1-1-p1-2-verification-runbook.md`
   Supporting runbook for the remaining P1 verification work.
 - `docs/ops/playwright-p1-2-callback-evidence.md`
@@ -70,6 +72,7 @@ This file is the authoritative active/completed registry for execution plans.
 - Current launch authorization gate: `docs/ops/mvp-launch-readiness-checklist.md`.
 - Current active proof tail beyond the gate: `docs/exec-plans/active/mvp-launch-proof-tail.md`.
 - Current active cleanup/scalability plan: `docs/exec-plans/active/repo-cleanup-and-scale-readiness-plan.md`.
+- Current active runtime/deploy simplification plan: `docs/exec-plans/active/mvp-runtime-simplification-plan.md`.
 - Current post-launch debt board: `docs/exec-plans/tech-debt-tracker.md`.
 - Manual iterative build strategy plans are paused reference docs.
 - Agentic orchestration: archived reference path.

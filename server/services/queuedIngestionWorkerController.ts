@@ -18,6 +18,8 @@ export type QueuedIngestionWorkerControllerDeps<DbClient> = {
   queuedIngestionScopes: readonly string[];
   queuedWorkerId: string;
   workerLeaseMs: number;
+  keepAliveEnabled: boolean;
+  keepAliveDelayMs?: number;
   getQueueSweepPlan: () => readonly QueueSweepPlanEntry[];
   claimQueuedIngestionJobs: (db: DbClient, input: {
     scopes: string[];
@@ -26,7 +28,6 @@ export type QueuedIngestionWorkerControllerDeps<DbClient> = {
     leaseSeconds: number;
   }) => Promise<IngestionJobRow[]>;
   processClaimedIngestionJobs: (db: DbClient, jobs: IngestionJobRow[]) => Promise<void>;
-  shouldAutoReschedule: () => boolean;
   onRecoveredJobs?: (input: { scope: string; recoveredJobs: IngestionJobRow[]; workerId: string }) => void;
   onWorkerFailure?: (input: { workerId: string; error: unknown }) => void;
 };
@@ -34,6 +35,7 @@ export type QueuedIngestionWorkerControllerDeps<DbClient> = {
 export function createQueuedIngestionWorkerController<DbClient>(
   deps: QueuedIngestionWorkerControllerDeps<DbClient>,
 ): QueuedIngestionWorkerController {
+  const keepAliveDelayMs = Math.max(0, Math.floor(deps.keepAliveDelayMs ?? 1500));
   let queuedWorkerTimer: ReturnType<typeof setTimeout> | null = null;
   let queuedWorkerRunning = false;
   let queuedWorkerRequested = false;
@@ -86,8 +88,8 @@ export function createQueuedIngestionWorkerController<DbClient>(
       });
     } finally {
       queuedWorkerRunning = false;
-      if (deps.shouldAutoReschedule()) {
-        schedule(1500);
+      if (deps.keepAliveEnabled) {
+        schedule(keepAliveDelayMs);
       }
     }
   }
