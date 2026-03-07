@@ -232,7 +232,7 @@ export function LandingHeroStory({
                     initial={{ opacity: 0, y: prefersReducedMotion ? 0 : 18 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: prefersReducedMotion ? 0 : -18 }}
-                    transition={{ duration: prefersReducedMotion ? 0 : 0.2, ease: [0.22, 1, 0.36, 1] }}
+                    transition={{ duration: prefersReducedMotion ? 0 : 0.28, ease: [0.22, 1, 0.36, 1] }}
                     className="absolute inset-0 space-y-5"
                   >
                     <p className="text-sm font-semibold uppercase tracking-[0.25em] text-primary/80">{scene.eyebrow}</p>
@@ -291,7 +291,7 @@ export function LandingHeroStory({
                     initial={{ opacity: 0, y: prefersReducedMotion ? 0 : 20, scale: prefersReducedMotion ? 1 : 0.98 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: prefersReducedMotion ? 0 : -20, scale: prefersReducedMotion ? 1 : 1.02 }}
-                    transition={{ duration: prefersReducedMotion ? 0 : 0.2, ease: [0.22, 1, 0.36, 1] }}
+                    transition={{ duration: prefersReducedMotion ? 0 : 0.28, ease: [0.22, 1, 0.36, 1] }}
                     className={cn('absolute inset-0 w-full rounded-[2rem] border border-white/50 bg-white/35 p-2 shadow-soft-xl backdrop-blur-sm', scene.accentClass)}
                   >
                     <LandingDemoScene variant={scene.demoVariant} onOpenDemo={onDemoCtaClick} />
