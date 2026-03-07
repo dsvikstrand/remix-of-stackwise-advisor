@@ -212,7 +212,7 @@ export function LandingHeroStory({
 
   return (
     <LazyMotion features={domAnimation}>
-      <section ref={containerRef} className="relative h-[320svh] md:h-[360svh]">
+      <section ref={containerRef} className="relative h-[185svh] md:h-[210svh]">
         <div className="sticky top-16 flex min-h-[calc(100svh-4rem)] items-center overflow-hidden border-b border-border/40">
           <BackgroundArt
             sceneIndex={activeSceneIndex}
