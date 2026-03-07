@@ -74,13 +74,7 @@ export function LandingProofSections({ isSignedIn, onFinalCtaClick }: LandingPro
             Bleu is easiest to understand when you see the output. These are curated examples from real blueprint generations, shown in a compact preview format.
           </p>
           <div className="flex items-center gap-2 pt-2">
-            <Button type="button" variant="outline" size="icon" aria-label="Previous blueprint" onClick={showPreviousBlueprint}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <Button type="button" variant="outline" size="icon" aria-label="Next blueprint" onClick={showNextBlueprint}>
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-            <div className="ml-2 flex items-center gap-2">
+            <div className="flex items-center gap-2">
               {LANDING_BLUEPRINT_PREVIEWS.map((preview, index) => (
                 <button
                   key={preview.id}
@@ -95,14 +89,34 @@ export function LandingProofSections({ isSignedIn, onFinalCtaClick }: LandingPro
             </div>
           </div>
         </div>
-        <div className="rounded-[2rem] border border-border/50 bg-gradient-to-br from-card via-card to-accent/20 p-3 shadow-soft-xl">
-            <Card className="rounded-[1.75rem] border-border/50 bg-background/90 shadow-none">
-              <CardContent className="space-y-6 p-6">
-                <div className="overflow-hidden rounded-[1.35rem] border border-border/50 bg-muted/20">
+        <div className="relative rounded-[2rem] border border-border/50 bg-gradient-to-br from-card via-card to-accent/20 p-3 shadow-soft-xl">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label="Previous blueprint"
+            onClick={showPreviousBlueprint}
+            className="absolute -left-4 top-1/2 z-10 hidden h-11 w-11 -translate-y-1/2 rounded-full border-border/60 bg-background/90 shadow-soft md:flex"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label="Next blueprint"
+            onClick={showNextBlueprint}
+            className="absolute -right-4 top-1/2 z-10 hidden h-11 w-11 -translate-y-1/2 rounded-full border-border/60 bg-background/90 shadow-soft md:flex"
+          >
+            <ArrowRight className="h-4 w-4" />
+          </Button>
+          <Card className="rounded-[1.75rem] border-border/50 bg-background/90 shadow-none">
+            <CardContent className="space-y-6 p-6">
+              <div className="overflow-hidden rounded-[1.35rem] border border-border/50 bg-muted/20">
                   <img
                     src={activeBlueprint.thumbnailUrl}
                     alt={activeBlueprint.title}
-                    className="aspect-video w-full object-cover"
+                    className="aspect-[7/2] w-full object-cover"
                     loading="lazy"
                   />
                 </div>
@@ -137,6 +151,27 @@ export function LandingProofSections({ isSignedIn, onFinalCtaClick }: LandingPro
                     </div>
                   ))}
                 </div>
+              </div>
+
+              <div className="flex items-center justify-center gap-3 md:hidden">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Previous blueprint"
+                  onClick={showPreviousBlueprint}
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Next blueprint"
+                  onClick={showNextBlueprint}
+                >
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
               </div>
             </CardContent>
           </Card>
