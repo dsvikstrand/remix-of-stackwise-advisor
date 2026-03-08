@@ -39,11 +39,11 @@ Status: `canonical`
 10. Signed-in primary nav is `Home / Channels / Explore`; search/create entrypoint is the header `Create` action to `/search`.
 11. Subscriptions are reachable from both user dropdown (full page) and profile workspace owner tab (lightweight list).
 12. Core high-traffic UI copy must use current runtime language (`Home`, `Create`, auto-channel publish) and avoid legacy manual-post wording.
-13. `/subscriptions` is the only entrypoint for YouTube OAuth connect + bulk import in MVP; signup-step integration is deferred.
+13. `/subscriptions` and new-account `/welcome` both use the manual-first creator setup flow in MVP; legacy YouTube OAuth onboarding is not the primary path.
 14. YouTube disconnect revokes+unlinks OAuth tokens but preserves existing app subscriptions.
 15. Import selection defaults to none-selected, and import is idempotent with inactive-row reactivation.
 16. New-account optional onboarding uses `/welcome` as a first-login setup entrypoint; existing accounts are not auto-prompted.
-17. Onboarding completion requires successful subscription import (connect-only is insufficient).
+17. Onboarding creator setup is optional; completion requires joining at least one Bleu channel, not importing YouTube subscriptions.
 18. Source identity is moving to platform-agnostic `Source Pages` (`/s/:platform/:externalId`), with YouTube channel `UC...` as the current canonical key.
 19. Source pages are public-readable and subscribe/unsubscribe capable; legacy `/api/source-subscriptions*` endpoints remain compatibility-safe during migration.
 20. Source pages may lazily hydrate missing avatar/banner metadata on first read so backfilled legacy rows render complete visuals without requiring unsubscribe/resubscribe.

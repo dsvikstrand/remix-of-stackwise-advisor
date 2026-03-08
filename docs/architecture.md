@@ -72,14 +72,14 @@
     - source feed cards are Home-style read-only (`open blueprint` on card click, no like/comment/share controls in this step).
     - reload-resume trust behavior: active unlock jobs are restored from `GET /api/ingestion/jobs/latest-mine?scope=source_item_unlock_generation`.
     - active subscription rows are copy-light; avatar is the channel-open link target.
-    - includes YouTube OAuth connect + bulk import flow (`Connect YouTube` -> preview -> select channels -> import).
+    - includes manual creator add as the primary action plus optional public YouTube subscription import by handle.
     - import selection defaults to none selected; users explicitly choose channels to import.
     - disconnect revokes+unlinks OAuth tokens but keeps existing app subscriptions unchanged.
     - includes manual `Refresh` popup flow: scan new subscription videos, select items, and start async background generation.
   - Onboarding setup surface in `src/pages/WelcomeOnboarding.tsx`:
-    - reuses OAuth connect/import APIs
-    - marks completion only after successful import (`imported` or `reactivated` > 0)
-    - skip path records non-blocking onboarding state.
+    - reuses the same manual-first creator setup surface as `/subscriptions`
+    - keeps creator add/import optional
+    - marks completion after the user joins at least one Bleu channel
   - User menu includes a direct `Subscriptions` shortcut to `/subscriptions`; profile tab keeps a lightweight owner-only list with `Unsubscribe`.
   - User menu credit panel shows daily reset timing plus latest wallet ledger activity summary when available.
   - Header now includes an auth-only notifications bell inbox (reply + generation terminal notifications with read/read-all actions).
@@ -188,7 +188,8 @@
 1. (Optional) New-account onboarding:
    - first authenticated session for new accounts is redirected once to `/welcome`.
    - onboarding remains optional (`Skip for now`) and never blocks normal usage after skip.
-   - completion is import-success-only; connect-only does not complete onboarding.
+   - `/welcome` reuses the manual-first creator setup flow from `/subscriptions` (manual add primary, public YouTube import optional).
+   - completion requires joining at least one Bleu channel; creator add/import is optional.
 2. Ingest source item (manual URL pull or subscription sync).
    - discovery option: user can search YouTube results in `/search` before selecting a source video.
    - Search-generated `/youtube` handoff carries channel context (id/title/url) so saved source items retain channel subtitle data in My Feed.
@@ -197,7 +198,7 @@
    - optional review generation is executed outside the core endpoint request and may attach after save.
 3. Subscription create/reactivate:
    - user opens `/subscriptions`, launches `Add Subscription`, searches channels, then clicks subscribe.
-   - optional onboarding accelerator: user connects YouTube on `/subscriptions` and imports selected subscriptions in bulk.
+   - optional onboarding accelerator: user can add creators manually or import selected public YouTube subscriptions from `/subscriptions` or `/welcome`.
    - user can unsubscribe existing active rows from `/subscriptions`; sync/reactivate UI is deferred.
    - resolve channel id and set first-sync checkpoint only (`last_seen_published_at`, `last_seen_video_id`).
    - ensure platform-agnostic source page row (`source_pages`) and link subscription/source items via `source_page_id`.
