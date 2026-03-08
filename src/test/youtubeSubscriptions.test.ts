@@ -48,6 +48,35 @@ describe('youtube public subscription helpers', () => {
     });
   });
 
+  it('resolves bare handle input through channels.list forHandle', async () => {
+    const fetchMock = vi.fn(async (input: unknown) => {
+      const url = new URL(String(input));
+      expect(url.pathname).toBe('/youtube/v3/channels');
+      expect(url.searchParams.get('forHandle')).toBe('MadameGlome');
+      expect(url.searchParams.get('part')).toBe('snippet');
+      return jsonResponse({
+        items: [{
+          id: 'UC12345678901234567890AB',
+          snippet: {
+            title: 'Madame Glome',
+          },
+        }],
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const resolved = await resolvePublicYouTubeChannel({
+      channelInput: 'MadameGlome',
+      apiKey: 'yt-key',
+    });
+
+    expect(resolved).toEqual({
+      channelId: 'UC12345678901234567890AB',
+      channelTitle: 'Madame Glome',
+      channelUrl: 'https://www.youtube.com/channel/UC12345678901234567890AB',
+    });
+  });
+
   it('returns truncated previews when maxItems is reached with more pages available', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({
       items: [

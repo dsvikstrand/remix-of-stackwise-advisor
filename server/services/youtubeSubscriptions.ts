@@ -60,6 +60,7 @@ export type YouTubeVideoState = {
 
 const CHANNEL_ID_RE = /^UC[a-zA-Z0-9_-]{20,}$/;
 const HANDLE_RE = /^@[a-zA-Z0-9._-]{3,30}$/;
+const BARE_HANDLE_RE = /^[a-zA-Z0-9._-]{3,30}$/;
 
 function decodeXml(text: string) {
   return text
@@ -123,6 +124,10 @@ function toOfficialChannelLookup(input: string): OfficialChannelLookup | null {
     const handle = normalizeHandleValue(raw);
     if (!handle) return null;
     return { kind: 'forHandle', value: handle };
+  }
+
+  if (BARE_HANDLE_RE.test(raw)) {
+    return { kind: 'forHandle', value: raw };
   }
 
   let url: URL;

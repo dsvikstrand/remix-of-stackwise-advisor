@@ -100,9 +100,9 @@ function getPublicYouTubePreviewErrorMessage(error: unknown) {
   if (error instanceof ApiRequestError) {
     switch (error.errorCode) {
       case 'INVALID_INPUT':
-        return 'Paste a YouTube channel URL or @handle.';
+        return 'Enter your YouTube handle.';
       case 'PUBLIC_IMPORT_CHANNEL_NOT_FOUND':
-        return "We couldn't find that YouTube channel. Check the URL or @handle and try again.";
+        return "We couldn't find that YouTube channel. Check the handle and try again.";
       case 'PUBLIC_SUBSCRIPTIONS_PRIVATE':
         return "We couldn't read this account's subscriptions.";
       case 'RATE_LIMITED':

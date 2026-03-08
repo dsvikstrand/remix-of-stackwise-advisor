@@ -200,7 +200,7 @@ export async function createSourceSubscription(input: { channelInput: string; mo
 export async function previewPublicYouTubeSubscriptions(input: { channelInput: string }) {
   const channelInput = String(input.channelInput || '').trim();
   if (!channelInput) {
-    throw new ApiRequestError(400, 'Paste a YouTube channel URL or @handle.', 'INVALID_INPUT');
+    throw new ApiRequestError(400, 'Enter your YouTube handle.', 'INVALID_INPUT');
   }
 
   const response = await apiRequest<PublicYouTubeSubscriptionsPreviewResult>('/source-subscriptions/public-youtube-preview', {

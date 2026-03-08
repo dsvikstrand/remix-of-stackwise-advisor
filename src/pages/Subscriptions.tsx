@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
@@ -5,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -106,6 +108,13 @@ export default function Subscriptions() {
     handleUnsubscribe,
     handleAutoUnlockToggle,
   } = useSubscriptionsPageController();
+  const [isPublicYouTubeImportOpen, setIsPublicYouTubeImportOpen] = useState(false);
+
+  useEffect(() => {
+    if (publicYouTubePreview || publicYouTubePreviewError || publicYouTubePreviewMutation.isPending) {
+      setIsPublicYouTubeImportOpen(true);
+    }
+  }, [publicYouTubePreview, publicYouTubePreviewError, publicYouTubePreviewMutation.isPending]);
 
   return (
     <PageRoot>
@@ -117,7 +126,7 @@ export default function Subscriptions() {
             <p className="text-sm font-semibold text-primary uppercase tracking-wide">Subscriptions</p>
             <h1 className="text-2xl font-semibold">Follow creators and build your feed</h1>
             <p className="text-sm text-muted-foreground">
-              Search and add creators manually, or preview creators from a public YouTube subscription list before importing them.
+              Add creators manually first, or optionally import your YouTube subscriptions and review them before importing.
             </p>
             {!subscriptionsEnabled ? (
               <p className="text-xs text-muted-foreground">
@@ -128,204 +137,214 @@ export default function Subscriptions() {
         </PageSection>
 
         <Card className="border-border/40">
-          <CardContent className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-foreground">Add creators manually</p>
-                <p className="text-xs text-muted-foreground">
-                  This is the standard MVP path. Search for creators and subscribe in one click.
-                </p>
-              </div>
-              <Button
-                size="sm"
-                onClick={() => handleAddSubscriptionDialogChange(true)}
-                disabled={!subscriptionsEnabled}
-              >
-                Add Subscription
-              </Button>
-            </div>
-            <div className="rounded-2xl border border-border/50 bg-muted/20 p-4">
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-foreground">Import from public YouTube subscriptions</p>
-                <p className="text-sm text-muted-foreground">
-                  Paste a YouTube channel URL or @handle. If the subscription list is public, Bleu will preview the creators first so you can choose what to import.
-                </p>
-              </div>
-              <form onSubmit={handlePublicYouTubePreviewSubmit} className="mt-4 flex flex-col gap-3 md:flex-row">
-                <Input
-                  value={publicYouTubeChannelInput}
-                  onChange={(event) => setPublicYouTubeChannelInput(event.target.value)}
-                  placeholder="https://www.youtube.com/@yourhandle or @yourhandle"
-                  className="md:flex-1"
-                />
-                <Button type="submit" size="sm" disabled={!subscriptionsEnabled || publicYouTubePreviewMutation.isPending}>
-                  {publicYouTubePreviewMutation.isPending ? 'Finding...' : 'Find public subscriptions'}
+          <CardContent className="space-y-4">
+            <div className="rounded-2xl border border-primary/15 bg-primary/5 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-base font-semibold text-foreground">Add creators manually</p>
+                    <Badge variant="secondary" className="h-5 px-2 text-[10px]">Main path</Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Search YouTube creators and subscribe one by one.
+                  </p>
+                </div>
+                <Button
+                  onClick={() => handleAddSubscriptionDialogChange(true)}
+                  disabled={!subscriptionsEnabled}
+                >
+                  Add creators manually
                 </Button>
-              </form>
+              </div>
+            </div>
 
-              {publicYouTubePreviewError && publicYouTubePreviewErrorCode !== 'PUBLIC_SUBSCRIPTIONS_PRIVATE' ? (
-                <p className="mt-3 text-sm text-destructive">{publicYouTubePreviewError}</p>
-              ) : null}
-
-              {publicYouTubePreviewMutation.isPending ? (
-                <div className="mt-4 space-y-2">
-                  <Skeleton className="h-16 rounded-md" />
-                  <Skeleton className="h-16 rounded-md" />
-                </div>
-              ) : null}
-
-              {publicYouTubePreviewErrorCode === 'PUBLIC_SUBSCRIPTIONS_PRIVATE' ? (
-                <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-foreground">{publicYouTubePreviewError}</p>
-                    <p className="text-sm text-muted-foreground">
-                      To import from this account, we need the subscription list to be public.
-                    </p>
-                  </div>
-                  <div className="space-y-3 rounded-xl border border-border/50 bg-background/80 p-3 text-sm text-muted-foreground">
-                    <div className="flex gap-3">
-                      <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">1</span>
-                      <p>Visit <a href="https://www.youtube.com/account" target="_blank" rel="noreferrer" className="text-foreground underline underline-offset-2">youtube.com/account</a>.</p>
+            <Collapsible open={isPublicYouTubeImportOpen} onOpenChange={setIsPublicYouTubeImportOpen}>
+              <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-medium text-foreground">Import From YouTube</p>
+                      <Badge variant="outline" className="h-5 px-2 text-[10px]">Optional</Badge>
                     </div>
-                    <div className="flex gap-3">
-                      <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">2</span>
-                      <p>Open Privacy.</p>
-                    </div>
-                    <div className="flex gap-3">
-                      <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">3</span>
-                      <p>Turn off "Keep all my subscriptions private".</p>
-                    </div>
-                    <div className="flex gap-3">
-                      <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">4</span>
-                      <p>Return here and try again.</p>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              {publicYouTubePreview ? (
-                <div className="mt-4 space-y-3">
-                  <div className="rounded-xl border border-border/50 bg-background/80 p-3">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-foreground">
-                          {publicYouTubePreview.source_channel_title || publicYouTubePreview.source_channel_id}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Found {publicYouTubePreview.creators_total} creator{publicYouTubePreview.creators_total === 1 ? '' : 's'} to review.
-                        </p>
-                      </div>
-                      <Button asChild size="sm" variant="outline">
-                        <a href={publicYouTubePreview.source_channel_url} target="_blank" rel="noreferrer">
-                          Open channel
-                        </a>
-                      </Button>
-                    </div>
-                    {publicYouTubePreview.truncated ? (
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        Showing the first {publicYouTubePreview.creators_total} subscriptions (preview cap reached).
-                      </p>
-                    ) : null}
-                    {publicYouTubeImportSummary ? (
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        Imported {publicYouTubeImportSummary.imported_count}, reactivated {publicYouTubeImportSummary.reactivated_count}, already active {publicYouTubeImportSummary.already_active_count}, failed {publicYouTubeImportSummary.failed_count}.
+                    {!isPublicYouTubeImportOpen ? (
+                      <p className="text-xs text-muted-foreground">
+                        Import your YouTube subscriptions by handle.
                       </p>
                     ) : null}
                   </div>
+                  <CollapsibleTrigger asChild>
+                    <Button size="sm" variant="ghost">
+                      {isPublicYouTubeImportOpen ? 'Hide' : 'Import From YouTube'}
+                    </Button>
+                  </CollapsibleTrigger>
+                </div>
 
-                  {publicYouTubePreview.creators.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      We found the channel, but there are no public subscriptions available to import.
-                    </p>
-                  ) : (
-                    <>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={handlePublicYouTubePreviewSelectAll}
-                          disabled={publicYouTubeImportMutation.isPending}
-                        >
-                          Select importable
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={handlePublicYouTubePreviewClearSelection}
-                          disabled={publicYouTubeImportMutation.isPending}
-                        >
-                          Clear
-                        </Button>
-                      </div>
-
+                <CollapsibleContent className="mt-4 space-y-4">
+                  <form onSubmit={handlePublicYouTubePreviewSubmit} className="flex flex-col gap-3 md:flex-row md:items-end">
+                    <div className="space-y-2 md:flex-1">
+                      <p className="text-sm font-medium text-foreground">Fill in your handle</p>
                       <Input
-                        value={publicYouTubePreviewFilterQuery}
-                        onChange={(event) => setPublicYouTubePreviewFilterQuery(event.target.value)}
-                        placeholder="Filter creators..."
-                        className="h-9"
+                        value={publicYouTubeChannelInput}
+                        onChange={(event) => setPublicYouTubeChannelInput(event.target.value)}
+                        placeholder="madameglome"
                       />
+                    </div>
+                    <Button type="submit" size="sm" disabled={!subscriptionsEnabled || publicYouTubePreviewMutation.isPending}>
+                      {publicYouTubePreviewMutation.isPending ? 'Finding...' : 'Find subscriptions'}
+                    </Button>
+                  </form>
 
-                      {filteredPublicYouTubePreviewCreators.length === 0 ? (
+                  {publicYouTubePreviewError && publicYouTubePreviewErrorCode !== 'PUBLIC_SUBSCRIPTIONS_PRIVATE' ? (
+                    <p className="text-sm text-destructive">{publicYouTubePreviewError}</p>
+                  ) : null}
+
+                  {publicYouTubePreviewMutation.isPending ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-16 rounded-md" />
+                      <Skeleton className="h-16 rounded-md" />
+                    </div>
+                  ) : null}
+
+                  {publicYouTubePreviewErrorCode === 'PUBLIC_SUBSCRIPTIONS_PRIVATE' ? (
+                    <div className="space-y-3 rounded-xl border border-border/50 bg-background/80 p-4">
+                      <p className="text-sm font-medium text-foreground">{publicYouTubePreviewError}</p>
+                      <p className="text-sm text-muted-foreground">
+                        To import from this account, we first need you to make your subscriptions public.
+                      </p>
+                      <div className="space-y-3 text-sm text-muted-foreground">
+                        <div className="flex gap-3">
+                          <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">1</span>
+                          <p>Visit <a href="https://www.youtube.com/account" target="_blank" rel="noreferrer" className="text-foreground underline underline-offset-2">youtube.com/account</a>.</p>
+                        </div>
+                        <div className="flex gap-3">
+                          <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">2</span>
+                          <p>Press &quot;Privacy&quot;.</p>
+                        </div>
+                        <div className="flex gap-3">
+                          <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">3</span>
+                          <p>Flip the &quot;Keep all my subscriptions private&quot; switch.</p>
+                        </div>
+                        <div className="flex gap-3">
+                          <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">4</span>
+                          <p>Return here and import your subscriptions.</p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {publicYouTubePreview ? (
+                    <div className="space-y-3">
+                      <div className="rounded-xl border border-border/50 bg-background/80 p-3">
+                        <p className="text-sm font-medium text-foreground">
+                          We found {publicYouTubePreview.creators_total} subscription{publicYouTubePreview.creators_total === 1 ? '' : 's'} to review.
+                        </p>
+                        {publicYouTubePreview.truncated ? (
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            Showing the first {publicYouTubePreview.creators_total} subscriptions (preview cap reached).
+                          </p>
+                        ) : null}
+                        {publicYouTubeImportSummary ? (
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            Imported {publicYouTubeImportSummary.imported_count}, reactivated {publicYouTubeImportSummary.reactivated_count}, already active {publicYouTubeImportSummary.already_active_count}, failed {publicYouTubeImportSummary.failed_count}.
+                          </p>
+                        ) : null}
+                      </div>
+
+                      {publicYouTubePreview.creators.length === 0 ? (
                         <p className="text-sm text-muted-foreground">
-                          No creators match "{publicYouTubePreviewFilterQuery.trim()}".
+                          We found the account, but there are no public subscriptions available to import.
                         </p>
                       ) : (
-                        <div className="space-y-2 max-h-[52vh] overflow-y-auto pr-1">
-                          {filteredPublicYouTubePreviewCreators.map((creator) => {
-                            const checked = Boolean(publicYouTubePreviewSelected[creator.channel_id]);
-                            return (
-                              <div key={creator.channel_id} className="rounded-md border border-border/40 p-3">
-                                <div className="flex items-start gap-3">
-                                  <Checkbox
-                                    checked={checked}
-                                    disabled={creator.already_active || publicYouTubeImportMutation.isPending}
-                                    onCheckedChange={(value) => togglePublicYouTubePreviewCreator(creator.channel_id, value === true)}
-                                    className="mt-0.5"
-                                  />
-                                  <div className="min-w-0 flex-1 space-y-1">
-                                    <p className="text-sm font-medium line-clamp-1">
-                                      {creator.channel_title || creator.channel_id}
-                                    </p>
-                                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                      {creator.already_active ? (
-                                        <Badge variant="secondary" className="h-5 px-2 text-[10px]">Already active</Badge>
-                                      ) : null}
-                                      {!creator.already_active && creator.already_exists_inactive ? (
-                                        <Badge variant="outline" className="h-5 px-2 text-[10px]">Will reactivate</Badge>
+                        <>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={handlePublicYouTubePreviewSelectAll}
+                              disabled={publicYouTubeImportMutation.isPending}
+                            >
+                              Select importable
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={handlePublicYouTubePreviewClearSelection}
+                              disabled={publicYouTubeImportMutation.isPending}
+                            >
+                              Clear
+                            </Button>
+                          </div>
+
+                          <Input
+                            value={publicYouTubePreviewFilterQuery}
+                            onChange={(event) => setPublicYouTubePreviewFilterQuery(event.target.value)}
+                            placeholder="Filter creators..."
+                            className="h-9"
+                          />
+
+                          {filteredPublicYouTubePreviewCreators.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">
+                              No creators match "{publicYouTubePreviewFilterQuery.trim()}".
+                            </p>
+                          ) : (
+                            <div className="space-y-2 max-h-[52vh] overflow-y-auto pr-1">
+                              {filteredPublicYouTubePreviewCreators.map((creator) => {
+                                const checked = Boolean(publicYouTubePreviewSelected[creator.channel_id]);
+                                return (
+                                  <div key={creator.channel_id} className="rounded-md border border-border/40 p-3">
+                                    <div className="flex items-start gap-3">
+                                      <Checkbox
+                                        checked={checked}
+                                        disabled={creator.already_active || publicYouTubeImportMutation.isPending}
+                                        onCheckedChange={(value) => togglePublicYouTubePreviewCreator(creator.channel_id, value === true)}
+                                        className="mt-0.5"
+                                      />
+                                      <div className="min-w-0 flex-1 space-y-1">
+                                        <p className="text-sm font-medium line-clamp-1">
+                                          {creator.channel_title || creator.channel_id}
+                                        </p>
+                                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                          {creator.already_active ? (
+                                            <Badge variant="secondary" className="h-5 px-2 text-[10px]">Already active</Badge>
+                                          ) : null}
+                                          {!creator.already_active && creator.already_exists_inactive ? (
+                                            <Badge variant="outline" className="h-5 px-2 text-[10px]">Will reactivate</Badge>
+                                          ) : null}
+                                        </div>
+                                      </div>
+                                      {creator.thumbnail_url ? (
+                                        <img
+                                          src={creator.thumbnail_url}
+                                          alt={creator.channel_title || creator.channel_id}
+                                          className="h-10 w-10 rounded-md border border-border/40 object-cover shrink-0"
+                                        />
                                       ) : null}
                                     </div>
                                   </div>
-                                  {creator.thumbnail_url ? (
-                                    <img
-                                      src={creator.thumbnail_url}
-                                      alt={creator.channel_title || creator.channel_id}
-                                      className="h-10 w-10 rounded-md border border-border/40 object-cover shrink-0"
-                                    />
-                                  ) : null}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
+                                );
+                              })}
+                            </div>
+                          )}
 
-                      <div className="flex items-center justify-between gap-2 pt-2">
-                        <p className="text-xs text-muted-foreground">
-                          {selectedPublicYouTubeCreators.length} selected
-                        </p>
-                        <Button
-                          size="sm"
-                          onClick={handleImportSelectedPublicYouTubeCreators}
-                          disabled={selectedPublicYouTubeCreators.length === 0 || publicYouTubeImportMutation.isPending}
-                        >
-                          {publicYouTubeImportMutation.isPending ? 'Importing...' : 'Import selected'}
-                        </Button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ) : null}
-            </div>
+                          <div className="flex items-center justify-between gap-2 pt-2">
+                            <p className="text-xs text-muted-foreground">
+                              {selectedPublicYouTubeCreators.length} selected
+                            </p>
+                            <Button
+                              size="sm"
+                              onClick={handleImportSelectedPublicYouTubeCreators}
+                              disabled={selectedPublicYouTubeCreators.length === 0 || publicYouTubeImportMutation.isPending}
+                            >
+                              {publicYouTubeImportMutation.isPending ? 'Importing...' : 'Import selected'}
+                            </Button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ) : null}
+                </CollapsibleContent>
+              </div>
+            </Collapsible>
           </CardContent>
         </Card>
 
