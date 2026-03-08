@@ -506,7 +506,7 @@ export async function handleDebugResetYtProxy(req: express.Request, res: express
     message: 'yt_to_text proxy cache reset',
     data: {
       reset: true,
-      proxy_selector_mode: deps.getYtToTextProxyDebugMode(),
+      proxy_mode: deps.getYtToTextProxyDebugMode(),
     },
   });
 }

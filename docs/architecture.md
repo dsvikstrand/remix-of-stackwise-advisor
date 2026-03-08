@@ -97,6 +97,7 @@
       - `RUN_INGESTION_WORKER=true` is the background-work keep-alive switch in combined mode
       - live app config is sourced from `/etc/agentic-backend.env`; backend startup must not depend on repo-root `.env` files on Oracle
       - repo-root `.env` is a local/dev fallback only for non-systemd runs, and backend bootstrap no longer reads `.env.production`
+      - Webshare transcript proxying for `yt_to_text` is explicit-endpoint-only (`WEBSHARE_PROXY_URL` or `WEBSHARE_PROXY_HOST` / `PORT` / `USERNAME` / `PASSWORD`); selector-by-index modes are no longer part of active runtime
       - `agentic-worker.service` remains a deferred scale path, not the current production contract
     - `/api/youtube-to-blueprint` generation pipeline.
   - shared YouTube live-call budgeting now uses atomic DB-backed quota consumption (`consume_youtube_quota_budget`) so search/channel-search admission is strict when the schema is present and fail-open only for missing-schema environments.

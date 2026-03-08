@@ -38,6 +38,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Shared auto-unlock schema migration watermark is now `20260306113000`.
 - Oracle MVP runtime has since been simplified to single-service combined mode (`agentic-backend.service` owns HTTP + background work); any split web/worker assumptions in this paused plan are historical reference only.
 - Oracle backend config source is `/etc/agentic-backend.env`; repo-root `.env` remains local-only fallback for non-systemd runs and `.env.production` is no longer part of backend bootstrap.
+- `yt_to_text` proxying now assumes one explicit Webshare endpoint; selector-based direct-proxy-list flows are historical-only and not part of the current MVP baseline.
 
 ### W1 - My Feed As First-Class Surface
 - Introduce/finish personal unfiltered feed lane behavior.

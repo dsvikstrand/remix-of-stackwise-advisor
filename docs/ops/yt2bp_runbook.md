@@ -216,6 +216,7 @@ Required runtime variables:
 - `YOUTUBE_IMPORT_MAX_CHANNELS` (default `2000`)
 - `YOUTUBE_OAUTH_STATE_TTL_SECONDS` (default `600`)
 - `TRANSCRIPT_PROVIDER` (`yt_to_text` or `youtube_timedtext`)
+- Webshare proxying for `yt_to_text` is explicit-endpoint-only when enabled (`WEBSHARE_PROXY_URL` or split host/port/username/password); selector/list envs are no longer part of the active runtime contract.
 - `YT2BP_ENABLED`
 - `YT2BP_QUALITY_ENABLED`
 - `YT2BP_CONTENT_SAFETY_ENABLED`

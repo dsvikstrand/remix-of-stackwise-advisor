@@ -43,18 +43,6 @@ type ResolvedProxyConnection = {
   transport: TranscriptTransportMetadata;
 };
 
-type WebshareProxyListRow = {
-  proxy_address?: unknown;
-  port?: unknown;
-  username?: unknown;
-  password?: unknown;
-  valid?: unknown;
-};
-
-type WebshareProxyListResponse = {
-  results?: WebshareProxyListRow[];
-};
-
 const TRUE_PATTERN = /^(1|true|yes|on)$/i;
 const require = createRequire(import.meta.url);
 
@@ -62,12 +50,8 @@ let cachedProxyUrl: string | null = null;
 let cachedDispatcher: ClosableDispatcher | undefined;
 let didWarnIncompleteConfig = false;
 let didWarnMissingUndici = false;
-let didWarnIndexSelectorConfig = false;
-let didWarnIndexSelectorFailure = false;
 let cachedProxyAgentConstructor: ProxyAgentConstructor | null | undefined;
 let cachedUndiciRequestFn: UndiciRequestFn | null | undefined;
-let cachedIndexProxyConfigKey: string | null = null;
-let cachedIndexProxyConfigPromise: Promise<ResolvedProxyConnection | null> | null = null;
 let proxyAgentFactoryOverride: ProxyAgentConstructor | null | undefined;
 let undiciRequestOverride: UndiciRequestFn | null | undefined;
 
@@ -93,18 +77,6 @@ function warnMissingUndici() {
   console.warn(
     '[webshare-proxy] Could not load undici proxy tools. Falling back to direct requests.',
   );
-}
-
-function warnIndexSelectorConfig(message: string) {
-  if (didWarnIndexSelectorConfig) return;
-  didWarnIndexSelectorConfig = true;
-  console.warn(`[webshare-proxy] ${message} Falling back to the explicit fixed proxy config.`);
-}
-
-function warnIndexSelectorFailure(message: string) {
-  if (didWarnIndexSelectorFailure) return;
-  didWarnIndexSelectorFailure = true;
-  console.warn(`[webshare-proxy] ${message} Falling back to the explicit fixed proxy config.`);
 }
 
 function getProxyAgentConstructor() {
@@ -221,127 +193,14 @@ function buildExplicitProxyConfig(): ResolvedProxyConnection | null {
   } satisfies ResolvedProxyConnection;
 }
 
-function isIndexSelectionEnabled() {
-  return isTruthyEnv(process.env.YT_TO_TEXT_PROXY_SELECT_BY_INDEX);
-}
-
-type SelectedProxyIndex = number | 'rand';
-
-function parseSelectedProxyIndex(): SelectedProxyIndex | null {
-  const raw = readEnv('YT_TO_TEXT_PROXY_INDEX');
-  if (!raw) return 0;
-  if (raw.toLowerCase() === 'rand') return 'rand';
-  if (raw.toLowerCase() === 'sample') return Math.floor(Math.random() * 10);
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 0) return null;
-  return value;
-}
-
-export function getYtToTextProxyDebugMode(): 'disabled' | 'explicit' | 'index' | 'rand' | 'sample' {
+export function getYtToTextProxyDebugMode(): 'disabled' | 'explicit' {
   if (!isTruthyEnv(process.env.YT_TO_TEXT_USE_WEBSHARE_PROXY)) {
     return 'disabled';
   }
-
-  if (isIndexSelectionEnabled()) {
-    const raw = readEnv('YT_TO_TEXT_PROXY_INDEX').toLowerCase();
-    if (raw === 'rand') return 'rand';
-    if (raw === 'sample') return 'sample';
-    return 'index';
-  }
-
   return 'explicit';
 }
 
-async function fetchIndexedProxyConfig(): Promise<ResolvedProxyConnection | null> {
-  if (!isIndexSelectionEnabled()) return null;
-
-  const apiKey = readEnv('WEBSHARE_API_KEY');
-  const planId = readEnv('WEBSHARE_PLAN_ID');
-  const baseUrl = readEnv('WEBSHARE_BASE_URL') || 'https://proxy.webshare.io/api';
-  const proxyIndex = parseSelectedProxyIndex();
-
-  if (!apiKey || !planId || proxyIndex == null) {
-    warnIndexSelectorConfig(
-      'YT_TO_TEXT_PROXY_SELECT_BY_INDEX is enabled, but WEBSHARE_API_KEY, WEBSHARE_PLAN_ID, or YT_TO_TEXT_PROXY_INDEX is invalid.',
-    );
-    return null;
-  }
-
-  const cacheKey = `${baseUrl}|${planId}|${proxyIndex}`;
-  if (cachedIndexProxyConfigKey === cacheKey && cachedIndexProxyConfigPromise) {
-    return cachedIndexProxyConfigPromise;
-  }
-
-  cachedIndexProxyConfigKey = cacheKey;
-  cachedIndexProxyConfigPromise = (async () => {
-    try {
-      const response = await fetch(
-        `${baseUrl.replace(/\/$/, '')}/v2/proxy/list/?mode=direct&plan_id=${encodeURIComponent(planId)}`,
-        {
-          headers: {
-            Authorization: `Token ${apiKey}`,
-          },
-        },
-      );
-      if (!response.ok) {
-        warnIndexSelectorFailure(`Webshare API returned HTTP ${response.status} while selecting a proxy by index.`);
-        return null;
-      }
-
-      const payload = await response.json().catch(() => null) as WebshareProxyListResponse | null;
-      const usableRows = Array.isArray(payload?.results)
-        ? payload.results.filter((row) => row?.valid !== false)
-        : [];
-      if (!usableRows.length) {
-        warnIndexSelectorFailure('Webshare API returned no usable direct proxies.');
-        return null;
-      }
-      const selectedRowIndex = proxyIndex === 'rand'
-        ? Math.floor(Math.random() * usableRows.length)
-        : proxyIndex;
-      if (selectedRowIndex >= usableRows.length) {
-        warnIndexSelectorFailure(
-          `YT_TO_TEXT_PROXY_INDEX=${proxyIndex} is out of range for the available Webshare direct proxy list.`,
-        );
-        return null;
-      }
-
-      const selected = usableRows[selectedRowIndex];
-      const host = typeof selected?.proxy_address === 'string' ? selected.proxy_address.trim() : '';
-      const port = Number(selected?.port);
-      const username = typeof selected?.username === 'string' ? selected.username.trim() : '';
-      const password = typeof selected?.password === 'string' ? selected.password.trim() : '';
-      if (!host || !Number.isInteger(port) || port <= 0 || !username || !password) {
-        warnIndexSelectorFailure('The selected Webshare proxy entry is missing required fields.');
-        return null;
-      }
-
-      return {
-        config: buildProxyConnectionConfig(host, port, username, password),
-        transport: {
-          provider: 'yt_to_text',
-          proxy_enabled: true,
-          proxy_mode: 'webshare_index',
-          proxy_selector: String(proxyIndex),
-          proxy_selected_index: selectedRowIndex,
-          proxy_host: host,
-        },
-      } satisfies ResolvedProxyConnection;
-    } catch (error) {
-      const message = error instanceof Error && error.message
-        ? error.message
-        : 'Unknown selector error.';
-      warnIndexSelectorFailure(`Could not fetch the Webshare direct proxy list (${message}).`);
-      return null;
-    }
-  })();
-
-  return cachedIndexProxyConfigPromise;
-}
-
 async function resolveProxyConnectionConfig(): Promise<ResolvedProxyConnection | null> {
-  const indexedProxy = await fetchIndexedProxyConfig();
-  if (indexedProxy) return indexedProxy;
   return buildExplicitProxyConfig();
 }
 
@@ -378,12 +237,8 @@ export async function resetYtToTextProxyDispatcher() {
   cachedDispatcher = undefined;
   didWarnIncompleteConfig = false;
   didWarnMissingUndici = false;
-  didWarnIndexSelectorConfig = false;
-  didWarnIndexSelectorFailure = false;
   cachedProxyAgentConstructor = undefined;
   cachedUndiciRequestFn = undefined;
-  cachedIndexProxyConfigKey = null;
-  cachedIndexProxyConfigPromise = null;
   proxyAgentFactoryOverride = undefined;
   undiciRequestOverride = undefined;
   if (!dispatcher) return;

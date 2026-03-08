@@ -27,6 +27,7 @@ a4h) [have] Backend maintainability pass extracted shared generation preflight h
 a4i) [have] Admin entitlement bypass now applies to concrete credit reservation and shared auto-unlock funding, preventing auto rows from remaining `unlockable` solely due to zero wallet balance.
 a4k) [have] Oracle MVP production runtime is now intentionally single-service combined mode (`agentic-backend.service` with HTTP + background work together); dedicated split worker topology is deferred beyond the current MVP load target.
 a4l) [have] Oracle backend config source is now conceptually locked to `/etc/agentic-backend.env`; repo-root `.env` is local-only fallback for non-systemd runs and `.env.production` is no longer part of backend bootstrap.
+a4m) [have] `yt_to_text` proxy runtime is now locked to one explicit Webshare endpoint; legacy selector/list modes are removed from active runtime and docs/tests should not reintroduce them.
 a5) [todo] Improve user trust around shared-cost auto billing transitions and async processing visibility.
 a6) [todo] Reduce terminology ambiguity between personal stream, followed channels, source pages, and channel taxonomy.
 

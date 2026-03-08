@@ -78,7 +78,7 @@ function createBaseDeps(overrides: Partial<OpsRouteDeps> = {}): OpsRouteDeps {
       safeParse: () => ({ success: true, data: {} }),
     },
     resetYtToTextProxyDispatcher: async () => undefined,
-    getYtToTextProxyDebugMode: () => 'rand',
+    getYtToTextProxyDebugMode: () => 'explicit',
     syncSingleSubscription: async () => ({ processed: 0, inserted: 0, skipped: 0 }),
     markSubscriptionSyncError: async () => undefined,
     ...overrides,
@@ -204,14 +204,14 @@ describe('debug yt_to_text proxy reset handler', () => {
     });
   });
 
-  it('resets the proxy cache and returns the current selector mode when authorized', async () => {
+  it('resets the proxy cache and returns the current proxy mode when authorized', async () => {
     const req = {} as never;
     const res = createMockResponse();
     const resetSpy = vi.fn(async () => undefined);
 
     await handleDebugResetYtProxy(req, res as never, createBaseDeps({
       resetYtToTextProxyDispatcher: resetSpy,
-      getYtToTextProxyDebugMode: () => 'rand',
+      getYtToTextProxyDebugMode: () => 'explicit',
     }));
 
     expect(resetSpy).toHaveBeenCalledTimes(1);
@@ -220,17 +220,17 @@ describe('debug yt_to_text proxy reset handler', () => {
       ok: true,
       data: {
         reset: true,
-        proxy_selector_mode: 'rand',
+        proxy_mode: 'explicit',
       },
     });
   });
 
-  it('can report sample as the current selector mode', async () => {
+  it('can report disabled as the current proxy mode', async () => {
     const req = {} as never;
     const res = createMockResponse();
 
     await handleDebugResetYtProxy(req, res as never, createBaseDeps({
-      getYtToTextProxyDebugMode: () => 'sample',
+      getYtToTextProxyDebugMode: () => 'disabled',
     }));
 
     expect(res.statusCode).toBe(200);
@@ -238,7 +238,7 @@ describe('debug yt_to_text proxy reset handler', () => {
       ok: true,
       data: {
         reset: true,
-        proxy_selector_mode: 'sample',
+        proxy_mode: 'disabled',
       },
     });
   });

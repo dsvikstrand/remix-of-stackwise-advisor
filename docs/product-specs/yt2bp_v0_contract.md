@@ -71,6 +71,7 @@
 - 2026-03-06 note: Home feed semantics now treat `Joined` as the canonical joined-channel discovery lane, keep `For You` as the only source-driven locked/unlocked lane, and restrict `All`/channel scopes to published-channel blueprints only; additive and outside the YT2BP endpoint envelope.
 - 2026-03-07 note: Oracle MVP production runtime now treats combined mode (`agentic-backend.service` with `RUN_INGESTION_WORKER=true`) as the canonical queue/scheduler keep-alive path; split worker topology remains deferred and this does not alter the YT2BP endpoint envelope.
 - 2026-03-07 note: backend env bootstrap now uses repo-root `.env` only as a non-systemd local/dev fallback and no longer reads `.env.production`; Oracle production uses `/etc/agentic-backend.env` as the canonical backend app-config source. This is additive runtime bootstrap policy and outside the YT2BP endpoint envelope.
+- 2026-03-08 note: `yt_to_text` Webshare proxying now uses an explicit-endpoint-only runtime contract; legacy selector/list envs and direct-proxy-list lookup are removed from active runtime. Historical transport metadata remains read-compatible, and this does not alter the YT2BP endpoint envelope.
 
 ## Request
 ```json
