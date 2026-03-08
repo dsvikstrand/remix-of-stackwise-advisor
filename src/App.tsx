@@ -40,45 +40,46 @@ const App = () => (
         {config.developerMode && <Toaster />}
         {config.developerMode && <Sonner />}
         <BrowserRouter basename={config.basePath}>
-          <BleupPwaRuntime />
-          <YouTubeOnboardingRedirectGate />
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/explore" element={<Explore />} />
-            <Route path="/blueprints" element={<Navigate to="/wall" replace />} />
-            <Route path="/youtube" element={<YouTubeToBlueprint />} />
-            <Route path="/generation-queue" element={<RequireAuth><GenerationQueue /></RequireAuth>} />
-            <Route path="/channels" element={<Channels />} />
-            <Route path="/search" element={<RequireAuth><SearchPage /></RequireAuth>} />
-            <Route path="/b/:channelSlug" element={<ChannelPage />} />
-            {config.features.myFeedV1 && (
-              <Route path="/my-feed" element={<RequireAuth><MyFeed /></RequireAuth>} />
-            )}
-            {config.features.myFeedV1 && (
-              <Route path="/subscriptions" element={<RequireAuth><Subscriptions /></RequireAuth>} />
-            )}
-            <Route path="/s/:platform/:externalId" element={<SourcePage />} />
-            <Route path="/welcome" element={<RequireAuth><WelcomeOnboarding /></RequireAuth>} />
-            <Route path="/wall" element={<Wall />} />
-            <Route path="/wall/:postId" element={<RequireAuth><PostDetail /></RequireAuth>} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/auth/reset-password" element={<ResetPassword />} />
-            <Route path="/inventory" element={<Navigate to="/wall" replace />} />
-            <Route path="/inventory/create" element={<Navigate to="/wall" replace />} />
-            <Route path="/inventory/:inventoryId" element={<Navigate to="/wall" replace />} />
-            <Route path="/inventory/:inventoryId/build" element={<Navigate to="/wall" replace />} />
-            <Route path="/blueprint/:blueprintId/edit" element={<Navigate to=".." replace />} />
-            <Route path="/blueprint/:blueprintId" element={<BlueprintDetail />} />
-            <Route path="/blueprint/:blueprintId/remix" element={<Navigate to=".." replace />} />
-            <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
-            <Route path="/u/:userId" element={<UserProfile />} />
-            <Route path="/tags" element={<Navigate to="/channels" replace />} />
-            <Route path="/about" element={<About />} />
-            <Route path="/terms" element={<Terms />} />
-            <Route path="/privacy" element={<Privacy />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <BleupPwaRuntime>
+            <YouTubeOnboardingRedirectGate />
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/explore" element={<Explore />} />
+              <Route path="/blueprints" element={<Navigate to="/wall" replace />} />
+              <Route path="/youtube" element={<YouTubeToBlueprint />} />
+              <Route path="/generation-queue" element={<RequireAuth><GenerationQueue /></RequireAuth>} />
+              <Route path="/channels" element={<Channels />} />
+              <Route path="/search" element={<RequireAuth><SearchPage /></RequireAuth>} />
+              <Route path="/b/:channelSlug" element={<ChannelPage />} />
+              {config.features.myFeedV1 && (
+                <Route path="/my-feed" element={<RequireAuth><MyFeed /></RequireAuth>} />
+              )}
+              {config.features.myFeedV1 && (
+                <Route path="/subscriptions" element={<RequireAuth><Subscriptions /></RequireAuth>} />
+              )}
+              <Route path="/s/:platform/:externalId" element={<SourcePage />} />
+              <Route path="/welcome" element={<RequireAuth><WelcomeOnboarding /></RequireAuth>} />
+              <Route path="/wall" element={<Wall />} />
+              <Route path="/wall/:postId" element={<RequireAuth><PostDetail /></RequireAuth>} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/auth/reset-password" element={<ResetPassword />} />
+              <Route path="/inventory" element={<Navigate to="/wall" replace />} />
+              <Route path="/inventory/create" element={<Navigate to="/wall" replace />} />
+              <Route path="/inventory/:inventoryId" element={<Navigate to="/wall" replace />} />
+              <Route path="/inventory/:inventoryId/build" element={<Navigate to="/wall" replace />} />
+              <Route path="/blueprint/:blueprintId/edit" element={<Navigate to=".." replace />} />
+              <Route path="/blueprint/:blueprintId" element={<BlueprintDetail />} />
+              <Route path="/blueprint/:blueprintId/remix" element={<Navigate to=".." replace />} />
+              <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
+              <Route path="/u/:userId" element={<UserProfile />} />
+              <Route path="/tags" element={<Navigate to="/channels" replace />} />
+              <Route path="/about" element={<About />} />
+              <Route path="/terms" element={<Terms />} />
+              <Route path="/privacy" element={<Privacy />} />
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BleupPwaRuntime>
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>

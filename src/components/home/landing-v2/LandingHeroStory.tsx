@@ -5,6 +5,7 @@ import { LazyMotion, domAnimation, AnimatePresence, m, useMotionValue, useSpring
 import { ArrowLeft, ArrowRight, Compass, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '@/components/ui/carousel';
+import { PwaInstallCta } from '@/components/pwa/PwaInstallCta';
 import { cn } from '@/lib/utils';
 import { LANDING_BACKGROUND_GLYPHS, LANDING_STORY_SCENES, type LandingBackgroundGlyph } from '@/lib/landingStory';
 import { LandingDemoScene } from '@/components/home/landing-v2/LandingDemoScene';
@@ -29,41 +30,44 @@ function HeroCtaRail({
   onHeroCtaClick: (slot: 'primary' | 'secondary' | 'tertiary') => void;
 }) {
   return (
-    <div className="mt-8 flex flex-wrap items-center gap-3">
-      {isSignedIn ? (
-        <>
-          <Button asChild size="lg" className="gap-2" onClick={() => onHeroCtaClick('primary')}>
-            <Link to="/search">
-              Open Create
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
-          <Button asChild size="lg" variant="outline" className="gap-2" onClick={() => onHeroCtaClick('secondary')}>
-            <Link to="/wall">
-              Open Home
-              <Compass className="h-4 w-4" />
-            </Link>
-          </Button>
-          <Button asChild size="lg" variant="ghost" onClick={() => onHeroCtaClick('tertiary')}>
-            <a href="#how-it-works">See how it works</a>
-          </Button>
-        </>
-      ) : (
-        <>
-          <Button asChild size="lg" className="gap-2" onClick={() => onHeroCtaClick('primary')}>
-            <Link to="/youtube">
-              Try a video
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
-          <Button asChild size="lg" variant="outline" onClick={() => onHeroCtaClick('secondary')}>
-            <a href="#how-it-works">See how it works</a>
-          </Button>
-          <Button asChild size="lg" variant="ghost" onClick={() => onHeroCtaClick('tertiary')}>
-            <Link to="/auth">Sign in to save your feed</Link>
-          </Button>
-        </>
-      )}
+    <div className="mt-8 space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        {isSignedIn ? (
+          <>
+            <Button asChild size="lg" className="gap-2" onClick={() => onHeroCtaClick('primary')}>
+              <Link to="/search">
+                Open Create
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+            <Button asChild size="lg" variant="outline" className="gap-2" onClick={() => onHeroCtaClick('secondary')}>
+              <Link to="/wall">
+                Open Home
+                <Compass className="h-4 w-4" />
+              </Link>
+            </Button>
+            <Button asChild size="lg" variant="ghost" onClick={() => onHeroCtaClick('tertiary')}>
+              <a href="#how-it-works">See how it works</a>
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button asChild size="lg" className="gap-2" onClick={() => onHeroCtaClick('primary')}>
+              <Link to="/youtube">
+                Try a video
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+            <Button asChild size="lg" variant="outline" onClick={() => onHeroCtaClick('secondary')}>
+              <a href="#how-it-works">See how it works</a>
+            </Button>
+            <Button asChild size="lg" variant="ghost" onClick={() => onHeroCtaClick('tertiary')}>
+              <Link to="/auth">Sign in to save your feed</Link>
+            </Button>
+          </>
+        )}
+      </div>
+      {!isSignedIn ? <PwaInstallCta compact className="md:hidden" /> : null}
     </div>
   );
 }
@@ -298,7 +302,7 @@ function DesktopLandingHeroStory({
 
   return (
     <section ref={containerRef} className="relative hidden h-[185svh] md:block md:h-[210svh]">
-      <div className="sticky top-16 flex min-h-[calc(100svh-4rem)] items-center overflow-hidden border-b border-border/40">
+      <div className="sticky top-[var(--bleup-header-offset)] flex min-h-[calc(100svh-var(--bleup-header-offset))] items-center overflow-hidden border-b border-border/40">
         <BackgroundArt
           sceneIndex={activeSceneIndex}
           scrollProgress={scrollProgress}

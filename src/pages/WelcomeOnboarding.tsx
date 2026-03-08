@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CreatorSetupSection } from '@/components/subscriptions/CreatorSetupSection';
+import { PwaInstallCta } from '@/components/pwa/PwaInstallCta';
 import { useCreatorSetupController } from '@/hooks/useCreatorSetupController';
 import { useToast } from '@/hooks/use-toast';
 import { useTagFollows } from '@/hooks/useTagFollows';
@@ -259,6 +260,9 @@ export default function WelcomeOnboarding() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            <div className="mb-4">
+              <PwaInstallCta compact />
+            </div>
             <CreatorSetupSection controller={creatorSetup} showBackendDisabledHint />
           </CardContent>
         </Card>

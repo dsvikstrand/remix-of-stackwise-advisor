@@ -3,6 +3,7 @@
 interface ImportMetaEnv {
   readonly VITE_RELEASE_SHA?: string;
   readonly VITE_FEATURE_PWA_RUNTIME_V1?: string;
+  readonly VITE_FEATURE_PWA_INSTALL_CTA_V1?: string;
 }
 
 interface ImportMeta {

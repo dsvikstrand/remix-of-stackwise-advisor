@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { BookOpen, Loader2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { config } from '@/config/runtime';
+import { PwaInstallCta } from '@/components/pwa/PwaInstallCta';
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -141,7 +142,7 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-3 sm:p-4">
+    <div className="min-h-[100dvh] flex items-center justify-center bg-background px-[calc(0.75rem+var(--bleup-app-safe-left))] pr-[calc(0.75rem+var(--bleup-app-safe-right))] pt-[calc(0.75rem+var(--bleup-app-safe-top))] pb-[calc(0.75rem+var(--bleup-app-safe-bottom))] sm:px-[calc(1rem+var(--bleup-app-safe-left))] sm:pr-[calc(1rem+var(--bleup-app-safe-right))] sm:pt-[calc(1rem+var(--bleup-app-safe-top))] sm:pb-[calc(1rem+var(--bleup-app-safe-bottom))]">
       <Card className="w-full max-w-md border-border/40 shadow-none">
         <CardHeader className="text-center">
           <div className="flex items-center justify-center gap-2 mb-2">
@@ -189,6 +190,8 @@ export default function Auth() {
             )}
             Continue with Google
           </Button>
+
+          <PwaInstallCta compact />
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">

@@ -11,7 +11,7 @@ type PwaUpdatePromptProps = {
 
 export function PwaUpdatePrompt({ isRefreshing, onRefreshNow, onLater }: PwaUpdatePromptProps) {
   return (
-    <div className="fixed inset-x-0 top-16 z-[70] px-3 sm:px-4">
+    <div className="fixed inset-x-0 top-[var(--bleup-header-offset)] z-[70] px-[calc(0.75rem+var(--bleup-app-safe-left))] pr-[calc(0.75rem+var(--bleup-app-safe-right))] sm:px-[calc(1rem+var(--bleup-app-safe-left))] sm:pr-[calc(1rem+var(--bleup-app-safe-right))]">
       <div className="mx-auto max-w-3xl">
         <Alert className="border-primary/25 bg-background/95 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/90">
           <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />

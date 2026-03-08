@@ -4,8 +4,11 @@ Status: `active`
 
 ## Current Status
 a0) [have] Phase 1 foundation and installability are implemented and published.
-a1) [have] Phase 2 runtime behavior is implemented behind the frontend rollout flag `VITE_FEATURE_PWA_RUNTIME_V1`.
-a2) [todo] Phase 2 still needs installed-mode rollout validation on iPhone Safari and Android Chrome before it can be marked complete in this program.
+a1) [have] Phase 2 runtime behavior is implemented and published on production with `VITE_FEATURE_PWA_RUNTIME_V1=true`.
+a2) [have] iPhone Safari installed-mode checks passed: add-to-home-screen, standalone launch, normal online routing, and offline fallback all behaved correctly.
+a3) [have] Phase 3 mobile polish and install CTA code are implemented behind `VITE_FEATURE_PWA_INSTALL_CTA_V1`.
+a4) [todo] Android Chrome installed-mode validation is still pending and will also close the remaining Phase 2 Android check.
+a5) [todo] Installed-app update-prompt validation is still pending on a future frontend publish.
 
 ## Goal
 b1) [todo] Convert Bleup into an installable, online-first PWA without creating a separate app product.
@@ -37,13 +40,14 @@ d2) [have] Phase 2: Safe caching and update architecture
 - keep `release.json` fresh and uncached for update detection
 - keep `/api/*`, Supabase requests, and OAuth/auth callback traffic network-only
 - add explicit installed-app update prompting for waiting worker/new `release_sha`
-- keep the Phase 2 runtime path behind `VITE_FEATURE_PWA_RUNTIME_V1` until device rollout validation is complete
+- Phase 2 runtime is now live; the remaining closeout work is Android installed-mode validation plus one real update-prompt validation after a future frontend deploy
 
 d3) [todo] Phase 3: Mobile installed-app UX polish
 - add iPhone/Android standalone polish
 - review safe-area handling, theme color, and launch behavior
 - add lightweight installed-app detection where it improves UX
 - validate deep-link behavior for key routes in installed mode
+- Phase 3 code is implemented behind `VITE_FEATURE_PWA_INSTALL_CTA_V1`; device rollout validation is still pending
 
 d4) [todo] Phase 4: Release hardening, docs, and rollout
 - extend frontend release validation to include manifest/service-worker outputs
@@ -100,15 +104,19 @@ f3) [todo] Caching and update checks
 
 f4) [have] Local implementation checks passed
 - `npx vitest run src/test/pwaRuntimeUtils.test.ts`
+- `npx vitest run src/test/pwaInstallUtils.test.ts`
 - `npx tsc --noEmit`
 - `npm run build`
 - `VITE_FEATURE_PWA_RUNTIME_V1=true VITE_RELEASE_SHA=phase2check VITE_BASE_PATH=/pwa-phase2-check/ npm run build`
+- `VITE_FEATURE_PWA_RUNTIME_V1=true VITE_FEATURE_PWA_INSTALL_CTA_V1=true VITE_RELEASE_SHA=phase3check npm run build`
 - verified the flagged `sw.js` excludes `release.json`, `/api/*`, and Supabase traffic while including `offline.html` and `bleup-nav-v1`
 
 f5) [todo] Live rollout checks
-- publish the frontend with `pwa_runtime_v1=true`
-- validate installed-mode update prompt behavior on Android Chrome and iPhone Safari
-- validate offline fallback and refresh behavior in installed mode
+- [have] published the frontend with `pwa_runtime_v1=true`
+- [have] validated iPhone Safari add-to-home-screen, standalone launch, and offline fallback behavior
+- [todo] validate installed-mode behavior on Android Chrome
+- [todo] validate the update prompt on a future frontend publish in installed mode
+- [todo] publish the frontend with `pwa_install_cta_v1=true` and validate the new install CTA behavior on iPhone Safari and Android Chrome
 
 ## Completion Rule
 g1) [todo] Move this file to `completed/` when:

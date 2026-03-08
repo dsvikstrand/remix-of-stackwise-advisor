@@ -111,6 +111,15 @@
     --shadow-2xl: 24px 24px 0px 0px hsl(25 30% 20%);
     --tracking-normal: 0em;
     --spacing: 0.25rem;
+    --bleup-safe-top: env(safe-area-inset-top, 0px);
+    --bleup-safe-right: env(safe-area-inset-right, 0px);
+    --bleup-safe-bottom: env(safe-area-inset-bottom, 0px);
+    --bleup-safe-left: env(safe-area-inset-left, 0px);
+    --bleup-app-safe-top: 0px;
+    --bleup-app-safe-right: 0px;
+    --bleup-app-safe-bottom: 0px;
+    --bleup-app-safe-left: 0px;
+    --bleup-header-offset: 4rem;
   }
 
   .dark {
@@ -266,12 +275,24 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    min-height: 100vh;
+    min-height: 100dvh;
   }
 
   /* Smooth scrolling */
   html {
     scroll-behavior: smooth;
+  }
+
+  #root {
+    min-height: 100dvh;
+  }
+
+  html[data-display-mode="standalone"] {
+    --bleup-app-safe-top: var(--bleup-safe-top);
+    --bleup-app-safe-right: var(--bleup-safe-right);
+    --bleup-app-safe-bottom: var(--bleup-safe-bottom);
+    --bleup-app-safe-left: var(--bleup-safe-left);
+    --bleup-header-offset: calc(4rem + var(--bleup-app-safe-top));
   }
 }
 

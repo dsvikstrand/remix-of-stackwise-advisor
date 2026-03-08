@@ -46,8 +46,8 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
 
   return (
     <>
-      <header className="sticky top-0 z-50 border-b border-border/40 bg-background">
-        <div className="w-full px-3 sm:px-4 py-3 grid grid-cols-[auto,1fr,auto] items-center gap-3">
+      <header className="sticky top-0 z-50 border-b border-border/40 bg-background pt-[var(--bleup-app-safe-top)]">
+        <div className="grid w-full grid-cols-[auto,1fr,auto] items-center gap-3 py-3 pl-[calc(0.75rem+var(--bleup-app-safe-left))] pr-[calc(0.75rem+var(--bleup-app-safe-right))] sm:pl-[calc(1rem+var(--bleup-app-safe-left))] sm:pr-[calc(1rem+var(--bleup-app-safe-right))]">
           <div className="flex items-center gap-3 min-w-0">
             <Link to={brandTarget} className="flex items-center gap-2">
               <div className="w-9 h-9 rounded-xl border border-primary/25 bg-gradient-to-br from-primary/90 to-primary/60 flex items-center justify-center">

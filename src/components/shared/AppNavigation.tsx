@@ -29,12 +29,13 @@ export function AppNavigation({ variant = 'header', mode = 'all', className }: A
 
   if (variant === 'floating') {
     return (
-      <nav
-        className={cn(
-          'fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1 p-1 bg-background rounded-full border border-border/40 shadow-soft-lg transition-transform duration-200 ease-out',
-          className,
-        )}
-      >
+        <nav
+          className={cn(
+            'fixed left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-full border border-border/40 bg-background p-1 shadow-soft-lg transition-transform duration-200 ease-out',
+            'bottom-[calc(1rem+var(--bleup-app-safe-bottom))]',
+            className,
+          )}
+        >
         {visibleItems.map((item) => {
           const isActive = currentPath === item.path;
           const Icon = item.icon;

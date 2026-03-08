@@ -31,6 +31,7 @@ export const config = {
     gatePipelineV1: toBool(import.meta.env.VITE_FEATURE_GATE_PIPELINE_V1, true),
     autoChannelPipelineV1: toBool(import.meta.env.VITE_FEATURE_AUTO_CHANNEL_PIPELINE_V1, true),
     pwaRuntimeV1: toBool(import.meta.env.VITE_FEATURE_PWA_RUNTIME_V1, false),
+    pwaInstallCtaV1: toBool(import.meta.env.VITE_FEATURE_PWA_INSTALL_CTA_V1, false),
   },
 } as const;
 

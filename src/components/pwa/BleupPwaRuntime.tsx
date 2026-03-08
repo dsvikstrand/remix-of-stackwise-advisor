@@ -1,6 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { config } from "@/config/runtime";
+import {
+  getInstallCtaKind,
+  PWA_INSTALL_CTA_DISMISS_KEY,
+  shouldShowInstallCta,
+  type InstallCtaKind,
+} from "@/pwa/installUtils";
 import { registerBleupPwa, type BleupPwaRegistration } from "@/pwa/register";
 import {
   buildReleaseMetadataUrl,
@@ -16,16 +30,54 @@ type ReleaseMetadata = {
   release_sha?: string | null;
 };
 
-export function BleupPwaRuntime() {
+type BleupPwaContextValue = {
+  installCtaKind: InstallCtaKind;
+  isStandaloneMode: boolean;
+  canShowInstallCta: boolean;
+  dismissInstallCta: () => void;
+  openInstallExperience: () => Promise<void>;
+};
+
+type BeforeInstallPromptChoice = {
+  outcome: "accepted" | "dismissed";
+  platform: string;
+};
+
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<BeforeInstallPromptChoice>;
+};
+
+const BleupPwaContext = createContext<BleupPwaContextValue>({
+  installCtaKind: null,
+  isStandaloneMode: false,
+  canShowInstallCta: false,
+  dismissInstallCta: () => undefined,
+  openInstallExperience: async () => undefined,
+});
+
+export function BleupPwaRuntime({ children }: { children: ReactNode }) {
   const [hasWaitingWorker, setHasWaitingWorker] = useState(false);
   const [latestReleaseSha, setLatestReleaseSha] = useState<string | null>(null);
   const [dismissedReleaseKey, setDismissedReleaseKey] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isStandaloneMode, setIsStandaloneMode] = useState(() => readStandaloneMode());
+  const [hasBeforeInstallPrompt, setHasBeforeInstallPrompt] = useState(false);
+  const [dismissedInstallAt, setDismissedInstallAt] = useState<number | null>(() => readDismissedInstallAt());
   const registrationRef = useRef<BleupPwaRegistration | null>(null);
+  const deferredInstallPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
 
   const runtimeEnabled = import.meta.env.PROD && config.features.pwaRuntimeV1;
+  const installCtaEnabled = config.features.pwaInstallCtaV1;
   const currentReleaseSha = config.releaseSha;
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.documentElement.dataset.displayMode = isStandaloneMode ? "standalone" : "browser";
+    return () => {
+      delete document.documentElement.dataset.displayMode;
+    };
+  }, [isStandaloneMode]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !("matchMedia" in window)) return;
@@ -45,6 +97,41 @@ export function BleupPwaRuntime() {
     mediaQuery.addListener(updateStandaloneMode);
     return () => mediaQuery.removeListener(updateStandaloneMode);
   }, []);
+
+  useEffect(() => {
+    if (!installCtaEnabled || typeof window === "undefined") return;
+
+    const handleBeforeInstallPrompt = (event: Event) => {
+      const installEvent = event as BeforeInstallPromptEvent;
+      installEvent.preventDefault();
+      deferredInstallPromptRef.current = installEvent;
+      setHasBeforeInstallPrompt(true);
+    };
+
+    const handleAppInstalled = () => {
+      deferredInstallPromptRef.current = null;
+      setHasBeforeInstallPrompt(false);
+      clearDismissedInstallAt();
+      setDismissedInstallAt(null);
+      setIsStandaloneMode(readStandaloneMode());
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt as EventListener);
+    window.addEventListener("appinstalled", handleAppInstalled);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt as EventListener);
+      window.removeEventListener("appinstalled", handleAppInstalled);
+    };
+  }, [installCtaEnabled]);
+
+  useEffect(() => {
+    if (!isStandaloneMode) return;
+    deferredInstallPromptRef.current = null;
+    setHasBeforeInstallPrompt(false);
+    clearDismissedInstallAt();
+    setDismissedInstallAt(null);
+  }, [isStandaloneMode]);
 
   useEffect(() => {
     if (!import.meta.env.PROD) return;
@@ -138,7 +225,28 @@ export function BleupPwaRuntime() {
     [currentReleaseSha, latestReleaseSha, hasWaitingWorker],
   );
 
-  const shouldShowPrompt =
+  const installCtaKind = useMemo(
+    () =>
+      installCtaEnabled && typeof window !== "undefined"
+        ? getInstallCtaKind({
+            userAgent: window.navigator.userAgent,
+            platform: window.navigator.platform,
+            maxTouchPoints: window.navigator.maxTouchPoints,
+            isStandalone: isStandaloneMode,
+            hasBeforeInstallPrompt,
+          })
+        : null,
+    [hasBeforeInstallPrompt, installCtaEnabled, isStandaloneMode],
+  );
+
+  const canShowInstallCta = shouldShowInstallCta({
+    flagEnabled: installCtaEnabled,
+    installCtaKind,
+    isStandalone: isStandaloneMode,
+    dismissedAt: dismissedInstallAt,
+  });
+
+  const shouldShowUpdatePrompt =
     runtimeEnabled &&
     isStandaloneMode &&
     Boolean(availableReleaseKey) &&
@@ -158,22 +266,61 @@ export function BleupPwaRuntime() {
     window.location.reload();
   }
 
-  function handleLater() {
+  async function openInstallExperience() {
+    if (installCtaKind !== "chromium") return;
+    const installEvent = deferredInstallPromptRef.current;
+    if (!installEvent) return;
+
+    deferredInstallPromptRef.current = null;
+    setHasBeforeInstallPrompt(false);
+
+    try {
+      await installEvent.prompt();
+      const choice = await installEvent.userChoice;
+      if (choice.outcome === "accepted") {
+        clearDismissedInstallAt();
+        setDismissedInstallAt(null);
+      }
+    } catch {
+      // Ignore prompt failures; the CTA remains dismissible and can recover on a later event.
+    }
+  }
+
+  function dismissInstallCta() {
+    const nextDismissedAt = Date.now();
+    writeDismissedInstallAt(nextDismissedAt);
+    setDismissedInstallAt(nextDismissedAt);
+  }
+
+  function handleLaterOnUpdatePrompt() {
     if (!availableReleaseKey) return;
     setDismissedReleaseKey(availableReleaseKey);
   }
 
-  if (!shouldShowPrompt) {
-    return null;
-  }
-
   return (
-    <PwaUpdatePrompt
-      isRefreshing={isRefreshing}
-      onRefreshNow={handleRefreshNow}
-      onLater={handleLater}
-    />
+    <BleupPwaContext.Provider
+      value={{
+        installCtaKind,
+        isStandaloneMode,
+        canShowInstallCta,
+        dismissInstallCta,
+        openInstallExperience,
+      }}
+    >
+      {children}
+      {shouldShowUpdatePrompt ? (
+        <PwaUpdatePrompt
+          isRefreshing={isRefreshing}
+          onRefreshNow={handleRefreshNow}
+          onLater={handleLaterOnUpdatePrompt}
+        />
+      ) : null}
+    </BleupPwaContext.Provider>
   );
+}
+
+export function useBleupPwa() {
+  return useContext(BleupPwaContext);
 }
 
 function readStandaloneMode(): boolean {
@@ -182,4 +329,22 @@ function readStandaloneMode(): boolean {
   const matchesDisplayMode =
     "matchMedia" in window ? window.matchMedia("(display-mode: standalone)").matches : false;
   return matchesDisplayMode || navigatorWithStandalone.standalone === true;
+}
+
+function readDismissedInstallAt(): number | null {
+  if (typeof window === "undefined") return null;
+  const raw = window.localStorage.getItem(PWA_INSTALL_CTA_DISMISS_KEY);
+  if (!raw) return null;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
+function writeDismissedInstallAt(value: number) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(PWA_INSTALL_CTA_DISMISS_KEY, String(value));
+}
+
+function clearDismissedInstallAt() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(PWA_INSTALL_CTA_DISMISS_KEY);
 }
