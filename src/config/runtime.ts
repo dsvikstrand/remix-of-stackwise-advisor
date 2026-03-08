@@ -14,6 +14,9 @@ export const config = {
   /** External agentic backend URL (may be undefined). */
   agenticBackendUrl: import.meta.env.VITE_AGENTIC_BACKEND_URL as string | undefined,
 
+  /** Frontend release SHA used for PWA update comparison. */
+  releaseSha: readOptionalString(import.meta.env.VITE_RELEASE_SHA),
+
   /** Vite base path (for SPA routing on GitHub Pages etc.). */
   basePath: import.meta.env.BASE_URL as string,
 
@@ -27,6 +30,7 @@ export const config = {
     channelSubmitV1: toBool(import.meta.env.VITE_FEATURE_CHANNEL_SUBMIT_V1, true),
     gatePipelineV1: toBool(import.meta.env.VITE_FEATURE_GATE_PIPELINE_V1, true),
     autoChannelPipelineV1: toBool(import.meta.env.VITE_FEATURE_AUTO_CHANNEL_PIPELINE_V1, true),
+    pwaRuntimeV1: toBool(import.meta.env.VITE_FEATURE_PWA_RUNTIME_V1, false),
   },
 } as const;
 
@@ -54,6 +58,12 @@ function toBool(raw: unknown, fallback: boolean) {
   if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
   if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
   return fallback;
+}
+
+function readOptionalString(raw: unknown): string | null {
+  if (raw === undefined || raw === null) return null;
+  const trimmed = String(raw).trim();
+  return trimmed ? trimmed : null;
 }
 
 /**

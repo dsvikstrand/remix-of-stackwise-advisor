@@ -1,15 +1,34 @@
 /// <reference lib="webworker" />
 
-import { cleanupOutdatedCaches, precacheAndRoute, type PrecacheEntry } from "workbox-precaching";
+import { clientsClaim } from "workbox-core";
+import {
+  cleanupOutdatedCaches,
+  matchPrecache,
+  precacheAndRoute,
+  type PrecacheEntry,
+} from "workbox-precaching";
+import { registerRoute } from "workbox-routing";
+import { NetworkFirst } from "workbox-strategies";
+
+import { shouldBypassPwaNavigation } from "./pwa/runtimeUtils";
 
 declare let self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<PrecacheEntry | string>;
 };
 
+const PWA_RUNTIME_ENABLED = String(import.meta.env.VITE_FEATURE_PWA_RUNTIME_V1 || "")
+  .trim()
+  .toLowerCase() === "true";
+const BASE_PATH = import.meta.env.BASE_URL || "/";
+const OFFLINE_FALLBACK_URL = "offline.html";
+
 const seenUrls = new Set<string>();
 const precacheEntries = (self.__WB_MANIFEST || []).filter((entry) => {
   const url = typeof entry === "string" ? entry : entry.url;
-  if (url.endsWith("index.html") || url.endsWith("release.json")) {
+  if (url.endsWith("index.html") || url.endsWith("release.json") || url.endsWith("404.html")) {
+    return false;
+  }
+  if (!PWA_RUNTIME_ENABLED && url.endsWith(OFFLINE_FALLBACK_URL)) {
     return false;
   }
   if (seenUrls.has(url)) {
@@ -21,3 +40,33 @@ const precacheEntries = (self.__WB_MANIFEST || []).filter((entry) => {
 
 cleanupOutdatedCaches();
 precacheAndRoute(precacheEntries);
+
+if (PWA_RUNTIME_ENABLED) {
+  const navigationStrategy = new NetworkFirst({
+    cacheName: "bleup-nav-v1",
+  });
+
+  self.addEventListener("message", (event) => {
+    if (event.data?.type === "SKIP_WAITING") {
+      self.skipWaiting();
+    }
+  });
+
+  clientsClaim();
+
+  registerRoute(
+    ({ request, url }) => {
+      if (request.mode !== "navigate") return false;
+      if (url.origin !== self.location.origin) return false;
+      return !shouldBypassPwaNavigation(url, BASE_PATH);
+    },
+    async ({ event, request }) => {
+      try {
+        return await navigationStrategy.handle({ event, request });
+      } catch {
+        const offlineResponse = await matchPrecache(OFFLINE_FALLBACK_URL);
+        return offlineResponse || Response.error();
+      }
+    },
+  );
+}

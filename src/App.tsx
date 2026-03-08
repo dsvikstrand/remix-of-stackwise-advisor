@@ -25,6 +25,7 @@ import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
 import NotFound from "./pages/NotFound";
 import { RequireAuth } from "@/components/shared/RequireAuth";
+import { BleupPwaRuntime } from "@/components/pwa/BleupPwaRuntime";
 import { config } from "@/config/runtime";
 import { YouTubeOnboardingRedirectGate } from "@/components/onboarding/YouTubeOnboardingRedirectGate";
 import WelcomeOnboarding from "./pages/WelcomeOnboarding";
@@ -38,6 +39,7 @@ const App = () => (
         {config.developerMode && <Toaster />}
         {config.developerMode && <Sonner />}
         <BrowserRouter basename={config.basePath}>
+          <BleupPwaRuntime />
           <YouTubeOnboardingRedirectGate />
           <Routes>
             <Route path="/" element={<Home />} />
