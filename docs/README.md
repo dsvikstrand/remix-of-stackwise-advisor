@@ -2,33 +2,25 @@
 
 This folder is the source of truth for product, architecture, planning, and operations.
 
-## MVP Navigation
-- Launch gate: `docs/ops/mvp-launch-readiness-checklist.md`
-- Current active launch-proof tail: `docs/exec-plans/active/mvp-launch-proof-tail.md`
-- Post-launch debt: `docs/exec-plans/tech-debt-tracker.md`
-- Canonical product/runtime truth:
-  - `docs/app/core-direction-lock.md`
-  - `docs/app/landing-page-direction.md`
-  - `docs/app/mvp-feed-and-channel-model.md`
-  - `docs/app/product-spec.md`
-  - `docs/architecture.md`
+## Current Production Truth
+- Product/runtime lock: `docs/app/core-direction-lock.md`
+- System/runtime topology: `docs/architecture.md`
+- Current production ops/release runbook: `docs/ops/yt2bp_runbook.md`
+- Launch gate board: `docs/ops/mvp-launch-readiness-checklist.md`
+- Plan/status registry: `docs/exec-plans/index.md`
 
 ## Delivery Mode
 - Active: manual iterative build loop.
 - Protocol: propose update -> planning pass -> `PA` -> implement + evaluate.
 - Agentic orchestration docs are reference material and not the active execution path.
-- Historical plan/reference docs may describe superseded intermediate states. Current runtime truth is always anchored in canonical docs below.
+- Historical plan/reference docs may describe superseded intermediate states. Use the canonical runtime docs above for current production truth.
 
-## Read Order For Current MVP Work
-1. `docs/ops/mvp-launch-readiness-checklist.md`
-2. `docs/exec-plans/active/mvp-launch-proof-tail.md`
-3. `docs/exec-plans/tech-debt-tracker.md`
-4. `docs/app/core-direction-lock.md`
-5. `docs/app/landing-page-direction.md`
-6. `docs/app/mvp-feed-and-channel-model.md`
-7. `docs/app/product-spec.md`
-8. `docs/architecture.md`
-9. `docs/exec-plans/index.md`
+## Read Order For Current Runtime And Ops
+1. `docs/app/core-direction-lock.md`
+2. `docs/architecture.md`
+3. `docs/ops/yt2bp_runbook.md`
+4. `docs/ops/mvp-launch-readiness-checklist.md`
+5. `docs/exec-plans/index.md`
 
 ## Primary Planning Surfaces
 - Launch gate board: `docs/ops/mvp-launch-readiness-checklist.md`
@@ -44,14 +36,16 @@ This folder is the source of truth for product, architecture, planning, and oper
 - Execution registry: `docs/exec-plans/index.md`
 
 ## Supporting Runbooks And Evidence
+- YT2BP runbook: `docs/ops/yt2bp_runbook.md`
 - P1-1 / P1-2 verification runbook: `docs/ops/p1-1-p1-2-verification-runbook.md`
 - Playwright callback evidence: `docs/ops/playwright-p1-2-callback-evidence.md`
 - Playwright preflight notes: `docs/ops/playwright-preflight-notes.md`
 - Google OAuth verification checklist: `docs/ops/google-oauth-verification-checklist.md`
-- YT2BP runbook: `docs/ops/yt2bp_runbook.md`
+- Google OAuth reviewer demo script: `docs/ops/google-oauth-reviewer-demo-script.md`
 - YT2BP API contract (adapter v0): `docs/product-specs/yt2bp_v0_contract.md`
 
 ## Historical Reference
+- Historical references are not the current production contract.
 - Completed launch hardening phases: `docs/exec-plans/completed/mvp-launch-hardening-phases.md`
 - Completed stepwise execution scheme: `docs/exec-plans/completed/bleuv1-manual-iteration-scheme.md`
 - Paused strategy reference (`bleuV1`): `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
@@ -60,6 +54,7 @@ This folder is the source of truth for product, architecture, planning, and oper
 ## Interpretation Rule
 - If a detailed plan/reference file conflicts with canonical docs, follow canonical docs.
 - Treat `docs/product-specs/youtube_to_blueprint_plan.md` as detailed historical/reference context; use `docs/product-specs/yt2bp_v0_contract.md` for runtime API truth.
+- Do not use paused/completed plan docs to infer the current Oracle runtime or release contract.
 
 ## Legacy Archive (Reference-Only)
 - Agentic foundation pack (archived): `docs/_archive/legacy-ass-agentic/agentic/foundation/`

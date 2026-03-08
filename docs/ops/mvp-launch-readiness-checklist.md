@@ -18,6 +18,10 @@ a6) [todo] Evidence must be concrete:
 - PR link
 - timestamped runbook note
 - dashboard screenshot link
+a7) [have] Historical runtime note:
+- some timestamped evidence rows below capture earlier rollout states such as `runtime_mode=web_only` or an enabled `agentic-worker.service`
+- those rows remain as factual history only and are not the current production contract
+- current runtime truth lives in `docs/app/core-direction-lock.md`, `docs/architecture.md`, and `docs/ops/yt2bp_runbook.md`
 
 ## Launch Gate Snapshot (Update Daily)
 b1) [todo] Release candidate backend SHA: `set per release`

@@ -9,6 +9,7 @@ Convert the current feature-complete MVP into a stable, clear, and scalable prod
 a0) [have] Canonical launch-readiness and phased fix process is maintained in `docs/ops/mvp-launch-readiness-checklist.md`.
 a00) [have] Use this playbook for strategic priority framing and use the ops checklist for execution evidence/status tracking.
 a000) [have] Current active cleanup/scalability follow-up now lives in `docs/exec-plans/active/repo-cleanup-and-scale-readiness-plan.md`.
+a0000) [have] Current runtime/deploy truth does not live here; use `docs/architecture.md` and `docs/ops/yt2bp_runbook.md` for the live Oracle contract.
 
 ## Current State Snapshot
 a1) [have] Core source-first loop is live: source subscriptions -> unlock/generate -> blueprint -> channel/home visibility.

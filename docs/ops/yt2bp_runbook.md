@@ -15,6 +15,14 @@
 - Runtime import note:
   - backend OpenAI SDK usage is lazy-loaded at call time; avoid reintroducing top-level `import OpenAI from "openai"` in backend startup files because Oracle `tsx` can stall before the HTTP listener binds.
 
+## Current Production Contract
+- One backend service: `agentic-backend.service`
+- Runtime mode: single-service `combined`
+- Keep-alive background work switch: `RUN_INGESTION_WORKER=true`
+- Live backend config source: `/etc/agentic-backend.env`
+- Release order: deploy backend for one explicit SHA, run smoke checks, then manually publish the frontend for that same SHA
+- `agentic-worker.service` is deferred and should remain disabled in the current MVP production contract
+
 ## bleuV1 source-first integration context
 - YT2BP remains the ingestion/generation entrypoint only.
 - Home/feed contract now follows the canonical model in `docs/app/mvp-feed-and-channel-model.md`:
@@ -95,8 +103,9 @@ curl -sS https://bapi.vdsai.cloud/api/ops/queue/health \
   - per-scope `queued` vs `queued_work_items`
   - per-scope `running` vs `running_work_items`
 
-### YouTube metadata refresh scheduler (worker-only)
+### YouTube metadata refresh scheduler (combined runtime)
 - Purpose: periodically refresh stored `view_count` and YouTube comment snapshots without calling YouTube from page loads.
+- Current runtime note: this scheduler runs from the combined backend service when `RUN_INGESTION_WORKER=true`; it does not require a separate worker service in MVP production.
 - Queue scope: `blueprint_youtube_refresh` (low-priority, budgeted).
 - Default cadence: every `10` minutes.
 - Comments policy:
@@ -169,6 +178,9 @@ ssh oracle-free 'sudo ls -l /etc/agentic-backend.env'
   - live backend app config comes from `/etc/agentic-backend.env`
   - repo-root `.env` / `.env.production` are local/dev-only and must not be used for Oracle production boot
   - the only expected remaining backend systemd drop-in is the Node path helper
+- Current service topology rule:
+  - `agentic-backend.service` is the only production backend service
+  - `agentic-worker.service` should remain disabled in the MVP runtime
 
 ## Release contract (backend first)
 - Release rule:
@@ -477,73 +489,22 @@ Safe defaults:
   2. verify first authenticated navigation is redirected to `/welcome`.
   3. click `Skip for now` and verify redirect to `/wall`.
 
-## Web / worker split rollout
-- Combined mode remains the default:
+## Runtime verification
+- Current MVP production runtime:
   - `RUN_HTTP_SERVER=true`
   - `RUN_INGESTION_WORKER=true`
-- Current MVP production recommendation:
-  - `agentic-backend.service` runs in combined mode:
-    - `RUN_HTTP_SERVER=true`
-    - `RUN_INGESTION_WORKER=true`
-    - values live in `/etc/agentic-backend.env`
-  - `agentic-worker.service` stays disabled unless an explicit later scale pass re-enables the split-runtime topology
-
-### Optional later split
-- Deferred until needed beyond the MVP target:
-  - `agentic-backend.service` (web):
-    - `RUN_HTTP_SERVER=true`
-    - `RUN_INGESTION_WORKER=false`
-  - `agentic-worker.service` (worker):
-    - `RUN_HTTP_SERVER=false`
-    - `RUN_INGESTION_WORKER=true`
-
-### Create worker service
-1. Copy the existing backend unit as a starting point:
+  - both values live in `/etc/agentic-backend.env`
+  - `agentic-worker.service` remains disabled
+- Verify the live contract:
 ```bash
-ssh oracle-free 'sudo cp /etc/systemd/system/agentic-backend.service /etc/systemd/system/agentic-worker.service'
+ssh oracle-free 'sudo systemctl is-active agentic-backend.service'
+ssh oracle-free 'sudo systemctl is-enabled agentic-worker.service || true'
+ssh oracle-free 'curl -sS http://127.0.0.1:8787/api/health'
+ssh oracle-free 'set -a; . /etc/agentic-backend.env; set +a; curl -sS http://127.0.0.1:8787/api/ops/queue/health -H "x-service-token: $INGESTION_SERVICE_TOKEN"'
 ```
-2. Edit `agentic-worker.service`:
-  - keep the same `WorkingDirectory`, `EnvironmentFile`, and start command
-  - add:
-    - `Environment=RUN_HTTP_SERVER=false`
-    - `Environment=RUN_INGESTION_WORKER=true`
-3. Edit `agentic-backend.service`:
-  - add:
-    - `Environment=RUN_HTTP_SERVER=true`
-    - `Environment=RUN_INGESTION_WORKER=false`
-4. Reload systemd and start the worker:
-```bash
-ssh oracle-free 'sudo systemctl daemon-reload && sudo systemctl enable --now agentic-worker.service && sudo systemctl restart agentic-backend.service'
-```
-
-### Verification
-```bash
-ssh oracle-free 'sudo systemctl status agentic-backend.service --no-pager'
-ssh oracle-free 'sudo systemctl status agentic-worker.service --no-pager'
-ssh oracle-free 'ss -ltnp | grep 8787 || true'
-ssh oracle-free 'sudo journalctl -u agentic-worker.service -n 100 --no-pager'
-```
-- The web service should bind `:8787`.
-- The worker service should not bind a port.
-- The worker service should log queue activity.
-
-### Rollback to combined mode
-1. Stop the worker:
-```bash
-ssh oracle-free 'sudo systemctl disable --now agentic-worker.service'
-```
-2. Remove or override the web unit flags back to combined mode:
-  - `RUN_HTTP_SERVER=true`
-  - `RUN_INGESTION_WORKER=true`
-3. Reload and restart:
-```bash
-ssh oracle-free 'sudo systemctl daemon-reload && sudo systemctl restart agentic-backend.service'
-```
-4. Confirm the combined-mode flags are present in `/etc/agentic-backend.env`.
-  4. verify Home shows dismissible setup reminder card.
-  5. complete import with at least one imported/reactivated channel and verify reminder no longer appears.
-- Existing-account check:
-  - existing users created before migration should not be auto-redirected to `/welcome`.
+- Deferred scale note:
+  - dedicated split web/worker topology is intentionally out of the current runbook
+  - if it is ever reintroduced, do it in a separate explicit scale plan rather than by following historical docs
 
 ## Failure playbooks
 

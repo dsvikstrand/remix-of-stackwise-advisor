@@ -38,7 +38,7 @@ d3) [have] Targets:
 - extract worker/runtime bootstrap concerns from `server/index.ts`
 - isolate queue-runner/scheduler wiring from route composition
 - keep route registration in `server/index.ts`, but move operational orchestration into dedicated modules
-- make runtime-mode (`combined`, `web_only`, `worker_only`) composition easier to reason about in one place
+- make the historical runtime-mode (`combined`, `web_only`, `worker_only`) composition easier to reason about in one place while keeping the current MVP contract centered on `combined`
 
 d4) [have] Success criteria:
 - `server/index.ts` is materially smaller

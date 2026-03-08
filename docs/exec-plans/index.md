@@ -2,6 +2,14 @@
 
 This file is the authoritative active/completed registry for execution plans.
 
+## Current Runtime / Ops Truth
+- `docs/app/core-direction-lock.md`
+  Canonical product/runtime lock, including the single-service Oracle MVP runtime.
+- `docs/architecture.md`
+  Canonical system/runtime topology for the current production contract.
+- `docs/ops/yt2bp_runbook.md`
+  Canonical production operations and backend-first release runbook.
+
 ## Primary Planning Surfaces
 - `docs/ops/mvp-launch-readiness-checklist.md`
   Launch-gate board. This is the only file that answers `Are we launch-ready?` and `What P0/P1 items are still open?`
@@ -25,6 +33,7 @@ This file is the authoritative active/completed registry for execution plans.
   Operational runbook for the YouTube-to-Blueprint service.
 
 ## Paused Reference (Not Active)
+- These files are reference/history only and must not be treated as the current production runtime contract.
 - `docs/exec-plans/active/on-pause/project-bleuv1-mvp-foundation.md`
 - `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
 - `docs/_archive/legacy-ass-agentic/README.md`
@@ -67,6 +76,7 @@ This file is the authoritative active/completed registry for execution plans.
 
 ## Current Program Snapshot
 - Core identity lock: `docs/app/core-direction-lock.md`.
+- Current runtime/ops truth: `docs/architecture.md` and `docs/ops/yt2bp_runbook.md`.
 - Legacy channels-first program: completed/archived.
 - `bleuV1` source-first umbrella program: completed.
 - Current launch authorization gate: `docs/ops/mvp-launch-readiness-checklist.md`.
@@ -82,3 +92,4 @@ This file is the authoritative active/completed registry for execution plans.
 - Keep paused plans under `docs/exec-plans/active/on-pause/`.
 - Move finished project plans into `completed/`.
 - Update this index whenever status changes.
+- Do not treat paused/completed plan docs as the current runtime/deploy source of truth.

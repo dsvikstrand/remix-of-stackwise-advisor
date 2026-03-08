@@ -14,6 +14,12 @@ A React + Supabase app for turning media into bite-sized blueprints and discussi
 - Loop: you propose change -> plan -> `PA` -> implementation -> validation.
 - Agentic orchestration docs are retained as reference and are not the active delivery path.
 
+## Current Production Runtime
+- Oracle MVP production runs as one backend service: `agentic-backend.service`.
+- Runtime mode is single-service `combined` (`RUN_HTTP_SERVER=true`, `RUN_INGESTION_WORKER=true`).
+- Live backend config comes from `/etc/agentic-backend.env`.
+- Releases are backend-first: deploy Oracle backend for one explicit SHA, smoke-check it, then manually publish the frontend for that same SHA.
+
 ## Current Runtime Surfaces
 - Home: `/`
 - Home feed: `/wall`
@@ -48,4 +54,7 @@ npm run docs:link-check
 ```
 
 ## Documentation Entry Point
-Start with `docs/README.md`.
+Start with `docs/README.md`, then use this path for current runtime truth:
+1. `docs/app/core-direction-lock.md`
+2. `docs/architecture.md`
+3. `docs/ops/yt2bp_runbook.md`

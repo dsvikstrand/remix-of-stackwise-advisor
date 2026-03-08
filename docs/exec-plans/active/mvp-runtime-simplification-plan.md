@@ -1,9 +1,16 @@
 # MVP Runtime Simplification Plan
 
-Status: `active`
+Status: `active` (`Phase 4` current; `Phases 1-3` complete)
 
 ## Goal
 a1) [todo] Simplify Bleu's live runtime and release process to a single-service MVP model that is easy to reason about, easy to restart, and robust enough for temporary spikes around `~100` concurrent users.
+
+## Progress Snapshot
+a2) [have] Phase 1 is complete: Oracle MVP runtime is intentionally single-service `combined`.
+a3) [have] Phase 2 is complete: production backend config is sourced from `/etc/agentic-backend.env`.
+a4) [have] Phase 3 is complete: releases are backend-first and frontend publish is manual with explicit `release_sha` parity.
+a5) [todo] Phase 4 is the current step: canonical docs/runbooks must match the live Oracle contract and demote historical runtime guidance.
+a6) [todo] Phase 5 remains after docs canonicalization: validation and MVP capacity guard.
 
 ## Scope
 b1) [have] This is an MVP reliability/simplicity plan, not a large-scale production platform plan.
@@ -25,7 +32,7 @@ b3) [have] Out of scope:
 ## Why This Plan Exists
 c1) [have] The current live system works, but the operational model is still more complex than the MVP needs.
 c2) [have] The main cleanup drivers are:
-- runtime ownership is conceptually split between `combined`, `web_only`, and `worker_only` paths
+- runtime ownership was historically split between `combined`, `web_only`, and `worker_only` paths
 - production config can still come from multiple places
 - frontend and backend releases can drift
 - docs describe more runtime complexity than the MVP actually needs

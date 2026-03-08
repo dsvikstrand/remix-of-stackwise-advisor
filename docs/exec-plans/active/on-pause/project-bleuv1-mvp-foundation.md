@@ -10,6 +10,9 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
   - `docs/exec-plans/completed/bleuv1-manual-iteration-scheme.md` (historical sequence)
 - Current cleanup/scalability follow-up:
   - `docs/exec-plans/active/repo-cleanup-and-scale-readiness-plan.md`
+- Current runtime/deploy truth:
+  - `docs/architecture.md`
+  - `docs/ops/yt2bp_runbook.md`
 
 ## Active Delivery Protocol
 1. User proposes a concrete update.
