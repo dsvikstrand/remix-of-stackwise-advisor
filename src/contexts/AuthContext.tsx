@@ -21,6 +21,8 @@ interface AuthContextType {
   isLoading: boolean;
   signUp: (email: string, password: string, displayName?: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  requestPasswordReset: (email: string) => Promise<{ error: Error | null }>;
+  updatePassword: (password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Pick<Profile, 'display_name' | 'avatar_url' | 'bio'>>) => Promise<{ error: Error | null }>;
 }
@@ -33,9 +35,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const buildAppUrl = (path = '') => {
+    const normalizedBasePath = config.basePath.replace(/\/$/, '');
+    const normalizedPath = String(path || '').replace(/^\/+/, '');
+    const joinedPath = [normalizedBasePath, normalizedPath].filter(Boolean).join('/');
+    return new URL(joinedPath || '/', window.location.origin).toString();
+  };
+
   // On GitHub Pages, apps are often hosted under a sub-path.
   // Using BASE_URL ensures auth redirects land back on the SPA path.
-  const appUrl = new URL(config.basePath, window.location.origin).toString();
+  const appUrl = buildAppUrl();
 
   // Fetch profile for user
   const fetchProfile = async (userId: string) => {
@@ -116,6 +125,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error as Error | null };
   };
 
+  const requestPasswordReset = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: buildAppUrl('/auth/reset-password'),
+    });
+    return { error: error as Error | null };
+  };
+
+  const updatePassword = async (password: string) => {
+    const { error } = await supabase.auth.updateUser({
+      password,
+    });
+    return { error: error as Error | null };
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
     setProfile(null);
@@ -145,6 +168,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         signUp,
         signIn,
+        requestPasswordReset,
+        updatePassword,
         signOut,
         updateProfile,
       }}

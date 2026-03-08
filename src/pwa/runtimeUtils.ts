@@ -59,7 +59,12 @@ export function shouldBypassPwaNavigation(url: URL, basePath: string): boolean {
   const offlinePath = trimTrailingSlash(joinBasePath(normalizedBasePath, "offline.html")) || "/";
   const redirectFallbackPath = trimTrailingSlash(joinBasePath(normalizedBasePath, "404.html")) || "/";
 
-  if (pathname === authPath || pathname === offlinePath || pathname === redirectFallbackPath) {
+  if (
+    pathname === authPath ||
+    pathname.startsWith(`${authPath}/`) ||
+    pathname === offlinePath ||
+    pathname === redirectFallbackPath
+  ) {
     return true;
   }
 

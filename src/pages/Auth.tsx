@@ -14,16 +14,19 @@ import { config } from '@/config/runtime';
 
 export default function Auth() {
   const navigate = useNavigate();
-  const { signIn, signUp, user } = useAuth();
+  const { signIn, signUp, requestPasswordReset, user } = useAuth();
   const { toast } = useToast();
   const postAuthRedirect = '/wall';
   
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isResetLoading, setIsResetLoading] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
   
   // Login form state
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [forgotEmail, setForgotEmail] = useState('');
   
   // Signup form state
   const [signupEmail, setSignupEmail] = useState('');
@@ -79,6 +82,35 @@ export default function Auth() {
     }
     
     setIsLoading(false);
+  };
+
+  const handleOpenForgotPassword = () => {
+    setForgotEmail(loginEmail);
+    setShowForgotPassword(true);
+  };
+
+  const handleRequestPasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsResetLoading(true);
+
+    const { error } = await requestPasswordReset(forgotEmail.trim());
+
+    if (error) {
+      toast({
+        title: 'Reset email failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } else {
+      toast({
+        title: 'Check your inbox',
+        description: 'If an account exists for that email, we sent a reset link.',
+      });
+      setLoginEmail(forgotEmail.trim());
+      setShowForgotPassword(false);
+    }
+
+    setIsResetLoading(false);
   };
 
   const handleGoogleSignIn = async () => {
@@ -174,43 +206,93 @@ export default function Auth() {
             </TabsList>
             
             <TabsContent value="login">
-              <form onSubmit={handleLogin} className="space-y-4 mt-4">
-                <div className="space-y-2">
-                  <Label htmlFor="login-email">Email</Label>
-                  <Input
-                    id="login-email"
-                    type="email"
-                    placeholder="you@example.com"
-                    value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
-                    required
-                    disabled={isLoading || isGoogleLoading}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="login-password">Password</Label>
-                  <Input
-                    id="login-password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    required
-                    disabled={isLoading || isGoogleLoading}
-                    minLength={6}
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={isLoading || isGoogleLoading}>
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Signing in...
-                    </>
-                  ) : (
-                    'Sign In'
-                  )}
-                </Button>
-              </form>
+              {showForgotPassword ? (
+                <form onSubmit={handleRequestPasswordReset} className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="forgot-email">Email</Label>
+                    <Input
+                      id="forgot-email"
+                      type="email"
+                      placeholder="you@example.com"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      required
+                      disabled={isResetLoading || isGoogleLoading}
+                    />
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Enter the email you use for Bleup and we&apos;ll send you a password reset link.
+                  </p>
+                  <Button type="submit" className="w-full" disabled={isResetLoading || isGoogleLoading}>
+                    {isResetLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Sending reset link...
+                      </>
+                    ) : (
+                      'Send reset link'
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full"
+                    onClick={() => setShowForgotPassword(false)}
+                    disabled={isResetLoading || isGoogleLoading}
+                  >
+                    Back to sign in
+                  </Button>
+                </form>
+              ) : (
+                <form onSubmit={handleLogin} className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="login-email">Email</Label>
+                    <Input
+                      id="login-email"
+                      type="email"
+                      placeholder="you@example.com"
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                      required
+                      disabled={isLoading || isGoogleLoading}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="login-password">Password</Label>
+                    <Input
+                      id="login-password"
+                      type="password"
+                      placeholder="••••••••"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      required
+                      disabled={isLoading || isGoogleLoading}
+                      minLength={6}
+                    />
+                  </div>
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="link"
+                      className="h-auto px-0 text-sm"
+                      onClick={handleOpenForgotPassword}
+                      disabled={isLoading || isGoogleLoading}
+                    >
+                      Forgot password?
+                    </Button>
+                  </div>
+                  <Button type="submit" className="w-full" disabled={isLoading || isGoogleLoading}>
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Signing in...
+                      </>
+                    ) : (
+                      'Sign In'
+                    )}
+                  </Button>
+                </form>
+              )}
             </TabsContent>
             
             <TabsContent value="signup">

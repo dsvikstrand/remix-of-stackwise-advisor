@@ -8,6 +8,7 @@ import Home from "./pages/Home";
 import Wall from "./pages/Wall";
 import Explore from "./pages/Explore";
 import Auth from "./pages/Auth";
+import ResetPassword from "./pages/ResetPassword";
 import Settings from "./pages/Settings";
 import UserProfile from "./pages/UserProfile";
 import Channels from "./pages/Channels";
@@ -61,6 +62,7 @@ const App = () => (
             <Route path="/wall" element={<Wall />} />
             <Route path="/wall/:postId" element={<RequireAuth><PostDetail /></RequireAuth>} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/auth/reset-password" element={<ResetPassword />} />
             <Route path="/inventory" element={<Navigate to="/wall" replace />} />
             <Route path="/inventory/create" element={<Navigate to="/wall" replace />} />
             <Route path="/inventory/:inventoryId" element={<Navigate to="/wall" replace />} />

@@ -19,8 +19,10 @@ describe("pwaRuntimeUtils", () => {
 
   it("bypasses callback-sensitive and auth navigations", () => {
     expect(shouldBypassPwaNavigation(new URL("https://bleup.app/auth"), "/")).toBe(true);
+    expect(shouldBypassPwaNavigation(new URL("https://bleup.app/auth/reset-password"), "/")).toBe(true);
     expect(shouldBypassPwaNavigation(new URL("https://bleup.app/wall?code=abc"), "/")).toBe(true);
     expect(shouldBypassPwaNavigation(new URL("https://bleup.app/app/auth"), "/app/")).toBe(true);
+    expect(shouldBypassPwaNavigation(new URL("https://bleup.app/app/auth/reset-password"), "/app/")).toBe(true);
   });
 
   it("allows normal in-app navigations to use runtime caching", () => {
