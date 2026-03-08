@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bleup is offline</title>
+    <meta name="theme-color" content="#faf8f5" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <style>
+      :root {
+        color-scheme: light;
+        --background: #faf8f5;
+        --foreground: #35291f;
+        --muted: #6f6256;
+        --card: rgba(255, 252, 247, 0.94);
+        --border: rgba(123, 95, 64, 0.18);
+        --primary: #d77a1f;
+        --primary-foreground: #fffaf5;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+        background:
+          radial-gradient(circle at top, rgba(215, 122, 31, 0.08), transparent 42%),
+          linear-gradient(180deg, #fcfbf7 0%, var(--background) 100%);
+        color: var(--foreground);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+
+      main {
+        width: min(100%, 480px);
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        box-shadow: 0 18px 50px rgba(53, 41, 31, 0.12);
+        padding: 28px;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 20px;
+      }
+
+      .brand img {
+        width: 52px;
+        height: 52px;
+        border-radius: 16px;
+      }
+
+      h1 {
+        font-size: 1.9rem;
+        line-height: 1.1;
+        margin: 0 0 12px;
+      }
+
+      p {
+        margin: 0 0 14px;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 999px;
+        padding: 12px 18px;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+        background: var(--primary);
+        color: var(--primary-foreground);
+        box-shadow: 0 12px 26px rgba(215, 122, 31, 0.22);
+      }
+
+      button:hover {
+        filter: brightness(1.03);
+      }
+
+      .meta {
+        margin-top: 18px;
+        font-size: 0.92rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="brand">
+        <img src="./pwa-192x192.png" alt="Bleup" />
+        <strong>Bleup</strong>
+      </div>
+      <h1>You’re offline right now.</h1>
+      <p>
+        Bleup can open as an installed app, but live feeds, subscriptions, and blueprint actions still need a network
+        connection.
+      </p>
+      <p class="meta">Reconnect and try again to keep using the latest live data.</p>
+      <button type="button" onclick="window.location.reload()">Try again</button>
+    </main>
+  </body>
+</html>
