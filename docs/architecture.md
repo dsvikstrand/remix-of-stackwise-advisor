@@ -39,6 +39,11 @@
   - Explore search now includes app Source Page lookup (`Sources` filter + grouped `Sources` section in `All` results), linking directly to `/s/:platform/:externalId`.
   - Frontend bootstrap has required-env guard:
     - missing `VITE_SUPABASE_URL` or `VITE_SUPABASE_PUBLISHABLE_KEY` renders a configuration screen instead of a blank page.
+  - Frontend distribution path is now installable PWA-first for non-store usage:
+    - `https://bleup.app` is the preferred app-like distribution path today
+    - installed mode uses the same frontend bundle, same backend API, and same Supabase auth/session model as browser mode
+    - runtime behavior remains online-first: static shell/offline fallback are supported, but authenticated feed/subscription/generation data is still network-driven
+    - normal production frontend publishes now default to `pwa_runtime_v1=true` and `pwa_install_cta_v1=true`, with manual workflow override retained for rollback
   - Personal workspace is profile-first at `/u/:userId` with tabs `Feed / Comments / Liked / Subscriptions` (subscriptions tab owner-only); `/my-feed` remains direct-access compatible.
   - Profile visibility default is public for new accounts (`profiles.is_public=true` by default).
   - Live adapter UI in `src/pages/YouTubeToBlueprint.tsx`.

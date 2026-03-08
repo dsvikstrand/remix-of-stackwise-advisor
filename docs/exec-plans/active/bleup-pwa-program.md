@@ -6,9 +6,10 @@ Status: `active`
 a0) [have] Phase 1 foundation and installability are implemented and published.
 a1) [have] Phase 2 runtime behavior is implemented and published on production with `VITE_FEATURE_PWA_RUNTIME_V1=true`.
 a2) [have] iPhone Safari installed-mode checks passed: add-to-home-screen, standalone launch, normal online routing, and offline fallback all behaved correctly.
-a3) [have] Phase 3 mobile polish and install CTA code are implemented behind `VITE_FEATURE_PWA_INSTALL_CTA_V1`.
-a4) [todo] Android Chrome installed-mode validation is still pending and will also close the remaining Phase 2 Android check.
-a5) [todo] Installed-app update-prompt validation is still pending on a future frontend publish.
+a3) [have] Phase 3 mobile polish and install CTA behavior are implemented and published on production with `VITE_FEATURE_PWA_INSTALL_CTA_V1=true`.
+a4) [have] iPhone Safari CTA validation passed on the intended live browser surfaces (`/`, `/auth`, `/wall`), including the stronger fully-dismissible Wall CTA behavior.
+a5) [todo] Android Chrome installed-mode validation is still pending and will also close the remaining Phase 2 Android check.
+a6) [todo] Installed-app update-prompt validation is still pending on a future frontend publish.
 
 ## Goal
 b1) [todo] Convert Bleup into an installable, online-first PWA without creating a separate app product.
@@ -42,18 +43,18 @@ d2) [have] Phase 2: Safe caching and update architecture
 - add explicit installed-app update prompting for waiting worker/new `release_sha`
 - Phase 2 runtime is now live; the remaining closeout work is Android installed-mode validation plus one real update-prompt validation after a future frontend deploy
 
-d3) [todo] Phase 3: Mobile installed-app UX polish
+d3) [have] Phase 3: Mobile installed-app UX polish
 - add iPhone/Android standalone polish
 - review safe-area handling, theme color, and launch behavior
 - add lightweight installed-app detection where it improves UX
 - validate deep-link behavior for key routes in installed mode
-- Phase 3 code is implemented behind `VITE_FEATURE_PWA_INSTALL_CTA_V1`; device rollout validation is still pending
+- Phase 3 is live with `VITE_FEATURE_PWA_INSTALL_CTA_V1=true`; iPhone validation passed and Android remains the open device gap
 
 d4) [todo] Phase 4: Release hardening, docs, and rollout
-- extend frontend release validation to include manifest/service-worker outputs
-- add PWA smoke coverage for install/update/offline-shell behavior
-- update canonical docs and ops docs so PWA becomes the preferred non-store install story
-- roll out conservatively: validate first, then expose install prompting softly, then treat PWA as the primary app-like distribution path
+- promote frontend workflow defaults so PWA runtime/install CTA are the normal production contract
+- extend release smoke coverage to include manifest/service-worker/offline-shell checks
+- update canonical docs and ops docs so PWA is the preferred non-store install story
+- close the remaining rollout gates: Android Chrome validation and installed update-prompt validation
 
 d5) [todo] Phase 5: Deferred post-MVP PWA enhancements
 - keep push notifications, background sync, rich offline caching, offline authenticated feed usage, and native-wrapper packaging out of the initial program
@@ -114,9 +115,11 @@ f4) [have] Local implementation checks passed
 f5) [todo] Live rollout checks
 - [have] published the frontend with `pwa_runtime_v1=true`
 - [have] validated iPhone Safari add-to-home-screen, standalone launch, and offline fallback behavior
+- [have] published the frontend with `pwa_install_cta_v1=true`
+- [have] validated the new install CTA behavior on iPhone Safari browser surfaces (`/`, `/auth`, `/wall`)
 - [todo] validate installed-mode behavior on Android Chrome
 - [todo] validate the update prompt on a future frontend publish in installed mode
-- [todo] publish the frontend with `pwa_install_cta_v1=true` and validate the new install CTA behavior on iPhone Safari and Android Chrome
+- [todo] validate the install CTA/native-install flow on Android Chrome
 
 ## Completion Rule
 g1) [todo] Move this file to `completed/` when:

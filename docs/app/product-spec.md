@@ -66,8 +66,8 @@ a43) [have] Landing now includes an above-the-fold proof card (live example when
 a44) [have] Landing social-proof sections (`Top Blueprints`, `Trending Topics`) now show curated fallback content instead of disappearing when live data is empty.
 a45) [have] Frontend bootstrap now guards missing Supabase env (`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`) and shows a user-facing configuration screen instead of a blank page.
 a46) [have] Landing use-case strip is now explicit (`fitness`, `recipes`, `study`, `productivity`) to communicate practical value before sign-in.
-a47) [have] New-account onboarding now supports an optional first-login `/welcome` setup path for YouTube connect + import.
-a48) [have] Onboarding completion requires successful import (`imported_count > 0` or `reactivated_count > 0`); connect-only does not complete setup.
+a47) [have] New-account onboarding still includes an optional first-login `/welcome` setup path, and it now reuses the same manual-first creator setup flow as `/subscriptions`.
+a48) [have] Onboarding completion is gated by joining at least one Bleu channel; creator add/import remains optional and speeds up personalization but does not block continue.
 a49) [have] Home now shows a small dismissible YouTube-setup reminder card for skipped/incomplete onboarding users.
 a50) [have] Source Pages foundation is active: YouTube channels are now represented as platform-agnostic shared source entities with route `/s/:platform/:externalId`.
 a51) [have] Subscription surfaces now deep-link to Source Pages, while legacy `/api/source-subscriptions*` contracts remain active for compatibility.
@@ -99,6 +99,9 @@ a76) [have] Supabase repo target is aligned to project `qgqqavaogicecvhopgan`, a
 a77) [have] Search, source-page unlock, and subscription manual-refresh flows now share typed backend preflight helpers for duplicate classification, queue admission, and manual reservation-prefix handling without changing route response contracts.
 a78) [have] `/subscriptions` now composes its OAuth/import/refresh orchestration through a dedicated frontend controller hook instead of keeping that state/query/mutation model inline in the page component.
 a79) [have] `/wall` now consumes backend-shaped feed endpoints for both public lanes and `For You`, and its scope/query/mutation orchestration is composed through a dedicated frontend controller hook rather than browser-side multi-table hydration.
+a80) [have] Bleup is now installable as an online-first PWA at `https://bleup.app`, and this is the preferred non-store app distribution path for the current MVP.
+a81) [have] PWA mode uses the same frontend, backend, and Supabase auth/session model as browser mode; it is not a separate app product.
+a82) [have] Current PWA behavior is intentionally conservative: installability, standalone launch, offline fallback, update prompting, and mobile install CTA surfaces are in scope, while authenticated feed/subscription/generation data remains network-only.
 
 ## Core Model
 b1) `Source Item`
@@ -236,6 +239,7 @@ s2) Out of scope
 - Debug simulation UI exposure remains deferred (operator-only endpoint stays hidden from user UI).
 - Fully open free-form blog/social posting model.
 - Full moderation platform for user-generated channels.
+- Rich offline product behavior, push notifications, background sync, and native app-store packaging remain deferred beyond the current PWA rollout.
 
 ## Data Surfaces (Current + Direction)
 d1) [have] `blueprints`, `blueprint_tags`, `blueprint_likes`, `blueprint_comments`.
@@ -285,7 +289,7 @@ si30) callback endpoint: `GET /api/youtube/connection/callback` (consumes one-ti
 si31) user endpoint: `GET /api/youtube/subscriptions/preview` (fetches all available YouTube subscriptions for import selection)
 si32) user endpoint: `POST /api/youtube/subscriptions/import` (bulk import selected channels; idempotent + inactive reactivation)
 si33) user endpoint: `DELETE /api/youtube/connection` (revoke+unlink OAuth connection while preserving existing app subscriptions)
-si34) `/subscriptions` now includes a `YouTube account` connect/import surface; import selection defaults to none selected.
+si34) `/subscriptions` is now manual-creator-add first in the public MVP path; it includes a public YouTube subscriptions import guide/placeholder, while the older direct YouTube OAuth connect/import surface remains in code for internal or beta use only.
 si35) public/auth endpoint: `GET /api/source-pages/:platform/:externalId` (source header + follower count + viewer subscription state).
 si36) auth endpoint: `POST /api/source-pages/:platform/:externalId/subscribe` (idempotent subscribe, source-page auto-create for YouTube).
 si37) auth endpoint: `DELETE /api/source-pages/:platform/:externalId/subscribe` (unsubscribe parity + subscription notice cleanup).

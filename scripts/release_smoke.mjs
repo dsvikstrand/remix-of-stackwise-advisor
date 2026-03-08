@@ -7,12 +7,24 @@ function parseArgs(argv) {
     const index = args.indexOf(flag);
     return index >= 0 ? String(args[index + 1] || '').trim() : fallback;
   };
+  const readBool = (flag, fallback) => {
+    const raw = read(flag, fallback === undefined ? '' : String(fallback));
+    if (!raw) return false;
+    const normalized = raw.trim().toLowerCase();
+    if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+    if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+    const fallbackNormalized = String(fallback ?? '')
+      .trim()
+      .toLowerCase();
+    return ['1', 'true', 'yes', 'on'].includes(fallbackNormalized);
+  };
 
   return {
     apiBaseUrl: read('--api-base-url', String(process.env.RELEASE_API_BASE_URL || 'https://api.bleup.app').trim()),
     frontendBaseUrl: read('--frontend-base-url', String(process.env.RELEASE_FRONTEND_BASE_URL || '').trim()),
     releaseSha: read('--release-sha', String(process.env.RELEASE_SHA || '').trim()),
     serviceToken: read('--service-token', String(process.env.INGESTION_SERVICE_TOKEN || '').trim()),
+    expectPwaRuntime: readBool('--expect-pwa-runtime', String(process.env.RELEASE_EXPECT_PWA_RUNTIME || 'true').trim()),
     json: args.includes('--json'),
   };
 }
@@ -147,6 +159,76 @@ async function checkFrontendRelease(frontendBaseUrl, releaseSha, apiBaseUrl) {
   });
 }
 
+async function checkFrontendAsset(frontendBaseUrl, path, name) {
+  if (!frontendBaseUrl) {
+    return {
+      name,
+      pass: true,
+      skipped: true,
+      reason: 'skipped (no frontend base URL provided)',
+    };
+  }
+
+  return runCheck(name, async () => {
+    const response = await fetch(`${trimTrailingSlash(frontendBaseUrl)}/${path.replace(/^\/+/, '')}`);
+    const pass = response.status === 200;
+    return {
+      name,
+      pass,
+      reason: pass ? 'ok' : `expected 200 for ${path}, got status=${response.status}`,
+      details: {
+        status: response.status,
+        url: response.url,
+      },
+    };
+  });
+}
+
+async function checkServiceWorkerRuntime(frontendBaseUrl, expectPwaRuntime) {
+  if (!frontendBaseUrl) {
+    return {
+      name: 'service_worker_runtime_contract',
+      pass: true,
+      skipped: true,
+      reason: 'skipped (no frontend base URL provided)',
+    };
+  }
+
+  if (!expectPwaRuntime) {
+    return {
+      name: 'service_worker_runtime_contract',
+      pass: true,
+      skipped: true,
+      reason: 'skipped (PWA runtime not expected for this publish)',
+    };
+  }
+
+  return runCheck('service_worker_runtime_contract', async () => {
+    const response = await fetch(`${trimTrailingSlash(frontendBaseUrl)}/sw.js`);
+    const body = await response.text();
+    const hasNavCacheMarker = body.includes('bleup-nav-v1');
+    const hasSkipWaitingMarker = body.includes('SKIP_WAITING');
+    const hasReleaseJsonPrecacheEntry =
+      /["']url["']\s*:\s*["'][^"']*release\.json["']/.test(body) ||
+      /url:"[^"]*release\.json"/.test(body);
+    const pass = response.status === 200 && hasNavCacheMarker && hasSkipWaitingMarker && !hasReleaseJsonPrecacheEntry;
+
+    return {
+      name: 'service_worker_runtime_contract',
+      pass,
+      reason: pass
+        ? 'ok'
+        : `expected sw.js runtime markers and no release.json precache entry, got status=${response.status}`,
+      details: {
+        status: response.status,
+        has_nav_cache_marker: hasNavCacheMarker,
+        has_skip_waiting_marker: hasSkipWaitingMarker,
+        has_release_json_precache_entry: hasReleaseJsonPrecacheEntry,
+      },
+    };
+  });
+}
+
 async function main() {
   const options = parseArgs(process.argv);
   const checks = [
@@ -154,6 +236,10 @@ async function main() {
     await checkPublicPreview(options.apiBaseUrl),
     await checkQueueHealth(options.apiBaseUrl, options.serviceToken),
     await checkFrontendRelease(options.frontendBaseUrl, options.releaseSha, options.apiBaseUrl),
+    await checkFrontendAsset(options.frontendBaseUrl, 'manifest.webmanifest', 'manifest_asset'),
+    await checkFrontendAsset(options.frontendBaseUrl, 'sw.js', 'service_worker_asset'),
+    await checkFrontendAsset(options.frontendBaseUrl, 'offline.html', 'offline_fallback_asset'),
+    await checkServiceWorkerRuntime(options.frontendBaseUrl, options.expectPwaRuntime),
   ];
   const failed = checks.filter((check) => !check.pass);
   const verdict = failed.length === 0 ? 'PASS' : 'FAIL';
@@ -179,6 +265,7 @@ async function main() {
   console.log(`- api_base_url: ${options.apiBaseUrl}`);
   if (options.frontendBaseUrl) console.log(`- frontend_base_url: ${options.frontendBaseUrl}`);
   if (options.releaseSha) console.log(`- release_sha: ${options.releaseSha}`);
+  console.log(`- expect_pwa_runtime: ${options.expectPwaRuntime}`);
   for (const check of checks) {
     const prefix = check.skipped ? 'SKIP' : check.pass ? 'PASS' : 'FAIL';
     console.log(`- [${prefix}] ${check.name}: ${check.reason}`);

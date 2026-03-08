@@ -8,6 +8,7 @@ This folder is the source of truth for product, architecture, planning, and oper
 - Current production ops/release runbook: `docs/ops/yt2bp_runbook.md`
 - Launch gate board: `docs/ops/mvp-launch-readiness-checklist.md`
 - Plan/status registry: `docs/exec-plans/index.md`
+- Preferred non-store app path: installable Bleup PWA at `https://bleup.app` (online-first, same backend/auth model as the web app)
 
 ## Delivery Mode
 - Active: manual iterative build loop.
@@ -24,6 +25,7 @@ This folder is the source of truth for product, architecture, planning, and oper
 
 ## Primary Planning Surfaces
 - Launch gate board: `docs/ops/mvp-launch-readiness-checklist.md`
+- Active PWA implementation program: `docs/exec-plans/active/bleup-pwa-program.md`
 - Active implementation program: `docs/exec-plans/active/mvp-launch-proof-tail.md`
 - Durable post-launch debt: `docs/exec-plans/tech-debt-tracker.md`
 
@@ -33,7 +35,13 @@ This folder is the source of truth for product, architecture, planning, and oper
 - Feed model: `docs/app/mvp-feed-and-channel-model.md`
 - Product behavior/spec: `docs/app/product-spec.md`
 - Architecture: `docs/architecture.md`
+- PWA implementation program: `docs/exec-plans/active/bleup-pwa-program.md`
 - Execution registry: `docs/exec-plans/index.md`
+
+## App Section Docs
+- Section-by-section app docs: `docs/app-sections/README.md`
+- Only reviewed sections should contain real content.
+- Unreviewed sections may exist as empty placeholders until they are inspected.
 
 ## Supporting Runbooks And Evidence
 - YT2BP runbook: `docs/ops/yt2bp_runbook.md`
@@ -63,6 +71,7 @@ This folder is the source of truth for product, architecture, planning, and oper
 
 ## Folder Map
 - `docs/app/` product-level behavior and user flow docs
+- `docs/app-sections/` section-by-section app surface notes and reviews
 - `docs/_archive/legacy-ass-agentic/` archived ASS/agentic reference contracts (not active runtime guidance)
 - `docs/architecture.md` system topology and invariants
 - `docs/design-docs/` technical design + diagrams

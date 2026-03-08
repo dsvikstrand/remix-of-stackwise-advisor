@@ -21,6 +21,8 @@
 - Keep-alive background work switch: `RUN_INGESTION_WORKER=true`
 - Live backend config source: `/etc/agentic-backend.env`
 - Release order: deploy backend for one explicit SHA, run smoke checks, then manually publish the frontend for that same SHA
+- Frontend PWA contract: normal frontend releases now default to `pwa_runtime_v1=true` and `pwa_install_cta_v1=true` unless explicitly overridden for rollback
+- Preferred non-store install path: `https://bleup.app` as an installable online-first PWA (same backend/auth model as the browser app)
 - `agentic-worker.service` is deferred and should remain disabled in the current MVP production contract
 
 ## bleuV1 source-first integration context
@@ -85,16 +87,16 @@ ssh oracle-free 'curl -sS http://localhost:8787/api/health'
 ```
 - Public health:
 ```bash
-curl -sS https://bapi.vdsai.cloud/api/health
+curl -sS https://api.bleup.app/api/health
 ```
 - Latest ingestion job (service auth):
 ```bash
-curl -sS https://bapi.vdsai.cloud/api/ingestion/jobs/latest \
+curl -sS https://api.bleup.app/api/ingestion/jobs/latest \
   -H "x-service-token: $INGESTION_SERVICE_TOKEN"
 ```
 - Queue health snapshot (service auth):
 ```bash
-curl -sS https://bapi.vdsai.cloud/api/ops/queue/health \
+curl -sS https://api.bleup.app/api/ops/queue/health \
   -H "x-service-token: $INGESTION_SERVICE_TOKEN"
 ```
 - Queue-health fields to inspect first:
@@ -128,12 +130,12 @@ YOUTUBE_REFRESH_ENABLED=false
   - if this route ever causes process restarts, verify route dependency wiring for `runSourcePageAssetSweep` in source-page route registration.
 - Latest auto-banner queue snapshot (service auth):
 ```bash
-curl -sS https://bapi.vdsai.cloud/api/auto-banner/jobs/latest \
+curl -sS https://api.bleup.app/api/auto-banner/jobs/latest \
   -H "x-service-token: $INGESTION_SERVICE_TOKEN"
 ```
 - Public YT2BP endpoint basic probe:
 ```bash
-curl -sS -X POST https://bapi.vdsai.cloud/api/youtube-to-blueprint \
+curl -sS -X POST https://api.bleup.app/api/youtube-to-blueprint \
   -H 'Content-Type: application/json' \
   --data '{"video_url":"https://www.youtube.com/watch?v=16hFQZbxZpU","generate_review":false,"generate_banner":false,"source":"youtube_mvp"}'
 ```
@@ -153,7 +155,7 @@ ssh oracle-free 'codex --version'
 
 - Notification inbox probe (auth):
 ```bash
-curl -sS "https://bapi.vdsai.cloud/api/notifications?limit=5" \
+curl -sS "https://api.bleup.app/api/notifications?limit=5" \
   -H "Authorization: Bearer $USER_TOKEN"
 ```
 
@@ -206,15 +208,38 @@ ssh oracle-free 'export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use 20.20
   - GitHub -> `Actions` -> `Deploy Frontend Release`
   - choose branch `main`
   - set `release_sha=$RELEASE_SHA`
+  - default workflow values already publish with `pwa_runtime_v1=true` and `pwa_install_cta_v1=true`
+  - only override those flags when doing an emergency rollback-style publish
   - run the workflow manually
 - Public parity check after the frontend publish finishes:
 ```bash
-npm run smoke:release -- --api-base-url https://api.bleup.app --frontend-base-url https://dsvikstrand.github.io/remix-of-stackwise-advisor --release-sha "$RELEASE_SHA"
+npm run smoke:release -- --api-base-url https://api.bleup.app --frontend-base-url https://bleup.app --release-sha "$RELEASE_SHA"
 ```
 - Frontend parity proof endpoint:
 ```bash
-curl -sS https://dsvikstrand.github.io/remix-of-stackwise-advisor/release.json
+curl -sS https://bleup.app/release.json
 ```
+
+## PWA Release Validation Bundle
+- Automated release smoke is now expected to prove all of these in one command:
+  - API health
+  - public preview auth-guard
+  - frontend `release.json` parity
+  - `manifest.webmanifest`, `sw.js`, and `offline.html` all return `200`
+  - the published `sw.js` contains the current runtime markers (`bleup-nav-v1`, `SKIP_WAITING`)
+  - no `release.json` precache entry appears in the published service worker artifact
+- Canonical production smoke:
+```bash
+npm run smoke:release -- --api-base-url https://api.bleup.app --frontend-base-url https://bleup.app --release-sha "$RELEASE_SHA"
+```
+- Emergency rollback-style smoke (for a manual publish with PWA runtime intentionally disabled):
+```bash
+npm run smoke:release -- --api-base-url https://api.bleup.app --frontend-base-url https://bleup.app --release-sha "$RELEASE_SHA" --expect-pwa-runtime false
+```
+- Required manual release evidence before treating the PWA rollout as fully closed:
+  1. Android Chrome install CTA + native install prompt + standalone launch
+  2. installed update-prompt validation after a newer frontend publish
+  3. final CTA validation across intended mobile browser surfaces
 
 ## Environment checklist
 Required runtime variables:
@@ -664,11 +689,11 @@ ssh oracle-free 'sudo systemctl restart agentic-backend.service'
 ## Post-deploy confidence checks
 - Release smoke:
 ```bash
-npm run smoke:release -- --api-base-url https://api.bleup.app --frontend-base-url https://dsvikstrand.github.io/remix-of-stackwise-advisor --release-sha "$RELEASE_SHA"
+npm run smoke:release -- --api-base-url https://api.bleup.app --frontend-base-url https://bleup.app --release-sha "$RELEASE_SHA"
 ```
 - YT2BP repro smoke:
 ```bash
-npm run smoke:yt2bp -- --base-url https://bapi.vdsai.cloud
+npm run smoke:yt2bp -- --base-url https://api.bleup.app
 ```
 - Metrics summary (Oracle logs):
 ```bash
@@ -696,14 +721,14 @@ select
 ## Candidate lifecycle smoke (auth required)
 Use a valid bearer token and existing `user_feed_item_id`.
 ```bash
-curl -sS -X POST https://bapi.vdsai.cloud/api/channel-candidates \
+curl -sS -X POST https://api.bleup.app/api/channel-candidates \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   --data '{"user_feed_item_id":"<uuid>","channel_slug":"skincare"}'
 ```
 
 ```bash
-curl -sS -X POST https://bapi.vdsai.cloud/api/channel-candidates/<candidate_id>/evaluate \
+curl -sS -X POST https://api.bleup.app/api/channel-candidates/<candidate_id>/evaluate \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json'
 ```
@@ -711,39 +736,39 @@ curl -sS -X POST https://bapi.vdsai.cloud/api/channel-candidates/<candidate_id>/
 ## Subscription + ingestion smoke
 YouTube search smoke (auth required):
 ```bash
-curl -sS "https://bapi.vdsai.cloud/api/youtube-search?q=skincare%202026%20best&limit=10" \
+curl -sS "https://api.bleup.app/api/youtube-search?q=skincare%202026%20best&limit=10" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 YouTube channel search smoke (auth required):
 ```bash
-curl -sS "https://bapi.vdsai.cloud/api/youtube-channel-search?q=skincare%20doctor&limit=10" \
+curl -sS "https://api.bleup.app/api/youtube-channel-search?q=skincare%20doctor&limit=10" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 YouTube OAuth status (auth required):
 ```bash
-curl -sS "https://bapi.vdsai.cloud/api/youtube/connection/status" \
+curl -sS "https://api.bleup.app/api/youtube/connection/status" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 YouTube OAuth start (auth required; open returned `auth_url` in browser):
 ```bash
-curl -sS -X POST https://bapi.vdsai.cloud/api/youtube/connection/start \
+curl -sS -X POST https://api.bleup.app/api/youtube/connection/start \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
-  --data '{"return_to":"https://dsvikstrand.github.io/remix-of-stackwise-advisor/subscriptions"}'
+  --data '{"return_to":"https://bleup.app/subscriptions"}'
 ```
 
 YouTube import preview (auth required):
 ```bash
-curl -sS "https://bapi.vdsai.cloud/api/youtube/subscriptions/preview" \
+curl -sS "https://api.bleup.app/api/youtube/subscriptions/preview" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 YouTube import selected channels (auth required):
 ```bash
-curl -sS -X POST https://bapi.vdsai.cloud/api/youtube/subscriptions/import \
+curl -sS -X POST https://api.bleup.app/api/youtube/subscriptions/import \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   --data '{"channels":[{"channel_id":"UC_x5XG1OV2P6uZZ5FSM9Ttw","channel_url":"https://www.youtube.com/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw","channel_title":"Google for Developers"}]}'
@@ -751,13 +776,13 @@ curl -sS -X POST https://bapi.vdsai.cloud/api/youtube/subscriptions/import \
 
 Disconnect YouTube OAuth link (auth required; imported app subscriptions remain):
 ```bash
-curl -sS -X DELETE https://bapi.vdsai.cloud/api/youtube/connection \
+curl -sS -X DELETE https://api.bleup.app/api/youtube/connection \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 Create a subscription (MVP auto-only behavior):
 ```bash
-curl -sS -X POST https://bapi.vdsai.cloud/api/source-subscriptions \
+curl -sS -X POST https://api.bleup.app/api/source-subscriptions \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   --data '{"channel_input":"https://www.youtube.com/@AliAbdaal"}'
@@ -773,7 +798,7 @@ Expected behavior:
 
 Manual refresh scan (auth required):
 ```bash
-curl -sS -X POST https://bapi.vdsai.cloud/api/source-subscriptions/refresh-scan \
+curl -sS -X POST https://api.bleup.app/api/source-subscriptions/refresh-scan \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   --data '{"max_per_subscription":5,"max_total":50}'
@@ -784,7 +809,7 @@ Expected behavior:
 
 Manual refresh enqueue (auth required):
 ```bash
-curl -sS -X POST https://bapi.vdsai.cloud/api/source-subscriptions/refresh-generate \
+curl -sS -X POST https://api.bleup.app/api/source-subscriptions/refresh-generate \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   --data '{"items":[{"subscription_id":"<uuid>","source_channel_id":"<channel_id>","video_id":"<video_id>","video_url":"https://www.youtube.com/watch?v=<video_id>","title":"<title>"}]}'
@@ -801,19 +826,19 @@ Expected behavior:
 
 Manual refresh job status (user auth):
 ```bash
-curl -sS https://bapi.vdsai.cloud/api/ingestion/jobs/<job_id> \
+curl -sS https://api.bleup.app/api/ingestion/jobs/<job_id> \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 Latest manual refresh job for current user (user auth):
 ```bash
-curl -sS "https://bapi.vdsai.cloud/api/ingestion/jobs/latest-mine?scope=manual_refresh_selection" \
+curl -sS "https://api.bleup.app/api/ingestion/jobs/latest-mine?scope=manual_refresh_selection" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 User-triggered sync (operator/debug path):
 ```bash
-curl -sS -X POST https://bapi.vdsai.cloud/api/source-subscriptions/<subscription_id>/sync \
+curl -sS -X POST https://api.bleup.app/api/source-subscriptions/<subscription_id>/sync \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   --data '{}'
@@ -821,7 +846,7 @@ curl -sS -X POST https://bapi.vdsai.cloud/api/source-subscriptions/<subscription
 
 Service cron trigger:
 ```bash
-curl -sS -X POST https://bapi.vdsai.cloud/api/ingestion/jobs/trigger \
+curl -sS -X POST https://api.bleup.app/api/ingestion/jobs/trigger \
   -H "x-service-token: $INGESTION_SERVICE_TOKEN" \
   -H 'Content-Type: application/json' \
   --data '{}'
@@ -829,7 +854,7 @@ curl -sS -X POST https://bapi.vdsai.cloud/api/ingestion/jobs/trigger \
 
 Latest ingestion job snapshot:
 ```bash
-curl -sS https://bapi.vdsai.cloud/api/ingestion/jobs/latest \
+curl -sS https://api.bleup.app/api/ingestion/jobs/latest \
   -H "x-service-token: $INGESTION_SERVICE_TOKEN"
 ```
 
@@ -840,7 +865,7 @@ Staleness guidance:
 
 Debug simulation trigger (single subscription, non-prod only):
 ```bash
-curl -sS -X POST https://bapi.vdsai.cloud/api/debug/subscriptions/<subscription_id>/simulate-new-uploads \
+curl -sS -X POST https://api.bleup.app/api/debug/subscriptions/<subscription_id>/simulate-new-uploads \
   -H "x-service-token: $INGESTION_SERVICE_TOKEN" \
   -H 'Content-Type: application/json' \
   --data '{"rewind_days":30}'
@@ -854,7 +879,7 @@ Notes:
 
 Auto-banner worker trigger (service auth):
 ```bash
-curl -sS -X POST https://bapi.vdsai.cloud/api/auto-banner/jobs/trigger \
+curl -sS -X POST https://api.bleup.app/api/auto-banner/jobs/trigger \
   -H "x-service-token: $INGESTION_SERVICE_TOKEN" \
   -H 'Content-Type: application/json' \
   --data '{}'
@@ -865,14 +890,14 @@ Subscription input note:
 
 Pending card actions (compatibility path for legacy pending items):
 ```bash
-curl -sS -X POST https://bapi.vdsai.cloud/api/my-feed/items/<user_feed_item_id>/accept \
+curl -sS -X POST https://api.bleup.app/api/my-feed/items/<user_feed_item_id>/accept \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   --data '{}'
 ```
 
 ```bash
-curl -sS -X POST https://bapi.vdsai.cloud/api/my-feed/items/<user_feed_item_id>/skip \
+curl -sS -X POST https://api.bleup.app/api/my-feed/items/<user_feed_item_id>/skip \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   --data '{}'
@@ -881,12 +906,12 @@ curl -sS -X POST https://bapi.vdsai.cloud/api/my-feed/items/<user_feed_item_id>/
 ## Oracle cron setup
 Example cron entry:
 ```bash
-*/30 * * * * curl -sS -X POST https://bapi.vdsai.cloud/api/ingestion/jobs/trigger -H \"x-service-token: ${INGESTION_SERVICE_TOKEN}\" -H 'Content-Type: application/json' --data '{}' >> /var/log/bleuv1-ingestion-cron.log 2>&1
+*/30 * * * * curl -sS -X POST https://api.bleup.app/api/ingestion/jobs/trigger -H \"x-service-token: ${INGESTION_SERVICE_TOKEN}\" -H 'Content-Type: application/json' --data '{}' >> /var/log/bleuv1-ingestion-cron.log 2>&1
 ```
 
 Auto-banner worker cron example (every 5 minutes):
 ```bash
-*/5 * * * * curl -sS -X POST https://bapi.vdsai.cloud/api/auto-banner/jobs/trigger -H \"x-service-token: ${INGESTION_SERVICE_TOKEN}\" -H 'Content-Type: application/json' --data '{}' >> /var/log/bleuv1-auto-banner-cron.log 2>&1
+*/5 * * * * curl -sS -X POST https://api.bleup.app/api/auto-banner/jobs/trigger -H \"x-service-token: ${INGESTION_SERVICE_TOKEN}\" -H 'Content-Type: application/json' --data '{}' >> /var/log/bleuv1-auto-banner-cron.log 2>&1
 ```
 
 ## Ingestion reliability triage
@@ -897,13 +922,18 @@ ssh oracle-free 'tail -n 100 /var/log/bleuv1-ingestion-cron.log'
 ```
 2. Check latest ingestion snapshot:
 ```bash
-curl -sS https://bapi.vdsai.cloud/api/ingestion/jobs/latest -H "x-service-token: $INGESTION_SERVICE_TOKEN"
+curl -sS https://api.bleup.app/api/ingestion/jobs/latest -H "x-service-token: $INGESTION_SERVICE_TOKEN"
 ```
-3. If delayed/failed, inspect backend logs:
+3. Capture bounded queue metrics on Oracle:
+```bash
+ssh oracle-free 'export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use 20.20.0 >/dev/null; cd /home/ubuntu/remix-of-stackwise-advisor && npm run metrics:queue -- --source journalctl --lines 800 --json'
+```
+- use `--lines 800` on Oracle to avoid the current `ENOBUFS` failure risk from the default `4000`-line window
+4. If delayed/failed, inspect backend logs:
 ```bash
 ssh oracle-free 'sudo journalctl -u agentic-backend.service -n 200 --no-pager'
 ```
-4. Spot-check subscription rows in app UI (`/subscriptions`) via `Sync issue`, `Last polled`, and health detail text.
+5. Spot-check subscription rows in app UI (`/subscriptions`) via `Sync issue`, `Last polled`, and health detail text.
 
 ## Traceability keys and expected logs
 Required IDs for triage:
