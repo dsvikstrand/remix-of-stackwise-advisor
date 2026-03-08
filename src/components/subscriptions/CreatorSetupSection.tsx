@@ -15,7 +15,7 @@ function PublicYouTubePrivacyGuide(props: { intro: string }) {
       <div className="space-y-3 text-sm text-muted-foreground">
         <div className="flex gap-3">
           <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">1</span>
-          <p>Visit <a href="https://www.youtube.com/account" target="_blank" rel="noreferrer" className="text-foreground underline underline-offset-2">youtube.com/account</a>.</p>
+          <p>Visit <a href="https://www.youtube.com/account_privacy" target="_blank" rel="noreferrer" className="text-foreground underline underline-offset-2">youtube.com/account_privacy</a>.</p>
         </div>
         <div className="flex gap-3">
           <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">2</span>
@@ -115,7 +115,7 @@ export function CreatorSetupSection({
                 <Input
                   value={controller.publicYouTubeChannelInput}
                   onChange={(event) => controller.setPublicYouTubeChannelInput(event.target.value)}
-                  placeholder="madameglome"
+                  placeholder="Your YouTube Name"
                 />
               </div>
               <Button type="submit" size="sm" disabled={!controller.subscriptionsEnabled || controller.publicYouTubePreviewMutation.isPending}>
