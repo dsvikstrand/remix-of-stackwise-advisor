@@ -37,6 +37,32 @@ function getSourcePagePath(subscription: SourceSubscription) {
   return buildSourcePagePath('youtube', channelId);
 }
 
+function PublicYouTubePrivacyGuide(props: { intro: string }) {
+  return (
+    <div className="space-y-3 rounded-xl border border-border/50 bg-background/80 p-4">
+      <p className="text-sm text-muted-foreground">{props.intro}</p>
+      <div className="space-y-3 text-sm text-muted-foreground">
+        <div className="flex gap-3">
+          <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">1</span>
+          <p>Visit <a href="https://www.youtube.com/account" target="_blank" rel="noreferrer" className="text-foreground underline underline-offset-2">youtube.com/account</a>.</p>
+        </div>
+        <div className="flex gap-3">
+          <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">2</span>
+          <p>Press &quot;Privacy&quot;.</p>
+        </div>
+        <div className="flex gap-3">
+          <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">3</span>
+          <p>Flip the &quot;Keep all my subscriptions private&quot; switch.</p>
+        </div>
+        <div className="flex gap-3">
+          <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">4</span>
+          <p>Return here and import your subscriptions.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Subscriptions() {
   const {
     user,
@@ -206,29 +232,9 @@ export default function Subscriptions() {
                   ) : null}
 
                   {publicYouTubePreviewErrorCode === 'PUBLIC_SUBSCRIPTIONS_PRIVATE' ? (
-                    <div className="space-y-3 rounded-xl border border-border/50 bg-background/80 p-4">
+                    <div className="space-y-3">
                       <p className="text-sm font-medium text-foreground">{publicYouTubePreviewError}</p>
-                      <p className="text-sm text-muted-foreground">
-                        To import from this account, we first need you to make your subscriptions public.
-                      </p>
-                      <div className="space-y-3 text-sm text-muted-foreground">
-                        <div className="flex gap-3">
-                          <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">1</span>
-                          <p>Visit <a href="https://www.youtube.com/account" target="_blank" rel="noreferrer" className="text-foreground underline underline-offset-2">youtube.com/account</a>.</p>
-                        </div>
-                        <div className="flex gap-3">
-                          <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">2</span>
-                          <p>Press &quot;Privacy&quot;.</p>
-                        </div>
-                        <div className="flex gap-3">
-                          <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">3</span>
-                          <p>Flip the &quot;Keep all my subscriptions private&quot; switch.</p>
-                        </div>
-                        <div className="flex gap-3">
-                          <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">4</span>
-                          <p>Return here and import your subscriptions.</p>
-                        </div>
-                      </div>
+                      <PublicYouTubePrivacyGuide intro="To import from this account, we first need you to make your subscriptions public." />
                     </div>
                   ) : null}
 
@@ -251,9 +257,12 @@ export default function Subscriptions() {
                       </div>
 
                       {publicYouTubePreview.creators.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">
-                          We found the account, but there are no public subscriptions available to import.
-                        </p>
+                        <div className="space-y-3">
+                          <p className="text-sm text-muted-foreground">
+                            We found the account, but there are no public subscriptions available to import.
+                          </p>
+                          <PublicYouTubePrivacyGuide intro="If you expected subscriptions here, they may still be private. To import from this account, we first need you to make your subscriptions public." />
+                        </div>
                       ) : (
                         <>
                           <div className="flex flex-wrap items-center gap-2">
