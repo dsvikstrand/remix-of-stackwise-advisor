@@ -17,12 +17,32 @@ import { cn } from "@/lib/utils";
 type PwaInstallCtaProps = {
   className?: string;
   compact?: boolean;
+  dismissMode?: "cooldown" | "permanent";
+  dismissStorageKey?: string;
 };
 
-export function PwaInstallCta({ className, compact = false }: PwaInstallCtaProps) {
+export function PwaInstallCta({
+  className,
+  compact = false,
+  dismissMode = "cooldown",
+  dismissStorageKey,
+}: PwaInstallCtaProps) {
   const { canShowInstallCta, installCtaKind, dismissInstallCta, openInstallExperience } = useBleupPwa();
+  const [isPermanentlyDismissed, setIsPermanentlyDismissed] = React.useState(() => {
+    if (dismissMode !== "permanent" || !dismissStorageKey || typeof window === "undefined") return false;
+    return window.localStorage.getItem(dismissStorageKey) === "1";
+  });
 
-  if (!canShowInstallCta || !installCtaKind) {
+  const dismiss = React.useCallback(() => {
+    if (dismissMode === "permanent" && dismissStorageKey && typeof window !== "undefined") {
+      window.localStorage.setItem(dismissStorageKey, "1");
+      setIsPermanentlyDismissed(true);
+      return;
+    }
+    dismissInstallCta();
+  }, [dismissInstallCta, dismissMode, dismissStorageKey]);
+
+  if (!canShowInstallCta || !installCtaKind || isPermanentlyDismissed) {
     return null;
   }
 
@@ -37,7 +57,7 @@ export function PwaInstallCta({ className, compact = false }: PwaInstallCtaProps
       installCtaKind={installCtaKind}
       title={title}
       description={description}
-      dismissInstallCta={dismissInstallCta}
+      dismissInstallCta={dismiss}
       openInstallExperience={openInstallExperience}
     >
       {(openDrawer) => (
@@ -59,7 +79,7 @@ export function PwaInstallCta({ className, compact = false }: PwaInstallCtaProps
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 shrink-0 text-muted-foreground"
-                onClick={dismissInstallCta}
+                onClick={dismiss}
                 aria-label="Dismiss install prompt"
               >
                 <X className="h-4 w-4" />
@@ -72,8 +92,8 @@ export function PwaInstallCta({ className, compact = false }: PwaInstallCtaProps
               {installCtaKind === "ios" ? "Add to Home Screen" : "Install Bleup"}
             </Button>
             {!compact ? (
-              <Button type="button" variant="outline" size="default" onClick={dismissInstallCta}>
-                Maybe later
+              <Button type="button" variant="outline" size="default" onClick={dismiss}>
+                {dismissMode === "permanent" ? "Dismiss" : "Maybe later"}
               </Button>
             ) : null}
           </CardContent>

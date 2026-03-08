@@ -14,6 +14,7 @@ import { resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
 import { WallBlueprintCard } from '@/components/wall/WallBlueprintCard';
 import { ForYouLockedSourceCard } from '@/components/wall/ForYouLockedSourceCard';
 import { useWallPageController } from '@/hooks/useWallPageController';
+import { PwaInstallCta } from '@/components/pwa/PwaInstallCta';
 
 type WallBlueprintCardInput = {
   id: string;
@@ -39,6 +40,8 @@ const SORT_TABS = [
   { value: 'latest', label: 'Latest' },
   { value: 'trending', label: 'Trending' },
 ] as const;
+
+const WALL_PWA_INSTALL_DISMISS_KEY = 'bleup:pwa-install-cta:wall-dismissed';
 
 type FeedSort = (typeof SORT_TABS)[number]['value'];
 
@@ -142,6 +145,14 @@ export default function Wall() {
             </div>
           </div>
         )}
+
+        <div className="mx-3 mb-3 sm:mx-4">
+          <PwaInstallCta
+            compact
+            dismissMode="permanent"
+            dismissStorageKey={WALL_PWA_INSTALL_DISMISS_KEY}
+          />
+        </div>
 
         <div className="space-y-3">
           <div className="px-3 sm:px-4">
