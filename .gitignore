@@ -20,9 +20,9 @@ supabase/.temp/
 
 # Editor directories and files
 .vscode/*
-!.vscode/extensions.jsonno lets 
+!.vscode/extensions.json
 .idea
-.DS_Storewhat
+.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
@@ -53,7 +53,8 @@ server/data/
 # Eval method run artifacts (local/runtime outputs)
 eval/methods/**/artifacts/
 youtube_urls.txt
-so im thinking about moving in to my most importand 
+oracle_info.txt
+oracle_info*.txt
 
 # Golden blueprint research artifacts
 docs/golden_blueprint/reddit/**

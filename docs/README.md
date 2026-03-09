@@ -45,6 +45,7 @@ This folder is the source of truth for product, architecture, planning, and oper
 
 ## Supporting Runbooks And Evidence
 - YT2BP runbook: `docs/ops/yt2bp_runbook.md`
+- Oracle CLI/auth access: `docs/ops/oracle-cli-access.md`
 - P1-1 / P1-2 verification runbook: `docs/ops/p1-1-p1-2-verification-runbook.md`
 - Playwright callback evidence: `docs/ops/playwright-p1-2-callback-evidence.md`
 - Playwright preflight notes: `docs/ops/playwright-preflight-notes.md`

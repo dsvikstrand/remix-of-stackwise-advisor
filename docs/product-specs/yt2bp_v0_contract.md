@@ -73,6 +73,7 @@
 - 2026-03-07 note: backend env bootstrap now uses repo-root `.env` only as a non-systemd local/dev fallback and no longer reads `.env.production`; Oracle production uses `/etc/agentic-backend.env` as the canonical backend app-config source. This is additive runtime bootstrap policy and outside the YT2BP endpoint envelope.
 - 2026-03-08 note: `yt_to_text` Webshare proxying now uses an explicit-endpoint-only runtime contract; legacy selector/list envs and direct-proxy-list lookup are removed from active runtime. Historical transport metadata remains read-compatible, and this does not alter the YT2BP endpoint envelope.
 - 2026-03-08 note: installed-PWA push delivery (`notification_push_subscriptions`, `notification_push_dispatch_queue`, `/api/notifications/push-subscriptions*`) is additive notification-channel infrastructure and does not alter the YT2BP endpoint envelope.
+- 2026-03-09 note: installed-PWA push runtime remains rollout-gated until backend startup validation and device delivery proof are complete; Oracle control-plane recovery for that rollout is documented separately in `docs/ops/oracle-cli-access.md`.
 
 ## Request
 ```json

@@ -8,6 +8,7 @@ import {
   getNotificationPushRetryDelaySeconds,
   isNotificationPushEligibleType,
   processNotificationPushDispatchBatch,
+  resolveWebPushClient,
   upsertNotificationPushSubscription,
   type NotificationPushSubscriptionRow,
 } from "../../server/services/notificationPush";
@@ -301,5 +302,43 @@ describe("notificationPush service", () => {
       classifyNotificationPushError(Object.assign(new Error("gone"), { statusCode: 404 })),
     ).toMatchObject({ kind: "permanent", statusCode: 404 });
     expect(classifyNotificationPushError(new Error("temp"))).toMatchObject({ kind: "transient" });
+  });
+
+  it("normalizes the web-push client shape and configures the sender", async () => {
+    const setVapidDetails = vi.fn();
+    const sendNotification = vi.fn(async () => undefined);
+    const client = resolveWebPushClient({
+      default: {
+        setVapidDetails,
+        sendNotification,
+      },
+    });
+
+    const sender = createNotificationPushSender(
+      {
+        enabled: true,
+        publicKey: "public",
+        privateKey: "private",
+        subject: "mailto:david@example.com",
+      },
+      client,
+    );
+
+    expect(sender).not.toBeNull();
+    expect(setVapidDetails).toHaveBeenCalledWith("mailto:david@example.com", "public", "private");
+
+    await sender?.(
+      createSubscriptionRow({ expiration_time: "2026-03-08T13:00:00.000Z" }),
+      {
+        notification_id: "notif_5",
+        type: "generation_failed",
+        title: "Generation failed",
+        body: "Something broke.",
+        link_path: "/generation-queue",
+        created_at: "2026-03-08T12:00:00.000Z",
+      },
+    );
+
+    expect(sendNotification).toHaveBeenCalledTimes(1);
   });
 });

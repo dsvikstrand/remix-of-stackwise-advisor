@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import * as webpush from 'web-push';
+import webpushImport from 'web-push';
 
 type DbClient = SupabaseClient<any, 'public', any>;
 
@@ -85,7 +85,22 @@ export type ProcessNotificationPushDispatchBatchDeps = {
   now?: () => Date;
 };
 
+type WebPushClient = {
+  setVapidDetails: (subject: string, publicKey: string, privateKey: string) => void;
+  sendNotification: (
+    subscription: {
+      endpoint: string;
+      expirationTime: number | null;
+      keys: { p256dh: string; auth: string };
+    },
+    payload: string,
+    options: { TTL: number; urgency: 'very-low' | 'low' | 'normal' | 'high' },
+  ) => Promise<unknown>;
+};
+
 const DEFAULT_RETRY_DELAYS_SECONDS = [30, 120, 600];
+
+const notificationWebPushClient = resolveWebPushClient(webpushImport);
 
 export function readNotificationPushConfigFromEnv(env: NodeJS.ProcessEnv): NotificationPushConfig {
   const enabled = parseRuntimeFlag(env.WEB_PUSH_ENABLED, false);
@@ -105,15 +120,30 @@ export function isNotificationPushEligibleType(value: unknown): value is Notific
   return NOTIFICATION_PUSH_TYPES.includes(String(value || '').trim() as NotificationPushType);
 }
 
-export function createNotificationPushSender(config: NotificationPushConfig) {
+export function resolveWebPushClient(moduleValue: unknown): WebPushClient {
+  const candidate =
+    moduleValue && typeof moduleValue === 'object' && 'default' in moduleValue
+      ? (moduleValue as { default?: unknown }).default ?? moduleValue
+      : moduleValue;
+  const client = candidate as Partial<WebPushClient> | null;
+  if (!client || typeof client.setVapidDetails !== 'function' || typeof client.sendNotification !== 'function') {
+    throw new Error('WEB_PUSH_CLIENT_INVALID');
+  }
+  return client as WebPushClient;
+}
+
+export function createNotificationPushSender(
+  config: NotificationPushConfig,
+  client: WebPushClient = notificationWebPushClient,
+) {
   if (!config.enabled || !config.publicKey || !config.privateKey || !config.subject) {
     return null;
   }
 
-  webpush.setVapidDetails(config.subject, config.publicKey, config.privateKey);
+  client.setVapidDetails(config.subject, config.publicKey, config.privateKey);
 
   return async (subscription: NotificationPushSubscriptionRow, payload: NotificationPushPayload) => {
-    await webpush.sendNotification(
+    await client.sendNotification(
       {
         endpoint: subscription.endpoint,
         expirationTime: subscription.expiration_time ? Date.parse(subscription.expiration_time) : null,

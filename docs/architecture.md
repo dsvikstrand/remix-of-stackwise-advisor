@@ -197,8 +197,9 @@
   - onboarding extension: `user_youtube_onboarding` for new-user optional setup state.
 - Eval assets:
   - Runtime policy/config under `eval/methods/v0/*`.
-- Operations:
-  - Oracle VM runtime + logs-first runbook (`docs/ops/yt2bp_runbook.md`).
+  - Operations:
+    - Oracle VM runtime + logs-first runbook (`docs/ops/yt2bp_runbook.md`).
+    - Oracle control-plane auth/reboot workflow is standardized in `docs/ops/oracle-cli-access.md` and should be used when SSH/runtime health is degraded.
 
 ## 3) Core Lifecycle (`bleuV1`)
 1. (Optional) New-account onboarding:

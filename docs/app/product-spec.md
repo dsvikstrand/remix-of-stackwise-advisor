@@ -103,6 +103,7 @@ a80) [have] Bleup is now installable as an online-first PWA at `https://bleup.ap
 a81) [have] PWA mode uses the same frontend, backend, and Supabase auth/session model as browser mode; it is not a separate app product.
 a82) [have] Current PWA behavior is intentionally conservative: installability, standalone launch, offline fallback, update prompting, and mobile install CTA surfaces are in scope, while authenticated feed/subscription/generation data remains network-only.
 a83) [have] Installed-PWA web push is now implemented behind rollout flags and remains opt-in only from notification surfaces; the first eligible push types are `comment_reply`, `generation_succeeded`, and `generation_failed`.
+a84) [have] Installed-PWA push remains outside the normal live contract until backend runtime validation and device delivery proof are complete; Oracle control-plane recovery/inspection now uses the standardized OCI CLI workflow instead of repo-local note files.
 
 ## Core Model
 b1) `Source Item`
