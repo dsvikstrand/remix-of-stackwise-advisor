@@ -39,7 +39,7 @@ This folder is the source of truth for product, architecture, planning, and oper
 - Execution registry: `docs/exec-plans/index.md`
 
 ## App Section Docs
-- Section-by-section app docs: `docs/app-sections/README.md`
+- Section-by-section app docs: `app-sections/README.md`
 - Only reviewed sections should contain real content.
 - Unreviewed sections may exist as empty placeholders until they are inspected.
 
@@ -71,7 +71,7 @@ This folder is the source of truth for product, architecture, planning, and oper
 
 ## Folder Map
 - `docs/app/` product-level behavior and user flow docs
-- `docs/app-sections/` section-by-section app surface notes and reviews
+- `app-sections/` section-by-section app surface notes and reviews
 - `docs/_archive/legacy-ass-agentic/` archived ASS/agentic reference contracts (not active runtime guidance)
 - `docs/architecture.md` system topology and invariants
 - `docs/design-docs/` technical design + diagrams
