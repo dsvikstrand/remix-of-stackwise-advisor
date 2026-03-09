@@ -22,6 +22,10 @@
 - Live backend config source: `/etc/agentic-backend.env`
 - Release order: deploy backend for one explicit SHA, run smoke checks, then manually publish the frontend for that same SHA
 - Frontend PWA contract: normal frontend releases now default to `pwa_runtime_v1=true` and `pwa_install_cta_v1=true` unless explicitly overridden for rollback
+- Installed-PWA push remains rollout-gated:
+  - frontend flag `pwa_push_v1`
+  - backend flag `WEB_PUSH_ENABLED`
+  - required backend envs: `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`, `WEB_PUSH_SUBJECT`
 - Preferred non-store install path: `https://bleup.app` as an installable online-first PWA (same backend/auth model as the browser app)
 - `agentic-worker.service` is deferred and should remain disabled in the current MVP production contract
 
@@ -69,6 +73,9 @@
     - `GET /api/notifications`
     - `POST /api/notifications/:id/read`
     - `POST /api/notifications/read-all`
+    - `GET /api/notifications/push-subscriptions/config`
+    - `POST /api/notifications/push-subscriptions`
+    - `DELETE /api/notifications/push-subscriptions`
     - emitted event families: `comment_reply`, `generation_succeeded`, `generation_failed`.
 - Profile feed read endpoint:
   - `GET /api/profile/:userId/feed` (optional auth; public profiles readable, private profiles owner-only)

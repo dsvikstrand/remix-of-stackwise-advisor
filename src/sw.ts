@@ -10,6 +10,10 @@ import {
 import { registerRoute } from "workbox-routing";
 import { NetworkFirst } from "workbox-strategies";
 
+import {
+  buildPushNotificationDisplay,
+  parsePushNotificationPayload,
+} from "./pwa/pushNotificationUtils";
 import { shouldBypassPwaNavigation } from "./pwa/runtimeUtils";
 
 declare let self: ServiceWorkerGlobalScope & {
@@ -17,6 +21,9 @@ declare let self: ServiceWorkerGlobalScope & {
 };
 
 const PWA_RUNTIME_ENABLED = String(import.meta.env.VITE_FEATURE_PWA_RUNTIME_V1 || "")
+  .trim()
+  .toLowerCase() === "true";
+const PWA_PUSH_ENABLED = String(import.meta.env.VITE_FEATURE_PWA_PUSH_V1 || "")
   .trim()
   .toLowerCase() === "true";
 const BASE_PATH = import.meta.env.BASE_URL || "/";
@@ -69,4 +76,32 @@ if (PWA_RUNTIME_ENABLED) {
       }
     },
   );
+}
+
+if (PWA_PUSH_ENABLED) {
+  self.addEventListener("push", (event) => {
+    const payload = parsePushNotificationPayload(event.data?.text());
+    if (!payload) return;
+    const display = buildPushNotificationDisplay(BASE_PATH, self.location.origin, payload);
+    event.waitUntil(self.registration.showNotification(display.title, display.options));
+  });
+
+  self.addEventListener("notificationclick", (event) => {
+    event.notification.close();
+    const targetUrl = String(event.notification.data?.url || "").trim() || self.location.origin;
+
+    event.waitUntil((async () => {
+      const clientList = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const client of clientList) {
+        if ("focus" in client) {
+          if ("navigate" in client) {
+            await client.navigate(targetUrl);
+          }
+          await client.focus();
+          return;
+        }
+      }
+      await self.clients.openWindow(targetUrl);
+    })());
+  });
 }

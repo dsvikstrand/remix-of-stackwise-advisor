@@ -139,6 +139,13 @@ import {
   markNotificationRead,
 } from './services/notifications';
 import {
+  createNotificationPushSender,
+  deactivateNotificationPushSubscription,
+  processNotificationPushDispatchBatch,
+  readNotificationPushConfigFromEnv,
+  upsertNotificationPushSubscription,
+} from './services/notificationPush';
+import {
   appendGenerationEvent,
   attachBlueprintToRun,
   finalizeGenerationRunFailure,
@@ -171,6 +178,7 @@ import {
 import { createSourcePageAssetSweepService } from './services/sourcePageAssetSweep';
 import { createAutoBannerQueueService } from './services/autoBannerQueue';
 import { createSourceSubscriptionSyncService } from './services/sourceSubscriptionSync';
+import { createNotificationPushDispatcherController } from './services/notificationPushDispatcherController';
 import { createBlueprintCreationService } from './services/blueprintCreation';
 import {
   createBlueprintYouTubeCommentsService,
@@ -410,6 +418,13 @@ const autoBannerTimeoutMs = clampInt(process.env.SUBSCRIPTION_AUTO_BANNER_TIMEOU
 const autoBannerBatchSize = clampInt(process.env.SUBSCRIPTION_AUTO_BANNER_BATCH_SIZE, 20, 1, 200);
 const autoBannerConcurrency = clampInt(process.env.SUBSCRIPTION_AUTO_BANNER_CONCURRENCY, 1, 1, 5);
 const autoBannerStaleRunningMs = clampInt(process.env.AUTO_BANNER_STALE_RUNNING_MS, 20 * 60 * 1000, 60_000, 24 * 60 * 60 * 1000);
+const notificationPushConfig = readNotificationPushConfigFromEnv(process.env);
+const notificationPushEnabled = notificationPushConfig.enabled;
+const notificationPushSender = createNotificationPushSender(notificationPushConfig);
+const notificationPushDispatchIntervalMs = 15_000;
+const notificationPushBatchSize = 10;
+const notificationPushMaxAttempts = 3;
+const notificationPushProcessingStaleMs = 5 * 60 * 1000;
 const runtimeConfig = (() => {
   try {
     return readBackendRuntimeConfig(process.env);
@@ -7511,6 +7526,38 @@ const queuedIngestionWorkerController = createQueuedIngestionWorkerController({
   },
 });
 
+async function runNotificationPushDispatcherCycle() {
+  if (!notificationPushEnabled || !runIngestionWorker || !notificationPushSender) return;
+  const db = getServiceSupabaseClient();
+  if (!db) return;
+
+  try {
+    const processed = await processNotificationPushDispatchBatch(db, {
+      batchSize: notificationPushBatchSize,
+      maxAttempts: notificationPushMaxAttempts,
+      processingStaleMs: notificationPushProcessingStaleMs,
+      sendPushNotification: notificationPushSender,
+    });
+
+    if (processed.length > 0) {
+      console.log('[notification_push_dispatch_cycle]', JSON.stringify({
+        processed_count: processed.length,
+      }));
+    }
+  } catch (error) {
+    console.log('[notification_push_dispatch_failed]', JSON.stringify({
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+}
+
+const notificationPushDispatcherController = createNotificationPushDispatcherController({
+  enabled: notificationPushEnabled,
+  runIngestionWorker,
+  intervalMs: notificationPushDispatchIntervalMs,
+  runCycle: runNotificationPushDispatcherCycle,
+});
+
 function scheduleQueuedIngestionProcessing(delayMs = 0) {
   queuedIngestionWorkerController.schedule(delayMs);
 }
@@ -7841,6 +7888,12 @@ registerNotificationRoutes(app, {
   listNotificationsForUser,
   markAllNotificationsRead,
   markNotificationRead,
+  getNotificationPushConfig: () => ({
+    enabled: notificationPushEnabled,
+    vapidPublicKey: notificationPushConfig.publicKey,
+  }),
+  upsertNotificationPushSubscription,
+  deactivateNotificationPushSubscription,
   clampInt,
 });
 
@@ -8541,5 +8594,8 @@ if (runIngestionWorker) {
   queuedIngestionWorkerController.start(1500);
   if (youtubeRefreshEnabled) {
     youtubeRefreshSchedulerController.start(1500);
+  }
+  if (notificationPushEnabled) {
+    notificationPushDispatcherController.start(5000);
   }
 }

@@ -48,6 +48,18 @@ export type NotificationReadAllResult = {
   read_at: string;
 };
 
+export type NotificationPushConfig = {
+  enabled: boolean;
+  vapid_public_key: string | null;
+};
+
+export type NotificationPushSubscriptionRecord = {
+  id: string;
+  user_id: string;
+  endpoint: string;
+  is_active: boolean;
+};
+
 function getApiBase() {
   if (!config.agenticBackendUrl) return null;
   return `${config.agenticBackendUrl.replace(/\/$/, '')}/api`;
@@ -118,6 +130,35 @@ export async function markAllNotificationsRead() {
   const response = await apiRequest<NotificationReadAllResult>('/notifications/read-all', {
     method: 'POST',
     body: JSON.stringify({}),
+  });
+  return response.data;
+}
+
+export async function getNotificationPushConfig() {
+  const response = await apiRequest<NotificationPushConfig>('/notifications/push-subscriptions/config', {
+    method: 'GET',
+  });
+  return response.data;
+}
+
+export async function upsertNotificationPushSubscription(input: {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  expiration_time?: string | null;
+  platform?: string | null;
+}) {
+  const response = await apiRequest<NotificationPushSubscriptionRecord>('/notifications/push-subscriptions', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return response.data;
+}
+
+export async function disableNotificationPushSubscription(endpoint: string) {
+  const response = await apiRequest<NotificationPushSubscriptionRecord>('/notifications/push-subscriptions', {
+    method: 'DELETE',
+    body: JSON.stringify({ endpoint }),
   });
   return response.data;
 }

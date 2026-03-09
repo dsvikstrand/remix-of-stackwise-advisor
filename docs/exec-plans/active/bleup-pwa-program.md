@@ -10,6 +10,11 @@ a3) [have] Phase 3 mobile polish and install CTA behavior are implemented and pu
 a4) [have] iPhone Safari CTA validation passed on the intended live browser surfaces (`/`, `/auth`, `/wall`), including the stronger fully-dismissible Wall CTA behavior.
 a5) [todo] Android Chrome installed-mode validation is still pending and will also close the remaining Phase 2 Android check.
 a6) [todo] Installed-app update-prompt validation is still pending on a future frontend publish.
+a7) [have] Phase 5 is now intentionally treated as a deferred enhancement umbrella, not the next default coding sprint.
+a8) [have] Phase 5A push/re-engagement is now implemented behind rollout gates only:
+- frontend flag `VITE_FEATURE_PWA_PUSH_V1`
+- backend flag `WEB_PUSH_ENABLED`
+- backend VAPID envs remain required before any live rollout
 
 ## Goal
 b1) [todo] Convert Bleup into an installable, online-first PWA without creating a separate app product.
@@ -57,8 +62,19 @@ d4) [todo] Phase 4: Release hardening, docs, and rollout
 - close the remaining rollout gates: Android Chrome validation and installed update-prompt validation
 
 d5) [todo] Phase 5: Deferred post-MVP PWA enhancements
-- keep push notifications, background sync, rich offline caching, offline authenticated feed usage, and native-wrapper packaging out of the initial program
-- record them as follow-up work only after the installable shell and update model prove stable
+- treat Phase 5 as roadmap structure only, not one immediate implementation wave
+- do not start any Phase 5 capability without a dedicated child plan
+- detailed deferred mini-plan: `docs/exec-plans/active/on-pause/bleup-pwa-phase5-deferred-tracks.md`
+- `5A` Push and re-engagement
+  - [have] implementation track now exists behind feature/env gates only; not yet rolled out
+  - candidate/live-gated scope: installed-PWA web push, notification permission UX/cooldowns, routing from notification tap into existing Bleup surfaces
+  - out of scope in the first track: desktop-first push expansion, background sync, native notification SDKs
+- `5B` Richer offline read behavior
+  - candidate scope: route-by-route offline-safe authenticated reads, stale-data labeling, session-safe cache partitioning, sign-out cleanup
+  - out of scope in the first track: offline generation, offline subscription import, write-behind mutation queues
+- `5C` Native-wrapper/store readiness
+  - candidate scope: wrapper evaluation, packaging readiness, store-facing metadata/assets only if native distribution later becomes worthwhile
+  - out of scope in the first track: separate native backend, separate native auth model, duplicated mobile product surfaces
 
 ## Important Contracts
 e1) [todo] New frontend/runtime assets:
@@ -81,6 +97,8 @@ e3) [todo] Network/cache policy:
 - user-specific feed/subscription/generation data is not service-worker cached in the first program
 
 e4) [have] No backend API redesign is required for the initial PWA program.
+e5) [have] Phase 5 umbrella itself adds no immediate backend, route, schema, or auth changes.
+e6) [have] Bleup must remain one product with one backend and one auth model across all future Phase 5 tracks.
 
 ## Validation
 f1) [todo] Installability checks
@@ -121,8 +139,37 @@ f5) [todo] Live rollout checks
 - [todo] validate the update prompt on a future frontend publish in installed mode
 - [todo] validate the install CTA/native-install flow on Android Chrome
 
+f6) [todo] Phase 5 entry gates
+- do not activate any Phase 5 child track until:
+  - Android Chrome installed-mode validation is closed
+  - installed update-prompt validation is closed
+  - current `smoke:release` stays green on production
+  - no unresolved stale-client or installability regressions remain open
+
+f7) [todo] Phase 5 child-plan rule
+- each of `5A`, `5B`, and `5C` requires its own dedicated implementation plan before code starts
+- each child plan must define rollout, rollback, acceptance tests, and device/platform scope explicitly
+
+## Phase 5A Current Contract
+g1) [have] Phase 5A code is now wired through the current repo, but remains rollout-gated.
+- frontend/runtime flag: `VITE_FEATURE_PWA_PUSH_V1`
+- backend/runtime flag: `WEB_PUSH_ENABLED`
+- required backend envs: `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`, `WEB_PUSH_SUBJECT`
+
+g2) [have] Current Phase 5A scope in code:
+- installed-standalone-only push enablement
+- explicit opt-in on notification surfaces only
+- eligible notification types limited to `comment_reply`, `generation_succeeded`, `generation_failed`
+- push dispatch derived from the existing `notifications` table
+
+g3) [todo] Phase 5A is not live until:
+- Phase 4 rollout proofs are closed
+- VAPID keys are provisioned
+- the frontend and backend push flags are enabled together
+- manual push delivery validation passes on a real installed device
+
 ## Completion Rule
 g1) [todo] Move this file to `completed/` when:
 - installability, caching/update safety, and installed-mobile polish are validated
 - rollout/docs/release hardening are finished
-- remaining non-MVP PWA ideas are explicitly deferred into follow-up work
+- remaining non-MVP PWA ideas are explicitly deferred into the Phase 5 child-track structure

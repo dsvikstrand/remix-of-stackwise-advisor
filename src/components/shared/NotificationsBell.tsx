@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { useNotifications, type NotificationItem } from '@/hooks/useNotifications';
 import { useGenerationQueue } from '@/hooks/useGenerationQueue';
 import { GenerationQueueRow } from '@/components/queue/GenerationQueueRow';
+import { PwaPushCta } from '@/components/pwa/PwaPushCta';
 
 function formatRelativeTime(iso: string) {
   const dateMs = Date.parse(iso);
@@ -118,6 +119,9 @@ export function NotificationsBell() {
               ))}
             </div>
           )}
+        </div>
+        <div className="px-3 pb-2">
+          <PwaPushCta compact />
         </div>
         <DropdownMenuSeparator />
         <div className="max-h-[420px] overflow-y-auto">

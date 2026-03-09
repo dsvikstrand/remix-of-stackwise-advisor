@@ -72,6 +72,7 @@
 - 2026-03-07 note: Oracle MVP production runtime now treats combined mode (`agentic-backend.service` with `RUN_INGESTION_WORKER=true`) as the canonical queue/scheduler keep-alive path; split worker topology remains deferred and this does not alter the YT2BP endpoint envelope.
 - 2026-03-07 note: backend env bootstrap now uses repo-root `.env` only as a non-systemd local/dev fallback and no longer reads `.env.production`; Oracle production uses `/etc/agentic-backend.env` as the canonical backend app-config source. This is additive runtime bootstrap policy and outside the YT2BP endpoint envelope.
 - 2026-03-08 note: `yt_to_text` Webshare proxying now uses an explicit-endpoint-only runtime contract; legacy selector/list envs and direct-proxy-list lookup are removed from active runtime. Historical transport metadata remains read-compatible, and this does not alter the YT2BP endpoint envelope.
+- 2026-03-08 note: installed-PWA push delivery (`notification_push_subscriptions`, `notification_push_dispatch_queue`, `/api/notifications/push-subscriptions*`) is additive notification-channel infrastructure and does not alter the YT2BP endpoint envelope.
 
 ## Request
 ```json
@@ -175,6 +176,7 @@
 - Transcript-unavailable cooldown/retry behavior in source unlock flows is intentionally outside this endpoint contract.
 - Silent auto transcript retry/feed suppression behavior and Source Page `+Add`-only speech warning scope are intentionally outside this endpoint contract.
 - Notifications inbox flows (`/api/notifications*`) and event emission for replies/generation terminal outcomes are intentionally outside this endpoint contract.
+- Installed-PWA push subscription/config routes (`/api/notifications/push-subscriptions*`) and push delivery queue processing are intentionally outside this endpoint contract.
 - Service queue operations (`POST /api/ingestion/jobs/trigger`, `GET /api/ingestion/jobs/latest`, `GET /api/ops/queue/health`) are intentionally outside this endpoint contract.
 - Daily-credit wallet and source-unlock persistence (`user_credit_wallets`, `credit_ledger`, `source_item_unlocks`, `/api/credits`) are intentionally outside this endpoint contract.
 - Queue-work-item budgeting and queue-health work-size reporting (`queue_work_items`, `running_work_items`, per-scope work-item fields) are intentionally outside this endpoint contract.

@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { GenerationQueueRow } from '@/components/queue/GenerationQueueRow';
+import { PwaPushCta } from '@/components/pwa/PwaPushCta';
 import { useGenerationQueue } from '@/hooks/useGenerationQueue';
 import { useNotifications, type NotificationItem } from '@/hooks/useNotifications';
 import {
@@ -134,6 +135,8 @@ export default function GenerationQueue() {
           ))}
         </PageSection>
 
+        <PwaPushCta />
+
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Active Queue</CardTitle>
@@ -241,4 +244,3 @@ export default function GenerationQueue() {
     </PageRoot>
   );
 }
-

@@ -88,6 +88,10 @@
   - User menu includes a direct `Subscriptions` shortcut to `/subscriptions`; profile tab keeps a lightweight owner-only list with `Unsubscribe`.
   - User menu credit panel shows daily reset timing plus latest wallet ledger activity summary when available.
   - Header now includes an auth-only notifications bell inbox (reply + generation terminal notifications with read/read-all actions).
+  - Installed-PWA push extension is now wired behind rollout gates:
+    - explicit opt-in lives only in notification surfaces (`NotificationsBell`, `GenerationQueue`)
+    - push enablement requires standalone mode, auth, browser push support, and feature/env flags
+    - first eligible types are `comment_reply`, `generation_succeeded`, and `generation_failed`
   - Legal baseline routes are first-class in runtime (`/terms`, `/privacy`) and linked from auth.
   - Backend:
     - Express server in `server/index.ts`.
@@ -141,6 +145,9 @@
     - `GET /api/notifications` (auth-only inbox list with unread count + cursor pagination)
     - `POST /api/notifications/:id/read` (auth-only mark one read)
     - `POST /api/notifications/read-all` (auth-only mark all unread read)
+    - `GET /api/notifications/push-subscriptions/config` (auth-only browser push config for installed PWA)
+    - `POST /api/notifications/push-subscriptions` (auth-only push subscription upsert)
+    - `DELETE /api/notifications/push-subscriptions` (auth-only push subscription disable)
     - `GET /api/blueprints/:id/generation-trace` (auth owner or service token; returns latest durable generation trace by blueprint with optional event pagination)
     - `GET /api/generation-runs/:runId` (auth owner or service token; returns durable generation trace by run id with optional event pagination)
     - `GET /api/youtube-search` (auth-only YouTube result discovery, relevance-sorted)
@@ -174,6 +181,10 @@
   - source-identity foundation: `source_pages` table and FK links from `user_source_subscriptions` + `source_items` via `source_page_id`.
   - shared unlock foundation: `source_item_unlocks` (status/cost/reservation/ready blueprint) + `user_credit_wallets` + immutable `credit_ledger`.
   - notifications foundation: `notifications` table with owner-read/update RLS and dedupe key support (`user_id + dedupe_key`).
+  - installed-PWA push extension:
+    - `notification_push_subscriptions` stores active browser/device subscription endpoints per user
+    - `notification_push_dispatch_queue` derives push delivery from `notifications` rows for eligible event types
+    - Node combined runtime sends pushes asynchronously with VAPID credentials; request handlers do not block on push delivery
   - durable generation trace foundation: `generation_runs` (run summary/model/quality terminal state) + `generation_run_events` (ordered stage-level events); 30-day event retention via service-role purge function, run summary retained indefinitely.
   - unlock reliability sweeps:
     - opportunistic sweeps on source-page video list/unlock routes.

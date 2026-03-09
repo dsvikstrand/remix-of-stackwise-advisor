@@ -102,6 +102,7 @@ a79) [have] `/wall` now consumes backend-shaped feed endpoints for both public l
 a80) [have] Bleup is now installable as an online-first PWA at `https://bleup.app`, and this is the preferred non-store app distribution path for the current MVP.
 a81) [have] PWA mode uses the same frontend, backend, and Supabase auth/session model as browser mode; it is not a separate app product.
 a82) [have] Current PWA behavior is intentionally conservative: installability, standalone launch, offline fallback, update prompting, and mobile install CTA surfaces are in scope, while authenticated feed/subscription/generation data remains network-only.
+a83) [have] Installed-PWA web push is now implemented behind rollout flags and remains opt-in only from notification surfaces; the first eligible push types are `comment_reply`, `generation_succeeded`, and `generation_failed`.
 
 ## Core Model
 b1) `Source Item`
@@ -240,6 +241,7 @@ s2) Out of scope
 - Fully open free-form blog/social posting model.
 - Full moderation platform for user-generated channels.
 - Rich offline product behavior, push notifications, background sync, and native app-store packaging remain deferred beyond the current PWA rollout.
+- Note: push notifications are now code-complete behind rollout gates, but still deferred from the normal live contract until device validation and flag enablement are complete.
 
 ## Data Surfaces (Current + Direction)
 d1) [have] `blueprints`, `blueprint_tags`, `blueprint_likes`, `blueprint_comments`.
@@ -327,6 +329,8 @@ si65) auth endpoint: `GET /api/notifications?limit=<1..50>&cursor=<opaque?>` ret
 si66) auth endpoint: `POST /api/notifications/:id/read` marks one notification read.
 si67) auth endpoint: `POST /api/notifications/read-all` marks all unread notifications read.
 si68) comment reply notifications are produced by DB trigger on `wall_comments` reply inserts (self-replies ignored; dedupe key is `comment_reply:<reply_comment_id>`).
+si69) auth endpoints: `GET /api/notifications/push-subscriptions/config`, `POST /api/notifications/push-subscriptions`, and `DELETE /api/notifications/push-subscriptions` manage installed-PWA browser push opt-in and subscription lifecycle.
+si70) installed-PWA push delivery is derived from the existing `notifications` table via a push-dispatch queue; it is not a separate notification product.
 si69) generation surfaces are gated by the daily credit wallet (`free=3.00`, `plus=20.00`, reset `00:00 UTC`, no rollover); manual routes queue only the affordable new-item prefix and return launch-safe credit denial/skip copy.
 si69a) admin entitlement bypass applies at actual reservation/settle/refund time for both manual generation and shared auto-unlock paths; admin users are not meant to remain `unlockable` solely because displayed wallet balance is depleted.
 si69b) canonical feed-lane semantics are defined in `docs/app/mvp-feed-and-channel-model.md`; implementation should treat `For You` as the only locked lane, `Joined` as joined-channel published discovery, and `All` as the global published blueprint stream.
