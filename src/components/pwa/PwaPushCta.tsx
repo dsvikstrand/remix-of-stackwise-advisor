@@ -12,7 +12,8 @@ type PwaPushCtaProps = {
 
 export function PwaPushCta({ className, compact = false }: PwaPushCtaProps) {
   const { push } = useBleupPwa();
-  const quietModeActive = push.canUseQuietMode && push.deliveryMode === "quiet_ios";
+  const quietModeActive = push.deliveryMode === "quiet_ios";
+  const showQuietModeControls = push.canUseQuietMode || quietModeActive;
 
   const shouldRender =
     push.isAvailable && (push.isSubscribed || push.permissionState === "denied" || push.canShowEnableCta);
@@ -21,9 +22,9 @@ export function PwaPushCta({ className, compact = false }: PwaPushCtaProps) {
 
   const isBlocked = push.permissionState === "denied" && !push.isSubscribed;
   const title = push.isSubscribed
-    ? quietModeActive
-      ? "Quiet notifications are on"
-      : "Push notifications are on"
+      ? quietModeActive
+        ? "Quiet notifications are on"
+        : "Push notifications are on"
     : isBlocked
       ? "Push notifications are blocked"
       : "Enable push notifications";
@@ -62,14 +63,14 @@ export function PwaPushCta({ className, compact = false }: PwaPushCtaProps) {
       <CardContent className={cn("pt-0", compact ? "flex flex-col gap-2" : "flex flex-wrap gap-2")}>
         {push.isSubscribed ? (
           <div className={cn("flex flex-wrap gap-2", compact ? "w-full" : "")}>
-            {push.canUseQuietMode ? (
+            {showQuietModeControls ? (
               <>
                 <Button
                   type="button"
                   variant={quietModeActive ? "default" : "outline"}
                   size={compact ? "sm" : "default"}
                   onClick={() => push.setDeliveryMode("quiet_ios")}
-                  disabled={push.isBusy || quietModeActive}
+                  disabled={push.isBusy || quietModeActive || !push.canUseQuietMode}
                 >
                   Quiet notifications
                 </Button>
