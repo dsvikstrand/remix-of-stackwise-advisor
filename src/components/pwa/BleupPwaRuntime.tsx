@@ -618,7 +618,6 @@ export function BleupPwaRuntime({ children }: { children: ReactNode }) {
       setPushEndpoint(null);
       setPushDeliveryModeState(null);
       setPushPermissionState(readPushPermissionState());
-      dismissPushCta();
       await syncAppBadge(typeof navigator !== "undefined" ? navigator : null, 0);
     } finally {
       setIsPushBusy(false);
