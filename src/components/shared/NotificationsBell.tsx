@@ -45,6 +45,8 @@ export function NotificationsBell() {
     unreadCount,
     isEnabled,
     isLoading,
+    isOfflineSnapshot,
+    lastSyncedAt,
     markAllRead,
   } = useNotifications({ limit: 15 });
 
@@ -74,7 +76,7 @@ export function NotificationsBell() {
     <DropdownMenu
       onOpenChange={(open) => {
         setIsOpen(open);
-        if (open && unreadCount > 0) {
+        if (open && unreadCount > 0 && !isOfflineSnapshot) {
           void markAllRead().catch(() => undefined);
         }
       }}
@@ -123,6 +125,11 @@ export function NotificationsBell() {
         <div className="px-3 pb-2">
           <PwaPushCta compact />
         </div>
+        {isOfflineSnapshot ? (
+          <div className="px-3 pb-2 text-[11px] text-muted-foreground">
+            Offline snapshot{lastSyncedAt ? ` • Synced ${formatRelativeTime(lastSyncedAt)}` : ''}
+          </div>
+        ) : null}
         <DropdownMenuSeparator />
         <div className="max-h-[420px] overflow-y-auto">
           {isLoading ? (

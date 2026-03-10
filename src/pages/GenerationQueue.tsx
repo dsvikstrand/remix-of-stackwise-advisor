@@ -95,6 +95,8 @@ export default function GenerationQueue() {
   const {
     items: notifications,
     isLoading: isNotificationsLoading,
+    isOfflineSnapshot: isOfflineNotificationsSnapshot,
+    lastSyncedAt: notificationsLastSyncedAt,
   } = useNotifications({ limit: 50 });
 
   const filteredActiveItems = useMemo(
@@ -189,6 +191,11 @@ export default function GenerationQueue() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Recent Results</CardTitle>
+            {isOfflineNotificationsSnapshot ? (
+              <p className="text-xs text-muted-foreground">
+                Offline snapshot{notificationsLastSyncedAt ? ` • Synced ${formatRelativeTime(notificationsLastSyncedAt)}` : ''}
+              </p>
+            ) : null}
           </CardHeader>
           <CardContent className="space-y-3">
             {isNotificationsLoading && recentResults.length === 0 ? (

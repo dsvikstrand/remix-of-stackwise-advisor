@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { config } from '@/config/runtime';
+import { clearNotificationSnapshot } from '@/lib/notificationSnapshots';
 
 interface Profile {
   id: string;
@@ -140,6 +141,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    if (user?.id) {
+      clearNotificationSnapshot(user.id);
+    }
     await supabase.auth.signOut();
     setProfile(null);
   };
