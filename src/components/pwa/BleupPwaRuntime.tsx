@@ -441,8 +441,8 @@ export function BleupPwaRuntime({ children }: { children: ReactNode }) {
     platform: window.navigator.platform,
     maxTouchPoints: window.navigator.maxTouchPoints,
   });
-  const canUseQuietMode = quietModeEligible && isPushSubscribed;
-  const quietModeActive = canUseQuietMode && pushDeliveryMode === "quiet_ios";
+  const canUseQuietMode = quietModeEligible;
+  const quietModeActive = quietModeEligible && pushDeliveryMode === "quiet_ios";
 
   const canShowPushEnableCta = shouldShowPushEnableCta({
     flagEnabled: pushFeatureEnabled,
