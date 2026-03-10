@@ -346,7 +346,14 @@ const youtubeRefreshCommentsMaxPerCycle = clampInt(process.env.YOUTUBE_REFRESH_C
 const youtubeRefreshViewIntervalHours = clampInt(process.env.YOUTUBE_REFRESH_VIEW_INTERVAL_HOURS, 12, 1, 24 * 14);
 const youtubeCommentsAutoFirstDelayMinutes = clampInt(process.env.YOUTUBE_COMMENTS_AUTO_FIRST_DELAY_MINUTES, 15, 1, 24 * 60);
 const youtubeCommentsAutoSecondDelayHours = clampInt(process.env.YOUTUBE_COMMENTS_AUTO_SECOND_DELAY_HOURS, 24, 1, 24 * 30);
-const youtubeCommentsManualCooldownHours = clampInt(process.env.YOUTUBE_COMMENTS_MANUAL_COOLDOWN_HOURS, 24, 1, 24 * 30);
+const youtubeCommentsManualCooldownMinutes = clampInt(
+  process.env.YOUTUBE_COMMENTS_MANUAL_COOLDOWN_MINUTES,
+  process.env.YOUTUBE_COMMENTS_MANUAL_COOLDOWN_HOURS
+    ? clampInt(process.env.YOUTUBE_COMMENTS_MANUAL_COOLDOWN_HOURS, 24, 1, 24 * 30) * 60
+    : 10,
+  1,
+  24 * 60,
+);
 const unlockIntakeEnabledRaw = String(process.env.UNLOCK_INTAKE_ENABLED || 'true').trim().toLowerCase();
 const unlockIntakeEnabled = !(unlockIntakeEnabledRaw === 'false' || unlockIntakeEnabledRaw === '0' || unlockIntakeEnabledRaw === 'off');
 const sourceUnlockReservationSeconds = clampInt(process.env.SOURCE_UNLOCK_RESERVATION_SECONDS, 300, 60, 3600);
@@ -2957,7 +2964,7 @@ const blueprintYouTubeCommentsService = createBlueprintYouTubeCommentsService({
   refreshViewIntervalHours: youtubeRefreshViewIntervalHours,
   commentsAutoFirstDelayMinutes: youtubeCommentsAutoFirstDelayMinutes,
   commentsAutoSecondDelayHours: youtubeCommentsAutoSecondDelayHours,
-  commentsManualCooldownHours: youtubeCommentsManualCooldownHours,
+  commentsManualCooldownMinutes: youtubeCommentsManualCooldownMinutes,
 });
 
 const blueprintCreationService = createBlueprintCreationService({

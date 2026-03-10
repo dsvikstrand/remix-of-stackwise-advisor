@@ -20,7 +20,7 @@ const YOUTUBE_COMMENT_SNAPSHOT_LIMIT = 20;
 const DEFAULT_REFRESH_VIEW_INTERVAL_HOURS = 12;
 const DEFAULT_COMMENTS_AUTO_FIRST_DELAY_MINUTES = 15;
 const DEFAULT_COMMENTS_AUTO_SECOND_DELAY_HOURS = 24;
-const DEFAULT_COMMENTS_MANUAL_COOLDOWN_HOURS = 24;
+const DEFAULT_COMMENTS_MANUAL_COOLDOWN_MINUTES = 10;
 const VIEW_REFRESH_BACKOFF_HOURS = [6, 24, 48] as const;
 const COMMENTS_REFRESH_BACKOFF_HOURS = [24, 72, 168] as const;
 const RECENT_BLUEPRINT_WINDOW_DAYS = 7;
@@ -161,7 +161,7 @@ export function createBlueprintYouTubeCommentsService(input: {
   refreshViewIntervalHours?: number;
   commentsAutoFirstDelayMinutes?: number;
   commentsAutoSecondDelayHours?: number;
-  commentsManualCooldownHours?: number;
+  commentsManualCooldownMinutes?: number;
 }) {
   const apiKey = String(input.apiKey || '').trim();
   const fetchImpl = input.fetchImpl || fetch;
@@ -177,9 +177,9 @@ export function createBlueprintYouTubeCommentsService(input: {
     input.commentsAutoSecondDelayHours,
     DEFAULT_COMMENTS_AUTO_SECOND_DELAY_HOURS,
   );
-  const commentsManualCooldownHours = normalizeIntervalHours(
-    input.commentsManualCooldownHours,
-    DEFAULT_COMMENTS_MANUAL_COOLDOWN_HOURS,
+  const commentsManualCooldownMinutes = normalizeIntervalHours(
+    input.commentsManualCooldownMinutes,
+    DEFAULT_COMMENTS_MANUAL_COOLDOWN_MINUTES,
   );
 
   async function resolveBlueprintYouTubeVideoId(args: {
@@ -475,7 +475,7 @@ export function createBlueprintYouTubeCommentsService(input: {
     previousCooldownUntil: string | null;
   }) {
     const nowIso = new Date().toISOString();
-    const cooldownUntil = toFutureIsoFromHours(commentsManualCooldownHours);
+    const cooldownUntil = toFutureIsoFromMinutes(commentsManualCooldownMinutes);
     let query = args.db
       .from('blueprint_youtube_refresh_state')
       .update({
@@ -873,7 +873,7 @@ export function createBlueprintYouTubeCommentsService(input: {
           ...(trigger === 'manual'
             ? {
                 last_comments_manual_refresh_at: nowIsoNext,
-                comments_manual_cooldown_until: toFutureIsoFromHours(commentsManualCooldownHours),
+                comments_manual_cooldown_until: toFutureIsoFromMinutes(commentsManualCooldownMinutes),
                 last_comments_manual_triggered_by: args.triggeredByUserId || null,
               }
             : {}),
@@ -918,7 +918,7 @@ export function createBlueprintYouTubeCommentsService(input: {
             : toFutureIsoFromHours(backoffHours),
           ...(trigger === 'manual'
             ? {
-                comments_manual_cooldown_until: toFutureIsoFromHours(commentsManualCooldownHours),
+                comments_manual_cooldown_until: toFutureIsoFromMinutes(commentsManualCooldownMinutes),
                 last_comments_manual_refresh_at: nowIso,
                 last_comments_manual_triggered_by: args.triggeredByUserId || null,
               }

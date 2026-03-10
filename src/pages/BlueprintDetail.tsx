@@ -32,6 +32,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { resolveEffectiveBanner } from '@/lib/bannerResolver';
 import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities';
 import { splitSummaryIntoSlides } from '@/lib/summarySlides';
+import { buildSourcePagePath } from '@/lib/sourcePagesApi';
 import {
   buildBlueprintSectionsV1FromRenderSteps,
   buildRenderBlocksFromBlueprintSections,
@@ -342,7 +343,7 @@ export default function BlueprintDetail() {
       if (code === 'COMMENTS_REFRESH_COOLDOWN_ACTIVE') {
         toast({
           title: 'Cooldown active',
-          description: 'Please try again tomorrow.',
+          description: 'Please try again in a little while.',
         });
         return;
       }
@@ -386,6 +387,7 @@ export default function BlueprintDetail() {
   const [sourceChannel, setSourceChannel] = useState<{
     title: string;
     url: string | null;
+    sourcePagePath: string | null;
     avatarUrl: string | null;
     thumbnailUrl: string | null;
     viewCount: number | null;
@@ -495,31 +497,43 @@ export default function BlueprintDetail() {
               : null
           );
       let sourcePageAvatarUrl: string | null = null;
+      let sourcePagePath: string | null = null;
       const sourcePageId = String(source.source_page_id || '').trim();
       if (sourcePageId) {
         const { data: sourcePage } = await supabase
           .from('source_pages')
-          .select('avatar_url')
+          .select('avatar_url, platform, external_id')
           .eq('id', sourcePageId)
           .maybeSingle();
         sourcePageAvatarUrl = sourcePage?.avatar_url || null;
+        const sourcePagePlatform = String(sourcePage?.platform || '').trim();
+        const sourcePageExternalId = String(sourcePage?.external_id || '').trim();
+        if (sourcePagePlatform && sourcePageExternalId) {
+          sourcePagePath = buildSourcePagePath(sourcePagePlatform, sourcePageExternalId);
+        }
       }
       const sourceChannelId = String(source.source_channel_id || '').trim();
       let sourceExternalAvatarUrl: string | null = null;
       if (!sourcePageAvatarUrl && sourceChannelId) {
         const { data: sourcePageByExternal } = await supabase
           .from('source_pages')
-          .select('avatar_url')
+          .select('avatar_url, platform, external_id')
           .eq('platform', 'youtube')
           .eq('external_id', sourceChannelId)
           .maybeSingle();
         sourceExternalAvatarUrl = sourcePageByExternal?.avatar_url || null;
+        const sourcePagePlatform = String(sourcePageByExternal?.platform || '').trim();
+        const sourcePageExternalId = String(sourcePageByExternal?.external_id || '').trim();
+        if (!sourcePagePath && sourcePagePlatform && sourcePageExternalId) {
+          sourcePagePath = buildSourcePagePath(sourcePagePlatform, sourcePageExternalId);
+        }
       }
       if (!cancelled) {
         const viewCount = parseSourceViewCount(sourceMetadata);
         setSourceChannel({
           title: channelTitle || source.title || 'Source channel',
           url: source.source_url || null,
+          sourcePagePath,
           avatarUrl: sourcePageAvatarUrl || metadataChannelAvatarUrl || sourceExternalAvatarUrl || null,
           thumbnailUrl: String(source.thumbnail_url || '').trim() || null,
           viewCount,
@@ -966,19 +980,39 @@ export default function BlueprintDetail() {
 
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 min-w-0">
-                  <Avatar className="h-6 w-6">
-                    <AvatarImage
-                      src={sourceChannel?.avatarUrl || undefined}
-                    />
-                    <AvatarFallback className="text-[10px]">
-                      {(sourceChannel?.title || (isSourceChannelResolved && sourceChannelLookupFailed ? (blueprint.creator_profile?.display_name || 'U') : 'S'))
-                        .slice(0, 2)
-                        .toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="text-sm text-muted-foreground truncate">
-                    {sourceChannel?.title || (isSourceChannelResolved && sourceChannelLookupFailed ? (blueprint.creator_profile?.display_name || 'Anonymous') : 'Source')}
-                  </span>
+                  {sourceChannel?.sourcePagePath ? (
+                    <Link to={sourceChannel.sourcePagePath} className="flex items-center gap-2 min-w-0 hover:opacity-80 transition-opacity">
+                      <Avatar className="h-6 w-6">
+                        <AvatarImage
+                          src={sourceChannel?.avatarUrl || undefined}
+                        />
+                        <AvatarFallback className="text-[10px]">
+                          {(sourceChannel?.title || (isSourceChannelResolved && sourceChannelLookupFailed ? (blueprint.creator_profile?.display_name || 'U') : 'S'))
+                            .slice(0, 2)
+                            .toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm text-muted-foreground truncate hover:underline">
+                        {sourceChannel?.title || (isSourceChannelResolved && sourceChannelLookupFailed ? (blueprint.creator_profile?.display_name || 'Anonymous') : 'Source')}
+                      </span>
+                    </Link>
+                  ) : (
+                    <>
+                      <Avatar className="h-6 w-6">
+                        <AvatarImage
+                          src={sourceChannel?.avatarUrl || undefined}
+                        />
+                        <AvatarFallback className="text-[10px]">
+                          {(sourceChannel?.title || (isSourceChannelResolved && sourceChannelLookupFailed ? (blueprint.creator_profile?.display_name || 'U') : 'S'))
+                            .slice(0, 2)
+                            .toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm text-muted-foreground truncate">
+                        {sourceChannel?.title || (isSourceChannelResolved && sourceChannelLookupFailed ? (blueprint.creator_profile?.display_name || 'Anonymous') : 'Source')}
+                      </span>
+                    </>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
                   {compactSourceViewCount ? (

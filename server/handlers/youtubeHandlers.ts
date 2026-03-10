@@ -454,7 +454,7 @@ app.post('/api/blueprints/:id/youtube-comments/refresh', async (req, res) => {
       return res.status(429).json({
         ok: false,
         error_code: 'COMMENTS_REFRESH_COOLDOWN_ACTIVE',
-        message: 'Please try again tomorrow.',
+        message: 'Please try again in a little while.',
         retry_at: result.retry_at,
         data: null,
       });
