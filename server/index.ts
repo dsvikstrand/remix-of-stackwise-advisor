@@ -141,6 +141,7 @@ import {
 import {
   createNotificationPushSender,
   deactivateNotificationPushSubscription,
+  listActiveNotificationPushSubscriptions,
   processNotificationPushDispatchBatch,
   readNotificationPushConfigFromEnv,
   upsertNotificationPushSubscription,
@@ -7537,6 +7538,7 @@ async function runNotificationPushDispatcherCycle() {
       maxAttempts: notificationPushMaxAttempts,
       processingStaleMs: notificationPushProcessingStaleMs,
       sendPushNotification: notificationPushSender,
+      quietIosEnabled: notificationPushConfig.quietIosEnabled,
     });
 
     if (processed.length > 0) {
@@ -7891,7 +7893,9 @@ registerNotificationRoutes(app, {
   getNotificationPushConfig: () => ({
     enabled: notificationPushEnabled,
     vapidPublicKey: notificationPushConfig.publicKey,
+    quietIosEnabled: notificationPushConfig.quietIosEnabled,
   }),
+  listNotificationPushSubscriptions: listActiveNotificationPushSubscriptions,
   upsertNotificationPushSubscription,
   deactivateNotificationPushSubscription,
   clampInt,

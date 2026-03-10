@@ -1,7 +1,9 @@
 import {
   buildPushNotificationDisplay,
   buildPushNotificationTarget,
+  getPushNotificationUnreadCount,
   parsePushNotificationPayload,
+  shouldUseQuietPushBadgeMode,
 } from "@/pwa/pushNotificationUtils";
 
 describe("pushNotificationUtils", () => {
@@ -45,5 +47,15 @@ describe("pushNotificationUtils", () => {
     });
     expect(result.options.icon).toBe("https://bleup.app/app/pwa-192x192.png");
     expect(result.options.badge).toBe(result.options.icon);
+  });
+
+  it("uses quiet badge mode only for quiet iPhone payloads with badge support", () => {
+    const quietPayload = parsePushNotificationPayload('{"delivery_mode":"quiet_ios","unread_count":7}');
+    expect(quietPayload).not.toBeNull();
+    expect(shouldUseQuietPushBadgeMode(quietPayload || {}, true)).toBe(true);
+    expect(getPushNotificationUnreadCount(quietPayload || {})).toBe(7);
+
+    expect(shouldUseQuietPushBadgeMode(quietPayload || {}, false)).toBe(false);
+    expect(shouldUseQuietPushBadgeMode({ delivery_mode: "normal" }, true)).toBe(false);
   });
 });

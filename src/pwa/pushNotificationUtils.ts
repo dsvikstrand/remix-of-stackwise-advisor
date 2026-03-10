@@ -1,3 +1,4 @@
+import type { PushDeliveryMode } from "./pushUtils";
 import { joinBasePath } from "./runtimeUtils";
 
 export type PushNotificationPayload = {
@@ -7,6 +8,8 @@ export type PushNotificationPayload = {
   body?: string | null;
   link_path?: string | null;
   created_at?: string | null;
+  delivery_mode?: PushDeliveryMode | null;
+  unread_count?: number | null;
 };
 
 export function parsePushNotificationPayload(raw: string | null | undefined): PushNotificationPayload | null {
@@ -48,4 +51,14 @@ export function buildPushNotificationDisplay(basePath: string, origin: string, p
       },
     },
   };
+}
+
+export function getPushNotificationUnreadCount(payload: PushNotificationPayload) {
+  const parsed = Number(payload.unread_count);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.floor(parsed));
+}
+
+export function shouldUseQuietPushBadgeMode(payload: PushNotificationPayload, badgeSupported: boolean) {
+  return badgeSupported && payload.delivery_mode === "quiet_ios";
 }

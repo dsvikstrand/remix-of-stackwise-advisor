@@ -10,9 +10,12 @@ import {
 
 import { config } from "@/config/runtime";
 import { useAuth } from "@/contexts/AuthContext";
+import { useNotifications } from "@/hooks/useNotifications";
 import {
   disableNotificationPushSubscription,
   getNotificationPushConfig,
+  listNotificationPushSubscriptions,
+  type NotificationPushDeliveryMode,
   upsertNotificationPushSubscription,
 } from "@/lib/notificationsApi";
 import {
@@ -24,8 +27,11 @@ import {
 import { registerBleupPwa, type BleupPwaRegistration } from "@/pwa/register";
 import {
   PWA_PUSH_CTA_SNOOZE_KEY,
+  isQuietIosPushEligible,
   readPushPermissionState,
+  syncAppBadge,
   shouldShowPushEnableCta,
+  supportsAppBadgeApi,
   urlBase64ToUint8Array,
 } from "@/pwa/pushUtils";
 import {
@@ -53,11 +59,14 @@ type BleupPwaContextValue = {
     isAvailable: boolean;
     permissionState: NotificationPermission | "unsupported";
     isSubscribed: boolean;
+    deliveryMode: NotificationPushDeliveryMode | null;
+    canUseQuietMode: boolean;
     isBusy: boolean;
     canShowEnableCta: boolean;
     dismissEnableCta: () => void;
     enable: () => Promise<void>;
     disable: () => Promise<void>;
+    setDeliveryMode: (mode: NotificationPushDeliveryMode) => Promise<void>;
   };
 };
 
@@ -82,11 +91,14 @@ const BleupPwaContext = createContext<BleupPwaContextValue>({
     isAvailable: false,
     permissionState: "unsupported",
     isSubscribed: false,
+    deliveryMode: null,
+    canUseQuietMode: false,
     isBusy: false,
     canShowEnableCta: false,
     dismissEnableCta: () => undefined,
     enable: async () => undefined,
     disable: async () => undefined,
+    setDeliveryMode: async () => undefined,
   },
 });
 
@@ -100,24 +112,31 @@ export function BleupPwaRuntime({ children }: { children: ReactNode }) {
   const [hasBeforeInstallPrompt, setHasBeforeInstallPrompt] = useState(false);
   const [dismissedInstallAt, setDismissedInstallAt] = useState<number | null>(() => readDismissedInstallAt());
   const [pushBackendEnabled, setPushBackendEnabled] = useState(false);
+  const [pushBackendQuietIosEnabled, setPushBackendQuietIosEnabled] = useState(false);
   const [pushVapidPublicKey, setPushVapidPublicKey] = useState<string | null>(null);
   const [pushPermissionState, setPushPermissionState] = useState<NotificationPermission | "unsupported">(() => readPushPermissionState());
   const [isPushSubscribed, setIsPushSubscribed] = useState(false);
   const [pushEndpoint, setPushEndpoint] = useState<string | null>(null);
+  const [pushDeliveryMode, setPushDeliveryModeState] = useState<NotificationPushDeliveryMode | null>(null);
   const [dismissedPushAt, setDismissedPushAt] = useState<number | null>(() => readDismissedPushAt());
   const [isPushBusy, setIsPushBusy] = useState(false);
-  const registrationRef = useRef<BleupPwaRegistration | null>(null);
-  const deferredInstallPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
 
   const runtimeEnabled = import.meta.env.PROD && config.features.pwaRuntimeV1;
   const installCtaEnabled = config.features.pwaInstallCtaV1;
   const pushFeatureEnabled = import.meta.env.PROD && config.features.pwaPushV1;
+  const quietIosFeatureEnabled = import.meta.env.PROD && config.features.pwaPushQuietIosV1;
   const currentReleaseSha = config.releaseSha;
   const pushSupported = pushFeatureEnabled
     && typeof window !== "undefined"
     && "Notification" in window
     && "PushManager" in window
     && "serviceWorker" in navigator;
+  const { unreadCount } = useNotifications({
+    limit: 1,
+    enabled: pushFeatureEnabled && quietIosFeatureEnabled && isStandaloneMode && Boolean(user?.id),
+  });
+  const registrationRef = useRef<BleupPwaRegistration | null>(null);
+  const deferredInstallPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -187,6 +206,8 @@ export function BleupPwaRuntime({ children }: { children: ReactNode }) {
       setDismissedPushAt(null);
       setIsPushSubscribed(false);
       setPushEndpoint(null);
+      setPushDeliveryModeState(null);
+      void syncAppBadge(typeof navigator !== "undefined" ? navigator : null, 0);
     }
   }, [user?.id]);
 
@@ -208,9 +229,11 @@ export function BleupPwaRuntime({ children }: { children: ReactNode }) {
 
       if (!user?.id) {
         setPushBackendEnabled(false);
+        setPushBackendQuietIosEnabled(false);
         setPushVapidPublicKey(null);
         setIsPushSubscribed(false);
         setPushEndpoint(null);
+        setPushDeliveryModeState(null);
         return;
       }
 
@@ -218,17 +241,21 @@ export function BleupPwaRuntime({ children }: { children: ReactNode }) {
         const nextConfig = await getNotificationPushConfig();
         if (isDisposed) return;
         setPushBackendEnabled(Boolean(nextConfig.enabled && nextConfig.vapid_public_key));
+        setPushBackendQuietIosEnabled(Boolean(nextConfig.enabled && nextConfig.quiet_ios_enabled));
         setPushVapidPublicKey(nextConfig.vapid_public_key || null);
       } catch {
         if (isDisposed) return;
         setPushBackendEnabled(false);
+        setPushBackendQuietIosEnabled(false);
         setPushVapidPublicKey(null);
+        setPushDeliveryModeState(null);
       }
 
       if (!pushSupported) {
         if (isDisposed) return;
         setIsPushSubscribed(false);
         setPushEndpoint(null);
+        setPushDeliveryModeState(null);
         return;
       }
 
@@ -238,10 +265,25 @@ export function BleupPwaRuntime({ children }: { children: ReactNode }) {
         if (isDisposed) return;
         setIsPushSubscribed(Boolean(subscription));
         setPushEndpoint(subscription?.endpoint || null);
+        if (!subscription?.endpoint) {
+          setPushDeliveryModeState(null);
+          return;
+        }
+
+        try {
+          const subscriptions = await listNotificationPushSubscriptions();
+          if (isDisposed) return;
+          const matchedSubscription = subscriptions.find((item) => item.endpoint === subscription.endpoint && item.is_active);
+          setPushDeliveryModeState(matchedSubscription?.delivery_mode || "normal");
+        } catch {
+          if (isDisposed) return;
+          setPushDeliveryModeState("normal");
+        }
       } catch {
         if (isDisposed) return;
         setIsPushSubscribed(false);
         setPushEndpoint(null);
+        setPushDeliveryModeState(null);
       }
     }
 
@@ -379,11 +421,26 @@ export function BleupPwaRuntime({ children }: { children: ReactNode }) {
     dismissedAt: dismissedInstallAt,
   });
 
+  const badgeSupported = typeof navigator !== "undefined" && supportsAppBadgeApi(navigator);
+
   const pushAvailable = pushSupported
     && isStandaloneMode
     && Boolean(user?.id)
     && pushBackendEnabled
     && Boolean(pushVapidPublicKey);
+
+  const quietModeEligible = typeof window !== "undefined" && isQuietIosPushEligible({
+    flagEnabled: quietIosFeatureEnabled,
+    isStandalone: isStandaloneMode,
+    isSupported: pushSupported,
+    backendEnabled: pushBackendQuietIosEnabled,
+    badgeSupported,
+    userAgent: window.navigator.userAgent,
+    platform: window.navigator.platform,
+    maxTouchPoints: window.navigator.maxTouchPoints,
+  });
+  const canUseQuietMode = quietModeEligible && isPushSubscribed;
+  const quietModeActive = canUseQuietMode && pushDeliveryMode === "quiet_ios";
 
   const canShowPushEnableCta = shouldShowPushEnableCta({
     flagEnabled: pushFeatureEnabled,
@@ -401,6 +458,18 @@ export function BleupPwaRuntime({ children }: { children: ReactNode }) {
     isStandaloneMode &&
     Boolean(availableReleaseKey) &&
     availableReleaseKey !== dismissedReleaseKey;
+
+  useEffect(() => {
+    if (typeof navigator === "undefined") return;
+    if (!badgeSupported) return;
+
+    if (!user?.id || !quietModeActive || !isPushSubscribed) {
+      void syncAppBadge(navigator, 0);
+      return;
+    }
+
+    void syncAppBadge(navigator, unreadCount);
+  }, [badgeSupported, isPushSubscribed, quietModeActive, unreadCount, user?.id]);
 
   async function handleRefreshNow() {
     setIsRefreshing(true);
@@ -453,6 +522,40 @@ export function BleupPwaRuntime({ children }: { children: ReactNode }) {
     setDismissedReleaseKey(availableReleaseKey);
   }
 
+  async function saveCurrentPushSubscription(nextDeliveryMode: NotificationPushDeliveryMode) {
+    if (!pushVapidPublicKey) {
+      throw new Error("PUSH_CONFIG_MISSING");
+    }
+
+    const registration = await navigator.serviceWorker.ready;
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(pushVapidPublicKey),
+      });
+    }
+
+    const payload = subscription.toJSON();
+    if (!payload.endpoint || !payload.keys?.p256dh || !payload.keys?.auth) {
+      throw new Error("PUSH_SUBSCRIPTION_INVALID");
+    }
+
+    const saved = await upsertNotificationPushSubscription({
+      endpoint: payload.endpoint,
+      p256dh: payload.keys.p256dh,
+      auth: payload.keys.auth,
+      expiration_time: subscription.expirationTime ? new Date(subscription.expirationTime).toISOString() : null,
+      platform: window.navigator.platform || null,
+      delivery_mode: nextDeliveryMode,
+    });
+
+    setIsPushSubscribed(true);
+    setPushEndpoint(payload.endpoint);
+    setPushDeliveryModeState(saved.delivery_mode || nextDeliveryMode);
+    return saved;
+  }
+
   async function enablePush() {
     if (!pushAvailable || !pushVapidPublicKey || !user?.id) return;
 
@@ -464,33 +567,23 @@ export function BleupPwaRuntime({ children }: { children: ReactNode }) {
       }
       setPushPermissionState(nextPermission);
       if (nextPermission !== "granted") return;
-
-      const registration = await navigator.serviceWorker.ready;
-      let subscription = await registration.pushManager.getSubscription();
-      if (!subscription) {
-        subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(pushVapidPublicKey),
-        });
-      }
-
-      const payload = subscription.toJSON();
-      if (!payload.endpoint || !payload.keys?.p256dh || !payload.keys?.auth) {
-        throw new Error("PUSH_SUBSCRIPTION_INVALID");
-      }
-
-      await upsertNotificationPushSubscription({
-        endpoint: payload.endpoint,
-        p256dh: payload.keys.p256dh,
-        auth: payload.keys.auth,
-        expiration_time: subscription.expirationTime ? new Date(subscription.expirationTime).toISOString() : null,
-        platform: window.navigator.platform || null,
-      });
+      const nextDeliveryMode: NotificationPushDeliveryMode = quietModeEligible ? "quiet_ios" : "normal";
+      await saveCurrentPushSubscription(nextDeliveryMode);
 
       clearDismissedPushAt();
       setDismissedPushAt(null);
-      setIsPushSubscribed(true);
-      setPushEndpoint(payload.endpoint);
+    } finally {
+      setIsPushBusy(false);
+    }
+  }
+
+  async function setPushDeliveryMode(nextDeliveryMode: NotificationPushDeliveryMode) {
+    if (!user?.id || !isPushSubscribed) return;
+    if (nextDeliveryMode === "quiet_ios" && !quietModeEligible) return;
+
+    setIsPushBusy(true);
+    try {
+      await saveCurrentPushSubscription(nextDeliveryMode === "quiet_ios" ? "quiet_ios" : "normal");
     } finally {
       setIsPushBusy(false);
     }
@@ -523,8 +616,10 @@ export function BleupPwaRuntime({ children }: { children: ReactNode }) {
 
       setIsPushSubscribed(false);
       setPushEndpoint(null);
+      setPushDeliveryModeState(null);
       setPushPermissionState(readPushPermissionState());
       dismissPushCta();
+      await syncAppBadge(typeof navigator !== "undefined" ? navigator : null, 0);
     } finally {
       setIsPushBusy(false);
     }
@@ -543,11 +638,14 @@ export function BleupPwaRuntime({ children }: { children: ReactNode }) {
           isAvailable: pushAvailable,
           permissionState: pushPermissionState,
           isSubscribed: isPushSubscribed,
+          deliveryMode: pushDeliveryMode,
+          canUseQuietMode,
           isBusy: isPushBusy,
           canShowEnableCta: canShowPushEnableCta,
           dismissEnableCta: dismissPushCta,
           enable: enablePush,
           disable: disablePush,
+          setDeliveryMode: setPushDeliveryMode,
         },
       }}
     >

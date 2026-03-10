@@ -13,7 +13,8 @@ export type NotificationsRouteDeps = {
   listNotificationsForUser: (db: DbClient, input: { userId: string; limit?: number; cursor?: string | null }) => Promise<NotificationList>;
   markAllNotificationsRead: (db: DbClient, input: { userId: string }) => Promise<Record<string, any>>;
   markNotificationRead: (db: DbClient, input: { userId: string; notificationId: string }) => Promise<Record<string, any> | null>;
-  getNotificationPushConfig: () => { enabled: boolean; vapidPublicKey: string | null };
+  getNotificationPushConfig: () => { enabled: boolean; vapidPublicKey: string | null; quietIosEnabled: boolean };
+  listNotificationPushSubscriptions: (db: DbClient, input: { userId: string }) => Promise<Array<Record<string, any>>>;
   upsertNotificationPushSubscription: (db: DbClient, input: {
     userId: string;
     endpoint: string;
@@ -22,6 +23,7 @@ export type NotificationsRouteDeps = {
     expirationTime?: string | null;
     platform?: string | null;
     userAgent?: string | null;
+    deliveryMode?: 'normal' | 'quiet_ios' | null;
   }) => Promise<Record<string, any> | null>;
   deactivateNotificationPushSubscription: (db: DbClient, input: { userId: string; endpoint: string }) => Promise<Record<string, any> | null>;
   clampInt: (raw: unknown, fallbackValue: number, minValue: number, maxValue: number) => number;

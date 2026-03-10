@@ -51,13 +51,17 @@ export type NotificationReadAllResult = {
 export type NotificationPushConfig = {
   enabled: boolean;
   vapid_public_key: string | null;
+  quiet_ios_enabled: boolean;
 };
+
+export type NotificationPushDeliveryMode = 'normal' | 'quiet_ios';
 
 export type NotificationPushSubscriptionRecord = {
   id: string;
   user_id: string;
   endpoint: string;
   is_active: boolean;
+  delivery_mode: NotificationPushDeliveryMode;
 };
 
 function getApiBase() {
@@ -141,12 +145,20 @@ export async function getNotificationPushConfig() {
   return response.data;
 }
 
+export async function listNotificationPushSubscriptions() {
+  const response = await apiRequest<NotificationPushSubscriptionRecord[]>('/notifications/push-subscriptions', {
+    method: 'GET',
+  });
+  return response.data;
+}
+
 export async function upsertNotificationPushSubscription(input: {
   endpoint: string;
   p256dh: string;
   auth: string;
   expiration_time?: string | null;
   platform?: string | null;
+  delivery_mode?: NotificationPushDeliveryMode;
 }) {
   const response = await apiRequest<NotificationPushSubscriptionRecord>('/notifications/push-subscriptions', {
     method: 'POST',

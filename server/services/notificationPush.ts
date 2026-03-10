@@ -10,6 +10,8 @@ export const NOTIFICATION_PUSH_TYPES = [
 ] as const;
 
 export type NotificationPushType = (typeof NOTIFICATION_PUSH_TYPES)[number];
+export const NOTIFICATION_PUSH_DELIVERY_MODES = ['normal', 'quiet_ios'] as const;
+export type NotificationPushDeliveryMode = (typeof NOTIFICATION_PUSH_DELIVERY_MODES)[number];
 
 export type NotificationPushSubscriptionRow = {
   id: string;
@@ -20,6 +22,7 @@ export type NotificationPushSubscriptionRow = {
   expiration_time: string | null;
   platform: string | null;
   user_agent: string | null;
+  delivery_mode: NotificationPushDeliveryMode;
   is_active: boolean;
   last_seen_at: string;
   created_at: string;
@@ -56,6 +59,7 @@ export type NotificationPushConfig = {
   publicKey: string | null;
   privateKey: string | null;
   subject: string | null;
+  quietIosEnabled: boolean;
 };
 
 export type NotificationPushPayload = {
@@ -65,6 +69,8 @@ export type NotificationPushPayload = {
   body: string;
   link_path: string | null;
   created_at: string;
+  delivery_mode: NotificationPushDeliveryMode;
+  unread_count?: number;
 };
 
 export type NotificationPushSubscriptionUpsertInput = {
@@ -75,6 +81,7 @@ export type NotificationPushSubscriptionUpsertInput = {
   expirationTime?: string | null;
   platform?: string | null;
   userAgent?: string | null;
+  deliveryMode?: NotificationPushDeliveryMode | null;
 };
 
 export type ProcessNotificationPushDispatchBatchDeps = {
@@ -82,6 +89,7 @@ export type ProcessNotificationPushDispatchBatchDeps = {
   processingStaleMs: number;
   batchSize: number;
   sendPushNotification: (subscription: NotificationPushSubscriptionRow, payload: NotificationPushPayload) => Promise<void>;
+  quietIosEnabled?: boolean;
   now?: () => Date;
 };
 
@@ -108,11 +116,13 @@ export function readNotificationPushConfigFromEnv(env: NodeJS.ProcessEnv): Notif
   const privateKey = readOptionalString(env.WEB_PUSH_VAPID_PRIVATE_KEY);
   const subject = readOptionalString(env.WEB_PUSH_SUBJECT);
   const configured = enabled && Boolean(publicKey && privateKey && subject);
+  const quietIosEnabled = configured && parseRuntimeFlag(env.WEB_PUSH_QUIET_IOS_ENABLED, false);
   return {
     enabled: configured,
     publicKey: configured ? publicKey : null,
     privateKey: configured ? privateKey : null,
     subject: configured ? subject : null,
+    quietIosEnabled,
   };
 }
 
@@ -161,7 +171,16 @@ export function createNotificationPushSender(
   };
 }
 
-export function buildNotificationPushPayload(notification: NotificationPushSourceRow): NotificationPushPayload {
+export function buildNotificationPushPayload(
+  notification: NotificationPushSourceRow,
+  input?: {
+    deliveryMode?: NotificationPushDeliveryMode | null;
+    unreadCount?: number | null;
+    quietIosEnabled?: boolean;
+  },
+): NotificationPushPayload {
+  const deliveryMode = normalizeNotificationPushDeliveryMode(input?.deliveryMode);
+  const quietDeliveryEnabled = Boolean(input?.quietIosEnabled) && deliveryMode === 'quiet_ios';
   return {
     notification_id: notification.id,
     type: notification.type,
@@ -169,6 +188,8 @@ export function buildNotificationPushPayload(notification: NotificationPushSourc
     body: notification.body,
     link_path: notification.link_path,
     created_at: notification.created_at,
+    delivery_mode: quietDeliveryEnabled ? 'quiet_ios' : 'normal',
+    ...(quietDeliveryEnabled ? { unread_count: normalizeUnreadCount(input?.unreadCount) } : {}),
   };
 }
 
@@ -212,6 +233,7 @@ export async function upsertNotificationPushSubscription(
     expiration_time: readOptionalString(input.expirationTime) || null,
     platform: readOptionalString(input.platform) || null,
     user_agent: readOptionalString(input.userAgent) || null,
+    delivery_mode: normalizeNotificationPushDeliveryMode(input.deliveryMode),
     is_active: true,
     last_seen_at: new Date().toISOString(),
   };
@@ -221,7 +243,7 @@ export async function upsertNotificationPushSubscription(
       .from('notification_push_subscriptions')
       .update(payload)
       .eq('id', existing.id)
-      .select('id, user_id, endpoint, p256dh, auth, expiration_time, platform, user_agent, is_active, last_seen_at, created_at, updated_at')
+      .select('id, user_id, endpoint, p256dh, auth, expiration_time, platform, user_agent, delivery_mode, is_active, last_seen_at, created_at, updated_at')
       .maybeSingle();
     if (error) throw error;
     return data as NotificationPushSubscriptionRow | null;
@@ -230,7 +252,7 @@ export async function upsertNotificationPushSubscription(
   const { data, error } = await db
     .from('notification_push_subscriptions')
     .insert(payload)
-    .select('id, user_id, endpoint, p256dh, auth, expiration_time, platform, user_agent, is_active, last_seen_at, created_at, updated_at')
+    .select('id, user_id, endpoint, p256dh, auth, expiration_time, platform, user_agent, delivery_mode, is_active, last_seen_at, created_at, updated_at')
     .maybeSingle();
   if (error) throw error;
   return data as NotificationPushSubscriptionRow | null;
@@ -254,7 +276,7 @@ export async function deactivateNotificationPushSubscription(
     })
     .eq('user_id', userId)
     .eq('endpoint', endpoint)
-    .select('id, user_id, endpoint, p256dh, auth, expiration_time, platform, user_agent, is_active, last_seen_at, created_at, updated_at')
+    .select('id, user_id, endpoint, p256dh, auth, expiration_time, platform, user_agent, delivery_mode, is_active, last_seen_at, created_at, updated_at')
     .maybeSingle();
   if (error) throw error;
   return data as NotificationPushSubscriptionRow | null;
@@ -273,7 +295,7 @@ export async function deactivateNotificationPushSubscriptionById(
       last_seen_at: new Date().toISOString(),
     })
     .eq('id', id)
-    .select('id, user_id, endpoint, p256dh, auth, expiration_time, platform, user_agent, is_active, last_seen_at, created_at, updated_at')
+    .select('id, user_id, endpoint, p256dh, auth, expiration_time, platform, user_agent, delivery_mode, is_active, last_seen_at, created_at, updated_at')
     .maybeSingle();
   if (error) throw error;
   return data as NotificationPushSubscriptionRow | null;
@@ -287,12 +309,27 @@ export async function listActiveNotificationPushSubscriptions(
   if (!userId) return [] as NotificationPushSubscriptionRow[];
   const { data, error } = await db
     .from('notification_push_subscriptions')
-    .select('id, user_id, endpoint, p256dh, auth, expiration_time, platform, user_agent, is_active, last_seen_at, created_at, updated_at')
+    .select('id, user_id, endpoint, p256dh, auth, expiration_time, platform, user_agent, delivery_mode, is_active, last_seen_at, created_at, updated_at')
     .eq('user_id', userId)
     .eq('is_active', true)
     .order('updated_at', { ascending: false });
   if (error) throw error;
   return (data || []) as NotificationPushSubscriptionRow[];
+}
+
+export async function countUnreadNotificationsForUser(
+  db: DbClient,
+  input: { userId: string },
+) {
+  const userId = String(input.userId || '').trim();
+  if (!userId) return 0;
+  const { data, error } = await db
+    .from('notifications')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('is_read', false);
+  if (error) throw error;
+  return Array.isArray(data) ? data.length : 0;
 }
 
 export async function getNotificationById(
@@ -495,12 +532,20 @@ export async function processNotificationPushDispatchBatch(
       continue;
     }
 
-    const payload = buildNotificationPushPayload(notification);
+    const quietModeEnabled = Boolean(deps.quietIosEnabled);
+    const unreadCount = quietModeEnabled && subscriptions.some((subscription) => subscription.delivery_mode === 'quiet_ios')
+      ? await countUnreadNotificationsForUser(db, { userId: row.user_id })
+      : null;
     let deliveredCount = 0;
     const transientErrors: string[] = [];
 
     for (const subscription of subscriptions) {
       try {
+        const payload = buildNotificationPushPayload(notification, {
+          deliveryMode: subscription.delivery_mode,
+          unreadCount,
+          quietIosEnabled: quietModeEnabled,
+        });
         await deps.sendPushNotification(subscription, payload);
         deliveredCount += 1;
       } catch (error) {
@@ -561,4 +606,15 @@ function readOptionalString(raw: unknown): string | null {
   if (raw === undefined || raw === null) return null;
   const trimmed = String(raw).trim();
   return trimmed ? trimmed : null;
+}
+
+function normalizeNotificationPushDeliveryMode(value: unknown): NotificationPushDeliveryMode {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === 'quiet_ios' ? 'quiet_ios' : 'normal';
+}
+
+function normalizeUnreadCount(value: unknown) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.floor(parsed));
 }

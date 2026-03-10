@@ -33,6 +33,7 @@ export const config = {
     pwaRuntimeV1: toBool(import.meta.env.VITE_FEATURE_PWA_RUNTIME_V1, false),
     pwaInstallCtaV1: toBool(import.meta.env.VITE_FEATURE_PWA_INSTALL_CTA_V1, false),
     pwaPushV1: toBool(import.meta.env.VITE_FEATURE_PWA_PUSH_V1, false),
+    pwaPushQuietIosV1: toBool(import.meta.env.VITE_FEATURE_PWA_PUSH_QUIET_IOS_V1, false),
   },
 } as const;
 

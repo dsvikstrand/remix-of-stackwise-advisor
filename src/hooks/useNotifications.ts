@@ -9,7 +9,7 @@ import {
   type NotificationListPage,
 } from '@/lib/notificationsApi';
 
-export function useNotifications(input?: { limit?: number }) {
+export function useNotifications(input?: { limit?: number; enabled?: boolean }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const limit = Math.max(1, Math.min(50, Number(input?.limit || 20)));
@@ -18,7 +18,7 @@ export function useNotifications(input?: { limit?: number }) {
   const query = useQuery({
     queryKey,
     queryFn: () => listNotifications({ limit }),
-    enabled: Boolean(user?.id),
+    enabled: Boolean(user?.id) && (input?.enabled ?? true),
     staleTime: 15_000,
     refetchInterval: 20_000,
     retry: false,

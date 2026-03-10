@@ -24,6 +24,7 @@ function createSubscriptionRow(overrides: Partial<NotificationPushSubscriptionRo
     expiration_time: null,
     platform: "ios",
     user_agent: "test-agent",
+    delivery_mode: "normal",
     is_active: true,
     last_seen_at: "2026-03-08T12:00:00.000Z",
     created_at: "2026-03-08T12:00:00.000Z",
@@ -52,12 +53,14 @@ describe("notificationPush service", () => {
       auth: "auth_1",
       platform: "ios",
       userAgent: "ua",
+      deliveryMode: "quiet_ios",
     });
 
     expect(created).toMatchObject({
       user_id: "user_1",
       endpoint: "https://push.example.com/sub-1",
       is_active: true,
+      delivery_mode: "quiet_ios",
     });
 
     const updated = await upsertNotificationPushSubscription(db, {
@@ -73,6 +76,7 @@ describe("notificationPush service", () => {
       endpoint: "https://push.example.com/sub-1",
       p256dh: "p256dh_2",
       auth: "auth_2",
+      delivery_mode: "normal",
       is_active: true,
     });
 
@@ -134,6 +138,7 @@ describe("notificationPush service", () => {
     expect(buildNotificationPushPayload(db.state.notifications[0])).toMatchObject({
       notification_id: "notif_1",
       type: "comment_reply",
+      delivery_mode: "normal",
     });
     expect(db.state.notification_push_dispatch_queue[0]).toMatchObject({
       status: "sent",
@@ -302,6 +307,69 @@ describe("notificationPush service", () => {
       classifyNotificationPushError(Object.assign(new Error("gone"), { statusCode: 404 })),
     ).toMatchObject({ kind: "permanent", statusCode: 404 });
     expect(classifyNotificationPushError(new Error("temp"))).toMatchObject({ kind: "transient" });
+  });
+
+  it("includes quiet delivery metadata and unread count for quiet iPhone subscriptions", async () => {
+    const db = createMockSupabase({
+      notifications: [
+        {
+          id: "notif_quiet",
+          user_id: "user_1",
+          type: "generation_succeeded",
+          title: "Generation done",
+          body: "Blueprint is ready.",
+          link_path: "/wall",
+          is_read: false,
+          created_at: "2026-03-08T12:00:00.000Z",
+        },
+        {
+          id: "notif_unread_2",
+          user_id: "user_1",
+          type: "comment_reply",
+          title: "Another unread",
+          body: "Still unread.",
+          link_path: "/wall",
+          is_read: false,
+          created_at: "2026-03-08T12:00:01.000Z",
+        },
+      ],
+      notification_push_dispatch_queue: [
+        {
+          id: "dispatch_quiet",
+          notification_id: "notif_quiet",
+          user_id: "user_1",
+          status: "queued",
+          attempt_count: 0,
+          next_attempt_at: "2026-03-08T11:59:00.000Z",
+          last_error: null,
+          delivered_subscription_count: 0,
+          last_attempt_at: null,
+          sent_at: null,
+          created_at: "2026-03-08T11:58:00.000Z",
+          updated_at: "2026-03-08T11:58:00.000Z",
+        },
+      ],
+      notification_push_subscriptions: [createSubscriptionRow({ delivery_mode: "quiet_ios" })],
+    }) as any;
+
+    const sendPushNotification = vi.fn(async () => undefined);
+
+    await processNotificationPushDispatchBatch(db, {
+      maxAttempts: 3,
+      processingStaleMs: 300_000,
+      batchSize: 10,
+      quietIosEnabled: true,
+      sendPushNotification,
+      now: () => new Date("2026-03-08T12:00:00.000Z"),
+    });
+
+    expect(sendPushNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ delivery_mode: "quiet_ios" }),
+      expect.objectContaining({
+        delivery_mode: "quiet_ios",
+        unread_count: 2,
+      }),
+    );
   });
 
   it("normalizes the web-push client shape and configures the sender", async () => {

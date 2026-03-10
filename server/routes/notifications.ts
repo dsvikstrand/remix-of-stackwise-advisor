@@ -17,8 +17,37 @@ export function registerNotificationRoutes(app: express.Express, deps: Notificat
       data: {
         enabled: config.enabled,
         vapid_public_key: config.vapidPublicKey,
+        quiet_ios_enabled: config.quietIosEnabled,
       },
     });
+  });
+
+  app.get('/api/notifications/push-subscriptions', async (req, res) => {
+    const userId = (res.locals.user as { id?: string } | undefined)?.id;
+    const authToken = (res.locals.authToken as string | undefined) ?? '';
+    if (!userId || !authToken) {
+      return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
+    }
+
+    const db = deps.getAuthedSupabaseClient(authToken);
+    if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
+
+    try {
+      const result = await deps.listNotificationPushSubscriptions(db, { userId });
+      return res.json({
+        ok: true,
+        error_code: null,
+        message: 'push subscriptions fetched',
+        data: result.map(toPublicPushSubscription),
+      });
+    } catch (error) {
+      return res.status(400).json({
+        ok: false,
+        error_code: 'READ_FAILED',
+        message: error instanceof Error ? error.message : 'Could not load push subscriptions.',
+        data: null,
+      });
+    }
   });
 
   app.get('/api/notifications', async (req, res) => {
@@ -136,12 +165,21 @@ export function registerNotificationRoutes(app: express.Express, deps: Notificat
     const expirationTime = String(req.body?.expiration_time || '').trim() || null;
     const platform = String(req.body?.platform || '').trim() || null;
     const userAgent = String(req.headers['user-agent'] || '').trim() || null;
+    const deliveryMode = String(req.body?.delivery_mode || '').trim() || 'normal';
 
     if (!endpoint || !p256dh || !auth) {
       return res.status(400).json({
         ok: false,
         error_code: 'INVALID_PUSH_SUBSCRIPTION',
         message: 'Missing push subscription fields.',
+        data: null,
+      });
+    }
+    if (!['normal', 'quiet_ios'].includes(deliveryMode)) {
+      return res.status(400).json({
+        ok: false,
+        error_code: 'INVALID_PUSH_SUBSCRIPTION',
+        message: 'Invalid push subscription delivery mode.',
         data: null,
       });
     }
@@ -155,12 +193,13 @@ export function registerNotificationRoutes(app: express.Express, deps: Notificat
         expirationTime,
         platform,
         userAgent,
+        deliveryMode: deliveryMode as 'normal' | 'quiet_ios',
       });
       return res.json({
         ok: true,
         error_code: null,
         message: 'push subscription saved',
-        data: result,
+        data: toPublicPushSubscription(result),
       });
     } catch (error) {
       return res.status(400).json({
@@ -209,7 +248,7 @@ export function registerNotificationRoutes(app: express.Express, deps: Notificat
         ok: true,
         error_code: null,
         message: 'push subscription disabled',
-        data: result,
+        data: toPublicPushSubscription(result),
       });
     } catch (error) {
       return res.status(400).json({
@@ -220,4 +259,17 @@ export function registerNotificationRoutes(app: express.Express, deps: Notificat
       });
     }
   });
+}
+
+function toPublicPushSubscription(
+  value: Record<string, any> | null | undefined,
+) {
+  if (!value) return null;
+  return {
+    id: value.id || null,
+    user_id: value.user_id || null,
+    endpoint: value.endpoint || null,
+    is_active: Boolean(value.is_active),
+    delivery_mode: value.delivery_mode === 'quiet_ios' ? 'quiet_ios' : 'normal',
+  };
 }

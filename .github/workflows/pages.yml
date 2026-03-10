@@ -22,6 +22,11 @@ on:
         required: true
         default: false
         type: boolean
+      pwa_push_quiet_ios_v1:
+        description: "Enable iPhone-only quiet push mode with badge-first delivery during this frontend publish"
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -71,6 +76,7 @@ jobs:
           VITE_FEATURE_PWA_RUNTIME_V1: ${{ inputs.pwa_runtime_v1 }}
           VITE_FEATURE_PWA_INSTALL_CTA_V1: ${{ inputs.pwa_install_cta_v1 }}
           VITE_FEATURE_PWA_PUSH_V1: ${{ inputs.pwa_push_v1 }}
+          VITE_FEATURE_PWA_PUSH_QUIET_IOS_V1: ${{ inputs.pwa_push_quiet_ios_v1 }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
 

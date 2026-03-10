@@ -12,8 +12,11 @@ import { NetworkFirst } from "workbox-strategies";
 
 import {
   buildPushNotificationDisplay,
+  getPushNotificationUnreadCount,
   parsePushNotificationPayload,
+  shouldUseQuietPushBadgeMode,
 } from "./pwa/pushNotificationUtils";
+import { syncAppBadge, supportsAppBadgeApi } from "./pwa/pushUtils";
 import { shouldBypassPwaNavigation } from "./pwa/runtimeUtils";
 
 declare let self: ServiceWorkerGlobalScope & {
@@ -82,8 +85,16 @@ if (PWA_PUSH_ENABLED) {
   self.addEventListener("push", (event) => {
     const payload = parsePushNotificationPayload(event.data?.text());
     if (!payload) return;
-    const display = buildPushNotificationDisplay(BASE_PATH, self.location.origin, payload);
-    event.waitUntil(self.registration.showNotification(display.title, display.options));
+    event.waitUntil((async () => {
+      const badgeSupported = supportsAppBadgeApi(self.navigator);
+      if (shouldUseQuietPushBadgeMode(payload, badgeSupported)) {
+        const badged = await syncAppBadge(self.navigator, getPushNotificationUnreadCount(payload));
+        if (badged) return;
+      }
+
+      const display = buildPushNotificationDisplay(BASE_PATH, self.location.origin, payload);
+      await self.registration.showNotification(display.title, display.options);
+    })());
   });
 
   self.addEventListener("notificationclick", (event) => {

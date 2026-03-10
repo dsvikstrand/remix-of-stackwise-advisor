@@ -12,6 +12,7 @@ type PwaPushCtaProps = {
 
 export function PwaPushCta({ className, compact = false }: PwaPushCtaProps) {
   const { push } = useBleupPwa();
+  const quietModeActive = push.canUseQuietMode && push.deliveryMode === "quiet_ios";
 
   const shouldRender =
     push.isAvailable && (push.isSubscribed || push.permissionState === "denied" || push.canShowEnableCta);
@@ -20,15 +21,21 @@ export function PwaPushCta({ className, compact = false }: PwaPushCtaProps) {
 
   const isBlocked = push.permissionState === "denied" && !push.isSubscribed;
   const title = push.isSubscribed
-    ? "Push notifications are on"
+    ? quietModeActive
+      ? "Quiet notifications are on"
+      : "Push notifications are on"
     : isBlocked
       ? "Push notifications are blocked"
       : "Enable push notifications";
   const description = push.isSubscribed
-    ? "Get replies and generation results even when Bleup is closed."
+    ? quietModeActive
+      ? "Bleup updates the app icon badge without showing visible alerts. You can switch back to alerts anytime."
+      : "Get replies and generation results even when Bleup is closed."
     : isBlocked
       ? "Re-enable notifications in your browser or device settings, then return here to turn them back on."
-      : "Get replies and generation results from the installed Bleup app.";
+      : push.canUseQuietMode
+        ? "Get replies and generation results from the installed Bleup app. On iPhone, Bleup starts in Quiet notifications by default."
+        : "Get replies and generation results from the installed Bleup app.";
 
   return (
     <Card className={cn("border-primary/20 bg-primary/5 shadow-none", compact ? "rounded-xl" : "", className)}>
@@ -54,10 +61,34 @@ export function PwaPushCta({ className, compact = false }: PwaPushCtaProps) {
       </CardHeader>
       <CardContent className={cn("pt-0", compact ? "flex flex-col gap-2" : "flex flex-wrap gap-2")}>
         {push.isSubscribed ? (
-          <Button type="button" variant="outline" size={compact ? "sm" : "default"} onClick={push.disable} disabled={push.isBusy}>
-            <BellOff className="mr-2 h-4 w-4" />
-            Turn off
-          </Button>
+          <div className={cn("flex flex-wrap gap-2", compact ? "w-full" : "")}>
+            {push.canUseQuietMode ? (
+              <>
+                <Button
+                  type="button"
+                  variant={quietModeActive ? "default" : "outline"}
+                  size={compact ? "sm" : "default"}
+                  onClick={() => push.setDeliveryMode("quiet_ios")}
+                  disabled={push.isBusy || quietModeActive}
+                >
+                  Quiet notifications
+                </Button>
+                <Button
+                  type="button"
+                  variant={!quietModeActive ? "default" : "outline"}
+                  size={compact ? "sm" : "default"}
+                  onClick={() => push.setDeliveryMode("normal")}
+                  disabled={push.isBusy || !quietModeActive}
+                >
+                  Alerts
+                </Button>
+              </>
+            ) : null}
+            <Button type="button" variant="outline" size={compact ? "sm" : "default"} onClick={push.disable} disabled={push.isBusy}>
+              <BellOff className="mr-2 h-4 w-4" />
+              Turn off
+            </Button>
+          </div>
         ) : isBlocked ? (
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" size={compact ? "sm" : "default"} disabled>
