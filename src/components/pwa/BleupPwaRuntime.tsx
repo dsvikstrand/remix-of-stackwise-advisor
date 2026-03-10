@@ -65,6 +65,7 @@ type BleupPwaContextValue = {
     canShowEnableCta: boolean;
     dismissEnableCta: () => void;
     enable: () => Promise<void>;
+    enableWithMode: (mode: NotificationPushDeliveryMode) => Promise<void>;
     disable: () => Promise<void>;
     setDeliveryMode: (mode: NotificationPushDeliveryMode) => Promise<void>;
   };
@@ -97,6 +98,7 @@ const BleupPwaContext = createContext<BleupPwaContextValue>({
     canShowEnableCta: false,
     dismissEnableCta: () => undefined,
     enable: async () => undefined,
+    enableWithMode: async () => undefined,
     disable: async () => undefined,
     setDeliveryMode: async () => undefined,
   },
@@ -556,7 +558,7 @@ export function BleupPwaRuntime({ children }: { children: ReactNode }) {
     return saved;
   }
 
-  async function enablePush() {
+  async function enablePush(nextPreferredMode?: NotificationPushDeliveryMode) {
     if (!pushAvailable || !pushVapidPublicKey || !user?.id) return;
 
     setIsPushBusy(true);
@@ -567,7 +569,9 @@ export function BleupPwaRuntime({ children }: { children: ReactNode }) {
       }
       setPushPermissionState(nextPermission);
       if (nextPermission !== "granted") return;
-      const nextDeliveryMode: NotificationPushDeliveryMode = quietModeEligible ? "quiet_ios" : "normal";
+      const requestedMode = nextPreferredMode === "quiet_ios" ? "quiet_ios" : "normal";
+      const nextDeliveryMode: NotificationPushDeliveryMode =
+        requestedMode === "quiet_ios" && quietModeEligible ? "quiet_ios" : "normal";
       await saveCurrentPushSubscription(nextDeliveryMode);
 
       clearDismissedPushAt();
@@ -642,7 +646,8 @@ export function BleupPwaRuntime({ children }: { children: ReactNode }) {
           isBusy: isPushBusy,
           canShowEnableCta: canShowPushEnableCta,
           dismissEnableCta: dismissPushCta,
-          enable: enablePush,
+          enable: () => enablePush(),
+          enableWithMode: (mode) => enablePush(mode),
           disable: disablePush,
           setDeliveryMode: setPushDeliveryMode,
         },

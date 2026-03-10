@@ -1,24 +1,88 @@
-import { BellRing, BellOff, Smartphone, X } from "lucide-react";
+import { BellOff, BellRing, Smartphone, X } from "lucide-react";
 
 import { useBleupPwa } from "@/components/pwa/BleupPwaRuntime";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 type PwaPushCtaProps = {
   className?: string;
   compact?: boolean;
+  surface?: "default" | "bell";
 };
 
-export function PwaPushCta({ className, compact = false }: PwaPushCtaProps) {
+export function PwaPushCta({ className, compact = false, surface = "default" }: PwaPushCtaProps) {
   const { push } = useBleupPwa();
   const quietModeActive = push.deliveryMode === "quiet_ios";
   const showQuietModeControls = push.canUseQuietMode || quietModeActive;
+  const isBellSurface = surface === "bell";
 
   const shouldRender =
     push.isAvailable && (push.isSubscribed || push.permissionState === "denied" || push.canShowEnableCta);
 
   if (!shouldRender) return null;
+
+  if (isBellSurface) {
+    const selectedValue = push.isSubscribed
+      ? quietModeActive
+        ? "badge"
+        : "alarm"
+      : "off";
+
+    async function handleBellModeChange(nextValue: string) {
+      if (nextValue === "off") {
+        await push.disable();
+        return;
+      }
+
+      if (nextValue === "badge") {
+        if (push.isSubscribed) {
+          if (showQuietModeControls) {
+            await push.setDeliveryMode("quiet_ios");
+          }
+          return;
+        }
+        await push.enableWithMode("quiet_ios");
+        return;
+      }
+
+      if (push.isSubscribed) {
+        await push.setDeliveryMode("normal");
+        return;
+      }
+      await push.enableWithMode("normal");
+    }
+
+    return (
+      <div className={cn("flex items-center justify-between gap-3 rounded-md border border-border/50 bg-muted/30 px-3 py-2", className)}>
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-foreground">Notification mode</p>
+          <p className="text-[11px] text-muted-foreground">
+            {showQuietModeControls
+              ? "Choose badge-only, alerts, or turn notifications off."
+              : "Choose alerts or turn notifications off."}
+          </p>
+        </div>
+        <Select value={selectedValue} onValueChange={(value) => void handleBellModeChange(value)} disabled={push.isBusy}>
+          <SelectTrigger className="h-8 w-[112px] shrink-0 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {showQuietModeControls ? <SelectItem value="badge">Badge</SelectItem> : null}
+            <SelectItem value="alarm">Alarm</SelectItem>
+            <SelectItem value="off">Off</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  }
 
   const isBlocked = push.permissionState === "denied" && !push.isSubscribed;
   const title = push.isSubscribed

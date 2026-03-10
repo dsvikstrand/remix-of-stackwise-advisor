@@ -123,7 +123,7 @@ export function NotificationsBell() {
           )}
         </div>
         <div className="px-3 pb-2">
-          <PwaPushCta compact />
+          <PwaPushCta compact surface="bell" />
         </div>
         {isOfflineSnapshot ? (
           <div className="px-3 pb-2 text-[11px] text-muted-foreground">
