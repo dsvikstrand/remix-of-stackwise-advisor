@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { Navigate } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,6 +26,10 @@ export default function Home() {
       'min-h-screen bg-[linear-gradient(180deg,hsl(var(--background))_0%,hsl(35_45%_97%)_16%,hsl(var(--background))_100%)]',
     [],
   );
+
+  if (user) {
+    return <Navigate to="/wall" replace />;
+  }
 
   return (
     <div className={bodyClassName}>
