@@ -25,7 +25,7 @@ export function PwaPushCta({ className, compact = false, surface = "default" }: 
   const isBellSurface = surface === "bell";
 
   const shouldRender = isBellSurface
-    ? push.isAvailable
+    ? push.isAvailable || push.isSubscribed || push.permissionState === "denied" || push.canShowEnableCta
     : push.isAvailable && (push.isSubscribed || push.permissionState === "denied" || push.canShowEnableCta);
 
   if (!shouldRender) return null;
