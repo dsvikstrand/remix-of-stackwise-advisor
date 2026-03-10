@@ -13,6 +13,10 @@ import {
   type PublicYouTubeSubscriptionsPreviewResult,
 } from '@/lib/subscriptionsApi';
 import {
+  extendPublicYouTubePreviewSelection,
+  mergePublicYouTubePreviewResults,
+} from '@/lib/publicYouTubePreviewState';
+import {
   ApiRequestError as ChannelSearchApiRequestError,
   searchYouTubeChannels,
   type YouTubeChannelSearchResult,
@@ -136,6 +140,8 @@ export function useCreatorSetupController() {
   const [publicYouTubePreviewError, setPublicYouTubePreviewError] = useState<string | null>(null);
   const [publicYouTubePreviewErrorCode, setPublicYouTubePreviewErrorCode] = useState<string | null>(null);
   const [publicYouTubeImportSummary, setPublicYouTubeImportSummary] = useState<PublicYouTubeSubscriptionsImportResult | null>(null);
+  const [publicYouTubePreviewLoadingMore, setPublicYouTubePreviewLoadingMore] = useState(false);
+  const [publicYouTubePreviewRequestInput, setPublicYouTubePreviewRequestInput] = useState('');
 
   const invalidateSubscriptionViews = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['source-subscriptions', user?.id] });
@@ -158,32 +164,51 @@ export function useCreatorSetupController() {
   }, [resetSearchDialogState]);
 
   const publicYouTubePreviewMutation = useMutation({
-    mutationFn: async (inputRaw: string) => {
-      const input = inputRaw.trim();
+    mutationFn: async (input: {
+      channelInput: string;
+      pageToken?: string | null;
+      pageSize?: number;
+      append: boolean;
+    }) => {
+      const channelInput = input.channelInput.trim();
       if (!subscriptionsEnabled) throw new Error('Backend API is not configured.');
-      return previewPublicYouTubeSubscriptions({ channelInput: input });
+      return previewPublicYouTubeSubscriptions({
+        channelInput,
+        pageToken: input.pageToken,
+        pageSize: input.pageSize,
+      });
     },
-    onMutate: () => {
-      setPublicYouTubePreview(null);
-      setPublicYouTubePreviewSelected({});
-      setPublicYouTubePreviewFilterQuery('');
+    onMutate: (input) => {
+      if (input.append) {
+        setPublicYouTubePreviewLoadingMore(true);
+      } else {
+        setPublicYouTubePreview(null);
+        setPublicYouTubePreviewSelected({});
+        setPublicYouTubePreviewFilterQuery('');
+        setPublicYouTubePreviewLoadingMore(false);
+        setPublicYouTubePreviewRequestInput(input.channelInput.trim());
+      }
       setPublicYouTubePreviewError(null);
       setPublicYouTubePreviewErrorCode(null);
       setPublicYouTubeImportSummary(null);
     },
-    onSuccess: (payload) => {
-      setPublicYouTubePreview(payload);
+    onSuccess: (payload, input) => {
+      setPublicYouTubePreviewLoadingMore(false);
+      setPublicYouTubePreview((previous) => mergePublicYouTubePreviewResults(previous, payload, input.append));
       setPublicYouTubePreviewError(null);
       setPublicYouTubePreviewErrorCode(null);
-      const nextSelected: Record<string, boolean> = {};
-      for (const creator of payload.creators || []) {
-        nextSelected[creator.channel_id] = false;
-      }
-      setPublicYouTubePreviewSelected(nextSelected);
+      setPublicYouTubePreviewSelected((previous) => (
+        input.append
+          ? extendPublicYouTubePreviewSelection(previous, payload.creators || [])
+          : extendPublicYouTubePreviewSelection({}, payload.creators || [])
+      ));
     },
-    onError: (error) => {
-      setPublicYouTubePreview(null);
-      setPublicYouTubePreviewSelected({});
+    onError: (error, input) => {
+      setPublicYouTubePreviewLoadingMore(false);
+      if (!input.append) {
+        setPublicYouTubePreview(null);
+        setPublicYouTubePreviewSelected({});
+      }
       setPublicYouTubeImportSummary(null);
       setPublicYouTubePreviewErrorCode(getPublicYouTubePreviewErrorCode(error));
       setPublicYouTubePreviewError(getPublicYouTubePreviewErrorMessage(error));
@@ -339,8 +364,35 @@ export function useCreatorSetupController() {
 
   const handlePublicYouTubePreviewSubmit = useCallback((event: FormEvent) => {
     event.preventDefault();
-    publicYouTubePreviewMutation.mutate(publicYouTubeChannelInput);
+    publicYouTubePreviewMutation.mutate({
+      channelInput: publicYouTubeChannelInput,
+      pageToken: null,
+      pageSize: 50,
+      append: false,
+    });
   }, [publicYouTubeChannelInput, publicYouTubePreviewMutation]);
+
+  const handlePublicYouTubePreviewLoadMore = useCallback(() => {
+    if (
+      !publicYouTubePreview?.next_page_token
+      || publicYouTubePreviewLoadingMore
+      || publicYouTubePreviewMutation.isPending
+    ) {
+      return;
+    }
+    publicYouTubePreviewMutation.mutate({
+      channelInput: publicYouTubePreviewRequestInput || publicYouTubeChannelInput,
+      pageToken: publicYouTubePreview.next_page_token,
+      pageSize: 50,
+      append: true,
+    });
+  }, [
+    publicYouTubeChannelInput,
+    publicYouTubePreviewRequestInput,
+    publicYouTubePreview?.next_page_token,
+    publicYouTubePreviewLoadingMore,
+    publicYouTubePreviewMutation,
+  ]);
 
   const togglePublicYouTubePreviewCreator = useCallback((channelId: string, checked: boolean) => {
     setPublicYouTubePreviewSelected((previous) => ({
@@ -432,6 +484,7 @@ export function useCreatorSetupController() {
     publicYouTubePreviewError,
     publicYouTubePreviewErrorCode,
     publicYouTubeImportSummary,
+    publicYouTubePreviewLoadingMore,
     publicYouTubePreviewMutation,
     publicYouTubeImportMutation,
     channelSearchMutation,
@@ -443,6 +496,7 @@ export function useCreatorSetupController() {
     setPublicYouTubePreviewFilterQuery,
     handleAddSubscriptionDialogChange,
     handlePublicYouTubePreviewSubmit,
+    handlePublicYouTubePreviewLoadMore,
     togglePublicYouTubePreviewCreator,
     handlePublicYouTubePreviewSelectAll,
     handlePublicYouTubePreviewClearSelection,

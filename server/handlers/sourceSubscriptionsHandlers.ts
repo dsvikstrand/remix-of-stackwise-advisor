@@ -29,7 +29,8 @@ type StoredSourcePageAssetRow = {
   banner_url: string | null;
 };
 
-const PUBLIC_YOUTUBE_PREVIEW_MAX_ITEMS = 150;
+const PUBLIC_YOUTUBE_PREVIEW_DEFAULT_PAGE_SIZE = 50;
+const PUBLIC_YOUTUBE_PREVIEW_MAX_PAGE_SIZE = 50;
 
 async function loadStoredSourcePageAssets(
   db: any,
@@ -296,6 +297,11 @@ export async function handlePreviewPublicYouTubeSubscriptions(
   }
 
   const channelInput = String((req.body as { channel_input?: string } | null)?.channel_input || '').trim();
+  const pageToken = String((req.body as { page_token?: string } | null)?.page_token || '').trim() || null;
+  const requestedPageSize = Number((req.body as { page_size?: number } | null)?.page_size);
+  const pageSize = Number.isFinite(requestedPageSize)
+    ? Math.max(1, Math.min(Math.floor(requestedPageSize), PUBLIC_YOUTUBE_PREVIEW_MAX_PAGE_SIZE))
+    : PUBLIC_YOUTUBE_PREVIEW_DEFAULT_PAGE_SIZE;
   if (!channelInput) {
     return res.status(400).json({ ok: false, error_code: 'INVALID_INPUT', message: 'channel_input required', data: null });
   }
@@ -328,7 +334,8 @@ export async function handlePreviewPublicYouTubeSubscriptions(
     preview = await deps.fetchPublicYouTubeSubscriptions({
       apiKey: deps.youtubeDataApiKey,
       channelId: resolved.channelId,
-      maxItems: PUBLIC_YOUTUBE_PREVIEW_MAX_ITEMS,
+      pageToken,
+      pageSize,
     });
   } catch (error) {
     const mapped = mapPublicYouTubePreviewError(error);
@@ -369,7 +376,8 @@ export async function handlePreviewPublicYouTubeSubscriptions(
       source_channel_title: resolved.channelTitle,
       source_channel_url: resolved.channelUrl,
       creators_total: preview.items.length,
-      truncated: Boolean(preview.truncated),
+      next_page_token: preview.nextPageToken,
+      has_more: Boolean(preview.hasMore),
       creators: preview.items.map((item: {
         channelId: string;
         channelTitle: string;

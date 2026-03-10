@@ -13,7 +13,8 @@ export type PublicYouTubeSubscriptionPreviewItem = {
 
 export type PublicYouTubeSubscriptionsPreview = {
   items: PublicYouTubeSubscriptionPreviewItem[];
-  truncated: boolean;
+  nextPageToken: string | null;
+  hasMore: boolean;
 };
 
 export class YouTubeChannelLookupError extends Error {
@@ -448,115 +449,114 @@ export async function resolvePublicYouTubeChannel(input: {
 export async function fetchPublicYouTubeSubscriptions(input: {
   apiKey: string;
   channelId: string;
-  maxItems?: number;
+  pageToken?: string | null;
+  pageSize?: number;
 }): Promise<PublicYouTubeSubscriptionsPreview> {
-  const maxItems = Math.max(1, Math.min(input.maxItems ?? 150, 200));
+  const pageSize = Math.max(1, Math.min(input.pageSize ?? 50, 50));
   const creators: PublicYouTubeSubscriptionPreviewItem[] = [];
   const seenChannelIds = new Set<string>();
-  let nextPageToken: string | undefined;
-  let truncated = false;
+  const nextPageTokenInput = String(input.pageToken || '').trim();
+  const url = new URL('https://www.googleapis.com/youtube/v3/subscriptions');
+  url.searchParams.set('part', 'snippet');
+  url.searchParams.set('channelId', input.channelId);
+  url.searchParams.set('maxResults', String(pageSize));
+  url.searchParams.set('key', input.apiKey);
+  if (nextPageTokenInput) {
+    url.searchParams.set('pageToken', nextPageTokenInput);
+  }
 
-  while (creators.length < maxItems) {
-    const remaining = Math.max(1, Math.min(50, maxItems - creators.length));
-    const url = new URL('https://www.googleapis.com/youtube/v3/subscriptions');
-    url.searchParams.set('part', 'snippet');
-    url.searchParams.set('channelId', input.channelId);
-    url.searchParams.set('maxResults', String(remaining));
-    url.searchParams.set('key', input.apiKey);
-    if (nextPageToken) {
-      url.searchParams.set('pageToken', nextPageToken);
-    }
+  const response = await fetch(url.toString(), {
+    headers: {
+      'User-Agent': 'bleuv1-subscriptions/1.0 (+https://api.bleup.app)',
+      Accept: 'application/json',
+    },
+  });
 
-    const response = await fetch(url.toString(), {
-      headers: {
-        'User-Agent': 'bleuv1-subscriptions/1.0 (+https://api.bleup.app)',
-        Accept: 'application/json',
-      },
-    });
-
-    const json = (await response.json().catch(() => null)) as
-      | {
-          items?: Array<{
-            snippet?: {
-              title?: string | null;
-              resourceId?: { channelId?: string | null } | null;
-              thumbnails?: {
-                high?: { url?: string | null } | null;
-                medium?: { url?: string | null } | null;
-                default?: { url?: string | null } | null;
-              } | null;
+  const json = (await response.json().catch(() => null)) as
+    | {
+        items?: Array<{
+          snippet?: {
+            title?: string | null;
+            resourceId?: { channelId?: string | null } | null;
+            thumbnails?: {
+              high?: { url?: string | null } | null;
+              medium?: { url?: string | null } | null;
+              default?: { url?: string | null } | null;
             } | null;
-          }>;
-          nextPageToken?: string | null;
-          error?: {
-            errors?: Array<{ reason?: string | null }>;
-            message?: string | null;
-          };
-        }
-      | null;
-
-    if (!response.ok) {
-      const reason = json?.error?.errors?.[0]?.reason ?? null;
-      if (
-        response.status === 404 &&
-        reason === 'subscriberNotFound'
-      ) {
-        throw new YouTubePublicSubscriptionsError(
-          'PUBLIC_IMPORT_CHANNEL_NOT_FOUND',
-          'Could not find that YouTube channel.',
-        );
+          } | null;
+        }>;
+        nextPageToken?: string | null;
+        error?: {
+          errors?: Array<{ reason?: string | null }>;
+          message?: string | null;
+        };
       }
-      if (
-        response.status === 403 &&
-        (reason === 'subscriptionForbidden' || reason === 'forbidden')
-      ) {
-        throw new YouTubePublicSubscriptionsError(
-          'PUBLIC_SUBSCRIPTIONS_PRIVATE',
-          'The channel subscriptions are private or inaccessible.',
-        );
-      }
+    | null;
 
+  if (!response.ok) {
+    const reason = json?.error?.errors?.[0]?.reason ?? null;
+    if (
+      response.status === 404 &&
+      reason === 'subscriberNotFound'
+    ) {
+      throw new YouTubePublicSubscriptionsError(
+        'PUBLIC_IMPORT_CHANNEL_NOT_FOUND',
+        'Could not find that YouTube channel.',
+      );
+    }
+    if (
+      response.status === 403 &&
+      (reason === 'subscriptionForbidden' || reason === 'forbidden')
+    ) {
+      throw new YouTubePublicSubscriptionsError(
+        'PUBLIC_SUBSCRIPTIONS_PRIVATE',
+        'The channel subscriptions are private or inaccessible.',
+      );
+    }
+    if (
+      response.status === 429
+      || reason === 'quotaExceeded'
+      || reason === 'dailyLimitExceeded'
+      || reason === 'userRateLimitExceeded'
+      || reason === 'rateLimitExceeded'
+    ) {
       throw new YouTubePublicSubscriptionsError(
         'PUBLIC_IMPORT_UNAVAILABLE',
-        json?.error?.message ?? 'Failed to fetch public YouTube subscriptions.',
+        'YouTube import is temporarily limited. Please try again shortly.',
       );
     }
 
-    const items = Array.isArray(json?.items) ? json.items : [];
-    for (const item of items) {
-      const channelId = item.snippet?.resourceId?.channelId?.trim();
-      const channelTitle = item.snippet?.title?.trim();
-      if (!channelId || !channelTitle || seenChannelIds.has(channelId)) {
-        continue;
-      }
+    throw new YouTubePublicSubscriptionsError(
+      'PUBLIC_IMPORT_UNAVAILABLE',
+      json?.error?.message ?? 'Failed to fetch public YouTube subscriptions.',
+    );
+  }
 
-      seenChannelIds.add(channelId);
-      creators.push({
-        channelId,
-        channelTitle,
-        channelUrl: getCanonicalChannelUrl(channelId),
-        thumbnailUrl:
-          item.snippet?.thumbnails?.high?.url ??
-          item.snippet?.thumbnails?.medium?.url ??
-          item.snippet?.thumbnails?.default?.url ??
-          null,
-      });
-
-      if (creators.length >= maxItems) {
-        truncated = Boolean(json?.nextPageToken);
-        break;
-      }
+  const items = Array.isArray(json?.items) ? json.items : [];
+  for (const item of items) {
+    const channelId = item.snippet?.resourceId?.channelId?.trim();
+    const channelTitle = item.snippet?.title?.trim();
+    if (!channelId || !channelTitle || seenChannelIds.has(channelId)) {
+      continue;
     }
 
-    nextPageToken = json?.nextPageToken ?? undefined;
-    if (truncated || !nextPageToken || items.length === 0) {
-      break;
-    }
+    seenChannelIds.add(channelId);
+    creators.push({
+      channelId,
+      channelTitle,
+      channelUrl: getCanonicalChannelUrl(channelId),
+      thumbnailUrl:
+        item.snippet?.thumbnails?.high?.url ??
+        item.snippet?.thumbnails?.medium?.url ??
+        item.snippet?.thumbnails?.default?.url ??
+        null,
+    });
   }
 
   return {
     items: creators,
-    truncated,
+    nextPageToken: json?.nextPageToken ?? null,
+    hasMore: Boolean(json?.nextPageToken),
   };
 }
 

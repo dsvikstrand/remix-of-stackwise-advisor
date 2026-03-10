@@ -973,7 +973,7 @@ const youtubePreviewLimiter = rateLimit({
 });
 
 const publicYouTubePreviewLimiter = rateLimit({
-  windowMs: 30_000,
+  windowMs: 5_000,
   max: 1,
   standardHeaders: true,
   legacyHeaders: false,

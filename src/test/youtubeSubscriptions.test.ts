@@ -77,36 +77,45 @@ describe('youtube public subscription helpers', () => {
     });
   });
 
-  it('returns truncated previews when maxItems is reached with more pages available', async () => {
-    const fetchMock = vi.fn(async () => jsonResponse({
-      items: [
-        {
-          snippet: {
-            title: 'Creator One',
-            resourceId: { channelId: 'UCaaaaaaaaaaaaaaaaaaaaaa' },
-            thumbnails: { high: { url: 'https://img.example.com/one.jpg' } },
+  it('returns one preview page and preserves nextPageToken for load more', async () => {
+    const fetchMock = vi.fn(async (input: unknown) => {
+      const url = new URL(String(input));
+      expect(url.pathname).toBe('/youtube/v3/subscriptions');
+      expect(url.searchParams.get('channelId')).toBe('UCsourcechannel1234567890');
+      expect(url.searchParams.get('maxResults')).toBe('2');
+      expect(url.searchParams.get('pageToken')).toBe('cursor-1');
+      return jsonResponse({
+        items: [
+          {
+            snippet: {
+              title: 'Creator One',
+              resourceId: { channelId: 'UCaaaaaaaaaaaaaaaaaaaaaa' },
+              thumbnails: { high: { url: 'https://img.example.com/one.jpg' } },
+            },
           },
-        },
-        {
-          snippet: {
-            title: 'Creator Two',
-            resourceId: { channelId: 'UCbbbbbbbbbbbbbbbbbbbbbb' },
-            thumbnails: { default: { url: 'https://img.example.com/two.jpg' } },
+          {
+            snippet: {
+              title: 'Creator Two',
+              resourceId: { channelId: 'UCbbbbbbbbbbbbbbbbbbbbbb' },
+              thumbnails: { default: { url: 'https://img.example.com/two.jpg' } },
+            },
           },
-        },
-      ],
-      nextPageToken: 'next-page',
-    }));
+        ],
+        nextPageToken: 'next-page',
+      });
+    });
     vi.stubGlobal('fetch', fetchMock);
 
     const preview = await fetchPublicYouTubeSubscriptions({
       apiKey: 'yt-key',
       channelId: 'UCsourcechannel1234567890',
-      maxItems: 2,
+      pageToken: 'cursor-1',
+      pageSize: 2,
     });
 
     expect(preview).toMatchObject({
-      truncated: true,
+      hasMore: true,
+      nextPageToken: 'next-page',
       items: [
         {
           channelId: 'UCaaaaaaaaaaaaaaaaaaaaaa',
@@ -125,6 +134,49 @@ describe('youtube public subscription helpers', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('dedupes repeated channel ids within a single preview page', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({
+      items: [
+        {
+          snippet: {
+            title: 'Creator One',
+            resourceId: { channelId: 'UCaaaaaaaaaaaaaaaaaaaaaa' },
+            thumbnails: { high: { url: 'https://img.example.com/one.jpg' } },
+          },
+        },
+        {
+          snippet: {
+            title: 'Creator One Duplicate',
+            resourceId: { channelId: 'UCaaaaaaaaaaaaaaaaaaaaaa' },
+            thumbnails: { default: { url: 'https://img.example.com/dup.jpg' } },
+          },
+        },
+      ],
+      nextPageToken: 'next-page',
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const preview = await fetchPublicYouTubeSubscriptions({
+      apiKey: 'yt-key',
+      channelId: 'UCsourcechannel1234567890',
+      pageSize: 50,
+    });
+
+    expect(preview).toMatchObject({
+      hasMore: true,
+      nextPageToken: 'next-page',
+      items: [
+        {
+          channelId: 'UCaaaaaaaaaaaaaaaaaaaaaa',
+          channelTitle: 'Creator One',
+          channelUrl: 'https://www.youtube.com/channel/UCaaaaaaaaaaaaaaaaaaaaaa',
+          thumbnailUrl: 'https://img.example.com/one.jpg',
+        },
+      ],
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('maps subscriptionForbidden to a private subscriptions error', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({
       error: {
@@ -137,7 +189,7 @@ describe('youtube public subscription helpers', () => {
     await expect(fetchPublicYouTubeSubscriptions({
       apiKey: 'yt-key',
       channelId: 'UCsourcechannel1234567890',
-      maxItems: 5,
+      pageSize: 5,
     })).rejects.toMatchObject({
       code: 'PUBLIC_SUBSCRIPTIONS_PRIVATE',
     });

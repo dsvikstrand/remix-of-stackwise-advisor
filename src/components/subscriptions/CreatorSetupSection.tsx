@@ -147,11 +147,6 @@ export function CreatorSetupSection({
                   <p className="text-sm font-medium text-foreground">
                     We found {controller.publicYouTubePreview.creators_total} subscription{controller.publicYouTubePreview.creators_total === 1 ? '' : 's'} to review.
                   </p>
-                  {controller.publicYouTubePreview.truncated ? (
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Showing the first {controller.publicYouTubePreview.creators_total} subscriptions (preview cap reached).
-                    </p>
-                  ) : null}
                   {controller.publicYouTubeImportSummary ? (
                     <p className="mt-2 text-xs text-muted-foreground">
                       Imported {controller.publicYouTubeImportSummary.imported_count}, reactivated {controller.publicYouTubeImportSummary.reactivated_count}, already active {controller.publicYouTubeImportSummary.already_active_count}, failed {controller.publicYouTubeImportSummary.failed_count}.
@@ -242,13 +237,25 @@ export function CreatorSetupSection({
                       <p className="text-xs text-muted-foreground">
                         {controller.selectedPublicYouTubeCreators.length} selected
                       </p>
-                      <Button
-                        size="sm"
-                        onClick={controller.handleImportSelectedPublicYouTubeCreators}
-                        disabled={controller.selectedPublicYouTubeCreators.length === 0 || controller.publicYouTubeImportMutation.isPending}
-                      >
-                        {controller.publicYouTubeImportMutation.isPending ? 'Importing...' : 'Import selected'}
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        {controller.publicYouTubePreview.has_more ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={controller.handlePublicYouTubePreviewLoadMore}
+                            disabled={controller.publicYouTubePreviewLoadingMore || controller.publicYouTubeImportMutation.isPending}
+                          >
+                            {controller.publicYouTubePreviewLoadingMore ? 'Loading...' : 'Load more'}
+                          </Button>
+                        ) : null}
+                        <Button
+                          size="sm"
+                          onClick={controller.handleImportSelectedPublicYouTubeCreators}
+                          disabled={controller.selectedPublicYouTubeCreators.length === 0 || controller.publicYouTubeImportMutation.isPending}
+                        >
+                          {controller.publicYouTubeImportMutation.isPending ? 'Importing...' : 'Import selected'}
+                        </Button>
+                      </div>
                     </div>
                   </>
                 )}

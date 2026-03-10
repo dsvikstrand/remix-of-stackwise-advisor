@@ -38,7 +38,8 @@ export type PublicYouTubeSubscriptionsPreviewResult = {
   source_channel_title: string | null;
   source_channel_url: string;
   creators_total: number;
-  truncated: boolean;
+  next_page_token: string | null;
+  has_more: boolean;
   creators: PublicYouTubeSubscriptionPreviewItem[];
 };
 
@@ -197,7 +198,11 @@ export async function createSourceSubscription(input: { channelInput: string; mo
   return response.data;
 }
 
-export async function previewPublicYouTubeSubscriptions(input: { channelInput: string }) {
+export async function previewPublicYouTubeSubscriptions(input: {
+  channelInput: string;
+  pageToken?: string | null;
+  pageSize?: number;
+}) {
   const channelInput = String(input.channelInput || '').trim();
   if (!channelInput) {
     throw new ApiRequestError(400, 'Enter your YouTube handle.', 'INVALID_INPUT');
@@ -207,6 +212,8 @@ export async function previewPublicYouTubeSubscriptions(input: { channelInput: s
     method: 'POST',
     body: JSON.stringify({
       channel_input: channelInput,
+      page_token: input.pageToken || undefined,
+      page_size: input.pageSize,
     }),
   });
   return response.data;

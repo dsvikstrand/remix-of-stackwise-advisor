@@ -36,7 +36,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     resolveYouTubeChannel: vi.fn(),
     resolvePublicYouTubeChannel: vi.fn(),
     youtubeDataApiKey: '',
-    fetchPublicYouTubeSubscriptions: vi.fn(async () => ({ items: [], truncated: false })),
+    fetchPublicYouTubeSubscriptions: vi.fn(async () => ({ items: [], nextPageToken: null, hasMore: false })),
     fetchYouTubeChannelAssetMap: vi.fn(async () => new Map()),
     runSourcePageAssetSweep: vi.fn(async () => null),
     ensureSourcePageFromYouTubeChannel: vi.fn(),
@@ -102,7 +102,7 @@ describe('source subscription refresh generate handler', () => {
       ],
     });
     const req = {
-      body: { channel_input: '@example' },
+      body: { channel_input: '@example', page_token: 'cursor-1', page_size: 25 },
     } as any;
     const res = createResponse();
     const deps = createDeps({
@@ -113,7 +113,14 @@ describe('source subscription refresh generate handler', () => {
         channelTitle: 'Source Channel',
         channelUrl: 'https://www.youtube.com/channel/source_channel',
       })),
-      fetchPublicYouTubeSubscriptions: vi.fn(async () => ({
+      fetchPublicYouTubeSubscriptions: vi.fn(async (input) => {
+        expect(input).toMatchObject({
+          apiKey: 'yt-key',
+          channelId: 'source_channel',
+          pageToken: 'cursor-1',
+          pageSize: 25,
+        });
+        return {
         items: [
           {
             channelId: 'creator_active',
@@ -134,8 +141,10 @@ describe('source subscription refresh generate handler', () => {
             thumbnailUrl: null,
           },
         ],
-        truncated: true,
-      })),
+        nextPageToken: 'next-page',
+        hasMore: true,
+      };
+      }),
     });
 
     await handlePreviewPublicYouTubeSubscriptions(req, res as any, deps);
@@ -148,7 +157,8 @@ describe('source subscription refresh generate handler', () => {
         source_channel_title: 'Source Channel',
         source_channel_url: 'https://www.youtube.com/channel/source_channel',
         creators_total: 3,
-        truncated: true,
+        next_page_token: 'next-page',
+        has_more: true,
         creators: [
           {
             channel_id: 'creator_active',

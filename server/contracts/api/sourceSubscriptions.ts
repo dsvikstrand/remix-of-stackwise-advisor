@@ -32,6 +32,8 @@ export type RefreshSubscriptionsGenerateInput = {
 
 export type PublicYouTubeSubscriptionsPreviewInput = {
   channel_input: string;
+  page_token?: string;
+  page_size?: number;
 };
 
 export type PublicYouTubeSubscriptionPreviewItem = {
@@ -48,7 +50,8 @@ export type PublicYouTubeSubscriptionsPreviewResult = {
   source_channel_title: string | null;
   source_channel_url: string;
   creators_total: number;
-  truncated: boolean;
+  next_page_token: string | null;
+  has_more: boolean;
   creators: PublicYouTubeSubscriptionPreviewItem[];
 };
 
