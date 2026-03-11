@@ -23,6 +23,9 @@ const FILTER_OPTIONS: { value: ExploreFilter; label: string }[] = [
   { value: 'users', label: 'Users' },
 ];
 
+const EXPLORE_TAG_BADGE_CLASS =
+  'cursor-pointer border border-border/60 bg-muted/40 px-3 py-1 text-muted-foreground transition-colors hover:bg-muted/60';
+
 export default function Explore() {
   const [searchInput, setSearchInput] = useState('');
   const [filter, setFilter] = useState<ExploreFilter>('all');
@@ -179,7 +182,7 @@ export default function Explore() {
                       <Badge
                         key={tag.id}
                         variant="secondary"
-                        className="cursor-pointer transition-colors px-3 py-1 border bg-primary/15 text-primary border-primary/30 hover:bg-primary/20"
+                        className={EXPLORE_TAG_BADGE_CLASS}
                         onClick={() => handleTagClick(`#${tag.slug}`)}
                       >
                         #{tag.slug}
@@ -219,11 +222,7 @@ export default function Explore() {
                     <Badge
                       key={tag.id}
                       variant="secondary"
-                      className={`cursor-pointer transition-colors px-3 py-1 border ${
-                        followedSlugs.has(tag.slug)
-                          ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/20'
-                          : 'bg-muted/40 text-muted-foreground border-border/60 hover:bg-muted/60'
-                      }`}
+                      className={EXPLORE_TAG_BADGE_CLASS}
                       onClick={() => handleTagClick(`#${tag.slug}`)}
                     >
                       #{tag.slug}

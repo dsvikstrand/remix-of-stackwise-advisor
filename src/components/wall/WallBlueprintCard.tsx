@@ -136,7 +136,7 @@ export function WallBlueprintCard({
           <p className="text-sm text-muted-foreground line-clamp-3">{safeSummary}</p>
 
           {(compactViewCount || tags.length > 0) && (
-            <div className="flex flex-wrap items-center gap-1.5 overflow-hidden">
+            <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
               {compactViewCount ? (
                 <span className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full border bg-muted/40 px-2 text-xs text-muted-foreground border-border/60">
                   <span>{compactViewCount}</span>
@@ -145,7 +145,7 @@ export function WallBlueprintCard({
               ) : null}
               {tags.length > 0 ? (
                 <OneRowTagChips
-                  className="min-w-0 flex-1 basis-full sm:basis-auto flex flex-nowrap gap-1.5 overflow-hidden"
+                  className="min-w-0 flex-1 flex flex-nowrap gap-1.5 overflow-hidden"
                   items={tags.map((tag) => ({
                     key: tag.key,
                     label: tag.label,

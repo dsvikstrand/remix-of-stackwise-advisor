@@ -504,14 +504,22 @@ export function MyFeedTimeline({
         const hasBlueprintBanner = !isSubscriptionNotice && !!effectiveBlueprintBannerUrl;
         const title = isSubscriptionNotice
           ? (source?.title || 'You are now subscribed')
-          : (blueprint?.title || source?.title || 'Pending source import');
+          : (blueprint?.title || source?.title || 'Imported source');
         const subtitle = isSubscriptionNotice
           ? 'New uploads from this channel will appear automatically.'
-          : (source?.sourceChannelTitle || source?.title || 'Imported source');
+          : (source?.sourceChannelTitle || (blueprint ? source?.title : null) || 'Source');
         const tags = blueprint?.tags || [];
         const canAccept = item.state === 'my_feed_pending_accept' || item.state === 'my_feed_skipped';
         const isUnlockable = item.state === 'my_feed_unlockable' && !blueprint;
         const isUnlocking = Boolean(item.source?.unlockInProgress) || Boolean(optimisticUnlockingItemIds[item.id]);
+        const pendingSourceStatusLabel =
+          item.state === 'my_feed_generating'
+            ? 'Generating blueprint'
+            : item.state === 'my_feed_pending_accept'
+              ? 'Ready to review'
+              : item.state === 'my_feed_skipped'
+                ? 'Saved for later'
+                : 'Imported to My Feed';
         const preview = buildFeedSummary({
           sectionsJson: blueprint?.sectionsJson || null,
           primary: blueprint?.llmReview || null,
@@ -616,14 +624,15 @@ export function MyFeedTimeline({
                 <>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 space-y-1">
+                      <p className="text-[11px] font-semibold tracking-wide text-foreground/75 line-clamp-1">{subtitle}</p>
                       <p className="font-medium leading-tight">{title}</p>
-                      <p className="text-xs text-muted-foreground line-clamp-2">{subtitle}</p>
+                      <p className="text-xs text-muted-foreground">{pendingSourceStatusLabel}</p>
                     </div>
-                    <Badge variant="secondary">{getMyFeedStateLabel(item.state as MyFeedItemState)}</Badge>
+                    <div className="flex flex-col items-end gap-2">
+                      <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
+                      <Badge variant="secondary">Source</Badge>
+                    </div>
                   </div>
-                  {!isSubscriptionNotice && item.lastDecisionCode && (
-                    <p className="text-xs text-muted-foreground">Reason: {item.lastDecisionCode}</p>
-                  )}
                   {canMutate ? (
                     <div className="flex flex-wrap gap-2">
                       {canAccept ? (
@@ -673,10 +682,6 @@ export function MyFeedTimeline({
                 </>
               )}
 
-              {!autoChannelPipelineEnabled && !isSubscriptionNotice && blueprint && item.lastDecisionCode && item.state !== 'channel_published' && (
-                <p className="text-xs text-muted-foreground">Reason: {item.lastDecisionCode}</p>
-              )}
-
               {!isSubscriptionNotice && !isUnlockable && (
                 <div className="flex justify-between items-center text-xs text-muted-foreground">
                   <span>
@@ -702,11 +707,11 @@ export function MyFeedTimeline({
                     )}
                   </span>
                   {item.state === 'channel_published' ? (
-                    <Badge variant="secondary">Blueprint</Badge>
+                    <Badge variant="secondary">Published</Badge>
                   ) : item.state === 'my_feed_published' || (autoChannelPipelineEnabled && item.state === 'channel_rejected') ? (
                     <Badge variant="secondary">Blueprint</Badge>
                   ) : (
-                    <span>{getMyFeedStateLabel(item.state as MyFeedItemState)}</span>
+                    <Badge variant="secondary">Blueprint</Badge>
                   )}
                 </div>
               )}

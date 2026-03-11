@@ -262,14 +262,14 @@ export default function Wall() {
                 }}
                 variant="outline"
                 size="sm"
-                className="w-full min-w-0 justify-start rounded-full border border-input bg-background p-1 sm:w-auto"
+                className="inline-flex max-w-full min-w-0 shrink-0 justify-start self-start rounded-full border border-input bg-background p-1"
                 aria-label="Feed lane"
               >
                 {scopeLaneButtons.map((lane) => (
                   <ToggleGroupItem
                     key={lane.value}
                     value={lane.value}
-                    className="rounded-full px-3 text-xs sm:px-4"
+                    className="rounded-full px-2.5 text-xs sm:px-4"
                     aria-label={lane.label}
                   >
                     {lane.label}

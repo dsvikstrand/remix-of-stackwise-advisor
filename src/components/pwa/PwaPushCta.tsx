@@ -88,7 +88,7 @@ export function PwaPushCta({ className, compact = false, surface = "default" }: 
   const isBlocked = push.permissionState === "denied" && !push.isSubscribed;
   const title = push.isSubscribed
       ? quietModeActive
-        ? "Quiet notifications are on"
+        ? "Badge mode is on"
         : "Push notifications are on"
     : isBlocked
       ? "Push notifications are blocked"
@@ -100,7 +100,7 @@ export function PwaPushCta({ className, compact = false, surface = "default" }: 
     : isBlocked
       ? "Re-enable notifications in your browser or device settings, then return here to turn them back on."
       : push.canUseQuietMode
-        ? "Get replies and generation results from the installed Bleup app. On iPhone, Bleup starts in Quiet notifications by default."
+        ? "Get replies and generation results from the installed Bleup app. On iPhone, Bleup starts in Badge mode by default."
         : "Get replies and generation results from the installed Bleup app.";
 
   return (
@@ -137,7 +137,7 @@ export function PwaPushCta({ className, compact = false, surface = "default" }: 
                   onClick={() => push.setDeliveryMode("quiet_ios")}
                   disabled={push.isBusy || quietModeActive || !push.canUseQuietMode}
                 >
-                  Quiet notifications
+                  Badge
                 </Button>
                 <Button
                   type="button"
