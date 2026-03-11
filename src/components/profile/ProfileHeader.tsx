@@ -4,23 +4,19 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { FollowButton } from './FollowButton';
 import { useAuth } from '@/contexts/AuthContext';
-import { Settings, Calendar, Rss, RefreshCcw } from 'lucide-react';
+import { Settings, Calendar, Rss } from 'lucide-react';
 import type { PublicProfile } from '@/hooks/useUserProfile';
 
 interface ProfileHeaderProps {
   profile: PublicProfile;
   onFollowersClick?: () => void;
   onFollowingClick?: () => void;
-  onRefreshClick?: () => void;
-  refreshPending?: boolean;
 }
 
 export function ProfileHeader({
   profile,
   onFollowersClick,
   onFollowingClick,
-  onRefreshClick,
-  refreshPending = false,
 }: ProfileHeaderProps) {
   const { user } = useAuth();
   const isOwnProfile = user?.id === profile.user_id;
@@ -62,16 +58,6 @@ export function ProfileHeader({
                     <Rss className="h-4 w-4 mr-1" />
                     Subscriptions
                   </Link>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onRefreshClick}
-                  disabled={refreshPending || !onRefreshClick}
-                  aria-label={refreshPending ? 'Refreshing subscriptions' : 'Refresh subscriptions'}
-                  title={refreshPending ? 'Refreshing...' : 'Refresh'}
-                >
-                    <RefreshCcw className="h-4 w-4" />
                 </Button>
               </>
             ) : (

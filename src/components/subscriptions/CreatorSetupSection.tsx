@@ -1,8 +1,6 @@
-import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -43,22 +41,6 @@ export function CreatorSetupSection({
   controller,
   showBackendDisabledHint = false,
 }: CreatorSetupSectionProps) {
-  const [isPublicYouTubeImportOpen, setIsPublicYouTubeImportOpen] = useState(false);
-
-  useEffect(() => {
-    if (
-      controller.publicYouTubePreview
-      || controller.publicYouTubePreviewError
-      || controller.publicYouTubePreviewMutation.isPending
-    ) {
-      setIsPublicYouTubeImportOpen(true);
-    }
-  }, [
-    controller.publicYouTubePreview,
-    controller.publicYouTubePreviewError,
-    controller.publicYouTubePreviewMutation.isPending,
-  ]);
-
   return (
     <div className="space-y-4">
       {showBackendDisabledHint && !controller.subscriptionsEnabled ? (
@@ -70,10 +52,7 @@ export function CreatorSetupSection({
       <div className="rounded-2xl border border-primary/15 bg-primary/5 p-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-base font-semibold text-foreground">Add creators manually</p>
-              <Badge variant="secondary" className="h-5 px-2 text-[10px]">Main path</Badge>
-            </div>
+            <p className="text-base font-semibold text-foreground">Add creators manually</p>
             <p className="text-sm text-muted-foreground">
               Search YouTube creators and subscribe one by one.
             </p>
@@ -87,29 +66,16 @@ export function CreatorSetupSection({
         </div>
       </div>
 
-      <Collapsible open={isPublicYouTubeImportOpen} onOpenChange={setIsPublicYouTubeImportOpen}>
-        <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="space-y-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-sm font-medium text-foreground">Import From YouTube</p>
-                <Badge variant="outline" className="h-5 px-2 text-[10px]">Optional</Badge>
-              </div>
-              {!isPublicYouTubeImportOpen ? (
-                <p className="text-xs text-muted-foreground">
-                  Import your YouTube subscriptions by handle.
-                </p>
-              ) : null}
-            </div>
-            <CollapsibleTrigger asChild>
-              <Button size="sm" variant="ghost">
-                {isPublicYouTubeImportOpen ? 'Hide' : 'Import From YouTube'}
-              </Button>
-            </CollapsibleTrigger>
-          </div>
+      <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 p-4">
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-foreground">Import From YouTube</p>
+          <p className="text-xs text-muted-foreground">
+            Import your YouTube subscriptions by handle.
+          </p>
+        </div>
 
-          <CollapsibleContent className="mt-4 space-y-4">
-            <form onSubmit={controller.handlePublicYouTubePreviewSubmit} className="flex flex-col gap-3 md:flex-row md:items-end">
+        <div className="mt-4 space-y-4">
+          <form onSubmit={controller.handlePublicYouTubePreviewSubmit} className="flex flex-col gap-3 md:flex-row md:items-end">
               <div className="space-y-2 md:flex-1">
                 <p className="text-sm font-medium text-foreground">Fill in your handle</p>
                 <Input
@@ -121,28 +87,28 @@ export function CreatorSetupSection({
               <Button type="submit" size="sm" disabled={!controller.subscriptionsEnabled || controller.publicYouTubePreviewMutation.isPending}>
                 {controller.publicYouTubePreviewMutation.isPending ? 'Finding...' : 'Find subscriptions'}
               </Button>
-            </form>
+          </form>
 
-            {controller.publicYouTubePreviewError && controller.publicYouTubePreviewErrorCode !== 'PUBLIC_SUBSCRIPTIONS_PRIVATE' ? (
-              <p className="text-sm text-destructive">{controller.publicYouTubePreviewError}</p>
-            ) : null}
+          {controller.publicYouTubePreviewError && controller.publicYouTubePreviewErrorCode !== 'PUBLIC_SUBSCRIPTIONS_PRIVATE' ? (
+            <p className="text-sm text-destructive">{controller.publicYouTubePreviewError}</p>
+          ) : null}
 
-            {controller.publicYouTubePreviewMutation.isPending ? (
-              <div className="space-y-2">
-                <Skeleton className="h-16 rounded-md" />
-                <Skeleton className="h-16 rounded-md" />
-              </div>
-            ) : null}
+          {controller.publicYouTubePreviewMutation.isPending ? (
+            <div className="space-y-2">
+              <Skeleton className="h-16 rounded-md" />
+              <Skeleton className="h-16 rounded-md" />
+            </div>
+          ) : null}
 
-            {controller.publicYouTubePreviewErrorCode === 'PUBLIC_SUBSCRIPTIONS_PRIVATE' ? (
-              <div className="space-y-3">
-                <p className="text-sm font-medium text-foreground">{controller.publicYouTubePreviewError}</p>
-                <PublicYouTubePrivacyGuide intro="To import from this account, we first need you to make your subscriptions public." />
-              </div>
-            ) : null}
+          {controller.publicYouTubePreviewErrorCode === 'PUBLIC_SUBSCRIPTIONS_PRIVATE' ? (
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-foreground">{controller.publicYouTubePreviewError}</p>
+              <PublicYouTubePrivacyGuide intro="To import from this account, we first need you to make your subscriptions public." />
+            </div>
+          ) : null}
 
-            {controller.publicYouTubePreview ? (
-              <div className="space-y-3">
+          {controller.publicYouTubePreview ? (
+            <div className="space-y-3">
                 <div className="rounded-xl border border-border/50 bg-background/80 p-3">
                   <p className="text-sm font-medium text-foreground">
                     We found {controller.publicYouTubePreview.creators_total} subscription{controller.publicYouTubePreview.creators_total === 1 ? '' : 's'} to review.
@@ -259,11 +225,10 @@ export function CreatorSetupSection({
                     </div>
                   </>
                 )}
-              </div>
-            ) : null}
-          </CollapsibleContent>
+            </div>
+          ) : null}
         </div>
-      </Collapsible>
+      </div>
 
       <Dialog open={controller.isAddSubscriptionOpen} onOpenChange={controller.handleAddSubscriptionDialogChange}>
         <DialogContent className="sm:max-w-2xl">

@@ -13,8 +13,6 @@ import { useNotifications, type NotificationItem } from '@/hooks/useNotification
 import {
   getGenerationQueueScopeLabel,
   getRetryPathForScope,
-  matchesGenerationQueueFilter,
-  type GenerationQueueFilter,
 } from '@/lib/generationQueueLabels';
 
 type RecentResultRow = {
@@ -29,13 +27,6 @@ type RecentResultRow = {
   skippedCount: number;
   failedCount: number;
 };
-
-const FILTERS: Array<{ key: GenerationQueueFilter; label: string }> = [
-  { key: 'all', label: 'All' },
-  { key: 'source_unlock', label: 'Source unlock' },
-  { key: 'search_generate', label: 'Search generate' },
-  { key: 'refresh_generate', label: 'Refresh generate' },
-];
 
 function toInt(value: unknown) {
   const parsed = Number(value);
@@ -80,7 +71,6 @@ function formatRelativeTime(iso: string) {
 
 export default function GenerationQueue() {
   const navigate = useNavigate();
-  const [activeFilter, setActiveFilter] = useState<GenerationQueueFilter>('all');
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   const {
     items: activeItems,
@@ -99,18 +89,14 @@ export default function GenerationQueue() {
     lastSyncedAt: notificationsLastSyncedAt,
   } = useNotifications({ limit: 50 });
 
-  const filteredActiveItems = useMemo(
-    () => activeItems.filter((item) => matchesGenerationQueueFilter(activeFilter, item.scope)),
-    [activeFilter, activeItems],
-  );
+  const filteredActiveItems = activeItems;
 
   const recentResults = useMemo(() => {
     return notifications
       .map(parseRecentResult)
       .filter((item): item is RecentResultRow => Boolean(item))
-      .filter((item) => matchesGenerationQueueFilter(activeFilter, item.scope))
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-  }, [activeFilter, notifications]);
+  }, [notifications]);
 
   return (
     <PageRoot>
@@ -121,20 +107,6 @@ export default function GenerationQueue() {
           <p className="text-sm text-muted-foreground">
             Track active blueprint generations and recent generation outcomes in one place.
           </p>
-        </PageSection>
-
-        <PageSection className="flex flex-wrap gap-2">
-          {FILTERS.map((filter) => (
-            <Button
-              key={filter.key}
-              type="button"
-              variant={activeFilter === filter.key ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setActiveFilter(filter.key)}
-            >
-              {filter.label}
-            </Button>
-          ))}
         </PageSection>
 
         <PwaPushCta />
@@ -151,7 +123,7 @@ export default function GenerationQueue() {
             {isActiveLoading && filteredActiveItems.length === 0 ? (
               <p className="text-sm text-muted-foreground">Loading active queue...</p>
             ) : filteredActiveItems.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No active jobs for this filter right now.</p>
+              <p className="text-sm text-muted-foreground">No active jobs right now.</p>
             ) : (
               filteredActiveItems.map((job) => {
                 const isExpanded = expandedJobId === job.job_id;
@@ -201,7 +173,7 @@ export default function GenerationQueue() {
             {isNotificationsLoading && recentResults.length === 0 ? (
               <p className="text-sm text-muted-foreground">Loading recent results...</p>
             ) : recentResults.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No recent generation results for this filter.</p>
+              <p className="text-sm text-muted-foreground">No recent generation results yet.</p>
             ) : (
               recentResults.map((item) => {
                 const isSucceeded = item.type === 'generation_succeeded';

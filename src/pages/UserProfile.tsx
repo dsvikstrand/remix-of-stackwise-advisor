@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useParams, Navigate, Link } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,20 +8,12 @@ import { ProfileHeader } from '@/components/profile/ProfileHeader';
 import { ProfileTabs } from '@/components/profile/ProfileTabs';
 import { FollowersList } from '@/components/profile/FollowersList';
 import { useUserProfile } from '@/hooks/useUserProfile';
-import { useToast } from '@/hooks/use-toast';
-import {
-  ApiRequestError,
-  generateSubscriptionRefreshBlueprints,
-  scanSubscriptionRefreshCandidates,
-} from '@/lib/subscriptionsApi';
 import { useAuth } from '@/contexts/AuthContext';
-import { config } from '@/config/runtime';
 import { Lock } from 'lucide-react';
 
 export default function UserProfile() {
   const { userId } = useParams();
   const { user } = useAuth();
-  const { toast } = useToast();
   const { data: profile, isLoading, error } = useUserProfile(userId);
   const [followersOpen, setFollowersOpen] = useState(false);
   const [followingOpen, setFollowingOpen] = useState(false);
@@ -36,58 +27,6 @@ export default function UserProfile() {
   const canViewProfile = profile?.is_public || isOwnProfile;
   const planLabel = 'Standard';
   const planBadgeVariant = 'outline' as const;
-  const subscriptionsEnabled = Boolean(config.agenticBackendUrl);
-  const refreshMutation = useMutation({
-    mutationFn: async () => {
-      const scanned = await scanSubscriptionRefreshCandidates();
-      const allCandidates = scanned.candidates || [];
-      if (allCandidates.length === 0) {
-        return { queuedCount: 0, scannedCount: 0 };
-      }
-      const maxItems = 20;
-      const items = allCandidates.slice(0, maxItems);
-      const queued = await generateSubscriptionRefreshBlueprints({ items });
-      return {
-        queuedCount: queued.queued_count,
-        scannedCount: allCandidates.length,
-      };
-    },
-    onSuccess: ({ queuedCount, scannedCount }) => {
-      if (queuedCount > 0) {
-        toast({
-          title: 'Refresh started',
-          description: scannedCount > queuedCount
-            ? `Queued ${queuedCount} videos (first batch).`
-            : `Queued ${queuedCount} videos for background generation.`,
-        });
-        return;
-      }
-      toast({
-        title: 'No new videos found',
-        description: 'Your subscriptions are already up to date.',
-      });
-    },
-    onError: (error) => {
-      const fallback = error instanceof Error ? error.message : 'Could not refresh subscriptions.';
-      if (error instanceof ApiRequestError && error.errorCode === 'JOB_ALREADY_RUNNING') {
-        toast({
-          title: 'Refresh already running',
-          description: 'A background refresh is already in progress.',
-        });
-        return;
-      }
-      toast({
-        title: 'Refresh failed',
-        description: fallback,
-        variant: 'destructive',
-      });
-    },
-  });
-
-  const handleRefresh = () => {
-    if (!isOwnProfile || !subscriptionsEnabled || refreshMutation.isPending) return;
-    refreshMutation.mutate();
-  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -139,8 +78,6 @@ export default function UserProfile() {
               profile={profile}
               onFollowersClick={() => setFollowersOpen(true)}
               onFollowingClick={() => setFollowingOpen(true)}
-              onRefreshClick={subscriptionsEnabled ? handleRefresh : undefined}
-              refreshPending={refreshMutation.isPending}
             />
 
             {isOwnProfile && (

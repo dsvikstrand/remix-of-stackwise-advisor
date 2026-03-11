@@ -805,8 +805,7 @@ export default function SearchPage() {
                           )}
                           <Button
                             size="sm"
-                            variant={isSubscribed ? 'default' : 'outline'}
-                            className={isSubscribed ? 'bg-orange-500 hover:bg-orange-500/90 text-white border-orange-500' : undefined}
+                            variant="outline"
                             onClick={() => handleSubscriptionToggle(result)}
                             disabled={isSubscribing || !searchEnabled}
                           >
@@ -937,8 +936,7 @@ export default function SearchPage() {
                           </Button>
                           <Button
                             size="sm"
-                            variant={isSubscribed ? 'default' : 'outline'}
-                            className={isSubscribed ? 'bg-orange-500 hover:bg-orange-500/90 text-white border-orange-500' : undefined}
+                            variant="outline"
                             onClick={() => handleSubscriptionToggle(channel)}
                             disabled={isSubscribing || !searchEnabled}
                           >

@@ -1,5 +1,5 @@
 import { Link, useParams } from 'react-router-dom';
-import { Heart, Loader2, MessageCircle, Plus } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AppHeader } from '@/components/shared/AppHeader';
@@ -17,8 +17,6 @@ import { buildBlueprintPreviewText, buildFeedSummary } from '@/lib/feedPreview';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { bucketJoinError, logP3Event } from '@/lib/telemetry';
-import { CreateBlueprintFlowModal } from '@/components/create/CreateBlueprintFlowModal';
-import { buildUrlWithChannel, isPostableChannelSlug } from '@/lib/channelPostContext';
 import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 
 export default function ChannelPage() {
@@ -32,7 +30,6 @@ export default function ChannelPage() {
   const { getFollowState, joinChannel, leaveChannel } = useTagFollows();
   const [showSigninPrompt, setShowSigninPrompt] = useState(false);
   const [tab, setTab] = useState<ChannelFeedTab>('top');
-  const [showCreate, setShowCreate] = useState(false);
   const hasLoggedViewRef = useRef(false);
 
   if (!channel) {
@@ -188,7 +185,6 @@ export default function ChannelPage() {
     totalCount,
     hasMore,
     loadMore,
-    commentCountsByBlueprintId,
     isLoading,
     isError,
   } = useChannelFeed({ channelSlug: channel.slug, tab, pageSize: 20 });
@@ -209,16 +205,6 @@ export default function ChannelPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-2"
-                disabled={!isPostableChannelSlug(channel.slug) || (!!user && !isJoined)}
-                onClick={() => setShowCreate(true)}
-              >
-                <Plus className="h-4 w-4" />
-                Create
-              </Button>
               {channel.isJoinEnabled && (
                 <Button
                   size="sm"
@@ -239,9 +225,6 @@ export default function ChannelPage() {
           )}
           {channel.isJoinEnabled && !tagsLoading && !joinAvailable && (
             <p className="text-xs text-muted-foreground">Channel activation pending.</p>
-          )}
-          {isPostableChannelSlug(channel.slug) && user && !isJoined && (
-            <p className="text-xs text-muted-foreground">Join this channel to post here.</p>
           )}
         </PageSection>
 
@@ -309,8 +292,6 @@ export default function ChannelPage() {
                       maxChars: 220,
                     });
                     const createdLabel = formatRelativeShort(post.createdAt);
-                    const commentsCount = commentCountsByBlueprintId[post.id] || 0;
-
                     return (
                       <Link
                         key={post.id}
@@ -336,17 +317,6 @@ export default function ChannelPage() {
                               }))}
                             />
                           )}
-
-                          <div className="flex items-center gap-1.5 pt-1 text-xs text-muted-foreground">
-                            <span className="inline-flex h-7 items-center gap-1 px-2">
-                              <Heart className="h-4 w-4" />
-                              {post.likesCount}
-                            </span>
-                            <span className="inline-flex h-7 items-center gap-1 px-2">
-                              <MessageCircle className="h-4 w-4" />
-                              {commentsCount}
-                            </span>
-                          </div>
                         </div>
                       </Link>
                     );
@@ -371,11 +341,6 @@ export default function ChannelPage() {
         </section>
         <AppFooter />
       </PageMain>
-      <CreateBlueprintFlowModal
-        open={showCreate}
-        onOpenChange={setShowCreate}
-        presetChannelSlug={channel.slug}
-      />
     </PageRoot>
   );
 }
