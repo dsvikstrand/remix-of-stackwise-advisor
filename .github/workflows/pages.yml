@@ -20,12 +20,12 @@ on:
       pwa_push_v1:
         description: "Enable Bleup's installed-PWA web push opt-in surfaces during this frontend publish"
         required: true
-        default: false
+        default: true
         type: boolean
       pwa_push_quiet_ios_v1:
         description: "Enable iPhone-only quiet push mode with badge-first delivery during this frontend publish"
         required: true
-        default: false
+        default: true
         type: boolean
 
 permissions:
