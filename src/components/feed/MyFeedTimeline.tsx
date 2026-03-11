@@ -500,8 +500,10 @@ export function MyFeedTimeline({
         const sourceTitle = String(source?.title || '').trim();
         const sourceChannelTitle = String(source?.sourceChannelTitle || '').trim();
         const sourceIdentityTitle = sourceChannelTitle || sourceTitle || 'Imported source';
+        const isSubscriptionNoticeSourceTitle =
+          sourceTitle.toLowerCase().startsWith('you are now subscribing to ');
         const sourceSupportLabel =
-          sourceChannelTitle && sourceTitle && sourceChannelTitle !== sourceTitle
+          !isSubscriptionNoticeSourceTitle && sourceChannelTitle && sourceTitle && sourceChannelTitle !== sourceTitle
             ? sourceTitle
             : null;
         const sourceVisualUrl = source?.sourceChannelAvatarUrl || source?.thumbnailUrl || null;
@@ -514,7 +516,7 @@ export function MyFeedTimeline({
           ? sourceIdentityTitle
           : (blueprint?.title || sourceIdentityTitle);
         const subtitle = isSubscriptionNotice
-          ? (sourceSupportLabel || 'New uploads from this channel will appear automatically.')
+          ? `New uploads from ${sourceIdentityTitle} will appear here.`
           : (blueprint ? (sourceChannelTitle || sourceTitle || 'Source') : (sourceSupportLabel || 'Imported to My Feed'));
         const tags = blueprint?.tags || [];
         const canAccept = item.state === 'my_feed_pending_accept' || item.state === 'my_feed_skipped';
@@ -645,12 +647,14 @@ export function MyFeedTimeline({
                       <div className="min-w-0 space-y-1">
                         <p className="font-medium leading-tight">{title}</p>
                         <p className="text-xs text-muted-foreground line-clamp-2">{subtitle}</p>
-                        <p className="text-xs text-muted-foreground">{pendingSourceStatusLabel}</p>
+                        {item.state !== 'channel_published' ? (
+                          <p className="text-xs text-muted-foreground">{pendingSourceStatusLabel}</p>
+                        ) : null}
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
-                      <Badge variant="secondary">{item.state === 'channel_published' ? 'Published' : 'Source'}</Badge>
+                      <Badge variant="secondary">{item.state === 'channel_published' ? 'Posted' : 'Source'}</Badge>
                     </div>
                   </div>
                   {canMutate ? (
@@ -706,7 +710,7 @@ export function MyFeedTimeline({
                 <div className="flex justify-between items-center text-xs text-muted-foreground">
                   <span>
                     {item.state === 'channel_published' ? (
-                      `Posted to ${getChannelDisplayName(item.candidate?.channelSlug || null)}`
+                      `Published to ${getChannelDisplayName(item.candidate?.channelSlug || null)}`
                     ) : item.state === 'my_feed_unlockable' ? (
                       isUnlocking ? 'Unlocking...' : 'Unlock available'
                     ) : autoChannelPipelineEnabled || !canMutate ? (
@@ -726,7 +730,7 @@ export function MyFeedTimeline({
                       </button>
                     )}
                   </span>
-                  <Badge variant="secondary">{item.state === 'channel_published' ? 'Published' : 'Blueprint'}</Badge>
+                  {item.state === 'channel_published' ? null : <Badge variant="secondary">Blueprint</Badge>}
                 </div>
               )}
 
