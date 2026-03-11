@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 
-const SUPPORT_EMAIL = 'hi@vdsai.cloud';
+const SUPPORT_EMAIL = 'hi@bleup.app';
 
 export function AppFooter() {
   return (

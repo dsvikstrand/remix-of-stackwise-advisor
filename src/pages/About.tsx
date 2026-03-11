@@ -7,23 +7,22 @@ export default function About() {
       <AppHeader />
       <main className="max-w-3xl mx-auto px-3 sm:px-4 py-10 pb-24 space-y-6">
         <div className="border border-border/40 px-3 py-4 space-y-4">
-          <h1 className="text-lg font-semibold">About Blueprints</h1>
+          <h1 className="text-lg font-semibold">About Bleup</h1>
           <div className="space-y-4 text-sm text-muted-foreground">
             <p>
-              Blueprints is a source-first community app. Pull content into your personal My Feed,
-              remix it into useful steps, and let eligible items auto-publish to Home for
-              discussion and voting.
+              Bleup helps you turn YouTube into something easier to follow, save, and return to
+              later. Pull in creators you care about, turn videos into blueprints, and keep the
+              useful parts instead of losing them to endless watch time.
             </p>
             <p>
-              The primary path is source-first: pull videos, generate blueprints, and publish to
-              community lanes when eligible.
+              The product is still intentionally simple: discover from your sources, save what is
+              useful, and browse a feed that feels more curated than the default YouTube loop.
             </p>
             <div>
               <p className="font-medium text-foreground">Contact</p>
               <p>
-                Email: <a href="mailto:hi@vdsai.cloud" className="underline">hi@vdsai.cloud</a>
+                Email: <a href="mailto:hi@bleup.app" className="underline">hi@bleup.app</a>
               </p>
-              <p>Based in Sweden</p>
             </div>
           </div>
         </div>

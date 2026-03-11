@@ -189,7 +189,7 @@ export function UserMenu({ onOpenHelp }: UserMenuProps) {
           Help
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <a href="mailto:hi@vdsai.cloud" className="flex items-center cursor-pointer">
+          <a href="mailto:hi@bleup.app" className="flex items-center cursor-pointer">
             <LifeBuoy className="mr-2 h-4 w-4" />
             Support
           </a>

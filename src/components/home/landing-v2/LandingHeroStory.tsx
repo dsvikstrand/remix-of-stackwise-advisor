@@ -31,6 +31,7 @@ function HeroCtaRail({
 }) {
   return (
     <div className="mt-8 space-y-4">
+      {!isSignedIn ? <PwaInstallCta compact className="md:hidden" /> : null}
       <div className="flex flex-wrap items-center gap-3">
         {isSignedIn ? (
           <>
@@ -67,7 +68,6 @@ function HeroCtaRail({
           </>
         )}
       </div>
-      {!isSignedIn ? <PwaInstallCta compact className="md:hidden" /> : null}
     </div>
   );
 }
