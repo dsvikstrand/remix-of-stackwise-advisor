@@ -2,11 +2,12 @@ import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { config } from '@/config/runtime';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useTrendingTags } from '@/hooks/useExploreSearch';
 import { useTagFollows } from '@/hooks/useTagFollows';
-import { ApiRequestError } from '@/lib/subscriptionsApi';
+import { ApiRequestError, listSourceSubscriptions } from '@/lib/subscriptionsApi';
 import { unlockSourcePageVideos } from '@/lib/sourcePagesApi';
 import { useSourceUnlockJobTracker } from '@/hooks/useSourceUnlockJobTracker';
 import { getLaunchErrorCopy } from '@/lib/launchErrorCopy';
@@ -58,6 +59,7 @@ export function useWallPageController() {
   const [selectedTagSlug, setSelectedTagSlug] = useState<string | null>(null);
   const [optimisticUnlockingSourceItemIds, setOptimisticUnlockingSourceItemIds] = useState<Record<string, boolean>>({});
   const { followedTags } = useTagFollows();
+  const subscriptionsEnabled = Boolean(config.agenticBackendUrl);
 
   const scopeValues = useMemo(
     () =>
@@ -74,7 +76,21 @@ export function useWallPageController() {
   const scopeParam = (searchParams.get('scope') || '').trim();
   const normalizedScopeParam = scopeParam === SCOPE_JOINED_ALIAS ? SCOPE_JOINED : scopeParam;
   const sortParam = (searchParams.get('sort') || '').trim();
-  const defaultScope = user ? SCOPE_FOR_YOU : SCOPE_ALL;
+  const sourceSubscriptionsQuery = useQuery({
+    queryKey: ['source-subscriptions', user?.id],
+    enabled: Boolean(user) && subscriptionsEnabled,
+    staleTime: 60_000,
+    queryFn: () => listSourceSubscriptions(),
+  });
+  const activeSourceSubscriptionCount = useMemo(
+    () => (sourceSubscriptionsQuery.data || []).filter((subscription) => subscription.is_active).length,
+    [sourceSubscriptionsQuery.data],
+  );
+  const defaultScope = !user
+    ? SCOPE_ALL
+    : sourceSubscriptionsQuery.status === 'success' && activeSourceSubscriptionCount < 10
+      ? SCOPE_ALL
+      : SCOPE_FOR_YOU;
   const feedScope = scopeValues.has(normalizedScopeParam) ? normalizedScopeParam : defaultScope;
   const requestedSort: FeedSort = sortParam === 'trending' ? 'trending' : 'latest';
 
@@ -408,8 +424,8 @@ export function useWallPageController() {
       user
         ? [
             { value: SCOPE_FOR_YOU, label: 'For You' },
-            { value: SCOPE_JOINED, label: 'Joined' },
             { value: SCOPE_ALL, label: 'All' },
+            { value: SCOPE_JOINED, label: 'Joined' },
           ]
         : [
             { value: SCOPE_ALL, label: 'All' },
@@ -442,6 +458,13 @@ export function useWallPageController() {
   const isForYouError = isForYouScope && forYouQuery.isError;
   const isBlueprintFeedLoading = !isForYouScope && wallFeedQuery.isLoading;
   const blueprintFeedError = !isForYouScope ? wallFeedQuery.error : null;
+  const refreshCurrentFeed = async () => {
+    if (isForYouScope) {
+      return forYouQuery.refetch();
+    }
+    return wallFeedQuery.refetch();
+  };
+  const isCurrentFeedRefreshing = isForYouScope ? forYouQuery.isFetching : wallFeedQuery.isFetching;
 
   return {
     user,
@@ -455,6 +478,7 @@ export function useWallPageController() {
     isForYouError,
     isBlueprintFeedLoading,
     blueprintFeedError,
+    activeSourceSubscriptionCount,
     selectedTagSlug,
     joinedCuratedCount,
     showZeroJoinCta,
@@ -466,6 +490,8 @@ export function useWallPageController() {
     unlockMutation,
     wallFeedQuery,
     forYouQuery,
+    isCurrentFeedRefreshing,
+    refreshCurrentFeed,
     handleScopeSelect,
     updateSearchParams,
     setScopeSelectOpen,

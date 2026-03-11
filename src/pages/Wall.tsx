@@ -1,3 +1,4 @@
+import { useMemo, useRef, useState, type TouchEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
@@ -6,7 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tag, Layers } from 'lucide-react';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { ArrowDown, Layers, Loader2, Tag } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
 import { buildBlueprintPreviewText, buildFeedSummary } from '@/lib/feedPreview';
 import { formatRelativeShort } from '@/lib/timeFormat';
@@ -42,6 +44,8 @@ const SORT_TABS = [
 ] as const;
 
 const WALL_PWA_INSTALL_DISMISS_KEY = 'bleup:pwa-install-cta:wall-dismissed';
+const PULL_REFRESH_THRESHOLD_PX = 64;
+const MAX_PULL_REFRESH_PX = 88;
 
 type FeedSort = (typeof SORT_TABS)[number]['value'];
 
@@ -90,22 +94,91 @@ export default function Wall() {
     isForYouError,
     isBlueprintFeedLoading,
     blueprintFeedError,
+    activeSourceSubscriptionCount,
     selectedTagSlug,
     joinedCuratedCount,
     showZeroJoinCta,
-    scopeSelectOpen,
     scopeLaneButtons,
     popularTags,
     visiblePosts,
     forYouStream,
     unlockMutation,
+    isCurrentFeedRefreshing,
+    refreshCurrentFeed,
     handleScopeSelect,
     updateSearchParams,
-    setScopeSelectOpen,
     setSelectedTagSlug,
     handleTagFilter,
     handleLike,
   } = useWallPageController();
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isPullRefreshing, setIsPullRefreshing] = useState(false);
+  const pullStartYRef = useRef<number | null>(null);
+
+  const canUsePullToRefresh = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(pointer: coarse)').matches;
+  }, []);
+  const pullProgress = Math.min(pullDistance / PULL_REFRESH_THRESHOLD_PX, 1);
+  const pullIndicatorHeight = isPullRefreshing ? 44 : Math.max(0, Math.min(MAX_PULL_REFRESH_PX, pullDistance));
+  const pullIndicatorLabel = isPullRefreshing
+    ? 'Refreshing feed...'
+    : pullDistance >= PULL_REFRESH_THRESHOLD_PX
+      ? 'Release to refresh'
+      : 'Pull to refresh';
+
+  const resetPullToRefresh = () => {
+    pullStartYRef.current = null;
+    setPullDistance(0);
+  };
+
+  const runPullRefresh = async () => {
+    if (isPullRefreshing) return;
+    setIsPullRefreshing(true);
+    try {
+      await refreshCurrentFeed();
+    } finally {
+      setIsPullRefreshing(false);
+    }
+  };
+
+  const handleFeedTouchStart = (event: TouchEvent<HTMLElement>) => {
+    if (!canUsePullToRefresh || isPullRefreshing || event.touches.length !== 1) return;
+    if (window.scrollY > 0) return;
+    pullStartYRef.current = event.touches[0]?.clientY ?? null;
+  };
+
+  const handleFeedTouchMove = (event: TouchEvent<HTMLElement>) => {
+    if (!canUsePullToRefresh || isPullRefreshing) return;
+    if (pullStartYRef.current == null || event.touches.length !== 1) return;
+    if (window.scrollY > 0) {
+      resetPullToRefresh();
+      return;
+    }
+
+    const currentY = event.touches[0]?.clientY ?? 0;
+    const delta = currentY - pullStartYRef.current;
+    if (delta <= 0) {
+      setPullDistance(0);
+      return;
+    }
+
+    event.preventDefault();
+    setPullDistance(Math.min(MAX_PULL_REFRESH_PX, delta * 0.5));
+  };
+
+  const handleFeedTouchEnd = () => {
+    if (!canUsePullToRefresh || isPullRefreshing) {
+      resetPullToRefresh();
+      return;
+    }
+
+    const shouldRefresh = pullDistance >= PULL_REFRESH_THRESHOLD_PX;
+    resetPullToRefresh();
+    if (shouldRefresh) {
+      void runPullRefresh();
+    }
+  };
 
   if (authLoading) {
     return (
@@ -119,7 +192,13 @@ export default function Wall() {
     <div className="min-h-screen bg-background">
       <AppHeader />
 
-      <main className="max-w-3xl mx-auto px-0 pb-24">
+      <main
+        className="max-w-3xl mx-auto px-0 pb-24"
+        onTouchStart={handleFeedTouchStart}
+        onTouchMove={handleFeedTouchMove}
+        onTouchEnd={handleFeedTouchEnd}
+        onTouchCancel={handleFeedTouchEnd}
+      >
         <section className="mb-6 px-3 sm:px-4 hidden sm:block">
           <div className="flex flex-col gap-2">
             <p className="text-sm font-semibold text-primary uppercase tracking-wide">Home</p>
@@ -154,28 +233,55 @@ export default function Wall() {
           />
         </div>
 
+        <div
+          className="mx-3 overflow-hidden transition-[height] duration-200 ease-out sm:hidden"
+          style={{ height: pullIndicatorHeight }}
+          aria-hidden={pullIndicatorHeight === 0}
+        >
+          <div className="flex h-11 items-end justify-center gap-2 pb-2 text-xs text-muted-foreground">
+            {isPullRefreshing || isCurrentFeedRefreshing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <ArrowDown
+                className="h-4 w-4 transition-transform duration-150 ease-out"
+                style={{ transform: `rotate(${pullProgress * 180}deg)` }}
+              />
+            )}
+            <span>{pullIndicatorLabel}</span>
+          </div>
+        </div>
+
         <div className="space-y-3">
           <div className="px-3 sm:px-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <Select value={activeLane} onValueChange={handleScopeSelect} open={scopeSelectOpen} onOpenChange={setScopeSelectOpen}>
-                <SelectTrigger className="h-9 w-auto min-w-0 border-input px-2.5 outline-none ring-0 transition-none [-webkit-tap-highlight-color:transparent] focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:ring-0 data-[state=open]:ring-offset-0 [&>svg]:hidden">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {scopeLaneButtons.map((lane) => (
-                    <SelectItem key={lane.value} value={lane.value}>
-                      {lane.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
+            <div className="flex items-center justify-between gap-3">
+              <ToggleGroup
+                type="single"
+                value={activeLane}
+                onValueChange={(value) => {
+                  if (value) handleScopeSelect(value);
+                }}
+                variant="outline"
+                size="sm"
+                className="w-full min-w-0 justify-start rounded-full border border-input bg-background p-1 sm:w-auto"
+                aria-label="Feed lane"
+              >
+                {scopeLaneButtons.map((lane) => (
+                  <ToggleGroupItem
+                    key={lane.value}
+                    value={lane.value}
+                    className="rounded-full px-3 text-xs sm:px-4"
+                    aria-label={lane.label}
+                  >
+                    {lane.label}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
               <Select
                 value={feedSort}
                 onValueChange={(value) => updateSearchParams({ sort: value as FeedSort })}
                 disabled={isForYouScope}
               >
-                <SelectTrigger className="h-9 w-auto min-w-0 border-input px-2.5 outline-none ring-0 transition-none [-webkit-tap-highlight-color:transparent] focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:ring-0 data-[state=open]:ring-offset-0 [&>svg]:hidden">
+                <SelectTrigger className="h-9 w-auto min-w-0 shrink-0 border-input px-2.5 outline-none ring-0 transition-none [-webkit-tap-highlight-color:transparent] focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:ring-0 data-[state=open]:ring-offset-0 [&>svg]:hidden">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -187,6 +293,11 @@ export default function Wall() {
                 </SelectContent>
               </Select>
             </div>
+            {user && activeSourceSubscriptionCount > 0 && activeSourceSubscriptionCount < 10 ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Showing <span className="font-medium text-foreground">All</span> by default while your creator list is still small.
+              </p>
+            ) : null}
           </div>
 
           <div className="mt-0">

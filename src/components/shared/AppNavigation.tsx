@@ -31,7 +31,7 @@ export function AppNavigation({ variant = 'header', mode = 'all', className }: A
     return (
         <nav
           className={cn(
-            'fixed left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-full border border-border/40 bg-background p-1 shadow-soft-lg transition-transform duration-200 ease-out',
+            'fixed left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-full border border-border/40 bg-background p-1 shadow-soft-lg transition-[transform,opacity] duration-300 ease-out will-change-transform',
             'bottom-[calc(1rem+var(--bleup-app-safe-bottom))]',
             className,
           )}
