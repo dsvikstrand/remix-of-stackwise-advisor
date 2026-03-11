@@ -59,7 +59,7 @@ a36) [have] `/subscriptions` rows are simplified to channel identity + unsubscri
 a37) [have] New profiles now default to `is_public=true` (public by default); existing profile visibility remains unchanged unless edited.
 a38) [have] Signed-in top nav is simplified to `Home / Channels / Explore`; Search is now entered via the header `Create` action near the profile menu.
 a39) [have] User dropdown includes `Subscriptions` as the direct link to the full subscription management page.
-a40) [have] Profile tabs now include owner-only `Subscriptions` with a lightweight list and `Unsubscribe` action.
+a40) [have] Profile `Feed` tab is a read-only history surface for generated blueprints and subscribed creators; subscription management stays on the dedicated `/subscriptions` page.
 a41) [have] Core high-traffic copy surfaces (Home/About/Explore/Help/Auth/YouTube/Search/Wall) are aligned to current source-first and auto-channel runtime language.
 a42) [have] Landing page hero now uses benefit-first, cold-user language with logged-out primary CTA `Try YouTube URL` and a tertiary `See example blueprint` jump.
 a43) [have] Landing now includes an above-the-fold proof card (live example when available, curated example fallback when empty).
@@ -223,7 +223,7 @@ r9) [have] Subscriptions route: `/subscriptions`
 r10) [have] Search route: `/search` (auth-only)
 r11) [have] Compatibility redirects: `/tags` -> `/channels`, `/blueprints` -> `/wall`
 r12) [have] Signed-in primary nav is community-first: `Home / Channels / Explore`.
-r13) [have] Personal workspace is profile-first: `/u/:userId` tabs are `Feed / Comments / Liked / Subscriptions` (subscriptions tab is owner-only); `/my-feed` remains compatibility/direct route.
+r13) [have] Personal workspace is profile-first: `/u/:userId` tabs are `Feed / Comments / Liked`, where `Feed` is read-only profile history; `/my-feed` remains the operational personal lane and compatibility/direct route.
 r14) [have] Header `Create` action (next to profile) is the primary entrypoint to `/search`.
 r15) [have] Optional onboarding route: `/welcome` (auth-only, first-login entrypoint for new users only).
 r16) [have] Source page route: `/s/:platform/:externalId` (public-readable, subscribe/unsubscribe capable for authenticated users).

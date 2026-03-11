@@ -31,8 +31,8 @@ function createMockApp() {
   };
 }
 
-describe('profile feed route', () => {
-  it('returns creator rows plus generated blueprints for profile history', async () => {
+describe('profile history route', () => {
+  it('returns the dedicated history contract from both /feed and /history', async () => {
     const app = createMockApp();
     const db = createMockSupabase({
       profiles: [
@@ -110,6 +110,7 @@ describe('profile feed route', () => {
           id: 'page_creator',
           platform: 'youtube',
           external_id: 'UC_creator',
+          title: 'Creator Alpha',
           avatar_url: 'https://img.example.com/source-page-avatar.jpg',
         },
       ],
@@ -164,16 +165,22 @@ describe('profile feed route', () => {
       normalizeTranscriptTruthStatus: (value: unknown) => String(value || '').trim().toLowerCase(),
     });
 
-    const handler = app.handlers['GET /api/profile/:userId/feed'];
     const req = {
       params: { userId: 'user_1' },
     } as any;
-    const res = createResponse('user_1');
+    const feedHandler = app.handlers['GET /api/profile/:userId/feed'];
+    const historyHandler = app.handlers['GET /api/profile/:userId/history'];
 
-    await handler(req, res as any);
+    const feedRes = createResponse('user_1');
+    await feedHandler(req, feedRes as any);
 
-    expect(res.statusCode).toBe(200);
-    expect(res.body).toMatchObject({
+    const historyRes = createResponse('user_1');
+    await historyHandler(req, historyRes as any);
+
+    expect(feedRes.statusCode).toBe(200);
+    expect(historyRes.statusCode).toBe(200);
+    expect(feedRes.body).toEqual(historyRes.body);
+    expect(feedRes.body).toMatchObject({
       ok: true,
       data: {
         profile_user_id: 'user_1',
@@ -181,33 +188,31 @@ describe('profile feed route', () => {
       },
     });
 
-    const payload = (res.body as { data: { items: Array<any> } }).data.items;
+    const payload = (feedRes.body as { data: { items: Array<any> } }).data.items;
     expect(payload).toHaveLength(2);
 
     expect(payload[0]).toMatchObject({
       id: 'feed_subscription',
-      state: 'subscription_notice',
-      source: {
-        sourceChannelTitle: 'Creator Alpha',
-        sourcePagePath: '/s/youtube/UC_creator',
-        sourceChannelAvatarUrl: 'https://img.example.com/creator-avatar.jpg',
-      },
-      blueprint: null,
+      kind: 'creator',
+      title: 'Creator Alpha',
+      subtitle: 'Subscribed creator',
+      href: '/s/youtube/UC_creator',
+      avatarUrl: 'https://img.example.com/creator-avatar.jpg',
+      badge: 'Creator',
+      statusText: null,
+      bannerUrl: null,
     });
 
     expect(payload[1]).toMatchObject({
       id: 'feed_generated_missing_blueprint',
-      state: 'channel_published',
-      source: {
-        sourceChannelTitle: 'Creator Alpha',
-        sourcePagePath: '/s/youtube/UC_creator',
-      },
-      blueprint: {
-        id: 'bp_1',
-        title: 'Blueprint One',
-        mixNotes: 'Mix notes',
-        tags: ['fitness'],
-      },
+      kind: 'blueprint',
+      title: 'Blueprint One',
+      subtitle: 'Creator Alpha',
+      href: '/blueprint/bp_1',
+      avatarUrl: 'https://img.example.com/source-page-avatar.jpg',
+      badge: 'Blueprint',
+      statusText: 'Published to fitness',
+      bannerUrl: 'https://img.example.com/banner.jpg',
     });
   });
 });

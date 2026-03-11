@@ -238,8 +238,13 @@ if (isProduction && configuredCorsOrigins.length === 0) {
 app.use(cors({ origin: corsOrigin }));
 app.use(express.json({ limit: '1mb' }));
 
-const supabaseUrl = process.env.SUPABASE_URL?.trim();
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY?.trim();
+const supabaseUrl = String(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
+const supabaseAnonKey = String(
+  process.env.SUPABASE_ANON_KEY
+  || process.env.SUPABASE_PUBLISHABLE_KEY
+  || process.env.VITE_SUPABASE_PUBLISHABLE_KEY
+  || '',
+).trim();
 const supabaseClient = supabaseUrl && supabaseAnonKey
   ? createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false } })
   : null;
@@ -1034,6 +1039,7 @@ app.use((req, res, next) => {
   const isDebugSimulationRoute = /^\/api\/debug\/subscriptions\/[^/]+\/simulate-new-uploads$/.test(req.path);
   const isDebugResetYtProxyRoute = req.method === 'POST' && req.path === '/api/debug/yt-to-text/reset-proxy';
   const isPublicProfileFeedRoute = /^\/api\/profile\/[^/]+\/feed$/.test(req.path);
+  const isPublicProfileHistoryRoute = /^\/api\/profile\/[^/]+\/history$/.test(req.path);
   const isPublicSourcePageSearchRoute = req.method === 'GET' && req.path === '/api/source-pages/search';
   const isPublicSourcePageRoute = req.method === 'GET' && /^\/api\/source-pages\/[^/]+\/[^/]+$/.test(req.path);
   const isPublicSourcePageBlueprintFeedRoute = req.method === 'GET' && /^\/api\/source-pages\/[^/]+\/[^/]+\/blueprints$/.test(req.path);
@@ -1046,6 +1052,7 @@ app.use((req, res, next) => {
     || req.path === '/api/auto-banner/jobs/trigger'
     || req.path === '/api/auto-banner/jobs/latest'
     || isPublicProfileFeedRoute
+    || isPublicProfileHistoryRoute
     || isPublicSourcePageSearchRoute
     || isPublicSourcePageRoute
     || isPublicSourcePageBlueprintFeedRoute

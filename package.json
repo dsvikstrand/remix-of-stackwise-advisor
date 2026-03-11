@@ -23,6 +23,7 @@
     "metrics:queue": "node scripts/queue_metrics_from_logs.mjs",
     "metrics:channels": "node scripts/channels_metrics_from_supabase.mjs",
     "drill:feed": "node scripts/feed_load_drill.mjs",
+    "repair:profile-history": "tsx scripts/repairProfileHistoryBlueprintIds.ts",
     "test:playwright:preflight": "playwright test -c playwright.preflight.config.ts",
     "test:playwright:p1-oauth": "playwright test -c playwright.p1-oauth.config.ts",
     "seed:channels:tags": "node scripts/seed_curated_channel_tags.mjs",

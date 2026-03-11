@@ -31,7 +31,7 @@ import {
   deactivateSourceSubscriptionByChannelId,
   skipMyFeedPendingItem,
 } from '@/lib/subscriptionsApi';
-import { buildSourcePagePath, unlockSourcePageVideos } from '@/lib/sourcePagesApi';
+import { unlockSourcePageVideos } from '@/lib/sourcePagesApi';
 import { extractYouTubeVideoId } from '@/lib/sourceIdentity';
 import { logMvpEvent } from '@/lib/logEvent';
 import { formatRelativeShort } from '@/lib/timeFormat';
@@ -66,8 +66,6 @@ type MyFeedTimelineProps = {
   items: MyFeedItemView[] | undefined;
   isLoading: boolean;
   isOwnerView: boolean;
-  profileUserId?: string;
-  presentation?: 'feed' | 'profile-history';
   showUnlockActivityPanel?: boolean;
   emptyMessage?: string;
   emptyActionHref?: string;
@@ -80,8 +78,6 @@ export function MyFeedTimeline({
   items,
   isLoading,
   isOwnerView,
-  profileUserId,
-  presentation = 'feed',
   showUnlockActivityPanel = true,
   emptyMessage = 'No content yet.',
   emptyActionHref,
@@ -94,7 +90,6 @@ export function MyFeedTimeline({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const autoChannelPipelineEnabled = config.features.autoChannelPipelineV1;
-  const isProfileHistory = presentation === 'profile-history';
   const [selectedChannels, setSelectedChannels] = useState<Record<string, string>>({});
   const [submissionDialogItemId, setSubmissionDialogItemId] = useState<string | null>(null);
   const [subscriptionDialogItemId, setSubscriptionDialogItemId] = useState<string | null>(null);
@@ -145,15 +140,12 @@ export function MyFeedTimeline({
 
   useEffect(() => {
     setVisibleCount(chunkSize ?? allItems.length);
-  }, [chunkSize, allItems.length, allItems[0]?.id, profileUserId]);
+  }, [chunkSize, allItems.length, allItems[0]?.id]);
 
   const invalidateFeedQueries = () => {
     if (user?.id) {
       queryClient.invalidateQueries({ queryKey: ['my-feed-items', user.id] });
       queryClient.invalidateQueries({ queryKey: ['source-subscriptions', user.id] });
-    }
-    if (profileUserId) {
-      queryClient.invalidateQueries({ queryKey: ['profile-feed', profileUserId] });
     }
   };
 
@@ -166,13 +158,6 @@ export function MyFeedTimeline({
   const getChannelDisplayName = (channelSlug: string | null | undefined) => {
     if (!channelSlug) return 'channel';
     return CHANNEL_NAME_BY_SLUG.get(channelSlug) || channelSlug;
-  };
-
-  const getSourcePagePath = (source: MyFeedItemView['source']) => {
-    if (!source) return null;
-    if (source.sourcePagePath) return source.sourcePagePath;
-    const sourceChannelId = String(source.sourceChannelId || '').trim();
-    return sourceChannelId ? buildSourcePagePath('youtube', sourceChannelId) : null;
   };
 
   const submitMutation = useMutation({
@@ -531,24 +516,15 @@ export function MyFeedTimeline({
             ? sourceTitle
             : null;
         const sourceVisualUrl = source?.sourceChannelAvatarUrl || source?.thumbnailUrl || null;
-        const sourcePagePath = getSourcePagePath(source);
         const effectiveBlueprintBannerUrl = resolveEffectiveBanner({
           bannerUrl: blueprint?.bannerUrl || null,
           sourceThumbnailUrl: source?.thumbnailUrl || null,
         });
         const hasBlueprintBanner = !isSubscriptionNotice && !!effectiveBlueprintBannerUrl;
         const title = blueprint?.title || sourceIdentityTitle;
-        const subtitle = isProfileHistory
-          ? (
-            blueprint
-              ? sourceIdentityTitle
-              : (isSubscriptionNotice ? 'Subscribed creator' : 'Creator')
-          )
-          : (
-            isSubscriptionNotice
-              ? `New uploads from ${sourceIdentityTitle} will appear here.`
-              : (blueprint ? (sourceChannelTitle || sourceTitle || 'Creator') : (sourceSupportLabel || 'Imported to My Feed'))
-          );
+        const subtitle = isSubscriptionNotice
+          ? `New uploads from ${sourceIdentityTitle} will appear here.`
+          : (blueprint ? (sourceChannelTitle || sourceTitle || 'Creator') : (sourceSupportLabel || 'Imported to My Feed'));
         const tags = blueprint?.tags || [];
         const canAccept = item.state === 'my_feed_pending_accept' || item.state === 'my_feed_skipped';
         const isUnlockable = item.state === 'my_feed_unlockable' && !blueprint;
@@ -569,10 +545,8 @@ export function MyFeedTimeline({
           maxChars: 220,
         });
         const createdLabel = formatRelativeShort(item.createdAt);
-        const cardTarget = blueprint
-          ? `/blueprint/${blueprint.id}`
-          : (isProfileHistory ? sourcePagePath : null);
-        const opensSubscriptionDialog = !isProfileHistory && isSubscriptionNotice;
+        const cardTarget = blueprint ? `/blueprint/${blueprint.id}` : null;
+        const opensSubscriptionDialog = isSubscriptionNotice;
         const isInteractive = Boolean(cardTarget) || opensSubscriptionDialog;
 
         if (!isSubscriptionNotice && isUnlockable) {
@@ -661,9 +635,6 @@ export function MyFeedTimeline({
                       <div className="min-w-0 space-y-1">
                         <p className="font-medium leading-tight">{title}</p>
                         <p className="text-xs text-muted-foreground line-clamp-2">{subtitle}</p>
-                        {isProfileHistory && sourcePagePath ? (
-                          <p className="text-xs text-primary/80">Open creator page</p>
-                        ) : null}
                       </div>
                     </div>
                     <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
@@ -775,7 +746,7 @@ export function MyFeedTimeline({
 
               {isSubscriptionNotice && (
                 <div className="flex justify-end">
-                  <Badge variant="secondary">{isProfileHistory ? 'Creator' : 'Subscription'}</Badge>
+                  <Badge variant="secondary">Subscription</Badge>
                 </div>
               )}
             </CardContent>
@@ -795,52 +766,50 @@ export function MyFeedTimeline({
         </div>
       ) : null}
 
-      {!isProfileHistory ? (
-        <Dialog
-          open={!!subscriptionDialogItem}
-          onOpenChange={(open) => {
-            if (!open) setSubscriptionDialogItemId(null);
-          }}
-        >
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Subscription details</DialogTitle>
-              <DialogDescription>
-                Manage this channel subscription from one place.
-              </DialogDescription>
-            </DialogHeader>
-            {subscriptionDialogItem?.source ? (
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium leading-tight">
-                    {subscriptionDialogItem.source.sourceChannelTitle || subscriptionDialogItem.source.title}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Status: {getMyFeedStateLabel(subscriptionDialogItem.state as MyFeedItemState)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Added: {formatRelativeShort(subscriptionDialogItem.createdAt)}
-                  </p>
-                </div>
-                {canMutate ? (
-                  <div className="flex justify-end">
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => setUnsubscribeDialogItemId(subscriptionDialogItem.id)}
-                      disabled={unsubscribeMutation.isPending}
-                    >
-                      Unsubscribe
-                    </Button>
-                  </div>
-                ) : null}
+      <Dialog
+        open={!!subscriptionDialogItem}
+        onOpenChange={(open) => {
+          if (!open) setSubscriptionDialogItemId(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Subscription details</DialogTitle>
+            <DialogDescription>
+              Manage this channel subscription from one place.
+            </DialogDescription>
+          </DialogHeader>
+          {subscriptionDialogItem?.source ? (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <p className="text-sm font-medium leading-tight">
+                  {subscriptionDialogItem.source.sourceChannelTitle || subscriptionDialogItem.source.title}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Status: {getMyFeedStateLabel(subscriptionDialogItem.state as MyFeedItemState)}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Added: {formatRelativeShort(subscriptionDialogItem.createdAt)}
+                </p>
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">Subscription details are unavailable.</p>
-            )}
-          </DialogContent>
-        </Dialog>
-      ) : null}
+              {canMutate ? (
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => setUnsubscribeDialogItemId(subscriptionDialogItem.id)}
+                    disabled={unsubscribeMutation.isPending}
+                  >
+                    Unsubscribe
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Subscription details are unavailable.</p>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {!autoChannelPipelineEnabled && canMutate && (
         <Dialog open={!!submissionDialogItem} onOpenChange={(open) => {

@@ -20,6 +20,20 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
     const db = deps.getAuthedSupabaseClient(authToken);
     if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
 
+    const { data: feedItem, error: feedError } = await db
+      .from('user_feed_items')
+      .select('id, blueprint_id')
+      .eq('id', userFeedItemId)
+      .maybeSingle();
+    if (feedError || !feedItem) {
+      return res.status(400).json({
+        ok: false,
+        error_code: 'READ_FAILED',
+        message: feedError?.message || 'Feed item missing',
+        data: null,
+      });
+    }
+
     const { data, error } = await db
       .from('channel_candidates')
       .upsert(
@@ -36,7 +50,10 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
 
     if (error) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: error.message, data: null });
 
-    await db.from('user_feed_items').update({ state: 'candidate_submitted', last_decision_code: null }).eq('id', userFeedItemId);
+    await db
+      .from('user_feed_items')
+      .update({ blueprint_id: feedItem.blueprint_id, state: 'candidate_submitted', last_decision_code: null })
+      .eq('id', userFeedItemId);
 
     return res.json({
       ok: true,
@@ -152,7 +169,7 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
     await db.from('channel_candidates').update({ status: evaluation.candidateStatus }).eq('id', candidate.id);
     await db
       .from('user_feed_items')
-      .update({ state: evaluation.feedState, last_decision_code: evaluation.reasonCode })
+      .update({ blueprint_id: feedItem.blueprint_id, state: evaluation.feedState, last_decision_code: evaluation.reasonCode })
       .eq('id', candidate.user_feed_item_id);
 
     console.log('[candidate_gate_result]', JSON.stringify({
@@ -247,7 +264,10 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
     if (tagLinkError) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: tagLinkError.message, data: null });
 
     await db.from('channel_candidates').update({ status: 'published' }).eq('id', candidate.id);
-    await db.from('user_feed_items').update({ state: 'channel_published', last_decision_code: 'ALL_GATES_PASS' }).eq('id', candidate.user_feed_item_id);
+    await db
+      .from('user_feed_items')
+      .update({ blueprint_id: feedItem.blueprint_id, state: 'channel_published', last_decision_code: 'ALL_GATES_PASS' })
+      .eq('id', candidate.user_feed_item_id);
 
     console.log('[candidate_published]', JSON.stringify({
       candidate_id: candidate.id,
@@ -297,7 +317,10 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
       .maybeSingle();
 
     await db.from('channel_candidates').update({ status: 'rejected' }).eq('id', candidate.id);
-    await db.from('user_feed_items').update({ state: 'channel_rejected', last_decision_code: reasonCode }).eq('id', candidate.user_feed_item_id);
+    await db
+      .from('user_feed_items')
+      .update({ blueprint_id: feedItem?.blueprint_id || null, state: 'channel_rejected', last_decision_code: reasonCode })
+      .eq('id', candidate.user_feed_item_id);
 
     console.log('[candidate_rejected]', JSON.stringify({
       candidate_id: candidate.id,

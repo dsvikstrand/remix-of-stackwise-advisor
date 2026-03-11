@@ -5,8 +5,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Inbox, MessageSquare, Heart, ArrowRight } from 'lucide-react';
 import { useUserLikedBlueprints, useUserComments } from '@/hooks/useUserProfile';
-import { useProfileFeed } from '@/hooks/useProfileFeed';
-import { MyFeedTimeline } from '@/components/feed/MyFeedTimeline';
+import { useProfileHistory } from '@/hooks/useProfileHistory';
+import { ProfileHistoryTimeline } from '@/components/profile/ProfileHistoryTimeline';
 
 interface ProfileTabsProps {
   userId: string;
@@ -15,12 +15,12 @@ interface ProfileTabsProps {
 }
 
 export function ProfileTabs({ userId, isOwnerView, profileIsPublic }: ProfileTabsProps) {
-  const { data: profileFeed, isLoading: profileFeedLoading, isError: profileFeedIsError, error: profileFeedError } = useProfileFeed(userId);
+  const { data: profileHistory, isLoading: profileHistoryLoading, isError: profileHistoryIsError, error: profileHistoryError } = useProfileHistory(userId);
   const { data: likedBlueprints, isLoading: likedLoading } = useUserLikedBlueprints(userId, 12);
   const { data: comments, isLoading: commentsLoading } = useUserComments(userId, 20);
 
-  const feedItems = profileFeed?.items || [];
-  const feedLoading = profileFeedLoading;
+  const historyItems = profileHistory?.items || [];
+  const historyLoading = profileHistoryLoading;
 
   return (
     <Tabs defaultValue="feed" className="w-full">
@@ -42,20 +42,16 @@ export function ProfileTabs({ userId, isOwnerView, profileIsPublic }: ProfileTab
       <TabsContent value="feed" className="mt-4">
         {!isOwnerView && !profileIsPublic ? (
           <EmptyState icon={<Inbox className="h-8 w-8" />} message="This feed is private." />
-        ) : !isOwnerView && profileFeedIsError ? (
+        ) : profileHistoryIsError ? (
           <EmptyState
             icon={<Inbox className="h-8 w-8" />}
-            message={profileFeedError instanceof Error ? profileFeedError.message : 'Failed to load feed.'}
+            message={profileHistoryError instanceof Error ? profileHistoryError.message : 'Failed to load history.'}
           />
         ) : (
-          <MyFeedTimeline
-            items={feedItems}
-            isLoading={feedLoading}
-            isOwnerView={isOwnerView}
-            profileUserId={userId}
-            presentation="profile-history"
-            showUnlockActivityPanel={false}
-            emptyMessage="No feed items yet."
+          <ProfileHistoryTimeline
+            items={historyItems}
+            isLoading={historyLoading}
+            emptyMessage="No history yet."
             initialVisibleCount={20}
             loadMoreStep={20}
           />

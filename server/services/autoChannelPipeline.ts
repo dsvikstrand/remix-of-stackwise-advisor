@@ -301,7 +301,7 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
 
     const { error: feedPublishError } = await input.db
       .from('user_feed_items')
-      .update({ state: 'channel_published', last_decision_code: evaluation.reasonCode })
+      .update({ blueprint_id: input.blueprintId, state: 'channel_published', last_decision_code: evaluation.reasonCode })
       .eq('id', input.userFeedItemId)
       .eq('user_id', input.userId);
     if (feedPublishError) throw new Error(feedPublishError.message);
@@ -330,7 +330,7 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
 
   const { error: feedRejectError } = await input.db
     .from('user_feed_items')
-    .update({ state: 'channel_rejected', last_decision_code: evaluation.reasonCode })
+    .update({ blueprint_id: input.blueprintId, state: 'channel_rejected', last_decision_code: evaluation.reasonCode })
     .eq('id', input.userFeedItemId)
     .eq('user_id', input.userId);
   if (feedRejectError) throw new Error(feedRejectError.message);

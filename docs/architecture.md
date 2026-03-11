@@ -44,7 +44,7 @@
     - installed mode uses the same frontend bundle, same backend API, and same Supabase auth/session model as browser mode
     - runtime behavior remains online-first: static shell/offline fallback are supported, but authenticated feed/subscription/generation data is still network-driven
     - normal production frontend publishes now default to `pwa_runtime_v1=true` and `pwa_install_cta_v1=true`, with manual workflow override retained for rollback
-  - Personal workspace is profile-first at `/u/:userId` with tabs `Feed / Comments / Liked / Subscriptions` (subscriptions tab owner-only); `/my-feed` remains direct-access compatible.
+  - Personal workspace is profile-first at `/u/:userId` with tabs `Feed / Comments / Liked`; the `Feed` tab is read-only profile history for generated blueprints and subscribed creators, while `/my-feed` remains the operational personal lane and direct-access route.
   - Profile visibility default is public for new accounts (`profiles.is_public=true` by default).
   - Live adapter UI in `src/pages/YouTubeToBlueprint.tsx`.
     - `/youtube` runs a core-first request (`generate_review=false`, `generate_banner=false`) and executes optional AI review as an async post-step.
@@ -85,7 +85,7 @@
     - reuses the same manual-first creator setup surface as `/subscriptions`
     - keeps creator add/import optional
     - marks completion after the user joins at least one Bleu channel
-  - User menu includes a direct `Subscriptions` shortcut to `/subscriptions`; profile tab keeps a lightweight owner-only list with `Unsubscribe`.
+  - User menu includes a direct `Subscriptions` shortcut to `/subscriptions`; subscription management remains a dedicated page instead of a profile tab.
   - User menu credit panel shows daily reset timing plus latest wallet ledger activity summary when available.
   - Header now includes an auth-only notifications bell inbox (reply + generation terminal notifications with read/read-all actions).
   - Installed-PWA push extension is now wired behind rollout gates:

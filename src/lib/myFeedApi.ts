@@ -186,6 +186,7 @@ async function ensureTagBySlug(slug: string, userId: string) {
 async function submitCandidateAndEvaluateFallback(input: {
   userId: string;
   userFeedItemId: string;
+  blueprintId: string;
   channelSlug: string;
   title: string;
   llmReview?: string | null;
@@ -210,7 +211,7 @@ async function submitCandidateAndEvaluateFallback(input: {
 
   await supabase
     .from('user_feed_items')
-    .update({ state: 'candidate_submitted', last_decision_code: null })
+    .update({ blueprint_id: input.blueprintId, state: 'candidate_submitted', last_decision_code: null })
     .eq('id', input.userFeedItemId)
     .eq('user_id', input.userId);
 
@@ -264,7 +265,7 @@ async function submitCandidateAndEvaluateFallback(input: {
 
     const { error: feedWarnError } = await supabase
       .from('user_feed_items')
-      .update({ state: 'candidate_pending_manual_review', last_decision_code: evaluation.primaryReason })
+      .update({ blueprint_id: input.blueprintId, state: 'candidate_pending_manual_review', last_decision_code: evaluation.primaryReason })
       .eq('id', input.userFeedItemId)
       .eq('user_id', input.userId);
 
@@ -286,7 +287,7 @@ async function submitCandidateAndEvaluateFallback(input: {
 
   const { error: feedFailError } = await supabase
     .from('user_feed_items')
-    .update({ state: 'channel_rejected', last_decision_code: evaluation.primaryReason })
+    .update({ blueprint_id: input.blueprintId, state: 'channel_rejected', last_decision_code: evaluation.primaryReason })
     .eq('id', input.userFeedItemId)
     .eq('user_id', input.userId);
 
@@ -389,7 +390,7 @@ async function publishCandidateFallback(input: {
 
   const { error: feedError } = await supabase
     .from('user_feed_items')
-    .update({ state: 'channel_published', last_decision_code: 'ALL_GATES_PASS' })
+    .update({ blueprint_id: input.blueprintId, state: 'channel_published', last_decision_code: 'ALL_GATES_PASS' })
     .eq('id', input.userFeedItemId)
     .eq('user_id', input.userId);
 
@@ -425,6 +426,7 @@ async function rejectCandidateFallback(input: {
   userId: string;
   candidateId: string;
   userFeedItemId: string;
+  blueprintId: string;
   reasonCode: string;
 }) {
   const { error: candidateError } = await supabase
@@ -436,7 +438,7 @@ async function rejectCandidateFallback(input: {
 
   const { error: feedError } = await supabase
     .from('user_feed_items')
-    .update({ state: 'channel_rejected', last_decision_code: input.reasonCode })
+    .update({ blueprint_id: input.blueprintId, state: 'channel_rejected', last_decision_code: input.reasonCode })
     .eq('id', input.userFeedItemId)
     .eq('user_id', input.userId);
 
@@ -447,6 +449,7 @@ export async function rejectCandidate(input: {
   userId: string;
   candidateId: string;
   userFeedItemId: string;
+  blueprintId: string;
   reasonCode: string;
 }) {
   const apiBase = getApiBase();
