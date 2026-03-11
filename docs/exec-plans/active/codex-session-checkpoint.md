@@ -10,8 +10,8 @@ Status: `active support note`
 ## Current Resume Baseline
 - [have] Latest locally committed SHA in this worktree: `8f73c7993f4ef8c5ccd22645779c97ebedf7aa75`
 - [have] Current main active proof file: `docs/exec-plans/active/mvp-launch-proof-tail.md`
-- [have] Current main active implementation/reference note: `docs/exec-plans/active/ui-ux-polish-batch-mvp-prelaunch.md`
-- [have] Current completed PWA umbrella: `docs/exec-plans/completed/bleup-pwa-program.md`
+- [have] Current main planning/reference index: `docs/exec-plans/index.md`
+- [have] Current PWA umbrella reference: `docs/exec-plans/active/bleup-pwa-program.md`
 
 ## Current Dirty Worktree Areas
 - [have] Docs-plan/index churn is present in:
@@ -23,9 +23,9 @@ Status: `active support note`
   - `docs/exec-plans/active/on-pause/project-bleuv1-mvp-foundation.md`
   - `docs/exec-plans/tech-debt-tracker.md`
 - [have] Completed/active plan moves are present in:
-  - `docs/exec-plans/completed/bleup-pwa-program.md`
-  - `docs/exec-plans/completed/mvp-runtime-simplification-plan.md`
-  - `docs/exec-plans/active/on-pause/repo-cleanup-and-scale-readiness-plan.md`
+  - `docs/exec-plans/active/bleup-pwa-program.md`
+  - `docs/exec-plans/active/mvp-runtime-simplification-plan.md`
+  - `docs/exec-plans/active/repo-cleanup-and-scale-readiness-plan.md`
 - [have] Current in-progress UI batch files are:
   - `src/components/profile/ProfileHeader.tsx`
   - `src/components/subscriptions/CreatorSetupSection.tsx`
@@ -36,7 +36,7 @@ Status: `active support note`
 
 ## Current Work Focus
 - [have] Batch 1 wall/feed polish was previously reported as implemented/live in chat, but the current local worktree baseline for safe resumption is the actual filesystem state, not the chat history.
-- [have] Batch 2 planning is already captured in `docs/exec-plans/active/ui-ux-polish-batch-mvp-prelaunch.md`.
+- [have] Current planning references are captured in `docs/exec-plans/index.md` and the active plan files linked there.
 - [todo] Immediate next engineering task on safe resume: validate and finish the current Batch 2 UI edits in the modified `src/` files listed above.
 
 ## Safe Resume Procedure
