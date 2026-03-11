@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Json } from '@/integrations/supabase/types';
+import { buildSourcePagePath } from '@/lib/sourcePagesApi';
 
 function extractSchemaTagSlugs(sectionsJson: Json | null): string[] {
   if (!sectionsJson || typeof sectionsJson !== 'object' || Array.isArray(sectionsJson)) return [];
@@ -34,6 +35,7 @@ export interface MyFeedItemView {
     id: string;
     sourceChannelId: string | null;
     sourcePageId: string | null;
+    sourcePagePath: string | null;
     sourceUrl: string;
     title: string;
     sourceChannelTitle: string | null;
@@ -155,18 +157,32 @@ export function useMyFeed(options?: { enabled?: boolean }) {
       const { data: sourcePagesData } = sourcePageIds.length
         ? await supabase
           .from('source_pages')
-          .select('id, avatar_url')
+          .select('id, avatar_url, platform, external_id')
           .in('id', sourcePageIds)
-        : { data: [] as Array<{ id: string; avatar_url: string | null }> };
+        : { data: [] as Array<{ id: string; avatar_url: string | null; platform: string | null; external_id: string | null }> };
       const { data: sourcePagesByExternalData } = sourceChannelIds.length
         ? await supabase
           .from('source_pages')
-          .select('external_id, avatar_url')
+          .select('external_id, avatar_url, platform')
           .eq('platform', 'youtube')
           .in('external_id', sourceChannelIds)
-        : { data: [] as Array<{ external_id: string; avatar_url: string | null }> };
+        : { data: [] as Array<{ external_id: string; avatar_url: string | null; platform: string | null }> };
       const sourcePageAvatarById = new Map((sourcePagesData || []).map((row) => [row.id, row.avatar_url || null]));
       const sourcePageAvatarByExternalId = new Map((sourcePagesByExternalData || []).map((row) => [row.external_id, row.avatar_url || null]));
+      const sourcePagePathById = new Map(
+        (sourcePagesData || []).map((row) => {
+          const platform = String(row.platform || '').trim();
+          const externalId = String(row.external_id || '').trim();
+          return [row.id, platform && externalId ? buildSourcePagePath(platform, externalId) : null] as const;
+        }),
+      );
+      const sourcePagePathByExternalId = new Map(
+        (sourcePagesByExternalData || []).map((row) => {
+          const platform = String(row.platform || '').trim();
+          const externalId = String(row.external_id || '').trim();
+          return [row.external_id, platform && externalId ? buildSourcePagePath(platform, externalId) : null] as const;
+        }),
+      );
       const unlockMap = new Map((unlocks || []).map((row) => [row.source_item_id, row]));
       const transcriptHiddenSourceIds = new Set(
         (unlocks || [])
@@ -233,6 +249,10 @@ export function useMyFeed(options?: { enabled?: boolean }) {
                 id: source.id,
                 sourceChannelId: source.source_channel_id || null,
                 sourcePageId: source.source_page_id || null,
+                sourcePagePath:
+                  sourcePagePathById.get(String(source.source_page_id || '').trim())
+                  || sourcePagePathByExternalId.get(String(source.source_channel_id || '').trim())
+                  || null,
                 sourceUrl: source.source_url,
                 title: source.title,
                 sourceChannelTitle: source.source_channel_title || metadataSourceChannelTitle || null,

@@ -6,7 +6,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Inbox, MessageSquare, Heart, ArrowRight } from 'lucide-react';
 import { useUserLikedBlueprints, useUserComments } from '@/hooks/useUserProfile';
 import { useProfileFeed } from '@/hooks/useProfileFeed';
-import { useMyFeed } from '@/hooks/useMyFeed';
 import { MyFeedTimeline } from '@/components/feed/MyFeedTimeline';
 
 interface ProfileTabsProps {
@@ -16,13 +15,12 @@ interface ProfileTabsProps {
 }
 
 export function ProfileTabs({ userId, isOwnerView, profileIsPublic }: ProfileTabsProps) {
-  const { data: myFeedItems, isLoading: myFeedLoading } = useMyFeed();
-  const { data: profileFeed, isLoading: profileFeedLoading, isError: profileFeedIsError, error: profileFeedError } = useProfileFeed(userId, !isOwnerView);
+  const { data: profileFeed, isLoading: profileFeedLoading, isError: profileFeedIsError, error: profileFeedError } = useProfileFeed(userId);
   const { data: likedBlueprints, isLoading: likedLoading } = useUserLikedBlueprints(userId, 12);
   const { data: comments, isLoading: commentsLoading } = useUserComments(userId, 20);
 
-  const feedItems = isOwnerView ? myFeedItems : (profileFeed?.items || []);
-  const feedLoading = isOwnerView ? myFeedLoading : profileFeedLoading;
+  const feedItems = profileFeed?.items || [];
+  const feedLoading = profileFeedLoading;
 
   return (
     <Tabs defaultValue="feed" className="w-full">
@@ -55,8 +53,11 @@ export function ProfileTabs({ userId, isOwnerView, profileIsPublic }: ProfileTab
             isLoading={feedLoading}
             isOwnerView={isOwnerView}
             profileUserId={userId}
+            presentation="profile-history"
             showUnlockActivityPanel={false}
             emptyMessage="No feed items yet."
+            initialVisibleCount={20}
+            loadMoreStep={20}
           />
         )}
       </TabsContent>
