@@ -12,7 +12,8 @@ import { useGenerationQueue } from '@/hooks/useGenerationQueue';
 import { useNotifications, type NotificationItem } from '@/hooks/useNotifications';
 import {
   getGenerationQueueScopeLabel,
-  getRetryPathForScope,
+  getGenerationResultActionLabel,
+  resolveGenerationResultLinkPath,
 } from '@/lib/generationQueueLabels';
 
 type RecentResultRow = {
@@ -177,10 +178,8 @@ export default function GenerationQueue() {
             ) : (
               recentResults.map((item) => {
                 const isSucceeded = item.type === 'generation_succeeded';
-                const actionLabel = isSucceeded ? 'Open blueprint' : 'Retry';
-                const actionPath = isSucceeded
-                  ? (item.linkPath || '/my-feed')
-                  : (item.linkPath || getRetryPathForScope(item.scope));
+                const actionLabel = getGenerationResultActionLabel(item.type, item.scope, item.linkPath);
+                const actionPath = resolveGenerationResultLinkPath(item.scope, item.linkPath);
                 return (
                   <div key={item.id} className="rounded-lg border border-border/50 bg-background px-3 py-2.5">
                     <div className="flex items-start justify-between gap-2">

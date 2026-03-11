@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { sortActiveIngestionJobs } from '@/hooks/useGenerationQueue';
 import {
   getGenerationQueueScopeLabel,
+  getGenerationResultActionLabel,
   getQueueFilterForScope,
   getRetryPathForScope,
   matchesGenerationQueueFilter,
+  resolveGenerationResultLinkPath,
 } from '@/lib/generationQueueLabels';
 import type { ActiveIngestionJob } from '@/lib/subscriptionsApi';
 
@@ -73,6 +75,10 @@ describe('generation queue UI logic', () => {
     expect(matchesGenerationQueueFilter('refresh_generate', 'manual_refresh_selection')).toBe(true);
     expect(matchesGenerationQueueFilter('source_unlock', 'search_video_generate')).toBe(false);
     expect(getRetryPathForScope('search_video_generate')).toBe('/search');
+    expect(getRetryPathForScope('source_item_unlock_generation')).toBe('/wall');
+    expect(resolveGenerationResultLinkPath('source_item_unlock_generation', '/my-feed')).toBe('/wall');
+    expect(resolveGenerationResultLinkPath('source_item_unlock_generation', null)).toBe('/wall');
+    expect(getGenerationResultActionLabel('generation_failed', 'source_item_unlock_generation', '/my-feed')).toBe('Open in Wall');
+    expect(getGenerationResultActionLabel('generation_failed', 'source_item_unlock_generation', '/s/youtube/x')).toBe('Open creator');
   });
 });
-

@@ -15,6 +15,7 @@ import { useNotifications, type NotificationItem } from '@/hooks/useNotification
 import { useGenerationQueue } from '@/hooks/useGenerationQueue';
 import { GenerationQueueRow } from '@/components/queue/GenerationQueueRow';
 import { PwaPushCta } from '@/components/pwa/PwaPushCta';
+import { resolveGenerationResultLinkPath } from '@/lib/generationQueueLabels';
 
 function formatRelativeTime(iso: string) {
   const dateMs = Date.parse(iso);
@@ -35,6 +36,13 @@ function notificationIcon(item: NotificationItem) {
   if (item.type === 'generation_started') return LoaderCircle;
   if (item.type === 'generation_failed') return TriangleAlert;
   return Sparkles;
+}
+
+function getNotificationScope(item: NotificationItem) {
+  const rawScope = item.metadata && typeof item.metadata === 'object'
+    ? (item.metadata as Record<string, unknown>).scope
+    : null;
+  return String(rawScope || '').trim() || null;
 }
 
 export function NotificationsBell() {
@@ -65,8 +73,12 @@ export function NotificationsBell() {
   const liveQueueTop = useMemo(() => activeJobs.slice(0, 3), [activeJobs]);
 
   const handleOpenItem = async (item: NotificationItem) => {
-    if (item.link_path) {
-      navigate(item.link_path);
+    const scope = getNotificationScope(item);
+    const resolvedPath = item.type.startsWith('generation_')
+      ? resolveGenerationResultLinkPath(scope, item.link_path)
+      : String(item.link_path || '').trim();
+    if (resolvedPath) {
+      navigate(resolvedPath);
     }
   };
 

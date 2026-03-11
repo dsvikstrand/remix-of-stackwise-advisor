@@ -4811,6 +4811,7 @@ async function emitGenerationTerminalNotification(
     failed: number;
     itemTitle?: string | null;
     blueprintTitle?: string | null;
+    failureSummary?: string | null;
     traceId?: string | null;
     firstBlueprintId?: string | null;
     linkPath?: string | null;
@@ -4828,6 +4829,7 @@ async function emitGenerationTerminalNotification(
       failed: params.failed,
       itemTitle: params.itemTitle || null,
       blueprintTitle: params.blueprintTitle || null,
+      failureSummary: params.failureSummary || null,
       traceId: params.traceId || null,
       linkPath: params.linkPath || null,
       firstBlueprintId: params.firstBlueprintId || null,
@@ -4854,9 +4856,42 @@ function getGenerationNotificationLinkPath(input: {
     case 'manual_refresh_selection':
       return '/subscriptions';
     case 'source_item_unlock_generation':
+    case 'source_page_video_library_selection':
     default:
-      return '/my-feed';
+      return '/wall';
   }
+}
+
+function summarizeGenerationFailure(input: {
+  errorCode?: string | null;
+  errorMessage?: string | null;
+}) {
+  const errorCode = String(input.errorCode || '').trim().toUpperCase();
+  const errorMessage = String(input.errorMessage || '').trim();
+  if (
+    errorCode === 'NO_TRANSCRIPT_PERMANENT'
+    || errorCode === 'NO_CAPTIONS'
+    || errorCode === 'VIDEO_UNAVAILABLE'
+  ) {
+    return 'No transcript available for this video.';
+  }
+  if (
+    errorCode === 'TRANSCRIPT_UNAVAILABLE'
+    || errorCode === 'ACCESS_DENIED'
+    || errorCode === 'TRANSCRIPT_FETCH_FAIL'
+    || errorCode === 'PROVIDER_FAIL'
+    || errorCode === 'RATE_LIMITED'
+    || errorCode === 'TIMEOUT'
+  ) {
+    return 'Transcript temporarily unavailable. Try again later.';
+  }
+  if (errorCode === 'VIDEO_TOO_LONG') {
+    return 'This video is too long to generate right now.';
+  }
+  if (errorCode === 'VIDEO_DURATION_UNAVAILABLE') {
+    return 'This video could not be processed because its duration is unavailable.';
+  }
+  return errorMessage || null;
 }
 
 async function emitGenerationStartedNotification(
@@ -6466,6 +6501,10 @@ async function processSourceItemUnlockGenerationJob(input: {
     failed: notifyFailedCount,
     itemTitle: firstItemTitle,
     blueprintTitle: firstBlueprintTitle,
+    failureSummary: summarizeGenerationFailure({
+      errorCode: failures[0]?.error_code,
+      errorMessage: failures[0]?.error,
+    }),
     traceId: input.traceId,
     linkPath: getGenerationNotificationLinkPath({ scope: 'source_item_unlock_generation' }),
     firstBlueprintId,

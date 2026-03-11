@@ -44,6 +44,7 @@ export type NotificationEvent =
       failed: number;
       itemTitle?: string | null;
       blueprintTitle?: string | null;
+      failureSummary?: string | null;
       traceId?: string | null;
       linkPath?: string | null;
       firstBlueprintId?: string | null;
@@ -138,7 +139,7 @@ function buildGenerationStartedEvent(
     || (queuedCount === 1
       ? 'We started generating your blueprint. We will notify you when it is done.'
       : `We started ${queuedCount} blueprint generations. We will notify you when they are done.`);
-  const linkPath = String(event.linkPath || '').trim() || '/my-feed';
+  const linkPath = String(event.linkPath || '').trim() || '/wall';
   const dedupeKey = `generation_started:${event.scope}:${event.jobId}`;
 
   return {
@@ -168,14 +169,19 @@ function buildGenerationTerminalEvent(
   if (!hasTerminalSignal) return null;
   const blueprintTitle = String(event.blueprintTitle || '').trim();
   const itemTitle = String(event.itemTitle || '').trim();
+  const failureSummary = String(event.failureSummary || '').trim();
 
   const succeeded = inserted > 0;
   const type: NotificationType = succeeded ? 'generation_succeeded' : 'generation_failed';
   const title = succeeded ? 'Your blueprint generation is complete' : 'Your blueprint generation failed';
-  const body = blueprintTitle || itemTitle || `Generated ${inserted}, skipped ${skipped}, failed ${failed}.`;
+  const body = succeeded
+    ? (blueprintTitle || itemTitle || `Generated ${inserted}, skipped ${skipped}, failed ${failed}.`)
+    : (itemTitle && failureSummary
+      ? `${itemTitle} · ${failureSummary}`
+      : failureSummary || itemTitle || `Generated ${inserted}, skipped ${skipped}, failed ${failed}.`);
   const linkPath = event.firstBlueprintId
     ? `/blueprint/${event.firstBlueprintId}`
-    : (String(event.linkPath || '').trim() || '/my-feed');
+    : (String(event.linkPath || '').trim() || '/wall');
   const dedupeKey = `generation_terminal:${event.scope}:${event.jobId}:${succeeded ? 'succeeded' : 'failed'}`;
 
   return {
@@ -192,6 +198,7 @@ function buildGenerationTerminalEvent(
       failed_count: failed,
       item_title: itemTitle || null,
       blueprint_title: blueprintTitle || null,
+      failure_summary: failureSummary || null,
       trace_id: event.traceId || null,
     },
     dedupeKey,
