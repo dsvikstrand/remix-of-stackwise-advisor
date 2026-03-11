@@ -140,7 +140,7 @@ Step 4 closure (2026-02-13):
   - Plain search terms now include tag-matched results even without `#` prefix.
 - Smoke checks passed:
   - `npm run build`
-  - `npm run smoke:yt2bp -- --base-url https://bapi.vdsai.cloud`
+  - `npm run smoke:yt2bp -- --base-url https://api.bleup.app`
   - `TMPDIR=/tmp npx -y tsx ./codex/skills/seed-blueprints/scripts/seed_stage0.ts --spec seed/seed_spec_v0.json --asp strength_training_male_v0 --auth-only`
 
 ## Test Matrix (P2)

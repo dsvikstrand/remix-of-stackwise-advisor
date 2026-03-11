@@ -241,7 +241,7 @@ i4) Immediate next action
 
 ## v0 Operational Lock-In (2026-02-12)
 j1) [have] Reproducible post-deploy smoke added:
-- `npm run smoke:yt2bp -- --base-url https://bapi.vdsai.cloud`
+- `npm run smoke:yt2bp -- --base-url https://api.bleup.app`
 - source list: `docs/app/yt2bp_smoke_urls.txt`
 j2) [have] Logs-first metrics parser added:
 - `npm run metrics:yt2bp -- --source journalctl --json`

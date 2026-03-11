@@ -211,11 +211,11 @@ n1) [todo] Release parity:
 n2) [todo] Migration parity:
 - `npx supabase migration list`
 n3) [todo] Health:
-- `curl -sS https://bapi.vdsai.cloud/api/health`
+- `curl -sS https://api.bleup.app/api/health`
 n4) [todo] Queue health:
-- `curl -sS https://bapi.vdsai.cloud/api/ops/queue/health -H "x-service-token: $INGESTION_SERVICE_TOKEN"`
+- `curl -sS https://api.bleup.app/api/ops/queue/health -H "x-service-token: $INGESTION_SERVICE_TOKEN"`
 n4a) [todo] Release smoke:
-- `npm run smoke:release -- --api-base-url https://api.bleup.app --frontend-base-url https://dsvikstrand.github.io/remix-of-stackwise-advisor --release-sha "$RELEASE_SHA"`
+- `npm run smoke:release -- --api-base-url https://api.bleup.app --frontend-base-url https://bleup.app --release-sha "$RELEASE_SHA"`
 n5) [todo] Tests:
 - `npm run test`
 n6) [todo] Build:
@@ -289,6 +289,9 @@ o58) [have] `2026-03-06T18:20:00Z` - `P1-2` - `Playwright callback evidence suit
 o59) [have] `2026-03-06T19:05:00Z` - `P1-2` - `real-device iPhone Safari subscriptions callback flows passed` - `Manual device validation confirmed success and denied /subscriptions YouTube OAuth flows both passed on iPhone Safari; landing route stayed /subscriptions, session remained present, and callback params were cleared after return` - `david`
 o60) [todo] `P1-2` - `real-device Android Chrome matrix row pending` - `Need one successful and one denied /subscriptions callback run on Android Chrome with screenshot/recording evidence` - `david`
 o61) [have] `2026-03-06T19:20:00Z` - `P1-1` - `public GitHub Actions surface confirms CI Gate workflow is active on main` - `Public Actions page for dsvikstrand/remix-of-stackwise-advisor shows workflow "CI Gate" and recent successful runs on main for commits 4ef5f9f, 78ead6c, and b8b94a3; however, this shell still lacks authenticated ruleset / PR merge-block access needed for final branch-protection proof` - `david`
+
+Note
+- Historical evidence entries above may still mention `bapi.vdsai.cloud` because that was the live hostname at the time the evidence was recorded. Active commands should use `https://api.bleup.app`.
 
 ## Deferred (Not Launch Gate)
 p1) [have] P2 modularization and post-launch optimizations are intentionally out of launch gate.
