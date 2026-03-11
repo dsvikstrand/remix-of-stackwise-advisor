@@ -476,12 +476,19 @@ describe('youtube handlers', () => {
 
   it('returns cooldown error when manual YouTube comments refresh is on cooldown', async () => {
     const app = createMockApp();
+    const serviceDb = createMockSupabase({
+      blueprints: [{
+        id: '00000000-0000-0000-0000-000000000999',
+        creator_user_id: '00000000-0000-0000-0000-000000000001',
+      }],
+    });
     const requestManualBlueprintYouTubeCommentsRefresh = vi.fn(async () => ({
       ok: false as const,
       code: 'COMMENTS_REFRESH_COOLDOWN_ACTIVE' as const,
       retry_at: '2026-03-06T10:00:00.000Z',
     }));
     registerYouTubeRouteHandlers(app as any, createDeps({
+      getServiceSupabaseClient: () => serviceDb,
       requestManualBlueprintYouTubeCommentsRefresh,
     }));
 
@@ -504,6 +511,12 @@ describe('youtube handlers', () => {
 
   it('queues manual YouTube comments refresh request', async () => {
     const app = createMockApp();
+    const serviceDb = createMockSupabase({
+      blueprints: [{
+        id: '00000000-0000-0000-0000-000000000999',
+        creator_user_id: '00000000-0000-0000-0000-000000000001',
+      }],
+    });
     const requestManualBlueprintYouTubeCommentsRefresh = vi.fn(async () => ({
       ok: true as const,
       status: 'queued' as const,
@@ -511,6 +524,7 @@ describe('youtube handlers', () => {
       queue_depth: 2,
     }));
     registerYouTubeRouteHandlers(app as any, createDeps({
+      getServiceSupabaseClient: () => serviceDb,
       requestManualBlueprintYouTubeCommentsRefresh,
     }));
 
@@ -530,6 +544,42 @@ describe('youtube handlers', () => {
       data: {
         status: 'queued',
       },
+    });
+  });
+
+  it('hides manual YouTube comments refresh for non-owners', async () => {
+    const app = createMockApp();
+    const serviceDb = createMockSupabase({
+      blueprints: [{
+        id: '00000000-0000-0000-0000-000000000999',
+        creator_user_id: '00000000-0000-0000-0000-000000000777',
+      }],
+    });
+    const requestManualBlueprintYouTubeCommentsRefresh = vi.fn(async () => ({
+      ok: true as const,
+      status: 'queued' as const,
+      cooldown_until: null,
+      queue_depth: 0,
+    }));
+    registerYouTubeRouteHandlers(app as any, createDeps({
+      getServiceSupabaseClient: () => serviceDb,
+      requestManualBlueprintYouTubeCommentsRefresh,
+    }));
+
+    const handler = app.handlers['POST /api/blueprints/:id/youtube-comments/refresh'];
+    const req = {
+      params: { id: '00000000-0000-0000-0000-000000000999' },
+      body: {},
+    } as any;
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(requestManualBlueprintYouTubeCommentsRefresh).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toMatchObject({
+      ok: false,
+      error_code: 'NOT_FOUND',
     });
   });
 });

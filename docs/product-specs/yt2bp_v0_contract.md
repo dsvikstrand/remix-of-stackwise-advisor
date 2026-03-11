@@ -204,4 +204,4 @@
 
 ## Related Endpoint Addendum (2026-03-05)
 - This contract still excludes comments-refresh control endpoints.
-- Manual YouTube source-comment refresh is handled by `POST /api/blueprints/:id/youtube-comments/refresh` with cooldown/backpressure guards.
+- Manual YouTube source-comment refresh is handled by `POST /api/blueprints/:id/youtube-comments/refresh`; it is owner-only and guarded by cooldown/backpressure controls.

@@ -409,6 +409,88 @@ describe('blueprint YouTube comments service', () => {
     expect(payload.last_comments_manual_triggered_by).toBe('00000000-0000-0000-0000-000000000777');
   });
 
+  it('executeRefresh(comments) manual trigger before bootstrap completion advances to stage one and keeps a delayed auto follow-up', async () => {
+    const commentDeleteEq2 = vi.fn(async () => ({ error: null }));
+    const commentDeleteEq1 = vi.fn(() => ({ eq: commentDeleteEq2 }));
+    const commentsTable = {
+      delete: vi.fn(() => ({ eq: commentDeleteEq1 })),
+      insert: vi.fn(async () => ({ error: null })),
+    };
+    const upsertRefreshState = vi.fn(async () => ({ error: null }));
+    const refreshSelectQuery = {
+      eq: vi.fn(),
+      maybeSingle: vi.fn(async () => ({
+        data: {
+          blueprint_id: 'bp_1',
+          youtube_video_id: 'abc123def45',
+          source_item_id: 'src_1',
+          enabled: true,
+          comments_auto_stage: 0,
+          next_comments_refresh_at: '2026-03-05T00:15:00.000Z',
+          comments_manual_cooldown_until: null,
+          last_comments_manual_refresh_at: null,
+          last_comments_manual_triggered_by: null,
+          consecutive_comments_failures: 0,
+        },
+        error: null,
+      })),
+    } as any;
+    refreshSelectQuery.eq.mockReturnValue(refreshSelectQuery);
+
+    const db = {
+      from(table: string) {
+        if (table === 'blueprint_youtube_comments') return commentsTable;
+        if (table === 'blueprint_youtube_refresh_state') {
+          return {
+            select: vi.fn(() => refreshSelectQuery),
+            upsert: upsertRefreshState,
+          };
+        }
+        throw new Error(`Unexpected table: ${table}`);
+      },
+    };
+
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        items: [
+          {
+            id: 'top_comment',
+            snippet: {
+              topLevelComment: {
+                snippet: {
+                  textDisplay: 'manual refresh comment',
+                },
+              },
+            },
+          },
+        ],
+      }),
+    })) as unknown as typeof fetch;
+
+    const service = createBlueprintYouTubeCommentsService({
+      apiKey: 'youtube-key',
+      fetchImpl,
+    });
+
+    await service.executeRefresh({
+      db,
+      blueprintId: 'bp_1',
+      kind: 'comments',
+      trigger: 'manual',
+      youtubeVideoId: 'abc123def45',
+      sourceItemId: 'src_1',
+      triggeredByUserId: '00000000-0000-0000-0000-000000000777',
+    });
+
+    const payload = upsertRefreshState.mock.calls[0][0] as Record<string, unknown>;
+    expect(payload.comments_auto_stage).toBe(1);
+    expect(typeof payload.next_comments_refresh_at).toBe('string');
+    expect(payload.next_comments_refresh_at).not.toBe('2026-03-05T00:15:00.000Z');
+    expect(typeof payload.comments_manual_cooldown_until).toBe('string');
+  });
+
   it('hasPendingRefreshJob detects matching blueprint/kind payloads', async () => {
     const pendingQuery = {
       select: vi.fn(),

@@ -71,6 +71,11 @@ function normalizeIntervalHours(raw: unknown, fallback: number) {
   return Math.max(1, Math.floor(parsed));
 }
 
+function normalizeNullableIso(raw: unknown) {
+  const value = raw == null ? '' : String(raw || '').trim();
+  return value || null;
+}
+
 function parseViewCount(payload: unknown) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
   const root = payload as Record<string, unknown>;
@@ -823,11 +828,22 @@ export function createBlueprintYouTubeCommentsService(input: {
       return;
     }
 
+    const refreshState = await getRefreshStateForBlueprint({
+      db: args.db,
+      blueprintId: args.blueprintId,
+    });
+    const trigger = args.trigger === 'manual' ? 'manual' : 'auto';
+    const currentAutoStage = normalizeAutoStage(refreshState?.comments_auto_stage);
+    const nextBootstrapDueAt = (() => {
+      if (currentAutoStage >= 2) return null;
+      const existingDueAt = normalizeNullableIso(refreshState?.next_comments_refresh_at);
+      if (existingDueAt) return existingDueAt;
+      return currentAutoStage <= 0
+        ? toFutureIsoFromMinutes(commentsAutoFirstDelayMinutes)
+        : toFutureIsoFromHours(commentsAutoSecondDelayHours);
+    })();
+
     try {
-      const refreshState = await getRefreshStateForBlueprint({
-        db: args.db,
-        blueprintId: args.blueprintId,
-      });
       const topComments = await fetchYouTubeCommentSnapshot({
         videoId: args.youtubeVideoId,
         sortMode: 'top',
@@ -851,13 +867,11 @@ export function createBlueprintYouTubeCommentsService(input: {
         comments: newComments,
       });
       const nowIsoNext = new Date().toISOString();
-      const trigger = args.trigger === 'manual' ? 'manual' : 'auto';
-      const currentAutoStage = normalizeAutoStage(refreshState?.comments_auto_stage);
       const nextAutoStage = trigger === 'manual'
-        ? currentAutoStage
+        ? Math.max(1, currentAutoStage)
         : (currentAutoStage <= 0 ? 1 : 2);
       const nextCommentsRefreshAt = trigger === 'manual'
-        ? null
+        ? (nextAutoStage >= 2 ? null : toFutureIsoFromHours(commentsAutoSecondDelayHours))
         : (nextAutoStage >= 2 ? null : toFutureIsoFromHours(commentsAutoSecondDelayHours));
       await upsertRefreshState({
         db: args.db,
@@ -904,7 +918,6 @@ export function createBlueprintYouTubeCommentsService(input: {
       const nextFailures = previousFailures + 1;
       const backoffHours = getBackoffHours(nextFailures, COMMENTS_REFRESH_BACKOFF_HOURS);
       const message = error instanceof Error ? error.message : String(error);
-      const trigger = args.trigger === 'manual' ? 'manual' : 'auto';
       await upsertRefreshState({
         db: args.db,
         blueprintId: args.blueprintId,
@@ -914,7 +927,7 @@ export function createBlueprintYouTubeCommentsService(input: {
           last_comments_refresh_status: 'failed',
           consecutive_comments_failures: nextFailures,
           next_comments_refresh_at: trigger === 'manual'
-            ? null
+            ? nextBootstrapDueAt
             : toFutureIsoFromHours(backoffHours),
           ...(trigger === 'manual'
             ? {

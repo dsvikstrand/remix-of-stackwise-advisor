@@ -121,7 +121,8 @@ curl -sS https://api.bleup.app/api/ops/queue/health \
 - Comments policy:
   - auto refresh once at `+15m` after blueprint registration
   - auto refresh once at `+24h` after blueprint registration
-  - then manual refresh only (`POST /api/blueprints/:id/youtube-comments/refresh`) with per-blueprint `24h` cooldown
+  - owner-triggered manual refresh is available immediately via `POST /api/blueprints/:id/youtube-comments/refresh`
+  - manual refresh uses per-blueprint `10m` cooldown and still respects pending-job + queue-depth guards
 - Default per-cycle budget:
   - view refresh jobs: `15`
   - comments refresh jobs: `5`

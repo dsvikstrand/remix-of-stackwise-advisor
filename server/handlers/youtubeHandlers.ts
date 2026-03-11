@@ -432,6 +432,28 @@ app.post('/api/blueprints/:id/youtube-comments/refresh', async (req, res) => {
   }
 
   try {
+    const { data: blueprint, error: blueprintError } = await db
+      .from('blueprints')
+      .select('id, creator_user_id')
+      .eq('id', blueprintId)
+      .maybeSingle();
+    if (blueprintError) {
+      return res.status(400).json({
+        ok: false,
+        error_code: 'READ_FAILED',
+        message: blueprintError.message,
+        data: null,
+      });
+    }
+    if (!blueprint || String(blueprint.creator_user_id || '').trim() !== userId) {
+      return res.status(404).json({
+        ok: false,
+        error_code: 'NOT_FOUND',
+        message: 'Blueprint not found.',
+        data: null,
+      });
+    }
+
     const result = await requestManualBlueprintYouTubeCommentsRefresh({
       db,
       blueprintId,
@@ -455,15 +477,6 @@ app.post('/api/blueprints/:id/youtube-comments/refresh', async (req, res) => {
         ok: false,
         error_code: 'COMMENTS_REFRESH_COOLDOWN_ACTIVE',
         message: 'Please try again in a little while.',
-        retry_at: result.retry_at,
-        data: null,
-      });
-    }
-    if (result.code === 'COMMENTS_REFRESH_AUTO_BOOTSTRAP_PENDING') {
-      return res.status(409).json({
-        ok: false,
-        error_code: 'COMMENTS_REFRESH_AUTO_BOOTSTRAP_PENDING',
-        message: 'Automatic source comment updates are still in progress for this blueprint.',
         retry_at: result.retry_at,
         data: null,
       });

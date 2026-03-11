@@ -4307,7 +4307,6 @@ async function enqueueBlueprintYouTubeRefreshJob(input: {
 type ManualBlueprintYouTubeCommentsRefreshResult =
   | { ok: true; status: 'queued' | 'already_pending'; cooldown_until: string | null; queue_depth: number | null }
   | { ok: false; code: 'BLUEPRINT_YOUTUBE_REFRESH_NOT_AVAILABLE' }
-  | { ok: false; code: 'COMMENTS_REFRESH_AUTO_BOOTSTRAP_PENDING'; retry_at: string | null }
   | { ok: false; code: 'COMMENTS_REFRESH_COOLDOWN_ACTIVE'; retry_at: string | null }
   | { ok: false; code: 'COMMENTS_REFRESH_QUEUE_GUARDED'; retry_after_seconds: number; queue_depth: number };
 
@@ -4335,14 +4334,6 @@ async function requestManualBlueprintYouTubeCommentsRefresh(input: {
   }
 
   const nowMs = Date.now();
-  if (refreshState.comments_auto_stage < 2) {
-    return {
-      ok: false,
-      code: 'COMMENTS_REFRESH_AUTO_BOOTSTRAP_PENDING',
-      retry_at: refreshState.next_comments_refresh_at || null,
-    };
-  }
-
   const cooldownMs = refreshState.comments_manual_cooldown_until
     ? Date.parse(refreshState.comments_manual_cooldown_until)
     : Number.NaN;

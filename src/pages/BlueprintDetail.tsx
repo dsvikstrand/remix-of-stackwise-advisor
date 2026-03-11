@@ -321,6 +321,7 @@ export default function BlueprintDetail() {
   const toggleLike = useToggleBlueprintLike();
   const { toast } = useToast();
   const { user } = useAuth();
+  const canRefreshYouTubeComments = Boolean(user?.id && blueprint?.creator_user_id === user.id);
   const [comment, setComment] = useState('');
   const youtubeCommentsRefresh = useMutation({
     mutationFn: async () => {
@@ -344,13 +345,6 @@ export default function BlueprintDetail() {
         toast({
           title: 'Cooldown active',
           description: 'Please try again in a little while.',
-        });
-        return;
-      }
-      if (code === 'COMMENTS_REFRESH_AUTO_BOOTSTRAP_PENDING') {
-        toast({
-          title: 'Automatic refresh pending',
-          description: 'This blueprint is still in its automatic comment refresh window.',
         });
         return;
       }
@@ -1149,7 +1143,7 @@ export default function BlueprintDetail() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <h2 className="text-lg font-semibold">{commentView === 'youtube' ? 'Comments' : 'Bleu Comments'}</h2>
                 <div className="flex shrink-0 flex-nowrap items-center gap-2">
-                  {commentView === 'youtube' ? (
+                  {commentView === 'youtube' && canRefreshYouTubeComments ? (
                     <Button
                       type="button"
                       variant="outline"

@@ -360,5 +360,5 @@ Current production behavior note:
 - Comment snapshots are no longer recurring periodic refresh:
   - auto at `+15m`
   - auto at `+24h`
-  - then manual trigger endpoint with per-blueprint cooldown.
+  - owner-triggered manual refresh is available immediately with per-blueprint cooldown.
 - Frontend still renders from stored data; page loads do not call YouTube directly.

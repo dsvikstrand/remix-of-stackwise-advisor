@@ -335,8 +335,8 @@ si70) installed-PWA push delivery is derived from the existing `notifications` t
 si69) generation surfaces are gated by the daily credit wallet (`free=3.00`, `plus=20.00`, reset `00:00 UTC`, no rollover); manual routes queue only the affordable new-item prefix and return launch-safe credit denial/skip copy.
 si69a) admin entitlement bypass applies at actual reservation/settle/refund time for both manual generation and shared auto-unlock paths; admin users are not meant to remain `unlockable` solely because displayed wallet balance is depleted.
 si69b) canonical feed-lane semantics are defined in `docs/app/mvp-feed-and-channel-model.md`; implementation should treat `For You` as the only locked lane, `Joined` as joined-channel published discovery, and `All` as the global published blueprint stream.
-si70) YouTube comment snapshots for blueprints now follow a bounded lifecycle: auto refresh at `+15m` and `+24h`, then manual-only refresh with per-blueprint cooldown.
-si71) manual source-comment refresh endpoint is `POST /api/blueprints/:id/youtube-comments/refresh`; cooldown denials return `COMMENTS_REFRESH_COOLDOWN_ACTIVE`.
+si70) YouTube comment snapshots for blueprints keep bounded background freshness: auto refresh targets `+15m` and `+24h`, while owner-triggered manual refresh is available immediately with per-blueprint cooldown.
+si71) manual source-comment refresh endpoint is `POST /api/blueprints/:id/youtube-comments/refresh`; it is owner-only, cooldown denials return `COMMENTS_REFRESH_COOLDOWN_ACTIVE`, and queue backpressure returns `COMMENTS_REFRESH_QUEUE_GUARDED`.
 
 ## Next Milestone (Hardening)
 n1) Keep legacy manual gate behavior stable with `CHANNEL_GATES_MODE=bypass` while auto-channel path uses `AUTO_CHANNEL_GATE_MODE`.

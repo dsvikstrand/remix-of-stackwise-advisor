@@ -209,7 +209,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 3. Deferred automation work can be resumed later without blocking MVP delivery.
 
 ## Snapshot Note (2026-03-05)
-1. Comment freshness for YouTube-backed blueprints now uses bounded bootstrap auto-refresh (`+15m`, `+24h`) plus manual cooldown-gated refresh.
+1. Comment freshness for YouTube-backed blueprints now uses bounded bootstrap auto-refresh (`+15m`, `+24h`) plus owner-triggered manual refresh with short cooldown/backpressure guards.
 2. Manual generation billing now uses reserve -> settle/release semantics with duplicate/no-charge short-circuiting and affordable-prefix queueing for Search/manual refresh.
 3. Queue admission now counts real work size (`queue_work_items`) for interactive multi-item jobs instead of relying on job rows alone.
 4. Credit refresh is now lazy/on-demand instead of background polling from always-mounted header UI.
