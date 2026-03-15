@@ -15,6 +15,10 @@ import {
   settleManualGeneration,
 } from '../services/manualGenerationBilling';
 import {
+  getBlueprintAvailabilityForVideo,
+  getBlueprintUnavailableMessage,
+} from '../services/blueprintAvailability';
+import {
   buildManualGenerationResultBuckets,
   classifyManualGenerationCandidates,
   readQueueAdmissionCounts,
@@ -238,6 +242,16 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
       ok: false,
       error_code: 'CONFIG_ERROR',
       message: 'Service role client not configured',
+      run_id: runId,
+    });
+  }
+  const blueprintAvailability = await getBlueprintAvailabilityForVideo(traceDb, validatedUrl.sourceNativeId);
+  if (blueprintAvailability.status === 'cooldown_active') {
+    return res.status(422).json({
+      ok: false,
+      error_code: 'VIDEO_BLUEPRINT_UNAVAILABLE',
+      message: getBlueprintUnavailableMessage(),
+      retry_after_seconds: blueprintAvailability.retryAfterSeconds,
       run_id: runId,
     });
   }
@@ -952,9 +966,23 @@ app.post(
       },
     });
     skippedExisting.push(...ready);
+    const blueprintUnavailableRows: Array<{ video_id: string; title: string; retry_after_seconds: number }> = [];
+    const availableBillableItems: typeof billableItems = [];
+    for (const item of billableItems) {
+      const availability = await getBlueprintAvailabilityForVideo(serviceDb, item.video_id);
+      if (availability.status === 'cooldown_active') {
+        blueprintUnavailableRows.push({
+          video_id: item.video_id,
+          title: item.title,
+          retry_after_seconds: availability.retryAfterSeconds,
+        });
+        continue;
+      }
+      availableBillableItems.push(item);
+    }
 
     const requestId = `search-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const reservationInput = billableItems.map((item, index) => ({
+    const reservationInput = availableBillableItems.map((item, index) => ({
       item,
       reservation: buildManualGenerationReservation({
         scope: 'search_video_generate',
@@ -1037,7 +1065,31 @@ app.post(
     }
 
     if (queuedItems.length === 0) {
-      if (durationBlocked.length > 0 && skippedExisting.length === 0 && inProgress.length === 0 && skippedUnaffordable.length === 0) {
+      if (
+        blueprintUnavailableRows.length > 0
+        && durationBlocked.length === 0
+        && skippedExisting.length === 0
+        && inProgress.length === 0
+        && skippedUnaffordable.length === 0
+      ) {
+        return res.status(422).json({
+          ok: false,
+          error_code: 'VIDEO_BLUEPRINT_UNAVAILABLE',
+          message: getBlueprintUnavailableMessage(),
+          retry_after_seconds: Math.max(...blueprintUnavailableRows.map((row) => row.retry_after_seconds)),
+          data: {
+            unavailable_count: blueprintUnavailableRows.length,
+            unavailable: blueprintUnavailableRows,
+          },
+        });
+      }
+      if (
+        durationBlocked.length > 0
+        && skippedExisting.length === 0
+        && inProgress.length === 0
+        && skippedUnaffordable.length === 0
+        && blueprintUnavailableRows.length === 0
+      ) {
         return res.status(422).json({
           ok: false,
           error_code: 'VIDEO_DURATION_POLICY_BLOCKED',
@@ -1069,6 +1121,7 @@ app.post(
             skippedExisting,
             inProgress,
             skippedUnaffordable,
+            unavailable: blueprintUnavailableRows,
           }),
         },
       });
@@ -1129,6 +1182,7 @@ app.post(
           skippedExisting,
           inProgress,
           skippedUnaffordable,
+          unavailable: blueprintUnavailableRows,
         }),
       },
     });

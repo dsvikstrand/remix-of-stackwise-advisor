@@ -20,6 +20,10 @@ import {
   wouldExceedQueueAdmission,
 } from '../services/generationPreflight';
 import { getBlueprintGenerationChargePolicy } from '../services/generationChargePolicy';
+import {
+  getBlueprintAvailabilityForVideo,
+  getBlueprintUnavailableMessage,
+} from '../services/blueprintAvailability';
 
 export function registerSourcePagesRouteHandlers(app: express.Express, deps: SourcePagesRouteDeps) {
   const {
@@ -758,6 +762,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
   const inProgressRows: Array<{ video_id: string; title: string }> = [];
   const readyRows: Array<{ video_id: string; title: string; blueprint_id: string | null }> = [];
   const insufficientRows: Array<{ video_id: string; title: string; required: number; balance: number }> = [];
+  const blueprintUnavailableRows: Array<{ video_id: string; title: string; retry_after_seconds: number }> = [];
   const transcriptUnavailableRows: Array<{ video_id: string; title: string; retry_after_seconds: number }> = [];
   const permanentNoTranscriptRows: Array<{ video_id: string; title: string }> = [];
 
@@ -863,6 +868,15 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         inProgressRows.push({
           video_id: item.video_id,
           title: item.title,
+        });
+        continue;
+      }
+      const blueprintAvailability = await getBlueprintAvailabilityForVideo(sourcePageDb, item.video_id);
+      if (blueprintAvailability.status === 'cooldown_active') {
+        blueprintUnavailableRows.push({
+          video_id: item.video_id,
+          title: item.title,
+          retry_after_seconds: blueprintAvailability.retryAfterSeconds,
         });
         continue;
       }
@@ -1017,6 +1031,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
     queueItems.length === 0
     && durationBlocked.length > 0
     && insufficientRows.length === 0
+    && blueprintUnavailableRows.length === 0
     && transcriptUnavailableRows.length === 0
     && permanentNoTranscriptRows.length === 0
     && readyRows.length === 0
@@ -1038,6 +1053,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
   if (
     queueItems.length === 0
     && insufficientRows.length > 0
+    && blueprintUnavailableRows.length === 0
     && transcriptUnavailableRows.length === 0
     && permanentNoTranscriptRows.length === 0
     && readyRows.length === 0
@@ -1061,8 +1077,34 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
 
   if (
     queueItems.length === 0
+    && blueprintUnavailableRows.length > 0
+    && insufficientRows.length === 0
+    && transcriptUnavailableRows.length === 0
+    && permanentNoTranscriptRows.length === 0
+    && readyRows.length === 0
+    && inProgressRows.length === 0
+    && duplicateRows.length === 0
+  ) {
+    return res.status(422).json({
+      ok: false,
+      error_code: 'VIDEO_BLUEPRINT_UNAVAILABLE',
+      message: getBlueprintUnavailableMessage(),
+      retry_after_seconds: Math.max(...blueprintUnavailableRows.map((row) => row.retry_after_seconds)),
+      data: {
+        ...traceData,
+        unavailable_count: blueprintUnavailableRows.length,
+        unavailable: blueprintUnavailableRows,
+        duration_blocked_count: durationBlocked.length,
+        duration_blocked: durationBlocked,
+      },
+    });
+  }
+
+  if (
+    queueItems.length === 0
     && transcriptUnavailableRows.length > 0
     && insufficientRows.length === 0
+    && blueprintUnavailableRows.length === 0
     && permanentNoTranscriptRows.length === 0
     && readyRows.length === 0
     && inProgressRows.length === 0
@@ -1097,6 +1139,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
     queueItems.length === 0
     && permanentNoTranscriptRows.length > 0
     && transcriptUnavailableRows.length === 0
+    && blueprintUnavailableRows.length === 0
     && insufficientRows.length === 0
     && readyRows.length === 0
     && inProgressRows.length === 0
@@ -1141,6 +1184,8 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         in_progress: inProgressRows,
         insufficient_count: insufficientRows.length,
         insufficient: insufficientRows,
+        unavailable_count: blueprintUnavailableRows.length,
+        unavailable: blueprintUnavailableRows,
         transcript_unavailable_count: transcriptUnavailableRows.length,
         transcript_unavailable: transcriptUnavailableRows,
         transcript_status: transcriptUnavailableRows.length > 0 ? 'retrying' : null,

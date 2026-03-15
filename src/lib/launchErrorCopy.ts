@@ -2,6 +2,7 @@ export type LaunchErrorCode =
   | 'INSUFFICIENT_CREDITS'
   | 'DAILY_GENERATION_CAP_REACHED'
   | 'SOURCE_PAGE_SUBSCRIPTION_REQUIRED'
+  | 'VIDEO_BLUEPRINT_UNAVAILABLE'
   | 'TRANSCRIPT_UNAVAILABLE'
   | 'NO_TRANSCRIPT_PERMANENT'
   | 'RATE_LIMITED'
@@ -27,6 +28,8 @@ export function getLaunchErrorCopy(input: {
       return 'No daily credits remain right now. Please try again after reset.';
     case 'SOURCE_PAGE_SUBSCRIPTION_REQUIRED':
       return 'Subscribe to this source before using its Video Library.';
+    case 'VIDEO_BLUEPRINT_UNAVAILABLE':
+      return 'This video isn’t currently available for blueprint generation.';
     case 'TRANSCRIPT_UNAVAILABLE':
       return 'Transcript unavailable right now. Please try again in a few minutes.';
     case 'NO_TRANSCRIPT_PERMANENT':

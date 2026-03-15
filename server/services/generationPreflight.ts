@@ -206,6 +206,7 @@ export function buildManualGenerationResultBuckets(input: {
   skippedExisting: unknown[];
   inProgress: unknown[];
   skippedUnaffordable: unknown[];
+  unavailable?: unknown[];
 }) {
   return {
     duration_blocked_count: input.durationBlocked.length,
@@ -216,5 +217,7 @@ export function buildManualGenerationResultBuckets(input: {
     in_progress: input.inProgress,
     skipped_unaffordable_count: input.skippedUnaffordable.length,
     skipped_unaffordable: input.skippedUnaffordable,
+    unavailable_count: (input.unavailable || []).length,
+    unavailable: input.unavailable || [],
   };
 }

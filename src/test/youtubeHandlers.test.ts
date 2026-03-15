@@ -378,6 +378,55 @@ describe('youtube handlers', () => {
     expect(serviceDb.state.credit_ledger.map((row: any) => row.entry_type)).toEqual(['hold', 'settle']);
   });
 
+  it('blocks direct generate for videos inside the 24h blueprint cooldown window', async () => {
+    const serviceDb = createMockSupabase({
+      generation_runs: [{
+        id: 'run_failed_1',
+        run_id: 'run_failed_1',
+        user_id: '00000000-0000-0000-0000-000000000001',
+        video_id: 'abc123def45',
+        status: 'failed',
+        error_code: 'TRANSCRIPT_UNAVAILABLE',
+        error_message: 'Temporary transcript job ended with status "failed".',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }],
+      user_credit_wallets: [{
+        user_id: '00000000-0000-0000-0000-000000000001',
+        balance: 3,
+        capacity: 3,
+        refill_rate_per_sec: 0,
+        last_refill_at: new Date().toISOString(),
+      }],
+    });
+    const app = createMockApp();
+    const runYouTubePipeline = vi.fn(async () => ({ ok: true, run_id: 'run_1' }));
+    registerYouTubeRouteHandlers(app as any, createDeps({
+      getServiceSupabaseClient: () => serviceDb,
+      runYouTubePipeline,
+    }));
+
+    const handler = app.handlers['POST /api/youtube-to-blueprint'];
+    const req = {
+      body: {
+        video_url: 'https://www.youtube.com/watch?v=abc123def45',
+        generate_banner: false,
+      },
+    } as any;
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(422);
+    expect(res.body).toMatchObject({
+      ok: false,
+      error_code: 'VIDEO_BLUEPRINT_UNAVAILABLE',
+      message: 'This video isn’t currently available for blueprint generation.',
+    });
+    expect(runYouTubePipeline).not.toHaveBeenCalled();
+    expect(serviceDb.state.credit_ledger).toHaveLength(0);
+  });
+
   it('queues only the affordable prefix for search generation and reports skipped counts', async () => {
     const authDb = createMockSupabase({
       ingestion_jobs: [],
@@ -500,6 +549,64 @@ describe('youtube handlers', () => {
     });
     expect(authDb.state.ingestion_jobs).toHaveLength(1);
     expect(authDb.state.ingestion_jobs[0].payload.items).toHaveLength(1);
+  });
+
+  it('returns unavailable bucket for search generation cooldown-blocked videos', async () => {
+    const authDb = createMockSupabase({
+      ingestion_jobs: [],
+    });
+    const serviceDb = createMockSupabase({
+      generation_runs: [{
+        id: 'run_failed_search_1',
+        run_id: 'run_failed_search_1',
+        user_id: '00000000-0000-0000-0000-000000000001',
+        video_id: 'video_unavailable',
+        status: 'failed',
+        error_code: 'TRANSCRIPT_UNAVAILABLE',
+        error_message: 'Temporary transcript job ended with status "failed".',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }],
+      user_credit_wallets: [{
+        user_id: '00000000-0000-0000-0000-000000000001',
+        balance: 5,
+        capacity: 5,
+        refill_rate_per_sec: 0,
+        last_refill_at: new Date().toISOString(),
+      }],
+    });
+    const app = createMockApp();
+    const items = [{
+      video_id: 'video_unavailable',
+      video_url: 'https://youtube.com/watch?v=video_unavailable',
+      title: 'Unavailable Video',
+      channel_id: 'channel_1',
+    }];
+    registerYouTubeRouteHandlers(app as any, createDeps({
+      getAuthedSupabaseClient: () => authDb,
+      getServiceSupabaseClient: () => serviceDb,
+      SearchVideosGenerateSchema: { safeParse: () => ({ success: true, data: { items } }) },
+      loadExistingSourceVideoStateForUser: vi.fn(async () => new Map()),
+      resolveVariantOrReady: vi.fn(async () => null),
+    }));
+
+    const handler = app.handlers['POST /api/search/videos/generate'];
+    const req = { body: { items } } as any;
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(422);
+    expect(res.body).toMatchObject({
+      ok: false,
+      error_code: 'VIDEO_BLUEPRINT_UNAVAILABLE',
+      message: 'This video isn’t currently available for blueprint generation.',
+      data: {
+        unavailable_count: 1,
+      },
+    });
+    expect(authDb.state.ingestion_jobs).toHaveLength(0);
+    expect(serviceDb.state.credit_ledger).toHaveLength(0);
   });
 
   it('rejects search generate requests above the route cap', async () => {

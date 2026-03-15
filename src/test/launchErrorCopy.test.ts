@@ -19,6 +19,11 @@ describe('launchErrorCopy', () => {
     })).toBe('Subscribe to this source before using its Video Library.');
 
     expect(getLaunchErrorCopy({
+      errorCode: 'VIDEO_BLUEPRINT_UNAVAILABLE',
+      fallback: 'fallback',
+    })).toBe('This video isn’t currently available for blueprint generation.');
+
+    expect(getLaunchErrorCopy({
       errorCode: 'TRANSCRIPT_UNAVAILABLE',
       fallback: 'fallback',
     })).toBe('Transcript unavailable right now. Please try again in a few minutes.');

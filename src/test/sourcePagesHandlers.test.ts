@@ -434,4 +434,88 @@ describe('source page handlers', () => {
     });
     expect(serviceDb.state.credit_ledger).toHaveLength(0);
   });
+
+  it('blocks source page unlock generation for videos inside the 24h blueprint cooldown window', async () => {
+    const app = createMockApp();
+    const authDb = createMockSupabase({
+      user_source_subscriptions: [{
+        id: 'sub_1',
+        user_id: '00000000-0000-0000-0000-000000000001',
+        source_type: 'youtube',
+        source_channel_id: 'channel_1',
+        source_page_id: 'page_1',
+        is_active: true,
+      }],
+    }) as any;
+    const serviceDb = createMockSupabase({
+      source_items: [{
+        id: 'source_video_blocked',
+        source_native_id: 'video_blocked',
+        source_url: 'https://youtube.com/watch?v=video_blocked',
+        title: 'Blocked Video',
+        source_page_id: 'page_1',
+        source_channel_id: 'channel_1',
+        source_channel_title: 'Channel 1',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }],
+      source_item_unlocks: [{
+        id: 'unlock_blocked',
+        source_item_id: 'source_video_blocked',
+        source_page_id: 'page_1',
+        status: 'available',
+        estimated_cost: 1,
+        reserved_by_user_id: null,
+        reservation_expires_at: null,
+        reserved_ledger_id: null,
+        blueprint_id: null,
+        job_id: null,
+        last_error_code: 'TRANSCRIPT_UNAVAILABLE',
+        last_error_message: 'Temporary transcript job ended with status "failed".',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }],
+      user_credit_wallets: [{
+        user_id: '00000000-0000-0000-0000-000000000001',
+        balance: 3,
+        capacity: 3,
+        refill_rate_per_sec: 0,
+        last_refill_at: new Date().toISOString(),
+      }],
+    }) as any;
+
+    registerSourcePagesRouteHandlers(app as any, createDeps({
+      getAuthedSupabaseClient: () => authDb,
+      getServiceSupabaseClient: () => serviceDb,
+      upsertSourceItemFromVideo: vi.fn(async () => ({
+        id: 'source_video_blocked',
+      })),
+    }));
+
+    const handler = app.handlers['POST /api/source-pages/:platform/:externalId/videos/unlock'];
+    const req = {
+      params: { platform: 'youtube', externalId: 'channel_1' },
+      body: {
+        items: [{
+          video_id: 'video_blocked',
+          video_url: 'https://youtube.com/watch?v=video_blocked',
+          title: 'Blocked Video',
+        }],
+      },
+    } as any;
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(422);
+    expect(res.body).toMatchObject({
+      ok: false,
+      error_code: 'VIDEO_BLUEPRINT_UNAVAILABLE',
+      message: 'This video isn’t currently available for blueprint generation.',
+      data: {
+        unavailable_count: 1,
+      },
+    });
+    expect(serviceDb.state.credit_ledger).toHaveLength(0);
+  });
 });
