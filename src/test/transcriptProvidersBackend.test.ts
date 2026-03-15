@@ -3,14 +3,23 @@ import { getTranscriptFromYouTubeTimedtext } from '../../server/transcript/provi
 import { TranscriptProviderError } from '../../server/transcript/types';
 
 const originalFetch = global.fetch;
+const originalRetryAttempts = process.env.TRANSCRIPT_YOUTUBE_TIMEDTEXT_RETRY_ATTEMPTS;
+const originalRetryBaseDelayMs = process.env.TRANSCRIPT_YOUTUBE_TIMEDTEXT_RETRY_BASE_DELAY_MS;
 
 afterEach(() => {
   vi.restoreAllMocks();
   global.fetch = originalFetch;
+  if (originalRetryAttempts == null) delete process.env.TRANSCRIPT_YOUTUBE_TIMEDTEXT_RETRY_ATTEMPTS;
+  else process.env.TRANSCRIPT_YOUTUBE_TIMEDTEXT_RETRY_ATTEMPTS = originalRetryAttempts;
+  if (originalRetryBaseDelayMs == null) delete process.env.TRANSCRIPT_YOUTUBE_TIMEDTEXT_RETRY_BASE_DELAY_MS;
+  else process.env.TRANSCRIPT_YOUTUBE_TIMEDTEXT_RETRY_BASE_DELAY_MS = originalRetryBaseDelayMs;
 });
 
 describe('transcript providers rate-limit mapping', () => {
   it('maps youtube_timedtext HTTP 429 to RATE_LIMITED and parses retry-after date', async () => {
+    process.env.TRANSCRIPT_YOUTUBE_TIMEDTEXT_RETRY_ATTEMPTS = '1';
+    process.env.TRANSCRIPT_YOUTUBE_TIMEDTEXT_RETRY_BASE_DELAY_MS = '0';
+
     const retryAt = new Date(Date.now() + 4000).toUTCString();
     const mockFetch = vi.fn()
       .mockResolvedValueOnce(new Response('<transcript_list><track lang_code="en"/></transcript_list>', {
@@ -90,5 +99,66 @@ describe('transcript providers rate-limit mapping', () => {
       source: 'youtube_timedtext',
       confidence: null,
     });
+  });
+
+  it('retries transient 429 failures before succeeding', async () => {
+    process.env.TRANSCRIPT_YOUTUBE_TIMEDTEXT_RETRY_ATTEMPTS = '3';
+    process.env.TRANSCRIPT_YOUTUBE_TIMEDTEXT_RETRY_BASE_DELAY_MS = '0';
+
+    const mockFetch = vi.fn()
+      .mockResolvedValueOnce(new Response('busy', { status: 429 }))
+      .mockResolvedValueOnce(new Response('<transcript_list><track lang_code="en"/></transcript_list>', {
+        status: 200,
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        events: [{ segs: [{ utf8: 'Recovered' }] }],
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }));
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    const result = await getTranscriptFromYouTubeTimedtext('video123');
+
+    expect(result.text).toBe('Recovered');
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('retries transport failures before succeeding', async () => {
+    process.env.TRANSCRIPT_YOUTUBE_TIMEDTEXT_RETRY_ATTEMPTS = '3';
+    process.env.TRANSCRIPT_YOUTUBE_TIMEDTEXT_RETRY_BASE_DELAY_MS = '0';
+
+    const mockFetch = vi.fn()
+      .mockRejectedValueOnce(new Error('socket hang up'))
+      .mockResolvedValueOnce(new Response('<transcript_list><track lang_code="en"/></transcript_list>', {
+        status: 200,
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        events: [{ segs: [{ utf8: 'Recovered transport' }] }],
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }));
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    const result = await getTranscriptFromYouTubeTimedtext('video123');
+
+    expect(result.text).toBe('Recovered transport');
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not retry permanent metadata failures', async () => {
+    process.env.TRANSCRIPT_YOUTUBE_TIMEDTEXT_RETRY_ATTEMPTS = '3';
+    process.env.TRANSCRIPT_YOUTUBE_TIMEDTEXT_RETRY_BASE_DELAY_MS = '0';
+
+    const mockFetch = vi.fn(async () => new Response(null, {
+      status: 403,
+    }));
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    await expect(getTranscriptFromYouTubeTimedtext('video123')).rejects.toMatchObject({
+      code: 'ACCESS_DENIED',
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 });

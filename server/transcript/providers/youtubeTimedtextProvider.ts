@@ -6,6 +6,9 @@ import {
   type TranscriptResult,
 } from '../types';
 
+const DEFAULT_RETRY_ATTEMPTS = 3;
+const DEFAULT_RETRY_BASE_DELAY_MS = 500;
+
 function buildProviderDebug(input: {
   status?: number | null;
   retryAfterSeconds?: number | null;
@@ -82,6 +85,41 @@ function mapTimedtextListTerminalStatus(status: number) {
     return new TranscriptProviderError('ACCESS_DENIED', 'Transcript access is denied for this video.');
   }
   return null;
+}
+
+function resolveRetryAttempts() {
+  const raw = Number(process.env.TRANSCRIPT_YOUTUBE_TIMEDTEXT_RETRY_ATTEMPTS || '');
+  if (Number.isInteger(raw) && raw >= 1 && raw <= 6) return raw;
+  return DEFAULT_RETRY_ATTEMPTS;
+}
+
+function resolveRetryBaseDelayMs() {
+  const raw = Number(process.env.TRANSCRIPT_YOUTUBE_TIMEDTEXT_RETRY_BASE_DELAY_MS || '');
+  if (Number.isFinite(raw) && raw >= 0 && raw <= 5000) return raw;
+  return DEFAULT_RETRY_BASE_DELAY_MS;
+}
+
+function isRetryableTimedtextError(error: unknown) {
+  if (error instanceof TranscriptProviderError) {
+    if (error.code === 'RATE_LIMITED' || error.code === 'TRANSCRIPT_FETCH_FAIL') {
+      return true;
+    }
+    const status = error.providerDebug?.http_status ?? null;
+    return typeof status === 'number' && status >= 500;
+  }
+  return true;
+}
+
+async function sleep(ms: number) {
+  if (ms <= 0) return;
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function computeRetryDelayMs(attempt: number) {
+  const baseDelayMs = resolveRetryBaseDelayMs();
+  if (baseDelayMs <= 0) return 0;
+  const jitterMs = Math.floor(Math.random() * Math.max(25, Math.floor(baseDelayMs / 4)));
+  return baseDelayMs * attempt + jitterMs;
 }
 
 async function fetchOnce(videoId: string): Promise<TranscriptResult> {
@@ -213,13 +251,18 @@ async function fetchOnce(videoId: string): Promise<TranscriptResult> {
 }
 
 export async function getTranscriptFromYouTubeTimedtext(videoId: string): Promise<TranscriptResult> {
-  try {
-    return await fetchOnce(videoId);
-  } catch (error) {
-    if (error instanceof TranscriptProviderError && error.code !== 'TRANSCRIPT_FETCH_FAIL') {
-      throw error;
+  const maxAttempts = resolveRetryAttempts();
+  let attempt = 1;
+  while (true) {
+    try {
+      return await fetchOnce(videoId);
+    } catch (error) {
+      if (attempt >= maxAttempts || !isRetryableTimedtextError(error)) {
+        throw error;
+      }
+      await sleep(computeRetryDelayMs(attempt));
+      attempt += 1;
     }
-    return fetchOnce(videoId);
   }
 }
 
