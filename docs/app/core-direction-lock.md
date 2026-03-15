@@ -49,48 +49,49 @@ Status: `canonical`
 20. Source pages may lazily hydrate missing avatar/banner metadata on first read so backfilled legacy rows render complete visuals without requiring unsubscribe/resubscribe.
 21. Source pages include a public, read-only blueprint feed (`GET /api/source-pages/:platform/:externalId/blueprints`) that shows channel-published items only, deduped by source video and paginated via load-more cursor.
 22. Source pages include an auth-only, user-triggered `Video Library` section for back-catalog generation (`GET /api/source-pages/:platform/:externalId/videos`, `POST /api/source-pages/:platform/:externalId/videos/unlock`) and run generation asynchronously through existing My Feed + auto-channel pipeline.
-23. Source-page Video Library filter UX is two-tab in MVP (`Full videos` and `Shorts`), with shorts classified by duration threshold `<=60s`.
-24. Source-page Video Library list traffic uses dual guardrails in backend (burst + sustained per-user/IP) so normal tab/list interaction is smooth while abuse remains capped.
-25. Shared source-video unlock is the default generation model for new source-page requests: one source item can be generated once and reused across subscribers.
-26. Credit policy is a daily UTC-reset wallet (`free=3.00`, `plus=20.00`, no rollover) with reserve-first manual billing, settle at first model dispatch, and release on pre-generation failure.
-27. Backend OpenAI SDK loading is lazy at call time; startup-critical backend modules must not depend on top-level `openai` ESM imports on Oracle.
-28. Source-page unlock request control is soft-limited (burst+sustained) with credits as the primary user-facing throttle; strict unlock cooldown is not used.
-29. Home feed contract is fixed for MVP:
+23. User-facing Source Page `Video Library` copy should frame the library as an optional browse-when-ready feature, not expose internal quota/API-fetch implementation details.
+24. Source-page Video Library filter UX is two-tab in MVP (`Full videos` and `Shorts`), with shorts classified by duration threshold `<=60s`.
+25. Source-page Video Library list traffic uses dual guardrails in backend (burst + sustained per-user/IP) so normal tab/list interaction is smooth while abuse remains capped.
+26. Shared source-video unlock is the default generation model for new source-page requests: one source item can be generated once and reused across subscribers.
+27. Credit policy is a daily UTC-reset wallet (`free=3.00`, `plus=20.00`, no rollover) with reserve-first manual billing, settle at first model dispatch, and release on pre-generation failure.
+28. Backend OpenAI SDK loading is lazy at call time; startup-critical backend modules must not depend on top-level `openai` ESM imports on Oracle.
+29. Source-page unlock request control is soft-limited (burst+sustained) with credits as the primary user-facing throttle; strict unlock cooldown is not used.
+30. Home feed contract is fixed for MVP:
     - `For You` is the subscribed-source lane plus personally unlocked blueprints, latest-first, and may contain locked + unlocked items.
     - `Joined` is the auth-only published-blueprint lane filtered by joined Bleu channels.
     - `All` is the global published-blueprint aggregation across Bleu channels.
-30. A manually unlocked blueprint from a non-subscribed source must appear in that user’s `For You`, but future videos from that source do not enter `For You` unless the user subscribes.
-31. Unlock status visibility must be consistent across Home, Source Page, and My Feed using a shared activity/status pattern with reload-resume support.
-32. Credits panel should load lazily on open, show daily reset timing, and keep debit/refund visibility without background polling from always-mounted UI.
-33. Home should provide first-time scope clarity (`For You`, `Joined`, and `All`) with dismissible helper copy where needed.
-34. Unlock backend reliability uses safe auto-fix sweeps (expired/stale/orphan recovery) with idempotent refund/fail transitions; no destructive cleanup.
-35. Unlock/generate responses must include additive `trace_id` and unlock lifecycle logs must propagate that trace through request -> queue/job -> terminal outcome.
-36. Unlock/manual/service generation execution is queue-first with durable DB claim+lease workers, bounded retries, and queue backpressure/intake controls (Oracle + Supabase only).
-37. Subscription rows include `auto_unlock_enabled` (default `true`) and only new incoming subscription videos can auto-attempt unlock generation; runtime auto billing is funded-subscriber shared-cost with participant snapshotting, fixed-point funded-subset selection, bounded retries, and admin-bypass-safe funding, while historical locked backlog is not auto-processed.
-38. Transcript-unavailable unlocks must not hard-fail user trust flows: manual unlock returns deterministic `TRANSCRIPT_UNAVAILABLE` with retry timing and auto-unlock retries are deferred with cooldown.
-39. Read-heavy status endpoints (`/api/credits`, `/api/ingestion/jobs/latest-mine`) must use dedicated soft read limits and be excluded from generic global limiter paths to avoid accidental unlock UX 429 spikes.
-40. Unlock queue items carry explicit `unlock_origin` metadata (`manual_unlock`, `subscription_auto_unlock`, `source_auto_unlock_retry`) for recovery and traceability.
-41. Profile workspace tabs are locked to `Feed / Comments / Liked`; subscriptions management remains a dedicated page (`/subscriptions`) and not a profile tab.
-42. Profile `Feed` is read-only personal history for generated blueprints and subscribed creators; operational controls remain exclusive to `/my-feed`.
-43. Blueprint feed cards are interaction-minimal in MVP (like/comment only; no share action button).
-44. Subscription sync must skip pre-release YouTube premieres (`upcoming`) so unreleased videos do not appear as unlock cards before publish.
-45. If a sync batch contains skipped upcoming premieres, subscription checkpoint advancement is held for that run to avoid missing those videos once they release.
-46. Permanent no-transcript source videos (`NO_TRANSCRIPT_PERMANENT` / legacy `NO_CAPTIONS`) must not remain as unlockable feed cards; only transient transcript-unavailable cases may retry.
-47. YouTube-source banners are thumbnail-first across feed/detail/source surfaces: source flows should write/use thumbnail URLs (stored source thumbnail or deterministic `ytimg` fallback) and should not rely on auto-banner queueing.
-48. Transcript truth classification must avoid one-shot permanence: ambiguous `NO_CAPTIONS` failures stay retryable until bounded multi-attempt confirmation marks `NO_TRANSCRIPT_PERMANENT` and hides the item from unlock surfaces.
-49. Known-channel YouTube video-library listing (`/api/youtube/channels/:channelId/videos`, `/api/source-pages/:platform/:externalId/videos`) must use the low-cost uploads-playlist path (`channels.list -> playlistItems.list`) rather than `search.list`; broad keyword discovery remains the quota-heavy surface.
-49. Auto subscription transcript failures must stay silent on feed surfaces: retry with bounded backoff and suppress locked cards until success; speech-guidance warnings are reserved for explicit Source Page `+Add` attempts.
-50. Notifications MVP scope is intentionally narrow: notify on comment replies and generation terminal outcomes, surfaced in a header bell inbox with read/read-all controls and an event-mapper backend contract for future expansion.
-51. Launch gate hardening requires explicit credit-backend outage behavior (`CREDITS_UNAVAILABLE`, HTTP `503`) and must not silently fail-open credit-dependent flows.
-52. Launch-critical UX copy for generation failures must be normalized via shared frontend mapping (no raw backend/internal payload leakage on key surfaces).
-53. Source-page read surfaces must fail safely: opportunistic asset-sweep hooks are allowed, but missing dependency wiring must never crash API process uptime.
-54. Oracle MVP production runtime is single-service combined mode (`agentic-backend.service` with HTTP + background work together); dedicated split worker topology is deferred until a later scale pass proves it necessary.
-55. Oracle backend runtime config is locked to `/etc/agentic-backend.env`; repo-root `.env` is local-only fallback for non-systemd runs and backend bootstrap must not depend on `.env.production`.
-56. Shared transcript proxy runtime for opted-in providers is explicit-endpoint-only for MVP; legacy Webshare selector/list modes are removed from active runtime, while historical transport metadata remains read-compatible.
-57. Installed-PWA web push is now a gated extension of the existing notifications model: only `comment_reply`, `generation_succeeded`, and `generation_failed` are eligible, opt-in is explicit from notification surfaces, and rollout remains behind push feature/env flags until device validation is complete.
-58. Oracle control-plane operations for MVP (instance inspection/reboot) must use the standardized OCI API-signing-key workflow in `docs/ops/oracle-cli-access.md`; ad hoc local note files are not part of the canonical ops contract.
-59. Transcript fetch now defaults to `youtube_timedtext` first and may fall through to `videotranscriber_temp` only through the existing transcript-provider seam when YouTube captions are unavailable.
-60. Temporary local/dev transcript fallbacks are allowed only behind the existing transcript-provider seam; they must be explicitly marked non-production and must not silently redefine Oracle/live runtime truth.
+31. A manually unlocked blueprint from a non-subscribed source must appear in that user’s `For You`, but future videos from that source do not enter `For You` unless the user subscribes.
+32. Unlock status visibility must be consistent across Home, Source Page, and My Feed using a shared activity/status pattern with reload-resume support.
+33. Credits panel should load lazily on open, show daily reset timing, and keep debit/refund visibility without background polling from always-mounted UI.
+34. Home should provide first-time scope clarity (`For You`, `Joined`, and `All`) with dismissible helper copy where needed.
+35. Unlock backend reliability uses safe auto-fix sweeps (expired/stale/orphan recovery) with idempotent refund/fail transitions; no destructive cleanup.
+36. Unlock/generate responses must include additive `trace_id` and unlock lifecycle logs must propagate that trace through request -> queue/job -> terminal outcome.
+37. Unlock/manual/service generation execution is queue-first with durable DB claim+lease workers, bounded retries, and queue backpressure/intake controls (Oracle + Supabase only).
+38. Subscription rows include `auto_unlock_enabled` (default `true`) and only new incoming subscription videos can auto-attempt unlock generation; runtime auto billing is funded-subscriber shared-cost with participant snapshotting, fixed-point funded-subset selection, bounded retries, and admin-bypass-safe funding, while historical locked backlog is not auto-processed.
+39. Transcript-unavailable unlocks must not hard-fail user trust flows: manual unlock returns deterministic `TRANSCRIPT_UNAVAILABLE` with retry timing and auto-unlock retries are deferred with cooldown.
+40. Read-heavy status endpoints (`/api/credits`, `/api/ingestion/jobs/latest-mine`) must use dedicated soft read limits and be excluded from generic global limiter paths to avoid accidental unlock UX 429 spikes.
+41. Unlock queue items carry explicit `unlock_origin` metadata (`manual_unlock`, `subscription_auto_unlock`, `source_auto_unlock_retry`) for recovery and traceability.
+42. Profile workspace tabs are locked to `Feed / Comments / Liked`; subscriptions management remains a dedicated page (`/subscriptions`) and not a profile tab.
+43. Profile `Feed` is read-only personal history for generated blueprints and subscribed creators; operational controls remain exclusive to `/my-feed`.
+44. Blueprint feed cards are interaction-minimal in MVP (like/comment only; no share action button).
+45. Subscription sync must skip pre-release YouTube premieres (`upcoming`) so unreleased videos do not appear as unlock cards before publish.
+46. If a sync batch contains skipped upcoming premieres, subscription checkpoint advancement is held for that run to avoid missing those videos once they release.
+47. Permanent no-transcript source videos (`NO_TRANSCRIPT_PERMANENT` / legacy `NO_CAPTIONS`) must not remain as unlockable feed cards; only transient transcript-unavailable cases may retry.
+48. YouTube-source banners are thumbnail-first across feed/detail/source surfaces: source flows should write/use thumbnail URLs (stored source thumbnail or deterministic `ytimg` fallback) and should not rely on auto-banner queueing.
+49. Transcript truth classification must avoid one-shot permanence: ambiguous `NO_CAPTIONS` failures stay retryable until bounded multi-attempt confirmation marks `NO_TRANSCRIPT_PERMANENT` and hides the item from unlock surfaces.
+50. Known-channel YouTube video-library listing (`/api/youtube/channels/:channelId/videos`, `/api/source-pages/:platform/:externalId/videos`) must use the low-cost uploads-playlist path (`channels.list -> playlistItems.list`) rather than `search.list`; broad keyword discovery remains the quota-heavy surface.
+51. Auto subscription transcript failures must stay silent on feed surfaces: retry with bounded backoff and suppress locked cards until success; speech-guidance warnings are reserved for explicit Source Page `+Add` attempts.
+52. Notifications MVP scope is intentionally narrow: notify on comment replies and generation terminal outcomes, surfaced in a header bell inbox with read/read-all controls and an event-mapper backend contract for future expansion.
+53. Launch gate hardening requires explicit credit-backend outage behavior (`CREDITS_UNAVAILABLE`, HTTP `503`) and must not silently fail-open credit-dependent flows.
+54. Launch-critical UX copy for generation failures must be normalized via shared frontend mapping (no raw backend/internal payload leakage on key surfaces).
+55. Source-page read surfaces must fail safely: opportunistic asset-sweep hooks are allowed, but missing dependency wiring must never crash API process uptime.
+56. Oracle MVP production runtime is single-service combined mode (`agentic-backend.service` with HTTP + background work together); dedicated split worker topology is deferred until a later scale pass proves it necessary.
+57. Oracle backend runtime config is locked to `/etc/agentic-backend.env`; repo-root `.env` is local-only fallback for non-systemd runs and backend bootstrap must not depend on `.env.production`.
+58. Shared transcript proxy runtime for opted-in providers is explicit-endpoint-only for MVP; legacy Webshare selector/list modes are removed from active runtime, while historical transport metadata remains read-compatible.
+59. Installed-PWA web push is now a gated extension of the existing notifications model: only `comment_reply`, `generation_succeeded`, and `generation_failed` are eligible, opt-in is explicit from notification surfaces, and rollout remains behind push feature/env flags until device validation is complete.
+60. Oracle control-plane operations for MVP (instance inspection/reboot) must use the standardized OCI API-signing-key workflow in `docs/ops/oracle-cli-access.md`; ad hoc local note files are not part of the canonical ops contract.
+61. Transcript fetch now defaults to `youtube_timedtext` first and may fall through to `videotranscriber_temp` only through the existing transcript-provider seam when YouTube captions are unavailable.
+62. Temporary local/dev transcript fallbacks are allowed only behind the existing transcript-provider seam; they must be explicitly marked non-production and must not silently redefine Oracle/live runtime truth.
 
 ## Core user journey
 1. Subscribe to a YouTube channel or search/select a video.

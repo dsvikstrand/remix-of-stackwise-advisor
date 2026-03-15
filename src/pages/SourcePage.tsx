@@ -489,7 +489,7 @@ export default function SourcePage() {
 
                       <div className="flex items-center justify-between gap-3 rounded-md border border-border/40 bg-muted/30 px-3 py-2">
                         <p className="text-xs text-muted-foreground">
-                          Load the Video Library on request to avoid automatic YouTube back-catalog fetches on page open.
+                          Explore this creator&apos;s older videos whenever you&apos;re ready.
                         </p>
                         <Button
                           size="sm"
@@ -502,7 +502,7 @@ export default function SourcePage() {
                           }
                         >
                           {!videoLibraryRequested
-                            ? 'Load Video Library'
+                            ? 'Browse Video Library'
                             : (sourceVideosQuery.isFetching && sourceVideoItems.length === 0)
                               ? 'Loading...'
                               : 'Refresh Library'}
