@@ -167,7 +167,8 @@ export function sanitizeTranscriptProviderDebug(input: TranscriptProviderDebug |
   ) return null;
   const httpStatus = Number(input.http_status);
   const retryAfterSeconds = Number(input.retry_after_seconds);
-  const proxySelectedIndex = Number(input.proxy_selected_index);
+  const hasProxySelectedIndex = input.proxy_selected_index != null && String(input.proxy_selected_index).trim() !== '';
+  const proxySelectedIndex = hasProxySelectedIndex ? Number(input.proxy_selected_index) : null;
   const sessionValue = sanitizeSessionValue(input.session_value);
   const sessionInitialValue = sanitizeSessionValue(input.session_initial_value);
   const sessionMode = sanitizeSessionMode(input.session_mode);
