@@ -49,10 +49,16 @@ d1) [have] Step 1: repo preflight
   - `npm run docs:refresh-check -- --json` passed
   - `npm run docs:link-check` passed
 
-d2) [todo] Step 2: push and CI confirmation
+d2) [have] Step 2: push and CI confirmation
 - push the current repo state
 - wait for CI to pass on the pushed commit
 - do not continue if CI is red
+- sweep result (`2026-03-15`):
+  - pushed release-prep commit `d1a2e6d9000e7df057b92341658798c601069042` to `origin/main`
+  - first CI run failed before Typecheck executed because `scripts/with-node20.sh` was committed without the executable bit (`exit code 126`)
+  - fixed forward with commit `86aa652d5a5a53271282abeb52bd62926227cc77` (`Fix CI executable bit for node20 wrapper`)
+  - pushed `86aa652d5a5a53271282abeb52bd62926227cc77` to `origin/main`
+  - CI Gate run `23105227966` completed `success`
 
 d3) [todo] Step 3: apply the additive migration first
 - apply `supabase/migrations/20260314183000_youtube_transcript_cache_v1.sql`
