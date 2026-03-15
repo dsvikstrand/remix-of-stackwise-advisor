@@ -1,10 +1,12 @@
 import {
+  getWallet,
   reserveCredits,
   refundReservation,
   settleReservation,
   type CreditLedgerContext,
   type CreditReserveResult,
 } from './creditWallet';
+import { getBlueprintGenerationChargePolicy, type BlueprintGenerationChargeMode } from './generationChargePolicy';
 
 type DbClient = any;
 
@@ -18,6 +20,7 @@ export type ManualGenerationReservation = {
   releaseIdempotencyKey: string;
   reasonCodeBase: string;
   context?: CreditLedgerContext;
+  chargeMode?: BlueprintGenerationChargeMode | 'admin_bypass' | 'wallet';
 };
 
 type ReservePrefixInput<T> = {
@@ -83,19 +86,41 @@ export async function reserveManualGeneration(
   db: DbClient,
   reservation: ManualGenerationReservation,
 ): Promise<CreditReserveResult> {
-  return reserveCredits(db, {
+  const policy = await getBlueprintGenerationChargePolicy();
+  if (policy.mode === 'free_window_open') {
+    reservation.chargeMode = 'free_window_open';
+    return {
+      ok: true,
+      ledger_id: null,
+      reserved_amount: 0,
+      wallet: await getWallet(db, reservation.userId),
+      bypass: false,
+    };
+  }
+
+  const result = await reserveCredits(db, {
     userId: reservation.userId,
     amount: reservation.amount,
     idempotencyKey: reservation.holdIdempotencyKey,
     reasonCode: `${reservation.reasonCodeBase}_HOLD`,
     context: reservation.context,
   });
+  if (result.ok) {
+    reservation.chargeMode = result.bypass ? 'admin_bypass' : 'wallet';
+  }
+  return result;
 }
 
 export async function settleManualGeneration(
   db: DbClient,
   reservation: ManualGenerationReservation,
 ) {
+  if (reservation.chargeMode === 'free_window_open') {
+    return {
+      bypass: false,
+      ledger_id: null,
+    };
+  }
   return settleReservation(db, {
     userId: reservation.userId,
     amount: reservation.amount,
@@ -109,6 +134,13 @@ export async function releaseManualGeneration(
   db: DbClient,
   reservation: ManualGenerationReservation,
 ) {
+  if (reservation.chargeMode === 'free_window_open') {
+    return {
+      bypass: false,
+      ledger_id: null,
+      wallet: await getWallet(db, reservation.userId),
+    };
+  }
   return refundReservation(db, {
     userId: reservation.userId,
     amount: reservation.amount,

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   computeAutoUnlockFundedShares,
   releaseAutoUnlockIntent,
@@ -21,6 +21,13 @@ function makeWallet(userId: string, balance: number) {
 }
 
 describe('auto unlock billing', () => {
+  afterEach(async () => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    const costs = await import('../../server/services/openaiDailyCosts');
+    costs.resetOpenAIDailyCostCacheForTests();
+  });
+
   it('computes deterministic equal shares for 10 funded users', () => {
     const result = computeAutoUnlockFundedShares(
       Array.from({ length: 10 }, (_, index) => ({
@@ -130,6 +137,56 @@ describe('auto unlock billing', () => {
     expect(reserved.intent?.intent_owner_user_id).toBe('admin_user');
     expect(db.state.credit_ledger).toHaveLength(0);
     expect(Number(db.state.user_credit_wallets[0]?.balance || 0)).toBe(0);
+  });
+
+  it('waives shared auto unlock charges while the OpenAI free window is open', async () => {
+    vi.stubEnv('OPENAI_DAILY_FREE_BUDGET_USD', '5');
+    vi.stubEnv('OPENAI_API_KEY_ADMIN', 'admin-key');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      data: [{ results: [{ amount: { value: 1, currency: 'usd' } }] }],
+    }), { status: 200 })));
+
+    const db = createMockSupabase({
+      user_credit_wallets: [
+        makeWallet('user_a', 0),
+        makeWallet('user_b', 0),
+        makeWallet('user_c', 0),
+      ],
+      credit_ledger: [],
+      source_auto_unlock_intents: [],
+      source_auto_unlock_participants: [],
+    }) as any;
+
+    const reserved = await reserveAutoUnlockIntent(db, {
+      sourceItemId: 'source_free_window',
+      sourcePageId: 'page_free_window',
+      unlockId: 'unlock_free_window',
+      sourceChannelId: 'channel_free_window',
+      eligibleUserIds: ['user_c', 'user_a', 'user_b'],
+      trigger: 'service_cron',
+      videoId: 'video_free_window',
+    });
+
+    expect(reserved.state).toBe('reserved');
+    expect(reserved.fundedCount).toBe(3);
+    expect(db.state.credit_ledger).toHaveLength(0);
+    expect(db.state.source_auto_unlock_participants.every((row: any) => row.hold_ledger_id == null)).toBe(true);
+
+    const settled = await settleAutoUnlockIntent(db, {
+      intentId: reserved.intent!.id,
+      blueprintId: 'bp_free_window',
+      jobId: 'job_free_window',
+      traceId: 'trace_free_window',
+    });
+    expect(settled.intent?.status).toBe('settled');
+    expect(db.state.credit_ledger).toHaveLength(0);
+
+    const retriedRelease = await releaseAutoUnlockIntent(db, {
+      intentId: reserved.intent!.id,
+      reasonCode: 'AUTO_UNLOCK_ALREADY_READY',
+    });
+    expect(retriedRelease.releasedCount).toBe(0);
+    expect(db.state.credit_ledger).toHaveLength(0);
   });
 
   it('reserves and releases shared auto charges in the fallback path', async () => {

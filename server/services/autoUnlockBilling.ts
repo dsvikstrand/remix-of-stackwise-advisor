@@ -1,4 +1,5 @@
 import { refundReservation, reserveCredits, settleReservation } from './creditWallet';
+import { getBlueprintGenerationChargePolicy } from './generationChargePolicy';
 
 type DbClient = any;
 
@@ -269,28 +270,46 @@ async function createFallbackAutoUnlockIntent(db: DbClient, input: {
   eligibleUserIds: string[];
   trigger: string;
   videoId: string;
+  waiveCharges?: boolean;
 }) {
-  const funding = await getFundingEligibilityForUsers(db, input.eligibleUserIds);
-  const computed = computeAutoUnlockFundedShares(
-    input.eligibleUserIds.map((userId) => ({
-      userId,
-      balance: funding.get(userId)?.balance ?? 0,
-      bypass: funding.get(userId)?.bypass ?? false,
-    })),
-  );
+  const computed = input.waiveCharges
+    ? computeAutoUnlockFundedShares(
+      input.eligibleUserIds.map((userId) => ({
+        userId,
+        balance: 1,
+        bypass: false,
+      })),
+    )
+    : computeAutoUnlockFundedShares(
+      input.eligibleUserIds.map((userId) => ({
+        userId,
+        balance: 0,
+        bypass: false,
+      })),
+    );
+  const funding = input.waiveCharges ? null : await getFundingEligibilityForUsers(db, input.eligibleUserIds);
+  const effectiveComputed = input.waiveCharges
+    ? computed
+    : computeAutoUnlockFundedShares(
+      input.eligibleUserIds.map((userId) => ({
+        userId,
+        balance: funding?.get(userId)?.balance ?? 0,
+        bypass: funding?.get(userId)?.bypass ?? false,
+      })),
+    );
 
-  if (computed.fundedCount === 0) {
+  if (effectiveComputed.fundedCount === 0) {
     return {
       state: 'empty_funded_set' as const,
       reservedNow: false,
       intent: null,
       participants: [] as [],
-      snapshotCount: computed.snapshotCount,
+      snapshotCount: effectiveComputed.snapshotCount,
       fundedCount: 0,
     };
   }
 
-  const ownerUserId = computed.participants[0]?.userId || null;
+  const ownerUserId = effectiveComputed.participants[0]?.userId || null;
   const { data: insertedIntent, error: intentError } = await db
     .from('source_auto_unlock_intents')
     .insert({
@@ -301,8 +320,8 @@ async function createFallbackAutoUnlockIntent(db: DbClient, input: {
       intent_owner_user_id: ownerUserId,
       status: 'reserved',
       trigger: input.trigger,
-      snapshot_count: computed.snapshotCount,
-      funded_count: computed.fundedCount,
+      snapshot_count: effectiveComputed.snapshotCount,
+      funded_count: effectiveComputed.fundedCount,
       total_share_cents: AUTO_UNLOCK_TOTAL_CENTS,
     })
     .select('*')
@@ -311,21 +330,23 @@ async function createFallbackAutoUnlockIntent(db: DbClient, input: {
 
   const intent = normalizeIntentRow(insertedIntent);
   const participantRows: AutoUnlockParticipantRow[] = [];
-  for (const participant of computed.participants) {
+  for (const participant of effectiveComputed.participants) {
     const amount = round2(participant.shareCents / 100);
     const holdKey = `auto_unlock:${intent.id}:user:${participant.userId}:hold`;
     const releaseKey = `auto_unlock:${intent.id}:user:${participant.userId}:release`;
     const settleKey = `auto_unlock:${intent.id}:user:${participant.userId}:settle`;
-    const hold = await refundSafeReserve(db, {
-      userId: participant.userId,
-      amount,
-      idempotencyKey: holdKey,
-      sourceItemId: input.sourceItemId,
-      sourcePageId: input.sourcePageId,
-      unlockId: input.unlockId,
-      intentId: intent.id,
-      videoId: input.videoId,
-    });
+    const hold = input.waiveCharges
+      ? { ok: true as const, ledger_id: null }
+      : await refundSafeReserve(db, {
+        userId: participant.userId,
+        amount,
+        idempotencyKey: holdKey,
+        sourceItemId: input.sourceItemId,
+        sourcePageId: input.sourcePageId,
+        unlockId: input.unlockId,
+        intentId: intent.id,
+        videoId: input.videoId,
+      });
     if (!hold.ok) {
       await releaseAutoUnlockIntent(db, {
         intentId: intent.id,
@@ -336,7 +357,7 @@ async function createFallbackAutoUnlockIntent(db: DbClient, input: {
         reservedNow: false,
         intent: null,
         participants: [] as [],
-        snapshotCount: computed.snapshotCount,
+        snapshotCount: effectiveComputed.snapshotCount,
         fundedCount: 0,
       };
     }
@@ -364,8 +385,8 @@ async function createFallbackAutoUnlockIntent(db: DbClient, input: {
     reservedNow: true,
     intent,
     participants: participantRows,
-    snapshotCount: computed.snapshotCount,
-    fundedCount: computed.fundedCount,
+    snapshotCount: effectiveComputed.snapshotCount,
+    fundedCount: effectiveComputed.fundedCount,
   };
 }
 
@@ -407,6 +428,8 @@ export async function reserveAutoUnlockIntent(db: DbClient, input: {
   videoId: string;
 }) : Promise<AutoUnlockReservationResult> {
   const normalizedSourceItemId = String(input.sourceItemId || '').trim();
+  const generationChargePolicy = await getBlueprintGenerationChargePolicy();
+  const waiveCharges = generationChargePolicy.mode === 'free_window_open';
   if (!normalizedSourceItemId) {
     return {
       state: 'invalid_source_item',
@@ -418,7 +441,7 @@ export async function reserveAutoUnlockIntent(db: DbClient, input: {
     };
   }
 
-  if (typeof db?.rpc === 'function') {
+  if (!waiveCharges && typeof db?.rpc === 'function') {
     try {
       const { data, error } = await db.rpc('reserve_source_auto_unlock_intent', {
         p_source_item_id: normalizedSourceItemId,
@@ -493,6 +516,7 @@ export async function reserveAutoUnlockIntent(db: DbClient, input: {
     eligibleUserIds: input.eligibleUserIds,
     trigger: input.trigger,
     videoId: input.videoId,
+    waiveCharges,
   });
 }
 
@@ -516,6 +540,18 @@ export async function releaseAutoUnlockIntent(db: DbClient, input: {
   let releasedCount = 0;
   for (const participant of participants) {
     if (participant.funding_status === 'released' || participant.funding_status === 'settled') continue;
+    if (!participant.hold_ledger_id) {
+      await db
+        .from('source_auto_unlock_participants')
+        .update({
+          funding_status: 'released',
+          release_ledger_id: null,
+          release_reason_code: input.reasonCode,
+        })
+        .eq('id', participant.id);
+      releasedCount += 1;
+      continue;
+    }
     const amount = round2(participant.share_cents / 100);
     const release = await refundReservation(db, {
       userId: participant.user_id,
@@ -584,6 +620,17 @@ export async function settleAutoUnlockIntent(db: DbClient, input: {
   for (const participant of participants) {
     if (participant.funding_status === 'settled') continue;
     if (participant.funding_status === 'released') continue;
+    if (!participant.hold_ledger_id) {
+      await db
+        .from('source_auto_unlock_participants')
+        .update({
+          funding_status: 'settled',
+          settle_ledger_id: null,
+        })
+        .eq('id', participant.id);
+      settledCount += 1;
+      continue;
+    }
     const amount = round2(participant.share_cents / 100);
     const settle = await settleReservation(db, {
       userId: participant.user_id,

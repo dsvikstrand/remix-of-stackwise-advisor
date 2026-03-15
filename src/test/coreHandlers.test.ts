@@ -61,6 +61,12 @@ function createBaseDeps(overrides: Partial<CoreRouteDeps> = {}): CoreRouteDeps {
       generation_daily_reset_at: '2026-03-06T00:00:00.000Z',
       generation_daily_bypass: false,
       generation_plan: 'free',
+      generation_charge_mode: 'free_window_open',
+      openai_daily_cost_usd: 1.25,
+      openai_daily_free_budget_usd: 5,
+      openai_daily_free_window_open: true,
+      openai_daily_cost_window_start: '2026-03-15T00:00:00.000Z',
+      openai_daily_cost_window_end: '2026-03-16T00:00:00.000Z',
     }),
     getServiceSupabaseClient: () => ({}),
     getGenerationDailyCapStatus: async () => ({
@@ -115,6 +121,12 @@ describe('core handlers', () => {
       generation_daily_limit: 10,
       generation_daily_used: 2,
       generation_daily_remaining: 8,
+      generation_charge_mode: 'free_window_open',
+      openai_daily_cost_usd: 1.25,
+      openai_daily_free_budget_usd: 5,
+      openai_daily_free_window_open: true,
+      openai_daily_cost_window_start: '2026-03-15T00:00:00.000Z',
+      openai_daily_cost_window_end: '2026-03-16T00:00:00.000Z',
     });
   });
 

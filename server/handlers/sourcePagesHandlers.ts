@@ -19,6 +19,7 @@ import {
   resolveSourcePageSubscriptionAccess,
   wouldExceedQueueAdmission,
 } from '../services/generationPreflight';
+import { getBlueprintGenerationChargePolicy } from '../services/generationChargePolicy';
 
 export function registerSourcePagesRouteHandlers(app: express.Express, deps: SourcePagesRouteDeps) {
   const {
@@ -746,6 +747,8 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
     .filter((row) => Boolean(row.existing?.already_exists_for_user));
 
   const estimatedUnlockCost = 1;
+  const generationChargePolicy = await getBlueprintGenerationChargePolicy();
+  const waiveGenerationCharges = generationChargePolicy.mode === 'free_window_open';
 
   const queueItems: SourceUnlockQueueItem[] = [];
   let queueDepth = 0;
@@ -913,9 +916,11 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       let reservedUnlock = reserveResult.unlock;
       const reservedCost = dualGenerateEnabled
         ? 0
+        : waiveGenerationCharges
+          ? 0
         : Math.max(0.001, Number(reservedUnlock.estimated_cost || estimatedUnlockCost));
       if (!reservedUnlock.reserved_ledger_id) {
-        if (!dualGenerateEnabled) {
+        if (!dualGenerateEnabled && !waiveGenerationCharges) {
           const hold = await reserveCredits(sourcePageDb, {
             userId,
             amount: reservedCost,
@@ -976,6 +981,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         unlock_origin: 'manual_unlock',
         generation_tier: resolvedTier,
         dual_generate_enabled: dualGenerateEnabled,
+        charge_mode: waiveGenerationCharges ? 'free_window_open' : 'wallet',
       });
       logUnlockEvent(
         'unlock_item_queued',

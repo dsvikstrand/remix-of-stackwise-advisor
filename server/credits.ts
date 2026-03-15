@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { consumeFlatCredit, getWallet, getWalletDefaults, type CreditLedgerContext } from './services/creditWallet';
+import { getBlueprintGenerationChargePolicy } from './services/generationChargePolicy';
 
 type UsageState = {
   global: {
@@ -61,6 +62,7 @@ export async function getCredits(userId: string) {
 
   try {
     const wallet = await getWallet(db, userId);
+    const chargePolicy = await getBlueprintGenerationChargePolicy();
     return {
       remaining: wallet.balance,
       limit: wallet.capacity,
@@ -90,6 +92,12 @@ export async function getCredits(userId: string) {
       generation_daily_reset_at: wallet.next_reset_at,
       generation_daily_bypass: wallet.bypass,
       generation_plan: wallet.plan,
+      generation_charge_mode: chargePolicy.mode,
+      openai_daily_cost_usd: chargePolicy.openaiDailyCostUsd,
+      openai_daily_free_budget_usd: chargePolicy.budgetUsd,
+      openai_daily_free_window_open: chargePolicy.mode === 'free_window_open',
+      openai_daily_cost_window_start: chargePolicy.windowStartIso,
+      openai_daily_cost_window_end: chargePolicy.windowEndIso,
     };
   } catch (error) {
     throwCreditsUnavailable(normalizeErrorMessage(error, 'Failed to read credits wallet.'));
