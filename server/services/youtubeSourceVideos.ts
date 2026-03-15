@@ -46,47 +46,129 @@ export function normalizeYouTubeSourceVideoKind(rawKind: string | undefined, fal
   return fallback;
 }
 
-function normalizeYouTubeSourceVideoItem(raw: unknown): YouTubeSourceVideo | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const item = raw as {
-    id?: { videoId?: string };
+type YouTubeApiErrorPayload = {
+  error?: { code?: number; message?: string };
+} | null;
+
+type YouTubeChannelUploadsLookup = {
+  channelTitle: string;
+  uploadsPlaylistId: string | null;
+};
+
+function mapYouTubeSourceVideoProviderError(status: number, message: string) {
+  if (status === 403 || status === 429) {
+    throw new YouTubeSourceVideosError('RATE_LIMITED', message || 'YouTube provider quota is currently limited.');
+  }
+  throw new YouTubeSourceVideosError('PROVIDER_FAIL', message || `YouTube source video provider failed (${status}).`);
+}
+
+async function parseYouTubeApiJson(response: Response, fallbackMessage: string) {
+  const json = (await response.json().catch(() => null)) as YouTubeApiErrorPayload;
+  if (!response.ok) {
+    mapYouTubeSourceVideoProviderError(response.status, json?.error?.message || fallbackMessage);
+  }
+  if (!json) {
+    throw new YouTubeSourceVideosError('PROVIDER_FAIL', 'Invalid response from YouTube source video provider.');
+  }
+  if (json.error) {
+    mapYouTubeSourceVideoProviderError(
+      Number(json.error.code || response.status || 500),
+      json.error.message || fallbackMessage,
+    );
+  }
+  return json;
+}
+
+async function fetchYouTubeChannelUploadsLookup(input: {
+  apiKey: string;
+  channelId: string;
+}) {
+  const url = new URL('https://www.googleapis.com/youtube/v3/channels');
+  url.searchParams.set('part', 'snippet,contentDetails');
+  url.searchParams.set('id', input.channelId);
+  url.searchParams.set('key', input.apiKey);
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      'User-Agent': 'bleuv1-youtube-source-videos/1.0 (+https://api.bleup.app)',
+      Accept: 'application/json',
+    },
+  });
+
+  const json = (await parseYouTubeApiJson(
+    response,
+    `YouTube source channel provider failed (${response.status}).`,
+  )) as YouTubeApiErrorPayload & {
+    items?: Array<{
+      snippet?: { title?: string };
+      contentDetails?: { relatedPlaylists?: { uploads?: string } };
+    }>;
+  };
+
+  const row = Array.isArray(json.items) ? json.items[0] : null;
+  return {
+    channelTitle: decodeHtmlEntities(String(row?.snippet?.title || input.channelId)).trim(),
+    uploadsPlaylistId: String(row?.contentDetails?.relatedPlaylists?.uploads || '').trim() || null,
+  } satisfies YouTubeChannelUploadsLookup;
+}
+
+function normalizeYouTubeSourceVideoPlaylistItem(input: {
+  raw: unknown;
+  channelId: string;
+  channelTitle: string;
+}): YouTubeSourceVideo | null {
+  if (!input.raw || typeof input.raw !== 'object') return null;
+  const item = input.raw as {
     snippet?: {
       title?: string;
       description?: string;
-      channelId?: string;
-      channelTitle?: string;
       publishedAt?: string;
-      liveBroadcastContent?: string;
       thumbnails?: {
         high?: { url?: string };
         medium?: { url?: string };
         default?: { url?: string };
       };
+      resourceId?: { videoId?: string };
+    };
+    contentDetails?: {
+      videoId?: string;
+      videoPublishedAt?: string;
+    };
+    status?: {
+      privacyStatus?: string;
     };
   };
 
-  const videoId = String(item.id?.videoId || '').trim();
-  const channelId = String(item.snippet?.channelId || '').trim();
-  if (!videoId || !channelId) return null;
+  const videoId = String(item.contentDetails?.videoId || item.snippet?.resourceId?.videoId || '').trim();
+  if (!videoId) return null;
 
-  // Skip upcoming placeholders that are not importable yet.
-  if (String(item.snippet?.liveBroadcastContent || '').toLowerCase() === 'upcoming') {
+  if (String(item.status?.privacyStatus || '').trim().toLowerCase() === 'private') {
+    return null;
+  }
+
+  const title = decodeHtmlEntities(String(item.snippet?.title || `Video ${videoId}`)).trim();
+  if (!title || title.toLowerCase() === 'deleted video' || title.toLowerCase() === 'private video') {
     return null;
   }
 
   return {
     video_id: videoId,
     video_url: `https://www.youtube.com/watch?v=${videoId}`,
-    title: decodeHtmlEntities(String(item.snippet?.title || `Video ${videoId}`)).trim(),
+    title,
     description: decodeHtmlEntities(String(item.snippet?.description || '')).trim(),
-    channel_id: channelId,
-    channel_title: decodeHtmlEntities(String(item.snippet?.channelTitle || channelId)).trim(),
+    channel_id: input.channelId,
+    channel_title: input.channelTitle,
     thumbnail_url:
       item.snippet?.thumbnails?.high?.url
       || item.snippet?.thumbnails?.medium?.url
       || item.snippet?.thumbnails?.default?.url
       || null,
-    published_at: item.snippet?.publishedAt ? String(item.snippet.publishedAt) : null,
+    published_at:
+      item.contentDetails?.videoPublishedAt
+      ? String(item.contentDetails.videoPublishedAt)
+      : item.snippet?.publishedAt
+        ? String(item.snippet.publishedAt)
+        : null,
     duration_seconds: null,
   };
 }
@@ -114,11 +196,20 @@ export async function listYouTubeSourceVideos(input: {
   const kind = normalizeYouTubeSourceVideoKind(input.kind, 'all');
   const shortsMaxSeconds = Math.max(10, Math.min(600, Number(input.shortsMaxSeconds || 60)));
 
-  const url = new URL('https://www.googleapis.com/youtube/v3/search');
-  url.searchParams.set('part', 'snippet');
-  url.searchParams.set('type', 'video');
-  url.searchParams.set('order', 'date');
-  url.searchParams.set('channelId', channelId);
+  const channelLookup = await fetchYouTubeChannelUploadsLookup({
+    apiKey,
+    channelId,
+  });
+  if (!channelLookup.uploadsPlaylistId) {
+    return {
+      results: [],
+      nextPageToken: null,
+    };
+  }
+
+  const url = new URL('https://www.googleapis.com/youtube/v3/playlistItems');
+  url.searchParams.set('part', 'snippet,contentDetails,status');
+  url.searchParams.set('playlistId', channelLookup.uploadsPlaylistId);
   url.searchParams.set('maxResults', String(limit));
   url.searchParams.set('key', apiKey);
   if (pageToken) {
@@ -132,32 +223,21 @@ export async function listYouTubeSourceVideos(input: {
     },
   });
 
-  if (response.status === 403 || response.status === 429) {
-    throw new YouTubeSourceVideosError('RATE_LIMITED', 'YouTube provider quota is currently limited.');
-  }
-
-  if (!response.ok) {
-    throw new YouTubeSourceVideosError('PROVIDER_FAIL', `YouTube source video provider failed (${response.status}).`);
-  }
-
-  const json = (await response.json().catch(() => null)) as {
+  const json = (await parseYouTubeApiJson(
+    response,
+    `YouTube source video provider failed (${response.status}).`,
+  )) as YouTubeApiErrorPayload & {
     items?: unknown[];
     nextPageToken?: string;
-    error?: { code?: number; message?: string };
-  } | null;
-  if (!json) {
-    throw new YouTubeSourceVideosError('PROVIDER_FAIL', 'Invalid response from YouTube source video provider.');
-  }
-  if (json.error) {
-    if (json.error.code === 403 || json.error.code === 429) {
-      throw new YouTubeSourceVideosError('RATE_LIMITED', json.error.message || 'YouTube provider quota is currently limited.');
-    }
-    throw new YouTubeSourceVideosError('PROVIDER_FAIL', json.error.message || 'YouTube provider returned an error.');
-  }
+  };
 
   const items = Array.isArray(json.items) ? json.items : [];
   let results = items
-    .map((item) => normalizeYouTubeSourceVideoItem(item))
+    .map((item) => normalizeYouTubeSourceVideoPlaylistItem({
+      raw: item,
+      channelId,
+      channelTitle: channelLookup.channelTitle,
+    }))
     .filter((item): item is YouTubeSourceVideo => Boolean(item));
 
   if (results.length > 0) {

@@ -262,6 +262,7 @@ npm run smoke:release -- --api-base-url https://api.bleup.app --frontend-base-ur
 Required runtime variables:
 - `OPENAI_API_KEY`
 - `YOUTUBE_DATA_API_KEY` (required for `/api/youtube-search`)
+- Known-channel video-library routes (`/api/youtube/channels/:channelId/videos`, `/api/source-pages/:platform/:externalId/videos`) now use the low-cost uploads-playlist path (`channels.list -> playlistItems.list`) rather than `search.list`; broad keyword and channel discovery remain the main quota-heavy surfaces.
 - `GOOGLE_OAUTH_CLIENT_ID` (required for `/api/youtube/connection*`)
 - `GOOGLE_OAUTH_CLIENT_SECRET` (required for `/api/youtube/connection*`)
 - `YOUTUBE_OAUTH_REDIRECT_URI` (must match Google OAuth client redirect URI exactly)

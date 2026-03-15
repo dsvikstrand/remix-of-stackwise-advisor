@@ -31,6 +31,7 @@ a4l) [have] Oracle backend config source is now conceptually locked to `/etc/age
 a4m) [have] Shared transcript proxy runtime for opted-in providers is now locked to one explicit Webshare endpoint; legacy selector/list modes are removed from active runtime and docs/tests should not reintroduce them.
 a4n) [have] `youtube_timedtext` is now the current default transcript path; `videotranscriber_temp` is the built-in fallback when YouTube captions are unavailable, and the temporary provider remains intentionally excluded from production runtime truth.
 a4o) [have] Supabase schema history still contains the older `transcript_requests` Oracle/Paperspace bridge tables; treat that as historical parity only, not as current MVP transcript-runtime truth.
+a4p) [have] Known-channel video-library routes now use the low-cost uploads-playlist path (`channels.list -> playlistItems.list`) instead of `search.list`; broad YouTube discovery remains the quota-heavy area to constrain.
 a5) [todo] Improve user trust around shared-cost auto billing transitions and async processing visibility.
 a6) [todo] Reduce terminology ambiguity between personal stream, followed channels, source pages, and channel taxonomy.
 

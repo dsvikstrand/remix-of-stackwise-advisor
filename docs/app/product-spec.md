@@ -277,6 +277,7 @@ si11b) service-ops endpoint: `GET /api/ops/queue/health` (service auth; queue de
 si12) YouTube search endpoint: `GET /api/youtube-search?q=<query>&limit=<1..25>&page_token=<optional>`
 si13) YouTube channel search endpoint: `GET /api/youtube-channel-search?q=<query>&limit=<1..25>&page_token=<optional>`
 si13b) Shared YouTube live-call budgeting now uses an atomic backend quota consume path; when the quota schema is present, retry timing comes from the DB decision rather than app-side best-effort counters.
+si13c) Known-channel video-library listing (`GET /api/youtube/channels/:channelId/videos`, `GET /api/source-pages/:platform/:externalId/videos`) now uses the channel uploads-playlist path (`channels.list -> playlistItems.list`) instead of `search.list`, so those routes no longer carry the 100-unit search cost per page.
 si14) `GET /api/source-subscriptions` now includes optional `source_channel_avatar_url` per subscription row from stored `source_pages` metadata; normal reads do not block on live YouTube API asset fetches.
 si15) service-ops endpoint: `POST /api/auto-banner/jobs/trigger` (service auth; processes queue + cap rebalance)
 si16) service-ops endpoint: `GET /api/auto-banner/jobs/latest` (service auth; queue snapshot)

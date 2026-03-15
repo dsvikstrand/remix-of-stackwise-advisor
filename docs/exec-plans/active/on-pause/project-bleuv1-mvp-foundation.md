@@ -95,6 +95,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Step 2 simplified actions on `/subscriptions`: active-list `Unsubscribe` only (sync/reactivate UI deferred).
 - Step 3 reliability pass adds `/subscriptions` health summary/badges and delayed-warning trust signals.
 - Step 4 discovery pass adds auth-only channel search in `/subscriptions` with per-result `Subscribe` (popup flow, manual paste removed).
+- Known-channel video-library listing now uses the low-cost uploads-playlist path (`channels.list -> playlistItems.list`) rather than `search.list`; broad discovery/search remains the quota-heavy surface.
 - Step 5 row polish adds optional channel avatars and removes technical row badges from subscription rows.
 - Step 6 UX simplification removes aggregate ingestion summary card from `/subscriptions` while keeping unsubscribe and row-level signals.
 - Step 7 My Feed notice polish adds avatar/banner notice rendering and confirm-gated unsubscribe that removes notice cards from My Feed.

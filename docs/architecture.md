@@ -152,6 +152,7 @@
     - `GET /api/generation-runs/:runId` (auth owner or service token; returns durable generation trace by run id with optional event pagination)
     - `GET /api/youtube-search` (auth-only YouTube result discovery, relevance-sorted)
     - `GET /api/youtube-channel-search` (auth-only YouTube channel discovery, relevance-sorted)
+    - known-channel video-library routes (`GET /api/youtube/channels/:channelId/videos`, `GET /api/source-pages/:platform/:externalId/videos`) now use `channels.list(part=contentDetails,snippet)` + `playlistItems.list` rather than `search.list`, so the expensive 100-unit search cost is limited to broad discovery routes
     - `GET /api/youtube/connection/status` (auth-only YouTube OAuth status)
     - `POST /api/youtube/connection/start` (auth-only OAuth start, returns auth URL)
     - `GET /api/youtube/connection/callback` (anonymous callback; state-validated and redirects back to app)

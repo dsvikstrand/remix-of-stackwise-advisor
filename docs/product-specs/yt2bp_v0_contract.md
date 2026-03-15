@@ -23,6 +23,7 @@
 - 2026-02-17 note: ingestion reliability visibility adds service-auth endpoint `GET /api/ingestion/jobs/latest`; this is an ops path and does not alter the YT2BP envelope.
 - 2026-02-17 note: auth-only YouTube discovery endpoint `GET /api/youtube-search` is additive and does not alter the YT2BP envelope.
 - 2026-02-17 note: auth-only YouTube channel discovery endpoint `GET /api/youtube-channel-search` is additive and does not alter the YT2BP envelope.
+- 2026-03-15 note: known-channel video-library routes (`GET /api/youtube/channels/:channelId/videos`, `GET /api/source-pages/:platform/:externalId/videos`) now use the low-cost uploads-playlist path (`channels.list -> playlistItems.list`) instead of `search.list`; this remains outside the YT2BP envelope.
 - 2026-02-17 note: `GET /api/source-subscriptions` now includes optional `source_channel_avatar_url` from stored `source_pages` metadata for UI; this remains outside the YT2BP envelope.
 - 2026-02-17 note: subscription auto-ingest generation now enables review-by-default while keeping banner disabled; this remains outside the YT2BP endpoint envelope.
 - 2026-02-18 note: subscription notice cards may use `source_items.metadata.channel_banner_url`, and unsubscribe now removes user-scoped notice rows from My Feed; this remains outside the YT2BP endpoint envelope.
