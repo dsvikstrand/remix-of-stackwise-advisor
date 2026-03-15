@@ -577,13 +577,6 @@ export default function SearchPage() {
     }
   };
 
-  const searchSummary = useMemo(() => {
-    if (!submittedQuery) return null;
-    return results.length > 0
-      ? `Best match for "${submittedQuery}"`
-      : `We couldn't find a strong match for "${submittedQuery}"`;
-  }, [results.length, submittedQuery]);
-
   const channelSearchSummary = useMemo(() => {
     if (!submittedChannelQuery) return null;
     return `Showing ${channelResults.length} channel${channelResults.length === 1 ? '' : 's'} for "${submittedChannelQuery}"`;
@@ -639,7 +632,7 @@ export default function SearchPage() {
                   </Button>
                 </form>
                 <p className="text-xs text-muted-foreground">
-                  Best with a full YouTube link or video id. Title lookup is there when you need it.
+                  A full YouTube link or video id works best. Title lookup is available when you need it.
                 </p>
                 {!searchEnabled ? (
                   <p className="text-xs text-muted-foreground">
@@ -649,9 +642,6 @@ export default function SearchPage() {
                 {searchError ? <p className="text-sm text-destructive">{searchError}</p> : null}
               </CardContent>
             </Card>
-
-            {searchSummary ? <p className="text-sm text-muted-foreground">{searchSummary}</p> : null}
-
             {searchMutation.isPending && !hasResults ? (
               <div className="space-y-3">
                 {Array.from({ length: 3 }).map((_, index) => (
@@ -664,7 +654,7 @@ export default function SearchPage() {
               <Card className="border-border/40">
                 <CardContent className="p-4">
                   <p className="text-sm text-muted-foreground">
-                    We couldn't find a close match. Try the full YouTube link or video id for the most reliable hit.
+                    We couldn't find that video. Try the full YouTube link or video id for the most reliable result.
                   </p>
                 </CardContent>
               </Card>

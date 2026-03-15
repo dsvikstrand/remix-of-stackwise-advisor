@@ -87,7 +87,7 @@
     - emitted event families: `comment_reply`, `generation_succeeded`, `generation_failed`.
   - Search-page video behavior:
     - `/search` video mode is now single-video lookup, not broad paginated discovery.
-    - preferred inputs are direct YouTube URL or video id; title lookup is a bounded fallback for one best match.
+    - preferred inputs are direct YouTube URL or video id; title lookup is a bounded helper fallback that returns either one confident hit or no hit.
 - Profile feed read endpoint:
   - `GET /api/profile/:userId/feed` (optional auth; public profiles readable, private profiles owner-only)
 - Subscription auto-unlock policy:
@@ -264,7 +264,7 @@ npm run smoke:release -- --api-base-url https://api.bleup.app --frontend-base-ur
 ## Environment checklist
 Required runtime variables:
 - `OPENAI_API_KEY`
-- `YOUTUBE_DATA_API_KEY` (required for `/api/youtube-search`)
+- `YOUTUBE_DATA_API_KEY` (required for channel discovery/search and other official YouTube Data API reads; direct `/api/youtube-search` video lookup now uses helper providers first)
 - Known-channel video-library routes (`/api/youtube/channels/:channelId/videos`, `/api/source-pages/:platform/:externalId/videos`) now use the low-cost uploads-playlist path (`channels.list -> playlistItems.list`) rather than `search.list`; broad keyword and channel discovery remain the main quota-heavy surfaces.
 - `GOOGLE_OAUTH_CLIENT_ID` (required for `/api/youtube/connection*`)
 - `GOOGLE_OAUTH_CLIENT_SECRET` (required for `/api/youtube/connection*`)

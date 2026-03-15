@@ -1,21 +1,47 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { execFileMock, youtubeiCreateMock } = vi.hoisted(() => ({
+  execFileMock: vi.fn(),
+  youtubeiCreateMock: vi.fn(),
+}));
+
+vi.mock('node:child_process', () => ({
+  default: {
+    execFile: execFileMock,
+  },
+  execFile: execFileMock,
+}));
+
+vi.mock('youtubei.js', () => ({
+  default: {
+    create: youtubeiCreateMock,
+  },
+}));
+
 import {
   extractYouTubeVideoIdFromLookupInput,
+  isStrongYouTubeTitleMatch,
+  resetYouTubeLookupHelpersForTest,
+  scoreYouTubeTitleMatch,
   searchYouTubeVideos,
   YouTubeSearchError,
 } from '../../server/services/youtubeSearch';
 
-function createJsonResponse(status: number, payload: unknown) {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => payload,
-  } as Response;
+function mockExecFileSuccess(payload: unknown) {
+  execFileMock.mockImplementation((_file, _args, _options, callback) => {
+    callback(null, JSON.stringify(payload), '');
+  });
 }
 
 describe('youtubeSearch service', () => {
+  beforeEach(() => {
+    resetYouTubeLookupHelpersForTest();
+    youtubeiCreateMock.mockReset();
+    execFileMock.mockReset();
+  });
+
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   it('extracts direct YouTube video ids from ids and watch urls', () => {
@@ -24,122 +50,187 @@ describe('youtubeSearch service', () => {
     expect(extractYouTubeVideoIdFromLookupInput('youtu.be/abc123xyz89')).toBe('abc123xyz89');
   });
 
-  it('uses videos.list directly for video id lookup', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
-      const url = new URL(String(input));
-      if (url.pathname === '/youtube/v3/videos') {
-        return createJsonResponse(200, {
-          items: [{
-            id: 'abc123xyz89',
-            snippet: {
-              title: 'Exact video',
-              description: 'Direct lookup',
-              channelId: 'channel_1',
-              channelTitle: 'Channel One',
-              publishedAt: '2026-03-15T11:00:00Z',
-              thumbnails: {
-                high: { url: 'https://img.example.com/exact.jpg' },
-              },
-            },
-            contentDetails: {
-              duration: 'PT4M5S',
-            },
-          }],
-        });
-      }
-      throw new Error(`Unexpected fetch: ${url.toString()}`);
+  it('uses youtubei direct lookup first for video ids', async () => {
+    youtubeiCreateMock.mockResolvedValue({
+      getBasicInfo: vi.fn(async () => ({
+        basic_info: {
+          id: 'abc123xyz89',
+          title: 'Exact video',
+          short_description: 'Direct helper lookup',
+          duration: 245,
+          channel: {
+            id: 'channel_1',
+            name: 'Channel One',
+            url: 'https://www.youtube.com/channel/channel_1',
+          },
+          thumbnail: [{ url: 'https://img.example.com/exact.jpg' }],
+          url_canonical: 'https://www.youtube.com/watch?v=abc123xyz89',
+        },
+      })),
     });
 
     const page = await searchYouTubeVideos({
-      apiKey: 'test-key',
       query: 'abc123xyz89',
     });
 
-    expect(fetchSpy.mock.calls.map(([input]) => new URL(String(input)).pathname)).toEqual([
-      '/youtube/v3/videos',
-    ]);
+    expect(execFileMock).not.toHaveBeenCalled();
     expect(page).toEqual({
       results: [{
         video_id: 'abc123xyz89',
         video_url: 'https://www.youtube.com/watch?v=abc123xyz89',
         title: 'Exact video',
-        description: 'Direct lookup',
+        description: 'Direct helper lookup',
         channel_id: 'channel_1',
         channel_title: 'Channel One',
         channel_url: 'https://www.youtube.com/channel/channel_1',
         thumbnail_url: 'https://img.example.com/exact.jpg',
-        published_at: '2026-03-15T11:00:00Z',
+        published_at: null,
         duration_seconds: 245,
       }],
       nextPageToken: null,
     });
   });
 
-  it('falls back to one search result plus duration enrichment for title lookup', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
-      const url = new URL(String(input));
-      if (url.pathname === '/youtube/v3/search') {
-        return createJsonResponse(200, {
-          items: [{
-            id: { videoId: 'title_match_1' },
-            snippet: {
-              title: 'Found title',
-              description: 'Best match',
-              channelId: 'channel_2',
-              channelTitle: 'Channel Two',
-              publishedAt: '2026-03-15T12:00:00Z',
-              thumbnails: {
-                medium: { url: 'https://img.example.com/title.jpg' },
-              },
-            },
-          }],
-        });
-      }
-      if (url.pathname === '/youtube/v3/videos') {
-        return createJsonResponse(200, {
-          items: [{
-            id: 'title_match_1',
-            contentDetails: {
-              duration: 'PT9M',
-            },
-          }],
-        });
-      }
-      throw new Error(`Unexpected fetch: ${url.toString()}`);
+  it('falls back to yt-dlp for video ids when youtubei direct lookup fails', async () => {
+    youtubeiCreateMock.mockResolvedValue({
+      getBasicInfo: vi.fn(async () => {
+        throw new Error('youtubei unavailable');
+      }),
+    });
+    mockExecFileSuccess({
+      id: 'abc123xyz89',
+      title: 'Fallback video',
+      description: 'Resolved by yt-dlp',
+      channel_id: 'channel_2',
+      channel: 'Channel Two',
+      channel_url: 'https://www.youtube.com/channel/channel_2',
+      thumbnail: 'https://img.example.com/fallback.jpg',
+      upload_date: '20260315',
+      duration: 540,
+      webpage_url: 'https://www.youtube.com/watch?v=abc123xyz89',
     });
 
     const page = await searchYouTubeVideos({
-      apiKey: 'test-key',
-      query: 'Found title',
+      query: 'abc123xyz89',
     });
 
-    expect(fetchSpy.mock.calls.map(([input]) => new URL(String(input)).pathname)).toEqual([
-      '/youtube/v3/search',
-      '/youtube/v3/videos',
-    ]);
-    expect(page).toEqual({
-      results: [{
-        video_id: 'title_match_1',
-        video_url: 'https://www.youtube.com/watch?v=title_match_1',
-        title: 'Found title',
-        description: 'Best match',
-        channel_id: 'channel_2',
-        channel_title: 'Channel Two',
-        channel_url: 'https://www.youtube.com/channel/channel_2',
-        thumbnail_url: 'https://img.example.com/title.jpg',
-        published_at: '2026-03-15T12:00:00Z',
-        duration_seconds: 540,
+    expect(execFileMock).toHaveBeenCalledTimes(1);
+    expect(page.results[0]).toMatchObject({
+      video_id: 'abc123xyz89',
+      title: 'Fallback video',
+      channel_id: 'channel_2',
+      duration_seconds: 540,
+      published_at: '2026-03-15T00:00:00.000Z',
+    });
+  });
+
+  it('accepts a strong youtubei title match', async () => {
+    youtubeiCreateMock.mockResolvedValue({
+      search: vi.fn(async () => ({
+        results: [{
+          type: 'Video',
+          video_id: 'title_match_1',
+          title: { toString: () => 'Found Title' },
+          description: 'Strong helper match',
+          author: {
+            id: 'channel_3',
+            name: 'Channel Three',
+            url: 'https://www.youtube.com/channel/channel_3',
+          },
+          best_thumbnail: {
+            url: 'https://img.example.com/title.jpg',
+          },
+          duration: {
+            seconds: 540,
+          },
+        }],
+      })),
+    });
+
+    const page = await searchYouTubeVideos({
+      query: 'Found Title',
+    });
+
+    expect(execFileMock).not.toHaveBeenCalled();
+    expect(page.results[0]).toMatchObject({
+      video_id: 'title_match_1',
+      title: 'Found Title',
+      channel_id: 'channel_3',
+      duration_seconds: 540,
+    });
+  });
+
+  it('falls back to yt-dlp when youtubei search returns no candidate', async () => {
+    youtubeiCreateMock.mockResolvedValue({
+      search: vi.fn(async () => ({
+        results: [],
+      })),
+    });
+    mockExecFileSuccess({
+      entries: [{
+        id: 'title_match_2',
+        title: 'Creatine After 50',
+        description: 'Fallback title match',
+        channel_id: 'channel_4',
+        channel: 'Channel Four',
+        channel_url: 'https://www.youtube.com/channel/channel_4',
+        thumbnail: 'https://img.example.com/title-fallback.jpg',
+        duration: 301,
+        webpage_url: 'https://www.youtube.com/watch?v=title_match_2',
       }],
+    });
+
+    const page = await searchYouTubeVideos({
+      query: 'Creatine After 50',
+    });
+
+    expect(execFileMock).toHaveBeenCalledTimes(1);
+    expect(page.results[0]).toMatchObject({
+      video_id: 'title_match_2',
+      title: 'Creatine After 50',
+      channel_id: 'channel_4',
+    });
+  });
+
+  it('returns no hit for weak title matches instead of auto-accepting them', async () => {
+    youtubeiCreateMock.mockResolvedValue({
+      search: vi.fn(async () => ({
+        results: [{
+          type: 'Video',
+          video_id: 'weak_match_1',
+          title: { toString: () => 'Creatine for College Athletes' },
+          description: '',
+          author: {
+            id: 'channel_5',
+            name: 'Channel Five',
+            url: 'https://www.youtube.com/channel/channel_5',
+          },
+          duration: { seconds: 120 },
+        }],
+      })),
+    });
+
+    const page = await searchYouTubeVideos({
+      query: 'Creatine After 50',
+    });
+
+    expect(page).toEqual({
+      results: [],
       nextPageToken: null,
     });
   });
 
   it('rejects playlist links as invalid lookup input', async () => {
     await expect(searchYouTubeVideos({
-      apiKey: 'test-key',
       query: 'https://www.youtube.com/playlist?list=PL123',
     })).rejects.toMatchObject<Partial<YouTubeSearchError>>({
       code: 'INVALID_QUERY',
     });
+  });
+
+  it('scores strong title matches conservatively', () => {
+    expect(scoreYouTubeTitleMatch('Found Title', 'Found Title')).toBe(1);
+    expect(isStrongYouTubeTitleMatch('Found Title', 'Found Title')).toBe(true);
+    expect(isStrongYouTubeTitleMatch('Creatine After 50', 'Creatine for College Athletes')).toBe(false);
   });
 });

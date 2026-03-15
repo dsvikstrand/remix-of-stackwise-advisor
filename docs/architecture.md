@@ -53,7 +53,7 @@
     - `draft.steps`, `draft.summaryVariants`, and `draft.notes` are compatibility carryovers during the contract cutover and should not be treated as equal current-runtime blueprint shapes.
     - YouTube-source banners are thumbnail-first (`source_items.thumbnail_url` with deterministic `ytimg` fallback), not generated-banner-first.
     - banner prompt path is constrained to visual-only output (no readable text/typography/logos/watermarks).
-  - Auth-only lookup UI in `src/pages/Search.tsx` for finding one specific YouTube video, then generating from the best match.
+  - Auth-only lookup UI in `src/pages/Search.tsx` for finding one specific YouTube video, then generating only when the app finds a confident match.
   - Live feed/community surfaces in `src/pages/MyFeed.tsx`, `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
     - `Wall` now loads backend-hydrated feed responses for both public lanes and `For You` instead of reconstructing feed rows through browser-side Supabase fan-out.
     - `Wall` feed contract is:

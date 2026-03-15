@@ -624,7 +624,7 @@ const youtubeOAuthConfig: YouTubeOAuthConfig = {
 const youtubeOAuthConfigured = isYouTubeOAuthConfigured(youtubeOAuthConfig);
 
 if (!youtubeDataApiKey) {
-  console.warn('[youtube-search] YOUTUBE_DATA_API_KEY is not configured. /api/youtube-search and /api/youtube-channel-search will return SEARCH_DISABLED.');
+  console.warn('[youtube-search] YOUTUBE_DATA_API_KEY is not configured. Video lookup will use helper providers only; channel search remains disabled.');
 }
 
 if (!youtubeOAuthConfigured) {

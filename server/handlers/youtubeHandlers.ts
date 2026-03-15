@@ -522,15 +522,6 @@ app.get('/api/youtube-search', searchApiLimiter, async (req, res) => {
     });
   }
 
-  if (!youtubeDataApiKey) {
-    return res.status(503).json({
-      ok: false,
-      error_code: 'SEARCH_DISABLED',
-      message: 'YouTube search is not configured.',
-      data: null,
-    });
-  }
-
   const limit = 1;
   const pageToken = '';
   const db = getAuthedSupabaseClient(authToken);
