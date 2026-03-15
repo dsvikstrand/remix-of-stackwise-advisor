@@ -9,6 +9,11 @@ export type TranscriptProviderDebug = {
   retry_after_seconds?: number | null;
   provider_error_code?: string | null;
   response_excerpt?: string | null;
+  proxy_enabled?: boolean | null;
+  proxy_mode?: TranscriptTransportMetadata['proxy_mode'] | null;
+  proxy_selector?: string | null;
+  proxy_selected_index?: number | null;
+  proxy_host?: string | null;
   session_value?: string | null;
   session_initial_value?: string | null;
   session_mode?: TranscriptProviderSessionMode | null;
@@ -162,10 +167,18 @@ export function sanitizeTranscriptProviderDebug(input: TranscriptProviderDebug |
   ) return null;
   const httpStatus = Number(input.http_status);
   const retryAfterSeconds = Number(input.retry_after_seconds);
+  const proxySelectedIndex = Number(input.proxy_selected_index);
   const sessionValue = sanitizeSessionValue(input.session_value);
   const sessionInitialValue = sanitizeSessionValue(input.session_initial_value);
   const sessionMode = sanitizeSessionMode(input.session_mode);
   const sessionRotated = sanitizeOptionalBoolean(input.session_rotated);
+  const proxyEnabled = sanitizeOptionalBoolean(input.proxy_enabled);
+  const proxyMode = String(input.proxy_mode || '').trim();
+  const normalizedProxyMode = proxyMode === 'direct' || proxyMode === 'webshare_explicit' || proxyMode === 'webshare_index'
+    ? proxyMode
+    : null;
+  const proxySelector = String(input.proxy_selector || '').trim() || null;
+  const proxyHost = String(input.proxy_host || '').trim() || null;
   return {
     provider: input.provider,
     stage: String(input.stage || '').trim() || null,
@@ -175,6 +188,11 @@ export function sanitizeTranscriptProviderDebug(input: TranscriptProviderDebug |
       : null,
     provider_error_code: String(input.provider_error_code || '').trim() || null,
     response_excerpt: sanitizeExcerpt(input.response_excerpt),
+    ...(proxyEnabled != null ? { proxy_enabled: proxyEnabled } : {}),
+    ...(normalizedProxyMode ? { proxy_mode: normalizedProxyMode } : {}),
+    ...(proxySelector ? { proxy_selector: proxySelector } : {}),
+    ...(Number.isFinite(proxySelectedIndex) ? { proxy_selected_index: proxySelectedIndex } : {}),
+    ...(proxyHost ? { proxy_host: proxyHost } : {}),
     ...(sessionValue ? { session_value: sessionValue } : {}),
     ...(sessionInitialValue ? { session_initial_value: sessionInitialValue } : {}),
     ...(sessionMode ? { session_mode: sessionMode } : {}),

@@ -4,7 +4,9 @@ import {
   type TranscriptProviderAdapter,
   type TranscriptProviderDebug,
   type TranscriptResult,
+  type TranscriptTransportMetadata,
 } from '../types';
+import { getWebshareProxyRequestTools } from '../../services/webshareProxy';
 
 const DEFAULT_RETRY_ATTEMPTS = 3;
 const DEFAULT_RETRY_BASE_DELAY_MS = 500;
@@ -15,6 +17,7 @@ function buildProviderDebug(input: {
   responseExcerpt?: string | null;
   providerErrorCode?: string | null;
   stage?: string | null;
+  transport?: TranscriptTransportMetadata | null;
 }): TranscriptProviderDebug {
   return {
     provider: 'youtube_timedtext',
@@ -23,6 +26,13 @@ function buildProviderDebug(input: {
     retry_after_seconds: input.retryAfterSeconds ?? null,
     provider_error_code: input.providerErrorCode ?? null,
     response_excerpt: input.responseExcerpt ?? null,
+    ...(input.transport ? {
+      proxy_enabled: input.transport.proxy_enabled,
+      proxy_mode: input.transport.proxy_mode,
+      proxy_selector: input.transport.proxy_selector,
+      proxy_selected_index: input.transport.proxy_selected_index,
+      proxy_host: input.transport.proxy_host,
+    } : {}),
   };
 }
 
@@ -122,11 +132,62 @@ function computeRetryDelayMs(attempt: number) {
   return baseDelayMs * attempt + jitterMs;
 }
 
+function buildDirectTransportMetadata(): TranscriptTransportMetadata {
+  return {
+    provider: 'youtube_timedtext',
+    proxy_enabled: false,
+    proxy_mode: 'direct',
+    proxy_selector: null,
+    proxy_selected_index: null,
+    proxy_host: null,
+  };
+}
+
+async function fetchTimedtext(
+  url: string,
+  transport: TranscriptTransportMetadata,
+): Promise<{ status: number; headers: Headers; text: string }> {
+  if (transport.proxy_enabled) {
+    const proxyTools = await getWebshareProxyRequestTools('youtube_timedtext');
+    if (proxyTools) {
+      const response = await proxyTools.request(url, {
+        method: 'GET',
+        headers: {},
+        dispatcher: proxyTools.dispatcher,
+      });
+      const headers = new Headers();
+      for (const [key, value] of Object.entries(response.headers || {})) {
+        if (typeof value === 'string') headers.set(key, value);
+        else if (Array.isArray(value)) headers.set(key, value.join(', '));
+      }
+      const text = typeof response.body.text === 'function'
+        ? await response.body.text().catch(() => '') || ''
+        : typeof response.body.json === 'function'
+          ? JSON.stringify(await response.body.json().catch(() => null))
+          : '';
+      return {
+        status: response.statusCode,
+        headers,
+        text,
+      };
+    }
+  }
+
+  const response = await fetch(url);
+  return {
+    status: response.status,
+    headers: response.headers,
+    text: await response.text(),
+  };
+}
+
 async function fetchOnce(videoId: string): Promise<TranscriptResult> {
+  const proxyTools = await getWebshareProxyRequestTools('youtube_timedtext');
+  const transport = proxyTools?.transport || buildDirectTransportMetadata();
   const listUrl = `https://www.youtube.com/api/timedtext?type=list&v=${encodeURIComponent(videoId)}`;
-  const listResponse = await fetch(listUrl);
+  const listResponse = await fetchTimedtext(listUrl, transport);
   const listRetryAfterSeconds = parseRetryAfterSeconds(listResponse.headers.get('retry-after'));
-  const listXml = await listResponse.text();
+  const listXml = listResponse.text;
   const terminalListError = mapTimedtextListTerminalStatus(listResponse.status);
   if (terminalListError) {
     terminalListError.providerDebug = buildProviderDebug({
@@ -135,6 +196,7 @@ async function fetchOnce(videoId: string): Promise<TranscriptResult> {
       retryAfterSeconds: listRetryAfterSeconds,
       providerErrorCode: terminalListError.code,
       responseExcerpt: listXml,
+      transport,
     });
     throw terminalListError;
   }
@@ -150,17 +212,19 @@ async function fetchOnce(videoId: string): Promise<TranscriptResult> {
           retryAfterSeconds: listRetryAfterSeconds,
           providerErrorCode: 'RATE_LIMITED',
           responseExcerpt: listXml,
+          transport,
         }),
       },
     );
   }
-  if (!listResponse.ok) {
+  if (listResponse.status < 200 || listResponse.status >= 300) {
     throw new TranscriptProviderError('TRANSCRIPT_FETCH_FAIL', 'Could not fetch transcript metadata.', {
       providerDebug: buildProviderDebug({
         stage: 'track_list',
         status: listResponse.status,
         retryAfterSeconds: listRetryAfterSeconds,
         responseExcerpt: listXml,
+        transport,
       }),
     });
   }
@@ -172,6 +236,7 @@ async function fetchOnce(videoId: string): Promise<TranscriptResult> {
         status: listResponse.status,
         providerErrorCode: 'NO_CAPTIONS',
         responseExcerpt: listXml,
+        transport,
       }),
     });
   }
@@ -183,9 +248,9 @@ async function fetchOnce(videoId: string): Promise<TranscriptResult> {
   trackUrl.searchParams.set('fmt', 'json3');
   if (preferred.name) trackUrl.searchParams.set('name', preferred.name);
 
-  const trackResponse = await fetch(trackUrl.toString());
+  const trackResponse = await fetchTimedtext(trackUrl.toString(), transport);
   const trackRetryAfterSeconds = parseRetryAfterSeconds(trackResponse.headers.get('retry-after'));
-  const trackText = await trackResponse.text();
+  const trackText = trackResponse.text;
   if (trackResponse.status === 401 || trackResponse.status === 403) {
     throw new TranscriptProviderError('ACCESS_DENIED', 'Transcript access is denied for this video.', {
       providerDebug: buildProviderDebug({
@@ -194,6 +259,7 @@ async function fetchOnce(videoId: string): Promise<TranscriptResult> {
         retryAfterSeconds: trackRetryAfterSeconds,
         providerErrorCode: 'ACCESS_DENIED',
         responseExcerpt: trackText,
+        transport,
       }),
     });
   }
@@ -209,17 +275,19 @@ async function fetchOnce(videoId: string): Promise<TranscriptResult> {
           retryAfterSeconds: trackRetryAfterSeconds,
           providerErrorCode: 'RATE_LIMITED',
           responseExcerpt: trackText,
+          transport,
         }),
       },
     );
   }
-  if (!trackResponse.ok) {
+  if (trackResponse.status < 200 || trackResponse.status >= 300) {
     throw new TranscriptProviderError('TRANSCRIPT_FETCH_FAIL', 'Could not fetch transcript content.', {
       providerDebug: buildProviderDebug({
         stage: 'track_content',
         status: trackResponse.status,
         retryAfterSeconds: trackRetryAfterSeconds,
         responseExcerpt: trackText,
+        transport,
       }),
     });
   }
@@ -239,6 +307,7 @@ async function fetchOnce(videoId: string): Promise<TranscriptResult> {
         status: trackResponse.status,
         providerErrorCode: 'TRANSCRIPT_EMPTY',
         responseExcerpt: trackText,
+        transport,
       }),
     });
   }
@@ -247,6 +316,7 @@ async function fetchOnce(videoId: string): Promise<TranscriptResult> {
     text,
     source: 'youtube_timedtext',
     confidence: null,
+    transport,
   };
 }
 

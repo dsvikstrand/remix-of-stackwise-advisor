@@ -178,7 +178,9 @@ function shouldRetryTranscriptProviderAttempt(provider: TranscriptProvider, erro
 
 function shouldStartTranscriptProviderCooldown(provider: TranscriptProvider, error: unknown) {
   if (provider !== 'youtube_timedtext') return false;
-  return normalizeTranscriptProviderErrorCode(error) === 'RATE_LIMITED';
+  if (normalizeTranscriptProviderErrorCode(error) !== 'RATE_LIMITED') return false;
+  const providerDebug = getTranscriptProviderDebug(error);
+  return providerDebug?.proxy_enabled !== true;
 }
 
 export function createTranscriptService(partialDeps: Partial<TranscriptServiceDeps> = {}) {

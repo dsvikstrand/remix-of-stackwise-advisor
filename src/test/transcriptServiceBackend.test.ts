@@ -382,6 +382,67 @@ describe('transcript service modularity (backend)', () => {
     }
   });
 
+  it('does not start a timedtext cooldown on RATE_LIMITED when the timedtext request used Webshare', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-03-15T16:00:00.000Z'));
+      process.env.TRANSCRIPT_YOUTUBE_TIMEDTEXT_COOLDOWN_SECONDS = '600';
+
+      const calls: string[] = [];
+      const providers: TranscriptProviderAdapter[] = [
+        {
+          id: 'youtube_timedtext',
+          getTranscript: async () => {
+            calls.push('youtube_timedtext');
+            throw new TranscriptProviderError('RATE_LIMITED', 'timedtext rate limited', {
+              providerDebug: {
+                provider: 'youtube_timedtext',
+                stage: 'track_list',
+                http_status: 429,
+                proxy_enabled: true,
+                proxy_mode: 'webshare_explicit',
+                proxy_host: 'p.webshare.io',
+              },
+            });
+          },
+        },
+        {
+          id: 'videotranscriber_temp',
+          getTranscript: async () => {
+            calls.push('videotranscriber_temp');
+            return {
+              text: 'temp fallback transcript',
+              source: 'videotranscriber_temp',
+              confidence: null,
+            };
+          },
+        },
+      ];
+
+      const service = buildService(providers, {
+        resolveProvider: () => 'youtube_timedtext',
+        providerRetryDefaults: {
+          transcriptAttempts: 1,
+          transcriptTimeoutMs: 1000,
+        },
+      });
+
+      const first = await service.getTranscriptForVideo('video123', { enableFallback: true });
+      const second = await service.getTranscriptForVideo('video456', { enableFallback: true });
+
+      expect(first.source).toBe('videotranscriber_temp');
+      expect(second.source).toBe('videotranscriber_temp');
+      expect(calls).toEqual([
+        'youtube_timedtext',
+        'videotranscriber_temp',
+        'youtube_timedtext',
+        'videotranscriber_temp',
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('restores youtube_timedtext-first behavior after the cooldown expires', async () => {
     vi.useFakeTimers();
     try {

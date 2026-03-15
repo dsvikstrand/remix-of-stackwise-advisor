@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getTranscriptFromYouTubeTimedtext } from '../../server/transcript/providers/youtubeTimedtextProvider';
 import { TranscriptProviderError } from '../../server/transcript/types';
+import * as webshareProxy from '../../server/services/webshareProxy';
 
 const originalFetch = global.fetch;
 const originalRetryAttempts = process.env.TRANSCRIPT_YOUTUBE_TIMEDTEXT_RETRY_ATTEMPTS;
@@ -160,5 +161,53 @@ describe('transcript providers rate-limit mapping', () => {
       code: 'ACCESS_DENIED',
     });
     expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses Webshare transport for timedtext when proxy tools are available', async () => {
+    const proxyRequest = vi.fn()
+      .mockResolvedValueOnce({
+        statusCode: 200,
+        headers: { 'content-type': 'text/xml' },
+        body: {
+          text: async () => '<transcript_list><track lang_code="en"/></transcript_list>',
+        },
+      })
+      .mockResolvedValueOnce({
+        statusCode: 200,
+        headers: { 'content-type': 'application/json' },
+        body: {
+          text: async () => JSON.stringify({
+            events: [{ segs: [{ utf8: 'Proxy transcript' }] }],
+          }),
+        },
+      });
+    vi.spyOn(webshareProxy, 'getWebshareProxyRequestTools').mockResolvedValue({
+      dispatcher: {},
+      request: proxyRequest,
+      transport: {
+        provider: 'youtube_timedtext',
+        proxy_enabled: true,
+        proxy_mode: 'webshare_explicit',
+        proxy_selector: 'explicit',
+        proxy_selected_index: null,
+        proxy_host: 'p.webshare.io',
+      },
+    });
+    global.fetch = vi.fn(() => {
+      throw new Error('direct fetch should not be used');
+    }) as unknown as typeof fetch;
+
+    const result = await getTranscriptFromYouTubeTimedtext('video123');
+
+    expect(result).toMatchObject({
+      text: 'Proxy transcript',
+      source: 'youtube_timedtext',
+      transport: {
+        proxy_enabled: true,
+        proxy_mode: 'webshare_explicit',
+        proxy_host: 'p.webshare.io',
+      },
+    });
+    expect(proxyRequest).toHaveBeenCalledTimes(2);
   });
 });
