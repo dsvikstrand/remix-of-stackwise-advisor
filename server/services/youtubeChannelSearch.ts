@@ -1,6 +1,7 @@
 import Innertube from 'youtubei.js';
 import { decodeHtmlEntities } from '../lib/decodeHtmlEntities';
 import { resolveYouTubeChannel } from './youtubeSubscriptions';
+import { getWebshareLookupFetch } from './webshareProxy';
 
 export type YouTubeChannelSearchResult = {
   channel_id: string;
@@ -202,7 +203,8 @@ function isStrongEnoughChannelMatch(query: string, candidate: Pick<YouTubeChanne
 
 async function getYouTubeiClient() {
   if (!youtubeiClientPromise) {
-    youtubeiClientPromise = Innertube.create();
+    const proxyFetch = await getWebshareLookupFetch();
+    youtubeiClientPromise = Innertube.create(proxyFetch ? { fetch: proxyFetch } : {});
   }
   return youtubeiClientPromise;
 }

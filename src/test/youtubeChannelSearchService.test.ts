@@ -21,15 +21,43 @@ import {
   searchYouTubeChannels,
   YouTubeChannelSearchError,
 } from '../../server/services/youtubeChannelSearch';
+import {
+  resetTranscriptProxyDispatcher,
+  setTranscriptProxyAgentFactoryForTests,
+} from '../../server/services/webshareProxy';
+
+const LOOKUP_PROXY_ENV_KEYS = [
+  'YOUTUBE_LOOKUP_USE_WEBSHARE_PROXY',
+  'TRANSCRIPT_USE_WEBSHARE_PROXY',
+  'WEBSHARE_PROXY_URL',
+  'WEBSHARE_PROXY_HOST',
+  'WEBSHARE_PROXY_PORT',
+  'WEBSHARE_PROXY_USERNAME',
+  'WEBSHARE_PROXY_PASSWORD',
+] as const;
+
+const ORIGINAL_LOOKUP_PROXY_ENV = Object.fromEntries(
+  LOOKUP_PROXY_ENV_KEYS.map((key) => [key, process.env[key]]),
+) as Record<(typeof LOOKUP_PROXY_ENV_KEYS)[number], string | undefined>;
 
 describe('youtubeChannelSearch service', () => {
   beforeEach(() => {
     resetYouTubeChannelLookupHelpersForTest();
     youtubeiCreateMock.mockReset();
     resolveYouTubeChannelMock.mockReset();
+    void resetTranscriptProxyDispatcher();
+    for (const key of LOOKUP_PROXY_ENV_KEYS) {
+      const value = ORIGINAL_LOOKUP_PROXY_ENV[key];
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
   });
 
   afterEach(() => {
+    void resetTranscriptProxyDispatcher();
     vi.clearAllMocks();
   });
 
@@ -240,6 +268,40 @@ describe('youtubeChannelSearch service', () => {
       results: [],
       nextPageToken: null,
     });
+  });
+
+  it('creates the creator youtubei client with a proxy-aware fetch when lookup proxying is enabled', async () => {
+    process.env.YOUTUBE_LOOKUP_USE_WEBSHARE_PROXY = 'true';
+    process.env.WEBSHARE_PROXY_HOST = '127.0.0.1';
+    process.env.WEBSHARE_PROXY_PORT = '8080';
+    process.env.WEBSHARE_PROXY_USERNAME = 'user_name';
+    process.env.WEBSHARE_PROXY_PASSWORD = 'pass_word';
+    setTranscriptProxyAgentFactoryForTests(class {
+      constructor(_options: unknown) {}
+    });
+    youtubeiCreateMock.mockResolvedValue({
+      search: vi.fn(async () => ({
+        results: [{
+          type: 'Channel',
+          id: 'UC12345678901234567890',
+          author: {
+            id: 'UC12345678901234567890',
+            name: 'Doctor Mike',
+            url: 'https://www.youtube.com/@DoctorMike',
+          },
+          description_snippet: { toString: () => 'Health and medicine' },
+        }],
+      })),
+    });
+
+    await searchYouTubeChannels({
+      query: 'Doctor Mike',
+      limit: 3,
+    });
+
+    expect(youtubeiCreateMock).toHaveBeenCalledWith(expect.objectContaining({
+      fetch: expect.any(Function),
+    }));
   });
 
   it('returns a tiny candidate list instead of a wrong auto-hit when bare handle and name paths disagree', async () => {

@@ -26,6 +26,24 @@ import {
   searchYouTubeVideos,
   YouTubeSearchError,
 } from '../../server/services/youtubeSearch';
+import {
+  resetTranscriptProxyDispatcher,
+  setTranscriptProxyAgentFactoryForTests,
+} from '../../server/services/webshareProxy';
+
+const LOOKUP_PROXY_ENV_KEYS = [
+  'YOUTUBE_LOOKUP_USE_WEBSHARE_PROXY',
+  'TRANSCRIPT_USE_WEBSHARE_PROXY',
+  'WEBSHARE_PROXY_URL',
+  'WEBSHARE_PROXY_HOST',
+  'WEBSHARE_PROXY_PORT',
+  'WEBSHARE_PROXY_USERNAME',
+  'WEBSHARE_PROXY_PASSWORD',
+] as const;
+
+const ORIGINAL_LOOKUP_PROXY_ENV = Object.fromEntries(
+  LOOKUP_PROXY_ENV_KEYS.map((key) => [key, process.env[key]]),
+) as Record<(typeof LOOKUP_PROXY_ENV_KEYS)[number], string | undefined>;
 
 function mockExecFileSuccess(payload: unknown) {
   execFileMock.mockImplementation((_file, _args, _options, callback) => {
@@ -45,9 +63,19 @@ describe('youtubeSearch service', () => {
     youtubeiCreateMock.mockReset();
     execFileMock.mockReset();
     global.fetch = vi.fn();
+    void resetTranscriptProxyDispatcher();
+    for (const key of LOOKUP_PROXY_ENV_KEYS) {
+      const value = ORIGINAL_LOOKUP_PROXY_ENV[key];
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
   });
 
   afterEach(() => {
+    void resetTranscriptProxyDispatcher();
     vi.clearAllMocks();
   });
 
@@ -96,6 +124,32 @@ describe('youtubeSearch service', () => {
       }],
       nextPageToken: null,
     });
+  });
+
+  it('adds the Webshare proxy to yt-dlp when lookup proxying is enabled', async () => {
+    process.env.YOUTUBE_LOOKUP_USE_WEBSHARE_PROXY = 'true';
+    process.env.WEBSHARE_PROXY_HOST = '127.0.0.1';
+    process.env.WEBSHARE_PROXY_PORT = '8080';
+    process.env.WEBSHARE_PROXY_USERNAME = 'user_name';
+    process.env.WEBSHARE_PROXY_PASSWORD = 'pass_word';
+    mockExecFileSuccess({
+      id: 'abc123xyz89',
+      title: 'Exact video',
+      channel_id: 'channel_1',
+      channel: 'Channel One',
+      channel_url: 'https://www.youtube.com/channel/channel_1',
+      webpage_url: 'https://www.youtube.com/watch?v=abc123xyz89',
+    });
+
+    await searchYouTubeVideos({
+      query: 'abc123xyz89',
+    });
+
+    expect(execFileMock).toHaveBeenCalledTimes(1);
+    expect(execFileMock.mock.calls[0]?.[1]).toEqual(expect.arrayContaining([
+      '--proxy',
+      'http://user_name:pass_word@127.0.0.1:8080/',
+    ]));
   });
 
   it('falls back to oembed metadata when yt-dlp direct lookup times out', async () => {
@@ -229,6 +283,41 @@ describe('youtubeSearch service', () => {
       channel_id: 'channel_3',
       duration_seconds: 540,
     });
+  });
+
+  it('creates the youtubei client with a proxy-aware fetch when lookup proxying is enabled', async () => {
+    process.env.YOUTUBE_LOOKUP_USE_WEBSHARE_PROXY = 'true';
+    process.env.WEBSHARE_PROXY_HOST = '127.0.0.1';
+    process.env.WEBSHARE_PROXY_PORT = '8080';
+    process.env.WEBSHARE_PROXY_USERNAME = 'user_name';
+    process.env.WEBSHARE_PROXY_PASSWORD = 'pass_word';
+    setTranscriptProxyAgentFactoryForTests(class {
+      constructor(_options: unknown) {}
+    });
+    youtubeiCreateMock.mockResolvedValue({
+      search: vi.fn(async () => ({
+        results: [{
+          type: 'Video',
+          video_id: 'title_match_proxy',
+          title: { toString: () => 'Found Title' },
+          description: 'Strong helper match',
+          author: {
+            id: 'channel_proxy',
+            name: 'Channel Proxy',
+            url: 'https://www.youtube.com/channel/channel_proxy',
+          },
+          duration: { seconds: 120 },
+        }],
+      })),
+    });
+
+    await searchYouTubeVideos({
+      query: 'Found Title',
+    });
+
+    expect(youtubeiCreateMock).toHaveBeenCalledWith(expect.objectContaining({
+      fetch: expect.any(Function),
+    }));
   });
 
   it('falls back to yt-dlp when youtubei search returns no candidate', async () => {

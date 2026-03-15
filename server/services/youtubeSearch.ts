@@ -1,6 +1,10 @@
 import { execFile } from 'node:child_process';
 import Innertube from 'youtubei.js';
 import { decodeHtmlEntities } from '../lib/decodeHtmlEntities';
+import {
+  getWebshareLookupFetch,
+  getWebshareLookupProxyCliUrl,
+} from './webshareProxy';
 
 export type YouTubeSearchResult = {
   video_id: string;
@@ -244,7 +248,8 @@ export function isStrongYouTubeTitleMatch(query: string, candidateTitle: string)
 
 async function getYouTubeiClient() {
   if (!youtubeiClientPromise) {
-    youtubeiClientPromise = Innertube.create();
+    const proxyFetch = await getWebshareLookupFetch();
+    youtubeiClientPromise = Innertube.create(proxyFetch ? { fetch: proxyFetch } : {});
   }
   return youtubeiClientPromise;
 }
@@ -322,8 +327,12 @@ function normalizeYtDlpResult(rawValue: YtDlpJson | null | undefined): YouTubeSe
 
 async function runYtDlpLookup(args: string[]) {
   try {
+    const proxyUrl = await getWebshareLookupProxyCliUrl();
+    const commandArgs = proxyUrl
+      ? ['--proxy', proxyUrl, ...args]
+      : args;
     const stdout = await new Promise<string>((resolve, reject) => {
-      execFile('yt-dlp', args, {
+      execFile('yt-dlp', commandArgs, {
         timeout: TITLE_LOOKUP_TIMEOUT_MS,
         maxBuffer: YTDLP_MAX_BUFFER_BYTES,
         windowsHide: true,
@@ -380,9 +389,11 @@ async function lookupYouTubeVideoByIdWithYtDlp(videoId: string): Promise<HelperL
 
 async function lookupYouTubeVideoByIdWithOEmbed(videoId: string): Promise<HelperLookupResult | null> {
   try {
+    const proxyFetch = await getWebshareLookupFetch();
+    const activeFetch = proxyFetch || fetch;
     const [oembedResponse, watchPageResponse] = await Promise.all([
       withTimeout(
-        fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}&format=json`, {
+        activeFetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}&format=json`, {
           headers: {
             'user-agent': YOUTUBE_WATCH_PAGE_USER_AGENT,
             'accept-language': 'en-US,en;q=0.9',
@@ -392,7 +403,7 @@ async function lookupYouTubeVideoByIdWithOEmbed(videoId: string): Promise<Helper
         'Video lookup is taking longer than expected. Please try again.',
       ),
       withTimeout(
-        fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+        activeFetch(`https://www.youtube.com/watch?v=${videoId}`, {
           headers: {
             'user-agent': YOUTUBE_WATCH_PAGE_USER_AGENT,
             'accept-language': 'en-US,en;q=0.9',
@@ -441,8 +452,10 @@ async function lookupYouTubeVideoByIdWithOEmbed(videoId: string): Promise<Helper
 
 async function lookupYouTubeVideoByIdWithWatchPage(videoId: string): Promise<HelperLookupResult | null> {
   try {
+    const proxyFetch = await getWebshareLookupFetch();
+    const activeFetch = proxyFetch || fetch;
     const response = await withTimeout(
-      fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+      activeFetch(`https://www.youtube.com/watch?v=${videoId}`, {
         headers: {
           'user-agent': YOUTUBE_WATCH_PAGE_USER_AGENT,
           'accept-language': 'en-US,en;q=0.9',

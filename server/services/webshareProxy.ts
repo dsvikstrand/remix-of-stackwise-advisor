@@ -42,6 +42,7 @@ type ProxyConnectionConfig = {
 type ResolvedProxyConnection = {
   config: ProxyConnectionConfig;
   host: string | null;
+  cliUrl: string;
 };
 
 const TRUE_PATTERN = /^(1|true|yes|on)$/i;
@@ -139,6 +140,14 @@ function buildProxyConnectionConfig(host: string, port: number, username: string
   } satisfies ProxyConnectionConfig;
 }
 
+function buildProxyCliUrl(host: string, port: number, username: string, password: string) {
+  const proxyUrl = new URL(`http://${host}`);
+  proxyUrl.port = String(port);
+  proxyUrl.username = encodeURIComponent(username);
+  proxyUrl.password = encodeURIComponent(password);
+  return proxyUrl.toString();
+}
+
 function buildExplicitProxyConfig(): ResolvedProxyConnection | null {
   const explicitProxyUrl = readEnv('WEBSHARE_PROXY_URL');
   if (explicitProxyUrl) {
@@ -155,6 +164,7 @@ function buildExplicitProxyConfig(): ResolvedProxyConnection | null {
           : undefined,
       },
       host: parsed.hostname || null,
+      cliUrl: explicitProxyUrl,
     } satisfies ResolvedProxyConnection;
   }
 
@@ -177,6 +187,7 @@ function buildExplicitProxyConfig(): ResolvedProxyConnection | null {
   return {
     config: buildProxyConnectionConfig(host, port, username, password),
     host,
+    cliUrl: buildProxyCliUrl(host, port, username, password),
   } satisfies ResolvedProxyConnection;
 }
 
@@ -187,6 +198,12 @@ export function getTranscriptProxyDebugMode(): TranscriptProxyDebugMode {
     return 'disabled';
   }
   return 'explicit';
+}
+
+function isLookupProxyEnabled() {
+  const dedicated = String(process.env.YOUTUBE_LOOKUP_USE_WEBSHARE_PROXY || '').trim();
+  if (dedicated) return isTruthyEnv(dedicated);
+  return isTruthyEnv(process.env.TRANSCRIPT_USE_WEBSHARE_PROXY);
 }
 
 async function resolveProxyConnectionConfig(): Promise<ResolvedProxyConnection | null> {
@@ -231,6 +248,38 @@ export async function getWebshareProxyRequestTools(
     request,
     transport: buildProxyTransportMetadata(provider, proxyConnection.host),
   };
+}
+
+export async function getWebshareLookupProxyCliUrl(): Promise<string | null> {
+  if (!isLookupProxyEnabled()) return null;
+  const proxyConnection = await resolveProxyConnectionConfig();
+  if (!proxyConnection) return null;
+  return proxyConnection.cliUrl;
+}
+
+export async function getWebshareLookupFetch(): Promise<typeof fetch | null> {
+  if (!isLookupProxyEnabled()) return null;
+
+  const proxyConnection = await resolveProxyConnectionConfig();
+  if (!proxyConnection) return null;
+
+  const ProxyAgent = getProxyAgentConstructor();
+  if (!ProxyAgent) return null;
+
+  if (!cachedDispatcher || cachedProxyUrl !== proxyConnection.config.uri) {
+    cachedProxyUrl = proxyConnection.config.uri;
+    cachedDispatcher = new ProxyAgent({
+      uri: proxyConnection.config.uri,
+      token: proxyConnection.config.token,
+    });
+  }
+
+  return ((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+    return fetch(input, {
+      ...(init || {}),
+      dispatcher: cachedDispatcher,
+    } as Parameters<typeof fetch>[1]);
+  }) as typeof fetch;
 }
 
 export async function resetTranscriptProxyDispatcher() {
