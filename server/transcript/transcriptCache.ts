@@ -2,6 +2,7 @@ import type {
   TranscriptProvider,
   TranscriptProviderAttempt,
   TranscriptProviderDebug,
+  TranscriptProviderSessionMode,
   TranscriptProviderTrace,
   TranscriptResult,
   TranscriptSegment,
@@ -50,6 +51,27 @@ function normalizeTranscriptSegments(value: unknown): TranscriptSegment[] | unde
   return segments.length > 0 ? segments : undefined;
 }
 
+function normalizeSessionValue(value: unknown) {
+  const normalized = String(value || '').trim();
+  if (!normalized) return null;
+  return normalized.length > 64 ? normalized.slice(0, 64) : normalized;
+}
+
+function normalizeSessionMode(value: unknown): TranscriptProviderSessionMode | null {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'shared') return 'shared';
+  if (normalized === 'force_new') return 'force_new';
+  return null;
+}
+
+function normalizeOptionalBoolean(value: unknown) {
+  if (typeof value === 'boolean') return value;
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'true') return true;
+  if (normalized === 'false') return false;
+  return null;
+}
+
 function normalizeTranscriptProviderDebug(value: unknown): TranscriptProviderDebug | null {
   if (!value || typeof value !== 'object') return null;
   const row = value as Record<string, unknown>;
@@ -57,6 +79,10 @@ function normalizeTranscriptProviderDebug(value: unknown): TranscriptProviderDeb
   if (!provider) return null;
   const httpStatus = Number(row.http_status);
   const retryAfterSeconds = Number(row.retry_after_seconds);
+  const sessionValue = normalizeSessionValue(row.session_value);
+  const sessionInitialValue = normalizeSessionValue(row.session_initial_value);
+  const sessionMode = normalizeSessionMode(row.session_mode);
+  const sessionRotated = normalizeOptionalBoolean(row.session_rotated);
   return {
     provider,
     stage: String(row.stage || '').trim() || null,
@@ -66,6 +92,10 @@ function normalizeTranscriptProviderDebug(value: unknown): TranscriptProviderDeb
       : null,
     provider_error_code: String(row.provider_error_code || '').trim() || null,
     response_excerpt: String(row.response_excerpt || '').trim() || null,
+    ...(sessionValue ? { session_value: sessionValue } : {}),
+    ...(sessionInitialValue ? { session_initial_value: sessionInitialValue } : {}),
+    ...(sessionMode ? { session_mode: sessionMode } : {}),
+    ...(sessionRotated != null ? { session_rotated: sessionRotated } : {}),
   } satisfies TranscriptProviderDebug;
 }
 
@@ -123,12 +153,20 @@ function normalizeTranscriptProviderTrace(
   const row = value as Record<string, unknown>;
   const winningProvider = normalizeTranscriptProvider(row.winning_provider) || fallbackProvider;
   if (!winningProvider) return null;
+  const sessionValue = normalizeSessionValue(row.session_value);
+  const sessionInitialValue = normalizeSessionValue(row.session_initial_value);
+  const sessionMode = normalizeSessionMode(row.session_mode);
+  const sessionRotated = normalizeOptionalBoolean(row.session_rotated);
   return {
     attempted_providers: normalizeTranscriptProviderAttempts(row.attempted_providers),
     winning_provider: winningProvider,
     used_fallback: Boolean(row.used_fallback),
     cache_hit: Boolean(row.cache_hit),
     cache_provider: normalizeTranscriptProvider(row.cache_provider),
+    ...(sessionValue ? { session_value: sessionValue } : {}),
+    ...(sessionInitialValue ? { session_initial_value: sessionInitialValue } : {}),
+    ...(sessionMode ? { session_mode: sessionMode } : {}),
+    ...(sessionRotated != null ? { session_rotated: sessionRotated } : {}),
   } satisfies TranscriptProviderTrace;
 }
 

@@ -344,6 +344,52 @@ describe('transcript service modularity (backend)', () => {
     expect(calls).toEqual(['videotranscriber_temp']);
   });
 
+  it('preserves provider session trace metadata when wrapping successful transcripts', async () => {
+    const providers: TranscriptProviderAdapter[] = [
+      {
+        id: 'videotranscriber_temp',
+        getTranscript: async () => ({
+          text: 'temp transcript',
+          source: 'videotranscriber_temp',
+          confidence: null,
+          provider_trace: {
+            attempted_providers: [],
+            winning_provider: 'videotranscriber_temp',
+            used_fallback: false,
+            session_value: 'sid_final123456',
+            session_initial_value: 'sid_initial9876',
+            session_mode: 'shared',
+            session_rotated: true,
+          },
+        }),
+      },
+    ];
+
+    const result = await buildService(providers, {
+      providerRetryDefaults: {
+        transcriptAttempts: 1,
+        transcriptTimeoutMs: 1000,
+      },
+    }).getTranscriptForVideo('video123');
+
+    expect(result.provider_trace).toEqual({
+      attempted_providers: [
+        {
+          provider: 'videotranscriber_temp',
+          ok: true,
+          error_code: null,
+          provider_debug: null,
+        },
+      ],
+      winning_provider: 'videotranscriber_temp',
+      used_fallback: false,
+      session_value: 'sid_final123456',
+      session_initial_value: 'sid_initial9876',
+      session_mode: 'shared',
+      session_rotated: true,
+    });
+  });
+
   it('uses provider-specific resilience keys for interactive fallback attempts', async () => {
     const providerKeys: string[] = [];
     const providers: TranscriptProviderAdapter[] = [

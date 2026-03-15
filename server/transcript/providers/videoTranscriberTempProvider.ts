@@ -1,12 +1,14 @@
-import { createHmac, randomUUID } from 'node:crypto';
+import { createHash, createHmac, randomUUID } from 'node:crypto';
 import {
   TranscriptProviderError,
   normalizeTranscriptWhitespace,
   type TranscriptProviderErrorCode,
   type TranscriptProviderAdapter,
   type TranscriptProviderDebug,
+  type TranscriptProviderSessionMode,
   type TranscriptResult,
   type TranscriptSegment,
+  type TranscriptProviderTrace,
   type TranscriptTransportMetadata,
 } from '../types';
 import { getWebshareProxyRequestTools } from '../../services/webshareProxy';
@@ -68,6 +70,13 @@ type VideoTranscriberRequestContext = {
   proxyTools: Awaited<ReturnType<typeof getWebshareProxyRequestTools>>;
 };
 
+type VideoTranscriberSessionState = {
+  mode: TranscriptProviderSessionMode;
+  initialSessionId: string;
+  currentSessionId: string;
+  rotated: boolean;
+};
+
 let cachedTranscriptKey: string | null = null;
 let sharedAnonymousUserId: string | null = null;
 
@@ -89,6 +98,38 @@ function shouldForceNewSession() {
   return isTruthyEnv(process.env.VIDEOTRANSCRIBER_TEMP_FORCE_NEW_SESSION);
 }
 
+function fingerprintSessionValue(sessionId: string) {
+  const normalized = normalizeTranscriptWhitespace(sessionId);
+  if (!normalized) return null;
+  return `sid_${createHash('sha256').update(normalized).digest('hex').slice(0, 12)}`;
+}
+
+function createSessionState(initialSessionId: string): VideoTranscriberSessionState {
+  return {
+    mode: shouldForceNewSession() ? 'force_new' : 'shared',
+    initialSessionId,
+    currentSessionId: initialSessionId,
+    rotated: false,
+  };
+}
+
+function buildSessionFields(sessionState?: VideoTranscriberSessionState | null) {
+  if (!sessionState) {
+    return {
+      session_value: null,
+      session_initial_value: null,
+      session_mode: null,
+      session_rotated: null,
+    };
+  }
+  return {
+    session_value: fingerprintSessionValue(sessionState.currentSessionId),
+    session_initial_value: fingerprintSessionValue(sessionState.initialSessionId),
+    session_mode: sessionState.mode,
+    session_rotated: sessionState.rotated,
+  };
+}
+
 function readVideoTranscriberTempTimeoutMs() {
   return clampInt(process.env.VIDEOTRANSCRIBER_TEMP_TIMEOUT_MS, DEFAULT_TIMEOUT_MS, MIN_TIMEOUT_MS, MAX_TIMEOUT_MS);
 }
@@ -99,6 +140,7 @@ function buildProviderDebug(input: {
   retryAfterSeconds?: number | null;
   providerErrorCode?: string | null;
   responseExcerpt?: string | null;
+  sessionState?: VideoTranscriberSessionState | null;
 }): TranscriptProviderDebug {
   return {
     provider: 'videotranscriber_temp',
@@ -107,6 +149,16 @@ function buildProviderDebug(input: {
     retry_after_seconds: input.retryAfterSeconds ?? null,
     provider_error_code: input.providerErrorCode ?? null,
     response_excerpt: input.responseExcerpt ?? null,
+    ...buildSessionFields(input.sessionState),
+  };
+}
+
+function buildProviderTrace(sessionState: VideoTranscriberSessionState): TranscriptProviderTrace {
+  return {
+    attempted_providers: [],
+    winning_provider: 'videotranscriber_temp',
+    used_fallback: false,
+    ...buildSessionFields(sessionState),
   };
 }
 
@@ -136,6 +188,13 @@ function rotateAnonymousUserId() {
   if (!shouldForceNewSession()) {
     sharedAnonymousUserId = next;
   }
+  return next;
+}
+
+function rotateSessionState(sessionState: VideoTranscriberSessionState) {
+  const next = rotateAnonymousUserId();
+  sessionState.currentSessionId = next;
+  sessionState.rotated = true;
   return next;
 }
 
@@ -297,6 +356,7 @@ function buildRequestTransportError(
   stage: string,
   fallbackMessage: string,
   error: unknown,
+  sessionState?: VideoTranscriberSessionState | null,
 ) {
   const errorCode = String((error as { code?: unknown } | null)?.code || '').trim() || 'TRANSPORT_FAIL';
   const responseExcerpt = error instanceof Error ? error.message : String(error);
@@ -310,6 +370,7 @@ function buildRequestTransportError(
       stage,
       providerErrorCode: errorCode,
       responseExcerpt,
+      sessionState,
     }),
   });
 }
@@ -340,6 +401,7 @@ async function fetchRawResult(
   requestContext: VideoTranscriberRequestContext,
   stage: string,
   failureMessage: string,
+  sessionState?: VideoTranscriberSessionState | null,
 ) {
   const headers = buildRequestHeaders(sessionId, init.headers);
   if (!requestContext.proxyTools) {
@@ -355,7 +417,7 @@ async function fetchRawResult(
         headers: response.headers,
       };
     } catch (error) {
-      throw buildRequestTransportError(stage, failureMessage, error);
+      throw buildRequestTransportError(stage, failureMessage, error, sessionState);
     }
   }
 
@@ -372,7 +434,7 @@ async function fetchRawResult(
       headers: headersFromRecord(response.headers),
     };
   } catch (error) {
-    throw buildRequestTransportError(stage, failureMessage, error);
+    throw buildRequestTransportError(stage, failureMessage, error, sessionState);
   }
 }
 
@@ -381,6 +443,7 @@ function throwMappedProviderError(
   message: string,
   stage: string,
   result: JsonFetchResult<unknown>,
+  sessionState?: VideoTranscriberSessionState | null,
 ) {
   throw new TranscriptProviderError(code, message, {
     retryAfterSeconds: parseRetryAfterSeconds(result.headers.get('retry-after')),
@@ -390,18 +453,24 @@ function throwMappedProviderError(
       retryAfterSeconds: parseRetryAfterSeconds(result.headers.get('retry-after')),
       providerErrorCode: String(result.body?.code || '').trim() || code,
       responseExcerpt: responseExcerptFromResult(result),
+      sessionState,
     }),
   });
 }
 
-function throwApiFailure(stage: string, result: JsonFetchResult<unknown>, fallbackMessage: string) {
+function throwApiFailure(
+  stage: string,
+  result: JsonFetchResult<unknown>,
+  fallbackMessage: string,
+  sessionState?: VideoTranscriberSessionState | null,
+) {
   const classified = classifyVideoTranscriberFailure({
     status: result.status,
     providerErrorCode: String(result.body?.code || '').trim() || null,
     responseExcerpt: responseExcerptFromResult(result),
     fallbackMessage,
   });
-  throwMappedProviderError(classified.code, classified.message, stage, result);
+  throwMappedProviderError(classified.code, classified.message, stage, result, sessionState);
 }
 
 async function fetchJsonResult<T>(
@@ -411,8 +480,9 @@ async function fetchJsonResult<T>(
   requestContext: VideoTranscriberRequestContext,
   stage: string,
   failureMessage: string,
+  sessionState?: VideoTranscriberSessionState | null,
 ): Promise<JsonFetchResult<T>> {
-  const response = await fetchRawResult(url, init, sessionId, requestContext, stage, failureMessage);
+  const response = await fetchRawResult(url, init, sessionId, requestContext, stage, failureMessage, sessionState);
   const text = response.text;
   let body: VideoTranscriberEnvelope<T> | null = null;
   try {
@@ -434,11 +504,16 @@ async function fetchTextResultWithContext(
   requestContext: VideoTranscriberRequestContext,
   stage: string,
   failureMessage: string,
+  sessionState?: VideoTranscriberSessionState | null,
 ) {
-  return fetchRawResult(url, { method: 'GET' }, sessionId, requestContext, stage, failureMessage);
+  return fetchRawResult(url, { method: 'GET' }, sessionId, requestContext, stage, failureMessage, sessionState);
 }
 
-async function getTranscriptKey(sessionId: string, requestContext: VideoTranscriberRequestContext) {
+async function getTranscriptKey(
+  sessionId: string,
+  requestContext: VideoTranscriberRequestContext,
+  sessionState: VideoTranscriberSessionState,
+) {
   if (cachedTranscriptKey) return cachedTranscriptKey;
   const response = await fetchTextResultWithContext(
     BASE_URL,
@@ -446,6 +521,7 @@ async function getTranscriptKey(sessionId: string, requestContext: VideoTranscri
     requestContext,
     'runtime_config',
     'Could not load temporary transcript provider config.',
+    sessionState,
   );
   const html = response.text;
   if (response.status < 200 || response.status >= 300) {
@@ -460,6 +536,7 @@ async function getTranscriptKey(sessionId: string, requestContext: VideoTranscri
         status: response.status,
         retryAfterSeconds: parseRetryAfterSeconds(response.headers.get('retry-after')),
         responseExcerpt: normalizeApiMessage(html),
+        sessionState,
       }),
     });
   }
@@ -470,6 +547,7 @@ async function getTranscriptKey(sessionId: string, requestContext: VideoTranscri
         stage: 'runtime_config',
         status: response.status,
         responseExcerpt: normalizeApiMessage(html),
+        sessionState,
       }),
     });
   }
@@ -477,7 +555,12 @@ async function getTranscriptKey(sessionId: string, requestContext: VideoTranscri
   return transcriptKey;
 }
 
-async function getUrlInfo(videoUrl: string, sessionId: string, requestContext: VideoTranscriberRequestContext) {
+async function getUrlInfo(
+  videoUrl: string,
+  sessionId: string,
+  requestContext: VideoTranscriberRequestContext,
+  sessionState: VideoTranscriberSessionState,
+) {
   const endpoint = new URL('/api/v1/transcriptions/url-info', BASE_URL);
   endpoint.searchParams.set('url', videoUrl);
   endpoint.searchParams.set('type', '3');
@@ -489,12 +572,13 @@ async function getUrlInfo(videoUrl: string, sessionId: string, requestContext: V
     requestContext,
     'url_info',
     'Could not load transcript metadata.',
+    sessionState,
   );
   if (result.status === 401 || result.status === 403 || result.status === 404 || result.status === 410) {
-    throwApiFailure('url_info', result, 'Could not load transcript metadata.');
+    throwApiFailure('url_info', result, 'Could not load transcript metadata.', sessionState);
   }
   if (result.body?.code !== 100000 || !result.body?.data) {
-    throwApiFailure('url_info', result, 'Could not load transcript metadata.');
+    throwApiFailure('url_info', result, 'Could not load transcript metadata.', sessionState);
   }
   return result.body.data;
 }
@@ -505,6 +589,7 @@ async function startTranscription(
   transcriptKey: string,
   sessionId: string,
   requestContext: VideoTranscriberRequestContext,
+  sessionState: VideoTranscriberSessionState,
 ) {
   const payload = {
     path: videoUrl,
@@ -530,6 +615,7 @@ async function startTranscription(
     requestContext,
     'start',
     'Could not start temporary transcript job.',
+    sessionState,
   );
 }
 
@@ -550,12 +636,13 @@ async function startTranscriptionWithRetry(
   transcriptKey: string,
   initialSessionId: string,
   requestContext: VideoTranscriberRequestContext,
+  sessionState: VideoTranscriberSessionState,
 ) {
   let sessionId = initialSessionId;
   for (let attempt = 1; attempt <= START_MAX_ATTEMPTS; attempt += 1) {
-    const result = await startTranscription(videoUrl, info, transcriptKey, sessionId, requestContext);
+    const result = await startTranscription(videoUrl, info, transcriptKey, sessionId, requestContext, sessionState);
     if (result.status === 401 || result.status === 403 || result.status === 404 || result.status === 410) {
-      throwApiFailure('start', result, 'Could not start temporary transcript job.');
+      throwApiFailure('start', result, 'Could not start temporary transcript job.', sessionState);
     }
 
     if (result.body?.code === 100000) {
@@ -567,6 +654,7 @@ async function startTranscriptionWithRetry(
             status: result.status,
             providerErrorCode: 'MISSING_RECORD_ID',
             responseExcerpt: responseExcerptFromResult(result),
+            sessionState,
           }),
         });
       }
@@ -575,7 +663,7 @@ async function startTranscriptionWithRetry(
 
     if (result.body?.code === 164002) {
       if (attempt < START_MAX_ATTEMPTS) {
-        sessionId = rotateAnonymousUserId();
+        sessionId = rotateSessionState(sessionState);
         continue;
       }
       throw new TranscriptProviderError('RATE_LIMITED', 'Temporary transcript provider queue is busy. Please retry shortly.', {
@@ -586,17 +674,29 @@ async function startTranscriptionWithRetry(
           retryAfterSeconds: parseRetryAfterSeconds(result.headers.get('retry-after')),
           providerErrorCode: '164002',
           responseExcerpt: responseExcerptFromResult(result),
+          sessionState,
         }),
       });
     }
 
-    throwApiFailure('start', result, 'Could not start temporary transcript job.');
+    throwApiFailure('start', result, 'Could not start temporary transcript job.', sessionState);
   }
 
-  throw new TranscriptProviderError('RATE_LIMITED', 'Temporary transcript provider queue is busy. Please retry shortly.');
+  throw new TranscriptProviderError('RATE_LIMITED', 'Temporary transcript provider queue is busy. Please retry shortly.', {
+    providerDebug: buildProviderDebug({
+      stage: 'start',
+      providerErrorCode: '164002',
+      sessionState,
+    }),
+  });
 }
 
-async function getRecord(recordId: string, sessionId: string, requestContext: VideoTranscriberRequestContext) {
+async function getRecord(
+  recordId: string,
+  sessionId: string,
+  requestContext: VideoTranscriberRequestContext,
+  sessionState: VideoTranscriberSessionState,
+) {
   const endpoint = new URL('/api/v1/transcriptions', BASE_URL);
   endpoint.searchParams.set('record_id', recordId);
   return fetchJsonResult<VideoTranscriberRecord>(
@@ -606,6 +706,7 @@ async function getRecord(recordId: string, sessionId: string, requestContext: Vi
     requestContext,
     'poll',
     'Could not read temporary transcript job.',
+    sessionState,
   );
 }
 
@@ -614,12 +715,13 @@ async function pollRecordUntilDone(
   sessionId: string,
   timeoutMs: number,
   requestContext: VideoTranscriberRequestContext,
+  sessionState: VideoTranscriberSessionState,
 ) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
-    const result = await getRecord(recordId, sessionId, requestContext);
+    const result = await getRecord(recordId, sessionId, requestContext, sessionState);
     if (result.status === 401 || result.status === 403) {
-      throwApiFailure('poll', result, 'Could not read temporary transcript job.');
+      throwApiFailure('poll', result, 'Could not read temporary transcript job.', sessionState);
     }
 
     if (result.body?.code === 100000 && result.body.data) {
@@ -634,6 +736,7 @@ async function pollRecordUntilDone(
             status: result.status,
             providerErrorCode: status.toUpperCase(),
             responseExcerpt: responseExcerptFromResult(result),
+            sessionState,
           }),
         });
       }
@@ -646,6 +749,7 @@ async function pollRecordUntilDone(
     providerDebug: buildProviderDebug({
       stage: 'poll',
       providerErrorCode: 'TIMEOUT',
+      sessionState,
     }),
   });
 }
@@ -692,6 +796,7 @@ async function getTranscriptMeta(
   transcriptType: string,
   sessionId: string,
   requestContext: VideoTranscriberRequestContext,
+  sessionState: VideoTranscriberSessionState,
 ) {
   const endpoint = new URL('/api/v1/transcriptions/get-transcript', BASE_URL);
   endpoint.searchParams.set('record_id', recordId);
@@ -704,6 +809,7 @@ async function getTranscriptMeta(
     requestContext,
     'get_transcript',
     'Could not resolve transcript metadata.',
+    sessionState,
   );
 }
 
@@ -711,6 +817,7 @@ async function fetchSegmentsFromTranscriptUrl(
   transcriptUrl: string,
   sessionId: string,
   requestContext: VideoTranscriberRequestContext,
+  sessionState: VideoTranscriberSessionState,
 ) {
   const result = await fetchTextResultWithContext(
     transcriptUrl,
@@ -718,6 +825,7 @@ async function fetchSegmentsFromTranscriptUrl(
     requestContext,
     'transcript_url',
     'Could not fetch transcript payload.',
+    sessionState,
   );
   if (!result.text.trim()) return [] as TranscriptSegment[];
   try {
@@ -738,6 +846,7 @@ async function resolveTranscriptSegments(
   record: VideoTranscriberRecord,
   sessionId: string,
   requestContext: VideoTranscriberRequestContext,
+  sessionState: VideoTranscriberSessionState,
 ) {
   const directSegments = normalizeSegments(record.transcript);
   if (directSegments.length > 0) {
@@ -762,6 +871,7 @@ async function resolveTranscriptSegments(
           transcriptType,
           sessionId,
           requestContext,
+          sessionState,
         );
         const metaUrl = normalizeTranscriptWhitespace(String(meta.body?.data?.transcript_url || ''));
         if (meta.body?.code === 100000 && metaUrl && !urlCandidates.some((candidate) => candidate.url === metaUrl)) {
@@ -778,7 +888,7 @@ async function resolveTranscriptSegments(
 
   for (const candidate of urlCandidates) {
     try {
-      const segments = await fetchSegmentsFromTranscriptUrl(candidate.url, sessionId, requestContext);
+      const segments = await fetchSegmentsFromTranscriptUrl(candidate.url, sessionId, requestContext, sessionState);
       if (segments.length > 0) {
         return {
           segments,
@@ -800,23 +910,27 @@ export async function getTranscriptFromVideoTranscriberTemp(videoId: string): Pr
   const timeoutMs = readVideoTranscriberTempTimeoutMs();
   const requestContext = await createRequestContext();
   const initialSessionId = getAnonymousUserIdForRequest();
+  const sessionState = createSessionState(initialSessionId);
   const videoUrl = buildVideoUrl(videoId);
-  const transcriptKey = await getTranscriptKey(initialSessionId, requestContext);
-  const info = await getUrlInfo(videoUrl, initialSessionId, requestContext);
+  const transcriptKey = await getTranscriptKey(initialSessionId, requestContext, sessionState);
+  const info = await getUrlInfo(videoUrl, initialSessionId, requestContext, sessionState);
   const { recordId, sessionId } = await startTranscriptionWithRetry(
     videoUrl,
     info,
     transcriptKey,
     initialSessionId,
     requestContext,
+    sessionState,
   );
-  const record = await pollRecordUntilDone(recordId, sessionId, timeoutMs, requestContext);
-  const resolvedTranscript = await resolveTranscriptSegments(record, sessionId, requestContext);
+  sessionState.currentSessionId = sessionId;
+  const record = await pollRecordUntilDone(recordId, sessionId, timeoutMs, requestContext, sessionState);
+  const resolvedTranscript = await resolveTranscriptSegments(record, sessionId, requestContext, sessionState);
   if (resolvedTranscript.segments.length === 0) {
     throw new TranscriptProviderError('TRANSCRIPT_EMPTY', 'Transcript unavailable for this video. Please try another video.', {
       providerDebug: buildProviderDebug({
         stage: 'transcript_resolution',
         providerErrorCode: 'TRANSCRIPT_EMPTY',
+        sessionState,
       }),
     });
   }
@@ -829,6 +943,7 @@ export async function getTranscriptFromVideoTranscriberTemp(videoId: string): Pr
       providerDebug: buildProviderDebug({
         stage: 'transcript_resolution',
         providerErrorCode: 'TRANSCRIPT_EMPTY',
+        sessionState,
       }),
     });
   }
@@ -839,6 +954,7 @@ export async function getTranscriptFromVideoTranscriberTemp(videoId: string): Pr
     confidence: null,
     segments: resolvedTranscript.segments,
     transport: requestContext.transport,
+    provider_trace: buildProviderTrace(sessionState),
   };
 }
 

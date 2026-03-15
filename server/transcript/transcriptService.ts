@@ -190,6 +190,7 @@ export function createTranscriptService(partialDeps: Partial<TranscriptServiceDe
     return {
       ...transcript,
       provider_trace: {
+        ...(transcript.provider_trace || {}),
         attempted_providers: input.attempts,
         winning_provider: input.winningProvider,
         used_fallback: input.attempts.length > 1,

@@ -1,5 +1,7 @@
 export type TranscriptProvider = 'youtube_timedtext' | 'videotranscriber_temp';
 
+export type TranscriptProviderSessionMode = 'shared' | 'force_new';
+
 export type TranscriptProviderDebug = {
   provider: TranscriptProvider;
   stage?: string | null;
@@ -7,6 +9,10 @@ export type TranscriptProviderDebug = {
   retry_after_seconds?: number | null;
   provider_error_code?: string | null;
   response_excerpt?: string | null;
+  session_value?: string | null;
+  session_initial_value?: string | null;
+  session_mode?: TranscriptProviderSessionMode | null;
+  session_rotated?: boolean | null;
 };
 
 export type TranscriptProviderErrorCode =
@@ -56,6 +62,10 @@ export type TranscriptProviderTrace = {
   used_fallback: boolean;
   cache_hit?: boolean;
   cache_provider?: TranscriptProvider | null;
+  session_value?: string | null;
+  session_initial_value?: string | null;
+  session_mode?: TranscriptProviderSessionMode | null;
+  session_rotated?: boolean | null;
 };
 
 export type TranscriptSegment = {
@@ -123,6 +133,27 @@ function sanitizeExcerpt(value: unknown, maxChars = 300) {
     : normalized;
 }
 
+function sanitizeSessionValue(value: unknown) {
+  const normalized = String(value || '').trim();
+  if (!normalized) return null;
+  return normalized.length > 64 ? normalized.slice(0, 64) : normalized;
+}
+
+function sanitizeSessionMode(value: unknown): TranscriptProviderSessionMode | null {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'shared') return 'shared';
+  if (normalized === 'force_new') return 'force_new';
+  return null;
+}
+
+function sanitizeOptionalBoolean(value: unknown) {
+  if (typeof value === 'boolean') return value;
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'true') return true;
+  if (normalized === 'false') return false;
+  return null;
+}
+
 export function sanitizeTranscriptProviderDebug(input: TranscriptProviderDebug | null | undefined) {
   if (!input) return null;
   if (
@@ -131,6 +162,10 @@ export function sanitizeTranscriptProviderDebug(input: TranscriptProviderDebug |
   ) return null;
   const httpStatus = Number(input.http_status);
   const retryAfterSeconds = Number(input.retry_after_seconds);
+  const sessionValue = sanitizeSessionValue(input.session_value);
+  const sessionInitialValue = sanitizeSessionValue(input.session_initial_value);
+  const sessionMode = sanitizeSessionMode(input.session_mode);
+  const sessionRotated = sanitizeOptionalBoolean(input.session_rotated);
   return {
     provider: input.provider,
     stage: String(input.stage || '').trim() || null,
@@ -140,6 +175,10 @@ export function sanitizeTranscriptProviderDebug(input: TranscriptProviderDebug |
       : null,
     provider_error_code: String(input.provider_error_code || '').trim() || null,
     response_excerpt: sanitizeExcerpt(input.response_excerpt),
+    ...(sessionValue ? { session_value: sessionValue } : {}),
+    ...(sessionInitialValue ? { session_initial_value: sessionInitialValue } : {}),
+    ...(sessionMode ? { session_mode: sessionMode } : {}),
+    ...(sessionRotated != null ? { session_rotated: sessionRotated } : {}),
   } satisfies TranscriptProviderDebug;
 }
 

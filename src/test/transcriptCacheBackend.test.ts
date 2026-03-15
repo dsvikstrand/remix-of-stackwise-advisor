@@ -39,6 +39,10 @@ describe('transcriptCache', () => {
         ],
         winning_provider: 'youtube_timedtext',
         used_fallback: true,
+        session_value: 'sid_final123456',
+        session_initial_value: 'sid_initial9876',
+        session_mode: 'shared',
+        session_rotated: true,
       },
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -59,6 +63,10 @@ describe('transcriptCache', () => {
         used_fallback: true,
         cache_hit: true,
         cache_provider: 'youtube_timedtext',
+        session_value: 'sid_final123456',
+        session_initial_value: 'sid_initial9876',
+        session_mode: 'shared',
+        session_rotated: true,
       },
     });
   });
@@ -167,6 +175,10 @@ describe('transcriptCache', () => {
         attempted_providers: [],
         winning_provider: 'youtube_timedtext',
         used_fallback: false,
+        session_value: 'sid_final123456',
+        session_initial_value: 'sid_initial9876',
+        session_mode: 'shared',
+        session_rotated: false,
       },
     });
 
@@ -183,6 +195,10 @@ describe('transcriptCache', () => {
             attempted_providers: [],
             winning_provider: 'youtube_timedtext',
             used_fallback: false,
+            session_value: 'sid_final123456',
+            session_initial_value: 'sid_initial9876',
+            session_mode: 'shared',
+            session_rotated: false,
           },
         }),
       },

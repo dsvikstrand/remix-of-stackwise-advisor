@@ -122,7 +122,16 @@ describe('videotranscriber_temp provider', () => {
         proxy_enabled: false,
         proxy_mode: 'direct',
       },
+      provider_trace: {
+        winning_provider: 'videotranscriber_temp',
+        used_fallback: false,
+        session_mode: 'shared',
+        session_rotated: false,
+        session_value: expect.stringMatching(/^sid_[0-9a-f]{12}$/),
+        session_initial_value: expect.stringMatching(/^sid_[0-9a-f]{12}$/),
+      },
     });
+    expect(result.provider_trace?.session_value).toBe(result.provider_trace?.session_initial_value);
     expect(result.segments).toEqual([
       { text: 'Hello', startSec: 0, endSec: 2 },
       { text: 'world', startSec: 2, endSec: 4 },
@@ -178,6 +187,14 @@ describe('videotranscriber_temp provider', () => {
     expect(startSessions[0]).not.toBe('');
     expect(startSessions[1]).not.toBe('');
     expect(startSessions[1]).not.toBe(startSessions[0]);
+    expect(result.provider_trace).toMatchObject({
+      winning_provider: 'videotranscriber_temp',
+      session_mode: 'shared',
+      session_rotated: true,
+      session_value: expect.stringMatching(/^sid_[0-9a-f]{12}$/),
+      session_initial_value: expect.stringMatching(/^sid_[0-9a-f]{12}$/),
+    });
+    expect(result.provider_trace?.session_value).not.toBe(result.provider_trace?.session_initial_value);
   });
 
   it('maps repeated queue-full responses to RATE_LIMITED', async () => {
@@ -208,6 +225,10 @@ describe('videotranscriber_temp provider', () => {
         provider: 'videotranscriber_temp',
         stage: 'start',
         provider_error_code: '164002',
+        session_mode: 'shared',
+        session_rotated: true,
+        session_value: expect.stringMatching(/^sid_[0-9a-f]{12}$/),
+        session_initial_value: expect.stringMatching(/^sid_[0-9a-f]{12}$/),
       },
     });
   });
@@ -470,19 +491,25 @@ describe('videotranscriber_temp provider', () => {
       throw new Error(`Unexpected fetch ${url}`);
     }) as unknown as typeof fetch;
 
-    await getTranscriptFromVideoTranscriberTemp('video123');
-    await getTranscriptFromVideoTranscriberTemp('video456');
+    const firstShared = await getTranscriptFromVideoTranscriberTemp('video123');
+    const secondShared = await getTranscriptFromVideoTranscriberTemp('video456');
     expect(requestSessions).toHaveLength(2);
     expect(requestSessions[0]).toBe(requestSessions[1]);
+    expect(firstShared.provider_trace?.session_mode).toBe('shared');
+    expect(secondShared.provider_trace?.session_mode).toBe('shared');
+    expect(firstShared.provider_trace?.session_value).toBe(secondShared.provider_trace?.session_value);
 
     resetVideoTranscriberTempProviderStateForTests();
     requestSessions.length = 0;
     process.env.VIDEOTRANSCRIBER_TEMP_FORCE_NEW_SESSION = 'true';
 
-    await getTranscriptFromVideoTranscriberTemp('video123');
-    await getTranscriptFromVideoTranscriberTemp('video456');
+    const firstForced = await getTranscriptFromVideoTranscriberTemp('video123');
+    const secondForced = await getTranscriptFromVideoTranscriberTemp('video456');
     expect(requestSessions).toHaveLength(2);
     expect(requestSessions[0]).not.toBe(requestSessions[1]);
+    expect(firstForced.provider_trace?.session_mode).toBe('force_new');
+    expect(secondForced.provider_trace?.session_mode).toBe('force_new');
+    expect(firstForced.provider_trace?.session_value).not.toBe(secondForced.provider_trace?.session_value);
   });
 
   it('reads the timeout override from env on the adapter', () => {
