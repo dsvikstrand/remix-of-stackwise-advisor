@@ -34,8 +34,8 @@
 - Preferred non-store install path: `https://bleup.app` as an installable online-first PWA (same backend/auth model as the browser app)
 - `agentic-worker.service` is deferred and should remain disabled in the current MVP production contract
 - Local/dev-only transcript fallback:
-  - `videotranscriber_temp` is the current repo/dev default behind `TRANSCRIPT_PROVIDER=videotranscriber_temp`.
-  - `youtube_timedtext` is the only built-in direct fallback provider.
+  - `youtube_timedtext` is the current default behind `TRANSCRIPT_PROVIDER=youtube_timedtext`.
+  - `videotranscriber_temp` is the built-in fallback provider when YouTube captions are unavailable.
   - it is not part of Oracle runtime truth and should not be enabled in `/etc/agentic-backend.env`.
   - provider-local envs: `VIDEOTRANSCRIBER_TEMP_TIMEOUT_MS`, `VIDEOTRANSCRIBER_TEMP_FORCE_NEW_SESSION`
 
@@ -414,7 +414,7 @@ Safe defaults:
 - `YT2BP_QUALITY_ENABLED=true`
 - `YT2BP_CONTENT_SAFETY_ENABLED=true`
 - current local/dev transcript default:
-  - `TRANSCRIPT_PROVIDER=videotranscriber_temp`
+  - `TRANSCRIPT_PROVIDER=youtube_timedtext`
   - `VIDEOTRANSCRIBER_TEMP_TIMEOUT_MS=180000`
   - `VIDEOTRANSCRIBER_TEMP_FORCE_NEW_SESSION=false`
 - `YT2BP_ANON_LIMIT_PER_MIN=6`
@@ -554,9 +554,9 @@ ssh oracle-free 'set -a; . /etc/agentic-backend.env; set +a; curl -sS http://127
   1) Confirm provider setting (`TRANSCRIPT_PROVIDER`).
   2) Run toy transcript probe:
   ```bash
-  TRANSCRIPT_PROVIDER=videotranscriber_temp node --import tsx scripts/toy_fetch_transcript.ts --url 'https://www.youtube.com/watch?v=16hFQZbxZpU'
+  TRANSCRIPT_PROVIDER=youtube_timedtext node --import tsx scripts/toy_fetch_transcript.ts --url 'https://www.youtube.com/watch?v=16hFQZbxZpU'
   ```
-  3) Switch provider if needed.
+  3) If timedtext has no captions, re-run with `TRANSCRIPT_PROVIDER=videotranscriber_temp`.
 
 ### `RATE_LIMITED`
 - Meaning: anon/auth/hourly limiter tripped.

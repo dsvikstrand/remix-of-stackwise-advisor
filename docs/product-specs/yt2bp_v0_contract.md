@@ -74,7 +74,7 @@
 - 2026-03-08 note: shared Webshare transcript proxying for opted-in providers now uses an explicit-endpoint-only runtime contract; legacy selector/list envs and direct-proxy-list lookup are removed from active runtime. Historical transport metadata remains read-compatible, and this does not alter the YT2BP endpoint envelope.
 - 2026-03-08 note: installed-PWA push delivery (`notification_push_subscriptions`, `notification_push_dispatch_queue`, `/api/notifications/push-subscriptions*`) is additive notification-channel infrastructure and does not alter the YT2BP endpoint envelope.
 - 2026-03-09 note: installed-PWA push runtime remains rollout-gated until backend startup validation and device delivery proof are complete; Oracle control-plane recovery for that rollout is documented separately in `docs/ops/oracle-cli-access.md`.
-- 2026-03-14 note: the current repo/dev default is `TRANSCRIPT_PROVIDER=videotranscriber_temp`, a wrapper around the browser-facing `videotranscriber.ai` flow with provider-local timeout/session envs. `youtube_timedtext` remains the only built-in direct fallback, and launch should later move to a stable API-backed provider. This is additive and does not change the production endpoint envelope.
+- 2026-03-14 note: the current default is `TRANSCRIPT_PROVIDER=youtube_timedtext`; if YouTube captions are unavailable, the same seam falls through to `videotranscriber_temp`, a wrapper around the browser-facing `videotranscriber.ai` flow with provider-local timeout/session envs. This is additive and does not change the production endpoint envelope.
 - 2026-03-15 note: the v0 success envelope still returns a `draft` object, but the canonical blueprint content inside that envelope is now `draft.sectionsJson` with schema `blueprint_sections_v1`. Legacy `draft.steps`, `draft.summaryVariants`, and `draft.notes` remain compatibility fields during cutover and should not be used as the target shape for new downstream work.
 
 ## Request
@@ -163,7 +163,7 @@
 ## Runtime controls
 - `YT2BP_ENABLED`
 - `YT2BP_QUALITY_ENABLED`
-- `TRANSCRIPT_PROVIDER` (current repo/dev default `videotranscriber_temp`; built-in direct fallback `youtube_timedtext`)
+- `TRANSCRIPT_PROVIDER` (current default `youtube_timedtext`; built-in fallback `videotranscriber_temp` when captions are unavailable)
 - `TRANSCRIPT_USE_WEBSHARE_PROXY`, `WEBSHARE_PROXY_URL`, `WEBSHARE_PROXY_HOST`, `WEBSHARE_PROXY_PORT`, `WEBSHARE_PROXY_USERNAME`, `WEBSHARE_PROXY_PASSWORD` (shared transport config for opted-in transcript providers)
 - `VIDEOTRANSCRIBER_TEMP_TIMEOUT_MS` (local/dev-only, default `180000`, bounded provider-local timeout)
 - `VIDEOTRANSCRIBER_TEMP_FORCE_NEW_SESSION` (local/dev-only anonymous-session rotation toggle)

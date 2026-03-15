@@ -88,7 +88,8 @@ Status: `canonical`
 56. Shared transcript proxy runtime for opted-in providers is explicit-endpoint-only for MVP; legacy Webshare selector/list modes are removed from active runtime, while historical transport metadata remains read-compatible.
 57. Installed-PWA web push is now a gated extension of the existing notifications model: only `comment_reply`, `generation_succeeded`, and `generation_failed` are eligible, opt-in is explicit from notification surfaces, and rollout remains behind push feature/env flags until device validation is complete.
 58. Oracle control-plane operations for MVP (instance inspection/reboot) must use the standardized OCI API-signing-key workflow in `docs/ops/oracle-cli-access.md`; ad hoc local note files are not part of the canonical ops contract.
-59. Temporary local/dev transcript fallbacks are allowed only behind the existing transcript-provider seam; they must be explicitly marked non-production and must not silently redefine Oracle/live runtime truth.
+59. Transcript fetch now defaults to `youtube_timedtext` first and may fall through to `videotranscriber_temp` only through the existing transcript-provider seam when YouTube captions are unavailable.
+60. Temporary local/dev transcript fallbacks are allowed only behind the existing transcript-provider seam; they must be explicitly marked non-production and must not silently redefine Oracle/live runtime truth.
 
 ## Core user journey
 1. Subscribe to a YouTube channel or search/select a video.

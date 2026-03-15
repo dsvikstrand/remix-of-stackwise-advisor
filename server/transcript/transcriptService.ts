@@ -78,10 +78,10 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 }
 
 export function resolveTranscriptProvider(): TranscriptProvider {
-  const raw = String(process.env.TRANSCRIPT_PROVIDER || 'videotranscriber_temp').toLowerCase();
+  const raw = String(process.env.TRANSCRIPT_PROVIDER || 'youtube_timedtext').toLowerCase();
   if (raw === 'videotranscriber_temp') return 'videotranscriber_temp';
   if (raw === 'youtube_timedtext') return 'youtube_timedtext';
-  return 'videotranscriber_temp';
+  return 'youtube_timedtext';
 }
 
 export function resolveTranscriptOperationTimeoutMs(defaultTimeoutMs: number) {
@@ -123,6 +123,11 @@ function isVideoTranscriberLateFallbackStage(stage: string) {
 
 function shouldFallbackTranscriptProviderAttempt(provider: TranscriptProvider, error: unknown) {
   const code = normalizeTranscriptProviderErrorCode(error);
+  if (provider === 'youtube_timedtext') {
+    if (code === 'NO_CAPTIONS' || code === 'TRANSCRIPT_EMPTY') {
+      return true;
+    }
+  }
   if (provider === 'videotranscriber_temp') {
     const stage = normalizeTranscriptProviderStage(error);
     if (code === 'TRANSCRIPT_EMPTY' && stage === 'transcript_resolution') {

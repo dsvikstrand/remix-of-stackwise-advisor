@@ -61,7 +61,7 @@ afterEach(() => {
 describe('transcript service modularity (backend)', () => {
   it('resolves primary provider from TRANSCRIPT_PROVIDER', () => {
     delete process.env.TRANSCRIPT_PROVIDER;
-    expect(resolveTranscriptProvider()).toBe('videotranscriber_temp');
+    expect(resolveTranscriptProvider()).toBe('youtube_timedtext');
 
     process.env.TRANSCRIPT_PROVIDER = 'youtube_timedtext';
     expect(resolveTranscriptProvider()).toBe('youtube_timedtext');
@@ -70,7 +70,7 @@ describe('transcript service modularity (backend)', () => {
     expect(resolveTranscriptProvider()).toBe('videotranscriber_temp');
 
     process.env.TRANSCRIPT_PROVIDER = 'unsupported_provider';
-    expect(resolveTranscriptProvider()).toBe('videotranscriber_temp');
+    expect(resolveTranscriptProvider()).toBe('youtube_timedtext');
   });
 
   it('expands transcript operation timeout to match the selected provider timeout', () => {
@@ -247,6 +247,118 @@ describe('transcript service modularity (backend)', () => {
       'youtube_timedtext',
       'videotranscriber_temp',
     ]);
+  });
+
+  it('defaults fallback provider order to youtube_timedtext before videotranscriber_temp', () => {
+    registerTranscriptProviders([
+      {
+        id: 'youtube_timedtext',
+        getTranscript: async () => ({ text: 'tt', source: 'youtube_timedtext', confidence: null }),
+      },
+      {
+        id: 'videotranscriber_temp',
+        getTranscript: async () => ({ text: 'vt', source: 'videotranscriber_temp', confidence: null }),
+      },
+    ]);
+
+    expect(listTranscriptProvidersForFallback().map((provider) => provider.id)).toEqual([
+      'youtube_timedtext',
+      'videotranscriber_temp',
+    ]);
+  });
+
+  it.each([
+    ['NO_CAPTIONS'],
+    ['TRANSCRIPT_EMPTY'],
+  ] as const)('falls through to videotranscriber_temp after youtube_timedtext %s', async (errorCode) => {
+    const calls: string[] = [];
+    const providers: TranscriptProviderAdapter[] = [
+      {
+        id: 'youtube_timedtext',
+        getTranscript: async () => {
+          calls.push('youtube_timedtext');
+          throw new TranscriptProviderError(errorCode, `timedtext failure: ${errorCode}`);
+        },
+      },
+      {
+        id: 'videotranscriber_temp',
+        getTranscript: async () => {
+          calls.push('videotranscriber_temp');
+          return {
+            text: 'temp fallback transcript',
+            source: 'videotranscriber_temp',
+            confidence: null,
+          };
+        },
+      },
+    ];
+
+    const result = await buildService(providers, {
+      resolveProvider: () => 'youtube_timedtext',
+      providerRetryDefaults: {
+        transcriptAttempts: 1,
+        transcriptTimeoutMs: 1000,
+      },
+    }).getTranscriptForVideo('video123', { enableFallback: true });
+
+    expect(calls).toEqual(['youtube_timedtext', 'videotranscriber_temp']);
+    expect(result.provider_trace).toEqual({
+      attempted_providers: [
+        {
+          provider: 'youtube_timedtext',
+          ok: false,
+          error_code: errorCode,
+          provider_debug: null,
+        },
+        {
+          provider: 'videotranscriber_temp',
+          ok: true,
+          error_code: null,
+          provider_debug: null,
+        },
+      ],
+      winning_provider: 'videotranscriber_temp',
+      used_fallback: true,
+    });
+  });
+
+  it.each([
+    ['VIDEO_UNAVAILABLE'],
+    ['ACCESS_DENIED'],
+  ] as const)('stops fallback immediately on youtube_timedtext %s', async (errorCode) => {
+    const calls: string[] = [];
+    const providers: TranscriptProviderAdapter[] = [
+      {
+        id: 'youtube_timedtext',
+        getTranscript: async () => {
+          calls.push('youtube_timedtext');
+          throw new TranscriptProviderError(errorCode, `timedtext failure: ${errorCode}`);
+        },
+      },
+      {
+        id: 'videotranscriber_temp',
+        getTranscript: async () => {
+          calls.push('videotranscriber_temp');
+          return {
+            text: 'should not happen',
+            source: 'videotranscriber_temp',
+            confidence: null,
+          };
+        },
+      },
+    ];
+
+    await expect(
+      buildService(providers, {
+        resolveProvider: () => 'youtube_timedtext',
+        providerRetryDefaults: {
+          transcriptAttempts: 1,
+          transcriptTimeoutMs: 1000,
+        },
+      }).getTranscriptForVideo('video123', { enableFallback: true }),
+    ).rejects.toMatchObject({ code: errorCode });
+
+    expect(calls).toEqual(['youtube_timedtext']);
   });
 
   it.each([

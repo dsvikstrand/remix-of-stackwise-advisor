@@ -2,7 +2,7 @@ import { videoTranscriberTempTranscriptProviderAdapter } from './providers/video
 import { youtubeTimedtextTranscriptProviderAdapter } from './providers/youtubeTimedtextProvider';
 import type { TranscriptProvider, TranscriptProviderAdapter } from './types';
 
-const DEFAULT_PROVIDER_ORDER: TranscriptProvider[] = ['videotranscriber_temp', 'youtube_timedtext'];
+const DEFAULT_PROVIDER_ORDER: TranscriptProvider[] = ['youtube_timedtext', 'videotranscriber_temp'];
 
 const transcriptProviderRegistry = new Map<TranscriptProvider, TranscriptProviderAdapter>();
 let probeProviderOrder: TranscriptProvider[] = [...DEFAULT_PROVIDER_ORDER];

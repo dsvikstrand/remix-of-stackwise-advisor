@@ -204,8 +204,8 @@
     - Oracle VM runtime + logs-first runbook (`docs/ops/yt2bp_runbook.md`).
     - Oracle control-plane auth/reboot workflow is standardized in `docs/ops/oracle-cli-access.md` and should be used when SSH/runtime health is degraded.
   - Local/dev transcript fallback:
-    - current repo/dev default is `videotranscriber_temp`.
-    - `youtube_timedtext` remains the direct built-in fallback provider behind the same seam.
+    - current default is `youtube_timedtext`.
+    - `videotranscriber_temp` remains the built-in fallback provider behind the same seam when YouTube captions are unavailable.
     - `videotranscriber_temp` wraps the browser-facing `videotranscriber.ai` flow and uses local-only timeout/session env controls.
     - this is still a temporary development default; launch should later move to a stable API-backed provider rather than treating `videotranscriber_temp` as production truth.
 
