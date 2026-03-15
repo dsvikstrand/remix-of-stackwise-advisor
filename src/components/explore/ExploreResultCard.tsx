@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
-import { Heart, MessageCircle } from 'lucide-react';
 import { UserMiniCard } from './UserMiniCard';
 import type { BlueprintResult, UserResult, SourceResult, ExploreResult } from '@/hooks/useExploreSearch';
 import { buildFeedSummary } from '@/lib/feedPreview';
@@ -15,15 +14,12 @@ import { resolveEffectiveBanner } from '@/lib/bannerResolver';
 
 interface ExploreResultCardProps {
   result: ExploreResult;
-  commentCountByBlueprintId?: Record<string, number>;
 }
 
 function BlueprintCard({
   result,
-  commentCountByBlueprintId,
 }: {
   result: BlueprintResult;
-  commentCountByBlueprintId?: Record<string, number>;
 }) {
   const summary = buildFeedSummary({
     sectionsJson: result.sectionsJson,
@@ -36,7 +32,6 @@ function BlueprintCard({
   const channelTagSlugs = new Set(getCatalogChannelTagSlugs().map(normalizeTag));
   const displayTags = result.tags.filter((tag) => !channelTagSlugs.has(normalizeTag(tag)));
   const createdLabel = formatRelativeShort(result.createdAt);
-  const commentsCount = commentCountByBlueprintId?.[result.id] || 0;
   const effectiveBannerUrl = resolveEffectiveBanner({
     bannerUrl: result.bannerUrl,
     sourceThumbnailUrl: result.sourceThumbnailUrl,
@@ -67,20 +62,6 @@ function BlueprintCard({
             <p className="text-xs text-muted-foreground line-clamp-3 mb-2">
               {summary}
             </p>
-
-            <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
-              <span className="inline-flex h-7 items-center gap-1 px-2" aria-label={`${result.likesCount} likes`}>
-                <Heart className="h-3.5 w-3.5" />
-                {result.likesCount}
-                <span>likes</span>
-              </span>
-              <span className="inline-flex h-7 items-center gap-1 px-2" aria-label={`${commentsCount} comments`}>
-                <MessageCircle className="h-3.5 w-3.5" />
-                {commentsCount}
-                <span>comments</span>
-              </span>
-            </div>
-
             {displayTags.length > 0 && (
               <OneRowTagChips
                 className="flex flex-nowrap gap-1 overflow-hidden"
@@ -153,15 +134,10 @@ function SourceCard({ result }: { result: SourceResult }) {
   );
 }
 
-export function ExploreResultCard({ result, commentCountByBlueprintId }: ExploreResultCardProps) {
+export function ExploreResultCard({ result }: ExploreResultCardProps) {
   switch (result.type) {
     case 'blueprint':
-      return (
-        <BlueprintCard
-          result={result}
-          commentCountByBlueprintId={commentCountByBlueprintId}
-        />
-      );
+      return <BlueprintCard result={result} />;
     case 'user':
       return <UserCard result={result} />;
     case 'source':

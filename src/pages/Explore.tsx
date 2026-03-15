@@ -1,7 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Search } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -13,7 +12,6 @@ import { useExploreSearch, useTrendingTags, type ExploreFilter, type ExploreResu
 import { useDebounce } from '@/hooks/useDebounce';
 import { useTagFollows } from '@/hooks/useTagFollows';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
 import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 
 const FILTER_OPTIONS: { value: ExploreFilter; label: string }[] = [
@@ -86,32 +84,6 @@ export default function Explore() {
 
     return groups;
   }, [results, filter]);
-
-  const visibleBlueprintIds = useMemo(() => {
-    if (!results) return [] as string[];
-    return results
-      .filter((row): row is Extract<ExploreResult, { type: 'blueprint' }> => row.type === 'blueprint')
-      .map((row) => row.id);
-  }, [results]);
-
-  const { data: commentCountByBlueprintId = {} } = useQuery({
-    queryKey: ['explore-blueprint-comment-counts', visibleBlueprintIds],
-    enabled: visibleBlueprintIds.length > 0,
-    staleTime: 30_000,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('blueprint_comments')
-        .select('blueprint_id')
-        .in('blueprint_id', visibleBlueprintIds);
-
-      if (error) throw error;
-
-      return (data || []).reduce<Record<string, number>>((acc, row) => {
-        acc[row.blueprint_id] = (acc[row.blueprint_id] || 0) + 1;
-        return acc;
-      }, {});
-    },
-  });
 
   return (
     <PageRoot>
@@ -268,11 +240,7 @@ export default function Explore() {
                 <h2 className="text-sm font-medium text-muted-foreground mb-3">Blueprints</h2>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {groupedResults.blueprints.map((r) => (
-                    <ExploreResultCard
-                      key={r.type === 'blueprint' ? r.id : ''}
-                      result={r}
-                      commentCountByBlueprintId={commentCountByBlueprintId}
-                    />
+                    <ExploreResultCard key={r.type === 'blueprint' ? r.id : ''} result={r} />
                   ))}
                 </div>
               </section>
@@ -283,11 +251,7 @@ export default function Explore() {
                 <h2 className="text-sm font-medium text-muted-foreground mb-3">Creators</h2>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {groupedResults.sources.map((r) => (
-                    <ExploreResultCard
-                      key={r.type === 'source' ? r.id : ''}
-                      result={r}
-                      commentCountByBlueprintId={commentCountByBlueprintId}
-                    />
+                    <ExploreResultCard key={r.type === 'source' ? r.id : ''} result={r} />
                   ))}
                 </div>
               </section>
@@ -320,11 +284,7 @@ export default function Explore() {
             {results.length > 0 ? (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {results.map((r) => (
-                  <ExploreResultCard
-                    key={r.type === 'user' ? r.userId : r.id}
-                    result={r}
-                    commentCountByBlueprintId={commentCountByBlueprintId}
-                  />
+                  <ExploreResultCard key={r.type === 'user' ? r.userId : r.id} result={r} />
                 ))}
               </div>
             ) : (
