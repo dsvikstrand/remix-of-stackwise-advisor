@@ -11,10 +11,27 @@ b1) [have] The transcript-provider code path is implemented locally:
 - `yt_to_text` is retired from active runtime
 - transcript cache support exists in code and migrations
 b2) [have] Local docs/typecheck/targeted-test validation is already green.
-b3) [todo] The two Supabase migrations still need to be applied remotely:
+b3) [have] The Supabase migrations needed for this launch are now applied remotely:
 - `supabase/migrations/20260314183000_youtube_transcript_cache_v1.sql`
 - `supabase/migrations/20260314203000_retire_yt_to_text_legacy_state.sql`
 b4) [todo] One post-deploy real `/api/youtube-to-blueprint` success proof is still needed when upstream provider conditions allow it.
+b5) [have] Sweep 3 blocker (`2026-03-15`) was identified correctly:
+- Supabase remote migration history is not in a safe apply state for this sweep
+- remote is ahead of local with:
+  - `20260312110000`
+  - `20260312123000`
+- local is ahead of remote with:
+  - `20260314183000_youtube_transcript_cache_v1.sql`
+  - `20260314203000_retire_yt_to_text_legacy_state.sql`
+- do not run blind `npx supabase db push` until the repo/remote migration history is reconciled
+b6) [have] Supabase migration history is now reconciled locally:
+- recovered the missing remote-only migrations into `supabase/migrations/`
+  - `20260312110000_transcript_requests_v1.sql`
+  - `20260312123000_transcript_requests_result_ingest_v1.sql`
+- `npx supabase migration list` now shows those two versions on both local and remote
+- only the intended launch migrations remain local-only:
+  - `20260314183000_youtube_transcript_cache_v1.sql`
+  - `20260314203000_retire_yt_to_text_legacy_state.sql`
 
 ## Scope
 c1) [todo] Keep this plan narrow:
@@ -60,20 +77,56 @@ d2) [have] Step 2: push and CI confirmation
   - pushed `86aa652d5a5a53271282abeb52bd62926227cc77` to `origin/main`
   - CI Gate run `23105227966` completed `success`
 
-d3) [todo] Step 3: apply the additive migration first
+d3) [have] Step 3: apply the additive migration first
 - apply `supabase/migrations/20260314183000_youtube_transcript_cache_v1.sql`
 - verify remote migration watermark
 - verify `youtube_transcript_cache` exists before moving on
+- sweep result (`2026-03-15`):
+  - blocked before apply
+  - `npx supabase migration list` showed remote-ahead drift (`20260312110000`, `20260312123000`) that is not present in this repo
+  - safe decision: stop before any apply command instead of risking mixed migration history
+- reconciliation result (`2026-03-15`):
+  - recovered `20260312110000_transcript_requests_v1.sql` and `20260312123000_transcript_requests_result_ingest_v1.sql` from remote migration history via `npx supabase migration fetch --linked`
+  - reverted the fetch-induced whitespace churn in older migration files and kept only the two real additions
+  - `npx supabase migration list` now shows the remote-only drift resolved
+  - Step 3 can resume from a clean migration-history baseline
+- apply result (`2026-03-15`):
+  - applied `supabase/migrations/20260314183000_youtube_transcript_cache_v1.sql` directly with `psql` against the linked Supabase database
+  - recorded version `20260314183000` as applied via `npx supabase migration repair --status applied 20260314183000 --linked --yes`
+  - verified `npx supabase migration list` now shows `20260314183000` on both local and remote
+  - verified only `20260314203000_retire_yt_to_text_legacy_state.sql` remains local-only
 
-d4) [todo] Step 4: verify behavior before cleanup migration
+d4) [have] Step 4: verify behavior before cleanup migration
 - run one safe backend/app smoke after the additive migration
 - confirm normal app boot and transcript fetch behavior still look correct
 - stop here if the additive migration introduces unexpected behavior
+- sweep result (`2026-03-15`):
+  - verified `public.youtube_transcript_cache` exists with the expected columns:
+    - `video_id`
+    - `transcript_text`
+    - `transcript_source`
+    - `confidence`
+    - `segments_json`
+    - `provider_id`
+    - `transport_json`
+    - `provider_trace_json`
+    - `created_at`
+    - `updated_at`
+  - verified local backend health by starting the server once through the Node 20 wrapper and hitting `/api/health`
+  - `GET /api/health` returned `{"ok":true}`
 
 d5) [todo] Step 5: apply the legacy cleanup migration second
 - apply `supabase/migrations/20260314203000_retire_yt_to_text_legacy_state.sql`
 - verify migration watermark and one post-apply DB sanity check
 - treat this as the cautious step because it deletes legacy rows
+- sweep result (`2026-03-15`):
+  - pre-apply DB sanity check found `0` `provider_circuit_state` rows for `transcript:yt_to_text`
+  - pre-apply DB sanity check found `0` `youtube_transcript_cache` rows tied to `yt_to_text`
+  - applied `supabase/migrations/20260314203000_retire_yt_to_text_legacy_state.sql` directly with `psql`
+  - migration output was `DELETE 0` and `DELETE 0`
+  - recorded version `20260314203000` as applied via `npx supabase migration repair --status applied 20260314203000 --linked --yes`
+  - verified `npx supabase migration list` now shows local and remote fully aligned through `20260314203000`
+  - post-apply DB sanity check still shows `0` legacy `yt_to_text` circuit rows and `0` legacy `yt_to_text` transcript-cache rows
 
 d6) [todo] Step 6: deploy backend/frontend
 - deploy the same commit that passed CI

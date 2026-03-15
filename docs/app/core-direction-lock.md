@@ -101,6 +101,7 @@ Status: `canonical`
 1. Library-first creation is deprecated as primary identity.
 2. Legacy inventory/library routes remain compatibility paths only.
 3. Multi-adapter rollout (PDF/audio/etc.) is deferred.
+4. Historical Oracle/Paperspace transcript-bridge schema (`public.transcript_requests`) remains in Supabase migration history for parity only and is not part of the current transcript-provider launch contract.
 
 ## Deprecation policy
 1. Keep compatibility routes/components until post-MVP cleanup.

@@ -259,6 +259,7 @@ d6) [have] Auto-banner policy + queue tables (`channel_default_banners`, `auto_b
 d7) [have] Onboarding state table for new-user YouTube setup (`user_youtube_onboarding`).
 d8) [have] Source-page foundation tables/links (`source_pages`, `user_source_subscriptions.source_page_id`, `source_items.source_page_id`).
 d9) [have] Daily-credit + unlock tables (`user_credit_wallets`, `credit_ledger`, `source_item_unlocks`).
+d10) [have] Historical transcript-bridge table `transcript_requests` exists in schema history for earlier Oracle/Paperspace experiments; current transcript-provider runtime does not depend on it.
 
 ## Subscription Interfaces (MVP)
 si1) `POST /api/source-subscriptions` with `{ channel_input, mode? }` (`mode` accepted but ignored/coerced to `auto` in MVP path)

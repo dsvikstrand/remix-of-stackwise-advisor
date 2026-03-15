@@ -43,6 +43,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Oracle backend config source is `/etc/agentic-backend.env`; repo-root `.env` remains local-only fallback for non-systemd runs and `.env.production` is no longer part of backend bootstrap.
 - Shared transcript proxying for opted-in providers now assumes one explicit Webshare endpoint; selector-based direct-proxy-list flows are historical-only and not part of the current MVP baseline.
 - Local developer setups now default the transcript provider to `videotranscriber_temp` behind the existing provider seam; `youtube_timedtext` is the built-in direct fallback, and this remains outside the MVP production baseline.
+- Historical Supabase migration parity now includes the older Oracle/Paperspace `transcript_requests` bridge tables; that schema is legacy reference only and not part of the active MVP transcript runtime.
 
 ### W1 - My Feed As First-Class Surface
 - Introduce/finish personal unfiltered feed lane behavior.

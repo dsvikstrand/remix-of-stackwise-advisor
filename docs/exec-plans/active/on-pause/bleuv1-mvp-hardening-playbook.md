@@ -30,6 +30,7 @@ a4k) [have] Oracle MVP production runtime is now intentionally single-service co
 a4l) [have] Oracle backend config source is now conceptually locked to `/etc/agentic-backend.env`; repo-root `.env` is local-only fallback for non-systemd runs and `.env.production` is no longer part of backend bootstrap.
 a4m) [have] Shared transcript proxy runtime for opted-in providers is now locked to one explicit Webshare endpoint; legacy selector/list modes are removed from active runtime and docs/tests should not reintroduce them.
 a4n) [have] `videotranscriber_temp` is now the current repo/dev default transcript path for developer momentum; `youtube_timedtext` is the built-in direct fallback, and the temporary provider remains intentionally excluded from production runtime truth.
+a4o) [have] Supabase schema history still contains the older `transcript_requests` Oracle/Paperspace bridge tables; treat that as historical parity only, not as current MVP transcript-runtime truth.
 a5) [todo] Improve user trust around shared-cost auto billing transitions and async processing visibility.
 a6) [todo] Reduce terminology ambiguity between personal stream, followed channels, source pages, and channel taxonomy.
 
