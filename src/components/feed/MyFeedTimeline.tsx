@@ -21,7 +21,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
 import { resolvePrimaryChannelFromTags } from '@/lib/channelMapping';
-import { buildBlueprintPreviewText, buildFeedSummary } from '@/lib/feedPreview';
+import { buildFeedSummary } from '@/lib/feedPreview';
 import { getMyFeedStateLabel, type MyFeedItemState } from '@/lib/myFeedState';
 import { publishCandidate, rejectCandidate, submitCandidateAndEvaluate } from '@/lib/myFeedApi';
 import { ForYouLockedSourceCard } from '@/components/wall/ForYouLockedSourceCard';
@@ -42,6 +42,7 @@ import { useSourceUnlockJobTracker } from '@/hooks/useSourceUnlockJobTracker';
 import { UnlockActivityCard } from '@/components/shared/UnlockActivityCard';
 import { resolveEffectiveBanner } from '@/lib/bannerResolver';
 import { getLaunchErrorCopy } from '@/lib/launchErrorCopy';
+import { countBlueprintSectionsV1 } from '@/lib/blueprintSections';
 
 const CHANNEL_OPTIONS = CHANNELS_CATALOG.filter((channel) => channel.status === 'active' && channel.isJoinEnabled);
 const CHANNEL_NAME_BY_SLUG = new Map(CHANNELS_CATALOG.map((channel) => [channel.slug, channel.name]));
@@ -540,7 +541,7 @@ export function MyFeedTimeline({
         const preview = buildFeedSummary({
           sectionsJson: blueprint?.sectionsJson || null,
           primary: blueprint?.llmReview || null,
-          secondary: (blueprint?.mixNotes || buildBlueprintPreviewText({ steps: blueprint?.steps })) || null,
+          secondary: blueprint?.mixNotes || null,
           fallback: source?.title || 'Open blueprint to view full details.',
           maxChars: 220,
         });
@@ -846,9 +847,7 @@ export function MyFeedTimeline({
                     onClick={() => {
                       const tags = submissionDialogItem.blueprint?.tags || [];
                       const selected = defaultChannelForItem(submissionDialogItem.id, tags);
-                      const stepCount = Array.isArray(submissionDialogItem.blueprint?.steps)
-                        ? submissionDialogItem.blueprint.steps.length
-                        : 0;
+                      const stepCount = countBlueprintSectionsV1(submissionDialogItem.blueprint?.sectionsJson ?? null);
                       submitMutation.mutate({
                         itemId: submissionDialogItem.id,
                         sourceItemId: submissionDialogItem.source?.id || null,
@@ -874,9 +873,7 @@ export function MyFeedTimeline({
                         onClick={() => {
                           const tags = submissionDialogItem.blueprint?.tags || [];
                           const selected = defaultChannelForItem(submissionDialogItem.id, tags);
-                          const stepCount = Array.isArray(submissionDialogItem.blueprint?.steps)
-                            ? submissionDialogItem.blueprint.steps.length
-                            : 0;
+                          const stepCount = countBlueprintSectionsV1(submissionDialogItem.blueprint?.sectionsJson ?? null);
                           submitMutation.mutate({
                             itemId: submissionDialogItem.id,
                             sourceItemId: submissionDialogItem.source?.id || null,

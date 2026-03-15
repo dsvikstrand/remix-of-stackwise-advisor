@@ -209,3 +209,17 @@ export function parseBlueprintSectionsV1(input: Json | null | undefined): Bluepr
     open_questions: openQuestions || { bullets: [] },
   };
 }
+
+export function countBlueprintSectionsV1(input: Json | null | undefined) {
+  const parsed = parseBlueprintSectionsV1(input);
+  if (!parsed) return 0;
+
+  let count = 0;
+  if (String(parsed.summary.text || '').trim()) count += 1;
+  if (parsed.takeaways.bullets.length > 0) count += 1;
+  if (String(parsed.storyline.text || '').trim()) count += 1;
+  if (parsed.deep_dive.bullets.length > 0) count += 1;
+  if (parsed.practical_rules.bullets.length > 0) count += 1;
+  if (parsed.open_questions.bullets.length > 0) count += 1;
+  return count;
+}

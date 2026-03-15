@@ -1,6 +1,10 @@
 # Repo Cleanup And Scale-Readiness Plan
 
-Status: `active`
+Status: `deserted`
+
+Deserted note
+a0) [have] This broad cleanup umbrella was deserted on `2026-03-15`.
+a00) [have] It was superseded by narrower, more trackable plans: `docs/exec-plans/completed/blueprint-contract-cutover-plan.md` and `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`.
 
 ## Goal
 a1) [todo] Reduce legacy, bloated, and duplicated code paths that increase maintenance cost or slow future feature work, without reopening launch-gate behavior changes.
@@ -83,7 +87,7 @@ f1) [todo] Goal:
 - remove compatibility paths that no longer justify the cognitive load
 
 f2) [todo] Primary targets:
-- source-page alias `POST /api/source-pages/:platform/:externalId/videos/generate`
+- historical source-page alias `POST /api/source-pages/:platform/:externalId/videos/generate` (now retired)
 - `mode` compatibility handling on source-subscription endpoints
 - other no-longer-used compatibility-only request/response branches discovered during cleanup
 

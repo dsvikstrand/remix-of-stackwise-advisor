@@ -94,8 +94,6 @@ export function registerSourcePagesRouteHandlers(app: express.Express, deps: Sou
     resolveGenerationTierAccess,
     resolveRequestedGenerationTier,
     normalizeRequestedGenerationTier,
-    isDualGenerateEnabledForUser,
-    getDualGenerateTiers,
     resolveVariantOrReady,
   } = deps;
 function normalizeSourcePageBlueprintCursor(input: SourcePageBlueprintCursor) {
@@ -1334,12 +1332,6 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
 
 app.post(
   '/api/source-pages/:platform/:externalId/videos/unlock',
-  sourceVideoUnlockBurstLimiter,
-  sourceVideoUnlockSustainedLimiter,
-  handleSourcePageVideosUnlock,
-);
-app.post(
-  '/api/source-pages/:platform/:externalId/videos/generate',
   sourceVideoUnlockBurstLimiter,
   sourceVideoUnlockSustainedLimiter,
   handleSourcePageVideosUnlock,

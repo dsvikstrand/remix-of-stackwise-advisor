@@ -1,6 +1,6 @@
 # bleuV1 MVP Hardening Playbook
 
-Status: `active`
+Status: `on-pause`
 
 ## Goal
 Convert the current feature-complete MVP into a stable, clear, and scalable product surface by hardening UX trust, runtime reliability, and engineering foundations.
@@ -8,7 +8,7 @@ Convert the current feature-complete MVP into a stable, clear, and scalable prod
 ## Canonical Launch Checklist
 a0) [have] Canonical launch-readiness and phased fix process is maintained in `docs/ops/mvp-launch-readiness-checklist.md`.
 a00) [have] Use this playbook for strategic priority framing and use the ops checklist for execution evidence/status tracking.
-a000) [have] Current active cleanup/scalability follow-up now lives in `docs/exec-plans/active/repo-cleanup-and-scale-readiness-plan.md`.
+a000) [have] Later cleanup/scalability follow-ups have since been reclassified; use `docs/exec-plans/index.md` for the current active plan.
 a0000) [have] Current runtime/deploy truth does not live here; use `docs/architecture.md` and `docs/ops/yt2bp_runbook.md` for the live Oracle contract.
 
 ## Current State Snapshot
@@ -28,7 +28,8 @@ a4h) [have] Backend maintainability pass extracted shared generation preflight h
 a4i) [have] Admin entitlement bypass now applies to concrete credit reservation and shared auto-unlock funding, preventing auto rows from remaining `unlockable` solely due to zero wallet balance.
 a4k) [have] Oracle MVP production runtime is now intentionally single-service combined mode (`agentic-backend.service` with HTTP + background work together); dedicated split worker topology is deferred beyond the current MVP load target.
 a4l) [have] Oracle backend config source is now conceptually locked to `/etc/agentic-backend.env`; repo-root `.env` is local-only fallback for non-systemd runs and `.env.production` is no longer part of backend bootstrap.
-a4m) [have] `yt_to_text` proxy runtime is now locked to one explicit Webshare endpoint; legacy selector/list modes are removed from active runtime and docs/tests should not reintroduce them.
+a4m) [have] Shared transcript proxy runtime for opted-in providers is now locked to one explicit Webshare endpoint; legacy selector/list modes are removed from active runtime and docs/tests should not reintroduce them.
+a4n) [have] `videotranscriber_temp` is now the current repo/dev default transcript path for developer momentum; `youtube_timedtext` is the built-in direct fallback, and the temporary provider remains intentionally excluded from production runtime truth.
 a5) [todo] Improve user trust around shared-cost auto billing transitions and async processing visibility.
 a6) [todo] Reduce terminology ambiguity between personal stream, followed channels, source pages, and channel taxonomy.
 

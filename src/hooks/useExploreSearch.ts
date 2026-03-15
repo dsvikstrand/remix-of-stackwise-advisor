@@ -10,7 +10,6 @@ export interface BlueprintResult {
   id: string;
   title: string;
   sectionsJson: unknown;
-  steps: unknown;
   llmReview: string | null;
   mixNotes: string | null;
   bannerUrl: string | null;
@@ -74,7 +73,7 @@ async function searchBlueprints(query: string, isTagSearch: boolean): Promise<Bl
 
     const { data: blueprints, error } = await supabase
       .from('blueprints')
-      .select('id, title, sections_json, steps, llm_review, mix_notes, banner_url, likes_count, creator_user_id, created_at')
+      .select('id, title, sections_json, llm_review, mix_notes, banner_url, likes_count, creator_user_id, created_at')
       .eq('is_public', true)
       .in('id', blueprintIds)
       .order('likes_count', { ascending: false })
@@ -102,7 +101,6 @@ async function searchBlueprints(query: string, isTagSearch: boolean): Promise<Bl
       id: b.id,
       title: b.title,
       sectionsJson: b.sections_json,
-      steps: b.steps,
       llmReview: b.llm_review,
       mixNotes: b.mix_notes,
       bannerUrl: b.banner_url,
@@ -116,7 +114,7 @@ async function searchBlueprints(query: string, isTagSearch: boolean): Promise<Bl
   // Search by title
   const { data: blueprints, error } = await supabase
     .from('blueprints')
-    .select('id, title, sections_json, steps, llm_review, mix_notes, banner_url, likes_count, creator_user_id, created_at')
+    .select('id, title, sections_json, llm_review, mix_notes, banner_url, likes_count, creator_user_id, created_at')
     .eq('is_public', true)
     .ilike('title', `%${query}%`)
     .order('likes_count', { ascending: false })
@@ -145,7 +143,6 @@ async function searchBlueprints(query: string, isTagSearch: boolean): Promise<Bl
     id: b.id,
     title: b.title,
     sectionsJson: b.sections_json,
-    steps: b.steps,
     llmReview: b.llm_review,
     mixNotes: b.mix_notes,
     bannerUrl: b.banner_url,

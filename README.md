@@ -41,12 +41,17 @@ A React + Supabase app for turning media into bite-sized blueprints and discussi
 
 ## Local Development
 ```bash
+nvm use 20.20.0
 npm install
 npm run dev
 ```
 
+- Node runtime rule: use Node `20.20.0` locally (`.nvmrc`), and treat Node 18 shells as unsupported.
+- Repo scripts auto-switch to Node 20 through `scripts/with-node20.sh` when `nvm` is available; installs fail fast on older Node versions via `engine-strict`.
+
 ## Key Commands
 ```bash
+npm run typecheck
 npm run build
 npm run test
 npm run docs:refresh-check -- --json

@@ -21,6 +21,8 @@ Provider implementations must throw `TranscriptProviderError` with one of:
 - `TRANSCRIPT_FETCH_FAIL`
 - `TRANSCRIPT_EMPTY`
 - `RATE_LIMITED`
+- `VIDEOTRANSCRIBER_DAILY_LIMIT` (`videotranscriber_temp` internal classification)
+- `VIDEOTRANSCRIBER_UPSTREAM_UNAVAILABLE` (`videotranscriber_temp` internal classification)
 - `TIMEOUT`
 
 Unknown errors are normalized by orchestration to `TRANSCRIPT_FETCH_FAIL`.

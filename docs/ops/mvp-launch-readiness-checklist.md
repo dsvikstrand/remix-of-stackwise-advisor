@@ -6,7 +6,7 @@ Scope: launch-critical and near-term useful hardening for MVP release safety.
 ## Source of Truth
 a1) [have] This file is the single execution board for MVP launch readiness.
 a2) [todo] Keep only `P0` and `P1` items active here.
-a3) [have] `P2` does not live here. The completed implementation program is `docs/exec-plans/completed/mvp-readiness-review-followup.md`, the remaining active proof tail is `docs/exec-plans/active/mvp-launch-proof-tail.md`, and durable debt lives in `docs/exec-plans/tech-debt-tracker.md`.
+a3) [have] `P2` does not live here. The completed implementation program is `docs/exec-plans/completed/mvp-readiness-review-followup.md`, the remaining active proof tail is `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`, and durable debt lives in `docs/exec-plans/tech-debt-tracker.md`.
 a4) [todo] Any launch-related PR must update this file in the same change set.
 a5) [todo] A checklist item can be marked `done` only when all four fields are filled:
 - `Owner`
@@ -256,9 +256,9 @@ o25) [have] `2026-03-05T14:55:35Z` - `P0-3` - `preflight health before sidecar d
 o26) [have] `2026-03-05T14:55:35Z` - `P0-3` - `credits fail-safe sidecar proof` - `sidecar on :18787 with blank SUPABASE_SERVICE_ROLE_KEY returned /api/credits => error_code=CREDITS_UNAVAILABLE and /api/generate-banner => error_code=CREDITS_UNAVAILABLE` - `david`
 o27) [have] `2026-03-05T14:55:35Z` - `P0-3` - `production non-impact during sidecar outage simulation` - `public /api/health => {"ok":true}; public /api/credits remained DB-backed (credits_backend_mode=db, credits_backend_ok=true)` - `david`
 o28) [have] `2026-03-05T14:55:35Z` - `P0-3` - `sidecar teardown` - `killed sidecar pid 576003; sidecar log retained expected 503 credit responses only` - `david`
-o29) [have] `2026-03-05T14:55:35Z` - `P0-4` - `pause drill deterministic rejection proof` - `UNLOCK_INTAKE_ENABLED=false + service restart; POST /api/source-pages/.../videos/generate => error_code=QUEUE_INTAKE_DISABLED` - `david`
+o29) [have] `2026-03-05T14:55:35Z` - `P0-4` - `pause drill deterministic rejection proof` - `UNLOCK_INTAKE_ENABLED=false + service restart; historical source-page alias POST /api/source-pages/.../videos/generate at capture time => error_code=QUEUE_INTAKE_DISABLED` - `david`
 o30) [have] `2026-03-05T14:55:35Z` - `P0-4` - `queue-health snapshot during pause` - `local /api/ops/queue/health => ok=true, queue_depth=0, running_depth=0, no stale lease growth` - `david`
-o31) [have] `2026-03-05T14:55:35Z` - `P0-4` - `recover drill proof` - `UNLOCK_INTAKE_ENABLED=true + restart; same generate endpoint returned background unlock generation started (job_id=7fac6886-ae0e-4ddf-a645-5e0c1b4bd0bb)` - `david`
+o31) [have] `2026-03-05T14:55:35Z` - `P0-4` - `recover drill proof` - `UNLOCK_INTAKE_ENABLED=true + restart; same historical source-page generate alias returned background unlock generation started (job_id=7fac6886-ae0e-4ddf-a645-5e0c1b4bd0bb)` - `david`
 o32) [have] `2026-03-05T14:55:35Z` - `P0-5` - `cross-surface canonical error-copy wiring proof` - `rg confirms getLaunchErrorCopy imports/calls in Search.tsx, SourcePage.tsx, Wall.tsx, MyFeedTimeline.tsx` - `david`
 o33) [have] `2026-03-05T14:55:35Z` - `P0-5` - `copy normalization behavior proof` - `npm run test -- src/test/launchErrorCopy.test.ts => 1 file passed, 2 tests passed` - `david`
 o34) [have] `2026-03-05T14:55:35Z` - `P0-6` - `transport-level deep-link check context` - `HEAD https://dsvikstrand.github.io/remix-of-stackwise-advisor/{terms,privacy,auth} => HTTP/2 404 (GitHub Pages SPA fallback path)` - `david`
@@ -298,7 +298,7 @@ p1) [have] P2 modularization and post-launch optimizations are intentionally out
 p2) [have] Active P2 sequencing lives in:
 - `docs/exec-plans/completed/mvp-readiness-review-followup.md`
 - `P2-A Coverage -> P2-B Shared Preflight -> P2-C Hygiene`
-- remaining active proof-only tail: `docs/exec-plans/active/mvp-launch-proof-tail.md`
+- remaining active proof-only tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
 p3) [have] Durable post-launch debt lives in:
 - `docs/exec-plans/tech-debt-tracker.md`
 p4) [have] The first P2 pass is implemented; only long-tail post-launch debt remains in the tracker.

@@ -41,7 +41,7 @@ a28) [have] 2026-02-18 save-path update: optional AI review continues asynchrono
 a29) [have] 2026-02-18 backend timeout update: core endpoint timeout is now configurable via `YT2BP_CORE_TIMEOUT_MS` (default `120000`).
 a30) [have] 2026-02-18 save-path update: `POST /api/my-feed/items/:id/auto-publish` is used to auto-publish URL/search saves after `Save to My Feed`.
 a31) [have] 2026-02-18 terminology update: high-traffic UI copy now uses `Home`/`Create`/auto-publish wording consistently; this is UI-only and does not change YT2BP API/runtime contract.
-a32) [have] 2026-02-20 source unlock update: source-page video-library generation now defaults to shared unlock flow (`POST /api/source-pages/:platform/:externalId/videos/unlock`, legacy `/videos/generate` alias), with refill-credit accounting outside YT2BP contract scope.
+a32) [have] 2026-02-20 source unlock update: source-page video-library generation now uses shared unlock flow (`POST /api/source-pages/:platform/:externalId/videos/unlock`), with refill-credit accounting outside YT2BP contract scope.
 a33) [have] 2026-02-20 subscription sync update: new subscription uploads create unlockable feed rows first (`my_feed_unlockable`) and no longer force immediate per-user blueprint generation.
 a34) [have] 2026-02-21 banner update: source-linked YouTube blueprints now use thumbnail-first banners (stored source thumbnail or deterministic `ytimg` fallback), and legacy source-linked rows are backfilled to thumbnail URLs.
 
@@ -171,7 +171,7 @@ d7) [have] Optional review/banner are now independent post-steps and no longer b
 ### Step 2 - Build the Core Pipeline (URL -> Blueprint)
 e1) [have] Transcript ingestion is behind one adapter:
 - `getTranscript(videoUrl) -> { text, segments?, source, confidence }`.
-e2) [have] Duct-tape transcript retrieval is active for MVP (`yt_to_text` provider), isolated behind the adapter.
+e2) [have] Duct-tape transcript retrieval is active for MVP behind the transcript-provider adapter seam.
 e3) [have] Transform transcript directly into a blueprint draft:
 - Title.
 - Ordered steps.
@@ -224,7 +224,7 @@ i1) Outcomes
 - Baseline phase A (10/10 URLs, review/banner off): 10 successes, 0 failures.
 - Review spot-check phase B (3 URLs): 3 successes.
 - Banner spot-check phase C (3 URLs): 3 successes.
-- Transcript source was consistently `yt_to_text_subtitles_v1`.
+- Transcript source was consistently provider-adapter controlled during the earlier MVP phase.
 
 i2) Top failure causes
 - None in this run set (`top_error_codes: []`).

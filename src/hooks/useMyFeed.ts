@@ -57,7 +57,6 @@ export interface MyFeedItemView {
     llmReview: string | null;
     mixNotes: string | null;
     isPublic: boolean;
-    steps: unknown;
     tags: string[];
   } | null;
   candidate: {
@@ -109,7 +108,7 @@ export function useMyFeed(options?: { enabled?: boolean }) {
         blueprintIds.length
           ? supabase
             .from('blueprints')
-            .select('id, creator_user_id, title, banner_url, sections_json, llm_review, mix_notes, is_public, steps')
+            .select('id, creator_user_id, title, banner_url, sections_json, llm_review, mix_notes, is_public')
             .in('id', blueprintIds)
           : Promise.resolve({ data: [], error: null }),
         supabase
@@ -294,7 +293,6 @@ export function useMyFeed(options?: { enabled?: boolean }) {
                 llmReview: blueprint.llm_review,
                 mixNotes: blueprint.mix_notes,
                 isPublic: blueprint.is_public,
-                steps: blueprint.steps,
                 tags: (() => {
                   const relationalTags = tagsByBlueprint.get(blueprint.id) || [];
                   if (relationalTags.length > 0) return relationalTags;

@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { ArrowDown, Layers, Loader2, Tag } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
-import { buildBlueprintPreviewText, buildFeedSummary } from '@/lib/feedPreview';
+import { buildFeedSummary } from '@/lib/feedPreview';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
 import { WallBlueprintCard } from '@/components/wall/WallBlueprintCard';
@@ -22,7 +22,6 @@ type WallBlueprintCardInput = {
   id: string;
   title: string;
   sectionsJson: Json | null;
-  steps: unknown;
   llmReview: string | null;
   mixNotes: string | null;
   bannerUrl: string | null;
@@ -52,13 +51,10 @@ type FeedSort = (typeof SORT_TABS)[number]['value'];
 function buildWallBlueprintCardProps(input: WallBlueprintCardInput) {
   const fallbackChannelSlug = resolveChannelLabelForBlueprint(input.tags).replace(/^b\//, '');
   const channelSlug = input.publishedChannelSlug || fallbackChannelSlug;
-  const blueprintPreview = buildBlueprintPreviewText({
-    steps: input.steps,
-  });
   const summary = buildFeedSummary({
     sectionsJson: input.sectionsJson,
     primary: input.llmReview,
-    secondary: input.mixNotes || blueprintPreview,
+    secondary: input.mixNotes,
     fallback: 'Open blueprint to view full details.',
     maxChars: 220,
   });
@@ -378,7 +374,6 @@ export default function Wall() {
                       id: item.blueprintId,
                       title: item.title,
                       sectionsJson: item.sectionsJson,
-                      steps: item.steps,
                       llmReview: item.llmReview,
                       mixNotes: item.mixNotes,
                       bannerUrl: item.bannerUrl,
@@ -457,7 +452,6 @@ export default function Wall() {
                       id: post.id,
                       title: post.title,
                       sectionsJson: post.sections_json,
-                      steps: post.steps,
                       llmReview: post.llm_review,
                       mixNotes: post.mix_notes,
                       bannerUrl: post.banner_url,

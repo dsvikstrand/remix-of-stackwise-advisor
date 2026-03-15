@@ -202,7 +202,7 @@ export function createYouTubeBlueprintPipelineService(deps: any) {
     mapPipelineError,
     canonicalSectionName,
     normalizeSummaryVariantText,
-    yt2bpTierOneStepPromptTemplatePath = '',
+    youtubeBlueprintPromptTemplatePath = '',
     pruneTranscriptForGeneration = (pruningInput: { transcriptText: string }) => ({
       text: pruningInput.transcriptText,
       meta: {
@@ -336,20 +336,10 @@ async function runYouTubePipeline(input: {
       });
     }
     const requestClass = input.requestClass === 'interactive' ? 'interactive' : 'background';
-    const transcript = await runWithProviderRetry(
-      {
-        providerKey: 'transcript',
-        db: serviceDb,
-        maxAttempts: providerRetryDefaults.transcriptAttempts,
-        timeoutMs: providerRetryDefaults.transcriptTimeoutMs,
-        baseDelayMs: 250,
-        jitterMs: 150,
-      },
-      async () => getTranscriptForVideo(input.videoId, {
-        requestClass,
-        reason: 'pipeline_transcript_fetch',
-      }),
-    );
+    const transcript = await getTranscriptForVideo(input.videoId, {
+      requestClass,
+      reason: 'pipeline_transcript_fetch',
+    });
     const rawTranscriptText = String(transcript.text || '').trim();
     const transcriptPruning = pruneTranscriptForGeneration({
       transcriptText: rawTranscriptText,
@@ -369,6 +359,7 @@ async function runYouTubePipeline(input: {
               raw_chars: rawTranscriptText.length,
               confidence: transcript.confidence,
               transport: transcript.transport || null,
+              provider_trace: transcript.provider_trace || null,
             },
           });
         },
@@ -396,7 +387,7 @@ async function runYouTubePipeline(input: {
       firstModelDispatchNotified = true;
       await input.onBeforeFirstModelDispatch?.();
     };
-    const oneStepPromptTemplatePath = String(yt2bpTierOneStepPromptTemplatePath || '').trim() || undefined;
+    const oneStepPromptTemplatePath = String(youtubeBlueprintPromptTemplatePath || '').trim() || undefined;
     if (traceContext.db && traceContext.userId) {
       await safeGenerationTraceWrite({
         runId: input.runId,
@@ -617,79 +608,46 @@ async function runYouTubePipeline(input: {
   const passingCandidates: Array<{ draft: YouTubeDraft; overall: number }> = [];
 
   const toDraft = (rawDraft: Awaited<ReturnType<typeof client.generateYouTubeBlueprint>>): YouTubeDraft => {
-    const isSectionsPayload = rawDraft?.schema_version === 'blueprint_sections_v1'
-      && typeof rawDraft?.summary?.text === 'string'
-      && Array.isArray(rawDraft?.takeaways?.bullets)
-      && typeof rawDraft?.storyline?.text === 'string'
-      && Array.isArray(rawDraft?.deep_dive?.bullets)
-      && Array.isArray(rawDraft?.practical_rules?.bullets)
-      && Array.isArray(rawDraft?.open_questions?.bullets);
-
-    if (isSectionsPayload) {
-      const sectionsJson: BlueprintSectionsV1 = {
-        schema_version: 'blueprint_sections_v1',
-        tags: (rawDraft.tags || []).map((tag) => String(tag || '').trim()).filter(Boolean).slice(0, 8),
-        summary: {
-          text: String(rawDraft.summary?.text || '').trim(),
-        },
-        takeaways: {
-          bullets: (rawDraft.takeaways?.bullets || []).map((item) => String(item || '').trim()).filter(Boolean),
-        },
-        storyline: {
-          text: String(rawDraft.storyline?.text || '').trim(),
-        },
-        deep_dive: {
-          bullets: (rawDraft.deep_dive?.bullets || []).map((item) => String(item || '').trim()).filter(Boolean),
-        },
-        practical_rules: {
-          bullets: (rawDraft.practical_rules?.bullets || []).map((item) => String(item || '').trim()).filter(Boolean),
-        },
-        open_questions: {
-          bullets: (rawDraft.open_questions?.bullets || []).map((item) => String(item || '').trim()).filter(Boolean),
-        },
-      };
-      const normalizedSteps = buildLegacyDraftStepsFromBlueprintSections(sectionsJson)
-        .map((step) => ({
-          name: String(step.name || '').trim(),
-          notes: String(step.notes || '').trim(),
-          timestamp: step.timestamp?.trim() || null,
-        }))
-        .filter((step) => step.name && step.notes);
-      const summaryDefault = normalizeSummaryVariantText(sectionsJson.summary.text);
-      return {
-        title: resolvedVideoTitle,
-        description: summaryDefault || 'AI-generated blueprint from video transcript.',
-        steps: normalizedSteps,
-        eli5Steps: [],
-        notes: null,
-        tags: sectionsJson.tags,
-        sectionsJson,
-        summaryVariants: {
-          default: summaryDefault,
-          eli5: '',
-        },
-      };
-    }
-
-    const normalizedSteps = (rawDraft.steps || [])
+    const sectionsJson: BlueprintSectionsV1 = {
+      schema_version: 'blueprint_sections_v1',
+      tags: (rawDraft.tags || []).map((tag) => String(tag || '').trim()).filter(Boolean).slice(0, 8),
+      summary: {
+        text: String(rawDraft.summary?.text || '').trim(),
+      },
+      takeaways: {
+        bullets: (rawDraft.takeaways?.bullets || []).map((item) => String(item || '').trim()).filter(Boolean),
+      },
+      storyline: {
+        text: String(rawDraft.storyline?.text || '').trim(),
+      },
+      deep_dive: {
+        bullets: (rawDraft.deep_dive?.bullets || []).map((item) => String(item || '').trim()).filter(Boolean),
+      },
+      practical_rules: {
+        bullets: (rawDraft.practical_rules?.bullets || []).map((item) => String(item || '').trim()).filter(Boolean),
+      },
+      open_questions: {
+        bullets: (rawDraft.open_questions?.bullets || []).map((item) => String(item || '').trim()).filter(Boolean),
+      },
+    };
+    // Later phases can remove these compatibility fields entirely. For now they are
+    // derived from the canonical sections payload instead of accepted as raw model output.
+    const normalizedSteps = buildLegacyDraftStepsFromBlueprintSections(sectionsJson)
       .map((step) => ({
         name: step.name?.trim() || '',
         notes: step.notes?.trim() || '',
         timestamp: step.timestamp?.trim() || null,
       }))
       .filter((step) => step.name && step.notes);
-    const summaryStepNotes = normalizedSteps.find((step) => canonicalSectionName(step.name) === 'summary')?.notes || '';
-    const summaryDefault = normalizeSummaryVariantText(
-      rawDraft.summary_variants?.default || summaryStepNotes || rawDraft.description || '',
-    );
+    const summaryDefault = normalizeSummaryVariantText(sectionsJson.summary.text);
     return {
       title: resolvedVideoTitle,
-      description: rawDraft.description?.trim() || 'AI-generated blueprint from video transcript.',
+      description: summaryDefault || 'AI-generated blueprint from video transcript.',
       steps: normalizedSteps,
       eli5Steps: [],
-      notes: rawDraft.notes?.trim() || null,
-      tags: (rawDraft.tags || []).map((tag) => tag.trim()).filter(Boolean).slice(0, 8),
-      sectionsJson: null,
+      notes: null,
+      tags: sectionsJson.tags,
+      sectionsJson,
       summaryVariants: {
         default: summaryDefault,
         eli5: '',
@@ -859,43 +817,6 @@ async function runYouTubePipeline(input: {
         globalRun: globalRunIndex,
       });
       const draft = toDraft(rawDraft);
-
-      if (!draft.steps.length) {
-        generationTrace.quality_judge_runs.push({
-          attempt,
-          run: attemptRunCount,
-          global_run: globalRunIndex,
-          pass: false,
-          overall: null,
-          failures: ['NO_STEPS'],
-          reason: 'no_steps',
-        });
-        if (traceContext.db && traceContext.userId) {
-          await safeGenerationTraceWrite({
-            runId: input.runId,
-            op: 'event_quality_judge_result',
-            fn: async () => {
-              await appendGenerationEvent(traceContext.db as any, {
-                runId: input.runId,
-                level: 'warn',
-                event: 'quality_judge_result',
-                payload: {
-                  attempt,
-                  run: attemptRunCount,
-                  global_run: globalRunIndex,
-                  pass: false,
-                  failures: ['NO_STEPS'],
-                  reason: 'no_steps',
-                },
-              });
-            },
-          });
-        }
-        console.log(
-          `[yt2bp-quality] run_id=${input.runId} attempt=${attempt}/${qualityAttempts} run=${attemptRunCount}/${maxRunsForAttempt} global_run=${globalRunIndex} pass=false reason=no_steps`
-        );
-        break;
-      }
 
       const flattened = flattenDraftText(draft);
       const deterministicSafety = runSafetyChecks(flattened);
@@ -1217,11 +1138,8 @@ async function runYouTubePipeline(input: {
       const promptIssueDetails = gateIssueDetails;
       const previousOutput = JSON.stringify({
         title: draft.title,
-        description: draft.description,
-        summary_variants: draft.summaryVariants,
-        steps: goldenFormat.steps,
-        notes: draft.notes || null,
         tags: draft.tags || [],
+        sections_json: draft.sectionsJson,
       }).slice(0, 12000);
 
       console.log('[bp_quality_retry_requested]', JSON.stringify({
@@ -1491,11 +1409,8 @@ async function runYouTubePipeline(input: {
       const promptIssueDetails = gateIssueDetails;
       const previousOutput = JSON.stringify({
         title: draft.title,
-        description: draft.description,
-        summary_variants: draft.summaryVariants,
-        steps: draft.steps,
-        notes: draft.notes || null,
         tags: draft.tags || [],
+        sections_json: draft.sectionsJson,
       }).slice(0, 12000);
 
       console.log('[bp_quality_retry_requested]', JSON.stringify({

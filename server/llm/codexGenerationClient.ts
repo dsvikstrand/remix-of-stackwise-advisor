@@ -12,7 +12,7 @@ import type {
   YouTubeBlueprintPass2TransformRequest,
   YouTubeBlueprintPass2TransformResult,
   YouTubeBlueprintRequest,
-  YouTubeBlueprintResult,
+  YouTubeBlueprintSectionsResult,
 } from './types';
 import {
   BLUEPRINT_SYSTEM_PROMPT,
@@ -23,23 +23,6 @@ import {
   extractJson,
 } from './prompts';
 import { CodexExecError } from './codexExec';
-
-const YouTubeBlueprintLegacyValidator = z.object({
-  description: z.string(),
-  notes: z.string().nullable().optional(),
-  tags: z.array(z.string()).optional(),
-  summary_variants: z.object({
-    default: z.string().nullable().optional(),
-    eli5: z.string().nullable().optional(),
-  }).nullable().optional(),
-  steps: z.array(
-    z.object({
-      name: z.string(),
-      notes: z.string(),
-      timestamp: z.string().nullable().optional(),
-    }),
-  ).min(1),
-});
 
 const YouTubeBlueprintSectionsValidator = z.object({
   schema_version: z.literal('blueprint_sections_v1'),
@@ -63,11 +46,6 @@ const YouTubeBlueprintSectionsValidator = z.object({
     bullets: z.array(z.string()),
   }),
 });
-
-const YouTubeBlueprintValidator = z.union([
-  YouTubeBlueprintLegacyValidator,
-  YouTubeBlueprintSectionsValidator,
-]);
 
 const YouTubeBlueprintPass2TransformValidator = z.object({
   eli5_steps: z.array(
@@ -217,7 +195,7 @@ export function createCodexGenerationClient(input: {
     async generateYouTubeBlueprint(
       request: YouTubeBlueprintRequest,
       options?: LLMGenerationOptions,
-    ): Promise<YouTubeBlueprintResult> {
+    ): Promise<YouTubeBlueprintSectionsResult> {
       const prompt = buildYouTubeBlueprintUserPrompt(request);
       return runCodexJson({
         operation: 'generateYouTubeBlueprint',
@@ -227,7 +205,7 @@ export function createCodexGenerationClient(input: {
         parse: (rawText) => {
           const parsed = JSON.parse(extractJson(String(rawText || '').trim()));
           return {
-            ...YouTubeBlueprintValidator.parse(parsed),
+            ...YouTubeBlueprintSectionsValidator.parse(parsed),
             raw_response: rawText,
           };
         },

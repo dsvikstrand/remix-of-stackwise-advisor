@@ -1,6 +1,10 @@
 export {
+  buildTranscriptProviderRetryKey,
+  listTranscriptProviderRetryKeys,
   resolveTranscriptProvider,
+  resolveTranscriptOperationTimeoutMs,
   getTranscriptForVideoWithProvider,
+  getTranscriptForVideoWithFallback,
   getTranscriptForVideo,
   probeTranscriptProviders,
   normalizeTranscriptProviderErrorCode,
@@ -8,6 +12,7 @@ export {
 } from './transcriptService';
 
 export type {
+  GetTranscriptForVideoOptions,
   TranscriptProbeProviderResult,
   TranscriptProbeResult,
   TranscriptServiceDeps,

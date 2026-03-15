@@ -48,7 +48,7 @@ Status: `canonical`
 19. Source pages are public-readable and subscribe/unsubscribe capable; legacy `/api/source-subscriptions*` endpoints remain compatibility-safe during migration.
 20. Source pages may lazily hydrate missing avatar/banner metadata on first read so backfilled legacy rows render complete visuals without requiring unsubscribe/resubscribe.
 21. Source pages include a public, read-only blueprint feed (`GET /api/source-pages/:platform/:externalId/blueprints`) that shows channel-published items only, deduped by source video and paginated via load-more cursor.
-22. Source pages include an auth-only `Video Library` section for back-catalog generation (`GET /api/source-pages/:platform/:externalId/videos`, `POST /api/source-pages/:platform/:externalId/videos/unlock`, compatibility alias `/videos/generate`) and run generation asynchronously through existing My Feed + auto-channel pipeline.
+22. Source pages include an auth-only `Video Library` section for back-catalog generation (`GET /api/source-pages/:platform/:externalId/videos`, `POST /api/source-pages/:platform/:externalId/videos/unlock`) and run generation asynchronously through existing My Feed + auto-channel pipeline.
 23. Source-page Video Library filter UX is two-tab in MVP (`Full videos` and `Shorts`), with shorts classified by duration threshold `<=60s`.
 24. Source-page Video Library list traffic uses dual guardrails in backend (burst + sustained per-user/IP) so normal tab/list interaction is smooth while abuse remains capped.
 25. Shared source-video unlock is the default generation model for new source-page requests: one source item can be generated once and reused across subscribers.
@@ -85,9 +85,10 @@ Status: `canonical`
 53. Source-page read surfaces must fail safely: opportunistic asset-sweep hooks are allowed, but missing dependency wiring must never crash API process uptime.
 54. Oracle MVP production runtime is single-service combined mode (`agentic-backend.service` with HTTP + background work together); dedicated split worker topology is deferred until a later scale pass proves it necessary.
 55. Oracle backend runtime config is locked to `/etc/agentic-backend.env`; repo-root `.env` is local-only fallback for non-systemd runs and backend bootstrap must not depend on `.env.production`.
-56. `yt_to_text` proxy runtime is explicit-endpoint-only for MVP; legacy Webshare selector/list modes are removed from active runtime, while historical transport metadata remains read-compatible.
+56. Shared transcript proxy runtime for opted-in providers is explicit-endpoint-only for MVP; legacy Webshare selector/list modes are removed from active runtime, while historical transport metadata remains read-compatible.
 57. Installed-PWA web push is now a gated extension of the existing notifications model: only `comment_reply`, `generation_succeeded`, and `generation_failed` are eligible, opt-in is explicit from notification surfaces, and rollout remains behind push feature/env flags until device validation is complete.
 58. Oracle control-plane operations for MVP (instance inspection/reboot) must use the standardized OCI API-signing-key workflow in `docs/ops/oracle-cli-access.md`; ad hoc local note files are not part of the canonical ops contract.
+59. Temporary local/dev transcript fallbacks are allowed only behind the existing transcript-provider seam; they must be explicitly marked non-production and must not silently redefine Oracle/live runtime truth.
 
 ## Core user journey
 1. Subscribe to a YouTube channel or search/select a video.
@@ -110,7 +111,7 @@ Status: `canonical`
 - Product: `docs/app/product-spec.md`
 - Feed model: `docs/app/mvp-feed-and-channel-model.md`
 - Architecture: `docs/architecture.md`
-- Active proof-only tracker: `docs/exec-plans/active/mvp-launch-proof-tail.md`
+- Active proof-only tracker: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
 - Completed implementation tracker: `docs/exec-plans/completed/mvp-readiness-review-followup.md`
 - Paused strategy playbook: `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
 - Runbook: `docs/ops/yt2bp_runbook.md`

@@ -21,7 +21,6 @@ import {
 } from '@/hooks/useBlueprintYoutubeComments';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Heart, Maximize2, Minimize2 } from 'lucide-react';
-import type { Json } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { logMvpEvent } from '@/lib/logEvent';
 import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
@@ -34,13 +33,11 @@ import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities';
 import { splitSummaryIntoSlides } from '@/lib/summarySlides';
 import { buildSourcePagePath } from '@/lib/sourcePagesApi';
 import {
-  buildBlueprintSectionsV1FromRenderSteps,
   buildRenderBlocksFromBlueprintSections,
   parseBlueprintSectionsV1,
 } from '@/lib/blueprintSections';
 
 type StepItem = { category?: string; name?: string; context?: string };
-type BlueprintStep = { id?: string; title?: string; description?: string | null; items?: StepItem[] };
 type RenderStep = { id?: string; title: string; description: string; items: StepItem[] };
 function extractYouTubeVideoId(url: string) {
   const raw = String(url || '').trim();
@@ -102,16 +99,6 @@ function formatStepItem(item: StepItem) {
   return context ? `${name} [${context}]` : name;
 }
 
-function parseSteps(steps: Json) {
-  if (!steps || typeof steps !== 'object') return [] as BlueprintStep[];
-  if (!Array.isArray(steps)) return [] as BlueprintStep[];
-  return steps.filter((step): step is BlueprintStep => !!step && typeof step === 'object');
-}
-
-function stripMarkdownImageTokens(text: string) {
-  return text.replace(/!\[[^\]]*]\([^)]+\)/g, '').replace(/\n{3,}/g, '\n\n').trim();
-}
-
 function normalizeHeadingKey(value: string) {
   return String(value || '')
     .toLowerCase()
@@ -162,62 +149,6 @@ function canonicalSectionTitle(rawTitle: string, fallbackIndex: number) {
   if (normalized === 'bottom line') return 'Bottom Line';
   const cleaned = (rawTitle || '').trim();
   return cleaned || `Section ${fallbackIndex + 1}`;
-}
-
-function headingAliasesFor(titleKey: string) {
-  if (titleKey === 'takeaways' || titleKey === 'lightning takeaways') {
-    return ['takeaways', 'lightning takeaways'];
-  }
-  if (titleKey === 'deep dive' || titleKey === 'mechanism deep dive') {
-    return ['deep dive', 'mechanism deep dive'];
-  }
-  if (titleKey === 'summary') {
-    return ['summary'];
-  }
-  if (titleKey === 'bleup' || titleKey === 'beup') {
-    return ['bleup', 'beup', 'summary'];
-  }
-  if (titleKey === 'practical rules' || titleKey === 'decision rules') {
-    return ['practical rules', 'decision rules'];
-  }
-  return [titleKey];
-}
-
-function stripRepeatedHeadingPrefix(description: string, title: string) {
-  const cleaned = stripMarkdownImageTokens(description);
-  if (!cleaned) return '';
-  const titleKey = normalizeHeadingKey(title);
-  if (!titleKey) return cleaned;
-  const aliases = headingAliasesFor(titleKey);
-  let normalizedText = cleaned;
-  for (const alias of aliases) {
-    const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').trim();
-    if (!escaped) continue;
-    normalizedText = normalizedText
-      .replace(new RegExp(`^(?:${escaped}\\s*[:\\-–—]?\\s*)+`, 'i'), '')
-      .trim();
-  }
-  const lines = normalizedText.split(/\r?\n/);
-  while (lines.length > 0) {
-    const head = normalizeHeadingKey(lines[0] || '');
-    if (!aliases.includes(head)) break;
-    lines.shift();
-  }
-  return lines.join('\n').trim();
-}
-
-function normalizeGoldenStep(step: BlueprintStep, fallbackIndex: number): RenderStep {
-  const title = canonicalSectionTitle(String(step.title || ''), fallbackIndex);
-  const description = stripRepeatedHeadingPrefix(String(step.description || '').trim(), title);
-  const items = Array.isArray(step.items)
-    ? step.items
-        .map((item) => ({
-          ...item,
-          name: stripRepeatedHeadingPrefix(String(item?.name || '').trim(), title),
-        }))
-        .filter((item) => item.name || item.context || item.category)
-    : [];
-  return { id: step.id, title, description, items };
 }
 
 function parseDescriptionBlocks(description: string) {
@@ -300,13 +231,6 @@ function splitEmbeddedGoldenSections(step: RenderStep): RenderStep[] {
   return sections;
 }
 
-function hasGoldenStructure(steps: BlueprintStep[]) {
-  if (!Array.isArray(steps) || steps.length < 2) return false;
-  const titles = steps.map((step) => normalizeHeadingKey(step.title || '')).filter(Boolean);
-  return titles.some((key) => isTakeawaysKey(key))
-    && titles.some((key) => isNarrativeKey(key));
-}
-
 export default function BlueprintDetail() {
   const navigate = useNavigate();
   const { blueprintId } = useParams();
@@ -369,15 +293,12 @@ export default function BlueprintDetail() {
   const [activeInteractiveTab, setActiveInteractiveTab] = useState('');
   const location = useLocation();
   const loggedBlueprintId = useRef<string | null>(null);
-  const baseSteps = blueprint ? parseSteps(blueprint.steps) : [];
-  const steps = baseSteps;
-  const storedGoldenSectionsSchema = useMemo(
+  const goldenSectionsSchema = useMemo(
     () => parseBlueprintSectionsV1(blueprint?.sections_json),
     [blueprint?.sections_json],
   );
-  const isGoldenStructured = hasGoldenStructure(baseSteps);
-  const useGoldenRender = Boolean(storedGoldenSectionsSchema) || isGoldenStructured;
-  const hasAiReview = !useGoldenRender && Boolean((blueprint?.llm_review || '').trim());
+  const hasCanonicalSections = Boolean(goldenSectionsSchema);
+  const hasAiReview = !hasCanonicalSections && Boolean((blueprint?.llm_review || '').trim());
   const [sourceChannel, setSourceChannel] = useState<{
     title: string;
     url: string | null;
@@ -585,48 +506,10 @@ export default function BlueprintDetail() {
     ? `https://www.youtube-nocookie.com/embed/${youtubeVideoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1`
     : '';
   const hasInlineVideo = Boolean(youtubeEmbedUrl);
-  const legacyGoldenSections = useGoldenRender
-    ? steps.map((step, index) => normalizeGoldenStep(step, index))
-    : [];
-  const legacyDefaultGoldenSections = useGoldenRender
-    ? baseSteps.map((step, index) => normalizeGoldenStep(step, index))
-    : [];
-  const useSectionsSchemaRender = useGoldenRender;
-  const derivedGoldenSectionsSchema = useMemo(
-    () =>
-      useSectionsSchemaRender
-        ? buildBlueprintSectionsV1FromRenderSteps({
-            steps: legacyGoldenSections,
-            tags: blueprint?.tags.map((tag) => tag.slug) || [],
-          })
-        : null,
-    [blueprint?.tags, legacyGoldenSections, useSectionsSchemaRender],
-  );
-  const derivedDefaultGoldenSectionsSchema = useMemo(
-    () =>
-      useSectionsSchemaRender
-        ? buildBlueprintSectionsV1FromRenderSteps({
-            steps: legacyDefaultGoldenSections,
-            tags: blueprint?.tags.map((tag) => tag.slug) || [],
-          })
-        : null,
-    [blueprint?.tags, legacyDefaultGoldenSections, useSectionsSchemaRender],
-  );
-  const goldenSectionsSchema = storedGoldenSectionsSchema || derivedGoldenSectionsSchema;
-  const defaultGoldenSectionsSchema = storedGoldenSectionsSchema || derivedDefaultGoldenSectionsSchema;
   const goldenSections = useMemo(
-    () => (goldenSectionsSchema ? buildRenderBlocksFromBlueprintSections(goldenSectionsSchema) : legacyGoldenSections),
-    [goldenSectionsSchema, legacyGoldenSections],
+    () => (goldenSectionsSchema ? buildRenderBlocksFromBlueprintSections(goldenSectionsSchema) : []),
+    [goldenSectionsSchema],
   );
-  const defaultGoldenSections = useMemo(
-    () => (defaultGoldenSectionsSchema ? buildRenderBlocksFromBlueprintSections(defaultGoldenSectionsSchema) : legacyDefaultGoldenSections),
-    [defaultGoldenSectionsSchema, legacyDefaultGoldenSections],
-  );
-  const defaultVisibleGoldenSections = defaultGoldenSections.filter((step) => normalizeHeadingKey(step.title) !== 'bottom line');
-  const defaultTopSummarySection = defaultVisibleGoldenSections.find((step) => {
-    const key = normalizeHeadingKey(step.title);
-    return isSummaryKey(key);
-  });
   const visibleGoldenSections = goldenSections.filter((step) => normalizeHeadingKey(step.title) !== 'bottom line');
   const takeawaysSection = visibleGoldenSections.find((step) => {
     const key = normalizeHeadingKey(step.title);
@@ -636,8 +519,7 @@ export default function BlueprintDetail() {
     const key = normalizeHeadingKey(step.title);
     return isSummaryKey(key);
   });
-  const summaryDefaultText = defaultTopSummarySection?.description || topSummarySection?.description || '';
-  const selectedSummaryText = summaryDefaultText;
+  const selectedSummaryText = topSummarySection?.description || '';
   const bleupSection = visibleGoldenSections.find((step) => {
     const key = normalizeHeadingKey(step.title);
     return isBleupKey(key);
@@ -653,16 +535,9 @@ export default function BlueprintDetail() {
   const effectiveTopSummarySection = topSummarySection
     ? {
         ...topSummarySection,
-        description: selectedSummaryText || topSummarySection.description,
+        description: selectedSummaryText,
       }
-    : summaryDefaultText
-      ? {
-          id: 'summary-virtual',
-          title: 'Summary',
-          description: selectedSummaryText || summaryDefaultText,
-          items: [],
-        }
-      : null;
+    : null;
   const effectiveBleupSection = bleupSection || fallbackNarrativeFromSplit;
   const deepDiveInteractiveSections = deepDiveAndMoreSections
     .flatMap((step) => splitEmbeddedGoldenSections(step))
@@ -705,7 +580,7 @@ export default function BlueprintDetail() {
           const useSummarySlider =
             isBleupSection &&
             step.description.trim().length > 0 &&
-            (summarySlides.length > 1 || useGoldenRender);
+            (summarySlides.length > 1 || hasCanonicalSections);
           return (
             <div
               key={step.id || `${step.title}-${index}`}
@@ -1050,7 +925,7 @@ export default function BlueprintDetail() {
                 <p className="text-sm text-muted-foreground whitespace-pre-line">{blueprint.mix_notes}</p>
               )}
 
-              {useGoldenRender ? (
+              {hasCanonicalSections ? (
                 <>
                   {renderGoldenGroup(effectiveTopSummarySection ? [effectiveTopSummarySection] : [])}
                   {renderBanner}
@@ -1061,65 +936,13 @@ export default function BlueprintDetail() {
               ) : (
                 <>
                   {renderBanner}
-                  <div>
-                    {steps.length > 0 ? (
-                      <>
-                        <h3 className="font-semibold">Steps</h3>
-                        <div className="mt-2 space-y-2">
-                          {steps.map((step, index) => (
-                            <div key={step.id || `${step.title}-${index}`} className="rounded-md border border-border/40 px-3 py-2.5">
-                              {step.description && (() => {
-                                const normalizedSummary = normalizeGoldenStep(step, index);
-                                const summarySlides = isBleupKey(normalizeHeadingKey(normalizedSummary.title))
-                                  ? splitSummaryIntoSlides(normalizedSummary.description)
-                                  : [];
-                                const useSummarySlider = summarySlides.length > 1;
-                                if (useSummarySlider) {
-                                  return (
-                                    <div className="mt-1">
-                                      <SummarySlides
-                                        title={normalizedSummary.title}
-                                        slides={summarySlides.length > 0 ? summarySlides : [normalizedSummary.description]}
-                                        surface="flat"
-                                      />
-                                    </div>
-                                  );
-                                }
-                                return (
-                                  <>
-                                    <div className="flex items-center justify-between gap-2">
-                                      <p className="text-sm font-medium">
-                                        {normalizedSummary.title?.trim() ? normalizedSummary.title : `Step ${index + 1}`}
-                                      </p>
-                                    </div>
-                                    <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line">{normalizedSummary.description}</p>
-                                  </>
-                                );
-                              })()}
-                              {!step.description ? (
-                                <div className="flex items-center justify-between gap-2">
-                                  <p className="text-sm font-medium">
-                                    {step.title?.trim() ? step.title : `Step ${index + 1}`}
-                                  </p>
-                                </div>
-                              ) : null}
-                              {Array.isArray(step.items) && step.items.length > 0 ? (
-                                <div className="mt-1.5 space-y-1.5">
-                                  {step.items.map((item, itemIndex) => (
-                                    <div key={`${step.id || index}-${itemIndex}`} className="text-sm">
-                                      <p className="text-sm leading-snug">{formatStepItem(item)}</p>
-                                      {item.category && (
-                                        <p className="text-xs text-muted-foreground">{item.category}</p>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : null}
-                            </div>
-                          ))}
-                        </div>
-                      </>
-                    ) : null}
+                  <div className="rounded-md border border-border/40 bg-muted/20 px-4 py-3">
+                    <h3 className="font-semibold">Legacy blueprint format</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      This blueprint does not have canonical `sections_json`, so the current detail view will not
+                      reconstruct old step data. Open a newer blueprint or regenerate this one through the current
+                      pipeline.
+                    </p>
                   </div>
                 </>
               )}

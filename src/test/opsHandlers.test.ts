@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  handleDebugResetYtProxy,
+  handleDebugResetTranscriptProxy,
   handleIngestionJobsTrigger,
   handleQueueHealth,
 } from '../../server/handlers/opsHandlers';
 import type { OpsRouteDeps } from '../../server/contracts/api/ops';
+import { listTranscriptProviderRetryKeys } from '../../server/transcript/getTranscript';
 
 function createMockResponse() {
   const response = {
@@ -77,8 +78,8 @@ function createBaseDeps(overrides: Partial<OpsRouteDeps> = {}): OpsRouteDeps {
     debugSimulateSubscriptionRequestSchema: {
       safeParse: () => ({ success: true, data: {} }),
     },
-    resetYtToTextProxyDispatcher: async () => undefined,
-    getYtToTextProxyDebugMode: () => 'explicit',
+    resetTranscriptProxyDispatcher: async () => undefined,
+    getTranscriptProxyDebugMode: () => 'explicit',
     syncSingleSubscription: async () => ({ processed: 0, inserted: 0, skipped: 0 }),
     markSubscriptionSyncError: async () => undefined,
     ...overrides,
@@ -173,12 +174,12 @@ function createIngestionTriggerDbWithoutRunningJob() {
   };
 }
 
-describe('debug yt_to_text proxy reset handler', () => {
+describe('debug transcript proxy reset handler', () => {
   it('returns 404 when debug endpoints are disabled', async () => {
     const req = {} as never;
     const res = createMockResponse();
 
-    await handleDebugResetYtProxy(req, res as never, createBaseDeps({
+    await handleDebugResetTranscriptProxy(req, res as never, createBaseDeps({
       debugEndpointsEnabled: false,
     }));
 
@@ -193,7 +194,7 @@ describe('debug yt_to_text proxy reset handler', () => {
     const req = {} as never;
     const res = createMockResponse();
 
-    await handleDebugResetYtProxy(req, res as never, createBaseDeps({
+    await handleDebugResetTranscriptProxy(req, res as never, createBaseDeps({
       isServiceRequestAuthorized: () => false,
     }));
 
@@ -209,9 +210,9 @@ describe('debug yt_to_text proxy reset handler', () => {
     const res = createMockResponse();
     const resetSpy = vi.fn(async () => undefined);
 
-    await handleDebugResetYtProxy(req, res as never, createBaseDeps({
-      resetYtToTextProxyDispatcher: resetSpy,
-      getYtToTextProxyDebugMode: () => 'explicit',
+    await handleDebugResetTranscriptProxy(req, res as never, createBaseDeps({
+      resetTranscriptProxyDispatcher: resetSpy,
+      getTranscriptProxyDebugMode: () => 'explicit',
     }));
 
     expect(resetSpy).toHaveBeenCalledTimes(1);
@@ -229,8 +230,8 @@ describe('debug yt_to_text proxy reset handler', () => {
     const req = {} as never;
     const res = createMockResponse();
 
-    await handleDebugResetYtProxy(req, res as never, createBaseDeps({
-      getYtToTextProxyDebugMode: () => 'disabled',
+    await handleDebugResetTranscriptProxy(req, res as never, createBaseDeps({
+      getTranscriptProxyDebugMode: () => 'disabled',
     }));
 
     expect(res.statusCode).toBe(200);
@@ -279,6 +280,7 @@ describe('queue health handler', () => {
     const now = Date.now();
     const queuedIso = new Date(now - 5 * 60_000).toISOString();
     const runningIso = new Date(now - 2 * 60_000).toISOString();
+    const getProviderCircuitSnapshot = vi.fn(async () => ({ state: 'closed' }));
 
     await handleQueueHealth(req, res as never, createBaseDeps({
       getServiceSupabaseClient: () => createQueueHealthDb({
@@ -308,7 +310,7 @@ describe('queue health handler', () => {
       ),
       queuedIngestionScopes: ['all_active_subscriptions', 'search_video_generate'],
       isQueuedIngestionScope: (scope) => scope === 'all_active_subscriptions' || scope === 'search_video_generate',
-      getProviderCircuitSnapshot: async () => ({ state: 'closed' }),
+      getProviderCircuitSnapshot,
     }));
 
     expect(res.statusCode).toBe(200);
@@ -365,6 +367,16 @@ describe('queue health handler', () => {
     });
     expect(payload.data.by_scope.search_video_generate.oldest_queued_age_ms).not.toBeNull();
     expect(payload.data.by_scope.search_video_generate.oldest_running_age_ms).toBeNull();
+    const providerKeys = getProviderCircuitSnapshot.mock.calls.map((call) => call[1]);
+    expect(providerKeys).toEqual([
+      ...listTranscriptProviderRetryKeys(),
+      'llm_generate_blueprint',
+      'llm_quality_judge',
+      'llm_safety_judge',
+      'llm_review',
+      'llm_banner',
+    ]);
+    expect(providerKeys).not.toContain('transcript');
   });
 
   it('returns null age fields when no queued or running jobs exist', async () => {

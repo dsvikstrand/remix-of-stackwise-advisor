@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import type { TranscriptTransportMetadata } from '../transcript/types';
+import type { TranscriptProvider, TranscriptTransportMetadata } from '../transcript/types';
 
 type ClosableDispatcher = {
   close?: () => Promise<void> | void;
@@ -13,7 +13,8 @@ type UndiciRequestResponse = {
   statusCode: number;
   headers: Record<string, string | string[] | undefined>;
   body: {
-    json: () => Promise<unknown>;
+    json?: () => Promise<unknown>;
+    text?: () => Promise<string>;
   };
 };
 
@@ -22,12 +23,12 @@ export type UndiciRequestFn = (
   options: {
     method: string;
     headers: Record<string, string>;
-    body: string;
+    body?: string;
     dispatcher: ClosableDispatcher;
   },
 ) => Promise<UndiciRequestResponse>;
 
-type YtToTextProxyRequestTools = {
+export type WebshareProxyRequestTools = {
   dispatcher: ClosableDispatcher;
   request: UndiciRequestFn;
   transport: TranscriptTransportMetadata;
@@ -40,7 +41,7 @@ type ProxyConnectionConfig = {
 
 type ResolvedProxyConnection = {
   config: ProxyConnectionConfig;
-  transport: TranscriptTransportMetadata;
+  host: string | null;
 };
 
 const TRUE_PATTERN = /^(1|true|yes|on)$/i;
@@ -67,7 +68,7 @@ function warnIncompleteProxyConfig() {
   if (didWarnIncompleteConfig) return;
   didWarnIncompleteConfig = true;
   console.warn(
-    '[webshare-proxy] YT_TO_TEXT_USE_WEBSHARE_PROXY is enabled, but the proxy configuration is incomplete. Falling back to direct requests.',
+    '[webshare-proxy] Shared Webshare proxy is enabled, but the proxy configuration is incomplete. Falling back to direct requests.',
   );
 }
 
@@ -100,7 +101,7 @@ function getProxyAgentConstructor() {
   return cachedProxyAgentConstructor;
 }
 
-export function setYtToTextProxyAgentFactoryForTests(factory: ProxyAgentConstructor | null | undefined) {
+export function setTranscriptProxyAgentFactoryForTests(factory: ProxyAgentConstructor | null | undefined) {
   proxyAgentFactoryOverride = factory;
 }
 
@@ -125,7 +126,7 @@ function getUndiciRequestFunction() {
   return cachedUndiciRequestFn;
 }
 
-export function setYtToTextUndiciRequestForTests(requestFn: UndiciRequestFn | null | undefined) {
+export function setTranscriptUndiciRequestForTests(requestFn: UndiciRequestFn | null | undefined) {
   undiciRequestOverride = requestFn;
 }
 
@@ -153,14 +154,7 @@ function buildExplicitProxyConfig(): ResolvedProxyConnection | null {
           ? `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`
           : undefined,
       },
-      transport: {
-        provider: 'yt_to_text',
-        proxy_enabled: true,
-        proxy_mode: 'webshare_explicit',
-        proxy_selector: 'explicit',
-        proxy_selected_index: null,
-        proxy_host: parsed.hostname || null,
-      },
+      host: parsed.hostname || null,
     } satisfies ResolvedProxyConnection;
   }
 
@@ -182,19 +176,14 @@ function buildExplicitProxyConfig(): ResolvedProxyConnection | null {
 
   return {
     config: buildProxyConnectionConfig(host, port, username, password),
-    transport: {
-      provider: 'yt_to_text',
-      proxy_enabled: true,
-      proxy_mode: 'webshare_explicit',
-      proxy_selector: 'explicit',
-      proxy_selected_index: null,
-      proxy_host: host,
-    },
+    host,
   } satisfies ResolvedProxyConnection;
 }
 
-export function getYtToTextProxyDebugMode(): 'disabled' | 'explicit' {
-  if (!isTruthyEnv(process.env.YT_TO_TEXT_USE_WEBSHARE_PROXY)) {
+export type TranscriptProxyDebugMode = 'disabled' | 'explicit';
+
+export function getTranscriptProxyDebugMode(): TranscriptProxyDebugMode {
+  if (!isTruthyEnv(process.env.TRANSCRIPT_USE_WEBSHARE_PROXY)) {
     return 'disabled';
   }
   return 'explicit';
@@ -204,8 +193,21 @@ async function resolveProxyConnectionConfig(): Promise<ResolvedProxyConnection |
   return buildExplicitProxyConfig();
 }
 
-export async function getYtToTextProxyRequestTools(): Promise<YtToTextProxyRequestTools | null> {
-  if (!isTruthyEnv(process.env.YT_TO_TEXT_USE_WEBSHARE_PROXY)) {
+function buildProxyTransportMetadata(provider: TranscriptProvider, host: string | null): TranscriptTransportMetadata {
+  return {
+    provider,
+    proxy_enabled: true,
+    proxy_mode: 'webshare_explicit',
+    proxy_selector: 'explicit',
+    proxy_selected_index: null,
+    proxy_host: host,
+  };
+}
+
+export async function getWebshareProxyRequestTools(
+  provider: TranscriptProvider,
+): Promise<WebshareProxyRequestTools | null> {
+  if (!isTruthyEnv(process.env.TRANSCRIPT_USE_WEBSHARE_PROXY)) {
     return null;
   }
 
@@ -227,11 +229,11 @@ export async function getYtToTextProxyRequestTools(): Promise<YtToTextProxyReque
   return {
     dispatcher: cachedDispatcher,
     request,
-    transport: proxyConnection.transport,
+    transport: buildProxyTransportMetadata(provider, proxyConnection.host),
   };
 }
 
-export async function resetYtToTextProxyDispatcher() {
+export async function resetTranscriptProxyDispatcher() {
   const dispatcher = cachedDispatcher;
   cachedProxyUrl = null;
   cachedDispatcher = undefined;

@@ -13,7 +13,7 @@ import { useTagsBySlugs } from '@/hooks/useTags';
 import { getChannelBySlug } from '@/lib/channelsCatalog';
 import { getChannelIcon } from '@/lib/channelIcons';
 import { useChannelFeed, type ChannelFeedTab } from '@/hooks/useChannelFeed';
-import { buildBlueprintPreviewText, buildFeedSummary } from '@/lib/feedPreview';
+import { buildFeedSummary } from '@/lib/feedPreview';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { bucketJoinError, logP3Event } from '@/lib/telemetry';
@@ -281,13 +281,10 @@ export default function ChannelPage() {
               ) : (
                 <div className="divide-y divide-border/40 border-y border-border/40">
                   {posts.map((post) => {
-                    const blueprintPreview = buildBlueprintPreviewText({
-                      steps: post.steps,
-                    });
                     const preview = buildFeedSummary({
                       sectionsJson: post.sectionsJson,
                       primary: post.llmReview,
-                      secondary: post.mixNotes || blueprintPreview,
+                      secondary: post.mixNotes,
                       fallback: 'Open blueprint to view full details.',
                       maxChars: 220,
                     });

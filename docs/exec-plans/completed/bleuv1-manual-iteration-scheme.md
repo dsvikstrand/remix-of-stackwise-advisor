@@ -332,7 +332,7 @@ Scope
 
 Definition of done
 - `GET /api/source-pages/:platform/:externalId/videos` returns paginated source videos with duplicate flags.
-- `POST /api/source-pages/:platform/:externalId/videos/generate` queues async generation and returns `job_id`.
+- historical at that step: `POST /api/source-pages/:platform/:externalId/videos/generate` queued async generation and returned `job_id`; the alias was retired later in favor of `/videos/unlock`.
 - `/s/:platform/:externalId` shows signed-in select/generate UI and lightweight job status.
 
 Evaluation
@@ -342,7 +342,7 @@ Evaluation
 - `npm run docs:link-check`
 
 Completion evidence (2026-02-19)
-- Added auth-only source-page video-library endpoints (`GET /videos`, `POST /videos/generate`) with deterministic duplicate skip reporting.
+- Added auth-only source-page video-library endpoints (`GET /videos`, historical `POST /videos/generate`) with deterministic duplicate skip reporting; the generate alias was retired later.
 - Added ingestion scope `source_page_video_library_selection` and async worker path that reuses existing blueprint/feed + auto-channel flow.
 - Updated `src/pages/SourcePage.tsx` with `Video Library` select/generate UI, duplicate badges, and background job polling card.
 - Added two-tab filter UX for `Video Library` (`Full videos`, `Shorts`) with server-side `kind` filtering and shorts threshold `<=60s`.
@@ -369,7 +369,7 @@ Evaluation
 Completion evidence (2026-02-20)
 - Added migration `20260220010000_credit_unlock_foundation_v1.sql` (wallet/ledger/unlock tables + indexes + RLS + triggers).
 - Added backend services `server/services/creditWallet.ts` and `server/services/sourceUnlocks.ts`.
-- Added `POST /api/source-pages/:platform/:externalId/videos/unlock` and kept `/videos/generate` as compatibility alias.
+- Added `POST /api/source-pages/:platform/:externalId/videos/unlock`; at that time `/videos/generate` remained as a temporary compatibility alias, but that alias is now retired.
 - Updated `/api/credits` + frontend credit UI to refill-model fields (`balance/capacity/refill_rate_per_sec/seconds_to_full`).
 - Cut subscription sync to write unlockable feed items and attached unlock actions on `My Feed` + `Source Page` Video Library.
 - Unlock throttling now uses soft request caps (`8/10s` burst, `120/10m` sustained) instead of hard cooldown, and unlock actions now trigger immediate `ai-credits` cache invalidation.

@@ -2,102 +2,160 @@ import { describe, expect, it } from 'vitest';
 import {
   evaluateGoldenQuality,
   normalizeYouTubeDraftToGoldenV1,
+  type YouTubeBlueprintNormalizationInput,
   validateGoldenStructure,
 } from '../../server/services/goldenBlueprintFormat';
-import type { YouTubeBlueprintResult } from '../../server/llm/types';
-
-function buildDeepDraft(): YouTubeBlueprintResult {
+function buildCanonicalInput(input: {
+  title: string;
+  tags: string[];
+  summary: string;
+  takeaways: string[];
+  storyline: string;
+  deepDive: string[];
+  practicalRules: string[];
+  openQuestions: string[];
+}): YouTubeBlueprintNormalizationInput {
   return {
+    title: input.title,
+    tags: input.tags,
+    sectionsJson: {
+      schema_version: 'blueprint_sections_v1',
+      tags: input.tags,
+      summary: { text: input.summary },
+      takeaways: { bullets: input.takeaways },
+      storyline: { text: input.storyline },
+      deep_dive: { bullets: input.deepDive },
+      practical_rules: { bullets: input.practicalRules },
+      open_questions: { bullets: input.openQuestions },
+    },
+  };
+}
+
+function buildDeepDraft(): YouTubeBlueprintNormalizationInput {
+  return buildCanonicalInput({
     title: 'Leucine and Functional Muscle Outcomes',
-    description:
-      'This video explains why leucine outcomes should be evaluated through function and not only visible mass changes. It highlights how dosing context and baseline behavior quality shape practical outcomes.',
-    notes:
-      'The transcript emphasizes maintenance outcomes and tradeoffs for adults over 35. The transcript also points to timing effects and protocol quality.',
     tags: ['nutrition', 'research', 'longevity'],
-    steps: [
-      {
-        name: 'Functional outcomes versus hypertrophy-only framing',
-        notes:
-          'Evidence in older populations can show better grip and gait markers even when lean mass gains are limited. This blueprint should not frame this as a magic shortcut.',
-        timestamp: null,
-      },
-      {
-        name: 'Meal-paired dosing context',
-        notes:
-          'Meal-paired leucine dosing can improve anabolic signaling context versus random standalone usage. This video notes that protocol context matters.',
-        timestamp: null,
-      },
-      {
-        name: 'Baseline quality determines incremental upside',
-        notes:
-          'When sleep, total protein, and training structure are already optimized, incremental lift can be smaller and should be interpreted cautiously.',
-        timestamp: null,
-      },
+    summary:
+      'This explains why leucine outcomes should be evaluated through function and not only visible mass changes. It highlights how dosing context and baseline behavior quality shape practical outcomes.',
+    takeaways: [
+      'Evaluate leucine outcomes through function, not just visible hypertrophy.',
+      'Meal-paired dosing context matters more than random standalone usage.',
+      'Baseline sleep, protein, and training quality determine incremental upside.',
     ],
-  };
+    storyline:
+      'Maintenance outcomes and tradeoffs matter, especially for adults over 35. Timing effects and protocol quality shape whether the intervention produces meaningful functional change in practice.',
+    deepDive: [
+      'Evidence in older populations can show better grip and gait markers even when lean mass gains are limited.',
+      'Meal-paired leucine dosing can improve anabolic signaling context versus random standalone usage.',
+      'Protocol quality changes whether a measured benefit is real or just noise.',
+    ],
+    practicalRules: [
+      'Use leucine inside a broader protein and training plan rather than as a magic shortcut.',
+      'Interpret incremental gains cautiously when the baseline routine is already strong.',
+      'Track functional markers alongside body-composition expectations.',
+    ],
+    openQuestions: [
+      'Which baseline profiles see the biggest functional benefit?',
+      'How much of the observed lift depends on meal timing context?',
+      'Where do leucine gains flatten once fundamentals are already optimized?',
+    ],
+  });
 }
 
-function buildActionDraft(): YouTubeBlueprintResult {
-  return {
+function buildActionDraft(): YouTubeBlueprintNormalizationInput {
+  return buildCanonicalInput({
     title: 'Italian Sausage Chowder Recipe',
-    description:
-      'This video shows a hearty chowder flow with sausage texture control and practical fallback handling.',
-    notes:
-      'Use a repeatable cooking sequence and adjust one variable at a time. The transcript covers practical fixes.',
     tags: ['recipe', 'cooking', 'meal'],
-    steps: [
-      { name: 'Brown sausage in medium chunks', notes: 'Keep chunks visible for final texture payoff.', timestamp: null },
-      { name: 'Cook aromatics and layer seasoning', notes: 'Build depth before thickening liquids.', timestamp: null },
-      { name: 'Add flour and liquid gradually', notes: 'Avoid clumps and monitor body development.', timestamp: null },
-      { name: 'Finish with hot milk', notes: 'Stabilize texture and avoid overcooking at the finish.', timestamp: null },
+    summary:
+      'This shows a hearty chowder flow with sausage texture control, sequencing discipline, and practical fallback handling.',
+    takeaways: [
+      'Run the chowder sequence in order and keep adjustments small between attempts.',
+      'Texture payoff depends on visible sausage chunks and controlled liquid thickening.',
+      'Late-stage fixes work best when the earlier base was built correctly.',
     ],
-  };
+    storyline:
+      'Use a repeatable cooking sequence and adjust one variable at a time. The practical payoff comes from layering flavor early, then stabilizing texture near the finish.',
+    deepDive: [
+      'Browning sausage in medium chunks preserves visible texture in the final bowl.',
+      'Aromatics and seasoning should build depth before thickening liquids.',
+      'Gradual flour and liquid integration prevents clumps and keeps body development readable.',
+    ],
+    practicalRules: [
+      'Do not stack multiple rescue moves at the finish if texture is already drifting.',
+      'Check thickness before adding the final milk stage.',
+      'Keep the finishing heat controlled so the chowder does not break.',
+    ],
+    openQuestions: [
+      'Which sausage fat level gives the best texture-to-richness balance?',
+      'How much liquid reduction is ideal before the final milk stage?',
+      'Which early signals predict that the chowder will finish too thick?',
+    ],
+  });
 }
 
-function buildNoisyDraft(): YouTubeBlueprintResult {
-  return {
+function buildNoisyDraft(): YouTubeBlueprintNormalizationInput {
+  return buildCanonicalInput({
     title: 'CoQ10 Basics',
-    description: [
+    tags: ['supplement', 'research'],
+    summary: [
       'Summary',
       '- CoQ10 supports mitochondrial ATP production.',
       '- Benefits are context-dependent and not universal.',
       '- Medication interactions require caution.',
     ].join('\n'),
-    notes: [
+    takeaways: ['Summary', 'Tradeoffs', 'CoQ10 may help when deficiency risk is elevated.'],
+    storyline: [
       'Mechanism Deep Dive',
       '- Mitochondrial electron transport support appears central.',
       '- Oxidative stress load can change perceived benefit.',
     ].join('\n'),
-    tags: ['supplement', 'research'],
-    steps: [
-      { name: 'Lightning Takeaways', notes: '- Summary\n- Tradeoffs', timestamp: null },
-      { name: 'Summary', notes: 'Summary\n\n- CoQ10 may help when deficiency risk is elevated.', timestamp: null },
-      { name: 'Mechanism Deep Dive', notes: 'Mechanism Deep Dive\n\n- ATP pathway relevance.', timestamp: null },
+    deepDive: [
+      'Mechanism Deep Dive',
+      'ATP pathway relevance.',
+      'Medication context can alter whether the intervention feels useful.',
     ],
-  };
+    practicalRules: [
+      'Use CoQ10 only when the context and medication profile make sense.',
+      'Review symptom goals before treating it as a universal addition.',
+      'Avoid overselling benefits outside deficiency-risk contexts.',
+    ],
+    openQuestions: [
+      'Which users actually notice a measurable lift?',
+      'How much does medication context change the effect?',
+      'Where does the marginal value flatten?',
+    ],
+  });
 }
 
-function buildNicheTagDraft(): YouTubeBlueprintResult {
-  return {
+function buildNicheTagDraft(): YouTubeBlueprintNormalizationInput {
+  return buildCanonicalInput({
     title: 'Riemannian geometry tricks for AI agents in software workflows',
-    description:
-      'A practical analysis of agent architecture choices, automation boundaries, and developer workflows.',
-    notes:
-      'Focus on implementation tradeoffs, software quality, and product-level decision making.',
     tags: ['riemannian-geometry', 'parallel-transport', 'ai', 'developer-tools', 'ultra-niche-operator'],
-    steps: [
-      {
-        name: 'Agent architecture choices',
-        notes: 'Compare orchestration tradeoffs and implementation complexity.',
-        timestamp: null,
-      },
-      {
-        name: 'Practical automation boundaries',
-        notes: 'Use clear escalation rules and fallback paths in production.',
-        timestamp: null,
-      },
+    summary:
+      'A practical analysis of agent architecture choices, automation boundaries, and developer workflows.',
+    takeaways: [
+      'Agent architecture choices should be evaluated through implementation tradeoffs, not novelty alone.',
+      'Automation boundaries matter as much as model capability in production systems.',
+      'Developer workflows improve when fallback paths and escalation rules are explicit.',
     ],
-  };
+    storyline:
+      'Focus on implementation tradeoffs, software quality, and product-level decision making instead of ultra-niche framing.',
+    deepDive: [
+      'Compare orchestration tradeoffs and implementation complexity.',
+      'Use explicit escalation rules when the system leaves the stable path.',
+      'Treat workflow quality as part of the architecture, not as an afterthought.',
+    ],
+    practicalRules: [
+      'Prefer broad user-searchable framing over ultra-niche specialist tags.',
+      'Keep the architecture readable before optimizing for exotic abstractions.',
+      'Use automation only where the operational boundary is clear.',
+    ],
+    openQuestions: [
+      'Which workflow boundaries should stay manual even in agentic systems?',
+      'Where do exotic abstractions help more than they confuse?',
+      'How much architectural complexity is justified by the real productivity gain?',
+    ],
+  });
 }
 
 describe('goldenBlueprintFormat (backend)', () => {

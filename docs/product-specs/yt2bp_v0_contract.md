@@ -46,10 +46,10 @@
 - 2026-02-19 note: Source Pages foundation (`source_pages` table + `/api/source-pages/:platform/:externalId` subscribe/read endpoints + `source_page_id` linkage on subscriptions/source_items) is additive and does not alter the YT2BP endpoint envelope.
 - 2026-02-19 note: source-page read-path lazy asset hydration (backfilled avatar/banner fill on `GET /api/source-pages/...`) is additive and does not alter the YT2BP endpoint envelope.
 - 2026-02-19 note: source-page public feed endpoint (`GET /api/source-pages/:platform/:externalId/blueprints`, deduped + cursor-paginated) is additive and does not alter the YT2BP endpoint envelope.
-- 2026-02-19 note: source-page video-library endpoints (`GET /api/source-pages/:platform/:externalId/videos`, `POST /api/source-pages/:platform/:externalId/videos/generate`) are additive and do not alter the YT2BP endpoint envelope.
+- 2026-02-19 note: source-page video-library endpoints (`GET /api/source-pages/:platform/:externalId/videos`, `POST /api/source-pages/:platform/:externalId/videos/unlock`) are additive and do not alter the YT2BP endpoint envelope.
 - 2026-02-19 note: source-page video-library listing now supports `kind=full|shorts` with shorts threshold `<=60s`; additive and outside the YT2BP envelope.
 - 2026-02-19 note: source-page video-library list now uses dual rate-limit guards (burst+sustained) and frontend cache/focus-refetch tuning; additive and outside the YT2BP envelope.
-- 2026-02-20 note: source-page unlock endpoint (`POST /api/source-pages/:platform/:externalId/videos/unlock`) is additive; legacy `/videos/generate` remains compatibility alias; both are outside this endpoint envelope.
+- 2026-02-20 note: source-page unlock endpoint (`POST /api/source-pages/:platform/:externalId/videos/unlock`) is additive and outside this endpoint envelope.
 - 2026-02-21 note: source-linked YouTube banners now use thumbnail-first assignment/backfill and source-generation paths bypass auto-banner enqueue; additive and outside this endpoint envelope.
 - 2026-02-20 note: source-page unlock route guard is soft-limited (`8/10s` burst + `120/10m` sustained) and no longer uses hard unlock cooldown; additive and outside this endpoint envelope.
 - 2026-03-06 note: daily-credit wallet model (`user_credit_wallets`, `credit_ledger`, `/api/credits` daily grant/reset fields) is additive and outside this endpoint envelope.
@@ -71,9 +71,11 @@
 - 2026-03-06 note: Home feed semantics now treat `Joined` as the canonical joined-channel discovery lane, keep `For You` as the only source-driven locked/unlocked lane, and restrict `All`/channel scopes to published-channel blueprints only; additive and outside the YT2BP endpoint envelope.
 - 2026-03-07 note: Oracle MVP production runtime now treats combined mode (`agentic-backend.service` with `RUN_INGESTION_WORKER=true`) as the canonical queue/scheduler keep-alive path; split worker topology remains deferred and this does not alter the YT2BP endpoint envelope.
 - 2026-03-07 note: backend env bootstrap now uses repo-root `.env` only as a non-systemd local/dev fallback and no longer reads `.env.production`; Oracle production uses `/etc/agentic-backend.env` as the canonical backend app-config source. This is additive runtime bootstrap policy and outside the YT2BP endpoint envelope.
-- 2026-03-08 note: `yt_to_text` Webshare proxying now uses an explicit-endpoint-only runtime contract; legacy selector/list envs and direct-proxy-list lookup are removed from active runtime. Historical transport metadata remains read-compatible, and this does not alter the YT2BP endpoint envelope.
+- 2026-03-08 note: shared Webshare transcript proxying for opted-in providers now uses an explicit-endpoint-only runtime contract; legacy selector/list envs and direct-proxy-list lookup are removed from active runtime. Historical transport metadata remains read-compatible, and this does not alter the YT2BP endpoint envelope.
 - 2026-03-08 note: installed-PWA push delivery (`notification_push_subscriptions`, `notification_push_dispatch_queue`, `/api/notifications/push-subscriptions*`) is additive notification-channel infrastructure and does not alter the YT2BP endpoint envelope.
 - 2026-03-09 note: installed-PWA push runtime remains rollout-gated until backend startup validation and device delivery proof are complete; Oracle control-plane recovery for that rollout is documented separately in `docs/ops/oracle-cli-access.md`.
+- 2026-03-14 note: the current repo/dev default is `TRANSCRIPT_PROVIDER=videotranscriber_temp`, a wrapper around the browser-facing `videotranscriber.ai` flow with provider-local timeout/session envs. `youtube_timedtext` remains the only built-in direct fallback, and launch should later move to a stable API-backed provider. This is additive and does not change the production endpoint envelope.
+- 2026-03-15 note: the v0 success envelope still returns a `draft` object, but the canonical blueprint content inside that envelope is now `draft.sectionsJson` with schema `blueprint_sections_v1`. Legacy `draft.steps`, `draft.summaryVariants`, and `draft.notes` remain compatibility fields during cutover and should not be used as the target shape for new downstream work.
 
 ## Request
 ```json
@@ -98,9 +100,23 @@
   "draft": {
     "title": "string",
     "description": "string",
+    "sectionsJson": {
+      "schema_version": "blueprint_sections_v1",
+      "summary": { "text": "string" },
+      "takeaways": { "bullets": ["string"] },
+      "storyline": { "text": "string" },
+      "deep_dive": { "bullets": ["string"] },
+      "practical_rules": { "bullets": ["string"] },
+      "open_questions": { "bullets": ["string"] },
+      "tags": ["string"]
+    },
     "steps": [
       { "name": "string", "notes": "string", "timestamp": "string|null" }
     ],
+    "summaryVariants": {
+      "default": "string",
+      "eli5": "string"
+    },
     "notes": "string|null",
     "tags": ["string"]
   },
@@ -113,6 +129,12 @@
   }
 }
 ```
+
+## Blueprint content contract (current truth)
+- Canonical blueprint content for current runtime work lives in `draft.sectionsJson`.
+- `draft.sectionsJson.schema_version` must be `blueprint_sections_v1`.
+- `draft.steps`, `draft.summaryVariants`, and `draft.notes` remain compatibility-era fields in the v0 envelope during cutover.
+- New gate/render/storage work should treat `draft.sectionsJson` as the authoritative blueprint shape, not the legacy compatibility fields.
 
 ## Error response
 ```json
@@ -141,6 +163,10 @@
 ## Runtime controls
 - `YT2BP_ENABLED`
 - `YT2BP_QUALITY_ENABLED`
+- `TRANSCRIPT_PROVIDER` (current repo/dev default `videotranscriber_temp`; built-in direct fallback `youtube_timedtext`)
+- `TRANSCRIPT_USE_WEBSHARE_PROXY`, `WEBSHARE_PROXY_URL`, `WEBSHARE_PROXY_HOST`, `WEBSHARE_PROXY_PORT`, `WEBSHARE_PROXY_USERNAME`, `WEBSHARE_PROXY_PASSWORD` (shared transport config for opted-in transcript providers)
+- `VIDEOTRANSCRIBER_TEMP_TIMEOUT_MS` (local/dev-only, default `180000`, bounded provider-local timeout)
+- `VIDEOTRANSCRIBER_TEMP_FORCE_NEW_SESSION` (local/dev-only anonymous-session rotation toggle)
 - `YT2BP_CONTENT_SAFETY_ENABLED`
 - `YT2BP_ANON_LIMIT_PER_MIN`
 - `YT2BP_AUTH_LIMIT_PER_MIN`
@@ -173,7 +199,7 @@
 - Source-page lifecycle (`source_pages`, `/api/source-pages/*`, `source_page_id` dual-write links) is intentionally outside this endpoint contract.
 - Source-page read-time asset hydration behavior is intentionally outside this endpoint contract.
 - Source-page public feed retrieval (`GET /api/source-pages/:platform/:externalId/blueprints`) is intentionally outside this endpoint contract.
-- Source-page video-library listing/queue flow (`GET /api/source-pages/:platform/:externalId/videos`, `POST /api/source-pages/:platform/:externalId/videos/unlock`, compatibility alias `/videos/generate`) is intentionally outside this endpoint contract.
+- Source-page video-library listing/queue flow (`GET /api/source-pages/:platform/:externalId/videos`, `POST /api/source-pages/:platform/:externalId/videos/unlock`) is intentionally outside this endpoint contract.
 - Transcript-unavailable cooldown/retry behavior in source unlock flows is intentionally outside this endpoint contract.
 - Silent auto transcript retry/feed suppression behavior and Source Page `+Add`-only speech warning scope are intentionally outside this endpoint contract.
 - Notifications inbox flows (`/api/notifications*`) and event emission for replies/generation terminal outcomes are intentionally outside this endpoint contract.
@@ -194,6 +220,7 @@
 - Quality retries: controlled by `YT2BP_QUALITY_MAX_RETRIES`.
 - Content safety retries: controlled by `YT2BP_CONTENT_SAFETY_MAX_RETRIES`.
 - Transcript fetch uses provider-level retry behavior.
+- `videotranscriber_temp` also expands the transcript-stage provider timeout to its provider-local timeout budget before the endpoint-level YT2BP timeout applies.
 
 ## Current non-goals
 - Playlist support.

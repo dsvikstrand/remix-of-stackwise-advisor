@@ -1,6 +1,10 @@
 # MVP Runtime Simplification Plan
 
-Status: `active` (`Phase 4` current; `Phases 1-3` complete)
+Status: `on-pause` (`Phase 4` next if resumed; `Phases 1-3` complete)
+
+Pause note
+a0) [have] Root-active plan cleanup on `2026-03-15` moved this umbrella to `active/on-pause/`.
+a00) [have] The remaining docs/validation follow-up is carried as a deferred item in `docs/exec-plans/active/tail/mvp-launch-proof-tail.md` until this track is resumed.
 
 ## Goal
 a1) [todo] Simplify Bleu's live runtime and release process to a single-service MVP model that is easy to reason about, easy to restart, and robust enough for temporary spikes around `~100` concurrent users.

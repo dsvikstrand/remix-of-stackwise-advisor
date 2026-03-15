@@ -1,6 +1,6 @@
 # Execution Plans Registry
 
-This file is the authoritative active/completed registry for execution plans.
+This file is the authoritative active/on-pause/deserted/completed registry for execution plans.
 
 ## Current Runtime / Ops Truth
 - `docs/app/core-direction-lock.md`
@@ -9,36 +9,40 @@ This file is the authoritative active/completed registry for execution plans.
   Canonical system/runtime topology for the current production contract.
 - `docs/ops/yt2bp_runbook.md`
   Canonical production operations and backend-first release runbook.
-
-## Primary Planning Surfaces
 - `docs/ops/mvp-launch-readiness-checklist.md`
-  Launch-gate board. This is the only file that answers `Are we launch-ready?` and `What P0/P1 items are still open?`
-- `docs/exec-plans/active/mvp-launch-proof-tail.md`
-  Current active proof-only tail beyond the checklist. This is the only file that answers `What launch-proof work is still open right now?`
+  Canonical launch gate board and proof log.
+
+## Active Root
+- `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
+  Current proof/deferred carry-forward tail. This is the only standing active-tail support file.
+- `docs/exec-plans/active/transcript-provider-launch-plan.md`
+  Current active implementation plan for the push, Supabase migration, deploy, and post-deploy proof of the new transcript-provider setup.
 - `docs/exec-plans/tech-debt-tracker.md`
-  Durable post-launch cleanup/debt board. This is the only file that answers `What survives after launch as cleanup or debt?`
+  Durable post-launch cleanup/debt board. This is not an execution plan, but it remains the long-lived debt surface.
 
-## Active Reference Support
-- `docs/exec-plans/active/repo-cleanup-and-scale-readiness-plan.md`
-  Active post-launch cleanup/scalability plan for backend composition, frontend page orchestration, compatibility pruning, and repo hygiene.
-- `docs/exec-plans/active/mvp-runtime-simplification-plan.md`
-  Active MVP runtime/deploy simplification plan for the single-service Oracle setup.
-- `docs/ops/p1-1-p1-2-verification-runbook.md`
-  Supporting runbook for the remaining P1 verification work.
-- `docs/ops/playwright-p1-2-callback-evidence.md`
-  Supporting automation evidence for P1-2.
-- `docs/ops/playwright-preflight-notes.md`
-  Supporting Playwright setup/findings for later callback verification.
-- `docs/ops/yt2bp_runbook.md`
-  Operational runbook for the YouTube-to-Blueprint service.
-
-## Paused Reference (Not Active)
-- These files are reference/history only and must not be treated as the current production runtime contract.
+## On-Pause Reference
+- These files remain valid reference plans, but they are not the current implementation focus.
+- `docs/exec-plans/active/on-pause/bleup-pwa-program.md`
+  Deferred until Android/install-update proof work becomes active again.
+- `docs/exec-plans/active/on-pause/mvp-runtime-simplification-plan.md`
+  Deferred while narrower blueprint-contract cleanup is the current implementation plan.
+- `docs/exec-plans/active/on-pause/bleup-pwa-phase5-deferred-tracks.md`
+  Deferred child-track reference for later PWA enhancements.
 - `docs/exec-plans/active/on-pause/project-bleuv1-mvp-foundation.md`
+  Historical paused MVP build reference.
 - `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
-- `docs/_archive/legacy-ass-agentic/README.md`
-- `docs/_archive/legacy-ass-agentic/agentic/foundation/`
-- `docs/_archive/legacy-ass-agentic/agentic/executable/`
+  Historical paused hardening reference.
+
+## Deserted / Superseded
+- These files are preserved for history only. They must not be resumed without a new explicit replacement plan.
+- `docs/exec-plans/deserted/ptp-provider-install-master-plan.md`
+  Deserted after the `PTP` direction was abandoned.
+- `docs/exec-plans/deserted/ptp-provider-validation-playbook.md`
+  Deserted with the `PTP` install track.
+- `docs/exec-plans/deserted/repo-cleanup-and-scale-readiness-plan.md`
+  Superseded by narrower, more trackable cleanup plans.
+- `docs/exec-plans/deserted/codex-session-checkpoint.md`
+  Historical session-local recovery note; not a current planning surface.
 
 ## Completed
 - `docs/exec-plans/completed/project-1-ia-and-lingo.md`
@@ -70,26 +74,31 @@ This file is the authoritative active/completed registry for execution plans.
 - `docs/exec-plans/completed/bleuv1-refactor-a3-response-shape-baseline.md`
   Completed: pre-refactor response-shape baseline artifact.
 - `docs/exec-plans/completed/bleuv1-source-first-program.md`
-  Completed: initial source-first umbrella direction plan (superseded by hardening + foundation active tracks).
+  Completed: initial source-first umbrella direction plan.
 - `docs/exec-plans/completed/bleuv1-manual-iteration-scheme.md`
   Completed: stepwise execution tracker with full MVP sequence closure.
+- `docs/exec-plans/completed/transcript-provider-robustness-plan.md`
+  Completed: transcript-provider hardening through provider fallback, cache reuse, stage-aware retry, and `yt_to_text` retirement. Remaining live-proof tail lives in `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`.
+- `docs/exec-plans/completed/blueprint-contract-cutover-plan.md`
+  Completed: blueprint contract cutover from legacy `steps`-first handling to canonical `blueprint_sections_v1`, including runtime, persistence, frontend, and repo-hygiene closure.
 
 ## Current Program Snapshot
 - Core identity lock: `docs/app/core-direction-lock.md`.
-- Current runtime/ops truth: `docs/architecture.md` and `docs/ops/yt2bp_runbook.md`.
-- Legacy channels-first program: completed/archived.
-- `bleuV1` source-first umbrella program: completed.
-- Current launch authorization gate: `docs/ops/mvp-launch-readiness-checklist.md`.
-- Current active proof tail beyond the gate: `docs/exec-plans/active/mvp-launch-proof-tail.md`.
-- Current active cleanup/scalability plan: `docs/exec-plans/active/repo-cleanup-and-scale-readiness-plan.md`.
-- Current active runtime/deploy simplification plan: `docs/exec-plans/active/mvp-runtime-simplification-plan.md`.
+- Current runtime/ops truth: `docs/architecture.md`, `docs/ops/yt2bp_runbook.md`, and `docs/ops/mvp-launch-readiness-checklist.md`.
+- Current active implementation plan: `docs/exec-plans/active/transcript-provider-launch-plan.md`.
+- Current active proof/deferred tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`.
 - Current post-launch debt board: `docs/exec-plans/tech-debt-tracker.md`.
-- Manual iterative build strategy plans are paused reference docs.
-- Agentic orchestration: archived reference path.
+- Latest completed implementation plan: `docs/exec-plans/completed/blueprint-contract-cutover-plan.md`.
+- PWA rollout follow-up is on pause.
+- Runtime simplification follow-up is on pause.
+- Transcript-provider robustness work is completed, with later live-proof items carried into the proof tail.
+- `PTP` install docs and the broad cleanup umbrella are deserted/superseded, not active.
 
 ## Rules
-- Keep actively executed plans at `docs/exec-plans/active/` root.
+- Keep only one active implementation plan at `docs/exec-plans/active/` root.
+- Keep `docs/exec-plans/active/tail/mvp-launch-proof-tail.md` as the canonical proof/deferred carry-forward file.
 - Keep paused plans under `docs/exec-plans/active/on-pause/`.
-- Move finished project plans into `completed/`.
+- Move abandoned/superseded plans into `docs/exec-plans/deserted/`.
+- Move finished plans into `docs/exec-plans/completed/`.
 - Update this index whenever status changes.
-- Do not treat paused/completed plan docs as the current runtime/deploy source of truth.
+- Do not treat on-pause, deserted, or completed plan docs as the current runtime/deploy source of truth.

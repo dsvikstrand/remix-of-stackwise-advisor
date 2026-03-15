@@ -25,8 +25,9 @@ This folder is the source of truth for product, architecture, planning, and oper
 
 ## Primary Planning Surfaces
 - Launch gate board: `docs/ops/mvp-launch-readiness-checklist.md`
-- Active PWA implementation program: `docs/exec-plans/active/bleup-pwa-program.md`
-- Active implementation program: `docs/exec-plans/active/mvp-launch-proof-tail.md`
+- Active proof/deferred tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
+- Active implementation program: `docs/exec-plans/active/transcript-provider-launch-plan.md`
+- Latest completed implementation program: `docs/exec-plans/completed/blueprint-contract-cutover-plan.md`
 - Durable post-launch debt: `docs/exec-plans/tech-debt-tracker.md`
 
 ## Canonical Runtime Documents
@@ -35,7 +36,6 @@ This folder is the source of truth for product, architecture, planning, and oper
 - Feed model: `docs/app/mvp-feed-and-channel-model.md`
 - Product behavior/spec: `docs/app/product-spec.md`
 - Architecture: `docs/architecture.md`
-- PWA implementation program: `docs/exec-plans/active/bleup-pwa-program.md`
 - Execution registry: `docs/exec-plans/index.md`
 
 ## App Section Docs
@@ -57,6 +57,8 @@ This folder is the source of truth for product, architecture, planning, and oper
 - Historical references are not the current production contract.
 - Completed launch hardening phases: `docs/exec-plans/completed/mvp-launch-hardening-phases.md`
 - Completed stepwise execution scheme: `docs/exec-plans/completed/bleuv1-manual-iteration-scheme.md`
+- Paused PWA implementation umbrella: `docs/exec-plans/active/on-pause/bleup-pwa-program.md`
+- Paused runtime simplification umbrella: `docs/exec-plans/active/on-pause/mvp-runtime-simplification-plan.md`
 - Paused strategy reference (`bleuV1`): `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
 - Paused MVP build reference plan: `docs/exec-plans/active/on-pause/project-bleuv1-mvp-foundation.md`
 
@@ -76,7 +78,10 @@ This folder is the source of truth for product, architecture, planning, and oper
 - `docs/_archive/legacy-ass-agentic/` archived ASS/agentic reference contracts (not active runtime guidance)
 - `docs/architecture.md` system topology and invariants
 - `docs/design-docs/` technical design + diagrams
-- `docs/exec-plans/active/` active execution docs (`active/on-pause/` holds paused reference plans)
+- `docs/exec-plans/active/` one current implementation plan only
+- `docs/exec-plans/active/tail/` proof/deferred carry-forward docs
+- `docs/exec-plans/active/on-pause/` paused reference plans
+- `docs/exec-plans/deserted/` abandoned/superseded plans kept for history only
 - `docs/exec-plans/completed/` closed plans and closure notes
 - `docs/ops/` runbooks and operational procedures
 - `docs/product-specs/` product contracts and scoped feature plans

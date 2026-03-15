@@ -26,7 +26,7 @@ describe('YouTube prompt POS references', () => {
       const prompt = buildYouTubeBlueprintUserPrompt({
         videoUrl: 'https://www.youtube.com/watch?v=abc123xyz00',
         videoTitle: 'Sample',
-        transcriptSource: 'yt_to_text',
+        transcriptSource: 'videotranscriber_temp',
         transcript: 'Transcript content.',
         oraclePosDir: posDir,
         positiveReferencePaths: [blockedPath, allowedPath],

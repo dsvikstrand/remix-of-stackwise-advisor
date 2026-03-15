@@ -50,6 +50,7 @@ d2) [have] Public/auth routes currently registered:
 
 ## Backend API Map (Current)
 e1) [have] Source of truth: `server/index.ts` Express route registrations.  
+e1a) [have] This route map is a dated historical snapshot from `2026-02-28`; entries below preserve aliases that were live then and may now be retired.
 e2) [have] Health/core generation endpoints:
 - `GET /api/health`
 - `GET /api/credits`
@@ -77,7 +78,7 @@ e4) [have] Source page + subscriptions endpoints:
 - `GET /api/source-pages/:platform/:externalId`
 - `GET /api/source-pages/:platform/:externalId/videos`
 - `POST /api/source-pages/:platform/:externalId/videos/unlock`
-- `POST /api/source-pages/:platform/:externalId/videos/generate`
+- historical at snapshot time: `POST /api/source-pages/:platform/:externalId/videos/generate` (retired later in favor of `/videos/unlock`)
 - `GET /api/source-pages/:platform/:externalId/blueprints`
 - `POST /api/source-pages/:platform/:externalId/subscribe`
 - `DELETE /api/source-pages/:platform/:externalId/subscribe`

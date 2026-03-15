@@ -18,9 +18,14 @@ function createFallbackClient(): LLMClient {
         reasoning_effort: null,
       });
       return {
-        title: 'fallback',
-        description: 'fallback',
-        steps: [{ name: 'S1', notes: 'N1', timestamp: null }],
+        schema_version: 'blueprint_sections_v1',
+        tags: ['fallback'],
+        summary: { text: 'fallback summary' },
+        takeaways: { bullets: ['fallback takeaway'] },
+        storyline: { text: 'fallback storyline' },
+        deep_dive: { bullets: ['fallback deep dive'] },
+        practical_rules: { bullets: ['fallback rule'] },
+        open_questions: { bullets: ['fallback question?'] },
       };
     },
     generateYouTubeBlueprintPass2Transform: async () => ({
@@ -41,9 +46,14 @@ describe('codex generation client', () => {
       codexTimeoutMs: 10_000,
       runCodexPrompt: async () => ({
         outputText: JSON.stringify({
-          title: 'codex',
-          description: 'codex',
-          steps: [{ name: 'A', notes: 'B', timestamp: null }],
+          schema_version: 'blueprint_sections_v1',
+          tags: ['codex'],
+          summary: { text: 'codex summary' },
+          takeaways: { bullets: ['codex takeaway'] },
+          storyline: { text: 'codex storyline' },
+          deep_dive: { bullets: ['codex deep dive'] },
+          practical_rules: { bullets: ['codex rule'] },
+          open_questions: { bullets: ['codex question?'] },
         }),
         durationMs: 10,
       }),
@@ -53,11 +63,10 @@ describe('codex generation client', () => {
       videoUrl: 'https://youtube.com/watch?v=abc',
       transcript: 'hello',
     });
-    expect(result.title).toBeUndefined();
-    expect(result.description).toBe('codex');
-    expect(result.steps).toHaveLength(1);
-    expect(result.steps[0]?.name).toBe('A');
-    expect(result.raw_response).toContain('"description":"codex"');
+    expect(result.schema_version).toBe('blueprint_sections_v1');
+    expect(result.summary.text).toBe('codex summary');
+    expect(result.takeaways.bullets).toEqual(['codex takeaway']);
+    expect(result.raw_response).toContain('"schema_version":"blueprint_sections_v1"');
   });
 
   it('falls back to API client when codex fails', async () => {
@@ -84,9 +93,31 @@ describe('codex generation client', () => {
         events.push(`${event.provider}:${event.event}`);
       },
     });
-    expect(result.description).toBe('fallback');
-    expect(result.steps).toHaveLength(1);
+    expect(result.summary.text).toBe('fallback summary');
+    expect(result.takeaways.bullets).toEqual(['fallback takeaway']);
     expect(events).toContain('codex_cli:request_failed');
     expect(events).toContain('openai_api:fallback_success');
+  });
+
+  it('rejects legacy steps-only codex output at the client boundary', async () => {
+    const client = createCodexGenerationClient({
+      fallbackClientFactory: () => createFallbackClient(),
+      fallbackEnabled: false,
+      codexModel: 'gpt-codex',
+      codexReasoningEffort: 'low',
+      codexTimeoutMs: 10_000,
+      runCodexPrompt: async () => ({
+        outputText: JSON.stringify({
+          description: 'legacy',
+          steps: [{ name: 'A', notes: 'B', timestamp: null }],
+        }),
+        durationMs: 10,
+      }),
+    });
+
+    await expect(client.generateYouTubeBlueprint({
+      videoUrl: 'https://youtube.com/watch?v=abc',
+      transcript: 'hello',
+    })).rejects.toThrow();
   });
 });

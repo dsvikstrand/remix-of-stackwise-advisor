@@ -38,6 +38,7 @@ a15) [have] `My Feed` subscription notice cards now support channel avatar rende
 a16) [have] `My Feed` subscription notice cards open a detailed popup with `Unsubscribe` confirmation; successful unsubscribe removes the notice card.
 a17) [have] Manual `Post to Channel` UI is feature-flagged for rollback and removed from normal auto-channel mode surfaces.
 a18) [have] `My Feed` blueprint cards now open blueprint detail by card click (dedicated `Open blueprint` link removed).
+a19) [have] The current repo/dev default transcript path is `videotranscriber_temp`, with `youtube_timedtext` as the only built-in fallback behind the same YT2BP pipeline seam.
 a19) [have] `My Feed` header now includes direct `Add Subscription` shortcut in addition to `Manage subscriptions`.
 a20) [have] Auto-banner queue contract is now available for subscription auto-ingest (`/api/auto-banner/jobs/trigger`) with service-auth control and non-blocking ingestion mode.
 a21) [have] Banner-cap policy contract is now available globally with generated banner preservation (`blueprints.banner_generated_url`) and deterministic channel-default fallback.
@@ -73,7 +74,7 @@ a50) [have] Source Pages foundation is active: YouTube channels are now represen
 a51) [have] Subscription surfaces now deep-link to Source Pages, while legacy `/api/source-subscriptions*` contracts remain active for compatibility.
 a52) [have] Source page reads now lazily hydrate missing avatar/banner assets for legacy backfilled rows, so first open can populate visuals without requiring re-subscribe.
 a53) [have] Source pages now expose a public, deduped blueprint feed (`latest + load more`) via `GET /api/source-pages/:platform/:externalId/blueprints`, and `/s/:platform/:externalId` renders Home-style read-only blueprint cards.
-a54) [have] Source pages now include a subscriber-only `Video Library` section for back-catalog generation (`GET /videos`, `POST /videos/unlock`, legacy alias `POST /videos/generate`) with async queue execution and duplicate skip visibility.
+a54) [have] Source pages now include a subscriber-only `Video Library` section for back-catalog generation (`GET /videos`, `POST /videos/unlock`) with async queue execution and duplicate skip visibility.
 a55) [have] Shared source-video unlock model is active for new source-page generation: one generation per source video can be reused across subscribers.
 a56) [have] Credit model now uses a daily credit wallet with UTC reset (`free=3.00`, `plus=20.00`, `admin` bypass, no rollover) instead of refill semantics.
 a57) [have] Subscription auto-ingestion now writes unlockable My Feed rows (`my_feed_unlockable`) for new uploads instead of immediately generating blueprints.
@@ -178,6 +179,10 @@ c8) Feed lane publication rules:
 - `Joined` contains only generated and published blueprint cards from joined Bleu channels.
 - `All` contains only generated and published blueprint cards across all Bleu channels.
 - A manually unlocked blueprint from a non-subscribed source appears in that user’s `For You`, but future videos from that source do not appear there unless the user later subscribes.
+c9) YT2BP blueprint contract:
+- the current canonical blueprint content produced by YT2BP is `draft.sectionsJson` with schema `blueprint_sections_v1`.
+- `draft.steps`, `draft.summaryVariants`, and `draft.notes` are compatibility-era carryovers during the cutover and are not the intended current-runtime shape for new gate/render/storage work.
+- the endpoint envelope may still carry those compatibility fields for v0 stability, but current product/runtime truth is sections-first.
 
 ## Product Principles
 p1) Source-first content supply (not creator-first posting).
@@ -300,7 +305,7 @@ si38) compatibility note: legacy `POST/GET/PATCH/DELETE /api/source-subscription
 si39) public/auth endpoint: `GET /api/source-pages/:platform/:externalId/blueprints?limit=<1..24>&cursor=<opaque?>` (public channel-published feed for the source page, deduped by `source_item_id` with `next_cursor` pagination; includes additive `source_thumbnail_url` fallback per item).
 si40) auth endpoint: `GET /api/source-pages/:platform/:externalId/videos?page_token=<optional>&limit=<1..25>&kind=<full|shorts>` (source-page video-library listing for subscribed signed-in users, includes duplicate flags per row; shorts threshold is `<=60s`).
 si41) auth endpoint: `POST /api/source-pages/:platform/:externalId/videos/unlock` (subscriber-only manual unlock route; reserves `1.00` credit only for new work, starts unlock generation queue, returns `job_id` + ready/in-progress/unaffordable summary buckets + additive `trace_id`).
-si42) compatibility alias: `POST /api/source-pages/:platform/:externalId/videos/generate` routes to unlock flow in this phase and mirrors additive `trace_id`.
+si42) current source-page manual generation route is `POST /api/source-pages/:platform/:externalId/videos/unlock`, which returns additive `trace_id` for unlock tracing.
 si43) `GET /api/source-pages/:platform/:externalId/videos` now includes unlock metadata per row (`unlock_status`, `unlock_cost`, `unlock_in_progress`, `ready_blueprint_id`).
 si44) `GET /api/credits` now returns daily-wallet fields (`balance`, `capacity`, `daily_grant`, `next_reset_at`, `seconds_to_reset`, `plan`) alongside compatibility fields (`remaining`, `limit`, `resetAt`).
 si44b) `GET /api/credits` keeps additive compatibility fields (`generation_daily_limit`, `generation_daily_used`, `generation_daily_remaining`, `generation_daily_reset_at`, `generation_daily_bypass`) while old daily-cap UI assumptions are phased out.
@@ -349,7 +354,7 @@ n5) Reserve `enforce` mode for non-prod verification until dedicated rollout app
 k1) Architecture: `docs/architecture.md`
 k2) Feed model: `docs/app/mvp-feed-and-channel-model.md`
 k3) Program + project status: `docs/exec-plans/index.md`
-k4) Active launch-proof tail: `docs/exec-plans/active/mvp-launch-proof-tail.md`
+k4) Active launch-proof tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
 k5) Completed hardening implementation plan: `docs/exec-plans/completed/mvp-readiness-review-followup.md`
 k6) Paused strategy reference: `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
 k7) YT2BP contract: `docs/product-specs/yt2bp_v0_contract.md`

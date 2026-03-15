@@ -1,4 +1,23 @@
-import type { YouTubeBlueprintResult, YouTubeDraftStep } from '../llm/types';
+import type { YouTubeDraftStep } from '../llm/types';
+import {
+  buildLegacyDraftStepsFromBlueprintSections,
+  type BlueprintSectionsV1,
+} from './blueprintSections';
+
+export type YouTubeBlueprintNormalizationInput = {
+  title: string;
+  tags?: string[];
+  sectionsJson: BlueprintSectionsV1;
+};
+
+type GoldenBlueprintWorkingDraft = {
+  title: string;
+  description: string;
+  notes: string | null;
+  tags: string[];
+  steps: YouTubeDraftStep[];
+  sectionsJson: BlueprintSectionsV1;
+};
 
 export type GoldenBlueprintDomain = 'deep' | 'action';
 
@@ -415,7 +434,7 @@ function toSentenceCandidates(value: string) {
   return toSentences(cleaned);
 }
 
-function detectDomain(draft: YouTubeBlueprintResult): GoldenBlueprintDomain {
+function detectDomain(draft: GoldenBlueprintWorkingDraft): GoldenBlueprintDomain {
   const corpus = [
     draft.title,
     draft.description,
@@ -437,7 +456,7 @@ function detectDomain(draft: YouTubeBlueprintResult): GoldenBlueprintDomain {
   return actionScore > deepScore ? 'action' : 'deep';
 }
 
-function selectTakeawayCandidates(draft: YouTubeBlueprintResult, domain: GoldenBlueprintDomain) {
+function selectTakeawayCandidates(draft: GoldenBlueprintWorkingDraft, domain: GoldenBlueprintDomain) {
   const sentenceCandidates = dedupeKeepOrder([
     ...toSentenceCandidates(draft.description),
     ...toSentenceCandidates(draft.notes || ''),
@@ -473,7 +492,7 @@ function selectTakeawayCandidates(draft: YouTubeBlueprintResult, domain: GoldenB
   return final.slice(0, Math.max(3, Math.min(4, final.length)));
 }
 
-function buildSummaryParagraphs(draft: YouTubeBlueprintResult, domain: GoldenBlueprintDomain) {
+function buildSummaryParagraphs(draft: GoldenBlueprintWorkingDraft, domain: GoldenBlueprintDomain) {
   const sentencePool = dedupeKeepOrder([
     ...toSentenceCandidates(draft.description),
     ...toSentenceCandidates(draft.notes || ''),
@@ -1199,7 +1218,7 @@ function repairGoldenQuality(
   ] satisfies YouTubeDraftStep[];
 }
 
-function chooseGeneralTags(draft: YouTubeBlueprintResult, domain: GoldenBlueprintDomain) {
+function chooseGeneralTags(draft: GoldenBlueprintWorkingDraft, domain: GoldenBlueprintDomain) {
   const corpus = [
     draft.title,
     draft.description,
@@ -1240,7 +1259,7 @@ function chooseGeneralTags(draft: YouTubeBlueprintResult, domain: GoldenBlueprin
   return selected.slice(0, 5);
 }
 
-function buildDeepSections(draft: YouTubeBlueprintResult) {
+function buildDeepSections(draft: GoldenBlueprintWorkingDraft) {
   const mechanismCandidates = dedupeKeepOrder(
     (draft.steps || [])
       .slice(0, 8)
@@ -1305,7 +1324,7 @@ function buildDeepSections(draft: YouTubeBlueprintResult) {
   ] satisfies YouTubeDraftStep[];
 }
 
-function buildActionSections(draft: YouTubeBlueprintResult) {
+function buildActionSections(draft: GoldenBlueprintWorkingDraft) {
   const stepBullets = dedupeKeepOrder(
     (draft.steps || [])
       .map((step) => stripMetaFraming(step.name))
@@ -1371,13 +1390,36 @@ function buildActionSections(draft: YouTubeBlueprintResult) {
   ] satisfies YouTubeDraftStep[];
 }
 
+function buildWorkingDraft(input: YouTubeBlueprintNormalizationInput): GoldenBlueprintWorkingDraft {
+  const sectionsJson = input.sectionsJson;
+  const steps = buildLegacyDraftStepsFromBlueprintSections(sectionsJson)
+    .map((step) => ({
+      name: String(step.name || '').trim(),
+      notes: String(step.notes || '').trim(),
+      timestamp: step.timestamp ?? null,
+    }))
+    .filter((step) => step.name && step.notes);
+
+  return {
+    title: String(input.title || '').trim(),
+    description: String(sectionsJson.summary?.text || '').trim(),
+    notes: String(sectionsJson.storyline?.text || '').trim() || null,
+    tags: (Array.isArray(input.tags) && input.tags.length > 0 ? input.tags : sectionsJson.tags || [])
+      .map((tag) => String(tag || '').trim())
+      .filter(Boolean),
+    steps,
+    sectionsJson,
+  };
+}
+
 export function normalizeYouTubeDraftToGoldenV1(
-  draft: YouTubeBlueprintResult,
+  input: YouTubeBlueprintNormalizationInput,
   options?: {
     repairQuality?: boolean;
     transcript?: string;
   },
 ): GoldenBlueprintFormatResult {
+  const draft = buildWorkingDraft(input);
   // Golden BP v1 is currently locked to the deep/research section template.
   const domain: GoldenBlueprintDomain = 'deep';
   const takeaways = selectTakeawayCandidates(draft, domain);

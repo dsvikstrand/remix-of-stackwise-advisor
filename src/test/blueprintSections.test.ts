@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildBlueprintSectionsV1FromRenderSteps,
   buildRenderBlocksFromBlueprintSections,
+  countBlueprintSectionsV1,
   parseBlueprintSectionsV1,
 } from '@/lib/blueprintSections';
 
@@ -163,5 +164,32 @@ describe('blueprintSections', () => {
     expect(partial?.takeaways.bullets).toEqual([]);
     expect(partial?.storyline.text).toBe('');
     expect(invalid).toBeNull();
+  });
+
+  it('counts only canonical non-empty sections for frontend read surfaces', () => {
+    const fullCount = countBlueprintSectionsV1({
+      schema_version: 'blueprint_sections_v1',
+      tags: ['ai-tools-automation'],
+      summary: { text: 'Summary text' },
+      takeaways: { bullets: ['One', 'Two'] },
+      storyline: { text: 'Storyline text' },
+      deep_dive: { bullets: ['Deep dive bullet'] },
+      practical_rules: { bullets: ['Rule'] },
+      open_questions: { bullets: ['Question'] },
+    });
+    const partialCount = countBlueprintSectionsV1({
+      schema_version: 'blueprint_sections_v1',
+      tags: [],
+      summary: { text: 'Summary text' },
+      takeaways: { bullets: [] },
+      storyline: { text: '' },
+      deep_dive: { bullets: ['Deep dive bullet'] },
+      practical_rules: { bullets: [] },
+      open_questions: { bullets: [] },
+    });
+
+    expect(fullCount).toBe(6);
+    expect(partialCount).toBe(2);
+    expect(countBlueprintSectionsV1(null)).toBe(0);
   });
 });

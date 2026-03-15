@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import './require-node20.mjs';
+
 const EXPECTED_PUBLIC_PREVIEW_STATUS = 401;
 
 function parseArgs(argv) {

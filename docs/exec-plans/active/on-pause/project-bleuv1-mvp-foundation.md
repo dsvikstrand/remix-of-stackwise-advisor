@@ -1,6 +1,6 @@
 # Project - bleuV1 MVP Build (Manual Iterative)
 
-Status: `active`
+Status: `on-pause`
 
 ## Objective
 Deliver the remaining `bleuV1` MVP through a manual iterative build loop with clear checkpoints and low ambiguity.
@@ -8,8 +8,8 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 ## Execution Scheme Reference
 - Primary sequence and progress tracker:
   - `docs/exec-plans/completed/bleuv1-manual-iteration-scheme.md` (historical sequence)
-- Current cleanup/scalability follow-up:
-  - `docs/exec-plans/active/repo-cleanup-and-scale-readiness-plan.md`
+- Current active implementation reference:
+  - `docs/exec-plans/index.md`
 - Current runtime/deploy truth:
   - `docs/architecture.md`
   - `docs/ops/yt2bp_runbook.md`
@@ -41,7 +41,8 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Shared auto-unlock schema migration watermark is now `20260306113000`.
 - Oracle MVP runtime has since been simplified to single-service combined mode (`agentic-backend.service` owns HTTP + background work); any split web/worker assumptions in this paused plan are historical reference only.
 - Oracle backend config source is `/etc/agentic-backend.env`; repo-root `.env` remains local-only fallback for non-systemd runs and `.env.production` is no longer part of backend bootstrap.
-- `yt_to_text` proxying now assumes one explicit Webshare endpoint; selector-based direct-proxy-list flows are historical-only and not part of the current MVP baseline.
+- Shared transcript proxying for opted-in providers now assumes one explicit Webshare endpoint; selector-based direct-proxy-list flows are historical-only and not part of the current MVP baseline.
+- Local developer setups now default the transcript provider to `videotranscriber_temp` behind the existing provider seam; `youtube_timedtext` is the built-in direct fallback, and this remains outside the MVP production baseline.
 
 ### W1 - My Feed As First-Class Surface
 - Introduce/finish personal unfiltered feed lane behavior.
@@ -109,11 +110,11 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Step 18 source-page foundation adds platform-agnostic `source_pages` identity, dual-write linking (`source_page_id`), additive source-page APIs, and minimal `/s/:platform/:externalId` UI routing from subscription surfaces.
 - Step 18 follow-up hardening adds lazy source-page asset hydration on read, so legacy backfilled rows load avatar/banner on first open.
 - Step 19 source-page feed activation adds public `GET /api/source-pages/:platform/:externalId/blueprints` and replaces `/s/:platform/:externalId` placeholder text with deduped Home-style read-only blueprint cards (`latest + load more`).
-- Step 20 source-page Video Library adds auth-only creator backlog listing (`GET /videos`) and async selected generation (`POST /videos/generate`) on `/s/:platform/:externalId` with duplicate skip visibility and job status polling.
+- Step 20 historical source-page Video Library note: auth-only creator backlog listing (`GET /videos`) and async selected generation (`POST /videos/generate`) on `/s/:platform/:externalId` were added at that stage; the generate alias is now retired.
 - Step 20 follow-up adds two-tab list filters in Video Library (`Full videos` and `Shorts`), with shorts classified as `<=60s`.
 - Step 20 safety follow-up tunes source-page list limiter policy to burst+sustained guardrails and frontend caching to avoid normal-flow 429 churn.
 - Step 21 shared unlock + daily credit wallet adds wallet/ledger economics (`user_credit_wallets`, `credit_ledger`) plus source-video unlock state (`source_item_unlocks`) for one-generation-per-source-item.
-- Step 21 source-page generation endpoint is now `POST /videos/unlock` (with `/videos/generate` compatibility alias), and subscription new uploads now land as `my_feed_unlockable` cards instead of immediate generation.
+- Step 21 source-page generation endpoint shifted to `POST /videos/unlock`; the earlier `/videos/generate` compatibility alias mentioned here was later retired, while subscription new uploads moved to `my_feed_unlockable` cards instead of immediate generation.
 - Step 21 follow-up removes strict unlock cooldown in favor of soft request caps (`8/10s` burst + `120/10m` sustained) and immediate credit cache refresh after unlock actions.
 - Step 22 Home scope split repurposes `/wall` `For You` to subscribed-source mixed stream (locked + unlocked) and adds `Your channels` as the unchanged followed-channel ranked lane.
 - Step 23 trust pass adds shared unlock activity cards (Home/Source Page/My Feed), reload-resume unlock tracking, user-menu credit refill/ledger transparency, and a dismissible Home scope helper strip.

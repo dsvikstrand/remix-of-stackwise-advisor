@@ -154,8 +154,6 @@ export type YouTubeRouteDeps = {
   resolveGenerationTierAccess: any;
   resolveRequestedGenerationTier: any;
   normalizeRequestedGenerationTier: any;
-  isDualGenerateEnabledForUser: any;
-  getDualGenerateTiers: any;
   resolveGenerationModelProfile: any;
   resolveVariantOrReady: any;
   findVariantsByBlueprintId: any;

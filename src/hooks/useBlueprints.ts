@@ -10,7 +10,7 @@ export interface BlueprintRow {
   creator_user_id: string;
   title: string;
   selected_items?: Json | null;
-  steps: Json | null;
+  steps?: Json | null;
   sections_json?: Json | null;
   mix_notes: string | null;
   review_prompt: string | null;
@@ -67,7 +67,7 @@ interface UpdateBlueprintInput {
 }
 
 const BLUEPRINT_FIELDS = 'id, inventory_id, creator_user_id, title, selected_items, steps, mix_notes, review_prompt, banner_url, llm_review, is_public, likes_count, source_blueprint_id, created_at, updated_at';
-const BLUEPRINT_DETAIL_FIELDS = 'id, inventory_id, creator_user_id, title, steps, mix_notes, review_prompt, banner_url, llm_review, is_public, likes_count, source_blueprint_id, created_at, updated_at';
+const BLUEPRINT_DETAIL_FIELDS = 'id, inventory_id, creator_user_id, title, sections_json, mix_notes, review_prompt, banner_url, llm_review, is_public, likes_count, source_blueprint_id, created_at, updated_at';
 
 function isMissingColumnError(error: unknown, column: string) {
   const e = error as any;
@@ -122,20 +122,6 @@ export function useBlueprint(blueprintId?: string) {
       if (error) throw error;
       if (!blueprint) return null;
 
-      let sectionsJson: Json | null = null;
-      const { data: sectionsData, error: sectionsError } = await supabase
-        .from('blueprints')
-        .select('sections_json')
-        .eq('id', blueprintId)
-        .maybeSingle();
-      if (sectionsError) {
-        if (!isMissingColumnError(sectionsError, 'sections_json')) {
-          throw sectionsError;
-        }
-      } else {
-        sectionsJson = sectionsData?.sections_json ?? null;
-      }
-
       const [tagRowsRes, likeRes, profileRes] = await Promise.all([
         supabase.from('blueprint_tags').select('tag_id').eq('blueprint_id', blueprintId),
         user
@@ -153,7 +139,6 @@ export function useBlueprint(blueprintId?: string) {
 
       return {
         ...(blueprint as BlueprintRow),
-        sections_json: sectionsJson,
         tags: tagsData || [],
         user_liked: userLiked,
         creator_profile: profileRes.data || null,

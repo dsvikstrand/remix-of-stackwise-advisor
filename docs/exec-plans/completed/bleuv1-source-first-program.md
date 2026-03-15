@@ -205,10 +205,10 @@ Rules:
   - `/s/:platform/:externalId` now renders Home-style read-only blueprint cards with latest-first `Load more` pagination.
 - Source page Video Library activation (2026-02-19):
   - added auth-only source backlog listing endpoint `GET /api/source-pages/:platform/:externalId/videos`.
-  - added async selected-generation endpoint `POST /api/source-pages/:platform/:externalId/videos/generate`.
+  - historical at that stage: added async selected-generation endpoint `POST /api/source-pages/:platform/:externalId/videos/generate` (retired later in favor of `/videos/unlock`).
   - `/s/:platform/:externalId` now lets signed-in users select older creator videos and queue generation with duplicate skip visibility and job polling.
 - Shared unlock + refill-credit cutover (2026-02-20):
-  - source-page generation now runs through shared unlock endpoint `POST /api/source-pages/:platform/:externalId/videos/unlock` (legacy `/videos/generate` remains alias).
+  - source-page generation now runs through shared unlock endpoint `POST /api/source-pages/:platform/:externalId/videos/unlock` (the earlier `/videos/generate` alias was a temporary compatibility path and is now retired).
   - new tables `source_item_unlocks`, `user_credit_wallets`, and `credit_ledger` enforce one-generation-per-source-item with hold -> settle/refund credit accounting.
   - subscription auto-ingest now creates `my_feed_unlockable` rows for new uploads instead of immediate blueprint generation.
   - unlock success fans out the shared blueprint to subscribed users and preserves auto-channel publish for the unlocking user path.

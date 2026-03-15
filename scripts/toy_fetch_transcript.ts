@@ -1,10 +1,11 @@
 /*
   Isolated toy spike: YouTube URL -> transcript text
   Usage:
-    TRANSCRIPT_PROVIDER=yt_to_text node --import tsx scripts/toy_fetch_transcript.ts --url "https://www.youtube.com/watch?v=..."
+    TRANSCRIPT_PROVIDER=videotranscriber_temp node --import tsx scripts/toy_fetch_transcript.ts --url "https://www.youtube.com/watch?v=..."
     TRANSCRIPT_PROVIDER=youtube_timedtext node --import tsx scripts/toy_fetch_transcript.ts --url "..." --with-timestamps
 */
 
+import './require-node20.mjs';
 import '../server/loadEnv';
 import { getTranscriptForVideo, resolveTranscriptProvider } from '../server/transcript/getTranscript';
 import { TranscriptProviderError } from '../server/transcript/types';

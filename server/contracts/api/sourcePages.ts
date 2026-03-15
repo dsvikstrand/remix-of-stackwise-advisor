@@ -123,7 +123,5 @@ export type SourcePagesRouteDeps = {
   resolveGenerationTierAccess: any;
   resolveRequestedGenerationTier: any;
   normalizeRequestedGenerationTier: any;
-  isDualGenerateEnabledForUser: any;
-  getDualGenerateTiers: any;
   resolveVariantOrReady: any;
 };

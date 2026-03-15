@@ -5,6 +5,7 @@ import {
   shouldSuppressLowPriorityQueueScope,
 } from '../services/queuePriority';
 import { getQueuedJobWorkItemCount } from '../services/ingestionQueue';
+import { listTranscriptProviderRetryKeys } from '../transcript/getTranscript';
 
 export async function handleIngestionJobsTrigger(req: express.Request, res: express.Response, deps: OpsRouteDeps) {
   if (!deps.isServiceRequestAuthorized(req)) {
@@ -304,7 +305,7 @@ export async function handleQueueHealth(req: express.Request, res: express.Respo
   const workerRunning = activeRunningJobs > 0;
 
   const providerKeys = [
-    'transcript',
+    ...listTranscriptProviderRetryKeys(),
     'llm_generate_blueprint',
     'llm_quality_judge',
     'llm_safety_judge',
@@ -490,7 +491,7 @@ export async function handleAutoBannerJobsLatest(req: express.Request, res: expr
   });
 }
 
-export async function handleDebugResetYtProxy(req: express.Request, res: express.Response, deps: OpsRouteDeps) {
+export async function handleDebugResetTranscriptProxy(req: express.Request, res: express.Response, deps: OpsRouteDeps) {
   if (!deps.debugEndpointsEnabled) {
     return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Not found', data: null });
   }
@@ -498,15 +499,15 @@ export async function handleDebugResetYtProxy(req: express.Request, res: express
     return res.status(401).json({ ok: false, error_code: 'SERVICE_AUTH_REQUIRED', message: 'Missing or invalid service token', data: null });
   }
 
-  await deps.resetYtToTextProxyDispatcher();
+  await deps.resetTranscriptProxyDispatcher();
 
   return res.json({
     ok: true,
     error_code: null,
-    message: 'yt_to_text proxy cache reset',
+    message: 'transcript proxy cache reset',
     data: {
       reset: true,
-      proxy_mode: deps.getYtToTextProxyDebugMode(),
+      proxy_mode: deps.getTranscriptProxyDebugMode(),
     },
   });
 }

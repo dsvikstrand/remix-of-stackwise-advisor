@@ -11,7 +11,6 @@ export interface ChannelFeedPost {
   sectionsJson: Json | null;
   llmReview: string | null;
   mixNotes: string | null;
-  steps: Json | null;
   likesCount: number;
   createdAt: string;
   tags: string[];
@@ -36,7 +35,7 @@ export function useChannelFeed({ channelSlug, tab, pageSize = 20 }: UseChannelFe
     queryFn: async (): Promise<ChannelFeedPost[]> => {
       const { data: blueprints, error } = await supabase
         .from('blueprints')
-        .select('id, title, sections_json, llm_review, mix_notes, steps, likes_count, created_at')
+        .select('id, title, sections_json, llm_review, mix_notes, likes_count, created_at')
         .eq('is_public', true)
         .order('created_at', { ascending: false })
         .limit(400);
@@ -108,7 +107,6 @@ export function useChannelFeed({ channelSlug, tab, pageSize = 20 }: UseChannelFe
           sectionsJson: row.sections_json,
           llmReview: row.llm_review,
           mixNotes: row.mix_notes,
-          steps: row.steps ?? null,
           likesCount: row.likes_count,
           createdAt: row.created_at,
           tags,

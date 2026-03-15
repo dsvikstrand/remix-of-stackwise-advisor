@@ -9,7 +9,7 @@ a1) [have] This plan completed the main MVP hardening implementation program bes
 b1) [have] This plan is derived from the repository review completed on `2026-03-05`.
 b2) [have] This plan focuses on launch stability, cost control, rate-limit protection, queue behavior, and repo-risk cleanup.
 b3) [have] This plan was the main implementation program beyond `docs/ops/mvp-launch-readiness-checklist.md`.
-b4) [have] The remaining proof-only tail now lives in `docs/exec-plans/active/mvp-launch-proof-tail.md`.
+b4) [have] The remaining proof-only tail now lives in `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`.
 
 ## Launch Read
 c1) [have] Current review recommendation is `GO for code-path blockers; remaining launch work is checklist evidence capture plus P1/P2 follow-up`.
@@ -311,4 +311,4 @@ r3) [have] `Phase 3: P2-C Hygiene`
 - docs and obvious policy drift were cleaned after the refactor settled
 
 ## Completion Rule
-s1) [have] This plan is complete because the remaining `P1-1` / `P1-2` proof work now lives in `docs/exec-plans/active/mvp-launch-proof-tail.md`.
+s1) [have] This plan is complete because the remaining `P1-1` / `P1-2` proof work now lives in `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`.

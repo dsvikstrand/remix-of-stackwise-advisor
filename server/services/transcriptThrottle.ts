@@ -53,10 +53,14 @@ function isUnstableTranscriptError(error: unknown) {
   if (error instanceof TranscriptProviderError) {
     return error.code === 'RATE_LIMITED'
       || error.code === 'TIMEOUT'
-      || error.code === 'TRANSCRIPT_FETCH_FAIL';
+      || error.code === 'TRANSCRIPT_FETCH_FAIL'
+      || error.code === 'VIDEOTRANSCRIBER_UPSTREAM_UNAVAILABLE';
   }
   const code = String((error as { code?: string } | null)?.code || '').trim().toUpperCase();
-  return code === 'RATE_LIMITED' || code === 'TIMEOUT' || code === 'TRANSCRIPT_FETCH_FAIL';
+  return code === 'RATE_LIMITED'
+    || code === 'TIMEOUT'
+    || code === 'TRANSCRIPT_FETCH_FAIL'
+    || code === 'VIDEOTRANSCRIBER_UPSTREAM_UNAVAILABLE';
 }
 
 export function createTranscriptThrottle(config: TranscriptThrottleConfig, partialDeps: Partial<TranscriptThrottleDeps> = {}) {
@@ -228,4 +232,3 @@ export function createTranscriptThrottle(config: TranscriptThrottleConfig, parti
     runTranscriptTask,
   };
 }
-

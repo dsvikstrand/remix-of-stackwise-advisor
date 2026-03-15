@@ -10,7 +10,7 @@ import type {
   GenerationModelEvent,
   LLMGenerationOptions,
   LLMClient,
-  YouTubeBlueprintResult,
+  YouTubeBlueprintSectionsResult,
   YouTubeBlueprintPass2TransformResult,
   YouTubeBlueprintPass2TransformRequest,
   YouTubeBlueprintRequest,
@@ -26,23 +26,6 @@ import {
   extractJson,
 } from './prompts';
 import { getOpenAIConstructor } from './openaiRuntime';
-
-const YouTubeBlueprintLegacyValidator = z.object({
-  description: z.string(),
-  notes: z.string().nullable().optional(),
-  tags: z.array(z.string()).optional(),
-  summary_variants: z.object({
-    default: z.string().nullable().optional(),
-    eli5: z.string().nullable().optional(),
-  }).nullable().optional(),
-  steps: z.array(
-    z.object({
-      name: z.string(),
-      notes: z.string(),
-      timestamp: z.string().nullable().optional(),
-    })
-  ).min(1),
-});
 
 const YouTubeBlueprintSectionsValidator = z.object({
   schema_version: z.literal('blueprint_sections_v1'),
@@ -66,11 +49,6 @@ const YouTubeBlueprintSectionsValidator = z.object({
     bullets: z.array(z.string()),
   }),
 });
-
-const YouTubeBlueprintValidator = z.union([
-  YouTubeBlueprintLegacyValidator,
-  YouTubeBlueprintSectionsValidator,
-]);
 
 const YouTubeBlueprintPass2TransformValidator = z.object({
   eli5_steps: z.array(
@@ -322,7 +300,10 @@ export function createOpenAIClient(): LLMClient {
         prompt,
       };
     },
-    async generateYouTubeBlueprint(input: YouTubeBlueprintRequest, options?: LLMGenerationOptions): Promise<YouTubeBlueprintResult> {
+    async generateYouTubeBlueprint(
+      input: YouTubeBlueprintRequest,
+      options?: LLMGenerationOptions,
+    ): Promise<YouTubeBlueprintSectionsResult> {
       const response = await runGenerationRequest({
         operation: 'generateYouTubeBlueprint',
         instructions: YOUTUBE_BLUEPRINT_SYSTEM_PROMPT,
@@ -336,7 +317,7 @@ export function createOpenAIClient(): LLMClient {
       }
       const parsed = JSON.parse(extractJson(outputText));
       return {
-        ...YouTubeBlueprintValidator.parse(parsed),
+        ...YouTubeBlueprintSectionsValidator.parse(parsed),
         raw_response: outputText,
       };
     },

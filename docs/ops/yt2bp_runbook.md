@@ -3,7 +3,7 @@
 ## Doc Role
 - Supporting operational runbook only; not a primary MVP planning surface.
 - Launch gate status lives in `docs/ops/mvp-launch-readiness-checklist.md`.
-- Active proof-only tail lives in `docs/exec-plans/active/mvp-launch-proof-tail.md`; completed implementation sequencing lives in `docs/exec-plans/completed/mvp-readiness-review-followup.md`.
+- Active proof-only tail lives in `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`; completed implementation sequencing lives in `docs/exec-plans/completed/mvp-readiness-review-followup.md`.
 - Post-launch debt lives in `docs/exec-plans/tech-debt-tracker.md`.
 
 ## Purpose and ownership
@@ -21,6 +21,10 @@
 - Runtime mode: single-service `combined`
 - Keep-alive background work switch: `RUN_INGESTION_WORKER=true`
 - Live backend config source: `/etc/agentic-backend.env`
+- Node runtime contract:
+  - local repo baseline is Node `20.20.0` from `.nvmrc`
+  - Oracle systemd is pinned to `/home/ubuntu/.nvm/versions/node/v20.20.0/bin/node`
+  - do not rely on bare `node` in local shells or one-shot Oracle SSH commands unless you have explicitly switched to Node 20
 - Release order: deploy backend for one explicit SHA, run smoke checks, then manually publish the frontend for that same SHA
 - Frontend PWA contract: normal frontend releases now default to `pwa_runtime_v1=true` and `pwa_install_cta_v1=true` unless explicitly overridden for rollback
 - Installed-PWA push remains rollout-gated:
@@ -29,6 +33,11 @@
   - required backend envs: `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`, `WEB_PUSH_SUBJECT`
 - Preferred non-store install path: `https://bleup.app` as an installable online-first PWA (same backend/auth model as the browser app)
 - `agentic-worker.service` is deferred and should remain disabled in the current MVP production contract
+- Local/dev-only transcript fallback:
+  - `videotranscriber_temp` is the current repo/dev default behind `TRANSCRIPT_PROVIDER=videotranscriber_temp`.
+  - `youtube_timedtext` is the only built-in direct fallback provider.
+  - it is not part of Oracle runtime truth and should not be enabled in `/etc/agentic-backend.env`.
+  - provider-local envs: `VIDEOTRANSCRIBER_TEMP_TIMEOUT_MS`, `VIDEOTRANSCRIBER_TEMP_FORCE_NEW_SESSION`
 
 ## bleuV1 source-first integration context
 - YT2BP remains the ingestion/generation entrypoint only.
@@ -62,8 +71,6 @@
   - `POST /api/source-pages/:platform/:externalId/videos/unlock` (auth shared unlock + async generation queue for selected source videos)
     - rate policy: burst `8/10s` + sustained `120/10m` per user/IP.
     - additive response field: `data.trace_id` for unlock tracing.
-  - `POST /api/source-pages/:platform/:externalId/videos/generate` (compatibility alias to `/videos/unlock`)
-    - mirrors unlock response contract, including `data.trace_id`.
   - `POST /api/source-pages/:platform/:externalId/subscribe` (auth)
   - `DELETE /api/source-pages/:platform/:externalId/subscribe` (auth)
   - Frontend trust status now resumes unlock jobs via `GET /api/ingestion/jobs/latest-mine?scope=source_item_unlock_generation` after reload.
@@ -192,6 +199,7 @@ ssh oracle-free 'sudo ls -l /etc/agentic-backend.env'
 - Current service topology rule:
   - `agentic-backend.service` is the only production backend service
   - `agentic-worker.service` should remain disabled in the MVP runtime
+  - `agentic-backend.service` is already pinned to Node `20.20.0` through explicit `ExecStart` and PATH drop-in; keep that invariant
 
 ## Release contract (backend first)
 - Release rule:
@@ -261,8 +269,10 @@ Required runtime variables:
 - `TOKEN_ENCRYPTION_KEY` (base64 32-byte key for encrypted OAuth tokens at rest)
 - `YOUTUBE_IMPORT_MAX_CHANNELS` (default `2000`)
 - `YOUTUBE_OAUTH_STATE_TTL_SECONDS` (default `600`)
-- `TRANSCRIPT_PROVIDER` (`yt_to_text` or `youtube_timedtext`)
-- Webshare proxying for `yt_to_text` is explicit-endpoint-only when enabled (`WEBSHARE_PROXY_URL` or split host/port/username/password); selector/list envs are no longer part of the active runtime contract.
+- `TRANSCRIPT_PROVIDER` (current dev default `videotranscriber_temp`; built-in direct fallback `youtube_timedtext`)
+- Webshare proxying is shared transport config for opted-in transcript providers (currently local/dev `videotranscriber_temp`) and remains explicit-endpoint-only when enabled (`WEBSHARE_PROXY_URL` or split host/port/username/password); selector/list envs are no longer part of the active runtime contract.
+- `VIDEOTRANSCRIBER_TEMP_TIMEOUT_MS` (local/dev-only timeout override for `videotranscriber_temp`; default `180000`)
+- `VIDEOTRANSCRIBER_TEMP_FORCE_NEW_SESSION` (local/dev-only anonymous-session rotation toggle)
 - `YT2BP_ENABLED`
 - `YT2BP_QUALITY_ENABLED`
 - `YT2BP_CONTENT_SAFETY_ENABLED`
@@ -381,12 +391,6 @@ Required runtime variables:
 - `GENERATION_TIER_TIER_MODEL` (default `gpt-5.2`; canonical generation model profile)
 - `GENERATION_TIER_TIER_FALLBACK_MODEL` (default follows `OPENAI_GENERATION_FALLBACK_MODEL`)
 - `GENERATION_TIER_TIER_REASONING_EFFORT` (default `low`)
-- `YT2BP_TIER_ONE_STEP_ENABLED` (legacy compatibility only; runtime now always uses the one-step pipeline)
-- `YT2BP_TIER_ONE_STEP_PROMPT_TEMPLATE_PATH` (default `docs/golden_blueprint/golden_bp_prompt_contract_one_step_v1.md`)
-- `GENERATION_TIER_DUAL_GENERATE_ENABLED` (legacy compatibility only; runtime no longer dual-generates)
-- `GENERATION_TIER_DUAL_GENERATE_USER_IDS` (legacy compatibility only)
-- `GENERATION_TIER_DUAL_GENERATE_SCOPE` (legacy compatibility only)
-- `GENERATION_TIER_DUAL_GENERATE_CREDIT_MODE` (legacy compatibility only)
 - `USE_CODEX_FOR_GENERATION` (default `false`; experimental Codex-first generation path for YT2BP stages)
 - `CODEX_EXEC_PATH` (default `codex`)
 - `CODEX_EXEC_TIMEOUT_MS` (default `90000`)
@@ -409,6 +413,10 @@ Safe defaults:
 - `YT2BP_ENABLED=true`
 - `YT2BP_QUALITY_ENABLED=true`
 - `YT2BP_CONTENT_SAFETY_ENABLED=true`
+- current local/dev transcript default:
+  - `TRANSCRIPT_PROVIDER=videotranscriber_temp`
+  - `VIDEOTRANSCRIBER_TEMP_TIMEOUT_MS=180000`
+  - `VIDEOTRANSCRIBER_TEMP_FORCE_NEW_SESSION=false`
 - `YT2BP_ANON_LIMIT_PER_MIN=6`
 - `YT2BP_AUTH_LIMIT_PER_MIN=20`
 - `YT2BP_IP_LIMIT_PER_HOUR=30`
@@ -417,8 +425,6 @@ Safe defaults:
 - `YT2BP_TRANSCRIPT_PRUNE_BUDGET_CHARS=4500`
 - `YT2BP_TRANSCRIPT_PRUNE_THRESHOLDS=4500,9000,16000`
 - `YT2BP_TRANSCRIPT_PRUNE_WINDOWS=1,4,6,8`
-- `YT2BP_TIER_ONE_STEP_ENABLED=false`
-- `YT2BP_TIER_ONE_STEP_PROMPT_TEMPLATE_PATH=docs/golden_blueprint/golden_bp_prompt_contract_one_step_v1.md`
 - `GENERATION_DURATION_CAP_ENABLED=false`
 - `GENERATION_MAX_VIDEO_SECONDS=2700`
 - `GENERATION_BLOCK_UNKNOWN_DURATION=true`
@@ -548,7 +554,7 @@ ssh oracle-free 'set -a; . /etc/agentic-backend.env; set +a; curl -sS http://127
   1) Confirm provider setting (`TRANSCRIPT_PROVIDER`).
   2) Run toy transcript probe:
   ```bash
-  TRANSCRIPT_PROVIDER=yt_to_text node --import tsx scripts/toy_fetch_transcript.ts --url 'https://www.youtube.com/watch?v=16hFQZbxZpU'
+  TRANSCRIPT_PROVIDER=videotranscriber_temp node --import tsx scripts/toy_fetch_transcript.ts --url 'https://www.youtube.com/watch?v=16hFQZbxZpU'
   ```
   3) Switch provider if needed.
 

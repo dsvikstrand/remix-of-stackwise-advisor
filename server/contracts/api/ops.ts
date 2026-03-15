@@ -41,7 +41,7 @@ export type DebugSimulateSchema = {
   safeParse: (input: unknown) => ParseResult<DebugSimulatePayload>;
 };
 
-export type YtToTextProxyDebugMode = 'disabled' | 'explicit';
+export type TranscriptProxyDebugMode = 'disabled' | 'explicit';
 
 export type OpsRouteDeps = {
   isServiceRequestAuthorized: (req: express.Request) => boolean;
@@ -80,8 +80,8 @@ export type OpsRouteDeps = {
   processAutoBannerQueue: (db: DbClient, input: { maxJobs: number }) => Promise<AutoBannerRunResult>;
   debugEndpointsEnabled: boolean;
   debugSimulateSubscriptionRequestSchema: DebugSimulateSchema;
-  resetYtToTextProxyDispatcher: () => Promise<void>;
-  getYtToTextProxyDebugMode: () => YtToTextProxyDebugMode;
+  resetTranscriptProxyDispatcher: () => Promise<void>;
+  getTranscriptProxyDebugMode: () => TranscriptProxyDebugMode;
   syncSingleSubscription: (db: DbClient, subscription: SubscriptionRow, input: { trigger: string }) => Promise<{ processed: number; inserted: number; skipped: number }>;
   markSubscriptionSyncError: (db: DbClient, subscriptionId: string, error: unknown) => Promise<void>;
 };

@@ -1,6 +1,10 @@
 # Bleup PWA Program
 
-Status: `active`
+Status: `on-pause`
+
+Pause note
+a9) [have] Root-active plan cleanup on `2026-03-15` moved this umbrella to `active/on-pause/`.
+a10) [have] The remaining Android/update-prompt rollout proofs now live in `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`.
 
 ## Current Status
 a0) [have] Phase 1 foundation and installability are implemented and published.

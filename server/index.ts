@@ -1,3 +1,4 @@
+import './runtime/requireNode20';
 import './loadEnv';
 import express from 'express';
 import cors from 'cors';
@@ -14,7 +15,11 @@ import { getOpenAIConstructor } from './llm/openaiRuntime';
 import { createCodexGenerationClient } from './llm/codexGenerationClient';
 import { CodexExecError, runCodexExec } from './llm/codexExec';
 import { consumeCredit, getCredits } from './credits';
-import { getTranscriptForVideo, probeTranscriptProviders } from './transcript/getTranscript';
+import {
+  getTranscriptForVideo,
+  probeTranscriptProviders,
+  resolveTranscriptOperationTimeoutMs,
+} from './transcript/getTranscript';
 import {
   getTranscriptProviderDebug,
   TranscriptProviderError,
@@ -48,8 +53,8 @@ import {
   readGenerationDailyCapConfigFromEnv,
 } from './services/generationDailyCap';
 import {
-  getYtToTextProxyDebugMode,
-  resetYtToTextProxyDispatcher,
+  getTranscriptProxyDebugMode,
+  resetTranscriptProxyDispatcher,
 } from './services/webshareProxy';
 import {
   fetchYouTubeDurationMap,
@@ -113,6 +118,7 @@ import {
 } from './services/autoUnlockBilling';
 import { runUnlockReliabilitySweeps } from './services/unlockReliabilitySweeps';
 import { createUnlockTraceId, logUnlockEvent } from './services/unlockTrace';
+import type { BlueprintSectionsV1 } from './services/blueprintSections';
 import { ProviderCircuitOpenError, getProviderCircuitSnapshot } from './services/providerCircuit';
 import { getProviderRetryDefaults, runWithProviderRetry } from './services/providerResilience';
 import { createTranscriptThrottle, type TranscriptRequestClass } from './services/transcriptThrottle';
@@ -189,17 +195,19 @@ import {
 import { createYouTubeBlueprintPipelineService } from './services/youtubeBlueprintPipeline';
 import {
   createGenerationTierAccessResolver,
-  createGenerationTierDualGenerateResolver,
   normalizeRequestedGenerationTier,
   readGenerationTierConfigFromEnv,
-  readGenerationTierDualGenerateConfigFromEnv,
   resolveRequestedGenerationTier,
   type GenerationTier,
 } from './services/generationTierAccess';
 import { createBlueprintVariantsService, BlueprintVariantInProgressError } from './services/blueprintVariants';
 import { runAutoChannelPipeline } from './services/autoChannelPipeline';
 import { normalizeYouTubeDraftToGoldenV1 } from './services/goldenBlueprintFormat';
-import { buildYouTubeQualityRetryInstructions, extractJson } from './llm/prompts';
+import {
+  buildYouTubeQualityRetryInstructions,
+  extractJson,
+  YOUTUBE_BLUEPRINT_PROMPT_TEMPLATE_PATH_DEFAULT,
+} from './llm/prompts';
 import type {
   GenerationModelEvent,
   GenerationPromptEvent,
@@ -459,8 +467,12 @@ const transcriptPruningConfigResult = readTranscriptPruningConfigFromEnv(process
 const transcriptPruningConfig = transcriptPruningConfigResult.config;
 const generationTierConfig = readGenerationTierConfigFromEnv(process.env);
 const resolveGenerationTierAccess = createGenerationTierAccessResolver(generationTierConfig);
-const generationTierDualGenerateConfig = readGenerationTierDualGenerateConfigFromEnv(process.env);
-const isDualGenerateEnabledForUser = createGenerationTierDualGenerateResolver(generationTierDualGenerateConfig);
+function isDualGenerateEnabledForUser(_input?: {
+  userId?: string | null;
+  scope?: 'queue' | 'direct' | null;
+}) {
+  return false;
+}
 
 function normalizeReasoningEffort(raw: unknown, fallback: 'none' | 'low' | 'medium' | 'high' | 'xhigh') {
   const normalized = String(raw || '').trim().toLowerCase();
@@ -502,16 +514,9 @@ function resolveGenerationModelProfile(tier: GenerationTier): GenerationModelPro
   return generationTierTierProfile;
 }
 
-const yt2bpTierOneStepEnabledRaw = String(process.env.YT2BP_TIER_ONE_STEP_ENABLED || 'false').trim().toLowerCase();
-const yt2bpTierOneStepEnabled = (
-  yt2bpTierOneStepEnabledRaw === 'true'
-  || yt2bpTierOneStepEnabledRaw === '1'
-  || yt2bpTierOneStepEnabledRaw === 'yes'
-  || yt2bpTierOneStepEnabledRaw === 'on'
-);
-const yt2bpTierOneStepPromptTemplatePath = String(
-  process.env.YT2BP_TIER_ONE_STEP_PROMPT_TEMPLATE_PATH
-  || 'docs/golden_blueprint/golden_bp_prompt_contract_one_step_v1.md',
+const youtubeBlueprintPromptTemplatePath = String(
+  process.env.YOUTUBE_BLUEPRINT_PROMPT_TEMPLATE_PATH
+  || YOUTUBE_BLUEPRINT_PROMPT_TEMPLATE_PATH_DEFAULT
 ).trim();
 
 const useCodexForGenerationRaw = String(process.env.USE_CODEX_FOR_GENERATION || 'false').trim().toLowerCase();
@@ -630,12 +635,12 @@ if (!tokenEncryptionKey) {
   console.warn('[youtube-oauth] TOKEN_ENCRYPTION_KEY is not configured. YouTube connection endpoints will return YT_OAUTH_NOT_CONFIGURED.');
 }
 
-if (yt2bpTierOneStepEnabled) {
-  const resolvedTemplatePath = path.isAbsolute(yt2bpTierOneStepPromptTemplatePath)
-    ? yt2bpTierOneStepPromptTemplatePath
-    : path.resolve(process.cwd(), yt2bpTierOneStepPromptTemplatePath);
+if (youtubeBlueprintPromptTemplatePath) {
+  const resolvedTemplatePath = path.isAbsolute(youtubeBlueprintPromptTemplatePath)
+    ? youtubeBlueprintPromptTemplatePath
+    : path.resolve(process.cwd(), youtubeBlueprintPromptTemplatePath);
   if (!fs.existsSync(resolvedTemplatePath)) {
-    console.warn(`[yt2bp_one_step] YT2BP_TIER_ONE_STEP_PROMPT_TEMPLATE_PATH not found: ${resolvedTemplatePath}`);
+    console.warn(`[yt2bp_prompt] YOUTUBE_BLUEPRINT_PROMPT_TEMPLATE_PATH not found: ${resolvedTemplatePath}`);
   }
 }
 
@@ -649,18 +654,6 @@ for (const warning of transcriptPruningConfigResult.warnings) {
 
 if (generationTierConfig.testModeEnabled && generationTierConfig.tierUserIds.size === 0) {
   console.warn('[generation-tier] test mode is enabled but GENERATION_TIER_TIER_USER_IDS is empty; all users remain free-tier only.');
-}
-
-const generationTierDualGenerateScopeRaw = String(process.env.GENERATION_TIER_DUAL_GENERATE_SCOPE || '').trim().toLowerCase();
-if (generationTierDualGenerateScopeRaw && generationTierDualGenerateScopeRaw !== 'queue_only') {
-  console.warn('[generation-tier] GENERATION_TIER_DUAL_GENERATE_SCOPE is invalid. Falling back to queue_only.');
-}
-const generationTierDualGenerateCreditModeRaw = String(process.env.GENERATION_TIER_DUAL_GENERATE_CREDIT_MODE || '').trim().toLowerCase();
-if (generationTierDualGenerateCreditModeRaw && generationTierDualGenerateCreditModeRaw !== 'none') {
-  console.warn('[generation-tier] GENERATION_TIER_DUAL_GENERATE_CREDIT_MODE is invalid. Falling back to none.');
-}
-if (generationTierDualGenerateConfig.enabled && generationTierDualGenerateConfig.userIds.size === 0) {
-  console.warn('[generation-tier] dual-generate is enabled but GENERATION_TIER_DUAL_GENERATE_USER_IDS is empty; dual-generate remains inactive.');
 }
 
 if (useCodexForGeneration && !codexFreeModelRaw) {
@@ -1037,7 +1030,7 @@ app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return next();
   if (req.path === '/api/health') return next();
   const isDebugSimulationRoute = /^\/api\/debug\/subscriptions\/[^/]+\/simulate-new-uploads$/.test(req.path);
-  const isDebugResetYtProxyRoute = req.method === 'POST' && req.path === '/api/debug/yt-to-text/reset-proxy';
+  const isDebugResetTranscriptProxyRoute = req.method === 'POST' && req.path === '/api/debug/transcript/reset-proxy';
   const isPublicProfileFeedRoute = /^\/api\/profile\/[^/]+\/feed$/.test(req.path);
   const isPublicProfileHistoryRoute = /^\/api\/profile\/[^/]+\/history$/.test(req.path);
   const isPublicSourcePageSearchRoute = req.method === 'GET' && req.path === '/api/source-pages/search';
@@ -1056,7 +1049,7 @@ app.use((req, res, next) => {
     || isPublicSourcePageSearchRoute
     || isPublicSourcePageRoute
     || isPublicSourcePageBlueprintFeedRoute
-    || (debugEndpointsEnabled && isDebugResetYtProxyRoute)
+    || (debugEndpointsEnabled && isDebugResetTranscriptProxyRoute)
     || (debugEndpointsEnabled && isDebugSimulationRoute);
 
   if (!supabaseClient) {
@@ -1194,6 +1187,7 @@ type YouTubeDraft = {
   steps: YouTubeDraftStep[];
   notes: string | null;
   tags: string[];
+  sectionsJson: BlueprintSectionsV1 | null;
   summaryVariants: {
     default: string;
     eli5: string;
@@ -1756,8 +1750,6 @@ registerYouTubeRoutes(app, {
   resolveGenerationTierAccess,
   resolveRequestedGenerationTier,
   normalizeRequestedGenerationTier,
-  isDualGenerateEnabledForUser,
-  getDualGenerateTiers,
   resolveGenerationModelProfile,
   resolveVariantOrReady: (variantInput: any) => resolveVariantOrReady(variantInput),
   findVariantsByBlueprintId: (variantInput: any) => findVariantsByBlueprintId(variantInput),
@@ -2980,9 +2972,6 @@ const blueprintCreationService = createBlueprintCreationService({
   startGenerationRun,
   runYouTubePipeline: (pipelineInput: any) => runYouTubePipeline(pipelineInput),
   toTagSlug,
-  mapDraftStepsForBlueprint,
-  normalizeSummaryVariantText,
-  yt2bpOutputMode,
   ensureTagId,
   attachBlueprintToRun,
   youtubeVideoIdRegex: /^[a-zA-Z0-9_-]{8,15}$/,
@@ -7095,17 +7084,6 @@ function resolveGenerationTierForUser(input: {
   return CANONICAL_GENERATION_TIER;
 }
 
-function getOppositeGenerationTier(tier: GenerationTier): GenerationTier {
-  return CANONICAL_GENERATION_TIER;
-}
-
-function getDualGenerateTiers(input: {
-  requestedTier: GenerationTier;
-  enabled: boolean;
-}): GenerationTier[] {
-  return [CANONICAL_GENERATION_TIER];
-}
-
 function getRetryDelayForErrorCode(errorCode: string) {
   if (isTerminalTranscriptProviderErrorCodeForUnlock(errorCode)) {
     return 0;
@@ -7833,8 +7811,6 @@ registerSourceSubscriptionsRoutes(app, {
   resolveGenerationTierAccess,
   resolveRequestedGenerationTier,
   normalizeRequestedGenerationTier,
-  isDualGenerateEnabledForUser,
-  getDualGenerateTiers,
   resolveVariantOrReady,
   consumeCredit,
   getGenerationDailyCapStatus: generationDailyCapService.getStatus,
@@ -7914,8 +7890,6 @@ registerSourcePagesRoutes(app, {
   resolveGenerationTierAccess,
   resolveRequestedGenerationTier,
   normalizeRequestedGenerationTier,
-  isDualGenerateEnabledForUser,
-  getDualGenerateTiers,
   resolveVariantOrReady,
 });
 
@@ -7982,8 +7956,8 @@ registerOpsRoutes(app, {
   processAutoBannerQueue,
   debugEndpointsEnabled,
   debugSimulateSubscriptionRequestSchema: DebugSimulateSubscriptionRequestSchema,
-  resetYtToTextProxyDispatcher,
-  getYtToTextProxyDebugMode,
+  resetTranscriptProxyDispatcher,
+  getTranscriptProxyDebugMode,
   syncSingleSubscription,
   markSubscriptionSyncError,
 });
@@ -8089,6 +8063,19 @@ function mapPipelineError(error: unknown): PipelineErrorShape | null {
     };
   }
   if (error instanceof TranscriptProviderError) {
+    if (error.code === 'VIDEOTRANSCRIBER_DAILY_LIMIT') {
+      return {
+        error_code: 'RATE_LIMITED',
+        message: 'Temporary transcript provider daily limit reached. Please retry later.',
+        retry_after_seconds: error.retryAfterSeconds || undefined,
+      };
+    }
+    if (error.code === 'VIDEOTRANSCRIBER_UPSTREAM_UNAVAILABLE') {
+      return {
+        error_code: 'PROVIDER_FAIL',
+        message: 'Transcript provider is currently unavailable. Please try another video.',
+      };
+    }
     if (error.code === 'TRANSCRIPT_FETCH_FAIL') {
       return { error_code: 'PROVIDER_FAIL', message: 'Transcript provider is currently unavailable. Please try another video.' };
     }
@@ -8125,16 +8112,24 @@ function flattenDraftText(draft: {
   description: string;
   notes?: string | null;
   tags?: string[];
-  steps: Array<{ name: string; notes: string; timestamp?: string | null }>;
+  sectionsJson?: BlueprintSectionsV1 | null;
+  steps?: Array<{ name: string; notes: string; timestamp?: string | null }>;
 }) {
+  const canonicalBlocks = draft.sectionsJson ? [
+    String(draft.sectionsJson.summary?.text || '').trim(),
+    ...(draft.sectionsJson.takeaways?.bullets || []).map((item) => String(item || '').trim()),
+    String(draft.sectionsJson.storyline?.text || '').trim(),
+    ...(draft.sectionsJson.deep_dive?.bullets || []).map((item) => String(item || '').trim()),
+    ...(draft.sectionsJson.practical_rules?.bullets || []).map((item) => String(item || '').trim()),
+    ...(draft.sectionsJson.open_questions?.bullets || []).map((item) => String(item || '').trim()),
+  ] : [];
   const blocks = [
     draft.title,
     draft.description,
-    draft.summaryVariants?.default || '',
-    draft.summaryVariants?.eli5 || '',
     draft.notes || '',
     ...(draft.tags || []),
-    ...draft.steps.flatMap((step) => [step.name, step.notes, step.timestamp || '']),
+    ...canonicalBlocks,
+    ...((draft.steps || []).flatMap((step) => [step.name, step.notes, step.timestamp || ''])),
   ];
   return blocks.filter(Boolean).join('\n').toLowerCase();
 }
@@ -8204,37 +8199,34 @@ function normalizeSummaryVariantText(value: unknown) {
 }
 
 function evaluateLlmNativeGate(draft: YouTubeDraft): LlmNativeGateResult {
+  if (!draft.sectionsJson || draft.sectionsJson.schema_version !== 'blueprint_sections_v1') {
+    return {
+      pass: false,
+      issues: ['CANONICAL_SECTIONS_MISSING'],
+      issueDetails: ['CANONICAL_SECTIONS_MISSING section=sections_json'],
+    };
+  }
+
   const issues: string[] = [];
   const issueDetails: string[] = [];
-  const sectionMap = new Map<string, YouTubeDraftStep>();
-  for (const step of draft.steps || []) {
-    const key = canonicalSectionName(step.name);
-    if (!key || sectionMap.has(key)) continue;
-    sectionMap.set(key, step);
-  }
+  const sections = draft.sectionsJson;
 
-  const requiredNarrativeSections: Array<{ key: string; code: string }> = [
+  const requiredNarrativeSections: Array<{
+    key: 'summary' | 'storyline';
+    code: 'SUMMARY' | 'STORYLINE';
+  }> = [
     { key: 'summary', code: 'SUMMARY' },
-    { key: 'bleup', code: 'BLEUP' },
+    { key: 'storyline', code: 'STORYLINE' },
   ];
   for (const target of requiredNarrativeSections) {
-    const section = sectionMap.get(target.key);
-    if (!section) {
-      issues.push(`${target.code}_MISSING`);
-      issueDetails.push(`${target.code}_MISSING section=${target.key}`);
-      continue;
-    }
-    const notes = String(section.notes || '').trim();
+    const text = target.key === 'summary'
+      ? String(sections.summary?.text || '').trim()
+      : String(sections.storyline?.text || '').trim();
+    const notes = normalizeSummaryVariantText(text);
     if (!notes) {
       issues.push(`${target.code}_EMPTY`);
-      issueDetails.push(`${target.code}_EMPTY section=${section.name}`);
+      issueDetails.push(`${target.code}_EMPTY section=${target.key}`);
     }
-  }
-
-  const summaryDefault = normalizeSummaryVariantText(draft.summaryVariants?.default || '');
-  if (!summaryDefault) {
-    issues.push('SUMMARY_VARIANT_DEFAULT_MISSING');
-    issueDetails.push('SUMMARY_VARIANT_DEFAULT_MISSING section=summary_variants.default');
   }
 
   const targetSections: Array<{ key: string; code: string }> = [
@@ -8245,16 +8237,17 @@ function evaluateLlmNativeGate(draft: YouTubeDraft): LlmNativeGateResult {
   ];
 
   for (const target of targetSections) {
-    const section = sectionMap.get(target.key);
-    if (!section) {
-      issues.push(`${target.code}_MISSING`);
-      issueDetails.push(`${target.code}_MISSING section=${target.key}`);
-      continue;
-    }
-    const bullets = extractSectionBullets(section.notes || '');
+    const bullets = (() => {
+      if (target.key === 'takeaways') return sections.takeaways?.bullets || [];
+      if (target.key === 'deep_dive') return sections.deep_dive?.bullets || [];
+      if (target.key === 'practical_rules') return sections.practical_rules?.bullets || [];
+      return sections.open_questions?.bullets || [];
+    })()
+      .map((bullet) => String(bullet || '').trim())
+      .filter(Boolean);
     if (bullets.length === 0) {
       issues.push(`${target.code}_NO_BULLETS`);
-      issueDetails.push(`${target.code}_NO_BULLETS section=${section.name}`);
+      issueDetails.push(`${target.code}_NO_BULLETS section=${target.key}`);
       continue;
     }
     if (target.key === 'takeaways') {
@@ -8278,6 +8271,10 @@ function evaluateLlmNativeGate(draft: YouTubeDraft): LlmNativeGateResult {
         issues.push(`${target.code}_BULLET_SENTENCE_LIMIT`);
         issueDetails.push(`${target.code}_BULLET_SENTENCE_LIMIT bullet=${index + 1} sentences=${sentences}`);
       }
+      if (target.key === 'open_questions' && !/\?\s*$/.test(bullet)) {
+        issues.push('OPEN_QUESTIONS_NOT_QUESTIONS');
+        issueDetails.push(`OPEN_QUESTIONS_NOT_QUESTIONS bullet=${index + 1}`);
+      }
     });
   }
 
@@ -8291,10 +8288,8 @@ function evaluateLlmNativeGate(draft: YouTubeDraft): LlmNativeGateResult {
 function draftToNormalizationInput(draft: YouTubeDraft) {
   return {
     title: draft.title,
-    description: draft.description,
-    steps: draft.steps,
-    notes: draft.notes,
     tags: draft.tags,
+    sectionsJson: draft.sectionsJson!,
   };
 }
 
@@ -8427,7 +8422,10 @@ async function getTranscriptForVideoWithThrottle(
       reason: options?.reason || 'pipeline_transcript_fetch',
       videoId,
     },
-    () => getTranscriptForVideo(videoId),
+    () => getTranscriptForVideo(videoId, {
+      db: getServiceSupabaseClient(),
+      enableFallback: options?.requestClass === 'interactive',
+    }),
   );
 }
 
@@ -8570,7 +8568,10 @@ const youtubeBlueprintPipelineService = createYouTubeBlueprintPipelineService({
   startGenerationRun,
   appendGenerationEvent,
   runWithProviderRetry,
-  providerRetryDefaults,
+  providerRetryDefaults: {
+    ...providerRetryDefaults,
+    transcriptTimeoutMs: resolveTranscriptOperationTimeoutMs(providerRetryDefaults.transcriptTimeoutMs),
+  },
   getTranscriptForVideo: getTranscriptForVideoWithThrottle,
   createYouTubeGenerationLLMClient,
   updateGenerationModelInfo,
@@ -8597,8 +8598,7 @@ const youtubeBlueprintPipelineService = createYouTubeBlueprintPipelineService({
   mapPipelineError,
   canonicalSectionName,
   normalizeSummaryVariantText,
-  yt2bpTierOneStepEnabled,
-  yt2bpTierOneStepPromptTemplatePath,
+  youtubeBlueprintPromptTemplatePath,
   pruneTranscriptForGeneration: (input: { transcriptText: string }) => applyTranscriptPruning({
     transcriptText: input.transcriptText,
     config: transcriptPruningConfig,

@@ -106,6 +106,30 @@ export interface YouTubeBlueprintPass2TransformRequest {
   additionalInstructions?: string;
 }
 
+export interface YouTubeBlueprintSectionsResult {
+  raw_response?: unknown;
+  schema_version: 'blueprint_sections_v1';
+  tags?: string[];
+  summary: {
+    text: string;
+  };
+  takeaways: {
+    bullets: string[];
+  };
+  storyline: {
+    text: string;
+  };
+  deep_dive: {
+    bullets: string[];
+  };
+  practical_rules: {
+    bullets: string[];
+  };
+  open_questions: {
+    bullets: string[];
+  };
+}
+
 export interface YouTubeBlueprintResult {
   raw_response?: unknown;
   title?: string;
@@ -167,7 +191,10 @@ export interface ChannelLabelResult {
 export interface LLMClient {
   analyzeBlueprint(input: BlueprintAnalysisRequest): Promise<string>;
   generateBanner(input: BannerRequest): Promise<BannerResult>;
-  generateYouTubeBlueprint(input: YouTubeBlueprintRequest, options?: LLMGenerationOptions): Promise<YouTubeBlueprintResult>;
+  generateYouTubeBlueprint(
+    input: YouTubeBlueprintRequest,
+    options?: LLMGenerationOptions,
+  ): Promise<YouTubeBlueprintSectionsResult>;
   generateYouTubeBlueprintPass2Transform(
     input: YouTubeBlueprintPass2TransformRequest,
     options?: LLMGenerationOptions,

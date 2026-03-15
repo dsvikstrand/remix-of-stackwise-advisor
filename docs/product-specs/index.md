@@ -3,7 +3,7 @@
 ## Canonical
 - Core direction lock: `docs/app/core-direction-lock.md`
 - Core product behavior: `docs/app/product-spec.md`
-- Active launch-proof tail: `docs/exec-plans/active/mvp-launch-proof-tail.md`
+- Active launch-proof tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
 - Completed launch hardening implementation tracker: `docs/exec-plans/completed/mvp-readiness-review-followup.md`
 - Active engineering backlog tracker: `docs/exec-plans/tech-debt-tracker.md`
 - YT2BP runtime contract: `docs/product-specs/yt2bp_v0_contract.md`

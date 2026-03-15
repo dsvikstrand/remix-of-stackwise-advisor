@@ -1,4 +1,4 @@
-export type TranscriptProvider = 'yt_to_text' | 'youtube_timedtext';
+export type TranscriptProvider = 'youtube_timedtext' | 'videotranscriber_temp';
 
 export type TranscriptProviderDebug = {
   provider: TranscriptProvider;
@@ -16,11 +16,23 @@ export type TranscriptProviderErrorCode =
   | 'TRANSCRIPT_FETCH_FAIL'
   | 'TRANSCRIPT_EMPTY'
   | 'RATE_LIMITED'
+  | 'VIDEOTRANSCRIBER_DAILY_LIMIT'
+  | 'VIDEOTRANSCRIBER_UPSTREAM_UNAVAILABLE'
   | 'TIMEOUT';
 
 export function isRetryableTranscriptProviderErrorCode(code: TranscriptProviderErrorCode | string | null | undefined) {
   const normalized = String(code || '').trim().toUpperCase();
   return normalized === 'TRANSCRIPT_FETCH_FAIL'
+    || normalized === 'VIDEOTRANSCRIBER_UPSTREAM_UNAVAILABLE'
+    || normalized === 'TIMEOUT'
+    || normalized === 'RATE_LIMITED';
+}
+
+export function isFallbackableTranscriptProviderErrorCode(code: TranscriptProviderErrorCode | string | null | undefined) {
+  const normalized = String(code || '').trim().toUpperCase();
+  return normalized === 'TRANSCRIPT_FETCH_FAIL'
+    || normalized === 'VIDEOTRANSCRIBER_UPSTREAM_UNAVAILABLE'
+    || normalized === 'VIDEOTRANSCRIBER_DAILY_LIMIT'
     || normalized === 'TIMEOUT'
     || normalized === 'RATE_LIMITED';
 }
@@ -30,6 +42,21 @@ export function isTerminalTranscriptProviderErrorCode(code: TranscriptProviderEr
   return normalized === 'VIDEO_UNAVAILABLE'
     || normalized === 'ACCESS_DENIED';
 }
+
+export type TranscriptProviderAttempt = {
+  provider: TranscriptProvider;
+  ok: boolean;
+  error_code: TranscriptProviderErrorCode | null;
+  provider_debug?: TranscriptProviderDebug | null;
+};
+
+export type TranscriptProviderTrace = {
+  attempted_providers: TranscriptProviderAttempt[];
+  winning_provider: TranscriptProvider;
+  used_fallback: boolean;
+  cache_hit?: boolean;
+  cache_provider?: TranscriptProvider | null;
+};
 
 export type TranscriptSegment = {
   text: string;
@@ -52,10 +79,12 @@ export type TranscriptResult = {
   confidence: number | null;
   segments?: TranscriptSegment[];
   transport?: TranscriptTransportMetadata | null;
+  provider_trace?: TranscriptProviderTrace | null;
 };
 
 export type TranscriptProviderAdapter = {
   id: TranscriptProvider;
+  timeoutMs?: number;
   getTranscript: (videoId: string) => Promise<TranscriptResult>;
 };
 
@@ -96,7 +125,10 @@ function sanitizeExcerpt(value: unknown, maxChars = 300) {
 
 export function sanitizeTranscriptProviderDebug(input: TranscriptProviderDebug | null | undefined) {
   if (!input) return null;
-  if (input.provider !== 'yt_to_text' && input.provider !== 'youtube_timedtext') return null;
+  if (
+    input.provider !== 'youtube_timedtext'
+    && input.provider !== 'videotranscriber_temp'
+  ) return null;
   const httpStatus = Number(input.http_status);
   const retryAfterSeconds = Number(input.retry_after_seconds);
   return {

@@ -118,8 +118,6 @@ export function registerYouTubeRouteHandlers(app: express.Express, deps: YouTube
     resolveGenerationTierAccess,
     resolveRequestedGenerationTier,
     normalizeRequestedGenerationTier,
-    isDualGenerateEnabledForUser,
-    getDualGenerateTiers,
     resolveGenerationModelProfile,
     resolveVariantOrReady,
     findVariantsByBlueprintId,

@@ -6,9 +6,10 @@ Status: `active`
 a1) [todo] Close or explicitly defer the remaining launch-proof checks without reopening the larger MVP hardening program.
 
 ## Scope
-b1) [have] This plan is intentionally small and only tracks the remaining proof tail from the completed readiness program.
+b1) [have] This plan is intentionally small and tracks the remaining proof/deferred tail without reopening broader implementation umbrellas.
 b2) [have] The completed implementation/history now lives in `docs/exec-plans/completed/mvp-readiness-review-followup.md`.
 b3) [have] The launch-gate board remains `docs/ops/mvp-launch-readiness-checklist.md`.
+b4) [have] This file also carries forward small deferred/proof items from reclassified plans when they are not the current implementation focus.
 
 ## Open Checks
 c1) [todo] `P1-1` Branch protection proof
@@ -37,7 +38,25 @@ d1) [have] GitHub ruleset/PR proof runbook: `docs/ops/p1-1-p1-2-verification-run
 d2) [have] Playwright callback evidence: `docs/ops/playwright-p1-2-callback-evidence.md`
 d3) [have] Launch board status/evidence: `docs/ops/mvp-launch-readiness-checklist.md`
 
+## Carried-Forward Deferred Items
+e1) [todo] Transcript-provider live rollout follow-up
+- apply Supabase transcript-cache + legacy-cleanup migrations during the next live rollout:
+  - `supabase/migrations/20260314183000_youtube_transcript_cache_v1.sql`
+  - `supabase/migrations/20260314203000_retire_yt_to_text_legacy_state.sql`
+- capture one later local/live `/api/youtube-to-blueprint` success sample after the current upstream transcript-provider constraints clear
+- source history: `docs/exec-plans/completed/transcript-provider-robustness-plan.md`
+
+e2) [todo] PWA follow-up proof
+- validate installed-mode behavior on Android Chrome
+- validate the installed-app update prompt on a future frontend publish
+- validate the Android native-install/install-CTA flow if that rollout is resumed
+- source history: `docs/exec-plans/active/on-pause/bleup-pwa-program.md`
+
+e3) [todo] Runtime simplification follow-up
+- if this track is resumed later, close docs canonicalization and one MVP validation/capacity guard before treating it as current implementation work again
+- source history: `docs/exec-plans/active/on-pause/mvp-runtime-simplification-plan.md`
+
 ## Completion Rule
-e1) [todo] Move this file to `completed/` when the remaining proof checks are either:
+f1) [todo] Move this file to `completed/` when the remaining proof/deferred checks are either:
 - closed with evidence in the launch checklist
 - or explicitly deferred with a documented launch decision

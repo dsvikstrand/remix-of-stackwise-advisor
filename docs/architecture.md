@@ -49,6 +49,8 @@
   - Live adapter UI in `src/pages/YouTubeToBlueprint.tsx`.
     - `/youtube` runs a core-first request (`generate_review=false`, `generate_banner=false`) and executes optional AI review as an async post-step.
     - `Save to My Feed` is intentionally non-blocking while optional post-steps finish; completed review updates are attached to the saved blueprint later.
+    - the YT2BP response still uses a `draft` envelope, but the canonical blueprint content inside it is `draft.sectionsJson` with schema `blueprint_sections_v1`.
+    - `draft.steps`, `draft.summaryVariants`, and `draft.notes` are compatibility carryovers during the contract cutover and should not be treated as equal current-runtime blueprint shapes.
     - YouTube-source banners are thumbnail-first (`source_items.thumbnail_url` with deterministic `ytimg` fallback), not generated-banner-first.
     - banner prompt path is constrained to visual-only output (no readable text/typography/logos/watermarks).
   - Auth-only discovery UI in `src/pages/Search.tsx` for YouTube query results and one-click generate.
@@ -106,7 +108,7 @@
       - `RUN_INGESTION_WORKER=true` is the background-work keep-alive switch in combined mode
       - live app config is sourced from `/etc/agentic-backend.env`; backend startup must not depend on repo-root `.env` files on Oracle
       - repo-root `.env` is a local/dev fallback only for non-systemd runs, and backend bootstrap no longer reads `.env.production`
-      - Webshare transcript proxying for `yt_to_text` is explicit-endpoint-only (`WEBSHARE_PROXY_URL` or `WEBSHARE_PROXY_HOST` / `PORT` / `USERNAME` / `PASSWORD`); selector-by-index modes are no longer part of active runtime
+      - Shared Webshare transcript proxying for opted-in providers (currently local/dev `videotranscriber_temp`) is explicit-endpoint-only (`WEBSHARE_PROXY_URL` or `WEBSHARE_PROXY_HOST` / `PORT` / `USERNAME` / `PASSWORD`); selector-by-index modes are no longer part of active runtime
       - `agentic-worker.service` remains a deferred scale path, not the current production contract
     - `/api/youtube-to-blueprint` generation pipeline.
   - shared YouTube live-call budgeting now uses atomic DB-backed quota consumption (`consume_youtube_quota_budget`) so search/channel-search admission is strict when the schema is present and fail-open only for missing-schema environments.
@@ -133,8 +135,6 @@
     - shared handler preflight helpers now live in `server/services/generationPreflight.ts`:
       - Search/manual-refresh/source-page routes reuse typed helpers for duplicate/ready/in-progress classification, reservation-prefix handling, source-page subscription access, and queue/work-item admission reads.
       - direct URL generation remains intentionally separate because it does not use queue admission.
-    - `POST /api/source-pages/:platform/:externalId/videos/generate` (compatibility alias to unlock flow)
-      - alias mirrors unlock response contract, including additive `data.trace_id`.
     - `POST /api/source-pages/:platform/:externalId/subscribe` (auth-only, idempotent source-page subscribe)
     - `DELETE /api/source-pages/:platform/:externalId/subscribe` (auth-only, unsubscribe parity + notice cleanup)
     - `POST /api/source-subscriptions/:id/sync`
@@ -195,11 +195,16 @@
     - ingestion job rows now track attempts/max attempts, lease expiry, next-run retry time, worker id, and trace id.
     - provider retry/circuit controls are env-driven (transcript + LLM bounded retries, fail-fast circuit open mode).
   - onboarding extension: `user_youtube_onboarding` for new-user optional setup state.
-- Eval assets:
+  - Eval assets:
   - Runtime policy/config under `eval/methods/v0/*`.
   - Operations:
     - Oracle VM runtime + logs-first runbook (`docs/ops/yt2bp_runbook.md`).
     - Oracle control-plane auth/reboot workflow is standardized in `docs/ops/oracle-cli-access.md` and should be used when SSH/runtime health is degraded.
+  - Local/dev transcript fallback:
+    - current repo/dev default is `videotranscriber_temp`.
+    - `youtube_timedtext` remains the direct built-in fallback provider behind the same seam.
+    - `videotranscriber_temp` wraps the browser-facing `videotranscriber.ai` flow and uses local-only timeout/session env controls.
+    - this is still a temporary development default; launch should later move to a stable API-backed provider rather than treating `videotranscriber_temp` as production truth.
 
 ## 3) Core Lifecycle (`bleuV1`)
 1. (Optional) New-account onboarding:
@@ -236,7 +241,10 @@
    - a manually unlocked blueprint from a non-subscribed source may still appear in that user’s `For You`; future videos from that source do not enter `For You` automatically unless the user later subscribes.
    - manual source-page generation uses reserve -> settle/release billing at `1.00` credit per new blueprint intent.
   - auto-ingest path enables review generation by default.
-  - YouTube generation now normalizes output into Golden BP v1 section structure by default (`Lightning Takeaways`, flowing `Summary`, then domain-adapted structured sections) and writes additive metadata markers (`selected_items.bp_style = golden_v1`, `bp_origin = youtube_pipeline`).
+   - YouTube generation now normalizes output into Golden BP v1 section structure by default (`Lightning Takeaways`, flowing `Summary`, then domain-adapted structured sections) and writes additive metadata markers (`selected_items.bp_style = golden_v1`, `bp_origin = youtube_pipeline`).
+   - current architecture truth is sections-first:
+     - canonical blueprint content is `draft.sectionsJson` / persisted `blueprints.sections_json`
+     - legacy `steps`, `summaryVariants`, and `notes` handling remains as cutover compatibility, not as the intended steady-state contract
    - YouTube source flows use thumbnail-first banner assignment (`blueprints.banner_url` from source thumbnail) and bypass auto-banner enqueue.
    - auto-banner mode remains env-controlled for compatibility/non-source paths:
      - `off`: no auto banner processing.
@@ -279,7 +287,7 @@ Current production behavior note:
 - Product behavior:
   - `docs/app/product-spec.md`
 - Program direction:
-  - `docs/exec-plans/active/mvp-launch-proof-tail.md`
+  - `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
   - `docs/exec-plans/completed/mvp-readiness-review-followup.md`
   - `docs/exec-plans/completed/mvp-launch-hardening-phases.md`
   - paused strategy reference: `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
@@ -350,7 +358,7 @@ Current production behavior note:
 ## 8) Document Ownership
 - Canonical architecture doc: `docs/architecture.md`.
 - Product contract: `docs/app/product-spec.md`.
-- Active proof tail plan: `docs/exec-plans/active/mvp-launch-proof-tail.md`.
+- Active proof tail plan: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`.
 - Completed implementation plan: `docs/exec-plans/completed/mvp-readiness-review-followup.md`.
 - Freshness mapping: `docs/_freshness_map.json`.
 

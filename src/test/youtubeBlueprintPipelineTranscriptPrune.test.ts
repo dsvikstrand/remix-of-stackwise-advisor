@@ -38,8 +38,7 @@ function buildDeps(input: {
     issues: string[];
     issueDetails: string[];
   }>;
-  tierOneStepEnabled?: boolean;
-  tierOneStepPromptTemplatePath?: string;
+  youtubeBlueprintPromptTemplatePath?: string;
 }) {
   return {
     getServiceSupabaseClient: () => ({ id: 'db' }),
@@ -69,7 +68,7 @@ function buildDeps(input: {
     getTranscriptForVideo: async () => {
       if (input.transcriptFetchCounter) input.transcriptFetchCounter.count += 1;
       return {
-        source: 'yt_to_text',
+        source: 'videotranscriber_temp',
         text: input.transcriptText,
         confidence: null,
       };
@@ -87,27 +86,19 @@ function buildDeps(input: {
           qualityIssueDetails: Array.isArray((request as any).qualityIssueDetails) ? (request as any).qualityIssueDetails : [],
           additionalInstructions: String((request as any).additionalInstructions || ''),
         });
-        return {
-          title: 'T',
-          description: 'D',
-          steps: [
-            { name: 'Summary', notes: 'S', timestamp: null },
-            { name: 'Takeaways', notes: 'T', timestamp: null },
-            { name: 'Bleup', notes: 'B', timestamp: null },
-            { name: 'Deep Dive', notes: 'DD', timestamp: null },
-            { name: 'Practical Rules', notes: 'PR', timestamp: null },
-            { name: 'Open Questions', notes: 'OQ', timestamp: null },
-          ],
-          notes: null,
+        const payload = {
+          schema_version: 'blueprint_sections_v1' as const,
           tags: ['one'],
-          summary_variants: {
-            default: 'summary',
-            eli5: null,
-          },
-          raw_response: JSON.stringify({
-            title: 'T',
-            description: 'D',
-          }),
+          summary: { text: 'summary' },
+          takeaways: { bullets: ['takeaway one', 'takeaway two', 'takeaway three'] },
+          storyline: { text: 'bleup story' },
+          deep_dive: { bullets: ['deep one', 'deep two', 'deep three'] },
+          practical_rules: { bullets: ['rule one', 'rule two', 'rule three'] },
+          open_questions: { bullets: ['question one?', 'question two?', 'question three?'] },
+        };
+        return {
+          ...payload,
+          raw_response: JSON.stringify(payload),
         };
       },
       generateYouTubeBlueprintPass2Transform: async (request: { transcript: string }) => {
@@ -167,8 +158,7 @@ function buildDeps(input: {
     canonicalSectionName: (name: string) => String(name || '').trim().toLowerCase(),
     normalizeSummaryVariantText: (text: string) => String(text || '').trim(),
     enforceVideoDurationPolicy: async (policyInput: { durationSeconds?: number | null }) => policyInput.durationSeconds ?? null,
-    yt2bpTierOneStepEnabled: Boolean(input.tierOneStepEnabled),
-    yt2bpTierOneStepPromptTemplatePath: String(input.tierOneStepPromptTemplatePath || ''),
+    youtubeBlueprintPromptTemplatePath: String(input.youtubeBlueprintPromptTemplatePath || ''),
   };
 }
 
@@ -334,7 +324,7 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
       pass1Transcripts,
       pass2Transcripts,
       pass1PromptTemplatePaths,
-      tierOneStepPromptTemplatePath: 'docs/golden_blueprint/golden_bp_prompt_contract_one_step_v1.md',
+      youtubeBlueprintPromptTemplatePath: 'docs/golden_blueprint/golden_bp_prompt_contract_one_step_v1.md',
     });
     const service = createYouTubeBlueprintPipelineService(deps);
 
@@ -357,6 +347,16 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
     expect(pass1Transcripts.length).toBeGreaterThan(0);
     expect(pass2Transcripts.length).toBe(0);
     expect(pass1PromptTemplatePaths[0]).toBe('docs/golden_blueprint/golden_bp_prompt_contract_one_step_v1.md');
+    expect(result.draft.sectionsJson?.schema_version).toBe('blueprint_sections_v1');
+    expect(result.draft.steps.map((step) => step.name)).toEqual([
+      'Summary',
+      'Takeaways',
+      'Bleup',
+      'Deep Dive',
+      'Practical Rules',
+      'Open Questions',
+    ]);
+    expect(result.draft.summaryVariants.default).toBe('summary');
     expect(result.draft.summaryVariants.eli5).toBe(result.draft.summaryVariants.default);
     expect(result.draft.eli5Steps.length).toBe(result.draft.steps.length);
     expect(events.some((row) => row.event === 'model_raw_output_captured')).toBe(true);

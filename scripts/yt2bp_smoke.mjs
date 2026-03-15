@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './require-node20.mjs';
 import fs from 'node:fs';
 
 const EXPECTED_FAIL_BUCKETS = new Set([

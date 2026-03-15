@@ -5,7 +5,7 @@ Status: `supporting-evidence`
 ## Doc Role
 a0) [have] This is supporting automation evidence for `P1-2`, not a primary planning surface.
 a00) [have] Launch status still lives in `docs/ops/mvp-launch-readiness-checklist.md`.
-a000) [have] Active proof-only sequencing now lives in `docs/exec-plans/active/mvp-launch-proof-tail.md`, while the completed implementation program lives in `docs/exec-plans/completed/mvp-readiness-review-followup.md`.
+a000) [have] Active proof-only sequencing now lives in `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`, while the completed implementation program lives in `docs/exec-plans/completed/mvp-readiness-review-followup.md`.
 
 ## Goal
 a1) [todo] Use Playwright to capture repeatable callback-path evidence for `P1-2` before final real-device signoff.

@@ -26,6 +26,7 @@ export type ProviderRetryOptions = {
   baseDelayMs?: number;
   jitterMs?: number;
   isRetryable?: (error: unknown) => boolean;
+  timeoutErrorFactory?: (timeoutMs: number) => unknown;
 };
 
 function defaultIsRetryable(error: unknown) {
@@ -47,14 +48,26 @@ function defaultIsRetryable(error: unknown) {
   return false;
 }
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
+function normalizeProviderTimeoutError(error: unknown, timeoutMs: number) {
+  if (error instanceof Error) return error;
+  return new Error(String(error || `Provider operation timeout (${timeoutMs}ms)`));
+}
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  timeoutErrorFactory?: (timeoutMs: number) => unknown,
+) {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
       promise,
       new Promise<T>((_resolve, reject) => {
         timeout = setTimeout(() => {
-          reject(new Error(`Provider operation timeout (${timeoutMs}ms)`));
+          reject(normalizeProviderTimeoutError(
+            timeoutErrorFactory ? timeoutErrorFactory(timeoutMs) : null,
+            timeoutMs,
+          ));
         }, timeoutMs);
       }),
     ]);
@@ -78,7 +91,7 @@ export async function runWithProviderRetry<T>(
   let lastError: unknown = null;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      const result = await withTimeout(task(attempt), timeoutMs);
+      const result = await withTimeout(task(attempt), timeoutMs, options.timeoutErrorFactory);
       await recordProviderSuccess(options.db || null, options.providerKey);
       return result;
     } catch (error) {

@@ -1,7 +1,7 @@
 import type { GenerationTier } from './generationTierAccess';
 import { DAILY_GENERATION_CAP_ERROR_CODE } from './generationDailyCap';
 import { BlueprintVariantInProgressError } from './blueprintVariants';
-import { buildBlueprintSectionsV1FromStoredSteps, type BlueprintSectionsV1 } from './blueprintSections';
+import type { BlueprintSectionsV1 } from './blueprintSections';
 type DbClient = any;
 
 function isMissingColumnError(error: unknown, column: string) {
@@ -101,9 +101,6 @@ export type BlueprintCreationDeps = {
     meta: Record<string, unknown> | null;
   }>;
   toTagSlug: (value: string) => string;
-  mapDraftStepsForBlueprint: (steps: Array<{ name: string; notes: string; timestamp: string | null }>) => unknown[];
-  normalizeSummaryVariantText: (value: string) => string;
-  yt2bpOutputMode: 'llm_native' | 'deterministic';
   ensureTagId: (db: DbClient, userId: string, tagSlug: string) => Promise<string>;
   attachBlueprintToRun: (db: DbClient, input: { runId: string; blueprintId: string }) => Promise<void>;
   youtubeVideoIdRegex: RegExp;
@@ -267,16 +264,12 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
         .map((tag) => deps.toTagSlug(String(tag || '').trim()))
         .filter(Boolean)
         .slice(0, 5);
-      const mappedDefaultSteps = deps.mapDraftStepsForBlueprint(result.draft.steps) as Array<{
-        id?: string;
-        title?: string;
-        description?: string | null;
-        items?: Array<{ name?: string | null }> | null;
-      }>;
-      const sectionsJson = result.draft.sectionsJson || buildBlueprintSectionsV1FromStoredSteps({
-        steps: mappedDefaultSteps,
-        tags: draftTags,
-      });
+      const sectionsJson = result.draft.sectionsJson;
+      if (!sectionsJson || sectionsJson.schema_version !== 'blueprint_sections_v1') {
+        const error = new Error('Current YT2BP persistence requires canonical sections_json.');
+        (error as Error & { code?: string }).code = 'CANONICAL_SECTIONS_REQUIRED';
+        throw error;
+      }
 
       const insertBlueprint = (payload: Record<string, unknown>) =>
         db
@@ -300,10 +293,9 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
       });
 
       if (blueprintInsert.error && isMissingColumnError(blueprintInsert.error, 'sections_json')) {
-        blueprintInsert = await insertBlueprint({
-          ...baseInsertPayload,
-          steps: mappedDefaultSteps,
-        });
+        const error = new Error('blueprints.sections_json is required for current YT2BP writes.');
+        (error as Error & { code?: string }).code = 'SECTIONS_JSON_COLUMN_REQUIRED';
+        throw error;
       }
 
       const { data: blueprint, error: blueprintError } = blueprintInsert;

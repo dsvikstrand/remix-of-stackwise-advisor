@@ -141,8 +141,6 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     resolveGenerationTierAccess: () => ({ allowedTiers: ['tier'], defaultTier: 'tier', testModeEnabled: false }),
     resolveRequestedGenerationTier: () => 'tier',
     normalizeRequestedGenerationTier: (value: unknown) => value,
-    isDualGenerateEnabledForUser: () => false,
-    getDualGenerateTiers: () => ['tier'],
     resolveVariantOrReady: vi.fn(async () => null),
     ...overrides,
   } as any;

@@ -9,7 +9,7 @@ import type {
   YouTubeBlueprintPass2TransformRequest,
   YouTubeBlueprintPass2TransformResult,
   YouTubeBlueprintRequest,
-  YouTubeBlueprintResult,
+  YouTubeBlueprintSectionsResult,
 } from './types';
 
 export function createMockClient(): LLMClient {
@@ -52,9 +52,11 @@ export function createMockClient(): LLMClient {
         prompt: 'mock-banner',
       };
     },
-    async generateYouTubeBlueprint(input: YouTubeBlueprintRequest, _options?: LLMGenerationOptions): Promise<YouTubeBlueprintResult> {
-      const payload: YouTubeBlueprintResult = {
-        title: `Blueprint from ${input.videoUrl}`,
+    async generateYouTubeBlueprint(
+      input: YouTubeBlueprintRequest,
+      _options?: LLMGenerationOptions,
+    ): Promise<YouTubeBlueprintSectionsResult> {
+      const payload: YouTubeBlueprintSectionsResult = {
         schema_version: 'blueprint_sections_v1',
         tags: ['youtube', 'guide'],
         summary: {
