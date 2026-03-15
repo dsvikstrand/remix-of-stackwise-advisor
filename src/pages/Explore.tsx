@@ -19,7 +19,7 @@ import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layou
 const FILTER_OPTIONS: { value: ExploreFilter; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'blueprints', label: 'Blueprints' },
-  { value: 'sources', label: 'Sources' },
+  { value: 'sources', label: 'Creators' },
   { value: 'users', label: 'Users' },
 ];
 
@@ -120,9 +120,9 @@ export default function Explore() {
       <PageMain>
         <PageSection className="mb-6">
           <p className="text-sm font-semibold text-primary uppercase tracking-wide">Explore</p>
-          <h1 className="text-2xl font-semibold mt-1">Search blueprints, sources, and creators</h1>
+          <h1 className="text-2xl font-semibold mt-1">Search blueprints, creators, and users</h1>
           <p className="text-sm text-muted-foreground mt-2">
-            Start with a keyword, then narrow by type or jump into trending channels and sources.
+            Start with a keyword, then narrow by type or jump into trending channels and creators.
           </p>
         </PageSection>
 
@@ -142,7 +142,7 @@ export default function Explore() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Search blueprints, sources, users..."
+            placeholder="Search blueprints, creators, users..."
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             className="pl-10 h-11 text-base border-border/50"
@@ -169,7 +169,7 @@ export default function Explore() {
             <div className="text-center py-8">
               <h2 className="text-2xl font-semibold mb-2">Discover what works</h2>
               <p className="text-muted-foreground">
-                Search blueprints, sources, and creators, or explore trending channels below.
+                Search blueprints, creators, and users, or explore trending channels below.
               </p>
             </div>
 
@@ -280,7 +280,7 @@ export default function Explore() {
 
             {groupedResults.sources.length > 0 && (
               <section>
-                <h2 className="text-sm font-medium text-muted-foreground mb-3">Sources</h2>
+                <h2 className="text-sm font-medium text-muted-foreground mb-3">Creators</h2>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {groupedResults.sources.map((r) => (
                     <ExploreResultCard

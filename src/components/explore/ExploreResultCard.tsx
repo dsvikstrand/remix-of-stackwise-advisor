@@ -69,13 +69,15 @@ function BlueprintCard({
             </p>
 
             <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
-              <span className="inline-flex h-7 items-center gap-1 px-2">
+              <span className="inline-flex h-7 items-center gap-1 px-2" aria-label={`${result.likesCount} likes`}>
                 <Heart className="h-3.5 w-3.5" />
                 {result.likesCount}
+                <span>likes</span>
               </span>
-              <span className="inline-flex h-7 items-center gap-1 px-2">
+              <span className="inline-flex h-7 items-center gap-1 px-2" aria-label={`${commentsCount} comments`}>
                 <MessageCircle className="h-3.5 w-3.5" />
                 {commentsCount}
+                <span>comments</span>
               </span>
             </div>
 
