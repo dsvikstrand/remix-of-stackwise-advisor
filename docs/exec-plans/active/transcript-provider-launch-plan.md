@@ -128,16 +128,39 @@ d5) [todo] Step 5: apply the legacy cleanup migration second
   - verified `npx supabase migration list` now shows local and remote fully aligned through `20260314203000`
   - post-apply DB sanity check still shows `0` legacy `yt_to_text` circuit rows and `0` legacy `yt_to_text` transcript-cache rows
 
-d6) [todo] Step 6: deploy backend/frontend
+d6) [have] Step 6: deploy backend/frontend
 - deploy the same commit that passed CI
 - restart/reload services through the normal deploy path
 - keep deploy and DB rollout tied to the same release window
+- sweep result (`2026-03-15`):
+  - committed and pushed rollout state as `11bc2e830122524c28e4d2864462a074bc9765b7` (`Record transcript launch migration rollout`)
+  - CI Gate run for `11bc2e8` completed `success`
+  - no frontend asset changes were part of this rollout commit, so the live deploy step was backend-only
+  - Oracle checkout at `/home/ubuntu/remix-of-stackwise-advisor` had drifted (`ahead 1, behind 4`) with tracked local edits from the abandoned Oracle/Paperspace cutover
+  - reset tracked Oracle repo state to `origin/main` at `11bc2e830122524c28e4d2864462a074bc9765b7` while preserving untracked `transcribe-queue/`
+  - restarted `agentic-backend.service`
+  - service is active on the Node 20 ExecStart path
 
 d7) [todo] Step 7: run post-deploy proof checks
 - verify `/api/health`
 - verify one normal authenticated app flow
 - run one real `/api/youtube-to-blueprint` smoke if upstream provider conditions allow it
 - confirm transcript-provider metadata reflects the current runtime path
+- sweep result (`2026-03-15`):
+  - deployed health checks passed:
+    - Oracle local `GET /api/health` -> `{"ok":true}`
+    - public `https://api.bleup.app/api/health` -> `{"ok":true}`
+  - `npm run smoke:release -- --api-base-url https://api.bleup.app --json` passed
+  - deployed YT2BP smoke was mixed:
+    - `success|https://www.youtube.com/watch?v=ojAjUKcx7p4` -> `504 TIMEOUT` after `60735ms`
+    - `expected_fail|https://www.youtube.com/watch?v=4q_b6Otq3aU` -> `200 ok=true`
+    - `edge|https://www.youtube.com/watch?v=CSgjaC6y6Mk` -> `200 ok=true`
+  - direct deployed verification on `https://www.youtube.com/watch?v=CSgjaC6y6Mk` returned:
+    - `status=200`
+    - `ok=true`
+    - `meta.transcript_transport.provider='videotranscriber_temp'`
+    - `meta.transcript_source='videotranscriber_temp'`
+  - proof boundary is therefore good enough to confirm deploy + current transcript-provider path, but the full smoke matrix is not fully green yet because the temporary provider remains variable
 
 d8) [todo] Step 8: record outcome
 - if rollout checks pass, record the launch evidence in `docs/ops/mvp-launch-readiness-checklist.md`

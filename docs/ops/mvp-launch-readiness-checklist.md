@@ -24,9 +24,9 @@ a7) [have] Historical runtime note:
 - current runtime truth lives in `docs/app/core-direction-lock.md`, `docs/architecture.md`, and `docs/ops/yt2bp_runbook.md`
 
 ## Launch Gate Snapshot (Update Daily)
-b1) [todo] Release candidate backend SHA: `set per release`
+b1) [have] Release candidate backend SHA: `11bc2e830122524c28e4d2864462a074bc9765b7`
 b2) [todo] Release candidate frontend SHA: `set per release and verify via /release.json`
-b3) [have] Latest migration watermark: `20260306143000`
+b3) [have] Latest migration watermark: `20260314203000`
 b4) [todo] P0 open count: `0`
 b5) [todo] P1 open count: `2`
 b6) [todo] Current launch recommendation: `GO (P0 cleared)`.
@@ -258,6 +258,9 @@ o27) [have] `2026-03-05T14:55:35Z` - `P0-3` - `production non-impact during side
 o28) [have] `2026-03-05T14:55:35Z` - `P0-3` - `sidecar teardown` - `killed sidecar pid 576003; sidecar log retained expected 503 credit responses only` - `david`
 o29) [have] `2026-03-05T14:55:35Z` - `P0-4` - `pause drill deterministic rejection proof` - `UNLOCK_INTAKE_ENABLED=false + service restart; historical source-page alias POST /api/source-pages/.../videos/generate at capture time => error_code=QUEUE_INTAKE_DISABLED` - `david`
 o30) [have] `2026-03-05T14:55:35Z` - `P0-4` - `queue-health snapshot during pause` - `local /api/ops/queue/health => ok=true, queue_depth=0, running_depth=0, no stale lease growth` - `david`
+o31) [have] `2026-03-15T07:37:00Z` - `P0-2` - `launch transcript migrations applied in production` - `applied 20260314183000_youtube_transcript_cache_v1.sql and 20260314203000_retire_yt_to_text_legacy_state.sql via targeted psql + supabase migration repair; npx supabase migration list => local/remote aligned through 20260314203000` - `david`
+o32) [have] `2026-03-15T07:44:00Z` - `P0-1` - `oracle backend redeployed to launch SHA` - `oracle checkout reset to origin/main 11bc2e830122524c28e4d2864462a074bc9765b7; agentic-backend.service restarted on Node 20 ExecStart; local/public /api/health => {\"ok\":true}` - `david`
+o33) [have] `2026-03-15T07:49:00Z` - `P0-1` - `deployed transcript-provider proof captured` - `npm run smoke:release -- --api-base-url https://api.bleup.app --json => PASS; direct deployed /api/youtube-to-blueprint on https://www.youtube.com/watch?v=CSgjaC6y6Mk => 200 ok=true with meta.transcript_transport.provider=videotranscriber_temp and meta.transcript_source=videotranscriber_temp; full smoke matrix remained mixed because one case timed out and one expected-fail case succeeded` - `david`
 o31) [have] `2026-03-05T14:55:35Z` - `P0-4` - `recover drill proof` - `UNLOCK_INTAKE_ENABLED=true + restart; same historical source-page generate alias returned background unlock generation started (job_id=7fac6886-ae0e-4ddf-a645-5e0c1b4bd0bb)` - `david`
 o32) [have] `2026-03-05T14:55:35Z` - `P0-5` - `cross-surface canonical error-copy wiring proof` - `rg confirms getLaunchErrorCopy imports/calls in Search.tsx, SourcePage.tsx, Wall.tsx, MyFeedTimeline.tsx` - `david`
 o33) [have] `2026-03-05T14:55:35Z` - `P0-5` - `copy normalization behavior proof` - `npm run test -- src/test/launchErrorCopy.test.ts => 1 file passed, 2 tests passed` - `david`
