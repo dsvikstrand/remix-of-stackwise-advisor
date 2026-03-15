@@ -105,6 +105,53 @@ describe('youtubeChannelSearch service', () => {
     });
   });
 
+  it('supports bare handles without requiring the @ prefix', async () => {
+    resolveYouTubeChannelMock.mockResolvedValue({
+      channelId: 'UC12345678901234567890',
+      channelUrl: 'https://www.youtube.com/channel/UC12345678901234567890',
+      channelTitle: 'Doctor Mike',
+    });
+    youtubeiCreateMock.mockResolvedValue({
+      getChannel: vi.fn(async () => ({
+        header: {
+          author: {
+            name: 'Doctor Mike',
+            thumbnails: [{ url: 'https://img.example.com/doctor-mike.jpg' }],
+          },
+          channel_handle: { toString: () => '@DoctorMike' },
+          subscribers: { toString: () => '13.2M subscribers' },
+        },
+        metadata: {
+          description: 'Health and medicine',
+        },
+      })),
+      search: vi.fn(async () => ({
+        results: [{
+          type: 'Channel',
+          id: 'UC12345678901234567890',
+          author: {
+            id: 'UC12345678901234567890',
+            name: 'Doctor Mike',
+            url: 'https://www.youtube.com/@DoctorMike',
+          },
+          description_snippet: { toString: () => 'Health and medicine' },
+        }],
+      })),
+    });
+
+    const page = await searchYouTubeChannels({
+      query: 'DoctorMike',
+      limit: 3,
+    });
+
+    expect(resolveYouTubeChannelMock).toHaveBeenCalledWith('@DoctorMike');
+    expect(page.results).toHaveLength(1);
+    expect(page.results[0]).toMatchObject({
+      channel_id: 'UC12345678901234567890',
+      channel_url: 'https://www.youtube.com/@DoctorMike',
+    });
+  });
+
   it('returns a tiny bounded creator candidate list for strong name matches', async () => {
     youtubeiCreateMock.mockResolvedValue({
       search: vi.fn(async () => ({
@@ -193,6 +240,50 @@ describe('youtubeChannelSearch service', () => {
       results: [],
       nextPageToken: null,
     });
+  });
+
+  it('returns a tiny candidate list instead of a wrong auto-hit when bare handle and name paths disagree', async () => {
+    resolveYouTubeChannelMock.mockResolvedValue({
+      channelId: 'UC12345678901234567890',
+      channelUrl: 'https://www.youtube.com/channel/UC12345678901234567890',
+      channelTitle: 'DoctorMike',
+    });
+    youtubeiCreateMock.mockResolvedValue({
+      getChannel: vi.fn(async () => ({
+        header: {
+          author: {
+            name: 'DoctorMike',
+          },
+          channel_handle: { toString: () => '@DoctorMike' },
+        },
+        metadata: {
+          description: '',
+        },
+      })),
+      search: vi.fn(async () => ({
+        results: [{
+          type: 'Channel',
+          id: 'UC22222222222222222222',
+          author: {
+            id: 'UC22222222222222222222',
+            name: 'Doctor Mike',
+            url: 'https://www.youtube.com/@DoctorMikeOfficial',
+          },
+          description_snippet: { toString: () => 'Official channel' },
+        }],
+      })),
+    });
+
+    const page = await searchYouTubeChannels({
+      query: 'DoctorMike',
+      limit: 3,
+    });
+
+    expect(page.results).toHaveLength(2);
+    expect(page.results.map((row) => row.channel_id)).toEqual([
+      'UC12345678901234567890',
+      'UC22222222222222222222',
+    ]);
   });
 
   it('surfaces SEARCH_DISABLED when helper lookup is unavailable for name queries', async () => {

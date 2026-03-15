@@ -25,6 +25,7 @@ type YouTubeChannelSearchErrorCode =
 
 const CHANNEL_ID_RE = /^UC[a-zA-Z0-9_-]{20,}$/;
 const HANDLE_RE = /^@[a-zA-Z0-9._-]{3,30}$/;
+const BARE_HANDLE_RE = /^[a-zA-Z0-9._-]{3,30}$/;
 const YOUTUBEI_TIMEOUT_MS = 5_000;
 const MAX_CHANNEL_LOOKUP_RESULTS = 3;
 
@@ -97,7 +98,7 @@ function extractHandleFromChannelUrl(rawValue: string) {
   const value = String(rawValue || '').trim();
   if (!value) return null;
   const directHandle = value.match(/(^|\/)(@[a-zA-Z0-9._-]{3,30})(?:\/|$)/);
-  if (directHandle?.[2]) return directHandle[2].toLowerCase();
+  if (directHandle?.[2]) return directHandle[2].replace(/^@/, '').toLowerCase();
   return null;
 }
 
@@ -126,7 +127,7 @@ export function validateYouTubeChannelLookupQuery(rawQuery: string) {
   if (!query) {
     return {
       ok: false as const,
-      message: 'Enter a channel link, @handle, channel id, or creator name.',
+      message: 'Enter a channel link, handle, channel id, or creator name.',
     };
   }
 
@@ -141,7 +142,7 @@ export function validateYouTubeChannelLookupQuery(rawQuery: string) {
   if (looksLikeUrlInput(query)) {
     return {
       ok: false as const,
-      message: 'Please use a YouTube creator link, @handle, channel id, or creator name.',
+      message: 'Please use a YouTube creator link, handle, channel id, or creator name.',
     };
   }
 
@@ -156,6 +157,7 @@ export function validateYouTubeChannelLookupQuery(rawQuery: string) {
     ok: true as const,
     query,
     direct: false,
+    bareHandleCandidate: BARE_HANDLE_RE.test(query) && !query.includes(' '),
   };
 }
 
@@ -185,7 +187,11 @@ function scoreChannelTextMatch(query: string, candidate: string) {
 
 export function scoreYouTubeChannelMatch(query: string, candidate: Pick<YouTubeChannelSearchResult, 'channel_title' | 'channel_url' | 'description'>) {
   const titleScore = scoreChannelTextMatch(query, candidate.channel_title || '');
-  const handleScore = scoreChannelTextMatch(query, extractHandleFromChannelUrl(candidate.channel_url || '') || '');
+  const handleValue = extractHandleFromChannelUrl(candidate.channel_url || '') || '';
+  const handleScore = Math.max(
+    scoreChannelTextMatch(query, handleValue),
+    scoreChannelTextMatch(query, handleValue ? `@${handleValue}` : ''),
+  );
   const descriptionScore = scoreChannelTextMatch(query, candidate.description || '');
   return Math.max(titleScore, handleScore, Math.min(descriptionScore, 0.65));
 }
@@ -342,6 +348,49 @@ async function searchYouTubeChannelsByName(query: string, limit: number): Promis
   }
 }
 
+function dedupeChannelResults(results: YouTubeChannelSearchResult[]) {
+  const seen = new Set<string>();
+  const deduped: YouTubeChannelSearchResult[] = [];
+  for (const result of results) {
+    const channelId = String(result.channel_id || '').trim();
+    if (!channelId || seen.has(channelId)) continue;
+    seen.add(channelId);
+    deduped.push(result);
+  }
+  return deduped;
+}
+
+async function resolveBareHandleOrCreatorNameQuery(query: string, limit: number): Promise<YouTubeChannelSearchResult[] | null> {
+  const directResults = await resolveDirectYouTubeChannel(`@${query}`);
+  const nameResults = await searchYouTubeChannelsByName(query, limit);
+
+  if (directResults === null && nameResults === null) return null;
+
+  const directHit = directResults?.[0] || null;
+  const rankedNameResults = nameResults || [];
+
+  if (!directHit) return rankedNameResults;
+  if (rankedNameResults.length === 0) return [directHit];
+
+  const exactInNameResults = rankedNameResults.find((result) => result.channel_id === directHit.channel_id);
+  if (exactInNameResults) {
+    return dedupeChannelResults([directHit, ...rankedNameResults]).slice(0, limit);
+  }
+
+  const directScore = scoreYouTubeChannelMatch(query, directHit);
+  const topNameScore = scoreYouTubeChannelMatch(query, rankedNameResults[0]);
+
+  if (directScore >= 0.9 && topNameScore < 0.78) {
+    return [directHit];
+  }
+
+  if (topNameScore >= directScore + 0.15) {
+    return rankedNameResults.slice(0, limit);
+  }
+
+  return dedupeChannelResults([directHit, ...rankedNameResults]).slice(0, limit);
+}
+
 export function normalizeYouTubeChannelSearchResult(raw: unknown): YouTubeChannelSearchResult | null {
   if (!raw || typeof raw !== 'object') return null;
   const row = raw as Partial<YouTubeChannelSearchResult>;
@@ -384,7 +433,9 @@ export async function searchYouTubeChannels(input: {
     };
   }
 
-  const results = await searchYouTubeChannelsByName(validation.query, limit);
+  const results = validation.bareHandleCandidate
+    ? await resolveBareHandleOrCreatorNameQuery(validation.query, limit)
+    : await searchYouTubeChannelsByName(validation.query, limit);
   if (results === null) {
     throw new YouTubeChannelSearchError('SEARCH_DISABLED', 'Creator lookup is currently unavailable.');
   }

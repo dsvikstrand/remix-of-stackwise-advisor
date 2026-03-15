@@ -33,7 +33,7 @@ a4n) [have] `youtube_timedtext` is now the current default transcript path; `vid
 a4o) [have] Supabase schema history still contains the older `transcript_requests` Oracle/Paperspace bridge tables; treat that as historical parity only, not as current MVP transcript-runtime truth.
 a4p) [have] Known-channel video-library routes now use the low-cost uploads-playlist path (`channels.list -> playlistItems.list`) instead of `search.list`; broad YouTube discovery remains the quota-heavy area to constrain.
 a4q) [have] Current runtime video behavior on `/search` is now bounded single-video lookup (`URL/id first, helper-backed title fallback second`) rather than broad paginated discovery.
-a4s) [have] Current runtime creator lookup is now also bounded: exact channel URL / `@handle` / channel id first, helper-backed name lookup second, and only a tiny candidate set is returned instead of broad paginated channel discovery.
+a4s) [have] Current runtime creator lookup is now also bounded: exact channel URL / handle / channel id first, bare handles work without requiring `@`, helper-backed name lookup stays second, and only a tiny candidate set is returned instead of broad paginated channel discovery.
 a4r) [have] Source Page `Video Library` is now loaded on explicit user request instead of auto-fetching on page open, which reduces background YouTube API usage on normal source-page reads.
 a5) [todo] Improve user trust around shared-cost auto billing transitions and async processing visibility.
 a6) [todo] Reduce terminology ambiguity between personal stream, followed channels, source pages, and channel taxonomy.

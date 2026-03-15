@@ -235,7 +235,7 @@ export function CreatorSetupSection({
           <DialogHeader>
             <DialogTitle>Add Subscription</DialogTitle>
             <DialogDescription>
-              Add a creator by channel link, @handle, channel id, or creator name.
+              Add a creator by channel link, handle, channel id, or creator name.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -243,7 +243,7 @@ export function CreatorSetupSection({
               <Input
                 value={controller.channelSearchQuery}
                 onChange={(event) => controller.setChannelSearchQuery(event.target.value)}
-                placeholder="Paste a channel link, @handle, channel id, or creator name"
+                placeholder="Paste a channel link, handle, channel id, or creator name"
               />
               <Button type="submit" size="sm" disabled={controller.channelSearchMutation.isPending || !controller.subscriptionsEnabled}>
                 {controller.channelSearchMutation.isPending ? 'Finding...' : 'Find creator'}

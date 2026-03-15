@@ -94,7 +94,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Add `/subscriptions` page as first-class management surface (Step 1 foundation + Step 2 simplification).
 - Step 2 simplified actions on `/subscriptions`: active-list `Unsubscribe` only (sync/reactivate UI deferred).
 - Step 3 reliability pass adds `/subscriptions` health summary/badges and delayed-warning trust signals.
-- Step 4 discovery pass adds auth-only creator lookup in `/subscriptions` with per-result `Subscribe` (popup flow, direct creator identifiers preferred; current runtime no longer relies on broad official channel search).
+- Step 4 discovery pass adds auth-only creator lookup in `/subscriptions` with per-result `Subscribe` (popup flow, direct creator identifiers preferred, bare handles accepted without requiring `@`; current runtime no longer relies on broad official channel search).
 - Known-channel video-library listing now uses the low-cost uploads-playlist path (`channels.list -> playlistItems.list`) rather than `search.list`; broad discovery/search remains the quota-heavy surface.
 - Search-page video lookup now prefers exact YouTube URL/video-id resolution and uses helper-backed title fallback only for a single confident hit; it is no longer broad video discovery.
 - Step 5 row polish adds optional channel avatars and removes technical row badges from subscription rows.

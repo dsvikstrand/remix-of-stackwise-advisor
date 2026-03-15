@@ -26,7 +26,7 @@ function getChannelSearchErrorMessage(error: unknown) {
   if (error instanceof ChannelSearchApiRequestError) {
     switch (error.errorCode) {
       case 'INVALID_QUERY':
-        return 'Enter a creator link, @handle, channel id, or creator name.';
+        return 'Enter a creator link, handle, channel id, or creator name.';
       case 'SEARCH_DISABLED':
         return 'Creator lookup is currently unavailable.';
       case 'RATE_LIMITED':
@@ -427,7 +427,7 @@ export function useCreatorSetupController() {
     event.preventDefault();
     const query = channelSearchQuery.trim();
     if (!query) {
-      setChannelSearchError('Enter a creator link, @handle, channel id, or creator name.');
+      setChannelSearchError('Enter a creator link, handle, channel id, or creator name.');
       return;
     }
     channelSearchMutation.mutate({ query });

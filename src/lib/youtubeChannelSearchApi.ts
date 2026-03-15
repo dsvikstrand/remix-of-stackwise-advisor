@@ -54,7 +54,7 @@ export function clampChannelSearchLimit(rawLimit?: number) {
 export function validateChannelSearchQuery(rawQuery: string) {
   const query = rawQuery.trim();
   if (!query) {
-    return { ok: false as const, message: 'Enter a channel link, @handle, channel id, or creator name.' };
+    return { ok: false as const, message: 'Enter a channel link, handle, channel id, or creator name.' };
   }
   if (query.length < 2 && !query.startsWith('@') && !query.startsWith('http')) {
     return { ok: false as const, message: 'Add a little more detail so we can find the right creator.' };

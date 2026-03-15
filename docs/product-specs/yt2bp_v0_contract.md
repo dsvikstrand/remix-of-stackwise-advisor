@@ -24,7 +24,7 @@
 - 2026-02-17 note: auth-only YouTube discovery endpoint `GET /api/youtube-search` is additive and does not alter the YT2BP envelope.
 - 2026-03-15 note: the auth-only `/search` video flow now treats `GET /api/youtube-search` as bounded single-video lookup (`URL/id first, helper-backed title fallback second`) rather than broad paginated discovery; the route returns one confident hit or no hit and remains outside the YT2BP envelope.
 - 2026-02-17 note: auth-only YouTube creator lookup endpoint `GET /api/youtube-channel-search` is additive and does not alter the YT2BP envelope.
-- 2026-03-15 note: creator lookup on `GET /api/youtube-channel-search` now prefers exact channel URL / `@handle` / channel id inputs and uses helper-backed bounded name lookup only; this remains outside the YT2BP envelope.
+- 2026-03-15 note: creator lookup on `GET /api/youtube-channel-search` now prefers exact channel URL / handle / channel id inputs, accepts bare handles without requiring `@`, and uses helper-backed bounded name lookup only; this remains outside the YT2BP envelope.
 - 2026-03-15 note: known-channel video-library routes (`GET /api/youtube/channels/:channelId/videos`, `GET /api/source-pages/:platform/:externalId/videos`) now use the low-cost uploads-playlist path (`channels.list -> playlistItems.list`) instead of `search.list`; this remains outside the YT2BP envelope.
 - 2026-02-17 note: `GET /api/source-subscriptions` now includes optional `source_channel_avatar_url` from stored `source_pages` metadata for UI; this remains outside the YT2BP envelope.
 - 2026-02-17 note: subscription auto-ingest generation now enables review-by-default while keeping banner disabled; this remains outside the YT2BP endpoint envelope.

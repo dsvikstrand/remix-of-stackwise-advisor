@@ -96,7 +96,7 @@ function getChannelSearchErrorMessage(error: unknown) {
   if (error instanceof ChannelSearchApiRequestError) {
     switch (error.errorCode) {
       case 'INVALID_QUERY':
-        return 'Enter a creator link, @handle, channel id, or creator name.';
+        return 'Enter a creator link, handle, channel id, or creator name.';
       case 'SEARCH_DISABLED':
         return 'Creator lookup is currently unavailable.';
       case 'RATE_LIMITED':
@@ -351,7 +351,7 @@ export default function SearchPage() {
     event.preventDefault();
     const query = channelQueryInput.trim();
     if (!query) {
-      setChannelSearchError('Enter a creator link, @handle, channel id, or creator name.');
+      setChannelSearchError('Enter a creator link, handle, channel id, or creator name.');
       return;
     }
     channelSearchMutation.mutate({ query });
@@ -676,14 +676,14 @@ export default function SearchPage() {
                   <Input
                     value={channelQueryInput}
                     onChange={(event) => setChannelQueryInput(event.target.value)}
-                    placeholder="Paste a channel link, @handle, channel id, or creator name"
+                    placeholder="Paste a channel link, handle, channel id, or creator name"
                   />
                   <Button type="submit" disabled={channelSearchMutation.isPending || !searchEnabled}>
                     {channelSearchMutation.isPending ? 'Finding...' : 'Find creator'}
                   </Button>
                 </form>
                 <p className="text-xs text-muted-foreground">
-                  A full channel link, @handle, or channel id works best. Name lookup is there when you need it.
+                  A full channel link, handle, or channel id works best. Name lookup is there when you need it.
                 </p>
                 {channelSearchError ? <p className="text-sm text-destructive">{channelSearchError}</p> : null}
               </CardContent>

@@ -151,7 +151,7 @@
     - `GET /api/blueprints/:id/generation-trace` (auth owner or service token; returns latest durable generation trace by blueprint with optional event pagination)
     - `GET /api/generation-runs/:runId` (auth owner or service token; returns durable generation trace by run id with optional event pagination)
     - `GET /api/youtube-search` (auth-only single-video lookup: URL/id first, title fallback second; no broad paging contract)
-    - `GET /api/youtube-channel-search` (auth-only creator lookup: exact channel URL / `@handle` / channel id first, helper-backed name lookup second, tiny candidate set only)
+    - `GET /api/youtube-channel-search` (auth-only creator lookup: exact channel URL / handle / channel id first, bare-handle input accepted without requiring `@`, helper-backed name lookup second, tiny candidate set only)
     - known-channel video-library routes (`GET /api/youtube/channels/:channelId/videos`, `GET /api/source-pages/:platform/:externalId/videos`) now use `channels.list(part=contentDetails,snippet)` + `playlistItems.list` rather than `search.list`, so the expensive 100-unit search cost is limited to broad discovery routes
     - `GET /api/youtube/connection/status` (auth-only YouTube OAuth status)
     - `POST /api/youtube/connection/start` (auth-only OAuth start, returns auth URL)
@@ -223,7 +223,7 @@
    - `/youtube` core request is timeout-bounded by `YT2BP_CORE_TIMEOUT_MS` (default `120000`).
    - optional review generation is executed outside the core endpoint request and may attach after save.
 3. Subscription create/reactivate:
-   - user opens `/subscriptions`, launches `Add Subscription`, looks up a creator by channel URL, `@handle`, channel id, or name, then clicks subscribe.
+   - user opens `/subscriptions`, launches `Add Subscription`, looks up a creator by channel URL, handle, channel id, or name, then clicks subscribe.
    - optional onboarding accelerator: user can add creators manually or import selected public YouTube subscriptions from `/subscriptions` or `/welcome`.
    - user can unsubscribe existing active rows from `/subscriptions`; sync/reactivate UI is deferred.
    - resolve channel id and set first-sync checkpoint only (`last_seen_published_at`, `last_seen_video_id`).
