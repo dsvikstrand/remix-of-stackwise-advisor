@@ -30,10 +30,12 @@ const YOUTUBE_VIDEO_ID_REGEX = /^[a-zA-Z0-9_-]{8,15}$/;
 const TITLE_LOOKUP_TIMEOUT_MS = 8_000;
 const YOUTUBEI_TIMEOUT_MS = 5_000;
 const YTDLP_MAX_BUFFER_BYTES = 2 * 1024 * 1024;
+const WATCH_PAGE_LOOKUP_TIMEOUT_MS = 5_000;
+const YOUTUBE_WATCH_PAGE_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36';
 
 type HelperLookupResult = {
   result: YouTubeSearchResult;
-  provider: 'youtubei' | 'yt_dlp';
+  provider: 'youtubei' | 'yt_dlp' | 'watch_page';
   score?: number;
 };
 
@@ -183,6 +185,71 @@ function parseYtDlpPublishedAt(rawValue: string | undefined) {
   const value = String(rawValue || '').trim();
   if (!/^\d{8}$/.test(value)) return null;
   return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}T00:00:00.000Z`;
+}
+
+function decodeEscapedJsonString(rawValue: string) {
+  return rawValue
+    .replace(/\\u0026/g, '&')
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, '\\')
+    .replace(/\\\//g, '/');
+}
+
+function extractHtmlAttributeValue(html: string, pattern: RegExp) {
+  const match = pattern.exec(html);
+  if (!match?.[1]) return null;
+  return decodeHtmlEntities(match[1].trim()) || null;
+}
+
+function parseIso8601DurationToSeconds(rawValue: string | null) {
+  const value = String(rawValue || '').trim();
+  if (!value) return null;
+  const match = /^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/i.exec(value);
+  if (!match) return null;
+  const days = Number(match[1] || 0);
+  const hours = Number(match[2] || 0);
+  const minutes = Number(match[3] || 0);
+  const seconds = Number(match[4] || 0);
+  return (days * 86400) + (hours * 3600) + (minutes * 60) + seconds;
+}
+
+function normalizeYouTubeWatchPageResult(videoId: string, html: string): YouTubeSearchResult | null {
+  const title = extractHtmlAttributeValue(html, /<meta\s+property="og:title"\s+content="([^"]+)"/i)
+    || extractHtmlAttributeValue(html, /<meta\s+name="title"\s+content="([^"]+)"/i);
+  const description = extractHtmlAttributeValue(html, /<meta\s+property="og:description"\s+content="([^"]*)"/i) || '';
+  const thumbnailUrl = extractHtmlAttributeValue(html, /<meta\s+property="og:image"\s+content="([^"]+)"/i);
+  const channelIdMatch = /"channelId":"([^"]+)"/.exec(html);
+  const channelId = String(channelIdMatch?.[1] || '').trim();
+  const channelTitle = extractHtmlAttributeValue(html, /<link\s+itemprop="name"\s+content="([^"]+)"/i)
+    || extractHtmlAttributeValue(html, /<meta\s+itemprop="author"\s+content="([^"]+)"/i)
+    || extractHtmlAttributeValue(html, /<meta\s+name="author"\s+content="([^"]+)"/i);
+  const channelUrlMatch = /"ownerProfileUrl":"([^"]+)"/.exec(html);
+  const channelUrlRaw = channelUrlMatch?.[1]
+    ? decodeEscapedJsonString(channelUrlMatch[1])
+    : channelId
+      ? `https://www.youtube.com/channel/${channelId}`
+      : null;
+  const durationIso = extractHtmlAttributeValue(html, /<meta\s+itemprop="duration"\s+content="([^"]+)"/i);
+  const publishedAt = extractHtmlAttributeValue(html, /<meta\s+itemprop="datePublished"\s+content="([^"]+)"/i);
+
+  if (!title || !channelId || !channelTitle || !channelUrlRaw) return null;
+
+  const channelUrl = channelUrlRaw.startsWith('http')
+    ? channelUrlRaw
+    : `https://www.youtube.com${channelUrlRaw.startsWith('/') ? channelUrlRaw : `/${channelUrlRaw}`}`;
+
+  return {
+    video_id: videoId,
+    video_url: `https://www.youtube.com/watch?v=${videoId}`,
+    title,
+    description,
+    channel_id: channelId,
+    channel_title: channelTitle,
+    channel_url: channelUrl,
+    thumbnail_url: thumbnailUrl,
+    published_at: publishedAt ? new Date(`${publishedAt}T00:00:00.000Z`).toISOString() : null,
+    duration_seconds: parseIso8601DurationToSeconds(durationIso),
+  };
 }
 
 function normalizeTitleForMatch(rawValue: string) {
@@ -349,14 +416,73 @@ async function lookupYouTubeVideoByIdWithYouTubei(videoId: string): Promise<Help
 }
 
 async function lookupYouTubeVideoByIdWithYtDlp(videoId: string): Promise<HelperLookupResult | null> {
-  const json = await runYtDlpLookup([
-    '--dump-single-json',
-    '--skip-download',
-    '--no-warnings',
-    `https://www.youtube.com/watch?v=${videoId}`,
-  ]);
-  const result = normalizeYtDlpResult(json);
-  return result ? { result, provider: 'yt_dlp' } : null;
+  try {
+    const json = await runYtDlpLookup([
+      '--dump-single-json',
+      '--skip-download',
+      '--no-warnings',
+      `https://www.youtube.com/watch?v=${videoId}`,
+    ]);
+    const result = normalizeYtDlpResult(json);
+    return result ? { result, provider: 'yt_dlp' } : null;
+  } catch (error) {
+    if (error instanceof YouTubeSearchError) throw error;
+    return null;
+  }
+}
+
+async function lookupYouTubeVideoByIdWithWatchPage(videoId: string): Promise<HelperLookupResult | null> {
+  try {
+    const response = await withTimeout(
+      fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+        headers: {
+          'user-agent': YOUTUBE_WATCH_PAGE_USER_AGENT,
+          'accept-language': 'en-US,en;q=0.9',
+        },
+      }),
+      WATCH_PAGE_LOOKUP_TIMEOUT_MS,
+      'Video lookup is taking longer than expected. Please try again.',
+    );
+    if (response.status === 429) {
+      throw new YouTubeSearchError('RATE_LIMITED', 'Video lookup is taking longer than expected. Please try again.');
+    }
+    if (!response.ok) return null;
+    const html = await response.text();
+    const result = normalizeYouTubeWatchPageResult(videoId, html);
+    return result ? { result, provider: 'watch_page' } : null;
+  } catch (error) {
+    if (error instanceof YouTubeSearchError) throw error;
+    return null;
+  }
+}
+
+async function lookupYouTubeVideoById(videoId: string): Promise<HelperLookupResult | null> {
+  let sawRateLimited = false;
+
+  const providers = [
+    lookupYouTubeVideoByIdWithYtDlp,
+    lookupYouTubeVideoByIdWithWatchPage,
+    lookupYouTubeVideoByIdWithYouTubei,
+  ] as const;
+
+  for (const lookup of providers) {
+    try {
+      const result = await lookup(videoId);
+      if (result) return result;
+    } catch (error) {
+      if (error instanceof YouTubeSearchError && error.code === 'RATE_LIMITED') {
+        sawRateLimited = true;
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  if (sawRateLimited) {
+    throw new YouTubeSearchError('RATE_LIMITED', 'Video lookup took too long. Please try again.');
+  }
+
+  return null;
 }
 
 async function lookupYouTubeVideoByTitleWithYouTubei(query: string): Promise<HelperLookupResult | null> {
@@ -408,8 +534,7 @@ export async function searchYouTubeVideos(input: {
   }
 
   if (validation.videoId) {
-    const directMatch = await lookupYouTubeVideoByIdWithYouTubei(validation.videoId)
-      || await lookupYouTubeVideoByIdWithYtDlp(validation.videoId);
+    const directMatch = await lookupYouTubeVideoById(validation.videoId);
     if (!directMatch) {
       throw new YouTubeSearchError('SEARCH_DISABLED', 'Video lookup providers are unavailable right now.');
     }
