@@ -98,23 +98,27 @@ describe('youtubeSearch service', () => {
     });
   });
 
-  it('falls back to watch-page metadata when yt-dlp direct lookup times out', async () => {
+  it('falls back to oembed metadata when yt-dlp direct lookup times out', async () => {
     mockExecFileFailure({
       killed: true,
       signal: 'SIGTERM',
     });
-    vi.mocked(global.fetch).mockResolvedValue({
+    vi.mocked(global.fetch)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          title: 'Watch Page Video',
+          author_name: 'Channel Watch',
+          author_url: 'https://www.youtube.com/@ChannelWatch',
+          thumbnail_url: 'https://img.example.com/watch.jpg',
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
       ok: true,
       status: 200,
       text: async () => `
-        <meta property="og:title" content="Watch Page Video">
-        <meta property="og:description" content="Watch page description">
-        <meta property="og:image" content="https://img.example.com/watch.jpg">
-        <meta itemprop="datePublished" content="2026-03-15">
-        <meta itemprop="duration" content="PT9M">
-        <link itemprop="name" content="Channel Watch">
         "channelId":"channel_watch"
-        "ownerProfileUrl":"\\/channel\\/channel_watch"
       `,
     } as Response);
     youtubeiCreateMock.mockResolvedValue({
@@ -128,24 +132,37 @@ describe('youtubeSearch service', () => {
     });
 
     expect(execFileMock).toHaveBeenCalledTimes(1);
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
     expect(page.results[0]).toMatchObject({
       video_id: 'abc123xyz89',
       title: 'Watch Page Video',
       channel_id: 'channel_watch',
       channel_title: 'Channel Watch',
-      duration_seconds: 540,
-      published_at: '2026-03-15T00:00:00.000Z',
+      channel_url: 'https://www.youtube.com/@ChannelWatch',
+      thumbnail_url: 'https://img.example.com/watch.jpg',
+      duration_seconds: null,
+      published_at: null,
     });
   });
 
   it('falls back to youtubei direct lookup for video ids when direct metadata helpers fail', async () => {
     mockExecFileFailure({ code: 1 });
-    vi.mocked(global.fetch).mockResolvedValue({
-      ok: false,
-      status: 500,
-      text: async () => '',
-    } as Response);
+    vi.mocked(global.fetch)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: async () => ({}),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        text: async () => '',
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        text: async () => '',
+      } as Response);
     youtubeiCreateMock.mockResolvedValue({
       getBasicInfo: vi.fn(async () => ({
         basic_info: {
@@ -169,7 +186,7 @@ describe('youtubeSearch service', () => {
     });
 
     expect(execFileMock).toHaveBeenCalledTimes(1);
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledTimes(3);
     expect(page.results[0]).toMatchObject({
       video_id: 'abc123xyz89',
       title: 'Fallback video',

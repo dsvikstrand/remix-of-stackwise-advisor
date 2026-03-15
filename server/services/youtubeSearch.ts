@@ -30,7 +30,7 @@ const YOUTUBE_VIDEO_ID_REGEX = /^[a-zA-Z0-9_-]{8,15}$/;
 const TITLE_LOOKUP_TIMEOUT_MS = 8_000;
 const YOUTUBEI_TIMEOUT_MS = 5_000;
 const YTDLP_MAX_BUFFER_BYTES = 2 * 1024 * 1024;
-const WATCH_PAGE_LOOKUP_TIMEOUT_MS = 5_000;
+const DIRECT_LOOKUP_TIMEOUT_MS = 5_000;
 const YOUTUBE_WATCH_PAGE_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36';
 
 type HelperLookupResult = {
@@ -54,6 +54,13 @@ type YtDlpJson = {
   webpage_url?: string;
   url?: string;
   entries?: YtDlpJson[];
+};
+
+type YouTubeOEmbedResponse = {
+  title?: string;
+  author_name?: string;
+  author_url?: string;
+  thumbnail_url?: string;
 };
 
 let youtubeiClientPromise: Promise<Innertube> | null = null;
@@ -187,69 +194,9 @@ function parseYtDlpPublishedAt(rawValue: string | undefined) {
   return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}T00:00:00.000Z`;
 }
 
-function decodeEscapedJsonString(rawValue: string) {
-  return rawValue
-    .replace(/\\u0026/g, '&')
-    .replace(/\\"/g, '"')
-    .replace(/\\\\/g, '\\')
-    .replace(/\\\//g, '/');
-}
-
-function extractHtmlAttributeValue(html: string, pattern: RegExp) {
-  const match = pattern.exec(html);
-  if (!match?.[1]) return null;
-  return decodeHtmlEntities(match[1].trim()) || null;
-}
-
-function parseIso8601DurationToSeconds(rawValue: string | null) {
-  const value = String(rawValue || '').trim();
-  if (!value) return null;
-  const match = /^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/i.exec(value);
-  if (!match) return null;
-  const days = Number(match[1] || 0);
-  const hours = Number(match[2] || 0);
-  const minutes = Number(match[3] || 0);
-  const seconds = Number(match[4] || 0);
-  return (days * 86400) + (hours * 3600) + (minutes * 60) + seconds;
-}
-
-function normalizeYouTubeWatchPageResult(videoId: string, html: string): YouTubeSearchResult | null {
-  const title = extractHtmlAttributeValue(html, /<meta\s+property="og:title"\s+content="([^"]+)"/i)
-    || extractHtmlAttributeValue(html, /<meta\s+name="title"\s+content="([^"]+)"/i);
-  const description = extractHtmlAttributeValue(html, /<meta\s+property="og:description"\s+content="([^"]*)"/i) || '';
-  const thumbnailUrl = extractHtmlAttributeValue(html, /<meta\s+property="og:image"\s+content="([^"]+)"/i);
+function extractYoutubeChannelIdFromWatchPage(html: string) {
   const channelIdMatch = /"channelId":"([^"]+)"/.exec(html);
-  const channelId = String(channelIdMatch?.[1] || '').trim();
-  const channelTitle = extractHtmlAttributeValue(html, /<link\s+itemprop="name"\s+content="([^"]+)"/i)
-    || extractHtmlAttributeValue(html, /<meta\s+itemprop="author"\s+content="([^"]+)"/i)
-    || extractHtmlAttributeValue(html, /<meta\s+name="author"\s+content="([^"]+)"/i);
-  const channelUrlMatch = /"ownerProfileUrl":"([^"]+)"/.exec(html);
-  const channelUrlRaw = channelUrlMatch?.[1]
-    ? decodeEscapedJsonString(channelUrlMatch[1])
-    : channelId
-      ? `https://www.youtube.com/channel/${channelId}`
-      : null;
-  const durationIso = extractHtmlAttributeValue(html, /<meta\s+itemprop="duration"\s+content="([^"]+)"/i);
-  const publishedAt = extractHtmlAttributeValue(html, /<meta\s+itemprop="datePublished"\s+content="([^"]+)"/i);
-
-  if (!title || !channelId || !channelTitle || !channelUrlRaw) return null;
-
-  const channelUrl = channelUrlRaw.startsWith('http')
-    ? channelUrlRaw
-    : `https://www.youtube.com${channelUrlRaw.startsWith('/') ? channelUrlRaw : `/${channelUrlRaw}`}`;
-
-  return {
-    video_id: videoId,
-    video_url: `https://www.youtube.com/watch?v=${videoId}`,
-    title,
-    description,
-    channel_id: channelId,
-    channel_title: channelTitle,
-    channel_url: channelUrl,
-    thumbnail_url: thumbnailUrl,
-    published_at: publishedAt ? new Date(`${publishedAt}T00:00:00.000Z`).toISOString() : null,
-    duration_seconds: parseIso8601DurationToSeconds(durationIso),
-  };
+  return String(channelIdMatch?.[1] || '').trim() || null;
 }
 
 function normalizeTitleForMatch(rawValue: string) {
@@ -431,6 +378,67 @@ async function lookupYouTubeVideoByIdWithYtDlp(videoId: string): Promise<HelperL
   }
 }
 
+async function lookupYouTubeVideoByIdWithOEmbed(videoId: string): Promise<HelperLookupResult | null> {
+  try {
+    const [oembedResponse, watchPageResponse] = await Promise.all([
+      withTimeout(
+        fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}&format=json`, {
+          headers: {
+            'user-agent': YOUTUBE_WATCH_PAGE_USER_AGENT,
+            'accept-language': 'en-US,en;q=0.9',
+          },
+        }),
+        DIRECT_LOOKUP_TIMEOUT_MS,
+        'Video lookup is taking longer than expected. Please try again.',
+      ),
+      withTimeout(
+        fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+          headers: {
+            'user-agent': YOUTUBE_WATCH_PAGE_USER_AGENT,
+            'accept-language': 'en-US,en;q=0.9',
+          },
+        }),
+        DIRECT_LOOKUP_TIMEOUT_MS,
+        'Video lookup is taking longer than expected. Please try again.',
+      ),
+    ]);
+    if (oembedResponse.status === 429 || watchPageResponse.status === 429) {
+      throw new YouTubeSearchError('RATE_LIMITED', 'Video lookup is taking longer than expected. Please try again.');
+    }
+    if (!oembedResponse.ok || !watchPageResponse.ok) return null;
+
+    const [oembedJson, watchPageHtml] = await Promise.all([
+      oembedResponse.json() as Promise<YouTubeOEmbedResponse>,
+      watchPageResponse.text(),
+    ]);
+    const channelId = extractYoutubeChannelIdFromWatchPage(watchPageHtml);
+    const title = decodeHtmlEntities(String(oembedJson.title || '').trim());
+    const channelTitle = decodeHtmlEntities(String(oembedJson.author_name || '').trim());
+    const channelUrl = String(oembedJson.author_url || '').trim();
+
+    if (!title || !channelTitle || !channelUrl || !channelId) return null;
+
+    return {
+      result: {
+        video_id: videoId,
+        video_url: `https://www.youtube.com/watch?v=${videoId}`,
+        title,
+        description: '',
+        channel_id: channelId,
+        channel_title: channelTitle,
+        channel_url: channelUrl,
+        thumbnail_url: String(oembedJson.thumbnail_url || '').trim() || null,
+        published_at: null,
+        duration_seconds: null,
+      },
+      provider: 'watch_page',
+    };
+  } catch (error) {
+    if (error instanceof YouTubeSearchError) throw error;
+    return null;
+  }
+}
+
 async function lookupYouTubeVideoByIdWithWatchPage(videoId: string): Promise<HelperLookupResult | null> {
   try {
     const response = await withTimeout(
@@ -440,7 +448,7 @@ async function lookupYouTubeVideoByIdWithWatchPage(videoId: string): Promise<Hel
           'accept-language': 'en-US,en;q=0.9',
         },
       }),
-      WATCH_PAGE_LOOKUP_TIMEOUT_MS,
+      DIRECT_LOOKUP_TIMEOUT_MS,
       'Video lookup is taking longer than expected. Please try again.',
     );
     if (response.status === 429) {
@@ -448,7 +456,27 @@ async function lookupYouTubeVideoByIdWithWatchPage(videoId: string): Promise<Hel
     }
     if (!response.ok) return null;
     const html = await response.text();
-    const result = normalizeYouTubeWatchPageResult(videoId, html);
+    const channelId = extractYoutubeChannelIdFromWatchPage(html);
+    const canonicalBaseUrlMatch = /"canonicalBaseUrl":"([^"]+)"/.exec(html);
+    const channelTitleMatch = /"shortBylineText":\{"runs":\[\{"text":"([^"]+)"/.exec(html);
+    const titleMatch = /"title":"([^"]+)"/.exec(html);
+    const title = decodeHtmlEntities(String(titleMatch?.[1] || '').trim());
+    const channelTitle = decodeHtmlEntities(String(channelTitleMatch?.[1] || '').trim());
+    const channelBaseUrl = String(canonicalBaseUrlMatch?.[1] || '').trim();
+    const result = title && channelId && channelTitle && channelBaseUrl
+      ? {
+        video_id: videoId,
+        video_url: `https://www.youtube.com/watch?v=${videoId}`,
+        title,
+        description: '',
+        channel_id: channelId,
+        channel_title: channelTitle,
+        channel_url: `https://www.youtube.com${channelBaseUrl}`,
+        thumbnail_url: null,
+        published_at: null,
+        duration_seconds: null,
+      }
+      : null;
     return result ? { result, provider: 'watch_page' } : null;
   } catch (error) {
     if (error instanceof YouTubeSearchError) throw error;
@@ -461,6 +489,7 @@ async function lookupYouTubeVideoById(videoId: string): Promise<HelperLookupResu
 
   const providers = [
     lookupYouTubeVideoByIdWithYtDlp,
+    lookupYouTubeVideoByIdWithOEmbed,
     lookupYouTubeVideoByIdWithWatchPage,
     lookupYouTubeVideoByIdWithYouTubei,
   ] as const;
