@@ -6218,12 +6218,11 @@ async function processSourceItemUnlockGenerationJob(input: {
         && errorCode === 'TRANSCRIPT_UNAVAILABLE'
         && transcriptAttempts >= sourceTranscriptMaxAttempts;
       if (transcriptRetryExhausted) {
-        errorCode = 'NO_TRANSCRIPT_PERMANENT';
         try {
           await db
             .from('source_item_unlocks')
             .update({
-              transcript_status: 'confirmed_no_speech',
+              transcript_status: 'transient_error',
               transcript_attempt_count: Math.max(sourceTranscriptMaxAttempts, transcriptAttempts),
               transcript_no_caption_hits: Math.max(
                 getUnlockTranscriptNoCaptionHits(processingUnlockRow),
@@ -6233,10 +6232,10 @@ async function processSourceItemUnlockGenerationJob(input: {
               transcript_probe_meta: {
                 ...(transcriptDecision?.probeMeta || {}),
                 exhausted_at: new Date().toISOString(),
-                exhausted_reason: 'MAX_TRANSCRIPT_ATTEMPTS',
+                exhausted_reason: 'MAX_TRANSCRIPT_ATTEMPTS_TRANSIENT',
               },
-              last_error_code: 'NO_TRANSCRIPT_PERMANENT',
-              last_error_message: 'Transcript unavailable after max retry attempts.',
+              last_error_code: 'TRANSCRIPT_UNAVAILABLE',
+              last_error_message: 'Transcript temporarily unavailable after max retry attempts.',
             })
             .eq('id', item.unlock_id);
         } catch (exhaustionError) {
@@ -6340,6 +6339,15 @@ async function processSourceItemUnlockGenerationJob(input: {
             },
           );
         }
+        logUnlockEvent(
+          'auto_transcript_retry_exhausted',
+          { trace_id: input.traceId, job_id: input.jobId, source_item_id: item.source_item_id, unlock_id: item.unlock_id, video_id: item.video_id },
+          {
+            transcript_attempt_count: transcriptAttempts,
+            forced_terminal: false,
+            exhausted_reason: 'MAX_TRANSCRIPT_ATTEMPTS_TRANSIENT',
+          },
+        );
       }
 
       if (
@@ -6694,11 +6702,7 @@ async function processSourceAutoUnlockRetryJob(input: {
     isTerminalTranscriptProviderErrorCodeForUnlock(unlock.last_error_code)
     || (
       transcriptAttempts >= sourceTranscriptMaxAttempts
-      && (
-        transcriptStatus === 'retrying'
-        || transcriptStatus === 'transient_error'
-        || isTransientTranscriptUnavailableCode(unlock.last_error_code)
-      )
+      && getUnlockTranscriptNoCaptionHits(unlock) >= sourceTranscriptMaxAttempts
     );
   if (shouldForceTerminalNoTranscript) {
     await db
@@ -6736,6 +6740,56 @@ async function processSourceAutoUnlockRetryJob(input: {
       'auto_transcript_retry_exhausted',
       { trace_id: input.traceId, job_id: input.jobId, source_item_id: sourceItemId, unlock_id: unlock.id, video_id: input.payload.video_id },
       { transcript_attempt_count: transcriptAttempts, forced_terminal: true },
+    );
+    return;
+  }
+
+  if (
+    transcriptAttempts >= sourceTranscriptMaxAttempts
+    && (
+      transcriptStatus === 'retrying'
+      || transcriptStatus === 'transient_error'
+      || isTransientTranscriptUnavailableCode(unlock.last_error_code)
+    )
+  ) {
+    await db
+      .from('source_item_unlocks')
+      .update({
+        transcript_status: 'transient_error',
+        transcript_attempt_count: Math.max(sourceTranscriptMaxAttempts, transcriptAttempts),
+        transcript_retry_after: null,
+        last_error_code: 'TRANSCRIPT_UNAVAILABLE',
+        last_error_message: 'Transcript temporarily unavailable after max retry attempts.',
+      })
+      .eq('id', unlock.id);
+    await suppressUnlockableFeedRowsForSourceItem(db, {
+      sourceItemId,
+      decisionCode: 'TRANSCRIPT_UNAVAILABLE_AUTO',
+      traceId: input.traceId,
+      sourceChannelId,
+      videoId: input.payload.video_id,
+    });
+    await db.from('ingestion_jobs').update({
+      status: 'succeeded',
+      finished_at: new Date().toISOString(),
+      processed_count: 1,
+      inserted_count: 0,
+      skipped_count: 1,
+      lease_expires_at: null,
+      worker_id: null,
+      last_heartbeat_at: new Date().toISOString(),
+      error_code: null,
+      error_message: null,
+    }).eq('id', input.jobId);
+
+    logUnlockEvent(
+      'auto_transcript_retry_exhausted',
+      { trace_id: input.traceId, job_id: input.jobId, source_item_id: sourceItemId, unlock_id: unlock.id, video_id: input.payload.video_id },
+      {
+        transcript_attempt_count: transcriptAttempts,
+        forced_terminal: false,
+        exhausted_reason: 'MAX_TRANSCRIPT_ATTEMPTS_TRANSIENT',
+      },
     );
     return;
   }
@@ -8424,7 +8478,7 @@ async function getTranscriptForVideoWithThrottle(
     },
     () => getTranscriptForVideo(videoId, {
       db: getServiceSupabaseClient(),
-      enableFallback: options?.requestClass === 'interactive',
+      enableFallback: true,
     }),
   );
 }
