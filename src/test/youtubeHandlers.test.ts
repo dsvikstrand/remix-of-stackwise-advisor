@@ -173,6 +173,58 @@ function createDeps(overrides: Record<string, unknown> = {}) {
 }
 
 describe('youtube handlers', () => {
+  it('treats /api/youtube-search as single-video lookup and clears pagination', async () => {
+    const app = createMockApp();
+    const searchYouTubeVideos = vi.fn(async () => ({
+      results: [{
+        video_id: 'abc123def45',
+        video_url: 'https://www.youtube.com/watch?v=abc123def45',
+        title: 'Exact video',
+        description: 'Best match',
+        channel_id: 'channel_1',
+        channel_title: 'Channel One',
+        channel_url: 'https://www.youtube.com/channel/channel_1',
+        thumbnail_url: null,
+        published_at: '2026-03-15T12:00:00Z',
+        duration_seconds: 240,
+      }],
+      nextPageToken: 'IGNORED_TOKEN',
+    }));
+    registerYouTubeRouteHandlers(app as any, createDeps({
+      youtubeDataApiKey: 'test-key',
+      searchYouTubeVideos,
+    }));
+
+    const handler = app.handlers['GET /api/youtube-search'];
+    const req = {
+      query: {
+        q: 'https://www.youtube.com/watch?v=abc123def45',
+        limit: '25',
+        page_token: 'PAGE_2',
+      },
+    } as any;
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(searchYouTubeVideos).toHaveBeenCalledWith({
+      apiKey: 'test-key',
+      query: 'https://www.youtube.com/watch?v=abc123def45',
+      limit: 1,
+      pageToken: undefined,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        results: [{
+          video_id: 'abc123def45',
+        }],
+        next_page_token: null,
+      },
+    });
+  });
+
   it('maps credit service outage to 503 CREDITS_UNAVAILABLE on direct generate route', async () => {
     const app = createMockApp();
     registerYouTubeRouteHandlers(app as any, createDeps({

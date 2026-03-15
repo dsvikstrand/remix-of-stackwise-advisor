@@ -1,4 +1,8 @@
-import { fetchYouTubeDurationMap, YouTubeDurationLookupError } from './youtubeDuration';
+import {
+  fetchYouTubeDurationMap,
+  parseYouTubeIsoDurationToSeconds,
+  YouTubeDurationLookupError,
+} from './youtubeDuration';
 import { decodeHtmlEntities } from '../lib/decodeHtmlEntities';
 
 export type YouTubeSearchResult = {
@@ -25,6 +29,8 @@ type YouTubeSearchErrorCode =
   | 'PROVIDER_FAIL'
   | 'RATE_LIMITED';
 
+const YOUTUBE_VIDEO_ID_REGEX = /^[a-zA-Z0-9_-]{8,15}$/;
+
 export class YouTubeSearchError extends Error {
   code: YouTubeSearchErrorCode;
 
@@ -39,10 +45,109 @@ export function clampYouTubeSearchLimit(rawLimit: number | undefined, defaultLim
   return Math.max(1, Math.min(25, Math.floor(rawLimit)));
 }
 
+function normalizeYouTubeVideoId(rawValue: string) {
+  const value = String(rawValue || '').trim();
+  return YOUTUBE_VIDEO_ID_REGEX.test(value) ? value : null;
+}
+
+function normalizePotentialYouTubeUrl(rawValue: string) {
+  const value = String(rawValue || '').trim();
+  if (/^(?:www\.)?(?:youtube\.com|m\.youtube\.com|youtu\.be)\//i.test(value)) {
+    return `https://${value}`;
+  }
+  return value;
+}
+
+function looksLikeUrlInput(rawValue: string) {
+  const value = String(rawValue || '').trim();
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(value) || /^(?:www\.)?(?:youtube\.com|m\.youtube\.com|youtu\.be)\//i.test(value);
+}
+
+function looksLikeYouTubeUrlInput(rawValue: string) {
+  const value = String(rawValue || '').trim();
+  return /(?:youtube\.com|m\.youtube\.com|youtu\.be)/i.test(value);
+}
+
+export function extractYouTubeVideoIdFromLookupInput(rawValue: string) {
+  const directVideoId = normalizeYouTubeVideoId(rawValue);
+  if (directVideoId) return directVideoId;
+
+  try {
+    const url = new URL(normalizePotentialYouTubeUrl(rawValue));
+    const host = url.hostname.replace(/^www\./i, '');
+    const pathParts = url.pathname.replace(/^\/+/, '').split('/').filter(Boolean);
+
+    if (host === 'youtube.com' || host === 'm.youtube.com') {
+      if (url.searchParams.has('list')) return null;
+      if (url.pathname === '/watch') {
+        return normalizeYouTubeVideoId(url.searchParams.get('v') || '');
+      }
+      if (pathParts[0] === 'shorts' || pathParts[0] === 'live' || pathParts[0] === 'embed') {
+        return normalizeYouTubeVideoId(pathParts[1] || '');
+      }
+      return null;
+    }
+
+    if (host === 'youtu.be') {
+      return normalizeYouTubeVideoId(pathParts[0] || '');
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function validateYouTubeVideoLookupQuery(rawQuery: string) {
+  const query = String(rawQuery || '').trim();
+  if (!query) {
+    return {
+      ok: false as const,
+      message: 'Enter a YouTube link, video id, or a specific title.',
+    };
+  }
+
+  const videoId = extractYouTubeVideoIdFromLookupInput(query);
+  if (videoId) {
+    return {
+      ok: true as const,
+      query,
+      videoId,
+    };
+  }
+
+  if (looksLikeYouTubeUrlInput(query)) {
+    return {
+      ok: false as const,
+      message: 'Please use a single YouTube video link, not a playlist or channel link.',
+    };
+  }
+
+  if (looksLikeUrlInput(query)) {
+    return {
+      ok: false as const,
+      message: 'Please use a YouTube link, video id, or a specific title.',
+    };
+  }
+
+  if (query.length < 3) {
+    return {
+      ok: false as const,
+      message: 'Add a little more detail so we can find the right video.',
+    };
+  }
+
+  return {
+    ok: true as const,
+    query,
+    videoId: null,
+  };
+}
+
 export function normalizeYouTubeSearchItem(raw: unknown): YouTubeSearchResult | null {
   if (!raw || typeof raw !== 'object') return null;
   const item = raw as {
-    id?: { videoId?: string };
+    id?: string | { videoId?: string };
     snippet?: {
       title?: string;
       description?: string;
@@ -55,9 +160,14 @@ export function normalizeYouTubeSearchItem(raw: unknown): YouTubeSearchResult | 
         default?: { url?: string };
       };
     };
+    contentDetails?: {
+      duration?: string;
+    };
   };
 
-  const videoId = String(item.id?.videoId || '').trim();
+  const videoId = typeof item.id === 'string'
+    ? String(item.id || '').trim()
+    : String(item.id?.videoId || '').trim();
   const channelId = String(item.snippet?.channelId || '').trim();
   if (!videoId || !channelId) return null;
 
@@ -79,6 +189,64 @@ export function normalizeYouTubeSearchItem(raw: unknown): YouTubeSearchResult | 
   };
 }
 
+function normalizeYouTubeLookupItem(raw: unknown): YouTubeSearchResult | null {
+  const normalized = normalizeYouTubeSearchItem(raw);
+  if (!normalized) return null;
+  const item = raw as { contentDetails?: { duration?: string } };
+  return {
+    ...normalized,
+    duration_seconds: item.contentDetails?.duration
+      ? parseYouTubeIsoDurationToSeconds(item.contentDetails?.duration)
+      : normalized.duration_seconds,
+  };
+}
+
+async function lookupYouTubeVideoById(input: {
+  apiKey: string;
+  videoId: string;
+  userAgent: string;
+}) {
+  const url = new URL('https://www.googleapis.com/youtube/v3/videos');
+  url.searchParams.set('part', 'snippet,contentDetails');
+  url.searchParams.set('id', input.videoId);
+  url.searchParams.set('key', input.apiKey);
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      'User-Agent': input.userAgent,
+      Accept: 'application/json',
+    },
+  });
+
+  if (response.status === 403 || response.status === 429) {
+    throw new YouTubeSearchError('RATE_LIMITED', 'Video lookup is currently limited. Please retry later.');
+  }
+
+  if (!response.ok) {
+    throw new YouTubeSearchError('PROVIDER_FAIL', `YouTube video lookup failed (${response.status}).`);
+  }
+
+  const json = (await response.json().catch(() => null)) as {
+    items?: unknown[];
+    error?: { code?: number; message?: string };
+  } | null;
+  if (!json) {
+    throw new YouTubeSearchError('PROVIDER_FAIL', 'Invalid response from YouTube video lookup.');
+  }
+  if (json.error) {
+    if (json.error.code === 403 || json.error.code === 429) {
+      throw new YouTubeSearchError('RATE_LIMITED', json.error.message || 'Video lookup is currently limited. Please retry later.');
+    }
+    throw new YouTubeSearchError('PROVIDER_FAIL', json.error.message || 'YouTube video lookup returned an error.');
+  }
+
+  const item = (Array.isArray(json.items) ? json.items : [])
+    .map((row) => normalizeYouTubeLookupItem(row))
+    .find((row): row is YouTubeSearchResult => !!row);
+
+  return item || null;
+}
+
 export async function searchYouTubeVideos(input: {
   apiKey: string;
   query: string;
@@ -90,38 +258,47 @@ export async function searchYouTubeVideos(input: {
     throw new YouTubeSearchError('SEARCH_DISABLED', 'YouTube search is not configured.');
   }
 
-  const query = String(input.query || '').trim();
-  if (query.length < 2) {
-    throw new YouTubeSearchError('INVALID_QUERY', 'Search query must be at least 2 characters.');
+  const validation = validateYouTubeVideoLookupQuery(input.query);
+  if (!validation.ok) {
+    throw new YouTubeSearchError('INVALID_QUERY', validation.message);
   }
 
-  const limit = clampYouTubeSearchLimit(input.limit, 10);
-  const pageToken = String(input.pageToken || '').trim();
+  const query = validation.query;
+  const userAgent = 'bleuv1-youtube-search/1.0 (+https://api.bleup.app)';
+
+  if (validation.videoId) {
+    const directMatch = await lookupYouTubeVideoById({
+      apiKey,
+      videoId: validation.videoId,
+      userAgent,
+    });
+    return {
+      results: directMatch ? [directMatch] : [],
+      nextPageToken: null,
+    };
+  }
 
   const url = new URL('https://www.googleapis.com/youtube/v3/search');
   url.searchParams.set('part', 'snippet');
   url.searchParams.set('type', 'video');
   url.searchParams.set('q', query);
-  url.searchParams.set('maxResults', String(limit));
+  url.searchParams.set('maxResults', '1');
   url.searchParams.set('order', 'relevance');
   url.searchParams.set('key', apiKey);
-  if (pageToken) {
-    url.searchParams.set('pageToken', pageToken);
-  }
 
   const response = await fetch(url.toString(), {
     headers: {
-      'User-Agent': 'bleuv1-youtube-search/1.0 (+https://api.bleup.app)',
+      'User-Agent': userAgent,
       Accept: 'application/json',
     },
   });
 
   if (response.status === 403 || response.status === 429) {
-    throw new YouTubeSearchError('RATE_LIMITED', 'Search provider quota is currently limited.');
+    throw new YouTubeSearchError('RATE_LIMITED', 'Video lookup is currently limited. Please retry later.');
   }
 
   if (!response.ok) {
-    throw new YouTubeSearchError('PROVIDER_FAIL', `YouTube search provider failed (${response.status}).`);
+    throw new YouTubeSearchError('PROVIDER_FAIL', `YouTube lookup provider failed (${response.status}).`);
   }
 
   const json = (await response.json().catch(() => null)) as {
@@ -130,13 +307,13 @@ export async function searchYouTubeVideos(input: {
     error?: { code?: number; message?: string };
   } | null;
   if (!json) {
-    throw new YouTubeSearchError('PROVIDER_FAIL', 'Invalid response from YouTube search provider.');
+    throw new YouTubeSearchError('PROVIDER_FAIL', 'Invalid response from YouTube lookup provider.');
   }
   if (json.error) {
     if (json.error.code === 403 || json.error.code === 429) {
-      throw new YouTubeSearchError('RATE_LIMITED', json.error.message || 'Search provider quota is currently limited.');
+      throw new YouTubeSearchError('RATE_LIMITED', json.error.message || 'Video lookup is currently limited. Please retry later.');
     }
-    throw new YouTubeSearchError('PROVIDER_FAIL', json.error.message || 'YouTube search provider returned an error.');
+    throw new YouTubeSearchError('PROVIDER_FAIL', json.error.message || 'YouTube lookup provider returned an error.');
   }
 
   const items = Array.isArray(json.items) ? json.items : [];
@@ -149,7 +326,7 @@ export async function searchYouTubeVideos(input: {
       const durationMap = await fetchYouTubeDurationMap({
         apiKey,
         videoIds: results.map((row) => row.video_id),
-        userAgent: 'bleuv1-youtube-search/1.0 (+https://api.bleup.app)',
+        userAgent,
       });
       results = results.map((row) => ({
         ...row,
@@ -165,6 +342,6 @@ export async function searchYouTubeVideos(input: {
 
   return {
     results,
-    nextPageToken: typeof json.nextPageToken === 'string' ? json.nextPageToken : null,
+    nextPageToken: null,
   };
 }

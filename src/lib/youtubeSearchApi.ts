@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { config } from '@/config/runtime';
+import { extractYouTubeVideoId } from '@/lib/sourceIdentity';
 
 export type YouTubeSearchResult = {
   video_id: string;
@@ -88,9 +89,47 @@ export function clampSearchLimit(rawLimit?: number) {
   return Math.max(1, Math.min(25, Math.floor(rawLimit)));
 }
 
+function looksLikeUrlInput(rawValue: string) {
+  const value = String(rawValue || '').trim();
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(value) || /^(?:www\.)?(?:youtube\.com|m\.youtube\.com|youtu\.be)\//i.test(value);
+}
+
+function looksLikeYouTubeUrlInput(rawValue: string) {
+  const value = String(rawValue || '').trim();
+  return /(?:youtube\.com|m\.youtube\.com|youtu\.be)/i.test(value);
+}
+
+function normalizePotentialYouTubeUrl(rawValue: string) {
+  const value = String(rawValue || '').trim();
+  if (/^(?:www\.)?(?:youtube\.com|m\.youtube\.com|youtu\.be)\//i.test(value)) {
+    return `https://${value}`;
+  }
+  return value;
+}
+
 export function validateSearchQuery(rawQuery: string) {
   const query = rawQuery.trim();
-  if (query.length < 2) return { ok: false as const, message: 'Query must be at least 2 characters.' };
+  if (!query) {
+    return { ok: false as const, message: 'Add a YouTube link, video id, or a specific title.' };
+  }
+  if (extractYouTubeVideoId(normalizePotentialYouTubeUrl(query)) || extractYouTubeVideoId(query)) {
+    return { ok: true as const, query };
+  }
+  if (looksLikeYouTubeUrlInput(query)) {
+    return {
+      ok: false as const,
+      message: 'Please use a single YouTube video link, not a playlist or channel link.',
+    };
+  }
+  if (looksLikeUrlInput(query)) {
+    return {
+      ok: false as const,
+      message: 'Please use a YouTube link, video id, or a specific title.',
+    };
+  }
+  if (query.length < 3) {
+    return { ok: false as const, message: 'Add a little more detail so we can find the right video.' };
+  }
   return { ok: true as const, query };
 }
 

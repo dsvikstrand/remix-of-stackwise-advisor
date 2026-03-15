@@ -30,7 +30,7 @@
     - use-case strip communicates concrete outcomes (fitness/recipes/study/productivity)
     - social-proof sections keep curated fallback content when live data is empty
   - Signed-in primary nav uses `Home / Channels / Explore`.
-  - Header `Create` action (next to profile menu) routes to `/search` for search/create discovery.
+  - Header `Create` action (next to profile menu) routes to `/search` for direct video lookup and create flows.
   - New-account onboarding is optional and route-based:
     - first-login redirect for new accounts goes to `/welcome`
     - existing pre-rollout accounts are not auto-prompted
@@ -53,7 +53,7 @@
     - `draft.steps`, `draft.summaryVariants`, and `draft.notes` are compatibility carryovers during the contract cutover and should not be treated as equal current-runtime blueprint shapes.
     - YouTube-source banners are thumbnail-first (`source_items.thumbnail_url` with deterministic `ytimg` fallback), not generated-banner-first.
     - banner prompt path is constrained to visual-only output (no readable text/typography/logos/watermarks).
-  - Auth-only discovery UI in `src/pages/Search.tsx` for YouTube query results and one-click generate.
+  - Auth-only lookup UI in `src/pages/Search.tsx` for finding one specific YouTube video, then generating from the best match.
   - Live feed/community surfaces in `src/pages/MyFeed.tsx`, `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
     - `Wall` now loads backend-hydrated feed responses for both public lanes and `For You` instead of reconstructing feed rows through browser-side Supabase fan-out.
     - `Wall` feed contract is:
@@ -150,7 +150,7 @@
     - `DELETE /api/notifications/push-subscriptions` (auth-only push subscription disable)
     - `GET /api/blueprints/:id/generation-trace` (auth owner or service token; returns latest durable generation trace by blueprint with optional event pagination)
     - `GET /api/generation-runs/:runId` (auth owner or service token; returns durable generation trace by run id with optional event pagination)
-    - `GET /api/youtube-search` (auth-only YouTube result discovery, relevance-sorted)
+    - `GET /api/youtube-search` (auth-only single-video lookup: URL/id first, title fallback second; no broad paging contract)
     - `GET /api/youtube-channel-search` (auth-only YouTube channel discovery, relevance-sorted)
     - known-channel video-library routes (`GET /api/youtube/channels/:channelId/videos`, `GET /api/source-pages/:platform/:externalId/videos`) now use `channels.list(part=contentDetails,snippet)` + `playlistItems.list` rather than `search.list`, so the expensive 100-unit search cost is limited to broad discovery routes
     - `GET /api/youtube/connection/status` (auth-only YouTube OAuth status)

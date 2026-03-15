@@ -85,6 +85,9 @@
     - `POST /api/notifications/push-subscriptions`
     - `DELETE /api/notifications/push-subscriptions`
     - emitted event families: `comment_reply`, `generation_succeeded`, `generation_failed`.
+  - Search-page video behavior:
+    - `/search` video mode is now single-video lookup, not broad paginated discovery.
+    - preferred inputs are direct YouTube URL or video id; title lookup is a bounded fallback for one best match.
 - Profile feed read endpoint:
   - `GET /api/profile/:userId/feed` (optional auth; public profiles readable, private profiles owner-only)
 - Subscription auto-unlock policy:

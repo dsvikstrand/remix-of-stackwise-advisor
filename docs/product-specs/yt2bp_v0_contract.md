@@ -22,6 +22,7 @@
 - 2026-02-18 note: YouTube subscription channel resolution now includes `browseId` fallback parsing for handle pages where direct `channelId` metadata is unavailable.
 - 2026-02-17 note: ingestion reliability visibility adds service-auth endpoint `GET /api/ingestion/jobs/latest`; this is an ops path and does not alter the YT2BP envelope.
 - 2026-02-17 note: auth-only YouTube discovery endpoint `GET /api/youtube-search` is additive and does not alter the YT2BP envelope.
+- 2026-03-15 note: the auth-only `/search` video flow now treats `GET /api/youtube-search` as bounded single-video lookup (`URL/id first, title fallback second`) rather than broad paginated discovery; this remains outside the YT2BP envelope.
 - 2026-02-17 note: auth-only YouTube channel discovery endpoint `GET /api/youtube-channel-search` is additive and does not alter the YT2BP envelope.
 - 2026-03-15 note: known-channel video-library routes (`GET /api/youtube/channels/:channelId/videos`, `GET /api/source-pages/:platform/:externalId/videos`) now use the low-cost uploads-playlist path (`channels.list -> playlistItems.list`) instead of `search.list`; this remains outside the YT2BP envelope.
 - 2026-02-17 note: `GET /api/source-subscriptions` now includes optional `source_channel_avatar_url` from stored `source_pages` metadata for UI; this remains outside the YT2BP envelope.

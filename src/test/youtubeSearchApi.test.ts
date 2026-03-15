@@ -13,15 +13,26 @@ describe('youtubeSearchApi utils', () => {
     expect(clampSearchLimit(99)).toBe(25);
   });
 
-  it('validates search query length', () => {
+  it('accepts direct YouTube video identifiers and specific titles', () => {
     const invalid = validateSearchQuery(' a ');
     expect(invalid.ok).toBe(false);
 
-    const valid = validateSearchQuery('  skincare 2026 best ');
-    expect(valid.ok).toBe(true);
-    if (valid.ok) {
-      expect(valid.query).toBe('skincare 2026 best');
+    expect(validateSearchQuery('https://www.youtube.com/watch?v=abc123xyz89').ok).toBe(true);
+    expect(validateSearchQuery('abc123xyz89').ok).toBe(true);
+
+    const validTitle = validateSearchQuery('  skincare 2026 best ');
+    expect(validTitle.ok).toBe(true);
+    if (validTitle.ok) {
+      expect(validTitle.query).toBe('skincare 2026 best');
     }
+  });
+
+  it('rejects invalid YouTube links and vague lookups', () => {
+    const invalidUrl = validateSearchQuery('https://www.youtube.com/playlist?list=PL123');
+    expect(invalidUrl.ok).toBe(false);
+
+    const genericUrl = validateSearchQuery('https://example.com/video');
+    expect(genericUrl.ok).toBe(false);
   });
 
   it('normalizes search results with fallback urls', () => {
@@ -40,4 +51,3 @@ describe('youtubeSearchApi utils', () => {
     expect(normalized?.channel_url).toBe('https://www.youtube.com/channel/UC12345678901234567890');
   });
 });
-

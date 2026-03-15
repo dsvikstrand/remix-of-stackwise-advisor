@@ -513,11 +513,11 @@ app.get('/api/youtube-search', searchApiLimiter, async (req, res) => {
   }
 
   const query = String(req.query.q || '').trim();
-  if (query.length < 2) {
+  if (!query) {
     return res.status(400).json({
       ok: false,
       error_code: 'INVALID_QUERY',
-      message: 'Query must be at least 2 characters.',
+      message: 'Enter a YouTube link, video id, or a specific title.',
       data: null,
     });
   }
@@ -531,9 +531,8 @@ app.get('/api/youtube-search', searchApiLimiter, async (req, res) => {
     });
   }
 
-  const rawLimit = typeof req.query.limit === 'string' ? Number(req.query.limit) : undefined;
-  const limit = clampYouTubeSearchLimit(rawLimit, 10);
-  const pageToken = typeof req.query.page_token === 'string' ? req.query.page_token.trim() : '';
+  const limit = 1;
+  const pageToken = '';
   const db = getAuthedSupabaseClient(authToken);
   if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
   const serviceDb = getServiceSupabaseClient();
@@ -604,10 +603,10 @@ app.get('/api/youtube-search', searchApiLimiter, async (req, res) => {
     return res.json({
       ok: true,
       error_code: null,
-      message: 'youtube search complete',
+      message: 'youtube video lookup complete',
       data: {
         results,
-        next_page_token: cached.nextPageToken,
+        next_page_token: null,
         cache: {
           source: 'fresh',
           age_seconds: cacheHit.ageSeconds ?? null,
@@ -630,10 +629,10 @@ app.get('/api/youtube-search', searchApiLimiter, async (req, res) => {
           return res.json({
             ok: true,
             error_code: null,
-            message: 'youtube search complete',
+            message: 'youtube video lookup complete',
             data: {
               results,
-              next_page_token: cached.nextPageToken,
+              next_page_token: null,
               cache: {
                 source: 'stale',
                 age_seconds: cacheHit.ageSeconds ?? null,
@@ -644,7 +643,7 @@ app.get('/api/youtube-search', searchApiLimiter, async (req, res) => {
         return res.status(429).json({
           ok: false,
           error_code: 'RATE_LIMITED',
-          message: 'Search is cooling down. Please retry shortly.',
+          message: 'Video lookup is cooling down. Please retry shortly.',
           retry_after_seconds: quotaDecision.retryAfterSeconds ?? null,
           data: null,
         });
@@ -693,10 +692,10 @@ app.get('/api/youtube-search', searchApiLimiter, async (req, res) => {
     return res.json({
       ok: true,
       error_code: null,
-      message: 'youtube search complete',
+      message: 'youtube video lookup complete',
       data: {
         results,
-        next_page_token: result.nextPageToken,
+        next_page_token: null,
         cache: {
           source: 'live',
           age_seconds: 0,
@@ -726,10 +725,10 @@ app.get('/api/youtube-search', searchApiLimiter, async (req, res) => {
       return res.json({
         ok: true,
         error_code: null,
-        message: 'youtube search complete',
+        message: 'youtube video lookup complete',
         data: {
           results,
-          next_page_token: cached.nextPageToken,
+          next_page_token: null,
           cache: {
             source: 'stale',
             age_seconds: cacheHit.ageSeconds ?? null,

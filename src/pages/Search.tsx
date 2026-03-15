@@ -44,43 +44,6 @@ import { getLaunchErrorCopy } from '@/lib/launchErrorCopy';
 const DEFAULT_SEARCH_LIMIT = 10;
 const GENERATE_BLUEPRINT_COST = 1;
 const QUICK_TAG_COUNT = 4;
-const VIDEO_QUICK_TAG_BANK = [
-  'protein meals',
-  'morning routine',
-  'mobility workout',
-  'skincare tips',
-  'ai coding',
-  'productivity habits',
-  'mental performance',
-  'weight loss',
-  'strength training',
-  'healthy recipes',
-  'calisthenics',
-  'sleep optimization',
-  'deep work',
-  'study techniques',
-  'running form',
-  'yoga flow',
-  'meal prep',
-  'finance basics',
-  'career advice',
-  'language learning',
-  'public speaking',
-  'cold exposure',
-  'gut health',
-  'meditation',
-  'data science',
-  'startup strategy',
-  'design systems',
-  'home workouts',
-  'leadership skills',
-  'digital marketing',
-  'paper review',
-  'neuroscience',
-  'supplements',
-  'boxing drills',
-  'stretch routine',
-];
 const CHANNEL_QUICK_TAG_BANK = [
   'fitness coach',
   'nutrition expert',
@@ -153,18 +116,18 @@ function getSearchErrorMessage(error: unknown) {
   if (error instanceof ApiRequestError) {
     switch (error.errorCode) {
       case 'INVALID_QUERY':
-        return 'Enter at least 2 characters to search.';
+        return error.message || 'Add a YouTube link, video id, or a specific title.';
       case 'SEARCH_DISABLED':
-        return 'Search is currently unavailable. Try direct URL in YouTube to Blueprint.';
+        return 'Video lookup is currently unavailable. Try again a little later.';
       case 'RATE_LIMITED':
-        return 'Search quota is currently limited. Please retry later.';
+        return 'Video lookup is a little busy right now. Please try again shortly.';
       case 'API_NOT_CONFIGURED':
-        return 'Search requires VITE_AGENTIC_BACKEND_URL.';
+        return 'Video lookup requires VITE_AGENTIC_BACKEND_URL.';
       default:
         return error.message;
     }
   }
-  return error instanceof Error ? error.message : 'Search failed.';
+  return error instanceof Error ? error.message : 'Could not find that video right now.';
 }
 
 function getChannelSearchErrorMessage(error: unknown) {
@@ -254,7 +217,6 @@ export default function SearchPage() {
   const [queryInput, setQueryInput] = useState('');
   const [submittedQuery, setSubmittedQuery] = useState('');
   const [results, setResults] = useState<YouTubeSearchResult[]>([]);
-  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [mode, setMode] = useState<'videos' | 'channels'>('videos');
   const [channelQueryInput, setChannelQueryInput] = useState('');
@@ -269,7 +231,6 @@ export default function SearchPage() {
   const [generatingVideoIds, setGeneratingVideoIds] = useState<Record<string, boolean>>({});
   const [subscribingChannelIds, setSubscribingChannelIds] = useState<Record<string, boolean>>({});
   const [pendingUnsubscribeChannelIds, setPendingUnsubscribeChannelIds] = useState<Record<string, boolean>>({});
-  const [quickVideoTags, setQuickVideoTags] = useState<string[]>(() => sampleQuickTags(VIDEO_QUICK_TAG_BANK));
   const [quickChannelTags, setQuickChannelTags] = useState<string[]>(() => sampleQuickTags(CHANNEL_QUICK_TAG_BANK));
 
   const sourceSubscriptionsQueryKey = useMemo(() => ['search-source-subscriptions', user?.id || 'anon'] as const, [user?.id]);
@@ -296,25 +257,22 @@ export default function SearchPage() {
   const showEmpty = submittedQuery.length > 0 && !hasResults;
 
   const searchMutation = useMutation({
-    mutationFn: async (input: { query: string; pageToken?: string | null; append?: boolean }) => {
+    mutationFn: async (input: { query: string }) => {
       const data = await searchYouTube({
         q: input.query,
-        limit: DEFAULT_SEARCH_LIMIT,
-        pageToken: input.pageToken || undefined,
       });
       return {
         query: input.query,
-        append: Boolean(input.append),
         ...data,
       };
     },
     onSuccess: (payload) => {
       setSubmittedQuery(payload.query);
       setSearchError(null);
-      setResults((previous) => (payload.append ? [...previous, ...payload.results] : payload.results));
-      setNextPageToken(payload.next_page_token);
+      setResults(payload.results);
     },
     onError: (error) => {
+      setResults([]);
       setSearchError(getSearchErrorMessage(error));
     },
   });
@@ -436,25 +394,11 @@ export default function SearchPage() {
     event.preventDefault();
     const query = queryInput.trim();
     if (!query) {
-      setSearchError('Enter a search query.');
+      setSearchError('Add a YouTube link, video id, or a specific title.');
       return;
     }
-    searchMutation.mutate({ query, append: false });
-  };
-
-  const handleLoadMore = () => {
-    if (!nextPageToken || searchMutation.isPending) return;
-    searchMutation.mutate({
-      query: submittedQuery || queryInput.trim(),
-      pageToken: nextPageToken,
-      append: true,
-    });
-  };
-
-  const runVideoQuickSearch = (tag: string) => {
-    setQueryInput(tag);
     setSearchError(null);
-    searchMutation.mutate({ query: tag, append: false });
+    searchMutation.mutate({ query });
   };
 
   const handleChannelSearchSubmit = (event: FormEvent) => {
@@ -635,7 +579,9 @@ export default function SearchPage() {
 
   const searchSummary = useMemo(() => {
     if (!submittedQuery) return null;
-    return `Showing ${results.length} result${results.length === 1 ? '' : 's'} for "${submittedQuery}"`;
+    return results.length > 0
+      ? `Best match for "${submittedQuery}"`
+      : `We couldn't find a strong match for "${submittedQuery}"`;
   }, [results.length, submittedQuery]);
 
   const channelSearchSummary = useMemo(() => {
@@ -649,9 +595,9 @@ export default function SearchPage() {
       <PageMain className="space-y-6">
         <PageSection className="space-y-2">
           <p className="text-sm font-semibold text-primary uppercase tracking-wide">Create</p>
-          <h1 className="text-2xl font-semibold">Find YouTube content and create blueprints</h1>
+          <h1 className="text-2xl font-semibold">Find the YouTube video you already have in mind</h1>
           <p className="text-sm text-muted-foreground">
-            Generate directly from search results. Successful generations are added to your feed.
+            Paste a YouTube link, add a video id, or type the title. If we find the right match, you can turn it into a blueprint right away.
           </p>
         </PageSection>
 
@@ -659,10 +605,7 @@ export default function SearchPage() {
           <Button
             size="sm"
             variant={mode === 'videos' ? 'default' : 'outline'}
-            onClick={() => {
-              setMode('videos');
-              if (quickVideoTags.length === 0) setQuickVideoTags(sampleQuickTags(VIDEO_QUICK_TAG_BANK));
-            }}
+            onClick={() => setMode('videos')}
           >
             Videos
           </Button>
@@ -682,46 +625,25 @@ export default function SearchPage() {
           <>
             <Card className="border-border/40">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">Search videos</CardTitle>
+                <CardTitle className="text-base">Find one video</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <form onSubmit={handleSearchSubmit} className="flex flex-col gap-2 sm:flex-row">
                   <Input
                     value={queryInput}
                     onChange={(event) => setQueryInput(event.target.value)}
-                    placeholder="Try: skincare 2026 best"
+                    placeholder="Paste a YouTube link, video id, or exact title"
                   />
                   <Button type="submit" disabled={searchMutation.isPending || !searchEnabled}>
-                    {searchMutation.isPending ? 'Searching...' : 'Search'}
+                    {searchMutation.isPending ? 'Finding...' : 'Find video'}
                   </Button>
                 </form>
-                <div className="flex flex-wrap items-center gap-2">
-                  {quickVideoTags.map((tag) => (
-                    <Button
-                      key={tag}
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-7 rounded-full px-3 text-xs"
-                      onClick={() => runVideoQuickSearch(tag)}
-                      disabled={searchMutation.isPending || !searchEnabled}
-                    >
-                      {tag}
-                    </Button>
-                  ))}
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 px-2 text-xs"
-                    onClick={() => setQuickVideoTags(sampleQuickTags(VIDEO_QUICK_TAG_BANK))}
-                  >
-                    Shuffle
-                  </Button>
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  Best with a full YouTube link or video id. Title lookup is there when you need it.
+                </p>
                 {!searchEnabled ? (
                   <p className="text-xs text-muted-foreground">
-                    Search requires `VITE_AGENTIC_BACKEND_URL`.
+                    Video lookup requires `VITE_AGENTIC_BACKEND_URL`.
                   </p>
                 ) : null}
                 {searchError ? <p className="text-sm text-destructive">{searchError}</p> : null}
@@ -741,7 +663,9 @@ export default function SearchPage() {
             {showEmpty ? (
               <Card className="border-border/40">
                 <CardContent className="p-4">
-                  <p className="text-sm text-muted-foreground">No results found for your query.</p>
+                  <p className="text-sm text-muted-foreground">
+                    We couldn't find a close match. Try the full YouTube link or video id for the most reliable hit.
+                  </p>
                 </CardContent>
               </Card>
             ) : null}
@@ -820,14 +744,6 @@ export default function SearchPage() {
                     </Card>
                   );
                 })}
-
-                {nextPageToken ? (
-                  <div className="flex justify-center">
-                    <Button variant="outline" onClick={handleLoadMore} disabled={searchMutation.isPending}>
-                      {searchMutation.isPending ? 'Loading...' : 'Load more'}
-                    </Button>
-                  </div>
-                ) : null}
               </div>
             ) : null}
           </>

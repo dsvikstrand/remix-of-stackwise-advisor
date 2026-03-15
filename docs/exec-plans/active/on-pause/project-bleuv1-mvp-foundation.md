@@ -142,6 +142,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Run scheduler trigger from Oracle (`/api/ingestion/jobs/trigger` with service auth).
 
 ### W6 - Search Discovery (YouTube)
+- Historical note: the current runtime video flow on `/search` has since narrowed to single-video lookup (`URL/id first, title fallback second`) rather than broad paginated discovery.
 - Add auth-only `/search` route for query-based discovery.
 - Use header `Create` action (next to profile menu) as the primary entrypoint to `/search`.
 - Add backend endpoint `GET /api/youtube-search` (YouTube Data API provider).
