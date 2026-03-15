@@ -759,9 +759,9 @@ curl -sS "https://api.bleup.app/api/youtube-search?q=skincare%202026%20best&limi
   -H "Authorization: Bearer $TOKEN"
 ```
 
-YouTube channel search smoke (auth required):
+YouTube creator lookup smoke (auth required):
 ```bash
-curl -sS "https://api.bleup.app/api/youtube-channel-search?q=skincare%20doctor&limit=10" \
+curl -sS "https://api.bleup.app/api/youtube-channel-search?q=%40DoctorMike&limit=3" \
   -H "Authorization: Bearer $TOKEN"
 ```
 

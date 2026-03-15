@@ -47,13 +47,18 @@ async function getAuthHeader(): Promise<Record<string, string>> {
 }
 
 export function clampChannelSearchLimit(rawLimit?: number) {
-  if (typeof rawLimit !== 'number' || !Number.isFinite(rawLimit)) return 10;
-  return Math.max(1, Math.min(25, Math.floor(rawLimit)));
+  if (typeof rawLimit !== 'number' || !Number.isFinite(rawLimit)) return 3;
+  return Math.max(1, Math.min(3, Math.floor(rawLimit)));
 }
 
 export function validateChannelSearchQuery(rawQuery: string) {
   const query = rawQuery.trim();
-  if (query.length < 2) return { ok: false as const, message: 'Query must be at least 2 characters.' };
+  if (!query) {
+    return { ok: false as const, message: 'Enter a channel link, @handle, channel id, or creator name.' };
+  }
+  if (query.length < 2 && !query.startsWith('@') && !query.startsWith('http')) {
+    return { ok: false as const, message: 'Add a little more detail so we can find the right creator.' };
+  }
   return { ok: true as const, query };
 }
 
@@ -90,9 +95,6 @@ export async function searchYouTubeChannels(input: { q: string; limit?: number; 
   const params = new URLSearchParams();
   params.set('q', validQuery.query);
   params.set('limit', String(clampChannelSearchLimit(input.limit)));
-  if (input.pageToken?.trim()) {
-    params.set('page_token', input.pageToken.trim());
-  }
 
   const response = await fetch(`${base}/youtube-channel-search?${params.toString()}`, {
     method: 'GET',

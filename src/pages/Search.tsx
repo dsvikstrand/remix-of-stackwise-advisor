@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppHeader } from '@/components/shared/AppHeader';
@@ -41,46 +41,8 @@ import { formatRelativeShort } from '@/lib/timeFormat';
 import { PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 import { getLaunchErrorCopy } from '@/lib/launchErrorCopy';
 
-const DEFAULT_SEARCH_LIMIT = 10;
+const DEFAULT_CHANNEL_LOOKUP_LIMIT = 3;
 const GENERATE_BLUEPRINT_COST = 1;
-const QUICK_TAG_COUNT = 4;
-const CHANNEL_QUICK_TAG_BANK = [
-  'fitness coach',
-  'nutrition expert',
-  'ai research',
-  'coding tutorials',
-  'business strategy',
-  'finance education',
-  'dermatology',
-  'home workout',
-  'meal prep',
-  'biohacking',
-  'calisthenics',
-  'science channel',
-  'podcast clips',
-  'startup founder',
-  'yoga instructor',
-  'mindset coach',
-  'machine learning',
-  'web development',
-  'career growth',
-  'language teacher',
-  'psychology channel',
-  'tech reviews',
-  'nutrition science',
-  'mobility coach',
-  'boxing coach',
-  'wellness doctor',
-  'strength coach',
-  'study channel',
-  'product management',
-  'deep learning',
-  'sleep science',
-  'habit building',
-  'creator economy',
-  'personal finance',
-  'design education',
-];
 
 function toGenerateErrorMessage(errorCode?: string | null) {
   switch (errorCode) {
@@ -134,18 +96,18 @@ function getChannelSearchErrorMessage(error: unknown) {
   if (error instanceof ChannelSearchApiRequestError) {
     switch (error.errorCode) {
       case 'INVALID_QUERY':
-        return 'Enter at least 2 characters to search channels.';
+        return 'Enter a creator link, @handle, channel id, or creator name.';
       case 'SEARCH_DISABLED':
-        return 'Channel search is currently unavailable.';
+        return 'Creator lookup is currently unavailable.';
       case 'RATE_LIMITED':
-        return 'Channel search quota is currently limited. Please retry later.';
+        return 'Creator lookup is a little busy right now. Please retry later.';
       case 'API_NOT_CONFIGURED':
-        return 'Channel search requires VITE_AGENTIC_BACKEND_URL.';
+        return 'Creator lookup requires VITE_AGENTIC_BACKEND_URL.';
       default:
         return error.message;
     }
   }
-  return error instanceof Error ? error.message : 'Channel search failed.';
+  return error instanceof Error ? error.message : 'Creator lookup failed.';
 }
 
 function getChannelVideosErrorMessage(error: unknown) {
@@ -173,17 +135,6 @@ type GenerateTarget = {
   channel_url: string;
   duration_seconds?: number | null;
 };
-
-function sampleQuickTags(bank: string[], count = QUICK_TAG_COUNT) {
-  const pool = [...bank];
-  const chosen: string[] = [];
-  while (pool.length > 0 && chosen.length < count) {
-    const index = Math.floor(Math.random() * pool.length);
-    const [pick] = pool.splice(index, 1);
-    chosen.push(pick);
-  }
-  return chosen;
-}
 
 function formatDuration(seconds: number | null | undefined) {
   const total = Math.max(0, Math.floor(Number(seconds || 0)));
@@ -222,7 +173,6 @@ export default function SearchPage() {
   const [channelQueryInput, setChannelQueryInput] = useState('');
   const [submittedChannelQuery, setSubmittedChannelQuery] = useState('');
   const [channelResults, setChannelResults] = useState<YouTubeChannelSearchResult[]>([]);
-  const [channelNextPageToken, setChannelNextPageToken] = useState<string | null>(null);
   const [channelSearchError, setChannelSearchError] = useState<string | null>(null);
   const [selectedBrowseChannel, setSelectedBrowseChannel] = useState<YouTubeChannelSearchResult | null>(null);
   const [channelVideoItems, setChannelVideoItems] = useState<YouTubeChannelVideoItem[]>([]);
@@ -231,7 +181,6 @@ export default function SearchPage() {
   const [generatingVideoIds, setGeneratingVideoIds] = useState<Record<string, boolean>>({});
   const [subscribingChannelIds, setSubscribingChannelIds] = useState<Record<string, boolean>>({});
   const [pendingUnsubscribeChannelIds, setPendingUnsubscribeChannelIds] = useState<Record<string, boolean>>({});
-  const [quickChannelTags, setQuickChannelTags] = useState<string[]>(() => sampleQuickTags(CHANNEL_QUICK_TAG_BANK));
 
   const sourceSubscriptionsQueryKey = useMemo(() => ['search-source-subscriptions', user?.id || 'anon'] as const, [user?.id]);
   const subscriptionsQuery = useQuery({
@@ -278,23 +227,20 @@ export default function SearchPage() {
   });
 
   const channelSearchMutation = useMutation({
-    mutationFn: async (input: { query: string; pageToken?: string | null; append?: boolean }) => {
+    mutationFn: async (input: { query: string }) => {
       const data = await searchYouTubeChannels({
         q: input.query,
-        limit: DEFAULT_SEARCH_LIMIT,
-        pageToken: input.pageToken || undefined,
+        limit: DEFAULT_CHANNEL_LOOKUP_LIMIT,
       });
       return {
         query: input.query,
-        append: Boolean(input.append),
         ...data,
       };
     },
     onSuccess: (payload) => {
       setSubmittedChannelQuery(payload.query);
       setChannelSearchError(null);
-      setChannelResults((previous) => (payload.append ? [...previous, ...payload.results] : payload.results));
-      setChannelNextPageToken(payload.next_page_token);
+      setChannelResults(payload.results);
     },
     onError: (error) => {
       setChannelSearchError(getChannelSearchErrorMessage(error));
@@ -405,25 +351,10 @@ export default function SearchPage() {
     event.preventDefault();
     const query = channelQueryInput.trim();
     if (!query) {
-      setChannelSearchError('Enter a channel query.');
+      setChannelSearchError('Enter a creator link, @handle, channel id, or creator name.');
       return;
     }
-    channelSearchMutation.mutate({ query, append: false });
-  };
-
-  const handleChannelSearchLoadMore = () => {
-    if (!channelNextPageToken || channelSearchMutation.isPending) return;
-    channelSearchMutation.mutate({
-      query: submittedChannelQuery || channelQueryInput.trim(),
-      pageToken: channelNextPageToken,
-      append: true,
-    });
-  };
-
-  const runChannelQuickSearch = (tag: string) => {
-    setChannelQueryInput(tag);
-    setChannelSearchError(null);
-    channelSearchMutation.mutate({ query: tag, append: false });
+    channelSearchMutation.mutate({ query });
   };
 
   const handleBrowseChannelVideos = (channel: YouTubeChannelSearchResult) => {
@@ -579,7 +510,7 @@ export default function SearchPage() {
 
   const channelSearchSummary = useMemo(() => {
     if (!submittedChannelQuery) return null;
-    return `Showing ${channelResults.length} channel${channelResults.length === 1 ? '' : 's'} for "${submittedChannelQuery}"`;
+    return `We found ${channelResults.length} creator${channelResults.length === 1 ? '' : 's'} for "${submittedChannelQuery}"`;
   }, [channelResults.length, submittedChannelQuery]);
 
   return (
@@ -605,10 +536,7 @@ export default function SearchPage() {
           <Button
             size="sm"
             variant={mode === 'channels' ? 'default' : 'outline'}
-            onClick={() => {
-              setMode('channels');
-              if (quickChannelTags.length === 0) setQuickChannelTags(sampleQuickTags(CHANNEL_QUICK_TAG_BANK));
-            }}
+            onClick={() => setMode('channels')}
           >
             Channels
           </Button>
@@ -741,43 +669,22 @@ export default function SearchPage() {
           <>
             <Card className="border-border/40">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">Search channels</CardTitle>
+                <CardTitle className="text-base">Find a creator</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <form onSubmit={handleChannelSearchSubmit} className="flex flex-col gap-2 sm:flex-row">
                   <Input
                     value={channelQueryInput}
                     onChange={(event) => setChannelQueryInput(event.target.value)}
-                    placeholder="Try: fitness coach"
+                    placeholder="Paste a channel link, @handle, channel id, or creator name"
                   />
                   <Button type="submit" disabled={channelSearchMutation.isPending || !searchEnabled}>
-                    {channelSearchMutation.isPending ? 'Searching...' : 'Search'}
+                    {channelSearchMutation.isPending ? 'Finding...' : 'Find creator'}
                   </Button>
                 </form>
-                <div className="flex flex-wrap items-center gap-2">
-                  {quickChannelTags.map((tag) => (
-                    <Button
-                      key={tag}
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-7 rounded-full px-3 text-xs"
-                      onClick={() => runChannelQuickSearch(tag)}
-                      disabled={channelSearchMutation.isPending || !searchEnabled}
-                    >
-                      {tag}
-                    </Button>
-                  ))}
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 px-2 text-xs"
-                    onClick={() => setQuickChannelTags(sampleQuickTags(CHANNEL_QUICK_TAG_BANK))}
-                  >
-                    Shuffle
-                  </Button>
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  A full channel link, @handle, or channel id works best. Name lookup is there when you need it.
+                </p>
                 {channelSearchError ? <p className="text-sm text-destructive">{channelSearchError}</p> : null}
               </CardContent>
             </Card>
@@ -795,7 +702,7 @@ export default function SearchPage() {
             {submittedChannelQuery && channelResults.length === 0 && !channelSearchMutation.isPending ? (
               <Card className="border-border/40">
                 <CardContent className="p-4">
-                  <p className="text-sm text-muted-foreground">No channels found for your query.</p>
+                  <p className="text-sm text-muted-foreground">We couldn&apos;t find that creator.</p>
                 </CardContent>
               </Card>
             ) : null}
@@ -858,13 +765,6 @@ export default function SearchPage() {
                   );
                 })}
 
-                {channelNextPageToken ? (
-                  <div className="flex justify-center">
-                    <Button variant="outline" onClick={handleChannelSearchLoadMore} disabled={channelSearchMutation.isPending}>
-                      {channelSearchMutation.isPending ? 'Loading...' : 'Load more channels'}
-                    </Button>
-                  </div>
-                ) : null}
               </div>
             ) : null}
 

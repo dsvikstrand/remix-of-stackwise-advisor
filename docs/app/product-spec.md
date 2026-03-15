@@ -30,7 +30,7 @@ a7) [have] Legacy pending/skipped feed rows without blueprints are hidden in `My
 a8) [have] `/subscriptions` is simplified for MVP to two visible actions: `Add Subscription` (popup search) and per-row `Unsubscribe`.
 a9) [have] `/subscriptions` hides the aggregate ingestion-health summary box to reduce new-user confusion.
 a10) [have] Auth-only `Search` route (`/search`) now treats video lookup as a direct-find flow: paste a YouTube link, video id, or specific title, then generate only when the app finds a confident match.
-a11) [have] `/subscriptions` now supports auth-only YouTube channel search with popup-based subscribe flow (manual paste fallback removed in UI).
+a11) [have] `/subscriptions` now supports auth-only creator lookup with popup-based subscribe flow: channel URL, `@handle`, and channel id are preferred, while creator-name lookup returns only a tiny helper-backed candidate set.
 a12) [have] Subscription rows now render channel avatar thumbnails (when available) and hide technical status/mode badges from row UI.
 a13) [have] `My Feed` blueprint rows now use channel-feed-style visual cards with status-driven auto-channel outcomes.
 a14) [have] Manual/search YouTube generation defaults to AI review enabled while banner generation stays off in the current thumbnail-first flow.
@@ -202,7 +202,7 @@ m7) Planned mutable interfaces use explicit auth scope + idempotency mode and un
 m8) Runtime default for legacy manual gates remains `CHANNEL_GATES_MODE=bypass`; auto-channel path can enforce independently via `AUTO_CHANNEL_GATE_MODE`.
 
 ## Primary User Flows (`bleuV1`)
-f1) User follows YouTube channels from `/subscriptions` by clicking `Add Subscription`, searching channels, and clicking `Subscribe`.
+f1) User follows YouTube channels from `/subscriptions` by clicking `Add Subscription`, looking up a creator by channel URL, `@handle`, channel id, or creator name, and clicking `Subscribe`.
 f2) User can unsubscribe from active channels directly on `/subscriptions` (unsubscribed rows disappear from the page list).
 f3) User enters search/create via header `Create` (which routes to `/search`) and looks up one specific YouTube video by link, video id, or title match (not persisted until generate).
 f4) User selects `Generate Blueprint` on a result to generate and save directly into `My Feed`.
@@ -275,7 +275,7 @@ si10) YouTube channel resolver accepts handle/channel URL/channel ID and uses `b
 si11) service-ops endpoint: `GET /api/ingestion/jobs/latest` (service auth; latest ingestion health snapshot)
 si11b) service-ops endpoint: `GET /api/ops/queue/health` (service auth; queue depth/stale lease/provider circuit state snapshot)
 si12) YouTube video lookup endpoint: `GET /api/youtube-search?q=<link|video_id|title>` (single confident-hit semantics via helper-backed title fallback; no broad paging contract)
-si13) YouTube channel search endpoint: `GET /api/youtube-channel-search?q=<query>&limit=<1..25>&page_token=<optional>`
+si13) YouTube creator lookup endpoint: `GET /api/youtube-channel-search?q=<channel_url|@handle|channel_id|creator_name>&limit=<1..3>` (exact identifiers first; helper-backed name lookup returns only a tiny candidate set and has no official `search.list` dependency)
 si13b) Shared YouTube live-call budgeting now uses an atomic backend quota consume path; when the quota schema is present, retry timing comes from the DB decision rather than app-side best-effort counters.
 si13c) Known-channel video-library listing (`GET /api/youtube/channels/:channelId/videos`, `GET /api/source-pages/:platform/:externalId/videos`) now uses the channel uploads-playlist path (`channels.list -> playlistItems.list`) instead of `search.list`, so those routes no longer carry the 100-unit search cost per page.
 si14) `GET /api/source-subscriptions` now includes optional `source_channel_avatar_url` per subscription row from stored `source_pages` metadata; normal reads do not block on live YouTube API asset fetches.

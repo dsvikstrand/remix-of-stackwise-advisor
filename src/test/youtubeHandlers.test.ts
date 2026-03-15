@@ -122,7 +122,11 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     emitGenerationStartedNotification: vi.fn(async () => undefined),
     getGenerationNotificationLinkPath: () => '/wall',
     scheduleQueuedIngestionProcessing: vi.fn(() => undefined),
-    clampYouTubeChannelSearchLimit: (_value: unknown, fallback: number) => fallback,
+    clampYouTubeChannelSearchLimit: (value: unknown, fallback: number) => {
+      const numeric = typeof value === 'number' ? value : Number(value);
+      if (!Number.isFinite(numeric)) return fallback;
+      return Math.max(1, Math.min(3, Math.floor(numeric)));
+    },
     searchYouTubeChannels: vi.fn(async () => ({ results: [], nextPageToken: null })),
     YouTubeChannelSearchError: class YouTubeChannelSearchError extends Error {},
     clampYouTubeSourceVideoLimit: (_value: unknown, fallback: number) => fallback,
@@ -219,6 +223,54 @@ describe('youtube handlers', () => {
       data: {
         results: [{
           video_id: 'abc123def45',
+        }],
+        next_page_token: null,
+      },
+    });
+  });
+
+  it('treats /api/youtube-channel-search as bounded creator lookup without api-key gating', async () => {
+    const app = createMockApp();
+    const searchYouTubeChannels = vi.fn(async () => ({
+      results: [{
+        channel_id: 'UC12345678901234567890',
+        channel_title: 'Doctor Mike',
+        channel_url: 'https://www.youtube.com/@DoctorMike',
+        description: 'Health and medicine',
+        thumbnail_url: null,
+        published_at: null,
+        subscriber_count: 13200000,
+      }],
+      nextPageToken: 'IGNORED_TOKEN',
+    }));
+    registerYouTubeRouteHandlers(app as any, createDeps({
+      youtubeDataApiKey: '',
+      searchYouTubeChannels,
+    }));
+
+    const handler = app.handlers['GET /api/youtube-channel-search'];
+    const req = {
+      query: {
+        q: '@DoctorMike',
+        limit: '25',
+        page_token: 'PAGE_2',
+      },
+    } as any;
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(searchYouTubeChannels).toHaveBeenCalledWith({
+      query: '@DoctorMike',
+      limit: 3,
+      pageToken: 'PAGE_2',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        results: [{
+          channel_id: 'UC12345678901234567890',
         }],
         next_page_token: null,
       },

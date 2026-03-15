@@ -1146,16 +1146,7 @@ app.get('/api/youtube-channel-search', searchApiLimiter, async (req, res) => {
     return res.status(400).json({
       ok: false,
       error_code: 'INVALID_QUERY',
-      message: 'Query must be at least 2 characters.',
-      data: null,
-    });
-  }
-
-  if (!youtubeDataApiKey) {
-    return res.status(503).json({
-      ok: false,
-      error_code: 'SEARCH_DISABLED',
-      message: 'YouTube channel search is not configured.',
+      message: 'Enter a creator link, @handle, channel id, or creator name.',
       data: null,
     });
   }
@@ -1259,7 +1250,6 @@ app.get('/api/youtube-channel-search', searchApiLimiter, async (req, res) => {
 
   try {
     const result = await searchYouTubeChannels({
-      apiKey: youtubeDataApiKey,
       query,
       limit,
       pageToken: pageToken || undefined,
@@ -1275,7 +1265,7 @@ app.get('/api/youtube-channel-search', searchApiLimiter, async (req, res) => {
           pageToken: pageToken || null,
           response: {
             results: result.results,
-            nextPageToken: result.nextPageToken || null,
+            nextPageToken: null,
           },
           ttlSeconds: youtubeChannelSearchCacheTtlSeconds,
         });
@@ -1294,7 +1284,7 @@ app.get('/api/youtube-channel-search', searchApiLimiter, async (req, res) => {
       message: 'youtube channel search complete',
       data: {
         results: result.results,
-        next_page_token: result.nextPageToken,
+        next_page_token: null,
         cache: {
           source: 'live',
           age_seconds: 0,

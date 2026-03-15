@@ -5,22 +5,28 @@ import {
 } from '@/lib/youtubeChannelSearchApi';
 
 describe('youtubeChannelSearchApi utils', () => {
-  it('clamps limit in 1..25 range with default 10', () => {
-    expect(clampChannelSearchLimit()).toBe(10);
+  it('clamps limit in 1..3 range with default 3', () => {
+    expect(clampChannelSearchLimit()).toBe(3);
     expect(clampChannelSearchLimit(0)).toBe(1);
     expect(clampChannelSearchLimit(1)).toBe(1);
-    expect(clampChannelSearchLimit(10)).toBe(10);
-    expect(clampChannelSearchLimit(99)).toBe(25);
+    expect(clampChannelSearchLimit(2)).toBe(2);
+    expect(clampChannelSearchLimit(99)).toBe(3);
   });
 
-  it('validates search query length', () => {
-    const invalid = validateChannelSearchQuery(' a ');
+  it('validates creator lookup query shape', () => {
+    const invalid = validateChannelSearchQuery(' ');
     expect(invalid.ok).toBe(false);
 
-    const valid = validateChannelSearchQuery('  skincare routines ');
+    const direct = validateChannelSearchQuery('  @DoctorMike ');
+    expect(direct.ok).toBe(true);
+    if (direct.ok) {
+      expect(direct.query).toBe('@DoctorMike');
+    }
+
+    const valid = validateChannelSearchQuery('  Doctor Mike ');
     expect(valid.ok).toBe(true);
     if (valid.ok) {
-      expect(valid.query).toBe('skincare routines');
+      expect(valid.query).toBe('Doctor Mike');
     }
   });
 

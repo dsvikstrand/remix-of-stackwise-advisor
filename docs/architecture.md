@@ -68,7 +68,7 @@
     - `My Feed` header includes both `Add Subscription` and `Manage subscriptions` entrypoints.
   - Blueprint detail in `src/pages/BlueprintDetail.tsx` now prefers source-channel attribution for imported YouTube blueprints and hides edit CTA in default MVP UI.
   - Blueprint detail renders `Summary` as swipeable slides when content is chunkable (3-4 chunks) and keeps non-summary sections in standard text blocks.
-  - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: popup channel search + subscribe + active-list `Unsubscribe`; aggregate health summary hidden for user clarity; row avatars shown when available).
+  - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: popup creator lookup + subscribe + active-list `Unsubscribe`; aggregate health summary hidden for user clarity; row avatars shown when available).
     - page-level OAuth/import/manual-refresh orchestration now lives in a dedicated frontend controller hook so the route component primarily owns rendering.
     - per-row `Auto unlock` toggle (`auto_unlock_enabled`) controls whether that subscription participates in new-video auto unlock attempts.
   - Source page surface in `src/pages/SourcePage.tsx` at `/s/:platform/:externalId`:
@@ -151,7 +151,7 @@
     - `GET /api/blueprints/:id/generation-trace` (auth owner or service token; returns latest durable generation trace by blueprint with optional event pagination)
     - `GET /api/generation-runs/:runId` (auth owner or service token; returns durable generation trace by run id with optional event pagination)
     - `GET /api/youtube-search` (auth-only single-video lookup: URL/id first, title fallback second; no broad paging contract)
-    - `GET /api/youtube-channel-search` (auth-only YouTube channel discovery, relevance-sorted)
+    - `GET /api/youtube-channel-search` (auth-only creator lookup: exact channel URL / `@handle` / channel id first, helper-backed name lookup second, tiny candidate set only)
     - known-channel video-library routes (`GET /api/youtube/channels/:channelId/videos`, `GET /api/source-pages/:platform/:externalId/videos`) now use `channels.list(part=contentDetails,snippet)` + `playlistItems.list` rather than `search.list`, so the expensive 100-unit search cost is limited to broad discovery routes
     - `GET /api/youtube/connection/status` (auth-only YouTube OAuth status)
     - `POST /api/youtube/connection/start` (auth-only OAuth start, returns auth URL)
@@ -217,13 +217,13 @@
    - `/welcome` reuses the manual-first creator setup flow from `/subscriptions` (manual add primary, public YouTube import optional).
    - completion requires joining at least one Bleu channel; creator add/import is optional.
 2. Ingest source item (manual URL pull or subscription sync).
-   - discovery option: user can search YouTube results in `/search` before selecting a source video.
+   - discovery option: user can look up one creator or one specific video in `/search` before selecting a source video.
    - Search-generated `/youtube` handoff carries channel context (id/title/url) so saved source items retain channel subtitle data in My Feed.
    - My Feed source subtitle mapping also falls back to source metadata channel title when column-level channel title is absent.
    - `/youtube` core request is timeout-bounded by `YT2BP_CORE_TIMEOUT_MS` (default `120000`).
    - optional review generation is executed outside the core endpoint request and may attach after save.
 3. Subscription create/reactivate:
-   - user opens `/subscriptions`, launches `Add Subscription`, searches channels, then clicks subscribe.
+   - user opens `/subscriptions`, launches `Add Subscription`, looks up a creator by channel URL, `@handle`, channel id, or name, then clicks subscribe.
    - optional onboarding accelerator: user can add creators manually or import selected public YouTube subscriptions from `/subscriptions` or `/welcome`.
    - user can unsubscribe existing active rows from `/subscriptions`; sync/reactivate UI is deferred.
    - resolve channel id and set first-sync checkpoint only (`last_seen_published_at`, `last_seen_video_id`).

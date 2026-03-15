@@ -23,7 +23,8 @@
 - 2026-02-17 note: ingestion reliability visibility adds service-auth endpoint `GET /api/ingestion/jobs/latest`; this is an ops path and does not alter the YT2BP envelope.
 - 2026-02-17 note: auth-only YouTube discovery endpoint `GET /api/youtube-search` is additive and does not alter the YT2BP envelope.
 - 2026-03-15 note: the auth-only `/search` video flow now treats `GET /api/youtube-search` as bounded single-video lookup (`URL/id first, helper-backed title fallback second`) rather than broad paginated discovery; the route returns one confident hit or no hit and remains outside the YT2BP envelope.
-- 2026-02-17 note: auth-only YouTube channel discovery endpoint `GET /api/youtube-channel-search` is additive and does not alter the YT2BP envelope.
+- 2026-02-17 note: auth-only YouTube creator lookup endpoint `GET /api/youtube-channel-search` is additive and does not alter the YT2BP envelope.
+- 2026-03-15 note: creator lookup on `GET /api/youtube-channel-search` now prefers exact channel URL / `@handle` / channel id inputs and uses helper-backed bounded name lookup only; this remains outside the YT2BP envelope.
 - 2026-03-15 note: known-channel video-library routes (`GET /api/youtube/channels/:channelId/videos`, `GET /api/source-pages/:platform/:externalId/videos`) now use the low-cost uploads-playlist path (`channels.list -> playlistItems.list`) instead of `search.list`; this remains outside the YT2BP envelope.
 - 2026-02-17 note: `GET /api/source-subscriptions` now includes optional `source_channel_avatar_url` from stored `source_pages` metadata for UI; this remains outside the YT2BP envelope.
 - 2026-02-17 note: subscription auto-ingest generation now enables review-by-default while keeping banner disabled; this remains outside the YT2BP endpoint envelope.
@@ -185,7 +186,7 @@
 - Subscription sync and manual pending-card acceptance are intentionally outside this endpoint contract.
 - Ingestion health polling (`/api/ingestion/jobs/latest`) is intentionally outside this endpoint contract.
 - YouTube query discovery (`/api/youtube-search`) is intentionally outside this endpoint contract.
-- YouTube channel discovery (`/api/youtube-channel-search`) is intentionally outside this endpoint contract.
+- YouTube creator lookup (`/api/youtube-channel-search`) is intentionally outside this endpoint contract.
 - Profile feed retrieval (`/api/profile/:userId/feed`) is intentionally outside this endpoint contract.
 - Subscription row avatar enrichment (`GET /api/source-subscriptions`) is intentionally outside this endpoint contract.
 - Auto-banner queue processing and cap rebalance are intentionally outside this endpoint contract.

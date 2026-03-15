@@ -26,18 +26,18 @@ function getChannelSearchErrorMessage(error: unknown) {
   if (error instanceof ChannelSearchApiRequestError) {
     switch (error.errorCode) {
       case 'INVALID_QUERY':
-        return 'Enter at least 2 characters to search for channels.';
+        return 'Enter a creator link, @handle, channel id, or creator name.';
       case 'SEARCH_DISABLED':
-        return 'Channel search is currently unavailable.';
+        return 'Creator lookup is currently unavailable.';
       case 'RATE_LIMITED':
-        return 'Search quota is currently limited. Please try again shortly.';
+        return 'Creator lookup is a little busy right now. Please try again shortly.';
       case 'API_NOT_CONFIGURED':
-        return 'Search requires VITE_AGENTIC_BACKEND_URL.';
+        return 'Creator lookup requires VITE_AGENTIC_BACKEND_URL.';
       default:
         return error.message;
     }
   }
-  return error instanceof Error ? error.message : 'Channel search failed.';
+  return error instanceof Error ? error.message : 'Creator lookup failed.';
 }
 
 function getPublicYouTubePreviewErrorCode(error: unknown) {
@@ -129,7 +129,6 @@ export function useCreatorSetupController() {
   const [channelSearchQuery, setChannelSearchQuery] = useState('');
   const [channelSearchSubmittedQuery, setChannelSearchSubmittedQuery] = useState('');
   const [channelSearchResults, setChannelSearchResults] = useState<YouTubeChannelSearchResult[]>([]);
-  const [channelSearchNextToken, setChannelSearchNextToken] = useState<string | null>(null);
   const [channelSearchError, setChannelSearchError] = useState<string | null>(null);
   const [subscribingChannelIds, setSubscribingChannelIds] = useState<Record<string, boolean>>({});
 
@@ -152,7 +151,6 @@ export function useCreatorSetupController() {
     setChannelSearchQuery('');
     setChannelSearchSubmittedQuery('');
     setChannelSearchResults([]);
-    setChannelSearchNextToken(null);
     setChannelSearchError(null);
   }, []);
 
@@ -261,23 +259,20 @@ export function useCreatorSetupController() {
   });
 
   const channelSearchMutation = useMutation({
-    mutationFn: async (input: { query: string; pageToken?: string | null; append?: boolean }) => {
+    mutationFn: async (input: { query: string }) => {
       const data = await searchYouTubeChannels({
         q: input.query,
-        limit: 10,
-        pageToken: input.pageToken || undefined,
+        limit: 3,
       });
       return {
         query: input.query,
-        append: Boolean(input.append),
         ...data,
       };
     },
     onSuccess: (payload) => {
       setChannelSearchSubmittedQuery(payload.query);
       setChannelSearchError(null);
-      setChannelSearchResults((previous) => (payload.append ? [...previous, ...payload.results] : payload.results));
-      setChannelSearchNextToken(payload.next_page_token);
+      setChannelSearchResults(payload.results);
     },
     onError: (error) => {
       setChannelSearchError(getChannelSearchErrorMessage(error));
@@ -432,20 +427,11 @@ export function useCreatorSetupController() {
     event.preventDefault();
     const query = channelSearchQuery.trim();
     if (!query) {
-      setChannelSearchError('Enter a channel query.');
+      setChannelSearchError('Enter a creator link, @handle, channel id, or creator name.');
       return;
     }
-    channelSearchMutation.mutate({ query, append: false });
+    channelSearchMutation.mutate({ query });
   }, [channelSearchMutation, channelSearchQuery]);
-
-  const handleChannelSearchLoadMore = useCallback(() => {
-    if (!channelSearchNextToken || channelSearchMutation.isPending) return;
-    channelSearchMutation.mutate({
-      query: channelSearchSubmittedQuery || channelSearchQuery.trim(),
-      pageToken: channelSearchNextToken,
-      append: true,
-    });
-  }, [channelSearchMutation, channelSearchNextToken, channelSearchQuery, channelSearchSubmittedQuery]);
 
   const runSubscribe = useCallback(async (input: string, successTitle = 'Subscription saved') => {
     await createMutation.mutateAsync(input);
@@ -475,7 +461,6 @@ export function useCreatorSetupController() {
     channelSearchQuery,
     channelSearchSubmittedQuery,
     channelSearchResults: filteredChannelSearchResults,
-    channelSearchNextToken,
     channelSearchError,
     publicYouTubeChannelInput,
     publicYouTubePreview,
@@ -501,7 +486,6 @@ export function useCreatorSetupController() {
     handlePublicYouTubePreviewSelectAll,
     handlePublicYouTubePreviewClearSelection,
     handleChannelSearchSubmit,
-    handleChannelSearchLoadMore,
     handleSubscribeFromSearch,
     handleImportSelectedPublicYouTubeCreators,
     isChannelSubscribing: (channelId: string) => Boolean(subscribingChannelIds[channelId]),

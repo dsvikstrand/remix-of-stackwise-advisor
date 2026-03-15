@@ -54,7 +54,7 @@ export function CreatorSetupSection({
           <div className="space-y-1">
             <p className="text-base font-semibold text-foreground">Add creators manually</p>
             <p className="text-sm text-muted-foreground">
-              Search YouTube creators and subscribe one by one.
+              Find the creator you already have in mind and subscribe in one click.
             </p>
           </div>
           <Button
@@ -235,7 +235,7 @@ export function CreatorSetupSection({
           <DialogHeader>
             <DialogTitle>Add Subscription</DialogTitle>
             <DialogDescription>
-              Search YouTube channels and subscribe in one click.
+              Add a creator by channel link, @handle, channel id, or creator name.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -243,19 +243,19 @@ export function CreatorSetupSection({
               <Input
                 value={controller.channelSearchQuery}
                 onChange={(event) => controller.setChannelSearchQuery(event.target.value)}
-                placeholder="Try: skincare, fitness, productivity"
+                placeholder="Paste a channel link, @handle, channel id, or creator name"
               />
               <Button type="submit" size="sm" disabled={controller.channelSearchMutation.isPending || !controller.subscriptionsEnabled}>
-                {controller.channelSearchMutation.isPending ? 'Searching...' : 'Search channels'}
+                {controller.channelSearchMutation.isPending ? 'Finding...' : 'Find creator'}
               </Button>
             </form>
             <p className="text-xs text-muted-foreground">
-              Suggestions are transient. Nothing changes until you click Subscribe.
+              Nothing changes until you click Subscribe.
             </p>
             {controller.channelSearchError ? <p className="text-sm text-destructive">{controller.channelSearchError}</p> : null}
 
             {controller.channelSearchResults.length === 0 && controller.channelSearchSubmittedQuery ? (
-              <p className="text-sm text-muted-foreground">No channels found for your query.</p>
+              <p className="text-sm text-muted-foreground">We couldn&apos;t find that creator.</p>
             ) : null}
 
             {controller.channelSearchResults.length > 0 ? (
@@ -296,18 +296,6 @@ export function CreatorSetupSection({
                     </div>
                   );
                 })}
-                {controller.channelSearchNextToken ? (
-                  <div className="flex justify-center">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={controller.handleChannelSearchLoadMore}
-                      disabled={controller.channelSearchMutation.isPending}
-                    >
-                      {controller.channelSearchMutation.isPending ? 'Loading...' : 'Load more'}
-                    </Button>
-                  </div>
-                ) : null}
               </div>
             ) : null}
           </div>
