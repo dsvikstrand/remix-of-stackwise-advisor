@@ -114,6 +114,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Step 19 source-page feed activation adds public `GET /api/source-pages/:platform/:externalId/blueprints` and replaces `/s/:platform/:externalId` placeholder text with deduped Home-style read-only blueprint cards (`latest + load more`).
 - Step 20 historical source-page Video Library note: auth-only creator backlog listing (`GET /videos`) and async selected generation (`POST /videos/generate`) on `/s/:platform/:externalId` were added at that stage; the generate alias is now retired.
 - Step 20 follow-up adds two-tab list filters in Video Library (`Full videos` and `Shorts`), with shorts classified as `<=60s`.
+- Current runtime note: Source Page `Video Library` now loads on explicit user request instead of auto-fetching on page open.
 - Step 20 safety follow-up tunes source-page list limiter policy to burst+sustained guardrails and frontend caching to avoid normal-flow 429 churn.
 - Step 21 shared unlock + daily credit wallet adds wallet/ledger economics (`user_credit_wallets`, `credit_ledger`) plus source-video unlock state (`source_item_unlocks`) for one-generation-per-source-item.
 - Step 21 source-page generation endpoint shifted to `POST /videos/unlock`; the earlier `/videos/generate` compatibility alias mentioned here was later retired, while subscription new uploads moved to `my_feed_unlockable` cards instead of immediate generation.

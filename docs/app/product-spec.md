@@ -74,7 +74,7 @@ a50) [have] Source Pages foundation is active: YouTube channels are now represen
 a51) [have] Subscription surfaces now deep-link to Source Pages, while legacy `/api/source-subscriptions*` contracts remain active for compatibility.
 a52) [have] Source page reads now lazily hydrate missing avatar/banner assets for legacy backfilled rows, so first open can populate visuals without requiring re-subscribe.
 a53) [have] Source pages now expose a public, deduped blueprint feed (`latest + load more`) via `GET /api/source-pages/:platform/:externalId/blueprints`, and `/s/:platform/:externalId` renders Home-style read-only blueprint cards.
-a54) [have] Source pages now include a subscriber-only `Video Library` section for back-catalog generation (`GET /videos`, `POST /videos/unlock`) with async queue execution and duplicate skip visibility.
+a54) [have] Source pages now include a subscriber-only, user-triggered `Video Library` section for back-catalog generation (`GET /videos`, `POST /videos/unlock`) with async queue execution and duplicate skip visibility.
 a55) [have] Shared source-video unlock model is active for new source-page generation: one generation per source video can be reused across subscribers.
 a56) [have] Credit model now uses a daily credit wallet with UTC reset (`free=3.00`, `plus=20.00`, `admin` bypass, no rollover) instead of refill semantics.
 a57) [have] Subscription auto-ingestion now writes unlockable My Feed rows (`my_feed_unlockable`) for new uploads instead of immediately generating blueprints.

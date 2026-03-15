@@ -188,13 +188,15 @@ export default function SourcePage() {
 
   const sourceBlueprintItems = sourceBlueprintsQuery.data?.pages.flatMap((page) => page.items) || [];
 
+  const [videoLibraryRequested, setVideoLibraryRequested] = useState(false);
   const [selectedVideoIds, setSelectedVideoIds] = useState<Record<string, boolean>>({});
   const [optimisticUnlockingVideoIds, setOptimisticUnlockingVideoIds] = useState<Record<string, boolean>>({});
   const sourceVideosQuery = useInfiniteQuery({
     queryKey: ['source-page-videos', platform, externalId, user?.id],
-    enabled: backendEnabled && isValidRoute && Boolean(sourcePage) && Boolean(user),
+    enabled: backendEnabled && isValidRoute && Boolean(sourcePage) && Boolean(user) && videoLibraryRequested,
     staleTime: 120_000,
-    refetchOnMount: 'always',
+    retry: false,
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
     initialPageParam: null as string | null,
     queryFn: ({ pageParam }) => getSourcePageVideos({
@@ -318,6 +320,12 @@ export default function SourcePage() {
   });
   const videoLibraryJobRunning = videoLibraryUnlockTracker.activity.isActive;
 
+  useEffect(() => {
+    setVideoLibraryRequested(false);
+    setSelectedVideoIds({});
+    setOptimisticUnlockingVideoIds({});
+  }, [externalId, platform, user?.id]);
+
   const handleSubscribeToggle = () => {
     if (!user) return;
     if (subscribed) {
@@ -339,6 +347,15 @@ export default function SourcePage() {
     if (selectedSourceVideoItems.length === 0) return;
     if (!canUnlockSourceVideos) return;
     videoLibraryGenerateMutation.mutate(selectedSourceVideoItems);
+  };
+
+  const handleRequestVideoLibrary = () => {
+    if (!user || !canUnlockSourceVideos) return;
+    if (!videoLibraryRequested) {
+      setVideoLibraryRequested(true);
+      return;
+    }
+    void sourceVideosQuery.refetch();
   };
 
   return (
@@ -470,32 +487,54 @@ export default function SourcePage() {
                         </p>
                       ) : null}
 
-                      {!sourceVideosQuery.isFetching && sourceVideosQuery.error ? (
+                      <div className="flex items-center justify-between gap-3 rounded-md border border-border/40 bg-muted/30 px-3 py-2">
+                        <p className="text-xs text-muted-foreground">
+                          Load the Video Library on request to avoid automatic YouTube back-catalog fetches on page open.
+                        </p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={handleRequestVideoLibrary}
+                          disabled={
+                            !canUnlockSourceVideos
+                            || sourceVideosQuery.isFetching
+                            || sourceVideosQuery.isFetchingNextPage
+                          }
+                        >
+                          {!videoLibraryRequested
+                            ? 'Load Video Library'
+                            : (sourceVideosQuery.isFetching && sourceVideoItems.length === 0)
+                              ? 'Loading...'
+                              : 'Refresh Library'}
+                        </Button>
+                      </div>
+
+                      {videoLibraryRequested && !sourceVideosQuery.isFetching && sourceVideosQuery.error ? (
                         <p className="text-sm text-destructive">
                           {getSourceVideoLibraryErrorMessage(sourceVideosQuery.error, 'Could not load source videos.')}
                         </p>
                       ) : null}
 
-                      {sourceVideoRateLimited ? (
+                      {videoLibraryRequested && sourceVideoRateLimited ? (
                         <p className="text-xs text-muted-foreground">
                           Showing cached results while rate limit cools down.
                         </p>
                       ) : null}
 
-                      {sourceVideosQuery.isFetching && sourceVideoItems.length === 0 ? (
+                      {videoLibraryRequested && sourceVideosQuery.isFetching && sourceVideoItems.length === 0 ? (
                         <div className="space-y-2">
                           <Skeleton className="h-16 rounded-md" />
                           <Skeleton className="h-16 rounded-md" />
                         </div>
                       ) : null}
 
-                      {!sourceVideosQuery.isFetching && !sourceVideosQuery.error && sourceVideoItems.length === 0 ? (
+                      {videoLibraryRequested && !sourceVideosQuery.isFetching && !sourceVideosQuery.error && sourceVideoItems.length === 0 ? (
                         <p className="text-sm text-muted-foreground">
                           No videos found for this source page right now.
                         </p>
                       ) : null}
 
-                      {sourceVideoItems.length > 0 ? (
+                      {videoLibraryRequested && sourceVideoItems.length > 0 ? (
                         <div className="space-y-2">
                           <div className="space-y-2 max-h-[52vh] overflow-y-auto pr-1">
                             {sourceVideoItems.map((item) => {

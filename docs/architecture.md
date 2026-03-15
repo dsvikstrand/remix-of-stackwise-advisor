@@ -74,7 +74,7 @@
   - Source page surface in `src/pages/SourcePage.tsx` at `/s/:platform/:externalId`:
     - public-readable source header (avatar/title/follower count + source link)
     - authenticated subscribe/unsubscribe actions
-    - subscriber-only `Video Library` section for creator back-catalog selection (`select -> unlock -> async generation`) with two filters: `Full videos` and `Shorts` (`<=60s` threshold).
+    - subscriber-only `Video Library` section for creator back-catalog selection (`select -> unlock -> async generation`) is loaded on explicit user request rather than auto-fetching on page open, with two filters: `Full videos` and `Shorts` (`<=60s` threshold).
     - source blueprint feed is now live: public-only channel-published cards, deduped by source video (`source_item_id`), newest-first, with `Load more` cursor pagination.
     - source feed cards are Home-style read-only (`open blueprint` on card click, no like/comment/share controls in this step).
     - reload-resume trust behavior: active unlock jobs are restored from `GET /api/ingestion/jobs/latest-mine?scope=source_item_unlock_generation`.

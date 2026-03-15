@@ -48,7 +48,7 @@ Status: `canonical`
 19. Source pages are public-readable and subscribe/unsubscribe capable; legacy `/api/source-subscriptions*` endpoints remain compatibility-safe during migration.
 20. Source pages may lazily hydrate missing avatar/banner metadata on first read so backfilled legacy rows render complete visuals without requiring unsubscribe/resubscribe.
 21. Source pages include a public, read-only blueprint feed (`GET /api/source-pages/:platform/:externalId/blueprints`) that shows channel-published items only, deduped by source video and paginated via load-more cursor.
-22. Source pages include an auth-only `Video Library` section for back-catalog generation (`GET /api/source-pages/:platform/:externalId/videos`, `POST /api/source-pages/:platform/:externalId/videos/unlock`) and run generation asynchronously through existing My Feed + auto-channel pipeline.
+22. Source pages include an auth-only, user-triggered `Video Library` section for back-catalog generation (`GET /api/source-pages/:platform/:externalId/videos`, `POST /api/source-pages/:platform/:externalId/videos/unlock`) and run generation asynchronously through existing My Feed + auto-channel pipeline.
 23. Source-page Video Library filter UX is two-tab in MVP (`Full videos` and `Shorts`), with shorts classified by duration threshold `<=60s`.
 24. Source-page Video Library list traffic uses dual guardrails in backend (burst + sustained per-user/IP) so normal tab/list interaction is smooth while abuse remains capped.
 25. Shared source-video unlock is the default generation model for new source-page requests: one source item can be generated once and reused across subscribers.

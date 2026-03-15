@@ -66,7 +66,7 @@
 - Source-page endpoints:
   - `GET /api/source-pages/:platform/:externalId` (public read)
   - `GET /api/source-pages/:platform/:externalId/blueprints` (public source-page feed, deduped by source video, cursor-paginated, includes additive `source_thumbnail_url`)
-  - `GET /api/source-pages/:platform/:externalId/videos` (auth source-page video-library list, supports `kind=full|shorts`)
+  - `GET /api/source-pages/:platform/:externalId/videos` (auth source-page video-library list, supports `kind=full|shorts`; UI loads it only on explicit user request)
     - rate policy: burst `4/15s` + sustained `40/10m` per user/IP.
   - `POST /api/source-pages/:platform/:externalId/videos/unlock` (auth shared unlock + async generation queue for selected source videos)
     - rate policy: burst `8/10s` + sustained `120/10m` per user/IP.
