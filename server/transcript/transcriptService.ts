@@ -8,6 +8,10 @@ import {
   runWithProviderRetry,
 } from '../services/providerResilience';
 import {
+  getTranscriptProviderCooldownRemainingSeconds,
+  startTranscriptProviderCooldown,
+} from '../services/transcriptProviderCooldown';
+import {
   readCachedTranscript,
   writeCachedTranscript,
 } from './transcriptCache';
@@ -172,6 +176,11 @@ function shouldRetryTranscriptProviderAttempt(provider: TranscriptProvider, erro
   return isRetryableTranscriptProviderErrorCode(code);
 }
 
+function shouldStartTranscriptProviderCooldown(provider: TranscriptProvider, error: unknown) {
+  if (provider !== 'youtube_timedtext') return false;
+  return normalizeTranscriptProviderErrorCode(error) === 'RATE_LIMITED';
+}
+
 export function createTranscriptService(partialDeps: Partial<TranscriptServiceDeps> = {}) {
   const deps: TranscriptServiceDeps = {
     timeoutMs: partialDeps.timeoutMs ?? DEFAULT_TRANSCRIPT_TIMEOUT_MS,
@@ -260,10 +269,22 @@ export function createTranscriptService(partialDeps: Partial<TranscriptServiceDe
     options?: { db?: DbClient | null },
   ): Promise<TranscriptResult> {
     const orderedProviders = deps.listProvidersForFallback(primaryProvider);
+    const timedtextCooldownRemainingSeconds = getTranscriptProviderCooldownRemainingSeconds('youtube_timedtext');
+    const effectiveProviders = timedtextCooldownRemainingSeconds
+      ? orderedProviders.filter((provider) => provider.id !== 'youtube_timedtext')
+      : orderedProviders;
+    if (timedtextCooldownRemainingSeconds && effectiveProviders.length > 0) {
+      console.log('[transcript_provider_cooldown_skip]', JSON.stringify({
+        provider: 'youtube_timedtext',
+        video_id: videoId,
+        cooldown_remaining_seconds: timedtextCooldownRemainingSeconds,
+        request_mode: options?.db ? 'db' : 'direct',
+      }));
+    }
     const attempts: TranscriptProviderAttempt[] = [];
     let lastError: unknown = null;
 
-    for (const provider of orderedProviders) {
+    for (const provider of (effectiveProviders.length > 0 ? effectiveProviders : orderedProviders)) {
       try {
         const transcript = await getTranscriptForVideoWithProviderResilience(videoId, provider.id, {
           db: options?.db || null,
@@ -286,6 +307,18 @@ export function createTranscriptService(partialDeps: Partial<TranscriptServiceDe
           error_code: errorCode,
           provider_debug: getTranscriptProviderDebug(error),
         });
+        if (shouldStartTranscriptProviderCooldown(provider.id, error)) {
+          const cooldown = startTranscriptProviderCooldown(provider.id);
+          const providerDebug = getTranscriptProviderDebug(error);
+          console.log('[transcript_provider_cooldown_started]', JSON.stringify({
+            provider: provider.id,
+            video_id: videoId,
+            cooldown_seconds: cooldown.cooldownSeconds,
+            error_code: errorCode,
+            stage: providerDebug?.stage || null,
+            http_status: providerDebug?.http_status || null,
+          }));
+        }
         lastError = error;
         if (!shouldFallbackTranscriptProviderAttempt(provider.id, error)) break;
       }

@@ -5,6 +5,7 @@ import {
   resolveTranscriptOperationTimeoutMs,
   resolveTranscriptProvider,
 } from '../../server/transcript/transcriptService';
+import { resetTranscriptProviderCooldownsForTests } from '../../server/services/transcriptProviderCooldown';
 import {
   listTranscriptProvidersForFallback,
   registerTranscriptProviders,
@@ -54,8 +55,10 @@ const originalTranscriptProvider = process.env.TRANSCRIPT_PROVIDER;
 afterEach(() => {
   vi.restoreAllMocks();
   registerTranscriptProviders();
+  resetTranscriptProviderCooldownsForTests();
   if (originalTranscriptProvider == null) delete process.env.TRANSCRIPT_PROVIDER;
   else process.env.TRANSCRIPT_PROVIDER = originalTranscriptProvider;
+  delete process.env.TRANSCRIPT_YOUTUBE_TIMEDTEXT_COOLDOWN_SECONDS;
 });
 
 describe('transcript service modularity (backend)', () => {
@@ -320,6 +323,130 @@ describe('transcript service modularity (backend)', () => {
       winning_provider: 'videotranscriber_temp',
       used_fallback: true,
     });
+  });
+
+  it('starts a timedtext cooldown on RATE_LIMITED and skips timedtext during that window', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-03-15T16:00:00.000Z'));
+      process.env.TRANSCRIPT_YOUTUBE_TIMEDTEXT_COOLDOWN_SECONDS = '600';
+
+      const calls: string[] = [];
+      const providers: TranscriptProviderAdapter[] = [
+        {
+          id: 'youtube_timedtext',
+          getTranscript: async () => {
+            calls.push('youtube_timedtext');
+            throw new TranscriptProviderError('RATE_LIMITED', 'timedtext rate limited', {
+              providerDebug: {
+                provider: 'youtube_timedtext',
+                stage: 'track_list',
+                http_status: 429,
+              },
+            });
+          },
+        },
+        {
+          id: 'videotranscriber_temp',
+          getTranscript: async () => {
+            calls.push('videotranscriber_temp');
+            return {
+              text: 'temp fallback transcript',
+              source: 'videotranscriber_temp',
+              confidence: null,
+            };
+          },
+        },
+      ];
+
+      const service = buildService(providers, {
+        resolveProvider: () => 'youtube_timedtext',
+        providerRetryDefaults: {
+          transcriptAttempts: 1,
+          transcriptTimeoutMs: 1000,
+        },
+      });
+
+      const first = await service.getTranscriptForVideo('video123', { enableFallback: true });
+      const second = await service.getTranscriptForVideo('video456', { enableFallback: true });
+
+      expect(first.source).toBe('videotranscriber_temp');
+      expect(second.source).toBe('videotranscriber_temp');
+      expect(calls).toEqual([
+        'youtube_timedtext',
+        'videotranscriber_temp',
+        'videotranscriber_temp',
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('restores youtube_timedtext-first behavior after the cooldown expires', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-03-15T16:00:00.000Z'));
+      process.env.TRANSCRIPT_YOUTUBE_TIMEDTEXT_COOLDOWN_SECONDS = '60';
+
+      const calls: string[] = [];
+      let timedtextAttempts = 0;
+      const providers: TranscriptProviderAdapter[] = [
+        {
+          id: 'youtube_timedtext',
+          getTranscript: async () => {
+            calls.push('youtube_timedtext');
+            timedtextAttempts += 1;
+            if (timedtextAttempts === 1) {
+              throw new TranscriptProviderError('RATE_LIMITED', 'timedtext rate limited', {
+                providerDebug: {
+                  provider: 'youtube_timedtext',
+                  stage: 'track_list',
+                  http_status: 429,
+                },
+              });
+            }
+            return {
+              text: 'timedtext recovered transcript',
+              source: 'youtube_timedtext',
+              confidence: null,
+            };
+          },
+        },
+        {
+          id: 'videotranscriber_temp',
+          getTranscript: async () => {
+            calls.push('videotranscriber_temp');
+            return {
+              text: 'temp fallback transcript',
+              source: 'videotranscriber_temp',
+              confidence: null,
+            };
+          },
+        },
+      ];
+
+      const service = buildService(providers, {
+        resolveProvider: () => 'youtube_timedtext',
+        providerRetryDefaults: {
+          transcriptAttempts: 1,
+          transcriptTimeoutMs: 1000,
+        },
+      });
+
+      const first = await service.getTranscriptForVideo('video123', { enableFallback: true });
+      vi.advanceTimersByTime(61_000);
+      const second = await service.getTranscriptForVideo('video456', { enableFallback: true });
+
+      expect(first.source).toBe('videotranscriber_temp');
+      expect(second.source).toBe('youtube_timedtext');
+      expect(calls).toEqual([
+        'youtube_timedtext',
+        'videotranscriber_temp',
+        'youtube_timedtext',
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it.each([
