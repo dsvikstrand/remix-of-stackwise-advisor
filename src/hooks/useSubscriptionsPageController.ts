@@ -545,24 +545,6 @@ export function useSubscriptionsPageController() {
     setTerminalHandledJobId(job.job_id);
     invalidateSubscriptionViews();
 
-    if (job.status === 'succeeded') {
-      const failedCount = Math.max(0, Number(job.processed_count || 0) - Number(job.inserted_count || 0) - Number(job.skipped_count || 0));
-      toast({
-        title: 'Background generation finished',
-        description: `Inserted ${job.inserted_count}, skipped ${job.skipped_count}, failed ${failedCount}.`,
-      });
-      if (refreshReturnTo) {
-        navigate(refreshReturnTo, { replace: true });
-        setRefreshReturnTo(null);
-      }
-      return;
-    }
-
-    toast({
-      title: 'Background generation failed',
-      description: job.error_message || 'Could not complete background generation.',
-      variant: 'destructive',
-    });
     if (refreshReturnTo) {
       navigate(refreshReturnTo, { replace: true });
       setRefreshReturnTo(null);

@@ -462,14 +462,7 @@ export default function SearchPage() {
         finalJob = await getIngestionJob(queued.job_id);
       }
 
-      if (finalJob.status === 'succeeded') {
-        toast({
-          title: 'Blueprint generated',
-          description: finalJob.inserted_count > 0
-            ? 'Added to your feed.'
-            : 'Already in your feed.',
-        });
-      } else {
+      if (finalJob.status !== 'succeeded') {
         const detail = String(finalJob.error_message || '').trim();
         const parsedMessage = detail.startsWith('[')
           ? (() => {
@@ -481,7 +474,11 @@ export default function SearchPage() {
               }
             })()
           : '';
-        throw new Error(parsedMessage || detail || 'Could not generate this blueprint right now.');
+        console.info('[search_generate_terminal_failed]', JSON.stringify({
+          video_id: target.video_id,
+          job_id: queued.job_id,
+          message: parsedMessage || detail || 'Could not generate this blueprint right now.',
+        }));
       }
 
       await Promise.all([
@@ -492,11 +489,13 @@ export default function SearchPage() {
         queryClient.invalidateQueries({ queryKey: ['wall-feed', user.id] }),
       ]);
     } catch (error) {
+      if (!(error instanceof ApiRequestError)) {
+        await queryClient.invalidateQueries({ queryKey: ['ai-credits'] });
+        return;
+      }
       const description = error instanceof ApiRequestError
         ? toGenerateErrorMessage(error.errorCode)
-        : error instanceof Error
-          ? error.message
-          : 'Could not generate this blueprint right now.';
+        : 'Could not generate this blueprint right now.';
       toast({
         title: 'Generation failed',
         description,

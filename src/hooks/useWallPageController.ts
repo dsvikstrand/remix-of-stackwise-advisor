@@ -285,21 +285,8 @@ export function useWallPageController() {
       void Promise.all([
         queryClient.invalidateQueries({ queryKey: ['wall-for-you', user?.id || 'anon'] }),
         queryClient.invalidateQueries({ queryKey: ['ai-credits'] }),
+        queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] }),
       ]);
-
-      if (job.status === 'succeeded') {
-        toast({
-          title: 'Unlock complete',
-          description: `Inserted ${job.inserted_count}, skipped ${job.skipped_count}, failed ${Math.max(0, job.processed_count - job.inserted_count - job.skipped_count)}.`,
-        });
-        return;
-      }
-
-      toast({
-        title: 'Unlock failed',
-        description: job.error_message || 'Could not complete unlock generation.',
-        variant: 'destructive',
-      });
     },
   });
 

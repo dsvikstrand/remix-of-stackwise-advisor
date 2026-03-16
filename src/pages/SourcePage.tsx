@@ -236,21 +236,8 @@ export default function SourcePage() {
         queryClient.invalidateQueries({ queryKey: ['source-page-blueprints', platform, externalId] }),
         queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] }),
         queryClient.invalidateQueries({ queryKey: ['ai-credits'] }),
+        queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] }),
       ]);
-
-      if (job.status === 'succeeded') {
-        toast({
-          title: 'Video Library unlock finished',
-          description: `Inserted ${job.inserted_count}, skipped ${job.skipped_count}, failed ${Math.max(0, job.processed_count - job.inserted_count - job.skipped_count)}.`,
-        });
-        return;
-      }
-
-      toast({
-        title: 'Video Library unlock failed',
-        description: job.error_message || 'Could not complete source video unlock.',
-        variant: 'destructive',
-      });
     },
   });
 
