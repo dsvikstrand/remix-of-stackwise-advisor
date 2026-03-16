@@ -15,12 +15,11 @@ import { BlueprintAnalysisView } from '@/components/blueprint/BlueprintAnalysisV
 import { SummarySlides } from '@/components/blueprint/SummarySlides';
 import { useBlueprint, useBlueprintComments, useCreateBlueprintComment, useToggleBlueprintLike } from '@/hooks/useBlueprints';
 import {
-  BlueprintYoutubeCommentsRefreshError,
   requestBlueprintYoutubeCommentsRefresh,
   useBlueprintYoutubeComments,
 } from '@/hooks/useBlueprintYoutubeComments';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Heart, Maximize2, Minimize2 } from 'lucide-react';
+import { ArrowLeft, Heart, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { logMvpEvent } from '@/lib/logEvent';
 import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
@@ -252,39 +251,11 @@ export default function BlueprintDetail() {
       if (!blueprintId) throw new Error('Blueprint id is missing.');
       return requestBlueprintYoutubeCommentsRefresh(blueprintId);
     },
-    onSuccess: async (result) => {
+    onSuccess: async (_result) => {
       if (!blueprintId) return;
-      toast({
-        title: result.status === 'already_pending' ? 'Refresh already in progress' : 'Comments refresh started',
-        description: result.status === 'already_pending'
-          ? 'A refresh job is already queued for this blueprint.'
-          : 'Source comments will update once the background job completes.',
-      });
       await queryClient.invalidateQueries({ queryKey: ['blueprint-youtube-comments', blueprintId] });
     },
-    onError: (error) => {
-      const refreshError = error instanceof BlueprintYoutubeCommentsRefreshError ? error : null;
-      const code = String(refreshError?.code || '').trim().toUpperCase();
-      if (code === 'COMMENTS_REFRESH_COOLDOWN_ACTIVE') {
-        toast({
-          title: 'Cooldown active',
-          description: 'Please try again in a little while.',
-        });
-        return;
-      }
-      if (code === 'COMMENTS_REFRESH_QUEUE_GUARDED') {
-        toast({
-          title: 'Queue busy',
-          description: 'Comments refresh queue is busy. Please retry shortly.',
-        });
-        return;
-      }
-      toast({
-        title: 'Refresh failed',
-        description: refreshError?.message || (error instanceof Error ? error.message : 'Please try again.'),
-        variant: 'destructive',
-      });
-    },
+    onError: (_error) => {},
   });
   const [isBannerExpanded, setIsBannerExpanded] = useState(false);
   const [isBannerVideoPlaying, setIsBannerVideoPlaying] = useState(false);
@@ -970,12 +941,14 @@ export default function BlueprintDetail() {
                     <Button
                       type="button"
                       variant="outline"
-                      size="sm"
-                      className="h-9 px-3"
+                      size="icon"
+                      className="h-9 w-9 shrink-0"
                       onClick={() => youtubeCommentsRefresh.mutate()}
                       disabled={youtubeCommentsRefresh.isPending}
+                      aria-label={youtubeCommentsRefresh.isPending ? 'Refreshing comments' : 'Refresh comments'}
+                      title={youtubeCommentsRefresh.isPending ? 'Refreshing comments' : 'Refresh comments'}
                     >
-                      {youtubeCommentsRefresh.isPending ? 'Refreshing...' : 'Refresh'}
+                      <RefreshCw className={`h-4 w-4 ${youtubeCommentsRefresh.isPending ? 'animate-spin' : ''}`} />
                     </Button>
                   ) : null}
                   <Select value={commentView} onValueChange={(value) => setCommentView(value as 'youtube' | 'community')}>
