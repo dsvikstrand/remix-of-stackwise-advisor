@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Compass, Home, Users, Leaf, SquarePlus } from 'lucide-react';
+import { Home, Users, Leaf, SquarePlus, Rss } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface AppNavigationProps {
@@ -17,8 +17,8 @@ export function AppNavigation({ variant = 'header', mode = 'all', className }: A
     { path: '/', label: 'Home', icon: Home, showWhen: 'public-only' as const },
     { path: '/wall', label: 'Home', icon: Users, showWhen: 'auth-only' as const },
     { path: '/channels', label: 'Channels', icon: Leaf, showWhen: 'always' as const },
+    { path: '/subscriptions', label: 'Subscriptions', icon: Rss, showWhen: 'auth-only' as const },
     { path: '/search', label: 'Add', icon: SquarePlus, showWhen: 'auth-only' as const },
-    { path: '/explore', label: 'Explore', icon: Compass, showWhen: 'always' as const },
   ];
 
   const visibleItems = allNavItems.filter((item) => {
