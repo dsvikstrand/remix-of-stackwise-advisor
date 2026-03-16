@@ -25,6 +25,10 @@ export type CreditsResponse = {
   credits_backend_mode?: 'db' | 'bypass' | 'unavailable' | string;
   credits_backend_ok?: boolean;
   credits_backend_error?: string | null;
+  generation_charge_mode?: 'free_window_open' | 'credit_charging_active' | 'disabled' | 'fallback_charge_mode' | string | null;
+  openai_daily_cost_usd?: number | null;
+  openai_daily_free_budget_usd?: number | null;
+  openai_daily_free_window_open?: boolean | null;
 };
 
 export type AiCreditsView = CreditsResponse & {
