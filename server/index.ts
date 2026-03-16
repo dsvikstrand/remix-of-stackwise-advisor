@@ -4864,6 +4864,9 @@ function summarizeGenerationFailure(input: {
   ) {
     return 'No transcript available for this video.';
   }
+  if (errorCode === 'TRANSCRIPT_INSUFFICIENT_CONTEXT') {
+    return "This video has very limited speech, so a blueprint can't be generated from it right now. If that seems incorrect, try again tomorrow.";
+  }
   if (
     errorCode === 'TRANSCRIPT_UNAVAILABLE'
     || errorCode === 'ACCESS_DENIED'
@@ -8041,6 +8044,7 @@ type PipelineErrorCode =
   | 'PROVIDER_FAIL'
   | 'PROVIDER_DEGRADED'
   | 'TRANSCRIPT_EMPTY'
+  | 'TRANSCRIPT_INSUFFICIENT_CONTEXT'
   | 'GENERATION_FAIL'
   | 'SAFETY_BLOCKED'
   | 'PII_BLOCKED'

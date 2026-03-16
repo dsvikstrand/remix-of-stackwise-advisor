@@ -39,6 +39,7 @@ function buildDeps(input: {
     issueDetails: string[];
   }>;
   youtubeBlueprintPromptTemplatePath?: string;
+  minTranscriptWords?: number;
 }) {
   return {
     getServiceSupabaseClient: () => ({ id: 'db' }),
@@ -159,6 +160,7 @@ function buildDeps(input: {
     normalizeSummaryVariantText: (text: string) => String(text || '').trim(),
     enforceVideoDurationPolicy: async (policyInput: { durationSeconds?: number | null }) => policyInput.durationSeconds ?? null,
     youtubeBlueprintPromptTemplatePath: String(input.youtubeBlueprintPromptTemplatePath || ''),
+    minTranscriptWords: input.minTranscriptWords ?? 0,
   };
 }
 
@@ -471,5 +473,43 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
     expect(events.some((row) => row.event === 'gate_published_anyway')).toBe(true);
     expect((result.meta as Record<string, unknown>).bp_structure_ok).toBe(false);
     expect((result.meta as Record<string, unknown>).bp_quality_final_mode).toBe('terminal_publish_anyway');
+  });
+
+  it('blocks generation when transcript has too few words', async () => {
+    const events: EventRow[] = [];
+    const service = createYouTubeBlueprintPipelineService(buildDeps({
+      transcriptText: 'Ben',
+      pruningConfig: {
+        enabled: false,
+        budgetChars: 1000,
+        thresholds: [1000, 2000, 4000],
+        windows: [1, 2, 4],
+        separator: '\n\n...\n\n',
+        minWindowChars: 50,
+      },
+      events,
+      pass1Transcripts: [],
+      pass2Transcripts: [],
+      pass1PromptTemplatePaths: [],
+      minTranscriptWords: 30,
+    }));
+
+    await expect(service.runYouTubePipeline({
+      runId: 'run-low-transcript',
+      videoId: 'VZUFiElNSbk',
+      videoUrl: 'https://www.youtube.com/watch?v=VZUFiElNSbk',
+      videoTitle: 'Derm Spring Skincare Must-Haves',
+      durationSeconds: 15,
+      generateReview: false,
+      generateBanner: false,
+      authToken: '',
+      requestClass: 'interactive',
+      trace: {
+        db: { id: 'trace-db' },
+        userId: 'user-low',
+      },
+    })).rejects.toThrow("This video has very limited speech, so a blueprint can't be generated from it right now. If that seems incorrect, try again tomorrow.");
+
+    expect(events.some((row) => row.event === 'transcript_insufficient_context')).toBe(true);
   });
 });

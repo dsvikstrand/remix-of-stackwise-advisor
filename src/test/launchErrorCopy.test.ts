@@ -29,6 +29,11 @@ describe('launchErrorCopy', () => {
     })).toBe('Transcript unavailable right now. Please try again in a few minutes.');
 
     expect(getLaunchErrorCopy({
+      errorCode: 'TRANSCRIPT_INSUFFICIENT_CONTEXT',
+      fallback: 'fallback',
+    })).toBe("This video has very limited speech, so a blueprint can't be generated from it right now. If that seems incorrect, try again tomorrow.");
+
+    expect(getLaunchErrorCopy({
       errorCode: 'RATE_LIMITED',
       fallback: 'fallback',
     })).toBe('Too many requests right now. Please retry shortly.');

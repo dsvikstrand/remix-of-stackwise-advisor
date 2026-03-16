@@ -343,6 +343,48 @@ describe('youtube handlers', () => {
     expect(serviceDb.state.credit_ledger.map((row: any) => row.entry_type)).toEqual(['hold', 'refund']);
   });
 
+  it('returns 422 for transcripts with insufficient spoken context on direct generate', async () => {
+    const serviceDb = createMockSupabase({
+      user_credit_wallets: [{
+        user_id: '00000000-0000-0000-0000-000000000001',
+        balance: 3,
+        capacity: 3,
+        refill_rate_per_sec: 0,
+        last_refill_at: new Date().toISOString(),
+      }],
+    });
+    const app = createMockApp();
+    registerYouTubeRouteHandlers(app as any, createDeps({
+      getServiceSupabaseClient: () => serviceDb,
+      runYouTubePipeline: vi.fn(async () => {
+        throw new Error('TRANSCRIPT_INSUFFICIENT_CONTEXT');
+      }),
+      mapPipelineError: () => ({
+        error_code: 'TRANSCRIPT_INSUFFICIENT_CONTEXT',
+        message: "This video has very limited speech, so a blueprint can't be generated from it right now. If that seems incorrect, try again tomorrow.",
+      }),
+    }));
+
+    const handler = app.handlers['POST /api/youtube-to-blueprint'];
+    const req = {
+      body: {
+        video_url: 'https://www.youtube.com/watch?v=abc123def45',
+        generate_banner: false,
+      },
+    } as any;
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(422);
+    expect(res.body).toMatchObject({
+      ok: false,
+      error_code: 'TRANSCRIPT_INSUFFICIENT_CONTEXT',
+    });
+    expect(serviceDb.state.user_credit_wallets[0].balance).toBe(3);
+    expect(serviceDb.state.credit_ledger.map((row: any) => row.entry_type)).toEqual(['hold', 'refund']);
+  });
+
   it('settles direct URL credit on first model dispatch', async () => {
     const serviceDb = createMockSupabase({
       user_credit_wallets: [{

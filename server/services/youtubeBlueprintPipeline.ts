@@ -50,6 +50,12 @@ function countWords(value: string) {
   return splitWords(value).length;
 }
 
+function getMinTranscriptWords() {
+  const raw = Number(process.env.YT2BP_MIN_TRANSCRIPT_WORDS);
+  if (!Number.isFinite(raw)) return 30;
+  return Math.max(0, Math.floor(raw));
+}
+
 function normalizeRawGenerationOutput(raw: unknown, maxChars = 16000) {
   let format: 'none' | 'text' | 'json' = 'none';
   let text = '';
@@ -203,6 +209,7 @@ export function createYouTubeBlueprintPipelineService(deps: any) {
     canonicalSectionName,
     normalizeSummaryVariantText,
     youtubeBlueprintPromptTemplatePath = '',
+    minTranscriptWords = getMinTranscriptWords(),
     pruneTranscriptForGeneration = (pruningInput: { transcriptText: string }) => ({
       text: pruningInput.transcriptText,
       meta: {
@@ -345,6 +352,7 @@ async function runYouTubePipeline(input: {
       transcriptText: rawTranscriptText,
     });
     const effectiveTranscriptText = String(transcriptPruning?.text || rawTranscriptText).trim();
+    const effectiveTranscriptWords = countWords(effectiveTranscriptText);
     if (traceContext.db && traceContext.userId) {
       await safeGenerationTraceWrite({
         runId: input.runId,
@@ -356,6 +364,7 @@ async function runYouTubePipeline(input: {
             payload: {
               source: transcript.source,
               chars: effectiveTranscriptText.length,
+              words: effectiveTranscriptWords,
               raw_chars: rawTranscriptText.length,
               confidence: transcript.confidence,
               transport: transcript.transport || null,
@@ -377,6 +386,37 @@ async function runYouTubePipeline(input: {
           });
         },
       });
+    }
+    if (effectiveTranscriptWords < minTranscriptWords) {
+      if (traceContext.db && traceContext.userId) {
+        await safeGenerationTraceWrite({
+          runId: input.runId,
+          op: 'event_transcript_insufficient_context',
+          fn: async () => {
+            await appendGenerationEvent(traceContext.db as any, {
+              runId: input.runId,
+              level: 'warn',
+              event: 'transcript_insufficient_context',
+              payload: {
+                words: effectiveTranscriptWords,
+                min_words: minTranscriptWords,
+                source: transcript.source,
+              },
+            });
+          },
+        });
+      }
+      makePipelineError(
+        'TRANSCRIPT_INSUFFICIENT_CONTEXT',
+        "This video has very limited speech, so a blueprint can't be generated from it right now. If that seems incorrect, try again tomorrow.",
+        {
+          details: {
+            min_transcript_words: minTranscriptWords,
+            transcript_words: effectiveTranscriptWords,
+            video_id: input.videoId,
+          },
+        },
+      );
     }
     const client = createYouTubeGenerationLLMClient({
       generationTier: normalizedGenerationTier,

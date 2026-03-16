@@ -351,7 +351,7 @@ app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt
         known.error_code === 'TIMEOUT' ? 504
           : known.error_code === 'INVALID_URL' ? 400
             : known.error_code === 'VIDEO_TOO_LONG' || known.error_code === 'VIDEO_DURATION_UNAVAILABLE' || known.error_code === 'VIDEO_DURATION_POLICY_BLOCKED' ? 422
-            : known.error_code === 'NO_CAPTIONS' || known.error_code === 'TRANSCRIPT_EMPTY' ? 422
+            : known.error_code === 'NO_CAPTIONS' || known.error_code === 'TRANSCRIPT_EMPTY' || known.error_code === 'TRANSCRIPT_INSUFFICIENT_CONTEXT' ? 422
               : known.error_code === 'PROVIDER_FAIL' ? 502
                 : known.error_code === 'PII_BLOCKED' || known.error_code === 'SAFETY_BLOCKED' ? 422
                   : known.error_code === 'RATE_LIMITED' ? 429
