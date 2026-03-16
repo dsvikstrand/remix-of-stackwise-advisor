@@ -32,6 +32,12 @@ export type AutoChannelResolution = {
   classifierMode: AutoChannelClassifierMode;
   classifierReason: ChannelClassifierReason;
   classifierConfidence?: number | null;
+  classifierFailureClass?: string | null;
+  classifierFailureDetail?: string | null;
+  classifierReturnedSlug?: string | null;
+  classifierRetryUsed?: boolean;
+  classifierFallbackUsed?: boolean;
+  classifierAttemptCount?: number;
 };
 
 class DeterministicAutoChannelResolver implements AutoChannelResolver {
@@ -63,6 +69,12 @@ class DeterministicAutoChannelResolver implements AutoChannelResolver {
         classifierMode: input.classifierMode,
         classifierReason: result.classifierReason,
         classifierConfidence: result.rawConfidence,
+        classifierFailureClass: result.failureClass,
+        classifierFailureDetail: result.failureDetail,
+        classifierReturnedSlug: result.returnedSlug,
+        classifierRetryUsed: result.retryUsed,
+        classifierFallbackUsed: result.fallbackUsed,
+        classifierAttemptCount: result.attemptCount,
       }));
     }
     const meta = getChannelResolutionMeta({
@@ -198,6 +210,12 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
       classifier_mode: resolution.classifierMode,
       classifier_reason: resolution.classifierReason,
       classifier_confidence: resolution.classifierConfidence ?? null,
+      classifier_failure_class: resolution.classifierFailureClass ?? null,
+      classifier_failure_detail: resolution.classifierFailureDetail ?? null,
+      classifier_returned_slug: resolution.classifierReturnedSlug ?? null,
+      classifier_retry_used: resolution.classifierRetryUsed ?? null,
+      classifier_fallback_used: resolution.classifierFallbackUsed ?? null,
+      classifier_attempt_count: resolution.classifierAttemptCount ?? null,
       channel_slug: resolution.channelSlug,
     }));
   }

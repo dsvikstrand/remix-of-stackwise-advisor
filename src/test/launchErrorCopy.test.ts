@@ -34,6 +34,11 @@ describe('launchErrorCopy', () => {
     })).toBe("This video has very limited speech, so a blueprint can't be generated from it right now. If that seems incorrect, try again tomorrow.");
 
     expect(getLaunchErrorCopy({
+      errorCode: 'BLUEPRINT_JSON_INVALID',
+      fallback: 'fallback',
+    })).toBe('Blueprint generation failed due to malformed model output. Please try again.');
+
+    expect(getLaunchErrorCopy({
       errorCode: 'RATE_LIMITED',
       fallback: 'fallback',
     })).toBe('Too many requests right now. Please retry shortly.');

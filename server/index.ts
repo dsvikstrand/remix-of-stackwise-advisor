@@ -8114,6 +8114,14 @@ function mapPipelineError(error: unknown): PipelineErrorShape | null {
     };
   }
   const providerCode = String((error as { code?: string } | null)?.code || '').trim();
+  if (providerCode === 'BLUEPRINT_JSON_INVALID') {
+    return {
+      error_code: 'BLUEPRINT_JSON_INVALID',
+      message: error instanceof Error
+        ? error.message
+        : 'Blueprint generation returned malformed structured output. Please try again.',
+    };
+  }
   if (providerCode === 'PROVIDER_DEGRADED') {
     return {
       error_code: 'PROVIDER_DEGRADED',

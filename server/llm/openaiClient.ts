@@ -26,6 +26,7 @@ import {
   extractJson,
 } from './prompts';
 import { getOpenAIConstructor } from './openaiRuntime';
+import { isBlueprintJsonInvalidError, parseBlueprintJsonOutput } from './blueprintJsonGuard';
 
 const YouTubeBlueprintSectionsValidator = z.object({
   schema_version: z.literal('blueprint_sections_v1'),
@@ -105,6 +106,14 @@ function logGenerationModelEvent(event: 'primary_success' | 'fallback_success' |
 }) {
   console.info(`[llm_generation_model] ${JSON.stringify({ event, ...payload })}`);
 }
+
+const BLUEPRINT_JSON_MAX_ATTEMPTS = 2;
+const BLUEPRINT_JSON_RETRY_INSTRUCTION = [
+  'RETRY REQUIREMENT:',
+  'Return strict valid JSON only.',
+  'Do not include markdown fences or commentary.',
+  'Ensure all arrays and objects are syntactically complete.',
+].join(' ');
 
 export function createOpenAIClient(): LLMClient {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -304,22 +313,43 @@ export function createOpenAIClient(): LLMClient {
       input: YouTubeBlueprintRequest,
       options?: LLMGenerationOptions,
     ): Promise<YouTubeBlueprintSectionsResult> {
-      const response = await runGenerationRequest({
-        operation: 'generateYouTubeBlueprint',
-        instructions: YOUTUBE_BLUEPRINT_SYSTEM_PROMPT,
-        prompt: buildYouTubeBlueprintUserPrompt(input),
-        options,
-      });
+      const basePrompt = buildYouTubeBlueprintUserPrompt(input);
+      for (let attempt = 1; attempt <= BLUEPRINT_JSON_MAX_ATTEMPTS; attempt += 1) {
+        const prompt = attempt === 1
+          ? basePrompt
+          : `${basePrompt}\n\n${BLUEPRINT_JSON_RETRY_INSTRUCTION}`;
+        const response = await runGenerationRequest({
+          operation: 'generateYouTubeBlueprint',
+          instructions: YOUTUBE_BLUEPRINT_SYSTEM_PROMPT,
+          prompt,
+          options,
+        });
 
-      const outputText = response.output_text?.trim();
-      if (!outputText) {
-        throw new Error('No output text from OpenAI');
+        const outputText = response.output_text?.trim();
+        try {
+          return {
+            ...parseBlueprintJsonOutput({
+              rawText: outputText,
+              validator: YouTubeBlueprintSectionsValidator,
+            }),
+            raw_response: outputText,
+          };
+        } catch (error) {
+          if (!isBlueprintJsonInvalidError(error) || attempt >= BLUEPRINT_JSON_MAX_ATTEMPTS) {
+            throw error;
+          }
+          console.warn('[llm_blueprint_json_retry]', JSON.stringify({
+            provider: 'openai_api',
+            operation: 'generateYouTubeBlueprint',
+            attempt,
+            next_attempt: attempt + 1,
+            failure_class: error.failureClass,
+            detail: error.detail,
+          }));
+        }
       }
-      const parsed = JSON.parse(extractJson(outputText));
-      return {
-        ...YouTubeBlueprintSectionsValidator.parse(parsed),
-        raw_response: outputText,
-      };
+
+      throw new Error('BLUEPRINT_JSON_RETRY_FLOW_UNREACHABLE');
     },
     async generateYouTubeBlueprintPass2Transform(
       input: YouTubeBlueprintPass2TransformRequest,

@@ -120,4 +120,78 @@ describe('codex generation client', () => {
       transcript: 'hello',
     })).rejects.toThrow();
   });
+
+  it('retries malformed blueprint JSON once before succeeding', async () => {
+    let calls = 0;
+    const client = createCodexGenerationClient({
+      fallbackClientFactory: () => createFallbackClient(),
+      fallbackEnabled: true,
+      codexModel: 'gpt-codex',
+      codexReasoningEffort: 'low',
+      codexTimeoutMs: 10_000,
+      runCodexPrompt: async () => {
+        calls += 1;
+        if (calls === 1) {
+          return {
+            outputText: '{"schema_version":"blueprint_sections_v1","tags":["bad" "json"]}',
+            durationMs: 10,
+          };
+        }
+        return {
+          outputText: JSON.stringify({
+            schema_version: 'blueprint_sections_v1',
+            tags: ['codex'],
+            summary: { text: 'retried summary' },
+            takeaways: { bullets: ['codex takeaway'] },
+            storyline: { text: 'codex storyline' },
+            deep_dive: { bullets: ['codex deep dive'] },
+            practical_rules: { bullets: ['codex rule'] },
+            open_questions: { bullets: ['codex question?'] },
+          }),
+          durationMs: 10,
+        };
+      },
+    });
+
+    const result = await client.generateYouTubeBlueprint({
+      videoUrl: 'https://youtube.com/watch?v=abc',
+      transcript: 'hello',
+    });
+
+    expect(calls).toBe(2);
+    expect(result.summary.text).toBe('retried summary');
+  });
+
+  it('falls back after repeated malformed blueprint JSON output', async () => {
+    let calls = 0;
+    const client = createCodexGenerationClient({
+      fallbackClientFactory: () => createFallbackClient(),
+      fallbackEnabled: true,
+      codexModel: 'gpt-codex',
+      codexReasoningEffort: 'low',
+      codexTimeoutMs: 10_000,
+      runCodexPrompt: async () => {
+        calls += 1;
+        return {
+          outputText: '{"schema_version":"blueprint_sections_v1","tags":["bad" "json"]}',
+          durationMs: 10,
+        };
+      },
+    });
+
+    const events: string[] = [];
+    const result = await client.generateYouTubeBlueprint({
+      videoUrl: 'https://youtube.com/watch?v=abc',
+      transcript: 'hello',
+    }, {
+      onGenerationModelEvent: (event) => {
+        events.push(`${event.provider}:${event.event}`);
+      },
+    });
+
+    expect(calls).toBe(2);
+    expect(result.summary.text).toBe('fallback summary');
+    expect(events.filter((entry) => entry === 'codex_cli:primary_success')).toHaveLength(2);
+    expect(events).toContain('openai_api:fallback_success');
+  });
 });

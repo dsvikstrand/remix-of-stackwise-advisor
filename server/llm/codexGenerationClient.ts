@@ -23,6 +23,11 @@ import {
   extractJson,
 } from './prompts';
 import { CodexExecError } from './codexExec';
+import {
+  BlueprintJsonInvalidError,
+  isBlueprintJsonInvalidError,
+  parseBlueprintJsonOutput,
+} from './blueprintJsonGuard';
 
 const YouTubeBlueprintSectionsValidator = z.object({
   schema_version: z.literal('blueprint_sections_v1'),
@@ -69,6 +74,13 @@ function normalizeReasoningEffort(raw: unknown): 'none' | 'low' | 'medium' | 'hi
 }
 
 type GenerationOperation = 'generateYouTubeBlueprint' | 'generateYouTubeBlueprintPass2Transform' | 'analyzeBlueprint';
+const BLUEPRINT_JSON_MAX_ATTEMPTS = 2;
+const BLUEPRINT_JSON_RETRY_INSTRUCTION = [
+  'RETRY REQUIREMENT:',
+  'Return strict valid JSON only.',
+  'Do not include markdown fences or commentary.',
+  'Ensure all arrays and objects are syntactically complete.',
+].join(' ');
 
 export function createCodexGenerationClient(input: {
   fallbackClientFactory: () => LLMClient;
@@ -196,21 +208,102 @@ export function createCodexGenerationClient(input: {
       request: YouTubeBlueprintRequest,
       options?: LLMGenerationOptions,
     ): Promise<YouTubeBlueprintSectionsResult> {
-      const prompt = buildYouTubeBlueprintUserPrompt(request);
-      return runCodexJson({
-        operation: 'generateYouTubeBlueprint',
-        instructions: YOUTUBE_BLUEPRINT_SYSTEM_PROMPT,
-        prompt,
-        options,
-        parse: (rawText) => {
-          const parsed = JSON.parse(extractJson(String(rawText || '').trim()));
+      const basePrompt = buildYouTubeBlueprintUserPrompt(request);
+      const profile = resolveProfile(options);
+      const fallback = async (errorCode: string, message: string) => {
+        if (!input.fallbackEnabled) {
+          if (errorCode === 'BLUEPRINT_JSON_INVALID') {
+            throw new BlueprintJsonInvalidError({
+              failureClass: 'invalid_json',
+              detail: message,
+              message,
+            });
+          }
+          throw new CodexExecError({ code: 'INVALID_OUTPUT', message });
+        }
+        input.onCodexFallback?.({
+          operation: 'generateYouTubeBlueprint',
+          errorCode,
+          message,
+        });
+        return getFallbackClient().generateYouTubeBlueprint(request, options);
+      };
+
+      for (let attempt = 1; attempt <= BLUEPRINT_JSON_MAX_ATTEMPTS; attempt += 1) {
+        const prompt = attempt === 1
+          ? basePrompt
+          : `${basePrompt}\n\n${BLUEPRINT_JSON_RETRY_INSTRUCTION}`;
+        emitPromptEvent(options, {
+          operation: 'generateYouTubeBlueprint',
+          instructions: YOUTUBE_BLUEPRINT_SYSTEM_PROMPT,
+          prompt,
+        });
+
+        let response: { outputText: string; durationMs: number };
+        try {
+          response = await input.runCodexPrompt({
+            operation: 'generateYouTubeBlueprint',
+            model: profile.model,
+            reasoningEffort: profile.reasoningEffort,
+            prompt: buildCodexPrompt({
+              instructions: YOUTUBE_BLUEPRINT_SYSTEM_PROMPT,
+              prompt,
+            }),
+          });
+          emitModelEvent(options, {
+            event: 'primary_success',
+            provider: 'codex_cli',
+            operation: 'generateYouTubeBlueprint',
+            model_used: profile.model,
+            fallback_used: false,
+            fallback_model: null,
+            reasoning_effort: profile.reasoningEffort,
+          });
+        } catch (error) {
+          emitModelEvent(options, {
+            event: 'request_failed',
+            provider: 'codex_cli',
+            operation: 'generateYouTubeBlueprint',
+            model_used: profile.model,
+            fallback_used: false,
+            fallback_model: null,
+            reasoning_effort: profile.reasoningEffort,
+            status: null,
+            message: error instanceof Error ? error.message : String(error),
+          });
+          return fallback(
+            error instanceof CodexExecError ? error.code : 'PROCESS_FAIL',
+            error instanceof Error ? error.message : String(error),
+          );
+        }
+
+        try {
           return {
-            ...YouTubeBlueprintSectionsValidator.parse(parsed),
-            raw_response: rawText,
+            ...parseBlueprintJsonOutput({
+              rawText: response.outputText,
+              validator: YouTubeBlueprintSectionsValidator,
+            }),
+            raw_response: response.outputText,
           };
-        },
-        fallback: () => getFallbackClient().generateYouTubeBlueprint(request, options),
-      });
+        } catch (error) {
+          if (!isBlueprintJsonInvalidError(error)) {
+            throw error;
+          }
+          if (attempt >= BLUEPRINT_JSON_MAX_ATTEMPTS) {
+            return fallback(error.code, error.message);
+          }
+          console.warn('[llm_blueprint_json_retry]', JSON.stringify({
+            provider: 'codex_cli',
+            operation: 'generateYouTubeBlueprint',
+            attempt,
+            next_attempt: attempt + 1,
+            failure_class: error.failureClass,
+            detail: error.detail,
+          }));
+        }
+      }
+
+      return fallback('BLUEPRINT_JSON_INVALID', 'Blueprint generation returned malformed structured output. Please try again.');
     },
     async generateYouTubeBlueprintPass2Transform(
       request: YouTubeBlueprintPass2TransformRequest,

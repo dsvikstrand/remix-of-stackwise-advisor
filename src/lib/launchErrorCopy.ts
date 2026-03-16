@@ -6,6 +6,7 @@ export type LaunchErrorCode =
   | 'TRANSCRIPT_UNAVAILABLE'
   | 'NO_TRANSCRIPT_PERMANENT'
   | 'TRANSCRIPT_INSUFFICIENT_CONTEXT'
+  | 'BLUEPRINT_JSON_INVALID'
   | 'RATE_LIMITED'
   | 'QUEUE_BACKPRESSURE'
   | 'QUEUE_INTAKE_DISABLED'
@@ -37,6 +38,8 @@ export function getLaunchErrorCopy(input: {
       return 'No transcript is available for this video.';
     case 'TRANSCRIPT_INSUFFICIENT_CONTEXT':
       return "This video has very limited speech, so a blueprint can't be generated from it right now. If that seems incorrect, try again tomorrow.";
+    case 'BLUEPRINT_JSON_INVALID':
+      return 'Blueprint generation failed due to malformed model output. Please try again.';
     case 'RATE_LIMITED':
       return 'Too many requests right now. Please retry shortly.';
     case 'QUEUE_BACKPRESSURE':
