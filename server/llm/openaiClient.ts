@@ -69,6 +69,7 @@ const ChannelLabelValidator = z.object({
 });
 
 type GenerationReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+type GenerationServiceTier = 'auto' | 'default' | 'flex' | 'priority';
 
 function normalizeGenerationReasoningEffort(raw: string | undefined | null): GenerationReasoningEffort {
   const normalized = String(raw || '').trim().toLowerCase();
@@ -78,6 +79,15 @@ function normalizeGenerationReasoningEffort(raw: string | undefined | null): Gen
   if (normalized === 'high') return 'high';
   if (normalized === 'xhigh') return 'xhigh';
   return 'medium';
+}
+
+function normalizeGenerationServiceTier(raw: string | undefined | null): GenerationServiceTier | null {
+  const normalized = String(raw || '').trim().toLowerCase();
+  if (normalized === 'auto') return 'auto';
+  if (normalized === 'default') return 'default';
+  if (normalized === 'flex') return 'flex';
+  if (normalized === 'priority') return 'priority';
+  return null;
 }
 
 function isModelCompatibilityError(error: unknown) {
@@ -125,6 +135,7 @@ export function createOpenAIClient(): LLMClient {
   const generationModelDefault = process.env.OPENAI_GENERATION_MODEL || 'gpt-5.2';
   const generationFallbackModelDefault = process.env.OPENAI_GENERATION_FALLBACK_MODEL || 'o4-mini';
   const generationReasoningEffortDefault = normalizeGenerationReasoningEffort(process.env.OPENAI_GENERATION_REASONING_EFFORT);
+  const generationServiceTierDefault = normalizeGenerationServiceTier(process.env.OPENAI_GENERATION_SERVICE_TIER);
   const imageModel = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1';
   const imageSize = process.env.OPENAI_IMAGE_SIZE || '1536x1024';
   const imageQuality = process.env.OPENAI_IMAGE_QUALITY || 'low';
@@ -145,6 +156,7 @@ export function createOpenAIClient(): LLMClient {
     const generationReasoningEffort = normalizeGenerationReasoningEffort(
       profileReasoningRaw || generationReasoningEffortDefault,
     );
+    const generationServiceTier = generationServiceTierDefault;
 
     const emitModelEvent = (event: GenerationModelEvent) => {
       try {
@@ -173,6 +185,7 @@ export function createOpenAIClient(): LLMClient {
         instructions?: string;
         input: string;
         reasoning?: { effort: Exclude<GenerationReasoningEffort, 'none'> };
+        service_tier?: GenerationServiceTier;
       } = {
         model: selectedModel,
         input: input.prompt,
@@ -183,6 +196,9 @@ export function createOpenAIClient(): LLMClient {
       }
       if (includeReasoning && generationReasoningEffort !== 'none') {
         payload.reasoning = { effort: generationReasoningEffort };
+      }
+      if (generationServiceTier) {
+        payload.service_tier = generationServiceTier;
       }
       return client.responses.create(payload);
     };
