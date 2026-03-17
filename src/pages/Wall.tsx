@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type TouchEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type TouchEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
@@ -17,6 +17,13 @@ import { WallBlueprintCard } from '@/components/wall/WallBlueprintCard';
 import { ForYouLockedSourceCard } from '@/components/wall/ForYouLockedSourceCard';
 import { useWallPageController } from '@/hooks/useWallPageController';
 import { PwaInstallCta } from '@/components/pwa/PwaInstallCta';
+import { useYouTubeOnboarding } from '@/hooks/useYouTubeOnboarding';
+import { HomeOnboardingCard } from '@/components/onboarding/HomeOnboardingCard';
+import {
+  consumeHomeOnboardingOpenRequest,
+  getHomeOnboardingDismissedKey,
+  HOME_ONBOARDING_REOPEN_EVENT,
+} from '@/lib/homeOnboarding';
 
 type WallBlueprintCardInput = {
   id: string;
@@ -107,9 +114,44 @@ export default function Wall() {
     handleTagFilter,
     handleLike,
   } = useWallPageController();
+  const onboardingQuery = useYouTubeOnboarding();
   const [pullDistance, setPullDistance] = useState(0);
   const [isPullRefreshing, setIsPullRefreshing] = useState(false);
+  const [showOnboardingCard, setShowOnboardingCard] = useState(false);
   const pullStartYRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!user?.id) {
+      setShowOnboardingCard(false);
+      return;
+    }
+    if (onboardingQuery.isLoading || onboardingQuery.isFetching) return;
+
+    const shouldAutoShow = onboardingQuery.data?.status === 'completed'
+      && window.localStorage.getItem(getHomeOnboardingDismissedKey(user.id)) !== '1';
+    const shouldForceOpen = consumeHomeOnboardingOpenRequest();
+
+    setShowOnboardingCard(Boolean(shouldForceOpen || shouldAutoShow));
+  }, [
+    onboardingQuery.data?.status,
+    onboardingQuery.isFetching,
+    onboardingQuery.isLoading,
+    user?.id,
+  ]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const handleReopen = () => {
+      if (!user?.id) return;
+      consumeHomeOnboardingOpenRequest();
+      setShowOnboardingCard(true);
+    };
+
+    window.addEventListener(HOME_ONBOARDING_REOPEN_EVENT, handleReopen);
+    return () => window.removeEventListener(HOME_ONBOARDING_REOPEN_EVENT, handleReopen);
+  }, [user?.id]);
 
   const canUsePullToRefresh = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -184,6 +226,13 @@ export default function Wall() {
     );
   }
 
+  const handleDismissOnboarding = () => {
+    if (typeof window !== 'undefined' && user?.id) {
+      window.localStorage.setItem(getHomeOnboardingDismissedKey(user.id), '1');
+    }
+    setShowOnboardingCard(false);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <AppHeader />
@@ -228,6 +277,12 @@ export default function Wall() {
             dismissStorageKey={WALL_PWA_INSTALL_DISMISS_KEY}
           />
         </div>
+
+        {user && showOnboardingCard ? (
+          <div className="mb-3">
+            <HomeOnboardingCard onDismiss={handleDismissOnboarding} />
+          </div>
+        ) : null}
 
         <div
           className="mx-3 overflow-hidden transition-[height] duration-200 ease-out sm:hidden"

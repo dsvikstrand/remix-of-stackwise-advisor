@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,8 +12,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, LogOut, Settings, LifeBuoy, HelpCircle, Moon, Sun, Compass } from 'lucide-react';
+import { User, LogOut, Settings, LifeBuoy, HelpCircle, Moon, Sun, Compass, Sparkles } from 'lucide-react';
 import { useAiCredits } from '@/hooks/useAiCredits';
+import { requestHomeOnboardingOpen } from '@/lib/homeOnboarding';
 
 interface UserMenuProps {
   onOpenHelp?: () => void;
@@ -23,6 +24,7 @@ type ThemeMode = 'light' | 'dark';
 
 export function UserMenu({ onOpenHelp }: UserMenuProps) {
   const { user, profile, signOut, isLoading } = useAuth();
+  const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const creditsQuery = useAiCredits({
     enabled: Boolean(user && menuOpen),
@@ -92,6 +94,12 @@ export function UserMenu({ onOpenHelp }: UserMenuProps) {
     && Number(credits?.daily_grant) > 0;
   const dailyCreditsUsed = Math.max(0, Number(credits?.generation_daily_used || 0));
   const dailyCreditsGrant = Math.max(0, Number(credits?.daily_grant || credits?.generation_daily_limit || 0));
+
+  const handleOpenOnboarding = () => {
+    setMenuOpen(false);
+    requestHomeOnboardingOpen();
+    navigate('/wall');
+  };
 
   return (
     <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
@@ -187,6 +195,13 @@ export function UserMenu({ onOpenHelp }: UserMenuProps) {
         >
           <HelpCircle className="mr-2 h-4 w-4" />
           Help
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="cursor-pointer"
+          onClick={handleOpenOnboarding}
+        >
+          <Sparkles className="mr-2 h-4 w-4" />
+          Show onboarding
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <a href="mailto:hi@bleup.app" className="flex items-center cursor-pointer">
