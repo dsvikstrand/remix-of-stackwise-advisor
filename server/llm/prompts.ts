@@ -47,7 +47,7 @@ Write the review now following the format rules.`;
 
 export const YOUTUBE_BLUEPRINT_SYSTEM_PROMPT = '';
 
-export const YOUTUBE_BLUEPRINT_PROMPT_TEMPLATE_PATH_DEFAULT = 'docs/golden_blueprint/golden_bp_prompt_contract_one_step_v1.md';
+export const YOUTUBE_BLUEPRINT_PROMPT_TEMPLATE_PATH_DEFAULT = 'docs/golden_blueprint/golden_bp_prompt_contract_one_step_v2.md';
 const YOUTUBE_PASS2_PROMPT_TEMPLATE_RELATIVE_PATH = 'docs/golden_blueprint/golden_bp_pass2_transform_prompt_v1.md';
 const YOUTUBE_POS_VIBE_ORACLE_DIR = '/home/ubuntu/remix-of-stackwise-advisor/docs/golden_blueprint/reddit/clean/pos';
 const YOUTUBE_REQUIRED_TEMPLATE_KEYS = [
@@ -358,7 +358,10 @@ export function buildYouTubeQualityRetryInstructions(input: {
     'Fix all listed quality failures in one pass.',
     'Return strict JSON in the required format only.',
     'Do not use meta framing like "this video", "this blueprint", or "the transcript".',
-    'All required sections must be present and non-empty: Summary, Takeaways, Bleup, Deep Dive, Practical Rules, Open Questions.',
+    'All required sections must be present and non-empty: Summary, Takeaways, Storyline, Deep Dive, Practical Rules, Open Questions.',
+    'Make sure the JSON is correctly formatted before returning it.',
+    'Do not add extra braces, missing commas, trailing commentary, malformed arrays/objects, or alternate field names.',
+    'Return one complete JSON object only.',
     'Pass 1 output is default-only. Do not generate ELI5 output in this pass.',
     'Ignore paid-promotion/sponsorship/affiliate transcript segments completely.',
     'Do not mention sponsor brands, promo codes, affiliate language, or promotion warnings in output.',
