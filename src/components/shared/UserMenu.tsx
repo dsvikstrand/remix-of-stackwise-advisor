@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, LogOut, Settings, LifeBuoy, HelpCircle, Moon, Sun, Compass, Home } from 'lucide-react';
+import { User, LogOut, Settings, LifeBuoy, HelpCircle, Moon, Sun, Compass } from 'lucide-react';
 import { useAiCredits } from '@/hooks/useAiCredits';
 
 interface UserMenuProps {
@@ -166,12 +166,6 @@ export function UserMenu({ onOpenHelp }: UserMenuProps) {
           <Link to="/explore" className="flex items-center cursor-pointer">
             <Compass className="mr-2 h-4 w-4" />
             Explore
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link to="/" className="flex items-center cursor-pointer">
-            <Home className="mr-2 h-4 w-4" />
-            Landing
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
