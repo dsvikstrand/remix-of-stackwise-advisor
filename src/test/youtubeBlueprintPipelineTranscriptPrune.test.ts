@@ -468,6 +468,9 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
     expect(pass1Requests[0].additionalInstructions).toContain('Return exactly 6 steps in this exact order and exact names:');
     expect(pass1Requests[1].additionalInstructions).toContain('Return exactly 6 steps in this exact order and exact names:');
     expect(pass1Requests[2].additionalInstructions).toContain('Return exactly 6 steps in this exact order and exact names:');
+    expect(pass1Requests[0].additionalInstructions).toContain('Summary, Takeaways, Storyline, Deep Dive, Practical Rules, Open Questions.');
+    expect(pass1Requests[1].additionalInstructions).toContain('Summary, Takeaways, Storyline, Deep Dive, Practical Rules, Open Questions.');
+    expect(pass1Requests[2].additionalInstructions).toContain('Summary, Takeaways, Storyline, Deep Dive, Practical Rules, Open Questions.');
     expect(pass2Transcripts.length).toBe(0);
     expect(events.some((row) => row.event === 'gate_failed_terminal')).toBe(true);
     expect(events.some((row) => row.event === 'gate_published_anyway')).toBe(true);

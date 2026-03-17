@@ -265,7 +265,7 @@ async function runYouTubePipeline(input: {
   const structureRetryInstructionBlock = [
     'Structure fix required.',
     'Return exactly 6 steps in this exact order and exact names:',
-    'Summary, Takeaways, Bleup, Deep Dive, Practical Rules, Open Questions.',
+    'Summary, Takeaways, Storyline, Deep Dive, Practical Rules, Open Questions.',
     'Return strict JSON only.',
   ].join('\n');
   const withStructureHint = (instructions?: string | null) => {
