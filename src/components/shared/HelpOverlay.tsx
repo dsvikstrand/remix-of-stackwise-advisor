@@ -2,7 +2,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Compass, Layers, Sparkles, Tag, Users } from 'lucide-react';
+import { Compass, Home, Rss, Sparkles, SquarePlus } from 'lucide-react';
 
 interface HelpOverlayProps {
   open: boolean;
@@ -10,37 +10,36 @@ interface HelpOverlayProps {
 }
 
 const FLOW_STEPS = [
-  { label: 'Pull From YouTube', hint: 'Use a single video URL to generate a blueprint draft.' },
-  { label: 'Save To My Feed', hint: 'Each item lands in your personal timeline first.' },
-  { label: 'Unlock Source Videos', hint: 'Use credits to unlock locked source cards when generation is needed.' },
-  { label: 'Auto Channel Publish', hint: 'Generated blueprints are auto-routed to channels after checks.' },
-  { label: 'Community Feedback', hint: 'Votes and comments keep Home relevant.' },
+  { label: 'Follow creators in Subscriptions', hint: 'Subscriptions follow creators you trust and shape My Feed.' },
+  { label: 'Join topics in Channels', hint: 'Channels follow topics you care about and shape Joined.' },
+  { label: 'Use Home to browse your streams', hint: 'My Feed follows your subscriptions, Joined follows your channels, and All shows every public blueprint.' },
+  { label: 'Use Add to generate on purpose', hint: 'Paste a video, use a video id, or search when you want a blueprint right away.' },
 ];
 
 const FEATURE_CARDS = [
   {
-    title: 'My Feed',
-    description: 'My Feed is your personal pulled-content lane. Everything lands here first.',
+    title: 'Subscriptions',
+    description: 'Subscriptions follow creators you trust.',
+    icon: Rss,
+    bullets: ['Follows creators, not topics', 'Shapes My Feed', 'Can run in Auto generate or Manual only mode'],
+  },
+  {
+    title: 'Channels',
+    description: 'Channels follow topics you care about.',
     icon: Sparkles,
-    bullets: ['Personal source intake', 'Unlock and open source cards', 'Keeps rejected items accessible'],
+    bullets: ['Follows topics, not creators', 'Shapes Joined', 'Helps you stay focused on what matters to you'],
   },
   {
-    title: 'Blueprints',
-    description: 'Blueprints are step-by-step summaries from source content, with optional user remix.',
-    icon: Layers,
-    bullets: ['Generated from media sources', 'Attach insight/remix', 'Auto-routed to channels when eligible'],
+    title: 'Home',
+    description: 'Home gives you three different streams.',
+    icon: Home,
+    bullets: ['My Feed = creators you subscribe to', 'Joined = channels you follow', 'All = every public blueprint on Bleup'],
   },
   {
-    title: 'Tags',
-    description: 'Tags connect the community. Follow them to tailor what you see.',
-    icon: Tag,
-    bullets: ['Join channels you like', 'Shape the Joined feed', 'Stay focused on your goals'],
-  },
-  {
-    title: 'Community',
-    description: 'Home has three lanes: For You, Joined, and All.',
-    icon: Users,
-    bullets: ['For You = source-driven stream', 'Joined = joined-channel discovery', 'All = global published blueprint feed'],
+    title: 'Add',
+    description: 'Add is where you generate a blueprint on purpose.',
+    icon: SquarePlus,
+    bullets: ['Paste a YouTube link or video id', 'Search for a specific video', 'Turn useful content into a blueprint right away'],
   },
 ];
 
@@ -57,17 +56,17 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                   <Compass className="h-5 w-5" />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-semibold">Welcome to Blueprints</h2>
+                  <h2 className="text-2xl font-semibold">How Bleup works</h2>
                   <p className="text-sm text-muted-foreground">
-                    A friendly guide to the flow, concepts, and how to get started.
+                    A quick guide to creators, topics, and your three Home streams.
                   </p>
                 </div>
               </div>
               <div className="mt-4 flex flex-wrap gap-2 text-xs">
-                <Badge variant="secondary">My Feed</Badge>
-                <Badge variant="secondary">Blueprints</Badge>
+                <Badge variant="secondary">Subscriptions</Badge>
                 <Badge variant="secondary">Channels</Badge>
-                <Badge variant="secondary">Community</Badge>
+                <Badge variant="secondary">Home</Badge>
+                <Badge variant="secondary">Add</Badge>
               </div>
             </div>
 
@@ -77,11 +76,10 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                   <CardContent className="p-6 space-y-2">
                     <p className="text-sm font-semibold">Let’s get oriented</p>
                     <p className="text-sm text-muted-foreground leading-relaxed">
-                      Here’s the goal: turn source content into actionable blueprints you can consume
-                      in bite-sized form. My Feed is your personal intake lane, and Home gives you
-                      For You (locked + unlocked source-driven items), Joined (published blueprints from channels you joined), and All (the global published blueprint stream) after quality checks.
-                      You can remix insights, auto-publish keeps useful items moving,
-                      and community feedback helps surface the best content.
+                      Bleup helps you turn useful creator content into blueprints you can actually use.
+                      Subscriptions follow creators you trust. Channels follow topics you care about.
+                      Home then brings those together through three streams: My Feed from your subscriptions,
+                      Joined from the channels you follow, and All for every public blueprint on Bleup.
                     </p>
                   </CardContent>
                 </Card>
@@ -93,8 +91,8 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                         <Sparkles className="h-4 w-4" />
                       </div>
                       <div>
-                      <p className="text-sm font-semibold">The Flow</p>
-                        <p className="text-xs text-muted-foreground">Source pull → My Feed → unlock/generate → Home lanes</p>
+                        <p className="text-sm font-semibold">The Flow</p>
+                        <p className="text-xs text-muted-foreground">Creators and topics in → Home streams out</p>
                       </div>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -141,7 +139,7 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                     <div>
                       <p className="text-sm font-semibold">Tip for first‑time users</p>
                       <p className="text-xs text-muted-foreground">
-                        Start with subscribed sources in For You, unlock one item, then open the generated blueprint in Home.
+                        Start by subscribing to one creator or joining one channel, then generate one blueprint from Add or open one from Home.
                       </p>
                     </div>
                     <Button
