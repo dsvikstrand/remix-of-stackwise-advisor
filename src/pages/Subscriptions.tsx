@@ -97,9 +97,12 @@ export default function Subscriptions() {
         <PageSection>
           <div className="space-y-2">
             <p className="text-sm font-semibold text-primary uppercase tracking-wide">Subscriptions</p>
-            <h1 className="text-2xl font-semibold">Follow creators and build your feed</h1>
+            <h1 className="text-2xl font-semibold">Follow creators and shape My Feed</h1>
             <p className="text-sm text-muted-foreground">
-              Add creators manually first, or optionally import your YouTube subscriptions and review them before importing.
+              Subscriptions follow creators you trust. Their videos shape My Feed.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Auto generate uses credits automatically when new videos arrive. Manual only lets you choose which videos to turn into blueprints.
             </p>
             {!subscriptionsEnabled ? (
               <p className="text-xs text-muted-foreground">
@@ -383,13 +386,18 @@ export default function Subscriptions() {
                           </div>
                           <div className="flex flex-col items-end gap-2">
                             <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <span>Auto</span>
+                              <span>{Boolean(subscription.auto_unlock_enabled) ? 'Auto generate' : 'Manual only'}</span>
                               <Switch
                                 checked={Boolean(subscription.auto_unlock_enabled)}
                                 onCheckedChange={(checked) => handleAutoUnlockToggle(subscription, checked)}
                                 disabled={!subscriptionsEnabled || isRowPending(subscription.id)}
                               />
                             </label>
+                            <p className="max-w-[12rem] text-right text-[11px] text-muted-foreground">
+                              {Boolean(subscription.auto_unlock_enabled)
+                                ? 'New videos can use credits automatically.'
+                                : 'You choose which videos become blueprints.'}
+                            </p>
                             <Button
                               size="sm"
                               variant="destructive"

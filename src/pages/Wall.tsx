@@ -198,9 +198,9 @@ export default function Wall() {
         <section className="mb-6 px-3 sm:px-4 hidden sm:block">
           <div className="flex flex-col gap-2">
             <p className="text-sm font-semibold text-primary uppercase tracking-wide">Home</p>
-            <h1 className="text-2xl font-semibold">Live blueprint stream</h1>
+            <h1 className="text-2xl font-semibold">Your blueprint streams</h1>
             <p className="text-sm text-muted-foreground">
-              For You follows your sources. Joined filters the channels you care about.
+              My Feed follows creators you subscribe to. Joined follows channels you join. All shows every public blueprint on Bleup.
             </p>
           </div>
         </section>
@@ -208,9 +208,9 @@ export default function Wall() {
         {!user && (
           <div className="mb-6 mx-3 sm:mx-4 border border-border/40 px-3 py-4">
             <div className="flex flex-col gap-2 text-center">
-              <p className="text-sm font-semibold">Sign in to personalize</p>
+              <p className="text-sm font-semibold">Sign in to personalize Home</p>
               <p className="text-sm text-muted-foreground">
-                Join channels to shape your feed, then follow creators you trust.
+                Subscriptions follow creators you trust. Channels follow topics you care about.
               </p>
               <div className="flex justify-center">
                 <Link to="/auth">
@@ -291,9 +291,16 @@ export default function Wall() {
             </div>
             {user && activeSourceSubscriptionCount > 0 && activeSourceSubscriptionCount < 10 ? (
               <p className="mt-2 text-xs text-muted-foreground">
-                Showing <span className="font-medium text-foreground">All</span> by default while your creator list is still small.
+                Showing <span className="font-medium text-foreground">All</span> by default while My Feed is still getting started.
               </p>
             ) : null}
+            <p className="mt-2 text-xs text-muted-foreground">
+              {activeLane === 'for-you'
+                ? 'My Feed shows blueprints from creators you subscribe to.'
+                : activeLane === 'joined'
+                  ? 'Joined shows blueprints posted into channels you follow.'
+                  : 'All shows every public blueprint on Bleup.'}
+            </p>
           </div>
 
           <div className="mt-0">
@@ -313,7 +320,7 @@ export default function Wall() {
                 <div>
                   <p className="text-sm font-semibold">Join channels to shape this lane</p>
                   <p className="text-xs text-muted-foreground">
-                    Joined only shows published blueprints from channels you have joined.
+                    Joined only shows published blueprints posted into channels you follow.
                   </p>
                 </div>
                 <Button asChild size="sm">
@@ -350,7 +357,7 @@ export default function Wall() {
               ) : isForYouError ? (
                 <Card className="mx-3 sm:mx-4">
                   <CardContent className="py-6 text-sm text-muted-foreground">
-                    Could not load For You right now. Please refresh and try again.
+                    Could not load My Feed right now. Please refresh and try again.
                   </CardContent>
                 </Card>
               ) : forYouStream.length > 0 ? (
@@ -496,14 +503,14 @@ export default function Wall() {
                           ? joinedCuratedCount > 0
                             ? 'No joined-channel blueprints yet'
                             : 'Personalize your joined feed'
-                          : 'No blueprints yet'}
+                          : 'No blueprints in My Feed yet'}
                       </h3>
                       <p className="text-sm text-muted-foreground mt-1">
                         {isJoinedScope
                           ? joinedCuratedCount > 0
                             ? 'Your joined channels do not have published blueprints here yet.'
-                            : 'Join channels to see published blueprints from topics you care about.'
-                          : 'Be the first to share a blueprint.'}
+                            : 'Join channels to see blueprints grouped by topics you care about.'
+                          : 'Subscribe to creators you trust, or generate a blueprint to start My Feed.'}
                       </p>
                     </div>
 
