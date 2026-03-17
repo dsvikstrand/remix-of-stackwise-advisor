@@ -12,7 +12,7 @@ interface HelpOverlayProps {
 const FLOW_STEPS = [
   { label: 'Follow creators in Subscriptions', hint: 'Subscriptions follow creators you trust and shape My Feed.' },
   { label: 'Join topics in Channels', hint: 'Channels follow topics you care about and shape Joined.' },
-  { label: 'Use Home to browse your streams', hint: 'My Feed follows your subscriptions, Joined follows your channels, and All shows every public blueprint.' },
+  { label: 'Check My Feed for ready and locked items', hint: 'Manual only subscriptions can send new videos to My Feed as locked items before you choose to generate them.' },
   { label: 'Use Add to generate on purpose', hint: 'Paste a video, use a video id, or search when you want a blueprint right away.' },
 ];
 
@@ -21,7 +21,13 @@ const FEATURE_CARDS = [
     title: 'Subscriptions',
     description: 'Subscriptions follow creators you trust.',
     icon: Rss,
-    bullets: ['Follows creators, not topics', 'Shapes My Feed', 'Can run in Auto generate or Manual only mode'],
+    bullets: [
+      'Follows creators, not topics',
+      'Shapes My Feed',
+      'Auto generate can spend credits automatically',
+      'Manual only sends new videos to My Feed first',
+      'Locked My Feed items cost 1 credit to generate',
+    ],
   },
   {
     title: 'Channels',
@@ -33,7 +39,12 @@ const FEATURE_CARDS = [
     title: 'Home',
     description: 'Home gives you three different streams.',
     icon: Home,
-    bullets: ['My Feed = creators you subscribe to', 'Joined = channels you follow', 'All = every public blueprint on Bleup'],
+    bullets: [
+      'My Feed = creators you subscribe to',
+      'Can contain ready blueprints and locked items',
+      'Joined = channels you follow',
+      'All = every public blueprint on Bleup',
+    ],
   },
   {
     title: 'Add',
@@ -80,6 +91,8 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                       Subscriptions follow creators you trust. Channels follow topics you care about.
                       Home then brings those together through three streams: My Feed from your subscriptions,
                       Joined from the channels you follow, and All for every public blueprint on Bleup.
+                      Credits are used when Bleup generates a blueprint. If a subscription is Manual only,
+                      new videos can land in My Feed as locked items and cost 1 credit when you choose to turn one into a blueprint.
                     </p>
                   </CardContent>
                 </Card>
@@ -139,7 +152,7 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                     <div>
                       <p className="text-sm font-semibold">Tip for first‑time users</p>
                       <p className="text-xs text-muted-foreground">
-                        Start by subscribing to one creator or joining one channel, then generate one blueprint from Add or open one from Home.
+                        Start by subscribing to one creator or joining one channel, then generate one blueprint from Add or open one from Home. If a creator is set to Manual only, look for locked items in My Feed.
                       </p>
                     </div>
                     <Button
