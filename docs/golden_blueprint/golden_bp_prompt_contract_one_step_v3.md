@@ -93,6 +93,11 @@ Open Questions defines what remains unresolved in a useful way. It should provid
 | `Practical Rules` | 3-5 complete bullets, each 1-2 sentences | actionable decisions | non-operational advice, abstract slogans, overlong bullets |
 | `Open Questions` | 3-5 complete bullets, each 1-2 sentences | meaningful unknowns | generic filler questions, repeated "why it matters" tails, overlong bullets |
 
+## Transcript Precedence Rule
+
+Transcript context is the top authority for all factual statements. Vibe references can shape tone and readability only. If there is any ambiguity, choose transcript fidelity over stylistic flourish.
+Paid promotion/sponsorship/affiliate transcript segments are explicitly excluded from content extraction and should not appear in output.
+
 ## Anti-Slop Rules
 
 Avoid the most common failure patterns:
@@ -100,6 +105,10 @@ Avoid the most common failure patterns:
 - no clipped bullets or bullet fragments
 - no generic boilerplate endings like repeated “why it matters” filler
 - no domain drift; use topic-native language
+
+## Reddit Reference Policy (Vibe Only, Never Content)
+
+Positive Reddit examples are allowed as style calibration inputs for feel, pacing, readability, and engagement energy. They are not allowed as content sources. We borrow narrative signal, not facts. The provided Reddit post are cherry picked based on high comment and like count, and based on a community value that the post seemed to proved. We want the blueprint to have the same "community value" feel.
 
 ## Strict JSON Contract
 
