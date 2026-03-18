@@ -24,6 +24,7 @@ type ForYouLockedSourceCardProps = {
   sourceChannelAvatarUrl?: string | null;
   createdAt: string;
   unlockCost: number;
+  isGenerationFree?: boolean;
   isUnlocking: boolean;
   canUnlock?: boolean;
   onUnlock: () => void;
@@ -35,6 +36,7 @@ export function ForYouLockedSourceCard({
   sourceChannelAvatarUrl,
   createdAt,
   unlockCost,
+  isGenerationFree = false,
   isUnlocking,
   canUnlock = true,
   onUnlock,
@@ -48,6 +50,7 @@ export function ForYouLockedSourceCard({
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() || '')
     .join('') || 'S';
+  const unlockCostLabel = `${unlockCostFormatter.format(unlockCost)} ${unlockCost === 1 ? 'credit' : 'credits'}`;
 
   const handleCardActivate = () => {
     if (isUnlocking || !canUnlock) return;
@@ -105,7 +108,7 @@ export function ForYouLockedSourceCard({
                 {isUnlocking ? 'Unlocking...' : 'Unlock available'}
               </Badge>
               <span className="inline-flex h-6 items-center rounded-full border border-border/60 bg-muted/40 px-2.5 text-[11px] text-muted-foreground">
-                ◉ {unlockCostFormatter.format(unlockCost)}
+                {isGenerationFree ? 'Free right now' : `◉ ${unlockCostFormatter.format(unlockCost)}`}
               </span>
             </div>
           </div>
@@ -118,7 +121,9 @@ export function ForYouLockedSourceCard({
           <AlertDialogHeader>
             <AlertDialogTitle>Unlock this blueprint?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will spend {unlockCostFormatter.format(unlockCost)} credits to unlock and generate it.
+              {isGenerationFree
+                ? 'This will unlock and generate it for free right now.'
+                : `This will spend ${unlockCostLabel} to unlock and generate it.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

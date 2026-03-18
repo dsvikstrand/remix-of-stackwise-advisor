@@ -16,6 +16,7 @@ import { resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
 import { WallBlueprintCard } from '@/components/wall/WallBlueprintCard';
 import { ForYouLockedSourceCard } from '@/components/wall/ForYouLockedSourceCard';
 import { useWallPageController } from '@/hooks/useWallPageController';
+import { useAiCredits } from '@/hooks/useAiCredits';
 import { PwaInstallCta } from '@/components/pwa/PwaInstallCta';
 import { useYouTubeOnboarding } from '@/hooks/useYouTubeOnboarding';
 import { HomeOnboardingCard } from '@/components/onboarding/HomeOnboardingCard';
@@ -114,10 +115,15 @@ export default function Wall() {
     handleTagFilter,
     handleLike,
   } = useWallPageController();
+  const creditsQuery = useAiCredits({
+    enabled: Boolean(user),
+    refetchIntervalMs: false,
+  });
   const onboardingQuery = useYouTubeOnboarding();
   const [pullDistance, setPullDistance] = useState(0);
   const [isPullRefreshing, setIsPullRefreshing] = useState(false);
   const [showOnboardingCard, setShowOnboardingCard] = useState(false);
+  const isGenerationFree = Boolean(creditsQuery.data?.openai_daily_free_window_open);
   const pullStartYRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -427,6 +433,7 @@ export default function Wall() {
                           sourceChannelAvatarUrl={item.sourceChannelAvatarUrl}
                           createdAt={item.createdAt}
                           unlockCost={item.unlockCost}
+                          isGenerationFree={isGenerationFree}
                           isUnlocking={item.unlockInProgress}
                           onUnlock={() => unlockMutation.mutate(item)}
                         />

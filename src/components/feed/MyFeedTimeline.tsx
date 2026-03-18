@@ -43,6 +43,7 @@ import { UnlockActivityCard } from '@/components/shared/UnlockActivityCard';
 import { resolveEffectiveBanner } from '@/lib/bannerResolver';
 import { getLaunchErrorCopy } from '@/lib/launchErrorCopy';
 import { countBlueprintSectionsV1 } from '@/lib/blueprintSections';
+import { useAiCredits } from '@/hooks/useAiCredits';
 
 const CHANNEL_OPTIONS = CHANNELS_CATALOG.filter((channel) => channel.status === 'active' && channel.isJoinEnabled);
 const CHANNEL_NAME_BY_SLUG = new Map(CHANNELS_CATALOG.map((channel) => [channel.slug, channel.name]));
@@ -102,6 +103,11 @@ export function MyFeedTimeline({
   const [visibleCount, setVisibleCount] = useState(chunkSize ?? allItems.length);
 
   const canMutate = isOwnerView && !!user;
+  const creditsQuery = useAiCredits({
+    enabled: canMutate,
+    refetchIntervalMs: false,
+  });
+  const isGenerationFree = Boolean(creditsQuery.data?.openai_daily_free_window_open);
 
   const unlockTracker = useSourceUnlockJobTracker({
     userId: user?.id,
@@ -559,6 +565,7 @@ export function MyFeedTimeline({
               sourceChannelAvatarUrl={source?.thumbnailUrl || null}
               createdAt={item.createdAt}
               unlockCost={Number(source?.unlockCost || 0)}
+              isGenerationFree={isGenerationFree}
               isUnlocking={isUnlocking}
               canUnlock={canMutate}
               onUnlock={() => unlockMutation.mutate(item)}
