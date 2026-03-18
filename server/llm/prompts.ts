@@ -47,7 +47,7 @@ Write the review now following the format rules.`;
 
 export const YOUTUBE_BLUEPRINT_SYSTEM_PROMPT = '';
 
-export const YOUTUBE_BLUEPRINT_PROMPT_TEMPLATE_PATH_DEFAULT = 'docs/golden_blueprint/golden_bp_prompt_contract_one_step_v2.md';
+export const YOUTUBE_BLUEPRINT_PROMPT_TEMPLATE_PATH_DEFAULT = 'docs/golden_blueprint/golden_bp_prompt_contract_one_step_v3.md';
 const YOUTUBE_PASS2_PROMPT_TEMPLATE_RELATIVE_PATH = 'docs/golden_blueprint/golden_bp_pass2_transform_prompt_v1.md';
 const YOUTUBE_POS_VIBE_ORACLE_DIR = '/home/ubuntu/remix-of-stackwise-advisor/docs/golden_blueprint/reddit/clean/pos';
 const YOUTUBE_REQUIRED_TEMPLATE_KEYS = [
