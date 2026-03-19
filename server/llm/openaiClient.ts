@@ -19,6 +19,7 @@ import {
   BLUEPRINT_SYSTEM_PROMPT,
   CHANNEL_LABEL_SYSTEM_PROMPT,
   YOUTUBE_BLUEPRINT_SYSTEM_PROMPT,
+  buildYouTubeBlueprintRepairPrompt,
   buildBlueprintUserPrompt,
   buildChannelLabelUserPrompt,
   buildYouTubeBlueprintPass2TransformPrompt,
@@ -117,8 +118,7 @@ function logGenerationModelEvent(event: 'primary_success' | 'fallback_success' |
   console.info(`[llm_generation_model] ${JSON.stringify({ event, ...payload })}`);
 }
 
-const BLUEPRINT_JSON_MAX_ATTEMPTS = 2;
-const BLUEPRINT_JSON_RETRY_INSTRUCTION = [
+const BLUEPRINT_JSON_HARD_RETRY_INSTRUCTION = [
   'RETRY REQUIREMENT:',
   'Return strict valid JSON only.',
   'Do not include markdown fences or commentary.',
@@ -330,14 +330,25 @@ export function createOpenAIClient(): LLMClient {
       options?: LLMGenerationOptions,
     ): Promise<YouTubeBlueprintSectionsResult> {
       const basePrompt = buildYouTubeBlueprintUserPrompt(input);
-      for (let attempt = 1; attempt <= BLUEPRINT_JSON_MAX_ATTEMPTS; attempt += 1) {
-        const prompt = attempt === 1
-          ? basePrompt
-          : `${basePrompt}\n\n${BLUEPRINT_JSON_RETRY_INSTRUCTION}`;
+      const attempts: Array<{
+        attempt: number;
+        attemptType: 'primary' | 'repair' | 'retry';
+        prompt: string;
+      }> = [
+        {
+          attempt: 1,
+          attemptType: 'primary',
+          prompt: basePrompt,
+        },
+      ];
+
+      let repairSeed: { rawText: string; failureClass: string; failureDetail: string } | null = null;
+
+      for (const attemptConfig of attempts) {
         const response = await runGenerationRequest({
           operation: 'generateYouTubeBlueprint',
           instructions: YOUTUBE_BLUEPRINT_SYSTEM_PROMPT,
-          prompt,
+          prompt: attemptConfig.prompt,
           options,
         });
 
@@ -351,17 +362,73 @@ export function createOpenAIClient(): LLMClient {
             raw_response: outputText,
           };
         } catch (error) {
-          if (!isBlueprintJsonInvalidError(error) || attempt >= BLUEPRINT_JSON_MAX_ATTEMPTS) {
+          if (!isBlueprintJsonInvalidError(error)) {
             throw error;
           }
-          console.warn('[llm_blueprint_json_retry]', JSON.stringify({
+          const rawText = String(outputText || '').trim();
+          const nextAttempt = attemptConfig.attempt + 1;
+
+          if (attemptConfig.attemptType === 'primary') {
+            repairSeed = {
+              rawText,
+              failureClass: error.failureClass,
+              failureDetail: error.detail,
+            };
+            attempts.push({
+              attempt: nextAttempt,
+              attemptType: 'repair',
+              prompt: buildYouTubeBlueprintRepairPrompt({
+                ...input,
+                previousOutput: rawText,
+                failureClass: error.failureClass,
+                failureDetail: error.detail,
+              }),
+            });
+            console.warn('[llm_blueprint_json_retry]', JSON.stringify({
+              provider: 'openai_api',
+              operation: 'generateYouTubeBlueprint',
+              attempt: attemptConfig.attempt,
+              attempt_type: attemptConfig.attemptType,
+              next_attempt: nextAttempt,
+              next_attempt_type: 'repair',
+              failure_class: error.failureClass,
+              detail: error.detail,
+            }));
+            continue;
+          }
+
+          if (attemptConfig.attemptType === 'repair') {
+            attempts.push({
+              attempt: nextAttempt,
+              attemptType: 'retry',
+              prompt: `${basePrompt}\n\n${BLUEPRINT_JSON_HARD_RETRY_INSTRUCTION}`,
+            });
+            console.warn('[llm_blueprint_json_retry]', JSON.stringify({
+              provider: 'openai_api',
+              operation: 'generateYouTubeBlueprint',
+              attempt: attemptConfig.attempt,
+              attempt_type: attemptConfig.attemptType,
+              next_attempt: nextAttempt,
+              next_attempt_type: 'retry',
+              failure_class: error.failureClass,
+              detail: error.detail,
+              initial_failure_class: repairSeed?.failureClass || null,
+              initial_failure_detail: repairSeed?.failureDetail || null,
+            }));
+            continue;
+          }
+
+          console.warn('[llm_blueprint_json_retry_exhausted]', JSON.stringify({
             provider: 'openai_api',
             operation: 'generateYouTubeBlueprint',
-            attempt,
-            next_attempt: attempt + 1,
+            attempt: attemptConfig.attempt,
+            attempt_type: attemptConfig.attemptType,
             failure_class: error.failureClass,
             detail: error.detail,
+            initial_failure_class: repairSeed?.failureClass || null,
+            initial_failure_detail: repairSeed?.failureDetail || null,
           }));
+          throw error;
         }
       }
 

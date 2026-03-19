@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const responseCreateMock = vi.fn(async (payload: Record<string, unknown>) => ({
-  output_text: JSON.stringify({
+function validBlueprintJson() {
+  return JSON.stringify({
     schema_version: 'blueprint_sections_v1',
     tags: ['test'],
     summary: { text: 'summary' },
@@ -10,7 +10,11 @@ const responseCreateMock = vi.fn(async (payload: Record<string, unknown>) => ({
     deep_dive: { bullets: ['deep dive'] },
     practical_rules: { bullets: ['rule'] },
     open_questions: { bullets: ['question'] },
-  }),
+  });
+}
+
+const responseCreateMock = vi.fn(async (payload: Record<string, unknown>) => ({
+  output_text: validBlueprintJson(),
   _payload: payload,
 }));
 
@@ -82,5 +86,86 @@ describe('openai client generation service tier', () => {
 
     expect(responseCreateMock).toHaveBeenCalledTimes(1);
     expect(responseCreateMock.mock.calls[0]?.[0]).not.toHaveProperty('service_tier');
+  });
+});
+
+describe('openai client blueprint repair ladder', () => {
+  const originalEnv = {
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    OPENAI_GENERATION_MODEL: process.env.OPENAI_GENERATION_MODEL,
+    OPENAI_GENERATION_FALLBACK_MODEL: process.env.OPENAI_GENERATION_FALLBACK_MODEL,
+    OPENAI_GENERATION_SERVICE_TIER: process.env.OPENAI_GENERATION_SERVICE_TIER,
+  };
+
+  afterEach(() => {
+    responseCreateMock.mockReset();
+    responseCreateMock.mockImplementation(async (payload: Record<string, unknown>) => ({
+      output_text: validBlueprintJson(),
+      _payload: payload,
+    }));
+    process.env.OPENAI_API_KEY = originalEnv.OPENAI_API_KEY;
+    process.env.OPENAI_GENERATION_MODEL = originalEnv.OPENAI_GENERATION_MODEL;
+    process.env.OPENAI_GENERATION_FALLBACK_MODEL = originalEnv.OPENAI_GENERATION_FALLBACK_MODEL;
+    process.env.OPENAI_GENERATION_SERVICE_TIER = originalEnv.OPENAI_GENERATION_SERVICE_TIER;
+    vi.resetModules();
+  });
+
+  it('repairs malformed first output before doing a hard retry', async () => {
+    process.env.OPENAI_API_KEY = 'test-key';
+    process.env.OPENAI_GENERATION_MODEL = 'gpt-5.4-mini';
+    process.env.OPENAI_GENERATION_FALLBACK_MODEL = 'gpt-5.4-mini';
+    delete process.env.OPENAI_GENERATION_SERVICE_TIER;
+
+    responseCreateMock
+      .mockResolvedValueOnce({
+        output_text: '{"schema_version":"blueprint_sections_v1","tags":["x"]',
+      })
+      .mockResolvedValueOnce({
+        output_text: validBlueprintJson(),
+      });
+
+    const { createOpenAIClient } = await import('../../server/llm/openaiClient');
+    const client = createOpenAIClient();
+
+    const result = await client.generateYouTubeBlueprint({
+      videoUrl: 'https://youtube.com/watch?v=abc12345678',
+      transcript: 'A sufficiently long transcript for testing valid blueprint generation.',
+    });
+
+    expect(result.storyline.text).toBe('storyline');
+    expect(responseCreateMock).toHaveBeenCalledTimes(2);
+    expect(String(responseCreateMock.mock.calls[1]?.[0]?.input || '')).toContain('REPAIR MODE:');
+    expect(String(responseCreateMock.mock.calls[1]?.[0]?.input || '')).toContain('Previous output to repair:');
+    expect(String(responseCreateMock.mock.calls[1]?.[0]?.input || '')).toContain('Failure class: invalid_json');
+  });
+
+  it('falls back to a hard retry when repair still fails', async () => {
+    process.env.OPENAI_API_KEY = 'test-key';
+    process.env.OPENAI_GENERATION_MODEL = 'gpt-5.4-mini';
+    process.env.OPENAI_GENERATION_FALLBACK_MODEL = 'gpt-5.4-mini';
+
+    responseCreateMock
+      .mockResolvedValueOnce({
+        output_text: '{"schema_version":"blueprint_sections_v1","tags":["x"]',
+      })
+      .mockResolvedValueOnce({
+        output_text: '{"schema_version":"blueprint_sections_v1","summary":"bad shape"}',
+      })
+      .mockResolvedValueOnce({
+        output_text: validBlueprintJson(),
+      });
+
+    const { createOpenAIClient } = await import('../../server/llm/openaiClient');
+    const client = createOpenAIClient();
+
+    const result = await client.generateYouTubeBlueprint({
+      videoUrl: 'https://youtube.com/watch?v=abc12345678',
+      transcript: 'A sufficiently long transcript for testing valid blueprint generation.',
+    });
+
+    expect(result.summary.text).toBe('summary');
+    expect(responseCreateMock).toHaveBeenCalledTimes(3);
+    expect(String(responseCreateMock.mock.calls[1]?.[0]?.input || '')).toContain('REPAIR MODE:');
+    expect(String(responseCreateMock.mock.calls[2]?.[0]?.input || '')).toContain('RETRY REQUIREMENT:');
   });
 });

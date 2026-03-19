@@ -304,6 +304,42 @@ export function buildYouTubeBlueprintUserPrompt(input: YouTubeBlueprintRequest) 
   });
 }
 
+export function buildYouTubeBlueprintRepairPrompt(input: YouTubeBlueprintRequest & {
+  previousOutput: string;
+  failureClass: string;
+  failureDetail: string;
+}) {
+  const basePrompt = buildYouTubeBlueprintUserPrompt(input);
+  const failureClass = String(input.failureClass || '').trim() || 'unknown_failure';
+  const failureDetail = String(input.failureDetail || '').trim() || 'Unknown validation error';
+  const previousOutput = String(input.previousOutput || '').trim();
+
+  return [
+    basePrompt,
+    '',
+    'REPAIR MODE:',
+    'You already produced a draft blueprint JSON object.',
+    'Repair that draft so it satisfies the exact schema and formatting contract.',
+    'Preserve the existing content and section meaning unless a schema or JSON fix requires a local change.',
+    '',
+    `Failure class: ${failureClass}`,
+    `Failure detail: ${failureDetail}`,
+    '',
+    'Repair requirements:',
+    '- Return one strict valid JSON object only.',
+    '- Do not include markdown fences or commentary.',
+    '- Keep the exact top-level keys: schema_version, tags, summary, takeaways, storyline, deep_dive, practical_rules, open_questions.',
+    '- summary and storyline must be objects with exactly one text field.',
+    '- takeaways, deep_dive, practical_rules, and open_questions must be objects with a bullets array.',
+    '- Do not use alternate keys such as bleup.',
+    '- Fix JSON syntax issues such as missing commas or extra braces/brackets.',
+    '- Do not freely rewrite strong content if a structural repair is enough.',
+    '',
+    'Previous output to repair:',
+    previousOutput || 'none',
+  ].join('\n');
+}
+
 export function buildYouTubeBlueprintPass2TransformPrompt(input: YouTubeBlueprintPass2TransformRequest) {
   const pass1BlueprintJson = String(input.pass1BlueprintJson || '').trim();
   const transcript = String(input.transcript || '').trim();

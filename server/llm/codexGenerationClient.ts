@@ -18,6 +18,7 @@ import {
   BLUEPRINT_SYSTEM_PROMPT,
   YOUTUBE_BLUEPRINT_SYSTEM_PROMPT,
   buildBlueprintUserPrompt,
+  buildYouTubeBlueprintRepairPrompt,
   buildYouTubeBlueprintPass2TransformPrompt,
   buildYouTubeBlueprintUserPrompt,
   extractJson,
@@ -74,8 +75,7 @@ function normalizeReasoningEffort(raw: unknown): 'none' | 'low' | 'medium' | 'hi
 }
 
 type GenerationOperation = 'generateYouTubeBlueprint' | 'generateYouTubeBlueprintPass2Transform' | 'analyzeBlueprint';
-const BLUEPRINT_JSON_MAX_ATTEMPTS = 2;
-const BLUEPRINT_JSON_RETRY_INSTRUCTION = [
+const BLUEPRINT_JSON_HARD_RETRY_INSTRUCTION = [
   'RETRY REQUIREMENT:',
   'Return strict valid JSON only.',
   'Do not include markdown fences or commentary.',
@@ -229,14 +229,24 @@ export function createCodexGenerationClient(input: {
         return getFallbackClient().generateYouTubeBlueprint(request, options);
       };
 
-      for (let attempt = 1; attempt <= BLUEPRINT_JSON_MAX_ATTEMPTS; attempt += 1) {
-        const prompt = attempt === 1
-          ? basePrompt
-          : `${basePrompt}\n\n${BLUEPRINT_JSON_RETRY_INSTRUCTION}`;
+      const attempts: Array<{
+        attempt: number;
+        attemptType: 'primary' | 'repair' | 'retry';
+        prompt: string;
+      }> = [
+        {
+          attempt: 1,
+          attemptType: 'primary',
+          prompt: basePrompt,
+        },
+      ];
+      let repairSeed: { rawText: string; failureClass: string; failureDetail: string } | null = null;
+
+      for (const attemptConfig of attempts) {
         emitPromptEvent(options, {
           operation: 'generateYouTubeBlueprint',
           instructions: YOUTUBE_BLUEPRINT_SYSTEM_PROMPT,
-          prompt,
+          prompt: attemptConfig.prompt,
         });
 
         let response: { outputText: string; durationMs: number };
@@ -247,7 +257,7 @@ export function createCodexGenerationClient(input: {
             reasoningEffort: profile.reasoningEffort,
             prompt: buildCodexPrompt({
               instructions: YOUTUBE_BLUEPRINT_SYSTEM_PROMPT,
-              prompt,
+              prompt: attemptConfig.prompt,
             }),
           });
           emitModelEvent(options, {
@@ -289,17 +299,63 @@ export function createCodexGenerationClient(input: {
           if (!isBlueprintJsonInvalidError(error)) {
             throw error;
           }
-          if (attempt >= BLUEPRINT_JSON_MAX_ATTEMPTS) {
+          const rawText = String(response.outputText || '').trim();
+          const nextAttempt = attemptConfig.attempt + 1;
+
+          if (attemptConfig.attemptType === 'primary') {
+            repairSeed = {
+              rawText,
+              failureClass: error.failureClass,
+              failureDetail: error.detail,
+            };
+            attempts.push({
+              attempt: nextAttempt,
+              attemptType: 'repair',
+              prompt: buildYouTubeBlueprintRepairPrompt({
+                ...request,
+                previousOutput: rawText,
+                failureClass: error.failureClass,
+                failureDetail: error.detail,
+              }),
+            });
+            console.warn('[llm_blueprint_json_retry]', JSON.stringify({
+              provider: 'codex_cli',
+              operation: 'generateYouTubeBlueprint',
+              attempt: attemptConfig.attempt,
+              attempt_type: attemptConfig.attemptType,
+              next_attempt: nextAttempt,
+              next_attempt_type: 'repair',
+              failure_class: error.failureClass,
+              detail: error.detail,
+            }));
+            continue;
+          }
+
+          if (attemptConfig.attemptType === 'repair') {
+            attempts.push({
+              attempt: nextAttempt,
+              attemptType: 'retry',
+              prompt: `${basePrompt}\n\n${BLUEPRINT_JSON_HARD_RETRY_INSTRUCTION}`,
+            });
+            console.warn('[llm_blueprint_json_retry]', JSON.stringify({
+              provider: 'codex_cli',
+              operation: 'generateYouTubeBlueprint',
+              attempt: attemptConfig.attempt,
+              attempt_type: attemptConfig.attemptType,
+              next_attempt: nextAttempt,
+              next_attempt_type: 'retry',
+              failure_class: error.failureClass,
+              detail: error.detail,
+              initial_failure_class: repairSeed?.failureClass || null,
+              initial_failure_detail: repairSeed?.failureDetail || null,
+            }));
+            continue;
+          }
+
+          if (attemptConfig.attemptType === 'retry') {
             return fallback(error.code, error.message);
           }
-          console.warn('[llm_blueprint_json_retry]', JSON.stringify({
-            provider: 'codex_cli',
-            operation: 'generateYouTubeBlueprint',
-            attempt,
-            next_attempt: attempt + 1,
-            failure_class: error.failureClass,
-            detail: error.detail,
-          }));
+          throw error;
         }
       }
 
