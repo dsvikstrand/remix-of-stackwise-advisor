@@ -34,8 +34,25 @@ d3) [have] Repeated active-subscriber counting and subscription lookups appear t
 d4) [have] `claim_ingestion_jobs` traffic appears too frequent for the amount of real work happening, which suggests idle/backoff behavior needs tightening.
 d5) [have] Frontend overfetch still matters, but it no longer looks like the dominant current source after the recent list-payload slimming pass.
 
+## Latest Measurement Snapshot
+e0) [have] Fresh short-window request-history export was regenerated at `2026-03-19T10:44:30.683Z`.
+e00) [have] Post-deploy `15m` top normalized paths are now:
+- `2398` :: `/rest/v1/user_feed_items?blueprint_id=is.null&select=id&source_item_id=:long&state=:long`
+- `925` :: `/rest/v1/user_source_subscriptions?id=:long`
+- `746` :: `/rest/v1/user_source_subscriptions?is_active=eq.true&select=id&source_page_id=:long`
+- `555` :: `/rest/v1/rpc/claim_ingestion_jobs`
+e01) [have] Post-deploy `60m` top normalized paths are now:
+- `22315` :: `/rest/v1/user_feed_items?blueprint_id=is.null&select=id&source_item_id=:long&state=:long`
+- `3696` :: `/rest/v1/user_source_subscriptions?id=:long`
+- `3520` :: `/rest/v1/user_source_subscriptions?is_active=eq.true&select=id&source_page_id=:long`
+- `1195` :: `/rest/v1/rpc/claim_ingestion_jobs`
+e02) [have] The feed-suppression bulk path is definitely live now; the sampled `user_feed_items` request URL shows `source_item_id=in.(...)` rather than only single-item `eq.` updates.
+e03) [have] Even after the shipped reductions, `user_feed_items` suppression remains the dominant current hotspot.
+e04) [have] `user_source_subscriptions` traffic remains the next largest family, but the remaining `PATCH ...id=...` writes are now likely tied to subscription checkpoint/health semantics rather than the redundant count-read path already removed.
+e05) [have] `claim_ingestion_jobs` is still meaningfully noisy, but it is now clearly behind feed suppression and subscription traffic in the short post-deploy windows.
+
 ## Phases
-e1) [todo] Phase 1: collapse transcript/feed suppression into bulk updates.
+f1) [todo] Phase 1: collapse transcript/feed suppression into bulk updates.
 - primary files:
   - `server/index.ts`
 - target functions:
@@ -48,8 +65,11 @@ e1) [todo] Phase 1: collapse transcript/feed suppression into bulk updates.
 - acceptance:
   - the sweep produces far fewer Supabase `user_feed_items` update requests
   - transcript/no-speech suppression behavior remains unchanged for users
-
-e2) [todo] Phase 2: eliminate repeated subscription-count and subscription-existence churn inside backend loops.
+ - progress note:
+   - bulk/chunked suppression is shipped
+   - count-only update responses are shipped
+   - follow-up is still needed because feed suppression remains the top live hotspot
+f2) [todo] Phase 2: eliminate repeated subscription-count and subscription-existence churn inside backend loops.
 - primary files:
   - `server/services/sourceUnlocks.ts`
   - `server/services/sourceSubscriptionSync.ts`
@@ -64,8 +84,10 @@ e2) [todo] Phase 2: eliminate repeated subscription-count and subscription-exist
 - acceptance:
   - fewer `user_source_subscriptions` reads/writes during source sync and unlock flows
   - no behavior drift in subscription state, source eligibility, or feed insertion
-
-e3) [todo] Phase 3: make ingestion-job claiming much more conservative while idle.
+ - progress note:
+   - the redundant active-subscriber count reads were removed from the hot subscription sync and auto-unlock retry paths
+   - the remaining `PATCH ...id=...` traffic still needs a narrower follow-up pass because it is likely coupled to subscription health/checkpoint updates
+f3) [todo] Phase 3: make ingestion-job claiming much more conservative while idle.
 - primary files:
   - `server/services/ingestionQueue.ts`
   - `server/index.ts` scheduler/caller paths for queue workers
@@ -79,8 +101,7 @@ e3) [todo] Phase 3: make ingestion-job claiming much more conservative while idl
 - acceptance:
   - `claim_ingestion_jobs` request volume drops materially during idle periods
   - queue pickup latency remains acceptable when work arrives
-
-e4) [todo] Phase 4: reduce queue-maintenance chatter around leases and queue-depth checks.
+f4) [todo] Phase 4: reduce queue-maintenance chatter around leases and queue-depth checks.
 - primary files:
   - `server/services/ingestionQueue.ts`
   - `server/index.ts`
@@ -92,8 +113,7 @@ e4) [todo] Phase 4: reduce queue-maintenance chatter around leases and queue-dep
   - avoid repeated queue-depth/count queries when no caller actually needs fresh values
 - acceptance:
   - fewer background queue-maintenance requests without increasing stale-lease failures
-
-e5) [todo] Phase 5: keep frontend list surfaces lean and verify no UX regressions after the recent slimming pass.
+f5) [todo] Phase 5: keep frontend list surfaces lean and verify no UX regressions after the recent slimming pass.
 - primary files:
   - `src/hooks/useBlueprintSearch.ts`
   - `src/hooks/useExploreSearch.ts`
@@ -107,8 +127,7 @@ e5) [todo] Phase 5: keep frontend list surfaces lean and verify no UX regression
 - acceptance:
   - list surfaces remain visually stable
   - frontend does not regress back toward full `sections_json` list payloads
-
-e6) [todo] Phase 6: add lightweight proof and tracking for the reduction.
+f6) [todo] Phase 6: add lightweight proof and tracking for the reduction.
 - primary files:
   - `docs/exec-plans/active/tail/mvp-launch-proof-tail.md` if ongoing proof needs to be carried forward
   - Supabase SQL/ops notes only if needed
@@ -121,31 +140,36 @@ e6) [todo] Phase 6: add lightweight proof and tracking for the reduction.
   - follow-up work is driven by observed remaining hotspots, not guesswork
 
 ## Execution Order
-f1) [todo] Implement Phase 1 first.
+g1) [todo] Implement Phase 1 first.
 Reason:
 - it targets the hottest current request family and likely offers the biggest single drop
 
-f2) [todo] Implement Phase 2 second.
+g2) [todo] Implement Phase 2 second.
 Reason:
 - subscription read/write churn is the next clearest backend multiplier
 
-f3) [todo] Implement Phase 3 third.
+g3) [todo] Implement Phase 3 third.
 Reason:
 - queue-claim volume is a strong background contributor and should be easy to prove after Phase 1-2
 
-f4) [todo] Implement Phase 4 fourth.
+g4) [todo] Implement Phase 4 fourth.
 Reason:
 - lease/count chatter matters, but likely less than the first three phases
 
-f5) [todo] Keep Phase 5 and Phase 6 running alongside the backend phases as verification/guardrails.
+g5) [todo] Keep Phase 5 and Phase 6 running alongside the backend phases as verification/guardrails.
+g6) [have] Based on the latest short-window snapshot, the next safest high-value code phase is still either:
+- more targeted feed-suppression reduction
+- or queue-claim idle backoff
+Reason:
+- the remaining `user_source_subscriptions?id=...` writes appear more likely to be tied to intended checkpoint/health behavior and therefore need a narrower design pass before changing them
 
 ## Validation Boundaries
-g1) [todo] After each phase, verify the affected hot path volume with the same Supabase history workflow used for the initial inspection.
-g2) [todo] Do not mark a phase complete based only on code review; require a before/after request-pattern check.
-g3) [todo] If a phase proves lower-impact than expected, keep the evidence and move to the next ranked hotspot rather than widening scope.
-g4) [todo] If any reduction changes user-visible behavior, capture that explicitly and either revert or carry the UX change as a separately approved follow-up.
+h1) [todo] After each phase, verify the affected hot path volume with the same Supabase history workflow used for the initial inspection.
+h2) [todo] Do not mark a phase complete based only on code review; require a before/after request-pattern check.
+h3) [todo] If a phase proves lower-impact than expected, keep the evidence and move to the next ranked hotspot rather than widening scope.
+h4) [todo] If any reduction changes user-visible behavior, capture that explicitly and either revert or carry the UX change as a separately approved follow-up.
 
 ## Working Rule
-h1) [have] This file is the current tracked implementation plan for egress reduction.
-h2) [todo] Before each code phase, restate the focused implementation plan for that phase and wait for approval.
-h3) [todo] Keep the proof tail and registry current as this plan moves from active to completed.
+i1) [have] This file is the current tracked implementation plan for egress reduction.
+i2) [todo] Before each code phase, restate the focused implementation plan for that phase and wait for approval.
+i3) [todo] Keep the proof tail and registry current as this plan moves from active to completed.
