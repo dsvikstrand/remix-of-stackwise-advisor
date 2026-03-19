@@ -33,33 +33,55 @@ d2) [have] The current hottest normalized path in the freshest lagged windows is
 d3) [have] Feed suppression is still present in the short windows, but the remaining traffic is now split between a shared single-item path and a bulk `source_item_id=in.(...)` path rather than one overwhelming sweep-only pattern.
 d4) [have] `claim_ingestion_jobs` remains a meaningful background contributor, but it no longer dominates the freshest measured windows.
 d5) [have] Frontend overfetch still matters, but it no longer looks like the dominant current source after the recent list-payload slimming pass.
+d6) [have] The freshest post-Phase-2b reads show `user_source_subscriptions?id=...` down by roughly `80%` versus the earlier hot `60m` snapshot, so the subscription-write throttling materially helped.
+d7) [have] The remaining short-window egress is now spread across queue claim traffic, queue-read helpers, refresh bookkeeping, and generation trace writes rather than one overwhelming backend loop.
+d8) [have] Several queue/read helpers still look broader than needed:
+- `countQueueDepth(...)` currently only supports a single `scope`, even though some callers pass `scopes: [...]`
+- `countQueueWorkItems(...)` still selects full `scope, payload` rows and reduces them in app code
+d9) [have] The YouTube refresh path still has avoidable churn:
+- `hasPendingRefreshJob(...)` scans queued/running refresh jobs by reading payloads
+- `listDueRefreshCandidates(...)` does multiple passes over refresh state and blueprints
+- `upsertRefreshState(...)` always writes `updated_at` with the patch payload
+d10) [have] Generation trace writes are still chatty:
+- `appendGenerationEvent(...)` reads latest `seq` before every event insert
+- several generation-run writes still use returning `.select(...)` payloads even when the caller only needs success/failure
 
 ## Latest Measurement Snapshot
-e0) [have] Fresh lagged request-history export was regenerated at `2026-03-19T11:42:38.888Z`.
-e00) [have] Freshest `15m` top normalized paths are now:
-- `925` :: `/rest/v1/user_source_subscriptions?id=eq.:long`
-- `155` :: `/rest/v1/rpc/claim_ingestion_jobs`
-- `104` :: `/auth/v1/user`
-- `57` :: `/rest/v1/ingestion_jobs?limit=:int&order=created_at.desc&requested_by_user_id=eq.:long&select=:long&status=in.(queued,running)`
-- `32` :: `/rest/v1/user_feed_items?source_item_id=:long`
-- `32` :: `/rest/v1/user_feed_items?blueprint_id=is.null&select=id&source_item_id=in.(...)&state=in.(...)`
-e01) [have] Freshest `60m` top normalized paths are now:
-- `3700` :: `/rest/v1/user_source_subscriptions?id=eq.:long`
-- `1542` :: `/rest/v1/rpc/claim_ingestion_jobs`
-- `484` :: `/rest/v1/source_item_unlocks?limit=:int&order=updated_at.asc&select=:long&status=eq.processing`
-- `484` :: `/rest/v1/source_item_unlocks?limit=:int&or=:long&order=updated_at.desc&select=source_item_id,transcript_status,last_error_code,updated_at`
-- `481` :: `/rest/v1/user_feed_items?source_item_id=:long`
-- `481` :: `/rest/v1/user_feed_items?blueprint_id=is.null&select=id&source_item_id=in.(...)&state=in.(...)`
-e02) [have] Fresh `60m` top request families are now:
-- `3737` subscription checks
-- `1542` unlock queue claim
-- `1009` unlock state reads
-- `1002` feed suppression writes
-e03) [have] The long-window `24h` and `6h` snapshots are still dominated by feed suppression because they include a large amount of pre-Phase-1b history.
-e04) [have] In the freshest measured windows, `user_source_subscriptions?id=...` writes are now the dominant hotspot.
-e05) [have] Feed suppression remains present, but it is no longer the dominant short-window family after the Phase 1b suppression cooldown + sweep cadence change.
-e06) [have] `claim_ingestion_jobs` remains materially noisy and is still above feed suppression in the fresh `60m` window, but it is now clearly behind subscription writes.
-e07) [have] The newest hotspot order suggests the next safest high-value code phase is a narrow Phase 2b on subscription write reduction, not another broad feed-suppression rewrite.
+e0) [have] Fresh lagged request-history exports were regenerated on `2026-03-19` after the Phase 2b write-throttling deploy.
+e00) [have] Freshest current `60m` snapshot:
+- window: `2026-03-19T12:23:00.000Z` -> `2026-03-19T13:23:00.000Z`
+- total sampled requests: `3780`
+- top normalized paths:
+  - `666` :: `/rest/v1/user_source_subscriptions?id=eq.:long`
+  - `621` :: `/rest/v1/rpc/claim_ingestion_jobs`
+  - `261` :: `/rest/v1/generation_run_events?select=id,run_id,seq,level,event,payload,created_at`
+  - `147` :: `/rest/v1/ingestion_jobs?select=id`
+  - `141` :: `/rest/v1/ingestion_jobs?select=id&status=in.(queued,running)`
+  - `115` :: `/rest/v1/blueprint_youtube_refresh_state?on_conflict=blueprint_id`
+e01) [have] Fresh `60m` request families now look like:
+- `704` subscription checks
+- `621` unlock queue claim
+- `582` ingestion job reads
+- `522` generation trace writes
+- `213` unlock state reads
+- `66` feed suppression writes
+e02) [have] Freshest current `24h` snapshot still looks historically feed-heavy because it includes a large amount of pre-fix traffic:
+- `459155` :: `/rest/v1/user_feed_items?blueprint_id=is.null&select=id&source_item_id=eq.:long&state=in.(...)`
+- `77503` :: `/rest/v1/user_source_subscriptions?id=eq.:long`
+- `65902` :: `/rest/v1/user_source_subscriptions?is_active=eq.true&select=id&source_page_id=eq.:long`
+- `18211` :: `/rest/v1/rpc/claim_ingestion_jobs`
+e03) [have] Same-shape short-window comparison against the earliest non-empty prior `60m` bucket in the last day shows:
+- `user_source_subscriptions?id=...` down from `3204` -> `666`
+- total sampled requests down from `24498` -> `3780`
+- `claim_ingestion_jobs` roughly flat/slightly up from `554` -> `621`
+e04) [have] The current short-window hotspot order is now:
+- `user_source_subscriptions?id=...`
+- `claim_ingestion_jobs`
+- `generation_run_events`
+- `ingestion_jobs` queue reads
+- `blueprint_youtube_refresh_state` writes
+e05) [have] Feed suppression is no longer a top short-window driver after the Phase 1 and Phase 1b reductions.
+e06) [have] The next tightening wave should focus on queue helpers, refresh queue bookkeeping, and generation trace chattiness rather than another broad feed-suppression rewrite.
 
 ## Phases
 f1) [todo] Phase 1: collapse transcript/feed suppression into bulk updates.
@@ -117,43 +139,72 @@ f3) [todo] Phase 3: make ingestion-job claiming much more conservative while idl
  - progress note:
    - idle backoff + jitter are shipped
    - fresh windows still show claim traffic as the second-largest short-window family, so more queue work may still be worth doing after Phase 2b
-f4) [todo] Phase 4: reduce queue-maintenance chatter around leases and queue-depth checks.
+f4) [todo] Phase 4: tighten queue helpers and scoped queue reads.
 - primary files:
   - `server/services/ingestionQueue.ts`
+  - `server/services/generationPreflight.ts`
+  - `server/handlers/opsHandlers.ts`
+  - `server/index.ts`
+- target functions:
+  - `countQueueDepth(...)`
+  - `countQueueWorkItems(...)`
+  - queue guard/read call sites that currently expect multi-scope filtering
+- implementation direction:
+  - make queue depth checks truly support multi-scope filtering where callers pass `scopes: [...]`
+  - reduce broad `ingestion_jobs` reads for queue work-item counting
+  - verify queue admission / refresh guards still reflect the intended queue slice rather than the full queue
+- acceptance:
+  - fewer `ingestion_jobs?select=id...` and related queue-read requests
+  - queue guards become both cheaper and more accurate
+f5) [todo] Phase 5: reduce refresh queue bookkeeping and refresh-state churn.
+- primary files:
+  - `server/services/blueprintYoutubeComments.ts`
+  - `server/index.ts`
+- implementation direction:
+  - tighten `hasPendingRefreshJob(...)` so it stops scanning queued/running refresh payloads more than necessary
+  - review `listDueRefreshCandidates(...)` for extra passes that can be collapsed
+  - skip no-op `blueprint_youtube_refresh_state` upserts where safe
+- acceptance:
+  - lower `blueprint_youtube_refresh_state` and refresh-related `ingestion_jobs` read traffic
+  - no regression in manual/auto refresh scheduling semantics
+f6) [todo] Phase 6: slim generation trace writes and reads.
+- primary files:
+  - `server/services/generationTrace.ts`
+  - `server/services/youtubeBlueprintPipeline.ts`
+- implementation direction:
+  - remove returning `.select(...)` payloads where callers do not need them
+  - review whether per-event `seq` lookup can be avoided or collapsed
+  - trim low-value trace events only if the first two changes are not enough
+- acceptance:
+  - lower `generation_run_events` read/write volume without losing the tracing needed for support/debugging
+f7) [todo] Phase 7: reduce remaining queue-maintenance chatter around leases and worker health once queue-helper correctness is tightened.
+- primary files:
+  - `server/services/ingestionQueue.ts`
+  - `server/services/queuedIngestionWorkerController.ts`
   - `server/index.ts`
 - target functions:
   - `touchIngestionJobLease(...)`
-  - queue depth / queued-work counting helpers
+  - stale-job recovery / worker-health read paths
 - implementation direction:
-  - slow lease-heartbeat frequency if current safety margin allows
-  - avoid repeated queue-depth/count queries when no caller actually needs fresh values
+  - revisit lease-heartbeat cadence once queue helper/guard reads are cheaper
+  - avoid maintenance reads/writes that do not materially change worker safety
 - acceptance:
   - fewer background queue-maintenance requests without increasing stale-lease failures
-f5) [todo] Phase 5: keep frontend list surfaces lean and verify no UX regressions after the recent slimming pass.
+f8) [todo] Phase 8: keep frontend list surfaces lean and maintain proof after each backend pass.
 - primary files:
   - `src/hooks/useBlueprintSearch.ts`
   - `src/hooks/useExploreSearch.ts`
   - `src/hooks/useMyFeed.ts`
   - `src/hooks/useChannelFeed.ts`
   - `server/services/wallFeed.ts`
+  - `docs/exec-plans/active/tail/mvp-launch-proof-tail.md` if ongoing proof needs to be carried forward
 - implementation direction:
   - treat the recent `preview_summary`/lean-query changes as the frontend baseline
   - only reintroduce heavy fields if a specific UX dependency is proven
-  - visually verify Wall/Search/Explore/My Feed/Channel still look the same
+  - keep recording before/after hotspot snapshots after each backend phase
 - acceptance:
   - list surfaces remain visually stable
-  - frontend does not regress back toward full `sections_json` list payloads
-f6) [todo] Phase 6: add lightweight proof and tracking for the reduction.
-- primary files:
-  - `docs/exec-plans/active/tail/mvp-launch-proof-tail.md` if ongoing proof needs to be carried forward
-  - Supabase SQL/ops notes only if needed
-- implementation direction:
-  - compare before/after request-history hotspots
-  - inspect `public.blueprint_generation_daily` and recent Supabase usage panel trends
-  - record the new steady-state request patterns after each major backend reduction
-- acceptance:
   - the repo has a durable record of which change reduced which hot path
-  - follow-up work is driven by observed remaining hotspots, not guesswork
 
 ## Execution Order
 g1) [have] Phase 1 core bulk suppression is shipped.
@@ -172,11 +223,24 @@ g4) [have] Phase 2b success/error write throttling is shipped.
 Reason:
 - `user_source_subscriptions?id=...` dominated the freshest `15m` and `60m` windows before the current write-throttling pass
 
-g5) [todo] Re-measure after Phase 2b, then choose between Phase 4 queue-maintenance chatter reduction and any narrower feed-suppression cleanup.
+g5) [have] Fresh post-Phase-2b measurement is now captured.
 Reason:
-- fresh measurement now matters more than the original ranking
+- it showed subscription-write traffic down materially and re-ranked the remaining hotspots
 
-g6) [todo] Keep Phase 5 and Phase 6 running alongside the backend phases as verification/guardrails.
+g6) [todo] Execute Phase 4 queue helper tightening next.
+Reason:
+- queue-read helpers now look like the cleanest remaining low-risk win
+- some current multi-scope callers are broader than intended
+
+g7) [todo] Execute Phase 5 refresh queue deduping after Phase 4 unless the next measurement unexpectedly changes the order.
+Reason:
+- refresh state + refresh job scans are the next clearest avoidable bookkeeping churn
+
+g8) [todo] Execute Phase 6 generation trace slimming after the queue/refresh tightenings.
+Reason:
+- trace writes are now visible in the fresh `60m` top paths, but they are less operationally sensitive than queue correctness
+
+g9) [todo] Keep Phase 7 and Phase 8 running alongside the backend phases as verification/guardrails.
 
 ## Validation Boundaries
 h1) [todo] After each phase, verify the affected hot path volume with the same Supabase history workflow used for the initial inspection.

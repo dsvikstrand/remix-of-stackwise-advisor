@@ -30,6 +30,7 @@ export type IngestionJobRow = {
 
 type QueueDepthFilter = {
   scope?: string;
+  scopes?: string[];
   userId?: string;
   includeRunning?: boolean;
   statuses?: string[];
@@ -39,6 +40,17 @@ function clampInt(raw: unknown, fallback: number, min: number, max: number) {
   const parsed = Number(raw);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.min(max, Math.max(min, Math.floor(parsed)));
+}
+
+function normalizeQueueScopes(input?: QueueDepthFilter) {
+  const scopes = new Set<string>();
+  const singleScope = String(input?.scope || '').trim();
+  if (singleScope) scopes.add(singleScope);
+  for (const candidate of Array.isArray(input?.scopes) ? input?.scopes : []) {
+    const normalized = String(candidate || '').trim();
+    if (normalized) scopes.add(normalized);
+  }
+  return [...scopes];
 }
 
 export async function claimQueuedIngestionJobs(db: DbClient, input: {
@@ -78,6 +90,7 @@ export async function touchIngestionJobLease(db: DbClient, input: {
 
 export async function countQueueDepth(db: DbClient, input?: {
   scope?: string;
+  scopes?: string[];
   userId?: string;
   includeRunning?: boolean;
   statuses?: string[];
@@ -92,7 +105,12 @@ export async function countQueueDepth(db: DbClient, input?: {
     .select('id', { head: true, count: 'exact' })
     .in('status', statuses);
 
-  if (input?.scope) query = query.eq('scope', input.scope);
+  const scopes = normalizeQueueScopes(input);
+  if (scopes.length === 1) {
+    query = query.eq('scope', scopes[0]);
+  } else if (scopes.length > 1) {
+    query = query.in('scope', scopes);
+  }
   if (input?.userId) query = query.eq('requested_by_user_id', input.userId);
 
   const { count, error } = await query;
@@ -142,7 +160,12 @@ export async function countQueueWorkItems(db: DbClient, input?: QueueDepthFilter
     .select('scope, payload')
     .in('status', statuses);
 
-  if (input?.scope) query = query.eq('scope', input.scope);
+  const scopes = normalizeQueueScopes(input);
+  if (scopes.length === 1) {
+    query = query.eq('scope', scopes[0]);
+  } else if (scopes.length > 1) {
+    query = query.in('scope', scopes);
+  }
   if (input?.userId) query = query.eq('requested_by_user_id', input.userId);
 
   const { data, error } = await query;

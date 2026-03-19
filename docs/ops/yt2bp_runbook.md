@@ -125,6 +125,7 @@ curl -sS https://api.bleup.app/api/ops/queue/health \
   - `queue_work_items` / `running_work_items`
   - per-scope `queued` vs `queued_work_items`
   - per-scope `running` vs `running_work_items`
+  - queue helper reads now honor explicit `scope`/`scopes` filters; when refresh/ops guards are meant to inspect the queued ingestion scopes, they should not rely on implicit full-queue reads.
 
 ### YouTube metadata refresh scheduler (combined runtime)
 - Purpose: periodically refresh stored `view_count` and YouTube comment snapshots without calling YouTube from page loads.
@@ -141,6 +142,7 @@ curl -sS https://api.bleup.app/api/ops/queue/health \
   - comments refresh jobs: `5`
   - total: `20`
 - Queue safety guard: if queue depth is `>= 100`, scheduler skips enqueueing for that cycle.
+- Current egress-hardening note: scheduler/manual refresh queue guards now depend on scoped queue-helper reads so the guard checks the intended queued-ingestion scope set instead of a broader whole-queue count.
 - Disable quickly:
 ```bash
 # in /etc/agentic-backend.env

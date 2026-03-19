@@ -153,8 +153,8 @@ export async function reserveManualGenerationWorkPrefix<T>(input: {
 export async function readQueueAdmissionCounts(input: {
   db: DbClient;
   userId: string;
-  countQueueDepth: (db: DbClient, args: { userId?: string; includeRunning: true; scope?: string }) => Promise<number>;
-  countQueueWorkItems: (db: DbClient, args: { userId?: string; includeRunning: true; scope?: string }) => Promise<number>;
+  countQueueDepth: (db: DbClient, args: { userId?: string; includeRunning: true; scope?: string; scopes?: string[] }) => Promise<number>;
+  countQueueWorkItems: (db: DbClient, args: { userId?: string; includeRunning: true; scope?: string; scopes?: string[] }) => Promise<number>;
   scope?: string;
 }) {
   const args = input.scope

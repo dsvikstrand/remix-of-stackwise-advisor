@@ -133,6 +133,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Step 28 thumbnail-first banner cutover sets source YouTube banner rendering to thumbnails across Wall/Feed/Explore/Detail/Source Page, backfills old source-linked blueprints, and bypasses source auto-banner enqueue paths.
 - Step 29 notifications MVP adds reply + generation-terminal notification events and ships an auth header bell inbox with read/read-all actions.
 - Step 30 maintainability pass expands backend regression coverage and extracts shared generation preflight helpers (`server/services/generationPreflight.ts`) for Search/source-page/manual-refresh flows without changing public route contracts.
+- Step 30a queue-helper tightening makes scoped queue depth/work-item reads honor explicit `scope`/`scopes` filters so refresh/ops guards stop silently widening to the full ingestion queue.
 - Step 31 frontend orchestration cleanup extracts `/subscriptions` and `/wall` page controllers into dedicated hooks, with `Wall` now consuming backend-hydrated feed responses instead of browser-side Supabase join fan-out.
 - Added service-ops endpoint `GET /api/ingestion/jobs/latest` for latest ingestion status checks.
 - Added user endpoint `GET /api/ingestion/jobs/:id` for owner-scoped manual refresh progress.
