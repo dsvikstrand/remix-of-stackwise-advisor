@@ -206,6 +206,7 @@
     - ingestion job rows now track attempts/max attempts, lease expiry, next-run retry time, worker id, and trace id.
     - queue helper tightening now treats multi-scope reads as first-class (`scope` or `scopes`) so queue depth/reporting can narrow to the intended ingestion scopes.
     - manual blueprint-comments refresh now reads the existing refresh-state row first and registers one only when the blueprint lacks an enabled refresh record.
+    - worker lease heartbeats are now lease-aware by default: a `90s` lease refreshes every `30s` instead of every `10s`, reducing Supabase lease-RPC churn without changing lease ownership semantics.
     - provider retry/circuit controls are env-driven (transcript + LLM bounded retries, fail-fast circuit open mode).
   - onboarding extension: `user_youtube_onboarding` for new-user optional setup state.
   - Eval assets:

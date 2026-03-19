@@ -35,6 +35,25 @@ export type QueuedIngestionWorkerControllerDeps<DbClient> = {
   onWorkerFailure?: (input: { workerId: string; error: unknown }) => void;
 };
 
+export function resolveWorkerLeaseHeartbeatMs(input: {
+  workerLeaseMs: number;
+  configuredHeartbeatMs: number;
+}) {
+  const normalizedLeaseMs = Math.max(5_000, Math.floor(Number(input.workerLeaseMs) || 0));
+  const normalizedConfiguredHeartbeatMs = Math.max(
+    1_000,
+    Math.floor(Number(input.configuredHeartbeatMs) || 0),
+  );
+  const leaseBasedHeartbeatMs = Math.max(
+    1_000,
+    Math.min(
+      normalizedLeaseMs - 1_000,
+      Math.floor(normalizedLeaseMs / 3),
+    ),
+  );
+  return Math.max(normalizedConfiguredHeartbeatMs, leaseBasedHeartbeatMs);
+}
+
 export function createQueuedIngestionWorkerController<DbClient>(
   deps: QueuedIngestionWorkerControllerDeps<DbClient>,
 ): QueuedIngestionWorkerController {

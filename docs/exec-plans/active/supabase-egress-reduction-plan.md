@@ -194,6 +194,9 @@ f7) [todo] Phase 7: reduce remaining queue-maintenance chatter around leases and
   - avoid maintenance reads/writes that do not materially change worker safety
 - acceptance:
   - fewer background queue-maintenance requests without increasing stale-lease failures
+- progress note:
+  - worker lease heartbeats now use a lease-aware cadence floor, so the default `90s` lease refreshes every `30s` instead of every `10s`
+  - fresh post-deploy request-history proof is still pending
 f8) [todo] Phase 8: keep frontend list surfaces lean and maintain proof after each backend pass.
 - primary files:
   - `src/hooks/useBlueprintSearch.ts`
@@ -248,7 +251,15 @@ g8) [todo] Execute Phase 6 generation trace slimming after the queue/refresh tig
 Reason:
 - trace writes are now visible in the fresh `60m` top paths, but they are less operationally sensitive than queue correctness
 
-g9) [todo] Keep Phase 7 and Phase 8 running alongside the backend phases as verification/guardrails.
+g9) [have] Phase 7 first slice is shipped.
+Reason:
+- the worker lease heartbeat is now materially less chatty by default while preserving the same lease-expiry model
+
+g9a) [todo] Re-measure fresh `60m` / `24h` windows after the Phase 7 slice and decide whether more queue-maintenance narrowing or Phase 6 trace slimming is the better next win.
+Reason:
+- `touch_ingestion_job_lease` was still a visible hotspot before this heartbeat-cadence cut
+
+g10) [todo] Keep Phase 8 running alongside the backend phases as verification/guardrails.
 
 ## Validation Boundaries
 h1) [todo] After each phase, verify the affected hot path volume with the same Supabase history workflow used for the initial inspection.

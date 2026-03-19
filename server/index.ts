@@ -45,7 +45,10 @@ import {
 } from './services/youtubeSearch';
 import { createYouTubeSearchCacheService } from './services/youtubeSearchCache';
 import { createYouTubeQuotaGuardService } from './services/youtubeQuotaGuard';
-import { createQueuedIngestionWorkerController } from './services/queuedIngestionWorkerController';
+import {
+  createQueuedIngestionWorkerController,
+  resolveWorkerLeaseHeartbeatMs,
+} from './services/queuedIngestionWorkerController';
 import { parseRuntimeFlag, readBackendRuntimeConfig } from './services/runtimeConfig';
 import { createYouTubeRefreshSchedulerController } from './services/youtubeRefreshSchedulerController';
 import {
@@ -357,6 +360,10 @@ const workerConcurrency = clampInt(process.env.WORKER_CONCURRENCY, 2, 1, 16);
 const workerBatchSize = clampInt(process.env.WORKER_BATCH_SIZE, 10, 1, 200);
 const workerLeaseMs = clampInt(process.env.WORKER_LEASE_MS, 90_000, 5_000, 15 * 60_000);
 const workerHeartbeatMs = clampInt(process.env.WORKER_HEARTBEAT_MS, 10_000, 1_000, 5 * 60_000);
+const effectiveWorkerHeartbeatMs = resolveWorkerLeaseHeartbeatMs({
+  workerLeaseMs,
+  configuredHeartbeatMs: workerHeartbeatMs,
+});
 const workerKeepAliveDelayMs = clampInt(process.env.WORKER_KEEPALIVE_DELAY_MS, 1_500, 0, 60_000);
 const workerIdleBackoffBaseMs = clampInt(process.env.WORKER_IDLE_BACKOFF_BASE_MS, 15_000, 1_000, 10 * 60_000);
 const workerIdleBackoffMaxMs = clampInt(process.env.WORKER_IDLE_BACKOFF_MAX_MS, 60_000, workerIdleBackoffBaseMs, 30 * 60_000);
@@ -7356,7 +7363,7 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
     }).catch((error) => {
       if (!heartbeatError) heartbeatError = error;
     });
-  }, workerHeartbeatMs);
+  }, effectiveWorkerHeartbeatMs);
 
   try {
     await runWithExecutionTimeout(

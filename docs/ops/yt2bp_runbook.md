@@ -81,6 +81,9 @@
   - Blueprint YouTube refresh bookkeeping is also egress-conscious:
     - scheduler pending checks batch by refresh kind + candidate blueprint set instead of reading queued job payloads once per candidate
     - manual comments refresh reads existing refresh state first and only registers a row when refresh state is missing or uninitialized
+  - Queue lease maintenance is also coarsened:
+    - worker lease heartbeats now refresh at a lease-aware cadence (`30s` on the default `90s` lease) instead of the older `10s` default
+    - this is an egress-control change only; lease ownership still uses the same DB RPC and expiry semantics
   - Legacy generation compatibility endpoints (auth):
     - `GET /api/generation/tier-access`
     - `GET /api/blueprints/:id/variants`

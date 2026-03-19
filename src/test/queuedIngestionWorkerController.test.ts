@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createQueuedIngestionWorkerController } from '../../server/services/queuedIngestionWorkerController';
+import {
+  createQueuedIngestionWorkerController,
+  resolveWorkerLeaseHeartbeatMs,
+} from '../../server/services/queuedIngestionWorkerController';
 
 describe('queued ingestion worker controller', () => {
   beforeEach(() => {
@@ -9,6 +12,25 @@ describe('queued ingestion worker controller', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+  });
+
+  it('coarsens worker lease heartbeats to a lease-aware cadence by default', () => {
+    expect(resolveWorkerLeaseHeartbeatMs({
+      workerLeaseMs: 90_000,
+      configuredHeartbeatMs: 10_000,
+    })).toBe(30_000);
+
+    expect(resolveWorkerLeaseHeartbeatMs({
+      workerLeaseMs: 15_000,
+      configuredHeartbeatMs: 1_000,
+    })).toBe(5_000);
+  });
+
+  it('keeps a slower configured heartbeat when it is already more conservative', () => {
+    expect(resolveWorkerLeaseHeartbeatMs({
+      workerLeaseMs: 90_000,
+      configuredHeartbeatMs: 45_000,
+    })).toBe(45_000);
   });
 
   it('processes claimed jobs and exposes running state', async () => {

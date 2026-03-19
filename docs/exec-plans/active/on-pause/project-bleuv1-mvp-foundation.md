@@ -68,6 +68,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Frontend bootstrap now guards missing Supabase env with explicit configuration UX instead of a blank page.
 - Card/list teaser copy now belongs on stored `blueprints.preview_summary`; Wall/Explore/Channel/Search/My Feed should treat canonical `sections_json` as detail-view content, not list-view payload.
 - Blueprint YouTube refresh bookkeeping should batch pending-job checks per refresh kind/candidate set and avoid re-registering an already-enabled refresh-state row on manual refresh entry.
+- Queue worker lease heartbeats should stay lease-aware by default, so background maintenance does not keep hammering Supabase lease RPCs more often than the actual lease window requires.
 
 ### W2 - Channel Candidate Gating
 - Run deterministic auto-channel checks for all source paths.
