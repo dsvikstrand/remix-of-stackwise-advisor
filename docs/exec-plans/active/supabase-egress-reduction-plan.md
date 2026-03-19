@@ -181,6 +181,10 @@ f6) [todo] Phase 6: slim generation trace writes and reads.
   - trim low-value trace events only if the first two changes are not enough
 - acceptance:
   - lower `generation_run_events` read/write volume without losing the tracing needed for support/debugging
+- progress note:
+  - run/event trace writes now skip returning payload selects where callers do not consume returned rows
+  - event sequencing now reserves the next `seq` once per run/process flow instead of re-reading the latest `seq` before every event insert
+  - fresh post-deploy request-history proof is still pending
 f7) [todo] Phase 7: reduce remaining queue-maintenance chatter around leases and worker health once queue-helper correctness is tightened.
 - primary files:
   - `server/services/ingestionQueue.ts`
@@ -247,17 +251,21 @@ g7a) [todo] Re-measure the fresh `60m` / `24h` windows after the Phase 5 slice a
 Reason:
 - the batched pending-check reduction is live, but the proof step is still pending
 
-g8) [todo] Execute Phase 6 generation trace slimming after the queue/refresh tightenings.
+g8) [have] Phase 6 first slice is shipped.
 Reason:
-- trace writes are now visible in the fresh `60m` top paths, but they are less operationally sensitive than queue correctness
+- trace writes were visible in the fresh `60m` top paths, and the first slice now removes the most obvious per-event read/write overhead
+
+g8a) [todo] Re-measure fresh `60m` / `24h` windows after the Phase 6 slice and decide whether more trace slimming or a return to queue/subscription churn is the better next win.
+Reason:
+- the first trace slice is live, but the proof step is still pending
 
 g9) [have] Phase 7 first slice is shipped.
 Reason:
 - the worker lease heartbeat is now materially less chatty by default while preserving the same lease-expiry model
 
-g9a) [todo] Re-measure fresh `60m` / `24h` windows after the Phase 7 slice and decide whether more queue-maintenance narrowing or Phase 6 trace slimming is the better next win.
+g9a) [todo] Re-measure fresh `60m` / `24h` windows after the latest trace/queue slices and decide whether more queue-maintenance narrowing or a second trace pass is the better next win.
 Reason:
-- `touch_ingestion_job_lease` was still a visible hotspot before this heartbeat-cadence cut
+- `touch_ingestion_job_lease`, `claim_ingestion_jobs`, `generation_run_events`, and residual subscription writes are still the competing short-window hotspots
 
 g10) [todo] Keep Phase 8 running alongside the backend phases as verification/guardrails.
 

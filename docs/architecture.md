@@ -197,6 +197,8 @@
     - `notification_push_dispatch_queue` derives push delivery from `notifications` rows for eligible event types
     - Node combined runtime sends pushes asynchronously with VAPID credentials; request handlers do not block on push delivery
   - durable generation trace foundation: `generation_runs` (run summary/model/quality terminal state) + `generation_run_events` (ordered stage-level events); 30-day event retention via service-role purge function, run summary retained indefinitely.
+    - run/event trace writes now avoid returning payload selects when callers do not consume the result.
+    - per-event trace sequencing now reuses a per-run in-process cursor instead of re-reading the latest `seq` from Supabase before every event insert.
   - unlock reliability sweeps:
     - opportunistic sweeps on source-page video list/unlock routes.
     - forced sweep on service cron trigger path.

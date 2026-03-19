@@ -97,6 +97,36 @@ describe('generationTrace service', () => {
     expect(page2.items[1]?.event).toBe('event_1');
   });
 
+  it('keeps event sequencing stable for concurrent appends in the same run', async () => {
+    const db = createMockSupabase({
+      generation_runs: [],
+      generation_run_events: [],
+    }) as any;
+
+    await startGenerationRun(db, { runId: 'run_concurrent', userId: 'user_concurrent' });
+    await Promise.all([
+      appendGenerationEvent(db, {
+        runId: 'run_concurrent',
+        event: 'event_a',
+        payload: { idx: 'a' },
+      }),
+      appendGenerationEvent(db, {
+        runId: 'run_concurrent',
+        event: 'event_b',
+        payload: { idx: 'b' },
+      }),
+      appendGenerationEvent(db, {
+        runId: 'run_concurrent',
+        event: 'event_c',
+        payload: { idx: 'c' },
+      }),
+    ]);
+
+    const page = await listGenerationRunEvents(db, { runId: 'run_concurrent', limit: 10 });
+    expect(page.items.map((item) => item.seq)).toEqual([3, 2, 1]);
+    expect(page.items.map((item) => item.event).sort()).toEqual(['event_a', 'event_b', 'event_c']);
+  });
+
   it('finalizes failed run and exposes latest run by blueprint', async () => {
     const db = createMockSupabase({
       generation_runs: [],

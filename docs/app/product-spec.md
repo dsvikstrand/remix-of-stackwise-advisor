@@ -110,6 +110,7 @@ a84) [have] Installed-PWA push remains outside the normal live contract until ba
 a85) [have] Wall/Explore/Channel/Search/My Feed cards now prefer stored `blueprints.preview_summary` teaser text, preserving summary-like previews without loading canonical `sections_json` on list surfaces.
 a86) [have] Blueprint YouTube refresh scheduling now batches pending-job detection by refresh kind/candidate set, and manual comments refresh no longer force-writes refresh state before reading an existing enabled row.
 a87) [have] Queue worker lease heartbeats are now lease-aware by default, reducing `touch_ingestion_job_lease` frequency without changing visible queue/job UX.
+a88) [have] Durable generation trace writes are now slimmer: per-event sequencing reuses a per-run in-process cursor and trace writes no longer ask Supabase to return row payloads when the caller does not use them.
 
 ## Core Model
 b1) `Source Item`

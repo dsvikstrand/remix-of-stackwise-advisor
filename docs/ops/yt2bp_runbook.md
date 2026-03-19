@@ -84,6 +84,9 @@
   - Queue lease maintenance is also coarsened:
     - worker lease heartbeats now refresh at a lease-aware cadence (`30s` on the default `90s` lease) instead of the older `10s` default
     - this is an egress-control change only; lease ownership still uses the same DB RPC and expiry semantics
+  - Durable generation trace writes are also slimmer:
+    - generation run/event writes no longer request returned row payloads when callers do not consume them
+    - event sequencing now reuses a per-run in-process cursor instead of re-reading the latest `seq` from Supabase before every event insert
   - Legacy generation compatibility endpoints (auth):
     - `GET /api/generation/tier-access`
     - `GET /api/blueprints/:id/variants`

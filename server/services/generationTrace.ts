@@ -44,6 +44,8 @@ export type GenerationRunEventRow = {
   created_at: string;
 };
 
+const nextGenerationEventSeqByRunId = new Map<string, Promise<number>>();
+
 function normalizeObject(input: unknown): Record<string, unknown> {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
   return input as Record<string, unknown>;
@@ -73,6 +75,33 @@ function decodeEventCursor(raw: string | null | undefined) {
   }
 }
 
+async function loadNextGenerationEventSeq(db: DbClient, runId: string) {
+  const { data: latest, error: latestError } = await db
+    .from('generation_run_events')
+    .select('seq')
+    .eq('run_id', runId)
+    .order('seq', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (latestError) throw latestError;
+  return clampInt(latest?.seq, 0, 0, Number.MAX_SAFE_INTEGER) + 1;
+}
+
+async function reserveGenerationEventSeq(db: DbClient, runId: string) {
+  const cursorPromise = nextGenerationEventSeqByRunId.get(runId) || loadNextGenerationEventSeq(db, runId);
+  const reservedSeqPromise = cursorPromise.then((seq) => clampInt(seq, 1, 1, Number.MAX_SAFE_INTEGER));
+  const nextCursorPromise = reservedSeqPromise.then((seq) => seq + 1);
+  nextGenerationEventSeqByRunId.set(runId, nextCursorPromise);
+  try {
+    return await reservedSeqPromise;
+  } catch (error) {
+    if (nextGenerationEventSeqByRunId.get(runId) === nextCursorPromise) {
+      nextGenerationEventSeqByRunId.delete(runId);
+    }
+    throw error;
+  }
+}
+
 export async function startGenerationRun(
   db: DbClient,
   input: {
@@ -90,6 +119,7 @@ export async function startGenerationRun(
   const runId = String(input.runId || '').trim();
   const userId = String(input.userId || '').trim();
   if (!runId || !userId) return null;
+  nextGenerationEventSeqByRunId.delete(runId);
   const nowIso = new Date().toISOString();
 
   const basePayload = {
@@ -123,18 +153,14 @@ export async function startGenerationRun(
         ...basePayload,
         updated_at: nowIso,
       })
-      .eq('run_id', runId)
-      .select('run_id')
-      .maybeSingle();
+      .eq('run_id', runId);
     if (updateError) throw updateError;
     return runId;
   }
 
   const { error: insertError } = await db
     .from('generation_runs')
-    .insert(basePayload)
-    .select('run_id')
-    .maybeSingle();
+    .insert(basePayload);
   if (insertError) throw insertError;
   return runId;
 }
@@ -152,18 +178,9 @@ export async function appendGenerationEvent(
   const eventName = String(input.event || '').trim();
   if (!runId || !eventName) return null;
 
-  const { data: latest, error: latestError } = await db
-    .from('generation_run_events')
-    .select('seq')
-    .eq('run_id', runId)
-    .order('seq', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (latestError) throw latestError;
-  const nextSeq = clampInt(latest?.seq, 0, 0, Number.MAX_SAFE_INTEGER) + 1;
-
+  const nextSeq = await reserveGenerationEventSeq(db, runId);
   const payload = normalizeObject(input.payload);
-  const { data, error } = await db
+  const { error } = await db
     .from('generation_run_events')
     .insert({
       run_id: runId,
@@ -171,11 +188,9 @@ export async function appendGenerationEvent(
       level: (input.level || 'info') as GenerationTraceLevel,
       event: eventName,
       payload,
-    })
-    .select('id, run_id, seq, level, event, payload, created_at')
-    .maybeSingle();
+    });
   if (error) throw error;
-  return (data || null) as GenerationRunEventRow | null;
+  return null;
 }
 
 export async function updateGenerationModelInfo(
@@ -204,9 +219,7 @@ export async function updateGenerationModelInfo(
   const { error } = await db
     .from('generation_runs')
     .update(payload)
-    .eq('run_id', runId)
-    .select('run_id')
-    .maybeSingle();
+    .eq('run_id', runId);
   if (error) throw error;
   return runId;
 }
@@ -225,9 +238,7 @@ export async function attachBlueprintToRun(
       blueprint_id: blueprintId,
       updated_at: new Date().toISOString(),
     })
-    .eq('run_id', runId)
-    .select('run_id')
-    .maybeSingle();
+    .eq('run_id', runId);
   if (error) throw error;
   return runId;
 }
@@ -262,9 +273,7 @@ export async function finalizeGenerationRunSuccess(
       finished_at: nowIso,
       updated_at: nowIso,
     })
-    .eq('run_id', runId)
-    .select('run_id')
-    .maybeSingle();
+    .eq('run_id', runId);
   if (error) throw error;
   return runId;
 }
@@ -293,9 +302,7 @@ export async function finalizeGenerationRunFailure(
       finished_at: nowIso,
       updated_at: nowIso,
     })
-    .eq('run_id', runId)
-    .select('run_id')
-    .maybeSingle();
+    .eq('run_id', runId);
   if (error) throw error;
   return runId;
 }

@@ -40,6 +40,7 @@ a4t) [have] Active Supabase egress-reduction work has now also throttled no-op s
 a4u) [have] Card/list teaser copy is now expected to come from stored `blueprints.preview_summary`, keeping Wall/Explore/Channel/Search/My Feed previews summary-like without list-surface `sections_json` loads.
 a4v) [have] YouTube refresh bookkeeping now avoids per-candidate pending-job reads and skips redundant manual refresh-state registration when an enabled row already exists.
 a4w) [have] Queue maintenance is now less chatty by default: worker lease heartbeats use a lease-aware cadence (`30s` on the default `90s` lease) instead of the older `10s` default.
+a4x) [have] Durable generation trace writes are now slimmer by default: event sequencing reuses a per-run cursor and trace writes skip returned row payloads when the caller does not consume them.
 a5) [todo] Improve user trust around shared-cost auto billing transitions and async processing visibility.
 a6) [todo] Reduce terminology ambiguity between personal stream, followed channels, source pages, and channel taxonomy.
 
