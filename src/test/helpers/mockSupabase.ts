@@ -45,14 +45,18 @@ class QueryBuilder {
   private mode: 'select' | 'insert' | 'update' = 'select';
   private insertPayload: Row[] = [];
   private updatePayload: Row | null = null;
+  private headOnly = false;
+  private countMode: string | null = null;
 
   constructor(tableName: string, state: TablesState) {
     this.tableName = tableName;
     this.state = state;
   }
 
-  select(columns?: string) {
+  select(columns?: string, options?: { head?: boolean; count?: string }) {
     this.selectColumns = columns?.trim() || '*';
+    this.headOnly = options?.head === true;
+    this.countMode = typeof options?.count === 'string' ? options.count : null;
     return this;
   }
 
@@ -102,6 +106,11 @@ class QueryBuilder {
   }
 
   eq(field: string, value: any) {
+    this.filters.push((row) => row[field] === value);
+    return this;
+  }
+
+  is(field: string, value: any) {
     this.filters.push((row) => row[field] === value);
     return this;
   }
@@ -250,12 +259,15 @@ class QueryBuilder {
         }
         updated.push(projectRow(row, this.selectColumns));
       }
+      const count = this.countMode ? updated.length : null;
       const limited = this.applyLimit(this.applyOrder(updated));
-      return { data: limited, error: null };
+      return { data: this.headOnly ? null : limited, error: null, count };
     }
 
-    const selected = this.applyLimit(this.applyOrder(this.applyFilters(table))).map((row) => projectRow(row, this.selectColumns));
-    return { data: selected, error: null };
+    const filtered = this.applyFilters(table);
+    const count = this.countMode ? filtered.length : null;
+    const selected = this.applyLimit(this.applyOrder(filtered)).map((row) => projectRow(row, this.selectColumns));
+    return { data: this.headOnly ? null : selected, error: null, count };
   }
 }
 

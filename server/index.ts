@@ -118,6 +118,10 @@ import {
 } from './services/autoUnlockBilling';
 import { runUnlockReliabilitySweeps } from './services/unlockReliabilitySweeps';
 import { createUnlockTraceId, logUnlockEvent } from './services/unlockTrace';
+import {
+  suppressUnlockableFeedRowsForSourceItem,
+  suppressUnlockableFeedRowsForSourceItems,
+} from './services/feedSuppression';
 import type { BlueprintSectionsV1 } from './services/blueprintSections';
 import { ProviderCircuitOpenError, getProviderCircuitSnapshot } from './services/providerCircuit';
 import { getProviderRetryDefaults, runWithProviderRetry } from './services/providerResilience';
@@ -2400,51 +2404,6 @@ async function insertFeedItem(db: ReturnType<typeof createClient>, input: {
   return data;
 }
 
-async function suppressUnlockableFeedRowsForSourceItem(
-  db: ReturnType<typeof createClient>,
-  input: {
-    sourceItemId: string;
-    decisionCode: string;
-    traceId?: string;
-    sourceChannelId?: string | null;
-    videoId?: string | null;
-  },
-) {
-  const sourceItemId = String(input.sourceItemId || '').trim();
-  if (!sourceItemId) return 0;
-
-  const { data, error } = await db
-    .from('user_feed_items')
-    .update({
-      state: 'my_feed_skipped',
-      last_decision_code: String(input.decisionCode || 'TRANSCRIPT_BLOCKED').slice(0, 120),
-    })
-    .eq('source_item_id', sourceItemId)
-    .is('blueprint_id', null)
-    .in('state', ['my_feed_unlockable', 'my_feed_unlocking'])
-    .select('id');
-  if (error) throw error;
-
-  const hiddenCount = (data || []).length;
-  if (hiddenCount > 0) {
-    logUnlockEvent(
-      'auto_transcript_hidden_feed_row',
-      {
-        trace_id: String(input.traceId || '').trim() || createUnlockTraceId(),
-        source_item_id: sourceItemId,
-      },
-      {
-        decision_code: String(input.decisionCode || '').trim() || 'TRANSCRIPT_BLOCKED',
-        hidden_count: hiddenCount,
-        source_channel_id: String(input.sourceChannelId || '').trim() || null,
-        video_id: String(input.videoId || '').trim() || null,
-      },
-    );
-  }
-
-  return hiddenCount;
-}
-
 async function upsertFeedItemWithBlueprint(db: ReturnType<typeof createClient>, input: {
   userId: string;
   sourceItemId: string;
@@ -3464,26 +3423,47 @@ async function runTranscriptFeedSuppressionSweep(
     return;
   }
 
-  let hiddenRows = 0;
+  const permanentSourceItemIds = new Set<string>();
+  const transientSourceItemIds = new Set<string>();
+
   for (const row of data || []) {
     const sourceItemId = String(row.source_item_id || '').trim();
     if (!sourceItemId) continue;
     const isPermanent =
       normalizeTranscriptTruthStatus((row as { transcript_status?: unknown }).transcript_status) === 'confirmed_no_speech'
       || isPermanentNoTranscriptCode(String((row as { last_error_code?: unknown }).last_error_code || ''));
-    const hidden = await suppressUnlockableFeedRowsForSourceItem(db, {
-      sourceItemId,
-      decisionCode: isPermanent ? 'NO_TRANSCRIPT_PERMANENT_AUTO' : 'TRANSCRIPT_UNAVAILABLE_AUTO',
+    if (isPermanent) {
+      permanentSourceItemIds.add(sourceItemId);
+      continue;
+    }
+    transientSourceItemIds.add(sourceItemId);
+  }
+
+  let hiddenRows = 0;
+  if (permanentSourceItemIds.size > 0) {
+    hiddenRows += await suppressUnlockableFeedRowsForSourceItems(db, {
+      sourceItemIds: [...permanentSourceItemIds],
+      decisionCode: 'NO_TRANSCRIPT_PERMANENT_AUTO',
       traceId: input?.traceId,
     });
-    hiddenRows += hidden;
+  }
+  if (transientSourceItemIds.size > 0) {
+    hiddenRows += await suppressUnlockableFeedRowsForSourceItems(db, {
+      sourceItemIds: [...transientSourceItemIds],
+      decisionCode: 'TRANSCRIPT_UNAVAILABLE_AUTO',
+      traceId: input?.traceId,
+    });
   }
 
   if (hiddenRows > 0) {
     logUnlockEvent(
       'transcript_feed_sweep_summary',
       { trace_id: String(input?.traceId || '').trim() || createUnlockTraceId() },
-      { hidden_rows: hiddenRows, scanned: (data || []).length },
+      {
+        hidden_rows: hiddenRows,
+        scanned: (data || []).length,
+        unique_source_items: permanentSourceItemIds.size + transientSourceItemIds.size,
+      },
     );
   }
 }

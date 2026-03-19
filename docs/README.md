@@ -26,8 +26,10 @@ This folder is the source of truth for product, architecture, planning, and oper
 ## Primary Planning Surfaces
 - Launch gate board: `docs/ops/mvp-launch-readiness-checklist.md`
 - Active proof/deferred tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
-- Active implementation program: `docs/exec-plans/active/transcript-provider-launch-plan.md`
-- Latest completed implementation program: `docs/exec-plans/completed/blueprint-contract-cutover-plan.md`
+- Active implementation program: `docs/exec-plans/active/supabase-egress-reduction-plan.md`
+- Latest completed implementation programs:
+  - `docs/exec-plans/completed/transcript-provider-launch-plan.md`
+  - `docs/exec-plans/completed/pre-launch-ui-ux-plan.md`
 - Durable post-launch debt: `docs/exec-plans/tech-debt-tracker.md`
 
 ## Canonical Runtime Documents

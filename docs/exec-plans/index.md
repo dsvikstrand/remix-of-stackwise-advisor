@@ -13,10 +13,10 @@ This file is the authoritative active/on-pause/deserted/completed registry for e
   Canonical launch gate board and proof log.
 
 ## Active Root
+- `docs/exec-plans/active/supabase-egress-reduction-plan.md`
+  Current tracked implementation plan for cutting Supabase request/egress churn without changing core UX.
 - `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
   Current proof/deferred carry-forward tail. This is the only standing active-tail support file.
-- `docs/exec-plans/active/transcript-provider-launch-plan.md`
-  Current active implementation plan for the push, Supabase migration, deploy, and post-deploy proof of the new transcript-provider setup.
 - `docs/exec-plans/tech-debt-tracker.md`
   Durable post-launch cleanup/debt board. This is not an execution plan, but it remains the long-lived debt surface.
 
@@ -81,14 +81,18 @@ This file is the authoritative active/on-pause/deserted/completed registry for e
   Completed: transcript-provider hardening through provider fallback, cache reuse, stage-aware retry, and `yt_to_text` retirement. Remaining live-proof tail lives in `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`.
 - `docs/exec-plans/completed/blueprint-contract-cutover-plan.md`
   Completed: blueprint contract cutover from legacy `steps`-first handling to canonical `blueprint_sections_v1`, including runtime, persistence, frontend, and repo-hygiene closure.
+- `docs/exec-plans/completed/transcript-provider-launch-plan.md`
+  Completed: transcript-provider launch execution, migration apply sequence, deploy, and proof logging.
+- `docs/exec-plans/completed/pre-launch-ui-ux-plan.md`
+  Completed: pre-launch navigation, interpretability, Help, and Home onboarding pass.
 
 ## Current Program Snapshot
 - Core identity lock: `docs/app/core-direction-lock.md`.
 - Current runtime/ops truth: `docs/architecture.md`, `docs/ops/yt2bp_runbook.md`, and `docs/ops/mvp-launch-readiness-checklist.md`.
-- Current active implementation plan: `docs/exec-plans/active/transcript-provider-launch-plan.md`.
+- Current active implementation plan: `docs/exec-plans/active/supabase-egress-reduction-plan.md`.
 - Current active proof/deferred tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`.
 - Current post-launch debt board: `docs/exec-plans/tech-debt-tracker.md`.
-- Latest completed implementation plan: `docs/exec-plans/completed/blueprint-contract-cutover-plan.md`.
+- Latest completed implementation plans: `docs/exec-plans/completed/transcript-provider-launch-plan.md` and `docs/exec-plans/completed/pre-launch-ui-ux-plan.md`.
 - PWA rollout follow-up is on pause.
 - Runtime simplification follow-up is on pause.
 - Transcript-provider robustness work is completed, with later live-proof items carried into the proof tail.
