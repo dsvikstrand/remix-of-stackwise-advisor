@@ -38,6 +38,7 @@ a4s) [have] Current runtime creator lookup is now also bounded: exact channel UR
 a4r) [have] Source Page `Video Library` is now loaded on explicit user request instead of auto-fetching on page open, which reduces background YouTube API usage on normal source-page reads.
 a4t) [have] Active Supabase egress-reduction work has now also throttled no-op subscription sync writes (`user_source_subscriptions`) behind a `15m` backend heartbeat; treat that as current runtime truth even though detailed proof/next steps live in the active egress plan.
 a4u) [have] Card/list teaser copy is now expected to come from stored `blueprints.preview_summary`, keeping Wall/Explore/Channel/Search/My Feed previews summary-like without list-surface `sections_json` loads.
+a4v) [have] User-scoped ingestion status routes are now part of the egress-hardening baseline: `latest-mine` avoids redundant double reads and `active-mine` narrows queue-position scans to requested/visible scopes.
 a4v) [have] YouTube refresh bookkeeping now avoids per-candidate pending-job reads and skips redundant manual refresh-state registration when an enabled row already exists.
 a4w) [have] Queue maintenance is now less chatty by default: worker lease heartbeats use a lease-aware cadence (`30s` on the default `90s` lease) instead of the older `10s` default.
 a4x) [have] Durable generation trace writes are now slimmer by default: event sequencing reuses a per-run cursor and trace writes skip returned row payloads when the caller does not consume them.

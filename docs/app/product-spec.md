@@ -111,6 +111,7 @@ a85) [have] Wall/Explore/Channel/Search/My Feed cards now prefer stored `bluepri
 a86) [have] Blueprint YouTube refresh scheduling now batches pending-job detection by refresh kind/candidate set, and manual comments refresh no longer force-writes refresh state before reading an existing enabled row.
 a87) [have] Queue worker lease heartbeats are now lease-aware by default, reducing `touch_ingestion_job_lease` frequency without changing visible queue/job UX.
 a88) [have] Durable generation trace writes are now slimmer: per-event sequencing reuses a per-run in-process cursor and trace writes no longer ask Supabase to return row payloads when the caller does not use them.
+a89) [have] User-scoped ingestion status routes are tighter: `latest-mine` now resolves from one recent-row read, and `active-mine` queue-position scans narrow to requested or visible queued scopes instead of broadly scanning all queue scopes.
 
 ## Core Model
 b1) `Source Item`

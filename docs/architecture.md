@@ -148,6 +148,7 @@
     - `POST /api/source-subscriptions/refresh-generate` (auth-only enqueue for selected videos; starts async background generation job)
     - `GET /api/ingestion/jobs/:id` (auth-only, owner-scoped status for manual refresh background jobs)
     - `GET /api/ingestion/jobs/latest-mine` (auth-only, user-scoped latest refresh job; used to restore in-flight status after reload)
+      - read path now resolves from one recent-row fetch instead of an active-then-latest double read.
     - `GET /api/notifications` (auth-only inbox list with unread count + cursor pagination)
     - `POST /api/notifications/:id/read` (auth-only mark one read)
     - `POST /api/notifications/read-all` (auth-only mark all unread read)
@@ -207,6 +208,7 @@
     - queued claim uses DB lease (`claim_ingestion_jobs`) + heartbeat (`touch_ingestion_job_lease`).
     - ingestion job rows now track attempts/max attempts, lease expiry, next-run retry time, worker id, and trace id.
     - queue helper tightening now treats multi-scope reads as first-class (`scope` or `scopes`) so queue depth/reporting can narrow to the intended ingestion scopes.
+    - user queue-position reads now narrow to requested or visible queued scopes when estimating `active-mine` queue order, rather than scanning every queued ingestion scope by default.
     - manual blueprint-comments refresh now reads the existing refresh-state row first and registers one only when the blueprint lacks an enabled refresh record.
     - worker lease heartbeats are now lease-aware by default: a `90s` lease refreshes every `30s` instead of every `10s`, reducing Supabase lease-RPC churn without changing lease ownership semantics.
     - provider retry/circuit controls are env-driven (transcript + LLM bounded retries, fail-fast circuit open mode).

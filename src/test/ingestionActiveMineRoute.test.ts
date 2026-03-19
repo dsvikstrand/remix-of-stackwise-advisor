@@ -5,6 +5,8 @@ import {
   compareQueuedJobsForPosition,
   estimateStartSeconds,
   parseScopeCsv,
+  pickLatestRelevantIngestionJob,
+  resolveQueuePositionScopes,
   type ActiveIngestionJobRow,
 } from '../../server/routes/ingestion';
 
@@ -152,5 +154,81 @@ describe('ingestion queue helpers', () => {
     expect(estimateStartSeconds(1, 2)).toBe(4);
     expect(estimateStartSeconds(5, 2)).toBe(12);
   });
-});
 
+  it('prefers an active job over a newer terminal job in recent latest-mine rows', () => {
+    const picked = pickLatestRelevantIngestionJob([
+      { id: 'job_terminal', status: 'succeeded' },
+      { id: 'job_active', status: 'running' },
+      { id: 'job_oldest', status: 'failed' },
+    ]);
+
+    expect(picked?.id).toBe('job_active');
+  });
+
+  it('falls back to the newest row when no active job exists', () => {
+    const picked = pickLatestRelevantIngestionJob([
+      { id: 'job_latest', status: 'succeeded' },
+      { id: 'job_older', status: 'failed' },
+    ]);
+
+    expect(picked?.id).toBe('job_latest');
+  });
+
+  it('uses explicit requested scopes before broad queue scope filters', () => {
+    const scopes = resolveQueuePositionScopes({
+      requestedScopes: ['manual_refresh_selection', 'search_video_generate'],
+      rows: [{
+        id: 'job_queued',
+        trigger: 'manual',
+        scope: 'manual_refresh_selection',
+        status: 'queued',
+        started_at: null,
+        finished_at: null,
+        processed_count: 0,
+        inserted_count: 0,
+        skipped_count: 0,
+        error_code: null,
+        error_message: null,
+        attempts: 0,
+        max_attempts: 3,
+        next_run_at: null,
+        lease_expires_at: null,
+        trace_id: null,
+        created_at: '2026-03-01T10:00:00.000Z',
+        updated_at: '2026-03-01T10:00:00.000Z',
+      }],
+      queuedIngestionScopes: ['manual_refresh_selection', 'source_item_unlock_generation'],
+    });
+
+    expect(scopes).toEqual(['manual_refresh_selection', 'search_video_generate']);
+  });
+
+  it('falls back to queued row scopes when no explicit scope filter is requested', () => {
+    const scopes = resolveQueuePositionScopes({
+      requestedScopes: [],
+      rows: [{
+        id: 'job_queued',
+        trigger: 'manual',
+        scope: 'source_item_unlock_generation',
+        status: 'queued',
+        started_at: null,
+        finished_at: null,
+        processed_count: 0,
+        inserted_count: 0,
+        skipped_count: 0,
+        error_code: null,
+        error_message: null,
+        attempts: 0,
+        max_attempts: 3,
+        next_run_at: null,
+        lease_expires_at: null,
+        trace_id: null,
+        created_at: '2026-03-01T10:00:00.000Z',
+        updated_at: '2026-03-01T10:00:00.000Z',
+      }],
+      queuedIngestionScopes: ['manual_refresh_selection', 'source_item_unlock_generation'],
+    });
+
+    expect(scopes).toEqual(['source_item_unlock_generation']);
+  });
+});

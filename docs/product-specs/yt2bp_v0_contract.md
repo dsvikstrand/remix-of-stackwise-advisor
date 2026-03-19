@@ -36,6 +36,7 @@
 - 2026-02-18 note: endpoint timeout is now env-configurable via `YT2BP_CORE_TIMEOUT_MS` (default `120000`, bounded server-side).
 - 2026-02-18 note: banner prompt hardening now enforces visual-only imagery and explicitly blocks readable text/typography/logos/watermarks in generated backgrounds.
 - 2026-03-19 note: save-time blueprint persistence now writes additive `blueprints.preview_summary` teaser text for cheap Wall/Explore/Channel/Search/My Feed cards; this does not alter the YT2BP request/response envelope.
+- 2026-03-19 note: ingestion status route tightening (`GET /api/ingestion/jobs/latest-mine` single-read selection and narrower `active-mine` queue-position scans) is additive backend hardening and does not alter the YT2BP request/response envelope.
 - 2026-03-19 note: manual YouTube comments refresh now reuses existing refresh-state rows when present, and scheduler pending-refresh checks are batched by refresh kind/candidate set; this is backend bookkeeping only and does not alter the YT2BP request/response envelope.
 - 2026-03-19 note: queued ingestion worker lease heartbeats now use a lease-aware cadence floor (`30s` on the default `90s` lease); this is backend bookkeeping only and does not alter the YT2BP request/response envelope.
 - 2026-03-19 note: durable generation trace writes now reuse a per-run `seq` cursor and skip returning row payloads on writes when callers do not consume them; this is backend bookkeeping only and does not alter the YT2BP request/response envelope.

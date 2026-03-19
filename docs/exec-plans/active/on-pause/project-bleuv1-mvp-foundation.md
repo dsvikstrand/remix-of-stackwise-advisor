@@ -142,6 +142,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Added service-ops endpoint `GET /api/ingestion/jobs/latest` for latest ingestion status checks.
 - Added user endpoint `GET /api/ingestion/jobs/:id` for owner-scoped manual refresh progress.
 - Added user endpoint `GET /api/ingestion/jobs/latest-mine` for owner-scoped latest refresh-job restore after page reload.
+- Follow-up hardening keeps that restore path egress-conscious: `latest-mine` now resolves from one recent-row read, and `active-mine` queue-position scans narrow to requested/visible scopes.
 - Keep sync/deactivate and pending accept/skip endpoints as compatibility/operator paths.
 - Keep debug simulation endpoint env-gated (`ENABLE_DEBUG_ENDPOINTS`) for non-prod ingestion testing.
 - Debug simulation auth contract: `x-service-token` only (no user bearer required).

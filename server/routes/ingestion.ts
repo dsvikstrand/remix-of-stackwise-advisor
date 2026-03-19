@@ -31,6 +31,11 @@ type QueueOrderRow = {
   created_at: string | null;
 };
 
+type LatestIngestionJobRow = {
+  id: string;
+  status: string;
+};
+
 function parseTimeToMs(value: string | null | undefined, fallbackMs: number) {
   const parsed = Date.parse(String(value || '').trim());
   return Number.isFinite(parsed) ? parsed : fallbackMs;
@@ -70,6 +75,40 @@ export function estimateStartSeconds(queueAheadCount: number, workerConcurrency:
   const normalizedAhead = Math.max(0, Math.floor(Number(queueAheadCount) || 0));
   const normalizedConcurrency = Math.max(1, Math.floor(Number(workerConcurrency) || 1));
   return Math.max(1, Math.ceil((normalizedAhead + 1) / normalizedConcurrency) * 4);
+}
+
+export function pickLatestRelevantIngestionJob<T extends LatestIngestionJobRow>(rows: T[]) {
+  let latestRow: T | null = null;
+  for (const row of rows) {
+    if (!row) continue;
+    latestRow ??= row;
+    const status = String(row.status || '').trim();
+    if (status === 'queued' || status === 'running') {
+      return row;
+    }
+  }
+  return latestRow;
+}
+
+export function resolveQueuePositionScopes(input: {
+  requestedScopes: string[];
+  rows: ActiveIngestionJobRow[];
+  queuedIngestionScopes: readonly string[];
+}) {
+  const requestedScopes = input.requestedScopes.map((scope) => String(scope || '').trim()).filter(Boolean);
+  if (requestedScopes.length > 0) {
+    return [...new Set(requestedScopes)];
+  }
+
+  const rowScopes = input.rows
+    .filter((row) => row.status === 'queued')
+    .map((row) => String(row.scope || '').trim())
+    .filter(Boolean);
+  if (rowScopes.length > 0) {
+    return [...new Set(rowScopes)];
+  }
+
+  return [...new Set(input.queuedIngestionScopes.map((scope) => String(scope || '').trim()).filter(Boolean))];
 }
 
 function extractJobTitle(payload: unknown) {
@@ -225,34 +264,18 @@ export function registerIngestionUserRoutes(app: express.Express, deps: Ingestio
     const scopeRaw = String(req.query.scope || '').trim();
     const scope = scopeRaw || 'manual_refresh_selection';
 
-    const { data: activeData, error: activeError } = await db
+    const { data: latestRows, error: latestError } = await db
       .from('ingestion_jobs')
       .select(INGESTION_JOB_SELECT_COLUMNS)
       .eq('requested_by_user_id', userId)
       .eq('scope', scope)
-      .in('status', ['queued', 'running'])
       .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (activeError) {
-      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: activeError.message, data: null });
+      .limit(25);
+    if (latestError) {
+      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: latestError.message, data: null });
     }
 
-    let data = activeData;
-    if (!data) {
-      const { data: latestData, error: latestError } = await db
-        .from('ingestion_jobs')
-        .select(INGESTION_JOB_SELECT_COLUMNS)
-        .eq('requested_by_user_id', userId)
-        .eq('scope', scope)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (latestError) {
-        return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: latestError.message, data: null });
-      }
-      data = latestData;
-    }
+    const data = pickLatestRelevantIngestionJob((latestRows || []) as any[]);
 
     return res.json({
       ok: true,
@@ -334,7 +357,11 @@ export function registerIngestionUserRoutes(app: express.Express, deps: Ingestio
           .order('created_at', { ascending: true })
           .order('id', { ascending: true });
 
-        const queuedScopes = [...deps.queuedIngestionScopes].filter(Boolean);
+        const queuedScopes = resolveQueuePositionScopes({
+          requestedScopes: scopes,
+          rows,
+          queuedIngestionScopes: deps.queuedIngestionScopes,
+        });
         if (queuedScopes.length > 0) {
           queueQuery = queueQuery.in('scope', queuedScopes);
         }

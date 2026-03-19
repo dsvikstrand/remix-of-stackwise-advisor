@@ -82,6 +82,16 @@ e04) [have] The current short-window hotspot order is now:
 - `blueprint_youtube_refresh_state` writes
 e05) [have] Feed suppression is no longer a top short-window driver after the Phase 1 and Phase 1b reductions.
 e06) [have] The next tightening wave should focus on queue helpers, refresh queue bookkeeping, and generation trace chattiness rather than another broad feed-suppression rewrite.
+e07) [have] Fresh post-Phase-6/7 measurement now shows the old trace hot paths materially reduced:
+- `generation_run_events?select=id,run_id,seq,...`: `138` -> `0`
+- `generation_run_events?select=seq&run_id=...`: `138` -> `4`
+- `touch_ingestion_job_lease`: `145` -> `96`
+e08) [have] The freshest follow-up `60m` hotspot order is now:
+- `user_source_subscriptions?id=...`
+- `claim_ingestion_jobs`
+- queue/job-status chatter around user ingestion routes and status reads
+- residual lease-heartbeat traffic
+e09) [have] The next queue-focused tightening should narrow backend user/ops route reads before another deeper worker rewrite.
 
 ## Phases
 f1) [todo] Phase 1: collapse transcript/feed suppression into bulk updates.
@@ -200,7 +210,8 @@ f7) [todo] Phase 7: reduce remaining queue-maintenance chatter around leases and
   - fewer background queue-maintenance requests without increasing stale-lease failures
 - progress note:
   - worker lease heartbeats now use a lease-aware cadence floor, so the default `90s` lease refreshes every `30s` instead of every `10s`
-  - fresh post-deploy request-history proof is still pending
+  - fresh post-deploy request-history proof showed `touch_ingestion_job_lease` down from `145` -> `96` in the current `60m` comparison
+  - the next safe queue slice is route/job-status tightening around `latest-mine`, `active-mine`, and related queue-position scans
 f8) [todo] Phase 8: keep frontend list surfaces lean and maintain proof after each backend pass.
 - primary files:
   - `src/hooks/useBlueprintSearch.ts`
@@ -267,7 +278,17 @@ g9a) [todo] Re-measure fresh `60m` / `24h` windows after the latest trace/queue 
 Reason:
 - `touch_ingestion_job_lease`, `claim_ingestion_jobs`, `generation_run_events`, and residual subscription writes are still the competing short-window hotspots
 
-g10) [todo] Keep Phase 8 running alongside the backend phases as verification/guardrails.
+g10) [have] Phase 7 second slice is shipped.
+Reason:
+- user/job-status queue routes now avoid broader queue reads than needed:
+  - `latest-mine` now resolves from one recent-row read instead of an active-then-latest double read path
+  - `active-mine` queue-position scans now narrow to requested or visible queued scopes instead of all queued scopes
+
+g10a) [todo] Re-measure fresh `60m` / `24h` windows after the route/job-status slice and decide whether the next win is deeper `claim_ingestion_jobs` control or a narrower subscription-write follow-up.
+Reason:
+- the remaining dominant hotspots are now `user_source_subscriptions?id=...` and `claim_ingestion_jobs`, with the route/read slice just shipped
+
+g11) [todo] Keep Phase 8 running alongside the backend phases as verification/guardrails.
 
 ## Validation Boundaries
 h1) [todo] After each phase, verify the affected hot path volume with the same Supabase history workflow used for the initial inspection.
