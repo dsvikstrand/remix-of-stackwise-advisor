@@ -243,7 +243,7 @@ export async function handleCreateSourceSubscription(req: express.Request, res: 
   try {
     sync = await deps.syncSingleSubscription(db, upserted, { trigger: 'subscription_create' });
   } catch (error) {
-    await deps.markSubscriptionSyncError(db, upserted.id, error);
+    await deps.markSubscriptionSyncError(db, upserted, error);
   }
 
   if (isCreateOrReactivate) {
@@ -982,7 +982,7 @@ export async function handleSyncSourceSubscription(req: express.Request, res: ex
 
   const { data: subscription, error: subscriptionError } = await db
     .from('user_source_subscriptions')
-    .select('id, user_id, mode, source_channel_id, source_page_id, last_seen_published_at, last_seen_video_id, is_active')
+    .select('id, user_id, mode, source_channel_id, source_channel_title, source_page_id, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, is_active')
     .eq('id', req.params.id)
     .eq('user_id', userId)
     .maybeSingle();
@@ -1027,7 +1027,7 @@ export async function handleSyncSourceSubscription(req: express.Request, res: ex
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await deps.markSubscriptionSyncError(db, subscription.id, error);
+    await deps.markSubscriptionSyncError(db, subscription, error);
     await db.from('ingestion_jobs').update({
       status: 'failed',
       finished_at: new Date().toISOString(),

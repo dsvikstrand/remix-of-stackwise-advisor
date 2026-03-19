@@ -78,6 +78,7 @@
 - 2026-03-08 note: installed-PWA push delivery (`notification_push_subscriptions`, `notification_push_dispatch_queue`, `/api/notifications/push-subscriptions*`) is additive notification-channel infrastructure and does not alter the YT2BP endpoint envelope.
 - 2026-03-09 note: installed-PWA push runtime remains rollout-gated until backend startup validation and device delivery proof are complete; Oracle control-plane recovery for that rollout is documented separately in `docs/ops/oracle-cli-access.md`.
 - 2026-03-14 note: the current default is `TRANSCRIPT_PROVIDER=youtube_timedtext`; if YouTube captions are unavailable, the same seam falls through to `videotranscriber_temp`, a wrapper around the browser-facing `videotranscriber.ai` flow with provider-local timeout/session envs. This is additive and does not change the production endpoint envelope.
+- 2026-03-19 note: subscription sync persistence now throttles no-op success/error writes to `user_source_subscriptions` behind a `15m` backend heartbeat to reduce Supabase churn; this is additive backend behavior outside the YT2BP request/response envelope.
 - 2026-03-15 note: the v0 success envelope still returns a `draft` object, but the canonical blueprint content inside that envelope is now `draft.sectionsJson` with schema `blueprint_sections_v1`. Legacy `draft.steps`, `draft.summaryVariants`, and `draft.notes` remain compatibility fields during cutover and should not be used as the target shape for new downstream work.
 
 ## Request

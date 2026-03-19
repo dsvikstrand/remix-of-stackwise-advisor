@@ -27,29 +27,39 @@ c3) [todo] Preserve user-visible UX unless a specific change is explicitly calle
 c4) [todo] Prefer reducing redundant reads/writes and polling before introducing new persistence structures.
 
 ## Findings To Carry Forward
-d1) [have] The current biggest backend egress suspect is the transcript/feed suppression sweep pattern in `server/index.ts`, which appears to patch `user_feed_items` one `source_item_id` at a time.
-d2) [have] That pattern lines up with the hottest normalized path observed in the recent Supabase request history:
-- `PATCH /rest/v1/user_feed_items?...source_item_id=...`
-d3) [have] Repeated active-subscriber counting and subscription lookups appear to be re-asking the same `user_source_subscriptions` questions many times inside backend loops.
-d4) [have] `claim_ingestion_jobs` traffic appears too frequent for the amount of real work happening, which suggests idle/backoff behavior needs tightening.
+d1) [have] Long-window snapshots still show feed suppression as a major historical contributor, but the freshest windows after the Phase 1b pass no longer show it as the dominant path.
+d2) [have] The current hottest normalized path in the freshest lagged windows is now:
+- `PATCH /rest/v1/user_source_subscriptions?id=...`
+d3) [have] Feed suppression is still present in the short windows, but the remaining traffic is now split between a shared single-item path and a bulk `source_item_id=in.(...)` path rather than one overwhelming sweep-only pattern.
+d4) [have] `claim_ingestion_jobs` remains a meaningful background contributor, but it no longer dominates the freshest measured windows.
 d5) [have] Frontend overfetch still matters, but it no longer looks like the dominant current source after the recent list-payload slimming pass.
 
 ## Latest Measurement Snapshot
-e0) [have] Fresh short-window request-history export was regenerated at `2026-03-19T10:44:30.683Z`.
-e00) [have] Post-deploy `15m` top normalized paths are now:
-- `2398` :: `/rest/v1/user_feed_items?blueprint_id=is.null&select=id&source_item_id=:long&state=:long`
-- `925` :: `/rest/v1/user_source_subscriptions?id=:long`
-- `746` :: `/rest/v1/user_source_subscriptions?is_active=eq.true&select=id&source_page_id=:long`
-- `555` :: `/rest/v1/rpc/claim_ingestion_jobs`
-e01) [have] Post-deploy `60m` top normalized paths are now:
-- `22315` :: `/rest/v1/user_feed_items?blueprint_id=is.null&select=id&source_item_id=:long&state=:long`
-- `3696` :: `/rest/v1/user_source_subscriptions?id=:long`
-- `3520` :: `/rest/v1/user_source_subscriptions?is_active=eq.true&select=id&source_page_id=:long`
-- `1195` :: `/rest/v1/rpc/claim_ingestion_jobs`
-e02) [have] The feed-suppression bulk path is definitely live now; the sampled `user_feed_items` request URL shows `source_item_id=in.(...)` rather than only single-item `eq.` updates.
-e03) [have] Even after the shipped reductions, `user_feed_items` suppression remains the dominant current hotspot.
-e04) [have] `user_source_subscriptions` traffic remains the next largest family, but the remaining `PATCH ...id=...` writes are now likely tied to subscription checkpoint/health semantics rather than the redundant count-read path already removed.
-e05) [have] `claim_ingestion_jobs` is still meaningfully noisy, but it is now clearly behind feed suppression and subscription traffic in the short post-deploy windows.
+e0) [have] Fresh lagged request-history export was regenerated at `2026-03-19T11:42:38.888Z`.
+e00) [have] Freshest `15m` top normalized paths are now:
+- `925` :: `/rest/v1/user_source_subscriptions?id=eq.:long`
+- `155` :: `/rest/v1/rpc/claim_ingestion_jobs`
+- `104` :: `/auth/v1/user`
+- `57` :: `/rest/v1/ingestion_jobs?limit=:int&order=created_at.desc&requested_by_user_id=eq.:long&select=:long&status=in.(queued,running)`
+- `32` :: `/rest/v1/user_feed_items?source_item_id=:long`
+- `32` :: `/rest/v1/user_feed_items?blueprint_id=is.null&select=id&source_item_id=in.(...)&state=in.(...)`
+e01) [have] Freshest `60m` top normalized paths are now:
+- `3700` :: `/rest/v1/user_source_subscriptions?id=eq.:long`
+- `1542` :: `/rest/v1/rpc/claim_ingestion_jobs`
+- `484` :: `/rest/v1/source_item_unlocks?limit=:int&order=updated_at.asc&select=:long&status=eq.processing`
+- `484` :: `/rest/v1/source_item_unlocks?limit=:int&or=:long&order=updated_at.desc&select=source_item_id,transcript_status,last_error_code,updated_at`
+- `481` :: `/rest/v1/user_feed_items?source_item_id=:long`
+- `481` :: `/rest/v1/user_feed_items?blueprint_id=is.null&select=id&source_item_id=in.(...)&state=in.(...)`
+e02) [have] Fresh `60m` top request families are now:
+- `3737` subscription checks
+- `1542` unlock queue claim
+- `1009` unlock state reads
+- `1002` feed suppression writes
+e03) [have] The long-window `24h` and `6h` snapshots are still dominated by feed suppression because they include a large amount of pre-Phase-1b history.
+e04) [have] In the freshest measured windows, `user_source_subscriptions?id=...` writes are now the dominant hotspot.
+e05) [have] Feed suppression remains present, but it is no longer the dominant short-window family after the Phase 1b suppression cooldown + sweep cadence change.
+e06) [have] `claim_ingestion_jobs` remains materially noisy and is still above feed suppression in the fresh `60m` window, but it is now clearly behind subscription writes.
+e07) [have] The newest hotspot order suggests the next safest high-value code phase is a narrow Phase 2b on subscription write reduction, not another broad feed-suppression rewrite.
 
 ## Phases
 f1) [todo] Phase 1: collapse transcript/feed suppression into bulk updates.
@@ -62,13 +72,14 @@ f1) [todo] Phase 1: collapse transcript/feed suppression into bulk updates.
   - dedupe `source_item_id`s before patching
   - replace per-item `user_feed_items` updates with bulk/chunked updates where possible
   - avoid `.select('id')` on updates unless the returned ids are actually required
-- acceptance:
+ - acceptance:
   - the sweep produces far fewer Supabase `user_feed_items` update requests
   - transcript/no-speech suppression behavior remains unchanged for users
  - progress note:
    - bulk/chunked suppression is shipped
    - count-only update responses are shipped
-   - follow-up is still needed because feed suppression remains the top live hotspot
+   - Phase 1b same-item suppression cooldown + less-frequent worker-triggered sweeps are shipped
+   - fresh `15m`/`60m` windows show feed suppression materially reduced, but not fully eliminated
 f2) [todo] Phase 2: eliminate repeated subscription-count and subscription-existence churn inside backend loops.
 - primary files:
   - `server/services/sourceUnlocks.ts`
@@ -86,7 +97,9 @@ f2) [todo] Phase 2: eliminate repeated subscription-count and subscription-exist
   - no behavior drift in subscription state, source eligibility, or feed insertion
  - progress note:
    - the redundant active-subscriber count reads were removed from the hot subscription sync and auto-unlock retry paths
-   - the remaining `PATCH ...id=...` traffic still needs a narrower follow-up pass because it is likely coupled to subscription health/checkpoint updates
+   - the remaining `PATCH ...id=...` traffic is now the top fresh-window hotspot
+   - Phase 2b success/error write throttling is now shipped
+   - the proof step for Phase 2b is still pending a fresh post-deploy request-history export
 f3) [todo] Phase 3: make ingestion-job claiming much more conservative while idle.
 - primary files:
   - `server/services/ingestionQueue.ts`
@@ -101,6 +114,9 @@ f3) [todo] Phase 3: make ingestion-job claiming much more conservative while idl
 - acceptance:
   - `claim_ingestion_jobs` request volume drops materially during idle periods
   - queue pickup latency remains acceptable when work arrives
+ - progress note:
+   - idle backoff + jitter are shipped
+   - fresh windows still show claim traffic as the second-largest short-window family, so more queue work may still be worth doing after Phase 2b
 f4) [todo] Phase 4: reduce queue-maintenance chatter around leases and queue-depth checks.
 - primary files:
   - `server/services/ingestionQueue.ts`
@@ -140,28 +156,27 @@ f6) [todo] Phase 6: add lightweight proof and tracking for the reduction.
   - follow-up work is driven by observed remaining hotspots, not guesswork
 
 ## Execution Order
-g1) [todo] Implement Phase 1 first.
+g1) [have] Phase 1 core bulk suppression is shipped.
 Reason:
-- it targets the hottest current request family and likely offers the biggest single drop
+- the original feed-suppression sweep was the biggest observed request family when this plan started
 
-g2) [todo] Implement Phase 2 second.
+g2) [have] Phase 1b same-item suppression cooldown + less-frequent worker-triggered sweeps are shipped.
 Reason:
-- subscription read/write churn is the next clearest backend multiplier
+- the remaining feed traffic looked like repeated same-item suppression and overly frequent sweep invocation rather than only the original bulk path
 
-g3) [todo] Implement Phase 3 third.
+g3) [have] Phase 2 count-read reduction is shipped and Phase 3 idle queue-claim backoff is shipped.
 Reason:
-- queue-claim volume is a strong background contributor and should be easy to prove after Phase 1-2
+- those were the next safest backend multipliers to reduce without touching UX
 
-g4) [todo] Implement Phase 4 fourth.
+g4) [have] Phase 2b success/error write throttling is shipped.
 Reason:
-- lease/count chatter matters, but likely less than the first three phases
+- `user_source_subscriptions?id=...` dominated the freshest `15m` and `60m` windows before the current write-throttling pass
 
-g5) [todo] Keep Phase 5 and Phase 6 running alongside the backend phases as verification/guardrails.
-g6) [have] Based on the latest short-window snapshot, the next safest high-value code phase is still either:
-- more targeted feed-suppression reduction
-- or queue-claim idle backoff
+g5) [todo] Re-measure after Phase 2b, then choose between Phase 4 queue-maintenance chatter reduction and any narrower feed-suppression cleanup.
 Reason:
-- the remaining `user_source_subscriptions?id=...` writes appear more likely to be tied to intended checkpoint/health behavior and therefore need a narrower design pass before changing them
+- fresh measurement now matters more than the original ranking
+
+g6) [todo] Keep Phase 5 and Phase 6 running alongside the backend phases as verification/guardrails.
 
 ## Validation Boundaries
 h1) [todo] After each phase, verify the affected hot path volume with the same Supabase history workflow used for the initial inspection.

@@ -74,6 +74,9 @@
   - `POST /api/source-pages/:platform/:externalId/subscribe` (auth)
   - `DELETE /api/source-pages/:platform/:externalId/subscribe` (auth)
   - Frontend trust status now resumes unlock jobs via `GET /api/ingestion/jobs/latest-mine?scope=source_item_unlock_generation` after reload.
+  - Subscription sync persistence is intentionally coarse-grained:
+    - unchanged success/error writes to `user_source_subscriptions` are skipped unless checkpoint/title/error state changed or the `15m` poll heartbeat expired
+    - this is an egress-control measure only; frontend subscription health still evaluates on a `60m` window
   - Legacy generation compatibility endpoints (auth):
     - `GET /api/generation/tier-access`
     - `GET /api/blueprints/:id/variants`

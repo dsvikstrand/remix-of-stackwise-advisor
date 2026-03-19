@@ -53,14 +53,101 @@ type SubscriptionSyncRow = {
   user_id: string;
   mode: string;
   source_channel_id: string;
+  source_channel_title?: string | null;
   source_page_id?: string | null;
+  last_polled_at?: string | null;
   last_seen_published_at: string | null;
   last_seen_video_id: string | null;
+  last_sync_error?: string | null;
 };
 
 type SubscriptionSyncOptions = {
   trigger: 'user_sync' | 'service_cron' | 'subscription_create' | 'debug_simulation' | 'youtube_import';
 };
+
+export const SUBSCRIPTION_SYNC_WRITE_HEARTBEAT_MINUTES = 15;
+const SUBSCRIPTION_SYNC_WRITE_HEARTBEAT_MS = SUBSCRIPTION_SYNC_WRITE_HEARTBEAT_MINUTES * 60_000;
+
+function normalizeNullableText(value: unknown) {
+  const normalized = String(value ?? '').trim();
+  return normalized || null;
+}
+
+function parseDateMs(value: string | null | undefined) {
+  if (!value) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function shouldRefreshSubscriptionHeartbeat(lastPolledAt: string | null | undefined, nowIso: string) {
+  const lastPolledAtMs = parseDateMs(lastPolledAt);
+  const nowMs = parseDateMs(nowIso);
+  if (lastPolledAtMs === null || nowMs === null) return true;
+  return nowMs - lastPolledAtMs >= SUBSCRIPTION_SYNC_WRITE_HEARTBEAT_MS;
+}
+
+type SubscriptionWriteSource = {
+  source_channel_title?: string | null;
+  last_polled_at?: string | null;
+  last_seen_published_at: string | null;
+  last_seen_video_id: string | null;
+  last_sync_error?: string | null;
+};
+
+export function buildSubscriptionSyncSuccessUpdate(input: {
+  subscription: SubscriptionWriteSource;
+  channelTitle: string | null;
+  newestPublishedAt: string | null;
+  newestVideoId: string | null;
+  skippedUpcoming: boolean;
+  nowIso: string;
+}) {
+  const nextLastSeenPublishedAt = input.skippedUpcoming
+    ? input.subscription.last_seen_published_at
+    : (input.newestPublishedAt || input.subscription.last_seen_published_at);
+  const nextLastSeenVideoId = input.skippedUpcoming
+    ? input.subscription.last_seen_video_id
+    : (input.newestVideoId || input.subscription.last_seen_video_id);
+
+  const checkpointChanged =
+    nextLastSeenPublishedAt !== input.subscription.last_seen_published_at
+    || nextLastSeenVideoId !== input.subscription.last_seen_video_id;
+  const titleChanged =
+    normalizeNullableText(input.subscription.source_channel_title) !== normalizeNullableText(input.channelTitle);
+  const shouldClearError = normalizeNullableText(input.subscription.last_sync_error) !== null;
+  const shouldRefreshHeartbeat = shouldRefreshSubscriptionHeartbeat(input.subscription.last_polled_at, input.nowIso);
+
+  if (!checkpointChanged && !titleChanged && !shouldClearError && !shouldRefreshHeartbeat) {
+    return null;
+  }
+
+  return {
+    source_channel_title: input.channelTitle,
+    last_polled_at: input.nowIso,
+    last_seen_published_at: nextLastSeenPublishedAt,
+    last_seen_video_id: nextLastSeenVideoId,
+    last_sync_error: null,
+  };
+}
+
+export function buildSubscriptionSyncErrorUpdate(input: {
+  subscription: { last_polled_at?: string | null; last_sync_error?: string | null } | null | undefined;
+  errorMessage: string;
+  nowIso: string;
+}) {
+  const nextError = String(input.errorMessage || '').slice(0, 500);
+  const currentError = normalizeNullableText(input.subscription?.last_sync_error);
+  const shouldRefreshHeartbeat = shouldRefreshSubscriptionHeartbeat(input.subscription?.last_polled_at, input.nowIso);
+
+  if (currentError === nextError && !shouldRefreshHeartbeat) {
+    return null;
+  }
+
+  return {
+    last_polled_at: input.nowIso,
+    last_sync_error: nextError,
+  };
+}
 
 export type SourceSubscriptionSyncDeps = {
   fetchYouTubeFeed: (channelId: string, maxResults: number) => Promise<{
@@ -196,13 +283,14 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
   ): Promise<SyncSubscriptionResult> {
     const feed = await deps.fetchYouTubeFeed(subscription.source_channel_id, 20);
     const newest = feed.videos[0] || null;
+    const bootstrapPolledAt = new Date().toISOString();
 
     if (!subscription.last_seen_published_at) {
       await db
         .from('user_source_subscriptions')
         .update({
           source_channel_title: feed.channelTitle,
-          last_polled_at: new Date().toISOString(),
+          last_polled_at: bootstrapPolledAt,
           last_seen_published_at: newest?.publishedAt || null,
           last_seen_video_id: newest?.videoId || null,
           last_sync_error: null,
@@ -510,20 +598,21 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
       }
     }
 
-    await db
-      .from('user_source_subscriptions')
-      .update({
-        source_channel_title: feed.channelTitle,
-        last_polled_at: new Date().toISOString(),
-        last_seen_published_at: skippedUpcoming > 0
-          ? subscription.last_seen_published_at
-          : (newest?.publishedAt || subscription.last_seen_published_at),
-        last_seen_video_id: skippedUpcoming > 0
-          ? subscription.last_seen_video_id
-          : (newest?.videoId || subscription.last_seen_video_id),
-        last_sync_error: null,
-      })
-      .eq('id', subscription.id);
+    const finalPolledAt = new Date().toISOString();
+    const successUpdate = buildSubscriptionSyncSuccessUpdate({
+      subscription,
+      channelTitle: feed.channelTitle,
+      newestPublishedAt: newest?.publishedAt || null,
+      newestVideoId: newest?.videoId || null,
+      skippedUpcoming: skippedUpcoming > 0,
+      nowIso: finalPolledAt,
+    });
+    if (successUpdate) {
+      await db
+        .from('user_source_subscriptions')
+        .update(successUpdate)
+        .eq('id', subscription.id);
+    }
     if (skippedByDurationPolicy > 0) {
       console.log('[subscription_duration_policy_summary]', JSON.stringify({
         subscription_id: subscription.id,

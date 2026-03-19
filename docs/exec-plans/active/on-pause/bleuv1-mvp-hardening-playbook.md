@@ -35,6 +35,7 @@ a4p) [have] Known-channel video-library routes now use the low-cost uploads-play
 a4q) [have] Current runtime video behavior on `/search` is now bounded single-video lookup (`URL/id first, helper-backed title fallback second`) rather than broad paginated discovery.
 a4s) [have] Current runtime creator lookup is now also bounded: exact channel URL / handle / channel id first, bare handles work without requiring `@`, helper-backed name lookup stays second, and only a tiny candidate set is returned instead of broad paginated channel discovery.
 a4r) [have] Source Page `Video Library` is now loaded on explicit user request instead of auto-fetching on page open, which reduces background YouTube API usage on normal source-page reads.
+a4t) [have] Active Supabase egress-reduction work has now also throttled no-op subscription sync writes (`user_source_subscriptions`) behind a `15m` backend heartbeat; treat that as current runtime truth even though detailed proof/next steps live in the active egress plan.
 a5) [todo] Improve user trust around shared-cost auto billing transitions and async processing visibility.
 a6) [todo] Reduce terminology ambiguity between personal stream, followed channels, source pages, and channel taxonomy.
 

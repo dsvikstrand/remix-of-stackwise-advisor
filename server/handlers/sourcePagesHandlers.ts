@@ -1857,7 +1857,7 @@ app.post('/api/source-pages/:platform/:externalId/subscribe', async (req, res) =
   try {
     sync = await syncSingleSubscription(db, upserted, { trigger: 'subscription_create' });
   } catch (error) {
-    await markSubscriptionSyncError(db, upserted.id, error);
+    await markSubscriptionSyncError(db, upserted, error);
   }
 
   if (isCreateOrReactivate) {

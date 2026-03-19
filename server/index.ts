@@ -188,7 +188,10 @@ import {
 } from './services/transcriptPruning';
 import { createSourcePageAssetSweepService } from './services/sourcePageAssetSweep';
 import { createAutoBannerQueueService } from './services/autoBannerQueue';
-import { createSourceSubscriptionSyncService } from './services/sourceSubscriptionSync';
+import {
+  buildSubscriptionSyncErrorUpdate,
+  createSourceSubscriptionSyncService,
+} from './services/sourceSubscriptionSync';
 import { createNotificationPushDispatcherController } from './services/notificationPushDispatcherController';
 import { createBlueprintCreationService } from './services/blueprintCreation';
 import {
@@ -7270,7 +7273,7 @@ async function processAllActiveSubscriptionsJob(input: {
 
   const { data: subscriptions, error: subscriptionsError } = await db
     .from('user_source_subscriptions')
-    .select('id, user_id, mode, source_channel_id, source_page_id, last_seen_published_at, last_seen_video_id, is_active')
+    .select('id, user_id, mode, source_channel_id, source_channel_title, source_page_id, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, is_active')
     .eq('is_active', true)
     .eq('source_type', 'youtube')
     .order('updated_at', { ascending: false });
@@ -7291,7 +7294,7 @@ async function processAllActiveSubscriptionsJob(input: {
         subscription_id: subscription.id,
         error: error instanceof Error ? error.message : String(error),
       });
-      await markSubscriptionSyncError(db, subscription.id, error);
+      await markSubscriptionSyncError(db, subscription, error);
     }
   }
 
@@ -7768,15 +7771,24 @@ const DebugSimulateSubscriptionRequestSchema = z.object({
   rewind_days: z.coerce.number().int().min(1).max(365).optional(),
 });
 
-async function markSubscriptionSyncError(db: ReturnType<typeof createClient>, subscriptionId: string, err: unknown) {
+async function markSubscriptionSyncError(
+  db: ReturnType<typeof createClient>,
+  subscription: string | { id: string; last_polled_at?: string | null; last_sync_error?: string | null },
+  err: unknown,
+) {
   const message = err instanceof Error ? err.message : String(err);
+  const nowIso = new Date().toISOString();
+  const update = buildSubscriptionSyncErrorUpdate({
+    subscription: typeof subscription === 'string' ? null : subscription,
+    errorMessage: message,
+    nowIso,
+  });
+  if (!update) return;
+
   await db
     .from('user_source_subscriptions')
-    .update({
-      last_polled_at: new Date().toISOString(),
-      last_sync_error: message.slice(0, 500),
-    })
-    .eq('id', subscriptionId);
+    .update(update)
+    .eq('id', typeof subscription === 'string' ? subscription : subscription.id);
 }
 
 async function cleanupSubscriptionNoticeForChannel(

@@ -1987,7 +1987,7 @@ app.post('/api/youtube/subscriptions/import', youtubeImportLimiter, async (req, 
     try {
       await syncSingleSubscription(db, upserted, { trigger: 'youtube_import' });
     } catch (error) {
-      await markSubscriptionSyncError(db, upserted.id, error);
+      await markSubscriptionSyncError(db, upserted, error);
     }
 
     if (!existing) importedCount += 1;

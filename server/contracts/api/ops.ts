@@ -27,9 +27,12 @@ export type SubscriptionRow = {
   user_id: string;
   mode: string;
   source_channel_id: string;
+  source_channel_title?: string | null;
   source_page_id: string | null;
+  last_polled_at?: string | null;
   last_seen_published_at: string | null;
   last_seen_video_id: string | null;
+  last_sync_error?: string | null;
   is_active: boolean;
 };
 
@@ -83,5 +86,9 @@ export type OpsRouteDeps = {
   resetTranscriptProxyDispatcher: () => Promise<void>;
   getTranscriptProxyDebugMode: () => TranscriptProxyDebugMode;
   syncSingleSubscription: (db: DbClient, subscription: SubscriptionRow, input: { trigger: string }) => Promise<{ processed: number; inserted: number; skipped: number }>;
-  markSubscriptionSyncError: (db: DbClient, subscriptionId: string, error: unknown) => Promise<void>;
+  markSubscriptionSyncError: (
+    db: DbClient,
+    subscription: string | { id: string; last_polled_at?: string | null; last_sync_error?: string | null },
+    error: unknown,
+  ) => Promise<void>;
 };

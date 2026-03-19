@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createSourceSubscriptionSyncService } from '../../server/services/sourceSubscriptionSync';
+import {
+  buildSubscriptionSyncErrorUpdate,
+  createSourceSubscriptionSyncService,
+} from '../../server/services/sourceSubscriptionSync';
 import { createMockSupabase } from './helpers/mockSupabase';
 
 describe('source subscription sync service', () => {
@@ -102,6 +105,205 @@ describe('source subscription sync service', () => {
       inserted: 1,
       skipped: 0,
       newestVideoId: 'video_new',
+    });
+  });
+
+  it('skips the final subscription write when nothing meaningful changed and poll heartbeat is still fresh', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-19T12:00:00.000Z'));
+
+    try {
+      const originalPolledAt = '2026-03-19T11:55:00.000Z';
+      const originalUpdatedAt = '2026-03-19T11:00:00.000Z';
+      const db = createMockSupabase({
+        user_source_subscriptions: [{
+          id: 'sub_1',
+          user_id: 'user_1',
+          source_channel_id: 'channel_1',
+          source_channel_title: 'Channel 1',
+          source_page_id: 'page_1',
+          last_polled_at: originalPolledAt,
+          last_seen_published_at: '2026-03-19T10:00:00.000Z',
+          last_seen_video_id: 'video_latest',
+          last_sync_error: null,
+          updated_at: originalUpdatedAt,
+        }],
+        user_feed_items: [],
+      }) as any;
+
+      const service = createSourceSubscriptionSyncService({
+        fetchYouTubeFeed: vi.fn(async () => ({
+          channelTitle: 'Channel 1',
+          videos: [{
+            videoId: 'video_latest',
+            url: 'https://youtube.com/watch?v=video_latest',
+            title: 'Video Latest',
+            publishedAt: '2026-03-19T10:00:00.000Z',
+            thumbnailUrl: null,
+            durationSeconds: 120,
+          }],
+        })),
+        isNewerThanCheckpoint: vi.fn(() => false),
+        ingestionMaxPerSubscription: 20,
+        youtubeDataApiKey: '',
+        generationDurationCapEnabled: false,
+        generationMaxVideoSeconds: 2700,
+        generationBlockUnknownDuration: true,
+        generationDurationLookupTimeoutMs: 8000,
+        fetchYouTubeDurationMap: vi.fn(async () => new Map()),
+        fetchYouTubeVideoStates: vi.fn(async () => new Map()),
+        upsertSourceItemFromVideo: vi.fn(),
+        getExistingFeedItem: vi.fn(),
+        ensureSourceItemUnlock: vi.fn(),
+        computeUnlockCost: vi.fn(() => 1),
+        attemptAutoUnlockForSourceItem: vi.fn(),
+        getServiceSupabaseClient: () => null,
+        enqueueSourceAutoUnlockRetryJob: vi.fn(),
+        getSourceItemUnlockBySourceItemId: vi.fn(),
+        getTranscriptCooldownState: vi.fn(() => ({ active: false })),
+        isConfirmedNoTranscriptUnlock: vi.fn(() => false),
+        suppressUnlockableFeedRowsForSourceItem: vi.fn(),
+        insertFeedItem: vi.fn(),
+      } as any);
+
+      const result = await service.syncSingleSubscription(
+        db,
+        {
+          id: 'sub_1',
+          user_id: 'user_1',
+          mode: 'auto',
+          source_channel_id: 'channel_1',
+          source_channel_title: 'Channel 1',
+          source_page_id: 'page_1',
+          last_polled_at: originalPolledAt,
+          last_seen_published_at: '2026-03-19T10:00:00.000Z',
+          last_seen_video_id: 'video_latest',
+          last_sync_error: null,
+        },
+        { trigger: 'service_cron' },
+      );
+
+      expect(result).toMatchObject({
+        processed: 0,
+        inserted: 0,
+        skipped: 0,
+        newestVideoId: 'video_latest',
+      });
+      expect(db.state.user_source_subscriptions[0]).toMatchObject({
+        last_polled_at: originalPolledAt,
+        last_sync_error: null,
+        updated_at: originalUpdatedAt,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('still writes when a successful sync clears a stored error', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-19T12:00:00.000Z'));
+
+    try {
+      const originalPolledAt = '2026-03-19T11:55:00.000Z';
+      const originalUpdatedAt = '2026-03-19T11:00:00.000Z';
+      const db = createMockSupabase({
+        user_source_subscriptions: [{
+          id: 'sub_1',
+          user_id: 'user_1',
+          source_channel_id: 'channel_1',
+          source_channel_title: 'Channel 1',
+          source_page_id: 'page_1',
+          last_polled_at: originalPolledAt,
+          last_seen_published_at: '2026-03-19T10:00:00.000Z',
+          last_seen_video_id: 'video_latest',
+          last_sync_error: 'SYNC_FAILED',
+          updated_at: originalUpdatedAt,
+        }],
+        user_feed_items: [],
+      }) as any;
+
+      const service = createSourceSubscriptionSyncService({
+        fetchYouTubeFeed: vi.fn(async () => ({
+          channelTitle: 'Channel 1',
+          videos: [{
+            videoId: 'video_latest',
+            url: 'https://youtube.com/watch?v=video_latest',
+            title: 'Video Latest',
+            publishedAt: '2026-03-19T10:00:00.000Z',
+            thumbnailUrl: null,
+            durationSeconds: 120,
+          }],
+        })),
+        isNewerThanCheckpoint: vi.fn(() => false),
+        ingestionMaxPerSubscription: 20,
+        youtubeDataApiKey: '',
+        generationDurationCapEnabled: false,
+        generationMaxVideoSeconds: 2700,
+        generationBlockUnknownDuration: true,
+        generationDurationLookupTimeoutMs: 8000,
+        fetchYouTubeDurationMap: vi.fn(async () => new Map()),
+        fetchYouTubeVideoStates: vi.fn(async () => new Map()),
+        upsertSourceItemFromVideo: vi.fn(),
+        getExistingFeedItem: vi.fn(),
+        ensureSourceItemUnlock: vi.fn(),
+        computeUnlockCost: vi.fn(() => 1),
+        attemptAutoUnlockForSourceItem: vi.fn(),
+        getServiceSupabaseClient: () => null,
+        enqueueSourceAutoUnlockRetryJob: vi.fn(),
+        getSourceItemUnlockBySourceItemId: vi.fn(),
+        getTranscriptCooldownState: vi.fn(() => ({ active: false })),
+        isConfirmedNoTranscriptUnlock: vi.fn(() => false),
+        suppressUnlockableFeedRowsForSourceItem: vi.fn(),
+        insertFeedItem: vi.fn(),
+      } as any);
+
+      await service.syncSingleSubscription(
+        db,
+        {
+          id: 'sub_1',
+          user_id: 'user_1',
+          mode: 'auto',
+          source_channel_id: 'channel_1',
+          source_channel_title: 'Channel 1',
+          source_page_id: 'page_1',
+          last_polled_at: originalPolledAt,
+          last_seen_published_at: '2026-03-19T10:00:00.000Z',
+          last_seen_video_id: 'video_latest',
+          last_sync_error: 'SYNC_FAILED',
+        },
+        { trigger: 'service_cron' },
+      );
+
+      expect(db.state.user_source_subscriptions[0]).toMatchObject({
+        last_polled_at: '2026-03-19T12:00:00.000Z',
+        last_sync_error: null,
+      });
+      expect(db.state.user_source_subscriptions[0].updated_at).not.toBe(originalUpdatedAt);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('throttles repeated identical subscription error writes inside the heartbeat window', () => {
+    expect(buildSubscriptionSyncErrorUpdate({
+      subscription: {
+        last_polled_at: '2026-03-19T11:55:00.000Z',
+        last_sync_error: 'SYNC_FAILED',
+      },
+      errorMessage: 'SYNC_FAILED',
+      nowIso: '2026-03-19T12:00:00.000Z',
+    })).toBeNull();
+
+    expect(buildSubscriptionSyncErrorUpdate({
+      subscription: {
+        last_polled_at: '2026-03-19T11:30:00.000Z',
+        last_sync_error: 'SYNC_FAILED',
+      },
+      errorMessage: 'SYNC_FAILED',
+      nowIso: '2026-03-19T12:00:00.000Z',
+    })).toEqual({
+      last_polled_at: '2026-03-19T12:00:00.000Z',
+      last_sync_error: 'SYNC_FAILED',
     });
   });
 });
