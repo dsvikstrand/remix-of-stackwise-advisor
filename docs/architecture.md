@@ -139,6 +139,7 @@
     - shared handler preflight helpers now live in `server/services/generationPreflight.ts`:
       - Search/manual-refresh/source-page routes reuse typed helpers for duplicate/ready/in-progress classification, reservation-prefix handling, source-page subscription access, and queue/work-item admission reads.
       - queue admission/read helpers now honor explicit `scope` or `scopes` filters so refresh/ops guards and interactive admission checks use the intended queue slice rather than a silent full-queue scan.
+      - blueprint YouTube refresh scheduler now batches pending-job detection by refresh kind/candidate set instead of reading queued refresh payloads once per candidate.
       - direct URL generation remains intentionally separate because it does not use queue admission.
     - `POST /api/source-pages/:platform/:externalId/subscribe` (auth-only, idempotent source-page subscribe)
     - `DELETE /api/source-pages/:platform/:externalId/subscribe` (auth-only, unsubscribe parity + notice cleanup)
@@ -204,6 +205,7 @@
     - queued claim uses DB lease (`claim_ingestion_jobs`) + heartbeat (`touch_ingestion_job_lease`).
     - ingestion job rows now track attempts/max attempts, lease expiry, next-run retry time, worker id, and trace id.
     - queue helper tightening now treats multi-scope reads as first-class (`scope` or `scopes`) so queue depth/reporting can narrow to the intended ingestion scopes.
+    - manual blueprint-comments refresh now reads the existing refresh-state row first and registers one only when the blueprint lacks an enabled refresh record.
     - provider retry/circuit controls are env-driven (transcript + LLM bounded retries, fail-fast circuit open mode).
   - onboarding extension: `user_youtube_onboarding` for new-user optional setup state.
   - Eval assets:

@@ -167,6 +167,10 @@ f5) [todo] Phase 5: reduce refresh queue bookkeeping and refresh-state churn.
 - acceptance:
   - lower `blueprint_youtube_refresh_state` and refresh-related `ingestion_jobs` read traffic
   - no regression in manual/auto refresh scheduling semantics
+- progress note:
+  - scheduler pending-refresh detection is now batched by refresh kind + candidate blueprint set instead of one read per candidate
+  - manual comments refresh now reads existing refresh state first and only registers a row when the blueprint lacks an enabled refresh record
+  - fresh post-deploy request-history proof is still pending
 f6) [todo] Phase 6: slim generation trace writes and reads.
 - primary files:
   - `server/services/generationTrace.ts`
@@ -227,14 +231,18 @@ g5) [have] Fresh post-Phase-2b measurement is now captured.
 Reason:
 - it showed subscription-write traffic down materially and re-ranked the remaining hotspots
 
-g6) [todo] Execute Phase 4 queue helper tightening next.
+g6) [have] Phase 4 queue helper tightening is shipped.
 Reason:
-- queue-read helpers now look like the cleanest remaining low-risk win
-- some current multi-scope callers are broader than intended
+- queue-read helpers were the cleanest remaining low-risk win
+- multi-scope callers now honor the intended queue slice
 
-g7) [todo] Execute Phase 5 refresh queue deduping after Phase 4 unless the next measurement unexpectedly changes the order.
+g7) [have] Phase 5 first slice is shipped.
 Reason:
-- refresh state + refresh job scans are the next clearest avoidable bookkeeping churn
+- refresh state + refresh job scans were the next clearest avoidable bookkeeping churn
+
+g7a) [todo] Re-measure the fresh `60m` / `24h` windows after the Phase 5 slice and decide whether refresh-state upsert narrowing or generation-trace slimming is the next better win.
+Reason:
+- the batched pending-check reduction is live, but the proof step is still pending
 
 g8) [todo] Execute Phase 6 generation trace slimming after the queue/refresh tightenings.
 Reason:

@@ -108,6 +108,7 @@ a82) [have] Current PWA behavior is intentionally conservative: installability, 
 a83) [have] Installed-PWA web push is now implemented behind rollout flags and remains opt-in only from notification surfaces; the first eligible push types are `comment_reply`, `generation_succeeded`, and `generation_failed`.
 a84) [have] Installed-PWA push remains outside the normal live contract until backend runtime validation and device delivery proof are complete; Oracle control-plane recovery/inspection now uses the standardized OCI CLI workflow instead of repo-local note files.
 a85) [have] Wall/Explore/Channel/Search/My Feed cards now prefer stored `blueprints.preview_summary` teaser text, preserving summary-like previews without loading canonical `sections_json` on list surfaces.
+a86) [have] Blueprint YouTube refresh scheduling now batches pending-job detection by refresh kind/candidate set, and manual comments refresh no longer force-writes refresh state before reading an existing enabled row.
 
 ## Core Model
 b1) `Source Item`

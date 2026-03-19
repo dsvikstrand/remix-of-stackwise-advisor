@@ -37,6 +37,11 @@ type BlueprintYouTubeRefreshCandidate = {
   comments_auto_stage?: number;
 };
 
+type PendingRefreshJobPayload = {
+  blueprint_id: string;
+  refresh_kind: BlueprintYouTubeRefreshKind;
+};
+
 export type BlueprintYouTubeRefreshState = {
   blueprint_id: string;
   youtube_video_id: string;
@@ -74,6 +79,10 @@ function normalizeIntervalHours(raw: unknown, fallback: number) {
 function normalizeNullableIso(raw: unknown) {
   const value = raw == null ? '' : String(raw || '').trim();
   return value || null;
+}
+
+function normalizeSourceItemId(raw: unknown) {
+  return raw == null ? null : String(raw || '').trim() || null;
 }
 
 function parseViewCount(payload: unknown) {
@@ -547,11 +556,28 @@ export function createBlueprintYouTubeCommentsService(input: {
     });
     if (!videoId) return;
 
+    const existingState = await getRefreshStateForBlueprint({
+      db: args.db,
+      blueprintId: args.blueprintId,
+    });
+    const normalizedSourceItemId = normalizeSourceItemId(args.explicitSourceItemId);
+    if (
+      existingState
+      && existingState.enabled
+      && existingState.youtube_video_id === videoId
+      && (
+        normalizedSourceItemId == null
+        || existingState.source_item_id === normalizedSourceItemId
+      )
+    ) {
+      return;
+    }
+
     await upsertRefreshState({
       db: args.db,
       blueprintId: args.blueprintId,
       videoId,
-      sourceItemId: args.explicitSourceItemId || null,
+      sourceItemId: normalizedSourceItemId,
       patch: {
         enabled: true,
         next_view_refresh_at: toFutureIsoFromHours(refreshViewIntervalHours),
@@ -664,30 +690,69 @@ export function createBlueprintYouTubeCommentsService(input: {
     return candidates.slice(0, limit);
   }
 
+  function extractPendingRefreshJobPayload(raw: unknown): PendingRefreshJobPayload | null {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const record = raw as Record<string, unknown>;
+    const blueprintId = String(record.blueprint_id || '').trim();
+    const refreshKindRaw = String(record.refresh_kind || '').trim().toLowerCase();
+    const refreshKind: BlueprintYouTubeRefreshKind | null = refreshKindRaw === 'view_count'
+      ? 'view_count'
+      : refreshKindRaw === 'comments'
+        ? 'comments'
+        : null;
+    if (!blueprintId || !refreshKind) return null;
+    return {
+      blueprint_id: blueprintId,
+      refresh_kind: refreshKind,
+    };
+  }
+
+  async function listPendingRefreshBlueprintIds(args: {
+    db: DbClient;
+    blueprintIds: string[];
+    kind: BlueprintYouTubeRefreshKind;
+  }) {
+    const normalizedIds = [...new Set(
+      (args.blueprintIds || [])
+        .map((value) => String(value || '').trim())
+        .filter(Boolean),
+    )];
+    if (normalizedIds.length === 0) return new Set<string>();
+
+    let query = args.db
+      .from('ingestion_jobs')
+      .select('payload')
+      .eq('scope', 'blueprint_youtube_refresh')
+      .in('status', ['queued', 'running']);
+
+    if (typeof query.contains === 'function') {
+      query = query.contains('payload', { refresh_kind: args.kind });
+    }
+
+    const { data, error } = await query.limit(Math.max(normalizedIds.length * 2, 50));
+    if (error) throw error;
+
+    const allowedIds = new Set(normalizedIds);
+    const pendingIds = new Set<string>();
+    for (const row of data || []) {
+      const payload = extractPendingRefreshJobPayload(row?.payload);
+      if (!payload || payload.refresh_kind !== args.kind || !allowedIds.has(payload.blueprint_id)) continue;
+      pendingIds.add(payload.blueprint_id);
+    }
+    return pendingIds;
+  }
+
   async function hasPendingRefreshJob(args: {
     db: DbClient;
     blueprintId: string;
     kind: BlueprintYouTubeRefreshKind;
   }) {
-    const { data, error } = await args.db
-      .from('ingestion_jobs')
-      .select('payload')
-      .eq('scope', 'blueprint_youtube_refresh')
-      .in('status', ['queued', 'running'])
-      .limit(200);
-    if (error) throw error;
-    for (const row of data || []) {
-      const payload = row?.payload;
-      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) continue;
-      const record = payload as Record<string, unknown>;
-      if (
-        String(record.blueprint_id || '').trim() === args.blueprintId
-        && String(record.refresh_kind || '').trim() === args.kind
-      ) {
-        return true;
-      }
-    }
-    return false;
+    const pendingIds = await listPendingRefreshBlueprintIds({
+      db: args.db,
+      blueprintIds: [args.blueprintId],
+      kind: args.kind,
+    });
+    return pendingIds.has(String(args.blueprintId || '').trim());
   }
 
   async function executeRefresh(args: {
@@ -1080,6 +1145,7 @@ export function createBlueprintYouTubeCommentsService(input: {
     claimManualCommentsRefreshCooldown,
     releaseManualCommentsRefreshCooldown,
     listDueRefreshCandidates,
+    listPendingRefreshBlueprintIds,
     hasPendingRefreshJob,
     executeRefresh,
     populateForBlueprint,

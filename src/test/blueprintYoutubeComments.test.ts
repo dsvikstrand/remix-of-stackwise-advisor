@@ -144,6 +144,63 @@ describe('blueprint YouTube comments service', () => {
     expect(upsertRefreshState).not.toHaveBeenCalled();
   });
 
+  it('registerRefreshStateForBlueprint skips the upsert when a matching refresh row already exists', async () => {
+    const generationRunsQuery = {
+      select: vi.fn(),
+      eq: vi.fn(),
+      order: vi.fn(),
+      limit: vi.fn(),
+      maybeSingle: vi.fn(async () => ({ data: { video_id: 'abc123def45' }, error: null })),
+    } as any;
+    generationRunsQuery.select.mockReturnValue(generationRunsQuery);
+    generationRunsQuery.eq.mockReturnValue(generationRunsQuery);
+    generationRunsQuery.order.mockReturnValue(generationRunsQuery);
+    generationRunsQuery.limit.mockReturnValue(generationRunsQuery);
+
+    const refreshSelectQuery = {
+      select: vi.fn(),
+      eq: vi.fn(),
+      maybeSingle: vi.fn(async () => ({
+        data: {
+          blueprint_id: 'bp_1',
+          youtube_video_id: 'abc123def45',
+          source_item_id: 'src_1',
+          enabled: true,
+          comments_auto_stage: 0,
+          next_comments_refresh_at: null,
+          comments_manual_cooldown_until: null,
+          last_comments_manual_refresh_at: null,
+          last_comments_manual_triggered_by: null,
+        },
+        error: null,
+      })),
+      upsert: vi.fn(async () => ({ error: null })),
+    } as any;
+    refreshSelectQuery.select.mockReturnValue(refreshSelectQuery);
+    refreshSelectQuery.eq.mockReturnValue(refreshSelectQuery);
+
+    const db = {
+      from(table: string) {
+        if (table === 'generation_runs') return generationRunsQuery;
+        if (table === 'blueprint_youtube_refresh_state') return refreshSelectQuery;
+        throw new Error(`Unexpected table: ${table}`);
+      },
+    };
+
+    const service = createBlueprintYouTubeCommentsService({
+      apiKey: 'youtube-key',
+      fetchImpl: vi.fn() as unknown as typeof fetch,
+    });
+
+    await service.registerRefreshStateForBlueprint({
+      db,
+      blueprintId: 'bp_1',
+      explicitSourceItemId: 'src_1',
+    });
+
+    expect(refreshSelectQuery.upsert).not.toHaveBeenCalled();
+  });
+
   it('executeRefresh(view_count) marks skipped when source_item_id is missing', async () => {
     const upsertRefreshState = vi.fn(async () => ({ error: null }));
     const db = {
@@ -496,6 +553,7 @@ describe('blueprint YouTube comments service', () => {
       select: vi.fn(),
       eq: vi.fn(),
       in: vi.fn(),
+      contains: vi.fn(),
       limit: vi.fn(async () => ({
         data: [
           {
@@ -511,6 +569,7 @@ describe('blueprint YouTube comments service', () => {
     pendingQuery.select.mockReturnValue(pendingQuery);
     pendingQuery.eq.mockReturnValue(pendingQuery);
     pendingQuery.in.mockReturnValue(pendingQuery);
+    pendingQuery.contains.mockReturnValue(pendingQuery);
 
     const db = {
       from(table: string) {
@@ -537,5 +596,61 @@ describe('blueprint YouTube comments service', () => {
 
     expect(isPendingComments).toBe(true);
     expect(isPendingViewCount).toBe(false);
+  });
+
+  it('listPendingRefreshBlueprintIds batches matching blueprint ids for one refresh kind', async () => {
+    const pendingQuery = {
+      select: vi.fn(),
+      eq: vi.fn(),
+      in: vi.fn(),
+      contains: vi.fn(),
+      limit: vi.fn(async () => ({
+        data: [
+          {
+            payload: {
+              blueprint_id: 'bp_1',
+              refresh_kind: 'comments',
+            },
+          },
+          {
+            payload: {
+              blueprint_id: 'bp_3',
+              refresh_kind: 'comments',
+            },
+          },
+          {
+            payload: {
+              blueprint_id: 'bp_2',
+              refresh_kind: 'view_count',
+            },
+          },
+        ],
+        error: null,
+      })),
+    } as any;
+    pendingQuery.select.mockReturnValue(pendingQuery);
+    pendingQuery.eq.mockReturnValue(pendingQuery);
+    pendingQuery.in.mockReturnValue(pendingQuery);
+    pendingQuery.contains.mockReturnValue(pendingQuery);
+
+    const db = {
+      from(table: string) {
+        if (table === 'ingestion_jobs') return pendingQuery;
+        throw new Error(`Unexpected table: ${table}`);
+      },
+    };
+
+    const service = createBlueprintYouTubeCommentsService({
+      apiKey: 'youtube-key',
+      fetchImpl: vi.fn() as unknown as typeof fetch,
+    });
+
+    const pendingIds = await service.listPendingRefreshBlueprintIds({
+      db,
+      blueprintIds: ['bp_1', 'bp_2', 'bp_3'],
+      kind: 'comments',
+    });
+
+    expect([...pendingIds]).toEqual(['bp_1', 'bp_3']);
   });
 });

@@ -4298,14 +4298,20 @@ async function requestManualBlueprintYouTubeCommentsRefresh(input: {
     return { ok: false, code: 'BLUEPRINT_YOUTUBE_REFRESH_NOT_AVAILABLE' };
   }
 
-  await blueprintYouTubeCommentsService.registerRefreshStateForBlueprint({
+  let refreshState = await blueprintYouTubeCommentsService.getRefreshStateForBlueprint({
     db: input.db,
     blueprintId,
   });
-  const refreshState = await blueprintYouTubeCommentsService.getRefreshStateForBlueprint({
-    db: input.db,
-    blueprintId,
-  });
+  if (!refreshState || !refreshState.enabled || !refreshState.youtube_video_id) {
+    await blueprintYouTubeCommentsService.registerRefreshStateForBlueprint({
+      db: input.db,
+      blueprintId,
+    });
+    refreshState = await blueprintYouTubeCommentsService.getRefreshStateForBlueprint({
+      db: input.db,
+      blueprintId,
+    });
+  }
   if (!refreshState || !refreshState.enabled || !refreshState.youtube_video_id) {
     return { ok: false, code: 'BLUEPRINT_YOUTUBE_REFRESH_NOT_AVAILABLE' };
   }
@@ -7662,14 +7668,14 @@ async function runYouTubeRefreshSchedulerCycle() {
         kind: 'view_count',
         limit: Math.min(youtubeRefreshViewMaxPerCycle, totalBudget),
       });
+      const pendingViewBlueprintIds = await blueprintYouTubeCommentsService.listPendingRefreshBlueprintIds({
+        db,
+        blueprintIds: viewCandidates.map((candidate) => candidate.blueprint_id),
+        kind: 'view_count',
+      });
       for (const candidate of viewCandidates) {
         if (enqueuedTotal >= totalBudget) break;
-        const hasPending = await blueprintYouTubeCommentsService.hasPendingRefreshJob({
-          db,
-          blueprintId: candidate.blueprint_id,
-          kind: 'view_count',
-        });
-        if (hasPending) continue;
+        if (pendingViewBlueprintIds.has(candidate.blueprint_id)) continue;
         const enqueueResult = await enqueueBlueprintYouTubeRefreshJob({
           db,
           blueprintId: candidate.blueprint_id,
@@ -7694,14 +7700,14 @@ async function runYouTubeRefreshSchedulerCycle() {
         kind: 'comments',
         limit: commentsBudget,
       });
+      const pendingCommentBlueprintIds = await blueprintYouTubeCommentsService.listPendingRefreshBlueprintIds({
+        db,
+        blueprintIds: commentCandidates.map((candidate) => candidate.blueprint_id),
+        kind: 'comments',
+      });
       for (const candidate of commentCandidates) {
         if (enqueuedTotal >= totalBudget) break;
-        const hasPending = await blueprintYouTubeCommentsService.hasPendingRefreshJob({
-          db,
-          blueprintId: candidate.blueprint_id,
-          kind: 'comments',
-        });
-        if (hasPending) continue;
+        if (pendingCommentBlueprintIds.has(candidate.blueprint_id)) continue;
         const enqueueResult = await enqueueBlueprintYouTubeRefreshJob({
           db,
           blueprintId: candidate.blueprint_id,

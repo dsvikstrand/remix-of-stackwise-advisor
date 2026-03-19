@@ -78,6 +78,9 @@
   - Subscription sync persistence is intentionally coarse-grained:
     - unchanged success/error writes to `user_source_subscriptions` are skipped unless checkpoint/title/error state changed or the `15m` poll heartbeat expired
     - this is an egress-control measure only; frontend subscription health still evaluates on a `60m` window
+  - Blueprint YouTube refresh bookkeeping is also egress-conscious:
+    - scheduler pending checks batch by refresh kind + candidate blueprint set instead of reading queued job payloads once per candidate
+    - manual comments refresh reads existing refresh state first and only registers a row when refresh state is missing or uninitialized
   - Legacy generation compatibility endpoints (auth):
     - `GET /api/generation/tier-access`
     - `GET /api/blueprints/:id/variants`
