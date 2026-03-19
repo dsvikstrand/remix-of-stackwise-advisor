@@ -84,6 +84,10 @@ describe('queued ingestion worker controller', () => {
       queuedWorkerId: 'worker_1',
       workerLeaseMs: 90_000,
       keepAliveEnabled: true,
+      keepAliveDelayMs: 1_500,
+      keepAliveIdleBaseDelayMs: 10_000,
+      keepAliveIdleMaxDelayMs: 60_000,
+      keepAliveIdleJitterRatio: 0,
       getQueueSweepPlan: () => [{ scopes: ['all_active_subscriptions'], maxJobs: 1 }],
       claimQueuedIngestionJobs: vi.fn(async () => []),
       processClaimedIngestionJobs: vi.fn(async () => undefined),
@@ -96,10 +100,87 @@ describe('queued ingestion worker controller', () => {
     expect(vi.getTimerCount()).toBe(1);
     expect(controller.getRunning()).toBe(false);
 
-    await vi.advanceTimersByTimeAsync(1500);
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1);
 
     expect(runUnlockSweeps).toHaveBeenCalledTimes(2);
     expect(vi.getTimerCount()).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(19_999);
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(3);
+  });
+
+  it('preempts a long idle timer when new work is scheduled', async () => {
+    const runUnlockSweeps = vi.fn(async () => undefined);
+    const controller = createQueuedIngestionWorkerController({
+      getServiceSupabaseClient: () => ({ tag: 'db' }),
+      runUnlockSweeps,
+      recoverStaleIngestionJobs: vi.fn(async () => []),
+      queuedIngestionScopes: ['all_active_subscriptions'],
+      queuedWorkerId: 'worker_1',
+      workerLeaseMs: 90_000,
+      keepAliveEnabled: true,
+      keepAliveDelayMs: 1_500,
+      keepAliveIdleBaseDelayMs: 10_000,
+      keepAliveIdleMaxDelayMs: 60_000,
+      keepAliveIdleJitterRatio: 0,
+      getQueueSweepPlan: () => [{ scopes: ['all_active_subscriptions'], maxJobs: 1 }],
+      claimQueuedIngestionJobs: vi.fn(async () => []),
+      processClaimedIngestionJobs: vi.fn(async () => undefined),
+    });
+
+    controller.start(0);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(1);
+
+    controller.schedule(0);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(2);
+  });
+
+  it('resets idle backoff after claimed work is found', async () => {
+    const runUnlockSweeps = vi.fn(async () => undefined);
+    const claimQueuedIngestionJobs = vi.fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: 'job_1' }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    const controller = createQueuedIngestionWorkerController({
+      getServiceSupabaseClient: () => ({ tag: 'db' }),
+      runUnlockSweeps,
+      recoverStaleIngestionJobs: vi.fn(async () => []),
+      queuedIngestionScopes: ['all_active_subscriptions'],
+      queuedWorkerId: 'worker_1',
+      workerLeaseMs: 90_000,
+      keepAliveEnabled: true,
+      keepAliveDelayMs: 1_500,
+      keepAliveIdleBaseDelayMs: 10_000,
+      keepAliveIdleMaxDelayMs: 60_000,
+      keepAliveIdleJitterRatio: 0,
+      getQueueSweepPlan: () => [{ scopes: ['all_active_subscriptions'], maxJobs: 1 }],
+      claimQueuedIngestionJobs,
+      processClaimedIngestionJobs: vi.fn(async () => undefined),
+    });
+
+    controller.start(0);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(1);
+
+    controller.schedule(0);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(1_499);
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(3);
   });
 
   it('does not keep polling when background work is disabled in web-only mode', async () => {

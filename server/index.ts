@@ -354,6 +354,9 @@ const workerConcurrency = clampInt(process.env.WORKER_CONCURRENCY, 2, 1, 16);
 const workerBatchSize = clampInt(process.env.WORKER_BATCH_SIZE, 10, 1, 200);
 const workerLeaseMs = clampInt(process.env.WORKER_LEASE_MS, 90_000, 5_000, 15 * 60_000);
 const workerHeartbeatMs = clampInt(process.env.WORKER_HEARTBEAT_MS, 10_000, 1_000, 5 * 60_000);
+const workerKeepAliveDelayMs = clampInt(process.env.WORKER_KEEPALIVE_DELAY_MS, 1_500, 0, 60_000);
+const workerIdleBackoffBaseMs = clampInt(process.env.WORKER_IDLE_BACKOFF_BASE_MS, 15_000, 1_000, 10 * 60_000);
+const workerIdleBackoffMaxMs = clampInt(process.env.WORKER_IDLE_BACKOFF_MAX_MS, 60_000, workerIdleBackoffBaseMs, 30 * 60_000);
 const jobExecutionTimeoutMs = clampInt(process.env.JOB_EXECUTION_TIMEOUT_MS, 180_000, 5_000, 10 * 60_000);
 const youtubeRefreshEnabled = parseRuntimeFlag(process.env.YOUTUBE_REFRESH_ENABLED, true);
 const youtubeRefreshIntervalMinutes = clampInt(process.env.YOUTUBE_REFRESH_INTERVAL_MINUTES, 10, 1, 120);
@@ -7567,7 +7570,9 @@ const queuedIngestionWorkerController = createQueuedIngestionWorkerController({
   queuedWorkerId,
   workerLeaseMs,
   keepAliveEnabled: runIngestionWorker,
-  keepAliveDelayMs: 1500,
+  keepAliveDelayMs: workerKeepAliveDelayMs,
+  keepAliveIdleBaseDelayMs: workerIdleBackoffBaseMs,
+  keepAliveIdleMaxDelayMs: workerIdleBackoffMaxMs,
   getQueueSweepPlan,
   claimQueuedIngestionJobs,
   processClaimedIngestionJobs,
