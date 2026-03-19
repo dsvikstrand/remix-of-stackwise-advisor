@@ -81,6 +81,7 @@ export default function GenerationQueue() {
   } = useGenerationQueue({
     limit: 50,
     pollMs: 4_000,
+    idlePollMs: 60_000,
     enabled: true,
   });
   const {

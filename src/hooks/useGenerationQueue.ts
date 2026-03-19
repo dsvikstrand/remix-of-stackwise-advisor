@@ -34,6 +34,7 @@ type UseGenerationQueueInput = {
   scopes?: string[];
   limit?: number;
   pollMs?: number;
+  idlePollMs?: number | false;
   enabled?: boolean;
 };
 
@@ -44,6 +45,9 @@ export function useGenerationQueue(input?: UseGenerationQueueInput) {
     : [];
   const limit = Math.max(1, Math.min(50, Math.floor(Number(input?.limit || 20))));
   const pollMs = Math.max(2_000, Math.floor(Number(input?.pollMs || 10_000)));
+  const idlePollMs = input?.idlePollMs === false
+    ? false
+    : Math.max(pollMs, Math.floor(Number(input?.idlePollMs || 60_000)));
   const enabled = Boolean(input?.enabled ?? true) && Boolean(user?.id);
 
   const query = useQuery({
@@ -51,7 +55,10 @@ export function useGenerationQueue(input?: UseGenerationQueueInput) {
     enabled,
     queryFn: () => listActiveMyIngestionJobs({ scopes, limit }),
     staleTime: Math.max(1_000, Math.floor(pollMs / 2)),
-    refetchInterval: pollMs,
+    refetchInterval: (state) => {
+      const activeCount = Number(state.state.data?.summary?.active_count || 0);
+      return activeCount > 0 ? pollMs : idlePollMs;
+    },
   });
 
   const data: ActiveIngestionJobsResponse = query.data || {
@@ -76,4 +83,3 @@ export function useGenerationQueue(input?: UseGenerationQueueInput) {
     refetch: query.refetch,
   };
 }
-
