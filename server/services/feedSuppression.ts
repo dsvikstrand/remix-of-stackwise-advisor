@@ -6,6 +6,11 @@ type DbClient = {
 
 const SUPPRESSIBLE_FEED_STATES = ['my_feed_unlockable', 'my_feed_unlocking'] as const;
 const DEFAULT_SUPPRESSION_CHUNK_SIZE = 200;
+export const FEED_SUPPRESSION_DEDUPE_WINDOW_MS = Math.max(
+  30_000,
+  Math.min(10 * 60_000, Math.floor(Number(process.env.FEED_SUPPRESSION_DEDUPE_WINDOW_MS || 3 * 60_000) || 3 * 60_000)),
+);
+const recentSuppressionAttempts = new Map<string, number>();
 
 function normalizeSourceItemIds(sourceItemIds: readonly string[]) {
   return [...new Set(
@@ -24,6 +29,45 @@ function chunkSourceItemIds(sourceItemIds: readonly string[], chunkSize = DEFAUL
   return chunks;
 }
 
+function buildSuppressionKey(sourceItemId: string, decisionCode: string) {
+  return `${sourceItemId}::${decisionCode}`;
+}
+
+function pruneRecentSuppressionAttempts(nowMs: number) {
+  const cutoff = nowMs - FEED_SUPPRESSION_DEDUPE_WINDOW_MS;
+  for (const [key, seenAtMs] of recentSuppressionAttempts.entries()) {
+    if (seenAtMs <= cutoff) {
+      recentSuppressionAttempts.delete(key);
+    }
+  }
+}
+
+function filterRecentlySuppressedSourceItemIds(
+  sourceItemIds: readonly string[],
+  decisionCode: string,
+  nowMs: number,
+) {
+  pruneRecentSuppressionAttempts(nowMs);
+  return sourceItemIds.filter((sourceItemId) => {
+    const lastAttemptAtMs = recentSuppressionAttempts.get(buildSuppressionKey(sourceItemId, decisionCode)) || 0;
+    return nowMs - lastAttemptAtMs >= FEED_SUPPRESSION_DEDUPE_WINDOW_MS;
+  });
+}
+
+function markRecentSuppressionAttempts(
+  sourceItemIds: readonly string[],
+  decisionCode: string,
+  nowMs: number,
+) {
+  for (const sourceItemId of sourceItemIds) {
+    recentSuppressionAttempts.set(buildSuppressionKey(sourceItemId, decisionCode), nowMs);
+  }
+}
+
+export function resetFeedSuppressionRuntimeStateForTests() {
+  recentSuppressionAttempts.clear();
+}
+
 export async function suppressUnlockableFeedRowsForSourceItem(
   db: DbClient,
   input: {
@@ -36,18 +80,23 @@ export async function suppressUnlockableFeedRowsForSourceItem(
 ) {
   const sourceItemId = String(input.sourceItemId || '').trim();
   if (!sourceItemId) return 0;
+  const decisionCode = String(input.decisionCode || 'TRANSCRIPT_BLOCKED').slice(0, 120);
+  const nowMs = Date.now();
+  const sourceItemIds = filterRecentlySuppressedSourceItemIds([sourceItemId], decisionCode, nowMs);
+  if (sourceItemIds.length === 0) return 0;
 
   const { count, error } = await db
     .from('user_feed_items')
     .update({
       state: 'my_feed_skipped',
-      last_decision_code: String(input.decisionCode || 'TRANSCRIPT_BLOCKED').slice(0, 120),
+      last_decision_code: decisionCode,
     })
     .eq('source_item_id', sourceItemId)
     .is('blueprint_id', null)
     .in('state', [...SUPPRESSIBLE_FEED_STATES])
     .select('id', { head: true, count: 'exact' });
   if (error) throw error;
+  markRecentSuppressionAttempts(sourceItemIds, decisionCode, nowMs);
 
   const hiddenCount = Math.max(0, Number(count) || 0);
   if (hiddenCount > 0) {
@@ -78,7 +127,10 @@ export async function suppressUnlockableFeedRowsForSourceItems(
     chunkSize?: number;
   },
 ) {
-  const sourceItemIds = normalizeSourceItemIds(input.sourceItemIds || []);
+  const normalizedSourceItemIds = normalizeSourceItemIds(input.sourceItemIds || []);
+  const decisionCode = String(input.decisionCode || 'TRANSCRIPT_BLOCKED').slice(0, 120);
+  const nowMs = Date.now();
+  const sourceItemIds = filterRecentlySuppressedSourceItemIds(normalizedSourceItemIds, decisionCode, nowMs);
   if (sourceItemIds.length === 0) return 0;
 
   let hiddenCount = 0;
@@ -88,7 +140,7 @@ export async function suppressUnlockableFeedRowsForSourceItems(
       .from('user_feed_items')
       .update({
         state: 'my_feed_skipped',
-        last_decision_code: String(input.decisionCode || 'TRANSCRIPT_BLOCKED').slice(0, 120),
+        last_decision_code: decisionCode,
       })
       .in('source_item_id', chunk)
       .is('blueprint_id', null)
@@ -97,6 +149,7 @@ export async function suppressUnlockableFeedRowsForSourceItems(
     if (error) throw error;
     hiddenCount += Math.max(0, Number(count) || 0);
   }
+  markRecentSuppressionAttempts(sourceItemIds, decisionCode, nowMs);
 
   if (hiddenCount > 0) {
     logUnlockEvent(
@@ -113,4 +166,3 @@ export async function suppressUnlockableFeedRowsForSourceItems(
 
   return hiddenCount;
 }
-

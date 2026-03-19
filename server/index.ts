@@ -3392,7 +3392,9 @@ async function runUnlockSweeps(db: ReturnType<typeof createClient>, input?: {
       dryLogs: sourceUnlockSweepDryLogs,
       enabled: sourceUnlockSweepsEnabled,
     });
-    await runTranscriptFeedSuppressionSweep(db, { traceId: input?.traceId });
+    if (Boolean(input?.force) || !sweepResult.skipped) {
+      await runTranscriptFeedSuppressionSweep(db, { traceId: input?.traceId });
+    }
     return sweepResult;
   } catch (error) {
     logUnlockEvent(

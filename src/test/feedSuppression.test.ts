@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  FEED_SUPPRESSION_DEDUPE_WINDOW_MS,
+  resetFeedSuppressionRuntimeStateForTests,
   suppressUnlockableFeedRowsForSourceItem,
   suppressUnlockableFeedRowsForSourceItems,
 } from '../../server/services/feedSuppression';
@@ -29,6 +31,14 @@ function createTrackedMockDb(initialTables?: Record<string, any[]>) {
 }
 
 describe('feed suppression helpers', () => {
+  beforeEach(() => {
+    resetFeedSuppressionRuntimeStateForTests();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('counts suppressed rows without returning updated row ids', async () => {
     const { db } = createTrackedMockDb({
       user_feed_items: [
@@ -79,5 +89,39 @@ describe('feed suppression helpers', () => {
       expect.objectContaining({ id: 'ufi_4', state: 'my_feed_generated' }),
       expect.objectContaining({ id: 'ufi_5', state: 'my_feed_unlockable' }),
     ]);
+  });
+
+  it('dedupes repeated single-item suppressions within the cooldown window', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-19T12:00:00.000Z'));
+
+    const { db, getUserFeedUpdateCalls } = createTrackedMockDb({
+      user_feed_items: [
+        { id: 'ufi_1', source_item_id: 'source_1', blueprint_id: null, state: 'my_feed_unlockable', last_decision_code: null },
+      ],
+    });
+
+    const firstHiddenCount = await suppressUnlockableFeedRowsForSourceItem(db, {
+      sourceItemId: 'source_1',
+      decisionCode: 'TRANSCRIPT_UNAVAILABLE_AUTO',
+    });
+    const secondHiddenCount = await suppressUnlockableFeedRowsForSourceItem(db, {
+      sourceItemId: 'source_1',
+      decisionCode: 'TRANSCRIPT_UNAVAILABLE_AUTO',
+    });
+
+    expect(firstHiddenCount).toBe(1);
+    expect(secondHiddenCount).toBe(0);
+    expect(getUserFeedUpdateCalls()).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(FEED_SUPPRESSION_DEDUPE_WINDOW_MS);
+
+    const thirdHiddenCount = await suppressUnlockableFeedRowsForSourceItem(db, {
+      sourceItemId: 'source_1',
+      decisionCode: 'TRANSCRIPT_UNAVAILABLE_AUTO',
+    });
+
+    expect(thirdHiddenCount).toBe(0);
+    expect(getUserFeedUpdateCalls()).toBe(2);
   });
 });

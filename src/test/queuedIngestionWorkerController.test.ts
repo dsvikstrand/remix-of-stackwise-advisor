@@ -14,9 +14,10 @@ describe('queued ingestion worker controller', () => {
   it('processes claimed jobs and exposes running state', async () => {
     const db = { tag: 'db' };
     const processClaimedIngestionJobs = vi.fn(async () => undefined);
+    const runUnlockSweeps = vi.fn(async () => undefined);
     const controller = createQueuedIngestionWorkerController({
       getServiceSupabaseClient: () => db,
-      runUnlockSweeps: vi.fn(async () => undefined),
+      runUnlockSweeps,
       recoverStaleIngestionJobs: vi.fn(async () => []),
       queuedIngestionScopes: ['search_video_generate'],
       queuedWorkerId: 'worker_1',
@@ -35,6 +36,7 @@ describe('queued ingestion worker controller', () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(processClaimedIngestionJobs).toHaveBeenCalledWith(db, [{ id: 'job_1' }]);
+    expect(runUnlockSweeps).toHaveBeenCalledWith(db, { mode: 'cron' });
     expect(controller.getRunning()).toBe(false);
   });
 

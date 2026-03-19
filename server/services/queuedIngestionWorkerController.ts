@@ -88,7 +88,7 @@ export function createQueuedIngestionWorkerController<DbClient>(
     try {
       do {
         queuedWorkerRequested = false;
-        await deps.runUnlockSweeps(db, { mode: 'cron', force: true });
+        await deps.runUnlockSweeps(db, { mode: 'cron' });
         for (const scope of deps.queuedIngestionScopes) {
           const recoveredJobs = await deps.recoverStaleIngestionJobs(db, { scope });
           if (recoveredJobs.length > 0) {
