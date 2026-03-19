@@ -189,9 +189,9 @@ describe('codex generation client', () => {
       },
     });
 
-    expect(calls).toBe(2);
+    expect(calls).toBe(3);
     expect(result.summary.text).toBe('fallback summary');
-    expect(events.filter((entry) => entry === 'codex_cli:primary_success')).toHaveLength(2);
+    expect(events.filter((entry) => entry === 'codex_cli:primary_success')).toHaveLength(3);
     expect(events).toContain('openai_api:fallback_success');
   });
 });
