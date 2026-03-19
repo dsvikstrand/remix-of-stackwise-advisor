@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -21,7 +21,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
 import { resolvePrimaryChannelFromTags } from '@/lib/channelMapping';
-import { buildFeedSummary } from '@/lib/feedPreview';
 import { getMyFeedStateLabel, type MyFeedItemState } from '@/lib/myFeedState';
 import { publishCandidate, rejectCandidate, submitCandidateAndEvaluate } from '@/lib/myFeedApi';
 import { ForYouLockedSourceCard } from '@/components/wall/ForYouLockedSourceCard';
@@ -37,6 +36,7 @@ import { logMvpEvent } from '@/lib/logEvent';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { config } from '@/config/runtime';
 import type { MyFeedItemView } from '@/hooks/useMyFeed';
+import { supabase } from '@/integrations/supabase/client';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { useSourceUnlockJobTracker } from '@/hooks/useSourceUnlockJobTracker';
 import { UnlockActivityCard } from '@/components/shared/UnlockActivityCard';
@@ -108,6 +108,30 @@ export function MyFeedTimeline({
     refetchIntervalMs: false,
   });
   const isGenerationFree = Boolean(creditsQuery.data?.openai_daily_free_window_open);
+  const submissionDialogItem = useMemo(
+    () => allItems.find((item) => item.id === submissionDialogItemId) || null,
+    [allItems, submissionDialogItemId],
+  );
+  const submissionDialogSectionsQuery = useQuery({
+    queryKey: ['my-feed-blueprint-sections', submissionDialogItem?.blueprint?.id || null],
+    enabled: Boolean(submissionDialogItem?.blueprint?.id),
+    staleTime: 60_000,
+    queryFn: async () => {
+      const blueprintId = submissionDialogItem?.blueprint?.id;
+      if (!blueprintId) return null;
+      const { data, error } = await supabase
+        .from('blueprints')
+        .select('sections_json')
+        .eq('id', blueprintId)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.sections_json ?? null;
+    },
+  });
+  const submissionDialogStepCount = useMemo(
+    () => countBlueprintSectionsV1(submissionDialogSectionsQuery.data ?? null),
+    [submissionDialogSectionsQuery.data],
+  );
 
   const unlockTracker = useSourceUnlockJobTracker({
     userId: user?.id,
@@ -453,10 +477,6 @@ export function MyFeedTimeline({
   const visibleItems = chunkSize ? allItems.slice(0, visibleCount) : allItems;
   const hasMoreItems = chunkSize ? visibleCount < allItems.length : false;
 
-  const submissionDialogItem = useMemo(
-    () => allItems.find((item) => item.id === submissionDialogItemId) || null,
-    [allItems, submissionDialogItemId],
-  );
   const unsubscribeDialogItem = useMemo(
     () => allItems.find((item) => item.id === unsubscribeDialogItemId) || null,
     [allItems, unsubscribeDialogItemId],
@@ -544,13 +564,7 @@ export function MyFeedTimeline({
               : item.state === 'my_feed_skipped'
                 ? 'Saved for later'
                 : 'Imported to My Feed';
-        const preview = buildFeedSummary({
-          sectionsJson: blueprint?.sectionsJson || null,
-          primary: blueprint?.llmReview || null,
-          secondary: blueprint?.mixNotes || null,
-          fallback: source?.title || 'Open blueprint to view full details.',
-          maxChars: 220,
-        });
+        const preview = blueprint?.previewSummary || source?.title || 'Open blueprint to view full details.';
         const createdLabel = formatRelativeShort(item.createdAt);
         const cardTarget = blueprint ? `/blueprint/${blueprint.id}` : null;
         const opensSubscriptionDialog = isSubscriptionNotice;
@@ -820,7 +834,7 @@ export function MyFeedTimeline({
       </Dialog>
 
       {!autoChannelPipelineEnabled && canMutate && (
-        <Dialog open={!!submissionDialogItem} onOpenChange={(open) => {
+      <Dialog open={!!submissionDialogItem} onOpenChange={(open) => {
           if (!open) setSubmissionDialogItemId(null);
         }}>
           <DialogContent className="sm:max-w-md">
@@ -854,19 +868,18 @@ export function MyFeedTimeline({
                     onClick={() => {
                       const tags = submissionDialogItem.blueprint?.tags || [];
                       const selected = defaultChannelForItem(submissionDialogItem.id, tags);
-                      const stepCount = countBlueprintSectionsV1(submissionDialogItem.blueprint?.sectionsJson ?? null);
-                      submitMutation.mutate({
-                        itemId: submissionDialogItem.id,
-                        sourceItemId: submissionDialogItem.source?.id || null,
-                        blueprintId: submissionDialogItem.blueprint.id,
-                        title: submissionDialogItem.blueprint.title,
-                        llmReview: submissionDialogItem.blueprint.llmReview,
-                        tags,
-                        stepCount,
-                        channelSlug: selected,
-                      });
-                    }}
-                    disabled={submitMutation.isPending}
+                          submitMutation.mutate({
+                            itemId: submissionDialogItem.id,
+                            sourceItemId: submissionDialogItem.source?.id || null,
+                            blueprintId: submissionDialogItem.blueprint.id,
+                            title: submissionDialogItem.blueprint.title,
+                            llmReview: submissionDialogItem.blueprint.llmReview,
+                            tags,
+                            stepCount: submissionDialogStepCount,
+                            channelSlug: selected,
+                          });
+                        }}
+                    disabled={submitMutation.isPending || submissionDialogSectionsQuery.isFetching}
                   >
                     Submit to Channel
                   </Button>
@@ -880,7 +893,6 @@ export function MyFeedTimeline({
                         onClick={() => {
                           const tags = submissionDialogItem.blueprint?.tags || [];
                           const selected = defaultChannelForItem(submissionDialogItem.id, tags);
-                          const stepCount = countBlueprintSectionsV1(submissionDialogItem.blueprint?.sectionsJson ?? null);
                           submitMutation.mutate({
                             itemId: submissionDialogItem.id,
                             sourceItemId: submissionDialogItem.source?.id || null,
@@ -888,11 +900,11 @@ export function MyFeedTimeline({
                             title: submissionDialogItem.blueprint.title,
                             llmReview: submissionDialogItem.blueprint.llmReview,
                             tags,
-                            stepCount,
+                            stepCount: submissionDialogStepCount,
                             channelSlug: selected,
                           });
                         }}
-                        disabled={submitMutation.isPending}
+                        disabled={submitMutation.isPending || submissionDialogSectionsQuery.isFetching}
                       >
                         Re-evaluate
                       </Button>

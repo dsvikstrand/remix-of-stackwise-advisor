@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { buildFeedSummary } from '@/lib/feedPreview';
 import { normalizeTag } from '@/lib/tagging';
 import { searchSourcePages } from '@/lib/sourcePagesApi';
 
@@ -9,9 +10,7 @@ export interface BlueprintResult {
   type: 'blueprint';
   id: string;
   title: string;
-  sectionsJson: unknown;
-  llmReview: string | null;
-  mixNotes: string | null;
+  previewSummary: string;
   bannerUrl: string | null;
   sourceThumbnailUrl?: string | null;
   likesCount: number;
@@ -73,7 +72,7 @@ async function searchBlueprints(query: string, isTagSearch: boolean): Promise<Bl
 
     const { data: blueprints, error } = await supabase
       .from('blueprints')
-      .select('id, title, sections_json, llm_review, mix_notes, banner_url, likes_count, creator_user_id, created_at')
+      .select('id, title, llm_review, mix_notes, banner_url, likes_count, creator_user_id, created_at')
       .eq('is_public', true)
       .in('id', blueprintIds)
       .order('likes_count', { ascending: false })
@@ -100,9 +99,12 @@ async function searchBlueprints(query: string, isTagSearch: boolean): Promise<Bl
       type: 'blueprint' as const,
       id: b.id,
       title: b.title,
-      sectionsJson: b.sections_json,
-      llmReview: b.llm_review,
-      mixNotes: b.mix_notes,
+      previewSummary: buildFeedSummary({
+        primary: b.llm_review,
+        secondary: b.mix_notes,
+        fallback: 'Open blueprint to view full details.',
+        maxChars: 190,
+      }),
       bannerUrl: b.banner_url,
       likesCount: b.likes_count,
       creatorUserId: b.creator_user_id,
@@ -114,7 +116,7 @@ async function searchBlueprints(query: string, isTagSearch: boolean): Promise<Bl
   // Search by title
   const { data: blueprints, error } = await supabase
     .from('blueprints')
-    .select('id, title, sections_json, llm_review, mix_notes, banner_url, likes_count, creator_user_id, created_at')
+    .select('id, title, llm_review, mix_notes, banner_url, likes_count, creator_user_id, created_at')
     .eq('is_public', true)
     .ilike('title', `%${query}%`)
     .order('likes_count', { ascending: false })
@@ -142,9 +144,12 @@ async function searchBlueprints(query: string, isTagSearch: boolean): Promise<Bl
     type: 'blueprint' as const,
     id: b.id,
     title: b.title,
-    sectionsJson: b.sections_json,
-    llmReview: b.llm_review,
-    mixNotes: b.mix_notes,
+    previewSummary: buildFeedSummary({
+      primary: b.llm_review,
+      secondary: b.mix_notes,
+      fallback: 'Open blueprint to view full details.',
+      maxChars: 190,
+    }),
     bannerUrl: b.banner_url,
     likesCount: b.likes_count,
     creatorUserId: b.creator_user_id,

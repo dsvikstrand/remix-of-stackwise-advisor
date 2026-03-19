@@ -1,5 +1,5 @@
 import { CHANNELS_CATALOG } from '../../src/lib/channelsCatalog';
-import type { Json } from '../../src/integrations/supabase/types';
+import { buildFeedSummary } from '../../src/lib/feedPreview';
 
 type DbClient = {
   from: (table: string) => any;
@@ -13,10 +13,7 @@ export type WallBlueprintFeedItem = {
   id: string;
   creator_user_id: string;
   title: string;
-  sections_json: Json | null;
-  steps: Json | null;
-  llm_review: string | null;
-  mix_notes: string | null;
+  preview_summary: string;
   banner_url: string | null;
   likes_count: number;
   created_at: string;
@@ -60,10 +57,7 @@ export type WallForYouItem =
       sourceChannelAvatarUrl: string | null;
       sourceThumbnailUrl: string | null;
       sourceViewCount: number | null;
-      sectionsJson: Json | null;
-      llmReview: string | null;
-      mixNotes: string | null;
-      steps: unknown;
+      previewSummary: string;
       bannerUrl: string | null;
       tags: string[];
       publishedChannelSlug: string | null;
@@ -96,13 +90,6 @@ function chunkValues<T>(values: T[], size: number) {
     chunks.push(values.slice(index, index + normalizedSize));
   }
   return chunks;
-}
-
-function extractSchemaTagSlugs(sectionsJson: Json | null): string[] {
-  if (!sectionsJson || typeof sectionsJson !== 'object' || Array.isArray(sectionsJson)) return [];
-  const rawTags = (sectionsJson as { tags?: unknown }).tags;
-  if (!Array.isArray(rawTags)) return [];
-  return rawTags.map((tag) => String(tag || '').trim()).filter(Boolean);
 }
 
 function parseSourceViewCount(metadata: Record<string, unknown> | null) {
@@ -281,7 +268,7 @@ export async function listWallBlueprintFeed(input: {
   const limit = isJoinedScope || isSpecificChannelScope ? 140 : 90;
   let query = db
     .from('blueprints')
-    .select('id, creator_user_id, title, sections_json, steps, llm_review, mix_notes, banner_url, likes_count, created_at')
+    .select('id, creator_user_id, title, llm_review, mix_notes, banner_url, likes_count, created_at')
     .eq('is_public', true)
     .limit(limit);
 
@@ -370,6 +357,12 @@ export async function listWallBlueprintFeed(input: {
 
   const hydrated = blueprints.map((blueprint: any) => ({
     ...blueprint,
+    preview_summary: buildFeedSummary({
+      primary: blueprint.llm_review,
+      secondary: blueprint.mix_notes,
+      fallback: 'Open blueprint to view full details.',
+      maxChars: 220,
+    }),
     profile: profilesMap.get(blueprint.creator_user_id) || { display_name: null, avatar_url: null },
     tags: blueprintTags.get(blueprint.id) || [],
     user_liked: likedIds.has(blueprint.id),
@@ -424,7 +417,7 @@ export async function listWallForYouFeed(input: {
   const [{ data: sources, error: sourcesError }, { data: blueprints, error: blueprintsError }, { data: candidates, error: candidatesError }, { data: unlocks, error: unlocksError }, { data: subscriptions, error: subscriptionsError }] = await Promise.all([
     db.from('source_items').select('id, source_channel_id, source_page_id, source_url, title, source_channel_title, thumbnail_url, metadata').in('id', sourceIds),
     blueprintIds.length
-      ? db.from('blueprints').select('id, creator_user_id, title, banner_url, sections_json, llm_review, mix_notes, is_public, steps, likes_count').in('id', blueprintIds)
+      ? db.from('blueprints').select('id, creator_user_id, title, banner_url, llm_review, mix_notes, is_public, likes_count').in('id', blueprintIds)
       : Promise.resolve({ data: [], error: null }),
     db.from('channel_candidates').select('id, user_feed_item_id, channel_slug, status, created_at').in('user_feed_item_id', feedItemIds).order('created_at', { ascending: false }),
     sourceIds.length
@@ -550,16 +543,14 @@ export async function listWallForYouFeed(input: {
         sourceChannelAvatarUrl,
         sourceThumbnailUrl: source.thumbnail_url || null,
         sourceViewCount: parseSourceViewCount(sourceMetadata),
-        sectionsJson: blueprint.sections_json ?? null,
-        llmReview: blueprint.llm_review,
-        mixNotes: blueprint.mix_notes,
-        steps: blueprint.steps,
+        previewSummary: buildFeedSummary({
+          primary: blueprint.llm_review,
+          secondary: blueprint.mix_notes,
+          fallback: source.title || 'Open blueprint to view full details.',
+          maxChars: 220,
+        }),
         bannerUrl: blueprint.banner_url,
-        tags: (() => {
-          const relationalTags = tagsByBlueprint.get(blueprint.id) || [];
-          if (relationalTags.length > 0) return relationalTags;
-          return extractSchemaTagSlugs(blueprint.sections_json ?? null);
-        })(),
+        tags: tagsByBlueprint.get(blueprint.id) || [],
         publishedChannelSlug: candidateMap.get(row.id)?.status === 'published' ? candidateMap.get(row.id)?.channelSlug || null : null,
         likesCount: Number(blueprint.likes_count || 0),
         userLiked: likedIds.has(blueprint.id),

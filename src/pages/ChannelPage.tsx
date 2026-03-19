@@ -13,7 +13,6 @@ import { useTagsBySlugs } from '@/hooks/useTags';
 import { getChannelBySlug } from '@/lib/channelsCatalog';
 import { getChannelIcon } from '@/lib/channelIcons';
 import { useChannelFeed, type ChannelFeedTab } from '@/hooks/useChannelFeed';
-import { buildFeedSummary } from '@/lib/feedPreview';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { bucketJoinError, logP3Event } from '@/lib/telemetry';
@@ -281,13 +280,6 @@ export default function ChannelPage() {
               ) : (
                 <div className="divide-y divide-border/40 border-y border-border/40">
                   {posts.map((post) => {
-                    const preview = buildFeedSummary({
-                      sectionsJson: post.sectionsJson,
-                      primary: post.llmReview,
-                      secondary: post.mixNotes,
-                      fallback: 'Open blueprint to view full details.',
-                      maxChars: 220,
-                    });
                     const createdLabel = formatRelativeShort(post.createdAt);
                     return (
                       <Link
@@ -301,7 +293,7 @@ export default function ChannelPage() {
                             <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
                           </div>
                           <h3 className="text-base font-semibold leading-tight">{post.title}</h3>
-                          <p className="text-sm text-muted-foreground line-clamp-3">{preview}</p>
+                          <p className="text-sm text-muted-foreground line-clamp-3">{post.previewSummary}</p>
 
                           {post.tags.length > 0 && (
                             <OneRowTagChips

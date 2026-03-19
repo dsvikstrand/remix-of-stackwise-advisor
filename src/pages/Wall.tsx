@@ -9,8 +9,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { ArrowDown, Layers, Loader2, Tag } from 'lucide-react';
-import type { Json } from '@/integrations/supabase/types';
-import { buildFeedSummary } from '@/lib/feedPreview';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
 import { WallBlueprintCard } from '@/components/wall/WallBlueprintCard';
@@ -29,9 +27,7 @@ import {
 type WallBlueprintCardInput = {
   id: string;
   title: string;
-  sectionsJson: Json | null;
-  llmReview: string | null;
-  mixNotes: string | null;
+  previewSummary: string;
   bannerUrl: string | null;
   createdAt: string;
   sourceName: string | null;
@@ -59,18 +55,11 @@ type FeedSort = (typeof SORT_TABS)[number]['value'];
 function buildWallBlueprintCardProps(input: WallBlueprintCardInput) {
   const fallbackChannelSlug = resolveChannelLabelForBlueprint(input.tags).replace(/^b\//, '');
   const channelSlug = input.publishedChannelSlug || fallbackChannelSlug;
-  const summary = buildFeedSummary({
-    sectionsJson: input.sectionsJson,
-    primary: input.llmReview,
-    secondary: input.mixNotes,
-    fallback: 'Open blueprint to view full details.',
-    maxChars: 220,
-  });
 
   return {
     to: `/blueprint/${input.id}`,
     title: input.title,
-    summary,
+    summary: input.previewSummary,
     sourceName: input.sourceName,
     sourceAvatarUrl: input.sourceAvatarUrl,
     bannerUrl: input.bannerUrl,
@@ -442,9 +431,7 @@ export default function Wall() {
                     const cardProps = buildWallBlueprintCardProps({
                       id: item.blueprintId,
                       title: item.title,
-                      sectionsJson: item.sectionsJson,
-                      llmReview: item.llmReview,
-                      mixNotes: item.mixNotes,
+                      previewSummary: item.previewSummary,
                       bannerUrl: item.bannerUrl,
                       createdAt: item.createdAt,
                       sourceName: item.sourceChannelTitle,
@@ -520,9 +507,7 @@ export default function Wall() {
                     const cardProps = buildWallBlueprintCardProps({
                       id: post.id,
                       title: post.title,
-                      sectionsJson: post.sections_json,
-                      llmReview: post.llm_review,
-                      mixNotes: post.mix_notes,
+                      previewSummary: post.preview_summary,
                       bannerUrl: post.banner_url,
                       createdAt: post.created_at,
                       sourceName: post.source_channel_title || null,

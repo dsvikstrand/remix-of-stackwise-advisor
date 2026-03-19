@@ -1,7 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
 import { config } from '@/config/runtime';
-import type { Json } from '@/integrations/supabase/types';
-
 type ApiEnvelope<T> = {
   ok: boolean;
   error_code: string | null;
@@ -24,10 +22,7 @@ export type WallFeedItem = {
   id: string;
   creator_user_id: string;
   title: string;
-  sections_json: Json | null;
-  steps: Json | null;
-  llm_review: string | null;
-  mix_notes: string | null;
+  preview_summary: string;
   banner_url: string | null;
   likes_count: number;
   created_at: string;
@@ -71,10 +66,7 @@ export type WallForYouItem =
       sourceChannelAvatarUrl: string | null;
       sourceThumbnailUrl: string | null;
       sourceViewCount: number | null;
-      sectionsJson: Json | null;
-      llmReview: string | null;
-      mixNotes: string | null;
-      steps: unknown;
+      previewSummary: string;
       bannerUrl: string | null;
       tags: string[];
       publishedChannelSlug: string | null;

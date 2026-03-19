@@ -5,7 +5,6 @@ import { Heart } from 'lucide-react';
 import type { BlueprintListItem } from '@/hooks/useBlueprintSearch';
 import { cn } from '@/lib/utils';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
-import { buildFeedSummary } from '@/lib/feedPreview';
 import { getCatalogChannelTagSlugs } from '@/lib/channelPostContext';
 import { normalizeTag } from '@/lib/tagging';
 import { resolveEffectiveBanner } from '@/lib/bannerResolver';
@@ -38,13 +37,6 @@ export function BlueprintCard({
     () => blueprint.tags.filter((tag) => !curatedChannelTagSlugs.has(normalizeTag(tag.slug))),
     [blueprint.tags, curatedChannelTagSlugs],
   );
-  const summary = buildFeedSummary({
-    sectionsJson: blueprint.sections_json,
-    primary: blueprint.mix_notes,
-    secondary: blueprint.inventory_title ? `From ${blueprint.inventory_title}` : null,
-    fallback: blueprint.inventory_title ? `From ${blueprint.inventory_title}` : 'Community blueprint',
-    maxChars: 170,
-  });
   const hotness = getHotnessView({
     likes: Number(blueprint.likes_count || 0),
     comments: Number(commentCount || 0),
@@ -85,7 +77,7 @@ export function BlueprintCard({
             </div>
 
             <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
-              {summary}
+              {blueprint.preview_summary}
             </p>
 
             <div className="flex items-center justify-between gap-2">

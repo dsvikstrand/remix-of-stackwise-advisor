@@ -1,16 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import type { Json } from '@/integrations/supabase/types';
+import { buildFeedSummary } from '@/lib/feedPreview';
 
 export type ChannelFeedTab = 'top' | 'recent';
 
 export interface ChannelFeedPost {
   id: string;
   title: string;
-  sectionsJson: Json | null;
-  llmReview: string | null;
-  mixNotes: string | null;
+  previewSummary: string;
   likesCount: number;
   createdAt: string;
   tags: string[];
@@ -35,7 +33,7 @@ export function useChannelFeed({ channelSlug, tab, pageSize = 20 }: UseChannelFe
     queryFn: async (): Promise<ChannelFeedPost[]> => {
       const { data: blueprints, error } = await supabase
         .from('blueprints')
-        .select('id, title, sections_json, llm_review, mix_notes, likes_count, created_at')
+        .select('id, title, llm_review, mix_notes, likes_count, created_at')
         .eq('is_public', true)
         .order('created_at', { ascending: false })
         .limit(400);
@@ -104,9 +102,12 @@ export function useChannelFeed({ channelSlug, tab, pageSize = 20 }: UseChannelFe
         return {
           id: row.id,
           title: row.title,
-          sectionsJson: row.sections_json,
-          llmReview: row.llm_review,
-          mixNotes: row.mix_notes,
+          previewSummary: buildFeedSummary({
+            primary: row.llm_review,
+            secondary: row.mix_notes,
+            fallback: 'Open blueprint to view full details.',
+            maxChars: 220,
+          }),
           likesCount: row.likes_count,
           createdAt: row.created_at,
           tags,

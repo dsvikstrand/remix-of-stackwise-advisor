@@ -2,17 +2,8 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import type { Json } from '@/integrations/supabase/types';
+import { buildFeedSummary } from '@/lib/feedPreview';
 import { buildSourcePagePath } from '@/lib/sourcePagesApi';
-
-function extractSchemaTagSlugs(sectionsJson: Json | null): string[] {
-  if (!sectionsJson || typeof sectionsJson !== 'object' || Array.isArray(sectionsJson)) return [];
-  const rawTags = (sectionsJson as { tags?: unknown }).tags;
-  if (!Array.isArray(rawTags)) return [];
-  return rawTags
-    .map((tag) => String(tag || '').trim())
-    .filter(Boolean);
-}
 
 function parseSourceViewCount(metadata: Record<string, unknown> | null) {
   if (!metadata) return null;
@@ -53,9 +44,8 @@ export interface MyFeedItemView {
     creatorUserId: string | null;
     title: string;
     bannerUrl: string | null;
-    sectionsJson: Json | null;
+    previewSummary: string;
     llmReview: string | null;
-    mixNotes: string | null;
     isPublic: boolean;
     tags: string[];
   } | null;
@@ -108,7 +98,7 @@ export function useMyFeed(options?: { enabled?: boolean }) {
         blueprintIds.length
           ? supabase
             .from('blueprints')
-            .select('id, creator_user_id, title, banner_url, sections_json, llm_review, mix_notes, is_public')
+            .select('id, creator_user_id, title, banner_url, llm_review, mix_notes, is_public')
             .in('id', blueprintIds)
           : Promise.resolve({ data: [], error: null }),
         supabase
@@ -288,17 +278,17 @@ export function useMyFeed(options?: { enabled?: boolean }) {
               id: blueprint.id,
               creatorUserId: blueprint.creator_user_id || null,
               title: blueprint.title,
-                bannerUrl: blueprint.banner_url,
-                sectionsJson: blueprint.sections_json ?? null,
-                llmReview: blueprint.llm_review,
-                mixNotes: blueprint.mix_notes,
-                isPublic: blueprint.is_public,
-                tags: (() => {
-                  const relationalTags = tagsByBlueprint.get(blueprint.id) || [];
-                  if (relationalTags.length > 0) return relationalTags;
-                  return extractSchemaTagSlugs(blueprint.sections_json ?? null);
-                })(),
-              }
+              bannerUrl: blueprint.banner_url,
+              previewSummary: buildFeedSummary({
+                primary: blueprint.llm_review,
+                secondary: blueprint.mix_notes,
+                fallback: source?.title || 'Open blueprint to view full details.',
+                maxChars: 220,
+              }),
+              llmReview: blueprint.llm_review,
+              isPublic: blueprint.is_public,
+              tags: tagsByBlueprint.get(blueprint.id) || [],
+            }
             : null,
           candidate: candidateMap.get(row.id) || null,
         } as MyFeedItemView;

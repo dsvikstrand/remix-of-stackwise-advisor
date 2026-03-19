@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { UserMiniCard } from './UserMiniCard';
 import type { BlueprintResult, UserResult, SourceResult, ExploreResult } from '@/hooks/useExploreSearch';
-import { buildFeedSummary } from '@/lib/feedPreview';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
@@ -21,13 +20,6 @@ function BlueprintCard({
 }: {
   result: BlueprintResult;
 }) {
-  const summary = buildFeedSummary({
-    sectionsJson: result.sectionsJson,
-    primary: result.llmReview,
-    secondary: result.mixNotes,
-    fallback: 'Open blueprint to view full details.',
-    maxChars: 190,
-  });
   const channelLabel = resolveChannelLabelForBlueprint(result.tags);
   const channelTagSlugs = new Set(getCatalogChannelTagSlugs().map(normalizeTag));
   const displayTags = result.tags.filter((tag) => !channelTagSlugs.has(normalizeTag(tag)));
@@ -60,7 +52,7 @@ function BlueprintCard({
             </div>
             <h3 className="font-semibold text-base leading-tight line-clamp-2 mb-1">{result.title}</h3>
             <p className="text-xs text-muted-foreground line-clamp-3 mb-2">
-              {summary}
+              {result.previewSummary}
             </p>
             {displayTags.length > 0 && (
               <OneRowTagChips
