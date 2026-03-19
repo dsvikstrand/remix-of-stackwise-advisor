@@ -72,7 +72,7 @@ async function searchBlueprints(query: string, isTagSearch: boolean): Promise<Bl
 
     const { data: blueprints, error } = await supabase
       .from('blueprints')
-      .select('id, title, llm_review, mix_notes, banner_url, likes_count, creator_user_id, created_at')
+      .select('id, title, preview_summary, banner_url, likes_count, creator_user_id, created_at')
       .eq('is_public', true)
       .in('id', blueprintIds)
       .order('likes_count', { ascending: false })
@@ -100,8 +100,7 @@ async function searchBlueprints(query: string, isTagSearch: boolean): Promise<Bl
       id: b.id,
       title: b.title,
       previewSummary: buildFeedSummary({
-        primary: b.llm_review,
-        secondary: b.mix_notes,
+        primary: b.preview_summary,
         fallback: 'Open blueprint to view full details.',
         maxChars: 190,
       }),
@@ -116,7 +115,7 @@ async function searchBlueprints(query: string, isTagSearch: boolean): Promise<Bl
   // Search by title
   const { data: blueprints, error } = await supabase
     .from('blueprints')
-    .select('id, title, llm_review, mix_notes, banner_url, likes_count, creator_user_id, created_at')
+    .select('id, title, preview_summary, banner_url, likes_count, creator_user_id, created_at')
     .eq('is_public', true)
     .ilike('title', `%${query}%`)
     .order('likes_count', { ascending: false })
@@ -145,8 +144,7 @@ async function searchBlueprints(query: string, isTagSearch: boolean): Promise<Bl
     id: b.id,
     title: b.title,
     previewSummary: buildFeedSummary({
-      primary: b.llm_review,
-      secondary: b.mix_notes,
+      primary: b.preview_summary,
       fallback: 'Open blueprint to view full details.',
       maxChars: 190,
     }),

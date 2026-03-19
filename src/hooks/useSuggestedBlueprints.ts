@@ -1,9 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import type { BlueprintListItem, BlueprintRow } from './useBlueprintSearch';
+import { BLUEPRINT_FIELDS, hydrateBlueprints, type BlueprintListItem, type BlueprintRow } from './useBlueprintSearch';
 
-const BLUEPRINT_FIELDS = 'id, inventory_id, creator_user_id, title, sections_json, mix_notes, banner_url, llm_review, is_public, likes_count, created_at, updated_at';
 
 export function useSuggestedBlueprints(limit = 6) {
   const { user } = useAuth();
@@ -80,47 +79,7 @@ export function useSuggestedBlueprints(limit = 6) {
 
       if (blueprints.length === 0) return [];
 
-      // Reuse hydration from useBlueprintSearch by calling it indirectly is not possible here,
-      // so duplicate the hydration logic inline.
-      const blueprintIds = blueprints.map((bp) => bp.id);
-      const inventoryIds = blueprints.map((bp) => bp.inventory_id).filter(Boolean) as string[];
-
-      const [tagsRes, likesRes, inventoriesRes] = await Promise.all([
-        supabase.from('blueprint_tags').select('blueprint_id, tag_id').in('blueprint_id', blueprintIds),
-        user?.id
-          ? supabase.from('blueprint_likes').select('blueprint_id').eq('user_id', user.id).in('blueprint_id', blueprintIds)
-          : Promise.resolve({ data: [] as { blueprint_id: string }[] }),
-        inventoryIds.length > 0
-          ? supabase.from('inventories').select('id, title').in('id', inventoryIds)
-          : Promise.resolve({ data: [] as { id: string; title: string }[] }),
-      ]);
-
-      const tagRows = tagsRes.data || [];
-      const tagIds = [...new Set(tagRows.map((row) => row.tag_id))];
-      const { data: tagsData } = tagIds.length > 0
-        ? await supabase.from('tags').select('id, slug').in('id', tagIds)
-        : { data: [] as { id: string; slug: string }[] };
-
-      const tagsMap = new Map((tagsData || []).map((tag) => [tag.id, tag]));
-      const blueprintTags = new Map<string, { id: string; slug: string }[]>();
-
-      tagRows.forEach((row) => {
-        const tag = tagsMap.get(row.tag_id);
-        if (!tag) return;
-        const list = blueprintTags.get(row.blueprint_id) || [];
-        list.push(tag);
-        blueprintTags.set(row.blueprint_id, list);
-      });
-
-      const likedIds = new Set((likesRes.data || []).map((row) => row.blueprint_id));
-      const inventoryMap = new Map((inventoriesRes.data || []).map((inv) => [inv.id, inv.title]));
-
-      return blueprints.map((bp) => ({
-        ...bp,
-        tags: blueprintTags.get(bp.id) || [],
-        user_liked: likedIds.has(bp.id),
-        inventory_title: bp.inventory_id ? inventoryMap.get(bp.inventory_id) || null : null,
-      }));
+      return hydrateBlueprints(blueprints, user?.id);
     },
     staleTime: 2 * 60 * 1000,
   });

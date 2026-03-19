@@ -9,9 +9,8 @@ export interface BlueprintRow {
   inventory_id: string | null;
   creator_user_id: string;
   title: string;
-  mix_notes: string | null;
   banner_url: string | null;
-  llm_review: string | null;
+  preview_summary: string | null;
   is_public: boolean;
   likes_count: number;
   created_at: string;
@@ -27,12 +26,11 @@ export interface BlueprintListItem extends BlueprintRow {
   tags: BlueprintTag[];
   user_liked: boolean;
   inventory_title: string | null;
-  preview_summary: string;
 }
 
 export type BlueprintSort = 'popular' | 'latest';
 
-const BLUEPRINT_FIELDS = 'id, inventory_id, creator_user_id, title, mix_notes, banner_url, llm_review, is_public, likes_count, created_at, updated_at';
+export const BLUEPRINT_FIELDS = 'id, inventory_id, creator_user_id, title, banner_url, preview_summary, is_public, likes_count, created_at, updated_at';
 
 function applyVisibilityFilter(query: any, userId?: string | null) {
   if (userId) {
@@ -41,7 +39,7 @@ function applyVisibilityFilter(query: any, userId?: string | null) {
   return query.eq('is_public', true);
 }
 
-async function hydrateBlueprints(rows: BlueprintRow[], userId?: string | null) {
+export async function hydrateBlueprints(rows: BlueprintRow[], userId?: string | null) {
   if (rows.length === 0) return [] as BlueprintListItem[];
 
   const blueprintIds = rows.map((row) => row.id);
@@ -77,7 +75,7 @@ async function hydrateBlueprints(rows: BlueprintRow[], userId?: string | null) {
   const likedIds = new Set((likesRes.data || []).map((row) => row.blueprint_id));
   const inventoryMap = new Map((inventoriesRes.data || []).map((inv) => [inv.id, inv.title]));
 
-  return rows.map((row) => ({
+  return rows.map((row) => {
     const inventoryTitle = row.inventory_id ? inventoryMap.get(row.inventory_id) || null : null;
     return {
       ...row,
@@ -85,8 +83,8 @@ async function hydrateBlueprints(rows: BlueprintRow[], userId?: string | null) {
       user_liked: likedIds.has(row.id),
       inventory_title: inventoryTitle,
       preview_summary: buildFeedSummary({
-        primary: row.llm_review,
-        secondary: row.mix_notes || (inventoryTitle ? `From ${inventoryTitle}` : null),
+        primary: row.preview_summary,
+        secondary: inventoryTitle ? `From ${inventoryTitle}` : null,
         fallback: inventoryTitle ? `From ${inventoryTitle}` : 'Community blueprint',
         maxChars: 170,
       }),

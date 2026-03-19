@@ -107,6 +107,7 @@ a81) [have] PWA mode uses the same frontend, backend, and Supabase auth/session 
 a82) [have] Current PWA behavior is intentionally conservative: installability, standalone launch, offline fallback, update prompting, and mobile install CTA surfaces are in scope, while authenticated feed/subscription/generation data remains network-only.
 a83) [have] Installed-PWA web push is now implemented behind rollout flags and remains opt-in only from notification surfaces; the first eligible push types are `comment_reply`, `generation_succeeded`, and `generation_failed`.
 a84) [have] Installed-PWA push remains outside the normal live contract until backend runtime validation and device delivery proof are complete; Oracle control-plane recovery/inspection now uses the standardized OCI CLI workflow instead of repo-local note files.
+a85) [have] Wall/Explore/Channel/Search/My Feed cards now prefer stored `blueprints.preview_summary` teaser text, preserving summary-like previews without loading canonical `sections_json` on list surfaces.
 
 ## Core Model
 b1) `Source Item`
@@ -253,6 +254,7 @@ s2) Out of scope
 
 ## Data Surfaces (Current + Direction)
 d1) [have] `blueprints`, `blueprint_tags`, `blueprint_likes`, `blueprint_comments`.
+d1a) [have] `blueprints.preview_summary` is the cheap teaser field for card/list surfaces; canonical long-form blueprint content still lives in `blueprints.sections_json`.
 d2) [have] `tag_follows`, `tags`, `profiles`, `mvp_events`.
 d3) [have] Source ingestion + feed tables (`source_items`, `user_source_subscriptions`, `user_feed_items`).
 d4) [have] Channel candidate + decision logs (`channel_candidates`, `channel_gate_decisions`).

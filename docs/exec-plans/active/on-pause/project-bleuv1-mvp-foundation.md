@@ -66,6 +66,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Core high-traffic copy is harmonized to current source-first behavior (`Home`, `Create`, auto-channel publish) and legacy manual-post phrasing is removed.
 - Landing cold-user pass adds value-first hero positioning, proof/use-case blocks, and curated fallback content so front-door sections never render empty.
 - Frontend bootstrap now guards missing Supabase env with explicit configuration UX instead of a blank page.
+- Card/list teaser copy now belongs on stored `blueprints.preview_summary`; Wall/Explore/Channel/Search/My Feed should treat canonical `sections_json` as detail-view content, not list-view payload.
 
 ### W2 - Channel Candidate Gating
 - Run deterministic auto-channel checks for all source paths.

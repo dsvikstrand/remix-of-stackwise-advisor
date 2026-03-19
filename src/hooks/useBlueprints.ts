@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { buildStoredPreviewSummary } from '@/lib/feedPreview';
 import { normalizeTags } from '@/lib/tagging';
 import type { Json } from '@/integrations/supabase/types';
 
@@ -16,6 +17,7 @@ export interface BlueprintRow {
   review_prompt: string | null;
   banner_url: string | null;
   llm_review: string | null;
+  preview_summary?: string | null;
   is_public: boolean;
   likes_count: number;
   source_blueprint_id: string | null;
@@ -66,8 +68,8 @@ interface UpdateBlueprintInput {
   isPublic: boolean;
 }
 
-const BLUEPRINT_FIELDS = 'id, inventory_id, creator_user_id, title, selected_items, steps, mix_notes, review_prompt, banner_url, llm_review, is_public, likes_count, source_blueprint_id, created_at, updated_at';
-const BLUEPRINT_DETAIL_FIELDS = 'id, inventory_id, creator_user_id, title, sections_json, mix_notes, review_prompt, banner_url, llm_review, is_public, likes_count, source_blueprint_id, created_at, updated_at';
+const BLUEPRINT_FIELDS = 'id, inventory_id, creator_user_id, title, selected_items, steps, mix_notes, review_prompt, banner_url, llm_review, preview_summary, is_public, likes_count, source_blueprint_id, created_at, updated_at';
+const BLUEPRINT_DETAIL_FIELDS = 'id, inventory_id, creator_user_id, title, sections_json, mix_notes, review_prompt, banner_url, llm_review, preview_summary, is_public, likes_count, source_blueprint_id, created_at, updated_at';
 
 function isMissingColumnError(error: unknown, column: string) {
   const e = error as any;
@@ -165,6 +167,12 @@ export function useCreateBlueprint() {
         review_prompt: input.reviewPrompt,
         banner_url: input.bannerUrl,
         llm_review: input.llmReview,
+        preview_summary: buildStoredPreviewSummary({
+          primary: input.llmReview,
+          secondary: input.mixNotes,
+          fallback: input.title,
+          maxChars: 220,
+        }),
         is_public: input.isPublic,
         source_blueprint_id: input.sourceBlueprintId || null,
       };
@@ -250,6 +258,12 @@ export function useUpdateBlueprint() {
         review_prompt: input.reviewPrompt,
         banner_url: input.bannerUrl,
         llm_review: input.llmReview,
+        preview_summary: buildStoredPreviewSummary({
+          primary: input.llmReview,
+          secondary: input.mixNotes,
+          fallback: input.title,
+          maxChars: 220,
+        }),
         is_public: input.isPublic,
       };
 

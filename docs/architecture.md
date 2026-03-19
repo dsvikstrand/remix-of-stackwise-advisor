@@ -59,6 +59,7 @@
   - Auth-only lookup UI in `src/pages/Search.tsx` for finding one specific YouTube video, then generating only when the app finds a confident match.
   - Live feed/community surfaces in `src/pages/MyFeed.tsx`, `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
     - `Wall` now loads backend-hydrated feed responses for both public lanes and `For You` instead of reconstructing feed rows through browser-side Supabase fan-out.
+    - card teaser copy now prefers stored `blueprints.preview_summary`, so list surfaces keep summary-like snippets without reloading canonical `sections_json`.
     - `Wall` feed contract is:
       - `For You`: the only lane that may contain locked items; built from subscribed-source content plus personally unlocked blueprints.
       - `Joined`: generated/published blueprints filtered by joined Bleu channels.
@@ -181,6 +182,7 @@
   - Gate runtime mode switch: `CHANNEL_GATES_MODE = bypass | shadow | enforce` (default `bypass`).
 - Data:
   - Supabase is system of record for blueprints, tags, follows, likes/comments, telemetry.
+  - `blueprints.preview_summary` is the cheap list/card teaser field; canonical blueprint body remains `blueprints.sections_json`.
   - Linked Supabase project for this repo is `qgqqavaogicecvhopgan`; shared auto-unlock schema migration watermark is `20260306113000`.
   - `bleuV1` extension: source-item canonical tables + user feed item tables + subscription/ingestion job tables + auto-banner policy/queue tables + daily-credit/unlock tables.
   - source-identity foundation: `source_pages` table and FK links from `user_source_subscriptions` + `source_items` via `source_page_id`.

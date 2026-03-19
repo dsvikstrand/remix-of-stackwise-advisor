@@ -268,7 +268,7 @@ export async function listWallBlueprintFeed(input: {
   const limit = isJoinedScope || isSpecificChannelScope ? 140 : 90;
   let query = db
     .from('blueprints')
-    .select('id, creator_user_id, title, llm_review, mix_notes, banner_url, likes_count, created_at')
+    .select('id, creator_user_id, title, preview_summary, banner_url, likes_count, created_at')
     .eq('is_public', true)
     .limit(limit);
 
@@ -358,8 +358,7 @@ export async function listWallBlueprintFeed(input: {
   const hydrated = blueprints.map((blueprint: any) => ({
     ...blueprint,
     preview_summary: buildFeedSummary({
-      primary: blueprint.llm_review,
-      secondary: blueprint.mix_notes,
+      primary: blueprint.preview_summary,
       fallback: 'Open blueprint to view full details.',
       maxChars: 220,
     }),
@@ -417,7 +416,7 @@ export async function listWallForYouFeed(input: {
   const [{ data: sources, error: sourcesError }, { data: blueprints, error: blueprintsError }, { data: candidates, error: candidatesError }, { data: unlocks, error: unlocksError }, { data: subscriptions, error: subscriptionsError }] = await Promise.all([
     db.from('source_items').select('id, source_channel_id, source_page_id, source_url, title, source_channel_title, thumbnail_url, metadata').in('id', sourceIds),
     blueprintIds.length
-      ? db.from('blueprints').select('id, creator_user_id, title, banner_url, llm_review, mix_notes, is_public, likes_count').in('id', blueprintIds)
+      ? db.from('blueprints').select('id, creator_user_id, title, banner_url, preview_summary, is_public, likes_count').in('id', blueprintIds)
       : Promise.resolve({ data: [], error: null }),
     db.from('channel_candidates').select('id, user_feed_item_id, channel_slug, status, created_at').in('user_feed_item_id', feedItemIds).order('created_at', { ascending: false }),
     sourceIds.length
@@ -544,8 +543,7 @@ export async function listWallForYouFeed(input: {
         sourceThumbnailUrl: source.thumbnail_url || null,
         sourceViewCount: parseSourceViewCount(sourceMetadata),
         previewSummary: buildFeedSummary({
-          primary: blueprint.llm_review,
-          secondary: blueprint.mix_notes,
+          primary: blueprint.preview_summary,
           fallback: source.title || 'Open blueprint to view full details.',
           maxChars: 220,
         }),

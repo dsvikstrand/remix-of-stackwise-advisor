@@ -133,6 +133,7 @@ describe('blueprint creation canonical payload', () => {
       practical_rules: { bullets: ['A practical rule.'] },
       open_questions: { bullets: ['An open question.'] },
     });
+    expect(insertedPayload?.preview_summary).toBe('A short summary for testing.');
     expect(enqueueBlueprintYouTubeEnrichment).toHaveBeenCalledWith({
       blueprintId: 'bp_123',
       db,

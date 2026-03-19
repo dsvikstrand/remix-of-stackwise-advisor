@@ -298,6 +298,7 @@ export type Database = {
           likes_count: number
           llm_review: string | null
           mix_notes: string | null
+          preview_summary: string | null
           review_prompt: string | null
           sections_json: Json | null
           selected_items: Json
@@ -316,6 +317,7 @@ export type Database = {
           likes_count?: number
           llm_review?: string | null
           mix_notes?: string | null
+          preview_summary?: string | null
           review_prompt?: string | null
           sections_json?: Json | null
           selected_items?: Json
@@ -334,6 +336,7 @@ export type Database = {
           likes_count?: number
           llm_review?: string | null
           mix_notes?: string | null
+          preview_summary?: string | null
           review_prompt?: string | null
           sections_json?: Json | null
           selected_items?: Json

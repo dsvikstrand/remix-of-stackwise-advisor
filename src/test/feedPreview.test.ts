@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildFeedSummary } from '@/lib/feedPreview';
+import { buildFeedSummary, buildStoredPreviewSummary } from '@/lib/feedPreview';
 
 describe('feedPreview', () => {
   it('prefers sections_json summary text over legacy preview sources', () => {
@@ -78,5 +78,25 @@ describe('feedPreview', () => {
     });
 
     expect(summary).toBe('Open blueprint to view full details.');
+  });
+
+  it('builds a stored preview summary without using the hard card fallback copy', () => {
+    const summary = buildStoredPreviewSummary({
+      sectionsJson: {
+        schema_version: 'blueprint_sections_v1',
+        tags: [],
+        summary: { text: '' },
+        takeaways: { bullets: [] },
+        storyline: { text: '' },
+        deep_dive: { bullets: [] },
+        practical_rules: { bullets: [] },
+        open_questions: { bullets: [] },
+      },
+      primary: '',
+      secondary: '',
+      fallback: 'Blueprint title fallback',
+    });
+
+    expect(summary).toBe('Blueprint title fallback');
   });
 });

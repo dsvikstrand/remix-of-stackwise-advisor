@@ -96,6 +96,7 @@ Status: `canonical`
 62. Temporary local/dev transcript fallbacks are allowed only behind the existing transcript-provider seam; they must be explicitly marked non-production and must not silently redefine Oracle/live runtime truth.
 63. Search-page video entry should behave as direct lookup, not open-ended discovery: URL and video-id input are preferred, title lookup is bounded to a single confident match through helper providers, and broad paginated keyword search is not the primary app behavior.
 64. Creator lookup should also behave as bounded find-this-one flow: channel URL, handle, and channel id are preferred inputs; creator-name lookup is helper-backed, returns only a tiny candidate set, and must not depend on official `search.list`.
+65. Public/list blueprint cards must use stored `blueprints.preview_summary` teaser text; list/feed/search surfaces should not reload canonical `sections_json` just to recover the first summary lines.
 
 ## Core user journey
 1. Subscribe to a YouTube channel or look up one specific video by link, video id, or title.

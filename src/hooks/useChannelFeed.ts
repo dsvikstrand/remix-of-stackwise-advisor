@@ -33,7 +33,7 @@ export function useChannelFeed({ channelSlug, tab, pageSize = 20 }: UseChannelFe
     queryFn: async (): Promise<ChannelFeedPost[]> => {
       const { data: blueprints, error } = await supabase
         .from('blueprints')
-        .select('id, title, llm_review, mix_notes, likes_count, created_at')
+        .select('id, title, preview_summary, likes_count, created_at')
         .eq('is_public', true)
         .order('created_at', { ascending: false })
         .limit(400);
@@ -103,8 +103,7 @@ export function useChannelFeed({ channelSlug, tab, pageSize = 20 }: UseChannelFe
           id: row.id,
           title: row.title,
           previewSummary: buildFeedSummary({
-            primary: row.llm_review,
-            secondary: row.mix_notes,
+            primary: row.preview_summary,
             fallback: 'Open blueprint to view full details.',
             maxChars: 220,
           }),

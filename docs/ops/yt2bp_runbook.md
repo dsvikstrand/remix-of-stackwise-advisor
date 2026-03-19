@@ -50,6 +50,7 @@
   - channel visibility is handled by auto-channel pipeline when enabled.
   - `/youtube` runs core generation first and executes optional AI review asynchronously after core success.
   - `Save to My Feed` is non-blocking while optional review completes and attaches later.
+  - save-time blueprint persistence also writes `blueprints.preview_summary` as the cheap teaser field for Wall/Explore/Channel/Search/My Feed cards.
   - YouTube-source banners are thumbnail-first (`source_items.thumbnail_url` or deterministic `ytimg` fallback).
   - banner prompts are visual-only by policy (no readable text/typography/logos/watermarks).
 - Gate runtime mode:

@@ -4,6 +4,8 @@ import { BlueprintVariantInProgressError } from './blueprintVariants';
 import type { BlueprintSectionsV1 } from './blueprintSections';
 type DbClient = any;
 
+import { buildStoredPreviewSummary } from '../../src/lib/feedPreview';
+
 function isMissingColumnError(error: unknown, column: string) {
   const e = error as { message?: unknown; details?: unknown; hint?: unknown } | null;
   const hay = `${String(e?.message || '')} ${String(e?.details || '')} ${String(e?.hint || '')}`.toLowerCase();
@@ -285,6 +287,13 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
         banner_url: sourceThumbnailUrl,
         mix_notes: result.draft.notes || null,
         llm_review: result.review.summary || null,
+        preview_summary: buildStoredPreviewSummary({
+          sectionsJson,
+          primary: result.review.summary || null,
+          secondary: result.draft.notes || null,
+          fallback: result.draft.title,
+          maxChars: 220,
+        }),
       };
 
       let blueprintInsert = await insertBlueprint({

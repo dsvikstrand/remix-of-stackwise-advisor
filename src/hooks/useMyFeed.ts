@@ -98,7 +98,7 @@ export function useMyFeed(options?: { enabled?: boolean }) {
         blueprintIds.length
           ? supabase
             .from('blueprints')
-            .select('id, creator_user_id, title, banner_url, llm_review, mix_notes, is_public')
+            .select('id, creator_user_id, title, banner_url, llm_review, preview_summary, is_public')
             .in('id', blueprintIds)
           : Promise.resolve({ data: [], error: null }),
         supabase
@@ -280,8 +280,8 @@ export function useMyFeed(options?: { enabled?: boolean }) {
               title: blueprint.title,
               bannerUrl: blueprint.banner_url,
               previewSummary: buildFeedSummary({
-                primary: blueprint.llm_review,
-                secondary: blueprint.mix_notes,
+                primary: blueprint.preview_summary,
+                secondary: blueprint.llm_review,
                 fallback: source?.title || 'Open blueprint to view full details.',
                 maxChars: 220,
               }),
