@@ -6646,8 +6646,9 @@ async function processSourceAutoUnlockRetryJob(input: {
     throw new Error('INVALID_AUTO_UNLOCK_RETRY_PAYLOAD');
   }
 
-  const activeSubscriberCount = await countActiveSubscribersForSourcePage(db, input.payload.source_page_id || null);
-  const estimatedUnlockCost = computeUnlockCost(activeSubscriberCount);
+  // Current runtime keeps a flat unlock cost, so subscriber counting is
+  // unnecessary in the hot auto-unlock retry path.
+  const estimatedUnlockCost = computeUnlockCost(1);
   const unlock = await ensureSourceItemUnlock(db, {
     sourceItemId,
     sourcePageId: input.payload.source_page_id || null,
@@ -7744,7 +7745,6 @@ const sourceSubscriptionSyncService = createSourceSubscriptionSyncService({
   upsertSourceItemFromVideo,
   getExistingFeedItem,
   ensureSourceItemUnlock,
-  countActiveSubscribersForSourcePage,
   computeUnlockCost,
   attemptAutoUnlockForSourceItem,
   getServiceSupabaseClient,

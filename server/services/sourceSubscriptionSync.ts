@@ -125,7 +125,6 @@ export type SourceSubscriptionSyncDeps = {
       estimatedCost: number;
     },
   ) => Promise<{ status: string }>;
-  countActiveSubscribersForSourcePage: (db: DbClient, sourcePageId: string | null) => Promise<number>;
   computeUnlockCost: (activeSubscriberCount: number) => number;
   attemptAutoUnlockForSourceItem: (input: {
     sourceItemId: string;
@@ -264,8 +263,9 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
     let skipped = 0;
     let skippedUpcoming = 0;
     let skippedByDurationPolicy = 0;
-    const activeSubscriberCount = await deps.countActiveSubscribersForSourcePage(db, subscription.source_page_id || null);
-    const estimatedUnlockCost = deps.computeUnlockCost(activeSubscriberCount);
+    // Current runtime uses a flat unlock cost, so we do not need to count
+    // active subscribers during every subscription sync.
+    const estimatedUnlockCost = deps.computeUnlockCost(1);
     const durationByVideoId = new Map<string, number | null>();
     for (const video of toProcess) {
       durationByVideoId.set(video.videoId, toDurationSeconds(video.durationSeconds));
