@@ -97,6 +97,9 @@ export function useBlueprintSearch(search: string, sort: BlueprintSort) {
 
   return useQuery({
     queryKey: ['blueprint-search', search, sort, user?.id],
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
     queryFn: async () => {
       const trimmed = search.trim();
       let blueprints: BlueprintRow[] = [];

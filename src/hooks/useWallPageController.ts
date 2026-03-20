@@ -205,12 +205,18 @@ export function useWallPageController() {
   const wallFeedQuery = useQuery({
     queryKey: ['wall-feed', effectiveScope, feedSort, user?.id || 'anon'],
     enabled: !isForYouScope,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
     queryFn: async () => getWallFeed({ scope: effectiveScope, sort: feedSort }),
   });
 
   const forYouQuery = useQuery({
     queryKey: ['wall-for-you', user?.id || 'anon'],
     enabled: isForYouScope && !!user,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
     queryFn: async () => getWallForYouFeed(),
   });
 

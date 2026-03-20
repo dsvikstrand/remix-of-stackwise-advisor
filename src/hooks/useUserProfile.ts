@@ -20,6 +20,9 @@ export function useUserProfile(userId: string | undefined) {
 
   return useQuery({
     queryKey: ['user-profile', userId],
+    staleTime: 120_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
     queryFn: async () => {
       if (!userId) return null;
 
@@ -39,6 +42,9 @@ export function useUserProfile(userId: string | undefined) {
 export function useUserBlueprints(userId: string | undefined, limit = 4) {
   return useQuery({
     queryKey: ['user-blueprints', userId, limit],
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
     queryFn: async () => {
       if (!userId) return [];
 
@@ -60,6 +66,9 @@ export function useUserBlueprints(userId: string | undefined, limit = 4) {
 export function useUserLikedBlueprints(userId: string | undefined, limit = 4) {
   return useQuery({
     queryKey: ['user-liked-blueprints', userId, limit],
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
     queryFn: async () => {
       if (!userId) return [];
 
@@ -217,6 +226,9 @@ export interface UserCommentItem {
 export function useUserComments(userId: string | undefined, limit = 20) {
   return useQuery({
     queryKey: ['user-comments', userId, limit],
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
     queryFn: async () => {
       if (!userId) return [] as UserCommentItem[];
 
@@ -265,6 +277,9 @@ export interface ActivityItem {
 export function useUserActivity(userId: string | undefined, limit = 4) {
   return useQuery({
     queryKey: ['user-activity', userId, limit],
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
     queryFn: async () => {
       if (!userId) return [];
 

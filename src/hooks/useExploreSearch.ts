@@ -214,6 +214,9 @@ export function useExploreSearch({ query, filter, enabled = true }: UseExploreSe
 
   return useQuery({
     queryKey: ['explore-search', trimmedQuery, filter],
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
     queryFn: async (): Promise<ExploreResult[]> => {
       if (!trimmedQuery) return [];
 
@@ -237,7 +240,6 @@ export function useExploreSearch({ query, filter, enabled = true }: UseExploreSe
       return results;
     },
     enabled: enabled && trimmedQuery.length > 0,
-    staleTime: 30_000,
   });
 }
 
@@ -254,6 +256,8 @@ export function useTrendingTags() {
       if (error) throw error;
       return data || [];
     },
-    staleTime: 60_000,
+    staleTime: 120_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 }

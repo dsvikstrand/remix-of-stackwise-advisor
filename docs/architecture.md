@@ -60,6 +60,9 @@
   - Live feed/community surfaces in `src/pages/MyFeed.tsx`, `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
     - `Wall` now loads backend-hydrated feed responses for both public lanes and `For You` instead of reconstructing feed rows through browser-side Supabase fan-out.
     - card teaser copy now prefers stored `blueprints.preview_summary`, so list surfaces keep summary-like snippets without reloading canonical `sections_json`.
+    - TanStack Query freshness is now explicit by surface class:
+      - live/semi-live hooks declare their own polling/stale rules locally.
+      - static-ish list/detail reads (`Wall`, `Search`, `Explore`, `My Feed`, channel feed, blueprint detail/comments, profile tabs) use conservative stale windows and disable focus-triggered refetch by default.
     - `Wall` feed contract is:
       - `For You`: the only lane that may contain locked items; built from subscribed-source content plus personally unlocked blueprints.
       - `Joined`: generated/published blueprints filtered by joined Bleu channels.
@@ -211,6 +214,7 @@
     - user queue-position reads now narrow to requested or visible queued scopes when estimating `active-mine` queue order, rather than scanning every queued ingestion scope by default.
     - manual blueprint-comments refresh now reads the existing refresh-state row first and registers one only when the blueprint lacks an enabled refresh record.
     - worker lease heartbeats are now lease-aware by default: a `90s` lease refreshes every `30s` instead of every `10s`, reducing Supabase lease-RPC churn without changing lease ownership semantics.
+    - frontend list/detail query tuning now complements the backend egress work by keeping non-live query surfaces on explicit conservative stale windows instead of implicit focus churn.
     - provider retry/circuit controls are env-driven (transcript + LLM bounded retries, fail-fast circuit open mode).
   - onboarding extension: `user_youtube_onboarding` for new-user optional setup state.
   - Eval assets:

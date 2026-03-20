@@ -30,6 +30,9 @@ export function useChannelFeed({ channelSlug, tab, pageSize = 20 }: UseChannelFe
 
   const baseQuery = useQuery({
     queryKey: ['channel-feed-base', channelSlug],
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
     queryFn: async (): Promise<ChannelFeedPost[]> => {
       const { data: blueprints, error } = await supabase
         .from('blueprints')
@@ -116,7 +119,6 @@ export function useChannelFeed({ channelSlug, tab, pageSize = 20 }: UseChannelFe
 
       return hydrated.filter((row) => row.primaryChannelSlug === channelSlug);
     },
-    staleTime: 30_000,
   });
 
   const sorted = useMemo(() => {
@@ -139,7 +141,9 @@ export function useChannelFeed({ channelSlug, tab, pageSize = 20 }: UseChannelFe
   const commentQuery = useQuery({
     queryKey: ['channel-feed-comments', visiblePosts.map((row) => row.id)],
     enabled: visiblePosts.length > 0,
-    staleTime: 30_000,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
     queryFn: async () => {
       const visibleIds = visiblePosts.map((row) => row.id);
       const { data, error } = await supabase

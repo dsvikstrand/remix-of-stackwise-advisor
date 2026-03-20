@@ -101,6 +101,7 @@ Status: `canonical`
 66. Blueprint YouTube refresh bookkeeping must stay egress-conscious: scheduler pending-job checks should batch by refresh kind/candidate set, and manual refresh entrypoints must not rewrite refresh-state rows when an enabled row already exists.
 67. Queue lease maintenance must also stay egress-conscious: worker heartbeats should refresh on a lease-aware cadence instead of a fixed chatty interval, while preserving the same lease ownership semantics.
 68. Durable generation trace writes must stay egress-conscious: avoid per-event sequence lookups and avoid returning trace row payloads on writes when the caller does not use them.
+69. Static-ish frontend read surfaces (`Wall`, `Search`, `Explore`, `My Feed`, channel feeds, blueprint detail/comments, profile tabs) must use explicit conservative TanStack Query freshness windows with no focus-triggered refetch by default; only live/semi-live surfaces should opt into tighter behavior.
 
 ## Core user journey
 1. Subscribe to a YouTube channel or look up one specific video by link, video id, or title.

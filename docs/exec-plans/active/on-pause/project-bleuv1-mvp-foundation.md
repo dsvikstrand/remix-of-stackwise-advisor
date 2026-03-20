@@ -45,6 +45,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Local/default transcript fetch now starts with `youtube_timedtext` behind the existing provider seam and falls through to `videotranscriber_temp` when YouTube captions are unavailable; the temporary provider remains outside the MVP production baseline.
 - Historical Supabase migration parity now includes the older Oracle/Paperspace `transcript_requests` bridge tables; that schema is legacy reference only and not part of the active MVP transcript runtime.
 - Active follow-up egress work now also throttles no-op subscription sync writes behind a `15m` backend heartbeat; repeated identical success/error writes to `user_source_subscriptions` are no longer expected on every sync loop.
+- Active frontend follow-up now also moves TanStack Query usage toward explicit freshness policy: global defaults are conservative, live/semi-live hooks declare their own cadence, and static-ish list/detail surfaces avoid focus-triggered default refetch churn.
 
 ### W1 - My Feed As First-Class Surface
 - Introduce/finish personal unfiltered feed lane behavior.

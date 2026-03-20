@@ -67,6 +67,9 @@ export function useMyFeed(options?: { enabled?: boolean }) {
   const query = useQuery({
     queryKey: ['my-feed-items', user?.id],
     enabled: !!user && (options?.enabled ?? true),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
     queryFn: async () => {
       if (!user) return [] as MyFeedItemView[];
 

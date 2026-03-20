@@ -112,6 +112,9 @@ export function useBlueprint(blueprintId?: string) {
   return useQuery({
     queryKey: ['blueprint', blueprintId, user?.id],
     enabled: !!blueprintId,
+    staleTime: 120_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
     queryFn: async () => {
       if (!blueprintId) return null;
 
@@ -321,6 +324,9 @@ export function useBlueprintComments(blueprintId?: string, sortMode: 'top' | 'ne
   return useQuery({
     queryKey: ['blueprint-comments', blueprintId, sortMode],
     enabled: !!blueprintId,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
     queryFn: async () => {
       if (!blueprintId) return [] as Array<{
         id: string;

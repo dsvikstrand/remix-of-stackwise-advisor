@@ -147,7 +147,7 @@ g3) [have] Phase 3: tune semi-live surfaces.
   - [useAiCredits.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useAiCredits.ts) now explicitly keeps credits semi-live without depending on inherited focus/reconnect behavior
   - [useWallPageController.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useWallPageController.ts) now makes the wall subscription-status read explicit with a `60s` stale window and no focus-triggered refetches
 
-g4) [todo] Phase 4: tune static-ish list/detail surfaces.
+g4) [have] Phase 4: tune static-ish list/detail surfaces.
 - primary files:
   - [useWallPageController.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useWallPageController.ts)
   - [useBlueprintSearch.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useBlueprintSearch.ts)
@@ -163,6 +163,10 @@ g4) [todo] Phase 4: tune static-ish list/detail surfaces.
 - acceptance:
   - no visible design change
   - only small timing/freshness differences
+- progress note:
+  - wall, search, explore, My Feed, channel feed, blueprint detail/comments, and profile-tab queries now declare explicit static-ish freshness windows
+  - these surfaces now disable focus-triggered refetches and keep reconnect behavior explicit instead of inheriting defaults implicitly
+  - profile and blueprint detail reads use slightly longer stale windows than fast-moving list surfaces
 
 g5) [todo] Phase 5: proof and measurement.
 - compare before/after on:
