@@ -55,6 +55,8 @@ export function useGenerationQueue(input?: UseGenerationQueueInput) {
     enabled,
     queryFn: () => listActiveMyIngestionJobs({ scopes, limit }),
     staleTime: Math.max(1_000, Math.floor(pollMs / 2)),
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
     refetchInterval: (state) => {
       const activeCount = Number(state.state.data?.summary?.active_count || 0);
       return activeCount > 0 ? pollMs : idlePollMs;

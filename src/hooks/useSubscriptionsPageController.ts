@@ -369,6 +369,9 @@ export function useSubscriptionsPageController() {
     queryKey: ['ingestion-job', activeRefreshJobId, user?.id],
     enabled: Boolean(activeRefreshJobId) && Boolean(user) && subscriptionsEnabled,
     queryFn: () => getIngestionJob(activeRefreshJobId as string),
+    staleTime: 2_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
     refetchInterval: (query) => {
       const status = query.state.data?.status as IngestionJobStatus | undefined;
       if (!status || status === 'queued' || status === 'running') return 4000;
@@ -382,6 +385,7 @@ export function useSubscriptionsPageController() {
     queryFn: () => getLatestMyIngestionJob('manual_refresh_selection'),
     staleTime: 15_000,
     refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 
   const handleUnsubscribe = useCallback((subscription: SourceSubscription) => {

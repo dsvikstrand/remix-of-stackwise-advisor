@@ -64,6 +64,8 @@ export function useSourceUnlockJobTracker({
     enabled: canRun && !activeJobId,
     queryFn: () => getLatestMyIngestionJob(scope),
     staleTime: 5_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
     retry: false,
   });
 
@@ -86,6 +88,9 @@ export function useSourceUnlockJobTracker({
     queryKey: ['source-unlock-job', userId, activeJobId],
     enabled: canRun && Boolean(activeJobId),
     queryFn: () => getIngestionJob(activeJobId as string),
+    staleTime: Math.max(1_000, Math.floor(pollMs / 2)),
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
     refetchInterval: (query) => {
       const status = query.state.data?.status as IngestionJobStatus | undefined;
       if (!status) return pollMs;

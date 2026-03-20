@@ -116,7 +116,7 @@ g1) [todo] Phase 1: set conservative global QueryClient defaults.
     - `refetchOnReconnect: true`
   - the next step is to verify/tune explicit live-surface overrides as needed rather than broadening the global defaults further
 
-g2) [todo] Phase 2: explicitly preserve/tune live surfaces.
+g2) [have] Phase 2: explicitly preserve/tune live surfaces.
 - primary files:
   - [useGenerationQueue.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useGenerationQueue.ts)
   - [useSourceUnlockJobTracker.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useSourceUnlockJobTracker.ts)
@@ -126,6 +126,11 @@ g2) [todo] Phase 2: explicitly preserve/tune live surfaces.
   - make non-active states conservative
 - acceptance:
   - queue/unlock/manual-refresh UX still feels live enough
+- progress note:
+  - live queue/unlock/manual-refresh queries now declare explicit query behavior instead of relying on inherited defaults
+  - [useGenerationQueue.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useGenerationQueue.ts) explicitly keeps its dynamic active-vs-idle polling and disables focus-triggered refetches
+  - [useSourceUnlockJobTracker.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useSourceUnlockJobTracker.ts) now sets explicit freshness, reconnect, and no-focus-refetch behavior for both latest-job lookup and active-job polling
+  - [useSubscriptionsPageController.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useSubscriptionsPageController.ts) now makes manual refresh-job tracking explicit with short active freshness and no focus-triggered refetches
 
 g3) [todo] Phase 3: tune semi-live surfaces.
 - primary files:
