@@ -63,7 +63,9 @@
   - `POST /api/channel-candidates/:id/publish`
   - `POST /api/channel-candidates/:id/reject`
 - Auto-channel endpoint:
+  - `GET /api/my-feed`
   - `POST /api/my-feed/items/:id/auto-publish`
+  - current rollout expectation: `GET /api/my-feed` is the preferred hydrated read path for the operational personal lane, while browser-side fallback remains available if the endpoint is unavailable
 - Source-page endpoints:
   - `GET /api/source-pages/:platform/:externalId` (public read)
   - `GET /api/source-pages/:platform/:externalId/blueprints` (public source-page feed, deduped by source video, cursor-paginated, includes additive `source_thumbnail_url`)

@@ -68,6 +68,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Landing cold-user pass adds value-first hero positioning, proof/use-case blocks, and curated fallback content so front-door sections never render empty.
 - Frontend bootstrap now guards missing Supabase env with explicit configuration UX instead of a blank page.
 - Card/list teaser copy now belongs on stored `blueprints.preview_summary`; Wall/Explore/Channel/Search/My Feed should treat canonical `sections_json` as detail-view content, not list-view payload.
+- My Feed read hydration now also has an additive backend-shaped auth path (`GET /api/my-feed`), with the earlier browser-side stitching retained as rollback-safe fallback during aggregation rollout.
 - Blueprint YouTube refresh bookkeeping should batch pending-job checks per refresh kind/candidate set and avoid re-registering an already-enabled refresh-state row on manual refresh entry.
 - Queue worker lease heartbeats should stay lease-aware by default, so background maintenance does not keep hammering Supabase lease RPCs more often than the actual lease window requires.
 - Durable generation trace writes should stay lean by default, avoiding per-event `seq` reads and unnecessary returning payloads on write helpers.

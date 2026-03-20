@@ -1,7 +1,49 @@
 import type express from 'express';
 import type { FeedRouteDeps } from '../contracts/api/feed';
+import { listMyFeedItems } from '../services/myFeed';
 
 export function registerFeedRoutes(app: express.Express, deps: FeedRouteDeps) {
+  app.get('/api/my-feed', async (_req, res) => {
+    const userId = String((res.locals.user as { id?: string } | undefined)?.id || '').trim();
+    if (!userId) {
+      return res.status(401).json({
+        ok: false,
+        error_code: 'AUTH_REQUIRED',
+        message: 'Unauthorized',
+        data: null,
+      });
+    }
+
+    const db = deps.getServiceSupabaseClient();
+    if (!db) {
+      return res.status(500).json({
+        ok: false,
+        error_code: 'CONFIG_ERROR',
+        message: 'Service role client is not configured',
+        data: null,
+      });
+    }
+
+    try {
+      const items = await listMyFeedItems({ db, userId });
+      return res.json({
+        ok: true,
+        error_code: null,
+        message: 'my feed',
+        data: {
+          items,
+        },
+      });
+    } catch (error) {
+      return res.status(400).json({
+        ok: false,
+        error_code: 'READ_FAILED',
+        message: error instanceof Error ? error.message : 'Failed to load My Feed',
+        data: null,
+      });
+    }
+  });
+
   app.post('/api/my-feed/items/:id/accept', async (req, res) => {
     const userId = (res.locals.user as { id?: string } | undefined)?.id;
     const authToken = (res.locals.authToken as string | undefined) ?? '';

@@ -8034,6 +8034,7 @@ registerOpsRoutes(app, {
 registerFeedRoutes(app, {
   autoChannelPipelineEnabled,
   getAuthedSupabaseClient,
+  getServiceSupabaseClient,
   createBlueprintFromVideo,
   runAutoChannelForFeedItem,
 });

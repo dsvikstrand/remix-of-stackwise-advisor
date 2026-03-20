@@ -4,6 +4,7 @@ import { normalizeTag } from '@/lib/tagging';
 import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
 import { evaluateCandidateGates } from '@/lib/candidateGates';
 import { buildYouTubeThumbnailUrl, extractYouTubeVideoId, toYouTubeIdentity } from '@/lib/sourceIdentity';
+import { listMyFeedItemsFromDb, type MyFeedItemView } from '@/lib/myFeedData';
 
 export async function ensureSourceItemForYouTube(input: {
   videoUrl: string;
@@ -108,7 +109,7 @@ type ApiEnvelope<T> = {
   meta?: Record<string, unknown>;
 };
 
-class ApiRequestError extends Error {
+export class ApiRequestError extends Error {
   status: number;
 
   constructor(status: number, message: string) {
@@ -157,9 +158,32 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<ApiEnvel
   return json;
 }
 
-function shouldFallbackToSupabase(error: unknown) {
+export function shouldFallbackToSupabase(error: unknown) {
   if (!(error instanceof ApiRequestError)) return true;
   return error.status === 404 || error.status >= 500;
+}
+
+async function listMyFeedItemsFallback(userId: string) {
+  return listMyFeedItemsFromDb({
+    db: supabase as any,
+    userId,
+  });
+}
+
+export async function listMyFeedItems(userId: string): Promise<MyFeedItemView[]> {
+  const apiBase = getApiBase();
+  if (!apiBase) {
+    return listMyFeedItemsFallback(userId);
+  }
+  try {
+    const response = await apiRequest<{ items: MyFeedItemView[] }>('/my-feed', {
+      method: 'GET',
+    });
+    return response.data.items || [];
+  } catch (error) {
+    if (!shouldFallbackToSupabase(error)) throw error;
+    return listMyFeedItemsFallback(userId);
+  }
 }
 
 async function ensureTagBySlug(slug: string, userId: string) {

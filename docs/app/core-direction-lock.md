@@ -102,6 +102,7 @@ Status: `canonical`
 67. Queue lease maintenance must also stay egress-conscious: worker heartbeats should refresh on a lease-aware cadence instead of a fixed chatty interval, while preserving the same lease ownership semantics.
 68. Durable generation trace writes must stay egress-conscious: avoid per-event sequence lookups and avoid returning trace row payloads on writes when the caller does not use them.
 69. Static-ish frontend read surfaces (`Wall`, `Search`, `Explore`, `My Feed`, channel feeds, blueprint detail/comments, profile tabs) must use explicit conservative TanStack Query freshness windows with no focus-triggered refetch by default; only live/semi-live surfaces should opt into tighter behavior.
+70. `My Feed` read hydration should prefer one backend-shaped auth endpoint (`GET /api/my-feed`) over browser-side multi-table fan-out, while keeping rollback-safe fallback available until the aggregated path is fully proven.
 
 ## Core user journey
 1. Subscribe to a YouTube channel or look up one specific video by link, video id, or title.

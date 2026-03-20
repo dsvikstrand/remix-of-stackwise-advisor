@@ -132,14 +132,21 @@ g2) [have] Phase 2: rank the best first aggregation target.
   - runner-up target: `Channel feed`
   - third target: `User profile tabs`, likely as multiple narrower aggregations rather than one giant endpoint
 
-g3) [todo] Phase 3: define one aggregated endpoint alongside the existing path.
+g3) [have] Phase 3: define one aggregated endpoint alongside the existing path.
 - keep business logic in shared backend services/helpers where possible
 - shape the response for the screen, not for raw tables
 - preserve auth scope and empty/error behavior
+- progress note:
+  - the first additive aggregation endpoint is `GET /api/my-feed`
+  - the backend shape reuses the current `My Feed` view-model contract closely, including source hydration, blueprint hydration, candidate info, tag expansion, unlock state, and transcript-hidden source filtering
+  - the current browser-side path is still available as fallback during rollout
 
-g4) [todo] Phase 4: migrate one consumer only.
+g4) [have] Phase 4: migrate one consumer only.
 - update one frontend surface to the new aggregated read
 - keep the old path available until verification is complete
+- progress note:
+  - [useMyFeed.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useMyFeed.ts) is now the single migrated consumer
+  - `My Feed` now prefers the backend-shaped read path and falls back to the earlier browser-side hydration if the endpoint is unavailable
 
 g5) [todo] Phase 5: measure request/egress change and decide the next target.
 - compare before/after request shape

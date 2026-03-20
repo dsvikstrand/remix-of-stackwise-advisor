@@ -113,6 +113,7 @@ a87) [have] Queue worker lease heartbeats are now lease-aware by default, reduci
 a88) [have] Durable generation trace writes are now slimmer: per-event sequencing reuses a per-run in-process cursor and trace writes no longer ask Supabase to return row payloads when the caller does not use them.
 a89) [have] User-scoped ingestion status routes are tighter: `latest-mine` now resolves from one recent-row read, and `active-mine` queue-position scans narrow to requested or visible queued scopes instead of broadly scanning all queue scopes.
 a90) [have] Frontend query freshness is now explicitly split by surface class: live and semi-live hooks declare their own cadence, while static-ish list/detail reads (`Wall`, `Search`, `Explore`, `My Feed`, channel feed, blueprint detail/comments, profile tabs) use conservative stale windows and disable focus-triggered refetch by default.
+a91) [have] `My Feed` now prefers a backend-shaped auth read (`GET /api/my-feed`) that returns hydrated feed rows in one payload, while the earlier browser-side Supabase stitching remains available as rollback-safe fallback.
 
 ## Core Model
 b1) `Source Item`
@@ -301,6 +302,7 @@ si24) user endpoint: `GET /api/ingestion/jobs/latest-mine?scope=manual_refresh_s
 si24b) job status endpoints now include additive retry/lease metadata (`attempts`, `max_attempts`, `next_run_at`, `lease_expires_at`, `trace_id`).
 si25) user endpoint: `POST /api/my-feed/items/:id/auto-publish` (run auto-channel publish for a saved My Feed blueprint).
 si26) `POST /api/my-feed/items/:id/auto-publish` returns additive classifier metadata (`classifier_mode`, `classifier_reason`, optional `classifier_confidence`) for audit/debug.
+si27) auth read endpoint: `GET /api/my-feed` returns the hydrated `My Feed` list in one backend-shaped payload (source, blueprint, candidate, tags, unlock state, transcript-hidden filtering) and is additive to the existing mutation endpoints.
 si27) `AUTO_CHANNEL_CLASSIFIER_MODE` now supports `llm_labeler_v1` (artifact-only input, sync before publish, retry once on invalid output, fallback to `general`).
 si28) user endpoint: `GET /api/youtube/connection/status` (owner-scoped YouTube OAuth link status for `/subscriptions`)
 si29) user endpoint: `POST /api/youtube/connection/start` (starts Google OAuth; returns `auth_url`)

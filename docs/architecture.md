@@ -73,6 +73,7 @@
     - `My Feed` subscription notices render avatar and optional banner background; card click opens a details popup with confirm-gated `Unsubscribe`.
     - subscription notice details popup is intentionally minimal (relative time + unsubscribe only).
     - `My Feed` header includes both `Add Subscription` and `Manage subscriptions` entrypoints.
+    - `My Feed` read hydration now prefers one backend-shaped auth endpoint (`GET /api/my-feed`) instead of browser-side multi-table Supabase fan-out; the older browser path remains as fallback during rollout.
   - Blueprint detail in `src/pages/BlueprintDetail.tsx` now prefers source-channel attribution for imported YouTube blueprints and hides edit CTA in default MVP UI.
   - Blueprint detail renders `Summary` as swipeable slides when content is chunkable (3-4 chunks) and keeps non-summary sections in standard text blocks.
   - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: popup creator lookup + subscribe + active-list `Unsubscribe`; aggregate health summary hidden for user clarity; row avatars shown when available).
@@ -179,6 +180,7 @@
     - `POST /api/auto-banner/jobs/trigger` (service auth, queue worker + cap rebalance)
     - `GET /api/auto-banner/jobs/latest` (service auth, queue snapshot)
     - `POST /api/debug/subscriptions/:id/simulate-new-uploads` (debug-only, service auth + `ENABLE_DEBUG_ENDPOINTS=true`; middleware allows service-token access without bearer user auth)
+    - `GET /api/my-feed` (auth-only hydrated My Feed read; additive backend-shaped aggregation path with rollback-safe frontend fallback)
     - `POST /api/my-feed/items/:id/accept|skip`
     - `POST /api/my-feed/items/:id/auto-publish`
   - Adapter abstraction in `server/adapters/*` (`BaseAdapter`, `YouTubeAdapter`, registry).
