@@ -132,7 +132,7 @@ g2) [have] Phase 2: explicitly preserve/tune live surfaces.
   - [useSourceUnlockJobTracker.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useSourceUnlockJobTracker.ts) now sets explicit freshness, reconnect, and no-focus-refetch behavior for both latest-job lookup and active-job polling
   - [useSubscriptionsPageController.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useSubscriptionsPageController.ts) now makes manual refresh-job tracking explicit with short active freshness and no focus-triggered refetches
 
-g3) [todo] Phase 3: tune semi-live surfaces.
+g3) [have] Phase 3: tune semi-live surfaces.
 - primary files:
   - [useNotifications.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useNotifications.ts)
   - [useAiCredits.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useAiCredits.ts)
@@ -142,6 +142,10 @@ g3) [todo] Phase 3: tune semi-live surfaces.
   - remove unnecessary focus/mount churn
 - acceptance:
   - notifications/credits still feel current enough
+- progress note:
+  - [useNotifications.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useNotifications.ts) now explicitly keeps its `15s` freshness window and `20s` polling while disabling focus-triggered refetches
+  - [useAiCredits.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useAiCredits.ts) now explicitly keeps credits semi-live without depending on inherited focus/reconnect behavior
+  - [useWallPageController.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useWallPageController.ts) now makes the wall subscription-status read explicit with a `60s` stale window and no focus-triggered refetches
 
 g4) [todo] Phase 4: tune static-ish list/detail surfaces.
 - primary files:

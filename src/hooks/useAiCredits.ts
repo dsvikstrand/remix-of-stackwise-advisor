@@ -194,6 +194,8 @@ export function useAiCredits(options: UseAiCreditsOptions) {
     queryFn: fetchCredits,
     enabled: options.enabled,
     staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
     refetchInterval: getAiCreditsRefetchIntervalMs(options.refetchIntervalMs),
     select: toAiCreditsView,
   });

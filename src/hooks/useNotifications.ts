@@ -26,6 +26,8 @@ export function useNotifications(input?: { limit?: number; enabled?: boolean }) 
     queryFn: () => listNotifications({ limit }),
     enabled: isQueryEnabled,
     staleTime: 15_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
     refetchInterval: 20_000,
     retry: false,
   });

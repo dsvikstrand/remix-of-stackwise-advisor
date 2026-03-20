@@ -80,6 +80,8 @@ export function useWallPageController() {
     queryKey: ['source-subscriptions', user?.id],
     enabled: Boolean(user) && subscriptionsEnabled,
     staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
     queryFn: () => listSourceSubscriptions(),
   });
   const activeSourceSubscriptionCount = useMemo(
