@@ -13,8 +13,8 @@ This file is the authoritative active/on-pause/deserted/completed registry for e
   Canonical launch gate board and proof log.
 
 ## Active Root
-- `docs/exec-plans/active/tanstack-query-tuning-plan.md`
-  Current tracked implementation plan for reducing user-driven query/refetch churn with standard TanStack Query best practices.
+- `docs/exec-plans/active/backend-aggregation-plan.md`
+  Current tracked implementation plan for safe, additive backend aggregation of read-heavy screen/task surfaces.
 - `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
   Current proof/deferred carry-forward tail. This is the only standing active-tail support file.
 - `docs/exec-plans/tech-debt-tracker.md`
@@ -33,7 +33,9 @@ This file is the authoritative active/on-pause/deserted/completed registry for e
 - `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
   Historical paused hardening reference.
 - `docs/exec-plans/active/on-pause/supabase-egress-reduction-plan.md`
-  Paused broader backend/frontend egress reduction plan; retained as reference while TanStack Query tuning is the current focused implementation track.
+  Paused broader backend/frontend egress reduction plan; retained as reference while backend aggregation is the current focused implementation track.
+- `docs/exec-plans/active/on-pause/tanstack-query-tuning-plan.md`
+  Paused after implementation; only the later proof/measurement + completion move remains.
 
 ## Deserted / Superseded
 - These files are preserved for history only. They must not be resumed without a new explicit replacement plan.
@@ -91,13 +93,14 @@ This file is the authoritative active/on-pause/deserted/completed registry for e
 ## Current Program Snapshot
 - Core identity lock: `docs/app/core-direction-lock.md`.
 - Current runtime/ops truth: `docs/architecture.md`, `docs/ops/yt2bp_runbook.md`, and `docs/ops/mvp-launch-readiness-checklist.md`.
-- Current active implementation plan: `docs/exec-plans/active/tanstack-query-tuning-plan.md`.
+- Current active implementation plan: `docs/exec-plans/active/backend-aggregation-plan.md`.
 - Current active proof/deferred tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`.
 - Current post-launch debt board: `docs/exec-plans/tech-debt-tracker.md`.
 - Latest completed implementation plans: `docs/exec-plans/completed/transcript-provider-launch-plan.md` and `docs/exec-plans/completed/pre-launch-ui-ux-plan.md`.
 - PWA rollout follow-up is on pause.
 - Runtime simplification follow-up is on pause.
-- The broader Supabase egress program is on pause while TanStack Query tuning is the current focused query-churn track.
+- The broader Supabase egress program is on pause while backend aggregation is the current focused structural read-reduction track.
+- TanStack Query tuning is on pause pending later proof/measurement and likely completion.
 - Transcript-provider robustness work is completed, with later live-proof items carried into the proof tail.
 - `PTP` install docs and the broad cleanup umbrella are deserted/superseded, not active.
 

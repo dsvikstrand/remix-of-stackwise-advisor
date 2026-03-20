@@ -26,7 +26,7 @@ This folder is the source of truth for product, architecture, planning, and oper
 ## Primary Planning Surfaces
 - Launch gate board: `docs/ops/mvp-launch-readiness-checklist.md`
 - Active proof/deferred tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
-- Active implementation program: `docs/exec-plans/active/tanstack-query-tuning-plan.md`
+- Active implementation program: `docs/exec-plans/active/backend-aggregation-plan.md`
 - Latest completed implementation programs:
   - `docs/exec-plans/completed/transcript-provider-launch-plan.md`
   - `docs/exec-plans/completed/pre-launch-ui-ux-plan.md`
@@ -58,6 +58,7 @@ This folder is the source of truth for product, architecture, planning, and oper
 ## Historical Reference
 - Historical references are not the current production contract.
 - Paused broader egress program: `docs/exec-plans/active/on-pause/supabase-egress-reduction-plan.md`
+- Paused TanStack Query tuning program (implementation done, later proof/closure pending): `docs/exec-plans/active/on-pause/tanstack-query-tuning-plan.md`
 - Completed launch hardening phases: `docs/exec-plans/completed/mvp-launch-hardening-phases.md`
 - Completed stepwise execution scheme: `docs/exec-plans/completed/bleuv1-manual-iteration-scheme.md`
 - Paused PWA implementation umbrella: `docs/exec-plans/active/on-pause/bleup-pwa-program.md`

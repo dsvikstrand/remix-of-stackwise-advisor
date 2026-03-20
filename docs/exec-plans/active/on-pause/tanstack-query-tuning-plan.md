@@ -1,6 +1,11 @@
 # TanStack Query Tuning Plan
 
-Status: `active`
+Status: `on-pause`
+
+## Pause Note
+a0) [have] Phases `1` through `4` are implemented, locally verified, and manually sanity-checked.
+
+a00) [todo] Only Phase `5` proof/measurement remains before this plan can move to `completed/`.
 
 ## Goal
 a1) [todo] Reduce user-driven query churn and background refetch waste without changing the current visual UX or breaking live queue/job flows.
