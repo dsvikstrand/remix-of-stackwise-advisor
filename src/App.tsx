@@ -32,7 +32,15 @@ import { config } from "@/config/runtime";
 import { YouTubeOnboardingRedirectGate } from "@/components/onboarding/YouTubeOnboardingRedirectGate";
 import WelcomeOnboarding from "./pages/WelcomeOnboarding";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60_000,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
+    },
+  },
+});
 const DevBlueprintPreview = lazy(() => import("./pages/DevBlueprintPreview"));
 
 const App = () => (
