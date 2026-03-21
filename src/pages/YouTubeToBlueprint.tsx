@@ -638,10 +638,10 @@ export default function YouTubeToBlueprint() {
       const existing = await getExistingUserFeedItem(user.id, sourceItem.id);
       if (existing) {
         toast({
-          title: 'Already in My Feed',
-          description: 'This source is already available in your personal feed.',
+          title: 'Already in Home',
+          description: 'This source is already available in your Home feed.',
         });
-        navigate('/my-feed');
+        navigate('/wall');
         return;
       }
 
@@ -702,18 +702,18 @@ export default function YouTubeToBlueprint() {
       });
 
       toast({
-        title: 'Saved to My Feed',
+        title: 'Saved to Home',
         description: autoPublishResult
           ? autoPublishResult.decision === 'published'
             ? `Posted to ${autoPublishResult.channelSlug}.`
-            : `Saved in My Feed. Auto channel checks held this item (${autoPublishResult.reasonCode}).`
+            : `Saved in Home. Auto channel checks held this item (${autoPublishResult.reasonCode}).`
           : 'Saved successfully.',
       });
-      navigate('/my-feed');
+      navigate('/wall');
     } catch (error) {
       toast({
         title: 'Save failed',
-        description: error instanceof Error ? error.message : 'Could not save to My Feed.',
+        description: error instanceof Error ? error.message : 'Could not save to Home.',
         variant: 'destructive',
       });
     } finally {
@@ -730,12 +730,12 @@ export default function YouTubeToBlueprint() {
             <div className="min-w-0">
               <p className="text-sm font-semibold">Personal-first flow</p>
               <p className="text-xs text-muted-foreground line-clamp-2">
-                Generated content saves to My Feed first. Channel routing runs automatically after save.
+                Generated content lands in Home first. Channel routing runs automatically after save.
               </p>
             </div>
             <div className="shrink-0">
               <Button asChild size="sm" variant="outline">
-                <Link to="/my-feed">Open My Feed</Link>
+                <Link to="/wall">Open Home</Link>
               </Button>
             </div>
           </div>
@@ -839,7 +839,7 @@ export default function YouTubeToBlueprint() {
 
               {!user ? (
                 <div className="rounded-md border border-border/40 p-3 flex items-center justify-between gap-3">
-                  <p className="text-sm text-muted-foreground">Log in to save this blueprint in My Feed.</p>
+                  <p className="text-sm text-muted-foreground">Log in to save this blueprint in Home.</p>
                   <Button asChild size="sm">
                     <Link to="/auth">Log in to save</Link>
                   </Button>
@@ -848,15 +848,15 @@ export default function YouTubeToBlueprint() {
                 <div className="space-y-2">
                   <div className="flex flex-wrap gap-2">
                     <Button onClick={saveToMyFeed} disabled={isSaving}>
-                      {isSaving ? 'Saving...' : 'Save to My Feed'}
+                      {isSaving ? 'Saving...' : 'Save to Home'}
                     </Button>
                     {config.features.autoChannelPipelineV1 ? (
                       <Button asChild variant="outline">
-                        <Link to="/my-feed">Open My Feed</Link>
+                        <Link to="/wall">Open Home</Link>
                       </Button>
                     ) : config.features.channelSubmitV1 && (
                       <Button asChild variant="outline">
-                        <Link to="/my-feed">Review channel status in My Feed</Link>
+                        <Link to="/wall">Review channel status in Home</Link>
                       </Button>
                     )}
                   </div>
@@ -865,7 +865,7 @@ export default function YouTubeToBlueprint() {
                       ? 'Optional enhancements are still running. You can save now and they will attach when finished.'
                       : config.features.autoChannelPipelineV1
                         ? 'Channel publishing runs automatically after save.'
-                        : 'Channel publishing is handled after submit and gate checks in My Feed.'}
+                        : 'Channel publishing is handled after submit and gate checks in Home.'}
                   </p>
                 </div>
               )}

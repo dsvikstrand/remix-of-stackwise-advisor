@@ -29,10 +29,10 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 
 ## Product Defaults (Locked)
 1. YouTube-only adapter scope for MVP.
-2. My Feed default visibility is personal/private until channel promotion.
+2. Personal-lane default visibility is personal/private until channel promotion; current runtime now surfaces that lane through Home `For You`, with legacy `My Feed` compatibility retained separately.
 3. Channel promotion default mode is classifier-driven auto-publish after checks.
 4. User value-add is insight/remix on imported blueprints; no standalone free-form post model in MVP core.
-5. Non-pass auto-channel outcomes are blocked from channel and retained in My Feed.
+5. Non-pass auto-channel outcomes are blocked from channel and retained in the personal lane (Home `For You`; legacy `My Feed` compatibility only where still exercised).
 6. Legacy manual gate runtime remains `CHANNEL_GATES_MODE=bypass`; auto-channel path uses `AUTO_CHANNEL_GATE_MODE`.
 
 ## Current Workstreams
@@ -47,16 +47,16 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Active follow-up egress work now also throttles no-op subscription sync writes behind a `15m` backend heartbeat; repeated identical success/error writes to `user_source_subscriptions` are no longer expected on every sync loop.
 - Active frontend follow-up now also moves TanStack Query usage toward explicit freshness policy: global defaults are conservative, live/semi-live hooks declare their own cadence, and static-ish list/detail surfaces avoid focus-triggered default refetch churn.
 
-### W1 - My Feed As First-Class Surface
+### W1 - My Feed As First-Class Surface (Historical / Legacy Context)
 - Introduce/finish personal unfiltered feed lane behavior.
-- Keep `My Feed` as a profile-oriented workspace surface (profile `Feed` tab) instead of a top-nav primary.
+- Keep `My Feed` as a profile-oriented workspace surface (profile `Feed` tab) instead of a top-nav primary. Current runtime has since moved `/my-feed` to a compatibility redirect and keeps Home `For You` as the active lane.
 - Ensure channel fail does not remove personal access.
 - Hide legacy no-blueprint pending/skipped rows during migration cleanup.
-- Align My Feed card presentation to channel-feed style and show read-only auto-channel status labels.
-- Normalize My Feed blueprint badges to `Blueprint` and align feed tag chips with Home one-row capped rendering (no `#` prefix).
-- Show `Posted to <Channel>` only for channel-published items; held/rejected items remain visible as `In My Feed` without technical reason copy.
-- Ensure full-card banner fill on My Feed blueprint cards (no transparent edge gap).
-- Harden Search-generated source channel-title persistence + metadata fallback so My Feed subtitle row consistently shows channel name.
+- Align legacy `My Feed` card presentation to channel-feed style and show read-only auto-channel status labels.
+- Normalize legacy `My Feed` blueprint badges to `Blueprint` and align feed tag chips with Home one-row capped rendering (no `#` prefix).
+- Show `Posted to <Channel>` only for channel-published items; held/rejected items remain visible as `In My Feed` in the legacy compatibility surface without technical reason copy.
+- Ensure full-card banner fill on legacy `My Feed` blueprint cards (no transparent edge gap).
+- Harden Search-generated source channel-title persistence + metadata fallback so legacy `My Feed` subtitle rows consistently show channel name.
 - Keep imported blueprint detail attribution source-first (show source channel when present, hide default edit CTA in MVP UI).
 - Profile privacy default migration: new profiles default to public (`profiles.is_public=true`), existing profiles unchanged.
 - Main nav IA is simplified to `Home / Channels / Explore`, with search/create moved to the header `Create` action.
@@ -67,8 +67,8 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Core high-traffic copy is harmonized to current source-first behavior (`Home`, `Create`, auto-channel publish) and legacy manual-post phrasing is removed.
 - Landing cold-user pass adds value-first hero positioning, proof/use-case blocks, and curated fallback content so front-door sections never render empty.
 - Frontend bootstrap now guards missing Supabase env with explicit configuration UX instead of a blank page.
-- Card/list teaser copy now belongs on stored `blueprints.preview_summary`; Wall/Explore/Channel/Search/My Feed should treat canonical `sections_json` as detail-view content, not list-view payload.
-- My Feed read hydration now also has an additive backend-shaped auth path (`GET /api/my-feed`), with the earlier browser-side stitching retained as rollback-safe fallback during aggregation rollout.
+- Card/list teaser copy now belongs on stored `blueprints.preview_summary`; Wall/Explore/Channel/Search should treat canonical `sections_json` as detail-view content, while legacy `My Feed` compatibility support remains additive only.
+- Legacy `My Feed` read hydration now also has an additive backend-shaped auth path (`GET /api/my-feed`), with the earlier browser-side stitching retained as rollback-safe fallback during aggregation rollout.
 - Blueprint YouTube refresh bookkeeping should batch pending-job checks per refresh kind/candidate set and avoid re-registering an already-enabled refresh-state row on manual refresh entry.
 - Queue worker lease heartbeats should stay lease-aware by default, so background maintenance does not keep hammering Supabase lease RPCs more often than the actual lease window requires.
 - Durable generation trace writes should stay lean by default, avoiding per-event `seq` reads and unnecessary returning payloads on write helpers.
@@ -84,7 +84,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Reuse generated artifacts for duplicate pulls when canonical source id matches.
 - Keep optional review enhancement as a separate post-generation step to reduce core latency bottlenecks.
 - `/youtube` now forces core-first endpoint payload (`generate_review=false`, `generate_banner=false`) and runs optional review attach asynchronously.
-- `Save to My Feed` is non-blocking during optional post-steps; late review can attach to already-saved blueprints.
+- `Save to Home` is non-blocking during optional post-steps; late review can attach to already-saved blueprints, while legacy `My Feed` naming remains compatibility-only.
 - Source YouTube blueprints are thumbnail-first for banners (stored thumbnail or deterministic `ytimg` fallback), including old source-linked rows via backfill.
 - Backend timeout budget for core endpoint is configurable via `YT2BP_CORE_TIMEOUT_MS` (default `120000`).
 - Banner prompt path is hardened for visual-only output so generated backgrounds avoid readable text overlays.
@@ -97,7 +97,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 ### W5 - Subscription Intake And Sync
 - Support YouTube channel subscriptions with auto-only MVP UX.
 - First subscribe sets checkpoint only (new-uploads-only, no historical prefill).
-- Insert persistent `subscription_notice` item in My Feed per subscribed channel.
+- Insert persistent `subscription_notice` item in the personal lane per subscribed channel; current runtime surfaces it on Home `For You`, with legacy `My Feed` compatibility retained separately.
 - Add `/subscriptions` page as first-class management surface (Step 1 foundation + Step 2 simplification).
 - Step 2 simplified actions on `/subscriptions`: active-list `Unsubscribe` only (sync/reactivate UI deferred).
 - Step 3 reliability pass adds `/subscriptions` health summary/badges and delayed-warning trust signals.
@@ -106,9 +106,9 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Search-page video lookup now prefers exact YouTube URL/video-id resolution and uses helper-backed title fallback only for a single confident hit; it is no longer broad video discovery.
 - Step 5 row polish adds optional channel avatars and removes technical row badges from subscription rows.
 - Step 6 UX simplification removes aggregate ingestion summary card from `/subscriptions` while keeping unsubscribe and row-level signals.
-- Step 7 My Feed notice polish adds avatar/banner notice rendering and confirm-gated unsubscribe that removes notice cards from My Feed.
-- Step 8 My Feed interaction cleanup adds simpler copy, direct `Add Subscription`, card-click blueprint opening, and compact notice-card actions.
-- Step 9 My Feed status-row refinement adds subscription details popup and footer-driven post-to-channel actions.
+- Step 7 legacy `My Feed` notice polish adds avatar/banner notice rendering and confirm-gated unsubscribe that removes notice cards from the personal lane.
+- Step 8 legacy `My Feed` interaction cleanup adds simpler copy, direct `Add Subscription`, card-click blueprint opening, and compact notice-card actions.
+- Step 9 legacy `My Feed` status-row refinement adds subscription details popup and footer-driven post-to-channel actions.
 - Step 10 async auto-banner policy adds queue processing (`auto_banner_jobs`) and generated-banner cap fallback with deterministic channel defaults.
 - Step 11 manual refresh adds `/subscriptions` scan popup + selected async background generation for new subscription videos.
 - Step 12 gotcha hardening adds refresh rate caps, manual-job concurrency lock, failed-video cooldown suppression, and lightweight background job status on `/subscriptions`.
@@ -128,7 +128,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Step 21 source-page generation endpoint shifted to `POST /videos/unlock`; the earlier `/videos/generate` compatibility alias mentioned here was later retired, while subscription new uploads moved to `my_feed_unlockable` cards instead of immediate generation.
 - Step 21 follow-up removes strict unlock cooldown in favor of soft request caps (`8/10s` burst + `120/10m` sustained) and immediate credit cache refresh after unlock actions.
 - Step 22 Home scope split repurposes `/wall` `For You` to subscribed-source mixed stream (locked + unlocked) and adds `Your channels` as the unchanged followed-channel ranked lane.
-- Step 23 trust pass adds shared unlock activity cards (Home/Source Page/My Feed), reload-resume unlock tracking, user-menu credit refill/ledger transparency, and a dismissible Home scope helper strip.
+- Step 23 trust pass adds shared unlock activity cards (Home/Source Page/legacy `My Feed` compatibility), reload-resume unlock tracking, user-menu credit refill/ledger transparency, and a dismissible Home scope helper strip.
 - Step 24 backend hardening adds unlock reliability sweeps (expired/stale/orphan recovery), additive unlock `trace_id` response contract, and service-level idempotency/race tests.
 - Step 24 scale follow-up shifts unlock/manual/service generation to enqueue-only worker execution with DB claim+lease heartbeat semantics, queue backpressure controls, provider retry/circuit guards, and service queue health endpoint (`GET /api/ops/queue/health`).
 - Step 25 subscription auto-unlock v1 adds per-subscription `auto_unlock_enabled` (default `true`) and bounded `source_auto_unlock_retry` attempts; funded-subscriber shared-cost billing is now active through canonical auto intents and participant snapshots.

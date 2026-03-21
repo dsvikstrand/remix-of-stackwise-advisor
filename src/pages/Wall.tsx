@@ -244,7 +244,7 @@ export default function Wall() {
             <p className="text-sm font-semibold text-primary uppercase tracking-wide">Home</p>
             <h1 className="text-2xl font-semibold">Your blueprint streams</h1>
             <p className="text-sm text-muted-foreground">
-              My Feed follows creators you subscribe to. Joined follows channels you join. All shows every public blueprint on Bleup.
+              For You follows creators you subscribe to. Joined follows channels you join. All shows every public blueprint on Bleup.
             </p>
           </div>
         </section>
@@ -341,12 +341,12 @@ export default function Wall() {
             </div>
             {user && activeSourceSubscriptionCount > 0 && activeSourceSubscriptionCount < 10 ? (
               <p className="mt-2 text-xs text-muted-foreground">
-                Showing <span className="font-medium text-foreground">All</span> by default while My Feed is still getting started.
+                Showing <span className="font-medium text-foreground">All</span> by default while For You is still getting started.
               </p>
             ) : null}
             <p className="mt-2 text-xs text-muted-foreground">
               {activeLane === 'for-you'
-                ? 'My Feed shows blueprints from creators you subscribe to.'
+                ? 'For You shows blueprints from creators you subscribe to.'
                 : activeLane === 'joined'
                   ? 'Joined shows blueprints posted into channels you follow.'
                   : 'All shows every public blueprint on Bleup.'}
@@ -407,7 +407,7 @@ export default function Wall() {
               ) : isForYouError ? (
                 <Card className="mx-3 sm:mx-4">
                   <CardContent className="py-6 text-sm text-muted-foreground">
-                    Could not load My Feed right now. Please refresh and try again.
+                    Could not load For You right now. Please refresh and try again.
                   </CardContent>
                 </Card>
               ) : forYouStream.length > 0 ? (
@@ -550,14 +550,14 @@ export default function Wall() {
                           ? joinedCuratedCount > 0
                             ? 'No joined-channel blueprints yet'
                             : 'Personalize your joined feed'
-                          : 'No blueprints in My Feed yet'}
+                          : 'No blueprints in For You yet'}
                       </h3>
                       <p className="text-sm text-muted-foreground mt-1">
                         {isJoinedScope
                           ? joinedCuratedCount > 0
                             ? 'Your joined channels do not have published blueprints here yet.'
                             : 'Join channels to see blueprints grouped by topics you care about.'
-                          : 'Subscribe to creators you trust, or generate a blueprint to start My Feed.'}
+                          : 'Subscribe to creators you trust, or generate a blueprint to start For You.'}
                       </p>
                     </div>
 

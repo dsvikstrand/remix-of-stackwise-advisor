@@ -20,14 +20,13 @@ b4) [have] Backend aggregation is a standard pattern, but the endpoint cuts for 
 ## Audit Findings
 c1) [have] `Wall` is no longer the strongest first candidate because its main lanes already use backend-shaped reads through [wallApi.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/lib/wallApi.ts) and [wallFeed.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/wallFeed.ts).
 
-c2) [have] `My Feed` is the clearest first aggregation candidate.
-Current frontend fan-out in [useMyFeed.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useMyFeed.ts):
-- one base `user_feed_items` read
-- parallel reads for `source_items`, `blueprints`, `channel_candidates`, `source_item_unlocks`
-- follow-up reads for `blueprint_tags`, `tags`, and `source_pages`
-- client-side hiding/grouping logic layered on top
+c2) [have] The earlier `My Feed` aggregation slice is now legacy compatibility-only.
+Current state:
+- `/my-feed` now redirects to `/wall`
+- `GET /api/my-feed` remains available as a compatibility endpoint
+- the landed `My Feed` aggregation work is no longer the active proving surface for this plan
 
-c3) [have] `Channel feed` is the next strongest candidate after `My Feed`.
+c3) [have] `Channel feed` is now the strongest active aggregation candidate.
 Current frontend fan-out in [useChannelFeed.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useChannelFeed.ts):
 - base `blueprints` read
 - `user_feed_items` read
@@ -43,7 +42,7 @@ Current frontend fan-out in [useUserProfile.ts](/mnt/c/Users/Dell/Documents/VSC/
 - `user_comments`
 - `user_activity` assembled from multiple reads
 
-c5) [have] `Blueprint search` and `Explore` still fan out in the browser, but they are weaker first targets than `My Feed`.
+c5) [have] `Blueprint search` and `Explore` still fan out in the browser, but they are weaker first targets than `Channel feed` or profile tabs.
 Reasons:
 - search flow mixes multiple query modes and dedupe behavior in [useBlueprintSearch.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useBlueprintSearch.ts)
 - explore flow mixes heterogeneous result types in [useExploreSearch.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useExploreSearch.ts)
@@ -111,10 +110,10 @@ g1) [have] Phase 1: audit frontend fan-out and screen/task candidates.
 - shortlist the best aggregation candidates
 - progress note:
   - shortlisted candidates are now:
-    - `My Feed`
     - `Channel feed`
     - `User profile tabs`
     - `Blueprint search` / `Explore` as secondary follow-ups
+  - the earlier `My Feed` slice is retained only as legacy compatibility context and is no longer the active proving target
   - `Wall` is explicitly deprioritized because it already uses backend-shaped feed endpoints
   - the audit confirms the main remaining leverage is in auth/read-heavy browser-side stitching rather than public wall feed assembly
 
@@ -122,15 +121,17 @@ g2) [have] Phase 2: rank the best first aggregation target.
 - choose one screen only
 - justify the selection by impact, effort, and UX risk
 - progress note:
-  - recommended first target: `My Feed`
+  - recommended first active target: `Channel feed`
   - why it wins:
-    - highest obvious client-side fan-out in one hook
+    - highest obvious active client-side fan-out in one still-used screen
     - stable, read-mostly view-model
     - strong likely request-count and payload reduction
-    - one clear consumer path through [useMyFeed.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useMyFeed.ts) and [MyFeed.tsx](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/pages/MyFeed.tsx)
+    - one clear consumer path through [useChannelFeed.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useChannelFeed.ts) and [ChannelPage.tsx](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/pages/ChannelPage.tsx)
     - rollback is straightforward because the current hook can remain intact until the new endpoint proves itself
-  - runner-up target: `Channel feed`
-  - third target: `User profile tabs`, likely as multiple narrower aggregations rather than one giant endpoint
+  - runner-up target: `User profile tabs`
+  - third target: `Blueprint search` / `Explore`
+  - historical note:
+    - the earlier `My Feed` slice landed as `GET /api/my-feed`, but that surface is now legacy compatibility-only and no longer drives the plan order
 
 g3) [have] Phase 3: define one aggregated endpoint alongside the existing path.
 - keep business logic in shared backend services/helpers where possible
@@ -148,20 +149,21 @@ g4) [have] Phase 4: migrate one consumer only.
   - [useMyFeed.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useMyFeed.ts) is now the single migrated consumer
   - `My Feed` now prefers the backend-shaped read path and falls back to the earlier browser-side hydration if the endpoint is unavailable
 
-g5) [todo] Phase 5: measure request/egress change and decide the next target.
-- compare before/after request shape
-- decide whether to keep going, pause, or close the plan
+g5) [todo] Phase 5: retire `My Feed` from the active proving surface and start the next target.
+- record `My Feed` as compatibility-only
+- define the first additive `Channel feed` aggregation cut
+- keep going from the current active surface instead of proving a legacy redirect
 
 ## Acceptance Criteria
-h1) [todo] One initial aggregation target is implemented and verified without a behavior regression.
+h1) [todo] One current active aggregation target is implemented and verified without a behavior regression.
 
 h2) [todo] The new aggregated path demonstrably reduces client fan-out or payload churn for that surface.
 
 h3) [todo] The rollout remains rollback-safe and does not require a broad rewrite.
 
 ## Related Plans
-i1) [have] TanStack Query tuning is now on pause pending later proof/closure:
-- [tanstack-query-tuning-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/active/on-pause/tanstack-query-tuning-plan.md)
+i1) [have] TanStack Query tuning is completed:
+- [tanstack-query-tuning-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/completed/tanstack-query-tuning-plan.md)
 
 i2) [have] The broader backend/frontend egress history remains on pause here:
 - [supabase-egress-reduction-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/active/on-pause/supabase-egress-reduction-plan.md)

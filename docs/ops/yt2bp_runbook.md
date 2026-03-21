@@ -46,11 +46,11 @@
   - `Joined` is auth-only and shows only published blueprints from Bleu channels the viewer has joined.
   - `All` is the global published-blueprint lane across all Bleu channels.
 - Personal-first routing is now expected:
-  - generated draft is saved to `My Feed` (`user_feed_items.state = my_feed_published` for direct/manual paths, `my_feed_unlockable` for new subscription uploads).
+  - generated draft is saved into Home `For You`; backing personal-lane row states still use legacy names (`user_feed_items.state = my_feed_published` for direct/manual paths, `my_feed_unlockable` for new subscription uploads).
   - channel visibility is handled by auto-channel pipeline when enabled.
   - `/youtube` runs core generation first and executes optional AI review asynchronously after core success.
-  - `Save to My Feed` is non-blocking while optional review completes and attaches later.
-  - save-time blueprint persistence also writes `blueprints.preview_summary` as the cheap teaser field for Wall/Explore/Channel/Search/My Feed cards.
+  - `Save to Home` is non-blocking while optional review completes and attaches later.
+  - save-time blueprint persistence also writes `blueprints.preview_summary` as the cheap teaser field for Wall/Explore/Channel/Search cards.
   - YouTube-source banners are thumbnail-first (`source_items.thumbnail_url` or deterministic `ytimg` fallback).
   - banner prompts are visual-only by policy (no readable text/typography/logos/watermarks).
 - Gate runtime mode:
@@ -65,7 +65,7 @@
 - Auto-channel endpoint:
   - `GET /api/my-feed`
   - `POST /api/my-feed/items/:id/auto-publish`
-  - current rollout expectation: `GET /api/my-feed` is the preferred hydrated read path for the operational personal lane, while browser-side fallback remains available if the endpoint is unavailable
+  - current compatibility expectation: `GET /api/my-feed` remains available for legacy flows, but the active user-facing lane is Home `For You` on `/wall`
 - Source-page endpoints:
   - `GET /api/source-pages/:platform/:externalId` (public read)
   - `GET /api/source-pages/:platform/:externalId/blueprints` (public source-page feed, deduped by source video, cursor-paginated, includes additive `source_thumbnail_url`)
@@ -678,7 +678,7 @@ select * from public.set_generation_plan_by_email('user@example.com', 'plus', 10
 - Action:
   1) Inspect `source_item_unlocks` (`last_error_code`, `transcript_status`, `transcript_attempt_count`, `transcript_no_caption_hits`).
   2) Confirm `transcript_status='confirmed_no_speech'` before treating as permanent.
-  3) Confirm locked-card suppression on `My Feed`, Home `For You`, profile feed, and Source Page Video Library.
+  3) Confirm locked-card suppression on Home `For You`, profile feed, Source Page Video Library, and any exercised legacy `My Feed` compatibility view.
   4) Do not enqueue retry jobs for confirmed permanent rows; only transient transcript errors should retry.
 
 ### `candidate_pending_manual_review` growth
@@ -707,7 +707,7 @@ select * from public.set_generation_plan_by_email('user@example.com', 'plus', 10
   0) Confirm runtime mode first (`CHANNEL_GATES_MODE`).
      - in `bypass`, reject spikes should come from explicit manual reject paths, not automated gate blocks.
   1) Inspect `channel_gate_decisions.reason_code` distribution.
-  2) Confirm reject path is preserving personal visibility (My Feed should remain visible).
+  2) Confirm reject path is preserving personal visibility (Home `For You` should remain visible; legacy `My Feed` compatibility view should still align if exercised).
   3) Escalate only after checking for source-content drift (e.g., different incoming topic mix).
 
 ## Rollback / fallback controls
@@ -832,7 +832,7 @@ Expected behavior:
 - future uploads are ingested automatically.
 - subscription rows returned by `GET /api/source-subscriptions` may include `source_channel_avatar_url` from stored `source_pages` metadata; missing avatars return `null` and should not trigger live YouTube asset fetches on the request path.
 - `subscription_notice` source metadata may include `channel_banner_url` for notice-card backgrounds.
-- unsubscribing (`DELETE /api/source-subscriptions/:id`) removes the user-scoped notice card from My Feed for that channel.
+- unsubscribing (`DELETE /api/source-subscriptions/:id`) removes the user-scoped notice card from Home `For You` for that channel (and from any exercised legacy `My Feed` compatibility view).
 - subscription auto-ingest generation runs with review enabled and banner disabled by default.
 
 Manual refresh scan (auth required):
@@ -856,7 +856,7 @@ curl -sS -X POST https://api.bleup.app/api/source-subscriptions/refresh-generate
 Expected behavior:
 - request returns quickly with `job_id` and `queued_count`
 - generation continues asynchronously in background
-- progress is visible via `ingestion_jobs` (scope `manual_refresh_selection`) and resulting My Feed inserts
+- progress is visible via `ingestion_jobs` (scope `manual_refresh_selection`) and resulting personal-lane inserts
 - successful generation advances subscription checkpoint forward (`last_seen_published_at` / `last_seen_video_id`) for touched subscriptions
 - route guardrails:
   - max selected items per run = `20` (`MAX_ITEMS_EXCEEDED`)

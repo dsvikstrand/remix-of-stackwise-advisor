@@ -34,8 +34,6 @@ This file is the authoritative active/on-pause/deserted/completed registry for e
   Historical paused hardening reference.
 - `docs/exec-plans/active/on-pause/supabase-egress-reduction-plan.md`
   Paused broader backend/frontend egress reduction plan; retained as reference while backend aggregation is the current focused implementation track.
-- `docs/exec-plans/active/on-pause/tanstack-query-tuning-plan.md`
-  Paused after implementation; only the later proof/measurement + completion move remains.
 
 ## Deserted / Superseded
 - These files are preserved for history only. They must not be resumed without a new explicit replacement plan.
@@ -89,6 +87,8 @@ This file is the authoritative active/on-pause/deserted/completed registry for e
   Completed: transcript-provider launch execution, migration apply sequence, deploy, and proof logging.
 - `docs/exec-plans/completed/pre-launch-ui-ux-plan.md`
   Completed: pre-launch navigation, interpretability, Help, and Home onboarding pass.
+- `docs/exec-plans/completed/tanstack-query-tuning-plan.md`
+  Completed: conservative global defaults plus explicit live/semi-live/static-ish query behavior, with post-change proof showing lower browser-attributed request churn.
 
 ## Current Program Snapshot
 - Core identity lock: `docs/app/core-direction-lock.md`.
@@ -100,7 +100,7 @@ This file is the authoritative active/on-pause/deserted/completed registry for e
 - PWA rollout follow-up is on pause.
 - Runtime simplification follow-up is on pause.
 - The broader Supabase egress program is on pause while backend aggregation is the current focused structural read-reduction track.
-- TanStack Query tuning is on pause pending later proof/measurement and likely completion.
+- TanStack Query tuning is completed.
 - Transcript-provider robustness work is completed, with later live-proof items carried into the proof tail.
 - `PTP` install docs and the broad cleanup umbrella are deserted/superseded, not active.
 

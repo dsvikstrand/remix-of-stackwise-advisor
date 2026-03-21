@@ -10,7 +10,7 @@ interface HomeOnboardingCardProps {
 const STEPS = [
   {
     title: 'Home is where things land',
-    description: 'My Feed follows your subscriptions. Joined follows your channels. All shows every public blueprint.',
+    description: 'For You follows your subscriptions. Joined follows your channels. All shows every public blueprint.',
     icon: Home,
   },
   {
@@ -69,7 +69,7 @@ export function HomeOnboardingCard({ onDismiss }: HomeOnboardingCardProps) {
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Tip: Manual only subscriptions can place locked items in My Feed. When you are ready, it costs 1 credit to turn one into a blueprint.
+          Tip: Manual only subscriptions can place locked items in For You. When you are ready, it costs 1 credit to turn one into a blueprint.
         </p>
       </CardContent>
     </Card>

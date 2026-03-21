@@ -29,13 +29,13 @@ Status: `canonical`
 ## Locked core (MVP)
 1. Source-first product identity.
 2. YouTube is the only required adapter in MVP.
-3. `My Feed` is the personal default lane.
-4. Home feed (`/wall`) is automatically populated from `My Feed` via auto-channel checks.
+3. Home feed (`/wall`) with `For You` is the personal default lane.
+4. `/my-feed` is a legacy compatibility route that redirects to `/wall` and is not a primary product surface.
 5. Community value is comments/votes/insights on blueprint content.
 6. Channel routing mode is env-driven (`deterministic_v1` default, `llm_labeler_v1` optional) and falls back to `general` on ambiguous/invalid label output.
 7. Feed/detail surfaces prioritize source-channel context for imported media over creator-edit workflows in MVP UI.
 8. Profile visibility is public-by-default for new accounts (`profiles.is_public=true` default); existing privacy choices remain respected.
-9. My Feed blueprint card badge label is normalized to `Blueprint`, and feed tags use the same one-row capped chip treatment as Home (without `#` prefix).
+9. Legacy `My Feed` compatibility blueprint cards keep the normalized `Blueprint` badge label and same one-row capped chip treatment as Home (without `#` prefix).
 10. Signed-in primary nav is `Home / Channels / Explore`; search/create entrypoint is the header `Create` action to `/search`.
 11. Subscriptions are reachable from both user dropdown (full page) and profile workspace owner tab (lightweight list).
 12. Core high-traffic UI copy must use current runtime language (`Home`, `Create`, auto-channel publish) and avoid legacy manual-post wording.
@@ -48,7 +48,7 @@ Status: `canonical`
 19. Source pages are public-readable and subscribe/unsubscribe capable; legacy `/api/source-subscriptions*` endpoints remain compatibility-safe during migration.
 20. Source pages may lazily hydrate missing avatar/banner metadata on first read so backfilled legacy rows render complete visuals without requiring unsubscribe/resubscribe.
 21. Source pages include a public, read-only blueprint feed (`GET /api/source-pages/:platform/:externalId/blueprints`) that shows channel-published items only, deduped by source video and paginated via load-more cursor.
-22. Source pages include an auth-only, user-triggered `Video Library` section for back-catalog generation (`GET /api/source-pages/:platform/:externalId/videos`, `POST /api/source-pages/:platform/:externalId/videos/unlock`) and run generation asynchronously through existing My Feed + auto-channel pipeline.
+22. Source pages include an auth-only, user-triggered `Video Library` section for back-catalog generation (`GET /api/source-pages/:platform/:externalId/videos`, `POST /api/source-pages/:platform/:externalId/videos/unlock`) and run generation asynchronously through the existing personal-lane + auto-channel pipeline.
 23. User-facing Source Page `Video Library` copy should frame the library as an optional browse-when-ready feature, not expose internal quota/API-fetch implementation details.
 24. Source-page Video Library filter UX is two-tab in MVP (`Full videos` and `Shorts`), with shorts classified by duration threshold `<=60s`.
 25. Source-page Video Library list traffic uses dual guardrails in backend (burst + sustained per-user/IP) so normal tab/list interaction is smooth while abuse remains capped.
@@ -61,7 +61,7 @@ Status: `canonical`
     - `Joined` is the auth-only published-blueprint lane filtered by joined Bleu channels.
     - `All` is the global published-blueprint aggregation across Bleu channels.
 31. A manually unlocked blueprint from a non-subscribed source must appear in that user’s `For You`, but future videos from that source do not enter `For You` unless the user subscribes.
-32. Unlock status visibility must be consistent across Home, Source Page, and My Feed using a shared activity/status pattern with reload-resume support.
+32. Unlock status visibility must be consistent across Home, Source Page, and any legacy `My Feed` compatibility flow using a shared activity/status pattern with reload-resume support.
 33. Credits panel should load lazily on open, show daily reset timing, and keep debit/refund visibility without background polling from always-mounted UI.
 34. Home should provide first-time scope clarity (`For You`, `Joined`, and `All`) with dismissible helper copy where needed.
 35. Unlock backend reliability uses safe auto-fix sweeps (expired/stale/orphan recovery) with idempotent refund/fail transitions; no destructive cleanup.
@@ -73,7 +73,7 @@ Status: `canonical`
 40a. User-scoped ingestion status routes must stay egress-conscious: `latest-mine` should avoid redundant active-then-latest double reads, and `active-mine` queue-position scans should narrow to the requested or currently visible queued scopes rather than scanning all queue scopes by default.
 41. Unlock queue items carry explicit `unlock_origin` metadata (`manual_unlock`, `subscription_auto_unlock`, `source_auto_unlock_retry`) for recovery and traceability.
 42. Profile workspace tabs are locked to `Feed / Comments / Liked`; subscriptions management remains a dedicated page (`/subscriptions`) and not a profile tab.
-43. Profile `Feed` is read-only personal history for generated blueprints and subscribed creators; operational controls remain exclusive to `/my-feed`.
+43. Profile `Feed` is read-only personal history for generated blueprints and subscribed creators; operational controls remain on Home `For You`, while `/my-feed` is compatibility-only.
 44. Blueprint feed cards are interaction-minimal in MVP (like/comment only; no share action button).
 45. Subscription sync must skip pre-release YouTube premieres (`upcoming`) so unreleased videos do not appear as unlock cards before publish.
 46. If a sync batch contains skipped upcoming premieres, subscription checkpoint advancement is held for that run to avoid missing those videos once they release.
@@ -101,15 +101,15 @@ Status: `canonical`
 66. Blueprint YouTube refresh bookkeeping must stay egress-conscious: scheduler pending-job checks should batch by refresh kind/candidate set, and manual refresh entrypoints must not rewrite refresh-state rows when an enabled row already exists.
 67. Queue lease maintenance must also stay egress-conscious: worker heartbeats should refresh on a lease-aware cadence instead of a fixed chatty interval, while preserving the same lease ownership semantics.
 68. Durable generation trace writes must stay egress-conscious: avoid per-event sequence lookups and avoid returning trace row payloads on writes when the caller does not use them.
-69. Static-ish frontend read surfaces (`Wall`, `Search`, `Explore`, `My Feed`, channel feeds, blueprint detail/comments, profile tabs) must use explicit conservative TanStack Query freshness windows with no focus-triggered refetch by default; only live/semi-live surfaces should opt into tighter behavior.
-70. `My Feed` read hydration should prefer one backend-shaped auth endpoint (`GET /api/my-feed`) over browser-side multi-table fan-out, while keeping rollback-safe fallback available until the aggregated path is fully proven.
+69. Static-ish frontend read surfaces (`Wall`, `Search`, `Explore`, channel feeds, blueprint detail/comments, profile tabs) must use explicit conservative TanStack Query freshness windows with no focus-triggered refetch by default; only live/semi-live surfaces should opt into tighter behavior.
+70. `GET /api/my-feed` is retained as a legacy compatibility endpoint only; it is no longer the active primary read surface now that `/my-feed` redirects to `/wall`.
 
 ## Core user journey
 1. Subscribe to a YouTube channel or look up one specific video by link, video id, or title.
-2. Generate/import blueprint into `My Feed`.
+2. Generate/import blueprint into Home `For You`.
 3. System auto-evaluates and posts eligible blueprints to channels.
 4. Engage through community interactions in Home lanes (`For You`, `Joined`, `All`, and channel scopes).
-5. Use profile workspace (`/u/:userId`) tabs `Feed / Comments / Liked` for personal history; `/my-feed` remains a compatibility/direct route.
+5. Use profile workspace (`/u/:userId`) tabs `Feed / Comments / Liked` for personal history; `/my-feed` remains a compatibility redirect only.
 
 ## What is not core right now
 1. Library-first creation is deprecated as primary identity.

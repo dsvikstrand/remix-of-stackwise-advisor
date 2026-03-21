@@ -97,9 +97,9 @@ export default function Subscriptions() {
         <PageSection>
           <div className="space-y-2">
             <p className="text-sm font-semibold text-primary uppercase tracking-wide">Subscriptions</p>
-            <h1 className="text-2xl font-semibold">Follow creators and shape My Feed</h1>
+            <h1 className="text-2xl font-semibold">Follow creators and shape Home</h1>
             <p className="text-sm text-muted-foreground">
-              Subscriptions follow creators you trust. Their videos shape My Feed.
+              Subscriptions follow creators you trust. Their videos shape your Home feed.
             </p>
             <p className="text-sm text-muted-foreground">
               Auto generate uses credits automatically when new videos arrive. Manual only lets you choose which videos to turn into blueprints.

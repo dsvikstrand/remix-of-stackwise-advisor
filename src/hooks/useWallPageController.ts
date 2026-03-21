@@ -418,7 +418,7 @@ export function useWallPageController() {
     () =>
       user
         ? [
-            { value: SCOPE_FOR_YOU, label: 'My Feed' },
+            { value: SCOPE_FOR_YOU, label: 'For You' },
             { value: SCOPE_ALL, label: 'All' },
             { value: SCOPE_JOINED, label: 'Joined' },
           ]

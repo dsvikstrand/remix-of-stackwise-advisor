@@ -37,20 +37,20 @@ a4q) [have] Current runtime video behavior on `/search` is now bounded single-vi
 a4s) [have] Current runtime creator lookup is now also bounded: exact channel URL / handle / channel id first, bare handles work without requiring `@`, helper-backed name lookup stays second, and only a tiny candidate set is returned instead of broad paginated channel discovery.
 a4r) [have] Source Page `Video Library` is now loaded on explicit user request instead of auto-fetching on page open, which reduces background YouTube API usage on normal source-page reads.
 a4t) [have] Active Supabase egress-reduction work has now also throttled no-op subscription sync writes (`user_source_subscriptions`) behind a `15m` backend heartbeat; treat that as current runtime truth even though detailed proof/next steps live in the active egress plan.
-a4u) [have] Card/list teaser copy is now expected to come from stored `blueprints.preview_summary`, keeping Wall/Explore/Channel/Search/My Feed previews summary-like without list-surface `sections_json` loads.
+a4u) [have] Card/list teaser copy is now expected to come from stored `blueprints.preview_summary`, keeping Wall/Explore/Channel/Search previews summary-like without list-surface `sections_json` loads; legacy `My Feed` compatibility support remains additive only.
 a4v) [have] User-scoped ingestion status routes are now part of the egress-hardening baseline: `latest-mine` avoids redundant double reads and `active-mine` narrows queue-position scans to requested/visible scopes.
 a4v) [have] YouTube refresh bookkeeping now avoids per-candidate pending-job reads and skips redundant manual refresh-state registration when an enabled row already exists.
 a4w) [have] Queue maintenance is now less chatty by default: worker lease heartbeats use a lease-aware cadence (`30s` on the default `90s` lease) instead of the older `10s` default.
 a4x) [have] Durable generation trace writes are now slimmer by default: event sequencing reuses a per-run cursor and trace writes skip returned row payloads when the caller does not consume them.
 a4y) [have] Frontend TanStack Query tuning is now in a dedicated active plan; global defaults plus live/semi-live/static-ish overrides are being made explicit so non-live list/detail surfaces stop relying on focus-triggered default refetch churn.
-a4z) [have] `My Feed` now has an additive backend-shaped auth read path (`GET /api/my-feed`) that collapses browser-side multi-table hydration into one payload while preserving rollback-safe fallback to the earlier client-side stitching path.
+a4z) [have] Legacy `My Feed` compatibility flow now has an additive backend-shaped auth read path (`GET /api/my-feed`) that collapses browser-side multi-table hydration into one payload while preserving rollback-safe fallback to the earlier client-side stitching path.
 a5) [todo] Improve user trust around shared-cost auto billing transitions and async processing visibility.
 a6) [todo] Reduce terminology ambiguity between personal stream, followed channels, source pages, and channel taxonomy.
 
 ## MVP Priorities
 
 ### P0 - Trust and Clarity (user-facing)
-b1) [todo] Add one shared card-state legend (`Locked`, `Unlocking`, `Ready`) reused on Home, Source Page, and My Feed.
+b1) [todo] Add one shared card-state legend (`Locked`, `Unlocking`, `Ready`) reused on Home, Source Page, and any remaining legacy `My Feed` compatibility flow.
 b2) [todo] Add lightweight recent-activity panel for generation jobs (queued/running/succeeded/failed).
 b3) [todo] Improve credit transparency in UI: latest debit event, refill pace, and next refill timer.
 b4) [todo] Add first-unlock guided milestone in onboarding so users see a complete success loop quickly.

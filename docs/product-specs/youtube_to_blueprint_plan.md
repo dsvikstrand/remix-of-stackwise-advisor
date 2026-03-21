@@ -13,7 +13,7 @@ Interpretation
 a1) [have] Clear wedge: `YouTube URL -> editable blueprint draft`.
 a2) [have] Strict MVP path is implemented for single-video YouTube flows.
 a3) [have] Real endpoint is live: `POST /api/youtube-to-blueprint`.
-a4) [have] Public route is live at `/youtube` and now routes generated output into personal lane (`/my-feed`) before channel sharing.
+a4) [have] Public route is live at `/youtube` and now routes generated output into the personal lane; current runtime lands users on Home `For You`, while legacy `/my-feed` remains compatibility-only.
 a5) [have] Focused YT2BP pilot completed and reviewed.
 a6) [have] YT2BP quality gate (LLM grading, min-score, retry) is wired server-side.
 a7) [have] YT2BP content safety gate (LLM grading + one retry) is wired server-side.
@@ -28,18 +28,18 @@ a15) [have] 2026-02-13 UI note: Project 3 Step 1 join-state wiring (Explore/Chan
 a16) [have] 2026-02-13 UI note: Channels IA routing foundation (`/channels`, `/b/:channelSlug`, `/tags` deprecation redirect, curated catalog guards) is frontend-only and does not change YT2BP API/runtime contract.
 a17) [have] 2026-02-13 UI note: Channel-scoped `+ Create` flow gates public publishing behind joined channels and routes to `/youtube?channel=<slug>&intent=post`; frontend-only and does not change YT2BP API/runtime contract.
 a18) [have] 2026-02-13 UI note: App-wide wall-to-wall layout migration (Run 1) updates the YouTube page framing to a minimal document-like layout (no ambient blobs/gradients, tighter gutters); frontend-only and does not change YT2BP API/runtime contract.
-a19) [have] 2026-02-17 flow update: generated YouTube drafts are saved to `My Feed` first (`my_feed_published`).
-a20) [have] 2026-02-18 backend update: auto-channel pipeline can publish saved My Feed items through deterministic channel assignment (`general`) and deterministic gate checks.
+a19) [have] 2026-02-17 flow update: generated YouTube drafts are saved to the personal lane first (backing state `my_feed_published`; active UI surface is now Home `For You`).
+a20) [have] 2026-02-18 backend update: auto-channel pipeline can publish saved personal-lane items through deterministic channel assignment (`general`) and deterministic gate checks.
 a21) [have] 2026-02-17 UX update: optional AI review and banner run as separate post-generation steps (core draft completes first).
 a22) [have] 2026-02-17 gating note: production channel-gate runtime is currently bypass-first (`EVAL_BYPASSED`) pending enforcement rollout.
 a23) [have] 2026-02-18+ default update: `/youtube` keeps core endpoint calls forced-off (`generate_review=false`, `generate_banner=false`) for fast generation and currently exposes AI review-only optional post-processing.
 a24) [have] 2026-02-18+ search handoff update: `Generate Blueprint` on `/search` opens `/youtube` with a prefilled video URL and review-focused staged progress in one place.
 a25) [have] 2026-02-18 ingestion default update: subscription auto-ingestion enables review by default and keeps banner generation off by default for throughput.
-a26) [have] 2026-02-18 search handoff now also carries channel context (`channel_id`, `channel_title`, `channel_url`) so saved source rows can show channel name in `My Feed`.
+a26) [have] 2026-02-18 search handoff now also carries channel context (`channel_id`, `channel_title`, `channel_url`) so saved source rows can show channel name in the personal lane, including legacy `My Feed` compatibility views.
 a27) [have] 2026-02-18 save-path hardening now preserves and reuses channel-title metadata on source upsert, preventing subtitle fallback to duplicated post title.
-a28) [have] 2026-02-18 save-path update: optional AI review continues asynchronously after core generation and can attach to a saved blueprint without blocking `Save to My Feed`.
+a28) [have] 2026-02-18 save-path update: optional AI review continues asynchronously after core generation and can attach to a saved blueprint without blocking `Save to Home`.
 a29) [have] 2026-02-18 backend timeout update: core endpoint timeout is now configurable via `YT2BP_CORE_TIMEOUT_MS` (default `120000`).
-a30) [have] 2026-02-18 save-path update: `POST /api/my-feed/items/:id/auto-publish` is used to auto-publish URL/search saves after `Save to My Feed`.
+a30) [have] 2026-02-18 save-path update: `POST /api/my-feed/items/:id/auto-publish` is used as the legacy compatibility mutation path for auto-publishing URL/search saves after `Save to Home`.
 a31) [have] 2026-02-18 terminology update: high-traffic UI copy now uses `Home`/`Create`/auto-publish wording consistently; this is UI-only and does not change YT2BP API/runtime contract.
 a32) [have] 2026-02-20 source unlock update: source-page video-library generation now uses shared unlock flow (`POST /api/source-pages/:platform/:externalId/videos/unlock`), with refill-credit accounting outside YT2BP contract scope.
 a33) [have] 2026-02-20 subscription sync update: new subscription uploads create unlockable feed rows first (`my_feed_unlockable`) and no longer force immediate per-user blueprint generation.
@@ -155,7 +155,7 @@ c5) [todo] Implement runtime `llm_instruction_security_v0` (prompt injection / j
 
 ### Step 1 - Ship the Simple YT2BP Entry
 d1) [have] `/youtube` is live and reachable via channel-scoped `+ Create` flow (nav entry optional/hidden).
-d1b) [have] Post-generation action now defaults to `Save to My Feed` with route transition to `/my-feed`.
+d1b) [have] Post-generation action now defaults to `Save to Home`; legacy `/my-feed` is a compatibility redirect only.
 d2) [have] Keep the page minimal:
 - One URL input.
 - One primary action: `Generate Blueprint`.

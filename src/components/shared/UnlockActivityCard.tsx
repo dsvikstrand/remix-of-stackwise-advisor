@@ -42,7 +42,7 @@ export function UnlockActivityCard({
           <div className="mt-2 flex items-center gap-2">
             {showViewMyFeed && activity.status === 'succeeded' && activity.insertedCount > 0 ? (
               <Button asChild size="sm" variant="outline" className="h-7 px-2.5 text-xs">
-                <Link to="/my-feed">View My Feed</Link>
+                <Link to="/wall">View Home</Link>
               </Button>
             ) : null}
             {onClear ? (

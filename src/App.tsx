@@ -16,7 +16,6 @@ import Channels from "./pages/Channels";
 import ChannelPage from "./pages/ChannelPage";
 import PostDetail from "./pages/PostDetail";
 import SearchPage from "./pages/Search";
-import MyFeed from "./pages/MyFeed";
 import Subscriptions from "./pages/Subscriptions";
 import SourcePage from "./pages/SourcePage";
 import BlueprintDetail from "./pages/BlueprintDetail";
@@ -61,9 +60,7 @@ const App = () => (
               <Route path="/channels" element={<Channels />} />
               <Route path="/search" element={<RequireAuth><SearchPage /></RequireAuth>} />
               <Route path="/b/:channelSlug" element={<ChannelPage />} />
-              {config.features.myFeedV1 && (
-                <Route path="/my-feed" element={<RequireAuth><MyFeed /></RequireAuth>} />
-              )}
+              <Route path="/my-feed" element={<RequireAuth><Navigate to="/wall" replace /></RequireAuth>} />
               {config.features.myFeedV1 && (
                 <Route path="/subscriptions" element={<RequireAuth><Subscriptions /></RequireAuth>} />
               )}

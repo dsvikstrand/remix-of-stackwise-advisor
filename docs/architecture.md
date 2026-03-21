@@ -9,11 +9,11 @@
   - those artifacts are historical-only and do not define current runtime architecture contracts
 - Product scope:
   - Source-first blueprint app.
-  - Personal unfiltered feed (`My Feed`) as primary lane.
-  - Home feed (`/wall`) as split lane:
+  - Home feed (`/wall`) as the active primary feed surface:
     - `For You` (auth): personal source-driven stream with locked + unlocked items, latest-first.
     - `Joined` (auth): published-blueprint stream filtered by joined Bleu channels.
     - `All` + `b/<slug>`: public published-blueprint discovery scopes.
+  - `/my-feed` is now legacy compatibility-only and redirects to `/wall`.
 - Current adapter baseline:
   - YouTube adapter is production-ready for direct URL generation and subscription ingestion.
 - Non-goals in current MVP:
@@ -47,33 +47,30 @@
     - installed mode uses the same frontend bundle, same backend API, and same Supabase auth/session model as browser mode
     - runtime behavior remains online-first: static shell/offline fallback are supported, but authenticated feed/subscription/generation data is still network-driven
     - normal production frontend publishes now default to `pwa_runtime_v1=true` and `pwa_install_cta_v1=true`, with manual workflow override retained for rollback
-  - Personal workspace is profile-first at `/u/:userId` with tabs `Feed / Comments / Liked`; the `Feed` tab is read-only profile history for generated blueprints and subscribed creators, while `/my-feed` remains the operational personal lane and direct-access route.
+  - Personal workspace is profile-first at `/u/:userId` with tabs `Feed / Comments / Liked`; the `Feed` tab is read-only profile history for generated blueprints and subscribed creators, while `/my-feed` is compatibility-only and redirects to `/wall`.
   - Profile visibility default is public for new accounts (`profiles.is_public=true` by default).
   - Live adapter UI in `src/pages/YouTubeToBlueprint.tsx`.
     - `/youtube` runs a core-first request (`generate_review=false`, `generate_banner=false`) and executes optional AI review as an async post-step.
-    - `Save to My Feed` is intentionally non-blocking while optional post-steps finish; completed review updates are attached to the saved blueprint later.
+    - `Save to Home` is intentionally non-blocking while optional post-steps finish; completed review updates are attached to the saved blueprint later.
     - the YT2BP response still uses a `draft` envelope, but the canonical blueprint content inside it is `draft.sectionsJson` with schema `blueprint_sections_v1`.
     - `draft.steps`, `draft.summaryVariants`, and `draft.notes` are compatibility carryovers during the contract cutover and should not be treated as equal current-runtime blueprint shapes.
     - YouTube-source banners are thumbnail-first (`source_items.thumbnail_url` with deterministic `ytimg` fallback), not generated-banner-first.
     - banner prompt path is constrained to visual-only output (no readable text/typography/logos/watermarks).
   - Auth-only lookup UI in `src/pages/Search.tsx` for finding one specific YouTube video, then generating only when the app finds a confident match.
-  - Live feed/community surfaces in `src/pages/MyFeed.tsx`, `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
+  - Live feed/community surfaces in `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
     - `Wall` now loads backend-hydrated feed responses for both public lanes and `For You` instead of reconstructing feed rows through browser-side Supabase fan-out.
     - card teaser copy now prefers stored `blueprints.preview_summary`, so list surfaces keep summary-like snippets without reloading canonical `sections_json`.
     - TanStack Query freshness is now explicit by surface class:
       - live/semi-live hooks declare their own polling/stale rules locally.
-      - static-ish list/detail reads (`Wall`, `Search`, `Explore`, `My Feed`, channel feed, blueprint detail/comments, profile tabs) use conservative stale windows and disable focus-triggered refetch by default.
+      - static-ish list/detail reads (`Wall`, `Search`, `Explore`, channel feed, blueprint detail/comments, profile tabs) use conservative stale windows and disable focus-triggered refetch by default.
     - `Wall` feed contract is:
       - `For You`: the only lane that may contain locked items; built from subscribed-source content plus personally unlocked blueprints.
       - `Joined`: generated/published blueprints filtered by joined Bleu channels.
       - `All`: generated/published blueprints across all Bleu channels.
     - `Wall` route/scope/query/mutation orchestration now lives in a dedicated frontend controller hook, keeping the page file render-focused.
-  - `My Feed` blueprint rows use channel-feed-like visual cards, open detail on card click, and use footer status labels (`Posted to <Channel>`, `Publishing...`, or `In My Feed`) with a unified `Blueprint` badge.
-    - unlock activity status now uses a shared frontend tracker and compact status card across Home `For You`, Source Page `Video Library`, and `My Feed`.
-    - `My Feed` subscription notices render avatar and optional banner background; card click opens a details popup with confirm-gated `Unsubscribe`.
-    - subscription notice details popup is intentionally minimal (relative time + unsubscribe only).
-    - `My Feed` header includes both `Add Subscription` and `Manage subscriptions` entrypoints.
-    - `My Feed` read hydration now prefers one backend-shaped auth endpoint (`GET /api/my-feed`) instead of browser-side multi-table Supabase fan-out; the older browser path remains as fallback during rollout.
+  - Legacy compatibility surface in `src/pages/MyFeed.tsx` remains code-present, but `/my-feed` now redirects to `/wall`.
+    - `GET /api/my-feed` remains available as a compatibility-only hydrated read endpoint.
+    - old `My Feed` UI/state contracts remain preserved only as rollback-safe compatibility behavior.
   - Blueprint detail in `src/pages/BlueprintDetail.tsx` now prefers source-channel attribution for imported YouTube blueprints and hides edit CTA in default MVP UI.
   - Blueprint detail renders `Summary` as swipeable slides when content is chunkable (3-4 chunks) and keeps non-summary sections in standard text blocks.
   - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: popup creator lookup + subscribe + active-list `Unsubscribe`; aggregate health summary hidden for user clarity; row avatars shown when available).
@@ -125,7 +122,7 @@
       - `GET` returns optional `source_channel_avatar_url` from stored `source_pages` metadata and never blocks on live YouTube asset fetches
       - rows now carry `source_page_id` and `source_page_path` when resolvable.
       - rows now include `auto_unlock_enabled` (default `true`) and `PATCH` accepts `auto_unlock_enabled` updates.
-      - `POST` notice insertion stores channel avatar + optional banner metadata for My Feed notice-card rendering
+      - `POST` notice insertion stores channel avatar + optional banner metadata for personal-lane notice-card rendering (including legacy `My Feed` compatibility views)
       - `POST` ensures a platform-agnostic source-page row and dual-writes `source_page_id`.
       - `DELETE` deactivates subscription and removes user-scoped `subscription_notice` feed row for that channel
     - `GET /api/source-pages/:platform/:externalId` (public-readable source page + follower count + viewer subscription state)
@@ -180,7 +177,7 @@
     - `POST /api/auto-banner/jobs/trigger` (service auth, queue worker + cap rebalance)
     - `GET /api/auto-banner/jobs/latest` (service auth, queue snapshot)
     - `POST /api/debug/subscriptions/:id/simulate-new-uploads` (debug-only, service auth + `ENABLE_DEBUG_ENDPOINTS=true`; middleware allows service-token access without bearer user auth)
-    - `GET /api/my-feed` (auth-only hydrated My Feed read; additive backend-shaped aggregation path with rollback-safe frontend fallback)
+    - `GET /api/my-feed` (auth-only hydrated legacy `My Feed` compatibility read; additive backend-shaped aggregation path with rollback-safe frontend fallback)
     - `POST /api/my-feed/items/:id/accept|skip`
     - `POST /api/my-feed/items/:id/auto-publish`
   - Adapter abstraction in `server/adapters/*` (`BaseAdapter`, `YouTubeAdapter`, registry).
@@ -238,8 +235,8 @@
    - completion requires joining at least one Bleu channel; creator add/import is optional.
 2. Ingest source item (manual URL pull or subscription sync).
    - discovery option: user can look up one creator or one specific video in `/search` before selecting a source video.
-   - Search-generated `/youtube` handoff carries channel context (id/title/url) so saved source items retain channel subtitle data in My Feed.
-   - My Feed source subtitle mapping also falls back to source metadata channel title when column-level channel title is absent.
+   - Search-generated `/youtube` handoff carries channel context (id/title/url) so saved source items retain channel subtitle data in the personal lane, including legacy `My Feed` compatibility views.
+   - Legacy `My Feed` subtitle mapping also falls back to source metadata channel title when column-level channel title is absent.
    - `/youtube` core request is timeout-bounded by `YT2BP_CORE_TIMEOUT_MS` (default `120000`).
    - optional review generation is executed outside the core endpoint request and may attach after save.
 3. Subscription create/reactivate:
@@ -250,7 +247,7 @@
    - ensure platform-agnostic source page row (`source_pages`) and link subscription/source items via `source_page_id`.
    - no historical prefill on first subscribe in MVP.
    - create one persistent notice card (`user_feed_items.state = subscription_notice`) with avatar + optional banner metadata.
-   - unsubscribe removes that user-scoped notice card while preserving other My Feed blueprint items.
+   - unsubscribe removes that user-scoped notice card while preserving other personal-lane blueprint items.
 4. Subscription sync after checkpoint:
    - new uploads create unlockable feed rows (`my_feed_unlockable`) instead of immediate generation.
    - new uploads can auto-attempt unlock generation when eligible subscribers are available (`auto_unlock_enabled=true`).
@@ -339,7 +336,7 @@ Current production behavior note:
 - Distribution invariants:
   - Channel publish is never unconditional; automatic publishing is blocked on deterministic gate pass.
 - Compatibility invariants:
-  - Existing public blueprint feed and channel routes remain functional while `My Feed` is introduced.
+  - Existing public blueprint feed and channel routes remain functional while legacy `My Feed` compatibility behavior remains code-present.
   - Legacy library/inventory surfaces remain compatibility-only (non-core) until post-MVP cleanup.
   - Legacy no-blueprint pending/skipped rows are filtered out in `My Feed` rendering.
   - Legacy pending-card endpoints (`/api/my-feed/items/:id/accept|skip`) remain available for compatibility/operator flows.

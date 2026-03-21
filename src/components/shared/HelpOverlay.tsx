@@ -10,9 +10,9 @@ interface HelpOverlayProps {
 }
 
 const FLOW_STEPS = [
-  { label: 'Follow creators in Subscriptions', hint: 'Subscriptions follow creators you trust and shape My Feed.' },
+  { label: 'Follow creators in Subscriptions', hint: 'Subscriptions follow creators you trust and shape For You in Home.' },
   { label: 'Join topics in Channels', hint: 'Channels follow topics you care about and shape Joined.' },
-  { label: 'Check My Feed for ready and locked items', hint: 'Manual only subscriptions can send new videos to My Feed as locked items before you choose to generate them.' },
+  { label: 'Check Home for ready and locked items', hint: 'Manual only subscriptions can send new videos into For You as locked items before you choose to generate them.' },
   { label: 'Use Add to generate on purpose', hint: 'Paste a video, use a video id, or search when you want a blueprint right away.' },
 ];
 
@@ -23,10 +23,10 @@ const FEATURE_CARDS = [
     icon: Rss,
     bullets: [
       'Follows creators, not topics',
-      'Shapes My Feed',
+      'Shapes For You',
       'Auto generate can spend credits automatically',
-      'Manual only sends new videos to My Feed first',
-      'Locked My Feed items cost 1 credit to generate',
+      'Manual only sends new videos into For You first',
+      'Locked For You items cost 1 credit to generate',
     ],
   },
   {
@@ -40,7 +40,7 @@ const FEATURE_CARDS = [
     description: 'Home gives you three different streams.',
     icon: Home,
     bullets: [
-      'My Feed = creators you subscribe to',
+      'For You = creators you subscribe to',
       'Can contain ready blueprints and locked items',
       'Joined = channels you follow',
       'All = every public blueprint on Bleup',
@@ -86,13 +86,13 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                 <Card className="border border-border/60 bg-background/80">
                   <CardContent className="p-6 space-y-2">
                     <p className="text-sm font-semibold">Let’s get oriented</p>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
+                  <p className="text-sm text-muted-foreground leading-relaxed">
                       Bleup helps you turn useful creator content into blueprints you can actually use.
                       Subscriptions follow creators you trust. Channels follow topics you care about.
-                      Home then brings those together through three streams: My Feed from your subscriptions,
+                      Home then brings those together through three streams: For You from your subscriptions,
                       Joined from the channels you follow, and All for every public blueprint on Bleup.
                       Credits are used when Bleup generates a blueprint. If a subscription is Manual only,
-                      new videos can land in My Feed as locked items and cost 1 credit when you choose to turn one into a blueprint.
+                      new videos can land in For You as locked items and cost 1 credit when you choose to turn one into a blueprint.
                     </p>
                   </CardContent>
                 </Card>
@@ -152,7 +152,7 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                     <div>
                       <p className="text-sm font-semibold">Tip for first‑time users</p>
                       <p className="text-xs text-muted-foreground">
-                        Start by subscribing to one creator or joining one channel, then generate one blueprint from Add or open one from Home. If a creator is set to Manual only, look for locked items in My Feed.
+                        Start by subscribing to one creator or joining one channel, then generate one blueprint from Add or open one from Home. If a creator is set to Manual only, look for locked items in For You.
                       </p>
                     </div>
                     <Button
