@@ -1,4 +1,5 @@
 import type { IngestionJobRow } from './ingestionQueue';
+import { isLowPriorityQueueScope } from './queuePriority';
 
 export type QueueSweepPlanEntry = {
   scopes: readonly string[];
@@ -76,10 +77,17 @@ export function createQueuedIngestionWorkerController<DbClient>(
   let queuedWorkerRequested = false;
   let idlePollStreak = 0;
 
-  function computeIdleDelayMs() {
+  function computeIdleDelayMs(input?: { lowPriorityOnly?: boolean }) {
+    const lowPriorityOnly = Boolean(input?.lowPriorityOnly);
+    const idleBaseDelayMs = lowPriorityOnly
+      ? Math.max(keepAliveIdleBaseDelayMs, 30_000)
+      : keepAliveIdleBaseDelayMs;
+    const idleMaxDelayMs = lowPriorityOnly
+      ? Math.max(keepAliveIdleMaxDelayMs, 180_000)
+      : keepAliveIdleMaxDelayMs;
     const baseDelay = Math.min(
-      keepAliveIdleMaxDelayMs,
-      keepAliveIdleBaseDelayMs * (2 ** Math.max(0, idlePollStreak)),
+      idleMaxDelayMs,
+      idleBaseDelayMs * (2 ** Math.max(0, idlePollStreak)),
     );
     if (keepAliveIdleJitterRatio <= 0) {
       return baseDelay;
@@ -103,6 +111,7 @@ export function createQueuedIngestionWorkerController<DbClient>(
     if (!db) return;
 
     let claimedWorkThisRun = false;
+    let lowPriorityOnlySweepPlan = false;
     queuedWorkerRunning = true;
     try {
       do {
@@ -120,6 +129,11 @@ export function createQueuedIngestionWorkerController<DbClient>(
         }
 
         const sweepPlan = deps.getQueueSweepPlan();
+        lowPriorityOnlySweepPlan = sweepPlan.length > 0
+          && sweepPlan.every((entry) => (
+            entry.scopes.length > 0
+            && entry.scopes.every((scope) => isLowPriorityQueueScope(scope))
+          ));
         while (true) {
           let claimedAny = false;
           for (const planEntry of sweepPlan) {
@@ -151,7 +165,7 @@ export function createQueuedIngestionWorkerController<DbClient>(
         if (claimedWorkThisRun || queuedWorkerRequested) {
           idlePollStreak = 0;
         } else {
-          nextDelayMs = computeIdleDelayMs();
+          nextDelayMs = computeIdleDelayMs({ lowPriorityOnly: lowPriorityOnlySweepPlan });
           idlePollStreak += 1;
         }
         schedule(nextDelayMs);

@@ -177,10 +177,15 @@ h2) [have] Phase 2: implement the first `user_source_subscriptions` policy pass.
   - repeated error-path heartbeat throttling remains unchanged in this phase
   - focused backend tests now cover stale-heartbeat success no-op behavior
 
-h3) [todo] Phase 3: implement queue control-plane cadence tuning.
+h3) [have] Phase 3: implement queue control-plane cadence tuning.
 - reduce idle claim chatter where safe
 - preserve lease safety and queue responsiveness
 - verify queue health remains correct
+- progress note:
+  - low-priority idle claim sweeps now back off more aggressively than the default worker idle cadence
+  - the queue worker keeps the normal idle cadence for non-low-priority scopes
+  - claimed-work resets remain unchanged, so real queue work still re-schedules quickly
+  - `touch_ingestion_job_lease` semantics remain unchanged in this phase
 
 h4) [todo] Phase 4: implement YouTube refresh-state / view-count dedupe.
 - skip unchanged `view_count` metadata writes

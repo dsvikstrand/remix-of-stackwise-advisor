@@ -43,6 +43,9 @@
     - unchanged successful writes to `user_source_subscriptions` are skipped unless checkpoint/title/error state changes
     - repeated identical error writes remain bounded by the `15m` heartbeat
     - UI health semantics stay separate and still treat `<=60m` since last poll as healthy
+  - Low-priority queue claim polling is also cadence-aware:
+    - idle claim sweeps for low-priority scopes back off more aggressively than the default worker idle cadence
+    - claimed-work reschedules and lease-heartbeat behavior remain unchanged
   - Frontend distribution path is now installable PWA-first for non-store usage:
     - `https://bleup.app` is the preferred app-like distribution path today
     - installed mode uses the same frontend bundle, same backend API, and same Supabase auth/session model as browser mode
@@ -215,6 +218,7 @@
     - user queue-position reads now narrow to requested or visible queued scopes when estimating `active-mine` queue order, rather than scanning every queued ingestion scope by default.
     - manual blueprint-comments refresh now reads the existing refresh-state row first and registers one only when the blueprint lacks an enabled refresh record.
     - worker lease heartbeats are now lease-aware by default: a `90s` lease refreshes every `30s` instead of every `10s`, reducing Supabase lease-RPC churn without changing lease ownership semantics.
+    - low-priority idle claim sweeps now back off more aggressively than the default worker idle cadence, reducing `claim_ingestion_jobs` chatter when only low-priority scopes are being polled.
     - frontend list/detail query tuning now complements the backend egress work by keeping non-live query surfaces on explicit conservative stale windows instead of implicit focus churn.
     - provider retry/circuit controls are env-driven (transcript + LLM bounded retries, fail-fast circuit open mode).
   - onboarding extension: `user_youtube_onboarding` for new-user optional setup state.

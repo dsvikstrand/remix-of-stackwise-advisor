@@ -124,7 +124,7 @@ describe('queued ingestion worker controller', () => {
     expect(vi.getTimerCount()).toBe(1);
     expect(controller.getRunning()).toBe(false);
 
-    await vi.advanceTimersByTimeAsync(9_999);
+    await vi.advanceTimersByTimeAsync(29_999);
     expect(runUnlockSweeps).toHaveBeenCalledTimes(1);
 
     await vi.advanceTimersByTimeAsync(1);
@@ -132,11 +132,42 @@ describe('queued ingestion worker controller', () => {
     expect(runUnlockSweeps).toHaveBeenCalledTimes(2);
     expect(vi.getTimerCount()).toBe(1);
 
-    await vi.advanceTimersByTimeAsync(19_999);
+    await vi.advanceTimersByTimeAsync(59_999);
     expect(runUnlockSweeps).toHaveBeenCalledTimes(2);
 
     await vi.advanceTimersByTimeAsync(1);
     expect(runUnlockSweeps).toHaveBeenCalledTimes(3);
+  });
+
+  it('keeps the default idle cadence for non-low-priority sweeps', async () => {
+    const runUnlockSweeps = vi.fn(async () => undefined);
+    const controller = createQueuedIngestionWorkerController({
+      getServiceSupabaseClient: () => ({ tag: 'db' }),
+      runUnlockSweeps,
+      recoverStaleIngestionJobs: vi.fn(async () => []),
+      queuedIngestionScopes: ['search_video_generate'],
+      queuedWorkerId: 'worker_1',
+      workerLeaseMs: 90_000,
+      keepAliveEnabled: true,
+      keepAliveDelayMs: 1_500,
+      keepAliveIdleBaseDelayMs: 10_000,
+      keepAliveIdleMaxDelayMs: 60_000,
+      keepAliveIdleJitterRatio: 0,
+      getQueueSweepPlan: () => [{ scopes: ['search_video_generate'], maxJobs: 1 }],
+      claimQueuedIngestionJobs: vi.fn(async () => []),
+      processClaimedIngestionJobs: vi.fn(async () => undefined),
+    });
+
+    controller.start(0);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(2);
   });
 
   it('preempts a long idle timer when new work is scheduled', async () => {

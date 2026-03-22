@@ -40,6 +40,7 @@ a4t) [have] Active Supabase egress-reduction work now skips unchanged successful
 a4u) [have] Card/list teaser copy is now expected to come from stored `blueprints.preview_summary`, keeping Wall/Explore/Channel/Search previews summary-like without list-surface `sections_json` loads; legacy `My Feed` compatibility support remains additive only.
 a4v) [have] User-scoped ingestion status routes are now part of the egress-hardening baseline: `latest-mine` avoids redundant double reads and `active-mine` narrows queue-position scans to requested/visible scopes.
 a4v) [have] YouTube refresh bookkeeping now avoids per-candidate pending-job reads and skips redundant manual refresh-state registration when an enabled row already exists.
+a4x) [have] Low-priority idle queue claim polling now backs off more aggressively than the default worker idle cadence, reducing `claim_ingestion_jobs` chatter without changing lease ownership semantics.
 a4w) [have] Queue maintenance is now less chatty by default: worker lease heartbeats use a lease-aware cadence (`30s` on the default `90s` lease) instead of the older `10s` default.
 a4x) [have] Durable generation trace writes are now slimmer by default: event sequencing reuses a per-run cursor and trace writes skip returned row payloads when the caller does not consume them.
 a4y) [have] Frontend TanStack Query tuning is now in a dedicated active plan; global defaults plus live/semi-live/static-ish overrides are being made explicit so non-live list/detail surfaces stop relying on focus-triggered default refetch churn.
