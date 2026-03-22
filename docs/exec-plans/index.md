@@ -13,8 +13,8 @@ This file is the authoritative active/on-pause/deserted/completed registry for e
   Canonical launch gate board and proof log.
 
 ## Active Root
-- `docs/exec-plans/active/backend-aggregation-plan.md`
-  Current tracked implementation plan for safe, additive backend aggregation of read-heavy screen/task surfaces.
+- `docs/exec-plans/active/backend-write-policy-plan.md`
+  Current tracked implementation plan for reducing Supabase backend churn by removing or coarsening non-essential bookkeeping writes and cadence.
 - `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
   Current proof/deferred carry-forward tail. This is the only standing active-tail support file.
 - `docs/exec-plans/tech-debt-tracker.md`
@@ -33,7 +33,9 @@ This file is the authoritative active/on-pause/deserted/completed registry for e
 - `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
   Historical paused hardening reference.
 - `docs/exec-plans/active/on-pause/supabase-egress-reduction-plan.md`
-  Paused broader backend/frontend egress reduction plan; retained as reference while backend aggregation is the current focused implementation track.
+  Paused broader backend/frontend egress reduction plan; retained as reference while narrower backend write-policy work is the current focused implementation track.
+- `docs/exec-plans/active/on-pause/backend-aggregation-plan.md`
+  Paused structural read-aggregation plan; retained as follow-up reference while the narrower Supabase write-policy pass is active.
 
 ## Deserted / Superseded
 - These files are preserved for history only. They must not be resumed without a new explicit replacement plan.
@@ -93,13 +95,14 @@ This file is the authoritative active/on-pause/deserted/completed registry for e
 ## Current Program Snapshot
 - Core identity lock: `docs/app/core-direction-lock.md`.
 - Current runtime/ops truth: `docs/architecture.md`, `docs/ops/yt2bp_runbook.md`, and `docs/ops/mvp-launch-readiness-checklist.md`.
-- Current active implementation plan: `docs/exec-plans/active/backend-aggregation-plan.md`.
+- Current active implementation plan: `docs/exec-plans/active/backend-write-policy-plan.md`.
 - Current active proof/deferred tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`.
 - Current post-launch debt board: `docs/exec-plans/tech-debt-tracker.md`.
 - Latest completed implementation plans: `docs/exec-plans/completed/transcript-provider-launch-plan.md` and `docs/exec-plans/completed/pre-launch-ui-ux-plan.md`.
 - PWA rollout follow-up is on pause.
 - Runtime simplification follow-up is on pause.
-- The broader Supabase egress program is on pause while backend aggregation is the current focused structural read-reduction track.
+- The broader Supabase egress program is on pause while the narrower backend write-policy pass is the current focused reduction track.
+- Backend aggregation is on pause while the write-policy pass addresses the strongest lower-risk backend churn candidates first.
 - TanStack Query tuning is completed.
 - Transcript-provider robustness work is completed, with later live-proof items carried into the proof tail.
 - `PTP` install docs and the broad cleanup umbrella are deserted/superseded, not active.

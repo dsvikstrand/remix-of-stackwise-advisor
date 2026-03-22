@@ -1,6 +1,11 @@
 # Backend Aggregation Plan
 
-Status: `active`
+Status: `on-pause`
+
+## Pause Note
+a0) [have] This plan is paused while the narrower Supabase backend write-policy reduction pass is the current active implementation track.
+
+a01) [have] The aggregation findings and target order remain valid reference context for later resumption.
 
 ## Goal
 a1) [todo] Reduce frontend request fan-out and repeated small payload fetches by introducing narrowly scoped backend-shaped read endpoints where they provide a clear payoff.

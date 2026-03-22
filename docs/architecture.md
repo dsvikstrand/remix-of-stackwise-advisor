@@ -39,8 +39,9 @@
   - Explore search now includes app Source Page lookup (`Sources` filter + grouped `Sources` section in `All` results), linking directly to `/s/:platform/:externalId`.
   - Frontend bootstrap has required-env guard:
     - missing `VITE_SUPABASE_URL` or `VITE_SUPABASE_PUBLISHABLE_KEY` renders a configuration screen instead of a blank page.
-  - Subscription sync persistence is coarse-heartbeat driven:
-    - unchanged success/error writes to `user_source_subscriptions` are skipped unless checkpoint/title/error state changes or the `15m` heartbeat is stale
+  - Subscription sync persistence is write-throttled:
+    - unchanged successful writes to `user_source_subscriptions` are skipped unless checkpoint/title/error state changes
+    - repeated identical error writes remain bounded by the `15m` heartbeat
     - UI health semantics stay separate and still treat `<=60m` since last poll as healthy
   - Frontend distribution path is now installable PWA-first for non-store usage:
     - `https://bleup.app` is the preferred app-like distribution path today
@@ -169,6 +170,7 @@
     - `DELETE /api/youtube/connection` (auth-only revoke+unlink)
     - `POST /api/ingestion/jobs/trigger` (service auth)
       - enqueue-only path for `all_active_subscriptions` scope; durable worker claim/lease executes outside request lifecycle.
+      - current Oracle cron cadence is every `3m`.
     - `GET /api/ingestion/jobs/latest` (service auth, latest job snapshot)
     - `GET /api/ops/queue/health` (service auth, queue depth + work-item backlog + stale lease/provider circuit snapshot)
     - credit path fail-safe:

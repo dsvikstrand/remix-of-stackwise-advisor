@@ -78,7 +78,8 @@
   - `DELETE /api/source-pages/:platform/:externalId/subscribe` (auth)
   - Frontend trust status now resumes unlock jobs via `GET /api/ingestion/jobs/latest-mine?scope=source_item_unlock_generation` after reload.
   - Subscription sync persistence is intentionally coarse-grained:
-    - unchanged success/error writes to `user_source_subscriptions` are skipped unless checkpoint/title/error state changed or the `15m` poll heartbeat expired
+    - unchanged successful writes to `user_source_subscriptions` are skipped unless checkpoint/title/error state changed
+    - repeated identical error writes remain bounded by the `15m` poll heartbeat
     - this is an egress-control measure only; frontend subscription health still evaluates on a `60m` window
   - Blueprint YouTube refresh bookkeeping is also egress-conscious:
     - scheduler pending checks batch by refresh kind + candidate blueprint set instead of reading queued job payloads once per candidate
@@ -945,7 +946,7 @@ curl -sS -X POST https://api.bleup.app/api/my-feed/items/<user_feed_item_id>/ski
 ## Oracle cron setup
 Example cron entry:
 ```bash
-*/30 * * * * curl -sS -X POST https://api.bleup.app/api/ingestion/jobs/trigger -H \"x-service-token: ${INGESTION_SERVICE_TOKEN}\" -H 'Content-Type: application/json' --data '{}' >> /var/log/bleuv1-ingestion-cron.log 2>&1
+*/3 * * * * curl -sS -X POST https://api.bleup.app/api/ingestion/jobs/trigger -H \"x-service-token: ${INGESTION_SERVICE_TOKEN}\" -H 'Content-Type: application/json' --data '{}' >> /var/log/bleuv1-ingestion-cron.log 2>&1
 ```
 
 Auto-banner worker cron example (every 5 minutes):

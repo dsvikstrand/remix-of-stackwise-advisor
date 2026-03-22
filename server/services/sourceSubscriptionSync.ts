@@ -115,9 +115,8 @@ export function buildSubscriptionSyncSuccessUpdate(input: {
   const titleChanged =
     normalizeNullableText(input.subscription.source_channel_title) !== normalizeNullableText(input.channelTitle);
   const shouldClearError = normalizeNullableText(input.subscription.last_sync_error) !== null;
-  const shouldRefreshHeartbeat = shouldRefreshSubscriptionHeartbeat(input.subscription.last_polled_at, input.nowIso);
 
-  if (!checkpointChanged && !titleChanged && !shouldClearError && !shouldRefreshHeartbeat) {
+  if (!checkpointChanged && !titleChanged && !shouldClearError) {
     return null;
   }
 
