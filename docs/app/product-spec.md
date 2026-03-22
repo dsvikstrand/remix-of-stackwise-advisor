@@ -115,6 +115,7 @@ a88) [have] Durable generation trace writes are now slimmer: per-event sequencin
 a89) [have] User-scoped ingestion status routes are tighter: `latest-mine` now resolves from one recent-row read, and `active-mine` queue-position scans narrow to requested or visible queued scopes instead of broadly scanning all queue scopes.
 a90) [have] Frontend query freshness is now explicitly split by surface class: live and semi-live hooks declare their own cadence, while static-ish list/detail reads (`Wall`, `Search`, `Explore`, channel feed, blueprint detail/comments, profile tabs) use conservative stale windows and disable focus-triggered refetch by default.
 a91) [have] `GET /api/my-feed` remains available as a legacy compatibility auth read, but it is no longer the active primary surface contract now that `/my-feed` redirects to `/wall`.
+a92) [have] YouTube refresh bookkeeping now skips unchanged `source_items.metadata.view_count` writes and no-op `blueprint_youtube_refresh_state` upserts, reducing backend churn without changing manual/auto refresh UX.
 
 ## Core Model
 b1) `Source Item`

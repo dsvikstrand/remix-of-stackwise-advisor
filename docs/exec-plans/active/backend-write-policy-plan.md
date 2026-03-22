@@ -187,10 +187,14 @@ h3) [have] Phase 3: implement queue control-plane cadence tuning.
   - claimed-work resets remain unchanged, so real queue work still re-schedules quickly
   - `touch_ingestion_job_lease` semantics remain unchanged in this phase
 
-h4) [todo] Phase 4: implement YouTube refresh-state / view-count dedupe.
+h4) [have] Phase 4: implement YouTube refresh-state / view-count dedupe.
 - skip unchanged `view_count` metadata writes
 - reduce no-op refresh-state upserts
 - verify manual/auto refresh UX still behaves correctly
+- progress note:
+  - `storeSourceItemViewCount(...)` now skips `source_items.metadata` writes when the fetched `view_count` is unchanged instead of rewriting only `view_count_fetched_at`
+  - `upsertRefreshState(...)` now reads the current refresh row and skips no-op writes when the patch would not change any meaningful persisted field
+  - manual and auto refresh semantics stay the same; this phase only removes bookkeeping-only writes
 
 h5) [todo] Phase 5: measure and summarize.
 - compare fresh `24h` request shape against the current baseline

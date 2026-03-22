@@ -104,6 +104,96 @@ describe('blueprint YouTube comments service', () => {
     expect(viewCount).toBe(12345);
   });
 
+  it('storeSourceItemViewCount skips the source_items write when the fetched count is unchanged', async () => {
+    const update = vi.fn(() => ({
+      eq: vi.fn(() => ({
+        select: vi.fn(() => ({
+          maybeSingle: vi.fn(async () => ({ data: { id: 'src_1' }, error: null })),
+        })),
+      })),
+    }));
+    const sourceItemsTable = {
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          maybeSingle: vi.fn(async () => ({
+            data: {
+              metadata: {
+                view_count: 12345,
+                view_count_fetched_at: '2026-03-22T09:00:00.000Z',
+              },
+            },
+            error: null,
+          })),
+        })),
+      })),
+      update,
+    };
+    const db = {
+      from(table: string) {
+        if (table === 'source_items') return sourceItemsTable;
+        throw new Error(`Unexpected table: ${table}`);
+      },
+    };
+
+    const service = createBlueprintYouTubeCommentsService({
+      apiKey: 'youtube-key',
+      fetchImpl: vi.fn() as unknown as typeof fetch,
+    });
+
+    const stored = await service.storeSourceItemViewCount({
+      db,
+      sourceItemId: 'src_1',
+      viewCount: 12345,
+    });
+
+    expect(stored).toBe(false);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('storeSourceItemViewCount still writes when the fetched count changed', async () => {
+    const maybeSingle = vi.fn(async () => ({ data: { id: 'src_1' }, error: null }));
+    const select = vi.fn(() => ({ maybeSingle }));
+    const eqForUpdate = vi.fn(() => ({ select }));
+    const update = vi.fn(() => ({ eq: eqForUpdate }));
+    const sourceItemsTable = {
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          maybeSingle: vi.fn(async () => ({
+            data: {
+              metadata: {
+                view_count: 12345,
+                view_count_fetched_at: '2026-03-22T09:00:00.000Z',
+              },
+            },
+            error: null,
+          })),
+        })),
+      })),
+      update,
+    };
+    const db = {
+      from(table: string) {
+        if (table === 'source_items') return sourceItemsTable;
+        throw new Error(`Unexpected table: ${table}`);
+      },
+    };
+
+    const service = createBlueprintYouTubeCommentsService({
+      apiKey: 'youtube-key',
+      fetchImpl: vi.fn() as unknown as typeof fetch,
+    });
+
+    const stored = await service.storeSourceItemViewCount({
+      db,
+      sourceItemId: 'src_1',
+      viewCount: 12346,
+    });
+
+    expect(stored).toBe(true);
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(maybeSingle).toHaveBeenCalledTimes(1);
+  });
+
   it('registerRefreshStateForBlueprint no-ops when no video id can be resolved', async () => {
     const generationRunsQuery = {
       select: vi.fn(),
@@ -233,6 +323,111 @@ describe('blueprint YouTube comments service', () => {
     const payload = upsertRefreshState.mock.calls[0][0] as Record<string, unknown>;
     expect(payload.last_view_refresh_status).toBe('skipped');
     expect(typeof payload.next_view_refresh_at).toBe('string');
+  });
+
+  it('executeRefresh(view_count) skips the refresh-state upsert when the patch is unchanged', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-22T10:00:00.000Z'));
+    try {
+      const upsertRefreshState = vi.fn(async () => ({ error: null }));
+      const refreshSelectQuery = {
+        eq: vi.fn(),
+        maybeSingle: vi.fn(async () => ({
+          data: {
+            blueprint_id: 'bp_1',
+            youtube_video_id: 'abc123def45',
+            source_item_id: null,
+            enabled: true,
+            next_view_refresh_at: '2026-03-23T10:00:00.000Z',
+            last_view_refresh_status: 'skipped',
+          },
+          error: null,
+        })),
+      } as any;
+      refreshSelectQuery.eq.mockReturnValue(refreshSelectQuery);
+      const db = {
+        from(table: string) {
+          if (table === 'blueprint_youtube_refresh_state') {
+            return {
+              select: vi.fn(() => refreshSelectQuery),
+              upsert: upsertRefreshState,
+            };
+          }
+          throw new Error(`Unexpected table: ${table}`);
+        },
+      };
+
+      const service = createBlueprintYouTubeCommentsService({
+        apiKey: 'youtube-key',
+        fetchImpl: vi.fn() as unknown as typeof fetch,
+      });
+
+      await service.executeRefresh({
+        db,
+        blueprintId: 'bp_1',
+        kind: 'view_count',
+        youtubeVideoId: 'abc123def45',
+        sourceItemId: null,
+      });
+
+      expect(upsertRefreshState).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('executeRefresh(view_count) still upserts refresh-state when a meaningful field changed', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-22T10:00:00.000Z'));
+    try {
+      const upsertRefreshState = vi.fn(async () => ({ error: null }));
+      const refreshSelectQuery = {
+        eq: vi.fn(),
+        maybeSingle: vi.fn(async () => ({
+          data: {
+            blueprint_id: 'bp_1',
+            youtube_video_id: 'abc123def45',
+            source_item_id: null,
+            enabled: true,
+            next_view_refresh_at: '2026-03-22T12:00:00.000Z',
+            last_view_refresh_status: 'failed',
+          },
+          error: null,
+        })),
+      } as any;
+      refreshSelectQuery.eq.mockReturnValue(refreshSelectQuery);
+      const db = {
+        from(table: string) {
+          if (table === 'blueprint_youtube_refresh_state') {
+            return {
+              select: vi.fn(() => refreshSelectQuery),
+              upsert: upsertRefreshState,
+            };
+          }
+          throw new Error(`Unexpected table: ${table}`);
+        },
+      };
+
+      const service = createBlueprintYouTubeCommentsService({
+        apiKey: 'youtube-key',
+        fetchImpl: vi.fn() as unknown as typeof fetch,
+      });
+
+      await service.executeRefresh({
+        db,
+        blueprintId: 'bp_1',
+        kind: 'view_count',
+        youtubeVideoId: 'abc123def45',
+        sourceItemId: null,
+      });
+
+      expect(upsertRefreshState).toHaveBeenCalledTimes(1);
+      const payload = upsertRefreshState.mock.calls[0][0] as Record<string, unknown>;
+      expect(payload.last_view_refresh_status).toBe('skipped');
+      expect(payload.next_view_refresh_at).toBe('2026-03-23T10:00:00.000Z');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('executeRefresh(comments) stores top/new snapshots and updates refresh state', async () => {

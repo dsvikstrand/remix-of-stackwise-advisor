@@ -85,6 +85,115 @@ function normalizeSourceItemId(raw: unknown) {
   return raw == null ? null : String(raw || '').trim() || null;
 }
 
+function normalizeCounter(raw: unknown) {
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.floor(parsed));
+}
+
+function normalizeRefreshStateComparableValue(key: string, raw: unknown) {
+  switch (key) {
+    case 'youtube_video_id':
+      return normalizeNullableIso(raw);
+    case 'source_item_id':
+      return normalizeSourceItemId(raw);
+    case 'enabled':
+      return Boolean(raw);
+    case 'comments_auto_stage':
+      return normalizeAutoStage(raw);
+    case 'consecutive_view_failures':
+    case 'consecutive_comments_failures':
+      return normalizeCounter(raw);
+    case 'next_view_refresh_at':
+    case 'last_view_refresh_at':
+    case 'next_comments_refresh_at':
+    case 'last_comments_refresh_at':
+    case 'comments_manual_cooldown_until':
+    case 'last_comments_manual_refresh_at':
+    case 'last_comments_manual_triggered_by':
+    case 'last_view_refresh_status':
+    case 'last_comments_refresh_status':
+    case 'last_error_message':
+      return normalizeNullableIso(raw);
+    default:
+      if (raw == null) return null;
+      if (typeof raw === 'string') return raw.trim() || null;
+      if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
+      if (typeof raw === 'boolean') return raw;
+      return raw;
+  }
+}
+
+async function getExistingRefreshStateRecord(args: {
+  db: DbClient;
+  blueprintId: string;
+}) {
+  const table = args.db.from('blueprint_youtube_refresh_state');
+  if (!table || typeof table.select !== 'function') return null;
+  const { data, error } = await table
+    .select([
+      'blueprint_id',
+      'youtube_video_id',
+      'source_item_id',
+      'enabled',
+      'next_view_refresh_at',
+      'last_view_refresh_at',
+      'last_view_refresh_status',
+      'consecutive_view_failures',
+      'next_comments_refresh_at',
+      'last_comments_refresh_at',
+      'last_comments_refresh_status',
+      'consecutive_comments_failures',
+      'comments_auto_stage',
+      'comments_manual_cooldown_until',
+      'last_comments_manual_refresh_at',
+      'last_comments_manual_triggered_by',
+      'last_error_message',
+    ].join(','))
+    .eq('blueprint_id', args.blueprintId)
+    .maybeSingle();
+  if (error) {
+    if (isMissingRelationError(error, 'blueprint_youtube_refresh_state')) return null;
+    throw error;
+  }
+  return data && typeof data === 'object' && !Array.isArray(data)
+    ? (data as Record<string, unknown>)
+    : null;
+}
+
+function refreshStatePatchIsNoop(args: {
+  existing: Record<string, unknown> | null;
+  videoId: string;
+  sourceItemId: string | null;
+  patch: Record<string, unknown>;
+}) {
+  if (!args.existing) return false;
+  if (
+    normalizeRefreshStateComparableValue('youtube_video_id', args.existing.youtube_video_id)
+    !== normalizeRefreshStateComparableValue('youtube_video_id', args.videoId)
+  ) {
+    return false;
+  }
+  if (
+    normalizeRefreshStateComparableValue('source_item_id', args.existing.source_item_id)
+    !== normalizeRefreshStateComparableValue('source_item_id', args.sourceItemId)
+  ) {
+    return false;
+  }
+
+  for (const [key, value] of Object.entries(args.patch)) {
+    if (value === undefined) continue;
+    if (
+      normalizeRefreshStateComparableValue(key, args.existing[key])
+      !== normalizeRefreshStateComparableValue(key, value)
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function parseViewCount(payload: unknown) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
   const root = payload as Record<string, unknown>;
@@ -352,6 +461,11 @@ export function createBlueprintYouTubeCommentsService(input: {
       sourceRow?.metadata && typeof sourceRow.metadata === 'object' && !Array.isArray(sourceRow.metadata)
         ? (sourceRow.metadata as Record<string, unknown>)
         : {};
+    const currentViewCount = (() => {
+      const parsed = Number(currentMetadata.view_count);
+      return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : null;
+    })();
+    if (currentViewCount === args.viewCount) return false;
 
     const nextMetadata = {
       ...currentMetadata,
@@ -394,13 +508,26 @@ export function createBlueprintYouTubeCommentsService(input: {
     sourceItemId?: string | null;
     patch: Record<string, unknown>;
   }) {
+    const normalizedSourceItemId = args.sourceItemId == null ? null : String(args.sourceItemId || '').trim() || null;
+    const existingRecord = await getExistingRefreshStateRecord({
+      db: args.db,
+      blueprintId: args.blueprintId,
+    });
+    if (refreshStatePatchIsNoop({
+      existing: existingRecord,
+      videoId: args.videoId,
+      sourceItemId: normalizedSourceItemId,
+      patch: args.patch,
+    })) {
+      return;
+    }
     const nowIso = new Date().toISOString();
     const { error } = await args.db
       .from('blueprint_youtube_refresh_state')
       .upsert({
         blueprint_id: args.blueprintId,
         youtube_video_id: args.videoId,
-        source_item_id: args.sourceItemId == null ? null : String(args.sourceItemId || '').trim() || null,
+        source_item_id: normalizedSourceItemId,
         updated_at: nowIso,
         ...args.patch,
       }, { onConflict: 'blueprint_id' });

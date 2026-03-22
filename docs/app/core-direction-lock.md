@@ -104,6 +104,7 @@ Status: `canonical`
 68. Durable generation trace writes must stay egress-conscious: avoid per-event sequence lookups and avoid returning trace row payloads on writes when the caller does not use them.
 69. Static-ish frontend read surfaces (`Wall`, `Search`, `Explore`, channel feeds, blueprint detail/comments, profile tabs) must use explicit conservative TanStack Query freshness windows with no focus-triggered refetch by default; only live/semi-live surfaces should opt into tighter behavior.
 70. `GET /api/my-feed` is retained as a legacy compatibility endpoint only; it is no longer the active primary read surface now that `/my-feed` redirects to `/wall`.
+71. YouTube refresh bookkeeping must avoid no-op persistence: unchanged source-item `view_count` fetches must not rewrite metadata just to refresh fetch timestamps, and refresh-state rows should only upsert when a meaningful persisted field changes.
 
 ## Core user journey
 1. Subscribe to a YouTube channel or look up one specific video by link, video id, or title.

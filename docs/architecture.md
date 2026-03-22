@@ -219,6 +219,7 @@
     - manual blueprint-comments refresh now reads the existing refresh-state row first and registers one only when the blueprint lacks an enabled refresh record.
     - worker lease heartbeats are now lease-aware by default: a `90s` lease refreshes every `30s` instead of every `10s`, reducing Supabase lease-RPC churn without changing lease ownership semantics.
     - low-priority idle claim sweeps now back off more aggressively than the default worker idle cadence, reducing `claim_ingestion_jobs` chatter when only low-priority scopes are being polled.
+    - YouTube refresh bookkeeping now skips unchanged `source_items.metadata.view_count` writes and no-op `blueprint_youtube_refresh_state` upserts, reducing refresh-state churn without changing refresh UX.
     - frontend list/detail query tuning now complements the backend egress work by keeping non-live query surfaces on explicit conservative stale windows instead of implicit focus churn.
     - provider retry/circuit controls are env-driven (transcript + LLM bounded retries, fail-fast circuit open mode).
   - onboarding extension: `user_youtube_onboarding` for new-user optional setup state.
