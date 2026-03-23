@@ -31,7 +31,7 @@ When bullets are used, each bullet must be complete and readable on its own. A c
 
 Keep bullets tight. `Takeaways`, `Deep Dive`, `Practical Rules`, and `Open Questions` bullets should be one to two sentences max. Do not write paragraph-length bullets.
 
-For `Takeaways` specifically, optimize for immediate grasp and curiosity. Lead with the clearest plain-English point first. Prefer reader-facing phrasing over analyst-style compression, and do not force every takeaway bullet to carry mechanism, caveat, and implication all at once.
+For `Takeaways` specifically, optimize for immediate grasp and curiosity. Lead with the clearest plain-English point first. Prefer reader-facing phrasing over analyst-style compression, and do not force every takeaway bullet to carry mechanism, caveat, and implication all at once. If the takeaway bullets become too dense, too technical, or too long to skim quickly, the output is treated as a quality miss.
 
 ### Golden structure target
 
@@ -66,7 +66,7 @@ Summary is the opening context layer and should orient the reader to the topic q
 
 ### Takeaways
 
-Takeaways is the highest-value skim section and should deliver immediate payoff in three to four complete bullets. Each bullet must stand alone and give the reader one meaningful thing they can retain or use right away. This section is not a keyword list and not a teaser. It should read like distilled insight with practical consequence, but in a lighter, more inviting register than `Storyline` or `Deep Dive`. Write for a curious non-expert first: lead with what is interesting or important in plain English, then briefly say why it matters. Practical consequence is welcome when natural, but do not force every bullet to include mechanism, caveat, and implication. Avoid mechanism-heavy openings when simpler phrasing works, and avoid stacking multiple qualifiers or caveats into one bullet. If a technical term is necessary, translate it quickly in plain English. Depth should be concise but non-trivial: enough specificity to be useful, short enough to scan in seconds. Target total read time is roughly ten to twenty seconds.
+Takeaways is the highest-value skim section and should deliver immediate payoff in three to four complete bullets. Each bullet must stand alone and give the reader one meaningful thing they can retain or use right away. This section is not a keyword list and not a teaser. It should read like distilled insight with practical consequence, but in a lighter, more inviting register than `Storyline` or `Deep Dive`. Write for a curious non-expert first: lead with what is interesting or important in plain English, then briefly say why it matters. Practical consequence is welcome when natural, but do not force every bullet to include mechanism, caveat, and implication. Avoid mechanism-heavy openings when simpler phrasing works, and avoid stacking multiple qualifiers or caveats into one bullet. If a technical term is necessary, translate it quickly in plain English. Keep the whole section skimmable in seconds, not dense enough to feel like compressed analyst notes. Not following these takeaway rules can trigger a retry. Depth should be concise but non-trivial: enough specificity to be useful, short enough to scan in seconds. Target total read time is roughly ten to twenty seconds.
 
 ### Storyline
 

@@ -46,6 +46,7 @@ a4x) [have] Queue maintenance is now less chatty by default: worker lease heartb
 a4y) [have] Durable generation trace writes are now slimmer by default: event sequencing reuses a per-run cursor and trace writes skip returned row payloads when the caller does not consume them.
 a4z) [have] Frontend TanStack Query tuning is now in a dedicated active plan; global defaults plus live/semi-live/static-ish overrides are being made explicit so non-live list/detail surfaces stop relying on focus-triggered default refetch churn.
 a4za) [have] Current YT2BP one-step prompt default is `docs/golden_blueprint/golden_bp_prompt_contract_one_step_v4.md`, keeping the same `blueprint_sections_v1` runtime shape while shifting `Takeaways` toward lighter plain-English skim value and requiring more substantial `Storyline` paragraphs/slides.
+a4zb) [have] Current `llm_native` retry policy now keeps regeneration for blocking structure/shape misses; `TAKEAWAYS_TOO_LONG` and `OPEN_QUESTIONS_NOT_QUESTIONS` remain visible in telemetry but no longer trigger retry on their own.
 a5) [have] Legacy `My Feed` compatibility flow now has an additive backend-shaped auth read path (`GET /api/my-feed`) that collapses browser-side multi-table hydration into one payload while preserving rollback-safe fallback to the earlier client-side stitching path.
 a6) [todo] Improve user trust around shared-cost auto billing transitions and async processing visibility.
 a7) [todo] Reduce terminology ambiguity between personal stream, followed channels, source pages, and channel taxonomy.

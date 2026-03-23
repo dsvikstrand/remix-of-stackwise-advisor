@@ -1491,8 +1491,9 @@ async function runYouTubePipeline(input: {
       })}
 
 Keep section bullets concise:
-- Takeaways: 3-4 bullets, total read should feel like 10-20 seconds, and lead with the clearest plain-English interesting point.
+- Takeaways: 3-4 bullets, total read should feel like 10-20 seconds, lead with the clearest plain-English interesting point, and stay light enough for a curious non-expert to skim quickly.
 - Takeaways/Deep Dive/Practical Rules/Open Questions: each bullet must be 1-2 sentences max.
+- Takeaways: if the bullets drift into dense analyst-style compression or become too long to skim, treat that as a quality miss and rewrite them more simply.
 - Storyline: 2-3 substantial paragraphs/slides. Avoid thin one-liners or fragmented slide stacks.`;
 
       const retryRawDraft = await runWithProviderRetry(

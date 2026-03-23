@@ -47,6 +47,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Active follow-up egress work now skips unchanged successful subscription sync writes unless checkpoint/title/error state changes, while repeated identical error writes remain bounded by a `30m` backend heartbeat; `all_active_subscriptions` enqueue is also gated to an effective `10m` minimum interval, so repeated identical success/error writes to `user_source_subscriptions` are no longer expected on every cron tick.
 - Active follow-up egress work also backs off low-priority idle queue claim polling more aggressively than the default worker idle cadence, reducing `claim_ingestion_jobs` chatter without changing lease ownership semantics.
 - Current YT2BP one-step prompt default is `docs/golden_blueprint/golden_bp_prompt_contract_one_step_v4.md`; the runtime schema is unchanged, but `Takeaways` now bias toward lighter plain-English skim value and `Storyline` should stay `2-3` substantial paragraphs/slides.
+- Current `llm_native` retry policy now reserves regeneration for blocking structure/shape failures; `TAKEAWAYS_TOO_LONG` and `OPEN_QUESTIONS_NOT_QUESTIONS` remain logged as soft quality telemetry but do not trigger retry on their own.
 - Active frontend follow-up now also moves TanStack Query usage toward explicit freshness policy: global defaults are conservative, live/semi-live hooks declare their own cadence, and static-ish list/detail surfaces avoid focus-triggered default refetch churn.
 
 ### W1 - My Feed As First-Class Surface (Historical / Legacy Context)

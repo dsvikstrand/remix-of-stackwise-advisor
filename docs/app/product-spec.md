@@ -118,6 +118,7 @@ a90) [have] Frontend query freshness is now explicitly split by surface class: l
 a91) [have] `GET /api/my-feed` remains available as a legacy compatibility auth read, but it is no longer the active primary surface contract now that `/my-feed` redirects to `/wall`.
 a92) [have] YouTube refresh bookkeeping now skips unchanged `source_items.metadata.view_count` writes and no-op `blueprint_youtube_refresh_state` upserts, reducing backend churn without changing manual/auto refresh UX.
 a92a) [have] The default one-step YT2BP prompt contract is now `docs/golden_blueprint/golden_bp_prompt_contract_one_step_v4.md`: it preserves the same `draft.sectionsJson` schema, but `Takeaways` now bias toward lighter plain-English skim value and `Storyline` must stay at `2-3` substantial paragraphs/slides rather than thin mini-slides.
+a92b) [have] In `llm_native` mode, YT2BP retries now stay focused on blocking structure/shape failures; `TAKEAWAYS_TOO_LONG` and `OPEN_QUESTIONS_NOT_QUESTIONS` are still logged for telemetry but no longer trigger regeneration on their own.
 
 ## Core Model
 b1) `Source Item`
