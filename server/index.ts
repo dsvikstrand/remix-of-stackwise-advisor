@@ -126,7 +126,7 @@ import {
   suppressUnlockableFeedRowsForSourceItems,
 } from './services/feedSuppression';
 import type { BlueprintSectionsV1 } from './services/blueprintSections';
-import { evaluateLlmNativeGate } from './services/llmNativeQualityGate';
+import { evaluateLlmNativeGate, normalizeSummaryVariantText } from './services/llmNativeQualityGate';
 import { ProviderCircuitOpenError, getProviderCircuitSnapshot } from './services/providerCircuit';
 import { getProviderRetryDefaults, runWithProviderRetry } from './services/providerResilience';
 import { createTranscriptThrottle, type TranscriptRequestClass } from './services/transcriptThrottle';

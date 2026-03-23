@@ -31,7 +31,7 @@ function wordCount(value: string) {
     .filter(Boolean).length;
 }
 
-function normalizeSummaryVariantText(value: unknown) {
+export function normalizeSummaryVariantText(value: unknown) {
   return String(value || '')
     .replace(/\r/g, '')
     .replace(/\n{3,}/g, '\n\n')
