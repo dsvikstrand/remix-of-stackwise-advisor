@@ -102,6 +102,7 @@
   - User menu includes a direct `Subscriptions` shortcut to `/subscriptions`; subscription management remains a dedicated page instead of a profile tab.
   - User menu credit panel shows daily reset timing plus latest wallet ledger activity summary when available.
   - Header now includes an auth-only notifications bell inbox (reply + generation terminal notifications with read/read-all actions).
+    - terminal unlock-generation failures now emit `generation_failed` from actual failed item counts, even when the underlying transcript/provider failure remains retryable.
   - Installed-PWA push extension is now wired behind rollout gates:
     - explicit opt-in lives only in notification surfaces (`NotificationsBell`, `GenerationQueue`)
     - push enablement requires standalone mode, auth, browser push support, and feature/env flags

@@ -68,6 +68,7 @@ c3) [todo] Normalize unlock failure reasons to stable user-facing messages and s
 c4) [have] Added focused backend integration tests for hold/settle/refund idempotency and concurrent unlock reserve semantics.
 c5) [todo] Add explicit smoke playbook for mobile OAuth callback edge cases and unlock transitions.
 c6) [have] Notifications MVP foundation is live (`comment_reply`, `generation_succeeded`, `generation_failed`) with header bell inbox and read/read-all controls.
+c6a) [have] Unlock-generation terminal failures now also surface through the same `generation_failed` notification path from real failed item counts, instead of suppressing retryable transcript/provider misses from `Recent Results`.
 
 ### P2 - Maintainability and Scale-readiness
 d1) [todo] Split `server/index.ts` into route modules (`source pages`, `subscriptions`, `unlock/credits`, `ingestion jobs`).

@@ -117,6 +117,7 @@
     - `POST /api/notifications/push-subscriptions`
     - `DELETE /api/notifications/push-subscriptions`
     - emitted event families: `comment_reply`, `generation_succeeded`, `generation_failed`.
+    - terminal unlock-generation failures now emit `generation_failed` from actual failed item counts, even when transcript/provider retry policy still treats the underlying outage as retryable.
   - Search-page video behavior:
     - `/search` video mode is now single-video lookup, not broad paginated discovery.
     - preferred inputs are direct YouTube URL or video id; title lookup is a bounded helper fallback that returns either one confident hit or no hit.

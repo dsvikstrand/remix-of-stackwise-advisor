@@ -349,6 +349,7 @@ si60) when one or more upcoming premieres are skipped in a sync run, subscriptio
 si61) transcript truth model distinguishes temporary transcript failures from confirmed no-speech outcomes; `NO_CAPTIONS` is retryable until confirmation quorum is reached.
 si62) `NO_TRANSCRIPT_PERMANENT` is now set only after bounded confirmation retries, and confirmed no-speech rows are hidden from unlockable feed/video-library surfaces.
 si63) auto subscription transcript failures now use silent bounded retries with explicit retry-after ladder; feed-card rows are suppressed during retry/permanent states instead of shown as unlockable locks.
+si63a) terminal `source_item_unlock_generation` failures now still emit `generation_failed` notifications from actual failed item counts, so `Recent Results` reflects incomplete generations even when transcript/provider retry policy remains active.
 si64) transcript speech-guidance warning copy is scoped to explicit Source Page Video Library `+Add` requests; Wall and legacy `My Feed` compatibility unlock actions use generic retry-safe messaging.
 si65) auth endpoint: `GET /api/notifications?limit=<1..50>&cursor=<opaque?>` returns inbox rows with `unread_count` and `next_cursor`.
 si66) auth endpoint: `POST /api/notifications/:id/read` marks one notification read.

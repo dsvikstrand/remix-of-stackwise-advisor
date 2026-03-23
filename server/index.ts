@@ -5770,7 +5770,6 @@ async function processSourceItemUnlockGenerationJob(input: {
   const firstItemTitle = String(input.items[0]?.title || '').trim() || null;
   let firstBlueprintId: string | null = null;
   let firstBlueprintTitle: string | null = null;
-  let notifyFailedCount = 0;
   const failures: Array<{ video_id: string; unlock_id: string; error_code: string; error: string }> = [];
   const dualGenerateEnabled = false;
 
@@ -6275,31 +6274,6 @@ async function processSourceItemUnlockGenerationJob(input: {
         error: message,
       });
 
-      const isIntermediateAutoTranscriptFailure =
-        isAutoOrigin
-        && errorCode === 'TRANSCRIPT_UNAVAILABLE'
-        && !transcriptRetryExhausted
-        && !transcriptDecision?.confirmedPermanent;
-      if (!isIntermediateAutoTranscriptFailure) {
-        notifyFailedCount += 1;
-      } else {
-        logUnlockEvent(
-          'auto_transcript_failure_notification_suppressed',
-          {
-            trace_id: input.traceId,
-            job_id: input.jobId,
-            unlock_id: item.unlock_id,
-            source_item_id: item.source_item_id,
-            video_id: item.video_id,
-          },
-          {
-            error_code: errorCode,
-            transcript_attempt_count: transcriptDecision?.transcriptAttemptCount || null,
-            transcript_no_caption_hits: transcriptDecision?.transcriptNoCaptionHits || null,
-          },
-        );
-      }
-
       await releaseAutoIntentIfPending({
         reasonCode: errorCode,
         lastErrorCode: errorCode,
@@ -6516,7 +6490,7 @@ async function processSourceItemUnlockGenerationJob(input: {
     scope: 'source_item_unlock_generation',
     inserted,
     skipped,
-    failed: notifyFailedCount,
+    failed: failures.length,
     itemTitle: firstItemTitle,
     blueprintTitle: firstBlueprintTitle,
     failureSummary: summarizeGenerationFailure({
