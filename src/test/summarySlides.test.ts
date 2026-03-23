@@ -15,7 +15,7 @@ describe('splitSummaryIntoSlides', () => {
     expect(slides[3]).toContain('Paragraph four');
   });
 
-  it('splits long single-paragraph text into 3-4 slides', () => {
+  it('splits long single-paragraph text into denser slides without forcing 3-4', () => {
     const input = [
       'Sentence one establishes context and practical goals.',
       'Sentence two introduces the key mechanism and why it matters.',
@@ -26,13 +26,23 @@ describe('splitSummaryIntoSlides', () => {
     ].join(' ');
 
     const slides = splitSummaryIntoSlides(input);
-    expect(slides.length).toBeGreaterThanOrEqual(3);
-    expect(slides.length).toBeLessThanOrEqual(4);
+    expect(slides.length).toBeGreaterThanOrEqual(2);
+    expect(slides.length).toBeLessThanOrEqual(3);
   });
 
   it('returns single slide for short summary text', () => {
     const slides = splitSummaryIntoSlides('Short summary with one key takeaway.');
     expect(slides).toEqual(['Short summary with one key takeaway.']);
   });
-});
 
+  it('keeps a medium single-paragraph storyline as one slide', () => {
+    const input = [
+      'The transcript then emphasizes the residual-refinement behavior: tactile correction updates the physical action based on touch, but it does not overwrite the robot’s visual and language knowledge.',
+      'It is also described as contact-aware, so when the tactile sensors read zero the correction fades and the main visual controller drives normally.',
+      'In the described outcome, older models struggle to maintain the delicate peel-and-rotate sequence, while the newer architecture sustains more continuous success by feeling and adjusting as it runs.',
+    ].join(' ');
+
+    const slides = splitSummaryIntoSlides(input);
+    expect(slides).toEqual([input]);
+  });
+});

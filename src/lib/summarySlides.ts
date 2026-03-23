@@ -24,9 +24,14 @@ export function splitSummaryIntoSlides(value: string) {
     .map((chunk) => chunk.trim())
     .filter(Boolean);
 
-  if (sentences.length <= 2) return [text];
+  if (sentences.length <= 3) return [text];
 
-  const targetSlides = Math.min(4, Math.max(3, Math.round(text.length / 280)));
+  // Keep medium single-paragraph narrative blocks intact; only split once the
+  // text is dense enough that multiple slides add readability instead of
+  // creating thin fragments.
+  if (sentences.length <= 5 && text.length < 650) return [text];
+
+  const targetSlides = Math.min(4, Math.max(2, Math.round(text.length / 420)));
   const chunkSize = Math.ceil(sentences.length / targetSlides);
   const grouped: string[] = [];
   for (let i = 0; i < sentences.length; i += chunkSize) {
