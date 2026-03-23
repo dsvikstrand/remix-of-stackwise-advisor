@@ -35,6 +35,23 @@ function createDbMock(input?: {
         };
       }
 
+      if (table === 'source_items') {
+        return {
+          select() {
+            return {
+              eq() {
+                return {
+                  maybeSingle: async () => ({
+                    data: null,
+                    error: null,
+                  }),
+                };
+              },
+            };
+          },
+        };
+      }
+
       throw new Error(`Unexpected table: ${table}`);
     },
   };
@@ -216,6 +233,76 @@ describe('blueprint creation canonical payload', () => {
     });
 
     expect(result.blueprintId).toBe('bp_123');
+  });
+
+  it('passes queue job ownership into variant claims when provided', async () => {
+    const { db } = createDbMock();
+    const claimVariantForGeneration = vi.fn(async () => ({
+      outcome: 'claimed' as const,
+      variant: { active_job_id: 'job_123' },
+    }));
+    const service = createBlueprintCreationService({
+      getServiceSupabaseClient: () => null,
+      safeGenerationTraceWrite: async () => undefined,
+      startGenerationRun: async () => undefined,
+      runYouTubePipeline: async ({ runId }) => ({
+        run_id: runId,
+        draft: {
+          title: 'Blueprint title',
+          description: 'A short summary for testing.',
+          steps: [{ name: 'Summary', notes: 'Step notes', timestamp: null }],
+          notes: null,
+          tags: [],
+          sectionsJson: {
+            schema_version: 'blueprint_sections_v1',
+            tags: [],
+            summary: { text: 'A short summary for testing.' },
+            takeaways: { bullets: ['One useful takeaway.'] },
+            storyline: { text: 'A short storyline block.' },
+            deep_dive: { bullets: ['A deep dive detail.'] },
+            practical_rules: { bullets: ['A practical rule.'] },
+            open_questions: { bullets: ['An open question.'] },
+          } satisfies BlueprintSectionsV1,
+          summaryVariants: {
+            default: 'Default summary',
+            eli5: 'ELI5 summary',
+          },
+          eli5Steps: [],
+        },
+        review: { summary: null },
+        meta: null,
+      }),
+      toTagSlug: (value) => value,
+      ensureTagId: async () => 'tag_123',
+      attachBlueprintToRun: async () => undefined,
+      youtubeVideoIdRegex: /^[a-zA-Z0-9_-]{11}$/,
+      resolveGenerationModelProfile: () => ({
+        model: 'o4-mini',
+        fallbackModel: 'o4-mini',
+        reasoningEffort: 'low' as const,
+      }),
+      claimVariantForGeneration,
+      markVariantReady: async () => undefined,
+      markVariantFailed: async () => undefined,
+      enqueueBlueprintYouTubeEnrichment: async () => undefined,
+      registerBlueprintYouTubeRefreshState: async () => undefined,
+    });
+
+    await service.createBlueprintFromVideo(db as never, {
+      userId: 'user_123',
+      videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      videoId: 'dQw4w9WgXcQ',
+      sourceTag: 'source_page_video_library',
+      sourceItemId: 'source_123',
+      jobId: 'job_123',
+    });
+
+    expect(claimVariantForGeneration).toHaveBeenCalledWith(expect.objectContaining({
+      sourceItemId: 'source_123',
+      userId: 'user_123',
+      jobId: 'job_123',
+      targetStatus: 'running',
+    }));
   });
 
   it('rethrows daily generation cap errors without masking them behind a reference error', async () => {

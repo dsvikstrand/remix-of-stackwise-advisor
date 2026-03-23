@@ -3,6 +3,16 @@ import type { GenerationTier } from './generationTierAccess';
 type DbClient = any;
 
 type VariantStatus = 'available' | 'queued' | 'running' | 'ready' | 'failed';
+type IngestionJobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'unknown';
+type IngestionJobRow = {
+  id: string;
+  status: IngestionJobStatus;
+  lease_expires_at: string | null;
+  updated_at: string | null;
+};
+
+const VARIANT_IN_PROGRESS_STALE_MS = 20 * 60 * 1000;
+const VARIANT_STALE_ERROR_CODE = 'STALE_VARIANT_RECOVERED';
 
 export type SourceItemBlueprintVariantRow = {
   id: string;
@@ -46,6 +56,32 @@ function normalizeStatus(raw: unknown): VariantStatus {
   if (normalized === 'ready') return 'ready';
   if (normalized === 'failed') return 'failed';
   return 'available';
+}
+
+function normalizeIngestionJobStatus(raw: unknown): IngestionJobStatus {
+  const normalized = String(raw || '').trim().toLowerCase();
+  if (normalized === 'queued') return 'queued';
+  if (normalized === 'running') return 'running';
+  if (normalized === 'succeeded') return 'succeeded';
+  if (normalized === 'failed') return 'failed';
+  return 'unknown';
+}
+
+function parseTimestampMs(raw: unknown) {
+  const parsed = Date.parse(String(raw || '').trim());
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isOlderThan(raw: unknown, thresholdMs: number) {
+  const parsed = parseTimestampMs(raw);
+  if (parsed == null) return true;
+  return (Date.now() - parsed) >= thresholdMs;
+}
+
+function hasExpired(raw: unknown) {
+  const parsed = parseTimestampMs(raw);
+  if (parsed == null) return false;
+  return parsed <= Date.now();
 }
 
 function normalizeVariantRow(raw: any): SourceItemBlueprintVariantRow | null {
@@ -150,6 +186,74 @@ export function createBlueprintVariantsService(deps: {
     return getVariant(input.sourceItemId, input.generationTier);
   }
 
+  async function getIngestionJob(jobId: string): Promise<IngestionJobRow | null> {
+    const normalizedJobId = String(jobId || '').trim();
+    if (!normalizedJobId) return null;
+    const db = getDb();
+    const { data, error } = await db
+      .from('ingestion_jobs')
+      .select('id,status,lease_expires_at,updated_at')
+      .eq('id', normalizedJobId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    return {
+      id: String(data.id || '').trim(),
+      status: normalizeIngestionJobStatus(data.status),
+      lease_expires_at: String(data.lease_expires_at || '').trim() || null,
+      updated_at: String(data.updated_at || '').trim() || null,
+    };
+  }
+
+  async function markVariantRecoveredFromStale(input: {
+    variant: SourceItemBlueprintVariantRow;
+    reason: string;
+  }) {
+    const db = getDb();
+    const { data, error } = await db
+      .from('source_item_blueprint_variants')
+      .update({
+        status: 'failed',
+        active_job_id: null,
+        last_error_code: VARIANT_STALE_ERROR_CODE,
+        last_error_message: `Recovered stale in-progress variant (${input.reason}).`,
+      })
+      .eq('id', input.variant.id)
+      .eq('updated_at', input.variant.updated_at)
+      .select(VARIANT_COLUMNS)
+      .maybeSingle();
+    if (error) throw error;
+    if (data) return normalizeVariantRow(data);
+    return getVariant(input.variant.source_item_id, input.variant.generation_tier);
+  }
+
+  async function maybeRecoverStaleInProgressVariant(variant: SourceItemBlueprintVariantRow) {
+    if (variant.status !== 'queued' && variant.status !== 'running') return variant;
+    if (!isOlderThan(variant.updated_at, VARIANT_IN_PROGRESS_STALE_MS)) return variant;
+
+    let recoverReason: string | null = null;
+    if (!variant.active_job_id) {
+      recoverReason = 'missing_active_job';
+    } else {
+      const activeJob = await getIngestionJob(variant.active_job_id);
+      if (!activeJob?.id) {
+        recoverReason = 'missing_ingestion_job';
+      } else if (activeJob.status === 'succeeded' || activeJob.status === 'failed' || activeJob.status === 'unknown') {
+        recoverReason = `terminal_ingestion_job_${activeJob.status}`;
+      } else if (activeJob.status === 'running' && hasExpired(activeJob.lease_expires_at) && isOlderThan(activeJob.updated_at, VARIANT_IN_PROGRESS_STALE_MS)) {
+        recoverReason = 'expired_running_job_lease';
+      } else if (activeJob.status === 'queued' && isOlderThan(activeJob.updated_at, VARIANT_IN_PROGRESS_STALE_MS)) {
+        recoverReason = 'stale_queued_job';
+      }
+    }
+
+    if (!recoverReason) return variant;
+    return markVariantRecoveredFromStale({
+      variant,
+      reason: recoverReason,
+    });
+  }
+
   async function resolveVariantOrReady(input: {
     sourceItemId: string;
     generationTier: GenerationTier;
@@ -186,29 +290,33 @@ export function createBlueprintVariantsService(deps: {
   }) {
     const db = getDb();
     const targetStatus = input.targetStatus || 'running';
+    const tryClaim = async () => {
+      const { data: updated, error: updateError } = await db
+        .from('source_item_blueprint_variants')
+        .update({
+          status: targetStatus,
+          active_job_id: input.jobId || null,
+          created_by_user_id: input.userId || null,
+          last_error_code: null,
+          last_error_message: null,
+        })
+        .eq('source_item_id', input.sourceItemId)
+        .eq('generation_tier', input.generationTier)
+        .in('status', ['available', 'failed'])
+        .select(VARIANT_COLUMNS)
+        .maybeSingle();
+
+      if (updateError) throw updateError;
+      return normalizeVariantRow(updated);
+    };
+
     await ensureVariantRecord({
       sourceItemId: input.sourceItemId,
       generationTier: input.generationTier,
       createdByUserId: input.userId || null,
     });
 
-    const { data: updated, error: updateError } = await db
-      .from('source_item_blueprint_variants')
-      .update({
-        status: targetStatus,
-        active_job_id: input.jobId || null,
-        created_by_user_id: input.userId || null,
-        last_error_code: null,
-        last_error_message: null,
-      })
-      .eq('source_item_id', input.sourceItemId)
-      .eq('generation_tier', input.generationTier)
-      .in('status', ['available', 'failed'])
-      .select(VARIANT_COLUMNS)
-      .maybeSingle();
-
-    if (updateError) throw updateError;
-    const claimed = normalizeVariantRow(updated);
+    let claimed = await tryClaim();
     if (claimed) {
       return {
         outcome: 'claimed' as const,
@@ -218,37 +326,57 @@ export function createBlueprintVariantsService(deps: {
 
     const current = await getVariant(input.sourceItemId, input.generationTier);
     if (!current) {
+      const ensured = await ensureVariantRecord({
+        sourceItemId: input.sourceItemId,
+        generationTier: input.generationTier,
+        createdByUserId: input.userId || null,
+      });
+      claimed = await tryClaim();
+      if (claimed) {
+        return {
+          outcome: 'claimed' as const,
+          variant: claimed,
+        };
+      }
       return {
         outcome: 'claimed' as const,
-        variant: await ensureVariantRecord({
-          sourceItemId: input.sourceItemId,
-          generationTier: input.generationTier,
-          createdByUserId: input.userId || null,
-        }),
+        variant: ensured,
       };
     }
 
-    if (current.status === 'ready' && current.blueprint_id) {
+    const recovered = await maybeRecoverStaleInProgressVariant(current);
+    if (recovered && (recovered.status === 'available' || recovered.status === 'failed')) {
+      claimed = await tryClaim();
+      if (claimed) {
+        return {
+          outcome: 'claimed' as const,
+          variant: claimed,
+        };
+      }
+    }
+    const resolvedCurrent = recovered || current;
+
+    if (resolvedCurrent.status === 'ready' && resolvedCurrent.blueprint_id) {
       return {
         outcome: 'ready' as const,
-        variant: current,
-        blueprintId: current.blueprint_id,
+        variant: resolvedCurrent,
+        blueprintId: resolvedCurrent.blueprint_id,
       };
     }
 
     if (
-      (current.status === 'queued' || current.status === 'running')
-      && (!input.jobId || current.active_job_id !== input.jobId)
+      (resolvedCurrent.status === 'queued' || resolvedCurrent.status === 'running')
+      && (!input.jobId || resolvedCurrent.active_job_id !== input.jobId)
     ) {
       return {
         outcome: 'in_progress' as const,
-        variant: current,
+        variant: resolvedCurrent,
       };
     }
 
     return {
       outcome: 'claimed' as const,
-      variant: current,
+      variant: resolvedCurrent,
     };
   }
 

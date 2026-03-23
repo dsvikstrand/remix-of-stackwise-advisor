@@ -361,6 +361,7 @@ si69a) admin entitlement bypass applies at actual reservation/settle/refund time
 si69b) canonical feed-lane semantics are defined in `docs/app/mvp-feed-and-channel-model.md`; implementation should treat `For You` as the only locked lane, `Joined` as joined-channel published discovery, and `All` as the global published blueprint stream.
 si70) YouTube comment snapshots for blueprints keep bounded background freshness: auto refresh targets `+15m` and `+24h`, while owner-triggered manual refresh is available immediately with per-blueprint cooldown.
 si71) manual source-comment refresh endpoint is `POST /api/blueprints/:id/youtube-comments/refresh`; it is owner-only, cooldown denials return `COMMENTS_REFRESH_COOLDOWN_ACTIVE`, and queue backpressure returns `COMMENTS_REFRESH_QUEUE_GUARDED`.
+si72) queue-backed source-video generation now records active ingestion-job ownership on `source_item_blueprint_variants`, reclaims stale in-progress variants after a bounded timeout, and persists terminal `generation_runs` status independently from best-effort trace-event logging so completed source-page/video-library work does not remain stuck as `running`.
 
 ## Next Milestone (Hardening)
 n1) Keep legacy manual gate behavior stable with `CHANNEL_GATES_MODE=bypass` while auto-channel path uses `AUTO_CHANNEL_GATE_MODE`.

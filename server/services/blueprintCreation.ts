@@ -27,6 +27,7 @@ type CreateBlueprintFromVideoInput = {
     | 'manual_refresh_generate';
   sourceItemId?: string | null;
   subscriptionId?: string | null;
+  jobId?: string | null;
   generationTier?: GenerationTier;
   onBeforeFirstModelDispatch?: () => Promise<void>;
 };
@@ -177,6 +178,7 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
         sourceItemId: normalizedSourceItemId,
         generationTier,
         userId: input.userId,
+        jobId: input.jobId || null,
         targetStatus: 'running',
       });
       if (variantClaim.outcome === 'ready') {

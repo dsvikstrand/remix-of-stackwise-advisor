@@ -33,6 +33,10 @@ function buildDeps(input: {
     qualityIssueDetails: string[];
     additionalInstructions: string;
   }>;
+  safeGenerationTraceWriteImpl?: (inputWrite: { op?: string; fn: () => Promise<void> }) => Promise<void>;
+  appendGenerationEventImpl?: (_db: unknown, row: EventRow) => Promise<void>;
+  finalizeGenerationRunSuccessImpl?: () => Promise<void>;
+  finalizeGenerationRunFailureImpl?: () => Promise<void>;
   gateResults?: Array<{
     pass: boolean;
     issues: string[];
@@ -52,11 +56,19 @@ function buildDeps(input: {
       reasoningEffort: traceInput.reasoningEffort || null,
       traceVersion: 'yt2bp_trace_v2',
     }),
-    safeGenerationTraceWrite: async (inputWrite: { fn: () => Promise<void> }) => {
+    safeGenerationTraceWrite: async (inputWrite: { op?: string; fn: () => Promise<void> }) => {
+      if (input.safeGenerationTraceWriteImpl) {
+        await input.safeGenerationTraceWriteImpl(inputWrite);
+        return;
+      }
       await inputWrite.fn();
     },
     startGenerationRun: async () => undefined,
     appendGenerationEvent: async (_db: unknown, row: EventRow) => {
+      if (input.appendGenerationEventImpl) {
+        await input.appendGenerationEventImpl(_db, row);
+        return;
+      }
       input.events.push(row);
     },
     runWithProviderRetry: async (_config: unknown, fn: () => Promise<unknown>) => fn(),
@@ -153,8 +165,16 @@ function buildDeps(input: {
     GOLDEN_QUALITY_MAX_RETRIES: 2,
     uploadBannerToSupabase: async () => null,
     supabaseUrl: '',
-    finalizeGenerationRunSuccess: async () => undefined,
-    finalizeGenerationRunFailure: async () => undefined,
+    finalizeGenerationRunSuccess: async () => {
+      if (input.finalizeGenerationRunSuccessImpl) {
+        await input.finalizeGenerationRunSuccessImpl();
+      }
+    },
+    finalizeGenerationRunFailure: async () => {
+      if (input.finalizeGenerationRunFailureImpl) {
+        await input.finalizeGenerationRunFailureImpl();
+      }
+    },
     mapPipelineError: () => ({ error_code: 'GENERATION_FAIL', message: 'failed' }),
     canonicalSectionName: (name: string) => String(name || '').trim().toLowerCase(),
     normalizeSummaryVariantText: (text: string) => String(text || '').trim(),
@@ -476,6 +496,63 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
     expect(events.some((row) => row.event === 'gate_published_anyway')).toBe(true);
     expect((result.meta as Record<string, unknown>).bp_structure_ok).toBe(false);
     expect((result.meta as Record<string, unknown>).bp_quality_final_mode).toBe('terminal_publish_anyway');
+  });
+
+  it('still finalizes the generation run when success event logging is swallowed', async () => {
+    const events: EventRow[] = [];
+    const finalized: string[] = [];
+    const service = createYouTubeBlueprintPipelineService(buildDeps({
+      transcriptText: `BEGIN ${'x'.repeat(1800)} END`,
+      pruningConfig: {
+        enabled: true,
+        budgetChars: 4500,
+        thresholds: [4500, 9000, 16000],
+        windows: [1, 4, 6, 8],
+        separator: '\n\n...\n\n',
+        minWindowChars: 120,
+      },
+      events,
+      pass1Transcripts: [],
+      pass2Transcripts: [],
+      pass1PromptTemplatePaths: [],
+      safeGenerationTraceWriteImpl: async ({ op, fn }) => {
+        if (op === 'event_pipeline_succeeded') {
+          try {
+            await fn();
+          } catch {
+            return;
+          }
+          return;
+        }
+        await fn();
+      },
+      appendGenerationEventImpl: async (_db, row) => {
+        if (row.event === 'pipeline_succeeded') {
+          throw new Error('event append failed');
+        }
+        events.push(row);
+      },
+      finalizeGenerationRunSuccessImpl: async () => {
+        finalized.push('success');
+      },
+    }));
+
+    await service.runYouTubePipeline({
+      runId: 'run-finalize-success',
+      videoId: 'fin12345678',
+      videoUrl: 'https://www.youtube.com/watch?v=fin12345678',
+      durationSeconds: 100,
+      generateReview: false,
+      generateBanner: false,
+      authToken: '',
+      requestClass: 'background',
+      trace: {
+        db: { id: 'trace-db' },
+        userId: 'user-finalize',
+      },
+    });
+
+    expect(finalized).toEqual(['success']);
   });
 
   it('blocks generation when transcript has too few words', async () => {

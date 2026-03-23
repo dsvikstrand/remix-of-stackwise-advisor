@@ -5056,6 +5056,7 @@ async function processSearchVideoGenerateJob(input: {
           sourceTag: 'youtube_search_direct',
           sourceItemId: source.id,
           subscriptionId: null,
+          jobId: input.jobId,
           generationTier,
           onBeforeFirstModelDispatch: settleReservationOnce,
         });
@@ -5367,6 +5368,7 @@ async function processManualRefreshGenerateJob(input: {
           sourceTag: 'subscription_auto',
           sourceItemId: source.id,
           subscriptionId: subscription.id,
+          jobId: input.jobId,
           generationTier,
           onBeforeFirstModelDispatch: settleReservationOnce,
         });
@@ -5634,6 +5636,7 @@ async function processSourcePageVideoLibraryJob(input: {
         sourceTag: 'source_page_video_library',
         sourceItemId: source.id,
         subscriptionId: null,
+        jobId: input.jobId,
       });
 
       const insertedItem = await insertFeedItem(db, {
@@ -5981,6 +5984,7 @@ async function processSourceItemUnlockGenerationJob(input: {
           sourceTag: 'source_page_video_library',
           sourceItemId: sourceRow.id,
           subscriptionId: null,
+          jobId: input.jobId,
           generationTier: itemGenerationTier,
           onBeforeFirstModelDispatch: autoIntentId ? settleAutoIntentOnce : undefined,
         });

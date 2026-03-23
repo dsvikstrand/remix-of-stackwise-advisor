@@ -227,6 +227,50 @@ export function createYouTubeBlueprintPipelineService(deps: any) {
       durationSeconds?: number | null;
     }) => policyInput.durationSeconds ?? null,
   } = deps;
+
+  async function persistTerminalGenerationRun(input: {
+    outcome: 'succeeded' | 'failed';
+    runId: string;
+    traceDb: DbClient;
+    traceVersion: string | null;
+    qualityOk?: boolean;
+    qualityIssues?: string[];
+    qualityRetriesUsed?: number;
+    qualityFinalMode?: string;
+    errorCode?: string;
+    errorMessage?: string;
+    summary?: Record<string, unknown> | null;
+  }) {
+    try {
+      if (input.outcome === 'succeeded') {
+        await finalizeGenerationRunSuccess(input.traceDb as any, {
+          runId: input.runId,
+          qualityOk: Boolean(input.qualityOk),
+          qualityIssues: input.qualityIssues || [],
+          qualityRetriesUsed: Number(input.qualityRetriesUsed || 0),
+          qualityFinalMode: String(input.qualityFinalMode || '').trim() || 'direct',
+          traceVersion: input.traceVersion,
+          summary: input.summary || null,
+        });
+        return;
+      }
+
+      await finalizeGenerationRunFailure(input.traceDb as any, {
+        runId: input.runId,
+        errorCode: String(input.errorCode || '').trim() || 'GENERATION_FAIL',
+        errorMessage: String(input.errorMessage || '').trim() || 'Generation failed.',
+        traceVersion: input.traceVersion,
+        summary: input.summary || null,
+      });
+    } catch (error) {
+      console.log('[generation_run_finalize_failed]', JSON.stringify({
+        run_id: input.runId,
+        outcome: input.outcome,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+
 async function runYouTubePipeline(input: {
   runId: string;
   videoId: string;
@@ -1779,20 +1823,16 @@ Keep section bullets concise:
           });
         },
       });
-      await safeGenerationTraceWrite({
+      await persistTerminalGenerationRun({
+        outcome: 'succeeded',
         runId: input.runId,
-        op: 'finalize_run_success',
-        fn: async () => {
-          await finalizeGenerationRunSuccess(traceContext.db as any, {
-            runId: input.runId,
-            qualityOk: gatePassed,
-            qualityIssues: gateIssueCodes,
-            qualityRetriesUsed: qualityRetriesUsed,
-            qualityFinalMode: qualityFinalMode,
-            traceVersion: traceContext.traceVersion,
-            summary: generationTrace,
-          });
-        },
+        traceDb: traceContext.db,
+        traceVersion: traceContext.traceVersion,
+        qualityOk: gatePassed,
+        qualityIssues: gateIssueCodes,
+        qualityRetriesUsed,
+        qualityFinalMode,
+        summary: generationTrace,
       });
     }
 
@@ -1824,6 +1864,7 @@ Keep section bullets concise:
     };
   } catch (error) {
     if (traceContext.db && traceContext.userId) {
+      const failure = mapPipelineError(error);
       await safeGenerationTraceWrite({
         runId: input.runId,
         op: 'event_pipeline_failed',
@@ -1833,29 +1874,25 @@ Keep section bullets concise:
             level: 'error',
             event: 'pipeline_failed',
             payload: {
-              error_code: mapPipelineError(error)?.error_code || 'GENERATION_FAIL',
-              error_message: mapPipelineError(error)?.message || (error instanceof Error ? error.message : String(error)),
+              error_code: failure?.error_code || 'GENERATION_FAIL',
+              error_message: failure?.message || (error instanceof Error ? error.message : String(error)),
               duration_ms: Date.now() - startedAt,
             },
           });
         },
       });
-      await safeGenerationTraceWrite({
+      await persistTerminalGenerationRun({
+        outcome: 'failed',
         runId: input.runId,
-        op: 'finalize_run_failure',
-        fn: async () => {
-          await finalizeGenerationRunFailure(traceContext.db as any, {
-            runId: input.runId,
-            errorCode: mapPipelineError(error)?.error_code || 'GENERATION_FAIL',
-            errorMessage: mapPipelineError(error)?.message || (error instanceof Error ? error.message : String(error)),
-            traceVersion: traceContext.traceVersion,
-            summary: {
-              run_id: input.runId,
-              video_id: input.videoId,
-              source_tag: traceContext.sourceTag || 'unknown',
-              duration_ms: Date.now() - startedAt,
-            },
-          });
+        traceDb: traceContext.db,
+        traceVersion: traceContext.traceVersion,
+        errorCode: failure?.error_code || 'GENERATION_FAIL',
+        errorMessage: failure?.message || (error instanceof Error ? error.message : String(error)),
+        summary: {
+          run_id: input.runId,
+          video_id: input.videoId,
+          source_tag: traceContext.sourceTag || 'unknown',
+          duration_ms: Date.now() - startedAt,
         },
       });
     }

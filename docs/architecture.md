@@ -210,6 +210,10 @@
   - durable generation trace foundation: `generation_runs` (run summary/model/quality terminal state) + `generation_run_events` (ordered stage-level events); 30-day event retention via service-role purge function, run summary retained indefinitely.
     - run/event trace writes now avoid returning payload selects when callers do not consume the result.
     - per-event trace sequencing now reuses a per-run in-process cursor instead of re-reading the latest `seq` from Supabase before every event insert.
+    - terminal `generation_runs` status writes now persist outside the best-effort event-write wrapper so trace-event append failures do not leave runs stuck in `running`.
+  - `source_item_blueprint_variants` is the canonical queue-claim guard for shared source-video generation.
+    - queue-backed claims now record `active_job_id` on the variant row.
+    - stale queued/running variants are reclaimed after a bounded timeout when the linked ingestion job is missing, terminal, or lease-stale.
   - unlock reliability sweeps:
     - opportunistic sweeps on source-page video list/unlock routes.
     - forced sweep on service cron trigger path.

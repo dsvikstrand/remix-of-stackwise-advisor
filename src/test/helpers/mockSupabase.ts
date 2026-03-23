@@ -222,6 +222,23 @@ class QueryBuilder {
     return null;
   }
 
+  private ensureVariantUnique(rows: Row[]) {
+    if (this.tableName !== 'source_item_blueprint_variants') return null;
+    for (const row of rows) {
+      const sourceItemId = String(row.source_item_id || '').trim();
+      const generationTier = String(row.generation_tier || '').trim();
+      if (!sourceItemId || !generationTier) continue;
+      const exists = this.getTable().some((candidate) => (
+        String(candidate.source_item_id || '').trim() === sourceItemId
+        && String(candidate.generation_tier || '').trim() === generationTier
+      ));
+      if (exists) {
+        return makeError('duplicate key value violates unique constraint', '23505');
+      }
+    }
+    return null;
+  }
+
   private async execute() {
     const table = this.getTable();
     const nowIso = new Date().toISOString();
@@ -230,6 +247,10 @@ class QueryBuilder {
       const duplicateError = this.ensureCreditLedgerUnique(this.insertPayload);
       if (duplicateError) {
         return { data: null, error: duplicateError };
+      }
+      const variantDuplicateError = this.ensureVariantUnique(this.insertPayload);
+      if (variantDuplicateError) {
+        return { data: null, error: variantDuplicateError };
       }
       const inserted: Row[] = [];
       for (const payload of this.insertPayload) {

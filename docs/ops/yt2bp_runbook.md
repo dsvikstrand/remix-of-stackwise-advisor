@@ -95,6 +95,10 @@
   - Low-priority queue claim polling is also coarsened:
     - idle low-priority claim sweeps now back off more aggressively than the default worker idle cadence
     - claimed-work reschedules remain fast, and lease-heartbeat behavior is unchanged
+  - Source-video generation claim state is now self-healing:
+    - queue-backed `createBlueprintFromVideo(...)` claims record the owning ingestion `jobId` on `source_item_blueprint_variants`
+    - stale queued/running variant rows are reclaimed after a bounded timeout when the linked ingestion job is missing, terminal, or lease-stale
+    - terminal `generation_runs` status writes now persist outside the best-effort trace-event wrapper so source-page/library jobs do not remain stuck as `running` when event append fails
   - User ingestion-status routes are also narrower:
     - `GET /api/ingestion/jobs/latest-mine` now resolves from one recent-row read instead of separate active/latest queries
     - `GET /api/ingestion/jobs/active-mine` queue-position scans now narrow to requested or visible queued scopes instead of every queued ingestion scope
