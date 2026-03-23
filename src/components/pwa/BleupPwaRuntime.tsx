@@ -139,6 +139,7 @@ export function BleupPwaRuntime({ children }: { children: ReactNode }) {
   });
   const registrationRef = useRef<BleupPwaRegistration | null>(null);
   const deferredInstallPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
+  const pendingRefreshReloadRef = useRef(false);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -392,6 +393,25 @@ export function BleupPwaRuntime({ children }: { children: ReactNode }) {
     };
   }, [currentReleaseSha, runtimeEnabled]);
 
+  useEffect(() => {
+    if (!runtimeEnabled || typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+
+    const handleControllerChange = () => {
+      setHasWaitingWorker(false);
+      setLatestReleaseSha(null);
+      setIsRefreshing(false);
+
+      if (!pendingRefreshReloadRef.current) return;
+      pendingRefreshReloadRef.current = false;
+      window.location.reload();
+    };
+
+    navigator.serviceWorker.addEventListener("controllerchange", handleControllerChange);
+    return () => {
+      navigator.serviceWorker.removeEventListener("controllerchange", handleControllerChange);
+    };
+  }, [runtimeEnabled]);
+
   const availableReleaseKey = useMemo(
     () =>
       getPwaAvailableReleaseKey({
@@ -474,16 +494,28 @@ export function BleupPwaRuntime({ children }: { children: ReactNode }) {
   }, [badgeSupported, isPushSubscribed, quietModeActive, unreadCount, user?.id]);
 
   async function handleRefreshNow() {
+    if (availableReleaseKey) {
+      setDismissedReleaseKey(availableReleaseKey);
+    }
+    setHasWaitingWorker(false);
+    setLatestReleaseSha(null);
     setIsRefreshing(true);
+    pendingRefreshReloadRef.current = true;
     try {
       if (hasWaitingWorker) {
         await registrationRef.current?.activateWaitingUpdate();
+        window.setTimeout(() => {
+          if (!pendingRefreshReloadRef.current) return;
+          pendingRefreshReloadRef.current = false;
+          window.location.reload();
+        }, 1500);
         return;
       }
     } catch {
       // Fall through to a hard reload below.
     }
 
+    pendingRefreshReloadRef.current = false;
     window.location.reload();
   }
 
