@@ -113,6 +113,41 @@ g21) [todo] Phase 1 should narrow to one concrete cleanup decision:
   - `jobId` ownership
   - terminal `generation_runs` persistence
 
+g22) [todo] Phase 1 execution structure:
+- inspect only the stale-recovery branch in [blueprintVariants.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/blueprintVariants.ts)
+- compare two cleanup options:
+  - `Option A`: remove stale-recovery logic entirely and keep only the smaller `jobId` ownership path
+  - `Option B`: keep a much smaller reclaim rule, but remove ingestion-job/lease heuristics and extra hot-path DB lookup
+- prefer `Option A` unless current evidence proves a smaller reclaim rule is still needed
+
+g23) [todo] Phase 1 decision questions:
+- does current production correctness still depend on runtime stale-variant recovery?
+- is the current stale-recovery branch fixing an ongoing app problem, or mainly preserving a one-time repair pattern?
+- if stale recovery is removed, do `jobId` ownership and terminal `generation_runs` persistence still cover the proven app-scope correctness needs?
+
+g24) [todo] Phase 1 scope lock:
+- no provider fixes
+- no frontend changes
+- no broad revert
+- no changes to [server/services/transcriptFetchWithCacheBypass.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/transcriptFetchWithCacheBypass.ts)
+- no changes to [src/components/pwa/BleupPwaRuntime.tsx](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/components/pwa/BleupPwaRuntime.tsx)
+- no changes outside the `13cb75b` cleanup target set unless the decision lock proves they are required for a coherent simplification
+
+g25) [todo] Phase 1 expected output:
+- one locked keep/remove table for:
+  - `jobId` plumbing
+  - stale variant recovery helpers
+  - ingestion-job lookup in variant resolution
+  - `persistTerminalGenerationRun(...)`
+  - supporting tests
+- one exact Phase 2 implementation contract naming the files/functions allowed to change
+- one explicit non-goal list for the cleanup pass
+
+g26) [todo] Phase 1 acceptance criteria:
+- the cleanup target is reduced to one concrete implementation choice
+- the chosen Phase 2 cut removes or simplifies code rather than adding more
+- the decision is justified by current evidence, not by provider-outage speculation
+
 g3) [todo] Phase 2: implement the smallest forward cleanup on `main`.
 - keep any proven app-correctness path
 - remove speculative recovery machinery first
