@@ -36,6 +36,8 @@ This file is the authoritative active/on-pause/deserted/completed registry for e
   Paused broader backend/frontend egress reduction plan; retained as reference while narrower backend write-policy work is the current focused implementation track.
 - `docs/exec-plans/active/on-pause/backend-aggregation-plan.md`
   Paused structural read-aggregation plan; retained as follow-up reference while the narrower Supabase write-policy pass is active.
+- `docs/exec-plans/active/on-pause/post-d3d0239-debloat-plan.md`
+  Paused narrow debloat track for auditing the post-`d3d0239` reaction commits, with special scrutiny on the larger stale-state recovery hardening before starting provider-specific investigation.
 
 ## Deserted / Superseded
 - These files are preserved for history only. They must not be resumed without a new explicit replacement plan.
@@ -103,6 +105,7 @@ This file is the authoritative active/on-pause/deserted/completed registry for e
 - Runtime simplification follow-up is on pause.
 - The broader Supabase egress program is on pause while the narrower backend write-policy pass is the current focused reduction track.
 - Backend aggregation is on pause while the write-policy pass addresses the strongest lower-risk backend churn candidates first.
+- Post-`d3d0239` debloat review is on pause as a narrow cleanup track to resume before any provider-specific work if the current stack still looks overgrown.
 - TanStack Query tuning is completed.
 - Transcript-provider robustness work is completed, with later live-proof items carried into the proof tail.
 - `PTP` install docs and the broad cleanup umbrella are deserted/superseded, not active.
@@ -113,5 +116,6 @@ This file is the authoritative active/on-pause/deserted/completed registry for e
 - Keep paused plans under `docs/exec-plans/active/on-pause/`.
 - Move abandoned/superseded plans into `docs/exec-plans/deserted/`.
 - Move finished plans into `docs/exec-plans/completed/`.
+- Use `docs/exec-plans/plan-authoring-guidelines.md` as the durable rulebook for future plan shape/review.
 - Update this index whenever status changes.
 - Do not treat on-pause, deserted, or completed plan docs as the current runtime/deploy source of truth.
