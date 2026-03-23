@@ -130,6 +130,7 @@ import { evaluateLlmNativeGate, normalizeSummaryVariantText } from './services/l
 import { ProviderCircuitOpenError, getProviderCircuitSnapshot } from './services/providerCircuit';
 import { getProviderRetryDefaults, runWithProviderRetry } from './services/providerResilience';
 import { createTranscriptThrottle, type TranscriptRequestClass } from './services/transcriptThrottle';
+import { createTranscriptFetchWithCacheBypass } from './services/transcriptFetchWithCacheBypass';
 import { createCodexLane } from './services/codexLane';
 import {
   claimQueuedIngestionJobs,
@@ -8405,6 +8406,18 @@ async function getTranscriptForVideoWithThrottle(
   );
 }
 
+const getTranscriptForVideoWithCacheBypass = createTranscriptFetchWithCacheBypass({
+  getDb: () => getServiceSupabaseClient(),
+  fetchWithThrottle: getTranscriptForVideoWithThrottle,
+  onCacheHit: ({ videoId, requestClass, reason }) => {
+    console.log('[transcript_cache_bypass_hit]', JSON.stringify({
+      video_id: videoId,
+      request_class: requestClass,
+      reason,
+    }));
+  },
+});
+
 async function probeTranscriptProvidersWithThrottle(
   videoId: string,
   options?: {
@@ -8548,7 +8561,7 @@ const youtubeBlueprintPipelineService = createYouTubeBlueprintPipelineService({
     ...providerRetryDefaults,
     transcriptTimeoutMs: resolveTranscriptOperationTimeoutMs(providerRetryDefaults.transcriptTimeoutMs),
   },
-  getTranscriptForVideo: getTranscriptForVideoWithThrottle,
+  getTranscriptForVideo: getTranscriptForVideoWithCacheBypass,
   createYouTubeGenerationLLMClient,
   updateGenerationModelInfo,
   yt2bpSafetyBlockEnabled,
