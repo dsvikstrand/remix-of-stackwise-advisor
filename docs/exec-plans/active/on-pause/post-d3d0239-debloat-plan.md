@@ -196,6 +196,36 @@ g44) [have] Phase 3 conclusion:
 - but the plan does not close cleanly here, because there is still a real terminal skipped-job stale-state bug in the unlock-generation path
 - the next plan should inspect that narrower terminal-skip / same-job state-sync branch directly, rather than reopening provider work or restoring the removed hot-path lookup machinery
 
+g5) [have] Phase 4: inspect the terminal-skip stale-state branch.
+
+g51) [have] Phase 4 root cause:
+- the bug is a same-job retry / stale-unlock mismatch, not a provider-path bug
+- [unlockReliabilitySweeps.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/unlockReliabilitySweeps.ts) can recover a `processing` unlock back to `available` when it decides the unlock is stale (`reservation_expired`, `job_queued`, `job_missing`, `job_<terminal>`) without touching the related variant or `generation_run`
+- on a later retry of that same ingestion job id, [markUnlockProcessing(...) in sourceUnlocks.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/sourceUnlocks.ts) returns `null` because the unlock is no longer `reserved`
+- [processSourceItemUnlockGenerationJob(...) in index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts) then enters the `!processingUnlock` branch and calls [resolveVariantOrReady(...) in blueprintVariants.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/blueprintVariants.ts)
+- `resolveVariantOrReady(...)` is not job-aware, so any `queued` / `running` variant becomes `in_progress`, even when `active_job_id === input.jobId`
+- that branch increments `skipped += 1` and exits as if another job owns generation
+- because the skip happens before the main generation path is re-entered, no code reconciles the still-owned `running` variant or the still-owned `generation_run`
+
+g52) [have] Phase 4 concrete evidence:
+- job `c65b2434-0803-4b80-913d-0af64b0a3247` finished `succeeded` / `skipped = 1`; unlock `8f068357-b5ad-4c29-ab95-cc41b58fd437` had already been sweep-recovered to `available` with `last_error_code = UNLOCK_PROCESSING_STALE_RECOVERED`; the related variant `fdcff8cc-fafa-459e-bd5f-5b66970e59ec` still shows `running` with `active_job_id = c65b2434-0803-4b80-913d-0af64b0a3247`
+- job `3c78394f-a6c0-473c-8e2c-2d32a598a1b8` finished `succeeded` / `skipped = 1`; unlock `cf7bf057-6bd2-455f-829b-d7b815d8a02f` had already been sweep-recovered to `available`; the related variant `75cdf1b7-b750-4d03-84df-3445fc32186d` still shows `running` with `active_job_id = 3c78394f-a6c0-473c-8e2c-2d32a598a1b8`
+- both sample jobs have `attempts = 2`, which matches the retry-path theory
+
+g53) [have] Phase 4 decision lock:
+- do not reintroduce the removed ingestion-job / lease lookup branch in [blueprintVariants.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/blueprintVariants.ts)
+- do not widen this into provider work
+- do not add new runtime surfaces
+- treat the stale-state bug as a narrow unlock preflight ownership mismatch
+
+g54) [have] Phase 5 implementation contract:
+- change only the unlock-generation preflight path in [processSourceItemUnlockGenerationJob(...) in index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts) and the helper it depends on in [blueprintVariants.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/blueprintVariants.ts)
+- make the unlock preflight variant check job-aware
+- if the current job already owns the `running` variant, do not take the generic `already in progress` skip branch
+- either continue through the normal generation path, or explicitly reconcile the owned variant / `generation_run` before counting the item as skipped
+- do not change [createBlueprintFromVideo(...) in blueprintCreation.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/blueprintCreation.ts) unless the Phase 5 implementation proves it is necessary
+- do not touch frontend, provider handling, or notification policy in Phase 5
+
 ## Success Criteria
 h1) [todo] The repo gets simpler after cleanup.
 
