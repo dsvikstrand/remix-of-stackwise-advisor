@@ -79,8 +79,9 @@
   - Frontend trust status now resumes unlock jobs via `GET /api/ingestion/jobs/latest-mine?scope=source_item_unlock_generation` after reload.
   - Subscription sync persistence is intentionally coarse-grained:
     - unchanged successful writes to `user_source_subscriptions` are skipped unless checkpoint/title/error state changed
-    - repeated identical error writes remain bounded by the `15m` poll heartbeat
+    - repeated identical error writes remain bounded by the `30m` poll heartbeat
     - this is an egress-control measure only; frontend subscription health still evaluates on a `60m` window
+    - Oracle cron may still hit `/api/ingestion/jobs/trigger` every `3m`, but backend enqueue now suppresses `all_active_subscriptions` until the default `10m` minimum interval has elapsed
   - Blueprint YouTube refresh bookkeeping is also egress-conscious:
     - scheduler pending checks batch by refresh kind + candidate blueprint set instead of reading queued job payloads once per candidate
     - manual comments refresh reads existing refresh state first and only registers a row when refresh state is missing or uninitialized
@@ -953,6 +954,9 @@ Example cron entry:
 ```bash
 */3 * * * * curl -sS -X POST https://api.bleup.app/api/ingestion/jobs/trigger -H \"x-service-token: ${INGESTION_SERVICE_TOKEN}\" -H 'Content-Type: application/json' --data '{}' >> /var/log/bleuv1-ingestion-cron.log 2>&1
 ```
+Notes:
+- the Oracle trigger may stay at `*/3m`, but backend enqueue now gates `all_active_subscriptions` to an effective `10m` minimum interval by default
+- repeated identical subscription sync errors now refresh `last_polled_at` / `last_sync_error` at `30m` instead of `15m`
 
 Auto-banner worker cron example (every 5 minutes):
 ```bash

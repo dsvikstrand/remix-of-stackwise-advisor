@@ -66,7 +66,9 @@ type SubscriptionSyncOptions = {
 };
 
 export const SUBSCRIPTION_SYNC_WRITE_HEARTBEAT_MINUTES = 15;
+export const SUBSCRIPTION_SYNC_ERROR_WRITE_HEARTBEAT_MINUTES = 30;
 const SUBSCRIPTION_SYNC_WRITE_HEARTBEAT_MS = SUBSCRIPTION_SYNC_WRITE_HEARTBEAT_MINUTES * 60_000;
+const SUBSCRIPTION_SYNC_ERROR_WRITE_HEARTBEAT_MS = SUBSCRIPTION_SYNC_ERROR_WRITE_HEARTBEAT_MINUTES * 60_000;
 
 function normalizeNullableText(value: unknown) {
   const normalized = String(value ?? '').trim();
@@ -79,11 +81,11 @@ function parseDateMs(value: string | null | undefined) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function shouldRefreshSubscriptionHeartbeat(lastPolledAt: string | null | undefined, nowIso: string) {
+function shouldRefreshSubscriptionHeartbeat(lastPolledAt: string | null | undefined, nowIso: string, heartbeatMs: number) {
   const lastPolledAtMs = parseDateMs(lastPolledAt);
   const nowMs = parseDateMs(nowIso);
   if (lastPolledAtMs === null || nowMs === null) return true;
-  return nowMs - lastPolledAtMs >= SUBSCRIPTION_SYNC_WRITE_HEARTBEAT_MS;
+  return nowMs - lastPolledAtMs >= heartbeatMs;
 }
 
 type SubscriptionWriteSource = {
@@ -136,7 +138,11 @@ export function buildSubscriptionSyncErrorUpdate(input: {
 }) {
   const nextError = String(input.errorMessage || '').slice(0, 500);
   const currentError = normalizeNullableText(input.subscription?.last_sync_error);
-  const shouldRefreshHeartbeat = shouldRefreshSubscriptionHeartbeat(input.subscription?.last_polled_at, input.nowIso);
+  const shouldRefreshHeartbeat = shouldRefreshSubscriptionHeartbeat(
+    input.subscription?.last_polled_at,
+    input.nowIso,
+    SUBSCRIPTION_SYNC_ERROR_WRITE_HEARTBEAT_MS,
+  );
 
   if (currentError === nextError && !shouldRefreshHeartbeat) {
     return null;

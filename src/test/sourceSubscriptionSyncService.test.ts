@@ -405,6 +405,15 @@ describe('source subscription sync service', () => {
 
     expect(buildSubscriptionSyncErrorUpdate({
       subscription: {
+        last_polled_at: '2026-03-19T11:31:00.000Z',
+        last_sync_error: 'SYNC_FAILED',
+      },
+      errorMessage: 'SYNC_FAILED',
+      nowIso: '2026-03-19T12:00:00.000Z',
+    })).toBeNull();
+
+    expect(buildSubscriptionSyncErrorUpdate({
+      subscription: {
         last_polled_at: '2026-03-19T11:30:00.000Z',
         last_sync_error: 'SYNC_FAILED',
       },

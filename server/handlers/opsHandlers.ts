@@ -7,6 +7,24 @@ import {
 import { getQueuedJobWorkItemCount } from '../services/ingestionQueue';
 import { listTranscriptProviderRetryKeys } from '../transcript/getTranscript';
 
+function getRecentAllActiveSubscriptionsTrigger(input: {
+  createdAt?: string | null;
+  startedAt?: string | null;
+  nowMs: number;
+  minIntervalMs: number;
+}) {
+  const latestActivity = String(input.startedAt || input.createdAt || '').trim();
+  if (!latestActivity) return null;
+  const latestActivityMs = Date.parse(latestActivity);
+  if (!Number.isFinite(latestActivityMs)) return null;
+  const elapsedMs = input.nowMs - latestActivityMs;
+  if (elapsedMs < 0 || elapsedMs >= input.minIntervalMs) return null;
+  return {
+    latestActivity,
+    retryAfterSeconds: Math.max(1, Math.ceil((input.minIntervalMs - elapsedMs) / 1000)),
+  };
+}
+
 export async function handleIngestionJobsTrigger(req: express.Request, res: express.Response, deps: OpsRouteDeps) {
   if (!deps.isServiceRequestAuthorized(req)) {
     return res.status(401).json({ ok: false, error_code: 'SERVICE_AUTH_REQUIRED', message: 'Missing or invalid service token', data: null });
@@ -57,6 +75,51 @@ export async function handleIngestionJobsTrigger(req: express.Request, res: expr
       error_code: 'JOB_ALREADY_RUNNING',
       message: 'A subscription ingestion job is already queued or running.',
       data: { job_id: existingJob.id, status: existingJob.status },
+    });
+  }
+
+  const { data: latestJob, error: latestJobError } = await db
+    .from('ingestion_jobs')
+    .select('id, status, created_at, started_at')
+    .eq('scope', 'all_active_subscriptions')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (latestJobError) {
+    return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: latestJobError.message, data: null });
+  }
+
+  const recentTrigger = getRecentAllActiveSubscriptionsTrigger({
+    createdAt: latestJob?.created_at ?? null,
+    startedAt: latestJob?.started_at ?? null,
+    nowMs: Date.now(),
+    minIntervalMs: deps.allActiveSubscriptionsMinTriggerIntervalMs,
+  });
+  if (recentTrigger) {
+    console.log('[subscription_trigger_interval_suppressed]', JSON.stringify({
+      scope: 'all_active_subscriptions',
+      latest_job_id: latestJob?.id ?? null,
+      latest_job_status: latestJob?.status ?? null,
+      latest_activity_at: recentTrigger.latestActivity,
+      min_interval_ms: deps.allActiveSubscriptionsMinTriggerIntervalMs,
+      retry_after_seconds: recentTrigger.retryAfterSeconds,
+      trigger: 'service_cron',
+      endpoint: '/api/ingestion/jobs/trigger',
+    }));
+    return res.status(202).json({
+      ok: true,
+      error_code: null,
+      message: 'subscription ingestion enqueue skipped by minimum interval gate',
+      retry_after_seconds: recentTrigger.retryAfterSeconds,
+      data: {
+        suppressed: true,
+        reason: 'min_interval',
+        scope: 'all_active_subscriptions',
+        latest_job_id: latestJob?.id ?? null,
+        latest_job_status: latestJob?.status ?? null,
+        latest_activity_at: recentTrigger.latestActivity,
+        min_interval_ms: deps.allActiveSubscriptionsMinTriggerIntervalMs,
+      },
     });
   }
 

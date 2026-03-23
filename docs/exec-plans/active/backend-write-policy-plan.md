@@ -138,7 +138,9 @@ h03) [have] Locked target order for the next implementation pass:
 
 h04) [have] Locked live cadence facts:
 - Oracle ingestion cron currently triggers `/api/ingestion/jobs/trigger` every `3m`
-- subscription heartbeat threshold is `15m`
+- effective `all_active_subscriptions` enqueue minimum interval is now `10m`
+- subscription success-path heartbeat threshold is `15m`
+- repeated-identical subscription error heartbeat threshold is `30m`
 - worker lease default is `90s`
 - configured worker heartbeat default is `10s`
 - effective worker heartbeat is derived from lease and configured heartbeat
@@ -200,6 +202,15 @@ h5) [todo] Phase 5: measure and summarize.
 - compare fresh `24h` request shape against the current baseline
 - record wins and residual hotspots
 - decide whether to continue with second-pass backend write work or resume backend aggregation
+
+h6) [have] Phase 6: implement background subscription cadence tuning.
+- add repo-enforced minimum interval gating for `all_active_subscriptions`
+- widen repeated-identical subscription error heartbeat writes
+- keep active-work queue behavior and lease semantics unchanged
+- progress note:
+  - `/api/ingestion/jobs/trigger` still runs from Oracle every `3m`, but backend enqueue now suppresses `all_active_subscriptions` when the latest activity is newer than the default `10m` gate
+  - repeated identical subscription error writes now refresh at `30m` instead of `15m`
+  - subscription product semantics and the frontend `60m` health window remain unchanged
 
 ## Acceptance Criteria
 i1) [todo] `user_source_subscriptions` write volume is materially reduced without breaking subscription polling correctness.

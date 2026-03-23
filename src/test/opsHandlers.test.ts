@@ -42,6 +42,7 @@ function createBaseDeps(overrides: Partial<OpsRouteDeps> = {}): OpsRouteDeps {
     queueWorkItemsPerUserLimit: 40,
     queuePriorityEnabled: true,
     queueLowPrioritySuppressionDepth: 100,
+    allActiveSubscriptionsMinTriggerIntervalMs: 10 * 60_000,
     workerConcurrency: 1,
     workerBatchSize: 10,
     workerLeaseMs: 90_000,
@@ -167,6 +168,61 @@ function createIngestionTriggerDbWithoutRunningJob() {
               return this;
             },
             maybeSingle: async () => ({ data: null, error: null }),
+          };
+        },
+      };
+    },
+  };
+}
+
+function createIngestionTriggerDb(options?: {
+  runningJob?: { id: string; status: 'queued' | 'running'; started_at?: string | null } | null;
+  latestJob?: { id: string; status: string; created_at?: string | null; started_at?: string | null } | null;
+  insertedJobId?: string;
+}) {
+  const insertedJobId = options?.insertedJobId ?? 'job_new';
+  const inserts: Array<Record<string, unknown>> = [];
+  return {
+    inserts,
+    from(table: string) {
+      if (table !== 'ingestion_jobs') {
+        throw new Error(`Unexpected table: ${table}`);
+      }
+      return {
+        select(_columns: string) {
+          const filters: Array<{ type: string; value?: unknown }> = [];
+          return {
+            eq(_field: string, value: unknown) {
+              filters.push({ type: 'eq', value });
+              return this;
+            },
+            in(_field: string, value: unknown) {
+              filters.push({ type: 'in', value });
+              return this;
+            },
+            order() {
+              return this;
+            },
+            limit() {
+              return this;
+            },
+            maybeSingle: async () => {
+              const hasQueuedRunningFilter = filters.some((entry) => entry.type === 'in');
+              return {
+                data: hasQueuedRunningFilter ? (options?.runningJob ?? null) : (options?.latestJob ?? null),
+                error: null,
+              };
+            },
+          };
+        },
+        insert(payload: Record<string, unknown>) {
+          inserts.push(payload);
+          return {
+            select() {
+              return {
+                single: async () => ({ data: { id: insertedJobId }, error: null }),
+              };
+            },
           };
         },
       };
@@ -490,6 +546,44 @@ describe('queue health handler', () => {
 });
 
 describe('ingestion trigger handler', () => {
+  it('suppresses enqueue when the latest all_active_subscriptions job is inside the minimum interval gate', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-23T12:00:00.000Z'));
+    try {
+      const req = {} as never;
+      const res = createMockResponse();
+      const scheduleQueuedIngestionProcessing = vi.fn();
+
+      await handleIngestionJobsTrigger(req, res as never, createBaseDeps({
+        getServiceSupabaseClient: () => createIngestionTriggerDb({
+          latestJob: {
+            id: 'job_recent',
+            status: 'succeeded',
+            created_at: '2026-03-23T11:54:00.000Z',
+            started_at: '2026-03-23T11:55:00.000Z',
+          },
+        }),
+        scheduleQueuedIngestionProcessing,
+      }));
+
+      expect(res.statusCode).toBe(202);
+      expect(res.body).toMatchObject({
+        ok: true,
+        data: {
+          suppressed: true,
+          reason: 'min_interval',
+          scope: 'all_active_subscriptions',
+          latest_job_id: 'job_recent',
+          latest_job_status: 'succeeded',
+          min_interval_ms: 10 * 60_000,
+        },
+      });
+      expect(scheduleQueuedIngestionProcessing).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('suppresses low-priority all_active_subscriptions enqueue when queue pressure threshold is hit', async () => {
     const req = {} as never;
     const res = createMockResponse();
@@ -509,5 +603,41 @@ describe('ingestion trigger handler', () => {
         scope: 'all_active_subscriptions',
       },
     });
+  });
+
+  it('queues a new all_active_subscriptions job once the minimum interval gate has elapsed', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-23T12:00:00.000Z'));
+    try {
+      const req = {} as never;
+      const res = createMockResponse();
+      const db = createIngestionTriggerDb({
+        latestJob: {
+          id: 'job_old',
+          status: 'succeeded',
+          created_at: '2026-03-23T11:40:00.000Z',
+          started_at: '2026-03-23T11:41:00.000Z',
+        },
+        insertedJobId: 'job_new',
+      });
+      const scheduleQueuedIngestionProcessing = vi.fn();
+
+      await handleIngestionJobsTrigger(req, res as never, createBaseDeps({
+        getServiceSupabaseClient: () => db,
+        scheduleQueuedIngestionProcessing,
+      }));
+
+      expect(res.statusCode).toBe(202);
+      expect(res.body).toMatchObject({
+        ok: true,
+        data: {
+          job_id: 'job_new',
+        },
+      });
+      expect(db.inserts).toHaveLength(1);
+      expect(scheduleQueuedIngestionProcessing).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

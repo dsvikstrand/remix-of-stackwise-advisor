@@ -356,6 +356,12 @@ const queueLowPrioritySuppressionDepth = clampInt(
   0,
   200_000,
 );
+const allActiveSubscriptionsMinTriggerIntervalMs = clampInt(
+  process.env.ALL_ACTIVE_SUBSCRIPTIONS_MIN_TRIGGER_INTERVAL_MS,
+  10 * 60_000,
+  60_000,
+  60 * 60_000,
+);
 const workerConcurrency = clampInt(process.env.WORKER_CONCURRENCY, 2, 1, 16);
 const workerBatchSize = clampInt(process.env.WORKER_BATCH_SIZE, 10, 1, 200);
 const workerLeaseMs = clampInt(process.env.WORKER_LEASE_MS, 90_000, 5_000, 15 * 60_000);
@@ -8005,6 +8011,7 @@ registerOpsRoutes(app, {
   queueWorkItemsPerUserLimit,
   queuePriorityEnabled,
   queueLowPrioritySuppressionDepth,
+  allActiveSubscriptionsMinTriggerIntervalMs,
   workerConcurrency,
   workerBatchSize,
   workerLeaseMs,

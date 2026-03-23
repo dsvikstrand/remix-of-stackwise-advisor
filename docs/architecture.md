@@ -41,8 +41,9 @@
     - missing `VITE_SUPABASE_URL` or `VITE_SUPABASE_PUBLISHABLE_KEY` renders a configuration screen instead of a blank page.
   - Subscription sync persistence is write-throttled:
     - unchanged successful writes to `user_source_subscriptions` are skipped unless checkpoint/title/error state changes
-    - repeated identical error writes remain bounded by the `15m` heartbeat
+    - repeated identical error writes remain bounded by the `30m` heartbeat
     - UI health semantics stay separate and still treat `<=60m` since last poll as healthy
+    - Oracle cron may still call `/api/ingestion/jobs/trigger` every `3m`, but backend enqueue now gates `all_active_subscriptions` to an effective minimum interval of `10m` by default
   - Low-priority queue claim polling is also cadence-aware:
     - idle claim sweeps for low-priority scopes back off more aggressively than the default worker idle cadence
     - claimed-work reschedules and lease-heartbeat behavior remain unchanged
@@ -219,6 +220,7 @@
     - manual blueprint-comments refresh now reads the existing refresh-state row first and registers one only when the blueprint lacks an enabled refresh record.
     - worker lease heartbeats are now lease-aware by default: a `90s` lease refreshes every `30s` instead of every `10s`, reducing Supabase lease-RPC churn without changing lease ownership semantics.
     - low-priority idle claim sweeps now back off more aggressively than the default worker idle cadence, reducing `claim_ingestion_jobs` chatter when only low-priority scopes are being polled.
+    - service-cron subscription enqueue is also cadence-aware now: the route still receives the `*/3m` Oracle trigger, but `all_active_subscriptions` is only re-enqueued after the default `10m` minimum interval has elapsed.
     - YouTube refresh bookkeeping now skips unchanged `source_items.metadata.view_count` writes and no-op `blueprint_youtube_refresh_state` upserts, reducing refresh-state churn without changing refresh UX.
     - frontend list/detail query tuning now complements the backend egress work by keeping non-live query surfaces on explicit conservative stale windows instead of implicit focus churn.
     - provider retry/circuit controls are env-driven (transcript + LLM bounded retries, fail-fast circuit open mode).

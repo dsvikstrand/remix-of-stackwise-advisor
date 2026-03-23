@@ -63,6 +63,7 @@ export type OpsRouteDeps = {
   queueWorkItemsPerUserLimit: number;
   queuePriorityEnabled: boolean;
   queueLowPrioritySuppressionDepth: number;
+  allActiveSubscriptionsMinTriggerIntervalMs: number;
   workerConcurrency: number;
   workerBatchSize: number;
   workerLeaseMs: number;
