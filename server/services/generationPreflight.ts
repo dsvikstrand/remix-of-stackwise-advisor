@@ -13,6 +13,7 @@ type VariantReadyState = {
 type VariantInProgressState = {
   state: 'in_progress';
   blueprintId?: string | null;
+  ownedByCurrentJob?: boolean;
 };
 
 type VariantState = VariantReadyState | VariantInProgressState | null | undefined;
@@ -66,6 +67,7 @@ export async function classifyManualGenerationCandidates<T>(input: {
   resolveVariantOrReady: (args: {
     sourceItemId: string;
     generationTier: string;
+    jobId?: string | null;
   }) => Promise<VariantState>;
   onReady?: (args: {
     item: T;

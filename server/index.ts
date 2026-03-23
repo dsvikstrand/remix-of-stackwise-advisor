@@ -5833,6 +5833,7 @@ async function processSourceItemUnlockGenerationJob(input: {
         const variantState = await resolveVariantOrReady({
           sourceItemId: item.source_item_id,
           generationTier: itemGenerationTier,
+          jobId: input.jobId,
         });
         if (variantState.state === 'ready' && variantState.blueprintId) {
           if (!dualGenerateEnabled) {
@@ -5845,7 +5846,8 @@ async function processSourceItemUnlockGenerationJob(input: {
           }
           skipUnlockSettlement = true;
         }
-        if (variantState.state === 'in_progress') {
+        const currentJobOwnsVariant = variantState.state === 'in_progress' && variantState.ownedByCurrentJob;
+        if (variantState.state === 'in_progress' && !currentJobOwnsVariant) {
           if (dualGenerateEnabled) {
             const { data: sourceForMirror } = await db
               .from('source_items')
@@ -5880,6 +5882,8 @@ async function processSourceItemUnlockGenerationJob(input: {
           // Dual-generate mode: primary is already ready, keep going so mirror can be ensured.
         } else if (current?.status === 'ready' && current.blueprint_id) {
           skipUnlockSettlement = true;
+        } else if (currentJobOwnsVariant) {
+          // Retrying the same job should fall through to the normal generation path.
         } else {
           await releaseAutoIntentIfPending({
             reasonCode: 'AUTO_UNLOCK_SKIPPED_NO_PROCESSING_UNLOCK',
@@ -5893,6 +5897,7 @@ async function processSourceItemUnlockGenerationJob(input: {
         const variantState = await resolveVariantOrReady({
           sourceItemId: item.source_item_id,
           generationTier: itemGenerationTier,
+          jobId: input.jobId,
         });
         if (variantState.state === 'ready' && variantState.blueprintId) {
           if (!dualGenerateEnabled) {
@@ -5905,7 +5910,7 @@ async function processSourceItemUnlockGenerationJob(input: {
           }
           skipUnlockSettlement = true;
         }
-        if (variantState.state === 'in_progress') {
+        if (variantState.state === 'in_progress' && !variantState.ownedByCurrentJob) {
           if (dualGenerateEnabled) {
             const { data: sourceForMirror } = await db
               .from('source_items')

@@ -214,6 +214,7 @@
   - `source_item_blueprint_variants` is the canonical queue-claim guard for shared source-video generation.
     - queue-backed claims now record `active_job_id` on the variant row.
     - stale queued/running variants are reclaimed after a bounded timeout only when `active_job_id` is missing.
+    - unlock-generation preflight now treats a current job that already owns the variant as same-job work, not generic `in_progress` work to skip.
   - unlock reliability sweeps:
     - opportunistic sweeps on source-page video list/unlock routes.
     - forced sweep on service cron trigger path.

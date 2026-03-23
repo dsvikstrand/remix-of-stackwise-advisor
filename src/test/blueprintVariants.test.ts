@@ -104,4 +104,84 @@ describe('blueprintVariants service', () => {
       created_by_user_id: 'user_live',
     });
   });
+
+  it('marks an in-progress variant as owned by the current job when resolving preflight state', async () => {
+    const db = createMockSupabase({
+      source_item_blueprint_variants: [
+        {
+          id: 'variant_owned',
+          source_item_id: 'source_owned',
+          generation_tier: 'tier',
+          status: 'running',
+          blueprint_id: null,
+          active_job_id: 'job_same',
+          last_error_code: null,
+          last_error_message: null,
+          created_by_user_id: 'user_same',
+          created_at: '2026-03-23T15:20:00.000Z',
+          updated_at: '2026-03-23T15:55:00.000Z',
+        },
+      ],
+    }) as any;
+
+    const service = createBlueprintVariantsService({
+      getServiceSupabaseClient: () => db,
+    });
+
+    const result = await service.resolveVariantOrReady({
+      sourceItemId: 'source_owned',
+      generationTier: 'tier',
+      jobId: 'job_same',
+    });
+
+    expect(result).toMatchObject({
+      state: 'in_progress',
+      ownedByCurrentJob: true,
+      variant: {
+        source_item_id: 'source_owned',
+        status: 'running',
+        active_job_id: 'job_same',
+      },
+    });
+  });
+
+  it('keeps a generic in-progress state when preflight is checking another job', async () => {
+    const db = createMockSupabase({
+      source_item_blueprint_variants: [
+        {
+          id: 'variant_other',
+          source_item_id: 'source_other',
+          generation_tier: 'tier',
+          status: 'running',
+          blueprint_id: null,
+          active_job_id: 'job_live',
+          last_error_code: null,
+          last_error_message: null,
+          created_by_user_id: 'user_live',
+          created_at: '2026-03-23T15:20:00.000Z',
+          updated_at: '2026-03-23T15:55:00.000Z',
+        },
+      ],
+    }) as any;
+
+    const service = createBlueprintVariantsService({
+      getServiceSupabaseClient: () => db,
+    });
+
+    const result = await service.resolveVariantOrReady({
+      sourceItemId: 'source_other',
+      generationTier: 'tier',
+      jobId: 'job_new',
+    });
+
+    expect(result).toMatchObject({
+      state: 'in_progress',
+      ownedByCurrentJob: false,
+      variant: {
+        source_item_id: 'source_other',
+        status: 'running',
+        active_job_id: 'job_live',
+      },
+    });
+  });
 });

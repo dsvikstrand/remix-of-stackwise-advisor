@@ -30,6 +30,7 @@ export type ResolveVariantStateResult =
   | {
       state: 'in_progress';
       variant: SourceItemBlueprintVariantRow;
+      ownedByCurrentJob?: boolean;
     }
   | {
       state: 'needs_generation';
@@ -199,6 +200,7 @@ export function createBlueprintVariantsService(deps: {
   async function resolveVariantOrReady(input: {
     sourceItemId: string;
     generationTier: GenerationTier;
+    jobId?: string | null;
   }): Promise<ResolveVariantStateResult> {
     const variant = await getVariant(input.sourceItemId, input.generationTier);
     if (!variant) {
@@ -215,6 +217,7 @@ export function createBlueprintVariantsService(deps: {
       return {
         state: 'in_progress',
         variant,
+        ownedByCurrentJob: Boolean(input.jobId && variant.active_job_id === input.jobId),
       };
     }
     return {

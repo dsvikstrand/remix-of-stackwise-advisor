@@ -226,6 +226,12 @@ g54) [have] Phase 5 implementation contract:
 - do not change [createBlueprintFromVideo(...) in blueprintCreation.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/blueprintCreation.ts) unless the Phase 5 implementation proves it is necessary
 - do not touch frontend, provider handling, or notification policy in Phase 5
 
+g55) [have] Phase 5 progress note:
+- [have] [blueprintVariants.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/blueprintVariants.ts) now accepts optional `jobId` in `resolveVariantOrReady(...)` and marks `in_progress` state with `ownedByCurrentJob` when `active_job_id === jobId`
+- [have] the two unlock preflight checks in [processSourceItemUnlockGenerationJob(...) in index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts) now pass `input.jobId`
+- [have] unlock preflight now skips only when another job owns the variant; the current job's own `running` variant falls through to the existing same-job generation path
+- [have] focused resolver coverage was added in [blueprintVariants.test.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/test/blueprintVariants.test.ts)
+
 ## Success Criteria
 h1) [todo] The repo gets simpler after cleanup.
 
