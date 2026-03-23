@@ -108,7 +108,7 @@ Status: `canonical`
 71. YouTube refresh bookkeeping must avoid no-op persistence: unchanged source-item `view_count` fetches must not rewrite metadata just to refresh fetch timestamps, and refresh-state rows should only upsert when a meaningful persisted field changes.
 72. The default one-step YT2BP prompt contract is now `docs/golden_blueprint/golden_bp_prompt_contract_one_step_v4.md`: it keeps the same `blueprint_sections_v1` runtime shape, but `Takeaways` should bias toward plain-English fast-skim value and `Storyline` should stay at `2-3` substantial paragraphs/slides rather than thin fragments.
 73. YT2BP `llm_native` quality retries now reserve regeneration for blocking structure/shape misses; `TAKEAWAYS_TOO_LONG` and `OPEN_QUESTIONS_NOT_QUESTIONS` remain logged as soft quality telemetry but do not trigger retry by themselves.
-74. Queue-backed source-video generation must retain claim ownership and bounded recovery: `source_item_blueprint_variants` should record the active ingestion job when work is claimed, stale queued/running variants must become reclaimable after a bounded timeout, and terminal `generation_runs` status persistence must not depend on best-effort trace-event writes.
+74. Queue-backed source-video generation must retain claim ownership and bounded recovery: `source_item_blueprint_variants` should record the active ingestion job when work is claimed, stale queued/running variants with no `active_job_id` must become reclaimable after a bounded timeout, and terminal `generation_runs` status persistence must not depend on best-effort trace-event writes.
 
 ## Core user journey
 1. Subscribe to a YouTube channel or look up one specific video by link, video id, or title.

@@ -99,7 +99,7 @@ g03) [have] Phase 0 decision:
 - treat the stale-recovery branch in `blueprintVariants.ts` as the main simplification candidate for Phase 1
 - keep provider investigation as a separate later plan
 
-g2) [todo] Phase 1: build and lock the simplification cut.
+g2) [have] Phase 1: build and lock the simplification cut.
 - evaluate:
   - `jobId` plumbing into `createBlueprintFromVideo(...)`
   - stale variant recovery in `blueprintVariants.ts`
@@ -107,25 +107,34 @@ g2) [todo] Phase 1: build and lock the simplification cut.
   - `persistTerminalGenerationRun(...)` in `youtubeBlueprintPipeline.ts`
   - tests/docs that only support logic we no longer want
 
-g21) [todo] Phase 1 should narrow to one concrete cleanup decision:
-- either keep the stale-recovery branch as-is because it is still proven necessary
-- or remove/simplify that branch while preserving:
-  - `jobId` ownership
+g21) [have] Phase 1 locked decision:
+- do not remove stale recovery entirely
+- keep only the smallest reclaim rule that is still supported by live evidence:
+  - reclaim stale `queued` / `running` variants only when they are older than the threshold and `active_job_id` is missing
+- remove the heavier ingestion-job / lease / status lookup heuristics
+- keep:
+  - `jobId` ownership plumbing
   - terminal `generation_runs` persistence
 
-g22) [todo] Phase 1 execution structure:
+g22) [have] Phase 1 execution structure:
 - inspect only the stale-recovery branch in [blueprintVariants.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/blueprintVariants.ts)
 - compare two cleanup options:
   - `Option A`: remove stale-recovery logic entirely and keep only the smaller `jobId` ownership path
   - `Option B`: keep a much smaller reclaim rule, but remove ingestion-job/lease heuristics and extra hot-path DB lookup
-- prefer `Option A` unless current evidence proves a smaller reclaim rule is still needed
+- decision:
+  - `Option B`
 
-g23) [todo] Phase 1 decision questions:
+g23) [have] Phase 1 decision questions:
 - does current production correctness still depend on runtime stale-variant recovery?
 - is the current stale-recovery branch fixing an ongoing app problem, or mainly preserving a one-time repair pattern?
 - if stale recovery is removed, do `jobId` ownership and terminal `generation_runs` persistence still cover the proven app-scope correctness needs?
 
-g24) [todo] Phase 1 scope lock:
+g231) [have] Phase 1 answer summary:
+- fully removing stale recovery is too aggressive right now because there are still live stale `running` variants with `active_job_id = null`
+- the ingestion-job lookup path is not justified by the current bounded evidence
+- the smallest defensible cut is to keep missing-`active_job_id` reclaim only
+
+g24) [have] Phase 1 scope lock:
 - no provider fixes
 - no frontend changes
 - no broad revert
@@ -133,7 +142,7 @@ g24) [todo] Phase 1 scope lock:
 - no changes to [src/components/pwa/BleupPwaRuntime.tsx](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/components/pwa/BleupPwaRuntime.tsx)
 - no changes outside the `13cb75b` cleanup target set unless the decision lock proves they are required for a coherent simplification
 
-g25) [todo] Phase 1 expected output:
+g25) [have] Phase 1 expected output:
 - one locked keep/remove table for:
   - `jobId` plumbing
   - stale variant recovery helpers
@@ -143,15 +152,24 @@ g25) [todo] Phase 1 expected output:
 - one exact Phase 2 implementation contract naming the files/functions allowed to change
 - one explicit non-goal list for the cleanup pass
 
-g26) [todo] Phase 1 acceptance criteria:
+g26) [have] Phase 1 acceptance criteria:
 - the cleanup target is reduced to one concrete implementation choice
 - the chosen Phase 2 cut removes or simplifies code rather than adding more
 - the decision is justified by current evidence, not by provider-outage speculation
 
-g3) [todo] Phase 2: implement the smallest forward cleanup on `main`.
+g3) [have] Phase 2: implement the smallest forward cleanup on `main`.
 - keep any proven app-correctness path
 - remove speculative recovery machinery first
 - avoid broad revert unless the entire commit is clearly net-negative
+
+g31) [have] Phase 2 progress note:
+- removed the ingestion-job lookup / lease heuristic branch from [blueprintVariants.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/blueprintVariants.ts)
+- kept only the smaller reclaim rule for stale `queued` / `running` variants that have no `active_job_id`
+- preserved:
+  - `jobId` ownership plumbing
+  - same-job no-block behavior
+  - terminal `generation_runs` persistence in [youtubeBlueprintPipeline.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/youtubeBlueprintPipeline.ts)
+- updated focused tests to match the simpler retained behavior
 
 g4) [todo] Phase 3: verify cleanup against current app behavior.
 - successful blueprint generation still publishes normally

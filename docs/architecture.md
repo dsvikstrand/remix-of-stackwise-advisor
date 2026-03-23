@@ -213,7 +213,7 @@
     - terminal `generation_runs` status writes now persist outside the best-effort event-write wrapper so trace-event append failures do not leave runs stuck in `running`.
   - `source_item_blueprint_variants` is the canonical queue-claim guard for shared source-video generation.
     - queue-backed claims now record `active_job_id` on the variant row.
-    - stale queued/running variants are reclaimed after a bounded timeout when the linked ingestion job is missing, terminal, or lease-stale.
+    - stale queued/running variants are reclaimed after a bounded timeout only when `active_job_id` is missing.
   - unlock reliability sweeps:
     - opportunistic sweeps on source-page video list/unlock routes.
     - forced sweep on service cron trigger path.

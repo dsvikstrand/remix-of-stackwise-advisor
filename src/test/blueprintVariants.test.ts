@@ -59,10 +59,7 @@ describe('blueprintVariants service', () => {
     });
   });
 
-  it('keeps a fresh running variant in progress when its active job is still live', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-03-23T16:00:00.000Z'));
-
+  it('keeps a running variant in progress when it is already owned by another job', async () => {
     const db = createMockSupabase({
       source_item_blueprint_variants: [
         {
@@ -77,14 +74,6 @@ describe('blueprintVariants service', () => {
           created_by_user_id: 'user_live',
           created_at: '2026-03-23T15:20:00.000Z',
           updated_at: '2026-03-23T15:55:00.000Z',
-        },
-      ],
-      ingestion_jobs: [
-        {
-          id: 'job_live',
-          status: 'running',
-          lease_expires_at: '2026-03-23T16:01:30.000Z',
-          updated_at: '2026-03-23T15:59:00.000Z',
         },
       ],
     }) as any;

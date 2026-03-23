@@ -3,13 +3,6 @@ import type { GenerationTier } from './generationTierAccess';
 type DbClient = any;
 
 type VariantStatus = 'available' | 'queued' | 'running' | 'ready' | 'failed';
-type IngestionJobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'unknown';
-type IngestionJobRow = {
-  id: string;
-  status: IngestionJobStatus;
-  lease_expires_at: string | null;
-  updated_at: string | null;
-};
 
 const VARIANT_IN_PROGRESS_STALE_MS = 20 * 60 * 1000;
 const VARIANT_STALE_ERROR_CODE = 'STALE_VARIANT_RECOVERED';
@@ -58,15 +51,6 @@ function normalizeStatus(raw: unknown): VariantStatus {
   return 'available';
 }
 
-function normalizeIngestionJobStatus(raw: unknown): IngestionJobStatus {
-  const normalized = String(raw || '').trim().toLowerCase();
-  if (normalized === 'queued') return 'queued';
-  if (normalized === 'running') return 'running';
-  if (normalized === 'succeeded') return 'succeeded';
-  if (normalized === 'failed') return 'failed';
-  return 'unknown';
-}
-
 function parseTimestampMs(raw: unknown) {
   const parsed = Date.parse(String(raw || '').trim());
   return Number.isFinite(parsed) ? parsed : null;
@@ -76,12 +60,6 @@ function isOlderThan(raw: unknown, thresholdMs: number) {
   const parsed = parseTimestampMs(raw);
   if (parsed == null) return true;
   return (Date.now() - parsed) >= thresholdMs;
-}
-
-function hasExpired(raw: unknown) {
-  const parsed = parseTimestampMs(raw);
-  if (parsed == null) return false;
-  return parsed <= Date.now();
 }
 
 function normalizeVariantRow(raw: any): SourceItemBlueprintVariantRow | null {
@@ -186,25 +164,6 @@ export function createBlueprintVariantsService(deps: {
     return getVariant(input.sourceItemId, input.generationTier);
   }
 
-  async function getIngestionJob(jobId: string): Promise<IngestionJobRow | null> {
-    const normalizedJobId = String(jobId || '').trim();
-    if (!normalizedJobId) return null;
-    const db = getDb();
-    const { data, error } = await db
-      .from('ingestion_jobs')
-      .select('id,status,lease_expires_at,updated_at')
-      .eq('id', normalizedJobId)
-      .maybeSingle();
-    if (error) throw error;
-    if (!data) return null;
-    return {
-      id: String(data.id || '').trim(),
-      status: normalizeIngestionJobStatus(data.status),
-      lease_expires_at: String(data.lease_expires_at || '').trim() || null,
-      updated_at: String(data.updated_at || '').trim() || null,
-    };
-  }
-
   async function markVariantRecoveredFromStale(input: {
     variant: SourceItemBlueprintVariantRow;
     reason: string;
@@ -230,27 +189,10 @@ export function createBlueprintVariantsService(deps: {
   async function maybeRecoverStaleInProgressVariant(variant: SourceItemBlueprintVariantRow) {
     if (variant.status !== 'queued' && variant.status !== 'running') return variant;
     if (!isOlderThan(variant.updated_at, VARIANT_IN_PROGRESS_STALE_MS)) return variant;
-
-    let recoverReason: string | null = null;
-    if (!variant.active_job_id) {
-      recoverReason = 'missing_active_job';
-    } else {
-      const activeJob = await getIngestionJob(variant.active_job_id);
-      if (!activeJob?.id) {
-        recoverReason = 'missing_ingestion_job';
-      } else if (activeJob.status === 'succeeded' || activeJob.status === 'failed' || activeJob.status === 'unknown') {
-        recoverReason = `terminal_ingestion_job_${activeJob.status}`;
-      } else if (activeJob.status === 'running' && hasExpired(activeJob.lease_expires_at) && isOlderThan(activeJob.updated_at, VARIANT_IN_PROGRESS_STALE_MS)) {
-        recoverReason = 'expired_running_job_lease';
-      } else if (activeJob.status === 'queued' && isOlderThan(activeJob.updated_at, VARIANT_IN_PROGRESS_STALE_MS)) {
-        recoverReason = 'stale_queued_job';
-      }
-    }
-
-    if (!recoverReason) return variant;
+    if (variant.active_job_id) return variant;
     return markVariantRecoveredFromStale({
       variant,
-      reason: recoverReason,
+      reason: 'missing_active_job',
     });
   }
 
