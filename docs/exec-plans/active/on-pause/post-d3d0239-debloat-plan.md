@@ -171,11 +171,30 @@ g31) [have] Phase 2 progress note:
   - terminal `generation_runs` persistence in [youtubeBlueprintPipeline.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/youtubeBlueprintPipeline.ts)
 - updated focused tests to match the simpler retained behavior
 
-g4) [todo] Phase 3: verify cleanup against current app behavior.
-- successful blueprint generation still publishes normally
-- failed transcript/provider runs still fail cleanly
-- no new stuck `running` state appears
-- queue/Wall truth remains unchanged apart from simpler internal code paths
+g4) [have] Phase 3: verify cleanup against current app behavior.
+
+g41) [have] Phase 3 proof result: mixed.
+- `[have]` Fresh `running` variants are now writing `active_job_id`, and there are no fresh post-cleanup `running` variants with missing `active_job_id` in the bounded check (`updated_at >= 2026-03-23T19:00:00Z`).
+- `[have]` Recent `source_page_video_library` failures still look like upstream provider failures, not silent publish misses.
+- `[have]` A real publish path still works end to end: the latest checked success `d9068a8b-8ad0-4244-b91c-695deaa0dc03` is `is_public = true` and has a `user_feed_items.state = channel_published` row.
+- `[todo]` A separate app-state mismatch is still present after the cleanup: some `source_item_unlock_generation` jobs are finishing `succeeded` with `skipped_count = 1` while leaving both their variant and `generation_run` in `running`.
+
+g42) [have] Phase 3 bounded live sample:
+- last `15` `generation_runs` for `source_scope = source_page_video_library`:
+  - `8` `running`
+  - `7` `failed`
+  - `0` fresh terminal success inside that bounded window
+- all `7` terminal failures in that bounded window were `PROVIDER_FAIL`
+
+g43) [have] Concrete stale-state examples observed after the cleanup:
+- job `c65b2434-0803-4b80-913d-0af64b0a3247` (`What Really Happens to Belly Fat When You Walk on an Empty Stomach (Science Explained)`) finished `succeeded` at `2026-03-23T19:28:34Z` with `inserted_count = 0` and `skipped_count = 1`, but variant `fdcff8cc-fafa-459e-bd5f-5b66970e59ec` is still `running` and generation run `sub-source_page_video_library-1774293902219-wsdz3g` is still `running`
+- job `3c78394f-a6c0-473c-8e2c-2d32a598a1b8` (`What Happens to Belly Fat When You Walk Fasted`) finished `succeeded` at `2026-03-23T19:28:03Z` with `inserted_count = 0` and `skipped_count = 1`, but variant `75cdf1b7-b750-4d03-84df-3445fc32186d` is still `running` and generation run `sub-source_page_video_library-1774293708842-4uc56f` is still `running`
+- the same post-terminal pattern also appears on other fresh unlock jobs in the same window (`23991961-067c-4e8a-a7dc-17f8adecc1c9`, `90d6b2ec-d28d-4c82-8cbe-8153af810685`, `cdc3e754-6f06-4f3c-b8a2-3d05dda06c5d`, `e777366f-93b5-484c-9345-252915531619`)
+
+g44) [have] Phase 3 conclusion:
+- the Phase 2 debloat cut did remove the heavier ingestion-job / lease lookup branch, and the retained `active_job_id` ownership path is working
+- but the plan does not close cleanly here, because there is still a real terminal skipped-job stale-state bug in the unlock-generation path
+- the next plan should inspect that narrower terminal-skip / same-job state-sync branch directly, rather than reopening provider work or restoring the removed hot-path lookup machinery
 
 ## Success Criteria
 h1) [todo] The repo gets simpler after cleanup.
