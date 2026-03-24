@@ -209,6 +209,10 @@ async function getYouTubeiClient() {
   return youtubeiClientPromise;
 }
 
+async function getYouTubeiClientWithTimeout(message: string) {
+  return withTimeout(getYouTubeiClient(), YOUTUBEI_TIMEOUT_MS, message);
+}
+
 export function resetYouTubeChannelLookupHelpersForTest() {
   youtubeiClientPromise = null;
 }
@@ -291,7 +295,9 @@ async function resolveDirectYouTubeChannel(query: string): Promise<YouTubeChanne
   try {
     const resolved = await resolveYouTubeChannel(query);
     try {
-      const client = await getYouTubeiClient();
+      const client = await getYouTubeiClientWithTimeout(
+        'Creator lookup is taking longer than expected. Please try again.',
+      );
       const info = await withTimeout(
         client.getChannel(resolved.channelId),
         YOUTUBEI_TIMEOUT_MS,
@@ -320,7 +326,9 @@ async function resolveDirectYouTubeChannel(query: string): Promise<YouTubeChanne
 
 async function searchYouTubeChannelsByName(query: string, limit: number): Promise<YouTubeChannelSearchResult[] | null> {
   try {
-    const client = await getYouTubeiClient();
+    const client = await getYouTubeiClientWithTimeout(
+      'Creator lookup is taking longer than expected. Please try again.',
+    );
     const search = await withTimeout(
       client.search(query, { type: 'channel' }),
       YOUTUBEI_TIMEOUT_MS,

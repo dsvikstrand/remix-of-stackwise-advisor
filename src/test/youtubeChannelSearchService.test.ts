@@ -304,6 +304,41 @@ describe('youtubeChannelSearch service', () => {
     }));
   });
 
+  it('falls back to the direct resolver when youtubei bootstrap hangs for direct lookups', async () => {
+    vi.useFakeTimers();
+    try {
+      resolveYouTubeChannelMock.mockResolvedValue({
+        channelId: 'UC12345678901234567890',
+        channelUrl: 'https://www.youtube.com/channel/UC12345678901234567890',
+        channelTitle: 'Doctor Mike',
+      });
+      youtubeiCreateMock.mockImplementation(() => new Promise(() => {}));
+
+      const pending = searchYouTubeChannels({
+        query: '@DoctorMike',
+        limit: 3,
+      });
+
+      await vi.advanceTimersByTimeAsync(5_000);
+      const page = await pending;
+
+      expect(page).toEqual({
+        results: [{
+          channel_id: 'UC12345678901234567890',
+          channel_title: 'Doctor Mike',
+          channel_url: 'https://www.youtube.com/channel/UC12345678901234567890',
+          description: '',
+          thumbnail_url: null,
+          published_at: null,
+          subscriber_count: null,
+        }],
+        nextPageToken: null,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('returns a tiny candidate list instead of a wrong auto-hit when bare handle and name paths disagree', async () => {
     resolveYouTubeChannelMock.mockResolvedValue({
       channelId: 'UC12345678901234567890',
@@ -356,6 +391,31 @@ describe('youtubeChannelSearch service', () => {
     })).rejects.toMatchObject<Partial<YouTubeChannelSearchError>>({
       code: 'SEARCH_DISABLED',
     });
+  });
+
+  it('fails fast with SEARCH_DISABLED when youtubei bootstrap hangs for name queries', async () => {
+    vi.useFakeTimers();
+    try {
+      youtubeiCreateMock.mockImplementation(() => new Promise(() => {}));
+
+      const pending = searchYouTubeChannels({
+        query: 'Doctor Mike',
+      });
+      const settled = pending.then(
+        () => ({ ok: true as const, error: null }),
+        (error) => ({ ok: false as const, error }),
+      );
+
+      await vi.advanceTimersByTimeAsync(5_000);
+      const outcome = await settled;
+
+      expect(outcome.ok).toBe(false);
+      expect(outcome.error).toMatchObject<Partial<YouTubeChannelSearchError>>({
+        code: 'SEARCH_DISABLED',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('scores exact creator matches above weak ones', () => {
