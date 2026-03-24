@@ -38,7 +38,7 @@ a15) [have] Legacy `My Feed` compatibility notice cards support channel avatar r
 a16) [have] Legacy `My Feed` compatibility notice cards open a detailed popup with `Unsubscribe` confirmation; successful unsubscribe removes the notice card.
 a17) [have] Manual `Post to Channel` UI is feature-flagged for rollback and removed from normal auto-channel mode surfaces.
 a18) [have] Legacy `My Feed` compatibility blueprint cards open blueprint detail by card click (dedicated `Open blueprint` link removed).
-a19) [have] The current transcript default is `youtube_timedtext` first, with `videotranscriber_temp` as the built-in fallback behind the same YT2BP pipeline seam when YouTube captions are unavailable.
+a19) [have] The current transcript default is `youtube_timedtext` first, with `videotranscriber_temp` as the built-in second fallback and `transcriptapi` as the built-in third fallback behind the same YT2BP pipeline seam when YouTube captions are unavailable.
 a19) [have] Legacy `My Feed` header shortcuts are compatibility-only; active subscription entrypoints are Home/user-menu + `/subscriptions`.
 a20) [have] Auto-banner queue contract is now available for subscription auto-ingest (`/api/auto-banner/jobs/trigger`) with service-auth control and non-blocking ingestion mode.
 a21) [have] Banner-cap policy contract is now available globally with generated banner preservation (`blueprints.banner_generated_url`) and deterministic channel-default fallback.
@@ -166,7 +166,7 @@ b5) Subscription behavior (MVP simplified)
   - `SUBSCRIPTION_AUTO_BANNER_MODE` remains as compatibility control for non-source/legacy banner worker paths.
 - A persistent notice card is inserted into the personal lane with state `subscription_notice` and is surfaced on Home `For You` (with legacy `My Feed` compatibility support retained).
 - Notice cards are visualized with channel avatar and optional banner background when metadata is available.
-- API compatibility note: `mode` is accepted on subscription endpoints but coerced/treated as `auto`.
+- API compatibility note: `mode` remains a legacy compatibility field on subscription endpoints and stored rows may still contain `manual` or `auto`, but runtime auto behavior is controlled by `auto_unlock_enabled`.
 - Manual refresh reliability policy:
   - `refresh-scan` rate limit: 1 request per 30 seconds per user.
   - `refresh-generate` rate limit: 1 request per 120 seconds per user.

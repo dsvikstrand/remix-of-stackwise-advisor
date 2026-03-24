@@ -83,6 +83,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 
 export function resolveTranscriptProvider(): TranscriptProvider {
   const raw = String(process.env.TRANSCRIPT_PROVIDER || 'youtube_timedtext').toLowerCase();
+  if (raw === 'transcriptapi') return 'transcriptapi';
   if (raw === 'videotranscriber_temp') return 'videotranscriber_temp';
   if (raw === 'youtube_timedtext') return 'youtube_timedtext';
   return 'youtube_timedtext';

@@ -72,6 +72,9 @@ describe('transcript service modularity (backend)', () => {
     process.env.TRANSCRIPT_PROVIDER = 'videotranscriber_temp';
     expect(resolveTranscriptProvider()).toBe('videotranscriber_temp');
 
+    process.env.TRANSCRIPT_PROVIDER = 'transcriptapi';
+    expect(resolveTranscriptProvider()).toBe('transcriptapi');
+
     process.env.TRANSCRIPT_PROVIDER = 'unsupported_provider';
     expect(resolveTranscriptProvider()).toBe('youtube_timedtext');
   });
@@ -244,15 +247,20 @@ describe('transcript service modularity (backend)', () => {
         id: 'videotranscriber_temp',
         getTranscript: async () => ({ text: 'vt', source: 'videotranscriber_temp', confidence: null }),
       },
+      {
+        id: 'transcriptapi',
+        getTranscript: async () => ({ text: 'ta', source: 'transcriptapi', confidence: null }),
+      },
     ]);
 
     expect(listTranscriptProvidersForFallback('youtube_timedtext').map((provider) => provider.id)).toEqual([
       'youtube_timedtext',
       'videotranscriber_temp',
+      'transcriptapi',
     ]);
   });
 
-  it('defaults fallback provider order to youtube_timedtext before videotranscriber_temp', () => {
+  it('defaults fallback provider order to youtube_timedtext, then videotranscriber_temp, then transcriptapi', () => {
     registerTranscriptProviders([
       {
         id: 'youtube_timedtext',
@@ -262,12 +270,94 @@ describe('transcript service modularity (backend)', () => {
         id: 'videotranscriber_temp',
         getTranscript: async () => ({ text: 'vt', source: 'videotranscriber_temp', confidence: null }),
       },
+      {
+        id: 'transcriptapi',
+        getTranscript: async () => ({ text: 'ta', source: 'transcriptapi', confidence: null }),
+      },
     ]);
 
     expect(listTranscriptProvidersForFallback().map((provider) => provider.id)).toEqual([
       'youtube_timedtext',
       'videotranscriber_temp',
+      'transcriptapi',
     ]);
+  });
+
+  it('falls through to transcriptapi after videotranscriber_temp fails', async () => {
+    const calls: string[] = [];
+    const providers: TranscriptProviderAdapter[] = [
+      {
+        id: 'youtube_timedtext',
+        getTranscript: async () => {
+          calls.push('youtube_timedtext');
+          throw new TranscriptProviderError('NO_CAPTIONS', 'timedtext failure: NO_CAPTIONS');
+        },
+      },
+      {
+        id: 'videotranscriber_temp',
+        getTranscript: async () => {
+          calls.push('videotranscriber_temp');
+          throw new TranscriptProviderError('VIDEOTRANSCRIBER_UPSTREAM_UNAVAILABLE', 'temp unavailable', {
+            providerDebug: {
+              provider: 'videotranscriber_temp',
+              stage: 'start',
+            },
+          });
+        },
+      },
+      {
+        id: 'transcriptapi',
+        getTranscript: async () => {
+          calls.push('transcriptapi');
+          return {
+            text: 'transcriptapi fallback transcript',
+            source: 'transcriptapi',
+            confidence: null,
+          };
+        },
+      },
+    ];
+
+    const result = await buildService(providers, {
+      resolveProvider: () => 'youtube_timedtext',
+      providerRetryDefaults: {
+        transcriptAttempts: 1,
+        transcriptTimeoutMs: 1000,
+      },
+    }).getTranscriptForVideo('video123', { enableFallback: true });
+
+    expect(calls).toEqual(['youtube_timedtext', 'videotranscriber_temp', 'transcriptapi']);
+    expect(result.provider_trace).toEqual({
+      attempted_providers: [
+        {
+          provider: 'youtube_timedtext',
+          ok: false,
+          error_code: 'NO_CAPTIONS',
+          provider_debug: null,
+        },
+        {
+          provider: 'videotranscriber_temp',
+          ok: false,
+          error_code: 'VIDEOTRANSCRIBER_UPSTREAM_UNAVAILABLE',
+          provider_debug: {
+            provider: 'videotranscriber_temp',
+            stage: 'start',
+            http_status: 0,
+            retry_after_seconds: null,
+            provider_error_code: null,
+            response_excerpt: null,
+          },
+        },
+        {
+          provider: 'transcriptapi',
+          ok: true,
+          error_code: null,
+          provider_debug: null,
+        },
+      ],
+      winning_provider: 'transcriptapi',
+      used_fallback: true,
+    });
   });
 
   it.each([

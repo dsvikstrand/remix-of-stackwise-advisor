@@ -17,7 +17,7 @@
 - 2026-02-17 note: dual-feed rollout moved post-generation behavior to a personal-first lane; current runtime surfaces that lane through Home `For You`, while legacy `/my-feed` remains compatibility-only. This does not alter the YT2BP request/response envelope.
 - 2026-02-17 note: optional AI review is executed as a separate post-generation step in UI (`/api/analyze-blueprint`) so core YT2BP latency is lower; banner generation remains outside the core YT2BP envelope.
 - 2026-02-18 note: subscription ingestion (`/api/source-subscriptions*`, `/api/ingestion/jobs/trigger`) and pending-card accept/skip (`/api/my-feed/items/:id/accept|skip`) are separate flows and do not alter this endpoint envelope.
-- 2026-02-18 note: subscription create path now uses auto-only behavior (incoming `mode` is compatibility-only and treated as `auto`); first subscribe sets checkpoint and inserts a `subscription_notice` feed card. This remains outside this endpoint envelope.
+- 2026-02-18 note: subscription create path still defaults new subscriptions into the auto path, but `mode` is now a legacy compatibility field and stored rows may contain `manual` or `auto`; operational auto behavior is controlled by `auto_unlock_enabled`. This remains outside this endpoint envelope.
 - 2026-02-18 note: debug simulation endpoint (`/api/debug/subscriptions/:id/simulate-new-uploads`) is env-gated (`ENABLE_DEBUG_ENDPOINTS`) and service-auth only (`x-service-token`, no user bearer required); this also remains outside the YT2BP envelope.
 - 2026-02-18 note: YouTube subscription channel resolution now includes `browseId` fallback parsing for handle pages where direct `channelId` metadata is unavailable.
 - 2026-02-17 note: ingestion reliability visibility adds service-auth endpoint `GET /api/ingestion/jobs/latest`; this is an ops path and does not alter the YT2BP envelope.
@@ -91,7 +91,7 @@
 - 2026-03-08 note: shared Webshare transcript proxying for opted-in providers now uses an explicit-endpoint-only runtime contract; legacy selector/list envs and direct-proxy-list lookup are removed from active runtime. Historical transport metadata remains read-compatible, and this does not alter the YT2BP endpoint envelope.
 - 2026-03-08 note: installed-PWA push delivery (`notification_push_subscriptions`, `notification_push_dispatch_queue`, `/api/notifications/push-subscriptions*`) is additive notification-channel infrastructure and does not alter the YT2BP endpoint envelope.
 - 2026-03-09 note: installed-PWA push runtime remains rollout-gated until backend startup validation and device delivery proof are complete; Oracle control-plane recovery for that rollout is documented separately in `docs/ops/oracle-cli-access.md`.
-- 2026-03-14 note: the current default is `TRANSCRIPT_PROVIDER=youtube_timedtext`; if YouTube captions are unavailable, the same seam falls through to `videotranscriber_temp`, a wrapper around the browser-facing `videotranscriber.ai` flow with provider-local timeout/session envs. This is additive and does not change the production endpoint envelope.
+- 2026-03-14 note: the current default is `TRANSCRIPT_PROVIDER=youtube_timedtext`; if YouTube captions are unavailable, the same seam falls through first to `videotranscriber_temp`, then to `transcriptapi` in lean text-only mode (`format=text`, `include_timestamp=false`) when `TRANSCRIPTAPI_APIKEY` is configured. This is additive and does not change the production endpoint envelope.
 - 2026-03-19 note: subscription sync persistence now throttles no-op success/error writes to `user_source_subscriptions` behind a `15m` backend heartbeat to reduce Supabase churn; this is additive backend behavior outside the YT2BP request/response envelope.
 - 2026-03-15 note: the v0 success envelope still returns a `draft` object, but the canonical blueprint content inside that envelope is now `draft.sectionsJson` with schema `blueprint_sections_v1`. Legacy `draft.steps`, `draft.summaryVariants`, and `draft.notes` remain compatibility fields during cutover and should not be used as the target shape for new downstream work.
 
@@ -181,7 +181,8 @@
 ## Runtime controls
 - `YT2BP_ENABLED`
 - `YT2BP_QUALITY_ENABLED`
-- `TRANSCRIPT_PROVIDER` (current default `youtube_timedtext`; built-in fallback `videotranscriber_temp` when captions are unavailable)
+- `TRANSCRIPT_PROVIDER` (current default `youtube_timedtext`; built-in fallback chain `videotranscriber_temp` then `transcriptapi` when available)
+- `TRANSCRIPTAPI_APIKEY` (enables the `transcriptapi` third-fallback adapter)
 - `TRANSCRIPT_USE_WEBSHARE_PROXY`, `WEBSHARE_PROXY_URL`, `WEBSHARE_PROXY_HOST`, `WEBSHARE_PROXY_PORT`, `WEBSHARE_PROXY_USERNAME`, `WEBSHARE_PROXY_PASSWORD` (shared transport config for opted-in transcript providers)
 - `VIDEOTRANSCRIBER_TEMP_TIMEOUT_MS` (local/dev-only, default `180000`, bounded provider-local timeout)
 - `VIDEOTRANSCRIBER_TEMP_FORCE_NEW_SESSION` (local/dev-only anonymous-session rotation toggle)

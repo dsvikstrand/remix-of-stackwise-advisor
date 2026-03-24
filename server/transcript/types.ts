@@ -1,4 +1,4 @@
-export type TranscriptProvider = 'youtube_timedtext' | 'videotranscriber_temp';
+export type TranscriptProvider = 'youtube_timedtext' | 'videotranscriber_temp' | 'transcriptapi';
 
 export type TranscriptProviderSessionMode = 'shared' | 'force_new';
 
@@ -164,6 +164,7 @@ export function sanitizeTranscriptProviderDebug(input: TranscriptProviderDebug |
   if (
     input.provider !== 'youtube_timedtext'
     && input.provider !== 'videotranscriber_temp'
+    && input.provider !== 'transcriptapi'
   ) return null;
   const httpStatus = Number(input.http_status);
   const retryAfterSeconds = Number(input.retry_after_seconds);

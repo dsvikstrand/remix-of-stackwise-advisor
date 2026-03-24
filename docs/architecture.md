@@ -83,6 +83,7 @@
   - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: popup creator lookup + subscribe + active-list `Unsubscribe`; aggregate health summary hidden for user clarity; row avatars shown when available).
     - page-level OAuth/import/manual-refresh orchestration now lives in a dedicated frontend controller hook so the route component primarily owns rendering.
     - per-row `Auto unlock` toggle (`auto_unlock_enabled`) controls whether that subscription participates in new-video auto unlock attempts.
+    - stored subscription `mode` values may still be `manual` or `auto` for compatibility, but runtime auto behavior should be read from `auto_unlock_enabled`.
   - Source page surface in `src/pages/SourcePage.tsx` at `/s/:platform/:externalId`:
     - public-readable source header (avatar/title/follower count + source link)
     - authenticated subscribe/unsubscribe actions
@@ -240,9 +241,10 @@
     - Oracle control-plane auth/reboot workflow is standardized in `docs/ops/oracle-cli-access.md` and should be used when SSH/runtime health is degraded.
   - Local/dev transcript fallback:
     - current default is `youtube_timedtext`.
-    - `videotranscriber_temp` remains the built-in fallback provider behind the same seam when YouTube captions are unavailable.
+    - `videotranscriber_temp` remains the built-in second fallback provider behind the same seam when YouTube captions are unavailable.
+    - `transcriptapi` is the built-in third fallback provider in lean text-only mode (`format=text`, `include_timestamp=false`) when `TRANSCRIPTAPI_APIKEY` is configured.
     - `videotranscriber_temp` wraps the browser-facing `videotranscriber.ai` flow and uses local-only timeout/session env controls.
-    - this is still a temporary development default; launch should later move to a stable API-backed provider rather than treating `videotranscriber_temp` as production truth.
+    - this preserves the temporary provider path while adding a low-risk API-backed fallback before any provider-order promotion.
 
 ## 3) Core Lifecycle (`bleuV1`)
 1. (Optional) New-account onboarding:

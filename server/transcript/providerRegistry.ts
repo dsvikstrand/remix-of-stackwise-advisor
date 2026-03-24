@@ -1,8 +1,9 @@
+import { transcriptApiTranscriptProviderAdapter } from './providers/transcriptApiProvider';
 import { videoTranscriberTempTranscriptProviderAdapter } from './providers/videoTranscriberTempProvider';
 import { youtubeTimedtextTranscriptProviderAdapter } from './providers/youtubeTimedtextProvider';
 import type { TranscriptProvider, TranscriptProviderAdapter } from './types';
 
-const DEFAULT_PROVIDER_ORDER: TranscriptProvider[] = ['youtube_timedtext', 'videotranscriber_temp'];
+const DEFAULT_PROVIDER_ORDER: TranscriptProvider[] = ['youtube_timedtext', 'videotranscriber_temp', 'transcriptapi'];
 
 const transcriptProviderRegistry = new Map<TranscriptProvider, TranscriptProviderAdapter>();
 let probeProviderOrder: TranscriptProvider[] = [...DEFAULT_PROVIDER_ORDER];
@@ -11,6 +12,7 @@ export function registerTranscriptProviders(
   providers: TranscriptProviderAdapter[] = [
     videoTranscriberTempTranscriptProviderAdapter,
     youtubeTimedtextTranscriptProviderAdapter,
+    transcriptApiTranscriptProviderAdapter,
   ],
 ) {
   transcriptProviderRegistry.clear();
@@ -36,7 +38,7 @@ export function registerTranscriptProviders(
 
 function resolveConfiguredProbeProvider(): TranscriptProvider | null {
   const raw = String(process.env.TRANSCRIPT_PROVIDER || '').toLowerCase();
-  if (raw === 'youtube_timedtext' || raw === 'videotranscriber_temp') {
+  if (raw === 'youtube_timedtext' || raw === 'videotranscriber_temp' || raw === 'transcriptapi') {
     return raw;
   }
   return null;

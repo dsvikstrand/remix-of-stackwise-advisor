@@ -35,9 +35,10 @@
 - `agentic-worker.service` is deferred and should remain disabled in the current MVP production contract
 - Local/dev-only transcript fallback:
   - `youtube_timedtext` is the current default behind `TRANSCRIPT_PROVIDER=youtube_timedtext`.
-  - `videotranscriber_temp` is the built-in fallback provider when YouTube captions are unavailable.
+  - `videotranscriber_temp` is the built-in second fallback provider when YouTube captions are unavailable.
+  - `transcriptapi` is the built-in third fallback provider in lean text-only mode (`format=text`, `include_timestamp=false`) when `TRANSCRIPTAPI_APIKEY` is configured.
   - it is not part of Oracle runtime truth and should not be enabled in `/etc/agentic-backend.env`.
-  - provider-local envs: `VIDEOTRANSCRIBER_TEMP_TIMEOUT_MS`, `VIDEOTRANSCRIBER_TEMP_FORCE_NEW_SESSION`
+  - provider-local envs: `VIDEOTRANSCRIBER_TEMP_TIMEOUT_MS`, `VIDEOTRANSCRIBER_TEMP_FORCE_NEW_SESSION`, `TRANSCRIPTAPI_APIKEY`
 
 ## bleuV1 source-first integration context
 - YT2BP remains the ingestion/generation entrypoint only.
@@ -308,7 +309,7 @@ Required runtime variables:
 - `TOKEN_ENCRYPTION_KEY` (base64 32-byte key for encrypted OAuth tokens at rest)
 - `YOUTUBE_IMPORT_MAX_CHANNELS` (default `2000`)
 - `YOUTUBE_OAUTH_STATE_TTL_SECONDS` (default `600`)
-- `TRANSCRIPT_PROVIDER` (current dev default `videotranscriber_temp`; built-in direct fallback `youtube_timedtext`)
+- `TRANSCRIPT_PROVIDER` (current default `youtube_timedtext`; built-in fallback chain `videotranscriber_temp` then `transcriptapi` when available)
 - Webshare proxying is shared transport config for opted-in transcript providers (currently local/dev `videotranscriber_temp`) and remains explicit-endpoint-only when enabled (`WEBSHARE_PROXY_URL` or split host/port/username/password); selector/list envs are no longer part of the active runtime contract.
 - `VIDEOTRANSCRIBER_TEMP_TIMEOUT_MS` (local/dev-only timeout override for `videotranscriber_temp`; default `180000`)
 - `VIDEOTRANSCRIBER_TEMP_FORCE_NEW_SESSION` (local/dev-only anonymous-session rotation toggle)

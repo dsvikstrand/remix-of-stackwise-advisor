@@ -28,6 +28,7 @@ function normalizeTranscriptProvider(value: unknown): TranscriptProvider | null 
   const normalized = String(value || '').trim().toLowerCase();
   if (normalized === 'youtube_timedtext') return 'youtube_timedtext';
   if (normalized === 'videotranscriber_temp') return 'videotranscriber_temp';
+  if (normalized === 'transcriptapi') return 'transcriptapi';
   return null;
 }
 
