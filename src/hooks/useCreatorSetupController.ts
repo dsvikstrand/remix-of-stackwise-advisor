@@ -126,6 +126,7 @@ export function useCreatorSetupController() {
   const subscriptionsEnabled = Boolean(config.agenticBackendUrl);
 
   const [isAddSubscriptionOpen, setIsAddSubscriptionOpen] = useState(false);
+  const [isPublicYouTubeImportOpen, setIsPublicYouTubeImportOpen] = useState(false);
   const [channelSearchQuery, setChannelSearchQuery] = useState('');
   const [channelSearchSubmittedQuery, setChannelSearchSubmittedQuery] = useState('');
   const [channelSearchResults, setChannelSearchResults] = useState<YouTubeChannelSearchResult[]>([]);
@@ -257,6 +258,27 @@ export function useCreatorSetupController() {
       });
     },
   });
+
+  const resetPublicYouTubeImportDialogState = useCallback(() => {
+    setPublicYouTubeChannelInput('');
+    setPublicYouTubePreview(null);
+    setPublicYouTubePreviewFilterQuery('');
+    setPublicYouTubePreviewSelected({});
+    setPublicYouTubePreviewError(null);
+    setPublicYouTubePreviewErrorCode(null);
+    setPublicYouTubeImportSummary(null);
+    setPublicYouTubePreviewLoadingMore(false);
+    setPublicYouTubePreviewRequestInput('');
+    publicYouTubePreviewMutation.reset();
+    publicYouTubeImportMutation.reset();
+  }, [publicYouTubeImportMutation, publicYouTubePreviewMutation]);
+
+  const handlePublicYouTubeImportDialogChange = useCallback((nextOpen: boolean) => {
+    setIsPublicYouTubeImportOpen(nextOpen);
+    if (!nextOpen) {
+      resetPublicYouTubeImportDialogState();
+    }
+  }, [resetPublicYouTubeImportDialogState]);
 
   const channelSearchMutation = useMutation({
     mutationFn: async (input: { query: string }) => {
@@ -458,6 +480,7 @@ export function useCreatorSetupController() {
   return {
     subscriptionsEnabled,
     isAddSubscriptionOpen,
+    isPublicYouTubeImportOpen,
     channelSearchQuery,
     channelSearchSubmittedQuery,
     channelSearchResults: filteredChannelSearchResults,
@@ -480,6 +503,7 @@ export function useCreatorSetupController() {
     setPublicYouTubeChannelInput,
     setPublicYouTubePreviewFilterQuery,
     handleAddSubscriptionDialogChange,
+    handlePublicYouTubeImportDialogChange,
     handlePublicYouTubePreviewSubmit,
     handlePublicYouTubePreviewLoadMore,
     togglePublicYouTubePreviewCreator,

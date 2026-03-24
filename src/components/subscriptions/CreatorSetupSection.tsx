@@ -66,16 +66,107 @@ export function CreatorSetupSection({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 p-4">
-        <div className="space-y-1">
-          <p className="text-sm font-medium text-foreground">Import From YouTube</p>
-          <p className="text-xs text-muted-foreground">
-            Import your YouTube subscriptions by handle.
-          </p>
+      <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-base font-semibold text-foreground">Import From Your YouTube Profile</p>
+            <p className="text-sm text-muted-foreground">
+              Import subscriptions from a public YouTube profile or handle.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            onClick={() => controller.handlePublicYouTubeImportDialogChange(true)}
+            disabled={!controller.subscriptionsEnabled}
+          >
+            Import from your profile
+          </Button>
         </div>
+      </div>
 
-        <div className="mt-4 space-y-4">
-          <form onSubmit={controller.handlePublicYouTubePreviewSubmit} className="flex flex-col gap-3 md:flex-row md:items-end">
+      <Dialog open={controller.isAddSubscriptionOpen} onOpenChange={controller.handleAddSubscriptionDialogChange}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Add Subscription</DialogTitle>
+            <DialogDescription>
+              Add a creator by channel link, handle, channel id, or creator name.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <form onSubmit={controller.handleChannelSearchSubmit} className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                value={controller.channelSearchQuery}
+                onChange={(event) => controller.setChannelSearchQuery(event.target.value)}
+                placeholder="Paste a channel link, handle, channel id, or creator name"
+              />
+              <Button type="submit" size="sm" disabled={controller.channelSearchMutation.isPending || !controller.subscriptionsEnabled}>
+                {controller.channelSearchMutation.isPending ? 'Finding...' : 'Find creator'}
+              </Button>
+            </form>
+            <p className="text-xs text-muted-foreground">
+              Nothing changes until you click Subscribe.
+            </p>
+            {controller.channelSearchError ? <p className="text-sm text-destructive">{controller.channelSearchError}</p> : null}
+
+            {controller.channelSearchResults.length === 0 && controller.channelSearchSubmittedQuery ? (
+              <p className="text-sm text-muted-foreground">We couldn&apos;t find that creator.</p>
+            ) : null}
+
+            {controller.channelSearchResults.length > 0 ? (
+              <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+                {controller.channelSearchResults.map((result) => {
+                  const isSubscribing = controller.isChannelSubscribing(result.channel_id);
+                  return (
+                    <div key={result.channel_id} className="rounded-md border border-border/40 p-3 space-y-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{result.channel_title}</p>
+                          <p className="text-xs text-muted-foreground line-clamp-2">
+                            {result.description || 'No channel description available.'}
+                          </p>
+                        </div>
+                        {result.thumbnail_url ? (
+                          <img
+                            src={result.thumbnail_url}
+                            alt={result.channel_title}
+                            className="h-10 w-10 rounded-md object-cover border border-border/40 shrink-0"
+                          />
+                        ) : null}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => controller.handleSubscribeFromSearch(result)}
+                          disabled={!controller.subscriptionsEnabled || isSubscribing || controller.createMutation.isPending}
+                        >
+                          {isSubscribing ? 'Subscribing...' : 'Subscribe'}
+                        </Button>
+                        <Button asChild size="sm" variant="outline">
+                          <a href={result.channel_url} target="_blank" rel="noreferrer">
+                            Open on YouTube
+                          </a>
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={controller.isPublicYouTubeImportOpen} onOpenChange={controller.handlePublicYouTubeImportDialogChange}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Import From Your YouTube Profile</DialogTitle>
+            <DialogDescription>
+              Import subscriptions from a public YouTube profile or handle. Nothing changes until you import selected creators.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <form onSubmit={controller.handlePublicYouTubePreviewSubmit} className="flex flex-col gap-3 md:flex-row md:items-end">
               <div className="space-y-2 md:flex-1">
                 <p className="text-sm font-medium text-foreground">Fill in your handle</p>
                 <Input
@@ -87,28 +178,28 @@ export function CreatorSetupSection({
               <Button type="submit" size="sm" disabled={!controller.subscriptionsEnabled || controller.publicYouTubePreviewMutation.isPending}>
                 {controller.publicYouTubePreviewMutation.isPending ? 'Finding...' : 'Find subscriptions'}
               </Button>
-          </form>
+            </form>
 
-          {controller.publicYouTubePreviewError && controller.publicYouTubePreviewErrorCode !== 'PUBLIC_SUBSCRIPTIONS_PRIVATE' ? (
-            <p className="text-sm text-destructive">{controller.publicYouTubePreviewError}</p>
-          ) : null}
+            {controller.publicYouTubePreviewError && controller.publicYouTubePreviewErrorCode !== 'PUBLIC_SUBSCRIPTIONS_PRIVATE' ? (
+              <p className="text-sm text-destructive">{controller.publicYouTubePreviewError}</p>
+            ) : null}
 
-          {controller.publicYouTubePreviewMutation.isPending ? (
-            <div className="space-y-2">
-              <Skeleton className="h-16 rounded-md" />
-              <Skeleton className="h-16 rounded-md" />
-            </div>
-          ) : null}
+            {controller.publicYouTubePreviewMutation.isPending ? (
+              <div className="space-y-2">
+                <Skeleton className="h-16 rounded-md" />
+                <Skeleton className="h-16 rounded-md" />
+              </div>
+            ) : null}
 
-          {controller.publicYouTubePreviewErrorCode === 'PUBLIC_SUBSCRIPTIONS_PRIVATE' ? (
-            <div className="space-y-3">
-              <p className="text-sm font-medium text-foreground">{controller.publicYouTubePreviewError}</p>
-              <PublicYouTubePrivacyGuide intro="To import from this account, we first need you to make your subscriptions public." />
-            </div>
-          ) : null}
+            {controller.publicYouTubePreviewErrorCode === 'PUBLIC_SUBSCRIPTIONS_PRIVATE' ? (
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-foreground">{controller.publicYouTubePreviewError}</p>
+                <PublicYouTubePrivacyGuide intro="To import from this account, we first need you to make your subscriptions public." />
+              </div>
+            ) : null}
 
-          {controller.publicYouTubePreview ? (
-            <div className="space-y-3">
+            {controller.publicYouTubePreview ? (
+              <div className="space-y-3">
                 <div className="rounded-xl border border-border/50 bg-background/80 p-3">
                   <p className="text-sm font-medium text-foreground">
                     We found {controller.publicYouTubePreview.creators_total} subscription{controller.publicYouTubePreview.creators_total === 1 ? '' : 's'} to review.
@@ -225,77 +316,6 @@ export function CreatorSetupSection({
                     </div>
                   </>
                 )}
-            </div>
-          ) : null}
-        </div>
-      </div>
-
-      <Dialog open={controller.isAddSubscriptionOpen} onOpenChange={controller.handleAddSubscriptionDialogChange}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Add Subscription</DialogTitle>
-            <DialogDescription>
-              Add a creator by channel link, handle, channel id, or creator name.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <form onSubmit={controller.handleChannelSearchSubmit} className="flex flex-col gap-2 sm:flex-row">
-              <Input
-                value={controller.channelSearchQuery}
-                onChange={(event) => controller.setChannelSearchQuery(event.target.value)}
-                placeholder="Paste a channel link, handle, channel id, or creator name"
-              />
-              <Button type="submit" size="sm" disabled={controller.channelSearchMutation.isPending || !controller.subscriptionsEnabled}>
-                {controller.channelSearchMutation.isPending ? 'Finding...' : 'Find creator'}
-              </Button>
-            </form>
-            <p className="text-xs text-muted-foreground">
-              Nothing changes until you click Subscribe.
-            </p>
-            {controller.channelSearchError ? <p className="text-sm text-destructive">{controller.channelSearchError}</p> : null}
-
-            {controller.channelSearchResults.length === 0 && controller.channelSearchSubmittedQuery ? (
-              <p className="text-sm text-muted-foreground">We couldn&apos;t find that creator.</p>
-            ) : null}
-
-            {controller.channelSearchResults.length > 0 ? (
-              <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
-                {controller.channelSearchResults.map((result) => {
-                  const isSubscribing = controller.isChannelSubscribing(result.channel_id);
-                  return (
-                    <div key={result.channel_id} className="rounded-md border border-border/40 p-3 space-y-2">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="space-y-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{result.channel_title}</p>
-                          <p className="text-xs text-muted-foreground line-clamp-2">
-                            {result.description || 'No channel description available.'}
-                          </p>
-                        </div>
-                        {result.thumbnail_url ? (
-                          <img
-                            src={result.thumbnail_url}
-                            alt={result.channel_title}
-                            className="h-10 w-10 rounded-md object-cover border border-border/40 shrink-0"
-                          />
-                        ) : null}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => controller.handleSubscribeFromSearch(result)}
-                          disabled={!controller.subscriptionsEnabled || isSubscribing || controller.createMutation.isPending}
-                        >
-                          {isSubscribing ? 'Subscribing...' : 'Subscribe'}
-                        </Button>
-                        <Button asChild size="sm" variant="outline">
-                          <a href={result.channel_url} target="_blank" rel="noreferrer">
-                            Open on YouTube
-                          </a>
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
             ) : null}
           </div>
