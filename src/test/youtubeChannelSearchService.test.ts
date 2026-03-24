@@ -339,6 +339,83 @@ describe('youtubeChannelSearch service', () => {
     }
   });
 
+  it('uses one strong bare-name candidate when exact @handle lookup misses', async () => {
+    resolveYouTubeChannelMock.mockRejectedValue(new Error('INVALID_CHANNEL'));
+    youtubeiCreateMock.mockResolvedValue({
+      search: vi.fn(async () => ({
+        results: [{
+          type: 'Channel',
+          id: 'UC77777777777777777777',
+          author: {
+            id: 'UC77777777777777777777',
+            name: 'BorderlinerNotes',
+            url: 'https://www.youtube.com/@BorderlinerNotesOfficial',
+          },
+          description_snippet: { toString: () => 'Mental health notes' },
+        }],
+      })),
+    });
+
+    const page = await searchYouTubeChannels({
+      query: '@BorderlinerNotes',
+      limit: 3,
+    });
+
+    expect(resolveYouTubeChannelMock).toHaveBeenCalledWith('@BorderlinerNotes');
+    expect(page).toEqual({
+      results: [{
+        channel_id: 'UC77777777777777777777',
+        channel_title: 'BorderlinerNotes',
+        channel_url: 'https://www.youtube.com/@BorderlinerNotesOfficial',
+        description: 'Mental health notes',
+        thumbnail_url: null,
+        published_at: null,
+        subscriber_count: null,
+      }],
+      nextPageToken: null,
+    });
+  });
+
+  it('keeps exact @handle misses as not-found when bare-name fallback is weak or ambiguous', async () => {
+    resolveYouTubeChannelMock.mockRejectedValue(new Error('INVALID_CHANNEL'));
+    youtubeiCreateMock.mockResolvedValue({
+      search: vi.fn(async () => ({
+        results: [
+          {
+            type: 'Channel',
+            id: 'UC88888888888888888888',
+            author: {
+              id: 'UC88888888888888888888',
+              name: 'Borderline Clips',
+              url: 'https://www.youtube.com/@BorderlineClips',
+            },
+            description_snippet: { toString: () => 'Different creator' },
+          },
+          {
+            type: 'Channel',
+            id: 'UC99999999999999999999',
+            author: {
+              id: 'UC99999999999999999999',
+              name: 'Borderline Notes Archive',
+              url: 'https://www.youtube.com/@BorderlineNotesArchive',
+            },
+            description_snippet: { toString: () => 'Archive channel' },
+          },
+        ],
+      })),
+    });
+
+    const page = await searchYouTubeChannels({
+      query: '@BorderlinerNotes',
+      limit: 3,
+    });
+
+    expect(page).toEqual({
+      results: [],
+      nextPageToken: null,
+    });
+  });
+
   it('fails fast with SEARCH_DISABLED when direct resolver bootstrap hangs', async () => {
     vi.useFakeTimers();
     try {

@@ -201,6 +201,14 @@ function isStrongEnoughChannelMatch(query: string, candidate: Pick<YouTubeChanne
   return scoreYouTubeChannelMatch(query, candidate) >= 0.62;
 }
 
+function isSafeSingleHandleFallbackCandidate(
+  handleQuery: string,
+  results: YouTubeChannelSearchResult[],
+) {
+  if (results.length !== 1) return false;
+  return scoreYouTubeChannelMatch(handleQuery, results[0]) >= 0.9;
+}
+
 async function getYouTubeiClient() {
   if (!youtubeiClientPromise) {
     const proxyFetch = await getWebshareLookupFetch();
@@ -441,12 +449,30 @@ export async function searchYouTubeChannels(input: {
 
   const limit = clampYouTubeChannelSearchLimit(input.limit, 3);
   if (validation.direct) {
-    const results = await resolveDirectYouTubeChannel(validation.query);
-    if (results === null) {
+    const directResults = await resolveDirectYouTubeChannel(validation.query);
+    if (directResults === null) {
       throw new YouTubeChannelSearchError('SEARCH_DISABLED', 'Creator lookup is currently unavailable.');
     }
+
+    if (
+      directResults.length === 0
+      && HANDLE_RE.test(validation.query)
+    ) {
+      const bareHandleQuery = validation.query.replace(/^@/, '');
+      const fallbackResults = await searchYouTubeChannelsByName(bareHandleQuery, limit);
+      if (fallbackResults === null) {
+        throw new YouTubeChannelSearchError('SEARCH_DISABLED', 'Creator lookup is currently unavailable.');
+      }
+      if (isSafeSingleHandleFallbackCandidate(bareHandleQuery, fallbackResults)) {
+        return {
+          results: fallbackResults,
+          nextPageToken: null,
+        };
+      }
+    }
+
     return {
-      results,
+      results: directResults,
       nextPageToken: null,
     };
   }
