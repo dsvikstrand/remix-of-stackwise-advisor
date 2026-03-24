@@ -67,7 +67,7 @@ export function CreatorSetupSection({
       </div>
 
       <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 p-5">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="space-y-4">
           <div className="space-y-1">
             <p className="text-base font-semibold text-foreground">Import From Your YouTube Profile</p>
             <p className="text-sm text-muted-foreground">
