@@ -339,6 +339,31 @@ describe('youtubeChannelSearch service', () => {
     }
   });
 
+  it('fails fast with SEARCH_DISABLED when direct resolver bootstrap hangs', async () => {
+    vi.useFakeTimers();
+    try {
+      resolveYouTubeChannelMock.mockImplementation(() => new Promise(() => {}));
+
+      const pending = searchYouTubeChannels({
+        query: '@DoctorMike',
+      });
+      const settled = pending.then(
+        () => ({ ok: true as const, error: null }),
+        (error) => ({ ok: false as const, error }),
+      );
+
+      await vi.advanceTimersByTimeAsync(5_000);
+      const outcome = await settled;
+
+      expect(outcome.ok).toBe(false);
+      expect(outcome.error).toMatchObject<Partial<YouTubeChannelSearchError>>({
+        code: 'SEARCH_DISABLED',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('returns a tiny candidate list instead of a wrong auto-hit when bare handle and name paths disagree', async () => {
     resolveYouTubeChannelMock.mockResolvedValue({
       channelId: 'UC12345678901234567890',

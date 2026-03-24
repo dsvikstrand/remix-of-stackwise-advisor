@@ -293,7 +293,11 @@ function normalizeYouTubeiChannelDetail(channelId: string, info: any, fallbackTi
 
 async function resolveDirectYouTubeChannel(query: string): Promise<YouTubeChannelSearchResult[] | null> {
   try {
-    const resolved = await resolveYouTubeChannel(query);
+    const resolved = await withTimeout(
+      resolveYouTubeChannel(query),
+      YOUTUBEI_TIMEOUT_MS,
+      'Creator lookup is taking longer than expected. Please try again.',
+    );
     try {
       const client = await getYouTubeiClientWithTimeout(
         'Creator lookup is taking longer than expected. Please try again.',
@@ -317,7 +321,11 @@ async function resolveDirectYouTubeChannel(query: string): Promise<YouTubeChanne
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (message === 'INVALID_CHANNEL' || message.startsWith('CHANNEL_FETCH_FAILED:') || message.startsWith('FEED_FETCH_FAILED:')) {
+    if (
+      message === 'INVALID_CHANNEL'
+      || message.startsWith('CHANNEL_FETCH_FAILED:404')
+      || message.startsWith('FEED_FETCH_FAILED:404')
+    ) {
       return [];
     }
     return null;
