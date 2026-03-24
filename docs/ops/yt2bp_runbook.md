@@ -39,6 +39,7 @@
   - `transcriptapi` is the built-in third fallback provider in lean text-only mode (`format=text`, `include_timestamp=false`) when `TRANSCRIPTAPI_APIKEY` is configured.
   - it is not part of Oracle runtime truth and should not be enabled in `/etc/agentic-backend.env`.
   - provider-local envs: `VIDEOTRANSCRIBER_TEMP_TIMEOUT_MS`, `VIDEOTRANSCRIBER_TEMP_FORCE_NEW_SESSION`, `TRANSCRIPTAPI_APIKEY`
+  - `videotranscriber_temp` now does one bounded local key/session renew attempt on early service failures (`runtime_config`, `url_info`, `start`) before returning the failure to the outer fallback chain.
 
 ## bleuV1 source-first integration context
 - YT2BP remains the ingestion/generation entrypoint only.

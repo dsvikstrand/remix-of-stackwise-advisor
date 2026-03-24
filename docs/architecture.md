@@ -244,6 +244,7 @@
     - `videotranscriber_temp` remains the built-in second fallback provider behind the same seam when YouTube captions are unavailable.
     - `transcriptapi` is the built-in third fallback provider in lean text-only mode (`format=text`, `include_timestamp=false`) when `TRANSCRIPTAPI_APIKEY` is configured.
     - `videotranscriber_temp` wraps the browser-facing `videotranscriber.ai` flow and uses local-only timeout/session env controls.
+    - `videotranscriber_temp` now also performs one bounded local key/session renew attempt on early service failures (`runtime_config`, `url_info`, `start`) before the outer provider fallback flow continues.
     - this preserves the temporary provider path while adding a low-risk API-backed fallback before any provider-order promotion.
 
 ## 3) Core Lifecycle (`bleuV1`)

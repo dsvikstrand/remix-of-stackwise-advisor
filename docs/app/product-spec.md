@@ -39,6 +39,7 @@ a16) [have] Legacy `My Feed` compatibility notice cards open a detailed popup wi
 a17) [have] Manual `Post to Channel` UI is feature-flagged for rollback and removed from normal auto-channel mode surfaces.
 a18) [have] Legacy `My Feed` compatibility blueprint cards open blueprint detail by card click (dedicated `Open blueprint` link removed).
 a19) [have] The current transcript default is `youtube_timedtext` first, with `videotranscriber_temp` as the built-in second fallback and `transcriptapi` as the built-in third fallback behind the same YT2BP pipeline seam when YouTube captions are unavailable.
+a19a) [have] `videotranscriber_temp` now performs one bounded local key/session renew attempt on early service-related failures before falling through to the broader transcript fallback behavior.
 a19) [have] Legacy `My Feed` header shortcuts are compatibility-only; active subscription entrypoints are Home/user-menu + `/subscriptions`.
 a20) [have] Auto-banner queue contract is now available for subscription auto-ingest (`/api/auto-banner/jobs/trigger`) with service-auth control and non-blocking ingestion mode.
 a21) [have] Banner-cap policy contract is now available globally with generated banner preservation (`blueprints.banner_generated_url`) and deterministic channel-default fallback.

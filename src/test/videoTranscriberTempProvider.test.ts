@@ -197,6 +197,106 @@ describe('videotranscriber_temp provider', () => {
     expect(result.provider_trace?.session_value).not.toBe(result.provider_trace?.session_initial_value);
   });
 
+  it('renews cached key and forces a new session once after upstream service failure', async () => {
+    const runtimeConfigSessions: string[] = [];
+    const runtimeConfigKeys: string[] = [];
+    const startSessions: string[] = [];
+    let startCalls = 0;
+    global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === 'https://videotranscriber.ai') {
+        const session = readCookieSession(init);
+        runtimeConfigSessions.push(session);
+        const nextKey = `renew-key-${runtimeConfigSessions.length}`;
+        runtimeConfigKeys.push(nextKey);
+        return new Response(buildRuntimeConfigHtml(nextKey), { status: 200 });
+      }
+      if (url.includes('/api/v1/transcriptions/url-info')) {
+        return jsonResponse({
+          code: 100000,
+          data: { title: 'Demo title', audio_time: 494 },
+        });
+      }
+      if (url.endsWith('/api/v1/transcriptions/start')) {
+        startCalls += 1;
+        startSessions.push(readCookieSession(init));
+        if (startCalls === 1) {
+          return new Response('<html>gateway timeout</html>', { status: 504 });
+        }
+        return jsonResponse({
+          code: 100000,
+          data: { audio_id: 'record-renew-success' },
+        });
+      }
+      if (url.includes('/api/v1/transcriptions?record_id=record-renew-success')) {
+        return jsonResponse({
+          code: 100000,
+          data: {
+            record_id: 'record-renew-success',
+            status: 'success',
+            transcript: [{ start: 0, end: 1, text: 'Renewed session success' }],
+          },
+        });
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    }) as unknown as typeof fetch;
+
+    const result = await getTranscriptFromVideoTranscriberTemp('video123');
+
+    expect(result.text).toBe('Renewed session success');
+    expect(runtimeConfigKeys).toEqual(['renew-key-1', 'renew-key-2']);
+    expect(runtimeConfigSessions).toHaveLength(2);
+    expect(startSessions).toHaveLength(2);
+    expect(runtimeConfigSessions[1]).not.toBe(runtimeConfigSessions[0]);
+    expect(startSessions[1]).not.toBe(startSessions[0]);
+    expect(result.provider_trace).toMatchObject({
+      winning_provider: 'videotranscriber_temp',
+      session_mode: 'force_new',
+      session_rotated: false,
+      session_value: expect.stringMatching(/^sid_[0-9a-f]{12}$/),
+      session_initial_value: expect.stringMatching(/^sid_[0-9a-f]{12}$/),
+    });
+    expect(result.provider_trace?.session_value).toBe(result.provider_trace?.session_initial_value);
+  });
+
+  it('does one renew attempt only on repeated upstream service failures', async () => {
+    const runtimeConfigSessions: string[] = [];
+    const startSessions: string[] = [];
+    global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === 'https://videotranscriber.ai') {
+        runtimeConfigSessions.push(readCookieSession(init));
+        return new Response(buildRuntimeConfigHtml(`loop-key-${runtimeConfigSessions.length}`), { status: 200 });
+      }
+      if (url.includes('/api/v1/transcriptions/url-info')) {
+        return jsonResponse({
+          code: 100000,
+          data: { title: 'Demo title', audio_time: 494 },
+        });
+      }
+      if (url.endsWith('/api/v1/transcriptions/start')) {
+        startSessions.push(readCookieSession(init));
+        return new Response('<html>gateway timeout</html>', { status: 504 });
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    }) as unknown as typeof fetch;
+
+    await expect(getTranscriptFromVideoTranscriberTemp('video123')).rejects.toMatchObject({
+      code: 'VIDEOTRANSCRIBER_UPSTREAM_UNAVAILABLE',
+      providerDebug: {
+        provider: 'videotranscriber_temp',
+        stage: 'start',
+        http_status: 504,
+        session_mode: 'force_new',
+      },
+    });
+
+    expect(runtimeConfigSessions).toHaveLength(2);
+    expect(startSessions).toHaveLength(2);
+    expect(runtimeConfigSessions[1]).not.toBe(runtimeConfigSessions[0]);
+    expect(startSessions[1]).not.toBe(startSessions[0]);
+  });
+
   it('maps repeated queue-full responses to RATE_LIMITED', async () => {
     global.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);

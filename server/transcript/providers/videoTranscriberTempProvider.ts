@@ -104,9 +104,12 @@ function fingerprintSessionValue(sessionId: string) {
   return `sid_${createHash('sha256').update(normalized).digest('hex').slice(0, 12)}`;
 }
 
-function createSessionState(initialSessionId: string): VideoTranscriberSessionState {
+function createSessionState(
+  initialSessionId: string,
+  modeOverride?: TranscriptProviderSessionMode,
+): VideoTranscriberSessionState {
   return {
-    mode: shouldForceNewSession() ? 'force_new' : 'shared',
+    mode: modeOverride ?? (shouldForceNewSession() ? 'force_new' : 'shared'),
     initialSessionId,
     currentSessionId: initialSessionId,
     rotated: false,
@@ -196,6 +199,38 @@ function rotateSessionState(sessionState: VideoTranscriberSessionState) {
   sessionState.currentSessionId = next;
   sessionState.rotated = true;
   return next;
+}
+
+function clearCachedTranscriptKey() {
+  cachedTranscriptKey = null;
+}
+
+function createRenewedSessionState() {
+  clearCachedTranscriptKey();
+  const renewedSessionId = rotateAnonymousUserId();
+  return createSessionState(renewedSessionId, 'force_new');
+}
+
+function normalizeProviderDebugStage(error: TranscriptProviderError) {
+  return String(error.providerDebug?.stage || '').trim().toLowerCase();
+}
+
+function isRenewableServiceStage(stage: string) {
+  return stage === 'runtime_config'
+    || stage === 'url_info'
+    || stage === 'start';
+}
+
+function shouldRenewSessionAfterServiceFailure(error: unknown) {
+  if (!(error instanceof TranscriptProviderError)) return false;
+  const stage = normalizeProviderDebugStage(error);
+  if (error.code === 'VIDEOTRANSCRIBER_UPSTREAM_UNAVAILABLE') {
+    return true;
+  }
+  if (error.code === 'TRANSCRIPT_FETCH_FAIL' || error.code === 'TIMEOUT') {
+    return isRenewableServiceStage(stage);
+  }
+  return false;
 }
 
 function buildVideoUrl(videoId: string) {
@@ -906,12 +941,14 @@ async function resolveTranscriptSegments(
   };
 }
 
-export async function getTranscriptFromVideoTranscriberTemp(videoId: string): Promise<TranscriptResult> {
+async function runVideoTranscriberTempAttempt(
+  videoId: string,
+  sessionState: VideoTranscriberSessionState,
+): Promise<TranscriptResult> {
   const timeoutMs = readVideoTranscriberTempTimeoutMs();
   const requestContext = await createRequestContext();
-  const initialSessionId = getAnonymousUserIdForRequest();
-  const sessionState = createSessionState(initialSessionId);
   const videoUrl = buildVideoUrl(videoId);
+  const initialSessionId = sessionState.initialSessionId;
   const transcriptKey = await getTranscriptKey(initialSessionId, requestContext, sessionState);
   const info = await getUrlInfo(videoUrl, initialSessionId, requestContext, sessionState);
   const { recordId, sessionId } = await startTranscriptionWithRetry(
@@ -958,8 +995,20 @@ export async function getTranscriptFromVideoTranscriberTemp(videoId: string): Pr
   };
 }
 
+export async function getTranscriptFromVideoTranscriberTemp(videoId: string): Promise<TranscriptResult> {
+  const initialSessionId = getAnonymousUserIdForRequest();
+  try {
+    return await runVideoTranscriberTempAttempt(videoId, createSessionState(initialSessionId));
+  } catch (error) {
+    if (!shouldRenewSessionAfterServiceFailure(error)) {
+      throw error;
+    }
+    return runVideoTranscriberTempAttempt(videoId, createRenewedSessionState());
+  }
+}
+
 export function resetVideoTranscriberTempProviderStateForTests() {
-  cachedTranscriptKey = null;
+  clearCachedTranscriptKey();
   sharedAnonymousUserId = null;
 }
 
