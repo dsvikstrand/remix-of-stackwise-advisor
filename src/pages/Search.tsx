@@ -458,7 +458,7 @@ export default function SearchPage() {
         if (pollCount > 60) {
           throw new Error('Generation is still running. Please check your notifications in a moment.');
         }
-        await sleep(2000);
+        await sleep(5000);
         finalJob = await getIngestionJob(queued.job_id);
       }
 

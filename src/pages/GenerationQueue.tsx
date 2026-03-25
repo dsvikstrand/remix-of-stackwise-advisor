@@ -80,7 +80,7 @@ export default function GenerationQueue() {
     isFetching: isActiveFetching,
   } = useGenerationQueue({
     limit: 50,
-    pollMs: 4_000,
+    pollMs: 10_000,
     idlePollMs: 60_000,
     enabled: true,
   });

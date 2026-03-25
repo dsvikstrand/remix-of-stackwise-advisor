@@ -66,7 +66,7 @@ export function NotificationsBell() {
     items: activeJobs,
     isLoading: isQueueLoading,
   } = useGenerationQueue({
-    pollMs: 4_000,
+    pollMs: 10_000,
     idlePollMs: isOpen ? 30_000 : 120_000,
     limit: 20,
     enabled: isEnabled,

@@ -374,7 +374,7 @@ export function useSubscriptionsPageController() {
     refetchOnReconnect: true,
     refetchInterval: (query) => {
       const status = query.state.data?.status as IngestionJobStatus | undefined;
-      if (!status || status === 'queued' || status === 'running') return 4000;
+      if (!status || status === 'queued' || status === 'running') return 10000;
       return false;
     },
   });
