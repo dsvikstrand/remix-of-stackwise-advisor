@@ -7,6 +7,7 @@ export type TranscriptThrottleConfig = {
   tiersMs: number[];
   jitterMs: number;
   interactiveMaxWaitMs: number;
+  maxConcurrency?: number;
 };
 
 type TranscriptTaskInput = {
@@ -76,10 +77,13 @@ export function createTranscriptThrottle(config: TranscriptThrottleConfig, parti
   const tiersMs = normalizeTiers(config.tiersMs);
   const jitterMs = clampInt(config.jitterMs, 500, 0, 5000);
   const interactiveMaxWaitMs = clampInt(config.interactiveMaxWaitMs, 2000, 100, 60_000);
+  const maxConcurrency = clampInt(config.maxConcurrency, 1, 1, 32);
   const enabled = Boolean(config.enabled);
 
   let queue: Array<TranscriptTaskQueueItem<any>> = [];
-  let running = false;
+  let runningCount = 0;
+  let pumpScheduled = false;
+  let pumpTimer: ReturnType<typeof setTimeout> | null = null;
   let nextTaskId = 0;
   let cooldownTierIndex = 0;
   let nextAvailableAtMs = 0;
@@ -119,51 +123,88 @@ export function createTranscriptThrottle(config: TranscriptThrottleConfig, parti
     queue = queue.filter((item) => item.id !== id);
   }
 
-  async function runLoop() {
-    if (running) return;
-    running = true;
-    try {
-      while (queue.length > 0) {
-        const head = queue[0];
-        if (!head || head.cancelled) {
-          queue.shift();
-          continue;
-        }
-
-        const waitMs = Math.max(0, nextAvailableAtMs - deps.now());
-        if (waitMs > 0) await deps.sleep(waitMs);
-
-        const item = queue.shift();
-        if (!item || item.cancelled) continue;
-        item.started = true;
-        if (item.waitTimer) {
-          clearTimeout(item.waitTimer);
-          item.waitTimer = null;
-        }
-
-        deps.log('task_started', {
-          id: item.id,
-          request_class: item.requestClass,
-          reason: item.reason,
-          video_id: item.videoId,
-          queue_wait_ms: Math.max(0, deps.now() - item.enqueuedAt),
-          queue_depth_remaining: queue.filter((candidate) => !candidate.cancelled).length,
-        });
-
-        try {
-          const result = await item.task();
-          applyCooldown('success');
-          item.resolve(result);
-        } catch (error) {
-          applyCooldown(isUnstableTranscriptError(error) ? 'unstable' : 'neutral');
-          item.reject(error);
-        }
+  function getNextQueuedItem() {
+    while (queue.length > 0) {
+      const head = queue[0];
+      if (!head || head.cancelled) {
+        queue.shift();
+        continue;
       }
-    } finally {
-      running = false;
-      if (queue.length > 0) {
-        void runLoop();
+      return head;
+    }
+    return null;
+  }
+
+  function schedulePump(delayMs = 0) {
+    const waitMs = Math.max(0, Math.floor(delayMs));
+    if (pumpScheduled && pumpTimer && waitMs >= 0) {
+      return;
+    }
+    pumpScheduled = true;
+    if (pumpTimer) {
+      clearTimeout(pumpTimer);
+      pumpTimer = null;
+    }
+    pumpTimer = setTimeout(() => {
+      pumpScheduled = false;
+      pumpTimer = null;
+      pumpQueue();
+    }, waitMs);
+  }
+
+  function startTask(item: TranscriptTaskQueueItem<any>) {
+    item.started = true;
+    if (item.waitTimer) {
+      clearTimeout(item.waitTimer);
+      item.waitTimer = null;
+    }
+    runningCount += 1;
+
+    deps.log('task_started', {
+      id: item.id,
+      request_class: item.requestClass,
+      reason: item.reason,
+      video_id: item.videoId,
+      queue_wait_ms: Math.max(0, deps.now() - item.enqueuedAt),
+      queue_depth_remaining: queue.filter((candidate) => !candidate.cancelled).length,
+    });
+
+    void item.task()
+      .then((result) => {
+        applyCooldown('success');
+        item.resolve(result);
+      })
+      .catch((error) => {
+        applyCooldown(isUnstableTranscriptError(error) ? 'unstable' : 'neutral');
+        item.reject(error);
+      })
+      .finally(() => {
+        runningCount = Math.max(0, runningCount - 1);
+        pumpQueue();
+      });
+  }
+
+  function pumpQueue() {
+    if (queue.length === 0 || runningCount >= maxConcurrency) {
+      return;
+    }
+
+    while (runningCount < maxConcurrency) {
+      const next = getNextQueuedItem();
+      if (!next) return;
+
+      const waitMs = Math.max(0, nextAvailableAtMs - deps.now());
+      if (waitMs > 0) {
+        schedulePump(waitMs);
+        return;
       }
+
+      const item = queue.shift();
+      if (!item || item.cancelled) {
+        continue;
+      }
+
+      startTask(item);
     }
   }
 
@@ -224,7 +265,7 @@ export function createTranscriptThrottle(config: TranscriptThrottleConfig, parti
         video_id: item.videoId,
         queue_depth: queue.filter((candidate) => !candidate.cancelled).length,
       });
-      void runLoop();
+      pumpQueue();
     });
   }
 

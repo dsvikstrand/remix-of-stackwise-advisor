@@ -640,6 +640,11 @@ const transcriptThrottleTiersMs = transcriptThrottleTierValues.length > 0
 const transcriptThrottleTierParseWarn = transcriptThrottleTiersRaw.length > 0 && transcriptThrottleTierValues.length === 0;
 const transcriptThrottleJitterMs = clampInt(process.env.TRANSCRIPT_THROTTLE_JITTER_MS, 500, 0, 5000);
 const transcriptThrottleInteractiveMaxWaitMs = clampInt(process.env.TRANSCRIPT_THROTTLE_INTERACTIVE_MAX_WAIT_MS, 2000, 100, 60_000);
+const transcriptThrottleMaxConcurrency = clampInt(process.env.TRANSCRIPT_THROTTLE_MAX_CONCURRENCY, 4, 1, 32);
+const effectiveTranscriptThrottleConcurrency = Math.max(
+  1,
+  Math.min(workerConcurrency, transcriptThrottleMaxConcurrency),
+);
 const youtubeOAuthConfig: YouTubeOAuthConfig = {
   clientId: googleOAuthClientId,
   clientSecret: googleOAuthClientSecret,
@@ -8348,6 +8353,7 @@ const transcriptThrottle = createTranscriptThrottle({
   tiersMs: transcriptThrottleTiersMs,
   jitterMs: transcriptThrottleJitterMs,
   interactiveMaxWaitMs: transcriptThrottleInteractiveMaxWaitMs,
+  maxConcurrency: effectiveTranscriptThrottleConcurrency,
 });
 
 async function runTranscriptTaskWithThrottle<T>(
