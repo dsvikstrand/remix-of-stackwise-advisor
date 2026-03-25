@@ -66,10 +66,10 @@ export function NotificationsBell() {
     items: activeJobs,
     isLoading: isQueueLoading,
   } = useGenerationQueue({
-    pollMs: 10_000,
-    idlePollMs: isOpen ? 30_000 : 120_000,
+    pollMs: 20_000,
+    idlePollMs: 60_000,
     limit: 20,
-    enabled: isEnabled,
+    enabled: isEnabled && isOpen,
   });
   const liveQueueTop = useMemo(() => activeJobs.slice(0, 3), [activeJobs]);
 

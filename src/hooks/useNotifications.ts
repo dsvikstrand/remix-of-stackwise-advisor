@@ -18,17 +18,18 @@ export function useNotifications(input?: { limit?: number; enabled?: boolean }) 
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const limit = Math.max(1, Math.min(50, Number(input?.limit || 20)));
-  const queryKey = ['notifications', user?.id, limit];
+  const fetchLimit = 50;
+  const queryKey = ['notifications', user?.id];
   const isQueryEnabled = Boolean(user?.id) && (input?.enabled ?? true);
 
   const query = useQuery({
     queryKey,
-    queryFn: () => listNotifications({ limit }),
+    queryFn: () => listNotifications({ limit: fetchLimit }),
     enabled: isQueryEnabled,
-    staleTime: 15_000,
+    staleTime: 60_000,
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
-    refetchInterval: 20_000,
+    refetchInterval: 60_000,
     retry: false,
   });
 
@@ -116,7 +117,7 @@ export function useNotifications(input?: { limit?: number; enabled?: boolean }) 
   });
 
   const unreadCount = selectedSource.page?.unread_count ?? 0;
-  const items = selectedSource.page?.items || [];
+  const items = (selectedSource.page?.items || []).slice(0, limit);
   const unreadItems = useMemo(
     () => items.filter((item) => !item.is_read),
     [items],

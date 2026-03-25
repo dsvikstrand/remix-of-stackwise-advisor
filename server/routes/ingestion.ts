@@ -1,7 +1,8 @@
 import type express from 'express';
 import type { IngestionRouteDeps } from '../contracts/api/ingestion';
 
-const INGESTION_JOB_SELECT_COLUMNS = 'id, trigger, scope, status, started_at, finished_at, processed_count, inserted_count, skipped_count, error_code, error_message, attempts, max_attempts, next_run_at, lease_expires_at, trace_id, payload, created_at, updated_at';
+const INGESTION_JOB_DETAIL_SELECT_COLUMNS = 'id, trigger, scope, status, started_at, finished_at, processed_count, inserted_count, skipped_count, error_code, error_message, attempts, max_attempts, next_run_at, lease_expires_at, trace_id, created_at, updated_at';
+const INGESTION_JOB_SUMMARY_SELECT_COLUMNS = 'id, trigger, scope, status, started_at, finished_at, processed_count, inserted_count, skipped_count, error_code, error_message, attempts, max_attempts, next_run_at, lease_expires_at, trace_id, created_at, updated_at';
 
 export type ActiveIngestionJobRow = {
   id: string;
@@ -212,7 +213,7 @@ export function registerIngestionUserRoutes(app: express.Express, deps: Ingestio
 
     const { data, error } = await db
       .from('ingestion_jobs')
-      .select(INGESTION_JOB_SELECT_COLUMNS)
+      .select(INGESTION_JOB_DETAIL_SELECT_COLUMNS)
       .eq('id', req.params.id)
       .eq('requested_by_user_id', userId)
       .maybeSingle();
@@ -266,7 +267,7 @@ export function registerIngestionUserRoutes(app: express.Express, deps: Ingestio
 
     const { data: latestRows, error: latestError } = await db
       .from('ingestion_jobs')
-      .select(INGESTION_JOB_SELECT_COLUMNS)
+      .select(INGESTION_JOB_SUMMARY_SELECT_COLUMNS)
       .eq('requested_by_user_id', userId)
       .eq('scope', scope)
       .order('created_at', { ascending: false })
@@ -321,7 +322,7 @@ export function registerIngestionUserRoutes(app: express.Express, deps: Ingestio
 
     let query = db
       .from('ingestion_jobs')
-      .select(INGESTION_JOB_SELECT_COLUMNS)
+      .select(INGESTION_JOB_SUMMARY_SELECT_COLUMNS)
       .eq('requested_by_user_id', userId)
       .in('status', ['queued', 'running'])
       .order('created_at', { ascending: false })
@@ -341,12 +342,13 @@ export function registerIngestionUserRoutes(app: express.Express, deps: Ingestio
       status: row.status === 'running' ? 'running' : 'queued',
     }));
 
+    const includePositions = String(req.query.positions || '').trim() === '1';
     let queueAheadByJobId = new Map<string, number>();
     const queuedJobIds = rows
       .filter((row) => row.status === 'queued')
       .map((row) => row.id);
 
-    if (queuedJobIds.length > 0) {
+    if (includePositions && queuedJobIds.length > 0) {
       const serviceDb = deps.getServiceSupabaseClient();
       if (serviceDb) {
         let queueQuery = serviceDb

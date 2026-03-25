@@ -49,7 +49,7 @@ export function useSourceUnlockJobTracker({
   userId,
   enabled = true,
   scope = 'source_item_unlock_generation',
-  pollMs = 10000,
+  pollMs = 20000,
   onTerminal,
 }: UseSourceUnlockJobTrackerInput) {
   const [activeJobId, setActiveJobId] = useState<string | null>(null);

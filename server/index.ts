@@ -360,7 +360,7 @@ const queueLowPrioritySuppressionDepth = clampInt(
 );
 const allActiveSubscriptionsMinTriggerIntervalMs = clampInt(
   process.env.ALL_ACTIVE_SUBSCRIPTIONS_MIN_TRIGGER_INTERVAL_MS,
-  10 * 60_000,
+  30 * 60_000,
   60_000,
   60 * 60_000,
 );
@@ -373,11 +373,11 @@ const effectiveWorkerHeartbeatMs = resolveWorkerLeaseHeartbeatMs({
   configuredHeartbeatMs: workerHeartbeatMs,
 });
 const workerKeepAliveDelayMs = clampInt(process.env.WORKER_KEEPALIVE_DELAY_MS, 1_500, 0, 60_000);
-const workerIdleBackoffBaseMs = clampInt(process.env.WORKER_IDLE_BACKOFF_BASE_MS, 30_000, 1_000, 10 * 60_000);
-const workerIdleBackoffMaxMs = clampInt(process.env.WORKER_IDLE_BACKOFF_MAX_MS, 120_000, workerIdleBackoffBaseMs, 30 * 60_000);
+const workerIdleBackoffBaseMs = clampInt(process.env.WORKER_IDLE_BACKOFF_BASE_MS, 60_000, 1_000, 10 * 60_000);
+const workerIdleBackoffMaxMs = clampInt(process.env.WORKER_IDLE_BACKOFF_MAX_MS, 300_000, workerIdleBackoffBaseMs, 30 * 60_000);
 const jobExecutionTimeoutMs = clampInt(process.env.JOB_EXECUTION_TIMEOUT_MS, 180_000, 5_000, 10 * 60_000);
 const youtubeRefreshEnabled = parseRuntimeFlag(process.env.YOUTUBE_REFRESH_ENABLED, true);
-const youtubeRefreshIntervalMinutes = clampInt(process.env.YOUTUBE_REFRESH_INTERVAL_MINUTES, 10, 1, 120);
+const youtubeRefreshIntervalMinutes = clampInt(process.env.YOUTUBE_REFRESH_INTERVAL_MINUTES, 30, 1, 120);
 const youtubeRefreshQueueDepthGuard = clampInt(process.env.YOUTUBE_REFRESH_QUEUE_DEPTH_GUARD, 100, 1, 50_000);
 const youtubeRefreshViewMaxPerCycle = clampInt(process.env.YOUTUBE_REFRESH_VIEW_MAX_PER_CYCLE, 15, 0, 500);
 const youtubeRefreshCommentsMaxPerCycle = clampInt(process.env.YOUTUBE_REFRESH_COMMENTS_MAX_PER_CYCLE, 5, 0, 500);
@@ -467,7 +467,7 @@ const autoBannerStaleRunningMs = clampInt(process.env.AUTO_BANNER_STALE_RUNNING_
 const notificationPushConfig = readNotificationPushConfigFromEnv(process.env);
 const notificationPushEnabled = notificationPushConfig.enabled;
 const notificationPushSender = createNotificationPushSender(notificationPushConfig);
-const notificationPushDispatchIntervalMs = 15_000;
+const notificationPushDispatchIntervalMs = 60_000;
 const notificationPushBatchSize = 10;
 const notificationPushMaxAttempts = 3;
 const notificationPushProcessingStaleMs = 5 * 60 * 1000;
@@ -8612,6 +8612,6 @@ if (runIngestionWorker) {
     youtubeRefreshSchedulerController.start(1500);
   }
   if (notificationPushEnabled) {
-    notificationPushDispatcherController.start(5000);
+    notificationPushDispatcherController.start(notificationPushDispatchIntervalMs);
   }
 }
