@@ -3,6 +3,7 @@ import {
   buildSubscriptionSyncErrorUpdate,
   buildSubscriptionSyncSuccessUpdate,
   createSourceSubscriptionSyncService,
+  SUBSCRIPTION_SYNC_ERROR_WRITE_HEARTBEAT_MINUTES,
 } from '../../server/services/sourceSubscriptionSync';
 import { createMockSupabase } from './helpers/mockSupabase';
 
@@ -394,33 +395,41 @@ describe('source subscription sync service', () => {
   });
 
   it('throttles repeated identical subscription error writes inside the heartbeat window', () => {
+    const nowIso = '2026-03-19T12:00:00.000Z';
+    const insideWindowIso = new Date(
+      Date.parse(nowIso) - ((SUBSCRIPTION_SYNC_ERROR_WRITE_HEARTBEAT_MINUTES - 1) * 60_000),
+    ).toISOString();
+    const boundaryIso = new Date(
+      Date.parse(nowIso) - (SUBSCRIPTION_SYNC_ERROR_WRITE_HEARTBEAT_MINUTES * 60_000),
+    ).toISOString();
+
     expect(buildSubscriptionSyncErrorUpdate({
       subscription: {
         last_polled_at: '2026-03-19T11:55:00.000Z',
         last_sync_error: 'SYNC_FAILED',
       },
       errorMessage: 'SYNC_FAILED',
-      nowIso: '2026-03-19T12:00:00.000Z',
+      nowIso,
     })).toBeNull();
 
     expect(buildSubscriptionSyncErrorUpdate({
       subscription: {
-        last_polled_at: '2026-03-19T11:31:00.000Z',
+        last_polled_at: insideWindowIso,
         last_sync_error: 'SYNC_FAILED',
       },
       errorMessage: 'SYNC_FAILED',
-      nowIso: '2026-03-19T12:00:00.000Z',
+      nowIso,
     })).toBeNull();
 
     expect(buildSubscriptionSyncErrorUpdate({
       subscription: {
-        last_polled_at: '2026-03-19T11:30:00.000Z',
+        last_polled_at: boundaryIso,
         last_sync_error: 'SYNC_FAILED',
       },
       errorMessage: 'SYNC_FAILED',
-      nowIso: '2026-03-19T12:00:00.000Z',
+      nowIso,
     })).toEqual({
-      last_polled_at: '2026-03-19T12:00:00.000Z',
+      last_polled_at: nowIso,
       last_sync_error: 'SYNC_FAILED',
     });
   });
