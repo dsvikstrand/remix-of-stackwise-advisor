@@ -35,6 +35,12 @@ PAP (plan approved -> push to github), push the latest update once you are done 
 ## Git push access in this environment
 Push access depends on the SSH key stored in this environment. Any Codex session can push only if it runs in the same envirbut i did not ask you to generate blueprints. only updaeonment where the key and SSH config exist. This applies to any repo path opened in this environment (for example `/mnt/c/Users/Dell/Documents/VSC/App/newApp`). Removing the key disables push until a new key is added.
 
+## GitHub CLI auth
+- If `GITHUB_TOKEN` is available in the environment, it may be used with `gh`.
+- Preferred pattern: `GH_TOKEN="$GITHUB_TOKEN" gh <command>`
+- Alternative login pattern: `printf '%s' \"$GITHUB_TOKEN\" | gh auth login --with-token`
+- Never commit, print, or paste the token value into repo files.
+
 ## UDO shortcut for execution
 If but a message ends with `UDO`, treat it as approval to execute the actions you propose without waiting for a separate confirmation. Always summarize what you did afterward. (Not for code, only for commands : PA/PAP is for code)
 
