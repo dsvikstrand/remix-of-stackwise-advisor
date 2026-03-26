@@ -19,6 +19,7 @@
     "test:watch": "./scripts/with-node20.sh vitest",
     "check:normalization": "./scripts/with-node20.sh node scripts/check-normalization.mjs",
     "smoke:yt2bp": "./scripts/with-node20.sh node scripts/yt2bp_smoke.mjs",
+    "probe:yt2bp:timing": "./scripts/with-node20.sh node scripts/yt2bp_timing_probe.mjs",
     "probe:yt2bp:cases": "./scripts/with-node20.sh node --import tsx eval/yt2bp-model-probe/fetchCases.ts",
     "probe:yt2bp": "./scripts/with-node20.sh node --import tsx eval/yt2bp-model-probe/runProbe.ts",
     "smoke:release": "./scripts/with-node20.sh node scripts/release_smoke.mjs",
