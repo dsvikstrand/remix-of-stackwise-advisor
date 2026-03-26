@@ -165,11 +165,6 @@ export function MyFeedTimeline({
   });
 
   useEffect(() => {
-    if (!canMutate) return;
-    void unlockTracker.resume();
-  }, [canMutate, unlockTracker.resume]);
-
-  useEffect(() => {
     setVisibleCount(chunkSize ?? allItems.length);
   }, [chunkSize, allItems.length, allItems[0]?.id]);
 

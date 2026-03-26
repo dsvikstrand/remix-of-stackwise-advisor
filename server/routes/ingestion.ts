@@ -271,7 +271,7 @@ export function registerIngestionUserRoutes(app: express.Express, deps: Ingestio
       .eq('requested_by_user_id', userId)
       .eq('scope', scope)
       .order('created_at', { ascending: false })
-      .limit(25);
+      .limit(5);
     if (latestError) {
       return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: latestError.message, data: null });
     }

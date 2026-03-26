@@ -163,18 +163,17 @@ export async function readQueueAdmissionCounts(input: {
     ? { includeRunning: true as const, scope: input.scope }
     : { includeRunning: true as const };
 
-  const [queueDepth, userQueueDepth, queueWorkItems, userQueueWorkItems] = await Promise.all([
+  const [queueDepth, userQueueDepth] = await Promise.all([
     input.countQueueDepth(input.db, args),
     input.countQueueDepth(input.db, { ...args, userId: input.userId }),
-    input.countQueueWorkItems(input.db, args),
-    input.countQueueWorkItems(input.db, { ...args, userId: input.userId }),
   ]);
 
   return {
     queue_depth: queueDepth,
     user_queue_depth: userQueueDepth,
-    queue_work_items: queueWorkItems,
-    user_queue_work_items: userQueueWorkItems,
+    // Aggressive mode intentionally drops the more expensive work-item scans.
+    queue_work_items: queueDepth,
+    user_queue_work_items: userQueueDepth,
   };
 }
 
@@ -193,8 +192,7 @@ export function wouldExceedQueueAdmission(input: {
 }) {
   const wouldExceedQueueDepth = input.counts.queue_depth >= input.queueDepthHardLimit
     || input.counts.user_queue_depth >= input.queueDepthPerUserLimit;
-  const wouldExceedWorkItems = (input.counts.queue_work_items + input.newWorkItems) > input.queueWorkItemsHardLimit
-    || (input.counts.user_queue_work_items + input.newWorkItems) > input.queueWorkItemsPerUserLimit;
+  const wouldExceedWorkItems = false;
 
   return {
     wouldExceedQueueDepth,

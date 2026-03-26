@@ -360,7 +360,7 @@ const queueLowPrioritySuppressionDepth = clampInt(
 );
 const allActiveSubscriptionsMinTriggerIntervalMs = clampInt(
   process.env.ALL_ACTIVE_SUBSCRIPTIONS_MIN_TRIGGER_INTERVAL_MS,
-  30 * 60_000,
+  60 * 60_000,
   60_000,
   60 * 60_000,
 );
@@ -373,11 +373,11 @@ const effectiveWorkerHeartbeatMs = resolveWorkerLeaseHeartbeatMs({
   configuredHeartbeatMs: workerHeartbeatMs,
 });
 const workerKeepAliveDelayMs = clampInt(process.env.WORKER_KEEPALIVE_DELAY_MS, 1_500, 0, 60_000);
-const workerIdleBackoffBaseMs = clampInt(process.env.WORKER_IDLE_BACKOFF_BASE_MS, 60_000, 1_000, 10 * 60_000);
-const workerIdleBackoffMaxMs = clampInt(process.env.WORKER_IDLE_BACKOFF_MAX_MS, 300_000, workerIdleBackoffBaseMs, 30 * 60_000);
+const workerIdleBackoffBaseMs = clampInt(process.env.WORKER_IDLE_BACKOFF_BASE_MS, 180_000, 1_000, 10 * 60_000);
+const workerIdleBackoffMaxMs = clampInt(process.env.WORKER_IDLE_BACKOFF_MAX_MS, 900_000, workerIdleBackoffBaseMs, 30 * 60_000);
 const jobExecutionTimeoutMs = clampInt(process.env.JOB_EXECUTION_TIMEOUT_MS, 180_000, 5_000, 10 * 60_000);
 const youtubeRefreshEnabled = parseRuntimeFlag(process.env.YOUTUBE_REFRESH_ENABLED, true);
-const youtubeRefreshIntervalMinutes = clampInt(process.env.YOUTUBE_REFRESH_INTERVAL_MINUTES, 30, 1, 120);
+const youtubeRefreshIntervalMinutes = clampInt(process.env.YOUTUBE_REFRESH_INTERVAL_MINUTES, 60, 1, 120);
 const youtubeRefreshQueueDepthGuard = clampInt(process.env.YOUTUBE_REFRESH_QUEUE_DEPTH_GUARD, 100, 1, 50_000);
 const youtubeRefreshViewMaxPerCycle = clampInt(process.env.YOUTUBE_REFRESH_VIEW_MAX_PER_CYCLE, 15, 0, 500);
 const youtubeRefreshCommentsMaxPerCycle = clampInt(process.env.YOUTUBE_REFRESH_COMMENTS_MAX_PER_CYCLE, 5, 0, 500);
@@ -448,13 +448,13 @@ const sourceUnlockSweepsEnabledRaw = String(process.env.SOURCE_UNLOCK_SWEEPS_ENA
 const sourceUnlockSweepsEnabled = !(sourceUnlockSweepsEnabledRaw === 'false' || sourceUnlockSweepsEnabledRaw === '0' || sourceUnlockSweepsEnabledRaw === 'off');
 const sourceUnlockSweepBatch = clampInt(process.env.SOURCE_UNLOCK_SWEEP_BATCH, 100, 10, 1000);
 const sourceUnlockProcessingStaleMs = clampInt(process.env.SOURCE_UNLOCK_PROCESSING_STALE_MS, 10 * 60_000, 60_000, 24 * 60 * 60 * 1000);
-const sourceUnlockSweepMinIntervalMs = clampInt(process.env.SOURCE_UNLOCK_SWEEP_MIN_INTERVAL_MS, 30_000, 1_000, 10 * 60_000);
+const sourceUnlockSweepMinIntervalMs = clampInt(process.env.SOURCE_UNLOCK_SWEEP_MIN_INTERVAL_MS, 300_000, 1_000, 10 * 60_000);
 const sourceUnlockSweepDryLogsRaw = String(process.env.SOURCE_UNLOCK_SWEEP_DRY_LOGS || 'true').trim().toLowerCase();
 const sourceUnlockSweepDryLogs = !(sourceUnlockSweepDryLogsRaw === 'false' || sourceUnlockSweepDryLogsRaw === '0' || sourceUnlockSweepDryLogsRaw === 'off');
 const sourcePageAssetSweepEnabledRaw = String(process.env.SOURCE_PAGE_ASSET_SWEEP_ENABLED || 'true').trim().toLowerCase();
 const sourcePageAssetSweepEnabled = !(sourcePageAssetSweepEnabledRaw === 'false' || sourcePageAssetSweepEnabledRaw === '0' || sourcePageAssetSweepEnabledRaw === 'off');
 const sourcePageAssetSweepBatch = clampInt(process.env.SOURCE_PAGE_ASSET_SWEEP_BATCH, 100, 10, 1000);
-const sourcePageAssetSweepMinIntervalMs = clampInt(process.env.SOURCE_PAGE_ASSET_SWEEP_MIN_INTERVAL_MS, 60_000, 5_000, 10 * 60_000);
+const sourcePageAssetSweepMinIntervalMs = clampInt(process.env.SOURCE_PAGE_ASSET_SWEEP_MIN_INTERVAL_MS, 1_800_000, 5_000, 60 * 60_000);
 const refreshFailureCooldownHours = clampInt(process.env.REFRESH_FAILURE_COOLDOWN_HOURS, 6, 1, 168);
 const ingestionStaleRunningMs = clampInt(process.env.INGESTION_STALE_RUNNING_MS, 30 * 60 * 1000, 60_000, 24 * 60 * 60 * 1000);
 const autoBannerMode = normalizeAutoBannerMode(process.env.SUBSCRIPTION_AUTO_BANNER_MODE);
@@ -467,7 +467,7 @@ const autoBannerStaleRunningMs = clampInt(process.env.AUTO_BANNER_STALE_RUNNING_
 const notificationPushConfig = readNotificationPushConfigFromEnv(process.env);
 const notificationPushEnabled = notificationPushConfig.enabled;
 const notificationPushSender = createNotificationPushSender(notificationPushConfig);
-const notificationPushDispatchIntervalMs = 60_000;
+const notificationPushDispatchIntervalMs = 300_000;
 const notificationPushBatchSize = 10;
 const notificationPushMaxAttempts = 3;
 const notificationPushProcessingStaleMs = 5 * 60 * 1000;

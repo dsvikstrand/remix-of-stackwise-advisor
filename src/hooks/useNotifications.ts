@@ -26,10 +26,10 @@ export function useNotifications(input?: { limit?: number; enabled?: boolean }) 
     queryKey,
     queryFn: () => listNotifications({ limit: fetchLimit }),
     enabled: isQueryEnabled,
-    staleTime: 60_000,
+    staleTime: 300_000,
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
     retry: false,
   });
 

@@ -44,10 +44,10 @@ export function useGenerationQueue(input?: UseGenerationQueueInput) {
     ? input?.scopes.map((scope) => String(scope || '').trim()).filter(Boolean)
     : [];
   const limit = Math.max(1, Math.min(50, Math.floor(Number(input?.limit || 20))));
-  const pollMs = Math.max(2_000, Math.floor(Number(input?.pollMs || 10_000)));
+  const pollMs = Math.max(2_000, Math.floor(Number(input?.pollMs || 60_000)));
   const idlePollMs = input?.idlePollMs === false
     ? false
-    : Math.max(pollMs, Math.floor(Number(input?.idlePollMs || 60_000)));
+    : Math.max(pollMs, Math.floor(Number(input?.idlePollMs || 300_000)));
   const enabled = Boolean(input?.enabled ?? true) && Boolean(user?.id);
 
   const query = useQuery({

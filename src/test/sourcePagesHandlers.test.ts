@@ -213,7 +213,7 @@ describe('source page handlers', () => {
     expect(reserveCreditsSpy).not.toHaveBeenCalled();
   });
 
-  it('refunds reserved unlock holds when queue admission rejects the request', async () => {
+  it('keeps reserved unlock holds when only the work-item budget would overflow', async () => {
     const app = createMockApp();
     const authDb = createMockSupabase({
       user_source_subscriptions: [{
@@ -348,17 +348,16 @@ describe('source page handlers', () => {
 
     await handler(req, res);
 
-    expect(res.statusCode).toBe(429);
+    expect(res.statusCode).toBe(202);
     expect(res.body).toMatchObject({
-      ok: false,
-      error_code: 'QUEUE_BACKPRESSURE',
+      ok: true,
       data: {
-        queue_work_items: 40,
-        user_queue_work_items: 40,
+        queue_work_items: 2,
+        user_queue_work_items: 2,
       },
     });
-    expect(serviceDb.state.credit_ledger.map((row: any) => row.entry_type)).toEqual(['hold', 'refund']);
-    expect(Number(serviceDb.state.user_credit_wallets[0].balance)).toBe(1);
+    expect(serviceDb.state.credit_ledger.map((row: any) => row.entry_type)).toEqual(['hold']);
+    expect(Number(serviceDb.state.user_credit_wallets[0].balance)).toBe(0);
   });
 
   it('returns stable duplicate and in-progress no-charge buckets', async () => {

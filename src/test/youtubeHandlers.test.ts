@@ -676,7 +676,7 @@ describe('youtube handlers', () => {
     });
   });
 
-  it('rejects search generate when work-item budget would overflow', async () => {
+  it('does not reject search generate when only the work-item budget would overflow', async () => {
     const authDb = createMockSupabase({
       ingestion_jobs: [],
     });
@@ -713,16 +713,15 @@ describe('youtube handlers', () => {
 
     await handler(req, res);
 
-    expect(res.statusCode).toBe(429);
+    expect(res.statusCode).toBe(202);
     expect(res.body).toMatchObject({
-      ok: false,
-      error_code: 'QUEUE_BACKPRESSURE',
+      ok: true,
       data: {
-        queue_work_items: 39,
-        user_queue_work_items: 39,
+        queue_work_items: 3,
+        user_queue_work_items: 3,
       },
     });
-    expect(serviceDb.state.credit_ledger.map((row: any) => row.entry_type)).toEqual(['hold', 'hold', 'refund', 'refund']);
+    expect(serviceDb.state.credit_ledger.map((row: any) => row.entry_type)).toEqual(['hold', 'hold']);
   });
 
   it('returns cooldown error when manual YouTube comments refresh is on cooldown', async () => {

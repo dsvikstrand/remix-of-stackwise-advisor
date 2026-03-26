@@ -241,11 +241,6 @@ export default function SourcePage() {
     },
   });
 
-  useEffect(() => {
-    if (!user) return;
-    void videoLibraryUnlockTracker.resume();
-  }, [user?.id, videoLibraryUnlockTracker.resume]);
-
   const videoLibraryGenerateMutation = useMutation({
     mutationFn: async (items: SourcePageVideoLibraryItem[]) => {
       const data = await unlockSourcePageVideos({

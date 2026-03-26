@@ -10,7 +10,7 @@ interface BlueprintFreeBadgeProps {
 export function BlueprintFreeBadge({ enabled }: BlueprintFreeBadgeProps) {
   const { data: credits } = useAiCredits({
     enabled,
-    refetchIntervalMs: 120_000,
+    refetchIntervalMs: 600_000,
   });
 
   if (!enabled || !credits?.openai_daily_free_window_open) return null;

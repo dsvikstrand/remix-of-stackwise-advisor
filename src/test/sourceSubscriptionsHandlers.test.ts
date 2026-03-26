@@ -475,7 +475,7 @@ describe('source subscription refresh generate handler', () => {
     expect(authDb.state.ingestion_jobs[0].payload.items).toHaveLength(1);
   });
 
-  it('rejects refresh generation when work-item budget would overflow', async () => {
+  it('does not reject refresh generation when only the work-item budget would overflow', async () => {
     const authDb = createMockSupabase({
       user_source_subscriptions: [{
         id: 'sub_1',
@@ -519,15 +519,14 @@ describe('source subscription refresh generate handler', () => {
 
     await handleRefreshGenerate(req, res as any, deps);
 
-    expect(res.statusCode).toBe(429);
+    expect(res.statusCode).toBe(202);
     expect(res.body).toMatchObject({
-      ok: false,
-      error_code: 'QUEUE_BACKPRESSURE',
+      ok: true,
       data: {
-        queue_work_items: 39,
-        user_queue_work_items: 39,
+        queue_work_items: 3,
+        user_queue_work_items: 3,
       },
     });
-    expect(serviceDb.state.credit_ledger.map((row: any) => row.entry_type)).toEqual(['hold', 'hold', 'refund', 'refund']);
+    expect(serviceDb.state.credit_ledger.map((row: any) => row.entry_type)).toEqual(['hold', 'hold']);
   });
 });

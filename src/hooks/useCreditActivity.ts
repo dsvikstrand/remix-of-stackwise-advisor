@@ -34,8 +34,8 @@ export function useCreditActivity(enabled: boolean, userId?: string | null) {
   return useQuery({
     queryKey: ['credit-activity', userId],
     enabled: enabled && Boolean(userId),
-    staleTime: 60_000,
-    refetchInterval: 60_000,
+    staleTime: 300_000,
+    refetchInterval: 300_000,
     queryFn: async (): Promise<CreditActivityItem[]> => {
       try {
         const { data, error } = await supabase
