@@ -3,7 +3,7 @@
 Status: `completed (archived legacy direction)`
 
 > Archived on 2026-02-14 after direction change to `bleuV1` source-first MVP.
-> Replacement active program: `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`.
+> Replacement historical program: `docs/exec-plans/completed/bleuv1-mvp-hardening-playbook.md`.
 
 ## 1) Problem Statement
 Current UX is blueprint-capable but not cold-user efficient. Users face:

@@ -16,8 +16,8 @@
         "docs/architecture.md",
         "docs/product-specs/youtube_to_blueprint_plan.md",
         "docs/product-specs/yt2bp_v0_contract.md",
-        "docs/exec-plans/active/on-pause/project-bleuv1-mvp-foundation.md",
-        "docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md"
+        "docs/exec-plans/completed/project-bleuv1-mvp-foundation.md",
+        "docs/exec-plans/completed/bleuv1-mvp-hardening-playbook.md"
       ],
       "suggested_sections": [
         "Adapter flow",
@@ -45,8 +45,8 @@
         "docs/app/core-direction-lock.md",
         "docs/app/product-spec.md",
         "docs/architecture.md",
-        "docs/exec-plans/active/on-pause/project-bleuv1-mvp-foundation.md",
-        "docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md"
+        "docs/exec-plans/completed/project-bleuv1-mvp-foundation.md",
+        "docs/exec-plans/completed/bleuv1-mvp-hardening-playbook.md"
       ],
       "suggested_sections": [
         "My Feed and channel roles",
@@ -67,8 +67,8 @@
         "docs/architecture.md",
         "docs/product-specs/yt2bp_v0_contract.md",
         "docs/ops/yt2bp_runbook.md",
-        "docs/exec-plans/active/on-pause/project-bleuv1-mvp-foundation.md",
-        "docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md"
+        "docs/exec-plans/completed/project-bleuv1-mvp-foundation.md",
+        "docs/exec-plans/completed/bleuv1-mvp-hardening-playbook.md"
       ],
       "suggested_sections": [
         "API contract",
@@ -103,8 +103,8 @@
         "docs/app/core-direction-lock.md",
         "docs/app/product-spec.md",
         "docs/architecture.md",
-        "docs/exec-plans/active/on-pause/project-bleuv1-mvp-foundation.md",
-        "docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md"
+        "docs/exec-plans/completed/project-bleuv1-mvp-foundation.md",
+        "docs/exec-plans/completed/bleuv1-mvp-hardening-playbook.md"
       ],
       "suggested_sections": [
         "Schema contract",
@@ -123,8 +123,8 @@
         "docs/app/product-spec.md",
         "docs/architecture.md",
         "docs/exec-plans/index.md",
-        "docs/exec-plans/active/on-pause/project-bleuv1-mvp-foundation.md",
-        "docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md",
+        "docs/exec-plans/completed/project-bleuv1-mvp-foundation.md",
+        "docs/exec-plans/completed/bleuv1-mvp-hardening-playbook.md",
         "docs/_archive/legacy-ass-agentic/agentic/README.md",
         "docs/_archive/legacy-ass-agentic/agentic/executable/README.md"
       ],

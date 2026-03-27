@@ -50,11 +50,11 @@ e2) [todo] PWA follow-up proof
 - validate installed-mode behavior on Android Chrome
 - validate the installed-app update prompt on a future frontend publish
 - validate the Android native-install/install-CTA flow if that rollout is resumed
-- source history: `docs/exec-plans/active/on-pause/bleup-pwa-program.md`
+- source history: `docs/exec-plans/completed/bleup-pwa-program.md`
 
 e3) [todo] Runtime simplification follow-up
 - if this track is resumed later, close docs canonicalization and one MVP validation/capacity guard before treating it as current implementation work again
-- source history: `docs/exec-plans/active/on-pause/mvp-runtime-simplification-plan.md`
+- source history: `docs/exec-plans/completed/mvp-runtime-simplification-plan.md`
 
 ## Completion Rule
 f1) [todo] Move this file to `completed/` when the remaining proof/deferred checks are either:

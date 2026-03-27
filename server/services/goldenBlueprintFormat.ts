@@ -178,8 +178,18 @@ const REQUIRED_GOLDEN_SECTION_ORDER = [
   'Bleup',
   'Deep Dive',
   'Practical Rules',
-  'Open Questions',
+  'Caveats',
 ] as const;
+const CAVEATS_SECTION_TITLE = 'Caveats';
+const LEGACY_OPEN_QUESTIONS_TITLE = 'Open Questions';
+
+function canonicalGoldenSectionName(value: string) {
+  const normalized = normalizeWhitespace(value || '');
+  if (normalized === LEGACY_OPEN_QUESTIONS_TITLE || normalized === CAVEATS_SECTION_TITLE) {
+    return CAVEATS_SECTION_TITLE;
+  }
+  return normalized;
+}
 const INCOMPLETE_TAIL_WORDS = new Set([
   'and',
   'or',
@@ -929,13 +939,13 @@ export function evaluateGoldenQuality(input: {
 
 export function validateGoldenStructure(steps: YouTubeDraftStep[]): GoldenStructureGateResult {
   const issues: string[] = [];
-  const titles = (steps || []).map((step) => normalizeWhitespace(step?.name || ''));
+  const titles = (steps || []).map((step) => canonicalGoldenSectionName(step?.name || ''));
   const expected = [...REQUIRED_GOLDEN_SECTION_ORDER];
   if (titles.length !== expected.length || titles.some((title, idx) => title !== expected[idx])) {
     issues.push('SECTION_ORDER_MISMATCH');
   }
 
-  const byName = new Map((steps || []).map((step) => [normalizeWhitespace(step?.name || ''), step]));
+  const byName = new Map((steps || []).map((step) => [canonicalGoldenSectionName(step?.name || ''), step]));
   const summary = normalizeWhitespace(byName.get('Summary')?.notes || '');
   if (!summary) issues.push('SUMMARY_EMPTY');
 
@@ -953,7 +963,7 @@ export function validateGoldenStructure(steps: YouTubeDraftStep[]): GoldenStruct
     issues.push('TAKEAWAYS_BULLET_COUNT');
   }
 
-  for (const sectionName of ['Deep Dive', 'Practical Rules', 'Open Questions']) {
+  for (const sectionName of ['Deep Dive', 'Practical Rules', CAVEATS_SECTION_TITLE]) {
     const count = parseBulletLines(byName.get(sectionName)?.notes || '').length;
     if (count < MIN_SECTION_BULLETS || count > MAX_SECTION_BULLETS) {
       issues.push(`${sectionName.toUpperCase().replace(/\s+/g, '_')}_BULLET_COUNT`);
@@ -994,7 +1004,7 @@ function repairGoldenStructure(
     deepFallbackByName: Map<string, string>;
   },
 ): YouTubeDraftStep[] {
-  const byName = new Map((steps || []).map((step) => [normalizeWhitespace(step?.name || ''), step]));
+  const byName = new Map((steps || []).map((step) => [canonicalGoldenSectionName(step?.name || ''), step]));
   const summary = normalizeWhitespace(byName.get('Summary')?.notes || '') || input.summaryFallback;
   const bleup = normalizeBleupParagraphs(
     normalizeWhitespace(byName.get('Bleup')?.notes || ''),
@@ -1007,7 +1017,7 @@ function repairGoldenStructure(
     MAX_TAKEAWAYS_BULLETS,
   );
 
-  const fixedDeep = ['Deep Dive', 'Practical Rules', 'Open Questions'].map((sectionName) => {
+  const fixedDeep = ['Deep Dive', 'Practical Rules', CAVEATS_SECTION_TITLE].map((sectionName) => {
     const normalized = normalizeBulletSection(
       byName.get(sectionName)?.notes || '',
       input.deepFallbackByName.get(sectionName) || '',
@@ -1043,7 +1053,7 @@ function repairGoldenQuality(
     tags?: string[];
   },
 ): YouTubeDraftStep[] {
-  const byName = new Map((steps || []).map((step) => [normalizeWhitespace(step.name), step]));
+  const byName = new Map((steps || []).map((step) => [canonicalGoldenSectionName(step.name), step]));
   const context = {
     domainEntities: extractDomainEntities({
       transcript: input.transcript,
@@ -1178,8 +1188,8 @@ function repairGoldenQuality(
       timestamp: null,
     },
     {
-      name: 'Open Questions',
-      notes: normalizeSectionBullets('Open Questions', MIN_SECTION_BULLETS, MAX_SECTION_BULLETS),
+      name: CAVEATS_SECTION_TITLE,
+      notes: normalizeSectionBullets(CAVEATS_SECTION_TITLE, MIN_SECTION_BULLETS, MAX_SECTION_BULLETS),
       timestamp: null,
     },
   ] satisfies YouTubeDraftStep[];
@@ -1272,7 +1282,7 @@ function buildDeepSections(draft: GoldenBlueprintWorkingDraft) {
       timestamp: null,
     },
     {
-      name: 'Open Questions',
+      name: CAVEATS_SECTION_TITLE,
       notes: toBulletBlock(
         normalizeGuidedBulletGroup(
           [
@@ -1442,7 +1452,7 @@ export function normalizeYouTubeDraftToGoldenV1(
         ['Takeaways', toBulletBlock(takeaways)],
         ['Deep Dive', deepFallbackByName.get('Deep Dive') || ''],
         ['Practical Rules', deepFallbackByName.get('Practical Rules') || ''],
-        ['Open Questions', deepFallbackByName.get('Open Questions') || ''],
+        [CAVEATS_SECTION_TITLE, deepFallbackByName.get(CAVEATS_SECTION_TITLE) || ''],
       ]),
       transcript: options?.transcript,
       title: draft.title,

@@ -45,6 +45,7 @@
 - 2026-03-22 note: YouTube refresh bookkeeping now skips unchanged `source_items.metadata.view_count` writes and no-op `blueprint_youtube_refresh_state` upserts; this is additive backend bookkeeping only and does not alter the YT2BP request/response envelope.
 - 2026-03-23 note: service-cron subscription ingestion still triggers `/api/ingestion/jobs/trigger` every `3m`, but backend enqueue now gates `all_active_subscriptions` to an effective `60m` minimum interval by default; this is additive backend control-plane behavior and does not alter the YT2BP request/response envelope.
 - 2026-03-27 note: the default one-step prompt template is now `docs/golden_blueprint/golden_bp_prompt_contract_one_step_v5.md`; this keeps the same `draft.sectionsJson` schema and endpoint envelope, but makes `Takeaways` lighter/plain-English, requires `Storyline` to stay `2-3` substantial paragraphs/slides, and uses the existing `open_questions` field for a human-facing `Caveats` section.
+- 2026-03-27 note: display/render surfaces now label that final section as `Caveats`, while runtime/storage keys stay `open_questions` and legacy `Open Questions` titles remain accepted as compatibility aliases.
 - 2026-03-27 note: in `llm_native` mode, YT2BP retries now stay reserved for blocking structure/shape misses; `TAKEAWAYS_TOO_LONG` remains logged on `generation_runs` as soft quality telemetry but no longer triggers regeneration by itself.
 - 2026-03-23 note: queue-backed source-video generation now records active ingestion-job ownership on `source_item_blueprint_variants`, reclaims stale in-progress variants after a bounded timeout only when `active_job_id` is missing, resumes same-job unlock preflight instead of treating owned variants as generic `in_progress`, and persists terminal `generation_runs` status outside best-effort trace-event writes; this is additive backend reliability hardening and remains outside the YT2BP request/response envelope.
 - 2026-02-18 note: subscription manual-refresh endpoints (`/api/source-subscriptions/refresh-scan`, `/api/source-subscriptions/refresh-generate`) are additive and do not alter the YT2BP endpoint envelope.
@@ -153,6 +154,7 @@
 - Canonical blueprint content for current runtime work lives in `draft.sectionsJson`.
 - `draft.sectionsJson.schema_version` must be `blueprint_sections_v1`.
 - `draft.steps`, `draft.summaryVariants`, and `draft.notes` remain compatibility-era fields in the v0 envelope during cutover.
+- When compatibility render blocks or legacy `draft.steps` are shown, the final section should now display as `Caveats` even though the canonical stored field name remains `open_questions`.
 - New gate/render/storage work should treat `draft.sectionsJson` as the authoritative blueprint shape, not the legacy compatibility fields.
 
 ## Error response

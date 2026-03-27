@@ -171,4 +171,4 @@ i1) [have] TanStack Query tuning is completed:
 - [tanstack-query-tuning-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/completed/tanstack-query-tuning-plan.md)
 
 i2) [have] The broader backend/frontend egress history remains on pause here:
-- [supabase-egress-reduction-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/active/on-pause/supabase-egress-reduction-plan.md)
+- [supabase-egress-reduction-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/completed/supabase-egress-reduction-plan.md)

@@ -71,7 +71,7 @@ d4) [have] Any further frontend traffic reduction should be treated as a new fol
 
 ## Related Plans
 e1) [have] The broader Supabase/backend egress history remains on pause here:
-- [supabase-egress-reduction-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/active/on-pause/supabase-egress-reduction-plan.md)
+- [supabase-egress-reduction-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/completed/supabase-egress-reduction-plan.md)
 
 e2) [have] Backend aggregation is now the active structural read-reduction track:
-- [backend-aggregation-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/active/backend-aggregation-plan.md)
+- [backend-aggregation-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/completed/backend-aggregation-plan.md)

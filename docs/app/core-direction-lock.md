@@ -108,8 +108,9 @@ Status: `canonical`
 70. `GET /api/my-feed` is retained as a legacy compatibility endpoint only; it is no longer the active primary read surface now that `/my-feed` redirects to `/wall`.
 71. YouTube refresh bookkeeping must avoid no-op persistence: unchanged source-item `view_count` fetches must not rewrite metadata just to refresh fetch timestamps, and refresh-state rows should only upsert when a meaningful persisted field changes.
 72. The default one-step YT2BP prompt contract is now `docs/golden_blueprint/golden_bp_prompt_contract_one_step_v5.md`: it keeps the same `blueprint_sections_v1` runtime shape, but `Takeaways` should bias toward plain-English fast-skim value, `Storyline` should stay at `2-3` substantial paragraphs/slides rather than thin fragments, and the existing `open_questions` field should carry a human-facing `Caveats` section.
-73. YT2BP `llm_native` quality retries now reserve regeneration for blocking structure/shape misses; `TAKEAWAYS_TOO_LONG` remains logged as soft quality telemetry but does not trigger retry by itself.
-74. Queue-backed source-video generation must retain claim ownership and bounded recovery: `source_item_blueprint_variants` should record the active ingestion job when work is claimed, stale queued/running variants with no `active_job_id` must become reclaimable after a bounded timeout, unlock-generation preflight must treat same-job ownership as resumable work rather than generic `in_progress`, and terminal `generation_runs` status persistence must not depend on best-effort trace-event writes.
+73. Display/render surfaces should now label that final section as `Caveats`, while runtime/storage keys stay `open_questions` and legacy `Open Questions` titles remain accepted as compatibility aliases.
+74. YT2BP `llm_native` quality retries now reserve regeneration for blocking structure/shape misses; `TAKEAWAYS_TOO_LONG` remains logged as soft quality telemetry but does not trigger retry by itself.
+75. Queue-backed source-video generation must retain claim ownership and bounded recovery: `source_item_blueprint_variants` should record the active ingestion job when work is claimed, stale queued/running variants with no `active_job_id` must become reclaimable after a bounded timeout, unlock-generation preflight must treat same-job ownership as resumable work rather than generic `in_progress`, and terminal `generation_runs` status persistence must not depend on best-effort trace-event writes.
 
 ## Core user journey
 1. Subscribe to a YouTube channel or look up one specific video by link, video id, or title.
@@ -135,7 +136,7 @@ Status: `canonical`
 - Architecture: `docs/architecture.md`
 - Active proof-only tracker: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
 - Completed implementation tracker: `docs/exec-plans/completed/mvp-readiness-review-followup.md`
-- Paused strategy playbook: `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
+- Historical strategy playbook: `docs/exec-plans/completed/bleuv1-mvp-hardening-playbook.md`
 - Runbook: `docs/ops/yt2bp_runbook.md`
 
 ## Latest Update (2026-03-05)

@@ -1,6 +1,12 @@
 # Blueprint Prompt v5 Caveats Plan
 
-Status: `on-pause`
+Status: `completed`
+
+## Completion
+- [have] `v5` is the default one-step YT2BP prompt contract in production.
+- [have] The runtime schema stayed `blueprint_sections_v1`, and the stored/runtime field stayed `open_questions`.
+- [have] Backend semantics, validation, retry wording, and display relabel were all completed without a DB or API shape migration.
+- [have] This plan is retained as the historical execution record for the low-risk `Caveats` rollout.
 
 ## Goal
 a1) [todo] Install a new one-step YT2BP prompt contract `v5` that replaces the human-facing `Open Questions` section semantics with `Caveats`.

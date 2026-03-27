@@ -58,7 +58,8 @@ function isAllowedSectionKey(key: string) {
     || key === 'mechanism deep dive'
     || key === 'practical rules'
     || key === 'decision rules'
-    || key === 'open questions';
+    || key === 'open questions'
+    || key === 'caveats';
 }
 
 function toBulletStrings(items: Array<{ name?: string }> | undefined) {
@@ -87,7 +88,7 @@ export function buildBlueprintSectionsV1FromRenderSteps(input: {
   const storyline = byKey.get('bleup') || byKey.get('storyline');
   const deepDive = byKey.get('deep dive');
   const practicalRules = byKey.get('practical rules');
-  const openQuestions = byKey.get('open questions');
+  const openQuestions = byKey.get('open questions') || byKey.get('caveats');
 
   if (!summary || !takeaways || !storyline || !deepDive || !practicalRules || !openQuestions) {
     return null;
@@ -153,7 +154,7 @@ export function buildRenderBlocksFromBlueprintSections(input: BlueprintSectionsV
     },
     {
       id: 'sections-v1-open-questions',
-      title: 'Open Questions',
+      title: 'Caveats',
       description: '',
       items: (input.open_questions?.bullets || []).map((bullet) => ({ name: String(bullet || '').trim() })).filter((item) => item.name),
     },

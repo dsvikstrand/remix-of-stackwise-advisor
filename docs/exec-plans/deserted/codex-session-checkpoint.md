@@ -15,20 +15,20 @@ Deserted note
 - [have] Latest locally committed SHA in this worktree: `8f73c7993f4ef8c5ccd22645779c97ebedf7aa75`
 - [have] Current main active proof file: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
 - [have] Current main planning/reference index: `docs/exec-plans/index.md`
-- [have] Current PWA umbrella reference at the time of capture is now preserved at `docs/exec-plans/active/on-pause/bleup-pwa-program.md`.
+- [have] Current PWA umbrella reference at the time of capture is now preserved at `docs/exec-plans/completed/bleup-pwa-program.md`.
 
 ## Current Dirty Worktree Areas
 - [have] Docs-plan/index churn is present in:
   - `docs/README.md`
   - `docs/exec-plans/index.md`
   - `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
-  - `docs/exec-plans/active/on-pause/bleup-pwa-phase5-deferred-tracks.md`
-  - `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
-  - `docs/exec-plans/active/on-pause/project-bleuv1-mvp-foundation.md`
+  - `docs/exec-plans/completed/bleup-pwa-phase5-deferred-tracks.md`
+  - `docs/exec-plans/completed/bleuv1-mvp-hardening-playbook.md`
+  - `docs/exec-plans/completed/project-bleuv1-mvp-foundation.md`
   - `docs/exec-plans/tech-debt-tracker.md`
 - [have] Completed/active plan moves are present in:
-  - `docs/exec-plans/active/on-pause/bleup-pwa-program.md`
-  - `docs/exec-plans/active/on-pause/mvp-runtime-simplification-plan.md`
+  - `docs/exec-plans/completed/bleup-pwa-program.md`
+  - `docs/exec-plans/completed/mvp-runtime-simplification-plan.md`
   - `docs/exec-plans/deserted/repo-cleanup-and-scale-readiness-plan.md`
 - [have] Current in-progress UI batch files are:
   - `src/components/profile/ProfileHeader.tsx`

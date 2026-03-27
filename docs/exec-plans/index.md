@@ -1,6 +1,6 @@
 # Execution Plans Registry
 
-This file is the authoritative active/on-pause/deserted/completed registry for execution plans.
+This file is the authoritative active/reference/deserted/completed registry for execution plans.
 
 ## Current Runtime / Ops Truth
 - `docs/app/core-direction-lock.md`
@@ -13,34 +13,30 @@ This file is the authoritative active/on-pause/deserted/completed registry for e
   Canonical launch gate board and proof log.
 
 ## Active Root
-- `docs/exec-plans/active/backend-write-policy-plan.md`
-  Current tracked implementation plan for reducing Supabase backend churn by removing or coarsening non-essential bookkeeping writes and cadence.
+- No root implementation plan is currently active.
 - `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
   Current proof/deferred carry-forward tail. This is the only standing active-tail support file.
 - `docs/exec-plans/tech-debt-tracker.md`
   Durable post-launch cleanup/debt board. This is not an execution plan, but it remains the long-lived debt surface.
 
-## On-Pause Reference
-- These files remain valid reference plans, but they are not the current implementation focus.
-- `docs/exec-plans/active/on-pause/bleup-pwa-program.md`
+## Reference Plans
+- These files remain valid historical reference plans, but they are not the current implementation focus.
+- `docs/exec-plans/completed/bleup-pwa-program.md`
   Deferred until Android/install-update proof work becomes active again.
-- `docs/exec-plans/active/on-pause/mvp-runtime-simplification-plan.md`
-  Deferred while narrower blueprint-contract cleanup is the current implementation plan.
-- `docs/exec-plans/active/on-pause/bleup-pwa-phase5-deferred-tracks.md`
+- `docs/exec-plans/completed/mvp-runtime-simplification-plan.md`
+  Deferred historical runtime simplification umbrella retained for later reconsideration.
+- `docs/exec-plans/completed/bleup-pwa-phase5-deferred-tracks.md`
   Deferred child-track reference for later PWA enhancements.
-- `docs/exec-plans/active/on-pause/project-bleuv1-mvp-foundation.md`
+- `docs/exec-plans/completed/project-bleuv1-mvp-foundation.md`
   Historical paused MVP build reference.
-- `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
+- `docs/exec-plans/completed/bleuv1-mvp-hardening-playbook.md`
   Historical paused hardening reference.
-- `docs/exec-plans/active/on-pause/supabase-egress-reduction-plan.md`
-  Paused broader backend/frontend egress reduction plan; retained as reference while narrower backend write-policy work is the current focused implementation track.
-- `docs/exec-plans/active/on-pause/backend-aggregation-plan.md`
-  Paused structural read-aggregation plan; retained as follow-up reference while the narrower Supabase write-policy pass is active.
-- `docs/exec-plans/active/on-pause/post-d3d0239-debloat-plan.md`
+- `docs/exec-plans/completed/supabase-egress-reduction-plan.md`
+  Historical broader backend/frontend egress reduction plan retained as reference.
+- `docs/exec-plans/completed/backend-aggregation-plan.md`
+  Historical structural read-aggregation plan retained as follow-up reference.
+- `docs/exec-plans/completed/post-d3d0239-debloat-plan.md`
   Paused narrow debloat track for auditing the post-`d3d0239` reaction commits, with special scrutiny on the larger stale-state recovery hardening before starting provider-specific investigation.
-- `docs/exec-plans/active/on-pause/blueprint-prompt-v5-caveats-plan.md`
-  Paused follow-up plan for the low-risk `v5` YT2BP contract rollout: keep `blueprint_sections_v1` and `open_questions`, but shift the section semantics to human-facing `Caveats` with backend-first prompt/gate changes and optional later UI relabel.
-
 ## Deserted / Superseded
 - These files are preserved for history only. They must not be resumed without a new explicit replacement plan.
 - `docs/exec-plans/deserted/ptp-provider-install-master-plan.md`
@@ -95,20 +91,36 @@ This file is the authoritative active/on-pause/deserted/completed registry for e
   Completed: pre-launch navigation, interpretability, Help, and Home onboarding pass.
 - `docs/exec-plans/completed/tanstack-query-tuning-plan.md`
   Completed: conservative global defaults plus explicit live/semi-live/static-ish query behavior, with post-change proof showing lower browser-attributed request churn.
+- `docs/exec-plans/completed/backend-write-policy-plan.md`
+  Completed: narrower backend write-policy reduction pass that replaced the earlier active root write-policy track.
+- `docs/exec-plans/completed/backend-aggregation-plan.md`
+  Completed/reference: structural read-aggregation plan retained as history after registry cleanup.
+- `docs/exec-plans/completed/supabase-egress-reduction-plan.md`
+  Completed/reference: broader Supabase egress reduction plan retained as history after later focused passes.
+- `docs/exec-plans/completed/post-d3d0239-debloat-plan.md`
+  Completed/reference: narrow post-`d3d0239` debloat audit retained as history.
+- `docs/exec-plans/completed/bleup-pwa-program.md`
+  Completed/reference: umbrella PWA program retained for history while remaining proof items live in the proof tail.
+- `docs/exec-plans/completed/bleup-pwa-phase5-deferred-tracks.md`
+  Completed/reference: deferred PWA child-track reference retained for later reconsideration.
+- `docs/exec-plans/completed/mvp-runtime-simplification-plan.md`
+  Completed/reference: runtime simplification umbrella retained for history.
+- `docs/exec-plans/completed/project-bleuv1-mvp-foundation.md`
+  Completed/reference: MVP foundation build reference retained for history.
+- `docs/exec-plans/completed/bleuv1-mvp-hardening-playbook.md`
+  Completed/reference: broader `bleuV1` hardening playbook retained for history.
+- `docs/exec-plans/completed/blueprint-prompt-v5-caveats-plan.md`
+  Completed: low-risk `v5` YT2BP contract rollout, keeping `blueprint_sections_v1` and `open_questions` while shifting the final section semantics and display label to `Caveats`.
 
 ## Current Program Snapshot
 - Core identity lock: `docs/app/core-direction-lock.md`.
 - Current runtime/ops truth: `docs/architecture.md`, `docs/ops/yt2bp_runbook.md`, and `docs/ops/mvp-launch-readiness-checklist.md`.
-- Current active implementation plan: `docs/exec-plans/active/backend-write-policy-plan.md`.
+- Current active implementation plan: none.
 - Current active proof/deferred tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`.
 - Current post-launch debt board: `docs/exec-plans/tech-debt-tracker.md`.
 - Latest completed implementation plans: `docs/exec-plans/completed/transcript-provider-launch-plan.md` and `docs/exec-plans/completed/pre-launch-ui-ux-plan.md`.
-- PWA rollout follow-up is on pause.
-- Runtime simplification follow-up is on pause.
-- The broader Supabase egress program is on pause while the narrower backend write-policy pass is the current focused reduction track.
-- Backend aggregation is on pause while the write-policy pass addresses the strongest lower-risk backend churn candidates first.
-- Post-`d3d0239` debloat review is on pause as a narrow cleanup track to resume before any provider-specific work if the current stack still looks overgrown.
-- Blueprint prompt `v5` Caveats rollout is queued as an on-pause follow-up plan; it keeps the current schema while changing the last section’s semantics from `Open Questions` to `Caveats`.
+- Historical PWA/runtime-simplification/egress reference plans are archived under `docs/exec-plans/completed/`.
+- Blueprint prompt `v5` Caveats rollout is completed.
 - TanStack Query tuning is completed.
 - Transcript-provider robustness work is completed, with later live-proof items carried into the proof tail.
 - `PTP` install docs and the broad cleanup umbrella are deserted/superseded, not active.
@@ -116,7 +128,7 @@ This file is the authoritative active/on-pause/deserted/completed registry for e
 ## Rules
 - Keep only one active implementation plan at `docs/exec-plans/active/` root.
 - Keep `docs/exec-plans/active/tail/mvp-launch-proof-tail.md` as the canonical proof/deferred carry-forward file.
-- Keep paused plans under `docs/exec-plans/active/on-pause/`.
+- Keep historical reference plans under `docs/exec-plans/completed/` unless a new explicit reactivation plan is created.
 - Move abandoned/superseded plans into `docs/exec-plans/deserted/`.
 - Move finished plans into `docs/exec-plans/completed/`.
 - Use `docs/exec-plans/plan-authoring-guidelines.md` as the durable rulebook for future plan shape/review.

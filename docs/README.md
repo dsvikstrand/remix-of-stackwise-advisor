@@ -26,7 +26,7 @@ This folder is the source of truth for product, architecture, planning, and oper
 ## Primary Planning Surfaces
 - Launch gate board: `docs/ops/mvp-launch-readiness-checklist.md`
 - Active proof/deferred tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
-- Active implementation program: `docs/exec-plans/active/backend-write-policy-plan.md`
+- Current root implementation program: none. Use `docs/exec-plans/index.md` for the authoritative registry.
 - Plan authoring governance: `docs/exec-plans/plan-authoring-guidelines.md`
 - Latest completed implementation programs:
   - `docs/exec-plans/completed/transcript-provider-launch-plan.md`
@@ -58,16 +58,16 @@ This folder is the source of truth for product, architecture, planning, and oper
 
 ## Historical Reference
 - Historical references are not the current production contract.
-- Paused broader egress program: `docs/exec-plans/active/on-pause/supabase-egress-reduction-plan.md`
-- Paused backend aggregation program: `docs/exec-plans/active/on-pause/backend-aggregation-plan.md`
-- Paused post-`d3d0239` debloat audit: `docs/exec-plans/active/on-pause/post-d3d0239-debloat-plan.md`
+- Historical broader egress program: `docs/exec-plans/completed/supabase-egress-reduction-plan.md`
+- Historical backend aggregation program: `docs/exec-plans/completed/backend-aggregation-plan.md`
+- Historical post-`d3d0239` debloat audit: `docs/exec-plans/completed/post-d3d0239-debloat-plan.md`
 - Completed TanStack Query tuning program: `docs/exec-plans/completed/tanstack-query-tuning-plan.md`
 - Completed launch hardening phases: `docs/exec-plans/completed/mvp-launch-hardening-phases.md`
 - Completed stepwise execution scheme: `docs/exec-plans/completed/bleuv1-manual-iteration-scheme.md`
-- Paused PWA implementation umbrella: `docs/exec-plans/active/on-pause/bleup-pwa-program.md`
-- Paused runtime simplification umbrella: `docs/exec-plans/active/on-pause/mvp-runtime-simplification-plan.md`
-- Paused strategy reference (`bleuV1`): `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
-- Paused MVP build reference plan: `docs/exec-plans/active/on-pause/project-bleuv1-mvp-foundation.md`
+- Historical PWA implementation umbrella: `docs/exec-plans/completed/bleup-pwa-program.md`
+- Historical runtime simplification umbrella: `docs/exec-plans/completed/mvp-runtime-simplification-plan.md`
+- Historical strategy reference (`bleuV1`): `docs/exec-plans/completed/bleuv1-mvp-hardening-playbook.md`
+- Historical MVP build reference plan: `docs/exec-plans/completed/project-bleuv1-mvp-foundation.md`
 
 ## Interpretation Rule
 - If a detailed plan/reference file conflicts with canonical docs, follow canonical docs.
@@ -87,9 +87,8 @@ This folder is the source of truth for product, architecture, planning, and oper
 - `docs/design-docs/` technical design + diagrams
 - `docs/exec-plans/active/` one current implementation plan only
 - `docs/exec-plans/active/tail/` proof/deferred carry-forward docs
-- `docs/exec-plans/active/on-pause/` paused reference plans
 - `docs/exec-plans/deserted/` abandoned/superseded plans kept for history only
-- `docs/exec-plans/completed/` closed plans and closure notes
+- `docs/exec-plans/completed/` closed plans, archived reference plans, and closure notes
 - `docs/ops/` runbooks and operational procedures
 - `docs/product-specs/` product contracts and scoped feature plans
 - `docs/references/` stable reference material

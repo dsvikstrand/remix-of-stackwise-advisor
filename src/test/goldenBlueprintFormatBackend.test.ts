@@ -175,7 +175,7 @@ describe('goldenBlueprintFormat (backend)', () => {
       'Bleup',
       'Deep Dive',
       'Practical Rules',
-      'Open Questions',
+      'Caveats',
     ]);
 
     const takeawayLines = (result.steps[1]?.notes || '').split('\n').filter((line) => line.trim().startsWith('- '));
@@ -190,6 +190,7 @@ describe('goldenBlueprintFormat (backend)', () => {
       expect(value).not.toBe('decision rules');
       expect(value).not.toBe('practical rules');
       expect(value).not.toBe('open questions');
+      expect(value).not.toBe('caveats');
       expect(value).not.toBe('bottom line');
     }
     expect((result.steps[0]?.notes || '').toLowerCase()).not.toContain('this video');
@@ -205,7 +206,7 @@ describe('goldenBlueprintFormat (backend)', () => {
     expect(summaryLead.length).toBeGreaterThan(20);
     expect((result.steps[2]?.notes || '')).not.toContain(summaryLead);
 
-    for (const stepName of ['Deep Dive', 'Practical Rules', 'Open Questions']) {
+    for (const stepName of ['Deep Dive', 'Practical Rules', 'Caveats']) {
       const section = result.steps.find((step) => step.name === stepName);
       expect(section).toBeTruthy();
       const sectionBullets = (section?.notes || '').split('\n').filter((line) => line.trim().startsWith('- '));
@@ -235,7 +236,7 @@ describe('goldenBlueprintFormat (backend)', () => {
       'Bleup',
       'Deep Dive',
       'Practical Rules',
-      'Open Questions',
+      'Caveats',
     ]);
   });
 

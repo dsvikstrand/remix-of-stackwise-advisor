@@ -13,5 +13,5 @@
   - Use for implementation history and rationale.
   - Do not treat as canonical API/runtime source when conflicts exist.
 - Paused strategy references:
-  - `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
-  - `docs/exec-plans/active/on-pause/project-bleuv1-mvp-foundation.md`
+  - `docs/exec-plans/completed/bleuv1-mvp-hardening-playbook.md`
+  - `docs/exec-plans/completed/project-bleuv1-mvp-foundation.md`

@@ -125,6 +125,10 @@ function isBleupKey(key: string) {
     || key.startsWith('beup(');
 }
 
+function isCaveatsKey(key: string) {
+  return key === 'open questions' || key === 'caveats';
+}
+
 function isNarrativeKey(key: string) {
   return isSummaryKey(key) || isBleupKey(key);
 }
@@ -133,6 +137,7 @@ function sectionDisplayTitle(rawTitle: string) {
   const key = normalizeHeadingKey(rawTitle);
   if (isSummaryKey(key)) return 'Quick Read';
   if (isBleupKey(key)) return 'Storyline';
+  if (isCaveatsKey(key)) return 'Caveats';
   return rawTitle;
 }
 
@@ -144,7 +149,7 @@ function canonicalSectionTitle(rawTitle: string, fallbackIndex: number) {
   if (normalized === 'mechanism deep dive' || normalized === 'deep dive') return 'Deep Dive';
   if (normalized === 'tradeoffs') return 'Tradeoffs';
   if (normalized === 'decision rules' || normalized === 'practical rules') return 'Practical Rules';
-  if (normalized === 'open questions') return 'Open Questions';
+  if (isCaveatsKey(normalized)) return 'Caveats';
   if (normalized === 'bottom line') return 'Bottom Line';
   const cleaned = (rawTitle || '').trim();
   return cleaned || `Section ${fallbackIndex + 1}`;
@@ -212,7 +217,7 @@ function splitEmbeddedGoldenSections(step: RenderStep): RenderStep[] {
 
   for (const rawLine of lines) {
     const trimmed = rawLine.trim();
-    const headingOnlyMatch = trimmed.match(/^(deep dive|mechanism deep dive|tradeoffs|practical rules|decision rules|bottom line|open questions)\s*:?\s*$/i);
+    const headingOnlyMatch = trimmed.match(/^(deep dive|mechanism deep dive|tradeoffs|practical rules|decision rules|bottom line|open questions|caveats)\s*:?\s*$/i);
     if (headingOnlyMatch) {
       if (currentLines.length > 0) flush();
       currentTitle = canonicalSectionTitle(headingOnlyMatch[1], sectionIndex);
@@ -517,14 +522,14 @@ export default function BlueprintDetail() {
       return key !== 'bottom line' && !isNarrativeKey(key);
     })
     .sort((a, b) => {
-      const rank = (value: RenderStep) => {
-        const key = normalizeHeadingKey(value.title);
-        if (key === 'practical rules') return 1;
-        if (key === 'deep dive') return 2;
-        if (key === 'open questions') return 3;
-        if (key === 'tradeoffs') return 4;
-        return 99;
-      };
+        const rank = (value: RenderStep) => {
+          const key = normalizeHeadingKey(value.title);
+          if (key === 'practical rules') return 1;
+          if (key === 'deep dive') return 2;
+          if (isCaveatsKey(key)) return 3;
+          if (key === 'tradeoffs') return 4;
+          return 99;
+        };
       return rank(a) - rank(b);
     });
   const renderGoldenGroup = (group: RenderStep[]) => {
@@ -621,7 +626,7 @@ export default function BlueprintDetail() {
     if (group.length === 0) return null;
     const previewBulletRows = 2;
     const isExpandableSectionKey = (key: string) =>
-      key === 'practical rules' || key === 'deep dive' || key === 'open questions';
+      key === 'practical rules' || key === 'deep dive' || isCaveatsKey(key);
     const practicalRulesIndex = group.findIndex((step) => normalizeHeadingKey(step.title) === 'practical rules');
     const defaultTabIndex = practicalRulesIndex >= 0 ? practicalRulesIndex : 0;
     const defaultTabValue = `golden-section-${defaultTabIndex}`;

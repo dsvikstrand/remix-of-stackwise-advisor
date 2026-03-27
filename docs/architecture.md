@@ -59,6 +59,7 @@
     - `Save to Home` is intentionally non-blocking while optional post-steps finish; completed review updates are attached to the saved blueprint later.
     - the YT2BP response still uses a `draft` envelope, but the canonical blueprint content inside it is `draft.sectionsJson` with schema `blueprint_sections_v1`.
     - the default one-step prompt template is `docs/golden_blueprint/golden_bp_prompt_contract_one_step_v5.md`; it keeps the same schema, uses the existing `open_questions` field for a human-facing `Caveats` section, retunes `Takeaways` toward lighter plain-English skim value, and requires `Storyline` to stay `2-3` substantial paragraphs/slides.
+    - display/render surfaces now label that final section as `Caveats`, while runtime/storage keys stay `open_questions` and legacy `Open Questions` titles remain parse-compatible.
     - in `llm_native` mode, retry-driving quality gates now stay limited to blocking structure/shape misses; soft issues like `TAKEAWAYS_TOO_LONG` are still logged but do not cause regeneration by themselves.
     - `draft.steps`, `draft.summaryVariants`, and `draft.notes` are compatibility carryovers during the contract cutover and should not be treated as equal current-runtime blueprint shapes.
     - YouTube-source banners are thumbnail-first (`source_items.thumbnail_url` with deterministic `ytimg` fallback), not generated-banner-first.
@@ -331,7 +332,7 @@ Current production behavior note:
   - `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
   - `docs/exec-plans/completed/mvp-readiness-review-followup.md`
   - `docs/exec-plans/completed/mvp-launch-hardening-phases.md`
-  - paused strategy reference: `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
+  - historical strategy reference: `docs/exec-plans/completed/bleuv1-mvp-hardening-playbook.md`
 - Eval policy classes used today:
   - `llm_blueprint_quality_v0`
   - `llm_content_safety_grading_v0`

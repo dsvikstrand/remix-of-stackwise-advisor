@@ -8,8 +8,8 @@ Current status: paused reference track. Manual iterative delivery is the active 
 - This pack is legacy reference-only and does not define active runtime execution.
 - Completed MVP readiness implementation tracker: `docs/exec-plans/completed/mvp-readiness-review-followup.md`.
 - Paused strategy references:
-  - `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`
-  - `docs/exec-plans/active/on-pause/project-bleuv1-mvp-foundation.md`
+  - `docs/exec-plans/completed/bleuv1-mvp-hardening-playbook.md`
+  - `docs/exec-plans/completed/project-bleuv1-mvp-foundation.md`
 
 ## Intent
 - Phase 1 (foundation): decision-locked descriptive contracts.

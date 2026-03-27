@@ -64,7 +64,8 @@ function isAllowedSectionKey(key: string) {
     || key === 'mechanism deep dive'
     || key === 'practical rules'
     || key === 'decision rules'
-    || key === 'open questions';
+    || key === 'open questions'
+    || key === 'caveats';
 }
 
 function toBulletStrings(items: StoredStepItem[] | null | undefined) {
@@ -93,7 +94,7 @@ export function buildBlueprintSectionsV1FromStoredSteps(input: {
   const storyline = byKey.get('bleup') || byKey.get('storyline');
   const deepDive = byKey.get('deep dive');
   const practicalRules = byKey.get('practical rules');
-  const openQuestions = byKey.get('open questions');
+  const openQuestions = byKey.get('open questions') || byKey.get('caveats');
 
   if (!summary || !takeaways || !storyline || !deepDive || !practicalRules || !openQuestions) {
     return null;
@@ -269,7 +270,7 @@ export function buildLegacyDraftStepsFromBlueprintSections(
       timestamp: null,
     },
     {
-      name: 'Open Questions',
+      name: 'Caveats',
       notes: formatBulletsAsNotes(input.open_questions?.bullets || []),
       timestamp: null,
     },

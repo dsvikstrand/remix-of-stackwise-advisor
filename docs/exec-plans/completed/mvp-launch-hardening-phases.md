@@ -13,7 +13,7 @@ a1) [todo] Execute launch hardening in a phase-by-phase sequence that can be che
 
 ## Scope
 b1) [have] This plan covers launch hardening for queue throughput, worker architecture, dependency resilience, launch controls, and backlog UX.
-b2) [have] This plan does not replace the broader strategic notes in `docs/exec-plans/active/on-pause/bleuv1-mvp-hardening-playbook.md`.
+b2) [have] This plan does not replace the broader strategic notes in `docs/exec-plans/completed/bleuv1-mvp-hardening-playbook.md`.
 b3) [have] This plan is a practical execution tracker for the queue/reliability work discussed after the MVP feature pass.
 
 ## Launch Gate Control

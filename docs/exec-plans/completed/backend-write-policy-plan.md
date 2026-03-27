@@ -225,10 +225,10 @@ i5) [todo] The plan leaves the current product/runtime contract intact.
 
 ## Related Plans
 j1) [have] Backend aggregation is paused and remains valid follow-up context:
-- [backend-aggregation-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/active/on-pause/backend-aggregation-plan.md)
+- [backend-aggregation-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/completed/backend-aggregation-plan.md)
 
 j2) [have] The broader egress history remains paused:
-- [supabase-egress-reduction-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/active/on-pause/supabase-egress-reduction-plan.md)
+- [supabase-egress-reduction-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/completed/supabase-egress-reduction-plan.md)
 
 j3) [have] TanStack Query tuning is completed:
 - [tanstack-query-tuning-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/completed/tanstack-query-tuning-plan.md)

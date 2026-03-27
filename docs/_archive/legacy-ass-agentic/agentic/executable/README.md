@@ -7,6 +7,9 @@ This pack converts foundation docs into machine-actionable contracts for agent r
 - Active runtime/docs governance lives in:
   - `docs/exec-plans/completed/mvp-readiness-review-followup.md`
   - `docs/exec-plans/index.md`
+- Historical `bleuV1` strategy references cited by the archived agentic docs now live in:
+  - `docs/exec-plans/completed/bleuv1-mvp-hardening-playbook.md`
+  - `docs/exec-plans/completed/project-bleuv1-mvp-foundation.md`
 
 ## Scope
 - Define deterministic planning and execution contracts.

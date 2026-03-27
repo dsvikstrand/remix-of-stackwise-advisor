@@ -3,7 +3,7 @@
 Status: `on-pause`
 
 Pause note
-a9) [have] Root-active plan cleanup on `2026-03-15` moved this umbrella to `active/on-pause/`.
+a9) [have] Root-active plan cleanup on `2026-03-15` paused this umbrella, and later registry cleanup archived it under `docs/exec-plans/completed/`.
 a10) [have] The remaining Android/update-prompt rollout proofs now live in `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`.
 
 ## Current Status
@@ -68,7 +68,7 @@ d4) [todo] Phase 4: Release hardening, docs, and rollout
 d5) [todo] Phase 5: Deferred post-MVP PWA enhancements
 - treat Phase 5 as roadmap structure only, not one immediate implementation wave
 - do not start any Phase 5 capability without a dedicated child plan
-- detailed deferred mini-plan: `docs/exec-plans/active/on-pause/bleup-pwa-phase5-deferred-tracks.md`
+- detailed deferred mini-plan: `docs/exec-plans/completed/bleup-pwa-phase5-deferred-tracks.md`
 - `5A` Push and re-engagement
   - [have] implementation track now exists behind feature/env gates only; not yet rolled out
   - candidate/live-gated scope: installed-PWA web push, notification permission UX/cooldowns, routing from notification tap into existing Bleup surfaces

@@ -378,7 +378,7 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
       'Bleup',
       'Deep Dive',
       'Practical Rules',
-      'Open Questions',
+      'Caveats',
     ]);
     expect(result.draft.summaryVariants.default).toBe('summary');
     expect(result.draft.summaryVariants.eli5).toBe(result.draft.summaryVariants.default);

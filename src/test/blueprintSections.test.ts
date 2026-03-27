@@ -79,7 +79,7 @@ describe('blueprintSections', () => {
       'Bleup',
       'Deep Dive',
       'Practical Rules',
-      'Open Questions',
+      'Caveats',
     ]);
     expect(renderBlocks[0]?.description).toBe(canonicalLegacyRenderBlocks[0]?.description);
     expect(renderBlocks[1]?.items.map((item) => item.name)).toEqual(
@@ -98,6 +98,18 @@ describe('blueprintSections', () => {
 
     expect(sections).not.toBeNull();
     expect(sections?.storyline.text).toContain('Latent predictive architectures');
+  });
+
+  it('accepts Caveats as a valid input alias for the open_questions slot', () => {
+    const sections = buildBlueprintSectionsV1FromRenderSteps({
+      steps: canonicalLegacyRenderBlocks.map((block) =>
+        block.title === 'Open Questions' ? { ...block, title: 'Caveats' } : block,
+      ),
+      tags: ['systems'],
+    });
+
+    expect(sections).not.toBeNull();
+    expect(sections?.open_questions.bullets).toEqual(['How should curvature magnitude be selected per domain?']);
   });
 
   it('returns null when a required canonical section is missing', () => {
@@ -132,7 +144,7 @@ describe('blueprintSections', () => {
       'Bleup',
       'Deep Dive',
       'Practical Rules',
-      'Open Questions',
+      'Caveats',
     ]);
   });
 

@@ -2245,6 +2245,7 @@ function mapDraftStepsForBlueprint(steps: Array<{ name: string; notes: string }>
     'decision rules',
     'practical rules',
     'open questions',
+    'caveats',
     'bottom line',
     'playbook steps',
     'fast fallbacks',
@@ -8245,7 +8246,7 @@ function canonicalSectionName(value: string) {
   if (key === 'takeaways' || key === 'lightning takeaways') return 'takeaways';
   if (key === 'deep dive' || key === 'mechanism deep dive') return 'deep_dive';
   if (key === 'practical rules' || key === 'decision rules') return 'practical_rules';
-  if (key === 'open questions') return 'open_questions';
+  if (key === 'open questions' || key === 'caveats') return 'open_questions';
   return key;
 }
 

@@ -3,7 +3,7 @@
 Status: `on-pause`
 
 ## Pause Note
-a0) [have] This plan is intentionally stored as an on-pause reference plan because the repo already has one active implementation root in [backend-write-policy-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/active/backend-write-policy-plan.md).
+a0) [have] This plan is intentionally retained as a historical reference plan because the narrower write-policy track now lives in [backend-write-policy-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/completed/backend-write-policy-plan.md).
 
 a1) [have] This plan should be resumed only as a narrow debloat pass.
 
