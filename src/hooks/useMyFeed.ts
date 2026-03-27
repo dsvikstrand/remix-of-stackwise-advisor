@@ -9,17 +9,24 @@ export function useMyFeed(options?: { enabled?: boolean }) {
   const query = useQuery({
     queryKey: ['my-feed-items', user?.id],
     enabled: !!user && (options?.enabled ?? true),
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
     refetchOnWindowFocus: false,
-    refetchOnReconnect: true,
+    refetchOnReconnect: false,
     queryFn: async () => {
-      if (!user) return [] as MyFeedItemView[];
+      if (!user) {
+        return {
+          items: [] as MyFeedItemView[],
+          staleFallback: false,
+          staleReason: null,
+          source: 'cache' as const,
+        };
+      }
       return listMyFeedItems(user.id);
     },
   });
 
   const grouped = useMemo(() => {
-    const items = query.data || [];
+    const items = query.data?.items || [];
     return {
       needsAction: items.filter((item) => !item.candidate),
       pendingReview: items.filter((item) => item.state === 'candidate_pending_manual_review'),
@@ -31,6 +38,9 @@ export function useMyFeed(options?: { enabled?: boolean }) {
 
   return {
     ...query,
+    items: query.data?.items || [],
+    isDegraded: Boolean(query.data?.staleFallback),
+    degradedMessage: query.data?.staleReason || null,
     grouped,
   };
 }

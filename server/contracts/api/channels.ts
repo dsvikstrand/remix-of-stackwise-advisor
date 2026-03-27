@@ -7,6 +7,7 @@ type DbClient = ReturnType<typeof createClient>;
 export type ChannelsRouteDeps = {
   rejectLegacyManualFlowIfDisabled: (res: express.Response) => boolean;
   getAuthedSupabaseClient: (authToken: string) => DbClient | null;
+  getServiceSupabaseClient: () => DbClient | null;
   evaluateCandidateForChannel: (input: {
     title: string;
     llmReview: string | null;

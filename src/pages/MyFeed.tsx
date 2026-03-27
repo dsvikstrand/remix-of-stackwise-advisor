@@ -12,7 +12,16 @@ import { MyFeedTimeline } from '@/components/feed/MyFeedTimeline';
 
 export default function MyFeed() {
   const { user } = useAuth();
-  const { data: items, isLoading } = useMyFeed();
+  const {
+    items,
+    isLoading,
+    isError,
+    error,
+    isDegraded,
+    degradedMessage,
+    refetch,
+    isFetching,
+  } = useMyFeed();
   const autoChannelPipelineEnabled = config.features.autoChannelPipelineV1;
 
   const pendingCount = useMemo(
@@ -66,15 +75,49 @@ export default function MyFeed() {
             </CardContent>
           </Card>
         ) : (
-          <MyFeedTimeline
-            items={items}
-            isLoading={isLoading}
-            isOwnerView={true}
-            showUnlockActivityPanel={false}
-            emptyMessage="No pulled content yet. Start with a YouTube URL."
-            emptyActionHref="/youtube"
-            emptyActionLabel="Pull from YouTube"
-          />
+          <>
+            {isDegraded && (
+              <Card className="border-border/40">
+                <CardContent className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold">Showing saved feed snapshot</p>
+                    <p className="text-xs text-muted-foreground">
+                      {degradedMessage || 'The live backend feed is temporarily unavailable.'}
+                    </p>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => refetch()} disabled={isFetching}>
+                    {isFetching ? 'Retrying...' : 'Retry'}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {isError && !items.length ? (
+              <Card className="border-border/40">
+                <CardContent className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold">My Feed is temporarily unavailable</p>
+                    <p className="text-xs text-muted-foreground">
+                      {error instanceof Error ? error.message : 'Please retry in a moment.'}
+                    </p>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => refetch()} disabled={isFetching}>
+                    {isFetching ? 'Retrying...' : 'Retry'}
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <MyFeedTimeline
+                items={items}
+                isLoading={isLoading}
+                isOwnerView={true}
+                showUnlockActivityPanel={false}
+                emptyMessage="No pulled content yet. Start with a YouTube URL."
+                emptyActionHref="/youtube"
+                emptyActionLabel="Pull from YouTube"
+              />
+            )}
+          </>
         )}
         <AppFooter />
       </PageMain>

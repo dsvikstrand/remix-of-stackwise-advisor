@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { config } from '@/config/runtime';
 import { buildFeedSummary } from '@/lib/feedPreview';
 
 const CHANNEL_FEED_BLUEPRINT_SCAN_LIMIT = 180;
@@ -23,126 +23,186 @@ interface UseChannelFeedOptions {
   pageSize?: number;
 }
 
-export function useChannelFeed({ channelSlug, tab, pageSize = 20 }: UseChannelFeedOptions) {
-  const [visibleCount, setVisibleCount] = useState(pageSize);
+type ChannelFeedPage = {
+  items: ChannelFeedPost[];
+  next_offset: number | null;
+  total_count: number | null;
+};
 
-  useEffect(() => {
-    setVisibleCount(pageSize);
-  }, [channelSlug, tab, pageSize]);
+function getChannelFeedApiBase() {
+  if (!config.agenticBackendUrl) return null;
+  return `${config.agenticBackendUrl.replace(/\/$/, '')}/api`;
+}
 
-  const baseQuery = useQuery({
-    queryKey: ['channel-feed-base', channelSlug],
-    staleTime: 5 * 60_000,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-    queryFn: async (): Promise<ChannelFeedPost[]> => {
-      const { data: blueprints, error } = await supabase
-        .from('blueprints')
-        .select('id, title, preview_summary, likes_count, created_at')
-        .eq('is_public', true)
-        .order('created_at', { ascending: false })
-        .limit(CHANNEL_FEED_BLUEPRINT_SCAN_LIMIT);
+async function listChannelFeedFallback(input: {
+  channelSlug: string;
+  tab: ChannelFeedTab;
+  limit: number;
+  offset: number;
+}): Promise<ChannelFeedPage> {
+  const { channelSlug, tab, limit, offset } = input;
+  const { data: blueprints, error } = await supabase
+    .from('blueprints')
+    .select('id, title, preview_summary, likes_count, created_at')
+    .eq('is_public', true)
+    .order('created_at', { ascending: false })
+    .limit(CHANNEL_FEED_BLUEPRINT_SCAN_LIMIT);
 
-      if (error) throw error;
-      if (!blueprints || blueprints.length === 0) return [];
+  if (error) throw error;
+  if (!blueprints || blueprints.length === 0) {
+    return { items: [], next_offset: null, total_count: 0 };
+  }
 
-      const blueprintIds = blueprints.map((row) => row.id);
-      const { data: feedItems, error: feedItemsError } = await supabase
-        .from('user_feed_items')
-        .select('id, blueprint_id, created_at')
-        .in('blueprint_id', blueprintIds);
+  const blueprintIds = blueprints.map((row) => row.id);
+  const { data: feedItems, error: feedItemsError } = await supabase
+    .from('user_feed_items')
+    .select('id, blueprint_id')
+    .in('blueprint_id', blueprintIds);
+  if (feedItemsError) throw feedItemsError;
 
-      if (feedItemsError) throw feedItemsError;
+  const blueprintIdByFeedItemId = new Map((feedItems || []).map((row) => [row.id, row.blueprint_id]));
+  const feedItemIds = (feedItems || []).map((row) => row.id);
+  const { data: candidateRows, error: candidateError } = feedItemIds.length > 0
+    ? await supabase
+        .from('channel_candidates')
+        .select('user_feed_item_id')
+        .eq('status', 'published')
+        .eq('channel_slug', channelSlug)
+        .in('user_feed_item_id', feedItemIds)
+    : { data: [], error: null };
+  if (candidateError) throw candidateError;
 
-      const blueprintIdByFeedItemId = new Map((feedItems || []).map((row) => [row.id, row.blueprint_id]));
-      const feedItemIds = (feedItems || []).map((row) => row.id);
-      const { data: candidateRows, error: candidateError } = feedItemIds.length > 0
-        ? await supabase
-            .from('channel_candidates')
-            .select('user_feed_item_id')
-            .eq('status', 'published')
-            .eq('channel_slug', channelSlug)
-            .in('user_feed_item_id', feedItemIds)
-        : { data: [], error: null };
+  const matchingBlueprintIds = [...new Set(
+    (candidateRows || [])
+      .map((row) => blueprintIdByFeedItemId.get(row.user_feed_item_id))
+      .filter((value): value is string => Boolean(value)),
+  )];
+  if (matchingBlueprintIds.length === 0) {
+    return { items: [], next_offset: null, total_count: 0 };
+  }
 
-      if (candidateError) throw candidateError;
+  const matchingBlueprintIdSet = new Set(matchingBlueprintIds);
+  const pageBaseRows = blueprints
+    .filter((row) => matchingBlueprintIdSet.has(row.id))
+    .map((row) => ({
+      id: row.id,
+      title: row.title,
+      previewSummary: buildFeedSummary({
+        primary: row.preview_summary,
+        fallback: 'Open blueprint to view full details.',
+        maxChars: 220,
+      }),
+      likesCount: Number(row.likes_count || 0),
+      createdAt: row.created_at,
+      primaryChannelSlug: channelSlug,
+    }));
 
-      const matchingBlueprintIds = [...new Set(
-        (candidateRows || [])
-          .map((row) => blueprintIdByFeedItemId.get(row.user_feed_item_id))
-          .filter((value): value is string => Boolean(value)),
-      )];
-      if (matchingBlueprintIds.length === 0) return [];
+  if (tab === 'top') {
+    pageBaseRows.sort((a, b) => {
+      if (b.likesCount !== a.likesCount) return b.likesCount - a.likesCount;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  } else {
+    pageBaseRows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
 
-      const { data: tagRows, error: tagError } = await supabase
+  const pagedBaseRows = pageBaseRows.slice(offset, offset + limit);
+  const pageBlueprintIds = pagedBaseRows.map((row) => row.id);
+  const { data: tagRows, error: tagError } = pageBlueprintIds.length > 0
+    ? await supabase
         .from('blueprint_tags')
         .select('blueprint_id, tags(slug)')
-        .in('blueprint_id', matchingBlueprintIds);
+        .in('blueprint_id', pageBlueprintIds)
+    : { data: [], error: null };
+  if (tagError) throw tagError;
 
-      if (tagError) throw tagError;
-
-      const tagsByBlueprintId = new Map<string, string[]>();
-      (tagRows || []).forEach((row) => {
-        const list = tagsByBlueprintId.get(row.blueprint_id) || [];
-        if (Array.isArray(row.tags)) {
-          row.tags.forEach((tag) => {
-            if (tag && typeof tag === 'object' && 'slug' in tag) {
-              list.push(String((tag as { slug: string }).slug));
-            }
-          });
-        } else if (row.tags && typeof row.tags === 'object' && 'slug' in row.tags) {
-          list.push(String((row.tags as { slug: string }).slug));
+  const tagsByBlueprintId = new Map<string, string[]>();
+  (tagRows || []).forEach((row) => {
+    const list = tagsByBlueprintId.get(row.blueprint_id) || [];
+    if (Array.isArray(row.tags)) {
+      row.tags.forEach((tag) => {
+        if (tag && typeof tag === 'object' && 'slug' in tag) {
+          list.push(String((tag as { slug: string }).slug));
         }
-        tagsByBlueprintId.set(row.blueprint_id, list);
       });
-
-      const matchingBlueprintIdSet = new Set(matchingBlueprintIds);
-
-      const hydrated = blueprints.filter((row) => matchingBlueprintIdSet.has(row.id)).map((row) => {
-        const tags = tagsByBlueprintId.get(row.id) || [];
-        return {
-          id: row.id,
-          title: row.title,
-          previewSummary: buildFeedSummary({
-            primary: row.preview_summary,
-            fallback: 'Open blueprint to view full details.',
-            maxChars: 220,
-          }),
-          likesCount: row.likes_count,
-          createdAt: row.created_at,
-          tags,
-          primaryChannelSlug: channelSlug,
-        };
-      });
-
-      return hydrated;
-    },
+    } else if (row.tags && typeof row.tags === 'object' && 'slug' in row.tags) {
+      list.push(String((row.tags as { slug: string }).slug));
+    }
+    tagsByBlueprintId.set(row.blueprint_id, list);
   });
 
-  const sorted = useMemo(() => {
-    const rows = [...(baseQuery.data || [])];
-    if (tab === 'top') {
-      rows.sort((a, b) => {
-        if (b.likesCount !== a.likesCount) return b.likesCount - a.likesCount;
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      });
-      return rows;
-    }
+  const items = pagedBaseRows.map((row) => ({
+    ...row,
+    tags: tagsByBlueprintId.get(row.id) || [],
+  }));
+  const resolvedCount = offset + items.length;
+  return {
+    items,
+    next_offset: pageBaseRows.length > resolvedCount ? resolvedCount : null,
+    total_count: pageBaseRows.length,
+  };
+}
 
-    rows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    return rows;
-  }, [baseQuery.data, tab]);
+async function fetchChannelFeedPage(input: {
+  channelSlug: string;
+  tab: ChannelFeedTab;
+  limit: number;
+  offset: number;
+}): Promise<ChannelFeedPage> {
+  const base = getChannelFeedApiBase();
+  if (!base) {
+    return listChannelFeedFallback(input);
+  }
 
-  const visiblePosts = sorted.slice(0, visibleCount);
-  const hasMore = visibleCount < sorted.length;
+  const search = new URLSearchParams({
+    tab: input.tab,
+    limit: String(input.limit),
+    offset: String(input.offset),
+  });
+  const response = await fetch(`${base}/channels/${encodeURIComponent(input.channelSlug)}/feed?${search.toString()}`, {
+    method: 'GET',
+  });
+  const json = await response.json().catch(() => null) as {
+    ok?: boolean;
+    message?: string;
+    error_code?: string | null;
+    data?: ChannelFeedPage | null;
+  } | null;
+  if (!response.ok || !json?.ok || !json.data) {
+    throw new Error(json?.message || `Channel feed request failed (${response.status})`);
+  }
+  return json.data;
+}
+
+export function useChannelFeed({ channelSlug, tab, pageSize = 20 }: UseChannelFeedOptions) {
+  const query = useInfiniteQuery({
+    queryKey: ['channel-feed', channelSlug, tab, pageSize],
+    enabled: Boolean(channelSlug),
+    staleTime: 10 * 60_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) => fetchChannelFeedPage({
+      channelSlug,
+      tab,
+      limit: pageSize,
+      offset: Number(pageParam || 0),
+    }),
+    getNextPageParam: (lastPage) => lastPage.next_offset ?? undefined,
+  });
+
+  const posts = query.data?.pages.flatMap((page) => page.items) || [];
+  const totalCount = query.data?.pages[query.data.pages.length - 1]?.total_count ?? query.data?.pages[0]?.total_count ?? posts.length;
 
   return {
-    posts: visiblePosts,
-    totalCount: sorted.length,
-    hasMore,
-    loadMore: () => setVisibleCount((current) => Math.min(current + pageSize, sorted.length)),
-    isLoading: baseQuery.isLoading,
-    isError: baseQuery.isError,
-    error: baseQuery.error,
+    posts,
+    totalCount,
+    hasMore: Boolean(query.hasNextPage),
+    loadMore: () => query.fetchNextPage(),
+    isLoading: query.isLoading,
+    isLoadingMore: query.isFetchingNextPage,
+    isError: query.isError,
+    error: query.error,
   };
 }

@@ -185,6 +185,7 @@ export default function ChannelPage() {
     hasMore,
     loadMore,
     isLoading,
+    isLoadingMore,
     isError,
   } = useChannelFeed({ channelSlug: channel.slug, tab, pageSize: 20 });
 
@@ -318,13 +319,17 @@ export default function ChannelPage() {
           {!isLoading && !isError && posts.length > 0 && (
             <div className="flex flex-col items-center gap-2 pt-2">
               {hasMore ? (
-                <Button variant="outline" size="sm" onClick={loadMore}>
-                  Load more
+                <Button variant="outline" size="sm" onClick={loadMore} disabled={isLoadingMore}>
+                  {isLoadingMore ? 'Loading...' : 'Load more'}
                 </Button>
               ) : (
                 <p className="text-xs text-muted-foreground">No more posts</p>
               )}
-              <p className="text-xs text-muted-foreground">Showing {posts.length} of {totalCount}</p>
+              <p className="text-xs text-muted-foreground">
+                {typeof totalCount === 'number'
+                  ? `Showing ${posts.length} of ${totalCount}`
+                  : `Showing ${posts.length}`}
+              </p>
             </div>
           )}
         </section>

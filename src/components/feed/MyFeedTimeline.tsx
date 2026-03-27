@@ -302,8 +302,7 @@ export function MyFeedTimeline({
     onSuccess: () => {
       invalidateFeedQueries();
       queryClient.invalidateQueries({ queryKey: ['wall-blueprints'] });
-      queryClient.invalidateQueries({ queryKey: ['channel-feed-base'] });
-      queryClient.invalidateQueries({ queryKey: ['channel-feed-comments'] });
+      queryClient.invalidateQueries({ queryKey: ['channel-feed'] });
       setSubmissionDialogItemId(null);
       toast({ title: 'Published', description: 'Item is now live in channel feed.' });
     },

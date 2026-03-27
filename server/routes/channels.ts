@@ -1,8 +1,183 @@
 import type express from 'express';
 import type { ChannelsRouteDeps } from '../contracts/api/channels';
 import { countBlueprintSections } from '../services/blueprintSections';
+import { buildFeedSummary } from '../../src/lib/feedPreview';
+
+type ChannelFeedTab = 'top' | 'recent';
+
+function clampInt(value: unknown, fallback: number, min: number, max: number) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(min, Math.min(max, Math.floor(numeric)));
+}
+
+function normalizeChannelFeedTab(value: unknown): ChannelFeedTab {
+  return String(value || '').trim().toLowerCase() === 'recent' ? 'recent' : 'top';
+}
 
 export function registerChannelCandidateRoutes(app: express.Express, deps: ChannelsRouteDeps) {
+  app.get('/api/channels/:channelSlug/feed', async (req, res) => {
+    const channelSlug = String(req.params.channelSlug || '').trim().toLowerCase();
+    if (!channelSlug) {
+      return res.status(400).json({
+        ok: false,
+        error_code: 'INVALID_CHANNEL',
+        message: 'Channel slug required.',
+        data: null,
+      });
+    }
+
+    const db = deps.getServiceSupabaseClient();
+    if (!db) {
+      return res.status(500).json({
+        ok: false,
+        error_code: 'CONFIG_ERROR',
+        message: 'Service role client is not configured',
+        data: null,
+      });
+    }
+
+    const tab = normalizeChannelFeedTab(req.query.tab);
+    const limit = clampInt(req.query.limit, 20, 1, 40);
+    const offset = clampInt(req.query.offset, 0, 0, 1000);
+    const scanLimit = Math.max(120, Math.min(480, offset + limit * 8));
+
+    try {
+      const { data: candidateRows, error: candidateError } = await db
+        .from('channel_candidates')
+        .select('user_feed_item_id, created_at')
+        .eq('status', 'published')
+        .eq('channel_slug', channelSlug)
+        .order('created_at', { ascending: false })
+        .limit(scanLimit);
+      if (candidateError) throw candidateError;
+      if (!candidateRows || candidateRows.length === 0) {
+        return res.json({
+          ok: true,
+          error_code: null,
+          message: 'channel feed',
+          data: {
+            items: [],
+            next_offset: null,
+            total_count: 0,
+          },
+        });
+      }
+
+      const feedItemIds = candidateRows.map((row) => row.user_feed_item_id).filter(Boolean);
+      const { data: feedItems, error: feedItemsError } = await db
+        .from('user_feed_items')
+        .select('id, blueprint_id')
+        .in('id', feedItemIds);
+      if (feedItemsError) throw feedItemsError;
+
+      const blueprintIdByFeedItemId = new Map<string, string>(
+        (feedItems || [])
+          .map((row: any) => [String(row.id || '').trim(), String(row.blueprint_id || '').trim()] as const)
+          .filter((row) => row[0] && row[1]),
+      );
+      const blueprintIds = [...new Set(
+        feedItemIds
+          .map((feedItemId) => blueprintIdByFeedItemId.get(String(feedItemId || '').trim()) || null)
+          .filter((value): value is string => Boolean(value)),
+      )];
+      if (blueprintIds.length === 0) {
+        return res.json({
+          ok: true,
+          error_code: null,
+          message: 'channel feed',
+          data: {
+            items: [],
+            next_offset: null,
+            total_count: 0,
+          },
+        });
+      }
+
+      const { data: blueprints, error: blueprintsError } = await db
+        .from('blueprints')
+        .select('id, title, preview_summary, likes_count, created_at')
+        .eq('is_public', true)
+        .in('id', blueprintIds);
+      if (blueprintsError) throw blueprintsError;
+
+      const baseRows = (blueprints || []).map((row: any) => ({
+        id: String(row.id || '').trim(),
+        title: String(row.title || '').trim(),
+        previewSummary: buildFeedSummary({
+          primary: row.preview_summary,
+          fallback: 'Open blueprint to view full details.',
+          maxChars: 220,
+        }),
+        likesCount: Number(row.likes_count || 0),
+        createdAt: String(row.created_at || ''),
+        primaryChannelSlug: channelSlug,
+      })).filter((row) => row.id);
+
+      if (tab === 'top') {
+        baseRows.sort((a, b) => {
+          if (b.likesCount !== a.likesCount) return b.likesCount - a.likesCount;
+          return Date.parse(b.createdAt) - Date.parse(a.createdAt);
+        });
+      } else {
+        baseRows.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+      }
+
+      const pagedBaseRows = baseRows.slice(offset, offset + limit);
+      const pageBlueprintIds = pagedBaseRows.map((row) => row.id);
+      const { data: tagRows, error: tagError } = pageBlueprintIds.length > 0
+        ? await db
+            .from('blueprint_tags')
+            .select('blueprint_id, tags(slug)')
+            .in('blueprint_id', pageBlueprintIds)
+        : { data: [], error: null };
+      if (tagError) throw tagError;
+
+      const tagsByBlueprintId = new Map<string, string[]>();
+      (tagRows || []).forEach((row: any) => {
+        const blueprintId = String(row.blueprint_id || '').trim();
+        if (!blueprintId) return;
+        const list = tagsByBlueprintId.get(blueprintId) || [];
+        if (Array.isArray(row.tags)) {
+          row.tags.forEach((tag: any) => {
+            if (tag && typeof tag === 'object' && 'slug' in tag) {
+              list.push(String(tag.slug || ''));
+            }
+          });
+        } else if (row.tags && typeof row.tags === 'object' && 'slug' in row.tags) {
+          list.push(String((row.tags as { slug?: string }).slug || ''));
+        }
+        tagsByBlueprintId.set(blueprintId, list.filter(Boolean));
+      });
+
+      const items = pagedBaseRows.map((row) => ({
+        ...row,
+        tags: tagsByBlueprintId.get(row.id) || [],
+      }));
+      const resolvedCount = offset + items.length;
+      const definitelyMore = baseRows.length > resolvedCount;
+      const maybeMoreBeyondScan = candidateRows.length === scanLimit && items.length > 0;
+
+      return res.json({
+        ok: true,
+        error_code: null,
+        message: 'channel feed',
+        data: {
+          items,
+          next_offset: definitelyMore || maybeMoreBeyondScan ? resolvedCount : null,
+          total_count: definitelyMore ? baseRows.length : (maybeMoreBeyondScan ? null : resolvedCount),
+        },
+      });
+    } catch (error) {
+      return res.status(400).json({
+        ok: false,
+        error_code: 'READ_FAILED',
+        message: error instanceof Error ? error.message : 'Failed to load channel feed.',
+        data: null,
+      });
+    }
+  });
+
   app.post('/api/channel-candidates', async (req, res) => {
     if (deps.rejectLegacyManualFlowIfDisabled(res)) return;
 

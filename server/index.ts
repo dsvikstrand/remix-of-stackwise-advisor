@@ -8056,6 +8056,7 @@ registerFeedRoutes(app, {
 registerChannelCandidateRoutes(app, {
   rejectLegacyManualFlowIfDisabled,
   getAuthedSupabaseClient,
+  getServiceSupabaseClient,
   evaluateCandidateForChannel,
 });
 

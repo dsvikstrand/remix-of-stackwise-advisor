@@ -109,6 +109,17 @@ type ApiEnvelope<T> = {
   meta?: Record<string, unknown>;
 };
 
+const MY_FEED_CACHE_KEY_PREFIX = 'bleup:my-feed-cache:v1:';
+const MY_FEED_CACHE_MAX_AGE_MS = 30 * 60_000;
+const myFeedMemoryCache = new Map<string, { savedAtMs: number; items: MyFeedItemView[] }>();
+
+export type MyFeedListResult = {
+  items: MyFeedItemView[];
+  staleFallback: boolean;
+  staleReason: string | null;
+  source: 'api' | 'cache' | 'supabase_local';
+};
+
 export class ApiRequestError extends Error {
   status: number;
 
@@ -163,6 +174,49 @@ export function shouldFallbackToSupabase(error: unknown) {
   return error.status === 404 || error.status >= 500;
 }
 
+function getMyFeedCacheKey(userId: string) {
+  return `${MY_FEED_CACHE_KEY_PREFIX}${userId}`;
+}
+
+function readCachedMyFeedItems(userId: string) {
+  const nowMs = Date.now();
+  const cached = myFeedMemoryCache.get(userId);
+  if (cached && nowMs - cached.savedAtMs <= MY_FEED_CACHE_MAX_AGE_MS) {
+    return cached.items;
+  }
+
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(getMyFeedCacheKey(userId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { savedAtMs?: unknown; items?: unknown };
+    const savedAtMs = Number(parsed.savedAtMs || 0);
+    const items = Array.isArray(parsed.items) ? (parsed.items as MyFeedItemView[]) : null;
+    if (!savedAtMs || !items || nowMs - savedAtMs > MY_FEED_CACHE_MAX_AGE_MS) {
+      window.localStorage.removeItem(getMyFeedCacheKey(userId));
+      return null;
+    }
+    myFeedMemoryCache.set(userId, { savedAtMs, items });
+    return items;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedMyFeedItems(userId: string, items: MyFeedItemView[]) {
+  const payload = {
+    savedAtMs: Date.now(),
+    items,
+  };
+  myFeedMemoryCache.set(userId, payload);
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(getMyFeedCacheKey(userId), JSON.stringify(payload));
+  } catch {
+    // Ignore storage errors and keep the in-memory cache only.
+  }
+}
+
 async function listMyFeedItemsFallback(userId: string) {
   return listMyFeedItemsFromDb({
     db: supabase as any,
@@ -170,19 +224,42 @@ async function listMyFeedItemsFallback(userId: string) {
   });
 }
 
-export async function listMyFeedItems(userId: string): Promise<MyFeedItemView[]> {
+export async function listMyFeedItems(userId: string): Promise<MyFeedListResult> {
   const apiBase = getApiBase();
   if (!apiBase) {
-    return listMyFeedItemsFallback(userId);
+    const items = await listMyFeedItemsFallback(userId);
+    writeCachedMyFeedItems(userId, items);
+    return {
+      items,
+      staleFallback: false,
+      staleReason: null,
+      source: 'supabase_local',
+    };
   }
   try {
     const response = await apiRequest<{ items: MyFeedItemView[] }>('/my-feed', {
       method: 'GET',
     });
-    return response.data.items || [];
+    const items = response.data.items || [];
+    writeCachedMyFeedItems(userId, items);
+    return {
+      items,
+      staleFallback: false,
+      staleReason: null,
+      source: 'api',
+    };
   } catch (error) {
     if (!shouldFallbackToSupabase(error)) throw error;
-    return listMyFeedItemsFallback(userId);
+    const cachedItems = readCachedMyFeedItems(userId);
+    if (cachedItems) {
+      return {
+        items: cachedItems,
+        staleFallback: true,
+        staleReason: 'Showing the last saved feed snapshot because the backend is temporarily unavailable.',
+        source: 'cache',
+      };
+    }
+    throw error;
   }
 }
 
