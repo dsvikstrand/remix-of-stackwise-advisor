@@ -99,6 +99,7 @@ const GENERIC_SECTION_LABELS = new Set([
   'tradeoffs',
   'decision rules',
   'practical rules',
+  'caveats',
   'open questions',
   'bottom line',
   'playbook steps',
@@ -909,18 +910,6 @@ export function evaluateGoldenQuality(input: {
     }
   }
 
-  const openQuestionBullets = sectionMap.get('Open Questions')?.looseBullets || [];
-  if (openQuestionBullets.length > 0) {
-    const nonQuestionCount = openQuestionBullets.filter((line) => !/\?\s*$/.test(line)).length;
-    if (nonQuestionCount > 0) {
-      issues.push({
-        code: 'OPEN_QUESTIONS_NOT_QUESTIONS',
-        section: 'Open Questions',
-        detail: `count=${nonQuestionCount}`,
-      });
-    }
-  }
-
   const uniqueKey = (issue: GoldenQualityGateIssue) => `${issue.code}::${issue.section || ''}::${issue.detail || ''}`;
   const deduped: GoldenQualityGateIssue[] = [];
   const seen = new Set<string>();
@@ -971,11 +960,6 @@ export function validateGoldenStructure(steps: YouTubeDraftStep[]): GoldenStruct
     }
   }
 
-  const openQuestionBullets = parseBulletLines(byName.get('Open Questions')?.notes || '');
-  if (openQuestionBullets.some((line) => !/\?\s*$/.test(line))) {
-    issues.push('OPEN_QUESTIONS_NOT_QUESTIONS');
-  }
-
   return {
     ok: issues.length === 0,
     issues,
@@ -1001,14 +985,6 @@ function normalizeBulletSection(
   return toBulletBlock(filled.slice(0, maxBullets));
 }
 
-function forceQuestionBullets(notes: string) {
-  const bullets = parseBulletLines(notes).map((line) => {
-    const trimmed = normalizeWhitespace(line).replace(/[.!\s]+$/, '');
-    return trimmed ? `${trimmed}?` : line;
-  });
-  return toBulletBlock(bullets);
-}
-
 function repairGoldenStructure(
   steps: YouTubeDraftStep[],
   input: {
@@ -1032,15 +1008,12 @@ function repairGoldenStructure(
   );
 
   const fixedDeep = ['Deep Dive', 'Practical Rules', 'Open Questions'].map((sectionName) => {
-    let normalized = normalizeBulletSection(
+    const normalized = normalizeBulletSection(
       byName.get(sectionName)?.notes || '',
       input.deepFallbackByName.get(sectionName) || '',
       MIN_SECTION_BULLETS,
       MAX_SECTION_BULLETS,
     );
-    if (sectionName === 'Open Questions') {
-      normalized = forceQuestionBullets(normalized);
-    }
     return {
       name: sectionName,
       notes: normalized,
@@ -1150,13 +1123,7 @@ function repairGoldenQuality(
       globalBulletSeen.add(key);
       merged.push(candidate);
     }
-    const sectionBullets = merged.slice(0, max).map((line) => {
-      if (sectionName !== 'Open Questions') return line;
-      const trimmed = normalizeWhitespace(line).replace(/[.!\s]+$/, '');
-      if (!trimmed) return line;
-      return `${trimmed}?`;
-    });
-    return toBulletBlock(sectionBullets);
+    return toBulletBlock(merged.slice(0, max));
   };
 
   const summaryFallback = normalizeWhitespace(input.description || input.title || '');

@@ -12,7 +12,6 @@ type LlmNativeDraft = {
 
 const SOFT_LLM_NATIVE_ISSUES = new Set([
   'TAKEAWAYS_TOO_LONG',
-  'OPEN_QUESTIONS_NOT_QUESTIONS',
 ]);
 
 function sentenceCount(value: string) {
@@ -113,10 +112,6 @@ export function evaluateLlmNativeGate(draft: LlmNativeDraft): LlmNativeGateResul
       if (sentences > 2) {
         issues.push(`${target.code}_BULLET_SENTENCE_LIMIT`);
         issueDetails.push(`${target.code}_BULLET_SENTENCE_LIMIT bullet=${index + 1} sentences=${sentences}`);
-      }
-      if (target.key === 'open_questions' && !/\?\s*$/.test(bullet)) {
-        issues.push('OPEN_QUESTIONS_NOT_QUESTIONS');
-        issueDetails.push(`OPEN_QUESTIONS_NOT_QUESTIONS bullet=${index + 1}`);
       }
     });
   }

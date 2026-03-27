@@ -47,7 +47,7 @@ Write the review now following the format rules.`;
 
 export const YOUTUBE_BLUEPRINT_SYSTEM_PROMPT = '';
 
-export const YOUTUBE_BLUEPRINT_PROMPT_TEMPLATE_PATH_DEFAULT = 'docs/golden_blueprint/golden_bp_prompt_contract_one_step_v4.md';
+export const YOUTUBE_BLUEPRINT_PROMPT_TEMPLATE_PATH_DEFAULT = 'docs/golden_blueprint/golden_bp_prompt_contract_one_step_v5.md';
 const YOUTUBE_PASS2_PROMPT_TEMPLATE_RELATIVE_PATH = 'docs/golden_blueprint/golden_bp_pass2_transform_prompt_v1.md';
 const YOUTUBE_POS_VIBE_ORACLE_DIR = '/home/ubuntu/remix-of-stackwise-advisor/docs/golden_blueprint/reddit/clean/pos';
 const YOUTUBE_REQUIRED_TEMPLATE_KEYS = [
@@ -329,6 +329,7 @@ export function buildYouTubeBlueprintRepairPrompt(input: YouTubeBlueprintRequest
     '- Return one strict valid JSON object only.',
     '- Do not include markdown fences or commentary.',
     '- Keep the exact top-level keys: schema_version, tags, summary, takeaways, storyline, deep_dive, practical_rules, open_questions.',
+    '- The final human section is Caveats, but it must still be returned in the open_questions field.',
     '- summary and storyline must be objects with exactly one text field.',
     '- takeaways, deep_dive, practical_rules, and open_questions must be objects with a bullets array.',
     '- Do not use alternate keys such as bleup.',
@@ -394,7 +395,8 @@ export function buildYouTubeQualityRetryInstructions(input: {
     'Fix all listed quality failures in one pass.',
     'Return strict JSON in the required format only.',
     'Do not use meta framing like "this video", "this blueprint", or "the transcript".',
-    'All required sections must be present and non-empty: Summary, Takeaways, Storyline, Deep Dive, Practical Rules, Open Questions.',
+    'All required sections must be present and non-empty: Summary, Takeaways, Storyline, Deep Dive, Practical Rules, Caveats.',
+    'Return Caveats content in the existing open_questions field. Do not rename the key.',
     'Make sure the JSON is correctly formatted before returning it.',
     'Do not add extra braces, missing commas, trailing commentary, malformed arrays/objects, or alternate field names.',
     'Return one complete JSON object only.',

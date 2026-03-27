@@ -308,9 +308,10 @@ async function runYouTubePipeline(input: {
   const normalizedGenerationTier: GenerationTier = 'tier';
   const structureRetryInstructionBlock = [
     'Structure fix required.',
-    'Return exactly 6 steps in this exact order and exact names:',
-    'Summary, Takeaways, Storyline, Deep Dive, Practical Rules, Open Questions.',
+    'Return exactly 6 sections in this exact order and exact names:',
+    'Summary, Takeaways, Storyline, Deep Dive, Practical Rules, Caveats.',
     'Return strict JSON only.',
+    'Return Caveats content in the existing open_questions field.',
   ].join('\n');
   const withStructureHint = (instructions?: string | null) => {
     const base = String(instructions || '').trim();
@@ -1536,7 +1537,8 @@ async function runYouTubePipeline(input: {
 
 Keep section bullets concise:
 - Takeaways: 3-4 bullets, total read should feel like 10-20 seconds, lead with the clearest plain-English interesting point, and stay light enough for a curious non-expert to skim quickly.
-- Takeaways/Deep Dive/Practical Rules/Open Questions: each bullet must be 1-2 sentences max.
+- Takeaways/Deep Dive/Practical Rules/Caveats: each bullet must be 1-2 sentences max.
+- Caveats: stay transcript-grounded, critique limitations or weak support when present, and return that section in the open_questions field.
 - Takeaways: if the bullets drift into dense analyst-style compression or become too long to skim, treat that as a quality miss and rewrite them more simply.
 - Storyline: 2-3 substantial paragraphs/slides. Avoid thin one-liners or fragmented slide stacks.`;
 

@@ -38,6 +38,8 @@ This file is the authoritative active/on-pause/deserted/completed registry for e
   Paused structural read-aggregation plan; retained as follow-up reference while the narrower Supabase write-policy pass is active.
 - `docs/exec-plans/active/on-pause/post-d3d0239-debloat-plan.md`
   Paused narrow debloat track for auditing the post-`d3d0239` reaction commits, with special scrutiny on the larger stale-state recovery hardening before starting provider-specific investigation.
+- `docs/exec-plans/active/on-pause/blueprint-prompt-v5-caveats-plan.md`
+  Paused follow-up plan for the low-risk `v5` YT2BP contract rollout: keep `blueprint_sections_v1` and `open_questions`, but shift the section semantics to human-facing `Caveats` with backend-first prompt/gate changes and optional later UI relabel.
 
 ## Deserted / Superseded
 - These files are preserved for history only. They must not be resumed without a new explicit replacement plan.
@@ -106,6 +108,7 @@ This file is the authoritative active/on-pause/deserted/completed registry for e
 - The broader Supabase egress program is on pause while the narrower backend write-policy pass is the current focused reduction track.
 - Backend aggregation is on pause while the write-policy pass addresses the strongest lower-risk backend churn candidates first.
 - Post-`d3d0239` debloat review is on pause as a narrow cleanup track to resume before any provider-specific work if the current stack still looks overgrown.
+- Blueprint prompt `v5` Caveats rollout is queued as an on-pause follow-up plan; it keeps the current schema while changing the last section’s semantics from `Open Questions` to `Caveats`.
 - TanStack Query tuning is completed.
 - Transcript-provider robustness work is completed, with later live-proof items carried into the proof tail.
 - `PTP` install docs and the broad cleanup umbrella are deserted/superseded, not active.

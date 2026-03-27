@@ -301,6 +301,27 @@ describe('goldenBlueprintFormat (backend)', () => {
     expect(gate.issues).toContain('BLEUP_PARAGRAPH_COUNT');
   });
 
+  it('allows caveat-style bullets in the legacy Open Questions slot', () => {
+    const caveatSteps = [
+      { name: 'Summary', notes: 'Valid summary paragraph with enough context to stand on its own.', timestamp: null },
+      { name: 'Takeaways', notes: '- One clear claim with context.\n- Second clear claim with context.\n- Third clear claim with context.', timestamp: null },
+      { name: 'Bleup', notes: 'First substantial paragraph with enough detail to stand alone.\n\nSecond substantial paragraph with enough detail to stand alone.', timestamp: null },
+      { name: 'Deep Dive', notes: '- Mechanism detail with receptor context.\n- Context and condition are explicit.\n- Practical implication is included.', timestamp: null },
+      { name: 'Practical Rules', notes: '- If condition A, do action B.\n- If condition C, adjust behavior D.\n- Avoid overgeneralizing across contexts.', timestamp: null },
+      { name: 'Open Questions', notes: '- The argument assumes ideal conditions and skips failure cases.\n- A few claims sound more certain than the evidence presented.\n- Important tradeoffs are implied but never really unpacked.', timestamp: null },
+    ];
+
+    const structureGate = validateGoldenStructure(caveatSteps);
+    const qualityGate = evaluateGoldenQuality({
+      steps: caveatSteps,
+      transcript: 'mechanism receptor membrane context condition practical implication baseline response adherence',
+    });
+
+    expect(structureGate.ok).toBe(true);
+    expect(structureGate.issues).not.toContain('OPEN_QUESTIONS_NOT_QUESTIONS');
+    expect(qualityGate.issues).not.toContain('OPEN_QUESTIONS_NOT_QUESTIONS');
+  });
+
   it('flags repetition and boilerplate patterns in quality gate', () => {
     const repeatedSteps = [
       { name: 'Summary', notes: 'Shared sentence one. Shared sentence two. Shared sentence one.', timestamp: null },

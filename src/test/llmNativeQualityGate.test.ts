@@ -59,26 +59,26 @@ describe('evaluateLlmNativeGate', () => {
     expect(result.issues).toContain('TAKEAWAYS_TOO_LONG');
   });
 
-  it('logs OPEN_QUESTIONS_NOT_QUESTIONS without failing the gate on its own', () => {
+  it('allows non-question caveat bullets in open_questions without failing the gate', () => {
     const draft = makeDraft();
     draft.sectionsJson.open_questions.bullets = [
-      'How reliable is the method under noisy contact',
-      'What breaks first when the environment changes',
-      'Where does the approach stop generalizing cleanly',
+      'The argument leans hard on ideal conditions without spending much time on failure cases.',
+      'A few conclusions sound more confident than the transcript’s evidence actually supports.',
+      'The creator skips tradeoffs that would matter if someone tried to generalize this approach broadly.',
     ];
 
     const result = evaluateLlmNativeGate(draft);
 
     expect(result.pass).toBe(true);
-    expect(result.issues).toContain('OPEN_QUESTIONS_NOT_QUESTIONS');
+    expect(result.issues).not.toContain('OPEN_QUESTIONS_NOT_QUESTIONS');
   });
 
-  it('still fails when a blocking structural issue is present alongside soft issues', () => {
+  it('still fails when a blocking structural issue is present alongside caveat-style bullets', () => {
     const draft = makeDraft();
     draft.sectionsJson.open_questions.bullets = [
-      'How reliable is the method under noisy contact',
-      'What breaks first when the environment changes',
-      'Where does the approach stop generalizing cleanly',
+      'The argument leans hard on ideal conditions without spending much time on failure cases.',
+      'A few conclusions sound more confident than the transcript’s evidence actually supports.',
+      'The creator skips tradeoffs that would matter if someone tried to generalize this approach broadly.',
     ];
     draft.sectionsJson.deep_dive.bullets = [];
 
@@ -86,6 +86,6 @@ describe('evaluateLlmNativeGate', () => {
 
     expect(result.pass).toBe(false);
     expect(result.issues).toContain('DEEP_DIVE_NO_BULLETS');
-    expect(result.issues).toContain('OPEN_QUESTIONS_NOT_QUESTIONS');
+    expect(result.issues).not.toContain('OPEN_QUESTIONS_NOT_QUESTIONS');
   });
 });

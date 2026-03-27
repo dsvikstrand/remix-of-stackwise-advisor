@@ -118,8 +118,8 @@ a89) [have] User-scoped ingestion status routes are tighter: `latest-mine` now r
 a90) [have] Frontend query freshness is now explicitly split by surface class: live and semi-live hooks declare their own cadence, while static-ish list/detail reads (`Wall`, `Search`, `Explore`, channel feed, blueprint detail/comments, profile tabs) use conservative stale windows and disable focus-triggered refetch by default.
 a91) [have] `GET /api/my-feed` remains available as a legacy compatibility auth read, but it is no longer the active primary surface contract now that `/my-feed` redirects to `/wall`.
 a92) [have] YouTube refresh bookkeeping now skips unchanged `source_items.metadata.view_count` writes and no-op `blueprint_youtube_refresh_state` upserts, reducing backend churn without changing manual/auto refresh UX.
-a92a) [have] The default one-step YT2BP prompt contract is now `docs/golden_blueprint/golden_bp_prompt_contract_one_step_v4.md`: it preserves the same `draft.sectionsJson` schema, but `Takeaways` now bias toward lighter plain-English skim value and `Storyline` must stay at `2-3` substantial paragraphs/slides rather than thin mini-slides.
-a92b) [have] In `llm_native` mode, YT2BP retries now stay focused on blocking structure/shape failures; `TAKEAWAYS_TOO_LONG` and `OPEN_QUESTIONS_NOT_QUESTIONS` are still logged for telemetry but no longer trigger regeneration on their own.
+a92a) [have] The default one-step YT2BP prompt contract is now `docs/golden_blueprint/golden_bp_prompt_contract_one_step_v5.md`: it preserves the same `draft.sectionsJson` schema, keeps `Takeaways` lighter/plain-English, keeps `Storyline` at `2-3` substantial paragraphs/slides, and uses the existing `open_questions` field for a human-facing `Caveats` section.
+a92b) [have] In `llm_native` mode, YT2BP retries now stay focused on blocking structure/shape failures; `TAKEAWAYS_TOO_LONG` is still logged for telemetry but no longer triggers regeneration on its own.
 
 ## Core Model
 b1) `Source Item`
@@ -198,7 +198,7 @@ c9) YT2BP blueprint contract:
 - the current canonical blueprint content produced by YT2BP is `draft.sectionsJson` with schema `blueprint_sections_v1`.
 - `draft.steps`, `draft.summaryVariants`, and `draft.notes` are compatibility-era carryovers during the cutover and are not the intended current-runtime shape for new gate/render/storage work.
 - the endpoint envelope may still carry those compatibility fields for v0 stability, but current product/runtime truth is sections-first.
-- the default one-step writing contract is `docs/golden_blueprint/golden_bp_prompt_contract_one_step_v4.md`, which keeps the same output schema while making `Takeaways` lighter and requiring more substantial `Storyline` paragraphs/slides.
+- the default one-step writing contract is `docs/golden_blueprint/golden_bp_prompt_contract_one_step_v5.md`, which keeps the same output schema while making `Takeaways` lighter, requiring more substantial `Storyline` paragraphs/slides, and using the existing `open_questions` field for a human-facing `Caveats` section.
 
 ## Product Principles
 p1) Source-first content supply (not creator-first posting).

@@ -52,8 +52,8 @@
   - channel visibility is handled by auto-channel pipeline when enabled.
   - `/youtube` runs core generation first and executes optional AI review asynchronously after core success.
   - `Save to Home` is non-blocking while optional review completes and attaches later.
-  - default one-step prompt contract is `docs/golden_blueprint/golden_bp_prompt_contract_one_step_v4.md`; it preserves the same `draft.sectionsJson` shape while making `Takeaways` more plain-English and keeping `Storyline` at `2-3` substantial paragraphs/slides.
-  - `llm_native` quality retries now stay focused on blocking structure/shape misses; `TAKEAWAYS_TOO_LONG` and `OPEN_QUESTIONS_NOT_QUESTIONS` still appear in logs/trace output, but they no longer trigger regeneration on their own.
+  - default one-step prompt contract is `docs/golden_blueprint/golden_bp_prompt_contract_one_step_v5.md`; it preserves the same `draft.sectionsJson` shape while making `Takeaways` more plain-English, keeping `Storyline` at `2-3` substantial paragraphs/slides, and using the existing `open_questions` field for a human-facing `Caveats` section.
+  - `llm_native` quality retries now stay focused on blocking structure/shape misses; `TAKEAWAYS_TOO_LONG` still appears in logs/trace output, but it no longer triggers regeneration on its own.
   - save-time blueprint persistence also writes `blueprints.preview_summary` as the cheap teaser field for Wall/Explore/Channel/Search cards.
   - YouTube-source banners are thumbnail-first (`source_items.thumbnail_url` or deterministic `ytimg` fallback).
   - banner prompts are visual-only by policy (no readable text/typography/logos/watermarks).

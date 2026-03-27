@@ -7,6 +7,7 @@ import {
   pruneTranscriptForGeneration,
   type TranscriptPruningConfig,
 } from '../../server/services/transcriptPruning';
+import { YOUTUBE_BLUEPRINT_PROMPT_TEMPLATE_PATH_DEFAULT } from '../../server/llm/prompts';
 
 type EventRow = {
   event: string;
@@ -274,6 +275,7 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
 
     expect(pass1Transcripts.length).toBeGreaterThan(0);
     expect(pass2Transcripts.length).toBe(0);
+    expect(YOUTUBE_BLUEPRINT_PROMPT_TEMPLATE_PATH_DEFAULT).toBe('docs/golden_blueprint/golden_bp_prompt_contract_one_step_v5.md');
     expect(pass1Transcripts[0].length).toBeLessThanOrEqual(4500);
     expect(result.meta.transcript_pruning?.applied).toBe(true);
     expect(result.meta.transcript_pruning?.pruned_chars).toBeLessThanOrEqual(4500);
@@ -485,12 +487,13 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
     expect(pass1Requests[2].qualityIssueCodes).toEqual(['SUMMARY_MISSING']);
     expect(pass1Requests[1].qualityIssueDetails).toEqual(['SUMMARY_MISSING section=summary']);
     expect(pass1Requests[2].qualityIssueDetails).toEqual(['SUMMARY_MISSING section=summary']);
-    expect(pass1Requests[0].additionalInstructions).toContain('Return exactly 6 steps in this exact order and exact names:');
-    expect(pass1Requests[1].additionalInstructions).toContain('Return exactly 6 steps in this exact order and exact names:');
-    expect(pass1Requests[2].additionalInstructions).toContain('Return exactly 6 steps in this exact order and exact names:');
-    expect(pass1Requests[0].additionalInstructions).toContain('Summary, Takeaways, Storyline, Deep Dive, Practical Rules, Open Questions.');
-    expect(pass1Requests[1].additionalInstructions).toContain('Summary, Takeaways, Storyline, Deep Dive, Practical Rules, Open Questions.');
-    expect(pass1Requests[2].additionalInstructions).toContain('Summary, Takeaways, Storyline, Deep Dive, Practical Rules, Open Questions.');
+    expect(pass1Requests[0].additionalInstructions).toContain('Return exactly 6 sections in this exact order and exact names:');
+    expect(pass1Requests[1].additionalInstructions).toContain('Return exactly 6 sections in this exact order and exact names:');
+    expect(pass1Requests[2].additionalInstructions).toContain('Return exactly 6 sections in this exact order and exact names:');
+    expect(pass1Requests[0].additionalInstructions).toContain('Summary, Takeaways, Storyline, Deep Dive, Practical Rules, Caveats.');
+    expect(pass1Requests[1].additionalInstructions).toContain('Summary, Takeaways, Storyline, Deep Dive, Practical Rules, Caveats.');
+    expect(pass1Requests[2].additionalInstructions).toContain('Summary, Takeaways, Storyline, Deep Dive, Practical Rules, Caveats.');
+    expect(pass1Requests[0].additionalInstructions).toContain('Return Caveats content in the existing open_questions field.');
     expect(pass2Transcripts.length).toBe(0);
     expect(events.some((row) => row.event === 'gate_failed_terminal')).toBe(true);
     expect(events.some((row) => row.event === 'gate_published_anyway')).toBe(true);
