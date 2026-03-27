@@ -23,6 +23,11 @@ export type ApiOptions = {
   pinnedToEdge?: boolean;
 };
 
+const AUTH_HEADER_CACHE_TTL_MS = 15_000;
+let cachedAuthHeaderValue: string | null = null;
+let cachedAuthHeaderExpiresAtMs = 0;
+let pendingAuthHeaderPromise: Promise<string> | null = null;
+
 /**
  * Build the Authorization header value.
  *
@@ -30,14 +35,36 @@ export type ApiOptions = {
  * otherwise we fall back to the publishable anon key.
  */
 export async function getAuthHeader(): Promise<string> {
-  try {
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
-    if (token) return `Bearer ${token}`;
-  } catch {
-    // Ignore – fall through to anon key.
+  const nowMs = Date.now();
+  if (cachedAuthHeaderValue && nowMs < cachedAuthHeaderExpiresAtMs) {
+    return cachedAuthHeaderValue;
   }
-  return `Bearer ${config.supabaseAnonKey}`;
+  if (pendingAuthHeaderPromise) {
+    return pendingAuthHeaderPromise;
+  }
+
+  pendingAuthHeaderPromise = (async () => {
+    let headerValue = `Bearer ${config.supabaseAnonKey}`;
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (token) {
+        headerValue = `Bearer ${token}`;
+      }
+    } catch {
+      // Ignore – fall through to anon key.
+    }
+
+    cachedAuthHeaderValue = headerValue;
+    cachedAuthHeaderExpiresAtMs = Date.now() + AUTH_HEADER_CACHE_TTL_MS;
+    return headerValue;
+  })();
+
+  try {
+    return await pendingAuthHeaderPromise;
+  } finally {
+    pendingAuthHeaderPromise = null;
+  }
 }
 
 /**
@@ -58,7 +85,7 @@ export async function apiFetch<T = unknown>(
   const url = opts.pinnedToEdge
     ? getEdgeFunctionUrl(fnName)
     : getFunctionUrl(fnName);
-  const authHeader = await getAuthHeader();
+  const authHeader = opts.headers?.Authorization || await getAuthHeader();
 
   const res = await fetch(url, {
     method: opts.method ?? "POST",

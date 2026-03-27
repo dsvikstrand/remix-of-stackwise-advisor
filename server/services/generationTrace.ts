@@ -45,6 +45,30 @@ export type GenerationRunEventRow = {
 };
 
 const nextGenerationEventSeqByRunId = new Map<string, Promise<number>>();
+const generationTraceVerboseEnabled = ['1', 'true', 'yes', 'on'].includes(
+  String(process.env.GENERATION_TRACE_VERBOSE ?? '').trim().toLowerCase(),
+);
+const generationTraceMilestoneEvents = new Set([
+  'pipeline_started',
+  'duration_policy_checked',
+  'transcript_loaded',
+  'transcript_pruning_applied',
+  'one_step_mode_enabled',
+  'prompt_rendered',
+  'model_resolution',
+  'draft_generated',
+  'gate_initial',
+  'gate_retry_requested',
+  'gate_retry_result',
+  'gate_repaired',
+  'gate_failed_terminal',
+  'gate_published_anyway',
+  'pass2_transform_skipped_one_step',
+  'pipeline_succeeded',
+  'pipeline_failed',
+  'youtube_comments_fetch_started',
+  'youtube_comments_fetch_succeeded',
+]);
 
 function normalizeObject(input: unknown): Record<string, unknown> {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
@@ -100,6 +124,12 @@ async function reserveGenerationEventSeq(db: DbClient, runId: string) {
     }
     throw error;
   }
+}
+
+function shouldPersistGenerationEvent(eventName: string, level: GenerationTraceLevel) {
+  if (generationTraceVerboseEnabled) return true;
+  if (level === 'warn' || level === 'error') return true;
+  return level === 'info' && generationTraceMilestoneEvents.has(eventName);
 }
 
 export async function startGenerationRun(
@@ -177,6 +207,8 @@ export async function appendGenerationEvent(
   const runId = String(input.runId || '').trim();
   const eventName = String(input.event || '').trim();
   if (!runId || !eventName) return null;
+  const level = (input.level || 'info') as GenerationTraceLevel;
+  if (!shouldPersistGenerationEvent(eventName, level)) return null;
 
   const nextSeq = await reserveGenerationEventSeq(db, runId);
   const payload = normalizeObject(input.payload);
@@ -185,7 +217,7 @@ export async function appendGenerationEvent(
     .insert({
       run_id: runId,
       seq: nextSeq,
-      level: (input.level || 'info') as GenerationTraceLevel,
+      level,
       event: eventName,
       payload,
     });

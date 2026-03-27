@@ -283,7 +283,7 @@ describe('source subscription refresh generate handler', () => {
     });
   });
 
-  it('tolerates missing stored source page assets and schedules a bounded sweep', async () => {
+  it('tolerates missing stored source page assets without scheduling an opportunistic sweep', async () => {
     const authDb = createMockSupabase({
       user_source_subscriptions: [{
         id: 'sub_1',
@@ -323,7 +323,7 @@ describe('source subscription refresh generate handler', () => {
 
     expect(res.statusCode).toBe(200);
     expect(fetchYouTubeChannelAssetMap).not.toHaveBeenCalled();
-    expect(runSourcePageAssetSweep).toHaveBeenCalledTimes(1);
+    expect(runSourcePageAssetSweep).not.toHaveBeenCalled();
     expect(res.body).toMatchObject({
       ok: true,
       data: [{

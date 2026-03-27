@@ -33,8 +33,6 @@ export function registerSourcePagesRouteHandlers(app: express.Express, deps: Sou
     buildSourcePagePath,
     normalizeSourcePagePlatform,
     getSourcePageByPlatformExternalId,
-    runSourcePageAssetSweep,
-    needsSourcePageAssetHydration,
     youtubeDataApiKey,
     getUserSubscriptionStateForSourcePage,
     sourceVideoListBurstLimiter,
@@ -205,7 +203,6 @@ app.get('/api/source-pages/search', async (req, res) => {
   const scanLimit = clampInt(limit * 4, 48, 20, 100);
   const db = getServiceSupabaseClient();
   if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
-  void runSourcePageAssetSweep(db, { mode: 'opportunistic' });
 
   const likePattern = `%${rawQuery}%`;
   const [titleResult, externalResult] = await Promise.all([
@@ -311,12 +308,6 @@ app.get('/api/source-pages/:platform/:externalId', async (req, res) => {
       message: 'Source page not found.',
       data: null,
     });
-  }
-
-  // Keep reads provider-safe: return stored/null assets immediately and let
-  // the bounded background sweep refresh legacy rows later.
-  if (needsSourcePageAssetHydration(sourcePage) && youtubeDataApiKey) {
-    void runSourcePageAssetSweep(db, { mode: 'opportunistic' });
   }
 
   const { count: linkedFollowerCount, error: linkedFollowerCountError } = await db

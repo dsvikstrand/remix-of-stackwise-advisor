@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Input } from '@/components/ui/input';
@@ -21,7 +20,6 @@ import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layou
 import { WallToWallGrid } from '@/components/layout/WallToWallGrid';
 import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
 import { resolvePrimaryChannelFromTags } from '@/lib/channelMapping';
-import { supabase } from '@/integrations/supabase/client';
 
 export default function Blueprints() {
   const location = useLocation();
@@ -92,27 +90,6 @@ export default function Blueprints() {
       return channelSlug === selectedChannel;
     });
   }, [displayBlueprints, selectedChannel]);
-
-  const blueprintIds = useMemo(() => filteredBlueprints.map((bp) => bp.id), [filteredBlueprints]);
-  const { data: commentCountsByBlueprintId = {} } = useQuery({
-    queryKey: ['blueprints-comment-counts', blueprintIds],
-    enabled: blueprintIds.length > 0,
-    staleTime: 30_000,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('blueprint_comments')
-        .select('blueprint_id')
-        .in('blueprint_id', blueprintIds);
-
-      if (error) throw error;
-
-      return (data || []).reduce<Record<string, number>>((acc, row) => {
-        acc[row.blueprint_id] = (acc[row.blueprint_id] || 0) + 1;
-        return acc;
-      }, {});
-    },
-  });
-
   const channelOptions = useMemo(() => {
     const sorted = [...CHANNELS_CATALOG].sort((a, b) => a.priority - b.priority);
     return [{ slug: 'any', name: 'Any channel' }, ...sorted.map((channel) => ({ slug: channel.slug, name: channel.name }))];
@@ -292,7 +269,6 @@ export default function Blueprints() {
                   blueprint={blueprint}
                   onLike={handleLike}
                   onTagClick={(tagSlug) => navigate(`/explore?q=${encodeURIComponent(tagSlug)}`)}
-                  commentCount={commentCountsByBlueprintId[blueprint.id] || 0}
                   variant="grid_flat"
                 />
               )}

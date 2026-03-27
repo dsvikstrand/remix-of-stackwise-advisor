@@ -3,7 +3,7 @@ import { listWallBlueprintFeed, listWallForYouFeed } from '../../server/services
 import { createMockSupabase } from './helpers/mockSupabase';
 
 describe('wall feed service', () => {
-  it('returns hydrated public wall cards with comments and like state', async () => {
+  it('returns hydrated public wall cards with like state', async () => {
     const db = createMockSupabase({
       blueprints: [
         {
@@ -96,7 +96,7 @@ describe('wall feed service', () => {
     expect(items[0]).toMatchObject({
       id: 'bp_1',
       user_liked: true,
-      comments_count: 2,
+      comments_count: 0,
       published_channel_slug: 'fitness-training',
       source_channel_title: 'Channel 1',
       source_channel_avatar_url: 'https://avatar/1.jpg',
@@ -506,7 +506,7 @@ describe('wall feed service', () => {
       blueprintId: 'bp_1',
       likesCount: 7,
       userLiked: true,
-      commentsCount: 2,
+      commentsCount: 0,
       publishedChannelSlug: 'fitness-training',
     });
     expect(items[1]).toMatchObject({

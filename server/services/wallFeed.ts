@@ -290,7 +290,7 @@ export async function listWallBlueprintFeed(input: {
   const blueprintIds = blueprints.map((row: any) => row.id);
   const userIds = [...new Set(blueprints.map((row: any) => row.creator_user_id).filter(Boolean))];
 
-  const [tagsRes, likesRes, profilesRes, feedItemsRes, commentRowsRes] = await Promise.all([
+  const [tagsRes, likesRes, profilesRes, feedItemsRes] = await Promise.all([
     db.from('blueprint_tags').select('blueprint_id, tag_id').in('blueprint_id', blueprintIds),
     viewerUserId
       ? db.from('blueprint_likes').select('blueprint_id').eq('user_id', viewerUserId).in('blueprint_id', blueprintIds)
@@ -299,11 +299,10 @@ export async function listWallBlueprintFeed(input: {
       ? db.from('profiles').select('user_id, display_name, avatar_url').in('user_id', userIds)
       : Promise.resolve({ data: [] as { user_id: string; display_name: string | null; avatar_url: string | null }[], error: null }),
     db.from('user_feed_items').select('id, blueprint_id, source_item_id, created_at').in('blueprint_id', blueprintIds),
-    db.from('blueprint_comments').select('blueprint_id').in('blueprint_id', blueprintIds),
   ]);
 
-  if (tagsRes.error || likesRes.error || profilesRes.error || feedItemsRes.error || commentRowsRes.error) {
-    throw tagsRes.error || likesRes.error || profilesRes.error || feedItemsRes.error || commentRowsRes.error;
+  if (tagsRes.error || likesRes.error || profilesRes.error || feedItemsRes.error) {
+    throw tagsRes.error || likesRes.error || profilesRes.error || feedItemsRes.error;
   }
 
   const tagRows = tagsRes.data || [];
@@ -327,10 +326,6 @@ export async function listWallBlueprintFeed(input: {
 
   const likedIds = new Set((likesRes.data || []).map((row: any) => row.blueprint_id));
   const profilesMap = new Map((profilesRes.data || []).map((profile: any) => [profile.user_id, profile]));
-  const commentsCountByBlueprint = (commentRowsRes.data || []).reduce<Record<string, number>>((acc, row: any) => {
-    acc[row.blueprint_id] = (acc[row.blueprint_id] || 0) + 1;
-    return acc;
-  }, {});
 
   const feedItemMaps = await buildFeedItemMaps(db, (feedItemsRes.data || []) as Array<{
     id: string;
@@ -370,7 +365,7 @@ export async function listWallBlueprintFeed(input: {
     source_channel_avatar_url: feedItemMaps.sourceChannelAvatarByBlueprint.get(blueprint.id)?.avatarUrl || null,
     source_thumbnail_url: feedItemMaps.sourceThumbnailByBlueprint.get(blueprint.id)?.thumbnailUrl || null,
     source_view_count: feedItemMaps.sourceViewCountByBlueprint.get(blueprint.id)?.viewCount ?? null,
-    comments_count: commentsCountByBlueprint[blueprint.id] || 0,
+    comments_count: 0,
   })) as WallBlueprintFeedItem[];
   const publishedOnly = hydrated.filter((post) => Boolean(String(post.published_channel_slug || '').trim()));
 
@@ -442,11 +437,6 @@ export async function listWallForYouFeed(input: {
     ? await db.from('blueprint_likes').select('blueprint_id').eq('user_id', userId).in('blueprint_id', blueprintIds)
     : { data: [], error: null };
   if (likedError) throw likedError;
-  const { data: commentRows, error: commentError } = blueprintIds.length > 0
-    ? await db.from('blueprint_comments').select('blueprint_id').in('blueprint_id', blueprintIds)
-    : { data: [], error: null };
-  if (commentError) throw commentError;
-
   const tagsMap = new Map((tagsData || []).map((tag: any) => [tag.id, String(tag.slug || '').trim()]));
   const tagsByBlueprint = new Map<string, string[]>();
   (tagRows || []).forEach((row: any) => {
@@ -497,10 +487,6 @@ export async function listWallForYouFeed(input: {
   const activeSourcePageIds = new Set((subscriptions || []).map((row: any) => String(row.source_page_id || '').trim()).filter(Boolean));
   const activeSourceChannelIds = new Set((subscriptions || []).map((row: any) => String(row.source_channel_id || '').trim()).filter(Boolean));
   const likedIds = new Set((likedRows || []).map((row: any) => row.blueprint_id));
-  const commentsCountByBlueprint = (commentRows || []).reduce<Record<string, number>>((acc, row: any) => {
-    acc[row.blueprint_id] = (acc[row.blueprint_id] || 0) + 1;
-    return acc;
-  }, {});
 
   const visibleFeedRows = filteredFeedRows.filter((row: any) => {
     if (row.blueprint_id) return true;
@@ -552,7 +538,7 @@ export async function listWallForYouFeed(input: {
         publishedChannelSlug: candidateMap.get(row.id)?.status === 'published' ? candidateMap.get(row.id)?.channelSlug || null : null,
         likesCount: Number(blueprint.likes_count || 0),
         userLiked: likedIds.has(blueprint.id),
-        commentsCount: commentsCountByBlueprint[blueprint.id] || 0,
+        commentsCount: 0,
       });
       continue;
     }

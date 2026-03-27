@@ -449,6 +449,12 @@ const sourceUnlockSweepsEnabled = !(sourceUnlockSweepsEnabledRaw === 'false' || 
 const sourceUnlockSweepBatch = clampInt(process.env.SOURCE_UNLOCK_SWEEP_BATCH, 100, 10, 1000);
 const sourceUnlockProcessingStaleMs = clampInt(process.env.SOURCE_UNLOCK_PROCESSING_STALE_MS, 10 * 60_000, 60_000, 24 * 60 * 60 * 1000);
 const sourceUnlockSweepMinIntervalMs = clampInt(process.env.SOURCE_UNLOCK_SWEEP_MIN_INTERVAL_MS, 300_000, 1_000, 10 * 60_000);
+const transcriptFeedSuppressionSweepMinIntervalMs = clampInt(
+  process.env.TRANSCRIPT_FEED_SUPPRESSION_SWEEP_MIN_INTERVAL_MS,
+  30 * 60_000,
+  60_000,
+  6 * 60 * 60_000,
+);
 const sourceUnlockSweepDryLogsRaw = String(process.env.SOURCE_UNLOCK_SWEEP_DRY_LOGS || 'true').trim().toLowerCase();
 const sourceUnlockSweepDryLogs = !(sourceUnlockSweepDryLogsRaw === 'false' || sourceUnlockSweepDryLogsRaw === '0' || sourceUnlockSweepDryLogsRaw === 'off');
 const sourcePageAssetSweepEnabledRaw = String(process.env.SOURCE_PAGE_ASSET_SWEEP_ENABLED || 'true').trim().toLowerCase();
@@ -3416,7 +3422,10 @@ async function runUnlockSweeps(db: ReturnType<typeof createClient>, input?: {
       enabled: sourceUnlockSweepsEnabled,
     });
     if (Boolean(input?.force) || !sweepResult.skipped) {
-      await runTranscriptFeedSuppressionSweep(db, { traceId: input?.traceId });
+      await runTranscriptFeedSuppressionSweep(db, {
+        traceId: input?.traceId,
+        force: Boolean(input?.force),
+      });
     }
     return sweepResult;
   } catch (error) {
@@ -3432,10 +3441,18 @@ async function runUnlockSweeps(db: ReturnType<typeof createClient>, input?: {
   }
 }
 
+let transcriptFeedSuppressionSweepLastRunMs = 0;
+
 async function runTranscriptFeedSuppressionSweep(
   db: ReturnType<typeof createClient>,
-  input?: { traceId?: string },
+  input?: { traceId?: string; force?: boolean },
 ) {
+  const nowMs = Date.now();
+  if (!input?.force && nowMs - transcriptFeedSuppressionSweepLastRunMs < transcriptFeedSuppressionSweepMinIntervalMs) {
+    return;
+  }
+  transcriptFeedSuppressionSweepLastRunMs = nowMs;
+
   const { data, error } = await db
     .from('source_item_unlocks')
     .select('source_item_id, transcript_status, last_error_code, updated_at')

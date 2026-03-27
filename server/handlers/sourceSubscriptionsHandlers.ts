@@ -416,10 +416,6 @@ export async function handleListSourceSubscriptions(_req: express.Request, res: 
   const rows = Array.isArray(data) ? data : [];
   try {
     const storedAssets = await loadStoredSourcePageAssets(sourcePageDb, rows);
-    if (storedAssets.needsSweep && typeof deps.runSourcePageAssetSweep === 'function' && sourcePageDb) {
-      void deps.runSourcePageAssetSweep(sourcePageDb, { mode: 'opportunistic' });
-    }
-
     const withAvatars = rows.map((row) => {
       const sourcePageId = String(row.source_page_id || '').trim();
       const sourceChannelId = String(row.source_channel_id || '').trim();

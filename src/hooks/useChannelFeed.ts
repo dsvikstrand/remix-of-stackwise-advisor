@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { buildFeedSummary } from '@/lib/feedPreview';
 
+const CHANNEL_FEED_BLUEPRINT_SCAN_LIMIT = 180;
+
 export type ChannelFeedTab = 'top' | 'recent';
 
 export interface ChannelFeedPost {
@@ -30,16 +32,16 @@ export function useChannelFeed({ channelSlug, tab, pageSize = 20 }: UseChannelFe
 
   const baseQuery = useQuery({
     queryKey: ['channel-feed-base', channelSlug],
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
     refetchOnWindowFocus: false,
-    refetchOnReconnect: true,
+    refetchOnReconnect: false,
     queryFn: async (): Promise<ChannelFeedPost[]> => {
       const { data: blueprints, error } = await supabase
         .from('blueprints')
         .select('id, title, preview_summary, likes_count, created_at')
         .eq('is_public', true)
         .order('created_at', { ascending: false })
-        .limit(400);
+        .limit(CHANNEL_FEED_BLUEPRINT_SCAN_LIMIT);
 
       if (error) throw error;
       if (!blueprints || blueprints.length === 0) return [];
@@ -52,22 +54,30 @@ export function useChannelFeed({ channelSlug, tab, pageSize = 20 }: UseChannelFe
 
       if (feedItemsError) throw feedItemsError;
 
+      const blueprintIdByFeedItemId = new Map((feedItems || []).map((row) => [row.id, row.blueprint_id]));
       const feedItemIds = (feedItems || []).map((row) => row.id);
       const { data: candidateRows, error: candidateError } = feedItemIds.length > 0
         ? await supabase
             .from('channel_candidates')
-            .select('user_feed_item_id, channel_slug, status, created_at')
+            .select('user_feed_item_id')
             .eq('status', 'published')
+            .eq('channel_slug', channelSlug)
             .in('user_feed_item_id', feedItemIds)
-            .order('created_at', { ascending: false })
         : { data: [], error: null };
 
       if (candidateError) throw candidateError;
 
+      const matchingBlueprintIds = [...new Set(
+        (candidateRows || [])
+          .map((row) => blueprintIdByFeedItemId.get(row.user_feed_item_id))
+          .filter((value): value is string => Boolean(value)),
+      )];
+      if (matchingBlueprintIds.length === 0) return [];
+
       const { data: tagRows, error: tagError } = await supabase
         .from('blueprint_tags')
         .select('blueprint_id, tags(slug)')
-        .in('blueprint_id', blueprintIds);
+        .in('blueprint_id', matchingBlueprintIds);
 
       if (tagError) throw tagError;
 
@@ -86,22 +96,10 @@ export function useChannelFeed({ channelSlug, tab, pageSize = 20 }: UseChannelFe
         tagsByBlueprintId.set(row.blueprint_id, list);
       });
 
-      const blueprintIdByFeedItemId = new Map((feedItems || []).map((row) => [row.id, row.blueprint_id]));
-      const publishedChannelByBlueprintId = new Map<string, { slug: string; createdAtMs: number }>();
-      (candidateRows || []).forEach((row) => {
-        const blueprintId = blueprintIdByFeedItemId.get(row.user_feed_item_id);
-        const channelSlug = String(row.channel_slug || '').trim().toLowerCase();
-        if (!blueprintId || !channelSlug) return;
-        const createdAtMs = Number.isFinite(Date.parse(row.created_at)) ? Date.parse(row.created_at) : 0;
-        const existing = publishedChannelByBlueprintId.get(blueprintId);
-        if (!existing || createdAtMs > existing.createdAtMs || (createdAtMs === existing.createdAtMs && channelSlug < existing.slug)) {
-          publishedChannelByBlueprintId.set(blueprintId, { slug: channelSlug, createdAtMs });
-        }
-      });
+      const matchingBlueprintIdSet = new Set(matchingBlueprintIds);
 
-      const hydrated = blueprints.map((row) => {
+      const hydrated = blueprints.filter((row) => matchingBlueprintIdSet.has(row.id)).map((row) => {
         const tags = tagsByBlueprintId.get(row.id) || [];
-        const publishedChannelSlug = publishedChannelByBlueprintId.get(row.id)?.slug || null;
         return {
           id: row.id,
           title: row.title,
@@ -113,11 +111,11 @@ export function useChannelFeed({ channelSlug, tab, pageSize = 20 }: UseChannelFe
           likesCount: row.likes_count,
           createdAt: row.created_at,
           tags,
-          primaryChannelSlug: publishedChannelSlug || '',
+          primaryChannelSlug: channelSlug,
         };
       });
 
-      return hydrated.filter((row) => row.primaryChannelSlug === channelSlug);
+      return hydrated;
     },
   });
 
@@ -138,34 +136,11 @@ export function useChannelFeed({ channelSlug, tab, pageSize = 20 }: UseChannelFe
   const visiblePosts = sorted.slice(0, visibleCount);
   const hasMore = visibleCount < sorted.length;
 
-  const commentQuery = useQuery({
-    queryKey: ['channel-feed-comments', visiblePosts.map((row) => row.id)],
-    enabled: visiblePosts.length > 0,
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: true,
-    queryFn: async () => {
-      const visibleIds = visiblePosts.map((row) => row.id);
-      const { data, error } = await supabase
-        .from('blueprint_comments')
-        .select('blueprint_id')
-        .in('blueprint_id', visibleIds);
-
-      if (error) throw error;
-
-      return (data || []).reduce<Record<string, number>>((acc, row) => {
-        acc[row.blueprint_id] = (acc[row.blueprint_id] || 0) + 1;
-        return acc;
-      }, {});
-    },
-  });
-
   return {
     posts: visiblePosts,
     totalCount: sorted.length,
     hasMore,
     loadMore: () => setVisibleCount((current) => Math.min(current + pageSize, sorted.length)),
-    commentCountsByBlueprintId: commentQuery.data || {},
     isLoading: baseQuery.isLoading,
     isError: baseQuery.isError,
     error: baseQuery.error,
