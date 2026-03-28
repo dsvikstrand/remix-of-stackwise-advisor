@@ -420,7 +420,7 @@ export function useWallPageController() {
         ? [
             { value: SCOPE_FOR_YOU, label: 'For You' },
             { value: SCOPE_ALL, label: 'All' },
-            { value: SCOPE_JOINED, label: 'Joined' },
+            { value: SCOPE_JOINED, label: 'Channels' },
           ]
         : [
             { value: SCOPE_ALL, label: 'All' },

@@ -109,7 +109,7 @@ function LanesScene({ onOpenDemo }: { onOpenDemo: (variant: LandingDemoVariant) 
       <div className="space-y-4 bg-gradient-to-b from-background to-accent/20 p-4">
         <div className="flex gap-2">
           <Badge className="bg-primary text-primary-foreground">For You</Badge>
-          <Badge variant="outline">Joined</Badge>
+          <Badge variant="outline">Channels</Badge>
           <Badge variant="outline">All</Badge>
         </div>
         <div className="grid gap-3 md:grid-cols-2">
@@ -133,12 +133,12 @@ function LanesScene({ onOpenDemo }: { onOpenDemo: (variant: LandingDemoVariant) 
             </div>
           </div>
           <div className="rounded-2xl border border-border/50 bg-card/70 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Joined</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Channels</p>
             <div className="mt-3 space-y-2">
               {['b/fitness-training', 'b/nutrition-meal-planning'].map((tag) => (
                 <div key={tag} className="rounded-xl border border-border/40 bg-background p-3">
                   <p className="text-sm font-semibold text-foreground">{tag}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Published blueprints from the topics you joined.</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Published blueprints from the channels you follow.</p>
                 </div>
               ))}
             </div>

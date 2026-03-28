@@ -79,7 +79,7 @@ export const LANDING_STORY_SCENES: LandingStoryScene[] = [
     eyebrow: 'Personalized discovery',
     headline: "Get your favorite creators' new videos as blueprints.",
     subheadline:
-      'For You stays creator-driven. Joined keeps you in the loop on the topics you actually care about.',
+      'For You stays creator-driven. Channels keeps you in the loop on the topics you actually care about.',
     demoVariant: 'lanes',
     accentClass: 'from-primary/20 via-rose-200/20 to-amber-100/30',
   },

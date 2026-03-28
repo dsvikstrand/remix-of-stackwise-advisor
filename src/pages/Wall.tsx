@@ -244,7 +244,7 @@ export default function Wall() {
             <p className="text-sm font-semibold text-primary uppercase tracking-wide">Home</p>
             <h1 className="text-2xl font-semibold">Your blueprint streams</h1>
             <p className="text-sm text-muted-foreground">
-              For You follows creators you subscribe to. Joined follows channels you join. All shows every public blueprint on Bleup.
+              For You follows creators you subscribe to. Channels shows blueprints from the channels you follow. All shows every public blueprint on Bleup.
             </p>
           </div>
         </section>
@@ -348,7 +348,7 @@ export default function Wall() {
               {activeLane === 'for-you'
                 ? 'For You shows blueprints from creators you subscribe to.'
                 : activeLane === 'joined'
-                  ? 'Joined shows blueprints posted into channels you follow.'
+                  ? 'Channels shows blueprints posted into the channels you follow.'
                   : 'All shows every public blueprint on Bleup.'}
             </p>
           </div>
@@ -370,7 +370,7 @@ export default function Wall() {
                 <div>
                   <p className="text-sm font-semibold">Join channels to shape this lane</p>
                   <p className="text-xs text-muted-foreground">
-                    Joined only shows published blueprints posted into channels you follow.
+                    Channels only shows published blueprints posted into the channels you follow.
                   </p>
                 </div>
                 <Button asChild size="sm">

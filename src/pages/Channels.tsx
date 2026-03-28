@@ -383,9 +383,9 @@ export default function Channels() {
       <PageMain className="space-y-6">
         <PageSection className="space-y-2">
           <p className="text-sm font-semibold text-primary uppercase tracking-wide">Channels</p>
-          <h1 className="text-2xl font-semibold tracking-tight">Follow topics and shape Joined</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Follow topics and shape Channels</h1>
           <p className="text-sm text-muted-foreground">
-            Channels follow topics you care about. Joined shows blueprints posted into the channels you follow.
+            Channels follow topics you care about. The Channels lane shows blueprints posted into the channels you follow.
           </p>
         </PageSection>
 
@@ -393,7 +393,7 @@ export default function Channels() {
           <div className="border border-border/40 px-3 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-semibold">Sign in to join channels</p>
-              <p className="text-xs text-muted-foreground">Join channels to personalize Joined with topics you care about.</p>
+              <p className="text-xs text-muted-foreground">Join channels to personalize Channels with topics you care about.</p>
             </div>
             <Button asChild size="sm">
               <Link to="/auth">Sign in</Link>

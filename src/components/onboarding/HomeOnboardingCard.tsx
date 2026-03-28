@@ -10,7 +10,7 @@ interface HomeOnboardingCardProps {
 const STEPS = [
   {
     title: 'Home is where things land',
-    description: 'For You follows your subscriptions. Joined follows your channels. All shows every public blueprint.',
+    description: 'For You follows your subscriptions. Channels shows blueprints from the channels you follow. All shows every public blueprint.',
     icon: Home,
   },
   {
@@ -20,7 +20,7 @@ const STEPS = [
   },
   {
     title: 'Channels follow topics',
-    description: 'Joined shows blueprints posted into the channels you follow.',
+    description: 'Channels shows blueprints posted into the channels you follow.',
     icon: Sparkles,
   },
   {
