@@ -90,10 +90,6 @@ export default function ResetPassword() {
       return;
     }
 
-    toast({
-      title: 'Password updated',
-      description: 'Your new password is ready to use.',
-    });
     navigate('/wall', { replace: true });
   };
 

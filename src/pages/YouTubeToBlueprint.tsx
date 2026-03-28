@@ -637,10 +637,6 @@ export default function YouTubeToBlueprint() {
 
       const existing = await getExistingUserFeedItem(user.id, sourceItem.id);
       if (existing) {
-        toast({
-          title: 'Already in Home',
-          description: 'This source is already available in your Home feed.',
-        });
         navigate('/wall');
         return;
       }
@@ -701,14 +697,6 @@ export default function YouTubeToBlueprint() {
         },
       });
 
-      toast({
-        title: 'Saved to Home',
-        description: autoPublishResult
-          ? autoPublishResult.decision === 'published'
-            ? `Posted to ${autoPublishResult.channelSlug}.`
-            : `Saved in Home. Auto channel checks held this item (${autoPublishResult.reasonCode}).`
-          : 'Saved successfully.',
-      });
       navigate('/wall');
     } catch (error) {
       toast({

@@ -279,10 +279,6 @@ export default function SearchPage() {
         return previous;
       });
       void queryClient.invalidateQueries({ queryKey: sourceSubscriptionsQueryKey });
-      toast({
-        title: 'Subscription saved',
-        description: 'New uploads from this channel will appear in your feed.',
-      });
     },
     onError: (error) => {
       const description = error instanceof SubscriptionApiRequestError && error.errorCode === 'INVALID_CHANNEL'
@@ -298,10 +294,6 @@ export default function SearchPage() {
     mutationFn: (input: { channelId: string }) => deactivateSourceSubscriptionByChannelId(input.channelId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: sourceSubscriptionsQueryKey });
-      toast({
-        title: 'Unsubscribed',
-        description: 'You will stop receiving new uploads from this channel.',
-      });
     },
     onError: (error) => {
       const description = error instanceof Error ? error.message : 'Could not unsubscribe.';

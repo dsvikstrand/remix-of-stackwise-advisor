@@ -80,11 +80,6 @@ export default function Settings() {
         description: (error || privacyError)?.message || 'Please try again.',
         variant: 'destructive',
       });
-    } else {
-      toast({
-        title: 'Settings saved',
-        description: 'Your profile settings have been updated.',
-      });
     }
 
     setSaving(false);

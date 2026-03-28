@@ -257,13 +257,6 @@ export function MyFeedTimeline({
     onSuccess: (result) => {
       invalidateFeedQueries();
       setSubmissionDialogItemId(null);
-      if (result.status === 'passed') {
-        toast({ title: 'Candidate passed gates', description: 'You can publish this to channel now.' });
-      } else if (result.status === 'pending_manual_review') {
-        toast({ title: 'Needs review', description: 'Candidate needs manual review before publish.' });
-      } else {
-        toast({ title: 'Rejected for channel', description: `Reason: ${result.reasonCode}` });
-      }
     },
     onError: (error) => {
       toast({ title: 'Submit failed', description: error instanceof Error ? error.message : 'Could not submit.', variant: 'destructive' });
@@ -304,7 +297,6 @@ export function MyFeedTimeline({
       queryClient.invalidateQueries({ queryKey: ['wall-blueprints'] });
       queryClient.invalidateQueries({ queryKey: ['channel-feed'] });
       setSubmissionDialogItemId(null);
-      toast({ title: 'Published', description: 'Item is now live in channel feed.' });
     },
     onError: (error) => {
       toast({ title: 'Publish failed', description: error instanceof Error ? error.message : 'Could not publish.', variant: 'destructive' });
@@ -343,7 +335,6 @@ export function MyFeedTimeline({
     onSuccess: () => {
       invalidateFeedQueries();
       setSubmissionDialogItemId(null);
-      toast({ title: 'Rejected', description: 'Kept in My Feed as personal content.' });
     },
     onError: (error) => {
       toast({ title: 'Reject failed', description: error instanceof Error ? error.message : 'Could not reject.', variant: 'destructive' });
@@ -357,7 +348,6 @@ export function MyFeedTimeline({
     },
     onSuccess: () => {
       invalidateFeedQueries();
-      toast({ title: 'Accepted', description: 'Blueprint generated and added to your feed.' });
     },
     onError: (error) => {
       toast({ title: 'Accept failed', description: error instanceof Error ? error.message : 'Could not accept item.', variant: 'destructive' });
@@ -371,7 +361,6 @@ export function MyFeedTimeline({
     },
     onSuccess: () => {
       invalidateFeedQueries();
-      toast({ title: 'Skipped', description: 'Item remains skipped in My Feed.' });
     },
     onError: (error) => {
       toast({ title: 'Skip failed', description: error instanceof Error ? error.message : 'Could not skip item.', variant: 'destructive' });
@@ -387,7 +376,6 @@ export function MyFeedTimeline({
       invalidateFeedQueries();
       setSubscriptionDialogItemId(null);
       setUnsubscribeDialogItemId(null);
-      toast({ title: 'Unsubscribed', description: 'Subscription removed from your feed.' });
     },
     onError: (error) => {
       toast({

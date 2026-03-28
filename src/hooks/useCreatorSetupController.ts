@@ -245,10 +245,6 @@ export function useCreatorSetupController() {
         };
       });
 
-      toast({
-        title: 'Import complete',
-        description: `Imported ${result.imported_count}, reactivated ${result.reactivated_count}, already active ${result.already_active_count}, failed ${result.failed_count}.`,
-      });
     },
     onError: (error) => {
       toast({
@@ -457,11 +453,7 @@ export function useCreatorSetupController() {
 
   const runSubscribe = useCallback(async (input: string, successTitle = 'Subscription saved') => {
     await createMutation.mutateAsync(input);
-    toast({
-      title: successTitle,
-      description: 'You are now subscribed. New uploads will appear in your feed.',
-    });
-  }, [createMutation, toast]);
+  }, [createMutation]);
 
   const handleSubscribeFromSearch = useCallback(async (result: YouTubeChannelSearchResult) => {
     if (!subscriptionsEnabled) return;

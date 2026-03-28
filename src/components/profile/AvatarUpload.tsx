@@ -70,7 +70,6 @@ export function AvatarUpload({
       const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
 
       onAvatarChange(urlData.publicUrl);
-      toast({ title: 'Avatar uploaded', description: 'Your new avatar has been set.' });
     } catch (error) {
       toast({
         title: 'Upload failed',
@@ -93,7 +92,6 @@ export function AvatarUpload({
       new URL(urlInput.trim());
       onAvatarChange(urlInput.trim());
       setUrlInput('');
-      toast({ title: 'Avatar updated', description: 'Your avatar URL has been set.' });
     } catch {
       toast({
         title: 'Invalid URL',

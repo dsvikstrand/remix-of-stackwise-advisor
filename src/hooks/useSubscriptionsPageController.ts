@@ -196,10 +196,6 @@ export function useSubscriptionsPageController() {
     queryClient.invalidateQueries({ queryKey: ['youtube-connection-status', user?.id] });
 
     if (connectStatus === 'success') {
-      toast({
-        title: 'YouTube connected',
-        description: 'You can now import subscriptions from your YouTube account.',
-      });
       return;
     }
 
@@ -296,10 +292,6 @@ export function useSubscriptionsPageController() {
       setYouTubeImportSummary(result);
       invalidateSubscriptionViews();
       queryClient.invalidateQueries({ queryKey: ['youtube-connection-status', user?.id] });
-      toast({
-        title: 'Import complete',
-        description: `Imported ${result.imported_count}, reactivated ${result.reactivated_count}, already active ${result.already_active_count}, failed ${result.failed_count}.`,
-      });
     },
     onError: (error) => {
       toast({
@@ -322,10 +314,6 @@ export function useSubscriptionsPageController() {
       setYouTubeImportTruncated(false);
       setYouTubeImportError(null);
       queryClient.invalidateQueries({ queryKey: ['youtube-connection-status', user?.id] });
-      toast({
-        title: 'YouTube disconnected',
-        description: 'Your existing app subscriptions were kept.',
-      });
     },
     onError: (error) => {
       toast({
@@ -340,7 +328,6 @@ export function useSubscriptionsPageController() {
     mutationFn: (id: string) => deactivateSourceSubscription(id),
     onSuccess: () => {
       invalidateSubscriptionViews();
-      toast({ title: 'Unsubscribed', description: 'You will no longer receive new uploads from this channel.' });
     },
     onError: (error) => {
       toast({

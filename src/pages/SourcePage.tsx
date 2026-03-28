@@ -133,10 +133,6 @@ export default function SourcePage() {
       queryClient.invalidateQueries({ queryKey: ['source-page', platform, externalId, user?.id] });
       queryClient.invalidateQueries({ queryKey: ['source-subscriptions', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] });
-      toast({
-        title: 'Subscribed',
-        description: 'New uploads from this source will appear automatically.',
-      });
     },
     onError: (error) => {
       toast({
@@ -153,10 +149,6 @@ export default function SourcePage() {
       queryClient.invalidateQueries({ queryKey: ['source-page', platform, externalId, user?.id] });
       queryClient.invalidateQueries({ queryKey: ['source-subscriptions', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['my-feed-items', user?.id] });
-      toast({
-        title: 'Unsubscribed',
-        description: 'You will no longer receive new uploads from this source.',
-      });
     },
     onError: (error) => {
       toast({

@@ -26,10 +26,8 @@ export function FollowButton({ targetUserId }: FollowButtonProps) {
     try {
       if (isFollowing) {
         await unfollowMutation.mutateAsync(targetUserId);
-        toast({ title: 'Unfollowed', description: 'You are no longer following this user.' });
       } else {
         await followMutation.mutateAsync(targetUserId);
-        toast({ title: 'Following!', description: 'You are now following this user.' });
       }
     } catch (error) {
       toast({
