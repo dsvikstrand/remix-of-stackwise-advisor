@@ -120,10 +120,6 @@ export function RefreshSubscriptionsDialog({
       const payload = result.payload;
       invalidateSubscriptionViews();
       onQueued?.({ jobId: payload.job_id, queuedCount: payload.queued_count });
-      toast({
-        title: 'Background generation started',
-        description: `Queued ${payload.queued_count} video(s). You can keep using the app while blueprints are generated.`,
-      });
       onOpenChange(false);
     },
     onError: (error) => {

@@ -424,10 +424,6 @@ export function MyFeedTimeline({
       queryClient.invalidateQueries({ queryKey: ['source-page-blueprints'] });
       if (result.job_id) {
         unlockTracker.start(result.job_id);
-        toast({
-          title: 'Unlock queued',
-          description: `Queued ${result.queued_count}, ready ${result.ready_count}, in progress ${result.in_progress_count}. This card will update automatically.`,
-        });
         return;
       }
       if (item.id) {
@@ -437,12 +433,6 @@ export function MyFeedTimeline({
           return next;
         });
       }
-      toast({
-        title: 'Unlock status updated',
-        description: result.ready_count > 0
-          ? `Ready ${result.ready_count}, in progress ${result.in_progress_count}.`
-          : `No new unlock started. Ready ${result.ready_count}, in progress ${result.in_progress_count}.`,
-      });
     },
     onError: (error, item) => {
       toast({

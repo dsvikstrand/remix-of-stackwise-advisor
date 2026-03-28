@@ -270,12 +270,6 @@ export default function SourcePage() {
       }
       setSelectedVideoIds({});
       queryClient.invalidateQueries({ queryKey: ['source-page-videos', platform, externalId, user?.id] });
-      toast({
-        title: data.job_id ? 'Unlock queued' : 'No unlock queued',
-        description: data.job_id
-          ? `Queued ${data.queued_count}, ready ${data.ready_count}, in progress ${data.in_progress_count}, skipped existing ${data.skipped_existing_count}, blocked by length ${data.duration_blocked_count || 0}.`
-          : `Ready ${data.ready_count}, in progress ${data.in_progress_count}, skipped existing ${data.skipped_existing_count}, blocked by length ${data.duration_blocked_count || 0}.`,
-      });
     },
     onError: (error, _items, context) => {
       toast({

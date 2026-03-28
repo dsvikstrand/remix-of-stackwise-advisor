@@ -362,13 +362,6 @@ export function useWallPageController() {
         });
       }
 
-      toast({
-        title: result.job_id ? 'Unlock queued' : 'No unlock queued',
-        description: result.job_id
-          ? `Queued ${result.queued_count} item${result.queued_count === 1 ? '' : 's'} for generation.`
-          : `No new unlock started. Ready ${result.ready_count}, in progress ${result.in_progress_count}.`,
-      });
-
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['ai-credits'] }),
         queryClient.invalidateQueries({ queryKey: ['wall-for-you', user?.id || 'anon'] }),
