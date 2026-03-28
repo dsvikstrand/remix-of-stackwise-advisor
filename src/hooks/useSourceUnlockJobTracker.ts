@@ -49,7 +49,7 @@ export function useSourceUnlockJobTracker({
   userId,
   enabled = true,
   scope = 'source_item_unlock_generation',
-  pollMs = 60000,
+  pollMs = 120000,
   onTerminal,
 }: UseSourceUnlockJobTrackerInput) {
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
@@ -63,9 +63,9 @@ export function useSourceUnlockJobTracker({
     queryKey: ['source-unlock-latest-mine', userId, scope],
     enabled: canRun && !activeJobId,
     queryFn: () => getLatestMyIngestionJob(scope),
-    staleTime: 60_000,
+    staleTime: 300_000,
     refetchOnWindowFocus: false,
-    refetchOnReconnect: true,
+    refetchOnReconnect: false,
     retry: false,
   });
 
@@ -90,7 +90,7 @@ export function useSourceUnlockJobTracker({
     queryFn: () => getIngestionJob(activeJobId as string),
     staleTime: Math.max(1_000, Math.floor(pollMs / 2)),
     refetchOnWindowFocus: false,
-    refetchOnReconnect: true,
+    refetchOnReconnect: false,
     refetchInterval: (query) => {
       const status = query.state.data?.status as IngestionJobStatus | undefined;
       if (!status) return pollMs;

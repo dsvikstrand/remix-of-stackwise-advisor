@@ -31,6 +31,31 @@ export interface BlueprintListItem extends BlueprintRow {
 export type BlueprintSort = 'popular' | 'latest';
 
 export const BLUEPRINT_FIELDS = 'id, inventory_id, creator_user_id, title, banner_url, preview_summary, is_public, likes_count, created_at, updated_at';
+const DEFAULT_BLUEPRINT_LIST_LIMIT = 24;
+
+function collectJoinedTags(
+  rows: Array<{ blueprint_id: string; tags?: { id?: string; slug?: string } | Array<{ id?: string; slug?: string }> | null }>,
+) {
+  const blueprintTags = new Map<string, BlueprintTag[]>();
+
+  rows.forEach((row) => {
+    const blueprintId = String(row.blueprint_id || '').trim();
+    if (!blueprintId) return;
+    const existing = blueprintTags.get(blueprintId) || [];
+    const joined = row.tags;
+    const tagCandidates = Array.isArray(joined) ? joined : joined ? [joined] : [];
+    for (const candidate of tagCandidates) {
+      const id = String(candidate?.id || '').trim();
+      const slug = String(candidate?.slug || '').trim();
+      if (!id || !slug) continue;
+      if (existing.some((tag) => tag.id === id)) continue;
+      existing.push({ id, slug });
+    }
+    blueprintTags.set(blueprintId, existing);
+  });
+
+  return blueprintTags;
+}
 
 function applyVisibilityFilter(query: any, userId?: string | null) {
   if (userId) {
@@ -46,7 +71,7 @@ export async function hydrateBlueprints(rows: BlueprintRow[], userId?: string | 
   const inventoryIds = rows.map((row) => row.inventory_id).filter(Boolean) as string[];
 
   const [tagsRes, likesRes, inventoriesRes] = await Promise.all([
-    supabase.from('blueprint_tags').select('blueprint_id, tag_id').in('blueprint_id', blueprintIds),
+    supabase.from('blueprint_tags').select('blueprint_id, tags(id, slug)').in('blueprint_id', blueprintIds),
     userId
       ? supabase.from('blueprint_likes').select('blueprint_id').eq('user_id', userId).in('blueprint_id', blueprintIds)
       : Promise.resolve({ data: [] as { blueprint_id: string }[] }),
@@ -55,22 +80,10 @@ export async function hydrateBlueprints(rows: BlueprintRow[], userId?: string | 
       : Promise.resolve({ data: [] as { id: string; title: string }[] }),
   ]);
 
-  const tagRows = tagsRes.data || [];
-  const tagIds = [...new Set(tagRows.map((row) => row.tag_id))];
-  const { data: tagsData } = tagIds.length > 0
-    ? await supabase.from('tags').select('id, slug').in('id', tagIds)
-    : { data: [] as BlueprintTag[] };
-
-  const tagsMap = new Map((tagsData || []).map((tag) => [tag.id, tag]));
-  const blueprintTags = new Map<string, BlueprintTag[]>();
-
-  tagRows.forEach((row) => {
-    const tag = tagsMap.get(row.tag_id);
-    if (!tag) return;
-    const list = blueprintTags.get(row.blueprint_id) || [];
-    list.push(tag);
-    blueprintTags.set(row.blueprint_id, list);
-  });
+  const blueprintTags = collectJoinedTags((tagsRes.data || []) as Array<{
+    blueprint_id: string;
+    tags?: { id?: string; slug?: string } | Array<{ id?: string; slug?: string }> | null;
+  }>);
 
   const likedIds = new Set((likesRes.data || []).map((row) => row.blueprint_id));
   const inventoryMap = new Map((inventoriesRes.data || []).map((inv) => [inv.id, inv.title]));
@@ -97,9 +110,9 @@ export function useBlueprintSearch(search: string, sort: BlueprintSort) {
 
   return useQuery({
     queryKey: ['blueprint-search', search, sort, user?.id],
-    staleTime: 60_000,
+    staleTime: 10 * 60_000,
     refetchOnWindowFocus: false,
-    refetchOnReconnect: true,
+    refetchOnReconnect: false,
     queryFn: async () => {
       const trimmed = search.trim();
       let blueprints: BlueprintRow[] = [];
@@ -113,7 +126,7 @@ export function useBlueprintSearch(search: string, sort: BlueprintSort) {
           .from('blueprints')
           .select(BLUEPRINT_FIELDS)
           .order(orderBy.column, { ascending: orderBy.ascending })
-          .limit(60);
+          .limit(DEFAULT_BLUEPRINT_LIST_LIMIT);
 
         query = applyVisibilityFilter(query, user?.id);
 
@@ -140,7 +153,8 @@ export function useBlueprintSearch(search: string, sort: BlueprintSort) {
               .from('blueprints')
               .select(BLUEPRINT_FIELDS)
               .in('id', blueprintIds)
-              .order(orderBy.column, { ascending: orderBy.ascending });
+              .order(orderBy.column, { ascending: orderBy.ascending })
+              .limit(DEFAULT_BLUEPRINT_LIST_LIMIT);
 
             tagQuery = applyVisibilityFilter(tagQuery, user?.id);
 
@@ -154,14 +168,16 @@ export function useBlueprintSearch(search: string, sort: BlueprintSort) {
         .from('blueprints')
         .select(BLUEPRINT_FIELDS)
         .ilike('title', `%${trimmed}%`)
-        .order(orderBy.column, { ascending: orderBy.ascending });
+        .order(orderBy.column, { ascending: orderBy.ascending })
+        .limit(DEFAULT_BLUEPRINT_LIST_LIMIT);
 
       titleQuery = applyVisibilityFilter(titleQuery, user?.id);
 
       const { data: titleMatches } = await titleQuery;
       if (titleMatches) matched.push(...titleMatches);
 
-      const deduped = Array.from(new Map(matched.map((row) => [row.id, row])).values());
+      const deduped = Array.from(new Map(matched.map((row) => [row.id, row])).values())
+        .slice(0, DEFAULT_BLUEPRINT_LIST_LIMIT);
       blueprints = deduped;
 
       return hydrateBlueprints(blueprints, user?.id);

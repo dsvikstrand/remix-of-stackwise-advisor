@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
 
 export interface PublicProfile {
   id: string;
@@ -16,13 +15,11 @@ export interface PublicProfile {
 }
 
 export function useUserProfile(userId: string | undefined) {
-  const { user } = useAuth();
-
   return useQuery({
     queryKey: ['user-profile', userId],
-    staleTime: 120_000,
+    staleTime: 10 * 60_000,
     refetchOnWindowFocus: false,
-    refetchOnReconnect: true,
+    refetchOnReconnect: false,
     queryFn: async () => {
       if (!userId) return null;
 
@@ -42,9 +39,9 @@ export function useUserProfile(userId: string | undefined) {
 export function useUserBlueprints(userId: string | undefined, limit = 4) {
   return useQuery({
     queryKey: ['user-blueprints', userId, limit],
-    staleTime: 60_000,
+    staleTime: 10 * 60_000,
     refetchOnWindowFocus: false,
-    refetchOnReconnect: true,
+    refetchOnReconnect: false,
     queryFn: async () => {
       if (!userId) return [];
 
@@ -66,9 +63,9 @@ export function useUserBlueprints(userId: string | undefined, limit = 4) {
 export function useUserLikedBlueprints(userId: string | undefined, limit = 4) {
   return useQuery({
     queryKey: ['user-liked-blueprints', userId, limit],
-    staleTime: 60_000,
+    staleTime: 10 * 60_000,
     refetchOnWindowFocus: false,
-    refetchOnReconnect: true,
+    refetchOnReconnect: false,
     queryFn: async () => {
       if (!userId) return [];
 
@@ -121,23 +118,6 @@ export function useUserLikedBlueprints(userId: string | undefined, limit = 4) {
         }
       });
 
-      const unresolvedBlueprintIds = publicBlueprintIds.filter((id) => !sourceItemIdByBlueprint.has(id));
-      if (unresolvedBlueprintIds.length > 0) {
-        const { data: feedRows } = await supabase
-          .from('user_feed_items')
-          .select('blueprint_id, source_item_id, created_at')
-          .in('blueprint_id', unresolvedBlueprintIds)
-          .order('created_at', { ascending: false });
-        (feedRows || []).forEach((row) => {
-          const blueprintId = String(row.blueprint_id || '').trim();
-          const sourceItemId = String(row.source_item_id || '').trim();
-          if (!blueprintId || !sourceItemId) return;
-          if (!sourceItemIdByBlueprint.has(blueprintId)) {
-            sourceItemIdByBlueprint.set(blueprintId, sourceItemId);
-          }
-        });
-      }
-
       const sourceItemIds = Array.from(new Set(Array.from(sourceItemIdByBlueprint.values()).filter(Boolean)));
       const { data: sourceRows } = sourceItemIds.length > 0
         ? await supabase
@@ -146,29 +126,6 @@ export function useUserLikedBlueprints(userId: string | undefined, limit = 4) {
           .in('id', sourceItemIds)
         : { data: [] as Array<{ id: string; source_page_id: string | null; source_channel_id: string | null; source_channel_title: string | null; metadata: unknown }> };
       const sourceById = new Map((sourceRows || []).map((row) => [row.id, row]));
-
-      const sourcePageIds = Array.from(new Set(
-        (sourceRows || [])
-          .map((row) => String(row.source_page_id || '').trim())
-          .filter(Boolean),
-      ));
-      const sourceChannelIds = Array.from(new Set(
-        (sourceRows || [])
-          .map((row) => String(row.source_channel_id || '').trim())
-          .filter(Boolean),
-      ));
-      const { data: sourcePagesById } = sourcePageIds.length > 0
-        ? await supabase.from('source_pages').select('id, avatar_url').in('id', sourcePageIds)
-        : { data: [] as Array<{ id: string; avatar_url: string | null }> };
-      const { data: sourcePagesByExternal } = sourceChannelIds.length > 0
-        ? await supabase
-          .from('source_pages')
-          .select('external_id, avatar_url')
-          .eq('platform', 'youtube')
-          .in('external_id', sourceChannelIds)
-        : { data: [] as Array<{ external_id: string; avatar_url: string | null }> };
-      const sourceAvatarByPageId = new Map((sourcePagesById || []).map((row) => [row.id, row.avatar_url || null]));
-      const sourceAvatarByExternalId = new Map((sourcePagesByExternal || []).map((row) => [row.external_id, row.avatar_url || null]));
 
       return (blueprints || []).map((bp) => ({
         ...bp,
@@ -197,15 +154,9 @@ export function useUserLikedBlueprints(userId: string | undefined, limit = 4) {
                   ? String(sourceMetadata.channel_avatar_url || '').trim() || null
                   : null
               );
-          const sourcePageId = String(source.source_page_id || '').trim();
-          const sourceChannelId = String(source.source_channel_id || '').trim();
           return {
             title: source.source_channel_title || metadataTitle || null,
-            avatar_url:
-              sourceAvatarByPageId.get(sourcePageId)
-              || metadataAvatar
-              || sourceAvatarByExternalId.get(sourceChannelId)
-              || null,
+            avatar_url: metadataAvatar || null,
           };
         })(),
         creator_profile: profileMap.get(bp.creator_user_id) || null,
@@ -226,9 +177,9 @@ export interface UserCommentItem {
 export function useUserComments(userId: string | undefined, limit = 20) {
   return useQuery({
     queryKey: ['user-comments', userId, limit],
-    staleTime: 60_000,
+    staleTime: 10 * 60_000,
     refetchOnWindowFocus: false,
-    refetchOnReconnect: true,
+    refetchOnReconnect: false,
     queryFn: async () => {
       if (!userId) return [] as UserCommentItem[];
 

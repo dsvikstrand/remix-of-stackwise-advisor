@@ -34,8 +34,8 @@ describe('wall feed service', () => {
         },
       ],
       blueprint_tags: [
-        { blueprint_id: 'bp_1', tag_id: 'tag_fit' },
-        { blueprint_id: 'bp_2', tag_id: 'tag_cook' },
+        { blueprint_id: 'bp_1', tags: { id: 'tag_fit', slug: 'fitness-training' } },
+        { blueprint_id: 'bp_2', tags: { id: 'tag_cook', slug: 'cooking-home-kitchen' } },
       ],
       tags: [
         { id: 'tag_fit', slug: 'fitness-training' },
@@ -59,7 +59,7 @@ describe('wall feed service', () => {
           source_channel_id: 'channel_1',
           source_channel_title: 'Channel 1',
           thumbnail_url: 'https://thumb/1.jpg',
-          metadata: { view_count: 1200 },
+          metadata: { view_count: 1200, source_channel_avatar_url: 'https://avatar/1.jpg' },
         },
         {
           id: 'source_2',
@@ -67,7 +67,7 @@ describe('wall feed service', () => {
           source_channel_id: 'channel_2',
           source_channel_title: 'Channel 2',
           thumbnail_url: 'https://thumb/2.jpg',
-          metadata: { view_count: 2400 },
+          metadata: { view_count: 2400, source_channel_avatar_url: 'https://avatar/2.jpg' },
         },
       ],
       source_pages: [
@@ -148,9 +148,9 @@ describe('wall feed service', () => {
         },
       ],
       blueprint_tags: [
-        { blueprint_id: 'bp_1', tag_id: 'tag_fit' },
-        { blueprint_id: 'bp_2', tag_id: 'tag_cook' },
-        { blueprint_id: 'bp_3', tag_id: 'tag_fit' },
+        { blueprint_id: 'bp_1', tags: { id: 'tag_fit', slug: 'fitness-training' } },
+        { blueprint_id: 'bp_2', tags: { id: 'tag_cook', slug: 'cooking-home-kitchen' } },
+        { blueprint_id: 'bp_3', tags: { id: 'tag_fit', slug: 'fitness-training' } },
       ],
       tags: [
         { id: 'tag_fit', slug: 'fitness-training' },
@@ -285,7 +285,7 @@ describe('wall feed service', () => {
       blueprints,
       blueprint_tags: blueprints.map((blueprint, index) => ({
         blueprint_id: blueprint.id,
-        tag_id: tagRows[index].id,
+        tags: { id: tagRows[index].id, slug: tagRows[index].slug },
       })),
       tags: tagRows,
       profiles: blueprints.map((blueprint, index) => ({
@@ -305,7 +305,7 @@ describe('wall feed service', () => {
         source_channel_id: `channel_${index + 1}`,
         source_channel_title: `Channel ${index + 1}`,
         thumbnail_url: null,
-        metadata: null,
+        metadata: { source_channel_avatar_url: 'https://avatar/1.jpg' },
       })),
       source_pages: blueprints.map((_, index) => ({
         id: `page_${index + 1}`,
@@ -432,7 +432,7 @@ describe('wall feed service', () => {
           title: 'Video One',
           source_channel_title: 'Channel 1',
           thumbnail_url: 'https://thumb/1.jpg',
-          metadata: { view_count: 100 },
+          metadata: { view_count: 100, source_channel_avatar_url: 'https://avatar/1.jpg' },
         },
         {
           id: 'source_locked',
@@ -442,7 +442,7 @@ describe('wall feed service', () => {
           title: 'Video Two',
           source_channel_title: 'Channel 1',
           thumbnail_url: 'https://thumb/2.jpg',
-          metadata: { view_count: 200 },
+          metadata: { view_count: 200, source_channel_avatar_url: 'https://avatar/1.jpg' },
         },
       ],
       blueprints: [

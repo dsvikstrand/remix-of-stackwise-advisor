@@ -80,7 +80,7 @@ function shouldRefundUnlock(unlock: SourceItemUnlockRow) {
 }
 
 async function listProcessingUnlocks(db: DbClient, limit: number) {
-  const fetchLimit = Math.max(1, Math.min(1000, limit * 3));
+  const fetchLimit = Math.max(1, Math.min(1000, limit * 2));
   const { data, error } = await db
     .from('source_item_unlocks')
     .select(unlockSelect)
@@ -214,9 +214,9 @@ export async function runUnlockReliabilitySweeps(
 ): Promise<UnlockSweepResult> {
   const deps: UnlockReliabilityDeps = { ...defaultDeps, ...overrides };
   const enabled = input.enabled !== false;
-  const batchSize = Math.max(10, Math.min(1000, Number(input.batchSize || 100)));
-  const processingStaleMs = Math.max(60_000, Math.min(24 * 60 * 60 * 1000, Number(input.processingStaleMs || 10 * 60_000)));
-  const minIntervalMs = Math.max(1_000, Math.min(10 * 60_000, Number(input.minIntervalMs || 30_000)));
+  const batchSize = Math.max(10, Math.min(1000, Number(input.batchSize || 40)));
+  const processingStaleMs = Math.max(60_000, Math.min(24 * 60 * 60 * 1000, Number(input.processingStaleMs || 20 * 60_000)));
+  const minIntervalMs = Math.max(1_000, Math.min(30 * 60_000, Number(input.minIntervalMs || 120_000)));
   const force = Boolean(input.force);
   const mode = input.mode || 'opportunistic';
   const dryLogs = input.dryLogs !== false;

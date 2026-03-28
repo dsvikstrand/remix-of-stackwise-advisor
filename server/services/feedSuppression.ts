@@ -8,7 +8,7 @@ const SUPPRESSIBLE_FEED_STATES = ['my_feed_unlockable', 'my_feed_unlocking'] as 
 const DEFAULT_SUPPRESSION_CHUNK_SIZE = 200;
 export const FEED_SUPPRESSION_DEDUPE_WINDOW_MS = Math.max(
   30_000,
-  Math.min(30 * 60_000, Math.floor(Number(process.env.FEED_SUPPRESSION_DEDUPE_WINDOW_MS || 10 * 60_000) || 10 * 60_000)),
+  Math.min(60 * 60_000, Math.floor(Number(process.env.FEED_SUPPRESSION_DEDUPE_WINDOW_MS || 30 * 60_000) || 30 * 60_000)),
 );
 const recentSuppressionAttempts = new Map<string, number>();
 

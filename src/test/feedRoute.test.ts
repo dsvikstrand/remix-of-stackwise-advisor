@@ -81,6 +81,7 @@ describe('my feed route', () => {
           metadata: {
             channel_banner_url: 'https://img.example.com/ready-banner.jpg',
             view_count: 1200,
+            source_channel_avatar_url: 'https://img.example.com/ready-avatar.jpg',
           },
         },
         {
@@ -91,7 +92,9 @@ describe('my feed route', () => {
           title: 'Locked video',
           source_channel_title: 'Locked Creator',
           thumbnail_url: 'https://img.example.com/locked.jpg',
-          metadata: {},
+          metadata: {
+            source_channel_avatar_url: 'https://img.example.com/locked-avatar.jpg',
+          },
         },
         {
           id: 'source_hidden',
@@ -151,7 +154,7 @@ describe('my feed route', () => {
         },
       ],
       blueprint_tags: [
-        { blueprint_id: 'bp_1', tag_id: 'tag_1' },
+        { blueprint_id: 'bp_1', tags: { slug: 'fitness' } },
       ],
       tags: [
         { id: 'tag_1', slug: 'fitness' },

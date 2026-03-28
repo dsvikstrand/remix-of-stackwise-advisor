@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { config } from '@/config/runtime';
 import { buildFeedSummary } from '@/lib/feedPreview';
 
-const CHANNEL_FEED_BLUEPRINT_SCAN_LIMIT = 180;
+const CHANNEL_FEED_BLUEPRINT_SCAN_LIMIT = 96;
 
 export type ChannelFeedTab = 'top' | 'recent';
 
@@ -174,11 +174,11 @@ async function fetchChannelFeedPage(input: {
   return json.data;
 }
 
-export function useChannelFeed({ channelSlug, tab, pageSize = 20 }: UseChannelFeedOptions) {
+export function useChannelFeed({ channelSlug, tab, pageSize = 16 }: UseChannelFeedOptions) {
   const query = useInfiniteQuery({
     queryKey: ['channel-feed', channelSlug, tab, pageSize],
     enabled: Boolean(channelSlug),
-    staleTime: 10 * 60_000,
+    staleTime: 20 * 60_000,
     retry: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,

@@ -307,8 +307,8 @@ const yt2bpSafetyBlockEnabled = (
 const yt2bpCoreTimeoutMs = clampInt(process.env.YT2BP_CORE_TIMEOUT_MS, 120_000, 30_000, 300_000);
 const ingestionServiceToken = String(process.env.INGESTION_SERVICE_TOKEN || '').trim();
 const ingestionMaxPerSubscription = Math.max(1, Number(process.env.INGESTION_MAX_PER_SUBSCRIPTION) || 5);
-const refreshScanCooldownMs = clampInt(process.env.REFRESH_SCAN_COOLDOWN_MS, 30_000, 5_000, 300_000);
-const refreshGenerateCooldownMs = clampInt(process.env.REFRESH_GENERATE_COOLDOWN_MS, 120_000, 10_000, 900_000);
+const refreshScanCooldownMs = clampInt(process.env.REFRESH_SCAN_COOLDOWN_MS, 60_000, 5_000, 600_000);
+const refreshGenerateCooldownMs = clampInt(process.env.REFRESH_GENERATE_COOLDOWN_MS, 300_000, 10_000, 1_800_000);
 const refreshGenerateMaxItems = clampInt(process.env.REFRESH_GENERATE_MAX_ITEMS, 10, 1, 200);
 const sourceVideoListBurstWindowMs = clampInt(process.env.SOURCE_VIDEO_LIST_BURST_WINDOW_MS, 15_000, 5_000, 300_000);
 const sourceVideoListBurstMax = clampInt(process.env.SOURCE_VIDEO_LIST_BURST_MAX, 4, 1, 20);
@@ -338,6 +338,8 @@ const queueDepthHardLimit = clampInt(process.env.QUEUE_DEPTH_HARD_LIMIT, 1000, 1
 const queueDepthPerUserLimit = clampInt(process.env.QUEUE_DEPTH_PER_USER_LIMIT, 50, 1, 10_000);
 const queueWorkItemsHardLimit = clampInt(process.env.QUEUE_WORK_ITEMS_HARD_LIMIT, 250, 1, 200_000);
 const queueWorkItemsPerUserLimit = clampInt(process.env.QUEUE_WORK_ITEMS_PER_USER_LIMIT, 40, 1, 10_000);
+const autoUnlockEligibleUsersCacheMs = clampInt(process.env.AUTO_UNLOCK_ELIGIBLE_USERS_CACHE_MS, 10 * 60_000, 5_000, 60 * 60_000);
+const autoUnlockQueueDepthCacheMs = clampInt(process.env.AUTO_UNLOCK_QUEUE_DEPTH_CACHE_MS, 60_000, 5_000, 10 * 60_000);
 const queuePriorityEnabled = parseRuntimeFlag(process.env.QUEUE_PRIORITY_ENABLED, true);
 const queueSweepHighBatch = clampInt(process.env.QUEUE_SWEEP_HIGH_BATCH, 10, 0, 200);
 const queueSweepMediumBatch = clampInt(
@@ -373,22 +375,22 @@ const effectiveWorkerHeartbeatMs = resolveWorkerLeaseHeartbeatMs({
   configuredHeartbeatMs: workerHeartbeatMs,
 });
 const workerKeepAliveDelayMs = clampInt(process.env.WORKER_KEEPALIVE_DELAY_MS, 1_500, 0, 60_000);
-const workerIdleBackoffBaseMs = clampInt(process.env.WORKER_IDLE_BACKOFF_BASE_MS, 180_000, 1_000, 10 * 60_000);
-const workerIdleBackoffMaxMs = clampInt(process.env.WORKER_IDLE_BACKOFF_MAX_MS, 900_000, workerIdleBackoffBaseMs, 30 * 60_000);
+const workerIdleBackoffBaseMs = clampInt(process.env.WORKER_IDLE_BACKOFF_BASE_MS, 300_000, 1_000, 15 * 60_000);
+const workerIdleBackoffMaxMs = clampInt(process.env.WORKER_IDLE_BACKOFF_MAX_MS, 1_200_000, workerIdleBackoffBaseMs, 45 * 60_000);
 const jobExecutionTimeoutMs = clampInt(process.env.JOB_EXECUTION_TIMEOUT_MS, 180_000, 5_000, 10 * 60_000);
 const youtubeRefreshEnabled = parseRuntimeFlag(process.env.YOUTUBE_REFRESH_ENABLED, true);
-const youtubeRefreshIntervalMinutes = clampInt(process.env.YOUTUBE_REFRESH_INTERVAL_MINUTES, 60, 1, 120);
+const youtubeRefreshIntervalMinutes = clampInt(process.env.YOUTUBE_REFRESH_INTERVAL_MINUTES, 120, 1, 240);
 const youtubeRefreshQueueDepthGuard = clampInt(process.env.YOUTUBE_REFRESH_QUEUE_DEPTH_GUARD, 100, 1, 50_000);
 const youtubeRefreshViewMaxPerCycle = clampInt(process.env.YOUTUBE_REFRESH_VIEW_MAX_PER_CYCLE, 15, 0, 500);
 const youtubeRefreshCommentsMaxPerCycle = clampInt(process.env.YOUTUBE_REFRESH_COMMENTS_MAX_PER_CYCLE, 5, 0, 500);
 const youtubeRefreshViewIntervalHours = clampInt(process.env.YOUTUBE_REFRESH_VIEW_INTERVAL_HOURS, 12, 1, 24 * 14);
-const youtubeCommentsAutoFirstDelayMinutes = clampInt(process.env.YOUTUBE_COMMENTS_AUTO_FIRST_DELAY_MINUTES, 15, 1, 24 * 60);
-const youtubeCommentsAutoSecondDelayHours = clampInt(process.env.YOUTUBE_COMMENTS_AUTO_SECOND_DELAY_HOURS, 24, 1, 24 * 30);
+const youtubeCommentsAutoFirstDelayMinutes = clampInt(process.env.YOUTUBE_COMMENTS_AUTO_FIRST_DELAY_MINUTES, 60, 1, 24 * 60);
+const youtubeCommentsAutoSecondDelayHours = clampInt(process.env.YOUTUBE_COMMENTS_AUTO_SECOND_DELAY_HOURS, 48, 1, 24 * 30);
 const youtubeCommentsManualCooldownMinutes = clampInt(
   process.env.YOUTUBE_COMMENTS_MANUAL_COOLDOWN_MINUTES,
   process.env.YOUTUBE_COMMENTS_MANUAL_COOLDOWN_HOURS
     ? clampInt(process.env.YOUTUBE_COMMENTS_MANUAL_COOLDOWN_HOURS, 24, 1, 24 * 30) * 60
-    : 10,
+    : 60,
   1,
   24 * 60,
 );
@@ -446,9 +448,9 @@ const transcriptFailFastEnabled = parseRuntimeFlag(process.env.TRANSCRIPT_FAIL_F
 const sourceUnlockExpiredSweepBatch = clampInt(process.env.SOURCE_UNLOCK_EXPIRED_SWEEP_BATCH, 100, 10, 1000);
 const sourceUnlockSweepsEnabledRaw = String(process.env.SOURCE_UNLOCK_SWEEPS_ENABLED || 'true').trim().toLowerCase();
 const sourceUnlockSweepsEnabled = !(sourceUnlockSweepsEnabledRaw === 'false' || sourceUnlockSweepsEnabledRaw === '0' || sourceUnlockSweepsEnabledRaw === 'off');
-const sourceUnlockSweepBatch = clampInt(process.env.SOURCE_UNLOCK_SWEEP_BATCH, 100, 10, 1000);
-const sourceUnlockProcessingStaleMs = clampInt(process.env.SOURCE_UNLOCK_PROCESSING_STALE_MS, 10 * 60_000, 60_000, 24 * 60 * 60 * 1000);
-const sourceUnlockSweepMinIntervalMs = clampInt(process.env.SOURCE_UNLOCK_SWEEP_MIN_INTERVAL_MS, 300_000, 1_000, 10 * 60_000);
+const sourceUnlockSweepBatch = clampInt(process.env.SOURCE_UNLOCK_SWEEP_BATCH, 40, 10, 1000);
+const sourceUnlockProcessingStaleMs = clampInt(process.env.SOURCE_UNLOCK_PROCESSING_STALE_MS, 20 * 60_000, 60_000, 24 * 60 * 60 * 1000);
+const sourceUnlockSweepMinIntervalMs = clampInt(process.env.SOURCE_UNLOCK_SWEEP_MIN_INTERVAL_MS, 600_000, 1_000, 30 * 60_000);
 const transcriptFeedSuppressionSweepMinIntervalMs = clampInt(
   process.env.TRANSCRIPT_FEED_SUPPRESSION_SWEEP_MIN_INTERVAL_MS,
   30 * 60_000,
@@ -460,7 +462,7 @@ const sourceUnlockSweepDryLogs = !(sourceUnlockSweepDryLogsRaw === 'false' || so
 const sourcePageAssetSweepEnabledRaw = String(process.env.SOURCE_PAGE_ASSET_SWEEP_ENABLED || 'true').trim().toLowerCase();
 const sourcePageAssetSweepEnabled = !(sourcePageAssetSweepEnabledRaw === 'false' || sourcePageAssetSweepEnabledRaw === '0' || sourcePageAssetSweepEnabledRaw === 'off');
 const sourcePageAssetSweepBatch = clampInt(process.env.SOURCE_PAGE_ASSET_SWEEP_BATCH, 100, 10, 1000);
-const sourcePageAssetSweepMinIntervalMs = clampInt(process.env.SOURCE_PAGE_ASSET_SWEEP_MIN_INTERVAL_MS, 1_800_000, 5_000, 60 * 60_000);
+const sourcePageAssetSweepMinIntervalMs = clampInt(process.env.SOURCE_PAGE_ASSET_SWEEP_MIN_INTERVAL_MS, 3_600_000, 5_000, 2 * 60 * 60_000);
 const refreshFailureCooldownHours = clampInt(process.env.REFRESH_FAILURE_COOLDOWN_HOURS, 6, 1, 168);
 const ingestionStaleRunningMs = clampInt(process.env.INGESTION_STALE_RUNNING_MS, 30 * 60 * 1000, 60_000, 24 * 60 * 60 * 1000);
 const autoBannerMode = normalizeAutoBannerMode(process.env.SUBSCRIPTION_AUTO_BANNER_MODE);
@@ -473,7 +475,7 @@ const autoBannerStaleRunningMs = clampInt(process.env.AUTO_BANNER_STALE_RUNNING_
 const notificationPushConfig = readNotificationPushConfigFromEnv(process.env);
 const notificationPushEnabled = notificationPushConfig.enabled;
 const notificationPushSender = createNotificationPushSender(notificationPushConfig);
-const notificationPushDispatchIntervalMs = 300_000;
+const notificationPushDispatchIntervalMs = 600_000;
 const notificationPushBatchSize = 10;
 const notificationPushMaxAttempts = 3;
 const notificationPushProcessingStaleMs = 5 * 60 * 1000;
@@ -3819,6 +3821,31 @@ type AutoUnlockAttemptResult =
     reason: AutoUnlockAttemptReason;
   };
 
+const autoUnlockEligibleUsersCache = new Map<string, { expiresAtMs: number; value: string[] }>();
+const autoUnlockQueueDepthCache = new Map<string, { expiresAtMs: number; value: number }>();
+
+function readExpiringCacheValue<T>(cache: Map<string, { expiresAtMs: number; value: T }>, key: string) {
+  const cached = cache.get(key);
+  if (!cached) return null;
+  if (cached.expiresAtMs <= Date.now()) {
+    cache.delete(key);
+    return null;
+  }
+  return cached.value;
+}
+
+function writeExpiringCacheValue<T>(cache: Map<string, { expiresAtMs: number; value: T }>, key: string, value: T, ttlMs: number) {
+  cache.set(key, {
+    expiresAtMs: Date.now() + Math.max(1_000, ttlMs),
+    value,
+  });
+  return value;
+}
+
+function buildAutoUnlockEligibleUsersCacheKey(input: { sourcePageId: string | null; sourceChannelId: string | null }) {
+  return `page:${String(input.sourcePageId || '').trim()}::channel:${String(input.sourceChannelId || '').trim()}`;
+}
+
 async function listEligibleAutoUnlockUsers(
   db: ReturnType<typeof createClient>,
   input: {
@@ -3826,6 +3853,10 @@ async function listEligibleAutoUnlockUsers(
     sourceChannelId: string | null;
   },
 ) {
+  const cacheKey = buildAutoUnlockEligibleUsersCacheKey(input);
+  const cached = readExpiringCacheValue(autoUnlockEligibleUsersCache, cacheKey);
+  if (cached) return cached;
+
   const userIds = new Set<string>();
   const sourcePageId = String(input.sourcePageId || '').trim();
   const sourceChannelId = String(input.sourceChannelId || '').trim();
@@ -3859,7 +3890,7 @@ async function listEligibleAutoUnlockUsers(
     }
   }
 
-  return Array.from(userIds);
+  return writeExpiringCacheValue(autoUnlockEligibleUsersCache, cacheKey, Array.from(userIds), autoUnlockEligibleUsersCacheMs);
 }
 
 async function attemptAutoUnlockForSourceItem(input: {
@@ -3971,15 +4002,29 @@ async function attemptAutoUnlockForSourceItem(input: {
     amount: computeUnlockCost(1),
   });
 
-  const queueDepth = await countQueueDepth(db, {
-    scope: 'source_item_unlock_generation',
-    includeRunning: true,
-  });
-  const ownerQueueDepth = await countQueueDepth(db, {
-    scope: 'source_item_unlock_generation',
-    userId: ownerUserId,
-    includeRunning: true,
-  });
+  const globalQueueDepthCacheKey = 'scope:source_item_unlock_generation::global';
+  const ownerQueueDepthCacheKey = `scope:source_item_unlock_generation::owner:${ownerUserId}`;
+  const cachedQueueDepth = readExpiringCacheValue(autoUnlockQueueDepthCache, globalQueueDepthCacheKey);
+  const cachedOwnerQueueDepth = readExpiringCacheValue(autoUnlockQueueDepthCache, ownerQueueDepthCacheKey);
+  const queueDepth = cachedQueueDepth ?? writeExpiringCacheValue(
+    autoUnlockQueueDepthCache,
+    globalQueueDepthCacheKey,
+    await countQueueDepth(db, {
+      scope: 'source_item_unlock_generation',
+      includeRunning: true,
+    }),
+    autoUnlockQueueDepthCacheMs,
+  );
+  const ownerQueueDepth = cachedOwnerQueueDepth ?? writeExpiringCacheValue(
+    autoUnlockQueueDepthCache,
+    ownerQueueDepthCacheKey,
+    await countQueueDepth(db, {
+      scope: 'source_item_unlock_generation',
+      userId: ownerUserId,
+      includeRunning: true,
+    }),
+    autoUnlockQueueDepthCacheMs,
+  );
 
   if (!unlockIntakeEnabled || queueDepth >= queueDepthHardLimit || ownerQueueDepth >= queueDepthPerUserLimit) {
     if (reservation.reservedNow) {

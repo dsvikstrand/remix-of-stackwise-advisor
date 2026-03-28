@@ -1,5 +1,14 @@
 type DbClient = any;
 
+const AUTO_BANNER_REBALANCE_COOLDOWN_MS = Math.max(
+  5 * 60_000,
+  Math.min(
+    24 * 60 * 60_000,
+    Math.floor(Number(process.env.AUTO_BANNER_REBALANCE_COOLDOWN_MS || 6 * 60 * 60_000) || 6 * 60 * 60_000),
+  ),
+);
+let lastAutoBannerRebalanceAtMs = 0;
+
 type AutoBannerJobRow = {
   id: string;
   blueprint_id: string;
@@ -55,7 +64,7 @@ export function createAutoBannerQueueService(deps: AutoBannerQueueDeps) {
   async function processAutoBannerQueue(db: DbClient, input?: { maxJobs?: number }): Promise<AutoBannerRunResult> {
     const nowIso = new Date().toISOString();
     const maxJobs = Math.max(1, Math.min(200, input?.maxJobs || deps.autoBannerBatchSize));
-    const claimScanLimit = Math.max(maxJobs * 4, maxJobs);
+    const claimScanLimit = Math.max(maxJobs * 2, maxJobs);
 
     await deps.recoverStaleAutoBannerJobs(db);
 
@@ -155,16 +164,29 @@ export function createAutoBannerQueueService(deps: AutoBannerQueueDeps) {
       }
     }
 
-    const rebalance = await deps.rebalanceGeneratedBannerCap(db);
-    console.log('[auto_banner_rebalance]', JSON.stringify({
-      cap: deps.autoBannerCap,
-      eligible: rebalance.eligible,
-      kept: rebalance.kept,
-      demoted: rebalance.demoted,
-      restored_generated: rebalance.restoredToGenerated,
-      demoted_default: rebalance.demotedToDefault,
-      demoted_none: rebalance.demotedToNone,
-    }));
+    const shouldRebalance = Date.now() - lastAutoBannerRebalanceAtMs >= AUTO_BANNER_REBALANCE_COOLDOWN_MS;
+    const rebalance = shouldRebalance
+      ? await deps.rebalanceGeneratedBannerCap(db)
+      : {
+          eligible: 0,
+          kept: 0,
+          demoted: 0,
+          restoredToGenerated: 0,
+          demotedToDefault: 0,
+          demotedToNone: 0,
+        };
+    if (shouldRebalance) {
+      lastAutoBannerRebalanceAtMs = Date.now();
+      console.log('[auto_banner_rebalance]', JSON.stringify({
+        cap: deps.autoBannerCap,
+        eligible: rebalance.eligible,
+        kept: rebalance.kept,
+        demoted: rebalance.demoted,
+        restored_generated: rebalance.restoredToGenerated,
+        demoted_default: rebalance.demotedToDefault,
+        demoted_none: rebalance.demotedToNone,
+      }));
+    }
 
     return {
       ...results,

@@ -25,6 +25,26 @@ function buildSourcePagePath(platform: string, externalId: string) {
   return `/s/${encodeURIComponent(platform)}/${encodeURIComponent(externalId)}`;
 }
 
+function collectJoinedTagSlugs(
+  rows: Array<{ blueprint_id: string; tags?: { slug?: string } | Array<{ slug?: string }> | null }>,
+) {
+  const tagsByBlueprint = new Map<string, string[]>();
+  for (const row of rows) {
+    const blueprintId = String(row.blueprint_id || '').trim();
+    if (!blueprintId) continue;
+    const existing = tagsByBlueprint.get(blueprintId) || [];
+    const joined = row.tags;
+    const tagCandidates = Array.isArray(joined) ? joined : joined ? [joined] : [];
+    for (const candidate of tagCandidates) {
+      const slug = String(candidate?.slug || '').trim();
+      if (!slug || existing.includes(slug)) continue;
+      existing.push(slug);
+    }
+    tagsByBlueprint.set(blueprintId, existing);
+  }
+  return tagsByBlueprint;
+}
+
 export interface MyFeedItemView {
   id: string;
   state: string;
@@ -117,61 +137,15 @@ export async function listMyFeedItemsFromDb(input: {
   const { data: tagRows } = blueprintIds.length
     ? await db
       .from('blueprint_tags')
-      .select('blueprint_id, tag_id')
+      .select('blueprint_id, tags(slug)')
       .in('blueprint_id', blueprintIds)
-    : { data: [] as Array<{ blueprint_id: string; tag_id: string }> };
-
-  const tagIds = [...new Set((tagRows || []).map((row) => String(row.tag_id || '').trim()).filter(Boolean))];
-  const { data: tagsData } = tagIds.length > 0
-    ? await db
-      .from('tags')
-      .select('id, slug')
-      .in('id', tagIds)
-    : { data: [] as Array<{ id: string; slug: string }> };
-
-  const tagsMap = new Map((tagsData || []).map((tag: any) => [tag.id, String(tag.slug || '').trim()]));
-  const tagsByBlueprint = new Map<string, string[]>();
-  (tagRows || []).forEach((row: any) => {
-    const blueprintId = String(row.blueprint_id || '').trim();
-    const slug = tagsMap.get(String(row.tag_id || '').trim()) || '';
-    if (!blueprintId || !slug) return;
-    const list = tagsByBlueprint.get(blueprintId) || [];
-    list.push(slug);
-    tagsByBlueprint.set(blueprintId, list);
-  });
+    : { data: [] as Array<{ blueprint_id: string; tags?: { slug?: string } | Array<{ slug?: string }> | null }> };
+  const tagsByBlueprint = collectJoinedTagSlugs((tagRows || []) as Array<{
+    blueprint_id: string;
+    tags?: { slug?: string } | Array<{ slug?: string }> | null;
+  }>);
 
   const sourceMap = new Map((sources || []).map((row: any) => [row.id, row]));
-  const sourcePageIds = [...new Set((sources || []).map((row: any) => String(row.source_page_id || '').trim()).filter(Boolean))];
-  const sourceChannelIds = [...new Set((sources || []).map((row: any) => String(row.source_channel_id || '').trim()).filter(Boolean))];
-  const { data: sourcePagesData } = sourcePageIds.length
-    ? await db
-      .from('source_pages')
-      .select('id, avatar_url, platform, external_id')
-      .in('id', sourcePageIds)
-    : { data: [] as Array<{ id: string; avatar_url: string | null; platform: string | null; external_id: string | null }> };
-  const { data: sourcePagesByExternalData } = sourceChannelIds.length
-    ? await db
-      .from('source_pages')
-      .select('external_id, avatar_url, platform')
-      .eq('platform', 'youtube')
-      .in('external_id', sourceChannelIds)
-    : { data: [] as Array<{ external_id: string; avatar_url: string | null; platform: string | null }> };
-  const sourcePageAvatarById = new Map((sourcePagesData || []).map((row: any) => [row.id, row.avatar_url || null]));
-  const sourcePageAvatarByExternalId = new Map((sourcePagesByExternalData || []).map((row: any) => [row.external_id, row.avatar_url || null]));
-  const sourcePagePathById = new Map(
-    (sourcePagesData || []).map((row: any) => {
-      const platform = String(row.platform || '').trim();
-      const externalId = String(row.external_id || '').trim();
-      return [row.id, platform && externalId ? buildSourcePagePath(platform, externalId) : null] as const;
-    }),
-  );
-  const sourcePagePathByExternalId = new Map(
-    (sourcePagesByExternalData || []).map((row: any) => {
-      const platform = String(row.platform || '').trim();
-      const externalId = String(row.external_id || '').trim();
-      return [row.external_id, platform && externalId ? buildSourcePagePath(platform, externalId) : null] as const;
-    }),
-  );
   const unlockMap = new Map((unlocks || []).map((row: any) => [row.source_item_id, row]));
   const transcriptHiddenSourceIds = new Set(
     (unlocks || [])
@@ -238,18 +212,13 @@ export async function listMyFeedItemsFromDb(input: {
             id: source.id,
             sourceChannelId: source.source_channel_id || null,
             sourcePageId: source.source_page_id || null,
-            sourcePagePath:
-              sourcePagePathById.get(String(source.source_page_id || '').trim())
-              || sourcePagePathByExternalId.get(String(source.source_channel_id || '').trim())
-              || null,
+            sourcePagePath: source.source_channel_id
+              ? buildSourcePagePath('youtube', String(source.source_channel_id || '').trim())
+              : null,
             sourceUrl: source.source_url,
             title: source.title,
             sourceChannelTitle: source.source_channel_title || metadataSourceChannelTitle || null,
-            sourceChannelAvatarUrl:
-              metadataSourceChannelAvatarUrl
-              || sourcePageAvatarById.get(String(source.source_page_id || '').trim())
-              || sourcePageAvatarByExternalId.get(String(source.source_channel_id || '').trim())
-              || null,
+            sourceChannelAvatarUrl: metadataSourceChannelAvatarUrl || null,
             thumbnailUrl: source.thumbnail_url || null,
             channelBannerUrl:
               source.metadata

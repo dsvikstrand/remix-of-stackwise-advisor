@@ -38,9 +38,9 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
     }
 
     const tab = normalizeChannelFeedTab(req.query.tab);
-    const limit = clampInt(req.query.limit, 20, 1, 40);
+    const limit = clampInt(req.query.limit, 16, 1, 24);
     const offset = clampInt(req.query.offset, 0, 0, 1000);
-    const scanLimit = Math.max(120, Math.min(480, offset + limit * 8));
+    const scanLimit = Math.max(limit * 3, Math.min(180, offset + limit * 4));
 
     try {
       const { data: candidateRows, error: candidateError } = await db

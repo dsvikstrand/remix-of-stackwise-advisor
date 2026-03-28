@@ -73,23 +73,12 @@ const CHANNEL_TAG_SLUG_TO_CHANNEL_SLUG = new Map(
     .filter((channel) => channel.isJoinEnabled && channel.status === 'active')
     .map((channel) => [channel.tagSlug, channel.slug] as const),
 );
-const TAG_LOOKUP_BATCH_SIZE = 80;
 
 function normalizeWallFeedScope(scope: WallFeedScope) {
   const normalized = String(scope || '').trim().toLowerCase();
   if (!normalized) return 'all';
   if (normalized === JOINED_SCOPE_ALIAS) return CANONICAL_JOINED_SCOPE;
   return normalized;
-}
-
-function chunkValues<T>(values: T[], size: number) {
-  if (!Array.isArray(values) || values.length === 0) return [] as T[][];
-  const normalizedSize = Math.max(1, Math.floor(Number(size) || 1));
-  const chunks: T[][] = [];
-  for (let index = 0; index < values.length; index += normalizedSize) {
-    chunks.push(values.slice(index, index + normalizedSize));
-  }
-  return chunks;
 }
 
 function parseSourceViewCount(metadata: Record<string, unknown> | null) {
@@ -136,6 +125,47 @@ function getMetadataSourceChannelAvatarUrl(metadata: Record<string, unknown> | n
   return null;
 }
 
+function collectJoinedTagRefs(
+  rows: Array<{ blueprint_id: string; tags?: { id?: string; slug?: string } | Array<{ id?: string; slug?: string }> | null }>,
+) {
+  const tagsByBlueprint = new Map<string, { id: string; slug: string }[]>();
+  for (const row of rows) {
+    const blueprintId = String(row.blueprint_id || '').trim();
+    if (!blueprintId) continue;
+    const existing = tagsByBlueprint.get(blueprintId) || [];
+    const joined = row.tags;
+    const tagCandidates = Array.isArray(joined) ? joined : joined ? [joined] : [];
+    for (const candidate of tagCandidates) {
+      const id = String(candidate?.id || '').trim();
+      const slug = String(candidate?.slug || '').trim();
+      if (!id || !slug || existing.some((tag) => tag.id === id)) continue;
+      existing.push({ id, slug });
+    }
+    tagsByBlueprint.set(blueprintId, existing);
+  }
+  return tagsByBlueprint;
+}
+
+function collectJoinedTagSlugs(
+  rows: Array<{ blueprint_id: string; tags?: { slug?: string } | Array<{ slug?: string }> | null }>,
+) {
+  const tagsByBlueprint = new Map<string, string[]>();
+  for (const row of rows) {
+    const blueprintId = String(row.blueprint_id || '').trim();
+    if (!blueprintId) continue;
+    const existing = tagsByBlueprint.get(blueprintId) || [];
+    const joined = row.tags;
+    const tagCandidates = Array.isArray(joined) ? joined : joined ? [joined] : [];
+    for (const candidate of tagCandidates) {
+      const slug = String(candidate?.slug || '').trim();
+      if (!slug || existing.includes(slug)) continue;
+      existing.push(slug);
+    }
+    tagsByBlueprint.set(blueprintId, existing);
+  }
+  return tagsByBlueprint;
+}
+
 type BuildFeedItemMapsResult = {
   sourceChannelTitleByBlueprint: Map<string, { title: string | null; createdAtMs: number }>;
   sourceChannelAvatarByBlueprint: Map<string, { avatarUrl: string | null; createdAtMs: number }>;
@@ -165,33 +195,15 @@ async function buildFeedItemMaps(db: DbClient, feedItems: Array<{ id: string; bl
 
   const { data: sourceItemsData, error: sourceItemsError } = await db
     .from('source_items')
-    .select('id, source_page_id, source_channel_id, source_channel_title, thumbnail_url, metadata')
+    .select('id, source_channel_id, source_channel_title, thumbnail_url, metadata')
     .in('id', sourceItemIds);
   if (sourceItemsError) throw sourceItemsError;
-
-  const sourcePageIds = [...new Set((sourceItemsData || []).map((row: any) => String(row.source_page_id || '').trim()).filter(Boolean))];
-  const sourceChannelIds = [...new Set((sourceItemsData || []).map((row: any) => String(row.source_channel_id || '').trim()).filter(Boolean))];
-  const { data: sourcePagesData, error: sourcePagesError } = sourcePageIds.length > 0
-    ? await db.from('source_pages').select('id, avatar_url').in('id', sourcePageIds)
-    : { data: [], error: null };
-  if (sourcePagesError) throw sourcePagesError;
-  const { data: sourcePagesByExternalData, error: sourcePagesByExternalError } = sourceChannelIds.length > 0
-    ? await db.from('source_pages').select('external_id, avatar_url').eq('platform', 'youtube').in('external_id', sourceChannelIds)
-    : { data: [], error: null };
-  if (sourcePagesByExternalError) throw sourcePagesByExternalError;
-
-  const sourcePageAvatarById = new Map((sourcePagesData || []).map((row: any) => [row.id, row.avatar_url || null]));
-  const sourcePageAvatarByExternalId = new Map((sourcePagesByExternalData || []).map((row: any) => [row.external_id, row.avatar_url || null]));
   const sourceItemsMap = new Map(
     (sourceItemsData || []).map((row: any) => {
       const metadata = toMetadataObject(row.metadata);
       return [row.id, {
         title: row.source_channel_title || getMetadataSourceChannelTitle(metadata) || null,
-        avatarUrl:
-          getMetadataSourceChannelAvatarUrl(metadata)
-          || sourcePageAvatarById.get(String(row.source_page_id || '').trim())
-          || sourcePageAvatarByExternalId.get(String(row.source_channel_id || '').trim())
-          || null,
+        avatarUrl: getMetadataSourceChannelAvatarUrl(metadata) || null,
         thumbnailUrl: String(row.thumbnail_url || '').trim() || null,
         viewCount: parseSourceViewCount(metadata),
       }] as const;
@@ -265,7 +277,7 @@ export async function listWallBlueprintFeed(input: {
   const isSpecificChannelScope = !!scopedChannel;
   const isJoinedScope = scope === CANONICAL_JOINED_SCOPE && !!viewerUserId;
 
-  const limit = isJoinedScope || isSpecificChannelScope ? 140 : 90;
+  const limit = isJoinedScope || isSpecificChannelScope ? 96 : 60;
   let query = db
     .from('blueprints')
     .select('id, creator_user_id, title, preview_summary, banner_url, likes_count, created_at')
@@ -288,44 +300,23 @@ export async function listWallBlueprintFeed(input: {
   if (!blueprints || blueprints.length === 0) return [] as WallBlueprintFeedItem[];
 
   const blueprintIds = blueprints.map((row: any) => row.id);
-  const userIds = [...new Set(blueprints.map((row: any) => row.creator_user_id).filter(Boolean))];
-
-  const [tagsRes, likesRes, profilesRes, feedItemsRes] = await Promise.all([
-    db.from('blueprint_tags').select('blueprint_id, tag_id').in('blueprint_id', blueprintIds),
+  const [tagsRes, likesRes, feedItemsRes] = await Promise.all([
+    db.from('blueprint_tags').select('blueprint_id, tags(id, slug)').in('blueprint_id', blueprintIds),
     viewerUserId
       ? db.from('blueprint_likes').select('blueprint_id').eq('user_id', viewerUserId).in('blueprint_id', blueprintIds)
       : Promise.resolve({ data: [] as { blueprint_id: string }[], error: null }),
-    userIds.length > 0
-      ? db.from('profiles').select('user_id, display_name, avatar_url').in('user_id', userIds)
-      : Promise.resolve({ data: [] as { user_id: string; display_name: string | null; avatar_url: string | null }[], error: null }),
     db.from('user_feed_items').select('id, blueprint_id, source_item_id, created_at').in('blueprint_id', blueprintIds),
   ]);
 
-  if (tagsRes.error || likesRes.error || profilesRes.error || feedItemsRes.error) {
-    throw tagsRes.error || likesRes.error || profilesRes.error || feedItemsRes.error;
+  if (tagsRes.error || likesRes.error || feedItemsRes.error) {
+    throw tagsRes.error || likesRes.error || feedItemsRes.error;
   }
 
-  const tagRows = tagsRes.data || [];
-  const tagIds = [...new Set(tagRows.map((row: any) => row.tag_id).filter(Boolean))];
-  const tagsData: Array<{ id: string; slug: string }> = [];
-  for (const batch of chunkValues(tagIds, TAG_LOOKUP_BATCH_SIZE)) {
-    const { data, error: tagsError } = await db.from('tags').select('id, slug').in('id', batch);
-    if (tagsError) throw tagsError;
-    tagsData.push(...((data || []) as Array<{ id: string; slug: string }>));
-  }
-
-  const tagsMap = new Map((tagsData || []).map((tag: any) => [tag.id, tag]));
-  const blueprintTags = new Map<string, { id: string; slug: string }[]>();
-  tagRows.forEach((row: any) => {
-    const tag = tagsMap.get(row.tag_id);
-    if (!tag) return;
-    const list = blueprintTags.get(row.blueprint_id) || [];
-    list.push(tag);
-    blueprintTags.set(row.blueprint_id, list);
-  });
-
+  const blueprintTags = collectJoinedTagRefs((tagsRes.data || []) as Array<{
+    blueprint_id: string;
+    tags?: { id?: string; slug?: string } | Array<{ id?: string; slug?: string }> | null;
+  }>);
   const likedIds = new Set((likesRes.data || []).map((row: any) => row.blueprint_id));
-  const profilesMap = new Map((profilesRes.data || []).map((profile: any) => [profile.user_id, profile]));
 
   const feedItemMaps = await buildFeedItemMaps(db, (feedItemsRes.data || []) as Array<{
     id: string;
@@ -357,7 +348,7 @@ export async function listWallBlueprintFeed(input: {
       fallback: 'Open blueprint to view full details.',
       maxChars: 220,
     }),
-    profile: profilesMap.get(blueprint.creator_user_id) || { display_name: null, avatar_url: null },
+    profile: { display_name: null, avatar_url: null },
     tags: blueprintTags.get(blueprint.id) || [],
     user_liked: likedIds.has(blueprint.id),
     published_channel_slug: feedItemMaps.publishedChannelByBlueprint.get(blueprint.id)?.slug || null,
@@ -424,44 +415,20 @@ export async function listWallForYouFeed(input: {
   }
 
   const { data: tagRows, error: tagRowsError } = blueprintIds.length
-    ? await db.from('blueprint_tags').select('blueprint_id, tag_id').in('blueprint_id', blueprintIds)
+    ? await db.from('blueprint_tags').select('blueprint_id, tags(slug)').in('blueprint_id', blueprintIds)
     : { data: [], error: null };
   if (tagRowsError) throw tagRowsError;
-  const tagIds = [...new Set((tagRows || []).map((row: any) => String(row.tag_id || '').trim()).filter(Boolean))];
-  const { data: tagsData, error: tagsError } = tagIds.length > 0
-    ? await db.from('tags').select('id, slug').in('id', tagIds)
-    : { data: [], error: null };
-  if (tagsError) throw tagsError;
 
   const { data: likedRows, error: likedError } = blueprintIds.length > 0
     ? await db.from('blueprint_likes').select('blueprint_id').eq('user_id', userId).in('blueprint_id', blueprintIds)
     : { data: [], error: null };
   if (likedError) throw likedError;
-  const tagsMap = new Map((tagsData || []).map((tag: any) => [tag.id, String(tag.slug || '').trim()]));
-  const tagsByBlueprint = new Map<string, string[]>();
-  (tagRows || []).forEach((row: any) => {
-    const blueprintId = String(row.blueprint_id || '').trim();
-    const slug = tagsMap.get(String(row.tag_id || '').trim()) || '';
-    if (!blueprintId || !slug) return;
-    const list = tagsByBlueprint.get(blueprintId) || [];
-    list.push(slug);
-    tagsByBlueprint.set(blueprintId, list);
-  });
+  const tagsByBlueprint = collectJoinedTagSlugs((tagRows || []) as Array<{
+    blueprint_id: string;
+    tags?: { slug?: string } | Array<{ slug?: string }> | null;
+  }>);
 
   const sourceMap = new Map((sources || []).map((row: any) => [row.id, row]));
-  const sourcePageIds = [...new Set((sources || []).map((row: any) => String(row.source_page_id || '').trim()).filter(Boolean))];
-  const sourceChannelIds = [...new Set((sources || []).map((row: any) => String(row.source_channel_id || '').trim()).filter(Boolean))];
-  const { data: sourcePagesData, error: sourcePagesError } = sourcePageIds.length
-    ? await db.from('source_pages').select('id, avatar_url').in('id', sourcePageIds)
-    : { data: [], error: null };
-  if (sourcePagesError) throw sourcePagesError;
-  const { data: sourcePagesByExternalData, error: sourcePagesByExternalError } = sourceChannelIds.length
-    ? await db.from('source_pages').select('external_id, avatar_url').eq('platform', 'youtube').in('external_id', sourceChannelIds)
-    : { data: [], error: null };
-  if (sourcePagesByExternalError) throw sourcePagesByExternalError;
-
-  const sourcePageAvatarById = new Map((sourcePagesData || []).map((row: any) => [row.id, row.avatar_url || null]));
-  const sourcePageAvatarByExternalId = new Map((sourcePagesByExternalData || []).map((row: any) => [row.external_id, row.avatar_url || null]));
   const unlockMap = new Map((unlocks || []).map((row: any) => [row.source_item_id, row]));
   const transcriptHiddenSourceIds = new Set(
     (unlocks || [])
@@ -503,11 +470,7 @@ export async function listWallForYouFeed(input: {
     const sourceUnlock = unlockMap.get(source.id);
     const blueprint = row.blueprint_id ? blueprintMap.get(row.blueprint_id) : null;
     const sourceChannelTitle = source.source_channel_title || getMetadataSourceChannelTitle(sourceMetadata) || null;
-    const sourceChannelAvatarUrl =
-      getMetadataSourceChannelAvatarUrl(sourceMetadata)
-      || sourcePageAvatarById.get(String(source.source_page_id || '').trim())
-      || sourcePageAvatarByExternalId.get(String(source.source_channel_id || '').trim())
-      || null;
+    const sourceChannelAvatarUrl = getMetadataSourceChannelAvatarUrl(sourceMetadata) || null;
     const sourcePageId = String(source.source_page_id || '').trim() || null;
     const sourceChannelId = String(source.source_channel_id || '').trim() || null;
     const isSubscribedSource =

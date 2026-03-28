@@ -9,7 +9,7 @@ export function useMyFeed(options?: { enabled?: boolean }) {
   const query = useQuery({
     queryKey: ['my-feed-items', user?.id],
     enabled: !!user && (options?.enabled ?? true),
-    staleTime: 5 * 60_000,
+    staleTime: 10 * 60_000,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     queryFn: async () => {
