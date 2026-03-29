@@ -80,13 +80,12 @@ function shouldRefundUnlock(unlock: SourceItemUnlockRow) {
 }
 
 async function listProcessingUnlocks(db: DbClient, limit: number) {
-  const fetchLimit = Math.max(1, Math.min(1000, limit * 2));
   const { data, error } = await db
     .from('source_item_unlocks')
     .select(unlockSelect)
     .eq('status', 'processing')
     .order('updated_at', { ascending: true })
-    .limit(fetchLimit);
+    .limit(Math.max(1, Math.min(1000, limit)));
   if (error) throw error;
   return (data || []) as SourceItemUnlockRow[];
 }

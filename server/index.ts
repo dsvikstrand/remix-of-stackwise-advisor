@@ -339,18 +339,18 @@ const queueDepthPerUserLimit = clampInt(process.env.QUEUE_DEPTH_PER_USER_LIMIT, 
 const queueWorkItemsHardLimit = clampInt(process.env.QUEUE_WORK_ITEMS_HARD_LIMIT, 250, 1, 200_000);
 const queueWorkItemsPerUserLimit = clampInt(process.env.QUEUE_WORK_ITEMS_PER_USER_LIMIT, 40, 1, 10_000);
 const autoUnlockEligibleUsersCacheMs = clampInt(process.env.AUTO_UNLOCK_ELIGIBLE_USERS_CACHE_MS, 10 * 60_000, 5_000, 60 * 60_000);
-const autoUnlockQueueDepthCacheMs = clampInt(process.env.AUTO_UNLOCK_QUEUE_DEPTH_CACHE_MS, 60_000, 5_000, 10 * 60_000);
+const autoUnlockQueueDepthCacheMs = clampInt(process.env.AUTO_UNLOCK_QUEUE_DEPTH_CACHE_MS, 180_000, 5_000, 10 * 60_000);
 const queuePriorityEnabled = parseRuntimeFlag(process.env.QUEUE_PRIORITY_ENABLED, true);
-const queueSweepHighBatch = clampInt(process.env.QUEUE_SWEEP_HIGH_BATCH, 10, 0, 200);
+const queueSweepHighBatch = clampInt(process.env.QUEUE_SWEEP_HIGH_BATCH, 8, 0, 200);
 const queueSweepMediumBatch = clampInt(
   process.env.QUEUE_SWEEP_MEDIUM_BATCH,
-  5,
+  3,
   0,
   200,
 );
 const queueSweepLowBatch = clampInt(
   process.env.QUEUE_SWEEP_LOW_BATCH,
-  2,
+  1,
   0,
   200,
 );
@@ -375,8 +375,8 @@ const effectiveWorkerHeartbeatMs = resolveWorkerLeaseHeartbeatMs({
   configuredHeartbeatMs: workerHeartbeatMs,
 });
 const workerKeepAliveDelayMs = clampInt(process.env.WORKER_KEEPALIVE_DELAY_MS, 1_500, 0, 60_000);
-const workerIdleBackoffBaseMs = clampInt(process.env.WORKER_IDLE_BACKOFF_BASE_MS, 300_000, 1_000, 15 * 60_000);
-const workerIdleBackoffMaxMs = clampInt(process.env.WORKER_IDLE_BACKOFF_MAX_MS, 1_200_000, workerIdleBackoffBaseMs, 45 * 60_000);
+const workerIdleBackoffBaseMs = clampInt(process.env.WORKER_IDLE_BACKOFF_BASE_MS, 600_000, 1_000, 15 * 60_000);
+const workerIdleBackoffMaxMs = clampInt(process.env.WORKER_IDLE_BACKOFF_MAX_MS, 1_800_000, workerIdleBackoffBaseMs, 45 * 60_000);
 const jobExecutionTimeoutMs = clampInt(process.env.JOB_EXECUTION_TIMEOUT_MS, 180_000, 5_000, 10 * 60_000);
 const youtubeRefreshEnabled = parseRuntimeFlag(process.env.YOUTUBE_REFRESH_ENABLED, true);
 const youtubeRefreshIntervalMinutes = clampInt(process.env.YOUTUBE_REFRESH_INTERVAL_MINUTES, 120, 1, 240);
@@ -448,12 +448,12 @@ const transcriptFailFastEnabled = parseRuntimeFlag(process.env.TRANSCRIPT_FAIL_F
 const sourceUnlockExpiredSweepBatch = clampInt(process.env.SOURCE_UNLOCK_EXPIRED_SWEEP_BATCH, 100, 10, 1000);
 const sourceUnlockSweepsEnabledRaw = String(process.env.SOURCE_UNLOCK_SWEEPS_ENABLED || 'true').trim().toLowerCase();
 const sourceUnlockSweepsEnabled = !(sourceUnlockSweepsEnabledRaw === 'false' || sourceUnlockSweepsEnabledRaw === '0' || sourceUnlockSweepsEnabledRaw === 'off');
-const sourceUnlockSweepBatch = clampInt(process.env.SOURCE_UNLOCK_SWEEP_BATCH, 40, 10, 1000);
-const sourceUnlockProcessingStaleMs = clampInt(process.env.SOURCE_UNLOCK_PROCESSING_STALE_MS, 20 * 60_000, 60_000, 24 * 60 * 60 * 1000);
-const sourceUnlockSweepMinIntervalMs = clampInt(process.env.SOURCE_UNLOCK_SWEEP_MIN_INTERVAL_MS, 600_000, 1_000, 30 * 60_000);
+const sourceUnlockSweepBatch = clampInt(process.env.SOURCE_UNLOCK_SWEEP_BATCH, 20, 10, 1000);
+const sourceUnlockProcessingStaleMs = clampInt(process.env.SOURCE_UNLOCK_PROCESSING_STALE_MS, 40 * 60_000, 60_000, 24 * 60 * 60 * 1000);
+const sourceUnlockSweepMinIntervalMs = clampInt(process.env.SOURCE_UNLOCK_SWEEP_MIN_INTERVAL_MS, 1_200_000, 1_000, 30 * 60_000);
 const transcriptFeedSuppressionSweepMinIntervalMs = clampInt(
   process.env.TRANSCRIPT_FEED_SUPPRESSION_SWEEP_MIN_INTERVAL_MS,
-  30 * 60_000,
+  60 * 60_000,
   60_000,
   6 * 60 * 60_000,
 );
@@ -3424,7 +3424,12 @@ async function runUnlockSweeps(db: ReturnType<typeof createClient>, input?: {
       dryLogs: sourceUnlockSweepDryLogs,
       enabled: sourceUnlockSweepsEnabled,
     });
-    if (Boolean(input?.force) || !sweepResult.skipped) {
+    const recoveredAny = (
+      sweepResult.expired_recovered
+      + sweepResult.processing_recovered
+      + sweepResult.orphan_jobs_recovered
+    ) > 0;
+    if (Boolean(input?.force) || recoveredAny) {
       await runTranscriptFeedSuppressionSweep(db, {
         traceId: input?.traceId,
         force: Boolean(input?.force),
@@ -3461,7 +3466,7 @@ async function runTranscriptFeedSuppressionSweep(
     .select('source_item_id, transcript_status, last_error_code, updated_at')
     .or('transcript_status.eq.retrying,transcript_status.eq.confirmed_no_speech,last_error_code.eq.NO_TRANSCRIPT_PERMANENT,last_error_code.eq.TRANSCRIPT_UNAVAILABLE')
     .order('updated_at', { ascending: false })
-    .limit(Math.max(10, sourceUnlockSweepBatch));
+    .limit(Math.min(15, Math.max(10, Math.floor(sourceUnlockSweepBatch / 2))));
   if (error) {
     logUnlockEvent(
       'transcript_feed_sweep_failed',
