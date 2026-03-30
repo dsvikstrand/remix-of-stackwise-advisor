@@ -1,7 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { Badge } from '@/components/ui/badge';
@@ -15,7 +14,7 @@ import { BlueprintAnalysisView } from '@/components/blueprint/BlueprintAnalysisV
 import { SummarySlides } from '@/components/blueprint/SummarySlides';
 import { useBlueprint, useBlueprintComments, useCreateBlueprintComment, useToggleBlueprintLike } from '@/hooks/useBlueprints';
 import {
-  requestBlueprintYoutubeCommentsRefresh,
+  useBlueprintYoutubeRefreshMutation,
   useBlueprintYoutubeComments,
 } from '@/hooks/useBlueprintYoutubeComments';
 import { useToast } from '@/hooks/use-toast';
@@ -243,7 +242,6 @@ export default function BlueprintDetail() {
   const [commentView, setCommentView] = useState<'youtube' | 'community'>('youtube');
   const [communityCommentSort, setCommunityCommentSort] = useState<'top' | 'new'>('top');
   const { data: youtubeComments, isLoading: youtubeCommentsLoading } = useBlueprintYoutubeComments(blueprintId, youtubeCommentSort);
-  const queryClient = useQueryClient();
   const { data: comments, isLoading: commentsLoading } = useBlueprintComments(blueprintId, communityCommentSort);
   const createComment = useCreateBlueprintComment();
   const toggleLike = useToggleBlueprintLike();
@@ -251,17 +249,7 @@ export default function BlueprintDetail() {
   const { user } = useAuth();
   const canRefreshYouTubeComments = Boolean(user?.id && blueprint?.creator_user_id === user.id);
   const [comment, setComment] = useState('');
-  const youtubeCommentsRefresh = useMutation({
-    mutationFn: async () => {
-      if (!blueprintId) throw new Error('Blueprint id is missing.');
-      return requestBlueprintYoutubeCommentsRefresh(blueprintId);
-    },
-    onSuccess: async (_result) => {
-      if (!blueprintId) return;
-      await queryClient.invalidateQueries({ queryKey: ['blueprint-youtube-comments', blueprintId] });
-    },
-    onError: (_error) => {},
-  });
+  const youtubeCommentsRefresh = useBlueprintYoutubeRefreshMutation(canRefreshYouTubeComments ? blueprintId : undefined);
   const [isBannerExpanded, setIsBannerExpanded] = useState(false);
   const [isBannerVideoPlaying, setIsBannerVideoPlaying] = useState(false);
   const [interactiveSectionsExpanded, setInteractiveSectionsExpanded] = useState(false);
@@ -880,15 +868,31 @@ export default function BlueprintDetail() {
                     </Badge>
                   ))}
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={`shrink-0 ${blueprint.user_liked ? 'text-red-500' : 'text-muted-foreground'}`}
-                  onClick={handleLike}
-                >
-                  <Heart className={`h-4 w-4 ${blueprint.user_liked ? 'fill-current' : ''}`} />
-                  <span className="ml-1 text-xs">{blueprint.likes_count}</span>
-                </Button>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {canRefreshYouTubeComments ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground"
+                      onClick={() => youtubeCommentsRefresh.mutate()}
+                      disabled={youtubeCommentsRefresh.isPending}
+                      aria-label={youtubeCommentsRefresh.isPending ? 'Refreshing YouTube data' : 'Refresh YouTube data'}
+                      title={youtubeCommentsRefresh.isPending ? 'Refreshing YouTube data' : 'Refresh YouTube data'}
+                    >
+                      <RefreshCw className={`h-4 w-4 ${youtubeCommentsRefresh.isPending ? 'animate-spin' : ''}`} />
+                    </Button>
+                  ) : null}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={`shrink-0 ${blueprint.user_liked ? 'text-red-500' : 'text-muted-foreground'}`}
+                    onClick={handleLike}
+                  >
+                    <Heart className={`h-4 w-4 ${blueprint.user_liked ? 'fill-current' : ''}`} />
+                    <span className="ml-1 text-xs">{blueprint.likes_count}</span>
+                  </Button>
+                </div>
               </div>
 
               
@@ -950,8 +954,8 @@ export default function BlueprintDetail() {
                       className="h-9 w-9 shrink-0"
                       onClick={() => youtubeCommentsRefresh.mutate()}
                       disabled={youtubeCommentsRefresh.isPending}
-                      aria-label={youtubeCommentsRefresh.isPending ? 'Refreshing comments' : 'Refresh comments'}
-                      title={youtubeCommentsRefresh.isPending ? 'Refreshing comments' : 'Refresh comments'}
+                      aria-label={youtubeCommentsRefresh.isPending ? 'Refreshing YouTube data' : 'Refresh YouTube data'}
+                      title={youtubeCommentsRefresh.isPending ? 'Refreshing YouTube data' : 'Refresh YouTube data'}
                     >
                       <RefreshCw className={`h-4 w-4 ${youtubeCommentsRefresh.isPending ? 'animate-spin' : ''}`} />
                     </Button>

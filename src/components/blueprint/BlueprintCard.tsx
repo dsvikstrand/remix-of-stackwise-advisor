@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Heart } from 'lucide-react';
+import { Heart, RefreshCw } from 'lucide-react';
 import type { BlueprintListItem } from '@/hooks/useBlueprintSearch';
 import { cn } from '@/lib/utils';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
@@ -9,6 +9,8 @@ import { getCatalogChannelTagSlugs } from '@/lib/channelPostContext';
 import { normalizeTag } from '@/lib/tagging';
 import { resolveEffectiveBanner } from '@/lib/bannerResolver';
 import { getHotnessView } from '@/lib/hotness';
+import { useAuth } from '@/contexts/AuthContext';
+import { useBlueprintYoutubeRefreshMutation } from '@/hooks/useBlueprintYoutubeComments';
 
 interface BlueprintCardProps {
   blueprint: BlueprintListItem;
@@ -27,6 +29,9 @@ export function BlueprintCard({
   variant = 'grid_flat',
   sourceThumbnailUrl = null,
 }: BlueprintCardProps) {
+  const { user } = useAuth();
+  const canRefresh = Boolean(user?.id && blueprint.creator_user_id === user.id);
+  const refreshMutation = useBlueprintYoutubeRefreshMutation(canRefresh ? blueprint.id : undefined);
   const effectiveBannerUrl = resolveEffectiveBanner({
     bannerUrl: blueprint.banner_url,
     sourceThumbnailUrl,
@@ -111,24 +116,44 @@ export function BlueprintCard({
                 >
                   {hotness.label}
                 </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={`h-7 w-7 rounded-full border p-0 ${hotness.surfaceClassName} ${
-                    blueprint.user_liked
-                      ? 'text-red-500 hover:text-red-600'
-                      : 'text-foreground/80 hover:text-foreground'
-                  }`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onLike(blueprint.id, blueprint.user_liked);
-                  }}
-                  aria-label={blueprint.user_liked ? 'Unlike blueprint' : 'Like blueprint'}
-                >
-                  <Heart className={`h-3.5 w-3.5 ${blueprint.user_liked ? 'fill-current' : ''}`} />
-                  <span className="sr-only">Like</span>
-                </Button>
+                <div className="flex items-center gap-1.5">
+                  {canRefresh ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className={`h-7 w-7 rounded-full border p-0 ${hotness.surfaceClassName} text-foreground/70 hover:text-foreground`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        refreshMutation.mutate();
+                      }}
+                      disabled={refreshMutation.isPending}
+                      aria-label={refreshMutation.isPending ? 'Refreshing YouTube data' : 'Refresh YouTube data'}
+                      title={refreshMutation.isPending ? 'Refreshing YouTube data' : 'Refresh YouTube data'}
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
+                      <span className="sr-only">Refresh</span>
+                    </Button>
+                  ) : null}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={`h-7 w-7 rounded-full border p-0 ${hotness.surfaceClassName} ${
+                      blueprint.user_liked
+                        ? 'text-red-500 hover:text-red-600'
+                        : 'text-foreground/80 hover:text-foreground'
+                    }`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onLike(blueprint.id, blueprint.user_liked);
+                    }}
+                    aria-label={blueprint.user_liked ? 'Unlike blueprint' : 'Like blueprint'}
+                  >
+                    <Heart className={`h-3.5 w-3.5 ${blueprint.user_liked ? 'fill-current' : ''}`} />
+                    <span className="sr-only">Like</span>
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

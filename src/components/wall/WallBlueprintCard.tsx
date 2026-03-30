@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, Heart } from 'lucide-react';
+import { Eye, Heart, RefreshCw } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { resolveEffectiveBanner } from '@/lib/bannerResolver';
 import { getHotnessView } from '@/lib/hotness';
 import { getChannelColorView } from '@/lib/channelColors';
 import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities';
+import { useBlueprintYoutubeRefreshMutation } from '@/hooks/useBlueprintYoutubeComments';
 
 type WallBlueprintCardTag = {
   key: string;
@@ -17,6 +18,7 @@ type WallBlueprintCardTag = {
 };
 
 type WallBlueprintCardProps = {
+  blueprintId: string;
   to: string;
   title: string;
   summary: string;
@@ -31,6 +33,7 @@ type WallBlueprintCardProps = {
   commentsCount: number;
   viewCount?: number | null;
   tags: WallBlueprintCardTag[];
+  canRefresh?: boolean;
   onLike: (event: MouseEvent<HTMLButtonElement>) => void;
 };
 
@@ -52,6 +55,7 @@ function formatCompactCount(value: number | null | undefined) {
 }
 
 export function WallBlueprintCard({
+  blueprintId,
   to,
   title,
   summary,
@@ -66,9 +70,11 @@ export function WallBlueprintCard({
   commentsCount,
   viewCount,
   tags,
+  canRefresh = false,
   onLike,
 }: WallBlueprintCardProps) {
   const navigate = useNavigate();
+  const refreshMutation = useBlueprintYoutubeRefreshMutation(canRefresh ? blueprintId : undefined);
   const channelLabel = `b/${channelSlug}`;
   const channelConfig = CHANNELS_CATALOG.find((channel) => channel.slug === channelSlug);
   const ChannelIcon = getChannelIcon(channelConfig?.icon || 'sparkles');
@@ -165,6 +171,23 @@ export function WallBlueprintCard({
               >
                 {hotness.label}
               </span>
+              {canRefresh ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={`h-7 w-7 rounded-full border p-0 ${channelColors.surfaceClassName} text-foreground/70 hover:text-foreground`}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    refreshMutation.mutate();
+                  }}
+                  disabled={refreshMutation.isPending}
+                  aria-label={refreshMutation.isPending ? 'Refreshing YouTube data' : 'Refresh YouTube data'}
+                  title={refreshMutation.isPending ? 'Refreshing YouTube data' : 'Refresh YouTube data'}
+                >
+                  <RefreshCw className={`h-4 w-4 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
+                </Button>
+              ) : null}
               <Button
                 variant="ghost"
                 size="sm"

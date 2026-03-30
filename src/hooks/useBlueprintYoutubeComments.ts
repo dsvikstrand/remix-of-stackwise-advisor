@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { config, getFunctionUrl } from '@/config/runtime';
+import { useToast } from '@/hooks/use-toast';
 
 export type BlueprintYoutubeComment = {
   id: string;
@@ -117,4 +118,32 @@ export async function requestBlueprintYoutubeCommentsRefresh(blueprintId: string
     cooldownUntil: payload.data?.cooldown_until || null,
     queueDepth: payload.data?.queue_depth ?? null,
   };
+}
+
+export function useBlueprintYoutubeRefreshMutation(blueprintId?: string) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async () => {
+      if (!blueprintId) throw new Error('Blueprint id is missing.');
+      return requestBlueprintYoutubeCommentsRefresh(blueprintId);
+    },
+    onSuccess: async () => {
+      if (!blueprintId) return;
+      await queryClient.invalidateQueries({ queryKey: ['blueprint-youtube-comments', blueprintId] });
+    },
+    onError: (error) => {
+      const message = error instanceof BlueprintYoutubeCommentsRefreshError
+        ? error.message
+        : error instanceof Error
+          ? error.message
+          : 'Could not request YouTube refresh.';
+      toast({
+        title: 'Refresh failed',
+        description: message,
+        variant: 'destructive',
+      });
+    },
+  });
 }

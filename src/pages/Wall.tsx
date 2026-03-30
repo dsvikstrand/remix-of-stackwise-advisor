@@ -57,6 +57,7 @@ function buildWallBlueprintCardProps(input: WallBlueprintCardInput) {
   const channelSlug = input.publishedChannelSlug || fallbackChannelSlug;
 
   return {
+    blueprintId: input.id,
     to: `/blueprint/${input.id}`,
     title: input.title,
     summary: input.previewSummary,
@@ -449,6 +450,7 @@ export default function Wall() {
                       <WallBlueprintCard
                         key={item.sourceItemId}
                         {...cardProps}
+                        canRefresh={false}
                         onLike={(event) => {
                           event.preventDefault();
                           handleLike(item.blueprintId, item.userLiked);
@@ -525,6 +527,7 @@ export default function Wall() {
                       <WallBlueprintCard
                         key={post.id}
                         {...cardProps}
+                        canRefresh={Boolean(user?.id && post.creator_user_id === user.id)}
                         onLike={(event) => {
                           event.preventDefault();
                           handleLike(post.id, post.user_liked);
