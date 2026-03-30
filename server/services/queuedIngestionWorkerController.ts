@@ -56,6 +56,41 @@ export function resolveWorkerLeaseHeartbeatMs(input: {
   return Math.max(normalizedConfiguredHeartbeatMs, leaseBasedHeartbeatMs);
 }
 
+const DEFERRED_WORKER_HEARTBEAT_SCOPES = new Set([
+  'source_auto_unlock_retry',
+  'source_transcript_revalidate',
+  'blueprint_youtube_enrichment',
+  'blueprint_youtube_refresh',
+]);
+
+export function resolveWorkerLeaseHeartbeatStartupDelayMs(input: {
+  scope: string;
+  workerLeaseMs: number;
+  heartbeatMs: number;
+}) {
+  const normalizedHeartbeatMs = Math.max(
+    1_000,
+    Math.floor(Number(input.heartbeatMs) || 0),
+  );
+  const normalizedLeaseMs = Math.max(
+    normalizedHeartbeatMs + 1_000,
+    Math.floor(Number(input.workerLeaseMs) || 0),
+  );
+  const normalizedScope = String(input.scope || '').trim();
+  if (!DEFERRED_WORKER_HEARTBEAT_SCOPES.has(normalizedScope)) {
+    return normalizedHeartbeatMs;
+  }
+
+  const safeLatestFirstHeartbeatMs = Math.max(
+    normalizedHeartbeatMs,
+    normalizedLeaseMs - Math.max(5_000, normalizedHeartbeatMs),
+  );
+  return Math.min(
+    safeLatestFirstHeartbeatMs,
+    Math.max(normalizedHeartbeatMs, Math.floor(normalizedLeaseMs / 2)),
+  );
+}
+
 export function createQueuedIngestionWorkerController<DbClient>(
   deps: QueuedIngestionWorkerControllerDeps<DbClient>,
 ): QueuedIngestionWorkerController {

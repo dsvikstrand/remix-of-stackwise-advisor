@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createQueuedIngestionWorkerController,
+  resolveWorkerLeaseHeartbeatStartupDelayMs,
   resolveWorkerLeaseHeartbeatMs,
 } from '../../server/services/queuedIngestionWorkerController';
 
@@ -31,6 +32,34 @@ describe('queued ingestion worker controller', () => {
       workerLeaseMs: 90_000,
       configuredHeartbeatMs: 45_000,
     })).toBe(45_000);
+  });
+
+  it('keeps the default first-heartbeat delay for heavy scopes', () => {
+    expect(resolveWorkerLeaseHeartbeatStartupDelayMs({
+      scope: 'search_video_generate',
+      workerLeaseMs: 90_000,
+      heartbeatMs: 30_000,
+    })).toBe(30_000);
+
+    expect(resolveWorkerLeaseHeartbeatStartupDelayMs({
+      scope: 'all_active_subscriptions',
+      workerLeaseMs: 90_000,
+      heartbeatMs: 30_000,
+    })).toBe(30_000);
+  });
+
+  it('defers the first heartbeat for fast maintenance scopes', () => {
+    expect(resolveWorkerLeaseHeartbeatStartupDelayMs({
+      scope: 'blueprint_youtube_refresh',
+      workerLeaseMs: 90_000,
+      heartbeatMs: 30_000,
+    })).toBe(45_000);
+
+    expect(resolveWorkerLeaseHeartbeatStartupDelayMs({
+      scope: 'source_transcript_revalidate',
+      workerLeaseMs: 15_000,
+      heartbeatMs: 5_000,
+    })).toBe(7_500);
   });
 
   it('processes claimed jobs and exposes running state', async () => {

@@ -47,6 +47,7 @@ import { createYouTubeSearchCacheService } from './services/youtubeSearchCache';
 import { createYouTubeQuotaGuardService } from './services/youtubeQuotaGuard';
 import {
   createQueuedIngestionWorkerController,
+  resolveWorkerLeaseHeartbeatStartupDelayMs,
   resolveWorkerLeaseHeartbeatMs,
 } from './services/queuedIngestionWorkerController';
 import { parseRuntimeFlag, readBackendRuntimeConfig } from './services/runtimeConfig';
@@ -7381,8 +7382,15 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
   const traceId = String(job.trace_id || payload.trace_id || '').trim() || createUnlockTraceId();
   const jobStartMs = Date.now();
   const leaseSeconds = Math.max(5, Math.ceil(workerLeaseMs / 1000));
+  const initialHeartbeatDelayMs = resolveWorkerLeaseHeartbeatStartupDelayMs({
+    scope,
+    workerLeaseMs,
+    heartbeatMs: effectiveWorkerHeartbeatMs,
+  });
   let heartbeatError: unknown = null;
-  const heartbeat = setInterval(() => {
+  let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
+  let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  const runHeartbeat = () => {
     void touchIngestionJobLease(db, {
       jobId: job.id,
       workerId: queuedWorkerId,
@@ -7394,7 +7402,12 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
     }).catch((error) => {
       if (!heartbeatError) heartbeatError = error;
     });
-  }, effectiveWorkerHeartbeatMs);
+  };
+  heartbeatTimer = setTimeout(() => {
+    heartbeatTimer = null;
+    runHeartbeat();
+    heartbeatInterval = setInterval(runHeartbeat, effectiveWorkerHeartbeatMs);
+  }, initialHeartbeatDelayMs);
 
   try {
     await runWithExecutionTimeout(
@@ -7594,7 +7607,8 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
       await runUnlockSweeps(db, { mode: 'cron', force: true, traceId });
     }
   } finally {
-    clearInterval(heartbeat);
+    if (heartbeatTimer) clearTimeout(heartbeatTimer);
+    if (heartbeatInterval) clearInterval(heartbeatInterval);
   }
 }
 

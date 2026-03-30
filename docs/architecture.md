@@ -229,6 +229,7 @@
     - user queue-position reads now narrow to requested or visible queued scopes when estimating `active-mine` queue order, rather than scanning every queued ingestion scope by default.
     - manual blueprint-comments refresh now reads the existing refresh-state row first and registers one only when the blueprint lacks an enabled refresh record.
     - worker lease heartbeats are now lease-aware by default: a `90s` lease refreshes every `30s` instead of every `10s`, reducing Supabase lease-RPC churn without changing lease ownership semantics.
+    - short-lived maintenance/enrichment scopes now also defer the first heartbeat deeper into that lease window (`45s` on the default `90s` lease), so many fast jobs complete without any lease-touch write while heavy scopes keep the usual cadence.
     - low-priority idle claim sweeps now back off more aggressively than the default worker idle cadence, reducing `claim_ingestion_jobs` chatter when only low-priority scopes are being polled.
     - queue maintenance is now time-gated as well: unlock sweeps and stale-job recovery still run in the combined worker loop, but only once per coarse maintenance window (`15m` default) instead of every idle keep-alive cycle.
     - service-cron subscription enqueue is also cadence-aware now: the route still receives the `*/3m` Oracle trigger, but `all_active_subscriptions` is only re-enqueued after the default `60m` minimum interval has elapsed.

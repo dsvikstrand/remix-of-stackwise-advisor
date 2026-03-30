@@ -96,6 +96,7 @@
     - no-op `blueprint_youtube_refresh_state` upserts are skipped when the persisted refresh fields would remain unchanged
   - Queue lease maintenance is also coarsened:
     - worker lease heartbeats now refresh at a lease-aware cadence (`30s` on the default `90s` lease) instead of the older `10s` default
+    - fast retry/enrichment scopes now defer their first heartbeat to `45s` on that default `90s` lease, so short-lived maintenance jobs often finish without any lease-touch write
     - this is an egress-control change only; lease ownership still uses the same DB RPC and expiry semantics
   - Low-priority queue claim polling is also coarsened:
     - idle low-priority claim sweeps now back off more aggressively than the default worker idle cadence
