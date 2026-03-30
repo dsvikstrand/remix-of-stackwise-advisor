@@ -86,7 +86,8 @@
     - unchanged successful writes to `user_source_subscriptions` are skipped unless checkpoint/title/error state changed
     - repeated identical error writes remain bounded by the `30m` poll heartbeat
     - this is an egress-control measure only; frontend subscription health still evaluates on a `60m` window
-    - Oracle cron may still hit `/api/ingestion/jobs/trigger` every `3m`, but backend enqueue now suppresses `all_active_subscriptions` until the default `10m` minimum interval has elapsed
+    - Oracle cron may still hit `/api/ingestion/jobs/trigger` every `3m`, but backend enqueue now suppresses `all_active_subscriptions` until the default `60m` minimum interval has elapsed
+    - the same trigger path no longer force-runs unlock sweeps, source-page asset sweeps, or transcript revalidate seeding before enqueue eligibility is known
   - Blueprint YouTube refresh bookkeeping is also egress-conscious:
     - scheduler pending checks batch by refresh kind + candidate blueprint set instead of reading queued job payloads once per candidate
     - manual comments refresh reads existing refresh state first and only registers a row when refresh state is missing or uninitialized
@@ -163,13 +164,14 @@ curl -sS https://api.bleup.app/api/ops/queue/health \
 ### YouTube metadata refresh scheduler (combined runtime)
 - Purpose: periodically refresh stored `view_count` and YouTube comment snapshots without calling YouTube from page loads.
 - Current runtime note: this scheduler runs from the combined backend service when `RUN_INGESTION_WORKER=true`; it does not require a separate worker service in MVP production.
+- Current production override: `YOUTUBE_REFRESH_ENABLED=false`, so the automatic scheduler is disabled on Oracle right now.
 - Queue scope: `blueprint_youtube_refresh` (low-priority, budgeted).
-- Default cadence: every `10` minutes.
+- Default cadence when enabled: every `120` minutes.
 - Comments policy:
-  - auto refresh once at `+15m` after blueprint registration
-  - auto refresh once at `+24h` after blueprint registration
+  - auto refresh once at `+60m` after blueprint registration
+  - auto refresh once again at `+48h` after blueprint registration
   - owner-triggered manual refresh is available immediately via `POST /api/blueprints/:id/youtube-comments/refresh`
-  - manual refresh uses per-blueprint `10m` cooldown and still respects pending-job + queue-depth guards
+  - manual refresh uses per-blueprint `60m` cooldown, still respects pending-job + queue-depth guards, and now queues both `comments` and `view_count`
 - Default per-cycle budget:
   - view refresh jobs: `15`
   - comments refresh jobs: `5`
@@ -850,7 +852,7 @@ Expected behavior:
 - future uploads are ingested automatically.
 - subscription rows returned by `GET /api/source-subscriptions` may include `source_channel_avatar_url` from stored `source_pages` metadata; missing avatars return `null` and should not trigger live YouTube asset fetches on the request path.
 - `subscription_notice` source metadata may include `channel_banner_url` for notice-card backgrounds.
-- unsubscribing (`DELETE /api/source-subscriptions/:id`) removes the user-scoped notice card from Home `For You` for that channel (and from any exercised legacy `My Feed` compatibility view).
+- unsubscribing (`DELETE /api/source-subscriptions/:id`) deactivates the subscription; current runtime no longer spends request-path work removing the legacy notice card immediately.
 - subscription auto-ingest generation runs with review enabled and banner disabled by default.
 
 Manual refresh scan (auth required):
@@ -861,7 +863,7 @@ curl -sS -X POST https://api.bleup.app/api/source-subscriptions/refresh-scan \
   --data '{"max_per_subscription":5,"max_total":50}'
 ```
 Expected behavior:
-- response includes candidate rows and `cooldown_filtered` count (failed items hidden during retry cooldown).
+- response includes candidate rows; `cooldown_filtered` is no longer expected now that failed-item retry cooldown persistence has been removed.
 - rate-limited retries return `RATE_LIMITED`.
 
 Manual refresh enqueue (auth required):
@@ -966,7 +968,7 @@ Example cron entry:
 */3 * * * * curl -sS -X POST https://api.bleup.app/api/ingestion/jobs/trigger -H \"x-service-token: ${INGESTION_SERVICE_TOKEN}\" -H 'Content-Type: application/json' --data '{}' >> /var/log/bleuv1-ingestion-cron.log 2>&1
 ```
 Notes:
-- the Oracle trigger may stay at `*/3m`, but backend enqueue now gates `all_active_subscriptions` to an effective `10m` minimum interval by default
+- the Oracle trigger may stay at `*/3m`, but backend enqueue now gates `all_active_subscriptions` to an effective `60m` minimum interval by default
 - repeated identical subscription sync errors now refresh `last_polled_at` / `last_sync_error` at `30m` instead of `15m`
 
 Auto-banner worker cron example (every 5 minutes):

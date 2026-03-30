@@ -553,6 +553,10 @@ describe('ingestion trigger handler', () => {
       const req = {} as never;
       const res = createMockResponse();
       const scheduleQueuedIngestionProcessing = vi.fn();
+      const recoverStaleIngestionJobs = vi.fn(async () => []);
+      const runUnlockSweeps = vi.fn(async () => undefined);
+      const runSourcePageAssetSweep = vi.fn(async () => null);
+      const seedSourceTranscriptRevalidateJobs = vi.fn(async () => ({ scanned: 0, enqueued: 0 }));
 
       await handleIngestionJobsTrigger(req, res as never, createBaseDeps({
         getServiceSupabaseClient: () => createIngestionTriggerDb({
@@ -564,6 +568,10 @@ describe('ingestion trigger handler', () => {
           },
         }),
         scheduleQueuedIngestionProcessing,
+        recoverStaleIngestionJobs,
+        runUnlockSweeps,
+        runSourcePageAssetSweep,
+        seedSourceTranscriptRevalidateJobs,
       }));
 
       expect(res.statusCode).toBe(202);
@@ -579,6 +587,10 @@ describe('ingestion trigger handler', () => {
         },
       });
       expect(scheduleQueuedIngestionProcessing).not.toHaveBeenCalled();
+      expect(recoverStaleIngestionJobs).not.toHaveBeenCalled();
+      expect(runUnlockSweeps).not.toHaveBeenCalled();
+      expect(runSourcePageAssetSweep).not.toHaveBeenCalled();
+      expect(seedSourceTranscriptRevalidateJobs).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }
@@ -587,12 +599,14 @@ describe('ingestion trigger handler', () => {
   it('suppresses low-priority all_active_subscriptions enqueue when queue pressure threshold is hit', async () => {
     const req = {} as never;
     const res = createMockResponse();
+    const recoverStaleIngestionJobs = vi.fn(async () => []);
 
     await handleIngestionJobsTrigger(req, res as never, createBaseDeps({
       getServiceSupabaseClient: () => createIngestionTriggerDbWithoutRunningJob(),
       countQueueDepth: async () => 125,
       queuePriorityEnabled: true,
       queueLowPrioritySuppressionDepth: 100,
+      recoverStaleIngestionJobs,
     }));
 
     expect(res.statusCode).toBe(202);
@@ -603,6 +617,7 @@ describe('ingestion trigger handler', () => {
         scope: 'all_active_subscriptions',
       },
     });
+    expect(recoverStaleIngestionJobs).not.toHaveBeenCalled();
   });
 
   it('queues a new all_active_subscriptions job once the minimum interval gate has elapsed', async () => {
@@ -639,5 +654,63 @@ describe('ingestion trigger handler', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('attempts stale recovery only for running all_active_subscriptions jobs before returning a conflict', async () => {
+    const req = {} as never;
+    const res = createMockResponse();
+    const recoverStaleIngestionJobs = vi.fn(async () => []);
+    let existingJobReads = 0;
+    const db = {
+      from(table: string) {
+        if (table !== 'ingestion_jobs') {
+          throw new Error(`Unexpected table: ${table}`);
+        }
+        return {
+          select(_columns: string) {
+            const filters: Array<{ type: string }> = [];
+            return {
+              eq() {
+                filters.push({ type: 'eq' });
+                return this;
+              },
+              in() {
+                filters.push({ type: 'in' });
+                return this;
+              },
+              order() {
+                return this;
+              },
+              limit() {
+                return this;
+              },
+              maybeSingle: async () => {
+                const isExistingJobRead = filters.some((entry) => entry.type === 'in');
+                if (isExistingJobRead) {
+                  existingJobReads += 1;
+                  return {
+                    data: { id: `job_running_${existingJobReads}`, status: 'running', started_at: '2026-03-23T11:40:00.000Z' },
+                    error: null,
+                  };
+                }
+                return {
+                  data: null,
+                  error: null,
+                };
+              },
+            };
+          },
+        };
+      },
+    };
+
+    await handleIngestionJobsTrigger(req, res as never, createBaseDeps({
+      getServiceSupabaseClient: () => db,
+      recoverStaleIngestionJobs,
+    }));
+
+    expect(res.statusCode).toBe(409);
+    expect(recoverStaleIngestionJobs).toHaveBeenCalledTimes(1);
+    expect(existingJobReads).toBe(2);
   });
 });

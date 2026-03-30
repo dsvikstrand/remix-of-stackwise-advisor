@@ -16,6 +16,10 @@ This file is the authoritative active/reference/deserted/completed registry for 
 - No root implementation plan is currently active.
 - `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
   Current proof/deferred carry-forward tail. This is the only standing active-tail support file.
+- `docs/exec-plans/active/on-pause/backend-egress-skip-candidates-plan.md`
+  On-pause tracked plan for the next narrow backend egress cuts after the larger runtime feature-off switches; focuses on trigger-path maintenance, worker stale-recovery churn, subscription breadth, and support-table cleanup work.
+- `docs/exec-plans/active/on-pause/backend-egress-skip-phase1-plan.md`
+  On-pause child plan for the first safe-first implementation slice from the backend egress skip tracker; focuses on trigger-path waste and low-value support-table/cleanup work.
 - `docs/exec-plans/tech-debt-tracker.md`
   Durable post-launch cleanup/debt board. This is not an execution plan, but it remains the long-lived debt surface.
 
@@ -116,6 +120,8 @@ This file is the authoritative active/reference/deserted/completed registry for 
 - Core identity lock: `docs/app/core-direction-lock.md`.
 - Current runtime/ops truth: `docs/architecture.md`, `docs/ops/yt2bp_runbook.md`, and `docs/ops/mvp-launch-readiness-checklist.md`.
 - Current active implementation plan: none.
+- Current tracked on-pause backend egress follow-up: `docs/exec-plans/active/on-pause/backend-egress-skip-candidates-plan.md`.
+- Current tracked on-pause Phase 1 child plan: `docs/exec-plans/active/on-pause/backend-egress-skip-phase1-plan.md`.
 - Current active proof/deferred tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`.
 - Current post-launch debt board: `docs/exec-plans/tech-debt-tracker.md`.
 - Latest completed implementation plans: `docs/exec-plans/completed/transcript-provider-launch-plan.md` and `docs/exec-plans/completed/pre-launch-ui-ux-plan.md`.

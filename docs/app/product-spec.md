@@ -35,7 +35,7 @@ a12) [have] Subscription rows now render channel avatar thumbnails (when availab
 a13) [have] Legacy `My Feed` compatibility blueprint rows retain channel-feed-style visual cards with status-driven auto-channel outcomes.
 a14) [have] Manual/search YouTube generation defaults to AI review enabled while banner generation stays off in the current thumbnail-first flow.
 a15) [have] Legacy `My Feed` compatibility notice cards support channel avatar rendering and optional profile-banner background (when available from YouTube).
-a16) [have] Legacy `My Feed` compatibility notice cards open a detailed popup with `Unsubscribe` confirmation; successful unsubscribe removes the notice card.
+a16) [have] Legacy `My Feed` compatibility notice cards still open a detailed popup with `Unsubscribe` confirmation; current unsubscribe no longer spends request-path work removing the notice row immediately.
 a17) [have] Manual `Post to Channel` UI is feature-flagged for rollback and removed from normal auto-channel mode surfaces.
 a18) [have] Legacy `My Feed` compatibility blueprint cards open blueprint detail by card click (dedicated `Open blueprint` link removed).
 a19) [have] The current transcript default is `youtube_timedtext` first, with `videotranscriber_temp` as the built-in second fallback and `transcriptapi` as the built-in third fallback behind the same YT2BP pipeline seam when YouTube captions are unavailable.
@@ -50,11 +50,11 @@ a25) [have] `/youtube` now runs core generation first and performs optional AI r
 a26) [have] Banner generation prompt is now explicitly visual-only (no readable text/typography/logos/watermarks) to keep card backgrounds clean.
 a27) [have] `/subscriptions` now includes `Refresh` popup flow: scan new videos from active subscriptions, select videos, and start background blueprint generation async.
 a28) [have] Manual refresh endpoints now enforce per-user cooldown limits and background-job concurrency guards to prevent duplicate/overlapping runs.
-a29) [have] Failed manual refresh videos enter a 6-hour retry cooldown and are temporarily hidden from follow-up scans.
+a29) [have] Failed manual refresh videos no longer enter a persisted retry cooldown table; follow-up scans can reconsider them immediately.
 a30) [have] `/subscriptions` now displays lightweight background-generation job status (`Queued/Running/Succeeded/Failed`) with inserted/skipped/failed counts.
 a31) [have] Successful manual refresh generation now advances subscription checkpoints forward so those videos are not picked up again by later auto polling.
 a32) [have] `/subscriptions` now restores active manual-refresh status on reload via latest user job lookup.
-a33) [have] Refresh scan dialog now shows `cooldown_filtered` count for videos hidden by the 6-hour retry window.
+a33) [have] Refresh scan dialog no longer depends on `cooldown_filtered`; failed items are eligible to reappear on later scans without a persisted retry-hold table.
 a34) [have] Blueprint detail header now prioritizes source-channel attribution for imported YouTube blueprints (creator-only edit CTA removed from default MVP UI).
 a35) [have] Subscription details popup in legacy `My Feed` compatibility UI is simplified (relative added-time + unsubscribe only, no absolute timestamp or open-channel action).
 a36) [have] `/subscriptions` rows are simplified to channel identity + unsubscribe, with channel-open behavior moved to avatar click and verbose URL/polling text removed.
@@ -174,7 +174,7 @@ b5) Subscription behavior (MVP simplified)
   - `refresh-generate` rate limit: 1 request per 120 seconds per user.
   - max selected items per generation run: `20`.
   - successful generation updates per-subscription checkpoint (`last_seen_published_at` / `last_seen_video_id`) forward.
-  - if generation fails for a selected video, that `(subscription_id, video_id)` is hidden from scan results for `6h` and then automatically retryable.
+  - failed selected videos are no longer hidden behind a persisted retry cooldown table and may reappear on later scans immediately.
 
 ## MVP Lifecycle Contract
 c1) Pull/ingest -> either generate directly or create unlockable source row -> Home `For You`.
@@ -189,7 +189,7 @@ c7) Subscription notice flow:
 - successful subscribe/reactivate inserts one persistent notice card per user/channel.
 - notice canonical key: `subscription:youtube:<channel_id>`.
 - notice cards are informational and have no Accept/Skip or channel submit controls.
-- notice cards open details on click and include `Unsubscribe` with confirm; unsubscribe removes the notice card from Home `For You` (and any legacy `My Feed` compatibility view) for that user/channel.
+- notice cards open details on click and include `Unsubscribe` with confirm; current unsubscribe deactivates the subscription without spending extra request-path work removing the notice card immediately.
 c8) Feed lane publication rules:
 - `For You` is the only lane that may contain locked items.
 - `Joined` contains only generated and published blueprint cards from joined Bleu channels.
@@ -306,7 +306,7 @@ si19) user endpoint: `POST /api/source-subscriptions/refresh-generate` (enqueue 
 si20) user endpoint: `GET /api/ingestion/jobs/:id` (owner-scoped status for manual refresh background jobs)
 si21) `POST /api/source-subscriptions/refresh-generate` returns `409 JOB_ALREADY_RUNNING` if a manual refresh job is already active for the user.
 si22) `POST /api/source-subscriptions/refresh-generate` returns `400 MAX_ITEMS_EXCEEDED` if selected item count exceeds `10`.
-si23) refresh candidate cooldown table is active: `refresh_video_attempts` (tracks failed manual refresh attempts with retry hold window).
+si23) refresh candidate rescans no longer rely on persisted `refresh_video_attempts` cooldown rows; failed manual-refresh items may reappear on later scans immediately.
 si24) user endpoint: `GET /api/ingestion/jobs/latest-mine?scope=manual_refresh_selection` (restore active manual-refresh status after page reload).
 si24b) job status endpoints now include additive retry/lease metadata (`attempts`, `max_attempts`, `next_run_at`, `lease_expires_at`, `trace_id`).
 si25) user endpoint: `POST /api/my-feed/items/:id/auto-publish` (legacy compatibility mutation path for auto-channel publish on a saved personal-lane blueprint).
@@ -322,7 +322,7 @@ si33) user endpoint: `DELETE /api/youtube/connection` (revoke+unlink OAuth conne
 si34) `/subscriptions` is now manual-creator-add first in the public MVP path; it includes a public YouTube subscriptions import guide/placeholder, while the older direct YouTube OAuth connect/import surface remains in code for internal or beta use only.
 si35) public/auth endpoint: `GET /api/source-pages/:platform/:externalId` (source header + follower count + viewer subscription state).
 si36) auth endpoint: `POST /api/source-pages/:platform/:externalId/subscribe` (idempotent subscribe, source-page auto-create for YouTube).
-si37) auth endpoint: `DELETE /api/source-pages/:platform/:externalId/subscribe` (unsubscribe parity + subscription notice cleanup).
+si37) auth endpoint: `DELETE /api/source-pages/:platform/:externalId/subscribe` (unsubscribe parity; legacy subscription-notice cleanup is no longer on the request path).
 si38) compatibility note: legacy `POST/GET/PATCH/DELETE /api/source-subscriptions*` remains live while Source Pages rollout expands.
 si39) public/auth endpoint: `GET /api/source-pages/:platform/:externalId/blueprints?limit=<1..24>&cursor=<opaque?>` (public channel-published feed for the source page, deduped by `source_item_id` with `next_cursor` pagination; includes additive `source_thumbnail_url` fallback per item).
 si40) auth endpoint: `GET /api/source-pages/:platform/:externalId/videos?page_token=<optional>&limit=<1..25>&kind=<full|shorts>` (source-page video-library listing for subscribed signed-in users, includes duplicate flags per row; shorts threshold is `<=60s`).
@@ -336,7 +336,7 @@ si45) source-page video-library unlock worker scope is `source_item_unlock_gener
 si46) source-page video-library list rate policy: burst `4/15s` plus sustained `40/10m` per user/IP (reduce accidental 429 on normal tab-switch/load-more while keeping abuse guardrails).
 si47) source-page video-library unlock/generate rate policy: burst `8/10s` plus sustained `120/10m` per user/IP (credit balance remains the primary generation throttle).
 si48) public/auth endpoint: `GET /api/source-pages/search?q=<query>&limit=<1..25>` (Explore source lookup against app `source_pages`; returns minimal source cards and source-page paths).
-si49) unlock reliability sweeps run opportunistically on source-page video list/unlock routes and force-run on service cron trigger path.
+si49) unlock reliability sweeps run opportunistically on source-page video list/unlock routes; service-cron ingestion trigger no longer force-runs those sweeps on its hot path.
 si50) unlock trace propagation contract: `trace_id` is emitted in unlock responses and threaded through unlock queue/job logs and credit-ledger metadata (`hold|settle|refund`).
 si51) transcript-unavailable unlock handling is deterministic: manual unlock returns `TRANSCRIPT_UNAVAILABLE` + `retry_after_seconds`, no credit hold is created, and auto-unlock retries are deferred via `source_auto_unlock_retry`.
 si52) source-page unlock queue payload now includes additive `unlock_origin` (`manual_unlock|subscription_auto_unlock|source_auto_unlock_retry`) for durable worker/retry semantics.
@@ -363,7 +363,7 @@ si70) installed-PWA push delivery is derived from the existing `notifications` t
 si69) generation surfaces are gated by the daily credit wallet (`free=3.00`, `plus=20.00`, reset `00:00 UTC`, no rollover); manual routes queue only the affordable new-item prefix and return launch-safe credit denial/skip copy.
 si69a) admin entitlement bypass applies at actual reservation/settle/refund time for both manual generation and shared auto-unlock paths; admin users are not meant to remain `unlockable` solely because displayed wallet balance is depleted.
 si69b) canonical feed-lane semantics are defined in `docs/app/mvp-feed-and-channel-model.md`; implementation should treat `For You` as the only locked lane, `Joined` as joined-channel published discovery, and `All` as the global published blueprint stream.
-si70) YouTube comment snapshots for blueprints keep bounded background freshness: auto refresh targets `+15m` and `+24h`, while owner-triggered manual refresh is available immediately with per-blueprint cooldown.
+si70) YouTube comment snapshots for blueprints keep bounded background freshness when the scheduler is enabled: auto refresh targets `+60m` and `+48h`, while owner-triggered manual refresh remains available with per-blueprint cooldown.
 si71) manual source-comment refresh endpoint is `POST /api/blueprints/:id/youtube-comments/refresh`; it is owner-only, cooldown denials return `COMMENTS_REFRESH_COOLDOWN_ACTIVE`, and queue backpressure returns `COMMENTS_REFRESH_QUEUE_GUARDED`.
 si72) queue-backed source-video generation now records active ingestion-job ownership on `source_item_blueprint_variants`, reclaims stale in-progress variants after a bounded timeout when `active_job_id` is missing, treats same-job unlock preflight as resumable ownership instead of generic `in_progress`, and persists terminal `generation_runs` status independently from best-effort trace-event logging so completed source-page/video-library work does not remain stuck as `running`.
 

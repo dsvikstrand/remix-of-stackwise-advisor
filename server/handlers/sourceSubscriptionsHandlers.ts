@@ -952,12 +952,6 @@ export async function handleDeleteSourceSubscription(req: express.Request, res: 
   if (error) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: error.message, data: null });
   if (!data) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Subscription not found', data: null });
 
-  await deps.cleanupSubscriptionNoticeForChannel(db, {
-    userId,
-    subscriptionId: data.id,
-    channelId: data.source_channel_id,
-  });
-
   return res.json({
     ok: true,
     error_code: null,

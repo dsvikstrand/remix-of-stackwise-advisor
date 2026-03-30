@@ -220,7 +220,7 @@
     - unlock-generation preflight now treats a current job that already owns the variant as same-job work, not generic `in_progress` work to skip.
   - unlock reliability sweeps:
     - opportunistic sweeps on source-page video list/unlock routes.
-    - forced sweep on service cron trigger path.
+    - service-cron ingestion trigger no longer force-runs these sweeps on its enqueue hot path.
     - stale/orphan recovery emits structured `unlock_sweep_*` logs and uses idempotent refund/fail transitions.
   - ingestion worker hardening:
     - queued claim uses DB lease (`claim_ingestion_jobs`) + heartbeat (`touch_ingestion_job_lease`).
@@ -268,7 +268,7 @@
    - ensure platform-agnostic source page row (`source_pages`) and link subscription/source items via `source_page_id`.
    - no historical prefill on first subscribe in MVP.
    - create one persistent notice card (`user_feed_items.state = subscription_notice`) with avatar + optional banner metadata.
-   - unsubscribe removes that user-scoped notice card while preserving other personal-lane blueprint items.
+   - current unsubscribe deactivates the subscription without spending extra request-path work removing that notice card.
 4. Subscription sync after checkpoint:
    - new uploads create unlockable feed rows (`my_feed_unlockable`) instead of immediate generation.
    - new uploads can auto-attempt unlock generation when eligible subscribers are available (`auto_unlock_enabled=true`).
@@ -299,12 +299,12 @@
      - per-user route cooldowns on refresh endpoints (`scan=30s`, `generate=120s`)
      - selected-item cap for manual generation (`max=20`)
      - active-job lock (`JOB_ALREADY_RUNNING`) for manual generation
-     - failed item cooldown (6h) via `refresh_video_attempts` so noisy failures do not reappear immediately.
+     - failed items are no longer hidden behind a persisted `refresh_video_attempts` cooldown table.
      - successful manual generation advances subscription checkpoint forward to prevent future auto-poll duplicates.
      - duplicate/ready/in-progress candidates are classified before charge, and only the affordable new-item prefix is enqueued.
      - queued manual items carry reservation metadata so workers settle at first OpenAI generation dispatch and release on pre-generation failure/duplicate collapse.
      - frontend restores active manual refresh status after reload via `GET /api/ingestion/jobs/latest-mine`.
-   - stale running ingestion jobs are recovered before new service/manual trigger paths execute (`STALE_RUNNING_RECOVERY`).
+   - stale running ingestion jobs are recovered on the remaining trigger/status recovery paths (`STALE_RUNNING_RECOVERY`), but service-cron trigger maintenance is otherwise trimmed to stay egress-conscious.
 5. Optional user remix/insight.
 6. Channel candidate evaluation (all-gates-run default, aggregated decision).
    - channel resolution mode is env-driven via `AUTO_CHANNEL_CLASSIFIER_MODE`:

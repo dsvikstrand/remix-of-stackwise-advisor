@@ -93,7 +93,6 @@ export function registerSourcePagesRouteHandlers(app: express.Express, deps: Sou
     markSubscriptionSyncError,
     upsertSubscriptionNoticeSourceItem,
     insertFeedItem,
-    cleanupSubscriptionNoticeForChannel,
     resolveGenerationTierAccess,
     resolveRequestedGenerationTier,
     normalizeRequestedGenerationTier,
@@ -1958,12 +1957,6 @@ app.delete('/api/source-pages/:platform/:externalId/subscribe', async (req, res)
     .maybeSingle();
   if (error) return res.status(400).json({ ok: false, error_code: 'SOURCE_PAGE_UNSUBSCRIBE_FAILED', message: error.message, data: null });
   if (!data) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Subscription not found', data: null });
-
-  await cleanupSubscriptionNoticeForChannel(db, {
-    userId,
-    subscriptionId: data.id,
-    channelId: data.source_channel_id,
-  });
 
   return res.json({
     ok: true,

@@ -32,33 +32,7 @@ export async function handleIngestionJobsTrigger(req: express.Request, res: expr
   const db = deps.getServiceSupabaseClient();
   if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
 
-  const recoveredJobs = await deps.recoverStaleIngestionJobs(db, {
-    scope: 'all_active_subscriptions',
-  });
-  if (recoveredJobs.length > 0) {
-    console.log('[ingestion_stale_recovered]', JSON.stringify({
-      scope: 'all_active_subscriptions',
-      recovered_count: recoveredJobs.length,
-      recovered_job_ids: recoveredJobs.map((row) => row.id),
-    }));
-  }
-  await deps.runUnlockSweeps(db, { mode: 'cron', force: true });
-  await deps.runSourcePageAssetSweep(db, { mode: 'cron' });
-  try {
-    const seeded = await deps.seedSourceTranscriptRevalidateJobs(db, 50);
-    if (seeded.enqueued > 0) {
-      console.log('[transcript_revalidate_seeded]', JSON.stringify({
-        scanned: seeded.scanned,
-        enqueued: seeded.enqueued,
-      }));
-    }
-  } catch (seedError) {
-    console.log('[transcript_revalidate_seed_failed]', JSON.stringify({
-      error: seedError instanceof Error ? seedError.message : String(seedError),
-    }));
-  }
-
-  const { data: existingJob, error: runningJobError } = await db
+  const selectExistingJob = async () => db
     .from('ingestion_jobs')
     .select('id, status, started_at')
     .eq('scope', 'all_active_subscriptions')
@@ -66,16 +40,37 @@ export async function handleIngestionJobsTrigger(req: express.Request, res: expr
     .order('started_at', { ascending: false })
     .limit(1)
     .maybeSingle();
+  let { data: existingJob, error: runningJobError } = await selectExistingJob();
   if (runningJobError) {
     return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: runningJobError.message, data: null });
   }
   if (existingJob?.id) {
-    return res.status(409).json({
-      ok: false,
-      error_code: 'JOB_ALREADY_RUNNING',
-      message: 'A subscription ingestion job is already queued or running.',
-      data: { job_id: existingJob.id, status: existingJob.status },
-    });
+    if (existingJob.status === 'running') {
+      const recoveredJobs = await deps.recoverStaleIngestionJobs(db, {
+        scope: 'all_active_subscriptions',
+      });
+      if (recoveredJobs.length > 0) {
+        console.log('[ingestion_stale_recovered]', JSON.stringify({
+          scope: 'all_active_subscriptions',
+          recovered_count: recoveredJobs.length,
+          recovered_job_ids: recoveredJobs.map((row) => row.id),
+        }));
+      }
+      const rerun = await selectExistingJob();
+      existingJob = rerun.data;
+      runningJobError = rerun.error;
+      if (runningJobError) {
+        return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: runningJobError.message, data: null });
+      }
+    }
+    if (existingJob?.id) {
+      return res.status(409).json({
+        ok: false,
+        error_code: 'JOB_ALREADY_RUNNING',
+        message: 'A subscription ingestion job is already queued or running.',
+        data: { job_id: existingJob.id, status: existingJob.status },
+      });
+    }
   }
 
   const { data: latestJob, error: latestJobError } = await db

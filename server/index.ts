@@ -4612,12 +4612,6 @@ async function seedSourceTranscriptRevalidateJobs(
   };
 }
 
-type RefreshVideoAttemptRow = {
-  subscription_id: string;
-  video_id: string;
-  cooldown_until: string | null;
-};
-
 const RefreshSubscriptionsScanSchema = z.object({
   max_per_subscription: z.coerce.number().int().min(1).max(20).optional(),
   max_total: z.coerce.number().int().min(1).max(200).optional(),
@@ -4718,62 +4712,6 @@ function shouldAdvanceSubscriptionCheckpoint(
   return candidateVideoId !== String(currentVideoId || '').trim();
 }
 
-async function markRefreshVideoFailureCooldown(
-  db: ReturnType<typeof createClient>,
-  input: { userId: string; subscriptionId: string; videoId: string; errorCode: string; errorMessage: string },
-) {
-  const now = new Date();
-  const cooldownUntil = new Date(now.getTime() + refreshFailureCooldownHours * 60 * 60 * 1000);
-  const { error } = await db.from('refresh_video_attempts').upsert(
-    {
-      user_id: input.userId,
-      subscription_id: input.subscriptionId,
-      video_id: input.videoId,
-      last_attempt_at: now.toISOString(),
-      last_result: 'failed',
-      error_code: input.errorCode,
-      error_message: input.errorMessage.slice(0, 500),
-      cooldown_until: cooldownUntil.toISOString(),
-    },
-    { onConflict: 'user_id,subscription_id,video_id' },
-  );
-  if (error && !isMissingTableError(error)) throw error;
-}
-
-async function clearRefreshVideoFailureCooldown(
-  db: ReturnType<typeof createClient>,
-  input: { userId: string; subscriptionId: string; videoId: string },
-) {
-  const { error } = await db
-    .from('refresh_video_attempts')
-    .delete()
-    .eq('user_id', input.userId)
-    .eq('subscription_id', input.subscriptionId)
-    .eq('video_id', input.videoId);
-  if (error && !isMissingTableError(error)) throw error;
-}
-
-async function fetchActiveRefreshCooldownRows(
-  db: ReturnType<typeof createClient>,
-  input: { userId: string; subscriptionIds: string[]; videoIds: string[] },
-) {
-  if (!input.subscriptionIds.length || !input.videoIds.length) return [] as RefreshVideoAttemptRow[];
-  const nowIso = new Date().toISOString();
-  const { data, error } = await db
-    .from('refresh_video_attempts')
-    .select('subscription_id, video_id, cooldown_until')
-    .eq('user_id', input.userId)
-    .in('subscription_id', input.subscriptionIds)
-    .in('video_id', input.videoIds)
-    .not('cooldown_until', 'is', null)
-    .gt('cooldown_until', nowIso);
-  if (error) {
-    if (isMissingTableError(error)) return [] as RefreshVideoAttemptRow[];
-    throw error;
-  }
-  return (data || []) as RefreshVideoAttemptRow[];
-}
-
 async function collectRefreshCandidatesForUser(db: ReturnType<typeof createClient>, userId: string, options?: {
   maxPerSubscription?: number;
   maxTotal?: number;
@@ -4792,7 +4730,6 @@ async function collectRefreshCandidatesForUser(db: ReturnType<typeof createClien
 
   const scanErrors: Array<{ subscription_id: string; error: string }> = [];
   const rawCandidates: RefreshScanCandidate[] = [];
-  let cooldownFiltered = 0;
   let durationFilteredCount = 0;
   let durationFilteredReasons: { too_long: number; unknown: number } = {
     too_long: 0,
@@ -4886,20 +4823,6 @@ async function collectRefreshCandidatesForUser(db: ReturnType<typeof createClien
     durationFilteredReasons = buildDurationFilteredReasonCounts(split.blocked);
   }
 
-  if (candidates.length > 0) {
-    const cooldownRows = await fetchActiveRefreshCooldownRows(db, {
-      userId,
-      subscriptionIds: Array.from(new Set(candidates.map((candidate) => candidate.subscription_id))),
-      videoIds: Array.from(new Set(candidates.map((candidate) => candidate.video_id))),
-    });
-    const cooldownKeys = new Set(
-      cooldownRows.map((row) => `${String(row.subscription_id || '').trim()}:${String(row.video_id || '').trim()}`),
-    );
-    const beforeCooldown = candidates.length;
-    candidates = candidates.filter((candidate) => !cooldownKeys.has(`${candidate.subscription_id}:${candidate.video_id}`));
-    cooldownFiltered = Math.max(0, beforeCooldown - candidates.length);
-  }
-
   candidates = candidates
     .sort((a, b) => {
       const aTs = a.published_at ? Date.parse(a.published_at) : 0;
@@ -4912,7 +4835,7 @@ async function collectRefreshCandidatesForUser(db: ReturnType<typeof createClien
     subscriptionsTotal: (subscriptions || []).length,
     candidates,
     scanErrors,
-    cooldownFiltered,
+    cooldownFiltered: 0,
     durationFilteredCount,
     durationFilteredReasons,
   };
@@ -5545,11 +5468,6 @@ async function processManualRefreshGenerateJob(input: {
       }
 
       recordCheckpointCandidate(item);
-      await clearRefreshVideoFailureCooldown(db, {
-        userId: input.userId,
-        subscriptionId: item.subscription_id,
-        videoId: item.video_id,
-      });
       console.log('[subscription_refresh_generate_item_succeeded]', JSON.stringify({
         job_id: input.jobId,
         user_id: input.userId,
@@ -5616,13 +5534,6 @@ async function processManualRefreshGenerateJob(input: {
         video_id: item.video_id,
         error_code: errorCode,
         error: message,
-      });
-      await markRefreshVideoFailureCooldown(db, {
-        userId: input.userId,
-        subscriptionId: item.subscription_id,
-        videoId: item.video_id,
-        errorCode,
-        errorMessage: message,
       });
       console.log('[subscription_refresh_generate_item_failed]', JSON.stringify({
         job_id: input.jobId,
