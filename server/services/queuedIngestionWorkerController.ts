@@ -24,6 +24,7 @@ export type QueuedIngestionWorkerControllerDeps<DbClient> = {
   keepAliveIdleBaseDelayMs?: number;
   keepAliveIdleMaxDelayMs?: number;
   keepAliveIdleJitterRatio?: number;
+  maintenanceMinIntervalMs?: number;
   getQueueSweepPlan: () => readonly QueueSweepPlanEntry[];
   claimQueuedIngestionJobs: (db: DbClient, input: {
     scopes: string[];
@@ -71,11 +72,13 @@ export function createQueuedIngestionWorkerController<DbClient>(
     0.5,
     Math.max(0, Number.isFinite(deps.keepAliveIdleJitterRatio) ? Number(deps.keepAliveIdleJitterRatio) : 0.2),
   );
+  const maintenanceMinIntervalMs = Math.max(0, Math.floor(deps.maintenanceMinIntervalMs ?? 0));
   let queuedWorkerTimer: ReturnType<typeof setTimeout> | null = null;
   let queuedWorkerNextRunAt = 0;
   let queuedWorkerRunning = false;
   let queuedWorkerRequested = false;
   let idlePollStreak = 0;
+  let lastMaintenanceRunAt = 0;
 
   function computeIdleDelayMs(input?: { lowPriorityOnly?: boolean }) {
     const lowPriorityOnly = Boolean(input?.lowPriorityOnly);
@@ -116,15 +119,22 @@ export function createQueuedIngestionWorkerController<DbClient>(
     try {
       do {
         queuedWorkerRequested = false;
-        await deps.runUnlockSweeps(db, { mode: 'cron' });
-        for (const scope of deps.queuedIngestionScopes) {
-          const recoveredJobs = await deps.recoverStaleIngestionJobs(db, { scope });
-          if (recoveredJobs.length > 0) {
-            deps.onRecoveredJobs?.({
-              scope,
-              recoveredJobs,
-              workerId: deps.queuedWorkerId,
-            });
+        const nowMs = Date.now();
+        const shouldRunMaintenance = maintenanceMinIntervalMs <= 0
+          || lastMaintenanceRunAt <= 0
+          || nowMs - lastMaintenanceRunAt >= maintenanceMinIntervalMs;
+        if (shouldRunMaintenance) {
+          lastMaintenanceRunAt = nowMs;
+          await deps.runUnlockSweeps(db, { mode: 'cron' });
+          for (const scope of deps.queuedIngestionScopes) {
+            const recoveredJobs = await deps.recoverStaleIngestionJobs(db, { scope });
+            if (recoveredJobs.length > 0) {
+              deps.onRecoveredJobs?.({
+                scope,
+                recoveredJobs,
+                workerId: deps.queuedWorkerId,
+              });
+            }
           }
         }
 

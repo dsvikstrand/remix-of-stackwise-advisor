@@ -230,9 +230,12 @@
     - manual blueprint-comments refresh now reads the existing refresh-state row first and registers one only when the blueprint lacks an enabled refresh record.
     - worker lease heartbeats are now lease-aware by default: a `90s` lease refreshes every `30s` instead of every `10s`, reducing Supabase lease-RPC churn without changing lease ownership semantics.
     - low-priority idle claim sweeps now back off more aggressively than the default worker idle cadence, reducing `claim_ingestion_jobs` chatter when only low-priority scopes are being polled.
+    - queue maintenance is now time-gated as well: unlock sweeps and stale-job recovery still run in the combined worker loop, but only once per coarse maintenance window (`15m` default) instead of every idle keep-alive cycle.
     - service-cron subscription enqueue is also cadence-aware now: the route still receives the `*/3m` Oracle trigger, but `all_active_subscriptions` is only re-enqueued after the default `60m` minimum interval has elapsed.
+    - `all_active_subscriptions` execution is breadth-limited by default: each run prioritizes the stalest `last_polled_at` subscriptions first and caps the active slice to `75` rows, smoothing `user_source_subscriptions` churn under heavier follow counts.
     - YouTube refresh bookkeeping now skips unchanged `source_items.metadata.view_count` writes and no-op `blueprint_youtube_refresh_state` upserts, reducing refresh-state churn without changing refresh UX.
     - frontend list/detail query tuning now complements the backend egress work by keeping non-live query surfaces on explicit conservative stale windows instead of implicit focus churn.
+    - source unlock trust-restore reads are also thinner now: `GET /api/ingestion/jobs/latest-mine` only reads the latest `2` rows for the requested scope, and Home `For You` no longer forces an extra tracker resume call on mount when the cached state is still fresh.
     - provider retry/circuit controls are env-driven (transcript + LLM bounded retries, fail-fast circuit open mode).
   - onboarding extension: `user_youtube_onboarding` for new-user optional setup state.
   - Eval assets:

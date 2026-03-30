@@ -170,6 +170,51 @@ describe('queued ingestion worker controller', () => {
     expect(runUnlockSweeps).toHaveBeenCalledTimes(2);
   });
 
+  it('throttles maintenance work when a maintenance interval is configured', async () => {
+    const db = { tag: 'db' };
+    const runUnlockSweeps = vi.fn(async () => undefined);
+    const recoverStaleIngestionJobs = vi.fn(async () => []);
+    const controller = createQueuedIngestionWorkerController({
+      getServiceSupabaseClient: () => db,
+      runUnlockSweeps,
+      recoverStaleIngestionJobs,
+      queuedIngestionScopes: ['all_active_subscriptions'],
+      queuedWorkerId: 'worker_1',
+      workerLeaseMs: 90_000,
+      keepAliveEnabled: true,
+      keepAliveDelayMs: 1_500,
+      keepAliveIdleBaseDelayMs: 10_000,
+      keepAliveIdleMaxDelayMs: 60_000,
+      keepAliveIdleJitterRatio: 0,
+      maintenanceMinIntervalMs: 30_000,
+      getQueueSweepPlan: () => [{ scopes: ['all_active_subscriptions'], maxJobs: 1 }],
+      claimQueuedIngestionJobs: vi.fn(async () => []),
+      processClaimedIngestionJobs: vi.fn(async () => undefined),
+    });
+
+    controller.start(0);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(1);
+    expect(recoverStaleIngestionJobs).toHaveBeenCalledTimes(1);
+
+    controller.schedule(0);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(1);
+    expect(recoverStaleIngestionJobs).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(59_999);
+
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(1);
+    expect(recoverStaleIngestionJobs).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(2);
+    expect(recoverStaleIngestionJobs).toHaveBeenCalledTimes(2);
+  });
+
   it('preempts a long idle timer when new work is scheduled', async () => {
     const runUnlockSweeps = vi.fn(async () => undefined);
     const controller = createQueuedIngestionWorkerController({

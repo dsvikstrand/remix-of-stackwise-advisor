@@ -366,6 +366,12 @@ const allActiveSubscriptionsMinTriggerIntervalMs = clampInt(
   60_000,
   60 * 60_000,
 );
+const allActiveSubscriptionsMaxPerRun = clampInt(
+  process.env.ALL_ACTIVE_SUBSCRIPTIONS_MAX_PER_RUN,
+  75,
+  1,
+  500,
+);
 const workerConcurrency = clampInt(process.env.WORKER_CONCURRENCY, 2, 1, 16);
 const workerBatchSize = clampInt(process.env.WORKER_BATCH_SIZE, 10, 1, 200);
 const workerLeaseMs = clampInt(process.env.WORKER_LEASE_MS, 90_000, 5_000, 15 * 60_000);
@@ -377,6 +383,7 @@ const effectiveWorkerHeartbeatMs = resolveWorkerLeaseHeartbeatMs({
 const workerKeepAliveDelayMs = clampInt(process.env.WORKER_KEEPALIVE_DELAY_MS, 1_500, 0, 60_000);
 const workerIdleBackoffBaseMs = clampInt(process.env.WORKER_IDLE_BACKOFF_BASE_MS, 600_000, 1_000, 15 * 60_000);
 const workerIdleBackoffMaxMs = clampInt(process.env.WORKER_IDLE_BACKOFF_MAX_MS, 1_800_000, workerIdleBackoffBaseMs, 45 * 60_000);
+const workerMaintenanceMinIntervalMs = clampInt(process.env.WORKER_MAINTENANCE_MIN_INTERVAL_MS, 900_000, 0, 60 * 60_000);
 const jobExecutionTimeoutMs = clampInt(process.env.JOB_EXECUTION_TIMEOUT_MS, 180_000, 5_000, 10 * 60_000);
 const youtubeRefreshEnabled = parseRuntimeFlag(process.env.YOUTUBE_REFRESH_ENABLED, true);
 const youtubeRefreshIntervalMinutes = clampInt(process.env.YOUTUBE_REFRESH_INTERVAL_MINUTES, 120, 1, 240);
@@ -7311,7 +7318,9 @@ async function processAllActiveSubscriptionsJob(input: {
     .select('id, user_id, mode, source_channel_id, source_channel_title, source_page_id, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, is_active')
     .eq('is_active', true)
     .eq('source_type', 'youtube')
-    .order('updated_at', { ascending: false });
+    .order('last_polled_at', { ascending: true, nullsFirst: true })
+    .order('updated_at', { ascending: false })
+    .limit(allActiveSubscriptionsMaxPerRun);
   if (subscriptionsError) throw subscriptionsError;
 
   let processed = 0;
@@ -7613,6 +7622,7 @@ const queuedIngestionWorkerController = createQueuedIngestionWorkerController({
   keepAliveDelayMs: workerKeepAliveDelayMs,
   keepAliveIdleBaseDelayMs: workerIdleBackoffBaseMs,
   keepAliveIdleMaxDelayMs: workerIdleBackoffMaxMs,
+  maintenanceMinIntervalMs: workerMaintenanceMinIntervalMs,
   getQueueSweepPlan,
   claimQueuedIngestionJobs,
   processClaimedIngestionJobs,

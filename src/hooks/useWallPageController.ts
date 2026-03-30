@@ -298,11 +298,6 @@ export function useWallPageController() {
     },
   });
 
-  useEffect(() => {
-    if (!isForYouScope || !user) return;
-    void forYouUnlockTracker.resume();
-  }, [forYouUnlockTracker.resume, isForYouScope, user]);
-
   const unlockMutation = useMutation({
     mutationFn: async (item: ForYouLockedItem) => {
       const externalId = String(item.sourceChannelId || '').trim();

@@ -88,6 +88,7 @@
     - this is an egress-control measure only; frontend subscription health still evaluates on a `60m` window
     - Oracle cron may still hit `/api/ingestion/jobs/trigger` every `3m`, but backend enqueue now suppresses `all_active_subscriptions` until the default `60m` minimum interval has elapsed
     - the same trigger path no longer force-runs unlock sweeps, source-page asset sweeps, or transcript revalidate seeding before enqueue eligibility is known
+    - each `all_active_subscriptions` worker run now prioritizes the stalest `last_polled_at` rows and caps the active slice to `75` subscriptions by default
   - Blueprint YouTube refresh bookkeeping is also egress-conscious:
     - scheduler pending checks batch by refresh kind + candidate blueprint set instead of reading queued job payloads once per candidate
     - manual comments refresh reads existing refresh state first and only registers a row when refresh state is missing or uninitialized
@@ -99,6 +100,8 @@
   - Low-priority queue claim polling is also coarsened:
     - idle low-priority claim sweeps now back off more aggressively than the default worker idle cadence
     - claimed-work reschedules remain fast, and lease-heartbeat behavior is unchanged
+  - Combined-worker maintenance is also coarsened:
+    - unlock sweeps and stale-job recovery remain enabled, but the worker only runs that maintenance once per coarse interval (`15m` default) instead of every idle keep-alive cycle
   - Source-video generation claim state is now self-healing:
     - queue-backed `createBlueprintFromVideo(...)` claims record the owning ingestion `jobId` on `source_item_blueprint_variants`
     - stale queued/running variant rows are reclaimed after a bounded timeout only when `active_job_id` is missing
@@ -106,7 +109,9 @@
     - terminal `generation_runs` status writes now persist outside the best-effort trace-event wrapper so source-page/library jobs do not remain stuck as `running` when event append fails
   - User ingestion-status routes are also narrower:
     - `GET /api/ingestion/jobs/latest-mine` now resolves from one recent-row read instead of separate active/latest queries
+    - the route now caps that recent-row read to `2` rows for the requested user/scope
     - `GET /api/ingestion/jobs/active-mine` queue-position scans now narrow to requested or visible queued scopes instead of every queued ingestion scope
+    - shared source-unlock trust restore now uses a slower baseline (`5m` poll / `30m` stale window), and Home `For You` no longer forces an extra resume refetch on mount
   - Durable generation trace writes are also slimmer:
     - generation run/event writes no longer request returned row payloads when callers do not consume them
     - event sequencing now reuses a per-run in-process cursor instead of re-reading the latest `seq` from Supabase before every event insert
