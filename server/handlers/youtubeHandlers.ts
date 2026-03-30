@@ -475,7 +475,7 @@ app.post('/api/blueprints/:id/youtube-comments/refresh', async (req, res) => {
       return res.status(202).json({
         ok: true,
         error_code: null,
-        message: result.status === 'already_pending' ? 'comments refresh already pending' : 'comments refresh queued',
+        message: result.status === 'already_pending' ? 'youtube refresh already pending' : 'youtube refresh queued',
         data: {
           status: result.status,
           cooldown_until: result.cooldown_until,
@@ -497,7 +497,7 @@ app.post('/api/blueprints/:id/youtube-comments/refresh', async (req, res) => {
       return res.status(429).json({
         ok: false,
         error_code: 'COMMENTS_REFRESH_QUEUE_GUARDED',
-        message: 'Comments refresh queue is busy. Please retry shortly.',
+        message: 'YouTube refresh queue is busy. Please retry shortly.',
         retry_after_seconds: result.retry_after_seconds,
         queue_depth: result.queue_depth,
         data: null,
@@ -506,14 +506,14 @@ app.post('/api/blueprints/:id/youtube-comments/refresh', async (req, res) => {
     return res.status(404).json({
       ok: false,
       error_code: 'BLUEPRINT_YOUTUBE_REFRESH_NOT_AVAILABLE',
-      message: 'No source comments available for this blueprint.',
+      message: 'No YouTube refresh available for this blueprint.',
       data: null,
     });
   } catch (error) {
     return res.status(500).json({
       ok: false,
       error_code: 'COMMENTS_REFRESH_FAILED',
-      message: error instanceof Error ? error.message : 'Could not request comments refresh.',
+      message: error instanceof Error ? error.message : 'Could not request YouTube refresh.',
       data: null,
     });
   }

@@ -4416,12 +4416,17 @@ async function requestManualBlueprintYouTubeCommentsRefresh(input: {
     };
   }
 
-  const hasPending = await blueprintYouTubeCommentsService.hasPendingRefreshJob({
+  const hasPendingComments = await blueprintYouTubeCommentsService.hasPendingRefreshJob({
     db: input.db,
     blueprintId,
     kind: 'comments',
   });
-  if (hasPending) {
+  const hasPendingViewCount = await blueprintYouTubeCommentsService.hasPendingRefreshJob({
+    db: input.db,
+    blueprintId,
+    kind: 'view_count',
+  });
+  if (hasPendingComments && hasPendingViewCount) {
     return {
       ok: true,
       status: 'already_pending',
@@ -4462,30 +4467,72 @@ async function requestManualBlueprintYouTubeCommentsRefresh(input: {
   }
 
   try {
-    const enqueueResult = await enqueueBlueprintYouTubeRefreshJob({
-      db: input.db,
-      blueprintId,
-      refreshKind: 'comments',
-      refreshTrigger: 'manual',
-      requestedByUserId,
-      youtubeVideoId: refreshState.youtube_video_id,
-      sourceItemId: refreshState.source_item_id,
-    });
-    if (enqueueResult.suppressed) {
-      await blueprintYouTubeCommentsService.releaseManualCommentsRefreshCooldown({
+    let queuedAny = false;
+
+    if (!hasPendingComments) {
+      const commentsEnqueueResult = await enqueueBlueprintYouTubeRefreshJob({
         db: input.db,
         blueprintId,
-        expectedCooldownUntil: claimedCooldown.cooldownUntil,
-        previousCooldownUntil: refreshState.comments_manual_cooldown_until,
-        previousManualRefreshAt: refreshState.last_comments_manual_refresh_at,
-        previousManualTriggeredBy: refreshState.last_comments_manual_triggered_by,
+        refreshKind: 'comments',
+        refreshTrigger: 'manual',
+        requestedByUserId,
+        youtubeVideoId: refreshState.youtube_video_id,
+        sourceItemId: refreshState.source_item_id,
       });
-      return {
-        ok: false,
-        code: 'COMMENTS_REFRESH_QUEUE_GUARDED',
-        retry_after_seconds: 60,
-        queue_depth: enqueueResult.queue_depth ?? queueDepth,
-      };
+      if (commentsEnqueueResult.suppressed) {
+        await blueprintYouTubeCommentsService.releaseManualCommentsRefreshCooldown({
+          db: input.db,
+          blueprintId,
+          expectedCooldownUntil: claimedCooldown.cooldownUntil,
+          previousCooldownUntil: refreshState.comments_manual_cooldown_until,
+          previousManualRefreshAt: refreshState.last_comments_manual_refresh_at,
+          previousManualTriggeredBy: refreshState.last_comments_manual_triggered_by,
+        });
+        return {
+          ok: false,
+          code: 'COMMENTS_REFRESH_QUEUE_GUARDED',
+          retry_after_seconds: 60,
+          queue_depth: commentsEnqueueResult.queue_depth ?? queueDepth,
+        };
+      }
+      queuedAny = true;
+    }
+
+    if (!hasPendingViewCount) {
+      const viewEnqueueResult = await enqueueBlueprintYouTubeRefreshJob({
+        db: input.db,
+        blueprintId,
+        refreshKind: 'view_count',
+        refreshTrigger: 'manual',
+        requestedByUserId,
+        youtubeVideoId: refreshState.youtube_video_id,
+        sourceItemId: refreshState.source_item_id,
+      });
+      if (viewEnqueueResult.suppressed) {
+        if (queuedAny) {
+          return {
+            ok: true,
+            status: 'queued',
+            cooldown_until: claimedCooldown.cooldownUntil,
+            queue_depth: queueDepth,
+          };
+        }
+        await blueprintYouTubeCommentsService.releaseManualCommentsRefreshCooldown({
+          db: input.db,
+          blueprintId,
+          expectedCooldownUntil: claimedCooldown.cooldownUntil,
+          previousCooldownUntil: refreshState.comments_manual_cooldown_until,
+          previousManualRefreshAt: refreshState.last_comments_manual_refresh_at,
+          previousManualTriggeredBy: refreshState.last_comments_manual_triggered_by,
+        });
+        return {
+          ok: false,
+          code: 'COMMENTS_REFRESH_QUEUE_GUARDED',
+          retry_after_seconds: 60,
+          queue_depth: viewEnqueueResult.queue_depth ?? queueDepth,
+        };
+      }
+      queuedAny = true;
     }
     return {
       ok: true,
@@ -4502,7 +4549,7 @@ async function requestManualBlueprintYouTubeCommentsRefresh(input: {
       previousManualRefreshAt: refreshState.last_comments_manual_refresh_at,
       previousManualTriggeredBy: refreshState.last_comments_manual_triggered_by,
     });
-    throw new Error('Could not enqueue manual YouTube comments refresh.');
+    throw new Error('Could not enqueue manual YouTube refresh.');
   }
 }
 

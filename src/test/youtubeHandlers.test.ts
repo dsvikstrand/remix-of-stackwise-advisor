@@ -791,8 +791,48 @@ describe('youtube handlers', () => {
     expect(res.statusCode).toBe(202);
     expect(res.body).toMatchObject({
       ok: true,
+      message: 'youtube refresh queued',
       data: {
         status: 'queued',
+      },
+    });
+  });
+
+  it('returns already pending for manual YouTube refresh when work is already queued', async () => {
+    const app = createMockApp();
+    const serviceDb = createMockSupabase({
+      blueprints: [{
+        id: '00000000-0000-0000-0000-000000000999',
+        creator_user_id: '00000000-0000-0000-0000-000000000001',
+      }],
+    });
+    const requestManualBlueprintYouTubeCommentsRefresh = vi.fn(async () => ({
+      ok: true as const,
+      status: 'already_pending' as const,
+      cooldown_until: '2026-03-06T10:00:00.000Z',
+      queue_depth: null,
+    }));
+    registerYouTubeRouteHandlers(app as any, createDeps({
+      getServiceSupabaseClient: () => serviceDb,
+      requestManualBlueprintYouTubeCommentsRefresh,
+    }));
+
+    const handler = app.handlers['POST /api/blueprints/:id/youtube-comments/refresh'];
+    const req = {
+      params: { id: '00000000-0000-0000-0000-000000000999' },
+      body: {},
+    } as any;
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(requestManualBlueprintYouTubeCommentsRefresh).toHaveBeenCalledTimes(1);
+    expect(res.statusCode).toBe(202);
+    expect(res.body).toMatchObject({
+      ok: true,
+      message: 'youtube refresh already pending',
+      data: {
+        status: 'already_pending',
       },
     });
   });
