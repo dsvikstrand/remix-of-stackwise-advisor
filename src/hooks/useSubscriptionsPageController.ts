@@ -366,15 +366,6 @@ export function useSubscriptionsPageController() {
     },
   });
 
-  const latestManualRefreshJobQuery = useQuery({
-    queryKey: ['ingestion-job-latest-mine', user?.id],
-    enabled: Boolean(user) && subscriptionsEnabled && !activeRefreshJobId,
-    queryFn: () => getLatestMyIngestionJob('manual_refresh_selection'),
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: true,
-  });
-
   const handleUnsubscribe = useCallback((subscription: SourceSubscription) => {
     void withRowPending(subscription.id, () => deactivateMutation.mutateAsync(subscription.id));
   }, [deactivateMutation, withRowPending]);
@@ -543,21 +534,32 @@ export function useSubscriptionsPageController() {
   }, [invalidateSubscriptionViews, navigate, refreshJobQuery.data, refreshReturnTo, terminalHandledJobId, toast]);
 
   useEffect(() => {
+    if (!isRefreshDialogOpen) return;
     if (activeRefreshJobId) return;
-    const latestJob = latestManualRefreshJobQuery.data;
-    if (!latestJob?.job_id) return;
-    if (latestJob.status !== 'queued' && latestJob.status !== 'running') return;
+    if (!user || !subscriptionsEnabled) return;
 
-    setActiveRefreshJobId(latestJob.job_id);
-    setTerminalHandledJobId(null);
-    const queuedEstimate = Math.max(
-      0,
-      Number(latestJob.processed_count || 0) + Number(latestJob.inserted_count || 0) + Number(latestJob.skipped_count || 0),
-    );
-    if (queuedEstimate > 0) {
-      setQueuedRefreshCount(queuedEstimate);
-    }
-  }, [activeRefreshJobId, latestManualRefreshJobQuery.data]);
+    let cancelled = false;
+    void getLatestMyIngestionJob('manual_refresh_selection')
+      .then((latestJob) => {
+        if (cancelled || !latestJob?.job_id) return;
+        if (latestJob.status !== 'queued' && latestJob.status !== 'running') return;
+
+        setActiveRefreshJobId(latestJob.job_id);
+        setTerminalHandledJobId(null);
+        const queuedEstimate = Math.max(
+          0,
+          Number(latestJob.processed_count || 0) + Number(latestJob.inserted_count || 0) + Number(latestJob.skipped_count || 0),
+        );
+        if (queuedEstimate > 0) {
+          setQueuedRefreshCount(queuedEstimate);
+        }
+      })
+      .catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRefreshJobId, isRefreshDialogOpen, subscriptionsEnabled, user]);
 
   const handleRefreshDialogChange = useCallback((nextOpen: boolean) => {
     const shouldReturnToProfile = !nextOpen && Boolean(refreshReturnTo);

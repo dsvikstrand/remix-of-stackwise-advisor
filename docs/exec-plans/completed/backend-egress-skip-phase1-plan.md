@@ -1,6 +1,6 @@
 # Backend Egress Skip Phase 1 Plan
 
-Status: `on-pause`  
+Status: `completed`  
 Owner: `Codex / David`  
 Last updated: `2026-03-30`
 
@@ -9,7 +9,7 @@ Last updated: `2026-03-30`
 Track the first concrete implementation slice from the broader backend egress skip candidates plan.
 
 Parent reference:
-- [backend-egress-skip-candidates-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/active/on-pause/backend-egress-skip-candidates-plan.md)
+- [backend-egress-skip-candidates-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/completed/backend-egress-skip-candidates-plan.md)
 
 This child plan intentionally starts with the safer backend cuts plus one medium-impact hot-path cleanup. It does **not** start with the riskiest recovery/sync reductions.
 
@@ -21,7 +21,7 @@ a1) [have] This Phase 1 plan covers:
 - `refresh_video_attempts` persistence removal
 - subscription-notice cleanup removal
 
-a2) [todo] This Phase 1 plan does **not** cover:
+a2) [have] This Phase 1 plan does **not** cover:
 - worker stale-recovery redesign
 - `all_active_subscriptions` breadth reduction
 - lease-heartbeat thinning
@@ -43,7 +43,7 @@ b3) [have] This is the smallest credible first slice from the broader tracker.
 
 ## Implementation Steps
 
-c1) [todo] **Step 1: trim `/api/ingestion/jobs/trigger` so maintenance does not run before enqueue eligibility is known**
+c1) [have] **Step 1: trim `/api/ingestion/jobs/trigger` so maintenance does not run before enqueue eligibility is known**
 Primary file:
 - [opsHandlers.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/handlers/opsHandlers.ts)
 
@@ -63,7 +63,7 @@ Goal:
 Risk:
 - low-medium
 
-c2) [todo] **Step 2: remove automatic transcript revalidate seeding from the trigger route**
+c2) [have] **Step 2: remove automatic transcript revalidate seeding from the trigger route**
 Primary files:
 - [opsHandlers.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/handlers/opsHandlers.ts)
 - [server/index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts)
@@ -81,7 +81,7 @@ Goal:
 Risk:
 - low
 
-c3) [todo] **Step 3: remove `refresh_video_attempts` persistence from the subscription refresh flow**
+c3) [have] **Step 3: remove `refresh_video_attempts` persistence from the subscription refresh flow**
 Primary file:
 - [server/index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts)
 
@@ -100,7 +100,7 @@ Goal:
 Risk:
 - low-medium
 
-c4) [todo] **Step 4: skip subscription-notice cleanup writes**
+c4) [have] **Step 4: skip subscription-notice cleanup writes**
 Primary files:
 - [server/index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts)
 - [sourceSubscriptionsHandlers.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/handlers/sourceSubscriptionsHandlers.ts)
@@ -119,7 +119,7 @@ Goal:
 Risk:
 - low
 
-c5) [todo] **Step 5: keep only one medium-impact trigger-path cleanup beyond the fully safe cuts**
+c5) [have] **Step 5: keep only one medium-impact trigger-path cleanup beyond the fully safe cuts**
 Primary file:
 - [opsHandlers.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/handlers/opsHandlers.ts)
 
@@ -135,50 +135,50 @@ Risk:
 
 ## Files Expected To Change
 
-d1) [todo] Expected primary edits:
+d1) [have] Expected primary edits:
 - [opsHandlers.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/handlers/opsHandlers.ts)
 - [server/index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts)
 - [sourceSubscriptionsHandlers.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/handlers/sourceSubscriptionsHandlers.ts)
 - [sourcePagesHandlers.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/handlers/sourcePagesHandlers.ts)
 
-d2) [todo] Secondary edits only if needed:
+d2) [have] Secondary edits only if needed:
 - targeted tests in [src/test](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/test)
 
 ## Verification
 
-e1) [todo] Run:
+e1) [have] Ran:
 - `npm run typecheck`
 - targeted backend tests for:
   - ingestion trigger route behavior
   - subscription refresh flows
   - touched cleanup/helper behavior
 
-e2) [todo] Deploy and verify:
+e2) [have] Deployed and verified:
 - Oracle backend smoke
 - public release smoke
 
-e3) [todo] Compare request history after soak:
+e3) [have] Compared request history after soak:
 - `ingestion_jobs`
 - `claim_ingestion_jobs`
 - support-table activity tied to `refresh_video_attempts`
 - any exact shapes tied to `/api/ingestion/jobs/trigger`
 
-e4) [todo] Product sanity checks:
+e4) [have] Product sanity checks:
 - subscription refresh trigger still works
 - normal generation enqueue still works
 - no obvious browse/generation regression appears
 
 ## Exit Criteria
 
-f1) [todo] Phase 1 is complete when:
-- the four safe cuts are implemented
-- verification passes
-- no clear product regression appears
-- request history shows at least some reduction in trigger/support-table waste
+f1) [have] Phase 1 completed with:
+- the four safe cuts implemented
+- verification passed
+- no clear product regression
+- trigger/support-table waste reduced enough to proceed to later phases
 
 ## Next Step After Phase 1
 
-g1) [have] The next implementation after this plan should be the medium-impact pass from the parent tracker:
+g1) [have] The next implementation after this plan was the medium-impact pass from the parent tracker:
 - worker stale-recovery cadence
 - `all_active_subscriptions` breadth
 - `latest-mine` churn

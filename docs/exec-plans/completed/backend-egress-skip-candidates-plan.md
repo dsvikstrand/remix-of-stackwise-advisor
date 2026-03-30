@@ -1,6 +1,6 @@
 # Backend Egress Skip Candidates Plan
 
-Status: `on-pause`  
+Status: `completed`  
 Owner: `Codex / David`  
 Last updated: `2026-03-30`
 
@@ -26,13 +26,13 @@ a2) [have] The biggest remaining request pressure still appears concentrated in 
 
 a3) [have] The next likely wins are no longer obvious user-facing features to disable.
 
-a4) [todo] The next work should target backend operations that still run even when little or no direct user value is created.
+a4) [have] The tracked backend control-plane follow-up is now implemented through the completed safe-first, medium-impact, and lease-heartbeat passes.
 
 ## Goal
 
-b1) [todo] Reduce backend request churn further without introducing broad new surfaces.
+b1) [have] Reduced backend request churn further without introducing broad new surfaces.
 
-b2) [todo] Prefer skipping, deferring, or coalescing existing maintenance/control-plane work over adding new endpoints, new storage, or new architecture.
+b2) [have] The implemented cuts preferred skipping, deferring, or coalescing existing maintenance/control-plane work over adding new endpoints, new storage, or new architecture.
 
 b3) [todo] Preserve:
 - blueprint reading
@@ -42,7 +42,7 @@ b3) [todo] Preserve:
 
 ## Ranked Candidates
 
-c1) [todo] **Trim pre-enqueue maintenance from `/api/ingestion/jobs/trigger`**
+c1) [have] **Trim pre-enqueue maintenance from `/api/ingestion/jobs/trigger`**
 Primary files:
 - [opsHandlers.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/handlers/opsHandlers.ts)
 
@@ -70,7 +70,7 @@ Expected impact:
 Risk:
 - low-medium
 
-c2) [todo] **Remove or severely downshift transcript revalidate seeding**
+c2) [have] **Remove or severely downshift transcript revalidate seeding**
 Primary files:
 - [server/index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts)
 - [opsHandlers.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/handlers/opsHandlers.ts)
@@ -92,7 +92,7 @@ Expected impact:
 Risk:
 - low
 
-c3) [todo] **Reduce stale-recovery work inside the queued worker loop**
+c3) [have] **Reduce stale-recovery work inside the queued worker loop**
 Primary files:
 - [queuedIngestionWorkerController.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/queuedIngestionWorkerController.ts)
 - [server/index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts)
@@ -118,7 +118,7 @@ Expected impact:
 Risk:
 - medium
 
-c4) [todo] **Thin `all_active_subscriptions` full-sync breadth**
+c4) [have] **Thin `all_active_subscriptions` full-sync breadth**
 Primary files:
 - [server/index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts)
 
@@ -140,7 +140,7 @@ Expected impact:
 Risk:
 - medium
 
-c5) [todo] **Reduce lease heartbeat churn for short-lived jobs**
+c5) [have] **Reduce lease heartbeat churn for short-lived jobs**
 Primary files:
 - [server/index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts)
 
@@ -161,7 +161,7 @@ Expected impact:
 Risk:
 - medium
 
-c6) [todo] **Drop `refresh_video_attempts` persistence if acceptable**
+c6) [have] **Drop `refresh_video_attempts` persistence if acceptable**
 Primary files:
 - [server/index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts)
 
@@ -181,7 +181,7 @@ Expected impact:
 Risk:
 - low-medium
 
-c7) [todo] **Skip subscription-notice cleanup writes**
+c7) [have] **Skip subscription-notice cleanup writes**
 Primary files:
 - [server/index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts)
 - [sourceSubscriptionsHandlers.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/handlers/sourceSubscriptionsHandlers.ts)
@@ -203,7 +203,7 @@ Expected impact:
 Risk:
 - low
 
-c8) [todo] **Reduce `latest-mine` status churn**
+c8) [have] **Reduce `latest-mine` status churn**
 Primary files:
 - [ingestion.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/routes/ingestion.ts)
 - [useSourceUnlockJobTracker.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useSourceUnlockJobTracker.ts)
@@ -239,11 +239,11 @@ d2) [have] Best safer cleanup order:
 3. subscription notice cleanup
 4. `latest-mine` churn
 
-d3) [todo] Do not start all slices at once. Prefer one narrow batch, then recheck production request history.
+d3) [have] The work landed in narrow batches with production soak checks between them.
 
 ## Proposed Phase Split
 
-e1) [todo] **Phase 1: trigger-path and maintenance skips**
+e1) [have] **Phase 1: trigger-path and maintenance skips**
 Scope:
 - [opsHandlers.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/handlers/opsHandlers.ts)
 - [server/index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts)
@@ -257,7 +257,7 @@ Targets:
 Reason:
 - smallest-risk backend-only cut set
 
-e2) [todo] **Phase 2: worker/control-plane churn**
+e2) [have] **Phase 2: worker/control-plane churn**
 Scope:
 - [queuedIngestionWorkerController.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/queuedIngestionWorkerController.ts)
 - [server/index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts)
@@ -269,7 +269,7 @@ Targets:
 Reason:
 - stronger payoff, but more runtime sensitivity
 
-e3) [todo] **Phase 3: subscription breadth and user status**
+e3) [have] **Phase 3: subscription breadth and user status**
 Scope:
 - [server/index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts)
 - [ingestion.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/routes/ingestion.ts)
@@ -284,19 +284,19 @@ Reason:
 
 ## Verification
 
-f1) [todo] After each phase, run:
+f1) [have] After each phase, run:
 - `npm run typecheck`
 - targeted tests for touched backend routes/services
 - Oracle backend smoke
 - public release smoke
 
-f2) [todo] Re-pull request-history analytics after each phase and compare:
+f2) [have] Re-pulled request-history analytics after each phase and compared:
 - `ingestion_jobs`
 - `claim_ingestion_jobs`
 - `user_source_subscriptions`
 - any exact shapes tied to the edited path
 
-f3) [todo] Product sanity checks:
+f3) [have] Product sanity checks remained part of each phase:
 - subscription refresh still works
 - generations still complete
 - queue status is not obviously broken
@@ -312,11 +312,13 @@ g1) [have] If the cuts are too harsh, restore in this order:
 
 ## Decision
 
-h1) [have] This plan is trackable and intentionally narrow.
+h1) [have] This plan was trackable and intentionally narrow.
 
-h2) [have] The smallest credible first implementation slice is **Phase 1**.
+h2) [have] The implementation sequence is complete and production-proven.
 
-h3) [todo] If resumed for implementation, start with:
-- trigger-path pre-maintenance reduction
-- transcript revalidate seeding removal/downshift
-- support-table cleanup persistence reduction
+h3) [have] Closure summary:
+- trigger-path pre-maintenance reduction shipped
+- transcript revalidate seeding removal/downshift shipped
+- support-table cleanup persistence reduction shipped
+- worker cadence/breadth/status trims shipped
+- fast-scope lease-heartbeat deferral shipped
