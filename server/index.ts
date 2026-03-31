@@ -53,7 +53,14 @@ import {
 import { parseRuntimeFlag, readBackendRuntimeConfig } from './services/runtimeConfig';
 import { readOracleControlPlaneConfig } from './services/oracleControlPlaneConfig';
 import { openOracleControlPlaneDb } from './services/oracleControlPlaneDb';
-import { bootstrapOracleSubscriptionSchedulerState } from './services/oracleSubscriptionSchedulerState';
+import { evaluateOracleShadowSchedulerDecision } from './services/oracleSubscriptionScheduler';
+import {
+  bootstrapOracleSubscriptionSchedulerState,
+  markOracleAllActiveSubscriptionsRunFinished,
+  markOracleAllActiveSubscriptionsRunStarted,
+  recordOracleSubscriptionSchedulerObservation,
+  recordOracleSubscriptionSyncOutcome,
+} from './services/oracleSubscriptionSchedulerState';
 import { createYouTubeRefreshSchedulerController } from './services/youtubeRefreshSchedulerController';
 import {
   createGenerationDailyCapService,
@@ -7328,48 +7335,104 @@ async function processAllActiveSubscriptionsJob(input: {
 }) {
   const db = getServiceSupabaseClient();
   if (!db) throw new Error('Service role client not configured');
-
-  const { data: subscriptions, error: subscriptionsError } = await db
-    .from('user_source_subscriptions')
-    .select('id, user_id, mode, source_channel_id, source_channel_title, source_page_id, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, is_active')
-    .eq('is_active', true)
-    .eq('source_type', 'youtube')
-    .order('last_polled_at', { ascending: true, nullsFirst: true })
-    .order('updated_at', { ascending: false })
-    .limit(allActiveSubscriptionsMaxPerRun);
-  if (subscriptionsError) throw subscriptionsError;
-
+  if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
+    await markOracleAllActiveSubscriptionsRunStarted({
+      controlDb: oracleControlPlane,
+    });
+  }
   let processed = 0;
   let inserted = 0;
   let skipped = 0;
   const failures: Array<{ subscription_id: string; error: string }> = [];
-  for (const subscription of subscriptions || []) {
-    try {
-      const sync = await syncSingleSubscription(db, subscription, { trigger: 'service_cron' });
-      processed += sync.processed;
-      inserted += sync.inserted;
-      skipped += sync.skipped;
-    } catch (error) {
-      failures.push({
-        subscription_id: subscription.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      await markSubscriptionSyncError(db, subscription, error);
+  try {
+    const { data: subscriptions, error: subscriptionsError } = await db
+      .from('user_source_subscriptions')
+      .select('id, user_id, mode, source_channel_id, source_channel_title, source_page_id, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, is_active')
+      .eq('is_active', true)
+      .eq('source_type', 'youtube')
+      .order('last_polled_at', { ascending: true, nullsFirst: true })
+      .order('updated_at', { ascending: false })
+      .limit(allActiveSubscriptionsMaxPerRun);
+    if (subscriptionsError) throw subscriptionsError;
+
+    for (const subscription of subscriptions || []) {
+      try {
+        const sync = await syncSingleSubscription(db, subscription, { trigger: 'service_cron' });
+        processed += sync.processed;
+        inserted += sync.inserted;
+        skipped += sync.skipped;
+        if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
+          await recordOracleSubscriptionSyncOutcome({
+            controlDb: oracleControlPlane,
+            subscriptionId: subscription.id,
+            resultCode: sync.resultCode,
+            activeRevisitMs: oracleControlPlaneConfig.activeRevisitMs,
+            normalRevisitMs: oracleControlPlaneConfig.normalRevisitMs,
+            quietRevisitMs: oracleControlPlaneConfig.quietRevisitMs,
+            errorRetryMs: oracleControlPlaneConfig.errorRetryMs,
+            processed: sync.processed,
+            inserted: sync.inserted,
+            skipped: sync.skipped,
+            trigger: 'service_cron',
+          });
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        failures.push({
+          subscription_id: subscription.id,
+          error: errorMessage,
+        });
+        await markSubscriptionSyncError(db, subscription, error);
+        if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
+          await recordOracleSubscriptionSyncOutcome({
+            controlDb: oracleControlPlane,
+            subscriptionId: subscription.id,
+            resultCode: 'error',
+            activeRevisitMs: oracleControlPlaneConfig.activeRevisitMs,
+            normalRevisitMs: oracleControlPlaneConfig.normalRevisitMs,
+            quietRevisitMs: oracleControlPlaneConfig.quietRevisitMs,
+            errorRetryMs: oracleControlPlaneConfig.errorRetryMs,
+            trigger: 'service_cron',
+            errorMessage,
+          });
+        }
+      }
     }
+
+    await db.from('ingestion_jobs').update({
+      status: failures.length ? 'failed' : 'succeeded',
+      finished_at: new Date().toISOString(),
+      processed_count: processed,
+      inserted_count: inserted,
+      skipped_count: skipped,
+      lease_expires_at: null,
+      worker_id: null,
+      last_heartbeat_at: new Date().toISOString(),
+      error_code: failures.length ? 'PARTIAL_FAILURE' : null,
+      error_message: failures.length ? JSON.stringify(failures).slice(0, 1000) : null,
+    }).eq('id', input.jobId);
+  } catch (error) {
+    if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
+      await markOracleAllActiveSubscriptionsRunFinished({
+        controlDb: oracleControlPlane,
+        processed,
+        inserted,
+        skipped,
+        failureCount: Math.max(1, failures.length),
+      });
+    }
+    throw error;
   }
 
-  await db.from('ingestion_jobs').update({
-    status: failures.length ? 'failed' : 'succeeded',
-    finished_at: new Date().toISOString(),
-    processed_count: processed,
-    inserted_count: inserted,
-    skipped_count: skipped,
-    lease_expires_at: null,
-    worker_id: null,
-    last_heartbeat_at: new Date().toISOString(),
-    error_code: failures.length ? 'PARTIAL_FAILURE' : null,
-    error_message: failures.length ? JSON.stringify(failures).slice(0, 1000) : null,
-  }).eq('id', input.jobId);
+  if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
+    await markOracleAllActiveSubscriptionsRunFinished({
+      controlDb: oracleControlPlane,
+      processed,
+      inserted,
+      skipped,
+      failureCount: failures.length,
+    });
+  }
 
   logUnlockEvent('unlock_job_terminal', { trace_id: input.traceId, job_id: input.jobId }, {
     scope: 'all_active_subscriptions',
@@ -7706,6 +7769,88 @@ const notificationPushDispatcherController = createNotificationPushDispatcherCon
 
 function scheduleQueuedIngestionProcessing(delayMs = 0) {
   queuedIngestionWorkerController.schedule(delayMs);
+}
+
+function mapActualAllActiveSubscriptionsDecisionToShadowCode(
+  actualDecisionCode:
+    | 'actual_existing_job'
+    | 'actual_min_interval'
+    | 'actual_queue_backpressure'
+    | 'actual_low_priority_suppressed'
+    | 'actual_enqueued',
+) {
+  if (actualDecisionCode === 'actual_existing_job') return 'shadow_existing_job' as const;
+  if (actualDecisionCode === 'actual_min_interval') return 'shadow_min_interval' as const;
+  if (actualDecisionCode === 'actual_queue_backpressure') return 'shadow_queue_backpressure' as const;
+  if (actualDecisionCode === 'actual_low_priority_suppressed') return 'shadow_low_priority_suppressed' as const;
+  return 'shadow_enqueue' as const;
+}
+
+async function observeOracleAllActiveSubscriptionsTrigger(input: {
+  actualDecisionCode:
+    | 'actual_existing_job'
+    | 'actual_min_interval'
+    | 'actual_queue_backpressure'
+    | 'actual_low_priority_suppressed'
+    | 'actual_enqueued';
+  queueDepth?: number | null;
+  latestJobId?: string | null;
+  latestJobStatus?: string | null;
+  latestActivityAt?: string | null;
+  existingJobId?: string | null;
+  existingJobStatus?: string | null;
+  enqueuedJobId?: string | null;
+}) {
+  if (
+    !oracleControlPlaneConfig.enabled
+    || !oracleControlPlane
+    || oracleControlPlaneConfig.subscriptionSchedulerMode !== 'shadow'
+  ) {
+    return;
+  }
+
+  const actualShadowCode = mapActualAllActiveSubscriptionsDecisionToShadowCode(input.actualDecisionCode);
+  const shadowDecision = await evaluateOracleShadowSchedulerDecision({
+    controlDb: oracleControlPlane,
+    config: oracleControlPlaneConfig,
+    queueDepth: input.queueDepth ?? null,
+    queueDepthHardLimit,
+    queuePrioritySuppressed: input.actualDecisionCode === 'actual_low_priority_suppressed',
+    actualExistingJob: input.existingJobId
+      ? {
+          id: input.existingJobId,
+          status: String(input.existingJobStatus || '').trim() || 'queued',
+        }
+      : null,
+  });
+
+  await recordOracleSubscriptionSchedulerObservation({
+    controlDb: oracleControlPlane,
+    actualDecisionCode: input.actualDecisionCode,
+    oracleDecisionCode: shadowDecision.oracleDecisionCode,
+    queueDepth: input.queueDepth ?? shadowDecision.queueDepth,
+    dueSubscriptionCount: shadowDecision.dueSubscriptionCount,
+    dueSubscriptionIds: shadowDecision.dueSubscriptionIds,
+    nextDueAt: shadowDecision.nextDueAt,
+    latestJobId: input.latestJobId,
+    latestJobStatus: input.latestJobStatus,
+    latestActivityAt: input.latestActivityAt,
+    existingJobId: input.existingJobId,
+    existingJobStatus: input.existingJobStatus,
+    enqueuedJobId: input.enqueuedJobId,
+    minIntervalMs: allActiveSubscriptionsMinTriggerIntervalMs,
+    suppressionMs: Math.max(60_000, oracleControlPlaneConfig.schedulerTickMs),
+  });
+
+  console.log('[oracle-control-plane] shadow_trigger_observed', JSON.stringify({
+    actual_decision_code: input.actualDecisionCode,
+    oracle_decision_code: shadowDecision.oracleDecisionCode,
+    matched: actualShadowCode === shadowDecision.oracleDecisionCode,
+    due_subscription_count: shadowDecision.dueSubscriptionCount,
+    due_subscription_ids: shadowDecision.dueSubscriptionIds.slice(0, 10),
+    next_due_at: shadowDecision.nextDueAt,
+    queue_depth: input.queueDepth ?? shadowDecision.queueDepth,
+  }));
 }
 
 async function bootstrapOracleControlPlaneState() {
@@ -8139,6 +8284,7 @@ registerOpsRoutes(app, {
   getTranscriptProxyDebugMode,
   syncSingleSubscription,
   markSubscriptionSyncError,
+  observeOracleAllActiveSubscriptionsTrigger,
 });
 
 registerFeedRoutes(app, {
@@ -8725,6 +8871,12 @@ if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
     sqlite_path: oracleControlPlane.sqlitePath,
     scheduler_tick_ms: oracleControlPlaneConfig.schedulerTickMs,
     bootstrap_batch: oracleControlPlaneConfig.bootstrapBatch,
+    shadow_batch_limit: oracleControlPlaneConfig.shadowBatchLimit,
+    shadow_lookahead_ms: oracleControlPlaneConfig.shadowLookaheadMs,
+    active_revisit_ms: oracleControlPlaneConfig.activeRevisitMs,
+    normal_revisit_ms: oracleControlPlaneConfig.normalRevisitMs,
+    quiet_revisit_ms: oracleControlPlaneConfig.quietRevisitMs,
+    error_retry_ms: oracleControlPlaneConfig.errorRetryMs,
   }));
 }
 

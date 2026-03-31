@@ -1,6 +1,7 @@
 import type express from 'express';
 import type { ParseResult } from './shared';
 import type { BackendRuntimeMode } from '../../services/runtimeConfig';
+import type { OracleScopeDecisionCode } from '../../services/oracleSubscriptionSchedulerState';
 
 type DbClient = any;
 
@@ -92,4 +93,14 @@ export type OpsRouteDeps = {
     subscription: string | { id: string; last_polled_at?: string | null; last_sync_error?: string | null },
     error: unknown,
   ) => Promise<void>;
+  observeOracleAllActiveSubscriptionsTrigger?: (input: {
+    actualDecisionCode: OracleScopeDecisionCode;
+    queueDepth?: number | null;
+    latestJobId?: string | null;
+    latestJobStatus?: string | null;
+    latestActivityAt?: string | null;
+    existingJobId?: string | null;
+    existingJobStatus?: string | null;
+    enqueuedJobId?: string | null;
+  }) => Promise<void>;
 };

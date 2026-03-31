@@ -117,7 +117,7 @@ Status: `canonical`
 73. Display/render surfaces should now label that final section as `Caveats`, while runtime/storage keys stay `open_questions` and legacy `Open Questions` titles remain accepted as compatibility aliases.
 74. YT2BP `llm_native` quality retries now reserve regeneration for blocking structure/shape misses; `TAKEAWAYS_TOO_LONG` remains logged as soft quality telemetry but does not trigger retry by itself.
 75. Queue-backed source-video generation must retain claim ownership and bounded recovery: `source_item_blueprint_variants` should record the active ingestion job when work is claimed, stale queued/running variants with no `active_job_id` must become reclaimable after a bounded timeout, unlock-generation preflight must treat same-job ownership as resumable work rather than generic `in_progress`, and terminal `generation_runs` status persistence must not depend on best-effort trace-event writes.
-76. Oracle control-plane bootstrap may initialize local SQLite scheduler state behind default-off env flags (`ORACLE_CONTROL_PLANE_*`), but Supabase must remain the durable queue truth until a later explicit migration phase promotes Oracle beyond bootstrap/shadow behavior.
+76. Oracle control-plane bootstrap/shadow runtime may initialize and update local SQLite scheduler state behind `ORACLE_CONTROL_PLANE_*` env flags, but Supabase must remain the durable queue truth and live enqueue authority until a later explicit migration phase promotes Oracle beyond bootstrap/shadow behavior.
 
 ## Core user journey
 1. Subscribe to a YouTube channel or look up one specific video by link, video id, or title.

@@ -31,6 +31,12 @@ describe('oracle control-plane config', () => {
       sqlitePath: path.resolve(cwd, '.runtime', 'control-plane.sqlite'),
       bootstrapBatch: 250,
       schedulerTickMs: 300_000,
+      shadowBatchLimit: 75,
+      shadowLookaheadMs: 60_000,
+      activeRevisitMs: 900_000,
+      normalRevisitMs: 1_800_000,
+      quietRevisitMs: 5_400_000,
+      errorRetryMs: 900_000,
     });
   });
 
@@ -43,12 +49,24 @@ describe('oracle control-plane config', () => {
       ORACLE_CONTROL_PLANE_SQLITE_PATH: '/tmp/agentic-runtime/control-plane.sqlite',
       ORACLE_SUBSCRIPTION_BOOTSTRAP_BATCH: '123',
       ORACLE_SUBSCRIPTION_SCHEDULER_TICK_MS: '45000',
+      ORACLE_SUBSCRIPTION_SHADOW_BATCH_LIMIT: '33',
+      ORACLE_SUBSCRIPTION_SHADOW_LOOKAHEAD_MS: '15000',
+      ORACLE_SUBSCRIPTION_REVISIT_ACTIVE_MS: '120000',
+      ORACLE_SUBSCRIPTION_REVISIT_NORMAL_MS: '240000',
+      ORACLE_SUBSCRIPTION_REVISIT_QUIET_MS: '720000',
+      ORACLE_SUBSCRIPTION_RETRY_ERROR_MS: '180000',
     }, { cwd })).toEqual({
       enabled: true,
       subscriptionSchedulerMode: 'shadow',
       sqlitePath: path.resolve(cwd, '/tmp/agentic-runtime/control-plane.sqlite'),
       bootstrapBatch: 123,
       schedulerTickMs: 45_000,
+      shadowBatchLimit: 33,
+      shadowLookaheadMs: 15_000,
+      activeRevisitMs: 120_000,
+      normalRevisitMs: 240_000,
+      quietRevisitMs: 720_000,
+      errorRetryMs: 180_000,
     });
   });
 

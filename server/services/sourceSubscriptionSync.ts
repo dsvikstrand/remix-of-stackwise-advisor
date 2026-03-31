@@ -46,6 +46,7 @@ type SyncSubscriptionResult = {
   newestVideoId: string | null;
   newestPublishedAt: string | null;
   channelTitle: string | null;
+  resultCode: 'bootstrap' | 'new_items' | 'checked_no_insert' | 'noop';
 };
 
 type SubscriptionSyncRow = {
@@ -309,6 +310,7 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
         newestVideoId: newest?.videoId || null,
         newestPublishedAt: newest?.publishedAt || null,
         channelTitle: feed.channelTitle,
+        resultCode: 'bootstrap',
       };
     }
 
@@ -635,6 +637,11 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
       newestVideoId: newest?.videoId || null,
       newestPublishedAt: newest?.publishedAt || null,
       channelTitle: feed.channelTitle,
+      resultCode: inserted > 0
+        ? 'new_items'
+        : processed > 0
+          ? 'checked_no_insert'
+          : 'noop',
     };
   }
 

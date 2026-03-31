@@ -9,6 +9,12 @@ export type OracleControlPlaneConfig = {
   sqlitePath: string;
   bootstrapBatch: number;
   schedulerTickMs: number;
+  shadowBatchLimit: number;
+  shadowLookaheadMs: number;
+  activeRevisitMs: number;
+  normalRevisitMs: number;
+  quietRevisitMs: number;
+  errorRetryMs: number;
 };
 
 function clampInt(raw: string | undefined, fallback: number, min: number, max: number) {
@@ -44,5 +50,11 @@ export function readOracleControlPlaneConfig(
     sqlitePath,
     bootstrapBatch: clampInt(env.ORACLE_SUBSCRIPTION_BOOTSTRAP_BATCH, 250, 10, 5000),
     schedulerTickMs: clampInt(env.ORACLE_SUBSCRIPTION_SCHEDULER_TICK_MS, 300_000, 5_000, 60 * 60_000),
+    shadowBatchLimit: clampInt(env.ORACLE_SUBSCRIPTION_SHADOW_BATCH_LIMIT, 75, 1, 5000),
+    shadowLookaheadMs: clampInt(env.ORACLE_SUBSCRIPTION_SHADOW_LOOKAHEAD_MS, 60_000, 0, 60 * 60_000),
+    activeRevisitMs: clampInt(env.ORACLE_SUBSCRIPTION_REVISIT_ACTIVE_MS, 15 * 60_000, 60_000, 24 * 60 * 60_000),
+    normalRevisitMs: clampInt(env.ORACLE_SUBSCRIPTION_REVISIT_NORMAL_MS, 30 * 60_000, 60_000, 24 * 60 * 60_000),
+    quietRevisitMs: clampInt(env.ORACLE_SUBSCRIPTION_REVISIT_QUIET_MS, 90 * 60_000, 60_000, 7 * 24 * 60 * 60_000),
+    errorRetryMs: clampInt(env.ORACLE_SUBSCRIPTION_RETRY_ERROR_MS, 15 * 60_000, 60_000, 24 * 60 * 60_000),
   };
 }

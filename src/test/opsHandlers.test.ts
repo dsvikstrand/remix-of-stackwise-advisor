@@ -636,10 +636,12 @@ describe('ingestion trigger handler', () => {
         insertedJobId: 'job_new',
       });
       const scheduleQueuedIngestionProcessing = vi.fn();
+      const observeOracleAllActiveSubscriptionsTrigger = vi.fn(async () => undefined);
 
       await handleIngestionJobsTrigger(req, res as never, createBaseDeps({
         getServiceSupabaseClient: () => db,
         scheduleQueuedIngestionProcessing,
+        observeOracleAllActiveSubscriptionsTrigger,
       }));
 
       expect(res.statusCode).toBe(202);
@@ -651,6 +653,11 @@ describe('ingestion trigger handler', () => {
       });
       expect(db.inserts).toHaveLength(1);
       expect(scheduleQueuedIngestionProcessing).toHaveBeenCalledTimes(1);
+      expect(observeOracleAllActiveSubscriptionsTrigger).toHaveBeenCalledWith({
+        actualDecisionCode: 'actual_enqueued',
+        queueDepth: 1,
+        enqueuedJobId: 'job_new',
+      });
     } finally {
       vi.useRealTimers();
     }

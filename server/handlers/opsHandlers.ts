@@ -31,6 +31,17 @@ export async function handleIngestionJobsTrigger(req: express.Request, res: expr
   }
   const db = deps.getServiceSupabaseClient();
   if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+  const observeOracleTrigger = async (input: Parameters<NonNullable<OpsRouteDeps['observeOracleAllActiveSubscriptionsTrigger']>>[0]) => {
+    if (!deps.observeOracleAllActiveSubscriptionsTrigger) return;
+    try {
+      await deps.observeOracleAllActiveSubscriptionsTrigger(input);
+    } catch (error) {
+      console.warn('[oracle-control-plane] shadow trigger observe failed', JSON.stringify({
+        actual_decision_code: input.actualDecisionCode,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  };
 
   const selectExistingJob = async () => db
     .from('ingestion_jobs')
@@ -64,6 +75,11 @@ export async function handleIngestionJobsTrigger(req: express.Request, res: expr
       }
     }
     if (existingJob?.id) {
+      await observeOracleTrigger({
+        actualDecisionCode: 'actual_existing_job',
+        existingJobId: existingJob.id,
+        existingJobStatus: existingJob.status,
+      });
       return res.status(409).json({
         ok: false,
         error_code: 'JOB_ALREADY_RUNNING',
@@ -91,6 +107,12 @@ export async function handleIngestionJobsTrigger(req: express.Request, res: expr
     minIntervalMs: deps.allActiveSubscriptionsMinTriggerIntervalMs,
   });
   if (recentTrigger) {
+    await observeOracleTrigger({
+      actualDecisionCode: 'actual_min_interval',
+      latestJobId: latestJob?.id ?? null,
+      latestJobStatus: latestJob?.status ?? null,
+      latestActivityAt: recentTrigger.latestActivity,
+    });
     console.log('[subscription_trigger_interval_suppressed]', JSON.stringify({
       scope: 'all_active_subscriptions',
       latest_job_id: latestJob?.id ?? null,
@@ -120,6 +142,10 @@ export async function handleIngestionJobsTrigger(req: express.Request, res: expr
 
   const queueDepth = await deps.countQueueDepth(db, { includeRunning: true });
   if (queueDepth >= deps.queueDepthHardLimit) {
+    await observeOracleTrigger({
+      actualDecisionCode: 'actual_queue_backpressure',
+      queueDepth,
+    });
     return res.status(429).json({
       ok: false,
       error_code: 'QUEUE_BACKPRESSURE',
@@ -138,6 +164,10 @@ export async function handleIngestionJobsTrigger(req: express.Request, res: expr
     enabled: deps.queuePriorityEnabled,
   });
   if (suppressed) {
+    await observeOracleTrigger({
+      actualDecisionCode: 'actual_low_priority_suppressed',
+      queueDepth,
+    });
     console.log('[queue_low_priority_suppressed]', JSON.stringify({
       scope: 'all_active_subscriptions',
       queue_depth: queueDepth,
@@ -176,6 +206,11 @@ export async function handleIngestionJobsTrigger(req: express.Request, res: expr
     .single();
   if (jobCreateError) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: jobCreateError.message, data: null });
 
+  await observeOracleTrigger({
+    actualDecisionCode: 'actual_enqueued',
+    queueDepth: queueDepth + 1,
+    enqueuedJobId: job.id,
+  });
   deps.scheduleQueuedIngestionProcessing();
   return res.status(202).json({
     ok: true,
