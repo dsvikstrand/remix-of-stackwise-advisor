@@ -767,6 +767,10 @@ ssh oracle-free 'sudo systemctl restart agentic-backend.service'
 ```bash
 npm run smoke:release -- --api-base-url https://api.bleup.app --frontend-base-url https://bleup.app --release-sha "$RELEASE_SHA"
 ```
+- Oracle primary soak snapshot (expects the `oracle-free` SSH alias from the local Codex environment):
+```bash
+npm run ops:oracle-primary-check -- --json
+```
 - YT2BP repro smoke:
 ```bash
 npm run smoke:yt2bp -- --base-url https://api.bleup.app

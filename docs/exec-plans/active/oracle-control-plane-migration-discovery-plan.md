@@ -82,7 +82,7 @@ Outputs:
 - restart behavior matrix
 - durability rules for cursors, guards, cooldowns, and local claims
 
-c5) [todo] **Oracle resource and concurrency budget**
+c5) [have] **Oracle resource and concurrency budget**
 Target:
 - define safe local scheduler intervals, concurrency, and queue depth for the current Oracle box
 
@@ -698,7 +698,104 @@ ac2) [have] **Main Step 4 conclusion**
   - memory for runtime hints
 - while durable queue truth, reservations, cooldowns, and checkpoints remain in Supabase
 
-## Step 5 Initial SQLite Schema Sketch
+## Step 5 Oracle Resource And Concurrency Budget
+
+### Current Oracle Envelope
+
+rc1) [have] **Current Oracle box is still small, so the scheduler budget must stay conservative**
+- current host shape:
+  - `~952 MiB` RAM
+  - `2 GiB` swap
+- observed backend footprint during the first Oracle control-plane phases:
+  - roughly `108-152 MiB` `MemoryCurrent`
+- implication:
+  - the Oracle scheduler should stay lightweight and avoid introducing a burstier multi-lane sync model in the first phases
+
+rc2) [have] **This migration slice does not increase actual subscription-sync concurrency**
+- `processAllActiveSubscriptionsJob(...)` still loops subscriptions serially inside one durable job
+- `all_active_subscriptions` still has effective active-run concurrency of `1`
+- reason:
+  - the current win comes from Oracle-owned scheduling fairness and admission continuity, not parallelizing per-channel sync work
+
+### Safe Starting Budget
+
+rd1) [have] **Keep the Oracle scheduler tick at the current `300000 ms` (`5 min`) default**
+- source:
+  - [oracleControlPlaneConfig.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/oracleControlPlaneConfig.ts)
+- meaning:
+  - this is the cadence reference for Oracle-local retry/suppression timing
+- reason:
+  - frequent enough for `<30 min` target freshness bands
+  - conservative enough for the current small Oracle box
+
+rd2) [have] **Keep the due-batch limit aligned to the current durable breadth cap**
+- current Oracle due-batch default:
+  - `ORACLE_SUBSCRIPTION_SHADOW_BATCH_LIMIT=75`
+- current durable breadth cap:
+  - `ALL_ACTIVE_SUBSCRIPTIONS_MAX_PER_RUN=75`
+- reason:
+  - Oracle-primary should not increase per-run breadth in the first phase
+  - it should improve fairness first, not widen work volume
+
+rd3) [have] **Keep current revisit targets as the first safe operating profile**
+- active/recent channels:
+  - `15 min`
+- normal channels:
+  - `30 min`
+- quiet channels:
+  - `90 min`
+- error retry:
+  - `15 min`
+- reason:
+  - these are already wired into the live Oracle scheduler config and are compatible with the current box and single-node design
+
+rd4) [have] **Keep the durable min-trigger interval at `60 min` during the first primary soak**
+- current source:
+  - `ALL_ACTIVE_SUBSCRIPTIONS_MIN_TRIGGER_INTERVAL_MS`
+- current default:
+  - `60 min`
+- reason:
+  - the first Oracle-primary cut is proving correctness/fairness continuity, not full live-frequency expansion
+- note:
+  - once Oracle-primary proves stable, reducing the durable trigger interval becomes a separate tuning decision
+
+rd5) [have] **Keep worker concurrency unchanged for this migration slice**
+- current global worker default:
+  - `WORKER_CONCURRENCY=2`
+- decision:
+  - do not raise worker concurrency as part of the Oracle scheduler rollout
+- reason:
+  - the control-plane migration should not confound scheduler gains with broader execution fan-out
+
+### Operational Guardrails
+
+re1) [have] **Treat these as immediate rollback or downgrade signals**
+- repeated:
+  - `primary trigger decision failed`
+  - `primary_due_batch_fallback`
+- health flapping or restart loops
+- obvious duplicate `all_active_subscriptions` enqueue behavior
+
+re2) [have] **Treat these as resource pressure warning thresholds**
+- sustained backend memory materially above the current baseline, especially if it trends toward `~256 MiB+`
+- sustained swap growth toward `~256 MiB+`
+- unexpected CPU pressure coinciding with Oracle-primary scheduling
+- action:
+  - if these persist rather than spike briefly, revert to `shadow` and inspect before expanding the scheduler further
+
+re3) [have] **Main Step 5 conclusion**
+- the safe starting Oracle-primary budget is intentionally conservative:
+  - `5 min` scheduler tick
+  - `75` due-batch cap
+  - unchanged global worker concurrency
+  - unchanged durable `60 min` trigger interval
+- this keeps the first primary phase focused on:
+  - fairness
+  - continuity
+  - lower Supabase chatter
+- not on aggressive throughput expansion
+
+## Step 6 Initial SQLite Schema Sketch
 
 ### Schema Scope
 
@@ -892,12 +989,12 @@ al1) [have] **Minimal schema to implement first**
 al2) [have] **Optional fourth table only if needed after testing**
 4. `scope_admission_windows`
 
-al3) [have] **Main Step 5 conclusion**
+al3) [have] **Main Step 6 conclusion**
 - the first SQLite schema can stay very small
 - only `subscription_schedule_state` is truly central to the first migration win
 - the rest exists to preserve cadence continuity and restart safety
 
-## Step 6 Initial Rollout And Rollback Sequence
+## Step 7 Initial Rollout And Rollback Sequence
 
 ### Rollout Principles
 
@@ -1005,6 +1102,61 @@ ap3) [have] **Phase 3 gate**
 - subscription freshness improves materially
 - Supabase control-plane chatter drops for the targeted shapes
 
+### Primary Monitoring Checklist
+
+ap4) [todo] **Health and service stability**
+- local Oracle `/api/health` stays `{"ok":true}`
+- public API `/api/health` stays `{"ok":true}`
+- `agentic-backend.service` remains `active`
+- no restart loop or repeated failed restart window
+
+ap5) [todo] **Runtime mode and release sanity**
+- deployed backend SHA stays on the intended release
+- `ORACLE_SUBSCRIPTION_SCHEDULER_MODE=primary`
+- `ORACLE_CONTROL_PLANE_ENABLED=true`
+- SQLite path remains the expected persistent runtime path
+
+ap6) [todo] **Primary decision logs appear cleanly**
+- expect:
+  - `[oracle-control-plane] primary_trigger_decision`
+- good signs:
+  - `matched=true`
+  - expected `actual_decision_code`
+- bad signs:
+  - `primary trigger decision failed`
+
+ap7) [todo] **Primary batch selection works**
+- expect:
+  - `[oracle-control-plane] primary_due_batch_selected`
+- good signs:
+  - reasonable `selected_count`
+  - no obvious missing-row drift
+- bad signs:
+  - `primary_due_batch_fallback`
+
+ap8) [todo] **First real primary enqueue completes cleanly**
+- confirm one eligible post-cutover trigger produces:
+  - `actual_enqueued`
+  - a normal `all_active_subscriptions` job
+  - clean `unlock_job_terminal` / `unlock_job_finished` logs
+- confirm no duplicate enqueue burst around the handoff
+
+ap9) [todo] **Subscription freshness remains acceptable**
+- followed-channel uploads still appear normally
+- no obvious missed pickups
+- compare another upload-to-detection sample after the first `24h`
+
+ap10) [todo] **Resource usage stays sane**
+- monitor service memory and swap use
+- check for unexpected CPU pressure if Oracle becomes busier
+- treat sustained upward drift as a rollback signal
+
+ap11) [todo] **Suggested monitoring cadence**
+- first eligible enqueue window after cutover
+- `1-2h` short soak check
+- `6-12h` stability check
+- `24h` verdict with request-family and freshness comparison
+
 ### Rollback Sequence
 
 aq1) [have] **Fast rollback**
@@ -1046,7 +1198,7 @@ ar2) [todo] **Runbook follow-up once implementation starts**
 
 ### Step 6 Conclusion
 
-as1) [have] **Main Step 6 conclusion**
+as1) [have] **Main Step 7 conclusion**
 - the safest first migration is:
   - bootstrap local SQLite state
   - run Oracle in shadow mode
