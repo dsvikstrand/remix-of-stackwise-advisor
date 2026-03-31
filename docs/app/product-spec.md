@@ -153,6 +153,9 @@ b5) Subscription behavior (MVP simplified)
 - Manual generation pricing is fixed: any explicit new blueprint generation intent costs `1.00` credit.
 - Manual debit policy is reserve-first, settle at first OpenAI generation dispatch, and release on pre-generation failure/duplicate short-circuit.
 - Backend runtime hardening: OpenAI SDK construction is lazy-loaded at call time so backend startup does not depend on top-level `openai` ESM import success on Oracle.
+- Oracle control-plane bootstrap foundation is additive and currently default-off:
+  - `ORACLE_CONTROL_PLANE_ENABLED=false` keeps current production behavior unchanged.
+  - local SQLite scheduler/bootstrap state may be initialized for future subscription-scheduler migration, but Supabase still owns durable queue truth in the current product contract.
 - Auto-unlock toggle defaults to enabled (`auto_unlock_enabled=true`) for existing and new subscriptions.
 - Locked auto-billing policy is shared-cost:
   - one canonical auto-generation intent per new source video

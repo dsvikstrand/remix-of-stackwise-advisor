@@ -51,6 +51,9 @@ import {
   resolveWorkerLeaseHeartbeatMs,
 } from './services/queuedIngestionWorkerController';
 import { parseRuntimeFlag, readBackendRuntimeConfig } from './services/runtimeConfig';
+import { readOracleControlPlaneConfig } from './services/oracleControlPlaneConfig';
+import { openOracleControlPlaneDb } from './services/oracleControlPlaneDb';
+import { bootstrapOracleSubscriptionSchedulerState } from './services/oracleSubscriptionSchedulerState';
 import { createYouTubeRefreshSchedulerController } from './services/youtubeRefreshSchedulerController';
 import {
   createGenerationDailyCapService,
@@ -496,6 +499,18 @@ const runtimeConfig = (() => {
   }
 })();
 const { runHttpServer, runIngestionWorker, runtimeMode } = runtimeConfig;
+const oracleControlPlaneConfig = readOracleControlPlaneConfig(process.env);
+const oracleControlPlane = (() => {
+  if (!oracleControlPlaneConfig.enabled) return null;
+  try {
+    return openOracleControlPlaneDb({
+      sqlitePath: oracleControlPlaneConfig.sqlitePath,
+    });
+  } catch (error) {
+    console.error('[oracle-control-plane] failed to open sqlite store', error);
+    process.exit(1);
+  }
+})();
 const debugEndpointsEnabledRaw = String(process.env.ENABLE_DEBUG_ENDPOINTS || 'false').trim().toLowerCase();
 const debugEndpointsEnabled = debugEndpointsEnabledRaw === 'true' || debugEndpointsEnabledRaw === '1' || debugEndpointsEnabledRaw === 'on';
 const youtubeDataApiKey = String(process.env.YOUTUBE_DATA_API_KEY || '').trim();
@@ -7693,6 +7708,54 @@ function scheduleQueuedIngestionProcessing(delayMs = 0) {
   queuedIngestionWorkerController.schedule(delayMs);
 }
 
+async function bootstrapOracleControlPlaneState() {
+  if (!oracleControlPlaneConfig.enabled || !oracleControlPlane || !runIngestionWorker) {
+    return;
+  }
+  const db = getServiceSupabaseClient();
+  if (!db) {
+    console.warn('[oracle-control-plane] bootstrap skipped: service role client not configured');
+    return;
+  }
+
+  const subscriptions: Array<{
+    id: string;
+    user_id: string;
+    source_channel_id: string;
+    last_polled_at?: string | null;
+    is_active?: boolean | null;
+  }> = [];
+  let from = 0;
+  while (true) {
+    const to = from + oracleControlPlaneConfig.bootstrapBatch - 1;
+    const { data, error } = await db
+      .from('user_source_subscriptions')
+      .select('id, user_id, source_channel_id, last_polled_at, is_active')
+      .eq('is_active', true)
+      .eq('source_type', 'youtube')
+      .order('id', { ascending: true })
+      .range(from, to);
+    if (error) throw error;
+    if (!data?.length) break;
+    subscriptions.push(...data);
+    from += data.length;
+    if (data.length < oracleControlPlaneConfig.bootstrapBatch) break;
+  }
+
+  const bootstrapResult = await bootstrapOracleSubscriptionSchedulerState({
+    controlDb: oracleControlPlane,
+    subscriptions,
+    scope: 'all_active_subscriptions',
+  });
+
+  console.log('[oracle-control-plane] bootstrap complete', JSON.stringify({
+    scheduler_mode: oracleControlPlaneConfig.subscriptionSchedulerMode,
+    sqlite_path: oracleControlPlane.sqlitePath,
+    subscription_count: bootstrapResult.activeCount,
+    bootstrap_batch: oracleControlPlaneConfig.bootstrapBatch,
+  }));
+}
+
 async function runYouTubeRefreshSchedulerCycle() {
   if (!youtubeRefreshEnabled || !runIngestionWorker) return;
   const db = getServiceSupabaseClient();
@@ -8656,6 +8719,14 @@ async function uploadBannerToSupabase(imageBase64: string, contentType: string, 
 }
 
 console.log(`[agentic-backend] runtime_mode=${runtimeMode}`);
+if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
+  console.log('[oracle-control-plane] enabled', JSON.stringify({
+    scheduler_mode: oracleControlPlaneConfig.subscriptionSchedulerMode,
+    sqlite_path: oracleControlPlane.sqlitePath,
+    scheduler_tick_ms: oracleControlPlaneConfig.schedulerTickMs,
+    bootstrap_batch: oracleControlPlaneConfig.bootstrapBatch,
+  }));
+}
 
 if (runHttpServer) {
   app.listen(port, () => {
@@ -8664,6 +8735,11 @@ if (runHttpServer) {
 }
 
 if (runIngestionWorker) {
+  if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
+    void bootstrapOracleControlPlaneState().catch((error) => {
+      console.error('[oracle-control-plane] bootstrap failed', error);
+    });
+  }
   queuedIngestionWorkerController.start(1500);
   if (youtubeRefreshEnabled) {
     youtubeRefreshSchedulerController.start(1500);
