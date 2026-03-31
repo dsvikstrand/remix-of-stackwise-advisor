@@ -402,6 +402,7 @@ Required runtime variables:
 - `ORACLE_CONTROL_PLANE_SQLITE_PATH` (default `.runtime/control-plane.sqlite`; local SQLite path for Oracle control-plane state)
 - `ORACLE_SUBSCRIPTION_BOOTSTRAP_BATCH` (default `250`; active YouTube subscriptions fetched per bootstrap page)
 - `ORACLE_SUBSCRIPTION_SCHEDULER_TICK_MS` (default `300000`; cadence reference for Oracle-local scheduler state and fallback retry windows)
+- `ORACLE_SUBSCRIPTION_PRIMARY_MIN_TRIGGER_INTERVAL_MS` (default `3600000`; Oracle-primary per-scope cadence window for `all_active_subscriptions` enqueue, independent of the legacy Supabase latest-job gate)
 - `ORACLE_SUBSCRIPTION_SHADOW_BATCH_LIMIT` (default `75`; max local due-subscription sample evaluated per shadow decision)
 - `ORACLE_SUBSCRIPTION_SHADOW_LOOKAHEAD_MS` (default `60000`; lookahead window for considering subscriptions due in shadow mode)
 - `ORACLE_SUBSCRIPTION_REVISIT_ACTIVE_MS` (default `900000`; next-due interval after Oracle sees newly inserted subscription content)
@@ -989,7 +990,7 @@ Example cron entry:
 */3 * * * * curl -sS -X POST https://api.bleup.app/api/ingestion/jobs/trigger -H \"x-service-token: ${INGESTION_SERVICE_TOKEN}\" -H 'Content-Type: application/json' --data '{}' >> /var/log/bleuv1-ingestion-cron.log 2>&1
 ```
 Notes:
-- the Oracle trigger may stay at `*/3m`, but backend enqueue now gates `all_active_subscriptions` to an effective `60m` minimum interval by default
+- the Oracle trigger may stay at `*/3m`, but backend enqueue now gates `all_active_subscriptions` to the Oracle-primary cadence window (`ORACLE_SUBSCRIPTION_PRIMARY_MIN_TRIGGER_INTERVAL_MS`, default `60m`)
 - repeated identical subscription sync errors now refresh `last_polled_at` / `last_sync_error` at `30m` instead of `15m`
 
 Auto-banner worker cron example (every 5 minutes):

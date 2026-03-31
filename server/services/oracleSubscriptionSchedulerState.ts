@@ -302,6 +302,8 @@ export async function recordOracleSubscriptionSchedulerObservation(input: {
   dueSubscriptionCount?: number;
   dueSubscriptionIds?: string[];
   nextDueAt?: string | null;
+  minIntervalUntil?: string | null;
+  suppressionUntil?: string | null;
   latestJobId?: string | null;
   latestJobStatus?: string | null;
   latestActivityAt?: string | null;
@@ -330,18 +332,26 @@ export async function recordOracleSubscriptionSchedulerObservation(input: {
   let minIntervalUntil: string | null | undefined;
   let suppressionUntil: string | null | undefined;
   let lastTriggeredAt: string | null | undefined;
+  const explicitMinIntervalUntil = normalizeIsoOrNull(input.minIntervalUntil);
+  const explicitSuppressionUntil = normalizeIsoOrNull(input.suppressionUntil);
 
   if (input.actualDecisionCode === 'actual_enqueued') {
     lastTriggeredAt = nowIso;
-    minIntervalUntil = addMsToIso(nowIso, Math.max(0, Math.floor(Number(input.minIntervalMs) || 0)));
-    suppressionUntil = null;
+    minIntervalUntil = explicitMinIntervalUntil
+      || addMsToIso(nowIso, Math.max(0, Math.floor(Number(input.minIntervalMs) || 0)));
+    suppressionUntil = explicitSuppressionUntil ?? null;
   } else if (input.actualDecisionCode === 'actual_min_interval') {
-    const latestActivityAt = normalizeIsoOrNull(input.latestActivityAt);
-    if (latestActivityAt) {
-      minIntervalUntil = addMsToIso(latestActivityAt, Math.max(0, Math.floor(Number(input.minIntervalMs) || 0)));
+    if (explicitMinIntervalUntil) {
+      minIntervalUntil = explicitMinIntervalUntil;
+    } else {
+      const latestActivityAt = normalizeIsoOrNull(input.latestActivityAt);
+      if (latestActivityAt) {
+        minIntervalUntil = addMsToIso(latestActivityAt, Math.max(0, Math.floor(Number(input.minIntervalMs) || 0)));
+      }
     }
   } else if (input.actualDecisionCode === 'actual_low_priority_suppressed') {
-    suppressionUntil = addMsToIso(nowIso, Math.max(0, Math.floor(Number(input.suppressionMs) || 0)));
+    suppressionUntil = explicitSuppressionUntil
+      || addMsToIso(nowIso, Math.max(0, Math.floor(Number(input.suppressionMs) || 0)));
   }
 
   await upsertScopeControlState({

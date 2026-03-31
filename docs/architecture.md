@@ -43,7 +43,7 @@
     - unchanged successful writes to `user_source_subscriptions` are skipped unless checkpoint/title/error state changes
     - repeated identical error writes remain bounded by the `30m` heartbeat
     - UI health semantics stay separate and still treat `<=60m` since last poll as healthy
-    - Oracle cron may still call `/api/ingestion/jobs/trigger` every `3m`, but backend enqueue now gates `all_active_subscriptions` to an effective minimum interval of `60m` by default
+    - Oracle cron may still call `/api/ingestion/jobs/trigger` every `3m`, but backend enqueue now gates `all_active_subscriptions` through the Oracle cadence window (`ORACLE_SUBSCRIPTION_PRIMARY_MIN_TRIGGER_INTERVAL_MS`, default `60m`)
   - Low-priority queue claim polling is also cadence-aware:
     - idle claim sweeps for low-priority scopes back off more aggressively than the default worker idle cadence
     - claimed-work reschedules and lease-heartbeat behavior remain unchanged
@@ -113,7 +113,7 @@
   - Backend:
     - Express server in `server/index.ts`.
     - OpenAI SDK runtime loading is lazy (`server/llm/openaiRuntime.ts`) so Oracle backend startup does not depend on top-level `openai` ESM import resolution.
-    - Oracle control-plane subscription scheduling now runs behind runtime env flags (`ORACLE_CONTROL_PLANE_ENABLED`, scheduler mode `supabase|shadow|primary`); local SQLite scheduler state bootstraps active YouTube subscriptions, can observe shadow scheduler decisions, and may own `all_active_subscriptions` enqueue admission plus batch selection in `primary`, while Supabase remains authoritative for durable queue truth, leases, checkpoints, and user-facing writes.
+    - Oracle control-plane subscription scheduling now runs behind runtime env flags (`ORACLE_CONTROL_PLANE_ENABLED`, scheduler mode `supabase|shadow|primary`); local SQLite scheduler state bootstraps active YouTube subscriptions, can observe shadow scheduler decisions, and may own `all_active_subscriptions` enqueue admission, cadence timing, and batch selection in `primary`, while Supabase remains authoritative for durable queue truth, leases, checkpoints, and user-facing writes.
     - Backend refactor a3 is completed with no behavior drift:
       - route registration is fully modular (`53` API routes across `server/routes/*` / route-domain modules)
       - `server/index.ts` has `0` direct `app.*` route registrations and now acts as composition/bootstrap only
@@ -233,7 +233,7 @@
     - short-lived maintenance/enrichment scopes now also defer the first heartbeat deeper into that lease window (`45s` on the default `90s` lease), so many fast jobs complete without any lease-touch write while heavy scopes keep the usual cadence.
     - low-priority idle claim sweeps now back off more aggressively than the default worker idle cadence, reducing `claim_ingestion_jobs` chatter when only low-priority scopes are being polled.
     - queue maintenance is now time-gated as well: unlock sweeps and stale-job recovery still run in the combined worker loop, but only once per coarse maintenance window (`15m` default) instead of every idle keep-alive cycle.
-    - service-cron subscription enqueue is also cadence-aware now: the route still receives the `*/3m` Oracle trigger, but `all_active_subscriptions` is only re-enqueued after the default `60m` minimum interval has elapsed.
+    - service-cron subscription enqueue is also cadence-aware now: the route still receives the `*/3m` Oracle trigger, but `all_active_subscriptions` is only re-enqueued after the Oracle cadence window (`ORACLE_SUBSCRIPTION_PRIMARY_MIN_TRIGGER_INTERVAL_MS`, default `60m`) has elapsed.
     - `all_active_subscriptions` execution is breadth-limited by default: each run prioritizes the stalest `last_polled_at` subscriptions first and caps the active slice to `75` rows, smoothing `user_source_subscriptions` churn under heavier follow counts.
     - YouTube refresh bookkeeping now skips unchanged `source_items.metadata.view_count` writes and no-op `blueprint_youtube_refresh_state` upserts, reducing refresh-state churn without changing refresh UX.
     - frontend list/detail query tuning now complements the backend egress work by keeping non-live query surfaces on explicit conservative stale windows instead of implicit focus churn.

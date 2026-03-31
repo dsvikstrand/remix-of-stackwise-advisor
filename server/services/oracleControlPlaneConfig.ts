@@ -9,6 +9,7 @@ export type OracleControlPlaneConfig = {
   sqlitePath: string;
   bootstrapBatch: number;
   schedulerTickMs: number;
+  primaryMinTriggerIntervalMs: number;
   shadowBatchLimit: number;
   shadowLookaheadMs: number;
   activeRevisitMs: number;
@@ -50,6 +51,12 @@ export function readOracleControlPlaneConfig(
     sqlitePath,
     bootstrapBatch: clampInt(env.ORACLE_SUBSCRIPTION_BOOTSTRAP_BATCH, 250, 10, 5000),
     schedulerTickMs: clampInt(env.ORACLE_SUBSCRIPTION_SCHEDULER_TICK_MS, 300_000, 5_000, 60 * 60_000),
+    primaryMinTriggerIntervalMs: clampInt(
+      env.ORACLE_SUBSCRIPTION_PRIMARY_MIN_TRIGGER_INTERVAL_MS,
+      60 * 60_000,
+      60_000,
+      24 * 60 * 60_000,
+    ),
     shadowBatchLimit: clampInt(env.ORACLE_SUBSCRIPTION_SHADOW_BATCH_LIMIT, 75, 1, 5000),
     shadowLookaheadMs: clampInt(env.ORACLE_SUBSCRIPTION_SHADOW_LOOKAHEAD_MS, 60_000, 0, 60 * 60_000),
     activeRevisitMs: clampInt(env.ORACLE_SUBSCRIPTION_REVISIT_ACTIVE_MS, 15 * 60_000, 60_000, 24 * 60 * 60_000),

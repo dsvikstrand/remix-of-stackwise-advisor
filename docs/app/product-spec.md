@@ -80,7 +80,7 @@ a55) [have] Shared source-video unlock model is active for new source-page gener
 a56) [have] Credit model now uses a daily credit wallet with UTC reset (`free=3.00`, `plus=20.00`, `admin` bypass, no rollover) instead of refill semantics.
 a57) [have] Subscription auto-ingestion now writes unlockable personal-lane rows (legacy state name `my_feed_unlockable`) for new uploads instead of immediately generating blueprints.
 a58) [have] Subscription sync persistence now skips unchanged successful writes unless checkpoint/title/error state changed, while repeated identical error writes remain throttled behind a `30m` backend heartbeat; this reduces Supabase churn while keeping the user-facing `60m` subscription-health window unchanged.
-a58a) [have] Service-cron subscription ingestion still triggers every `3m`, but backend enqueue now gates `all_active_subscriptions` to an effective minimum interval of `60m` by default, reducing background requeue churn without changing active-work queue behavior.
+a58a) [have] Service-cron subscription ingestion still triggers every `3m`, but backend enqueue now gates `all_active_subscriptions` through the Oracle cadence window (`ORACLE_SUBSCRIPTION_PRIMARY_MIN_TRIGGER_INTERVAL_MS`, default `60m`), reducing background requeue churn without changing active-work queue behavior.
 a58b) [have] Low-priority queue claim polling now backs off more aggressively at idle, reducing `claim_ingestion_jobs` churn without changing queue/job UX or lease ownership semantics.
 a58c) [have] `all_active_subscriptions` processing is now breadth-limited on each run: the backend prioritizes the stalest `last_polled_at` rows first and caps the per-run slice to `75` subscriptions by default, trading some freshness breadth for lower recurring egress.
 a58) [have] Source-video unlock throttling now uses soft request caps (burst+sustained) instead of hard cooldown, and frontend credit meter refreshes immediately after unlock actions.
@@ -156,7 +156,7 @@ b5) Subscription behavior (MVP simplified)
 - Oracle control-plane subscription scheduler migration remains additive:
   - `ORACLE_CONTROL_PLANE_ENABLED=true` may bootstrap local SQLite scheduler state without changing queue authority when scheduler mode stays `supabase`.
   - `ORACLE_SUBSCRIPTION_SCHEDULER_MODE=shadow` may compute and persist Oracle-side subscription scheduling decisions for comparison.
-  - `ORACLE_SUBSCRIPTION_SCHEDULER_MODE=primary` may make Oracle authoritative for `all_active_subscriptions` enqueue admission and batch selection only, while Supabase still owns durable queue truth, leases, checkpoints, and user-facing writes.
+  - `ORACLE_SUBSCRIPTION_SCHEDULER_MODE=primary` may make Oracle authoritative for `all_active_subscriptions` enqueue admission, cadence timing, and batch selection only, while Supabase still owns durable queue truth, leases, checkpoints, and user-facing writes.
 - Auto-unlock toggle defaults to enabled (`auto_unlock_enabled=true`) for existing and new subscriptions.
 - Locked auto-billing policy is shared-cost:
   - one canonical auto-generation intent per new source video

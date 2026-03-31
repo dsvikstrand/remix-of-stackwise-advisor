@@ -207,6 +207,42 @@ describe('oracle subscription scheduler bootstrap', () => {
     }
   });
 
+  it('prefers an explicit Oracle min-interval-until value when recording scheduler observations', async () => {
+    const controlDb = openOracleControlPlaneDb({
+      sqlitePath: createTempSqlitePath(),
+    });
+
+    try {
+      await bootstrapOracleSubscriptionSchedulerState({
+        controlDb,
+        nowIso: '2026-03-31T12:00:00.000Z',
+        subscriptions: [],
+      });
+
+      await recordOracleSubscriptionSchedulerObservation({
+        controlDb,
+        nowIso: '2026-03-31T12:10:00.000Z',
+        actualDecisionCode: 'actual_min_interval',
+        oracleDecisionCode: 'shadow_min_interval',
+        minIntervalUntil: '2026-03-31T12:25:00.000Z',
+        latestActivityAt: '2026-03-31T11:00:00.000Z',
+        minIntervalMs: 60 * 60_000,
+      });
+
+      const scopeState = await getOracleScopeControlState({
+        controlDb,
+      });
+
+      expect(scopeState).toMatchObject({
+        scope: 'all_active_subscriptions',
+        lastDecisionCode: 'actual_min_interval',
+        minIntervalUntil: '2026-03-31T12:25:00.000Z',
+      });
+    } finally {
+      await controlDb.close();
+    }
+  });
+
   it('updates next_due_at from actual sync outcomes and escalates repeated noops to the quiet interval', async () => {
     const controlDb = openOracleControlPlaneDb({
       sqlitePath: createTempSqlitePath(),

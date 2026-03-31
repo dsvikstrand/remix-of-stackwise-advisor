@@ -198,4 +198,55 @@ describe('oracle shadow subscription scheduler', () => {
       await controlDb.close();
     }
   });
+
+  it('returns a primary min-interval decision from Oracle local cadence state', async () => {
+    const controlDb = openOracleControlPlaneDb({
+      sqlitePath: createTempSqlitePath(),
+    });
+
+    try {
+      await bootstrapOracleSubscriptionSchedulerState({
+        controlDb,
+        nowIso: '2026-03-31T12:00:00.000Z',
+        subscriptions: [{
+          id: 'sub_1',
+          user_id: 'user_1',
+          source_channel_id: 'channel_1',
+          last_polled_at: '2026-03-31T11:00:00.000Z',
+          is_active: true,
+        }],
+      });
+
+      await recordOracleSubscriptionSchedulerObservation({
+        controlDb,
+        nowIso: '2026-03-31T12:00:00.000Z',
+        actualDecisionCode: 'actual_enqueued',
+        oracleDecisionCode: 'shadow_enqueue',
+        minIntervalMs: 20 * 60_000,
+        dueSubscriptionCount: 1,
+        dueSubscriptionIds: ['sub_1'],
+      });
+
+      const decision = await evaluateOraclePrimarySchedulerDecision({
+        controlDb,
+        config: {
+          schedulerTickMs: 300_000,
+          shadowBatchLimit: 75,
+          shadowLookaheadMs: 0,
+        },
+        nowIso: '2026-03-31T12:10:00.000Z',
+      });
+
+      expect(decision).toMatchObject({
+        actualDecisionCode: 'actual_min_interval',
+        oracleDecisionCode: 'shadow_min_interval',
+        shouldEnqueue: false,
+        dueSubscriptionCount: 1,
+        minIntervalUntil: '2026-03-31T12:20:00.000Z',
+        retryAfterSeconds: 600,
+      });
+    } finally {
+      await controlDb.close();
+    }
+  });
 });

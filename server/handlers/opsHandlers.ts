@@ -109,6 +109,8 @@ export async function handleIngestionJobsTrigger(req: express.Request, res: expr
       dueSubscriptionCount: oraclePrimaryDecision.dueSubscriptionCount,
       dueSubscriptionIds: oraclePrimaryDecision.dueSubscriptionIds,
       nextDueAt: oraclePrimaryDecision.nextDueAt,
+      minIntervalUntil: oraclePrimaryDecision.minIntervalUntil,
+      suppressionUntil: oraclePrimaryDecision.suppressionUntil,
     });
     if (oraclePrimaryDecision.actualDecisionCode === 'actual_no_due_subscriptions') {
       return res.status(202).json({
@@ -135,7 +137,7 @@ export async function handleIngestionJobsTrigger(req: express.Request, res: expr
           suppressed: true,
           reason: 'min_interval',
           scope: 'all_active_subscriptions',
-          min_interval_ms: deps.allActiveSubscriptionsMinTriggerIntervalMs,
+          min_interval_ms: deps.oraclePrimaryMinTriggerIntervalMs,
           min_interval_until: oraclePrimaryDecision.minIntervalUntil,
           next_due_at: oraclePrimaryDecision.nextDueAt,
         },

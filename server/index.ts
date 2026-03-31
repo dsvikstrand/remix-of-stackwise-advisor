@@ -7876,6 +7876,8 @@ async function observeOracleAllActiveSubscriptionsTrigger(input: {
   dueSubscriptionCount?: number;
   dueSubscriptionIds?: string[];
   nextDueAt?: string | null;
+  minIntervalUntil?: string | null;
+  suppressionUntil?: string | null;
   latestJobId?: string | null;
   latestJobStatus?: string | null;
   latestActivityAt?: string | null;
@@ -7935,13 +7937,15 @@ async function observeOracleAllActiveSubscriptionsTrigger(input: {
     dueSubscriptionCount,
     dueSubscriptionIds,
     nextDueAt,
+    minIntervalUntil: input.minIntervalUntil,
+    suppressionUntil: input.suppressionUntil,
     latestJobId: input.latestJobId,
     latestJobStatus: input.latestJobStatus,
     latestActivityAt: input.latestActivityAt,
     existingJobId: input.existingJobId,
     existingJobStatus: input.existingJobStatus,
     enqueuedJobId: input.enqueuedJobId,
-    minIntervalMs: allActiveSubscriptionsMinTriggerIntervalMs,
+    minIntervalMs: oracleControlPlaneConfig.primaryMinTriggerIntervalMs,
     suppressionMs: Math.max(60_000, oracleControlPlaneConfig.schedulerTickMs),
   });
 
@@ -8376,6 +8380,7 @@ registerOpsRoutes(app, {
   queuePriorityEnabled,
   queueLowPrioritySuppressionDepth,
   allActiveSubscriptionsMinTriggerIntervalMs,
+  oraclePrimaryMinTriggerIntervalMs: oracleControlPlaneConfig.primaryMinTriggerIntervalMs,
   workerConcurrency,
   workerBatchSize,
   workerLeaseMs,
@@ -8987,6 +8992,7 @@ if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
     scheduler_mode: oracleControlPlaneConfig.subscriptionSchedulerMode,
     sqlite_path: oracleControlPlane.sqlitePath,
     scheduler_tick_ms: oracleControlPlaneConfig.schedulerTickMs,
+    primary_min_trigger_interval_ms: oracleControlPlaneConfig.primaryMinTriggerIntervalMs,
     bootstrap_batch: oracleControlPlaneConfig.bootstrapBatch,
     shadow_batch_limit: oracleControlPlaneConfig.shadowBatchLimit,
     shadow_lookahead_ms: oracleControlPlaneConfig.shadowLookaheadMs,

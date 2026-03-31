@@ -43,6 +43,7 @@ function createBaseDeps(overrides: Partial<OpsRouteDeps> = {}): OpsRouteDeps {
     queuePriorityEnabled: true,
     queueLowPrioritySuppressionDepth: 100,
     allActiveSubscriptionsMinTriggerIntervalMs: 10 * 60_000,
+    oraclePrimaryMinTriggerIntervalMs: 10 * 60_000,
     workerConcurrency: 1,
     workerBatchSize: 10,
     workerLeaseMs: 90_000,
@@ -674,6 +675,93 @@ describe('ingestion trigger handler', () => {
       dueSubscriptionCount: 0,
       dueSubscriptionIds: [],
       nextDueAt: '2026-03-31T12:30:00.000Z',
+      minIntervalUntil: null,
+      suppressionUntil: null,
+    });
+  });
+
+  it('suppresses enqueue from the Oracle primary scheduler using the Oracle cadence window', async () => {
+    const req = {} as never;
+    const res = createMockResponse();
+    const observeOracleAllActiveSubscriptionsTrigger = vi.fn(async () => undefined);
+    const resolveOracleAllActiveSubscriptionsPrimaryDecision = vi.fn(async () => ({
+      nowIso: '2026-03-31T12:00:00.000Z',
+      actualDecisionCode: 'actual_min_interval' as const,
+      oracleDecisionCode: 'shadow_min_interval' as const,
+      shouldEnqueue: false,
+      dueSubscriptionCount: 3,
+      dueSubscriptionIds: ['sub_1', 'sub_2'],
+      nextDueAt: '2026-03-31T12:05:00.000Z',
+      minIntervalUntil: '2026-03-31T12:20:00.000Z',
+      suppressionUntil: null,
+      queueDepth: null,
+      retryAfterSeconds: 1200,
+    }));
+    const db = {
+      from(table: string) {
+        if (table !== 'ingestion_jobs') {
+          throw new Error(`Unexpected table: ${table}`);
+        }
+        return {
+          select() {
+            const filters: Array<{ type: string }> = [];
+            return {
+              eq() {
+                return this;
+              },
+              in() {
+                filters.push({ type: 'in' });
+                return this;
+              },
+              order() {
+                return this;
+              },
+              limit() {
+                return this;
+              },
+              maybeSingle: async () => {
+                const isExistingJobRead = filters.some((entry) => entry.type === 'in');
+                if (isExistingJobRead) {
+                  return { data: null, error: null };
+                }
+                throw new Error('Latest-job fallback should not run in primary min-interval mode');
+              },
+            };
+          },
+        };
+      },
+    };
+
+    await handleIngestionJobsTrigger(req, res as never, createBaseDeps({
+      getServiceSupabaseClient: () => db,
+      observeOracleAllActiveSubscriptionsTrigger,
+      resolveOracleAllActiveSubscriptionsPrimaryDecision,
+      oraclePrimaryMinTriggerIntervalMs: 20 * 60_000,
+    }));
+
+    expect(res.statusCode).toBe(202);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        suppressed: true,
+        reason: 'min_interval',
+        scope: 'all_active_subscriptions',
+        min_interval_ms: 20 * 60_000,
+        min_interval_until: '2026-03-31T12:20:00.000Z',
+        next_due_at: '2026-03-31T12:05:00.000Z',
+      },
+      retry_after_seconds: 1200,
+    });
+    expect(resolveOracleAllActiveSubscriptionsPrimaryDecision).toHaveBeenCalledTimes(1);
+    expect(observeOracleAllActiveSubscriptionsTrigger).toHaveBeenCalledWith({
+      actualDecisionCode: 'actual_min_interval',
+      oracleDecisionCode: 'shadow_min_interval',
+      queueDepth: null,
+      dueSubscriptionCount: 3,
+      dueSubscriptionIds: ['sub_1', 'sub_2'],
+      nextDueAt: '2026-03-31T12:05:00.000Z',
+      minIntervalUntil: '2026-03-31T12:20:00.000Z',
+      suppressionUntil: null,
     });
   });
 
