@@ -13,8 +13,8 @@ This file is the authoritative active/reference/deserted/completed registry for 
   Canonical launch gate board and proof log.
 
 ## Active Root
-- `docs/exec-plans/active/frontend-read-surface-egress-plan.md`
-  Current active frontend/read-surface egress plan; focuses on bell live-queue duplication, profile-history hydration, and other secondary read surfaces with weak value-to-request ratios.
+- `docs/exec-plans/active/oracle-control-plane-migration-discovery-plan.md`
+  Current active migration-discovery root; defines the pre-implementation inspection and design work for moving hot control-plane state from Supabase-backed decisions toward Oracle-owned local state.
 - `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
   Current proof/deferred carry-forward tail. This is the only standing active-tail support file.
 - `docs/exec-plans/tech-debt-tracker.md`
@@ -22,6 +22,8 @@ This file is the authoritative active/reference/deserted/completed registry for 
 
 ## Reference Plans
 - These files remain valid historical reference plans, but they are not the current implementation focus.
+- `docs/exec-plans/active/on-pause/backend-aggressive-egress-tuning-plan.md`
+  Paused backend egress tuning root retained in case the team chooses to resume the remaining aggressive-but-acceptable freshness/cadence trims later.
 - `docs/exec-plans/completed/bleup-pwa-program.md`
   Deferred until Android/install-update proof work becomes active again.
 - `docs/exec-plans/completed/mvp-runtime-simplification-plan.md`
@@ -116,16 +118,20 @@ This file is the authoritative active/reference/deserted/completed registry for 
   Completed: narrow backend egress follow-up covering trigger-path maintenance, worker cadence/breadth/status trims, and fast-scope lease-heartbeat deferral.
 - `docs/exec-plans/completed/backend-egress-skip-phase1-plan.md`
   Completed: safe-first child slice for the backend egress tracker covering trigger-path waste and low-value support-table/cleanup work.
+- `docs/exec-plans/completed/frontend-read-surface-egress-plan.md`
+  Completed: narrowed frontend/read-surface follow-up where only subscriptions passive status reads were implemented; remaining optional surfaces were not promoted to active work.
 
 ## Current Program Snapshot
 - Core identity lock: `docs/app/core-direction-lock.md`.
 - Current runtime/ops truth: `docs/architecture.md`, `docs/ops/yt2bp_runbook.md`, and `docs/ops/mvp-launch-readiness-checklist.md`.
-- Current active implementation plan: `docs/exec-plans/active/frontend-read-surface-egress-plan.md`.
+- Current active implementation plan: `docs/exec-plans/active/oracle-control-plane-migration-discovery-plan.md`.
 - Current active proof/deferred tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`.
 - Current post-launch debt board: `docs/exec-plans/tech-debt-tracker.md`.
 - Latest completed implementation plans: `docs/exec-plans/completed/transcript-provider-launch-plan.md` and `docs/exec-plans/completed/pre-launch-ui-ux-plan.md`.
 - Historical PWA/runtime-simplification/egress reference plans are archived under `docs/exec-plans/completed/`.
 - Backend egress skip candidates + Phase 1 child plan are completed and archived under `docs/exec-plans/completed/`.
+- Frontend read-surface egress follow-up is completed and archived under `docs/exec-plans/completed/`.
+- Backend aggressive egress tuning is currently paused under `docs/exec-plans/active/on-pause/`.
 - Blueprint prompt `v5` Caveats rollout is completed.
 - TanStack Query tuning is completed.
 - Transcript-provider robustness work is completed, with later live-proof items carried into the proof tail.

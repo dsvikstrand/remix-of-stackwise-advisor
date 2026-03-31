@@ -1,8 +1,8 @@
 # Frontend Read Surface Egress Plan
 
-Status: `active`  
+Status: `completed`  
 Owner: `Codex / David`  
-Last updated: `2026-03-30`
+Last updated: `2026-03-31`
 
 ## Purpose
 
@@ -25,7 +25,7 @@ a3) [have] These surfaces are useful, but they are not as central as:
 - source unlock completion
 - main Wall/feed browsing
 
-a4) [have] The plan is now intentionally narrowed in practice: `P3` subscriptions passive status reads are the first implementation target, while the other slices remain candidates only.
+a4) [have] The plan was intentionally narrowed in practice: `P3` subscriptions passive status reads became the only implemented target, while the other slices remained candidates only.
 
 ## Goal
 
@@ -195,7 +195,7 @@ e3) [todo] After deploy and soak, compare:
 
 ## Exit Criteria
 
-f1) [todo] This plan is complete when:
-- the current narrowed `P3` slice lands and is production-verified
-- a follow-up decision is made on whether the remaining candidate slices are worth doing
-- any remaining items are either implemented, explicitly deferred, or spun into a narrower follow-up plan
+f1) [have] This plan is complete because:
+- the narrowed `P3` slice landed and was production-verified
+- the remaining candidate slices were not selected as current implementation work
+- the next active egress work moved back to backend/control-plane tuning under a new active root plan
