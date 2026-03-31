@@ -2,6 +2,7 @@ import type express from 'express';
 import type { ParseResult } from './shared';
 import type { BackendRuntimeMode } from '../../services/runtimeConfig';
 import type { OracleScopeDecisionCode } from '../../services/oracleSubscriptionSchedulerState';
+import type { OraclePrimarySchedulerDecision } from '../../services/oracleSubscriptionScheduler';
 
 type DbClient = any;
 
@@ -95,7 +96,11 @@ export type OpsRouteDeps = {
   ) => Promise<void>;
   observeOracleAllActiveSubscriptionsTrigger?: (input: {
     actualDecisionCode: OracleScopeDecisionCode;
+    oracleDecisionCode?: OracleScopeDecisionCode;
     queueDepth?: number | null;
+    dueSubscriptionCount?: number;
+    dueSubscriptionIds?: string[];
+    nextDueAt?: string | null;
     latestJobId?: string | null;
     latestJobStatus?: string | null;
     latestActivityAt?: string | null;
@@ -103,4 +108,7 @@ export type OpsRouteDeps = {
     existingJobStatus?: string | null;
     enqueuedJobId?: string | null;
   }) => Promise<void>;
+  resolveOracleAllActiveSubscriptionsPrimaryDecision?: (input: {
+    queueDepth?: number | null;
+  }) => Promise<OraclePrimarySchedulerDecision | null>;
 };

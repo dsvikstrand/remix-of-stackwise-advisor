@@ -28,6 +28,7 @@ export type OracleScopeDecisionCode =
   | 'actual_min_interval'
   | 'actual_queue_backpressure'
   | 'actual_low_priority_suppressed'
+  | 'actual_no_due_subscriptions'
   | 'actual_enqueued'
   | 'actual_job_started'
   | 'actual_job_succeeded'

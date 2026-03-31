@@ -53,13 +53,18 @@ import {
 import { parseRuntimeFlag, readBackendRuntimeConfig } from './services/runtimeConfig';
 import { readOracleControlPlaneConfig } from './services/oracleControlPlaneConfig';
 import { openOracleControlPlaneDb } from './services/oracleControlPlaneDb';
-import { evaluateOracleShadowSchedulerDecision } from './services/oracleSubscriptionScheduler';
+import {
+  evaluateOraclePrimarySchedulerDecision,
+  evaluateOracleShadowSchedulerDecision,
+} from './services/oracleSubscriptionScheduler';
 import {
   bootstrapOracleSubscriptionSchedulerState,
+  listOracleDueSubscriptions,
   markOracleAllActiveSubscriptionsRunFinished,
   markOracleAllActiveSubscriptionsRunStarted,
   recordOracleSubscriptionSchedulerObservation,
   recordOracleSubscriptionSyncOutcome,
+  type OracleScopeDecisionCode,
 } from './services/oracleSubscriptionSchedulerState';
 import { createYouTubeRefreshSchedulerController } from './services/youtubeRefreshSchedulerController';
 import {
@@ -7329,6 +7334,69 @@ async function runWithExecutionTimeout<T>(task: Promise<T>, timeoutMs: number): 
   }
 }
 
+async function loadAllActiveSubscriptionsBatchForRun(db: ReturnType<typeof getServiceSupabaseClient>) {
+  const selectColumns = 'id, user_id, mode, source_channel_id, source_channel_title, source_page_id, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, is_active';
+  if (
+    oracleControlPlaneConfig.enabled
+    && oracleControlPlane
+    && oracleControlPlaneConfig.subscriptionSchedulerMode === 'primary'
+  ) {
+    try {
+      const dueSnapshot = await listOracleDueSubscriptions({
+        controlDb: oracleControlPlane,
+        limit: Math.min(allActiveSubscriptionsMaxPerRun, oracleControlPlaneConfig.shadowBatchLimit),
+        lookaheadMs: oracleControlPlaneConfig.shadowLookaheadMs,
+      });
+      const dueSubscriptionIds = dueSnapshot.rows.map((row) => row.subscriptionId);
+      if (dueSubscriptionIds.length === 0) {
+        console.log('[oracle-control-plane] primary_due_batch_empty', JSON.stringify({
+          due_subscription_count: dueSnapshot.dueCount,
+          next_due_at: dueSnapshot.nextDueAt,
+        }));
+        return [];
+      }
+
+      const { data, error } = await db
+        .from('user_source_subscriptions')
+        .select(selectColumns)
+        .eq('is_active', true)
+        .eq('source_type', 'youtube')
+        .in('id', dueSubscriptionIds);
+      if (error) throw error;
+
+      const rowMap = new Map((data || []).map((row) => [row.id, row]));
+      const orderedSubscriptions = dueSubscriptionIds
+        .map((subscriptionId) => rowMap.get(subscriptionId))
+        .filter((subscription): subscription is NonNullable<(typeof data)[number]> => Boolean(subscription));
+
+      console.log('[oracle-control-plane] primary_due_batch_selected', JSON.stringify({
+        due_subscription_count: dueSnapshot.dueCount,
+        selected_count: orderedSubscriptions.length,
+        missing_count: Math.max(0, dueSubscriptionIds.length - orderedSubscriptions.length),
+        next_due_at: dueSnapshot.nextDueAt,
+        subscription_ids: dueSubscriptionIds.slice(0, 10),
+      }));
+
+      return orderedSubscriptions;
+    } catch (error) {
+      console.warn('[oracle-control-plane] primary_due_batch_fallback', JSON.stringify({
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+
+  const { data: subscriptions, error: subscriptionsError } = await db
+    .from('user_source_subscriptions')
+    .select(selectColumns)
+    .eq('is_active', true)
+    .eq('source_type', 'youtube')
+    .order('last_polled_at', { ascending: true, nullsFirst: true })
+    .order('updated_at', { ascending: false })
+    .limit(allActiveSubscriptionsMaxPerRun);
+  if (subscriptionsError) throw subscriptionsError;
+  return subscriptions || [];
+}
+
 async function processAllActiveSubscriptionsJob(input: {
   jobId: string;
   traceId: string;
@@ -7345,17 +7413,9 @@ async function processAllActiveSubscriptionsJob(input: {
   let skipped = 0;
   const failures: Array<{ subscription_id: string; error: string }> = [];
   try {
-    const { data: subscriptions, error: subscriptionsError } = await db
-      .from('user_source_subscriptions')
-      .select('id, user_id, mode, source_channel_id, source_channel_title, source_page_id, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, is_active')
-      .eq('is_active', true)
-      .eq('source_type', 'youtube')
-      .order('last_polled_at', { ascending: true, nullsFirst: true })
-      .order('updated_at', { ascending: false })
-      .limit(allActiveSubscriptionsMaxPerRun);
-    if (subscriptionsError) throw subscriptionsError;
+    const subscriptions = await loadAllActiveSubscriptionsBatchForRun(db);
 
-    for (const subscription of subscriptions || []) {
+    for (const subscription of subscriptions) {
       try {
         const sync = await syncSingleSubscription(db, subscription, { trigger: 'service_cron' });
         processed += sync.processed;
@@ -7777,13 +7837,30 @@ function mapActualAllActiveSubscriptionsDecisionToShadowCode(
     | 'actual_min_interval'
     | 'actual_queue_backpressure'
     | 'actual_low_priority_suppressed'
+    | 'actual_no_due_subscriptions'
     | 'actual_enqueued',
 ) {
   if (actualDecisionCode === 'actual_existing_job') return 'shadow_existing_job' as const;
   if (actualDecisionCode === 'actual_min_interval') return 'shadow_min_interval' as const;
   if (actualDecisionCode === 'actual_queue_backpressure') return 'shadow_queue_backpressure' as const;
   if (actualDecisionCode === 'actual_low_priority_suppressed') return 'shadow_low_priority_suppressed' as const;
+  if (actualDecisionCode === 'actual_no_due_subscriptions') return 'shadow_no_due_subscriptions' as const;
   return 'shadow_enqueue' as const;
+}
+
+async function resolveOracleAllActiveSubscriptionsPrimaryDecision() {
+  if (
+    !oracleControlPlaneConfig.enabled
+    || !oracleControlPlane
+    || oracleControlPlaneConfig.subscriptionSchedulerMode !== 'primary'
+  ) {
+    return null;
+  }
+
+  return evaluateOraclePrimarySchedulerDecision({
+    controlDb: oracleControlPlane,
+    config: oracleControlPlaneConfig,
+  });
 }
 
 async function observeOracleAllActiveSubscriptionsTrigger(input: {
@@ -7792,8 +7869,13 @@ async function observeOracleAllActiveSubscriptionsTrigger(input: {
     | 'actual_min_interval'
     | 'actual_queue_backpressure'
     | 'actual_low_priority_suppressed'
+    | 'actual_no_due_subscriptions'
     | 'actual_enqueued';
+  oracleDecisionCode?: OracleScopeDecisionCode | null;
   queueDepth?: number | null;
+  dueSubscriptionCount?: number;
+  dueSubscriptionIds?: string[];
+  nextDueAt?: string | null;
   latestJobId?: string | null;
   latestJobStatus?: string | null;
   latestActivityAt?: string | null;
@@ -7804,34 +7886,55 @@ async function observeOracleAllActiveSubscriptionsTrigger(input: {
   if (
     !oracleControlPlaneConfig.enabled
     || !oracleControlPlane
-    || oracleControlPlaneConfig.subscriptionSchedulerMode !== 'shadow'
+    || (
+      oracleControlPlaneConfig.subscriptionSchedulerMode !== 'shadow'
+      && oracleControlPlaneConfig.subscriptionSchedulerMode !== 'primary'
+    )
   ) {
     return;
   }
 
   const actualShadowCode = mapActualAllActiveSubscriptionsDecisionToShadowCode(input.actualDecisionCode);
-  const shadowDecision = await evaluateOracleShadowSchedulerDecision({
-    controlDb: oracleControlPlane,
-    config: oracleControlPlaneConfig,
-    queueDepth: input.queueDepth ?? null,
-    queueDepthHardLimit,
-    queuePrioritySuppressed: input.actualDecisionCode === 'actual_low_priority_suppressed',
-    actualExistingJob: input.existingJobId
-      ? {
-          id: input.existingJobId,
-          status: String(input.existingJobStatus || '').trim() || 'queued',
-        }
-      : null,
-  });
+  let oracleDecisionCode = input.oracleDecisionCode || null;
+  let dueSubscriptionCount = Math.max(0, Math.floor(Number(input.dueSubscriptionCount) || 0));
+  let dueSubscriptionIds = (input.dueSubscriptionIds || []).slice(0, 10);
+  let nextDueAt = input.nextDueAt || null;
+  let resolvedQueueDepth = input.queueDepth ?? null;
+
+  if (oracleControlPlaneConfig.subscriptionSchedulerMode === 'shadow') {
+    const shadowDecision = await evaluateOracleShadowSchedulerDecision({
+      controlDb: oracleControlPlane,
+      config: oracleControlPlaneConfig,
+      queueDepth: input.queueDepth ?? null,
+      queueDepthHardLimit,
+      queuePrioritySuppressed: input.actualDecisionCode === 'actual_low_priority_suppressed',
+      actualExistingJob: input.existingJobId
+        ? {
+            id: input.existingJobId,
+            status: String(input.existingJobStatus || '').trim() || 'queued',
+          }
+        : null,
+    });
+    oracleDecisionCode = shadowDecision.oracleDecisionCode;
+    dueSubscriptionCount = shadowDecision.dueSubscriptionCount;
+    dueSubscriptionIds = shadowDecision.dueSubscriptionIds.slice(0, 10);
+    nextDueAt = shadowDecision.nextDueAt;
+    resolvedQueueDepth = input.queueDepth ?? shadowDecision.queueDepth;
+  } else if (!oracleDecisionCode) {
+    oracleDecisionCode = actualShadowCode;
+  }
+  if (!oracleDecisionCode) {
+    oracleDecisionCode = actualShadowCode;
+  }
 
   await recordOracleSubscriptionSchedulerObservation({
     controlDb: oracleControlPlane,
     actualDecisionCode: input.actualDecisionCode,
-    oracleDecisionCode: shadowDecision.oracleDecisionCode,
-    queueDepth: input.queueDepth ?? shadowDecision.queueDepth,
-    dueSubscriptionCount: shadowDecision.dueSubscriptionCount,
-    dueSubscriptionIds: shadowDecision.dueSubscriptionIds,
-    nextDueAt: shadowDecision.nextDueAt,
+    oracleDecisionCode,
+    queueDepth: resolvedQueueDepth,
+    dueSubscriptionCount,
+    dueSubscriptionIds,
+    nextDueAt,
     latestJobId: input.latestJobId,
     latestJobStatus: input.latestJobStatus,
     latestActivityAt: input.latestActivityAt,
@@ -7842,14 +7945,27 @@ async function observeOracleAllActiveSubscriptionsTrigger(input: {
     suppressionMs: Math.max(60_000, oracleControlPlaneConfig.schedulerTickMs),
   });
 
-  console.log('[oracle-control-plane] shadow_trigger_observed', JSON.stringify({
+  if (oracleControlPlaneConfig.subscriptionSchedulerMode === 'shadow') {
+    console.log('[oracle-control-plane] shadow_trigger_observed', JSON.stringify({
+      actual_decision_code: input.actualDecisionCode,
+      oracle_decision_code: oracleDecisionCode,
+      matched: actualShadowCode === oracleDecisionCode,
+      due_subscription_count: dueSubscriptionCount,
+      due_subscription_ids: dueSubscriptionIds,
+      next_due_at: nextDueAt,
+      queue_depth: resolvedQueueDepth,
+    }));
+    return;
+  }
+
+  console.log('[oracle-control-plane] primary_trigger_decision', JSON.stringify({
     actual_decision_code: input.actualDecisionCode,
-    oracle_decision_code: shadowDecision.oracleDecisionCode,
-    matched: actualShadowCode === shadowDecision.oracleDecisionCode,
-    due_subscription_count: shadowDecision.dueSubscriptionCount,
-    due_subscription_ids: shadowDecision.dueSubscriptionIds.slice(0, 10),
-    next_due_at: shadowDecision.nextDueAt,
-    queue_depth: input.queueDepth ?? shadowDecision.queueDepth,
+    oracle_decision_code: oracleDecisionCode,
+    matched: actualShadowCode === oracleDecisionCode,
+    due_subscription_count: dueSubscriptionCount,
+    due_subscription_ids: dueSubscriptionIds,
+    next_due_at: nextDueAt,
+    queue_depth: resolvedQueueDepth,
   }));
 }
 
@@ -8284,6 +8400,7 @@ registerOpsRoutes(app, {
   getTranscriptProxyDebugMode,
   syncSingleSubscription,
   markSubscriptionSyncError,
+  resolveOracleAllActiveSubscriptionsPrimaryDecision,
   observeOracleAllActiveSubscriptionsTrigger,
 });
 

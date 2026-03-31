@@ -401,7 +401,7 @@ Required runtime variables:
 - `ORACLE_SUBSCRIPTION_SCHEDULER_MODE` (default `supabase`; accepted values: `supabase`, `shadow`, `primary`)
 - `ORACLE_CONTROL_PLANE_SQLITE_PATH` (default `.runtime/control-plane.sqlite`; local SQLite path for Oracle control-plane state)
 - `ORACLE_SUBSCRIPTION_BOOTSTRAP_BATCH` (default `250`; active YouTube subscriptions fetched per bootstrap page)
-- `ORACLE_SUBSCRIPTION_SCHEDULER_TICK_MS` (default `300000`; cadence reference for Oracle-local scheduler/shadow state)
+- `ORACLE_SUBSCRIPTION_SCHEDULER_TICK_MS` (default `300000`; cadence reference for Oracle-local scheduler state and fallback retry windows)
 - `ORACLE_SUBSCRIPTION_SHADOW_BATCH_LIMIT` (default `75`; max local due-subscription sample evaluated per shadow decision)
 - `ORACLE_SUBSCRIPTION_SHADOW_LOOKAHEAD_MS` (default `60000`; lookahead window for considering subscriptions due in shadow mode)
 - `ORACLE_SUBSCRIPTION_REVISIT_ACTIVE_MS` (default `900000`; next-due interval after Oracle sees newly inserted subscription content)

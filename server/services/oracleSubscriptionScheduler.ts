@@ -27,6 +27,17 @@ export type OracleShadowSchedulerDecision = {
   queueDepth: number | null;
 };
 
+export type OraclePrimarySchedulerDecision = OracleShadowSchedulerDecision & {
+  actualDecisionCode:
+    | 'actual_existing_job'
+    | 'actual_min_interval'
+    | 'actual_queue_backpressure'
+    | 'actual_low_priority_suppressed'
+    | 'actual_no_due_subscriptions'
+    | 'actual_enqueued';
+  retryAfterSeconds: number | null;
+};
+
 export function resolveOracleNextDueAt(input: {
   nowIso?: string;
   resultCode: OracleSubscriptionSyncResultCode;
@@ -37,6 +48,23 @@ export function resolveOracleNextDueAt(input: {
   errorRetryMs: number;
 }) {
   return resolveOracleNextDueAtFromOutcome(input);
+}
+
+export function mapOracleSchedulerDecisionToActualCode(decisionCode: OracleScopeDecisionCode) {
+  if (decisionCode === 'shadow_existing_job') return 'actual_existing_job' as const;
+  if (decisionCode === 'shadow_min_interval') return 'actual_min_interval' as const;
+  if (decisionCode === 'shadow_queue_backpressure') return 'actual_queue_backpressure' as const;
+  if (decisionCode === 'shadow_low_priority_suppressed') return 'actual_low_priority_suppressed' as const;
+  if (decisionCode === 'shadow_no_due_subscriptions') return 'actual_no_due_subscriptions' as const;
+  if (decisionCode === 'shadow_enqueue') return 'actual_enqueued' as const;
+  return null;
+}
+
+function resolveRetryAfterSeconds(targetIso: string | null, nowIso: string, fallbackSeconds: number | null = null) {
+  const nowMs = Date.parse(nowIso);
+  const targetMs = parseDateMs(targetIso);
+  if (targetMs == null || !Number.isFinite(nowMs)) return fallbackSeconds;
+  return Math.max(1, Math.ceil(Math.max(0, targetMs - nowMs) / 1000));
 }
 
 export async function evaluateOracleShadowSchedulerDecision(input: {
@@ -97,5 +125,47 @@ export async function evaluateOracleShadowSchedulerDecision(input: {
     minIntervalUntil: scopeState?.minIntervalUntil || null,
     suppressionUntil: scopeState?.suppressionUntil || null,
     queueDepth: input.queueDepth == null ? null : Math.max(0, Math.floor(input.queueDepth)),
+  };
+}
+
+export async function evaluateOraclePrimarySchedulerDecision(input: {
+  controlDb: OracleControlPlaneDb;
+  config: Pick<
+    OracleControlPlaneConfig,
+    'schedulerTickMs' | 'shadowBatchLimit' | 'shadowLookaheadMs'
+  >;
+  nowIso?: string;
+  queueDepth?: number | null;
+  queueDepthHardLimit?: number;
+  queuePrioritySuppressed?: boolean;
+  actualExistingJob?: { id: string; status: string } | null;
+}): Promise<OraclePrimarySchedulerDecision | null> {
+  const shadowDecision = await evaluateOracleShadowSchedulerDecision(input);
+  const actualDecisionCode = mapOracleSchedulerDecisionToActualCode(shadowDecision.oracleDecisionCode);
+  if (!actualDecisionCode) return null;
+
+  let retryAfterSeconds: number | null = null;
+  if (shadowDecision.oracleDecisionCode === 'shadow_min_interval') {
+    retryAfterSeconds = resolveRetryAfterSeconds(shadowDecision.minIntervalUntil, shadowDecision.nowIso);
+  } else if (shadowDecision.oracleDecisionCode === 'shadow_low_priority_suppressed') {
+    retryAfterSeconds = resolveRetryAfterSeconds(
+      shadowDecision.suppressionUntil,
+      shadowDecision.nowIso,
+      Math.max(1, Math.ceil(input.config.schedulerTickMs / 1000)),
+    );
+  } else if (shadowDecision.oracleDecisionCode === 'shadow_no_due_subscriptions') {
+    retryAfterSeconds = resolveRetryAfterSeconds(
+      shadowDecision.nextDueAt,
+      shadowDecision.nowIso,
+      Math.max(1, Math.ceil(input.config.schedulerTickMs / 1000)),
+    );
+  } else if (shadowDecision.oracleDecisionCode === 'shadow_queue_backpressure') {
+    retryAfterSeconds = 30;
+  }
+
+  return {
+    ...shadowDecision,
+    actualDecisionCode,
+    retryAfterSeconds,
   };
 }

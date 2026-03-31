@@ -155,7 +155,8 @@ b5) Subscription behavior (MVP simplified)
 - Backend runtime hardening: OpenAI SDK construction is lazy-loaded at call time so backend startup does not depend on top-level `openai` ESM import success on Oracle.
 - Oracle control-plane subscription scheduler migration remains additive:
   - `ORACLE_CONTROL_PLANE_ENABLED=true` may bootstrap local SQLite scheduler state without changing queue authority when scheduler mode stays `supabase`.
-  - `ORACLE_SUBSCRIPTION_SCHEDULER_MODE=shadow` may compute and persist Oracle-side subscription scheduling decisions for comparison, but Supabase still owns durable queue truth and live enqueue decisions in the current product contract.
+  - `ORACLE_SUBSCRIPTION_SCHEDULER_MODE=shadow` may compute and persist Oracle-side subscription scheduling decisions for comparison.
+  - `ORACLE_SUBSCRIPTION_SCHEDULER_MODE=primary` may make Oracle authoritative for `all_active_subscriptions` enqueue admission and batch selection only, while Supabase still owns durable queue truth, leases, checkpoints, and user-facing writes.
 - Auto-unlock toggle defaults to enabled (`auto_unlock_enabled=true`) for existing and new subscriptions.
 - Locked auto-billing policy is shared-cost:
   - one canonical auto-generation intent per new source video

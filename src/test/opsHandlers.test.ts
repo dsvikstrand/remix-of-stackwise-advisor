@@ -596,6 +596,214 @@ describe('ingestion trigger handler', () => {
     }
   });
 
+  it('suppresses enqueue from the Oracle primary scheduler when no subscriptions are due', async () => {
+    const req = {} as never;
+    const res = createMockResponse();
+    const observeOracleAllActiveSubscriptionsTrigger = vi.fn(async () => undefined);
+    const resolveOracleAllActiveSubscriptionsPrimaryDecision = vi.fn(async () => ({
+      nowIso: '2026-03-31T12:00:00.000Z',
+      actualDecisionCode: 'actual_no_due_subscriptions' as const,
+      oracleDecisionCode: 'shadow_no_due_subscriptions' as const,
+      shouldEnqueue: false,
+      dueSubscriptionCount: 0,
+      dueSubscriptionIds: [],
+      nextDueAt: '2026-03-31T12:30:00.000Z',
+      minIntervalUntil: null,
+      suppressionUntil: null,
+      queueDepth: null,
+      retryAfterSeconds: 1800,
+    }));
+    const db = {
+      from(table: string) {
+        if (table !== 'ingestion_jobs') {
+          throw new Error(`Unexpected table: ${table}`);
+        }
+        return {
+          select() {
+            const filters: Array<{ type: string }> = [];
+            return {
+              eq() {
+                return this;
+              },
+              in() {
+                filters.push({ type: 'in' });
+                return this;
+              },
+              order() {
+                return this;
+              },
+              limit() {
+                return this;
+              },
+              maybeSingle: async () => {
+                const isExistingJobRead = filters.some((entry) => entry.type === 'in');
+                if (isExistingJobRead) {
+                  return { data: null, error: null };
+                }
+                throw new Error('Latest-job fallback should not run in primary no-due mode');
+              },
+            };
+          },
+        };
+      },
+    };
+
+    await handleIngestionJobsTrigger(req, res as never, createBaseDeps({
+      getServiceSupabaseClient: () => db,
+      observeOracleAllActiveSubscriptionsTrigger,
+      resolveOracleAllActiveSubscriptionsPrimaryDecision,
+    }));
+
+    expect(res.statusCode).toBe(202);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        suppressed: true,
+        reason: 'no_due_subscriptions',
+        scope: 'all_active_subscriptions',
+        due_subscription_count: 0,
+        next_due_at: '2026-03-31T12:30:00.000Z',
+      },
+      retry_after_seconds: 1800,
+    });
+    expect(resolveOracleAllActiveSubscriptionsPrimaryDecision).toHaveBeenCalledTimes(1);
+    expect(observeOracleAllActiveSubscriptionsTrigger).toHaveBeenCalledWith({
+      actualDecisionCode: 'actual_no_due_subscriptions',
+      oracleDecisionCode: 'shadow_no_due_subscriptions',
+      queueDepth: null,
+      dueSubscriptionCount: 0,
+      dueSubscriptionIds: [],
+      nextDueAt: '2026-03-31T12:30:00.000Z',
+    });
+  });
+
+  it('falls back to the Supabase minimum-interval gate when Oracle primary resolution is unavailable', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-23T12:00:00.000Z'));
+    try {
+      const req = {} as never;
+      const res = createMockResponse();
+      const resolveOracleAllActiveSubscriptionsPrimaryDecision = vi.fn(async () => null);
+
+      await handleIngestionJobsTrigger(req, res as never, createBaseDeps({
+        getServiceSupabaseClient: () => createIngestionTriggerDb({
+          latestJob: {
+            id: 'job_recent',
+            status: 'succeeded',
+            created_at: '2026-03-23T11:54:00.000Z',
+            started_at: '2026-03-23T11:55:00.000Z',
+          },
+        }),
+        resolveOracleAllActiveSubscriptionsPrimaryDecision,
+      }));
+
+      expect(res.statusCode).toBe(202);
+      expect(res.body).toMatchObject({
+        ok: true,
+        data: {
+          suppressed: true,
+          reason: 'min_interval',
+          latest_job_id: 'job_recent',
+        },
+      });
+      expect(resolveOracleAllActiveSubscriptionsPrimaryDecision).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('queues a new job from the Oracle primary scheduler without using the latest-job fallback', async () => {
+    const req = {} as never;
+    const res = createMockResponse();
+    const scheduleQueuedIngestionProcessing = vi.fn();
+    const observeOracleAllActiveSubscriptionsTrigger = vi.fn(async () => undefined);
+    const resolveOracleAllActiveSubscriptionsPrimaryDecision = vi.fn(async () => ({
+      nowIso: '2026-03-31T12:00:00.000Z',
+      actualDecisionCode: 'actual_enqueued' as const,
+      oracleDecisionCode: 'shadow_enqueue' as const,
+      shouldEnqueue: true,
+      dueSubscriptionCount: 4,
+      dueSubscriptionIds: ['sub_1', 'sub_2'],
+      nextDueAt: '2026-03-31T11:45:00.000Z',
+      minIntervalUntil: null,
+      suppressionUntil: null,
+      queueDepth: null,
+      retryAfterSeconds: null,
+    }));
+    const inserts: Array<Record<string, unknown>> = [];
+    const db = {
+      inserts,
+      from(table: string) {
+        if (table !== 'ingestion_jobs') {
+          throw new Error(`Unexpected table: ${table}`);
+        }
+        return {
+          select() {
+            const filters: Array<{ type: string }> = [];
+            return {
+              eq() {
+                return this;
+              },
+              in() {
+                filters.push({ type: 'in' });
+                return this;
+              },
+              order() {
+                return this;
+              },
+              limit() {
+                return this;
+              },
+              maybeSingle: async () => {
+                const isExistingJobRead = filters.some((entry) => entry.type === 'in');
+                if (isExistingJobRead) {
+                  return { data: null, error: null };
+                }
+                throw new Error('Latest-job fallback should not run for Oracle primary enqueue');
+              },
+            };
+          },
+          insert(payload: Record<string, unknown>) {
+            inserts.push(payload);
+            return {
+              select() {
+                return {
+                  single: async () => ({ data: { id: 'job_primary' }, error: null }),
+                };
+              },
+            };
+          },
+        };
+      },
+    };
+
+    await handleIngestionJobsTrigger(req, res as never, createBaseDeps({
+      getServiceSupabaseClient: () => db,
+      scheduleQueuedIngestionProcessing,
+      observeOracleAllActiveSubscriptionsTrigger,
+      resolveOracleAllActiveSubscriptionsPrimaryDecision,
+    }));
+
+    expect(res.statusCode).toBe(202);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        job_id: 'job_primary',
+      },
+    });
+    expect(inserts).toHaveLength(1);
+    expect(scheduleQueuedIngestionProcessing).toHaveBeenCalledTimes(1);
+    expect(observeOracleAllActiveSubscriptionsTrigger).toHaveBeenCalledWith({
+      actualDecisionCode: 'actual_enqueued',
+      oracleDecisionCode: 'shadow_enqueue',
+      queueDepth: 1,
+      dueSubscriptionCount: 4,
+      dueSubscriptionIds: ['sub_1', 'sub_2'],
+      nextDueAt: '2026-03-31T11:45:00.000Z',
+      enqueuedJobId: 'job_primary',
+    });
+  });
+
   it('suppresses low-priority all_active_subscriptions enqueue when queue pressure threshold is hit', async () => {
     const req = {} as never;
     const res = createMockResponse();

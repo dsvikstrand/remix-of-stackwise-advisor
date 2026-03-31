@@ -113,7 +113,7 @@
   - Backend:
     - Express server in `server/index.ts`.
     - OpenAI SDK runtime loading is lazy (`server/llm/openaiRuntime.ts`) so Oracle backend startup does not depend on top-level `openai` ESM import resolution.
-    - Oracle control-plane bootstrap foundation is now present behind runtime env flags (`ORACLE_CONTROL_PLANE_ENABLED`, scheduler mode `supabase|shadow|primary`); local SQLite scheduler state now bootstraps active YouTube subscriptions and can observe shadow scheduler decisions, but Supabase remains authoritative for durable queue truth and actual enqueue decisions in the current runtime.
+    - Oracle control-plane subscription scheduling now runs behind runtime env flags (`ORACLE_CONTROL_PLANE_ENABLED`, scheduler mode `supabase|shadow|primary`); local SQLite scheduler state bootstraps active YouTube subscriptions, can observe shadow scheduler decisions, and may own `all_active_subscriptions` enqueue admission plus batch selection in `primary`, while Supabase remains authoritative for durable queue truth, leases, checkpoints, and user-facing writes.
     - Backend refactor a3 is completed with no behavior drift:
       - route registration is fully modular (`53` API routes across `server/routes/*` / route-domain modules)
       - `server/index.ts` has `0` direct `app.*` route registrations and now acts as composition/bootstrap only

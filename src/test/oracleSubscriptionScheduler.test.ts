@@ -3,7 +3,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { openOracleControlPlaneDb } from '../../server/services/oracleControlPlaneDb';
-import { evaluateOracleShadowSchedulerDecision } from '../../server/services/oracleSubscriptionScheduler';
+import {
+  evaluateOraclePrimarySchedulerDecision,
+  evaluateOracleShadowSchedulerDecision,
+} from '../../server/services/oracleSubscriptionScheduler';
 import {
   bootstrapOracleSubscriptionSchedulerState,
   recordOracleSubscriptionSchedulerObservation,
@@ -109,6 +112,88 @@ describe('oracle shadow subscription scheduler', () => {
         dueSubscriptionCount: 1,
       });
       expect(decision.minIntervalUntil).toBe('2026-03-31T12:30:00.000Z');
+    } finally {
+      await controlDb.close();
+    }
+  });
+
+  it('returns a primary no-due decision when no subscriptions are currently due', async () => {
+    const controlDb = openOracleControlPlaneDb({
+      sqlitePath: createTempSqlitePath(),
+    });
+
+    try {
+      await bootstrapOracleSubscriptionSchedulerState({
+        controlDb,
+        nowIso: '2026-03-31T12:00:00.000Z',
+        subscriptions: [{
+          id: 'sub_1',
+          user_id: 'user_1',
+          source_channel_id: 'channel_1',
+          last_polled_at: '2026-03-31T13:00:00.000Z',
+          is_active: true,
+        }],
+      });
+
+      const decision = await evaluateOraclePrimarySchedulerDecision({
+        controlDb,
+        config: {
+          schedulerTickMs: 300_000,
+          shadowBatchLimit: 75,
+          shadowLookaheadMs: 0,
+        },
+        nowIso: '2026-03-31T12:00:00.000Z',
+      });
+
+      expect(decision).toMatchObject({
+        actualDecisionCode: 'actual_no_due_subscriptions',
+        oracleDecisionCode: 'shadow_no_due_subscriptions',
+        shouldEnqueue: false,
+        dueSubscriptionCount: 0,
+        nextDueAt: '2026-03-31T13:00:00.000Z',
+        retryAfterSeconds: 3600,
+      });
+    } finally {
+      await controlDb.close();
+    }
+  });
+
+  it('maps a due Oracle decision into a primary enqueue decision', async () => {
+    const controlDb = openOracleControlPlaneDb({
+      sqlitePath: createTempSqlitePath(),
+    });
+
+    try {
+      await bootstrapOracleSubscriptionSchedulerState({
+        controlDb,
+        nowIso: '2026-03-31T12:00:00.000Z',
+        subscriptions: [{
+          id: 'sub_1',
+          user_id: 'user_1',
+          source_channel_id: 'channel_1',
+          last_polled_at: '2026-03-31T11:00:00.000Z',
+          is_active: true,
+        }],
+      });
+
+      const decision = await evaluateOraclePrimarySchedulerDecision({
+        controlDb,
+        config: {
+          schedulerTickMs: 300_000,
+          shadowBatchLimit: 75,
+          shadowLookaheadMs: 0,
+        },
+        nowIso: '2026-03-31T12:00:00.000Z',
+      });
+
+      expect(decision).toMatchObject({
+        actualDecisionCode: 'actual_enqueued',
+        oracleDecisionCode: 'shadow_enqueue',
+        shouldEnqueue: true,
+        dueSubscriptionCount: 1,
+        dueSubscriptionIds: ['sub_1'],
+        retryAfterSeconds: null,
+      });
     } finally {
       await controlDb.close();
     }

@@ -42,6 +42,7 @@ export async function handleIngestionJobsTrigger(req: express.Request, res: expr
       }));
     }
   };
+  let oraclePrimaryDecision: Awaited<ReturnType<NonNullable<OpsRouteDeps['resolveOracleAllActiveSubscriptionsPrimaryDecision']>>> = null;
 
   const selectExistingJob = async () => db
     .from('ingestion_jobs')
@@ -89,62 +90,121 @@ export async function handleIngestionJobsTrigger(req: express.Request, res: expr
     }
   }
 
-  const { data: latestJob, error: latestJobError } = await db
-    .from('ingestion_jobs')
-    .select('id, status, created_at, started_at')
-    .eq('scope', 'all_active_subscriptions')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (latestJobError) {
-    return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: latestJobError.message, data: null });
+  if (deps.resolveOracleAllActiveSubscriptionsPrimaryDecision) {
+    try {
+      oraclePrimaryDecision = await deps.resolveOracleAllActiveSubscriptionsPrimaryDecision({});
+    } catch (error) {
+      console.warn('[oracle-control-plane] primary trigger decision failed', JSON.stringify({
+        error: error instanceof Error ? error.message : String(error),
+      }));
+      oraclePrimaryDecision = null;
+    }
   }
 
-  const recentTrigger = getRecentAllActiveSubscriptionsTrigger({
-    createdAt: latestJob?.created_at ?? null,
-    startedAt: latestJob?.started_at ?? null,
-    nowMs: Date.now(),
-    minIntervalMs: deps.allActiveSubscriptionsMinTriggerIntervalMs,
-  });
-  if (recentTrigger) {
+  if (oraclePrimaryDecision && !oraclePrimaryDecision.shouldEnqueue) {
     await observeOracleTrigger({
-      actualDecisionCode: 'actual_min_interval',
-      latestJobId: latestJob?.id ?? null,
-      latestJobStatus: latestJob?.status ?? null,
-      latestActivityAt: recentTrigger.latestActivity,
+      actualDecisionCode: oraclePrimaryDecision.actualDecisionCode,
+      oracleDecisionCode: oraclePrimaryDecision.oracleDecisionCode,
+      queueDepth: oraclePrimaryDecision.queueDepth,
+      dueSubscriptionCount: oraclePrimaryDecision.dueSubscriptionCount,
+      dueSubscriptionIds: oraclePrimaryDecision.dueSubscriptionIds,
+      nextDueAt: oraclePrimaryDecision.nextDueAt,
     });
-    console.log('[subscription_trigger_interval_suppressed]', JSON.stringify({
-      scope: 'all_active_subscriptions',
-      latest_job_id: latestJob?.id ?? null,
-      latest_job_status: latestJob?.status ?? null,
-      latest_activity_at: recentTrigger.latestActivity,
-      min_interval_ms: deps.allActiveSubscriptionsMinTriggerIntervalMs,
-      retry_after_seconds: recentTrigger.retryAfterSeconds,
-      trigger: 'service_cron',
-      endpoint: '/api/ingestion/jobs/trigger',
-    }));
-    return res.status(202).json({
-      ok: true,
-      error_code: null,
-      message: 'subscription ingestion enqueue skipped by minimum interval gate',
-      retry_after_seconds: recentTrigger.retryAfterSeconds,
-      data: {
-        suppressed: true,
-        reason: 'min_interval',
+    if (oraclePrimaryDecision.actualDecisionCode === 'actual_no_due_subscriptions') {
+      return res.status(202).json({
+        ok: true,
+        error_code: null,
+        message: 'subscription ingestion enqueue skipped by oracle due scheduler',
+        retry_after_seconds: oraclePrimaryDecision.retryAfterSeconds,
+        data: {
+          suppressed: true,
+          reason: 'no_due_subscriptions',
+          scope: 'all_active_subscriptions',
+          due_subscription_count: oraclePrimaryDecision.dueSubscriptionCount,
+          next_due_at: oraclePrimaryDecision.nextDueAt,
+        },
+      });
+    }
+    if (oraclePrimaryDecision.actualDecisionCode === 'actual_min_interval') {
+      return res.status(202).json({
+        ok: true,
+        error_code: null,
+        message: 'subscription ingestion enqueue skipped by oracle minimum interval gate',
+        retry_after_seconds: oraclePrimaryDecision.retryAfterSeconds,
+        data: {
+          suppressed: true,
+          reason: 'min_interval',
+          scope: 'all_active_subscriptions',
+          min_interval_ms: deps.allActiveSubscriptionsMinTriggerIntervalMs,
+          min_interval_until: oraclePrimaryDecision.minIntervalUntil,
+          next_due_at: oraclePrimaryDecision.nextDueAt,
+        },
+      });
+    }
+  }
+
+  if (!oraclePrimaryDecision) {
+    const { data: latestJob, error: latestJobError } = await db
+      .from('ingestion_jobs')
+      .select('id, status, created_at, started_at')
+      .eq('scope', 'all_active_subscriptions')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (latestJobError) {
+      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: latestJobError.message, data: null });
+    }
+
+    const recentTrigger = getRecentAllActiveSubscriptionsTrigger({
+      createdAt: latestJob?.created_at ?? null,
+      startedAt: latestJob?.started_at ?? null,
+      nowMs: Date.now(),
+      minIntervalMs: deps.allActiveSubscriptionsMinTriggerIntervalMs,
+    });
+    if (recentTrigger) {
+      await observeOracleTrigger({
+        actualDecisionCode: 'actual_min_interval',
+        latestJobId: latestJob?.id ?? null,
+        latestJobStatus: latestJob?.status ?? null,
+        latestActivityAt: recentTrigger.latestActivity,
+      });
+      console.log('[subscription_trigger_interval_suppressed]', JSON.stringify({
         scope: 'all_active_subscriptions',
         latest_job_id: latestJob?.id ?? null,
         latest_job_status: latestJob?.status ?? null,
         latest_activity_at: recentTrigger.latestActivity,
         min_interval_ms: deps.allActiveSubscriptionsMinTriggerIntervalMs,
-      },
-    });
+        retry_after_seconds: recentTrigger.retryAfterSeconds,
+        trigger: 'service_cron',
+        endpoint: '/api/ingestion/jobs/trigger',
+      }));
+      return res.status(202).json({
+        ok: true,
+        error_code: null,
+        message: 'subscription ingestion enqueue skipped by minimum interval gate',
+        retry_after_seconds: recentTrigger.retryAfterSeconds,
+        data: {
+          suppressed: true,
+          reason: 'min_interval',
+          scope: 'all_active_subscriptions',
+          latest_job_id: latestJob?.id ?? null,
+          latest_job_status: latestJob?.status ?? null,
+          latest_activity_at: recentTrigger.latestActivity,
+          min_interval_ms: deps.allActiveSubscriptionsMinTriggerIntervalMs,
+        },
+      });
+    }
   }
 
   const queueDepth = await deps.countQueueDepth(db, { includeRunning: true });
   if (queueDepth >= deps.queueDepthHardLimit) {
     await observeOracleTrigger({
       actualDecisionCode: 'actual_queue_backpressure',
+      oracleDecisionCode: oraclePrimaryDecision?.oracleDecisionCode,
       queueDepth,
+      dueSubscriptionCount: oraclePrimaryDecision?.dueSubscriptionCount,
+      dueSubscriptionIds: oraclePrimaryDecision?.dueSubscriptionIds,
+      nextDueAt: oraclePrimaryDecision?.nextDueAt,
     });
     return res.status(429).json({
       ok: false,
@@ -166,7 +226,11 @@ export async function handleIngestionJobsTrigger(req: express.Request, res: expr
   if (suppressed) {
     await observeOracleTrigger({
       actualDecisionCode: 'actual_low_priority_suppressed',
+      oracleDecisionCode: oraclePrimaryDecision?.oracleDecisionCode,
       queueDepth,
+      dueSubscriptionCount: oraclePrimaryDecision?.dueSubscriptionCount,
+      dueSubscriptionIds: oraclePrimaryDecision?.dueSubscriptionIds,
+      nextDueAt: oraclePrimaryDecision?.nextDueAt,
     });
     console.log('[queue_low_priority_suppressed]', JSON.stringify({
       scope: 'all_active_subscriptions',
@@ -208,7 +272,11 @@ export async function handleIngestionJobsTrigger(req: express.Request, res: expr
 
   await observeOracleTrigger({
     actualDecisionCode: 'actual_enqueued',
+    oracleDecisionCode: oraclePrimaryDecision?.oracleDecisionCode,
     queueDepth: queueDepth + 1,
+    dueSubscriptionCount: oraclePrimaryDecision?.dueSubscriptionCount,
+    dueSubscriptionIds: oraclePrimaryDecision?.dueSubscriptionIds,
+    nextDueAt: oraclePrimaryDecision?.nextDueAt,
     enqueuedJobId: job.id,
   });
   deps.scheduleQueuedIngestionProcessing();
