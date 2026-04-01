@@ -11,6 +11,7 @@ export type OracleControlPlaneConfig = {
   schedulerTickMs: number;
   primaryMinTriggerIntervalMs: number;
   primaryBatchLimit: number;
+  primaryMaxBatchesPerRun: number;
   shadowBatchLimit: number;
   shadowLookaheadMs: number;
   activeRevisitMs: number;
@@ -63,6 +64,12 @@ export function readOracleControlPlaneConfig(
       150,
       1,
       5000,
+    ),
+    primaryMaxBatchesPerRun: clampInt(
+      env.ORACLE_SUBSCRIPTION_PRIMARY_MAX_BATCHES_PER_RUN,
+      2,
+      1,
+      25,
     ),
     shadowBatchLimit: clampInt(env.ORACLE_SUBSCRIPTION_SHADOW_BATCH_LIMIT, 75, 1, 5000),
     shadowLookaheadMs: clampInt(env.ORACLE_SUBSCRIPTION_SHADOW_LOOKAHEAD_MS, 60_000, 0, 60 * 60_000),

@@ -157,7 +157,7 @@ b5) Subscription behavior (MVP simplified)
   - `ORACLE_CONTROL_PLANE_ENABLED=true` may bootstrap local SQLite scheduler state without changing queue authority when scheduler mode stays `supabase`.
   - `ORACLE_SUBSCRIPTION_SCHEDULER_MODE=shadow` may compute and persist Oracle-side subscription scheduling decisions for comparison.
   - `ORACLE_SUBSCRIPTION_SCHEDULER_MODE=primary` now makes Oracle authoritative for `all_active_subscriptions` enqueue admission, cadence timing, external-trigger ownership, and due-batch selection, while Supabase still owns durable queue truth, leases, checkpoints, and user-facing writes.
-  - Oracle-primary drain breadth is now separately configurable through `ORACLE_SUBSCRIPTION_PRIMARY_BATCH_LIMIT`; this lets the migration improve backlog clearance without moving queue truth off Supabase.
+  - Oracle-primary drain breadth is now separately configurable through `ORACLE_SUBSCRIPTION_PRIMARY_BATCH_LIMIT`, and one run may drain multiple due batches through `ORACLE_SUBSCRIPTION_PRIMARY_MAX_BATCHES_PER_RUN`; this lets the migration improve backlog clearance without moving queue truth off Supabase.
 - Auto-unlock toggle defaults to enabled (`auto_unlock_enabled=true`) for existing and new subscriptions.
 - Locked auto-billing policy is shared-cost:
   - one canonical auto-generation intent per new source video

@@ -7354,7 +7354,12 @@ async function loadAllActiveSubscriptionsBatchForRun(db: ReturnType<typeof getSe
           due_subscription_count: dueSnapshot.dueCount,
           next_due_at: dueSnapshot.nextDueAt,
         }));
-        return [];
+        return {
+          source: 'oracle_primary_due' as const,
+          dueCount: dueSnapshot.dueCount,
+          nextDueAt: dueSnapshot.nextDueAt,
+          subscriptions: [],
+        };
       }
 
       const { data, error } = await db
@@ -7378,7 +7383,12 @@ async function loadAllActiveSubscriptionsBatchForRun(db: ReturnType<typeof getSe
         subscription_ids: dueSubscriptionIds.slice(0, 10),
       }));
 
-      return orderedSubscriptions;
+      return {
+        source: 'oracle_primary_due' as const,
+        dueCount: dueSnapshot.dueCount,
+        nextDueAt: dueSnapshot.nextDueAt,
+        subscriptions: orderedSubscriptions,
+      };
     } catch (error) {
       console.warn('[oracle-control-plane] primary_due_batch_fallback', JSON.stringify({
         error: error instanceof Error ? error.message : String(error),
@@ -7401,7 +7411,12 @@ async function loadAllActiveSubscriptionsBatchForRun(db: ReturnType<typeof getSe
         : allActiveSubscriptionsMaxPerRun,
     );
   if (subscriptionsError) throw subscriptionsError;
-  return subscriptions || [];
+  return {
+    source: 'supabase_fallback' as const,
+    dueCount: null,
+    nextDueAt: null,
+    subscriptions: subscriptions || [],
+  };
 }
 
 async function processAllActiveSubscriptionsJob(input: {
@@ -7418,51 +7433,78 @@ async function processAllActiveSubscriptionsJob(input: {
   let processed = 0;
   let inserted = 0;
   let skipped = 0;
+  let batchCount = 0;
   const failures: Array<{ subscription_id: string; error: string }> = [];
   try {
-    const subscriptions = await loadAllActiveSubscriptionsBatchForRun(db);
+    const maxBatchRuns = (
+      oracleControlPlaneConfig.enabled
+      && oracleControlPlane
+      && oracleControlPlaneConfig.subscriptionSchedulerMode === 'primary'
+    )
+      ? oracleControlPlaneConfig.primaryMaxBatchesPerRun
+      : 1;
 
-    for (const subscription of subscriptions) {
-      try {
-        const sync = await syncSingleSubscription(db, subscription, { trigger: 'service_cron' });
-        processed += sync.processed;
-        inserted += sync.inserted;
-        skipped += sync.skipped;
-        if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
-          await recordOracleSubscriptionSyncOutcome({
-            controlDb: oracleControlPlane,
-            subscriptionId: subscription.id,
-            resultCode: sync.resultCode,
-            activeRevisitMs: oracleControlPlaneConfig.activeRevisitMs,
-            normalRevisitMs: oracleControlPlaneConfig.normalRevisitMs,
-            quietRevisitMs: oracleControlPlaneConfig.quietRevisitMs,
-            errorRetryMs: oracleControlPlaneConfig.errorRetryMs,
-            processed: sync.processed,
-            inserted: sync.inserted,
-            skipped: sync.skipped,
-            trigger: 'service_cron',
+    for (let batchIndex = 0; batchIndex < maxBatchRuns; batchIndex += 1) {
+      const batchLoad = await loadAllActiveSubscriptionsBatchForRun(db);
+      const subscriptions = batchLoad.subscriptions;
+      if (subscriptions.length === 0) break;
+      batchCount += 1;
+
+      for (const subscription of subscriptions) {
+        try {
+          const sync = await syncSingleSubscription(db, subscription, { trigger: 'service_cron' });
+          processed += sync.processed;
+          inserted += sync.inserted;
+          skipped += sync.skipped;
+          if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
+            await recordOracleSubscriptionSyncOutcome({
+              controlDb: oracleControlPlane,
+              subscriptionId: subscription.id,
+              resultCode: sync.resultCode,
+              activeRevisitMs: oracleControlPlaneConfig.activeRevisitMs,
+              normalRevisitMs: oracleControlPlaneConfig.normalRevisitMs,
+              quietRevisitMs: oracleControlPlaneConfig.quietRevisitMs,
+              errorRetryMs: oracleControlPlaneConfig.errorRetryMs,
+              processed: sync.processed,
+              inserted: sync.inserted,
+              skipped: sync.skipped,
+              trigger: 'service_cron',
+            });
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          failures.push({
+            subscription_id: subscription.id,
+            error: errorMessage,
           });
+          await markSubscriptionSyncError(db, subscription, error);
+          if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
+            await recordOracleSubscriptionSyncOutcome({
+              controlDb: oracleControlPlane,
+              subscriptionId: subscription.id,
+              resultCode: 'error',
+              activeRevisitMs: oracleControlPlaneConfig.activeRevisitMs,
+              normalRevisitMs: oracleControlPlaneConfig.normalRevisitMs,
+              quietRevisitMs: oracleControlPlaneConfig.quietRevisitMs,
+              errorRetryMs: oracleControlPlaneConfig.errorRetryMs,
+              trigger: 'service_cron',
+              errorMessage,
+            });
+          }
         }
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        failures.push({
-          subscription_id: subscription.id,
-          error: errorMessage,
-        });
-        await markSubscriptionSyncError(db, subscription, error);
-        if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
-          await recordOracleSubscriptionSyncOutcome({
-            controlDb: oracleControlPlane,
-            subscriptionId: subscription.id,
-            resultCode: 'error',
-            activeRevisitMs: oracleControlPlaneConfig.activeRevisitMs,
-            normalRevisitMs: oracleControlPlaneConfig.normalRevisitMs,
-            quietRevisitMs: oracleControlPlaneConfig.quietRevisitMs,
-            errorRetryMs: oracleControlPlaneConfig.errorRetryMs,
-            trigger: 'service_cron',
-            errorMessage,
-          });
-        }
+      }
+
+      if (batchLoad.source !== 'oracle_primary_due') {
+        break;
+      }
+      if (batchCount >= maxBatchRuns) {
+        console.log('[oracle-control-plane] primary_multi_batch_cap_reached', JSON.stringify({
+          batch_count: batchCount,
+          max_batches_per_run: maxBatchRuns,
+          last_due_count: batchLoad.dueCount,
+          last_next_due_at: batchLoad.nextDueAt,
+        }));
+        break;
       }
     }
 
@@ -7499,6 +7541,17 @@ async function processAllActiveSubscriptionsJob(input: {
       skipped,
       failureCount: failures.length,
     });
+  }
+
+  if (batchCount > 1) {
+    console.log('[oracle-control-plane] primary_multi_batch_summary', JSON.stringify({
+      batch_count: batchCount,
+      max_batches_per_run: oracleControlPlaneConfig.primaryMaxBatchesPerRun,
+      processed,
+      inserted,
+      skipped,
+      failures: failures.length,
+    }));
   }
 
   logUnlockEvent('unlock_job_terminal', { trace_id: input.traceId, job_id: input.jobId }, {
@@ -9062,6 +9115,7 @@ if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
     scheduler_tick_ms: oracleControlPlaneConfig.schedulerTickMs,
     primary_min_trigger_interval_ms: oracleControlPlaneConfig.primaryMinTriggerIntervalMs,
     primary_batch_limit: oracleControlPlaneConfig.primaryBatchLimit,
+    primary_max_batches_per_run: oracleControlPlaneConfig.primaryMaxBatchesPerRun,
     bootstrap_batch: oracleControlPlaneConfig.bootstrapBatch,
     shadow_batch_limit: oracleControlPlaneConfig.shadowBatchLimit,
     shadow_lookahead_ms: oracleControlPlaneConfig.shadowLookaheadMs,

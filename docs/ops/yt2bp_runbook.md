@@ -404,6 +404,7 @@ Required runtime variables:
 - `ORACLE_SUBSCRIPTION_SCHEDULER_TICK_MS` (default `300000`; cadence reference for Oracle-local scheduler state and fallback retry windows)
 - `ORACLE_SUBSCRIPTION_PRIMARY_MIN_TRIGGER_INTERVAL_MS` (default `3600000`; Oracle-primary per-scope cadence window for `all_active_subscriptions` enqueue, independent of the legacy Supabase latest-job gate)
 - `ORACLE_SUBSCRIPTION_PRIMARY_BATCH_LIMIT` (default `150`; Oracle-primary due-batch cap for each `all_active_subscriptions` run)
+- `ORACLE_SUBSCRIPTION_PRIMARY_MAX_BATCHES_PER_RUN` (default `2`; Oracle-primary cap on how many due batches one `all_active_subscriptions` job may drain before yielding)
 - `ORACLE_SUBSCRIPTION_SHADOW_BATCH_LIMIT` (default `75`; max local due-subscription sample evaluated per shadow decision)
 - `ORACLE_SUBSCRIPTION_SHADOW_LOOKAHEAD_MS` (default `60000`; lookahead window for considering subscriptions due in shadow mode)
 - `ORACLE_SUBSCRIPTION_REVISIT_ACTIVE_MS` (default `900000`; next-due interval after Oracle sees newly inserted subscription content)
@@ -994,6 +995,7 @@ Notes:
 - in `primary`, Oracle-local scheduler ticks own `all_active_subscriptions` triggering; external cron hits to `/api/ingestion/jobs/trigger` for that scope now no-op with `oracle_primary_scheduler_owned`
 - Oracle may still keep the `*/3m` trigger cadence as a lightweight compatibility path, but the live owner for `all_active_subscriptions` is the local Oracle scheduler tick plus the Oracle cadence window (`ORACLE_SUBSCRIPTION_PRIMARY_MIN_TRIGGER_INTERVAL_MS`)
 - each Oracle-primary run may now drain up to `ORACLE_SUBSCRIPTION_PRIMARY_BATCH_LIMIT` due subscriptions from local SQLite state instead of the older fixed `75`-row cap
+- Oracle-primary runs may also drain more than one due batch per job when backlog remains, bounded by `ORACLE_SUBSCRIPTION_PRIMARY_MAX_BATCHES_PER_RUN`
 - repeated identical subscription sync errors now refresh `last_polled_at` / `last_sync_error` at `30m` instead of `15m`
 
 Auto-banner worker cron example (every 5 minutes):
