@@ -9375,6 +9375,7 @@ registerOpsRoutes(app, {
   createUnlockTraceId,
   scheduleQueuedIngestionProcessing,
   enqueueIngestionJob: enqueueIngestionJobWithMirror,
+  finalizeIngestionJob: finalizeIngestionJobWithMirror,
   queueDepthHardLimit,
   queueDepthPerUserLimit,
   queueWorkItemsHardLimit,

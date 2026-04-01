@@ -116,6 +116,7 @@
     - Oracle job-activity mirror now also serves owner-scoped `GET /api/ingestion/jobs/:id`, Oracle-first active `all_active_subscriptions` duplicate guards, and Oracle-backed queue-position reads for `GET /api/ingestion/jobs/active-mine` before Supabase fallback
     - hot enqueue/worker lifecycle transitions now update that Oracle job-activity mirror directly from the inserted/claimed/finalized/recovered `ingestion_jobs` rows in hand, instead of doing a second Supabase read just to refresh mirror state
     - user-triggered generation/sync handlers now also stay on that centralized Oracle-aware path: manual refresh, source-page unlock generation, search generation, and foreground subscription sync enqueue/finalize through shared helpers rather than inline `ingestion_jobs` writes
+    - service/debug control now does the same: `/api/ingestion/jobs/trigger` and debug subscription simulation both enqueue/finalize through the shared Oracle-aware helpers instead of direct handler-local `ingestion_jobs` writes
   - Durable generation trace writes are also slimmer:
     - generation run/event writes no longer request returned row payloads when callers do not consume them
     - event sequencing now reuses a per-run in-process cursor instead of re-reading the latest `seq` from Supabase before every event insert

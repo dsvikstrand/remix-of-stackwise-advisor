@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  handleDebugSimulateNewUploads,
   handleDebugResetTranscriptProxy,
   handleIngestionJobsLatest,
   handleIngestionJobsTrigger,
@@ -37,6 +38,10 @@ function createBaseDeps(overrides: Partial<OpsRouteDeps> = {}): OpsRouteDeps {
     countQueueWorkItems: async () => 0,
     createUnlockTraceId: () => 'trace_123',
     scheduleQueuedIngestionProcessing: () => undefined,
+    enqueueIngestionJob: vi.fn(async (db: any, values: Record<string, unknown>) => (
+      db.from('ingestion_jobs').insert(values).select().single()
+    )),
+    finalizeIngestionJob: vi.fn(async (_db: any, input: { jobId: string }) => ({ id: input.jobId })),
     queueDepthHardLimit: 1000,
     queueDepthPerUserLimit: 50,
     queueWorkItemsHardLimit: 250,
@@ -299,6 +304,95 @@ describe('debug transcript proxy reset handler', () => {
       data: {
         reset: true,
         proxy_mode: 'disabled',
+      },
+    });
+  });
+});
+
+describe('debug simulate subscription uploads handler', () => {
+  it('uses centralized enqueue and finalize helpers for debug subscription sync jobs', async () => {
+    const rewinds: Array<Record<string, unknown>> = [];
+    const enqueueIngestionJob = vi.fn(async () => ({ data: { id: 'job_debug_1' }, error: null }));
+    const finalizeIngestionJob = vi.fn(async (_db: any, input: Record<string, unknown>) => ({ id: input.jobId }));
+    const db = {
+      from(table: string) {
+        if (table !== 'user_source_subscriptions') {
+          throw new Error(`Unexpected table: ${table}`);
+        }
+        return {
+          select() {
+            return {
+              eq() {
+                return this;
+              },
+              maybeSingle: async () => ({
+                data: {
+                  id: 'sub_debug_1',
+                  user_id: '00000000-0000-0000-0000-000000000001',
+                  mode: 'auto',
+                  source_channel_id: 'channel_1',
+                  source_channel_title: 'Channel 1',
+                  source_page_id: 'page_1',
+                  last_polled_at: null,
+                  last_seen_published_at: '2026-03-01T00:00:00.000Z',
+                  last_seen_video_id: 'video_old',
+                  last_sync_error: null,
+                  is_active: true,
+                },
+                error: null,
+              }),
+            };
+          },
+          update(values: Record<string, unknown>) {
+            rewinds.push(values);
+            return {
+              eq: async () => ({ error: null }),
+            };
+          },
+        };
+      },
+    };
+    const req = {
+      params: { id: 'sub_debug_1' },
+      body: { rewind_days: 7 },
+    } as never;
+    const res = createMockResponse();
+
+    await handleDebugSimulateNewUploads(req, res as never, createBaseDeps({
+      getServiceSupabaseClient: () => db as any,
+      enqueueIngestionJob,
+      finalizeIngestionJob,
+      debugSimulateSubscriptionRequestSchema: {
+        safeParse: (value: any) => ({ success: true, data: value }),
+      },
+      syncSingleSubscription: async () => ({ processed: 2, inserted: 1, skipped: 1 }),
+    }));
+
+    expect(res.statusCode).toBe(200);
+    expect(rewinds).toHaveLength(1);
+    expect(enqueueIngestionJob).toHaveBeenCalledWith(db, expect.objectContaining({
+      trigger: 'debug_simulation',
+      scope: 'subscription_debug',
+      status: 'running',
+      subscription_id: 'sub_debug_1',
+    }));
+    expect(finalizeIngestionJob).toHaveBeenCalledWith(db, expect.objectContaining({
+      jobId: 'job_debug_1',
+      status: 'succeeded',
+      processedCount: 2,
+      insertedCount: 1,
+      skippedCount: 1,
+      action: 'subscription_debug_terminal',
+    }));
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        job_id: 'job_debug_1',
+        subscription_id: 'sub_debug_1',
+        rewind_days: 7,
+        processed: 2,
+        inserted: 1,
+        skipped: 1,
       },
     });
   });

@@ -288,31 +288,16 @@ export async function handleIngestionJobsTrigger(req: express.Request, res: expr
   }
 
   const traceId = deps.createUnlockTraceId();
-  const jobInsert = deps.enqueueIngestionJob
-    ? await deps.enqueueIngestionJob(db, {
-        trigger: 'service_cron',
-        scope: 'all_active_subscriptions',
-        status: 'queued',
-        trace_id: traceId,
-        payload: {
-          trace_id: traceId,
-        },
-        next_run_at: new Date().toISOString(),
-      })
-    : await db
-      .from('ingestion_jobs')
-      .insert({
-        trigger: 'service_cron',
-        scope: 'all_active_subscriptions',
-        status: 'queued',
-        trace_id: traceId,
-        payload: {
-          trace_id: traceId,
-        },
-        next_run_at: new Date().toISOString(),
-      })
-      .select('id')
-      .single();
+  const jobInsert = await deps.enqueueIngestionJob(db, {
+    trigger: 'service_cron',
+    scope: 'all_active_subscriptions',
+    status: 'queued',
+    trace_id: traceId,
+    payload: {
+      trace_id: traceId,
+    },
+    next_run_at: new Date().toISOString(),
+  });
   const { data: job, error: jobCreateError } = jobInsert;
   if (jobCreateError) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: jobCreateError.message, data: null });
 
@@ -816,17 +801,14 @@ export async function handleDebugSimulateNewUploads(req: express.Request, res: e
     return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: rewindError.message, data: null });
   }
 
-  const { data: job, error: jobCreateError } = await db
-    .from('ingestion_jobs')
-    .insert({
-      trigger: 'debug_simulation',
-      scope: 'subscription_debug',
-      status: 'running',
-      subscription_id: subscription.id,
-      started_at: new Date().toISOString(),
-    })
-    .select('id')
-    .single();
+  const { data: job, error: jobCreateError } = await deps.enqueueIngestionJob(db, {
+    trigger: 'debug_simulation',
+    scope: 'subscription_debug',
+    status: 'running',
+    subscription_id: subscription.id,
+    started_at: new Date().toISOString(),
+    next_run_at: new Date().toISOString(),
+  });
   if (jobCreateError) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: jobCreateError.message, data: null });
 
   try {
@@ -840,15 +822,14 @@ export async function handleDebugSimulateNewUploads(req: express.Request, res: e
       { trigger: 'debug_simulation' },
     );
 
-    await db.from('ingestion_jobs').update({
+    await deps.finalizeIngestionJob(db, {
+      jobId: job.id,
       status: 'succeeded',
-      finished_at: new Date().toISOString(),
-      processed_count: sync.processed,
-      inserted_count: sync.inserted,
-      skipped_count: sync.skipped,
-      error_code: null,
-      error_message: null,
-    }).eq('id', job.id);
+      processedCount: sync.processed,
+      insertedCount: sync.inserted,
+      skippedCount: sync.skipped,
+      action: 'subscription_debug_terminal',
+    });
 
     return res.json({
       ok: true,
@@ -865,12 +846,16 @@ export async function handleDebugSimulateNewUploads(req: express.Request, res: e
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await deps.markSubscriptionSyncError(db, subscription, error);
-    await db.from('ingestion_jobs').update({
+    await deps.finalizeIngestionJob(db, {
+      jobId: job.id,
       status: 'failed',
-      finished_at: new Date().toISOString(),
-      error_code: 'SYNC_FAILED',
-      error_message: message.slice(0, 500),
-    }).eq('id', job.id);
+      processedCount: 0,
+      insertedCount: 0,
+      skippedCount: 0,
+      errorCode: 'SYNC_FAILED',
+      errorMessage: message.slice(0, 500),
+      action: 'subscription_debug_failed',
+    });
     return res.status(500).json({ ok: false, error_code: 'SYNC_FAILED', message, data: { job_id: job.id } });
   }
 }

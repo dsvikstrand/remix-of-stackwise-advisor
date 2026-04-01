@@ -89,7 +89,8 @@ export type OpsRouteDeps = {
   countQueueWorkItems: (db: DbClient, input: { includeRunning?: boolean; userId?: string; statuses?: string[]; scope?: string; scopes?: string[] }) => Promise<number>;
   createUnlockTraceId: () => string;
   scheduleQueuedIngestionProcessing: () => void;
-  enqueueIngestionJob?: any;
+  enqueueIngestionJob: any;
+  finalizeIngestionJob: any;
   queueDepthHardLimit: number;
   queueDepthPerUserLimit: number;
   queueWorkItemsHardLimit: number;
