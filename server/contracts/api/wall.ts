@@ -5,6 +5,7 @@ type DbClient = ReturnType<typeof createClient>;
 export type WallRouteDeps = {
   getServiceSupabaseClient: () => DbClient | null;
   normalizeTranscriptTruthStatus: (value: unknown) => string;
+  readPublicFeedRows?: any;
   readFeedRows?: any;
   readSourceRows?: any;
   readUnlockRows?: any;

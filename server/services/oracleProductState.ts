@@ -75,6 +75,11 @@ export type OracleProductFeedRow = {
   updated_at: string;
 };
 
+export type OracleProductFeedCursor = {
+  createdAt: string;
+  feedItemId: string;
+};
+
 type ProductSyncResult = {
   subscriptionCount: number;
   sourceItemCount: number;
@@ -779,27 +784,55 @@ export async function getOracleProductUnlockBySourceItemId(input: {
 
 export async function listOracleProductFeedRows(input: {
   controlDb: OracleControlPlaneDb;
-  userId: string;
+  userId?: string | null;
+  state?: string | null;
   limit?: number;
   sourceItemIds?: string[];
+  blueprintIds?: string[];
   requireBlueprint?: boolean;
+  cursor?: OracleProductFeedCursor | null;
 }) {
   const userId = String(input.userId || '').trim();
-  if (!userId) return [] as OracleProductFeedRow[];
+  const state = String(input.state || '').trim();
+  const blueprintIds = [...new Set((input.blueprintIds || []).map((value) => String(value || '').trim()).filter(Boolean))];
+  const sourceItemIds = [...new Set((input.sourceItemIds || []).map((value) => String(value || '').trim()).filter(Boolean))];
+  const cursorCreatedAt = String(input.cursor?.createdAt || '').trim();
+  const cursorFeedItemId = String(input.cursor?.feedItemId || '').trim();
+  const hasCursor = Boolean(cursorCreatedAt && cursorFeedItemId);
+  if (!userId && !state && blueprintIds.length === 0 && sourceItemIds.length === 0) {
+    return [] as OracleProductFeedRow[];
+  }
 
   let query = input.controlDb.db
     .selectFrom('product_feed_state')
     .selectAll()
-    .where('user_id', '=', userId)
     .orderBy('created_at', 'desc')
+    .orderBy('id', 'desc')
     .limit(Math.max(1, Math.min(5000, Number(input.limit || 200))));
 
-  const sourceItemIds = [...new Set((input.sourceItemIds || []).map((value) => String(value || '').trim()).filter(Boolean))];
+  if (userId) {
+    query = query.where('user_id', '=', userId);
+  }
+  if (state) {
+    query = query.where('state', '=', state);
+  }
   if (sourceItemIds.length > 0) {
     query = query.where('source_item_id', 'in', sourceItemIds);
   }
+  if (blueprintIds.length > 0) {
+    query = query.where('blueprint_id', 'in', blueprintIds);
+  }
   if (input.requireBlueprint) {
     query = query.where('blueprint_id', 'is not', null);
+  }
+  if (hasCursor) {
+    query = query.where((eb) => eb.or([
+      eb('created_at', '<', cursorCreatedAt),
+      eb.and([
+        eb('created_at', '=', cursorCreatedAt),
+        eb('id', '<', cursorFeedItemId),
+      ]),
+    ]));
   }
 
   const rows = await query.execute();

@@ -31,6 +31,8 @@ export function registerWallRoutes(app: express.Express, deps: WallRouteDeps) {
         scope: normalizeScope(req.query.scope),
         sort: normalizeSort(req.query.sort),
         viewerUserId,
+        readPublicFeedRows: deps.readPublicFeedRows,
+        readSourceRows: deps.readSourceRows,
       });
       return res.json({
         ok: true,

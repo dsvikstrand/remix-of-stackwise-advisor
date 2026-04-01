@@ -128,6 +128,12 @@ describe('oracle product state', () => {
         userId: 'user_1',
         limit: 10,
       });
+      const publicFeedRows = await listOracleProductFeedRows({
+        controlDb,
+        blueprintIds: ['bp_1'],
+        state: 'my_feed_published',
+        limit: 10,
+      });
 
       expect(subscriptionState).toMatchObject({
         id: 'sub_1',
@@ -153,6 +159,10 @@ describe('oracle product state', () => {
       expect(feedRows[0]).toMatchObject({
         id: 'feed_1',
         state: 'my_feed_published',
+      });
+      expect(publicFeedRows[0]).toMatchObject({
+        id: 'feed_1',
+        blueprint_id: 'bp_1',
       });
     } finally {
       await controlDb.close();

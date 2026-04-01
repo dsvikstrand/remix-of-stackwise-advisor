@@ -152,3 +152,4 @@ k1) [have] YouTube comments refresh moved to bootstrap+manual model:
 k2) [have] Manual generation billing now uses reserve -> settle/release semantics against the daily credit wallet, and shared-cost auto billing is active for funded auto-enabled subscribers.
 k3) [have] Queue realism hardening is in place: weighted queue-work-item limits gate interactive multi-item jobs and `GET /api/ops/queue/health` now reports work-item backlog.
 k4) [have] Credit-load hardening is in place: `useAiCredits` no longer polls globally, the always-mounted user menu is lazy-on-open, and post-action wallet freshness is event-driven.
+k5) [have] Oracle product-state mirroring now also covers public wall/source-page blueprint reads: recent feed/source rows can be served Oracle-first for public Wall cards and Source Page blueprint scans, while Supabase remains the durable product ledger and fallback path.

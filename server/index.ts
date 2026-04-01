@@ -2264,6 +2264,152 @@ async function listProductFeedRowsForUserOracleFirst(
   return data || [];
 }
 
+function normalizePublicProductFeedCursor(input: { createdAt?: string | null; feedItemId?: string | null } | null | undefined) {
+  const createdAt = String(input?.createdAt || '').trim();
+  const feedItemId = String(input?.feedItemId || '').trim();
+  if (!createdAt || !feedItemId) return null;
+  const createdAtMs = Date.parse(createdAt);
+  if (!Number.isFinite(createdAtMs)) return null;
+  return {
+    createdAt: new Date(createdAtMs).toISOString(),
+    feedItemId,
+  };
+}
+
+function buildPublicProductFeedCursorFilter(input: { createdAt: string; feedItemId: string }) {
+  return `created_at.lt.${input.createdAt},and(created_at.eq.${input.createdAt},id.lt.${input.feedItemId})`;
+}
+
+function sortMergedProductFeedRows(rows: any[]) {
+  return [...rows].sort((left, right) => {
+    const leftCreatedAt = Date.parse(String(left?.created_at || ''));
+    const rightCreatedAt = Date.parse(String(right?.created_at || ''));
+    const safeLeftCreatedAt = Number.isFinite(leftCreatedAt) ? leftCreatedAt : 0;
+    const safeRightCreatedAt = Number.isFinite(rightCreatedAt) ? rightCreatedAt : 0;
+    if (safeRightCreatedAt !== safeLeftCreatedAt) {
+      return safeRightCreatedAt - safeLeftCreatedAt;
+    }
+    const leftId = String(left?.id || '');
+    const rightId = String(right?.id || '');
+    return rightId.localeCompare(leftId);
+  });
+}
+
+function mergeProductFeedRows(rows: any[]) {
+  const rowsById = new Map<string, any>();
+  for (const row of rows) {
+    const id = String(row?.id || '').trim();
+    if (!id || rowsById.has(id)) continue;
+    rowsById.set(id, row);
+  }
+  return sortMergedProductFeedRows([...rowsById.values()]);
+}
+
+async function listPublicProductFeedRowsFromSupabase(
+  db: ReturnType<typeof createClient>,
+  input: {
+    blueprintIds?: string[];
+    state?: string | null;
+    limit?: number;
+    cursor?: { createdAt?: string | null; feedItemId?: string | null } | null;
+    requireBlueprint?: boolean;
+  },
+) {
+  const blueprintIds = [...new Set((input.blueprintIds || []).map((value) => String(value || '').trim()).filter(Boolean))];
+  const state = String(input.state || '').trim();
+  const normalizedLimit = Math.max(1, Math.min(5000, Number(input.limit || 0) || 200));
+  const cursor = normalizePublicProductFeedCursor(input.cursor);
+
+  let query = db
+    .from('user_feed_items')
+    .select('id, user_id, source_item_id, blueprint_id, state, last_decision_code, created_at, updated_at')
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(normalizedLimit);
+
+  if (blueprintIds.length > 0) {
+    query = query.in('blueprint_id', blueprintIds);
+  }
+  if (state) {
+    query = query.eq('state', state);
+  }
+  if (input.requireBlueprint) {
+    query = query.not('blueprint_id', 'is', null);
+  }
+  if (cursor) {
+    query = query.or(buildPublicProductFeedCursorFilter(cursor));
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+async function listPublicProductFeedRowsOracleFirst(
+  db: ReturnType<typeof createClient>,
+  input: {
+    blueprintIds?: string[];
+    state?: string | null;
+    limit?: number;
+    cursor?: { createdAt?: string | null; feedItemId?: string | null } | null;
+    requireBlueprint?: boolean;
+  },
+) {
+  const blueprintIds = [...new Set((input.blueprintIds || []).map((value) => String(value || '').trim()).filter(Boolean))];
+  const state = String(input.state || '').trim();
+  const normalizedLimit = Math.max(1, Math.min(5000, Number(input.limit || 0) || (blueprintIds.length > 0 ? 5000 : 200)));
+  const cursor = normalizePublicProductFeedCursor(input.cursor);
+
+  if (oracleProductMirrorEnabled && oracleControlPlane) {
+    try {
+      const mirrored = await listOracleProductFeedRows({
+        controlDb: oracleControlPlane,
+        blueprintIds,
+        state,
+        limit: normalizedLimit,
+        cursor,
+        requireBlueprint: input.requireBlueprint,
+      });
+
+      const mirrorLooksComplete = blueprintIds.length > 0
+        ? new Set(
+          mirrored
+            .map((row) => String(row.blueprint_id || '').trim())
+            .filter(Boolean),
+        ).size >= blueprintIds.length
+        : mirrored.length >= normalizedLimit;
+
+      if (mirrorLooksComplete) {
+        return sortMergedProductFeedRows(mirrored).slice(0, normalizedLimit);
+      }
+
+      const fallbackRows = await listPublicProductFeedRowsFromSupabase(db, {
+        blueprintIds,
+        state,
+        limit: normalizedLimit,
+        cursor,
+        requireBlueprint: input.requireBlueprint,
+      });
+      return mergeProductFeedRows([...mirrored, ...fallbackRows]).slice(0, normalizedLimit);
+    } catch (error) {
+      console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
+        action: 'list_public_product_feed_rows',
+        state: state || null,
+        blueprint_count: blueprintIds.length,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+
+  return listPublicProductFeedRowsFromSupabase(db, {
+    blueprintIds,
+    state,
+    limit: normalizedLimit,
+    cursor,
+    requireBlueprint: input.requireBlueprint,
+  });
+}
+
 async function listProductSourceItemsOracleFirst(
   db: ReturnType<typeof createClient>,
   input: { ids?: string[]; sourceNativeId?: string | null },
@@ -4293,6 +4439,13 @@ registerProfileRoutes(app, {
 registerWallRoutes(app, {
   getServiceSupabaseClient,
   normalizeTranscriptTruthStatus,
+  readPublicFeedRows: ({ db, blueprintIds, state, limit, cursor, requireBlueprint }: any) => listPublicProductFeedRowsOracleFirst(db, {
+    blueprintIds,
+    state,
+    limit,
+    cursor,
+    requireBlueprint,
+  }),
   readFeedRows: ({ db, userId, limit, sourceItemIds, requireBlueprint }: any) => listProductFeedRowsForUserOracleFirst(db, {
     userId,
     limit,
@@ -11183,6 +11336,14 @@ registerSourcePagesRoutes(app, {
   youtubeDataApiKey,
   getUserSubscriptionStateForSourcePage: getUserSubscriptionStateForSourcePageOracleFirst,
   getBlueprintAvailabilityForVideo: getBlueprintAvailabilityForVideoOracleFirst,
+  readPublicFeedRows: ({ db, blueprintIds, state, limit, cursor, requireBlueprint }: any) => listPublicProductFeedRowsOracleFirst(db, {
+    blueprintIds,
+    state,
+    limit,
+    cursor,
+    requireBlueprint,
+  }),
+  readSourceRows: ({ db, sourceIds }: any) => listProductSourceItemsOracleFirst(db, { ids: sourceIds }),
   sourceVideoListBurstLimiter,
   sourceVideoListSustainedLimiter,
   sourceVideoUnlockBurstLimiter,

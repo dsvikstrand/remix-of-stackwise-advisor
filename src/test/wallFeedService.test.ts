@@ -104,6 +104,71 @@ describe('wall feed service', () => {
     });
   });
 
+  it('supports Oracle-first public feed and source readers for wall cards', async () => {
+    const db = createMockSupabase({
+      blueprints: [
+        {
+          id: 'bp_1',
+          creator_user_id: 'creator_1',
+          title: 'Blueprint One',
+          sections_json: null,
+          steps: null,
+          llm_review: 'Review 1',
+          mix_notes: null,
+          banner_url: null,
+          likes_count: 4,
+          created_at: '2026-03-06T10:00:00.000Z',
+          is_public: true,
+        },
+      ],
+      blueprint_tags: [
+        { blueprint_id: 'bp_1', tags: { id: 'tag_fit', slug: 'fitness-training' } },
+      ],
+      blueprint_likes: [
+        { blueprint_id: 'bp_1', user_id: 'viewer_1' },
+      ],
+      channel_candidates: [
+        { user_feed_item_id: 'ufi_1', channel_slug: 'fitness-training', status: 'published', created_at: '2026-03-06T10:02:00.000Z' },
+      ],
+      user_feed_items: [],
+      source_items: [],
+    }) as any;
+
+    const items = await listWallBlueprintFeed({
+      db,
+      scope: 'all',
+      sort: 'latest',
+      viewerUserId: 'viewer_1',
+      readPublicFeedRows: async () => ([
+        {
+          id: 'ufi_1',
+          blueprint_id: 'bp_1',
+          source_item_id: 'source_1',
+          created_at: '2026-03-06T10:01:00.000Z',
+        },
+      ]),
+      readSourceRows: async () => ([
+        {
+          id: 'source_1',
+          source_page_id: 'page_1',
+          source_channel_id: 'channel_1',
+          source_channel_title: 'Channel 1',
+          thumbnail_url: 'https://thumb/1.jpg',
+          metadata: { view_count: 1200, source_channel_avatar_url: 'https://avatar/1.jpg' },
+        },
+      ]),
+    });
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      id: 'bp_1',
+      published_channel_slug: 'fitness-training',
+      source_channel_title: 'Channel 1',
+      source_thumbnail_url: 'https://thumb/1.jpg',
+      source_channel_avatar_url: 'https://avatar/1.jpg',
+    });
+  });
+
   it('filters joined lane and channel scopes by published channel slug only', async () => {
     const db = createMockSupabase({
       blueprints: [

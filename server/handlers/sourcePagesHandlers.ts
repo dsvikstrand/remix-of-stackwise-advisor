@@ -35,6 +35,8 @@ export function registerSourcePagesRouteHandlers(app: express.Express, deps: Sou
     youtubeDataApiKey,
     getUserSubscriptionStateForSourcePage,
     getBlueprintAvailabilityForVideo,
+    readPublicFeedRows,
+    readSourceRows,
     sourceVideoListBurstLimiter,
     sourceVideoListSustainedLimiter,
     sourceVideoUnlockBurstLimiter,
@@ -1443,19 +1445,35 @@ app.get('/api/source-pages/:platform/:externalId/blueprints', async (req, res) =
   let lastScannedCursor: SourcePageBlueprintCursor | null = null;
 
   while (!reachedLimit && !exhausted && scanRows < maxScanRows) {
-    let feedQuery = db
-      .from('user_feed_items')
-      .select('id, source_item_id, blueprint_id, created_at')
-      .eq('state', 'channel_published')
-      .not('blueprint_id', 'is', null)
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false })
-      .limit(scanBatch);
+    const feedRowsResult = readPublicFeedRows
+      ? {
+        data: await readPublicFeedRows({
+          db,
+          state: 'channel_published',
+          limit: scanBatch,
+          cursor,
+          requireBlueprint: true,
+        }),
+        error: null,
+      }
+      : await (() => {
+        let feedQuery = db
+          .from('user_feed_items')
+          .select('id, source_item_id, blueprint_id, created_at')
+          .eq('state', 'channel_published')
+          .not('blueprint_id', 'is', null)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .limit(scanBatch);
 
-    const cursorFilter = cursor ? buildSourcePageCursorFilter(cursor) : null;
-    if (cursorFilter) feedQuery = feedQuery.or(cursorFilter);
-
-    const { data: feedRowsData, error: feedRowsError } = await feedQuery;
+        const cursorFilter = cursor ? buildSourcePageCursorFilter(cursor) : null;
+        if (cursorFilter) feedQuery = feedQuery.or(cursorFilter);
+        return feedQuery;
+      })();
+    const feedRowsData = Array.isArray((feedRowsResult as any)?.data)
+      ? (feedRowsResult as any).data
+      : feedRowsResult;
+    const feedRowsError = (feedRowsResult as any)?.error || null;
     if (feedRowsError) {
       return res.status(400).json({
         ok: false,
@@ -1490,10 +1508,18 @@ app.get('/api/source-pages/:platform/:externalId/blueprints', async (req, res) =
     }
 
     const [{ data: sourceRowsData, error: sourceRowsError }, { data: blueprintVisibilityData, error: blueprintVisibilityError }] = await Promise.all([
-      db
-        .from('source_items')
-        .select('id, source_page_id, source_channel_id, source_url, thumbnail_url')
-        .in('id', sourceItemIds),
+      readSourceRows
+        ? Promise.resolve({
+          data: await readSourceRows({
+            db,
+            sourceIds: sourceItemIds,
+          }),
+          error: null,
+        })
+        : db
+          .from('source_items')
+          .select('id, source_page_id, source_channel_id, source_url, thumbnail_url')
+          .in('id', sourceItemIds),
       db
         .from('blueprints')
         .select('id, is_public')
@@ -1610,11 +1636,25 @@ app.get('/api/source-pages/:platform/:externalId/blueprints', async (req, res) =
     });
   }
 
-  const { data: allPublishedFeedRows, error: allPublishedFeedRowsError } = await db
-    .from('user_feed_items')
-    .select('id, blueprint_id')
-    .eq('state', 'channel_published')
-    .in('blueprint_id', blueprintIds);
+  const allPublishedFeedRowsResult = readPublicFeedRows
+    ? {
+      data: await readPublicFeedRows({
+        db,
+        state: 'channel_published',
+        blueprintIds,
+        limit: 5000,
+      }),
+      error: null,
+    }
+    : await db
+      .from('user_feed_items')
+      .select('id, blueprint_id')
+      .eq('state', 'channel_published')
+      .in('blueprint_id', blueprintIds);
+  const allPublishedFeedRows = Array.isArray((allPublishedFeedRowsResult as any)?.data)
+    ? (allPublishedFeedRowsResult as any).data
+    : allPublishedFeedRowsResult;
+  const allPublishedFeedRowsError = (allPublishedFeedRowsResult as any)?.error || null;
   if (allPublishedFeedRowsError) {
     return res.status(400).json({
       ok: false,

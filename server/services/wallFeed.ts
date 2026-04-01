@@ -174,7 +174,11 @@ type BuildFeedItemMapsResult = {
   publishedChannelByBlueprint: Map<string, { slug: string; createdAtMs: number }>;
 };
 
-async function buildFeedItemMaps(db: DbClient, feedItems: Array<{ id: string; blueprint_id: string; source_item_id: string; created_at: string }>) {
+async function buildFeedItemMaps(
+  db: DbClient,
+  feedItems: Array<{ id: string; blueprint_id: string; source_item_id: string; created_at: string }>,
+  readSourceRows?: (args: { db: DbClient; sourceIds: string[] }) => Promise<any[]>,
+) {
   const blueprintIdByFeedItemId = new Map(feedItems.map((row) => [row.id, row.blueprint_id]));
   const sourceItemIds = [...new Set(feedItems.map((row) => String(row.source_item_id || '').trim()).filter(Boolean))];
   const sourceChannelTitleByBlueprint = new Map<string, { title: string | null; createdAtMs: number }>();
@@ -193,10 +197,16 @@ async function buildFeedItemMaps(db: DbClient, feedItems: Array<{ id: string; bl
     } satisfies BuildFeedItemMapsResult;
   }
 
-  const { data: sourceItemsData, error: sourceItemsError } = await db
-    .from('source_items')
-    .select('id, source_channel_id, source_channel_title, thumbnail_url, metadata')
-    .in('id', sourceItemIds);
+  const sourceItemsResult = readSourceRows
+    ? { data: await readSourceRows({ db, sourceIds: sourceItemIds }), error: null }
+    : await db
+      .from('source_items')
+      .select('id, source_channel_id, source_channel_title, thumbnail_url, metadata')
+      .in('id', sourceItemIds);
+  const sourceItemsData = Array.isArray((sourceItemsResult as any)?.data)
+    ? (sourceItemsResult as any).data
+    : sourceItemsResult;
+  const sourceItemsError = (sourceItemsResult as any)?.error || null;
   if (sourceItemsError) throw sourceItemsError;
   const sourceItemsMap = new Map(
     (sourceItemsData || []).map((row: any) => {
@@ -267,6 +277,18 @@ export async function listWallBlueprintFeed(input: {
   scope: WallFeedScope;
   sort: FeedSort;
   viewerUserId?: string | null;
+  readPublicFeedRows?: (args: {
+    db: DbClient;
+    blueprintIds?: string[];
+    state?: string | null;
+    limit?: number;
+    cursor?: { createdAt?: string | null; feedItemId?: string | null } | null;
+    requireBlueprint?: boolean;
+  }) => Promise<any[]>;
+  readSourceRows?: (args: {
+    db: DbClient;
+    sourceIds: string[];
+  }) => Promise<any[]>;
 }) {
   const { db, sort, viewerUserId } = input;
   const scope = normalizeWallFeedScope(input.scope);
@@ -305,7 +327,16 @@ export async function listWallBlueprintFeed(input: {
     viewerUserId
       ? db.from('blueprint_likes').select('blueprint_id').eq('user_id', viewerUserId).in('blueprint_id', blueprintIds)
       : Promise.resolve({ data: [] as { blueprint_id: string }[], error: null }),
-    db.from('user_feed_items').select('id, blueprint_id, source_item_id, created_at').in('blueprint_id', blueprintIds),
+    input.readPublicFeedRows
+      ? Promise.resolve({
+        data: await input.readPublicFeedRows({
+          db,
+          blueprintIds,
+          limit: 5000,
+        }),
+        error: null,
+      })
+      : db.from('user_feed_items').select('id, blueprint_id, source_item_id, created_at').in('blueprint_id', blueprintIds),
   ]);
 
   if (tagsRes.error || likesRes.error || feedItemsRes.error) {
@@ -323,7 +354,7 @@ export async function listWallBlueprintFeed(input: {
     blueprint_id: string;
     source_item_id: string;
     created_at: string;
-  }>);
+  }>, input.readSourceRows);
 
   let joinedChannelSlugs = new Set<string>();
   if (isJoinedScope && viewerUserId) {

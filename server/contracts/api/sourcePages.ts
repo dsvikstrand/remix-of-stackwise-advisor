@@ -62,6 +62,8 @@ export type SourcePagesRouteDeps = {
   youtubeDataApiKey: string;
   getUserSubscriptionStateForSourcePage: any;
   getBlueprintAvailabilityForVideo: any;
+  readPublicFeedRows?: any;
+  readSourceRows?: any;
   sourceVideoListBurstLimiter: express.RequestHandler;
   sourceVideoListSustainedLimiter: express.RequestHandler;
   sourceVideoUnlockBurstLimiter: express.RequestHandler;

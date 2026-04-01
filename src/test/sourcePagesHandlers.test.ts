@@ -80,6 +80,8 @@ function createDeps(overrides: Record<string, unknown> = {}) {
       lastErrorCode: null,
       lastErrorMessage: null,
     })),
+    readPublicFeedRows: undefined,
+    readSourceRows: undefined,
     sourceVideoListBurstLimiter: passThroughLimiter,
     sourceVideoListSustainedLimiter: passThroughLimiter,
     sourceVideoUnlockBurstLimiter: passThroughLimiter,
@@ -186,6 +188,93 @@ describe('source page handlers', () => {
       error_code: 'SOURCE_PAGE_SUBSCRIPTION_REQUIRED',
     });
     expect(listYouTubeSourceVideos).not.toHaveBeenCalled();
+  });
+
+  it('supports Oracle-first public feed and source readers for source page blueprints', async () => {
+    const app = createMockApp();
+    const serviceDb = createMockSupabase({
+      blueprints: [{
+        id: 'bp_1',
+        title: 'Blueprint One',
+        llm_review: 'Review 1',
+        banner_url: 'https://banner/1.jpg',
+        sections_json: null,
+        steps: null,
+        is_public: true,
+      }],
+      blueprint_tags: [{
+        blueprint_id: 'bp_1',
+        tag_id: 'tag_fit',
+      }],
+      tags: [{
+        id: 'tag_fit',
+        slug: 'fitness-training',
+      }],
+      channel_candidates: [{
+        user_feed_item_id: 'ufi_1',
+        channel_slug: 'fitness-training',
+        status: 'published',
+        created_at: '2026-03-06T10:02:00.000Z',
+      }],
+      user_feed_items: [],
+      source_items: [],
+    }) as any;
+
+    const readPublicFeedRows = vi.fn(async ({ blueprintIds }: { blueprintIds?: string[] }) => {
+      if (Array.isArray(blueprintIds) && blueprintIds.length > 0) {
+        return [{
+          id: 'ufi_1',
+          blueprint_id: 'bp_1',
+          source_item_id: 'source_1',
+          created_at: '2026-03-06T10:01:00.000Z',
+        }];
+      }
+      return [{
+        id: 'ufi_1',
+        blueprint_id: 'bp_1',
+        source_item_id: 'source_1',
+        created_at: '2026-03-06T10:01:00.000Z',
+      }];
+    });
+    const readSourceRows = vi.fn(async () => ([
+      {
+        id: 'source_1',
+        source_page_id: 'page_1',
+        source_channel_id: 'channel_1',
+        source_url: 'https://youtube.com/watch?v=video_1',
+        thumbnail_url: 'https://thumb/1.jpg',
+      },
+    ]));
+
+    registerSourcePagesRouteHandlers(app as any, createDeps({
+      getServiceSupabaseClient: () => serviceDb,
+      readPublicFeedRows,
+      readSourceRows,
+    }));
+
+    const handler = app.handlers['GET /api/source-pages/:platform/:externalId/blueprints'];
+    const req = {
+      params: { platform: 'youtube', externalId: 'channel_1' },
+      query: {},
+    } as any;
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        items: [{
+          blueprint_id: 'bp_1',
+          source_item_id: 'source_1',
+          published_channel_slug: 'fitness-training',
+          source_thumbnail_url: 'https://thumb/1.jpg',
+        }],
+      },
+    });
+    expect(readPublicFeedRows).toHaveBeenCalled();
+    expect(readSourceRows).toHaveBeenCalled();
   });
 
   it('denies unlock generation for unsubscribed users', async () => {
