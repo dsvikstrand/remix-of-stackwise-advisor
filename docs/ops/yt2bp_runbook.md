@@ -411,6 +411,11 @@ Required runtime variables:
 - `ORACLE_SUBSCRIPTION_REVISIT_NORMAL_MS` (default `1800000`; normal next-due interval after a no-new-items check)
 - `ORACLE_SUBSCRIPTION_REVISIT_QUIET_MS` (default `5400000`; quieter next-due interval after repeated no-op checks)
 - `ORACLE_SUBSCRIPTION_RETRY_ERROR_MS` (default `900000`; next-due retry interval after subscription sync failure)
+- `ORACLE_QUEUE_CONTROL_ENABLED` (default `false`; enables Oracle-local claim/backoff control for the queued worker while Supabase still stores durable queue truth)
+- `ORACLE_QUEUE_EMPTY_BACKOFF_MIN_MS` (default `15000`; minimum Oracle-local cooldown after an empty claim attempt)
+- `ORACLE_QUEUE_EMPTY_BACKOFF_MAX_MS` (default `180000`; maximum Oracle-local cooldown after repeated empty claim attempts)
+- `ORACLE_QUEUE_MEDIUM_PRIORITY_BACKOFF_MULTIPLIER` (default `2`; multiplier applied to empty-claim cooldown for medium-priority queue tiers)
+- `ORACLE_QUEUE_LOW_PRIORITY_BACKOFF_MULTIPLIER` (default `4`; multiplier applied to empty-claim cooldown for low-priority queue tiers)
 - `YOUTUBE_REFRESH_ENABLED` (default `true`; enables low-priority YouTube metadata refresh scheduler on worker)
 - `YOUTUBE_REFRESH_INTERVAL_MINUTES` (default `60`)
 - `YOUTUBE_REFRESH_QUEUE_DEPTH_GUARD` (default `100`; scheduler skips enqueueing when queue depth is high)
@@ -996,6 +1001,7 @@ Notes:
 - Oracle may still keep the `*/3m` trigger cadence as a lightweight compatibility path, but the live owner for `all_active_subscriptions` is the local Oracle scheduler tick plus the Oracle cadence window (`ORACLE_SUBSCRIPTION_PRIMARY_MIN_TRIGGER_INTERVAL_MS`)
 - each Oracle-primary run may now drain up to `ORACLE_SUBSCRIPTION_PRIMARY_BATCH_LIMIT` due subscriptions from local SQLite state instead of the older fixed `75`-row cap
 - Oracle-primary runs may also drain more than one due batch per job when backlog remains, bounded by `ORACLE_SUBSCRIPTION_PRIMARY_MAX_BATCHES_PER_RUN`
+- queued-worker claim polling may now also be suppressed by Oracle-local queue-control state after repeated empty claim attempts, especially for medium/low-priority tiers, while Supabase still stores queued/running rows, claims, leases, and retries
 - repeated identical subscription sync errors now refresh `last_polled_at` / `last_sync_error` at `30m` instead of `15m`
 
 Auto-banner worker cron example (every 5 minutes):

@@ -55,6 +55,10 @@ import { readOracleControlPlaneConfig } from './services/oracleControlPlaneConfi
 import { openOracleControlPlaneDb } from './services/oracleControlPlaneDb';
 import { createOracleSubscriptionSchedulerController } from './services/oracleSubscriptionSchedulerController';
 import {
+  recordOracleQueueClaimResult,
+  shouldAttemptOracleQueueClaim,
+} from './services/oracleQueueClaimGovernor';
+import {
   evaluateOraclePrimarySchedulerDecision,
   evaluateOracleShadowSchedulerDecision,
 } from './services/oracleSubscriptionScheduler';
@@ -524,6 +528,11 @@ const oracleControlPlane = (() => {
     process.exit(1);
   }
 })();
+const oracleQueueClaimControlEnabled = (
+  oracleControlPlaneConfig.enabled
+  && oracleControlPlaneConfig.queueControlEnabled
+  && Boolean(oracleControlPlane)
+);
 const debugEndpointsEnabledRaw = String(process.env.ENABLE_DEBUG_ENDPOINTS || 'false').trim().toLowerCase();
 const debugEndpointsEnabled = debugEndpointsEnabledRaw === 'true' || debugEndpointsEnabledRaw === '1' || debugEndpointsEnabledRaw === 'on';
 const youtubeDataApiKey = String(process.env.YOUTUBE_DATA_API_KEY || '').trim();
@@ -7837,6 +7846,31 @@ const queuedIngestionWorkerController = createQueuedIngestionWorkerController({
   maintenanceMinIntervalMs: workerMaintenanceMinIntervalMs,
   getQueueSweepPlan,
   claimQueuedIngestionJobs,
+  shouldAttemptQueueClaim: oracleQueueClaimControlEnabled && oracleControlPlane
+    ? async ({ tier, scopes, maxJobs, nowIso }) => shouldAttemptOracleQueueClaim({
+        controlDb: oracleControlPlane,
+        tier,
+        scopes,
+        maxJobs,
+        nowIso,
+      })
+    : undefined,
+  recordQueueClaimResult: oracleQueueClaimControlEnabled && oracleControlPlane
+    ? async ({ tier, scopes, maxJobs, claimedCount, nowIso }) => recordOracleQueueClaimResult({
+        controlDb: oracleControlPlane,
+        config: {
+          emptyBackoffMinMs: oracleControlPlaneConfig.queueEmptyBackoffMinMs,
+          emptyBackoffMaxMs: oracleControlPlaneConfig.queueEmptyBackoffMaxMs,
+          mediumPriorityMultiplier: oracleControlPlaneConfig.queueMediumPriorityBackoffMultiplier,
+          lowPriorityMultiplier: oracleControlPlaneConfig.queueLowPriorityBackoffMultiplier,
+        },
+        tier,
+        scopes,
+        maxJobs,
+        claimedCount,
+        nowIso,
+      })
+    : undefined,
   processClaimedIngestionJobs,
   onRecoveredJobs: ({ scope, recoveredJobs, workerId }) => {
     console.log('[ingestion_stale_recovered]', JSON.stringify({
@@ -9116,6 +9150,11 @@ if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
     primary_min_trigger_interval_ms: oracleControlPlaneConfig.primaryMinTriggerIntervalMs,
     primary_batch_limit: oracleControlPlaneConfig.primaryBatchLimit,
     primary_max_batches_per_run: oracleControlPlaneConfig.primaryMaxBatchesPerRun,
+    queue_control_enabled: oracleControlPlaneConfig.queueControlEnabled,
+    queue_empty_backoff_min_ms: oracleControlPlaneConfig.queueEmptyBackoffMinMs,
+    queue_empty_backoff_max_ms: oracleControlPlaneConfig.queueEmptyBackoffMaxMs,
+    queue_medium_priority_backoff_multiplier: oracleControlPlaneConfig.queueMediumPriorityBackoffMultiplier,
+    queue_low_priority_backoff_multiplier: oracleControlPlaneConfig.queueLowPriorityBackoffMultiplier,
     bootstrap_batch: oracleControlPlaneConfig.bootstrapBatch,
     shadow_batch_limit: oracleControlPlaneConfig.shadowBatchLimit,
     shadow_lookahead_ms: oracleControlPlaneConfig.shadowLookaheadMs,

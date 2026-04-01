@@ -40,6 +40,11 @@ describe('oracle control-plane config', () => {
       normalRevisitMs: 1_800_000,
       quietRevisitMs: 5_400_000,
       errorRetryMs: 900_000,
+      queueControlEnabled: false,
+      queueEmptyBackoffMinMs: 15_000,
+      queueEmptyBackoffMaxMs: 180_000,
+      queueMediumPriorityBackoffMultiplier: 2,
+      queueLowPriorityBackoffMultiplier: 4,
     });
   });
 
@@ -61,6 +66,11 @@ describe('oracle control-plane config', () => {
       ORACLE_SUBSCRIPTION_REVISIT_NORMAL_MS: '240000',
       ORACLE_SUBSCRIPTION_REVISIT_QUIET_MS: '720000',
       ORACLE_SUBSCRIPTION_RETRY_ERROR_MS: '180000',
+      ORACLE_QUEUE_CONTROL_ENABLED: 'true',
+      ORACLE_QUEUE_EMPTY_BACKOFF_MIN_MS: '12000',
+      ORACLE_QUEUE_EMPTY_BACKOFF_MAX_MS: '60000',
+      ORACLE_QUEUE_MEDIUM_PRIORITY_BACKOFF_MULTIPLIER: '3',
+      ORACLE_QUEUE_LOW_PRIORITY_BACKOFF_MULTIPLIER: '6',
     }, { cwd })).toEqual({
       enabled: true,
       subscriptionSchedulerMode: 'shadow',
@@ -76,6 +86,11 @@ describe('oracle control-plane config', () => {
       normalRevisitMs: 240_000,
       quietRevisitMs: 720_000,
       errorRetryMs: 180_000,
+      queueControlEnabled: true,
+      queueEmptyBackoffMinMs: 12_000,
+      queueEmptyBackoffMaxMs: 60_000,
+      queueMediumPriorityBackoffMultiplier: 3,
+      queueLowPriorityBackoffMultiplier: 6,
     });
   });
 

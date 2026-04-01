@@ -333,4 +333,57 @@ describe('queued ingestion worker controller', () => {
     expect(runUnlockSweeps).toHaveBeenCalledTimes(1);
     expect(vi.getTimerCount()).toBe(0);
   });
+
+  it('skips claim RPCs when the Oracle queue governor says the sweep is still cooling down', async () => {
+    const runUnlockSweeps = vi.fn(async () => undefined);
+    const claimQueuedIngestionJobs = vi.fn(async () => []);
+    const shouldAttemptQueueClaim = vi.fn(async () => ({ allowed: false }));
+    const controller = createQueuedIngestionWorkerController({
+      getServiceSupabaseClient: () => ({ tag: 'db' }),
+      runUnlockSweeps,
+      recoverStaleIngestionJobs: vi.fn(async () => []),
+      queuedIngestionScopes: ['all_active_subscriptions'],
+      queuedWorkerId: 'worker_1',
+      workerLeaseMs: 90_000,
+      keepAliveEnabled: false,
+      getQueueSweepPlan: () => [{ tier: 'low', scopes: ['all_active_subscriptions'], maxJobs: 1 }],
+      claimQueuedIngestionJobs,
+      shouldAttemptQueueClaim,
+      processClaimedIngestionJobs: vi.fn(async () => undefined),
+    });
+
+    controller.start(0);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(shouldAttemptQueueClaim).toHaveBeenCalledTimes(1);
+    expect(claimQueuedIngestionJobs).not.toHaveBeenCalled();
+  });
+
+  it('records Oracle queue claim results after each sweep attempt', async () => {
+    const runUnlockSweeps = vi.fn(async () => undefined);
+    const recordQueueClaimResult = vi.fn(async () => undefined);
+    const controller = createQueuedIngestionWorkerController({
+      getServiceSupabaseClient: () => ({ tag: 'db' }),
+      runUnlockSweeps,
+      recoverStaleIngestionJobs: vi.fn(async () => []),
+      queuedIngestionScopes: ['source_auto_unlock_retry'],
+      queuedWorkerId: 'worker_1',
+      workerLeaseMs: 90_000,
+      keepAliveEnabled: false,
+      getQueueSweepPlan: () => [{ tier: 'medium', scopes: ['source_auto_unlock_retry'], maxJobs: 2 }],
+      claimQueuedIngestionJobs: vi.fn(async () => []),
+      recordQueueClaimResult,
+      processClaimedIngestionJobs: vi.fn(async () => undefined),
+    });
+
+    controller.start(0);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(recordQueueClaimResult).toHaveBeenCalledWith(expect.objectContaining({
+      tier: 'medium',
+      scopes: ['source_auto_unlock_retry'],
+      maxJobs: 2,
+      claimedCount: 0,
+    }));
+  });
 });

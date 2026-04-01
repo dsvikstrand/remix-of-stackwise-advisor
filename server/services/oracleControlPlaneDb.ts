@@ -52,11 +52,24 @@ type ScopeAdmissionWindowsTable = {
   updated_at: string;
 };
 
+type QueueClaimControlStateTable = {
+  claim_key: string;
+  priority_tier: string;
+  scope_key: string;
+  next_allowed_claim_at: string | null;
+  last_attempted_at: string | null;
+  last_claimed_at: string | null;
+  consecutive_empty_claims: number;
+  last_claimed_count: number;
+  updated_at: string;
+};
+
 export type OracleControlPlaneDatabase = {
   control_meta: ControlMetaTable;
   subscription_schedule_state: SubscriptionScheduleStateTable;
   scope_control_state: ScopeControlStateTable;
   scope_admission_windows: ScopeAdmissionWindowsTable;
+  queue_claim_control_state: QueueClaimControlStateTable;
 };
 
 export type OracleControlPlaneDb = {
@@ -127,6 +140,21 @@ CREATE TABLE IF NOT EXISTS scope_admission_windows (
 
 CREATE INDEX IF NOT EXISTS idx_scope_admission_scope_until
   ON scope_admission_windows (scope, effective_until);
+
+CREATE TABLE IF NOT EXISTS queue_claim_control_state (
+  claim_key TEXT PRIMARY KEY,
+  priority_tier TEXT NOT NULL DEFAULT 'medium',
+  scope_key TEXT NOT NULL,
+  next_allowed_claim_at TEXT,
+  last_attempted_at TEXT,
+  last_claimed_at TEXT,
+  consecutive_empty_claims INTEGER NOT NULL DEFAULT 0,
+  last_claimed_count INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_queue_claim_next_allowed
+  ON queue_claim_control_state (next_allowed_claim_at);
 `;
 
 export function openOracleControlPlaneDb(input: {

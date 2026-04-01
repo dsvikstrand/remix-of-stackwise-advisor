@@ -1,7 +1,9 @@
 import type { IngestionJobRow } from './ingestionQueue';
+import type { QueuePriorityTier } from './queuePriority';
 import { isLowPriorityQueueScope } from './queuePriority';
 
 export type QueueSweepPlanEntry = {
+  tier?: QueuePriorityTier;
   scopes: readonly string[];
   maxJobs: number;
 };
@@ -32,6 +34,19 @@ export type QueuedIngestionWorkerControllerDeps<DbClient> = {
     workerId: string;
     leaseSeconds: number;
   }) => Promise<IngestionJobRow[]>;
+  shouldAttemptQueueClaim?: (input: {
+    tier?: QueuePriorityTier;
+    scopes: readonly string[];
+    maxJobs: number;
+    nowIso?: string;
+  }) => Promise<{ allowed: boolean } | null>;
+  recordQueueClaimResult?: (input: {
+    tier?: QueuePriorityTier;
+    scopes: readonly string[];
+    maxJobs: number;
+    claimedCount: number;
+    nowIso?: string;
+  }) => Promise<void>;
   processClaimedIngestionJobs: (db: DbClient, jobs: IngestionJobRow[]) => Promise<void>;
   onRecoveredJobs?: (input: { scope: string; recoveredJobs: IngestionJobRow[]; workerId: string }) => void;
   onWorkerFailure?: (input: { workerId: string; error: unknown }) => void;
@@ -182,11 +197,28 @@ export function createQueuedIngestionWorkerController<DbClient>(
         while (true) {
           let claimedAny = false;
           for (const planEntry of sweepPlan) {
+            const nowIso = new Date().toISOString();
+            const claimAttempt = await deps.shouldAttemptQueueClaim?.({
+              tier: planEntry.tier,
+              scopes: planEntry.scopes,
+              maxJobs: planEntry.maxJobs,
+              nowIso,
+            });
+            if (claimAttempt && !claimAttempt.allowed) {
+              continue;
+            }
             const claimed = await deps.claimQueuedIngestionJobs(db, {
               scopes: [...planEntry.scopes],
               maxJobs: planEntry.maxJobs,
               workerId: deps.queuedWorkerId,
               leaseSeconds: Math.max(5, Math.ceil(deps.workerLeaseMs / 1000)),
+            });
+            await deps.recordQueueClaimResult?.({
+              tier: planEntry.tier,
+              scopes: planEntry.scopes,
+              maxJobs: planEntry.maxJobs,
+              claimedCount: claimed.length,
+              nowIso,
             });
             if (claimed.length === 0) continue;
             claimedAny = true;

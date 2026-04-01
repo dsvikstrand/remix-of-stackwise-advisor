@@ -18,6 +18,11 @@ export type OracleControlPlaneConfig = {
   normalRevisitMs: number;
   quietRevisitMs: number;
   errorRetryMs: number;
+  queueControlEnabled: boolean;
+  queueEmptyBackoffMinMs: number;
+  queueEmptyBackoffMaxMs: number;
+  queueMediumPriorityBackoffMultiplier: number;
+  queueLowPriorityBackoffMultiplier: number;
 };
 
 function clampInt(raw: string | undefined, fallback: number, min: number, max: number) {
@@ -77,5 +82,30 @@ export function readOracleControlPlaneConfig(
     normalRevisitMs: clampInt(env.ORACLE_SUBSCRIPTION_REVISIT_NORMAL_MS, 30 * 60_000, 60_000, 24 * 60 * 60_000),
     quietRevisitMs: clampInt(env.ORACLE_SUBSCRIPTION_REVISIT_QUIET_MS, 90 * 60_000, 60_000, 7 * 24 * 60 * 60_000),
     errorRetryMs: clampInt(env.ORACLE_SUBSCRIPTION_RETRY_ERROR_MS, 15 * 60_000, 60_000, 24 * 60 * 60_000),
+    queueControlEnabled: parseRuntimeFlag(env.ORACLE_QUEUE_CONTROL_ENABLED, false),
+    queueEmptyBackoffMinMs: clampInt(
+      env.ORACLE_QUEUE_EMPTY_BACKOFF_MIN_MS,
+      15_000,
+      1_000,
+      24 * 60 * 60_000,
+    ),
+    queueEmptyBackoffMaxMs: clampInt(
+      env.ORACLE_QUEUE_EMPTY_BACKOFF_MAX_MS,
+      180_000,
+      1_000,
+      24 * 60 * 60_000,
+    ),
+    queueMediumPriorityBackoffMultiplier: clampInt(
+      env.ORACLE_QUEUE_MEDIUM_PRIORITY_BACKOFF_MULTIPLIER,
+      2,
+      1,
+      100,
+    ),
+    queueLowPriorityBackoffMultiplier: clampInt(
+      env.ORACLE_QUEUE_LOW_PRIORITY_BACKOFF_MULTIPLIER,
+      4,
+      1,
+      100,
+    ),
   };
 }
