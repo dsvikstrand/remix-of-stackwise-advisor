@@ -997,7 +997,7 @@ async function syncOracleJobActivityById(
   jobId: string,
 ) {
   const normalizedJobId = String(jobId || '').trim();
-  if (!oracleJobActivityMirrorEnabled || !oracleControlPlane || !normalizedJobId) {
+  if (!oracleJobActivityMirrorEnabled || !oracleControlPlane || !normalizedJobId || oracleQueueLedgerPrimaryEnabled) {
     return;
   }
 
@@ -1025,7 +1025,7 @@ async function syncOracleJobActivityByIds(
       .map((jobId) => String(jobId || '').trim())
       .filter(Boolean),
   )];
-  if (!oracleJobActivityMirrorEnabled || !oracleControlPlane || normalizedJobIds.length === 0) {
+  if (!oracleJobActivityMirrorEnabled || !oracleControlPlane || normalizedJobIds.length === 0 || oracleQueueLedgerPrimaryEnabled) {
     return;
   }
 
@@ -1049,7 +1049,7 @@ async function upsertOracleJobActivityFromKnownRow(
   job: OracleMirroredIngestionJob | IngestionJobRow | null | undefined,
   action: string,
 ) {
-  if (!oracleJobActivityMirrorEnabled || !oracleControlPlane || !job?.id) {
+  if (!oracleJobActivityMirrorEnabled || !oracleControlPlane || !job?.id || oracleQueueLedgerPrimaryEnabled) {
     return;
   }
 
@@ -1074,7 +1074,7 @@ async function upsertOracleJobActivityFromKnownRows(
   const normalizedJobs = jobs
     .filter((job): job is OracleMirroredIngestionJob | IngestionJobRow => Boolean(job?.id))
     .map((job) => ({ ...job }));
-  if (!oracleJobActivityMirrorEnabled || !oracleControlPlane || normalizedJobs.length === 0) {
+  if (!oracleJobActivityMirrorEnabled || !oracleControlPlane || normalizedJobs.length === 0 || oracleQueueLedgerPrimaryEnabled) {
     return;
   }
 
@@ -1491,7 +1491,7 @@ async function touchClaimedIngestionJobLeaseWithMirror(
       });
     }
 
-    if (oracleJobActivityMirrorEnabled && oracleControlPlane) {
+    if (oracleJobActivityMirrorEnabled && oracleControlPlane && !oracleQueueLedgerPrimaryEnabled) {
       await recordOracleJobLeaseHeartbeat({
         controlDb: oracleControlPlane,
         job: touchedJob,
@@ -1517,7 +1517,7 @@ async function touchClaimedIngestionJobLeaseWithMirror(
         last_heartbeat_at: input.heartbeatAtIso,
         updated_at: input.heartbeatAtIso,
       }, 'queued_job_lease_touch');
-      if (!oracleJobActivityMirrorEnabled || !oracleControlPlane) {
+      if (!oracleJobActivityMirrorEnabled || !oracleControlPlane || oracleQueueLedgerPrimaryEnabled) {
         return;
       }
       await recordOracleJobLeaseHeartbeat({
@@ -6625,7 +6625,7 @@ async function recoverStaleIngestionJobs(
   db: ReturnType<typeof createClient>,
   input?: { scope?: string; requestedByUserId?: string; olderThanMs?: number },
 ) {
-  if (!oracleJobActivityMirrorEnabled || !oracleControlPlane) {
+  if ((!oracleJobActivityMirrorEnabled && !oracleQueueLedgerEnabled) || !oracleControlPlane) {
     return recoverStaleIngestionJobsFromSupabase(db, input);
   }
 
@@ -6685,7 +6685,7 @@ async function getActiveManualRefreshJobFromSupabase(db: ReturnType<typeof creat
 }
 
 async function getActiveManualRefreshJob(db: ReturnType<typeof createClient>, userId: string) {
-  if (!oracleJobActivityMirrorEnabled || !oracleControlPlane) {
+  if ((!oracleJobActivityMirrorEnabled && !oracleQueueLedgerEnabled) || !oracleControlPlane) {
     return getActiveManualRefreshJobFromSupabase(db, userId);
   }
 

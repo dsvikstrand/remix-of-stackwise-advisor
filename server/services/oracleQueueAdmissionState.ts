@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { OracleControlPlaneDb } from './oracleControlPlaneDb';
-import { listOracleQueueLedgerJobs } from './oracleQueueLedgerState';
+import { countOracleQueueLedgerJobs, listOracleQueueLedgerJobs } from './oracleQueueLedgerState';
 
 type DbClient = SupabaseClient<any, 'public', any>;
 type TransactionDb = OracleControlPlaneDb['db'];
@@ -94,6 +94,10 @@ function buildCountStateRows(activeRows: QueueAdmissionActiveRow[], nowIso: stri
 }
 
 let refreshPromise: Promise<void> | null = null;
+
+async function hasOracleQueueLedgerRows(controlDb: OracleControlPlaneDb) {
+  return (await countOracleQueueLedgerJobs({ controlDb })) > 0;
+}
 
 async function setLastSnapshotAt(input: {
   controlDb: OracleControlPlaneDb;
@@ -335,7 +339,7 @@ export async function syncOracleQueueAdmissionMirrorFromSupabase(input: {
     limit: 5000,
     orderBy: 'created_desc',
   });
-  if (queueLedgerRows.length > 0) {
+  if (queueLedgerRows.length > 0 || await hasOracleQueueLedgerRows(input.controlDb)) {
     return replaceOracleQueueAdmissionMirror({
       controlDb: input.controlDb,
       activeRows: queueLedgerRows.map((row) => ({
@@ -440,6 +444,32 @@ export async function readOracleQueueAdmissionCounts(input: {
   scopes?: readonly string[] | null;
   nowIso?: string;
 }) {
+  if (await hasOracleQueueLedgerRows(input.controlDb)) {
+    const [queueDepth, userQueueDepth] = await Promise.all([
+      countOracleQueueLedgerJobs({
+        controlDb: input.controlDb,
+        scope: input.scope || undefined,
+        scopes: input.scopes || undefined,
+        statuses: ['queued', 'running'],
+      }),
+      countOracleQueueLedgerJobs({
+        controlDb: input.controlDb,
+        scope: input.scope || undefined,
+        scopes: input.scopes || undefined,
+        userId: input.userId,
+        statuses: ['queued', 'running'],
+      }),
+    ]);
+
+    return {
+      queue_depth: queueDepth,
+      user_queue_depth: userQueueDepth,
+      queue_work_items: queueDepth,
+      user_queue_work_items: userQueueDepth,
+      source: 'oracle_queue_ledger' as const,
+    };
+  }
+
   await ensureOracleQueueAdmissionMirrorFresh({
     controlDb: input.controlDb,
     db: input.db,

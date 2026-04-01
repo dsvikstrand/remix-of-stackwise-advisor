@@ -391,4 +391,78 @@ describe('oracle job activity state', () => {
       await controlDb.close();
     }
   });
+
+  it('prefers queue ledger rows over stale mirror rows for active and stale-job reads', async () => {
+    const controlDb = openOracleControlPlaneDb({
+      sqlitePath: createTempSqlitePath(),
+    });
+
+    try {
+      await upsertOracleJobActivityRow({
+        controlDb,
+        nowIso: '2026-04-01T16:00:00.000Z',
+        job: {
+          id: 'mirror_manual_old',
+          trigger: 'user_sync',
+          scope: 'manual_refresh_selection',
+          status: 'running',
+          requested_by_user_id: 'user_ledger',
+          started_at: '2026-04-01T14:00:00.000Z',
+          created_at: '2026-04-01T14:00:00.000Z',
+          updated_at: '2026-04-01T16:00:00.000Z',
+        },
+      });
+      await upsertOracleQueueLedgerRow({
+        controlDb,
+        job: buildOracleQueueLedgerJobFromInsertValues({
+          nowIso: '2026-04-01T16:05:00.000Z',
+          values: {
+            id: 'ledger_manual_new',
+            trigger: 'user_sync',
+            scope: 'manual_refresh_selection',
+            status: 'queued',
+            requested_by_user_id: 'user_ledger',
+            next_run_at: '2026-04-01T16:05:00.000Z',
+            created_at: '2026-04-01T16:05:00.000Z',
+            updated_at: '2026-04-01T16:05:00.000Z',
+          },
+        }),
+      });
+      await upsertOracleQueueLedgerRow({
+        controlDb,
+        job: buildOracleQueueLedgerJobFromInsertValues({
+          nowIso: '2026-04-01T16:06:00.000Z',
+          values: {
+            id: 'ledger_manual_stale',
+            trigger: 'user_sync',
+            scope: 'manual_refresh_selection',
+            status: 'running',
+            requested_by_user_id: 'user_ledger',
+            started_at: '2026-04-01T15:00:00.000Z',
+            next_run_at: '2026-04-01T15:00:00.000Z',
+            created_at: '2026-04-01T15:00:00.000Z',
+            updated_at: '2026-04-01T16:06:00.000Z',
+          },
+        }),
+      });
+
+      const active = await getOracleActiveJobForUserScope({
+        controlDb,
+        userId: 'user_ledger',
+        scope: 'manual_refresh_selection',
+      });
+      const staleRows = await findOracleStaleRunningJobs({
+        controlDb,
+        olderThanMs: 30 * 60_000,
+        nowIso: '2026-04-01T16:10:00.000Z',
+        scope: 'manual_refresh_selection',
+        userId: 'user_ledger',
+      });
+
+      expect(active?.id).toBe('ledger_manual_new');
+      expect(staleRows.map((row) => row.id)).toEqual(['ledger_manual_stale']);
+    } finally {
+      await controlDb.close();
+    }
+  });
 });

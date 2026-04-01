@@ -150,4 +150,48 @@ describe('oracle queue admission state', () => {
       await controlDb.close();
     }
   });
+
+  it('reads queue admission counts directly from the Oracle queue ledger when it is populated', async () => {
+    const controlDb = openOracleControlPlaneDb({
+      sqlitePath: createTempSqlitePath(),
+    });
+
+    try {
+      await upsertOracleQueueLedgerRow({
+        controlDb,
+        job: buildOracleQueueLedgerJobFromInsertValues({
+          nowIso: '2026-04-01T15:10:00.000Z',
+          values: {
+            id: 'job_ledger_manual_direct',
+            trigger: 'user_sync',
+            scope: 'manual_refresh_selection',
+            status: 'queued',
+            requested_by_user_id: 'user_direct',
+            next_run_at: '2026-04-01T15:10:00.000Z',
+            created_at: '2026-04-01T15:10:00.000Z',
+            updated_at: '2026-04-01T15:10:00.000Z',
+          },
+        }),
+      });
+
+      const counts = await readOracleQueueAdmissionCounts({
+        controlDb,
+        db: {} as any,
+        refreshStaleMs: 60_000,
+        userId: 'user_direct',
+        scope: 'manual_refresh_selection',
+        nowIso: '2026-04-01T15:10:10.000Z',
+      });
+
+      expect(counts).toEqual({
+        queue_depth: 1,
+        user_queue_depth: 1,
+        queue_work_items: 1,
+        user_queue_work_items: 1,
+        source: 'oracle_queue_ledger',
+      });
+    } finally {
+      await controlDb.close();
+    }
+  });
 });

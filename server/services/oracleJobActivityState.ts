@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { OracleControlPlaneDb } from './oracleControlPlaneDb';
 import { reconcileOracleQueueAdmissionJobState } from './oracleQueueAdmissionState';
-import { listOracleQueueLedgerJobs } from './oracleQueueLedgerState';
+import { countOracleQueueLedgerJobs, listOracleQueueLedgerJobs } from './oracleQueueLedgerState';
 
 type DbClient = SupabaseClient<any, 'public', any>;
 
@@ -199,6 +199,38 @@ function mapStateRowToSummary(row: OracleJobActivityStateRow): OracleJobActivity
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
+}
+
+function mapJobToSummary(job: OracleMirroredIngestionJob): OracleJobActivitySummary {
+  const createdAt = normalizeIsoOrNull(job.created_at) || new Date().toISOString();
+  const updatedAt = normalizeIsoOrNull(job.updated_at) || createdAt;
+  return {
+    id: String(job.id || '').trim(),
+    trigger: normalizeMaybeString(job.trigger),
+    scope: String(job.scope || '').trim(),
+    status: String(job.status || '').trim() || 'queued',
+    requested_by_user_id: normalizeMaybeString(job.requested_by_user_id),
+    subscription_id: normalizeMaybeString(job.subscription_id),
+    started_at: normalizeIsoOrNull(job.started_at),
+    finished_at: normalizeIsoOrNull(job.finished_at),
+    processed_count: normalizeInt(job.processed_count),
+    inserted_count: normalizeInt(job.inserted_count),
+    skipped_count: normalizeInt(job.skipped_count),
+    error_code: normalizeMaybeString(job.error_code),
+    error_message: normalizeMaybeString(job.error_message),
+    attempts: normalizeInt(job.attempts),
+    max_attempts: normalizeInt(job.max_attempts),
+    next_run_at: normalizeIsoOrNull(job.next_run_at),
+    lease_expires_at: normalizeIsoOrNull(job.lease_expires_at),
+    trace_id: normalizeMaybeString(job.trace_id),
+    payload: job.payload && typeof job.payload === 'object' ? job.payload : null,
+    created_at: createdAt,
+    updated_at: updatedAt,
+  };
+}
+
+async function hasOracleQueueLedgerRows(controlDb: OracleControlPlaneDb) {
+  return (await countOracleQueueLedgerJobs({ controlDb })) > 0;
 }
 
 async function setJobActivityMeta(input: {
@@ -528,6 +560,27 @@ export async function findOracleStaleRunningJobs(input: {
   const staleBeforeIso = new Date(Date.parse(nowIso) - olderThanMs).toISOString();
   const limit = Math.max(1, Math.floor(Number(input.limit) || 500));
 
+  const queueLedgerRows = await listOracleQueueLedgerJobs({
+    controlDb: input.controlDb,
+    scope: String(input.scope || '').trim() || undefined,
+    userId: String(input.userId || '').trim() || undefined,
+    statuses: ['running'],
+    startedBeforeIso: staleBeforeIso,
+    limit,
+    orderBy: 'started_asc',
+  });
+  if (queueLedgerRows.length > 0) {
+    return queueLedgerRows.map((row) => ({
+      id: row.id,
+      scope: row.scope || null,
+      requested_by_user_id: row.requested_by_user_id ?? null,
+      started_at: row.started_at,
+    }));
+  }
+  if (await hasOracleQueueLedgerRows(input.controlDb)) {
+    return [];
+  }
+
   let query = input.controlDb.db
     .selectFrom('job_activity_state')
     .select(['job_id', 'scope_key', 'user_key', 'started_at'])
@@ -561,6 +614,21 @@ export async function getOracleActiveJobForUserScope(input: {
   userId: string;
   scope: string;
 }) {
+  const queueLedgerRows = await listOracleQueueLedgerJobs({
+    controlDb: input.controlDb,
+    userId: String(input.userId || '').trim() || undefined,
+    scope: String(input.scope || '').trim() || undefined,
+    statuses: ['queued', 'running'],
+    limit: 1,
+    orderBy: 'created_desc',
+  });
+  if (queueLedgerRows[0]) {
+    return mapJobToSummary(queueLedgerRows[0]);
+  }
+  if (await hasOracleQueueLedgerRows(input.controlDb)) {
+    return null;
+  }
+
   const userKey = normalizeUserKey(input.userId);
   const scopeKey = normalizeScopeKey(input.scope);
   const row = await input.controlDb.db
@@ -580,8 +648,22 @@ export async function listOracleActiveJobsForScope(input: {
   scope: string;
   limit?: number;
 }) {
-  const scopeKey = normalizeScopeKey(input.scope);
   const limit = Math.max(1, Math.floor(Number(input.limit) || 200));
+  const queueLedgerRows = await listOracleQueueLedgerJobs({
+    controlDb: input.controlDb,
+    scope: String(input.scope || '').trim() || undefined,
+    statuses: ['queued', 'running'],
+    limit,
+    orderBy: 'created_desc',
+  });
+  if (queueLedgerRows.length > 0) {
+    return queueLedgerRows.map(mapJobToSummary);
+  }
+  if (await hasOracleQueueLedgerRows(input.controlDb)) {
+    return [];
+  }
+
+  const scopeKey = normalizeScopeKey(input.scope);
   const rows = await input.controlDb.db
     .selectFrom('job_activity_state')
     .selectAll()
@@ -599,9 +681,23 @@ export async function listOracleLatestJobsForUserScope(input: {
   scope: string;
   limit?: number;
 }) {
+  const limit = Math.max(1, Math.floor(Number(input.limit) || 2));
+  const queueLedgerRows = await listOracleQueueLedgerJobs({
+    controlDb: input.controlDb,
+    userId: String(input.userId || '').trim() || undefined,
+    scope: String(input.scope || '').trim() || undefined,
+    limit,
+    orderBy: 'created_desc',
+  });
+  if (queueLedgerRows.length > 0) {
+    return queueLedgerRows.map(mapJobToSummary);
+  }
+  if (await hasOracleQueueLedgerRows(input.controlDb)) {
+    return [];
+  }
+
   const userKey = normalizeUserKey(input.userId);
   const scopeKey = normalizeScopeKey(input.scope);
-  const limit = Math.max(1, Math.floor(Number(input.limit) || 2));
   const rows = await input.controlDb.db
     .selectFrom('job_activity_state')
     .selectAll()
@@ -619,9 +715,24 @@ export async function listOracleActiveJobsForUser(input: {
   scopes?: readonly string[];
   limit?: number;
 }) {
-  const userKey = normalizeUserKey(input.userId);
   const limit = Math.max(1, Math.floor(Number(input.limit) || 20));
   const scopes = [...new Set((input.scopes || []).map((scope) => normalizeScopeKey(scope)).filter((scope) => scope !== '*'))];
+  const queueLedgerRows = await listOracleQueueLedgerJobs({
+    controlDb: input.controlDb,
+    scopes,
+    userId: String(input.userId || '').trim() || undefined,
+    statuses: ['queued', 'running'],
+    limit,
+    orderBy: 'created_desc',
+  });
+  if (queueLedgerRows.length > 0) {
+    return queueLedgerRows.map(mapJobToSummary);
+  }
+  if (await hasOracleQueueLedgerRows(input.controlDb)) {
+    return [];
+  }
+
+  const userKey = normalizeUserKey(input.userId);
 
   let query = input.controlDb.db
     .selectFrom('job_activity_state')
@@ -651,6 +762,20 @@ export async function listOracleActiveJobsForScopes(input: {
   )];
   const limit = Math.max(1, Math.floor(Number(input.limit) || 1000));
 
+  const queueLedgerRows = await listOracleQueueLedgerJobs({
+    controlDb: input.controlDb,
+    scopes,
+    statuses: ['queued', 'running'],
+    limit,
+    orderBy: 'created_desc',
+  });
+  if (queueLedgerRows.length > 0) {
+    return queueLedgerRows.map(mapJobToSummary);
+  }
+  if (await hasOracleQueueLedgerRows(input.controlDb)) {
+    return [];
+  }
+
   let query = input.controlDb.db
     .selectFrom('job_activity_state')
     .selectAll()
@@ -677,6 +802,18 @@ export async function listOracleJobsByIds(input: {
   )];
   if (jobIds.length === 0) return [];
 
+  const queueLedgerRows = await listOracleQueueLedgerJobs({
+    controlDb: input.controlDb,
+    jobIds,
+    limit: jobIds.length,
+  });
+  if (queueLedgerRows.length > 0) {
+    return queueLedgerRows.map(mapJobToSummary);
+  }
+  if (await hasOracleQueueLedgerRows(input.controlDb)) {
+    return [];
+  }
+
   const rows = await input.controlDb.db
     .selectFrom('job_activity_state')
     .selectAll()
@@ -693,6 +830,20 @@ export async function listOracleRunningJobsByScope(input: {
 }) {
   const scopeKey = normalizeScopeKey(input.scope);
   const limit = Math.max(1, Math.floor(Number(input.limit) || 500));
+  const queueLedgerRows = await listOracleQueueLedgerJobs({
+    controlDb: input.controlDb,
+    scope: scopeKey === '*' ? undefined : scopeKey,
+    statuses: ['running'],
+    startedBeforeIso: input.staleBeforeIso,
+    limit,
+    orderBy: 'started_asc',
+  });
+  if (queueLedgerRows.length > 0) {
+    return queueLedgerRows.map(mapJobToSummary);
+  }
+  if (await hasOracleQueueLedgerRows(input.controlDb)) {
+    return [];
+  }
 
   let query = input.controlDb.db
     .selectFrom('job_activity_state')
@@ -716,6 +867,15 @@ export async function listOracleRunningJobsByScope(input: {
 export async function getOracleLatestIngestionJob(input: {
   controlDb: OracleControlPlaneDb;
 }) {
+  const queueLedgerRows = await listOracleQueueLedgerJobs({
+    controlDb: input.controlDb,
+    limit: 1,
+    orderBy: 'created_desc',
+  });
+  if (queueLedgerRows[0]) {
+    return mapJobToSummary(queueLedgerRows[0]);
+  }
+
   const row = await input.controlDb.db
     .selectFrom('job_activity_state')
     .selectAll()
