@@ -59,6 +59,11 @@ import {
   shouldAttemptOracleQueueClaim,
 } from './services/oracleQueueClaimGovernor';
 import {
+  getOracleQueueSweepNextDelayMs,
+  recordOracleQueueSweepResult,
+  selectDueOracleQueueSweeps,
+} from './services/oracleQueueSweepScheduler';
+import {
   evaluateOraclePrimarySchedulerDecision,
   evaluateOracleShadowSchedulerDecision,
 } from './services/oracleSubscriptionScheduler';
@@ -531,6 +536,12 @@ const oracleControlPlane = (() => {
 const oracleQueueClaimControlEnabled = (
   oracleControlPlaneConfig.enabled
   && oracleControlPlaneConfig.queueControlEnabled
+  && !oracleControlPlaneConfig.queueSweepControlEnabled
+  && Boolean(oracleControlPlane)
+);
+const oracleQueueSweepControlEnabled = (
+  oracleControlPlaneConfig.enabled
+  && oracleControlPlaneConfig.queueSweepControlEnabled
   && Boolean(oracleControlPlane)
 );
 const debugEndpointsEnabledRaw = String(process.env.ENABLE_DEBUG_ENDPOINTS || 'false').trim().toLowerCase();
@@ -780,6 +791,12 @@ const QUEUED_INGESTION_SCOPES = [
 type QueuedIngestionScope = (typeof QUEUED_INGESTION_SCOPES)[number];
 
 function getQueueSweepConfigByTier(tier: QueuePriorityTier) {
+  if (oracleQueueSweepControlEnabled) {
+    if (tier === 'high') return oracleControlPlaneConfig.queueSweepHighBatch;
+    if (tier === 'medium') return oracleControlPlaneConfig.queueSweepMediumBatch;
+    return oracleControlPlaneConfig.queueSweepLowBatch;
+  }
+
   if (tier === 'high') return queueSweepHighBatch;
   if (tier === 'medium') return queueSweepMediumBatch;
   return queueSweepLowBatch;
@@ -7845,6 +7862,14 @@ const queuedIngestionWorkerController = createQueuedIngestionWorkerController({
   keepAliveIdleMaxDelayMs: workerIdleBackoffMaxMs,
   maintenanceMinIntervalMs: workerMaintenanceMinIntervalMs,
   getQueueSweepPlan,
+  selectQueueSweepPlan: oracleQueueSweepControlEnabled && oracleControlPlane
+    ? async ({ basePlan, nowIso }) => selectDueOracleQueueSweeps({
+        controlDb: oracleControlPlane,
+        config: oracleControlPlaneConfig,
+        basePlan,
+        nowIso,
+      })
+    : undefined,
   claimQueuedIngestionJobs,
   shouldAttemptQueueClaim: oracleQueueClaimControlEnabled && oracleControlPlane
     ? async ({ tier, scopes, maxJobs, nowIso }) => shouldAttemptOracleQueueClaim({
@@ -7868,6 +7893,26 @@ const queuedIngestionWorkerController = createQueuedIngestionWorkerController({
         scopes,
         maxJobs,
         claimedCount,
+        nowIso,
+      })
+    : undefined,
+  recordQueueSweepResult: oracleQueueSweepControlEnabled && oracleControlPlane
+    ? async ({ tier, scopes, maxJobs, claimedCount, nowIso }) => recordOracleQueueSweepResult({
+        controlDb: oracleControlPlane,
+        config: oracleControlPlaneConfig,
+        tier,
+        scopes,
+        maxJobs,
+        claimedCount,
+        nowIso,
+      })
+    : undefined,
+  getKeepAliveDelayOverrideMs: oracleQueueSweepControlEnabled && oracleControlPlane
+    ? async ({ baseIdleDelayMs, nowIso }) => getOracleQueueSweepNextDelayMs({
+        controlDb: oracleControlPlane,
+        basePlan: getQueueSweepPlan(),
+        fallbackMs: baseIdleDelayMs,
+        minDelayMs: workerKeepAliveDelayMs,
         nowIso,
       })
     : undefined,
@@ -9151,6 +9196,14 @@ if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
     primary_batch_limit: oracleControlPlaneConfig.primaryBatchLimit,
     primary_max_batches_per_run: oracleControlPlaneConfig.primaryMaxBatchesPerRun,
     queue_control_enabled: oracleControlPlaneConfig.queueControlEnabled,
+    queue_sweep_control_enabled: oracleControlPlaneConfig.queueSweepControlEnabled,
+    queue_sweep_high_interval_ms: oracleControlPlaneConfig.queueSweepHighIntervalMs,
+    queue_sweep_medium_interval_ms: oracleControlPlaneConfig.queueSweepMediumIntervalMs,
+    queue_sweep_low_interval_ms: oracleControlPlaneConfig.queueSweepLowIntervalMs,
+    queue_sweep_high_batch: oracleControlPlaneConfig.queueSweepHighBatch,
+    queue_sweep_medium_batch: oracleControlPlaneConfig.queueSweepMediumBatch,
+    queue_sweep_low_batch: oracleControlPlaneConfig.queueSweepLowBatch,
+    queue_sweep_max_sweeps_per_run: oracleControlPlaneConfig.queueSweepMaxSweepsPerRun,
     queue_empty_backoff_min_ms: oracleControlPlaneConfig.queueEmptyBackoffMinMs,
     queue_empty_backoff_max_ms: oracleControlPlaneConfig.queueEmptyBackoffMaxMs,
     queue_medium_priority_backoff_multiplier: oracleControlPlaneConfig.queueMediumPriorityBackoffMultiplier,

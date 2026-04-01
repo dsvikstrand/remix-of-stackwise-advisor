@@ -412,6 +412,14 @@ Required runtime variables:
 - `ORACLE_SUBSCRIPTION_REVISIT_QUIET_MS` (default `5400000`; quieter next-due interval after repeated no-op checks)
 - `ORACLE_SUBSCRIPTION_RETRY_ERROR_MS` (default `900000`; next-due retry interval after subscription sync failure)
 - `ORACLE_QUEUE_CONTROL_ENABLED` (default `false`; enables Oracle-local claim/backoff control for the queued worker while Supabase still stores durable queue truth)
+- `ORACLE_QUEUE_SWEEP_CONTROL_ENABLED` (default `false`; enables Oracle-local sweep cadence/tier selection for the queued worker while Supabase still performs durable claim RPCs)
+- `ORACLE_QUEUE_SWEEP_HIGH_INTERVAL_MS` (default `5000`; Oracle-local due interval for high-priority queue sweeps)
+- `ORACLE_QUEUE_SWEEP_MEDIUM_INTERVAL_MS` (default `15000`; Oracle-local due interval for medium-priority queue sweeps)
+- `ORACLE_QUEUE_SWEEP_LOW_INTERVAL_MS` (default `60000`; Oracle-local due interval for low-priority queue sweeps)
+- `ORACLE_QUEUE_SWEEP_HIGH_BATCH` (default `8`; Oracle-local high-priority queued-worker batch size)
+- `ORACLE_QUEUE_SWEEP_MEDIUM_BATCH` (default `3`; Oracle-local medium-priority queued-worker batch size)
+- `ORACLE_QUEUE_SWEEP_LOW_BATCH` (default `1`; Oracle-local low-priority queued-worker batch size)
+- `ORACLE_QUEUE_SWEEP_MAX_SWEEPS_PER_RUN` (default `3`; Oracle-local cap on due tier sweeps the worker may run before yielding)
 - `ORACLE_QUEUE_EMPTY_BACKOFF_MIN_MS` (default `15000`; minimum Oracle-local cooldown after an empty claim attempt)
 - `ORACLE_QUEUE_EMPTY_BACKOFF_MAX_MS` (default `180000`; maximum Oracle-local cooldown after repeated empty claim attempts)
 - `ORACLE_QUEUE_MEDIUM_PRIORITY_BACKOFF_MULTIPLIER` (default `2`; multiplier applied to empty-claim cooldown for medium-priority queue tiers)
@@ -1001,7 +1009,8 @@ Notes:
 - Oracle may still keep the `*/3m` trigger cadence as a lightweight compatibility path, but the live owner for `all_active_subscriptions` is the local Oracle scheduler tick plus the Oracle cadence window (`ORACLE_SUBSCRIPTION_PRIMARY_MIN_TRIGGER_INTERVAL_MS`)
 - each Oracle-primary run may now drain up to `ORACLE_SUBSCRIPTION_PRIMARY_BATCH_LIMIT` due subscriptions from local SQLite state instead of the older fixed `75`-row cap
 - Oracle-primary runs may also drain more than one due batch per job when backlog remains, bounded by `ORACLE_SUBSCRIPTION_PRIMARY_MAX_BATCHES_PER_RUN`
-- queued-worker claim polling may now also be suppressed by Oracle-local queue-control state after repeated empty claim attempts, especially for medium/low-priority tiers, while Supabase still stores queued/running rows, claims, leases, and retries
+- queued-worker sweep cadence may now also be owned by Oracle-local queue-sweep state through `ORACLE_QUEUE_SWEEP_*`: Oracle decides which priority tiers are due, what batch size each tier uses, and when the worker should wake for the next due sweep, while Supabase still stores queued/running rows, claims, leases, and retries
+- repeated empty queued-worker claim attempts may still be backstopped by Oracle-local queue-control cooldown state through `ORACLE_QUEUE_*`, especially for medium/low-priority tiers
 - repeated identical subscription sync errors now refresh `last_polled_at` / `last_sync_error` at `30m` instead of `15m`
 
 Auto-banner worker cron example (every 5 minutes):

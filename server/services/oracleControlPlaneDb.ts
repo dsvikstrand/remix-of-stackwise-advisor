@@ -64,12 +64,27 @@ type QueueClaimControlStateTable = {
   updated_at: string;
 };
 
+type QueueSweepControlStateTable = {
+  sweep_key: string;
+  priority_tier: string;
+  scope_key: string;
+  next_due_at: string | null;
+  last_attempted_at: string | null;
+  last_claimed_at: string | null;
+  consecutive_empty_sweeps: number;
+  last_claimed_count: number;
+  last_batch_size: number;
+  inflight_until: string | null;
+  updated_at: string;
+};
+
 export type OracleControlPlaneDatabase = {
   control_meta: ControlMetaTable;
   subscription_schedule_state: SubscriptionScheduleStateTable;
   scope_control_state: ScopeControlStateTable;
   scope_admission_windows: ScopeAdmissionWindowsTable;
   queue_claim_control_state: QueueClaimControlStateTable;
+  queue_sweep_control_state: QueueSweepControlStateTable;
 };
 
 export type OracleControlPlaneDb = {
@@ -155,6 +170,26 @@ CREATE TABLE IF NOT EXISTS queue_claim_control_state (
 
 CREATE INDEX IF NOT EXISTS idx_queue_claim_next_allowed
   ON queue_claim_control_state (next_allowed_claim_at);
+
+CREATE TABLE IF NOT EXISTS queue_sweep_control_state (
+  sweep_key TEXT PRIMARY KEY,
+  priority_tier TEXT NOT NULL DEFAULT 'medium',
+  scope_key TEXT NOT NULL,
+  next_due_at TEXT,
+  last_attempted_at TEXT,
+  last_claimed_at TEXT,
+  consecutive_empty_sweeps INTEGER NOT NULL DEFAULT 0,
+  last_claimed_count INTEGER NOT NULL DEFAULT 0,
+  last_batch_size INTEGER NOT NULL DEFAULT 0,
+  inflight_until TEXT,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_queue_sweep_next_due
+  ON queue_sweep_control_state (next_due_at);
+
+CREATE INDEX IF NOT EXISTS idx_queue_sweep_inflight
+  ON queue_sweep_control_state (inflight_until);
 `;
 
 export function openOracleControlPlaneDb(input: {

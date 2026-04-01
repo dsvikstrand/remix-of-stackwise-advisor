@@ -386,4 +386,65 @@ describe('queued ingestion worker controller', () => {
       claimedCount: 0,
     }));
   });
+
+  it('uses the Oracle-selected sweep plan when provided', async () => {
+    const runUnlockSweeps = vi.fn(async () => undefined);
+    const claimQueuedIngestionJobs = vi.fn(async () => []);
+    const controller = createQueuedIngestionWorkerController({
+      getServiceSupabaseClient: () => ({ tag: 'db' }),
+      runUnlockSweeps,
+      recoverStaleIngestionJobs: vi.fn(async () => []),
+      queuedIngestionScopes: ['manual_refresh_selection', 'all_active_subscriptions'],
+      queuedWorkerId: 'worker_1',
+      workerLeaseMs: 90_000,
+      keepAliveEnabled: false,
+      getQueueSweepPlan: () => [
+        { tier: 'high', scopes: ['manual_refresh_selection'], maxJobs: 8 },
+        { tier: 'low', scopes: ['all_active_subscriptions'], maxJobs: 1 },
+      ],
+      selectQueueSweepPlan: vi.fn(async ({ basePlan }) => basePlan.filter((entry) => entry.tier === 'high')),
+      claimQueuedIngestionJobs,
+      processClaimedIngestionJobs: vi.fn(async () => undefined),
+    });
+
+    controller.start(0);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(claimQueuedIngestionJobs).toHaveBeenCalledTimes(1);
+    expect(claimQueuedIngestionJobs).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      scopes: ['manual_refresh_selection'],
+      maxJobs: 8,
+    }));
+  });
+
+  it('uses the Oracle keepalive override when the worker goes idle', async () => {
+    const runUnlockSweeps = vi.fn(async () => undefined);
+    const controller = createQueuedIngestionWorkerController({
+      getServiceSupabaseClient: () => ({ tag: 'db' }),
+      runUnlockSweeps,
+      recoverStaleIngestionJobs: vi.fn(async () => []),
+      queuedIngestionScopes: ['all_active_subscriptions'],
+      queuedWorkerId: 'worker_1',
+      workerLeaseMs: 90_000,
+      keepAliveEnabled: true,
+      keepAliveDelayMs: 1_500,
+      keepAliveIdleBaseDelayMs: 10_000,
+      keepAliveIdleMaxDelayMs: 60_000,
+      keepAliveIdleJitterRatio: 0,
+      getQueueSweepPlan: () => [{ tier: 'low', scopes: ['all_active_subscriptions'], maxJobs: 1 }],
+      getKeepAliveDelayOverrideMs: vi.fn(async () => 2_000),
+      claimQueuedIngestionJobs: vi.fn(async () => []),
+      processClaimedIngestionJobs: vi.fn(async () => undefined),
+    });
+
+    controller.start(0);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(2);
+  });
 });

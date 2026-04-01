@@ -28,6 +28,10 @@ export type QueuedIngestionWorkerControllerDeps<DbClient> = {
   keepAliveIdleJitterRatio?: number;
   maintenanceMinIntervalMs?: number;
   getQueueSweepPlan: () => readonly QueueSweepPlanEntry[];
+  selectQueueSweepPlan?: (input: {
+    basePlan: readonly QueueSweepPlanEntry[];
+    nowIso?: string;
+  }) => Promise<readonly QueueSweepPlanEntry[] | null>;
   claimQueuedIngestionJobs: (db: DbClient, input: {
     scopes: string[];
     maxJobs: number;
@@ -47,6 +51,18 @@ export type QueuedIngestionWorkerControllerDeps<DbClient> = {
     claimedCount: number;
     nowIso?: string;
   }) => Promise<void>;
+  recordQueueSweepResult?: (input: {
+    tier?: QueuePriorityTier;
+    scopes: readonly string[];
+    maxJobs: number;
+    claimedCount: number;
+    nowIso?: string;
+  }) => Promise<void>;
+  getKeepAliveDelayOverrideMs?: (input: {
+    baseIdleDelayMs: number;
+    lowPriorityOnly: boolean;
+    nowIso?: string;
+  }) => Promise<number | null>;
   processClaimedIngestionJobs: (db: DbClient, jobs: IngestionJobRow[]) => Promise<void>;
   onRecoveredJobs?: (input: { scope: string; recoveredJobs: IngestionJobRow[]; workerId: string }) => void;
   onWorkerFailure?: (input: { workerId: string; error: unknown }) => void;
@@ -188,7 +204,11 @@ export function createQueuedIngestionWorkerController<DbClient>(
           }
         }
 
-        const sweepPlan = deps.getQueueSweepPlan();
+        const baseSweepPlan = deps.getQueueSweepPlan();
+        const sweepPlan = await deps.selectQueueSweepPlan?.({
+          basePlan: baseSweepPlan,
+          nowIso: new Date().toISOString(),
+        }) ?? baseSweepPlan;
         lowPriorityOnlySweepPlan = sweepPlan.length > 0
           && sweepPlan.every((entry) => (
             entry.scopes.length > 0
@@ -205,6 +225,13 @@ export function createQueuedIngestionWorkerController<DbClient>(
               nowIso,
             });
             if (claimAttempt && !claimAttempt.allowed) {
+              await deps.recordQueueSweepResult?.({
+                tier: planEntry.tier,
+                scopes: planEntry.scopes,
+                maxJobs: planEntry.maxJobs,
+                claimedCount: 0,
+                nowIso,
+              });
               continue;
             }
             const claimed = await deps.claimQueuedIngestionJobs(db, {
@@ -214,6 +241,13 @@ export function createQueuedIngestionWorkerController<DbClient>(
               leaseSeconds: Math.max(5, Math.ceil(deps.workerLeaseMs / 1000)),
             });
             await deps.recordQueueClaimResult?.({
+              tier: planEntry.tier,
+              scopes: planEntry.scopes,
+              maxJobs: planEntry.maxJobs,
+              claimedCount: claimed.length,
+              nowIso,
+            });
+            await deps.recordQueueSweepResult?.({
               tier: planEntry.tier,
               scopes: planEntry.scopes,
               maxJobs: planEntry.maxJobs,
@@ -243,6 +277,14 @@ export function createQueuedIngestionWorkerController<DbClient>(
           idlePollStreak = 0;
         } else {
           nextDelayMs = computeIdleDelayMs({ lowPriorityOnly: lowPriorityOnlySweepPlan });
+          const nextDelayOverrideMs = await deps.getKeepAliveDelayOverrideMs?.({
+            baseIdleDelayMs: nextDelayMs,
+            lowPriorityOnly: lowPriorityOnlySweepPlan,
+            nowIso: new Date().toISOString(),
+          });
+          if (Number.isFinite(nextDelayOverrideMs) && nextDelayOverrideMs != null) {
+            nextDelayMs = Math.max(0, Math.floor(nextDelayOverrideMs));
+          }
           idlePollStreak += 1;
         }
         schedule(nextDelayMs);
