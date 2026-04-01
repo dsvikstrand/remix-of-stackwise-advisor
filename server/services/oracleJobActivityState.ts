@@ -476,6 +476,24 @@ export async function getOracleActiveJobForUserScope(input: {
   return row ? mapStateRowToSummary(row) : null;
 }
 
+export async function listOracleActiveJobsForScope(input: {
+  controlDb: OracleControlPlaneDb;
+  scope: string;
+  limit?: number;
+}) {
+  const scopeKey = normalizeScopeKey(input.scope);
+  const limit = Math.max(1, Math.floor(Number(input.limit) || 200));
+  const rows = await input.controlDb.db
+    .selectFrom('job_activity_state')
+    .selectAll()
+    .where('scope_key', '=', scopeKey)
+    .where('status', 'in', ['queued', 'running'])
+    .orderBy('created_at', 'desc')
+    .limit(limit)
+    .execute();
+  return rows.map(mapStateRowToSummary);
+}
+
 export async function listOracleLatestJobsForUserScope(input: {
   controlDb: OracleControlPlaneDb;
   userId: string;
@@ -520,4 +538,89 @@ export async function listOracleActiveJobsForUser(input: {
 
   const rows = await query.execute();
   return rows.map(mapStateRowToSummary);
+}
+
+export async function listOracleActiveJobsForScopes(input: {
+  controlDb: OracleControlPlaneDb;
+  scopes?: readonly string[];
+  limit?: number;
+}) {
+  const scopes = [...new Set(
+    (input.scopes || [])
+      .map((scope) => normalizeScopeKey(scope))
+      .filter((scope) => scope !== '*'),
+  )];
+  const limit = Math.max(1, Math.floor(Number(input.limit) || 1000));
+
+  let query = input.controlDb.db
+    .selectFrom('job_activity_state')
+    .selectAll()
+    .where('status', 'in', ['queued', 'running'])
+    .orderBy('created_at', 'desc')
+    .limit(limit);
+
+  if (scopes.length > 0) {
+    query = query.where('scope_key', 'in', scopes);
+  }
+
+  const rows = await query.execute();
+  return rows.map(mapStateRowToSummary);
+}
+
+export async function listOracleJobsByIds(input: {
+  controlDb: OracleControlPlaneDb;
+  jobIds: readonly string[];
+}) {
+  const jobIds = [...new Set(
+    (Array.isArray(input.jobIds) ? input.jobIds : [])
+      .map((jobId) => String(jobId || '').trim())
+      .filter(Boolean),
+  )];
+  if (jobIds.length === 0) return [];
+
+  const rows = await input.controlDb.db
+    .selectFrom('job_activity_state')
+    .selectAll()
+    .where('job_id', 'in', jobIds)
+    .execute();
+  return rows.map(mapStateRowToSummary);
+}
+
+export async function listOracleRunningJobsByScope(input: {
+  controlDb: OracleControlPlaneDb;
+  scope: string;
+  staleBeforeIso?: string | null;
+  limit?: number;
+}) {
+  const scopeKey = normalizeScopeKey(input.scope);
+  const limit = Math.max(1, Math.floor(Number(input.limit) || 500));
+
+  let query = input.controlDb.db
+    .selectFrom('job_activity_state')
+    .selectAll()
+    .where('scope_key', '=', scopeKey)
+    .where('status', '=', 'running')
+    .orderBy('started_at', 'asc')
+    .limit(limit);
+
+  const staleBeforeIso = normalizeIsoOrNull(input.staleBeforeIso);
+  if (staleBeforeIso) {
+    query = query
+      .where('started_at', 'is not', null)
+      .where('started_at', '<', staleBeforeIso);
+  }
+
+  const rows = await query.execute();
+  return rows.map(mapStateRowToSummary);
+}
+
+export async function getOracleLatestIngestionJob(input: {
+  controlDb: OracleControlPlaneDb;
+}) {
+  const row = await input.controlDb.db
+    .selectFrom('job_activity_state')
+    .selectAll()
+    .orderBy('created_at', 'desc')
+    .executeTakeFirst();
+  return row ? mapStateRowToSummary(row) : null;
 }

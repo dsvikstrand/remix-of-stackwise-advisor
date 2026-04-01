@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   handleDebugResetTranscriptProxy,
+  handleIngestionJobsLatest,
   handleIngestionJobsTrigger,
   handleQueueHealth,
 } from '../../server/handlers/opsHandlers';
@@ -476,6 +477,58 @@ describe('queue health handler', () => {
     });
   });
 
+  it('prefers the Oracle queue health snapshot when provided', async () => {
+    const req = {} as never;
+    const res = createMockResponse();
+    const getQueueHealthSnapshot = vi.fn(async () => ({
+      worker_running: true,
+      queue_depth: 4,
+      running_depth: 2,
+      queue_work_items: 9,
+      running_work_items: 5,
+      oldest_queued_created_at: '2026-04-01T09:00:00.000Z',
+      oldest_queued_age_ms: 1000,
+      oldest_running_started_at: '2026-04-01T09:05:00.000Z',
+      oldest_running_age_ms: 500,
+      stale_leases: 1,
+      by_scope: {
+        all_active_subscriptions: {
+          queued: 1,
+          running: 1,
+          queued_work_items: 1,
+          running_work_items: 1,
+          oldest_queued_age_ms: 1000,
+          oldest_running_age_ms: 500,
+          priority: 'low',
+        },
+      },
+    }));
+
+    await handleQueueHealth(req, res as never, createBaseDeps({
+      getServiceSupabaseClient: () => ({}) as any,
+      getQueueHealthSnapshot,
+      getProviderCircuitSnapshot: async () => ({ state: 'closed' }),
+      countQueueDepth: vi.fn(async () => 999),
+      countQueueWorkItems: vi.fn(async () => 999),
+      queuedIngestionScopes: ['all_active_subscriptions'],
+      isQueuedIngestionScope: () => true,
+    }));
+
+    expect(getQueueHealthSnapshot).toHaveBeenCalledTimes(1);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        worker_running: true,
+        queue_depth: 4,
+        running_depth: 2,
+        queue_work_items: 9,
+        running_work_items: 5,
+        stale_leases: 1,
+      },
+    });
+  });
+
   it('reports worker_running from fresh running jobs even when the local web process is not a worker', async () => {
     const req = {} as never;
     const res = createMockResponse();
@@ -542,6 +595,49 @@ describe('queue health handler', () => {
         worker_running: false,
         local_worker_running: true,
         runtime_mode: 'web_only',
+      },
+    });
+  });
+});
+
+describe('latest ingestion job handler', () => {
+  it('prefers the Oracle latest-job reader when provided', async () => {
+    const req = {} as never;
+    const res = createMockResponse();
+    const getLatestIngestionJob = vi.fn(async () => ({
+      id: 'job_latest_1',
+      trigger: 'user_sync',
+      scope: 'manual_refresh_selection',
+      status: 'queued',
+      started_at: null,
+      finished_at: null,
+      processed_count: 0,
+      inserted_count: 0,
+      skipped_count: 0,
+      error_code: null,
+      error_message: null,
+      attempts: 0,
+      max_attempts: 3,
+      next_run_at: '2026-04-01T10:00:00.000Z',
+      lease_expires_at: null,
+      trace_id: 'trace_latest',
+      created_at: '2026-04-01T09:59:00.000Z',
+      updated_at: '2026-04-01T09:59:00.000Z',
+    }));
+
+    await handleIngestionJobsLatest(req, res as never, createBaseDeps({
+      getServiceSupabaseClient: () => ({}) as any,
+      getLatestIngestionJob,
+    }));
+
+    expect(getLatestIngestionJob).toHaveBeenCalledTimes(1);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        job_id: 'job_latest_1',
+        scope: 'manual_refresh_selection',
+        trace_id: 'trace_latest',
       },
     });
   });

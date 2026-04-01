@@ -330,15 +330,26 @@ export async function handleIngestionJobsLatest(req: express.Request, res: expre
   const db = deps.getServiceSupabaseClient();
   if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
 
-  const { data, error } = await db
-    .from('ingestion_jobs')
-    .select('id, trigger, scope, status, started_at, finished_at, processed_count, inserted_count, skipped_count, error_code, error_message, attempts, max_attempts, next_run_at, lease_expires_at, trace_id')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  let data: any | null = null;
+  if (deps.getLatestIngestionJob) {
+    try {
+      data = await deps.getLatestIngestionJob();
+    } catch {
+      data = null;
+    }
+  }
 
-  if (error) {
-    return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error.message, data: null });
+  if (!data) {
+    const latestResult = await db
+      .from('ingestion_jobs')
+      .select('id, trigger, scope, status, started_at, finished_at, processed_count, inserted_count, skipped_count, error_code, error_message, attempts, max_attempts, next_run_at, lease_expires_at, trace_id')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (latestResult.error) {
+      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: latestResult.error.message, data: null });
+    }
+    data = latestResult.data || null;
   }
 
   return res.json({
@@ -377,32 +388,31 @@ export async function handleQueueHealth(req: express.Request, res: express.Respo
 
   const snapshotAt = new Date();
   const nowIso = snapshotAt.toISOString();
-  const [queuedDepth, runningDepth, queuedWorkItems, runningWorkItems] = await Promise.all([
-    deps.countQueueDepth(db, { statuses: ['queued'] }),
-    deps.countQueueDepth(db, { statuses: ['queued', 'running'] }),
-    deps.countQueueWorkItems(db, { statuses: ['queued'] }),
-    deps.countQueueWorkItems(db, { statuses: ['running'] }),
-  ]);
-
-  const { count: staleLeaseCount, error: staleLeaseError } = await db
-    .from('ingestion_jobs')
-    .select('id', { head: true, count: 'exact' })
-    .eq('status', 'running')
-    .not('lease_expires_at', 'is', null)
-    .lt('lease_expires_at', nowIso);
-  if (staleLeaseError) {
-    return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: staleLeaseError.message, data: null });
+  const runningHeartbeatFreshMs = Math.max(deps.workerHeartbeatMs * 3, deps.workerLeaseMs);
+  const localWorkerRunning = deps.getQueuedWorkerRunning();
+  let queueSnapshot = null as Awaited<ReturnType<NonNullable<OpsRouteDeps['getQueueHealthSnapshot']>>> | null;
+  if (deps.getQueueHealthSnapshot) {
+    try {
+      queueSnapshot = await deps.getQueueHealthSnapshot({
+        snapshotAtIso: nowIso,
+        runningHeartbeatFreshMs,
+      });
+    } catch {
+      queueSnapshot = null;
+    }
   }
 
-  const { data: byScopeRows, error: byScopeError } = await db
-    .from('ingestion_jobs')
-    .select('scope, status, payload, created_at, started_at, lease_expires_at, last_heartbeat_at')
-    .in('status', ['queued', 'running'])
-    .in('scope', [...deps.queuedIngestionScopes]);
-  if (byScopeError) {
-    return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: byScopeError.message, data: null });
-  }
-  const byScope: Record<string, {
+  let queuedDepth = 0;
+  let runningDepth = 0;
+  let queuedWorkItems = 0;
+  let runningWorkItems = 0;
+  let staleLeaseCount = 0;
+  let oldestQueuedCreatedAt: string | null = null;
+  let oldestQueuedAgeMs: number | null = null;
+  let oldestRunningStartedAt: string | null = null;
+  let oldestRunningAgeMs: number | null = null;
+  let workerRunning = false;
+  let byScope: Record<string, {
     queued: number;
     running: number;
     queued_work_items: number;
@@ -411,90 +421,130 @@ export async function handleQueueHealth(req: express.Request, res: express.Respo
     oldest_running_age_ms: number | null;
     priority: string;
   }> = {};
-  for (const scope of deps.queuedIngestionScopes) {
-    byScope[scope] = {
-      queued: 0,
-      running: 0,
-      queued_work_items: 0,
-      running_work_items: 0,
-      oldest_queued_age_ms: null,
-      oldest_running_age_ms: null,
-      priority: getQueuePriorityTierForScope(scope),
-    };
-  }
-  let oldestQueuedCreatedAt: string | null = null;
-  let oldestQueuedAgeMs: number | null = null;
-  let oldestRunningStartedAt: string | null = null;
-  let oldestRunningAgeMs: number | null = null;
-  const localWorkerRunning = deps.getQueuedWorkerRunning();
-  const runningHeartbeatFreshMs = Math.max(deps.workerHeartbeatMs * 3, deps.workerLeaseMs);
-  let activeRunningJobs = 0;
-  for (const row of byScopeRows || []) {
-    const normalized = row as {
-      scope?: string;
-      status?: string;
-      created_at?: string | null;
-      started_at?: string | null;
-      lease_expires_at?: string | null;
-      last_heartbeat_at?: string | null;
-    };
-    const scope = String(normalized.scope || '').trim();
-    const status = String(normalized.status || '').trim();
-    if (!deps.isQueuedIngestionScope(scope)) continue;
-    if (status === 'queued') {
-      byScope[scope].queued += 1;
-      byScope[scope].queued_work_items += getQueuedJobWorkItemCount({
-        scope,
-        payload: ((row as { payload?: unknown }).payload && typeof (row as { payload?: unknown }).payload === 'object')
-          ? (row as { payload?: Record<string, unknown> }).payload || null
-          : null,
-      });
-      const createdAt = typeof normalized.created_at === 'string' ? normalized.created_at : null;
-      const createdAtMs = createdAt ? Date.parse(createdAt) : Number.NaN;
-      if (createdAt && Number.isFinite(createdAtMs)) {
-        const ageMs = Math.max(0, snapshotAt.getTime() - createdAtMs);
-        if (oldestQueuedAgeMs == null || ageMs > oldestQueuedAgeMs) {
-          oldestQueuedAgeMs = ageMs;
-          oldestQueuedCreatedAt = createdAt;
+
+  if (queueSnapshot) {
+    queuedDepth = queueSnapshot.queue_depth;
+    runningDepth = queueSnapshot.running_depth;
+    queuedWorkItems = queueSnapshot.queue_work_items;
+    runningWorkItems = queueSnapshot.running_work_items;
+    staleLeaseCount = queueSnapshot.stale_leases;
+    oldestQueuedCreatedAt = queueSnapshot.oldest_queued_created_at;
+    oldestQueuedAgeMs = queueSnapshot.oldest_queued_age_ms;
+    oldestRunningStartedAt = queueSnapshot.oldest_running_started_at;
+    oldestRunningAgeMs = queueSnapshot.oldest_running_age_ms;
+    workerRunning = queueSnapshot.worker_running;
+    byScope = queueSnapshot.by_scope;
+  } else {
+    const [resolvedQueuedDepth, resolvedRunningDepth, resolvedQueuedWorkItems, resolvedRunningWorkItems] = await Promise.all([
+      deps.countQueueDepth(db, { statuses: ['queued'] }),
+      deps.countQueueDepth(db, { statuses: ['queued', 'running'] }),
+      deps.countQueueWorkItems(db, { statuses: ['queued'] }),
+      deps.countQueueWorkItems(db, { statuses: ['running'] }),
+    ]);
+    queuedDepth = resolvedQueuedDepth;
+    runningDepth = Math.max(0, resolvedRunningDepth - resolvedQueuedDepth);
+    queuedWorkItems = resolvedQueuedWorkItems;
+    runningWorkItems = resolvedRunningWorkItems;
+
+    const staleLeaseResult = await db
+      .from('ingestion_jobs')
+      .select('id', { head: true, count: 'exact' })
+      .eq('status', 'running')
+      .not('lease_expires_at', 'is', null)
+      .lt('lease_expires_at', nowIso);
+    if (staleLeaseResult.error) {
+      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: staleLeaseResult.error.message, data: null });
+    }
+    staleLeaseCount = Number(staleLeaseResult.count || 0);
+
+    const byScopeResult = await db
+      .from('ingestion_jobs')
+      .select('scope, status, payload, created_at, started_at, lease_expires_at, last_heartbeat_at')
+      .in('status', ['queued', 'running'])
+      .in('scope', [...deps.queuedIngestionScopes]);
+    if (byScopeResult.error) {
+      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: byScopeResult.error.message, data: null });
+    }
+    byScope = {};
+    for (const scope of deps.queuedIngestionScopes) {
+      byScope[scope] = {
+        queued: 0,
+        running: 0,
+        queued_work_items: 0,
+        running_work_items: 0,
+        oldest_queued_age_ms: null,
+        oldest_running_age_ms: null,
+        priority: getQueuePriorityTierForScope(scope),
+      };
+    }
+    let activeRunningJobs = 0;
+    for (const row of byScopeResult.data || []) {
+      const normalized = row as {
+        scope?: string;
+        status?: string;
+        created_at?: string | null;
+        started_at?: string | null;
+        lease_expires_at?: string | null;
+        last_heartbeat_at?: string | null;
+      };
+      const scope = String(normalized.scope || '').trim();
+      const status = String(normalized.status || '').trim();
+      if (!deps.isQueuedIngestionScope(scope)) continue;
+      if (status === 'queued') {
+        byScope[scope].queued += 1;
+        byScope[scope].queued_work_items += getQueuedJobWorkItemCount({
+          scope,
+          payload: ((row as { payload?: unknown }).payload && typeof (row as { payload?: unknown }).payload === 'object')
+            ? (row as { payload?: Record<string, unknown> }).payload || null
+            : null,
+        });
+        const createdAt = typeof normalized.created_at === 'string' ? normalized.created_at : null;
+        const createdAtMs = createdAt ? Date.parse(createdAt) : Number.NaN;
+        if (createdAt && Number.isFinite(createdAtMs)) {
+          const ageMs = Math.max(0, snapshotAt.getTime() - createdAtMs);
+          if (oldestQueuedAgeMs == null || ageMs > oldestQueuedAgeMs) {
+            oldestQueuedAgeMs = ageMs;
+            oldestQueuedCreatedAt = createdAt;
+          }
+          if (byScope[scope].oldest_queued_age_ms == null || ageMs > byScope[scope].oldest_queued_age_ms) {
+            byScope[scope].oldest_queued_age_ms = ageMs;
+          }
         }
-        if (byScope[scope].oldest_queued_age_ms == null || ageMs > byScope[scope].oldest_queued_age_ms) {
-          byScope[scope].oldest_queued_age_ms = ageMs;
+      }
+      if (status === 'running') {
+        byScope[scope].running += 1;
+        byScope[scope].running_work_items += getQueuedJobWorkItemCount({
+          scope,
+          payload: ((row as { payload?: unknown }).payload && typeof (row as { payload?: unknown }).payload === 'object')
+            ? (row as { payload?: Record<string, unknown> }).payload || null
+            : null,
+        });
+        const startedAt = typeof normalized.started_at === 'string' ? normalized.started_at : null;
+        const startedAtMs = startedAt ? Date.parse(startedAt) : Number.NaN;
+        if (startedAt && Number.isFinite(startedAtMs)) {
+          const ageMs = Math.max(0, snapshotAt.getTime() - startedAtMs);
+          if (oldestRunningAgeMs == null || ageMs > oldestRunningAgeMs) {
+            oldestRunningAgeMs = ageMs;
+            oldestRunningStartedAt = startedAt;
+          }
+          if (byScope[scope].oldest_running_age_ms == null || ageMs > byScope[scope].oldest_running_age_ms) {
+            byScope[scope].oldest_running_age_ms = ageMs;
+          }
+        }
+        const leaseExpiresAt = typeof normalized.lease_expires_at === 'string' ? normalized.lease_expires_at : null;
+        const leaseExpiresAtMs = leaseExpiresAt ? Date.parse(leaseExpiresAt) : Number.NaN;
+        const heartbeatAt = typeof normalized.last_heartbeat_at === 'string' ? normalized.last_heartbeat_at : null;
+        const heartbeatAtMs = heartbeatAt ? Date.parse(heartbeatAt) : Number.NaN;
+        const hasFreshLease = leaseExpiresAt && Number.isFinite(leaseExpiresAtMs) && leaseExpiresAtMs > snapshotAt.getTime();
+        const hasFreshHeartbeat = heartbeatAt && Number.isFinite(heartbeatAtMs)
+          && (snapshotAt.getTime() - heartbeatAtMs) <= runningHeartbeatFreshMs;
+        if (hasFreshLease || hasFreshHeartbeat) {
+          activeRunningJobs += 1;
         }
       }
     }
-    if (status === 'running') {
-      byScope[scope].running += 1;
-      byScope[scope].running_work_items += getQueuedJobWorkItemCount({
-        scope,
-        payload: ((row as { payload?: unknown }).payload && typeof (row as { payload?: unknown }).payload === 'object')
-          ? (row as { payload?: Record<string, unknown> }).payload || null
-          : null,
-      });
-      const startedAt = typeof normalized.started_at === 'string' ? normalized.started_at : null;
-      const startedAtMs = startedAt ? Date.parse(startedAt) : Number.NaN;
-      if (startedAt && Number.isFinite(startedAtMs)) {
-        const ageMs = Math.max(0, snapshotAt.getTime() - startedAtMs);
-        if (oldestRunningAgeMs == null || ageMs > oldestRunningAgeMs) {
-          oldestRunningAgeMs = ageMs;
-          oldestRunningStartedAt = startedAt;
-        }
-        if (byScope[scope].oldest_running_age_ms == null || ageMs > byScope[scope].oldest_running_age_ms) {
-          byScope[scope].oldest_running_age_ms = ageMs;
-        }
-      }
-      const leaseExpiresAt = typeof normalized.lease_expires_at === 'string' ? normalized.lease_expires_at : null;
-      const leaseExpiresAtMs = leaseExpiresAt ? Date.parse(leaseExpiresAt) : Number.NaN;
-      const heartbeatAt = typeof normalized.last_heartbeat_at === 'string' ? normalized.last_heartbeat_at : null;
-      const heartbeatAtMs = heartbeatAt ? Date.parse(heartbeatAt) : Number.NaN;
-      const hasFreshLease = leaseExpiresAt && Number.isFinite(leaseExpiresAtMs) && leaseExpiresAtMs > snapshotAt.getTime();
-      const hasFreshHeartbeat = heartbeatAt && Number.isFinite(heartbeatAtMs)
-        && (snapshotAt.getTime() - heartbeatAtMs) <= runningHeartbeatFreshMs;
-      if (hasFreshLease || hasFreshHeartbeat) {
-        activeRunningJobs += 1;
-      }
-    }
+    workerRunning = activeRunningJobs > 0;
   }
-  const workerRunning = activeRunningJobs > 0;
 
   const providerKeys = [
     ...listTranscriptProviderRetryKeys(),
@@ -520,7 +570,7 @@ export async function handleQueueHealth(req: express.Request, res: express.Respo
       runtime_mode: deps.runtimeMode,
       snapshot_at: nowIso,
       queue_depth: queuedDepth,
-      running_depth: Math.max(0, runningDepth - queuedDepth),
+      running_depth: runningDepth,
       queue_work_items: queuedWorkItems,
       running_work_items: runningWorkItems,
       oldest_queued_created_at: oldestQueuedCreatedAt,

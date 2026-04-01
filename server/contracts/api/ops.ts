@@ -51,6 +51,31 @@ export type TranscriptProxyDebugMode = 'disabled' | 'explicit';
 export type OpsRouteDeps = {
   isServiceRequestAuthorized: (req: express.Request) => boolean;
   getServiceSupabaseClient: () => DbClient | null;
+  getLatestIngestionJob?: () => Promise<any | null>;
+  getQueueHealthSnapshot?: (input: {
+    snapshotAtIso: string;
+    runningHeartbeatFreshMs: number;
+  }) => Promise<{
+    worker_running: boolean;
+    queue_depth: number;
+    running_depth: number;
+    queue_work_items: number;
+    running_work_items: number;
+    oldest_queued_created_at: string | null;
+    oldest_queued_age_ms: number | null;
+    oldest_running_started_at: string | null;
+    oldest_running_age_ms: number | null;
+    stale_leases: number;
+    by_scope: Record<string, {
+      queued: number;
+      running: number;
+      queued_work_items: number;
+      running_work_items: number;
+      oldest_queued_age_ms: number | null;
+      oldest_running_age_ms: number | null;
+      priority: string;
+    }>;
+  } | null>;
   recoverStaleIngestionJobs: (db: DbClient, input: { scope: string }) => Promise<IngestionJobRow[]>;
   runUnlockSweeps: (db: DbClient, input: { mode: 'cron' | 'opportunistic' | 'manual'; force?: boolean; traceId?: string }) => Promise<void>;
   runSourcePageAssetSweep: (db: DbClient, input: { mode: 'cron' | 'opportunistic' | 'manual'; force?: boolean; traceId?: string }) => Promise<unknown>;

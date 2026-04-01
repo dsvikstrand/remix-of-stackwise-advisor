@@ -6,8 +6,12 @@ import { openOracleControlPlaneDb } from '../../server/services/oracleControlPla
 import {
   findOracleStaleRunningJobs,
   getOracleActiveJobForUserScope,
+  getOracleLatestIngestionJob,
+  listOracleActiveJobsForScope,
+  listOracleJobsByIds,
   listOracleActiveJobsForUser,
   listOracleLatestJobsForUserScope,
+  listOracleRunningJobsByScope,
   upsertOracleJobActivityRow,
 } from '../../server/services/oracleJobActivityState';
 import { readOracleQueueAdmissionCounts } from '../../server/services/oracleQueueAdmissionState';
@@ -196,6 +200,67 @@ describe('oracle job activity state', () => {
           requested_by_user_id: 'user_3',
         }),
       ]);
+    } finally {
+      await controlDb.close();
+    }
+  });
+
+  it('lists scope-active jobs, latest job, and jobs by id from the mirror', async () => {
+    const controlDb = openOracleControlPlaneDb({
+      sqlitePath: createTempSqlitePath(),
+    });
+
+    try {
+      await upsertOracleJobActivityRow({
+        controlDb,
+        nowIso: '2026-04-01T13:00:00.000Z',
+        job: {
+          id: 'job_retry_1',
+          trigger: 'service_cron',
+          scope: 'source_auto_unlock_retry',
+          status: 'queued',
+          payload: {
+            source_item_id: 'source_1',
+          },
+          created_at: '2026-04-01T13:00:00.000Z',
+          updated_at: '2026-04-01T13:00:00.000Z',
+        },
+      });
+      await upsertOracleJobActivityRow({
+        controlDb,
+        nowIso: '2026-04-01T13:01:00.000Z',
+        job: {
+          id: 'job_unlock_running',
+          trigger: 'service_cron',
+          scope: 'source_item_unlock_generation',
+          status: 'running',
+          started_at: '2026-04-01T12:40:00.000Z',
+          created_at: '2026-04-01T12:39:00.000Z',
+          updated_at: '2026-04-01T13:01:00.000Z',
+        },
+      });
+
+      const scopeRows = await listOracleActiveJobsForScope({
+        controlDb,
+        scope: 'source_auto_unlock_retry',
+      });
+      const runningRows = await listOracleRunningJobsByScope({
+        controlDb,
+        scope: 'source_item_unlock_generation',
+        staleBeforeIso: '2026-04-01T12:50:00.000Z',
+      });
+      const byIdRows = await listOracleJobsByIds({
+        controlDb,
+        jobIds: ['job_retry_1', 'job_unlock_running'],
+      });
+      const latestRow = await getOracleLatestIngestionJob({
+        controlDb,
+      });
+
+      expect(scopeRows.map((row) => row.id)).toEqual(['job_retry_1']);
+      expect(runningRows.map((row) => row.id)).toEqual(['job_unlock_running']);
+      expect(byIdRows.map((row) => row.id).sort()).toEqual(['job_retry_1', 'job_unlock_running']);
+      expect(latestRow?.id).toBe('job_retry_1');
     } finally {
       await controlDb.close();
     }

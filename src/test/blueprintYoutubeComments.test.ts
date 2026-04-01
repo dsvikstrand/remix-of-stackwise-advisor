@@ -848,4 +848,39 @@ describe('blueprint YouTube comments service', () => {
 
     expect([...pendingIds]).toEqual(['bp_1', 'bp_3']);
   });
+
+  it('can resolve pending refresh ids from the Oracle activity mirror callback', async () => {
+    const listOracleActiveRefreshJobs = vi.fn(async () => ([
+      {
+        payload: {
+          blueprint_id: 'bp_1',
+          refresh_kind: 'comments',
+        },
+      },
+      {
+        payload: {
+          blueprint_id: 'bp_2',
+          refresh_kind: 'view_count',
+        },
+      },
+    ]));
+
+    const service = createBlueprintYouTubeCommentsService({
+      apiKey: 'youtube-key',
+      fetchImpl: vi.fn() as unknown as typeof fetch,
+      listOracleActiveRefreshJobs,
+    });
+
+    const pendingIds = await service.listPendingRefreshBlueprintIds({
+      db: {} as any,
+      blueprintIds: ['bp_1', 'bp_2', 'bp_3'],
+      kind: 'comments',
+    });
+
+    expect(listOracleActiveRefreshJobs).toHaveBeenCalledWith({
+      scope: 'blueprint_youtube_refresh',
+      limit: 50,
+    });
+    expect([...pendingIds]).toEqual(['bp_1']);
+  });
 });

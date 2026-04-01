@@ -285,6 +285,12 @@ export function createBlueprintYouTubeCommentsService(input: {
   commentsAutoFirstDelayMinutes?: number;
   commentsAutoSecondDelayHours?: number;
   commentsManualCooldownMinutes?: number;
+  listOracleActiveRefreshJobs?: (input: {
+    scope: string;
+    limit: number;
+  }) => Promise<Array<{
+    payload: Record<string, unknown> | null;
+  }>>;
 }) {
   const apiKey = String(input.apiKey || '').trim();
   const fetchImpl = input.fetchImpl || fetch;
@@ -304,6 +310,7 @@ export function createBlueprintYouTubeCommentsService(input: {
     input.commentsManualCooldownMinutes,
     DEFAULT_COMMENTS_MANUAL_COOLDOWN_MINUTES,
   );
+  const listOracleActiveRefreshJobs = input.listOracleActiveRefreshJobs;
 
   async function resolveBlueprintYouTubeVideoId(args: {
     db: DbClient;
@@ -845,6 +852,21 @@ export function createBlueprintYouTubeCommentsService(input: {
         .filter(Boolean),
     )];
     if (normalizedIds.length === 0) return new Set<string>();
+
+    if (listOracleActiveRefreshJobs) {
+      const rows = await listOracleActiveRefreshJobs({
+        scope: 'blueprint_youtube_refresh',
+        limit: Math.max(normalizedIds.length * 2, 50),
+      });
+      const allowedIds = new Set(normalizedIds);
+      const pendingIds = new Set<string>();
+      for (const row of rows || []) {
+        const payload = extractPendingRefreshJobPayload(row?.payload);
+        if (!payload || payload.refresh_kind !== args.kind || !allowedIds.has(payload.blueprint_id)) continue;
+        pendingIds.add(payload.blueprint_id);
+      }
+      return pendingIds;
+    }
 
     let query = args.db
       .from('ingestion_jobs')
