@@ -15,7 +15,6 @@ import {
   settleManualGeneration,
 } from '../services/manualGenerationBilling';
 import {
-  getBlueprintAvailabilityForVideo,
   getBlueprintUnavailableMessage,
 } from '../services/blueprintAvailability';
 import {
@@ -72,6 +71,7 @@ export function registerYouTubeRouteHandlers(app: express.Express, deps: YouTube
     consumeGenerationDailyCap,
     getGenerationDailyCapStatus,
     getServiceSupabaseClient,
+    getBlueprintAvailabilityForVideo,
     withTimeout,
     runYouTubePipeline,
     mapPipelineError,

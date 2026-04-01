@@ -106,6 +106,7 @@ export type YouTubeRouteDeps = {
   consumeGenerationDailyCap: any;
   getGenerationDailyCapStatus: any;
   getServiceSupabaseClient: any;
+  getBlueprintAvailabilityForVideo: any;
   withTimeout: any;
   runYouTubePipeline: any;
   mapPipelineError: any;

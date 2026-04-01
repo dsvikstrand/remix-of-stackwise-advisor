@@ -107,6 +107,16 @@ function createDeps(overrides: Record<string, unknown> = {}) {
       resetAt: '2026-03-06T00:00:00.000Z',
     })),
     getServiceSupabaseClient: () => ({}),
+    getBlueprintAvailabilityForVideo: vi.fn(async () => ({
+      status: 'available',
+      videoId: '',
+      message: null,
+      retryAfterSeconds: 0,
+      cooldownUntilIso: null,
+      failureSource: null,
+      lastErrorCode: null,
+      lastErrorMessage: null,
+    })),
     withTimeout: async (promise: Promise<unknown>) => promise,
     runYouTubePipeline: vi.fn(async () => ({ ok: true })),
     mapPipelineError: () => null,
@@ -427,17 +437,6 @@ describe('youtube handlers', () => {
 
   it('blocks direct generate for videos inside the 24h blueprint cooldown window', async () => {
     const serviceDb = createMockSupabase({
-      generation_runs: [{
-        id: 'run_failed_1',
-        run_id: 'run_failed_1',
-        user_id: '00000000-0000-0000-0000-000000000001',
-        video_id: 'abc123def45',
-        status: 'failed',
-        error_code: 'TRANSCRIPT_UNAVAILABLE',
-        error_message: 'Temporary transcript job ended with status "failed".',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }],
       user_credit_wallets: [{
         user_id: '00000000-0000-0000-0000-000000000001',
         balance: 3,
@@ -448,8 +447,19 @@ describe('youtube handlers', () => {
     });
     const app = createMockApp();
     const runYouTubePipeline = vi.fn(async () => ({ ok: true, run_id: 'run_1' }));
+    const getBlueprintAvailabilityForVideo = vi.fn(async () => ({
+      status: 'cooldown_active',
+      videoId: 'abc123def45',
+      message: 'This video isn’t currently available for blueprint generation.',
+      retryAfterSeconds: 3600,
+      cooldownUntilIso: new Date(Date.now() + 3600_000).toISOString(),
+      failureSource: 'generation_runs',
+      lastErrorCode: 'TRANSCRIPT_UNAVAILABLE',
+      lastErrorMessage: 'Temporary transcript job ended with status "failed".',
+    }));
     registerYouTubeRouteHandlers(app as any, createDeps({
       getServiceSupabaseClient: () => serviceDb,
+      getBlueprintAvailabilityForVideo,
       runYouTubePipeline,
     }));
 
@@ -470,6 +480,7 @@ describe('youtube handlers', () => {
       error_code: 'VIDEO_BLUEPRINT_UNAVAILABLE',
       message: 'This video isn’t currently available for blueprint generation.',
     });
+    expect(getBlueprintAvailabilityForVideo).toHaveBeenCalledWith(serviceDb, 'abc123def45');
     expect(runYouTubePipeline).not.toHaveBeenCalled();
     expect(serviceDb.state.credit_ledger).toHaveLength(0);
   });
@@ -605,17 +616,6 @@ describe('youtube handlers', () => {
       ingestion_jobs: [],
     });
     const serviceDb = createMockSupabase({
-      generation_runs: [{
-        id: 'run_failed_search_1',
-        run_id: 'run_failed_search_1',
-        user_id: '00000000-0000-0000-0000-000000000001',
-        video_id: 'video_unavailable',
-        status: 'failed',
-        error_code: 'TRANSCRIPT_UNAVAILABLE',
-        error_message: 'Temporary transcript job ended with status "failed".',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }],
       user_credit_wallets: [{
         user_id: '00000000-0000-0000-0000-000000000001',
         balance: 5,
@@ -631,9 +631,20 @@ describe('youtube handlers', () => {
       title: 'Unavailable Video',
       channel_id: 'channel_1',
     }];
+    const getBlueprintAvailabilityForVideo = vi.fn(async () => ({
+      status: 'cooldown_active',
+      videoId: 'video_unavailable',
+      message: 'This video isn’t currently available for blueprint generation.',
+      retryAfterSeconds: 3600,
+      cooldownUntilIso: new Date(Date.now() + 3600_000).toISOString(),
+      failureSource: 'generation_runs',
+      lastErrorCode: 'TRANSCRIPT_UNAVAILABLE',
+      lastErrorMessage: 'Temporary transcript job ended with status "failed".',
+    }));
     registerYouTubeRouteHandlers(app as any, createDeps({
       getAuthedSupabaseClient: () => authDb,
       getServiceSupabaseClient: () => serviceDb,
+      getBlueprintAvailabilityForVideo,
       SearchVideosGenerateSchema: { safeParse: () => ({ success: true, data: { items } }) },
       loadExistingSourceVideoStateForUser: vi.fn(async () => new Map()),
       resolveVariantOrReady: vi.fn(async () => null),
@@ -654,6 +665,7 @@ describe('youtube handlers', () => {
         unavailable_count: 1,
       },
     });
+    expect(getBlueprintAvailabilityForVideo).toHaveBeenCalledWith(serviceDb, 'video_unavailable');
     expect(authDb.state.ingestion_jobs).toHaveLength(0);
     expect(serviceDb.state.credit_ledger).toHaveLength(0);
   });

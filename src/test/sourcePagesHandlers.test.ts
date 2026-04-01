@@ -70,6 +70,16 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     hydrateSourcePageAssetsForRow: vi.fn(async () => sourcePage),
     youtubeDataApiKey: '',
     getUserSubscriptionStateForSourcePage: vi.fn(async () => null),
+    getBlueprintAvailabilityForVideo: vi.fn(async () => ({
+      status: 'available',
+      videoId: '',
+      message: null,
+      retryAfterSeconds: 0,
+      cooldownUntilIso: null,
+      failureSource: null,
+      lastErrorCode: null,
+      lastErrorMessage: null,
+    })),
     sourceVideoListBurstLimiter: passThroughLimiter,
     sourceVideoListSustainedLimiter: passThroughLimiter,
     sourceVideoUnlockBurstLimiter: passThroughLimiter,
@@ -483,10 +493,21 @@ describe('source page handlers', () => {
         last_refill_at: new Date().toISOString(),
       }],
     }) as any;
+    const getBlueprintAvailabilityForVideo = vi.fn(async () => ({
+      status: 'cooldown_active',
+      videoId: 'video_blocked',
+      message: 'This video isn’t currently available for blueprint generation.',
+      retryAfterSeconds: 3600,
+      cooldownUntilIso: new Date(Date.now() + 3600_000).toISOString(),
+      failureSource: 'source_item_unlocks',
+      lastErrorCode: 'TRANSCRIPT_UNAVAILABLE',
+      lastErrorMessage: 'Temporary transcript job ended with status "failed".',
+    }));
 
     registerSourcePagesRouteHandlers(app as any, createDeps({
       getAuthedSupabaseClient: () => authDb,
       getServiceSupabaseClient: () => serviceDb,
+      getBlueprintAvailabilityForVideo,
       upsertSourceItemFromVideo: vi.fn(async () => ({
         id: 'source_video_blocked',
       })),
@@ -516,6 +537,7 @@ describe('source page handlers', () => {
         unavailable_count: 1,
       },
     });
+    expect(getBlueprintAvailabilityForVideo).toHaveBeenCalledWith(serviceDb, 'video_blocked');
     expect(serviceDb.state.credit_ledger).toHaveLength(0);
   });
 });

@@ -30,12 +30,13 @@ export async function resolveSourcePageSubscriptionAccess(input: {
   sourceChannelId: string;
   getUserSubscriptionStateForSourcePage: (
     db: DbClient,
-    args: { userId: string; sourcePageId: string },
+    args: { userId: string; sourcePageId: string; sourceChannelId?: string | null },
   ) => Promise<{ subscribed?: boolean; subscription_id?: string | null } | null>;
 }): Promise<SourcePageSubscriptionAccess> {
   const subscriptionState = await input.getUserSubscriptionStateForSourcePage(input.db, {
     userId: input.userId,
     sourcePageId: input.sourcePageId,
+    sourceChannelId: input.sourceChannelId,
   });
   if (subscriptionState?.subscribed) {
     return {

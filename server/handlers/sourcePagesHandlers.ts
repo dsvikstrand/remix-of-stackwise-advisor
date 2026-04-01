@@ -21,7 +21,6 @@ import {
 } from '../services/generationPreflight';
 import { getBlueprintGenerationChargePolicy } from '../services/generationChargePolicy';
 import {
-  getBlueprintAvailabilityForVideo,
   getBlueprintUnavailableMessage,
 } from '../services/blueprintAvailability';
 
@@ -35,6 +34,7 @@ export function registerSourcePagesRouteHandlers(app: express.Express, deps: Sou
     getSourcePageByPlatformExternalId,
     youtubeDataApiKey,
     getUserSubscriptionStateForSourcePage,
+    getBlueprintAvailabilityForVideo,
     sourceVideoListBurstLimiter,
     sourceVideoListSustainedLimiter,
     sourceVideoUnlockBurstLimiter,

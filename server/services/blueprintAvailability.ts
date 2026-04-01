@@ -2,6 +2,21 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 type DbClient = SupabaseClient<any, 'public', any>;
 
+export type BlueprintAvailabilitySourceItemLookupRow = {
+  id: string | null;
+};
+
+export type BlueprintAvailabilityUnlockLookupRow = {
+  updated_at: string | null;
+  last_error_code: string | null;
+  last_error_message: string | null;
+};
+
+export type BlueprintAvailabilityReaders = {
+  listSourceItemsByVideoId?: (videoId: string) => Promise<BlueprintAvailabilitySourceItemLookupRow[]>;
+  listUnlockRowsBySourceItemIds?: (sourceItemIds: string[]) => Promise<BlueprintAvailabilityUnlockLookupRow[]>;
+};
+
 export type BlueprintAvailabilityStatus = 'available' | 'cooldown_active';
 
 export type BlueprintAvailabilityDecision = {
@@ -85,21 +100,35 @@ function buildCooldownDecision(input: {
   };
 }
 
-async function readLatestUnlockCooldownCandidate(db: DbClient, videoId: string) {
-  const { data: sourceRows, error: sourceError } = await db
-    .from('source_items')
-    .select('id')
-    .eq('source_native_id', videoId);
-  if (sourceError) throw sourceError;
+async function readLatestUnlockCooldownCandidate(
+  db: DbClient,
+  videoId: string,
+  readers?: BlueprintAvailabilityReaders,
+) {
+  const sourceRows = readers?.listSourceItemsByVideoId
+    ? await readers.listSourceItemsByVideoId(videoId)
+    : await (async () => {
+      const { data, error } = await db
+        .from('source_items')
+        .select('id')
+        .eq('source_native_id', videoId);
+      if (error) throw error;
+      return (data || []) as BlueprintAvailabilitySourceItemLookupRow[];
+    })();
 
   const sourceItemIds = Array.from(new Set((sourceRows || []).map((row: any) => String(row?.id || '').trim()).filter(Boolean)));
   if (sourceItemIds.length === 0) return null;
 
-  const { data: unlockRows, error: unlockError } = await db
-    .from('source_item_unlocks')
-    .select('updated_at, last_error_code, last_error_message')
-    .in('source_item_id', sourceItemIds);
-  if (unlockError) throw unlockError;
+  const unlockRows = readers?.listUnlockRowsBySourceItemIds
+    ? await readers.listUnlockRowsBySourceItemIds(sourceItemIds)
+    : await (async () => {
+      const { data, error } = await db
+        .from('source_item_unlocks')
+        .select('updated_at, last_error_code, last_error_message')
+        .in('source_item_id', sourceItemIds);
+      if (error) throw error;
+      return (data || []) as BlueprintAvailabilityUnlockLookupRow[];
+    })();
 
   let latest: {
     atMs: number;
@@ -158,6 +187,7 @@ async function readLatestGenerationRunCooldownCandidate(db: DbClient, videoId: s
 export async function getBlueprintAvailabilityForVideo(
   db: DbClient,
   videoId: string,
+  readers?: BlueprintAvailabilityReaders,
 ): Promise<BlueprintAvailabilityDecision> {
   const normalizedVideoId = String(videoId || '').trim();
   if (!normalizedVideoId) return buildAvailableDecision('');
@@ -166,7 +196,7 @@ export async function getBlueprintAvailabilityForVideo(
   }
 
   const [unlockCandidate, generationCandidate] = await Promise.all([
-    readLatestUnlockCooldownCandidate(db, normalizedVideoId),
+    readLatestUnlockCooldownCandidate(db, normalizedVideoId, readers),
     readLatestGenerationRunCooldownCandidate(db, normalizedVideoId),
   ]);
 

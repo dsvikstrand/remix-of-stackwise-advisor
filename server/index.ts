@@ -135,6 +135,7 @@ import {
   createGenerationDailyCapService,
   readGenerationDailyCapConfigFromEnv,
 } from './services/generationDailyCap';
+import { getBlueprintAvailabilityForVideo as readBlueprintAvailabilityForVideo } from './services/blueprintAvailability';
 import {
   getTranscriptProxyDebugMode,
   resetTranscriptProxyDispatcher,
@@ -2355,6 +2356,24 @@ async function listActiveSubscriptionsForUserOracleFirst(
   return data || [];
 }
 
+async function getBlueprintAvailabilityForVideoOracleFirst(
+  db: ReturnType<typeof createClient>,
+  videoId: string,
+) {
+  return readBlueprintAvailabilityForVideo(db, videoId, {
+    listSourceItemsByVideoId: async (sourceNativeId) => (
+      await listProductSourceItemsOracleFirst(db, { sourceNativeId })
+    ).map((row) => ({ id: row.id || null })),
+    listUnlockRowsBySourceItemIds: async (sourceItemIds) => (
+      await getSourceItemUnlocksBySourceItemIdsOracleFirst(db, sourceItemIds)
+    ).map((row) => ({
+      updated_at: String((row as any)?.updated_at || '').trim() || null,
+      last_error_code: String((row as any)?.last_error_code || '').trim() || null,
+      last_error_message: String((row as any)?.last_error_message || '').trim() || null,
+    })),
+  });
+}
+
 async function syncOracleProductFeedRowsByIds(
   db: ReturnType<typeof createClient>,
   feedItemIds: string[],
@@ -4348,6 +4367,7 @@ registerYouTubeRoutes(app, {
   consumeGenerationDailyCap: generationDailyCapService.consume,
   getGenerationDailyCapStatus: generationDailyCapService.getStatus,
   getServiceSupabaseClient,
+  getBlueprintAvailabilityForVideo: getBlueprintAvailabilityForVideoOracleFirst,
   withTimeout,
   runYouTubePipeline: (pipelineInput: any) => runYouTubePipeline(pipelineInput),
   mapPipelineError,
@@ -11162,6 +11182,7 @@ registerSourcePagesRoutes(app, {
   hydrateSourcePageAssetsForRow,
   youtubeDataApiKey,
   getUserSubscriptionStateForSourcePage: getUserSubscriptionStateForSourcePageOracleFirst,
+  getBlueprintAvailabilityForVideo: getBlueprintAvailabilityForVideoOracleFirst,
   sourceVideoListBurstLimiter,
   sourceVideoListSustainedLimiter,
   sourceVideoUnlockBurstLimiter,
