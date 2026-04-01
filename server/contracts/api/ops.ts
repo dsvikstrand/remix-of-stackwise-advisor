@@ -67,6 +67,7 @@ export type OpsRouteDeps = {
   queueLowPrioritySuppressionDepth: number;
   allActiveSubscriptionsMinTriggerIntervalMs: number;
   oraclePrimaryMinTriggerIntervalMs: number;
+  oraclePrimaryOwnsAllActiveSubscriptionsTrigger: boolean;
   workerConcurrency: number;
   workerBatchSize: number;
   workerLeaseMs: number;

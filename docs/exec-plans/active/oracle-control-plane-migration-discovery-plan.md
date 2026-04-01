@@ -1051,7 +1051,7 @@ ao2) [todo] **Phase 1: bootstrap-only**
 - success condition:
   - SQLite state is populated and stable across restart
 
-ao3) [todo] **Phase 2: shadow mode**
+ao3) [have] **Phase 2: shadow mode**
 - switch to:
   - `ORACLE_SUBSCRIPTION_SCHEDULER_MODE=shadow`
 - Oracle computes:
@@ -1064,25 +1064,31 @@ ao3) [todo] **Phase 2: shadow mode**
   - fairness gap
   - projected lag improvements
 
-ao4) [todo] **Phase 3: Oracle-primary scheduling for `all_active_subscriptions` only**
+ao4) [have] **Phase 3: Oracle-primary scheduling for `all_active_subscriptions` only**
 - switch to:
   - `ORACLE_SUBSCRIPTION_SCHEDULER_MODE=primary`
 - Oracle becomes authoritative for:
   - which subscriptions are due
   - when the next scheduler run should happen
   - recent-run suppression/min-interval continuity
+  - external trigger ownership for `all_active_subscriptions`
+  - Oracle-primary due-batch drain size via `ORACLE_SUBSCRIPTION_PRIMARY_BATCH_LIMIT`
 - Supabase still remains authoritative for:
   - durable queue rows
   - subscription checkpoints
   - user-facing writes
 
-ao5) [todo] **Phase 4: stabilize and measure**
+ao5) [have] **Phase 4: stabilize and measure**
 - let the system soak
 - compare:
   - Supabase control-plane request families
   - upload-to-detection lag
   - queue duplication/stale-claim behavior
   - restart recovery after a deliberate backend restart
+ - current live baseline:
+  - Oracle `primary` is active on production
+  - cadence is reduced from `60m` to `30m`
+  - no `primary_due_batch_fallback` has been observed in the initial soak windows
 
 ### Verification Gates
 

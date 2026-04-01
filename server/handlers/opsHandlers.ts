@@ -31,6 +31,23 @@ export async function handleIngestionJobsTrigger(req: express.Request, res: expr
   }
   const db = deps.getServiceSupabaseClient();
   if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+  const oraclePrimarySchedulerRequest = String(req.header('x-oracle-primary-scheduler') || '').trim() === '1';
+  if (deps.oraclePrimaryOwnsAllActiveSubscriptionsTrigger && !oraclePrimarySchedulerRequest) {
+    console.log('[oracle-control-plane] primary_external_trigger_skipped', JSON.stringify({
+      scope: 'all_active_subscriptions',
+      endpoint: '/api/ingestion/jobs/trigger',
+    }));
+    return res.status(202).json({
+      ok: true,
+      error_code: null,
+      message: 'subscription ingestion trigger is owned by the oracle primary scheduler',
+      data: {
+        suppressed: true,
+        reason: 'oracle_primary_scheduler_owned',
+        scope: 'all_active_subscriptions',
+      },
+    });
+  }
   const observeOracleTrigger = async (input: Parameters<NonNullable<OpsRouteDeps['observeOracleAllActiveSubscriptionsTrigger']>>[0]) => {
     if (!deps.observeOracleAllActiveSubscriptionsTrigger) return;
     try {

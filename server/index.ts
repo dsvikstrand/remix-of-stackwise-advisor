@@ -53,6 +53,7 @@ import {
 import { parseRuntimeFlag, readBackendRuntimeConfig } from './services/runtimeConfig';
 import { readOracleControlPlaneConfig } from './services/oracleControlPlaneConfig';
 import { openOracleControlPlaneDb } from './services/oracleControlPlaneDb';
+import { createOracleSubscriptionSchedulerController } from './services/oracleSubscriptionSchedulerController';
 import {
   evaluateOraclePrimarySchedulerDecision,
   evaluateOracleShadowSchedulerDecision,
@@ -7344,7 +7345,7 @@ async function loadAllActiveSubscriptionsBatchForRun(db: ReturnType<typeof getSe
     try {
       const dueSnapshot = await listOracleDueSubscriptions({
         controlDb: oracleControlPlane,
-        limit: Math.min(allActiveSubscriptionsMaxPerRun, oracleControlPlaneConfig.shadowBatchLimit),
+        limit: oracleControlPlaneConfig.primaryBatchLimit,
         lookaheadMs: oracleControlPlaneConfig.shadowLookaheadMs,
       });
       const dueSubscriptionIds = dueSnapshot.rows.map((row) => row.subscriptionId);
@@ -7392,7 +7393,13 @@ async function loadAllActiveSubscriptionsBatchForRun(db: ReturnType<typeof getSe
     .eq('source_type', 'youtube')
     .order('last_polled_at', { ascending: true, nullsFirst: true })
     .order('updated_at', { ascending: false })
-    .limit(allActiveSubscriptionsMaxPerRun);
+    .limit(
+      oracleControlPlaneConfig.enabled
+        && oracleControlPlane
+        && oracleControlPlaneConfig.subscriptionSchedulerMode === 'primary'
+        ? oracleControlPlaneConfig.primaryBatchLimit
+        : allActiveSubscriptionsMaxPerRun,
+    );
   if (subscriptionsError) throw subscriptionsError;
   return subscriptions || [];
 }
@@ -7830,6 +7837,63 @@ const notificationPushDispatcherController = createNotificationPushDispatcherCon
 function scheduleQueuedIngestionProcessing(delayMs = 0) {
   queuedIngestionWorkerController.schedule(delayMs);
 }
+
+async function runOraclePrimarySubscriptionSchedulerCycle() {
+  if (
+    !oracleControlPlaneConfig.enabled
+    || !oracleControlPlane
+    || oracleControlPlaneConfig.subscriptionSchedulerMode !== 'primary'
+    || !runIngestionWorker
+  ) {
+    return;
+  }
+  if (!runHttpServer) {
+    console.warn('[oracle-control-plane] primary_scheduler_tick_skipped', JSON.stringify({
+      reason: 'http_server_disabled',
+    }));
+    return;
+  }
+  if (!ingestionServiceToken) {
+    console.warn('[oracle-control-plane] primary_scheduler_tick_skipped', JSON.stringify({
+      reason: 'missing_service_token',
+    }));
+    return;
+  }
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/api/ingestion/jobs/trigger`, {
+      method: 'POST',
+      headers: {
+        'x-service-token': ingestionServiceToken,
+        'x-oracle-primary-scheduler': '1',
+      },
+      signal: AbortSignal.timeout(Math.max(5_000, Math.min(30_000, oracleControlPlaneConfig.schedulerTickMs))),
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      console.warn('[oracle-control-plane] primary_scheduler_tick_failed', JSON.stringify({
+        status: response.status,
+        body: body.slice(0, 500),
+      }));
+    }
+  } catch (error) {
+    console.warn('[oracle-control-plane] primary_scheduler_tick_failed', JSON.stringify({
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+}
+
+const oracleSubscriptionSchedulerController = createOracleSubscriptionSchedulerController({
+  enabled: (
+    oracleControlPlaneConfig.enabled
+    && oracleControlPlaneConfig.subscriptionSchedulerMode === 'primary'
+    && runIngestionWorker
+    && runHttpServer
+  ),
+  intervalMs: oracleControlPlaneConfig.schedulerTickMs,
+  runCycle: runOraclePrimarySubscriptionSchedulerCycle,
+});
 
 function mapActualAllActiveSubscriptionsDecisionToShadowCode(
   actualDecisionCode:
@@ -8381,6 +8445,10 @@ registerOpsRoutes(app, {
   queueLowPrioritySuppressionDepth,
   allActiveSubscriptionsMinTriggerIntervalMs,
   oraclePrimaryMinTriggerIntervalMs: oracleControlPlaneConfig.primaryMinTriggerIntervalMs,
+  oraclePrimaryOwnsAllActiveSubscriptionsTrigger: (
+    oracleControlPlaneConfig.enabled
+    && oracleControlPlaneConfig.subscriptionSchedulerMode === 'primary'
+  ),
   workerConcurrency,
   workerBatchSize,
   workerLeaseMs,
@@ -8993,6 +9061,7 @@ if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
     sqlite_path: oracleControlPlane.sqlitePath,
     scheduler_tick_ms: oracleControlPlaneConfig.schedulerTickMs,
     primary_min_trigger_interval_ms: oracleControlPlaneConfig.primaryMinTriggerIntervalMs,
+    primary_batch_limit: oracleControlPlaneConfig.primaryBatchLimit,
     bootstrap_batch: oracleControlPlaneConfig.bootstrapBatch,
     shadow_batch_limit: oracleControlPlaneConfig.shadowBatchLimit,
     shadow_lookahead_ms: oracleControlPlaneConfig.shadowLookaheadMs,
@@ -9015,6 +9084,7 @@ if (runIngestionWorker) {
       console.error('[oracle-control-plane] bootstrap failed', error);
     });
   }
+  oracleSubscriptionSchedulerController.start(3_000);
   queuedIngestionWorkerController.start(1500);
   if (youtubeRefreshEnabled) {
     youtubeRefreshSchedulerController.start(1500);

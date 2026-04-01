@@ -44,6 +44,7 @@ function createBaseDeps(overrides: Partial<OpsRouteDeps> = {}): OpsRouteDeps {
     queueLowPrioritySuppressionDepth: 100,
     allActiveSubscriptionsMinTriggerIntervalMs: 10 * 60_000,
     oraclePrimaryMinTriggerIntervalMs: 10 * 60_000,
+    oraclePrimaryOwnsAllActiveSubscriptionsTrigger: false,
     workerConcurrency: 1,
     workerBatchSize: 10,
     workerLeaseMs: 90_000,
@@ -547,11 +548,104 @@ describe('queue health handler', () => {
 });
 
 describe('ingestion trigger handler', () => {
+  it('skips external all_active_subscriptions trigger requests when Oracle primary owns the scope', async () => {
+    const req = {
+      header: vi.fn(() => undefined),
+    } as never;
+    const res = createMockResponse();
+    const resolveOracleAllActiveSubscriptionsPrimaryDecision = vi.fn(async () => null);
+
+    await handleIngestionJobsTrigger(req, res as never, createBaseDeps({
+      getServiceSupabaseClient: () => createIngestionTriggerDbWithoutRunningJob(),
+      oraclePrimaryOwnsAllActiveSubscriptionsTrigger: true,
+      resolveOracleAllActiveSubscriptionsPrimaryDecision,
+    }));
+
+    expect(res.statusCode).toBe(202);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        suppressed: true,
+        reason: 'oracle_primary_scheduler_owned',
+        scope: 'all_active_subscriptions',
+      },
+    });
+    expect(resolveOracleAllActiveSubscriptionsPrimaryDecision).not.toHaveBeenCalled();
+  });
+
+  it('allows Oracle-owned internal scheduler requests through the trigger path', async () => {
+    const req = {
+      header: vi.fn((name: string) => (name === 'x-oracle-primary-scheduler' ? '1' : undefined)),
+    } as never;
+    const res = createMockResponse();
+    const observeOracleAllActiveSubscriptionsTrigger = vi.fn(async () => undefined);
+    const resolveOracleAllActiveSubscriptionsPrimaryDecision = vi.fn(async () => ({
+      nowIso: '2026-03-31T12:00:00.000Z',
+      actualDecisionCode: 'actual_no_due_subscriptions' as const,
+      oracleDecisionCode: 'shadow_no_due_subscriptions' as const,
+      shouldEnqueue: false,
+      dueSubscriptionCount: 0,
+      dueSubscriptionIds: [],
+      nextDueAt: '2026-03-31T12:30:00.000Z',
+      minIntervalUntil: null,
+      suppressionUntil: null,
+      queueDepth: null,
+      retryAfterSeconds: 1800,
+    }));
+    const db = {
+      from(table: string) {
+        if (table !== 'ingestion_jobs') {
+          throw new Error(`Unexpected table: ${table}`);
+        }
+        return {
+          select() {
+            const filters: Array<{ type: string }> = [];
+            return {
+              eq() {
+                return this;
+              },
+              in() {
+                filters.push({ type: 'in' });
+                return this;
+              },
+              order() {
+                return this;
+              },
+              limit() {
+                return this;
+              },
+              maybeSingle: async () => {
+                const isExistingJobRead = filters.some((entry) => entry.type === 'in');
+                if (isExistingJobRead) {
+                  return { data: null, error: null };
+                }
+                throw new Error('Latest-job fallback should not run in primary no-due mode');
+              },
+            };
+          },
+        };
+      },
+    };
+
+    await handleIngestionJobsTrigger(req, res as never, createBaseDeps({
+      getServiceSupabaseClient: () => db,
+      oraclePrimaryOwnsAllActiveSubscriptionsTrigger: true,
+      observeOracleAllActiveSubscriptionsTrigger,
+      resolveOracleAllActiveSubscriptionsPrimaryDecision,
+    }));
+
+    expect(res.statusCode).toBe(202);
+    expect(resolveOracleAllActiveSubscriptionsPrimaryDecision).toHaveBeenCalledTimes(1);
+    expect(observeOracleAllActiveSubscriptionsTrigger).toHaveBeenCalledTimes(1);
+  });
+
   it('suppresses enqueue when the latest all_active_subscriptions job is inside the minimum interval gate', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-03-23T12:00:00.000Z'));
     try {
-      const req = {} as never;
+      const req = {
+        header: () => undefined,
+      } as never;
       const res = createMockResponse();
       const scheduleQueuedIngestionProcessing = vi.fn();
       const recoverStaleIngestionJobs = vi.fn(async () => []);
@@ -598,7 +692,9 @@ describe('ingestion trigger handler', () => {
   });
 
   it('suppresses enqueue from the Oracle primary scheduler when no subscriptions are due', async () => {
-    const req = {} as never;
+    const req = {
+      header: () => '1',
+    } as never;
     const res = createMockResponse();
     const observeOracleAllActiveSubscriptionsTrigger = vi.fn(async () => undefined);
     const resolveOracleAllActiveSubscriptionsPrimaryDecision = vi.fn(async () => ({
@@ -681,7 +777,9 @@ describe('ingestion trigger handler', () => {
   });
 
   it('suppresses enqueue from the Oracle primary scheduler using the Oracle cadence window', async () => {
-    const req = {} as never;
+    const req = {
+      header: () => '1',
+    } as never;
     const res = createMockResponse();
     const observeOracleAllActiveSubscriptionsTrigger = vi.fn(async () => undefined);
     const resolveOracleAllActiveSubscriptionsPrimaryDecision = vi.fn(async () => ({
@@ -769,7 +867,9 @@ describe('ingestion trigger handler', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-03-23T12:00:00.000Z'));
     try {
-      const req = {} as never;
+      const req = {
+        header: () => '1',
+      } as never;
       const res = createMockResponse();
       const resolveOracleAllActiveSubscriptionsPrimaryDecision = vi.fn(async () => null);
 
@@ -801,7 +901,9 @@ describe('ingestion trigger handler', () => {
   });
 
   it('queues a new job from the Oracle primary scheduler without using the latest-job fallback', async () => {
-    const req = {} as never;
+    const req = {
+      header: () => '1',
+    } as never;
     const res = createMockResponse();
     const scheduleQueuedIngestionProcessing = vi.fn();
     const observeOracleAllActiveSubscriptionsTrigger = vi.fn(async () => undefined);
@@ -893,7 +995,9 @@ describe('ingestion trigger handler', () => {
   });
 
   it('suppresses low-priority all_active_subscriptions enqueue when queue pressure threshold is hit', async () => {
-    const req = {} as never;
+    const req = {
+      header: () => undefined,
+    } as never;
     const res = createMockResponse();
     const recoverStaleIngestionJobs = vi.fn(async () => []);
 
@@ -920,7 +1024,9 @@ describe('ingestion trigger handler', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-03-23T12:00:00.000Z'));
     try {
-      const req = {} as never;
+      const req = {
+        header: () => undefined,
+      } as never;
       const res = createMockResponse();
       const db = createIngestionTriggerDb({
         latestJob: {
@@ -960,7 +1066,9 @@ describe('ingestion trigger handler', () => {
   });
 
   it('attempts stale recovery only for running all_active_subscriptions jobs before returning a conflict', async () => {
-    const req = {} as never;
+    const req = {
+      header: () => undefined,
+    } as never;
     const res = createMockResponse();
     const recoverStaleIngestionJobs = vi.fn(async () => []);
     let existingJobReads = 0;
