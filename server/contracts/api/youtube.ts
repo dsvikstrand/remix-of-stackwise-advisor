@@ -121,6 +121,7 @@ export type YouTubeRouteDeps = {
   emitGenerationStartedNotification: any;
   getGenerationNotificationLinkPath: any;
   scheduleQueuedIngestionProcessing: any;
+  enqueueIngestionJob?: any;
   clampYouTubeChannelSearchLimit: any;
   searchYouTubeChannels: any;
   YouTubeChannelSearchError: any;

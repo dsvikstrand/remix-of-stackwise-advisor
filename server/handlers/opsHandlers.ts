@@ -273,20 +273,32 @@ export async function handleIngestionJobsTrigger(req: express.Request, res: expr
   }
 
   const traceId = deps.createUnlockTraceId();
-  const { data: job, error: jobCreateError } = await db
-    .from('ingestion_jobs')
-    .insert({
-      trigger: 'service_cron',
-      scope: 'all_active_subscriptions',
-      status: 'queued',
-      trace_id: traceId,
-      payload: {
+  const jobInsert = deps.enqueueIngestionJob
+    ? await deps.enqueueIngestionJob(db, {
+        trigger: 'service_cron',
+        scope: 'all_active_subscriptions',
+        status: 'queued',
         trace_id: traceId,
-      },
-      next_run_at: new Date().toISOString(),
-    })
-    .select('id')
-    .single();
+        payload: {
+          trace_id: traceId,
+        },
+        next_run_at: new Date().toISOString(),
+      })
+    : await db
+      .from('ingestion_jobs')
+      .insert({
+        trigger: 'service_cron',
+        scope: 'all_active_subscriptions',
+        status: 'queued',
+        trace_id: traceId,
+        payload: {
+          trace_id: traceId,
+        },
+        next_run_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single();
+  const { data: job, error: jobCreateError } = jobInsert;
   if (jobCreateError) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: jobCreateError.message, data: null });
 
   await observeOracleTrigger({

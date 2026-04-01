@@ -86,6 +86,30 @@ type QueueAdmissionCountStateTable = {
   updated_at: string;
 };
 
+type JobActivityStateTable = {
+  job_id: string;
+  scope_key: string;
+  user_key: string;
+  status: string;
+  trigger_key: string | null;
+  subscription_id: string | null;
+  trace_id: string | null;
+  payload_json: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  next_run_at: string | null;
+  lease_expires_at: string | null;
+  processed_count: number;
+  inserted_count: number;
+  skipped_count: number;
+  attempts: number;
+  max_attempts: number;
+  error_code: string | null;
+  error_message: string | null;
+  updated_at: string;
+};
+
 export type OracleControlPlaneDatabase = {
   control_meta: ControlMetaTable;
   subscription_schedule_state: SubscriptionScheduleStateTable;
@@ -94,6 +118,7 @@ export type OracleControlPlaneDatabase = {
   queue_claim_control_state: QueueClaimControlStateTable;
   queue_sweep_control_state: QueueSweepControlStateTable;
   queue_admission_count_state: QueueAdmissionCountStateTable;
+  job_activity_state: JobActivityStateTable;
 };
 
 export type OracleControlPlaneDb = {
@@ -210,6 +235,39 @@ CREATE TABLE IF NOT EXISTS queue_admission_count_state (
 
 CREATE INDEX IF NOT EXISTS idx_queue_admission_scope_user
   ON queue_admission_count_state (scope_key, user_key);
+
+CREATE TABLE IF NOT EXISTS job_activity_state (
+  job_id TEXT PRIMARY KEY,
+  scope_key TEXT NOT NULL,
+  user_key TEXT NOT NULL,
+  status TEXT NOT NULL,
+  trigger_key TEXT,
+  subscription_id TEXT,
+  trace_id TEXT,
+  payload_json TEXT,
+  created_at TEXT NOT NULL,
+  started_at TEXT,
+  finished_at TEXT,
+  next_run_at TEXT,
+  lease_expires_at TEXT,
+  processed_count INTEGER NOT NULL DEFAULT 0,
+  inserted_count INTEGER NOT NULL DEFAULT 0,
+  skipped_count INTEGER NOT NULL DEFAULT 0,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  max_attempts INTEGER NOT NULL DEFAULT 0,
+  error_code TEXT,
+  error_message TEXT,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_job_activity_user_scope_created
+  ON job_activity_state (user_key, scope_key, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_job_activity_user_scope_status
+  ON job_activity_state (user_key, scope_key, status, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_job_activity_scope_status_started
+  ON job_activity_state (scope_key, status, started_at);
 `;
 
 export function openOracleControlPlaneDb(input: {

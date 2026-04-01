@@ -69,6 +69,15 @@ import {
   syncOracleQueueAdmissionMirrorFromSupabase,
 } from './services/oracleQueueAdmissionState';
 import {
+  findOracleStaleRunningJobs,
+  getOracleActiveJobForUserScope,
+  listOracleActiveJobsForUser,
+  listOracleLatestJobsForUserScope,
+  syncOracleJobActivityMirrorFromSupabase,
+  syncOracleJobActivityRowFromSupabaseById,
+  syncOracleJobActivityRowsFromSupabaseByIds,
+} from './services/oracleJobActivityState';
+import {
   evaluateOraclePrimarySchedulerDecision,
   evaluateOracleShadowSchedulerDecision,
 } from './services/oracleSubscriptionScheduler';
@@ -549,6 +558,11 @@ const oracleQueueAdmissionMirrorEnabled = (
   && oracleControlPlaneConfig.queueAdmissionMirrorEnabled
   && Boolean(oracleControlPlane)
 );
+const oracleJobActivityMirrorEnabled = (
+  oracleControlPlaneConfig.enabled
+  && oracleControlPlaneConfig.jobActivityMirrorEnabled
+  && Boolean(oracleControlPlane)
+);
 const oracleQueueSweepControlEnabled = (
   oracleControlPlaneConfig.enabled
   && oracleControlPlaneConfig.queueSweepControlEnabled
@@ -901,6 +915,130 @@ async function countQueueWorkItemsForAdmission(
       error: error instanceof Error ? error.message : String(error),
     }));
     return countQueueWorkItems(db, input);
+  }
+}
+
+async function syncOracleJobActivityById(
+  db: ReturnType<typeof createClient>,
+  jobId: string,
+) {
+  const normalizedJobId = String(jobId || '').trim();
+  if (!oracleJobActivityMirrorEnabled || !oracleControlPlane || !normalizedJobId) {
+    return;
+  }
+
+  try {
+    await syncOracleJobActivityRowFromSupabaseById({
+      controlDb: oracleControlPlane,
+      db,
+      jobId: normalizedJobId,
+    });
+  } catch (error) {
+    console.warn('[oracle-control-plane] job_activity_mirror_failed', JSON.stringify({
+      action: 'sync_by_id',
+      job_id: normalizedJobId,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+}
+
+async function syncOracleJobActivityByIds(
+  db: ReturnType<typeof createClient>,
+  jobIds: string[],
+) {
+  const normalizedJobIds = [...new Set(
+    (Array.isArray(jobIds) ? jobIds : [])
+      .map((jobId) => String(jobId || '').trim())
+      .filter(Boolean),
+  )];
+  if (!oracleJobActivityMirrorEnabled || !oracleControlPlane || normalizedJobIds.length === 0) {
+    return;
+  }
+
+  try {
+    await syncOracleJobActivityRowsFromSupabaseByIds({
+      controlDb: oracleControlPlane,
+      db,
+      jobIds: normalizedJobIds,
+    });
+  } catch (error) {
+    console.warn('[oracle-control-plane] job_activity_mirror_failed', JSON.stringify({
+      action: 'sync_by_ids',
+      job_ids: normalizedJobIds.slice(0, 10),
+      count: normalizedJobIds.length,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+}
+
+async function enqueueIngestionJobWithMirror(
+  db: ReturnType<typeof createClient>,
+  values: Record<string, unknown>,
+) {
+  const result = await db
+    .from('ingestion_jobs')
+    .insert(values)
+    .select('id')
+    .single();
+
+  if (!result.error && result.data?.id) {
+    await syncOracleJobActivityById(db, result.data.id);
+  }
+
+  return result;
+}
+
+async function listLatestUserIngestionJobsOracleFirst(input: {
+  userId: string;
+  scope: string;
+  limit: number;
+}) {
+  if (!oracleJobActivityMirrorEnabled || !oracleControlPlane) {
+    return null;
+  }
+
+  try {
+    return await listOracleLatestJobsForUserScope({
+      controlDb: oracleControlPlane,
+      userId: input.userId,
+      scope: input.scope,
+      limit: input.limit,
+    });
+  } catch (error) {
+    console.warn('[oracle-control-plane] job_activity_mirror_failed', JSON.stringify({
+      action: 'list_latest_for_user_scope',
+      scope: input.scope,
+      user_id: input.userId,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    return null;
+  }
+}
+
+async function listActiveUserIngestionJobsOracleFirst(input: {
+  userId: string;
+  scopes: string[];
+  limit: number;
+}) {
+  if (!oracleJobActivityMirrorEnabled || !oracleControlPlane) {
+    return null;
+  }
+
+  try {
+    return await listOracleActiveJobsForUser({
+      controlDb: oracleControlPlane,
+      userId: input.userId,
+      scopes: input.scopes,
+      limit: input.limit,
+    });
+  } catch (error) {
+    console.warn('[oracle-control-plane] job_activity_mirror_failed', JSON.stringify({
+      action: 'list_active_for_user',
+      scopes: input.scopes,
+      user_id: input.userId,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    return null;
   }
 }
 
@@ -1893,6 +2031,7 @@ registerYouTubeRoutes(app, {
   emitGenerationStartedNotification,
   getGenerationNotificationLinkPath,
   scheduleQueuedIngestionProcessing,
+  enqueueIngestionJob: enqueueIngestionJobWithMirror,
   clampYouTubeChannelSearchLimit,
   searchYouTubeChannels,
   YouTubeChannelSearchError,
@@ -4194,40 +4333,36 @@ async function attemptAutoUnlockForSourceItem(input: {
   const ownerGenerationTier = resolveGenerationTierForUser({
     userId: ownerUserId,
   });
-  const { data: job, error: jobError } = await db
-    .from('ingestion_jobs')
-    .insert({
-      trigger: input.trigger === 'service_cron' ? 'service_cron' : 'user_sync',
-      scope: 'source_item_unlock_generation',
-      status: 'queued',
-      requested_by_user_id: ownerUserId,
+  const { data: job, error: jobError } = await enqueueIngestionJobWithMirror(db, {
+    trigger: input.trigger === 'service_cron' ? 'service_cron' : 'user_sync',
+    scope: 'source_item_unlock_generation',
+    status: 'queued',
+    requested_by_user_id: ownerUserId,
+    trace_id: traceId,
+    payload: {
+      user_id: ownerUserId,
       trace_id: traceId,
-      payload: {
-        user_id: ownerUserId,
-        trace_id: traceId,
+      generation_tier: ownerGenerationTier,
+      items: [{
+        unlock_id: reservedUnlock.id,
+        source_item_id: sourceItemId,
+        source_page_id: input.sourcePageId,
+        source_channel_id: sourceChannelId,
+        source_channel_title: input.sourceChannelTitle,
+        video_id: input.video.videoId,
+        video_url: input.video.url,
+        title: input.video.title,
+        duration_seconds: toDurationSeconds((input.video as { durationSeconds?: unknown }).durationSeconds),
+        reserved_cost: 0,
+        reserved_by_user_id: ownerUserId,
+        auto_intent_id: autoIntent.id,
+        unlock_origin: reservation.reservedNow ? 'subscription_auto_unlock' : 'source_auto_unlock_retry',
         generation_tier: ownerGenerationTier,
-        items: [{
-          unlock_id: reservedUnlock.id,
-          source_item_id: sourceItemId,
-          source_page_id: input.sourcePageId,
-          source_channel_id: sourceChannelId,
-          source_channel_title: input.sourceChannelTitle,
-          video_id: input.video.videoId,
-          video_url: input.video.url,
-          title: input.video.title,
-          duration_seconds: toDurationSeconds((input.video as { durationSeconds?: unknown }).durationSeconds),
-          reserved_cost: 0,
-          reserved_by_user_id: ownerUserId,
-          auto_intent_id: autoIntent.id,
-          unlock_origin: reservation.reservedNow ? 'subscription_auto_unlock' : 'source_auto_unlock_retry',
-          generation_tier: ownerGenerationTier,
-          dual_generate_enabled: false,
-        } satisfies SourceUnlockQueueItem],
-      },
-      next_run_at: new Date().toISOString(),
-    })
-    .select('id')
-    .single();
+        dual_generate_enabled: false,
+      } satisfies SourceUnlockQueueItem],
+    },
+    next_run_at: new Date().toISOString(),
+  });
 
   if (jobError || !job?.id) {
     if (reservation.reservedNow) {
@@ -4292,22 +4427,18 @@ async function enqueueSourceAutoUnlockRetryJob(
 
   const nextRunAt = new Date(Date.now() + sourceAutoUnlockRetryDelaySeconds * 1000).toISOString();
   const retryGenerationTier = 'free';
-  const { data: job, error: jobError } = await db
-    .from('ingestion_jobs')
-    .insert({
-      trigger: input.trigger === 'service_cron' ? 'service_cron' : 'user_sync',
-      scope: 'source_auto_unlock_retry',
-      status: 'queued',
-      requested_by_user_id: null,
-      max_attempts: sourceAutoUnlockRetryMaxAttempts,
-      payload: {
-        ...input,
-        generation_tier: retryGenerationTier,
-      },
-      next_run_at: nextRunAt,
-    })
-    .select('id')
-    .single();
+  const { data: job, error: jobError } = await enqueueIngestionJobWithMirror(db, {
+    trigger: input.trigger === 'service_cron' ? 'service_cron' : 'user_sync',
+    scope: 'source_auto_unlock_retry',
+    status: 'queued',
+    requested_by_user_id: null,
+    max_attempts: sourceAutoUnlockRetryMaxAttempts,
+    payload: {
+      ...input,
+      generation_tier: retryGenerationTier,
+    },
+    next_run_at: nextRunAt,
+  });
   if (jobError || !job?.id) {
     throw new Error(jobError?.message || 'Could not enqueue auto-unlock retry job.');
   }
@@ -4347,22 +4478,18 @@ async function enqueueSourceTranscriptRevalidateJob(
   }
 
   const traceId = createUnlockTraceId();
-  const { data: job, error: jobError } = await db
-    .from('ingestion_jobs')
-    .insert({
-      trigger: 'service_cron',
-      scope: 'source_transcript_revalidate',
-      status: 'queued',
-      max_attempts: 1,
+  const { data: job, error: jobError } = await enqueueIngestionJobWithMirror(db, {
+    trigger: 'service_cron',
+    scope: 'source_transcript_revalidate',
+    status: 'queued',
+    max_attempts: 1,
+    trace_id: traceId,
+    payload: {
+      ...input,
       trace_id: traceId,
-      payload: {
-        ...input,
-        trace_id: traceId,
-      },
-      next_run_at: new Date().toISOString(),
-    })
-    .select('id')
-    .single();
+    },
+    next_run_at: new Date().toISOString(),
+  });
 
   if (jobError || !job?.id) {
     throw new Error(jobError?.message || 'Could not enqueue transcript revalidate job.');
@@ -4425,24 +4552,20 @@ async function enqueueBlueprintYouTubeEnrichmentJob(input: {
     };
   }
   const nowIso = new Date().toISOString();
-  const { data: job, error: jobError } = await writeDb
-    .from('ingestion_jobs')
-    .insert({
-      trigger: 'service_cron',
-      scope: 'blueprint_youtube_enrichment',
-      status: 'queued',
-      max_attempts: 3,
-      trace_id: input.runId,
-      payload: {
-        run_id: input.runId,
-        blueprint_id: input.blueprintId,
-        video_id: input.explicitVideoId == null ? null : String(input.explicitVideoId || '').trim() || null,
-        source_item_id: input.explicitSourceItemId == null ? null : String(input.explicitSourceItemId || '').trim() || null,
-      } satisfies BlueprintYouTubeEnrichmentPayload,
-      next_run_at: nowIso,
-    })
-    .select('id')
-    .single();
+  const { data: job, error: jobError } = await enqueueIngestionJobWithMirror(writeDb, {
+    trigger: 'service_cron',
+    scope: 'blueprint_youtube_enrichment',
+    status: 'queued',
+    max_attempts: 3,
+    trace_id: input.runId,
+    payload: {
+      run_id: input.runId,
+      blueprint_id: input.blueprintId,
+      video_id: input.explicitVideoId == null ? null : String(input.explicitVideoId || '').trim() || null,
+      source_item_id: input.explicitSourceItemId == null ? null : String(input.explicitSourceItemId || '').trim() || null,
+    } satisfies BlueprintYouTubeEnrichmentPayload,
+    next_run_at: nowIso,
+  });
   if (jobError || !job?.id) {
     throw new Error(jobError?.message || 'Could not enqueue blueprint YouTube enrichment job.');
   }
@@ -4478,26 +4601,22 @@ async function enqueueBlueprintYouTubeRefreshJob(input: {
     };
   }
   const nowIso = new Date().toISOString();
-  const { data: job, error: jobError } = await input.db
-    .from('ingestion_jobs')
-    .insert({
-      trigger: input.refreshTrigger === 'manual' ? 'user_sync' : 'service_cron',
-      scope: 'blueprint_youtube_refresh',
-      status: 'queued',
-      requested_by_user_id: input.requestedByUserId || null,
-      max_attempts: 1,
-      trace_id: null,
-      payload: {
-        blueprint_id: input.blueprintId,
-        refresh_kind: input.refreshKind,
-        refresh_trigger: input.refreshTrigger || 'auto',
-        youtube_video_id: input.youtubeVideoId,
-        source_item_id: input.sourceItemId == null ? null : String(input.sourceItemId || '').trim() || null,
-      } satisfies BlueprintYouTubeRefreshPayload,
-      next_run_at: nowIso,
-    })
-    .select('id')
-    .single();
+  const { data: job, error: jobError } = await enqueueIngestionJobWithMirror(input.db, {
+    trigger: input.refreshTrigger === 'manual' ? 'user_sync' : 'service_cron',
+    scope: 'blueprint_youtube_refresh',
+    status: 'queued',
+    requested_by_user_id: input.requestedByUserId || null,
+    max_attempts: 1,
+    trace_id: null,
+    payload: {
+      blueprint_id: input.blueprintId,
+      refresh_kind: input.refreshKind,
+      refresh_trigger: input.refreshTrigger || 'auto',
+      youtube_video_id: input.youtubeVideoId,
+      source_item_id: input.sourceItemId == null ? null : String(input.sourceItemId || '').trim() || null,
+    } satisfies BlueprintYouTubeRefreshPayload,
+    next_run_at: nowIso,
+  });
   if (jobError || !job?.id) {
     throw new Error(jobError?.message || 'Could not enqueue blueprint YouTube refresh job.');
   }
@@ -4781,7 +4900,7 @@ function isMissingTableError(error: unknown) {
   return getSupabaseErrorCode(error) === '42P01';
 }
 
-async function recoverStaleIngestionJobs(
+async function recoverStaleIngestionJobsFromSupabase(
   db: ReturnType<typeof createClient>,
   input?: { scope?: string; requestedByUserId?: string; olderThanMs?: number },
 ) {
@@ -4809,10 +4928,60 @@ async function recoverStaleIngestionJobs(
     if (isMissingTableError(error)) return [];
     throw error;
   }
+  await syncOracleJobActivityByIds(
+    db,
+    (data || []).map((row) => String((row as { id?: string } | null)?.id || '')),
+  );
   return data || [];
 }
 
-async function getActiveManualRefreshJob(db: ReturnType<typeof createClient>, userId: string) {
+async function recoverStaleIngestionJobs(
+  db: ReturnType<typeof createClient>,
+  input?: { scope?: string; requestedByUserId?: string; olderThanMs?: number },
+) {
+  if (!oracleJobActivityMirrorEnabled || !oracleControlPlane) {
+    return recoverStaleIngestionJobsFromSupabase(db, input);
+  }
+
+  try {
+    const staleRows = await findOracleStaleRunningJobs({
+      controlDb: oracleControlPlane,
+      olderThanMs: Math.max(60_000, input?.olderThanMs || ingestionStaleRunningMs),
+      scope: input?.scope,
+      userId: input?.requestedByUserId,
+    });
+    const staleIds = staleRows.map((row) => String(row.id || '').trim()).filter(Boolean);
+    if (staleIds.length === 0) {
+      return [];
+    }
+
+    const nowIso = new Date().toISOString();
+    const { data, error } = await db
+      .from('ingestion_jobs')
+      .update({
+        status: 'failed',
+        finished_at: nowIso,
+        error_code: 'STALE_RUNNING_RECOVERY',
+        error_message: 'Recovered stale running job',
+      })
+      .in('id', staleIds)
+      .select('id, scope, requested_by_user_id');
+    if (error) throw error;
+
+    await syncOracleJobActivityByIds(db, staleIds);
+    return data || [];
+  } catch (error) {
+    console.warn('[oracle-control-plane] job_activity_mirror_failed', JSON.stringify({
+      action: 'recover_stale_jobs',
+      scope: input?.scope || null,
+      requested_by_user_id: input?.requestedByUserId || null,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    return recoverStaleIngestionJobsFromSupabase(db, input);
+  }
+}
+
+async function getActiveManualRefreshJobFromSupabase(db: ReturnType<typeof createClient>, userId: string) {
   const { data, error } = await db
     .from('ingestion_jobs')
     .select('id, status, started_at')
@@ -4827,6 +4996,34 @@ async function getActiveManualRefreshJob(db: ReturnType<typeof createClient>, us
     throw error;
   }
   return data || null;
+}
+
+async function getActiveManualRefreshJob(db: ReturnType<typeof createClient>, userId: string) {
+  if (!oracleJobActivityMirrorEnabled || !oracleControlPlane) {
+    return getActiveManualRefreshJobFromSupabase(db, userId);
+  }
+
+  try {
+    const job = await getOracleActiveJobForUserScope({
+      controlDb: oracleControlPlane,
+      userId,
+      scope: 'manual_refresh_selection',
+    });
+    return job
+      ? {
+          id: job.id,
+          status: job.status,
+          started_at: job.started_at,
+        }
+      : null;
+  } catch (error) {
+    console.warn('[oracle-control-plane] job_activity_mirror_failed', JSON.stringify({
+      action: 'get_active_manual_refresh_job',
+      user_id: userId,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    return getActiveManualRefreshJobFromSupabase(db, userId);
+  }
 }
 
 function shouldAdvanceSubscriptionCheckpoint(
@@ -7710,6 +7907,7 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
   }, initialHeartbeatDelayMs);
 
   try {
+    await syncOracleJobActivityById(db, job.id);
     await runWithExecutionTimeout(
       (async () => {
         if (scope === 'source_item_unlock_generation') {
@@ -7876,6 +8074,8 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
       throw heartbeatError;
     }
 
+    await syncOracleJobActivityById(db, job.id);
+
     logUnlockEvent('unlock_job_finished', { trace_id: traceId, job_id: job.id }, {
       scope,
       duration_ms: Date.now() - jobStartMs,
@@ -7892,6 +8092,7 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
       scheduleRetryInSeconds: nextRetryDelay,
       maxAttempts: Number(job.max_attempts || 3),
     });
+    await syncOracleJobActivityById(db, job.id);
 
     logUnlockEvent('unlock_job_failed', { trace_id: traceId, job_id: job.id }, {
       scope,
@@ -8294,12 +8495,27 @@ async function bootstrapOracleControlPlaneState() {
     queueAdmissionActiveCount = queueAdmissionBootstrap.activeCount;
   }
 
+  let jobActivityCount: number | null = null;
+  let jobActivityActiveCount: number | null = null;
+  if (oracleControlPlaneConfig.jobActivityMirrorEnabled) {
+    const jobActivityBootstrap = await syncOracleJobActivityMirrorFromSupabase({
+      controlDb: oracleControlPlane,
+      db,
+      recentLimit: oracleControlPlaneConfig.jobActivityBootstrapLimit,
+    });
+    jobActivityCount = jobActivityBootstrap.rowCount;
+    jobActivityActiveCount = jobActivityBootstrap.activeCount;
+  }
+
   console.log('[oracle-control-plane] bootstrap complete', JSON.stringify({
     scheduler_mode: oracleControlPlaneConfig.subscriptionSchedulerMode,
     sqlite_path: oracleControlPlane.sqlitePath,
     subscription_count: bootstrapResult.activeCount,
     queue_admission_active_count: queueAdmissionActiveCount,
+    job_activity_count: jobActivityCount,
+    job_activity_active_count: jobActivityActiveCount,
     bootstrap_batch: oracleControlPlaneConfig.bootstrapBatch,
+    job_activity_bootstrap_limit: oracleControlPlaneConfig.jobActivityBootstrapLimit,
   }));
 }
 
@@ -8533,6 +8749,7 @@ registerSourceSubscriptionsRoutes(app, {
   emitGenerationStartedNotification,
   getGenerationNotificationLinkPath,
   scheduleQueuedIngestionProcessing,
+  enqueueIngestionJob: enqueueIngestionJobWithMirror,
   resolveGenerationTierAccess,
   resolveRequestedGenerationTier,
   normalizeRequestedGenerationTier,
@@ -8599,6 +8816,7 @@ registerSourcePagesRoutes(app, {
   emitGenerationStartedNotification,
   getGenerationNotificationLinkPath,
   scheduleQueuedIngestionProcessing,
+  enqueueIngestionJob: enqueueIngestionJobWithMirror,
   settleReservation,
   completeUnlock,
   runYouTubePipeline: (pipelineInput: any) => runYouTubePipeline(pipelineInput),
@@ -8621,6 +8839,8 @@ registerSourcePagesRoutes(app, {
 registerIngestionUserRoutes(app, {
   getAuthedSupabaseClient,
   getServiceSupabaseClient,
+  getLatestUserIngestionJobs: listLatestUserIngestionJobsOracleFirst,
+  listActiveUserIngestionJobs: listActiveUserIngestionJobsOracleFirst,
   clampInt,
   ingestionLatestMineLimiter,
   workerConcurrency,
@@ -8655,6 +8875,7 @@ registerOpsRoutes(app, {
   countQueueWorkItems: countQueueWorkItemsForAdmission,
   createUnlockTraceId,
   scheduleQueuedIngestionProcessing,
+  enqueueIngestionJob: enqueueIngestionJobWithMirror,
   queueDepthHardLimit,
   queueDepthPerUserLimit,
   queueWorkItemsHardLimit,
@@ -9285,6 +9506,8 @@ if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
     queue_sweep_control_enabled: oracleControlPlaneConfig.queueSweepControlEnabled,
     queue_admission_mirror_enabled: oracleControlPlaneConfig.queueAdmissionMirrorEnabled,
     queue_admission_refresh_stale_ms: oracleControlPlaneConfig.queueAdmissionRefreshStaleMs,
+    job_activity_mirror_enabled: oracleControlPlaneConfig.jobActivityMirrorEnabled,
+    job_activity_bootstrap_limit: oracleControlPlaneConfig.jobActivityBootstrapLimit,
     queue_sweep_high_interval_ms: oracleControlPlaneConfig.queueSweepHighIntervalMs,
     queue_sweep_medium_interval_ms: oracleControlPlaneConfig.queueSweepMediumIntervalMs,
     queue_sweep_low_interval_ms: oracleControlPlaneConfig.queueSweepLowIntervalMs,

@@ -22,6 +22,8 @@ export type OracleControlPlaneConfig = {
   queueSweepControlEnabled: boolean;
   queueAdmissionMirrorEnabled: boolean;
   queueAdmissionRefreshStaleMs: number;
+  jobActivityMirrorEnabled: boolean;
+  jobActivityBootstrapLimit: number;
   queueSweepHighIntervalMs: number;
   queueSweepMediumIntervalMs: number;
   queueSweepLowIntervalMs: number;
@@ -100,6 +102,13 @@ export function readOracleControlPlaneConfig(
       15_000,
       1_000,
       24 * 60 * 60_000,
+    ),
+    jobActivityMirrorEnabled: parseRuntimeFlag(env.ORACLE_JOB_ACTIVITY_MIRROR_ENABLED, false),
+    jobActivityBootstrapLimit: clampInt(
+      env.ORACLE_JOB_ACTIVITY_BOOTSTRAP_LIMIT,
+      1_000,
+      50,
+      10_000,
     ),
     queueSweepHighIntervalMs: clampInt(
       env.ORACLE_QUEUE_SWEEP_HIGH_INTERVAL_MS,

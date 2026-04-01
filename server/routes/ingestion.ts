@@ -265,18 +265,34 @@ export function registerIngestionUserRoutes(app: express.Express, deps: Ingestio
     const scopeRaw = String(req.query.scope || '').trim();
     const scope = scopeRaw || 'manual_refresh_selection';
 
-    const { data: latestRows, error: latestError } = await db
-      .from('ingestion_jobs')
-      .select(INGESTION_JOB_SUMMARY_SELECT_COLUMNS)
-      .eq('requested_by_user_id', userId)
-      .eq('scope', scope)
-      .order('created_at', { ascending: false })
-      .limit(2);
-    if (latestError) {
-      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: latestError.message, data: null });
+    let latestRows: any[] | null = null;
+    if (deps.getLatestUserIngestionJobs) {
+      try {
+        latestRows = await deps.getLatestUserIngestionJobs({
+          userId,
+          scope,
+          limit: 2,
+        });
+      } catch {
+        latestRows = null;
+      }
     }
 
-    const data = pickLatestRelevantIngestionJob((latestRows || []) as any[]);
+    if (!latestRows) {
+      const latestResult = await db
+        .from('ingestion_jobs')
+        .select(INGESTION_JOB_SUMMARY_SELECT_COLUMNS)
+        .eq('requested_by_user_id', userId)
+        .eq('scope', scope)
+        .order('created_at', { ascending: false })
+        .limit(2);
+      if (latestResult.error) {
+        return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: latestResult.error.message, data: null });
+      }
+      latestRows = latestResult.data || [];
+    }
+
+    const data = pickLatestRelevantIngestionJob(latestRows as any[]);
 
     return res.json({
       ok: true,
@@ -320,24 +336,40 @@ export function registerIngestionUserRoutes(app: express.Express, deps: Ingestio
     const limit = deps.clampInt(req.query.limit, 20, 1, 50);
     const scopes = parseScopeCsv(req.query.scope);
 
-    let query = db
-      .from('ingestion_jobs')
-      .select(INGESTION_JOB_SUMMARY_SELECT_COLUMNS)
-      .eq('requested_by_user_id', userId)
-      .in('status', ['queued', 'running'])
-      .order('created_at', { ascending: false })
-      .limit(limit);
-
-    if (scopes.length > 0) {
-      query = query.in('scope', scopes);
+    let activeRows: any[] | null = null;
+    if (deps.listActiveUserIngestionJobs) {
+      try {
+        activeRows = await deps.listActiveUserIngestionJobs({
+          userId,
+          scopes,
+          limit,
+        });
+      } catch {
+        activeRows = null;
+      }
     }
 
-    const { data, error } = await query;
-    if (error) {
-      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error.message, data: null });
+    if (!activeRows) {
+      let query = db
+        .from('ingestion_jobs')
+        .select(INGESTION_JOB_SUMMARY_SELECT_COLUMNS)
+        .eq('requested_by_user_id', userId)
+        .in('status', ['queued', 'running'])
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (scopes.length > 0) {
+        query = query.in('scope', scopes);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error.message, data: null });
+      }
+      activeRows = data || [];
     }
 
-    const rows = ((data || []) as ActiveIngestionJobRow[]).map((row) => ({
+    const rows = (activeRows as ActiveIngestionJobRow[]).map((row) => ({
       ...row,
       status: row.status === 'running' ? 'running' : 'queued',
     }));

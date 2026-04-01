@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { OracleControlPlaneDb } from './oracleControlPlaneDb';
 
 type DbClient = SupabaseClient<any, 'public', any>;
+type TransactionDb = OracleControlPlaneDb['db'];
 
 type QueueAdmissionActiveRow = {
   scope: string;
@@ -37,6 +38,11 @@ function buildQueueAdmissionCountKey(input: {
   userKey: string;
 }) {
   return `scope=${input.scopeKey}|user=${input.userKey}`;
+}
+
+function isActiveQueueAdmissionStatus(status?: string | null) {
+  const normalized = String(status || '').trim();
+  return normalized === 'queued' || normalized === 'running';
 }
 
 function normalizeScopes(scopes?: readonly string[] | null) {
@@ -88,17 +94,22 @@ function buildCountStateRows(activeRows: QueueAdmissionActiveRow[], nowIso: stri
 
 let refreshPromise: Promise<void> | null = null;
 
-async function setLastSnapshotAt(controlDb: OracleControlPlaneDb, nowIso: string) {
-  await controlDb.db
+async function setLastSnapshotAt(input: {
+  controlDb: OracleControlPlaneDb;
+  nowIso: string;
+  db?: TransactionDb;
+}) {
+  const db = input.db || input.controlDb.db;
+  await db
     .insertInto('control_meta')
     .values({
       key: 'queue_admission_last_snapshot_at',
-      value_json: JSON.stringify({ at: nowIso }),
-      updated_at: nowIso,
+      value_json: JSON.stringify({ at: input.nowIso }),
+      updated_at: input.nowIso,
     })
     .onConflict((oc) => oc.column('key').doUpdateSet({
-      value_json: JSON.stringify({ at: nowIso }),
-      updated_at: nowIso,
+      value_json: JSON.stringify({ at: input.nowIso }),
+      updated_at: input.nowIso,
     }))
     .execute();
 }
@@ -147,6 +158,170 @@ export async function replaceOracleQueueAdmissionMirror(input: {
   };
 }
 
+async function applyOracleQueueAdmissionCountDelta(input: {
+  controlDb: OracleControlPlaneDb;
+  db?: TransactionDb;
+  scopeKey: string;
+  userKey: string;
+  delta: number;
+  nowIso: string;
+}) {
+  const delta = Math.trunc(input.delta);
+  if (!delta) return;
+  const db = input.db || input.controlDb.db;
+  const countKey = buildQueueAdmissionCountKey({
+    scopeKey: input.scopeKey,
+    userKey: input.userKey,
+  });
+  const existing = await db
+    .selectFrom('queue_admission_count_state')
+    .select(['active_count'])
+    .where('count_key', '=', countKey)
+    .executeTakeFirst();
+  const nextCount = Math.max(0, Math.floor(Number(existing?.active_count) || 0) + delta);
+
+  if (nextCount <= 0) {
+    await db
+      .deleteFrom('queue_admission_count_state')
+      .where('count_key', '=', countKey)
+      .execute();
+    return;
+  }
+
+  await db
+    .insertInto('queue_admission_count_state')
+    .values({
+      count_key: countKey,
+      scope_key: input.scopeKey,
+      user_key: input.userKey,
+      active_count: nextCount,
+      updated_at: input.nowIso,
+    })
+    .onConflict((oc) => oc.column('count_key').doUpdateSet({
+      active_count: nextCount,
+      updated_at: input.nowIso,
+    }))
+    .execute();
+}
+
+export async function reconcileOracleQueueAdmissionJobState(input: {
+  controlDb: OracleControlPlaneDb;
+  db?: TransactionDb;
+  nowIso?: string;
+  previous: {
+    scope?: string | null;
+    requestedByUserId?: string | null;
+    status?: string | null;
+  } | null;
+  next: {
+    scope?: string | null;
+    requestedByUserId?: string | null;
+    status?: string | null;
+  } | null;
+}) {
+  const nowIso = normalizeIsoOrNull(input.nowIso) || new Date().toISOString();
+  const db = input.db || input.controlDb.db;
+  const previousActive = isActiveQueueAdmissionStatus(input.previous?.status);
+  const nextActive = isActiveQueueAdmissionStatus(input.next?.status);
+  const previousScopeKey = normalizeScopeKey(input.previous?.scope);
+  const nextScopeKey = normalizeScopeKey(input.next?.scope);
+  const previousUserKey = normalizeUserKey(input.previous?.requestedByUserId);
+  const nextUserKey = normalizeUserKey(input.next?.requestedByUserId);
+
+  if (
+    previousActive === nextActive
+    && previousScopeKey === nextScopeKey
+    && previousUserKey === nextUserKey
+  ) {
+    await setLastSnapshotAt({
+      controlDb: input.controlDb,
+      nowIso,
+      db,
+    });
+    return;
+  }
+
+  if (previousActive) {
+    await applyOracleQueueAdmissionCountDelta({
+      controlDb: input.controlDb,
+      db,
+      scopeKey: '*',
+      userKey: '*',
+      delta: -1,
+      nowIso,
+    });
+    await applyOracleQueueAdmissionCountDelta({
+      controlDb: input.controlDb,
+      db,
+      scopeKey: previousScopeKey,
+      userKey: '*',
+      delta: -1,
+      nowIso,
+    });
+    if (previousUserKey !== '*') {
+      await applyOracleQueueAdmissionCountDelta({
+        controlDb: input.controlDb,
+        db,
+        scopeKey: '*',
+        userKey: previousUserKey,
+        delta: -1,
+        nowIso,
+      });
+      await applyOracleQueueAdmissionCountDelta({
+        controlDb: input.controlDb,
+        db,
+        scopeKey: previousScopeKey,
+        userKey: previousUserKey,
+        delta: -1,
+        nowIso,
+      });
+    }
+  }
+
+  if (nextActive) {
+    await applyOracleQueueAdmissionCountDelta({
+      controlDb: input.controlDb,
+      db,
+      scopeKey: '*',
+      userKey: '*',
+      delta: 1,
+      nowIso,
+    });
+    await applyOracleQueueAdmissionCountDelta({
+      controlDb: input.controlDb,
+      db,
+      scopeKey: nextScopeKey,
+      userKey: '*',
+      delta: 1,
+      nowIso,
+    });
+    if (nextUserKey !== '*') {
+      await applyOracleQueueAdmissionCountDelta({
+        controlDb: input.controlDb,
+        db,
+        scopeKey: '*',
+        userKey: nextUserKey,
+        delta: 1,
+        nowIso,
+      });
+      await applyOracleQueueAdmissionCountDelta({
+        controlDb: input.controlDb,
+        db,
+        scopeKey: nextScopeKey,
+        userKey: nextUserKey,
+        delta: 1,
+        nowIso,
+      });
+    }
+  }
+
+  await setLastSnapshotAt({
+    controlDb: input.controlDb,
+    nowIso,
+    db,
+  });
+}
+
 export async function syncOracleQueueAdmissionMirrorFromSupabase(input: {
   controlDb: OracleControlPlaneDb;
   db: DbClient;
@@ -189,7 +364,10 @@ export async function ensureOracleQueueAdmissionMirrorFresh(input: {
       db: input.db,
       nowIso,
     }).then(async () => {
-      await setLastSnapshotAt(input.controlDb, nowIso);
+      await setLastSnapshotAt({
+        controlDb: input.controlDb,
+        nowIso,
+      });
     }).finally(() => {
       refreshPromise = null;
     });
