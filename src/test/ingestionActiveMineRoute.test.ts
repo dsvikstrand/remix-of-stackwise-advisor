@@ -188,7 +188,10 @@ describe('ingestion user routes', () => {
         },
       }) as any,
       getServiceSupabaseClient: () => null,
-      getUserIngestionJobById,
+      getUserIngestionJobById: (_db, input) => getUserIngestionJobById(input),
+      getLatestUserIngestionJobs: async () => [],
+      listActiveUserIngestionJobs: async () => [],
+      listQueuedJobsForScopes: async () => [],
       clampInt: (_raw, fallback) => fallback,
       ingestionLatestMineLimiter: (_req, _res, next) => next(),
       workerConcurrency: 2,
@@ -222,12 +225,10 @@ describe('ingestion user routes', () => {
           throw new Error('Authed Supabase reads should not run for Oracle-backed active-mine rows');
         },
       }) as any,
-      getServiceSupabaseClient: () => ({
-        from() {
-          throw new Error('Service Supabase queue-position fallback should not run when Oracle provides queued rows');
-        },
-      }) as any,
-      listActiveUserIngestionJobs: async () => [{
+      getServiceSupabaseClient: () => null,
+      getUserIngestionJobById: async () => null,
+      getLatestUserIngestionJobs: async () => [],
+      listActiveUserIngestionJobs: async (_db, _input) => [{
         id: 'job_queue_target',
         trigger: 'user_sync',
         scope: 'manual_refresh_selection',
@@ -289,6 +290,65 @@ describe('ingestion user routes', () => {
             estimated_start_seconds: 4,
           },
         ],
+      },
+    });
+  });
+
+  it('uses the centralized latest-mine reader before any authed Supabase fallback', async () => {
+    const app = createMockApp();
+
+    registerIngestionUserRoutes(app as any, {
+      getAuthedSupabaseClient: () => ({
+        from() {
+          throw new Error('Authed Supabase latest-mine fallback should not run when centralized reader returns rows');
+        },
+      }) as any,
+      getServiceSupabaseClient: () => null,
+      getUserIngestionJobById: async () => null,
+      getLatestUserIngestionJobs: async (_db, input) => [{
+        id: 'job_latest_active',
+        trigger: 'user_sync',
+        scope: input.scope,
+        status: 'running',
+        started_at: '2026-04-01T09:00:00.000Z',
+        finished_at: null,
+        processed_count: 1,
+        inserted_count: 0,
+        skipped_count: 0,
+        error_code: null,
+        error_message: null,
+        attempts: 1,
+        max_attempts: 3,
+        next_run_at: null,
+        lease_expires_at: null,
+        trace_id: 'trace_latest_mine',
+        created_at: '2026-04-01T08:59:00.000Z',
+        updated_at: '2026-04-01T09:00:00.000Z',
+      }],
+      listActiveUserIngestionJobs: async () => [],
+      listQueuedJobsForScopes: async () => [],
+      clampInt: (_raw, fallback) => fallback,
+      ingestionLatestMineLimiter: (_req, _res, next) => next(),
+      workerConcurrency: 2,
+      queuedIngestionScopes: ['manual_refresh_selection'],
+      isQueuedIngestionScope: () => true,
+    });
+
+    const handler = app.handlers['GET /api/ingestion/jobs/latest-mine'];
+    const res = createResponse();
+    await handler({
+      query: {
+        scope: 'manual_refresh_selection',
+      },
+    } as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        job_id: 'job_latest_active',
+        scope: 'manual_refresh_selection',
+        trace_id: 'trace_latest_mine',
       },
     });
   });

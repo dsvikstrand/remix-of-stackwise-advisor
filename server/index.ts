@@ -1133,88 +1133,173 @@ async function failIngestionJobWithMirror(
   return failedJob;
 }
 
-async function listLatestUserIngestionJobsOracleFirst(input: {
-  userId: string;
-  scope: string;
-  limit: number;
-}) {
-  if (!oracleJobActivityMirrorEnabled || !oracleControlPlane) {
-    return null;
+async function markRunningIngestionJobsFailedWithMirror(
+  db: ReturnType<typeof createClient>,
+  input: {
+    jobIds: string[];
+    errorCode: string;
+    errorMessage: string;
+    action: string;
+  },
+) {
+  const uniqueJobIds = [...new Set(
+    (Array.isArray(input.jobIds) ? input.jobIds : [])
+      .map((jobId) => String(jobId || '').trim())
+      .filter(Boolean),
+  )];
+  if (uniqueJobIds.length === 0) {
+    return 0;
   }
 
-  try {
-    return await listOracleLatestJobsForUserScope({
-      controlDb: oracleControlPlane,
-      userId: input.userId,
-      scope: input.scope,
-      limit: input.limit,
-    });
-  } catch (error) {
-    console.warn('[oracle-control-plane] job_activity_mirror_failed', JSON.stringify({
-      action: 'list_latest_for_user_scope',
-      scope: input.scope,
-      user_id: input.userId,
-      error: error instanceof Error ? error.message : String(error),
-    }));
-    return null;
+  const finishedAt = new Date().toISOString();
+  let updated = 0;
+  for (const jobId of uniqueJobIds) {
+    const { data, error } = await db
+      .from('ingestion_jobs')
+      .update({
+        status: 'failed',
+        finished_at: finishedAt,
+        lease_expires_at: null,
+        worker_id: null,
+        last_heartbeat_at: finishedAt,
+        error_code: input.errorCode,
+        error_message: input.errorMessage.slice(0, 500),
+      })
+      .eq('id', jobId)
+      .eq('status', 'running')
+      .select('*')
+      .maybeSingle();
+    if (error) throw error;
+    if (!data?.id) continue;
+    updated += 1;
+    await upsertOracleJobActivityFromKnownRow(data as IngestionJobRow, input.action);
   }
+  return updated;
 }
 
-async function listActiveUserIngestionJobsOracleFirst(input: {
-  userId: string;
-  scopes: string[];
-  limit: number;
-}) {
-  if (!oracleJobActivityMirrorEnabled || !oracleControlPlane) {
-    return null;
+async function listLatestUserIngestionJobsOracleFirst(
+  db: ReturnType<typeof createClient>,
+  input: {
+    userId: string;
+    scope: string;
+    limit: number;
+  },
+) {
+  if (oracleJobActivityMirrorEnabled && oracleControlPlane) {
+    try {
+      const rows = await listOracleLatestJobsForUserScope({
+        controlDb: oracleControlPlane,
+        userId: input.userId,
+        scope: input.scope,
+        limit: input.limit,
+      });
+      if (rows.length > 0) return rows;
+    } catch (error) {
+      console.warn('[oracle-control-plane] job_activity_mirror_failed', JSON.stringify({
+        action: 'list_latest_for_user_scope',
+        scope: input.scope,
+        user_id: input.userId,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
   }
 
-  try {
-    return await listOracleActiveJobsForUser({
-      controlDb: oracleControlPlane,
-      userId: input.userId,
-      scopes: input.scopes,
-      limit: input.limit,
-    });
-  } catch (error) {
-    console.warn('[oracle-control-plane] job_activity_mirror_failed', JSON.stringify({
-      action: 'list_active_for_user',
-      scopes: input.scopes,
-      user_id: input.userId,
-      error: error instanceof Error ? error.message : String(error),
-    }));
-    return null;
-  }
+  const latestResult = await db
+    .from('ingestion_jobs')
+    .select('id, trigger, scope, status, started_at, finished_at, processed_count, inserted_count, skipped_count, error_code, error_message, attempts, max_attempts, next_run_at, lease_expires_at, trace_id, created_at, updated_at')
+    .eq('requested_by_user_id', input.userId)
+    .eq('scope', input.scope)
+    .order('created_at', { ascending: false })
+    .limit(Math.max(1, Math.min(10, input.limit)));
+  if (latestResult.error) throw latestResult.error;
+  return latestResult.data || [];
 }
 
-async function getUserIngestionJobByIdOracleFirst(input: {
-  userId: string;
-  jobId: string;
-}) {
+async function listActiveUserIngestionJobsOracleFirst(
+  db: ReturnType<typeof createClient>,
+  input: {
+    userId: string;
+    scopes: string[];
+    limit: number;
+  },
+) {
+  if (oracleJobActivityMirrorEnabled && oracleControlPlane) {
+    try {
+      const rows = await listOracleActiveJobsForUser({
+        controlDb: oracleControlPlane,
+        userId: input.userId,
+        scopes: input.scopes,
+        limit: input.limit,
+      });
+      if (rows.length > 0 || input.scopes.length === 0) return rows;
+    } catch (error) {
+      console.warn('[oracle-control-plane] job_activity_mirror_failed', JSON.stringify({
+        action: 'list_active_for_user',
+        scopes: input.scopes,
+        user_id: input.userId,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+
+  let query = db
+    .from('ingestion_jobs')
+    .select('id, trigger, scope, status, started_at, finished_at, processed_count, inserted_count, skipped_count, error_code, error_message, attempts, max_attempts, next_run_at, lease_expires_at, trace_id, payload, created_at, updated_at')
+    .eq('requested_by_user_id', input.userId)
+    .in('status', ['queued', 'running'])
+    .order('created_at', { ascending: false })
+    .limit(Math.max(1, Math.min(50, input.limit)));
+
+  if (input.scopes.length > 0) {
+    query = query.in('scope', input.scopes);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+async function getUserIngestionJobByIdOracleFirst(
+  db: ReturnType<typeof createClient>,
+  input: {
+    userId: string;
+    jobId: string;
+  },
+) {
   const normalizedJobId = String(input.jobId || '').trim();
-  if (!oracleJobActivityMirrorEnabled || !oracleControlPlane || !normalizedJobId) {
+  if (!normalizedJobId) {
     return null;
   }
 
-  try {
-    const rows = await listOracleJobsByIds({
-      controlDb: oracleControlPlane,
-      jobIds: [normalizedJobId],
-    });
-    const row = rows.find((candidate) => (
-      String(candidate.id || '').trim() === normalizedJobId
-      && String(candidate.requested_by_user_id || '').trim() === String(input.userId || '').trim()
-    ));
-    return row || null;
-  } catch (error) {
-    console.warn('[oracle-control-plane] job_activity_mirror_failed', JSON.stringify({
-      action: 'get_user_job_by_id',
-      job_id: normalizedJobId,
-      user_id: input.userId,
-      error: error instanceof Error ? error.message : String(error),
-    }));
-    return null;
+  if (oracleJobActivityMirrorEnabled && oracleControlPlane) {
+    try {
+      const rows = await listOracleJobsByIds({
+        controlDb: oracleControlPlane,
+        jobIds: [normalizedJobId],
+      });
+      const row = rows.find((candidate) => (
+        String(candidate.id || '').trim() === normalizedJobId
+        && String(candidate.requested_by_user_id || '').trim() === String(input.userId || '').trim()
+      ));
+      if (row) return row;
+    } catch (error) {
+      console.warn('[oracle-control-plane] job_activity_mirror_failed', JSON.stringify({
+        action: 'get_user_job_by_id',
+        job_id: normalizedJobId,
+        user_id: input.userId,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
   }
+
+  const result = await db
+    .from('ingestion_jobs')
+    .select('id, trigger, scope, status, started_at, finished_at, processed_count, inserted_count, skipped_count, error_code, error_message, attempts, max_attempts, next_run_at, lease_expires_at, trace_id, created_at, updated_at')
+    .eq('id', normalizedJobId)
+    .eq('requested_by_user_id', input.userId)
+    .maybeSingle();
+  if (result.error) throw result.error;
+  return result.data || null;
 }
 
 async function getActiveIngestionJobForScopeOracleFirst(input: {
@@ -1251,31 +1336,53 @@ async function getActiveIngestionJobForScopeOracleFirst(input: {
 async function listQueuedJobsForScopesOracleFirst(input: {
   scopes: string[];
 }) {
-  if (!oracleJobActivityMirrorEnabled || !oracleControlPlane) {
-    return null;
+  if (oracleJobActivityMirrorEnabled && oracleControlPlane) {
+    try {
+      const rows = await listOracleActiveJobsForScopes({
+        controlDb: oracleControlPlane,
+        scopes: input.scopes,
+        limit: 5000,
+      });
+      return rows
+        .filter((row) => row.status === 'queued')
+        .map((row) => ({
+          id: row.id,
+          next_run_at: row.next_run_at,
+          created_at: row.created_at,
+        }));
+    } catch (error) {
+      console.warn('[oracle-control-plane] job_activity_mirror_failed', JSON.stringify({
+        action: 'list_queued_jobs_for_scopes',
+        scopes: input.scopes,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
   }
 
-  try {
-    const rows = await listOracleActiveJobsForScopes({
-      controlDb: oracleControlPlane,
-      scopes: input.scopes,
-      limit: 5000,
-    });
-    return rows
-      .filter((row) => row.status === 'queued')
-      .map((row) => ({
-        id: row.id,
-        next_run_at: row.next_run_at,
-        created_at: row.created_at,
-      }));
-  } catch (error) {
-    console.warn('[oracle-control-plane] job_activity_mirror_failed', JSON.stringify({
-      action: 'list_queued_jobs_for_scopes',
-      scopes: input.scopes,
-      error: error instanceof Error ? error.message : String(error),
-    }));
-    return null;
+  const serviceDb = getServiceSupabaseClient();
+  if (!serviceDb) {
+    return [];
   }
+
+  let queueQuery = serviceDb
+    .from('ingestion_jobs')
+    .select('id, next_run_at, created_at')
+    .eq('status', 'queued')
+    .order('next_run_at', { ascending: true })
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true });
+
+  if (input.scopes.length > 0) {
+    queueQuery = queueQuery.in('scope', input.scopes);
+  }
+
+  const { data, error } = await queueQuery;
+  if (error) throw error;
+  return (data || []) as Array<{
+    id: string;
+    next_run_at: string | null;
+    created_at: string | null;
+  }>;
 }
 
 function normalizeOracleJobPayload(raw: unknown) {
@@ -4262,6 +4369,10 @@ async function runUnlockSweeps(db: ReturnType<typeof createClient>, input?: {
       listRunningUnlockJobs: (workerDb, limit, staleBeforeIso) => (
         listRunningUnlockJobsOracleFirst(workerDb, limit, staleBeforeIso)
       ),
+      markJobsFailed: (workerDb, sweepInput) => markRunningIngestionJobsFailedWithMirror(workerDb, {
+        ...sweepInput,
+        action: 'unlock_reliability_orphan_jobs_failed',
+      }),
     });
     const recoveredAny = (
       sweepResult.expired_recovered

@@ -212,29 +212,14 @@ export function registerIngestionUserRoutes(app: express.Express, deps: Ingestio
     if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
 
     let data: any | null = null;
-    if (deps.getUserIngestionJobById) {
-      try {
-        data = await deps.getUserIngestionJobById({
-          userId,
-          jobId: req.params.id,
-        });
-      } catch {
-        data = null;
-      }
-    }
-
-    if (!data) {
-      const result = await db
-        .from('ingestion_jobs')
-        .select(INGESTION_JOB_DETAIL_SELECT_COLUMNS)
-        .eq('id', req.params.id)
-        .eq('requested_by_user_id', userId)
-        .maybeSingle();
-
-      if (result.error) {
-        return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: result.error.message, data: null });
-      }
-      data = result.data || null;
+    try {
+      data = await deps.getUserIngestionJobById(db, {
+        userId,
+        jobId: req.params.id,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not read ingestion job';
+      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message, data: null });
     }
     if (!data) {
       return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Ingestion job not found', data: null });
@@ -280,31 +265,16 @@ export function registerIngestionUserRoutes(app: express.Express, deps: Ingestio
     const scopeRaw = String(req.query.scope || '').trim();
     const scope = scopeRaw || 'manual_refresh_selection';
 
-    let latestRows: any[] | null = null;
-    if (deps.getLatestUserIngestionJobs) {
-      try {
-        latestRows = await deps.getLatestUserIngestionJobs({
-          userId,
-          scope,
-          limit: 2,
-        });
-      } catch {
-        latestRows = null;
-      }
-    }
-
-    if (!latestRows) {
-      const latestResult = await db
-        .from('ingestion_jobs')
-        .select(INGESTION_JOB_SUMMARY_SELECT_COLUMNS)
-        .eq('requested_by_user_id', userId)
-        .eq('scope', scope)
-        .order('created_at', { ascending: false })
-        .limit(2);
-      if (latestResult.error) {
-        return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: latestResult.error.message, data: null });
-      }
-      latestRows = latestResult.data || [];
+    let latestRows: any[] = [];
+    try {
+      latestRows = await deps.getLatestUserIngestionJobs(db, {
+        userId,
+        scope,
+        limit: 2,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not read ingestion jobs';
+      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message, data: null });
     }
 
     const data = pickLatestRelevantIngestionJob(latestRows as any[]);
@@ -351,37 +321,16 @@ export function registerIngestionUserRoutes(app: express.Express, deps: Ingestio
     const limit = deps.clampInt(req.query.limit, 20, 1, 50);
     const scopes = parseScopeCsv(req.query.scope);
 
-    let activeRows: any[] | null = null;
-    if (deps.listActiveUserIngestionJobs) {
-      try {
-        activeRows = await deps.listActiveUserIngestionJobs({
-          userId,
-          scopes,
-          limit,
-        });
-      } catch {
-        activeRows = null;
-      }
-    }
-
-    if (!activeRows) {
-      let query = db
-        .from('ingestion_jobs')
-        .select(INGESTION_JOB_SUMMARY_SELECT_COLUMNS)
-        .eq('requested_by_user_id', userId)
-        .in('status', ['queued', 'running'])
-        .order('created_at', { ascending: false })
-        .limit(limit);
-
-      if (scopes.length > 0) {
-        query = query.in('scope', scopes);
-      }
-
-      const { data, error } = await query;
-      if (error) {
-        return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error.message, data: null });
-      }
-      activeRows = data || [];
+    let activeRows: any[] = [];
+    try {
+      activeRows = await deps.listActiveUserIngestionJobs(db, {
+        userId,
+        scopes,
+        limit,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not read active ingestion jobs';
+      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message, data: null });
     }
 
     const rows = (activeRows as ActiveIngestionJobRow[]).map((row) => ({
@@ -402,37 +351,13 @@ export function registerIngestionUserRoutes(app: express.Express, deps: Ingestio
         queuedIngestionScopes: deps.queuedIngestionScopes,
       });
 
-      let queueRows: QueueOrderRow[] | null = null;
-      if (deps.listQueuedJobsForScopes) {
-        try {
-          queueRows = await deps.listQueuedJobsForScopes({
-            scopes: queuedScopes,
-          });
-        } catch {
-          queueRows = null;
-        }
-      }
-
-      if (!queueRows) {
-        const serviceDb = deps.getServiceSupabaseClient();
-        if (serviceDb) {
-          let queueQuery = serviceDb
-            .from('ingestion_jobs')
-            .select('id, next_run_at, created_at')
-            .eq('status', 'queued')
-            .order('next_run_at', { ascending: true })
-            .order('created_at', { ascending: true })
-            .order('id', { ascending: true });
-
-          if (queuedScopes.length > 0) {
-            queueQuery = queueQuery.in('scope', queuedScopes);
-          }
-
-          const { data: fallbackRows, error: queueError } = await queueQuery;
-          if (!queueError && Array.isArray(fallbackRows)) {
-            queueRows = fallbackRows as QueueOrderRow[];
-          }
-        }
+      let queueRows: QueueOrderRow[] = [];
+      try {
+        queueRows = await deps.listQueuedJobsForScopes({
+          scopes: queuedScopes,
+        });
+      } catch {
+        queueRows = [];
       }
 
       if (Array.isArray(queueRows)) {

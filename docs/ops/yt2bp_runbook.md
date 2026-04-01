@@ -114,8 +114,10 @@
     - `GET /api/ingestion/jobs/active-mine` queue-position scans now narrow to requested or visible queued scopes instead of every queued ingestion scope
     - shared source-unlock trust restore now uses a slower baseline (`5m` poll / `30m` stale window), and Home `For You` no longer forces an extra resume refetch on mount
     - Oracle job-activity mirror now also serves owner-scoped `GET /api/ingestion/jobs/:id`, Oracle-first active `all_active_subscriptions` duplicate guards, and Oracle-backed queue-position reads for `GET /api/ingestion/jobs/active-mine` before Supabase fallback
+    - ingestion user-status routes now consume centralized Oracle-first readers end-to-end, so `:id`, `latest-mine`, `active-mine`, and queued-position ordering no longer keep their own inline Supabase fallback branches in the route file
     - hot enqueue/worker lifecycle transitions now update that Oracle job-activity mirror directly from the inserted/claimed/finalized/recovered `ingestion_jobs` rows in hand, instead of doing a second Supabase read just to refresh mirror state
     - queued-worker lease heartbeats now also refresh the Oracle job-activity mirror from the already-claimed job row, so long-running queue health stays warm locally without another Supabase mirror-read round trip
+    - unlock reliability orphan-job recovery now also uses the same Oracle-aware failure path, so stale running unlock jobs no longer bypass mirror updates when they are forced terminal
     - user-triggered generation/sync handlers now also stay on that centralized Oracle-aware path: manual refresh, source-page unlock generation, search generation, and foreground subscription sync enqueue/finalize through shared helpers rather than inline `ingestion_jobs` writes
     - service/debug control now does the same: `/api/ingestion/jobs/trigger` and debug subscription simulation both enqueue/finalize through the shared Oracle-aware helpers instead of direct handler-local `ingestion_jobs` writes
   - Durable generation trace writes are also slimmer:
