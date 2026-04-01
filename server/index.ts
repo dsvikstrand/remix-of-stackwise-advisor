@@ -64,6 +64,11 @@ import {
   selectDueOracleQueueSweeps,
 } from './services/oracleQueueSweepScheduler';
 import {
+  readOracleQueueAdmissionCounts,
+  supportsOracleQueueAdmissionMirror,
+  syncOracleQueueAdmissionMirrorFromSupabase,
+} from './services/oracleQueueAdmissionState';
+import {
   evaluateOraclePrimarySchedulerDecision,
   evaluateOracleShadowSchedulerDecision,
 } from './services/oracleSubscriptionScheduler';
@@ -539,6 +544,11 @@ const oracleQueueClaimControlEnabled = (
   && !oracleControlPlaneConfig.queueSweepControlEnabled
   && Boolean(oracleControlPlane)
 );
+const oracleQueueAdmissionMirrorEnabled = (
+  oracleControlPlaneConfig.enabled
+  && oracleControlPlaneConfig.queueAdmissionMirrorEnabled
+  && Boolean(oracleControlPlane)
+);
 const oracleQueueSweepControlEnabled = (
   oracleControlPlaneConfig.enabled
   && oracleControlPlaneConfig.queueSweepControlEnabled
@@ -826,6 +836,72 @@ function getQueueSweepPlan() {
     scopes: [...QUEUED_INGESTION_SCOPES],
     maxJobs: workerBatchSize,
   }];
+}
+
+async function countQueueDepthForAdmission(
+  db: ReturnType<typeof createClient>,
+  input?: {
+    scope?: string;
+    scopes?: string[];
+    userId?: string;
+    includeRunning?: boolean;
+    statuses?: string[];
+  },
+) {
+  if (!oracleQueueAdmissionMirrorEnabled || !oracleControlPlane || !supportsOracleQueueAdmissionMirror(input)) {
+    return countQueueDepth(db, input);
+  }
+
+  try {
+    const counts = await readOracleQueueAdmissionCounts({
+      controlDb: oracleControlPlane,
+      db,
+      refreshStaleMs: oracleControlPlaneConfig.queueAdmissionRefreshStaleMs,
+      userId: String(input?.userId || '').trim(),
+      scope: input?.scope,
+      scopes: input?.scopes,
+    });
+    return input?.userId ? counts.user_queue_depth : counts.queue_depth;
+  } catch (error) {
+    console.warn('[oracle-control-plane] queue_admission_mirror_failed', JSON.stringify({
+      action: 'count_queue_depth',
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    return countQueueDepth(db, input);
+  }
+}
+
+async function countQueueWorkItemsForAdmission(
+  db: ReturnType<typeof createClient>,
+  input?: {
+    scope?: string;
+    scopes?: string[];
+    userId?: string;
+    includeRunning?: boolean;
+    statuses?: string[];
+  },
+) {
+  if (!oracleQueueAdmissionMirrorEnabled || !oracleControlPlane || !supportsOracleQueueAdmissionMirror(input)) {
+    return countQueueWorkItems(db, input);
+  }
+
+  try {
+    const counts = await readOracleQueueAdmissionCounts({
+      controlDb: oracleControlPlane,
+      db,
+      refreshStaleMs: oracleControlPlaneConfig.queueAdmissionRefreshStaleMs,
+      userId: String(input?.userId || '').trim(),
+      scope: input?.scope,
+      scopes: input?.scopes,
+    });
+    return input?.userId ? counts.user_queue_work_items : counts.queue_work_items;
+  } catch (error) {
+    console.warn('[oracle-control-plane] queue_admission_mirror_failed', JSON.stringify({
+      action: 'count_queue_work_items',
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    return countQueueWorkItems(db, input);
+  }
 }
 
 const queuedWorkerId = `ingestion-worker-${process.pid}`;
@@ -1812,8 +1888,8 @@ registerYouTubeRoutes(app, {
   YouTubeSearchError,
   youtubeSearchCacheService,
   youtubeQuotaGuardService,
-  countQueueDepth,
-  countQueueWorkItems,
+  countQueueDepth: countQueueDepthForAdmission,
+  countQueueWorkItems: countQueueWorkItemsForAdmission,
   emitGenerationStartedNotification,
   getGenerationNotificationLinkPath,
   scheduleQueuedIngestionProcessing,
@@ -4305,7 +4381,7 @@ async function shouldSuppressLowPriorityEnqueue(input: {
   scope: QueuedIngestionScope;
   context?: Record<string, unknown>;
 }) {
-  const queueDepth = await countQueueDepth(input.db, { includeRunning: true });
+  const queueDepth = await countQueueDepthForAdmission(input.db, { includeRunning: true });
   const suppressed = shouldSuppressLowPriorityQueueScope({
     scope: input.scope,
     queueDepth,
@@ -4497,7 +4573,7 @@ async function requestManualBlueprintYouTubeCommentsRefresh(input: {
     };
   }
 
-  const queueDepth = await countQueueDepth(input.db, {
+  const queueDepth = await countQueueDepthForAdmission(input.db, {
     statuses: ['queued', 'running'],
     scopes: [...QUEUED_INGESTION_SCOPES],
   });
@@ -8209,10 +8285,20 @@ async function bootstrapOracleControlPlaneState() {
     scope: 'all_active_subscriptions',
   });
 
+  let queueAdmissionActiveCount: number | null = null;
+  if (oracleControlPlaneConfig.queueAdmissionMirrorEnabled) {
+    const queueAdmissionBootstrap = await syncOracleQueueAdmissionMirrorFromSupabase({
+      controlDb: oracleControlPlane,
+      db,
+    });
+    queueAdmissionActiveCount = queueAdmissionBootstrap.activeCount;
+  }
+
   console.log('[oracle-control-plane] bootstrap complete', JSON.stringify({
     scheduler_mode: oracleControlPlaneConfig.subscriptionSchedulerMode,
     sqlite_path: oracleControlPlane.sqlitePath,
     subscription_count: bootstrapResult.activeCount,
+    queue_admission_active_count: queueAdmissionActiveCount,
     bootstrap_batch: oracleControlPlaneConfig.bootstrapBatch,
   }));
 }
@@ -8223,7 +8309,7 @@ async function runYouTubeRefreshSchedulerCycle() {
   if (!db) return;
 
   try {
-    const queueDepth = await countQueueDepth(db, {
+    const queueDepth = await countQueueDepthForAdmission(db, {
       statuses: ['queued', 'running'],
       scopes: [...QUEUED_INGESTION_SCOPES],
     });
@@ -8438,8 +8524,8 @@ registerSourceSubscriptionsRoutes(app, {
   generationDurationLookupTimeoutMs,
   recoverStaleIngestionJobs,
   getActiveManualRefreshJob,
-  countQueueDepth,
-  countQueueWorkItems,
+  countQueueDepth: countQueueDepthForAdmission,
+  countQueueWorkItems: countQueueWorkItemsForAdmission,
   queueDepthHardLimit,
   queueDepthPerUserLimit,
   queueWorkItemsHardLimit,
@@ -8502,8 +8588,8 @@ registerSourcePagesRoutes(app, {
   failUnlock,
   attachReservationLedger,
   markUnlockProcessing,
-  countQueueDepth,
-  countQueueWorkItems,
+  countQueueDepth: countQueueDepthForAdmission,
+  countQueueWorkItems: countQueueWorkItemsForAdmission,
   unlockIntakeEnabled,
   queueDepthHardLimit,
   queueDepthPerUserLimit,
@@ -8565,8 +8651,8 @@ registerOpsRoutes(app, {
   runUnlockSweeps,
   runSourcePageAssetSweep,
   seedSourceTranscriptRevalidateJobs,
-  countQueueDepth,
-  countQueueWorkItems,
+  countQueueDepth: countQueueDepthForAdmission,
+  countQueueWorkItems: countQueueWorkItemsForAdmission,
   createUnlockTraceId,
   scheduleQueuedIngestionProcessing,
   queueDepthHardLimit,
@@ -9197,6 +9283,8 @@ if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
     primary_max_batches_per_run: oracleControlPlaneConfig.primaryMaxBatchesPerRun,
     queue_control_enabled: oracleControlPlaneConfig.queueControlEnabled,
     queue_sweep_control_enabled: oracleControlPlaneConfig.queueSweepControlEnabled,
+    queue_admission_mirror_enabled: oracleControlPlaneConfig.queueAdmissionMirrorEnabled,
+    queue_admission_refresh_stale_ms: oracleControlPlaneConfig.queueAdmissionRefreshStaleMs,
     queue_sweep_high_interval_ms: oracleControlPlaneConfig.queueSweepHighIntervalMs,
     queue_sweep_medium_interval_ms: oracleControlPlaneConfig.queueSweepMediumIntervalMs,
     queue_sweep_low_interval_ms: oracleControlPlaneConfig.queueSweepLowIntervalMs,

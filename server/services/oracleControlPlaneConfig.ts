@@ -20,6 +20,8 @@ export type OracleControlPlaneConfig = {
   errorRetryMs: number;
   queueControlEnabled: boolean;
   queueSweepControlEnabled: boolean;
+  queueAdmissionMirrorEnabled: boolean;
+  queueAdmissionRefreshStaleMs: number;
   queueSweepHighIntervalMs: number;
   queueSweepMediumIntervalMs: number;
   queueSweepLowIntervalMs: number;
@@ -92,6 +94,13 @@ export function readOracleControlPlaneConfig(
     errorRetryMs: clampInt(env.ORACLE_SUBSCRIPTION_RETRY_ERROR_MS, 15 * 60_000, 60_000, 24 * 60 * 60_000),
     queueControlEnabled: parseRuntimeFlag(env.ORACLE_QUEUE_CONTROL_ENABLED, false),
     queueSweepControlEnabled: parseRuntimeFlag(env.ORACLE_QUEUE_SWEEP_CONTROL_ENABLED, false),
+    queueAdmissionMirrorEnabled: parseRuntimeFlag(env.ORACLE_QUEUE_ADMISSION_MIRROR_ENABLED, false),
+    queueAdmissionRefreshStaleMs: clampInt(
+      env.ORACLE_QUEUE_ADMISSION_REFRESH_STALE_MS,
+      15_000,
+      1_000,
+      24 * 60 * 60_000,
+    ),
     queueSweepHighIntervalMs: clampInt(
       env.ORACLE_QUEUE_SWEEP_HIGH_INTERVAL_MS,
       5_000,

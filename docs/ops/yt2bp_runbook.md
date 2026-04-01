@@ -413,6 +413,8 @@ Required runtime variables:
 - `ORACLE_SUBSCRIPTION_RETRY_ERROR_MS` (default `900000`; next-due retry interval after subscription sync failure)
 - `ORACLE_QUEUE_CONTROL_ENABLED` (default `false`; enables Oracle-local claim/backoff control for the queued worker while Supabase still stores durable queue truth)
 - `ORACLE_QUEUE_SWEEP_CONTROL_ENABLED` (default `false`; enables Oracle-local sweep cadence/tier selection for the queued worker while Supabase still performs durable claim RPCs)
+- `ORACLE_QUEUE_ADMISSION_MIRROR_ENABLED` (default `false`; enables Oracle-local mirrored active queue counts for hot admission/backpressure reads while Supabase still stores the durable queued/running rows)
+- `ORACLE_QUEUE_ADMISSION_REFRESH_STALE_MS` (default `15000`; maximum tolerated age for Oracle-local mirrored queue-admission counts before the backend refreshes them from Supabase)
 - `ORACLE_QUEUE_SWEEP_HIGH_INTERVAL_MS` (default `5000`; Oracle-local due interval for high-priority queue sweeps)
 - `ORACLE_QUEUE_SWEEP_MEDIUM_INTERVAL_MS` (default `15000`; Oracle-local due interval for medium-priority queue sweeps)
 - `ORACLE_QUEUE_SWEEP_LOW_INTERVAL_MS` (default `60000`; Oracle-local due interval for low-priority queue sweeps)
@@ -1011,6 +1013,7 @@ Notes:
 - Oracle-primary runs may also drain more than one due batch per job when backlog remains, bounded by `ORACLE_SUBSCRIPTION_PRIMARY_MAX_BATCHES_PER_RUN`
 - queued-worker sweep cadence may now also be owned by Oracle-local queue-sweep state through `ORACLE_QUEUE_SWEEP_*`: Oracle decides which priority tiers are due, what batch size each tier uses, and when the worker should wake for the next due sweep, while Supabase still stores queued/running rows, claims, leases, and retries
 - repeated empty queued-worker claim attempts may still be backstopped by Oracle-local queue-control cooldown state through `ORACLE_QUEUE_*`, especially for medium/low-priority tiers
+- hot admission/backpressure reads may now also be served from Oracle-local queue-admission mirror state through `ORACLE_QUEUE_ADMISSION_*`, so search/manual-refresh/source-page/subscription enqueue guards can reuse one local active-count snapshot instead of re-reading active queue counts from Supabase on each request
 - repeated identical subscription sync errors now refresh `last_polled_at` / `last_sync_error` at `30m` instead of `15m`
 
 Auto-banner worker cron example (every 5 minutes):

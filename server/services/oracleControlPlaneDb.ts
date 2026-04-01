@@ -78,6 +78,14 @@ type QueueSweepControlStateTable = {
   updated_at: string;
 };
 
+type QueueAdmissionCountStateTable = {
+  count_key: string;
+  scope_key: string;
+  user_key: string;
+  active_count: number;
+  updated_at: string;
+};
+
 export type OracleControlPlaneDatabase = {
   control_meta: ControlMetaTable;
   subscription_schedule_state: SubscriptionScheduleStateTable;
@@ -85,6 +93,7 @@ export type OracleControlPlaneDatabase = {
   scope_admission_windows: ScopeAdmissionWindowsTable;
   queue_claim_control_state: QueueClaimControlStateTable;
   queue_sweep_control_state: QueueSweepControlStateTable;
+  queue_admission_count_state: QueueAdmissionCountStateTable;
 };
 
 export type OracleControlPlaneDb = {
@@ -190,6 +199,17 @@ CREATE INDEX IF NOT EXISTS idx_queue_sweep_next_due
 
 CREATE INDEX IF NOT EXISTS idx_queue_sweep_inflight
   ON queue_sweep_control_state (inflight_until);
+
+CREATE TABLE IF NOT EXISTS queue_admission_count_state (
+  count_key TEXT PRIMARY KEY,
+  scope_key TEXT NOT NULL,
+  user_key TEXT NOT NULL,
+  active_count INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_queue_admission_scope_user
+  ON queue_admission_count_state (scope_key, user_key);
 `;
 
 export function openOracleControlPlaneDb(input: {
