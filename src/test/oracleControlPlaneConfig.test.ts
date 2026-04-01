@@ -28,8 +28,10 @@ describe('oracle control-plane config', () => {
     expect(readOracleControlPlaneConfig({}, { cwd })).toEqual({
       enabled: false,
       subscriptionSchedulerMode: 'supabase',
+      queueLedgerMode: 'supabase',
       sqlitePath: path.resolve(cwd, '.runtime', 'control-plane.sqlite'),
       bootstrapBatch: 250,
+      queueLedgerBootstrapLimit: 1_000,
       schedulerTickMs: 300_000,
       primaryMinTriggerIntervalMs: 3_600_000,
       primaryBatchLimit: 150,
@@ -66,8 +68,10 @@ describe('oracle control-plane config', () => {
     expect(readOracleControlPlaneConfig({
       ORACLE_CONTROL_PLANE_ENABLED: 'true',
       ORACLE_SUBSCRIPTION_SCHEDULER_MODE: 'shadow',
+      ORACLE_QUEUE_LEDGER_MODE: 'dual',
       ORACLE_CONTROL_PLANE_SQLITE_PATH: '/tmp/agentic-runtime/control-plane.sqlite',
       ORACLE_SUBSCRIPTION_BOOTSTRAP_BATCH: '123',
+      ORACLE_QUEUE_LEDGER_BOOTSTRAP_LIMIT: '1400',
       ORACLE_SUBSCRIPTION_SCHEDULER_TICK_MS: '45000',
       ORACLE_SUBSCRIPTION_PRIMARY_MIN_TRIGGER_INTERVAL_MS: '1800000',
       ORACLE_SUBSCRIPTION_PRIMARY_BATCH_LIMIT: '222',
@@ -98,8 +102,10 @@ describe('oracle control-plane config', () => {
     }, { cwd })).toEqual({
       enabled: true,
       subscriptionSchedulerMode: 'shadow',
+      queueLedgerMode: 'dual',
       sqlitePath: path.resolve(cwd, '/tmp/agentic-runtime/control-plane.sqlite'),
       bootstrapBatch: 123,
+      queueLedgerBootstrapLimit: 1_400,
       schedulerTickMs: 45_000,
       primaryMinTriggerIntervalMs: 1_800_000,
       primaryBatchLimit: 222,
@@ -137,5 +143,14 @@ describe('oracle control-plane config', () => {
       ORACLE_CONTROL_PLANE_ENABLED: 'true',
       ORACLE_SUBSCRIPTION_SCHEDULER_MODE: 'unknown',
     }, { cwd }).subscriptionSchedulerMode).toBe('supabase');
+  });
+
+  it('falls back to supabase queue-ledger mode when the mode is unknown', () => {
+    const cwd = createTempDir();
+
+    expect(readOracleControlPlaneConfig({
+      ORACLE_CONTROL_PLANE_ENABLED: 'true',
+      ORACLE_QUEUE_LEDGER_MODE: 'unknown',
+    }, { cwd }).queueLedgerMode).toBe('supabase');
   });
 });

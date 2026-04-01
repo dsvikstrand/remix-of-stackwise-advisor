@@ -87,6 +87,19 @@ import {
   upsertOracleJobActivityRows,
 } from './services/oracleJobActivityState';
 import {
+  buildOracleQueueLedgerJobFromInsertValues,
+  claimOracleQueuedIngestionJobs,
+  deleteOracleQueueLedgerJob,
+  failOracleQueueJob,
+  finalizeOracleQueueJob,
+  getOracleLatestQueueJobForScope,
+  markOracleRunningJobsFailed,
+  syncOracleQueueLedgerFromSupabase,
+  touchOracleQueueJobLease,
+  upsertOracleQueueLedgerRow,
+  upsertOracleQueueLedgerRows,
+} from './services/oracleQueueLedgerState';
+import {
   evaluateOraclePrimarySchedulerDecision,
   evaluateOracleShadowSchedulerDecision,
 } from './services/oracleSubscriptionScheduler';
@@ -182,14 +195,11 @@ import { createTranscriptThrottle, type TranscriptRequestClass } from './service
 import { createTranscriptFetchWithCacheBypass } from './services/transcriptFetchWithCacheBypass';
 import { createCodexLane } from './services/codexLane';
 import {
-  claimQueuedIngestionJobs,
   claimQueuedIngestionJobsWithHooks,
   countQueueDepth,
   countQueueWorkItems,
-  failIngestionJob,
   failIngestionJobWithHooks,
   getQueuedJobWorkItemCount,
-  touchIngestionJobLease,
   touchIngestionJobLeaseWithHooks,
   type IngestionJobRow,
 } from './services/ingestionQueue';
@@ -576,6 +586,17 @@ const oracleJobActivityMirrorEnabled = (
   && oracleControlPlaneConfig.jobActivityMirrorEnabled
   && Boolean(oracleControlPlane)
 );
+const oracleQueueLedgerMode = (
+  oracleControlPlaneConfig.enabled
+  && oracleControlPlane
+)
+  ? oracleControlPlaneConfig.queueLedgerMode
+  : 'supabase';
+const oracleQueueLedgerEnabled = (
+  oracleQueueLedgerMode === 'dual'
+  || oracleQueueLedgerMode === 'primary'
+);
+const oracleQueueLedgerPrimaryEnabled = oracleQueueLedgerMode === 'primary';
 const oracleQueueSweepControlEnabled = (
   oracleControlPlaneConfig.enabled
   && oracleControlPlaneConfig.queueSweepControlEnabled
@@ -1032,24 +1053,107 @@ async function upsertOracleJobActivityFromKnownRows(
   }
 }
 
-async function updateIngestionJobWithMirror(
+async function upsertOracleQueueLedgerFromKnownRow(
+  job: IngestionJobRow | null | undefined,
+  action: string,
+) {
+  if (!oracleQueueLedgerEnabled || !oracleControlPlane || !job?.id) {
+    return;
+  }
+
+  try {
+    await upsertOracleQueueLedgerRow({
+      controlDb: oracleControlPlane,
+      job,
+    });
+  } catch (error) {
+    console.warn('[oracle-control-plane] queue_ledger_mirror_failed', JSON.stringify({
+      action,
+      job_id: String(job.id || '').trim(),
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+}
+
+async function upsertOracleQueueLedgerFromKnownRows(
+  jobs: Array<IngestionJobRow | null | undefined>,
+  action: string,
+) {
+  const normalizedJobs = jobs
+    .filter((job): job is IngestionJobRow => Boolean(job?.id))
+    .map((job) => ({ ...job }));
+  if (!oracleQueueLedgerEnabled || !oracleControlPlane || normalizedJobs.length === 0) {
+    return;
+  }
+
+  try {
+    await upsertOracleQueueLedgerRows({
+      controlDb: oracleControlPlane,
+      jobs: normalizedJobs,
+    });
+  } catch (error) {
+    console.warn('[oracle-control-plane] queue_ledger_mirror_failed', JSON.stringify({
+      action,
+      count: normalizedJobs.length,
+      job_ids: normalizedJobs.slice(0, 10).map((job) => String(job.id || '').trim()),
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+}
+
+function mapIngestionJobToSupabaseShadowValues(job: IngestionJobRow) {
+  return {
+    id: job.id,
+    trigger: job.trigger,
+    scope: job.scope,
+    status: job.status,
+    requested_by_user_id: job.requested_by_user_id,
+    subscription_id: job.subscription_id,
+    started_at: job.started_at,
+    finished_at: job.finished_at,
+    processed_count: job.processed_count,
+    inserted_count: job.inserted_count,
+    skipped_count: job.skipped_count,
+    error_code: job.error_code,
+    error_message: job.error_message,
+    attempts: job.attempts,
+    max_attempts: job.max_attempts,
+    next_run_at: job.next_run_at,
+    lease_expires_at: job.lease_expires_at,
+    last_heartbeat_at: job.last_heartbeat_at,
+    worker_id: job.worker_id,
+    trace_id: job.trace_id,
+    payload: job.payload,
+    created_at: job.created_at,
+    updated_at: job.updated_at,
+  };
+}
+
+async function upsertSupabaseQueueShadow(
   db: ReturnType<typeof createClient>,
-  input: {
-    jobId: string;
-    patch: Record<string, unknown>;
-    action: string;
-  },
+  job: IngestionJobRow,
 ) {
   const { data, error } = await db
     .from('ingestion_jobs')
-    .update(input.patch)
-    .eq('id', input.jobId)
+    .upsert(mapIngestionJobToSupabaseShadowValues(job), {
+      onConflict: 'id',
+    })
     .select('*')
     .single();
   if (error) throw error;
-
-  await upsertOracleJobActivityFromKnownRow(data as IngestionJobRow, input.action);
   return data as IngestionJobRow;
+}
+
+function logOracleQueueLedgerShadowWriteError(input: {
+  action: string;
+  jobId?: string | null;
+  error: unknown;
+}) {
+  console.warn('[oracle-control-plane] queue_ledger_shadow_write_failed', JSON.stringify({
+    action: input.action,
+    job_id: input.jobId || null,
+    error: input.error instanceof Error ? input.error.message : String(input.error),
+  }));
 }
 
 async function finalizeIngestionJobWithMirror(
@@ -1069,10 +1173,38 @@ async function finalizeIngestionJobWithMirror(
 ) {
   const finishedAt = input.finishedAt || new Date().toISOString();
   const heartbeatAt = input.heartbeatAt || finishedAt;
-  return updateIngestionJobWithMirror(db, {
-    jobId: input.jobId,
-    action: input.action,
-    patch: {
+  if (oracleQueueLedgerPrimaryEnabled && oracleControlPlane) {
+    const finalizedJob = await finalizeOracleQueueJob({
+      controlDb: oracleControlPlane,
+      jobId: input.jobId,
+      status: input.status,
+      processedCount: input.processedCount,
+      insertedCount: input.insertedCount,
+      skippedCount: input.skippedCount,
+      errorCode: input.errorCode,
+      errorMessage: input.errorMessage,
+      finishedAt,
+      heartbeatAt,
+    });
+    if (!finalizedJob) return null;
+
+    try {
+      await upsertSupabaseQueueShadow(db, finalizedJob);
+    } catch (error) {
+      logOracleQueueLedgerShadowWriteError({
+        action: `${input.action}_finalize_shadow`,
+        jobId: finalizedJob.id,
+        error,
+      });
+    }
+
+    await upsertOracleJobActivityFromKnownRow(finalizedJob, input.action);
+    return finalizedJob;
+  }
+
+  const { data, error } = await db
+    .from('ingestion_jobs')
+    .update({
       status: input.status,
       finished_at: finishedAt,
       processed_count: input.processedCount,
@@ -1083,21 +1215,81 @@ async function finalizeIngestionJobWithMirror(
       last_heartbeat_at: heartbeatAt,
       error_code: input.errorCode || null,
       error_message: input.errorMessage || null,
-    },
-  });
+    })
+    .eq('id', input.jobId)
+    .select('*')
+    .single();
+  if (error) throw error;
+
+  const finalizedJob = data as IngestionJobRow;
+  if (oracleQueueLedgerEnabled && oracleControlPlane) {
+    try {
+      await upsertOracleQueueLedgerRow({
+        controlDb: oracleControlPlane,
+        job: finalizedJob,
+      });
+    } catch (error) {
+      console.warn('[oracle-control-plane] queue_ledger_mirror_failed', JSON.stringify({
+        action: input.action,
+        job_id: finalizedJob.id,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+  await upsertOracleJobActivityFromKnownRow(finalizedJob, input.action);
+  return finalizedJob;
 }
 
 async function enqueueIngestionJobWithMirror(
   db: ReturnType<typeof createClient>,
   values: Record<string, unknown>,
 ) {
+  const normalizedJob = buildOracleQueueLedgerJobFromInsertValues({ values });
+  if (oracleQueueLedgerPrimaryEnabled && oracleControlPlane) {
+    await upsertOracleQueueLedgerRow({
+      controlDb: oracleControlPlane,
+      job: normalizedJob,
+    });
+    const result = await db
+      .from('ingestion_jobs')
+      .insert(mapIngestionJobToSupabaseShadowValues(normalizedJob))
+      .select('*')
+      .single();
+    if (result.error) {
+      await deleteOracleQueueLedgerJob({
+        controlDb: oracleControlPlane,
+        jobId: normalizedJob.id,
+      });
+      return result;
+    }
+    await upsertOracleJobActivityFromKnownRow(normalizedJob, 'enqueue_insert');
+    return {
+      data: normalizedJob,
+      error: null,
+    };
+  }
+
   const result = await db
     .from('ingestion_jobs')
-    .insert(values)
+    .insert(mapIngestionJobToSupabaseShadowValues(normalizedJob))
     .select('*')
     .single();
 
   if (!result.error && result.data?.id) {
+    if (oracleQueueLedgerEnabled && oracleControlPlane) {
+      try {
+        await upsertOracleQueueLedgerRow({
+          controlDb: oracleControlPlane,
+          job: result.data as IngestionJobRow,
+        });
+      } catch (error) {
+        console.warn('[oracle-control-plane] queue_ledger_mirror_failed', JSON.stringify({
+          action: 'enqueue_insert',
+          job_id: String(result.data.id || '').trim(),
+          error: error instanceof Error ? error.message : String(error),
+        }));
+      }
+    }
     await upsertOracleJobActivityFromKnownRow(result.data as IngestionJobRow, 'enqueue_insert');
   }
 
@@ -1123,6 +1315,29 @@ async function markRunningIngestionJobsFailedWithMirror(
   }
 
   const finishedAt = new Date().toISOString();
+  if (oracleQueueLedgerPrimaryEnabled && oracleControlPlane) {
+    const updatedRows = await markOracleRunningJobsFailed({
+      controlDb: oracleControlPlane,
+      jobIds: uniqueJobIds,
+      errorCode: input.errorCode,
+      errorMessage: input.errorMessage,
+      finishedAt,
+    });
+    for (const job of updatedRows) {
+      try {
+        await upsertSupabaseQueueShadow(db, job);
+      } catch (error) {
+        logOracleQueueLedgerShadowWriteError({
+          action: `${input.action}_mark_failed_shadow`,
+          jobId: job.id,
+          error,
+        });
+      }
+      await upsertOracleJobActivityFromKnownRow(job, input.action);
+    }
+    return updatedRows.length;
+  }
+
   let updated = 0;
   for (const jobId of uniqueJobIds) {
     const { data, error } = await db
@@ -1143,9 +1358,188 @@ async function markRunningIngestionJobsFailedWithMirror(
     if (error) throw error;
     if (!data?.id) continue;
     updated += 1;
+    if (oracleQueueLedgerEnabled && oracleControlPlane) {
+      try {
+        await upsertOracleQueueLedgerRow({
+          controlDb: oracleControlPlane,
+          job: data as IngestionJobRow,
+        });
+      } catch (error) {
+        console.warn('[oracle-control-plane] queue_ledger_mirror_failed', JSON.stringify({
+          action: input.action,
+          job_id: String(data.id || '').trim(),
+          error: error instanceof Error ? error.message : String(error),
+        }));
+      }
+    }
     await upsertOracleJobActivityFromKnownRow(data as IngestionJobRow, input.action);
   }
   return updated;
+}
+
+async function claimQueuedIngestionJobsWithLedger(
+  db: ReturnType<typeof createClient>,
+  input: {
+    scopes?: string[];
+    maxJobs?: number;
+    workerId: string;
+    leaseSeconds: number;
+  },
+  hooks?: {
+    afterClaimedJobs?: (jobs: IngestionJobRow[]) => Promise<void> | void;
+  },
+) {
+  if (oracleQueueLedgerPrimaryEnabled && oracleControlPlane) {
+    const claimed = await claimOracleQueuedIngestionJobs({
+      controlDb: oracleControlPlane,
+      scopes: input.scopes,
+      maxJobs: input.maxJobs,
+      workerId: input.workerId,
+      leaseSeconds: input.leaseSeconds,
+    });
+    for (const job of claimed) {
+      try {
+        await upsertSupabaseQueueShadow(db, job);
+      } catch (error) {
+        logOracleQueueLedgerShadowWriteError({
+          action: 'queued_job_claim_shadow',
+          jobId: job.id,
+          error,
+        });
+      }
+    }
+    await hooks?.afterClaimedJobs?.(claimed);
+    return claimed;
+  }
+
+  return claimQueuedIngestionJobsWithHooks(db, input, {
+    afterClaimedJobs: async (claimed) => {
+      await upsertOracleQueueLedgerFromKnownRows(claimed, 'queued_job_claim_batch');
+      await hooks?.afterClaimedJobs?.(claimed);
+    },
+  });
+}
+
+async function touchClaimedIngestionJobLeaseWithMirror(
+  db: ReturnType<typeof createClient>,
+  input: {
+    job: IngestionJobRow;
+    workerId: string;
+    leaseSeconds: number;
+    heartbeatAtIso: string;
+  },
+) {
+  if (oracleQueueLedgerPrimaryEnabled && oracleControlPlane) {
+    const touchedJob = await touchOracleQueueJobLease({
+      controlDb: oracleControlPlane,
+      jobId: input.job.id,
+      workerId: input.workerId,
+      leaseSeconds: input.leaseSeconds,
+      nowIso: input.heartbeatAtIso,
+    });
+    if (!touchedJob) {
+      return false;
+    }
+
+    try {
+      await upsertSupabaseQueueShadow(db, touchedJob);
+    } catch (error) {
+      logOracleQueueLedgerShadowWriteError({
+        action: 'queued_job_lease_touch_shadow',
+        jobId: touchedJob.id,
+        error,
+      });
+    }
+
+    if (oracleJobActivityMirrorEnabled && oracleControlPlane) {
+      await recordOracleJobLeaseHeartbeat({
+        controlDb: oracleControlPlane,
+        job: touchedJob,
+        leaseSeconds: input.leaseSeconds,
+        heartbeatAtIso: input.heartbeatAtIso,
+      });
+    }
+    return true;
+  }
+
+  return touchIngestionJobLeaseWithHooks(db, {
+    jobId: input.job.id,
+    workerId: input.workerId,
+    leaseSeconds: input.leaseSeconds,
+  }, {
+    afterLeaseTouched: async ({ leaseSeconds: normalizedLeaseSeconds }) => {
+      const leaseExpiresAtIso = new Date(Date.parse(input.heartbeatAtIso) + (normalizedLeaseSeconds * 1000)).toISOString();
+      await upsertOracleQueueLedgerFromKnownRow({
+        ...input.job,
+        status: 'running',
+        worker_id: input.workerId,
+        lease_expires_at: leaseExpiresAtIso,
+        last_heartbeat_at: input.heartbeatAtIso,
+        updated_at: input.heartbeatAtIso,
+      }, 'queued_job_lease_touch');
+      if (!oracleJobActivityMirrorEnabled || !oracleControlPlane) {
+        return;
+      }
+      await recordOracleJobLeaseHeartbeat({
+        controlDb: oracleControlPlane,
+        job: input.job,
+        leaseSeconds: normalizedLeaseSeconds,
+        heartbeatAtIso: input.heartbeatAtIso,
+      });
+    },
+  });
+}
+
+async function failClaimedIngestionJobWithMirror(
+  db: ReturnType<typeof createClient>,
+  input: {
+    job: IngestionJobRow;
+    errorCode: string;
+    errorMessage: string;
+    scheduleRetryInSeconds?: number;
+    maxAttempts?: number;
+    action: string;
+  },
+) {
+  if (oracleQueueLedgerPrimaryEnabled && oracleControlPlane) {
+    const failedJob = await failOracleQueueJob({
+      controlDb: oracleControlPlane,
+      jobId: input.job.id,
+      errorCode: input.errorCode,
+      errorMessage: input.errorMessage,
+      scheduleRetryInSeconds: input.scheduleRetryInSeconds,
+      maxAttempts: input.maxAttempts,
+      currentAttempts: Number(input.job.attempts || 0),
+    });
+    if (!failedJob) return null;
+
+    try {
+      await upsertSupabaseQueueShadow(db, failedJob);
+    } catch (error) {
+      logOracleQueueLedgerShadowWriteError({
+        action: `${input.action}_shadow`,
+        jobId: failedJob.id,
+        error,
+      });
+    }
+
+    await upsertOracleJobActivityFromKnownRow(failedJob, input.action);
+    return failedJob;
+  }
+
+  return failIngestionJobWithHooks(db, {
+    jobId: input.job.id,
+    errorCode: input.errorCode,
+    errorMessage: input.errorMessage,
+    scheduleRetryInSeconds: input.scheduleRetryInSeconds,
+    maxAttempts: input.maxAttempts,
+    currentAttempts: Number(input.job.attempts || 0),
+  }, {
+    afterFailedJob: async (failedJob) => {
+      await upsertOracleQueueLedgerFromKnownRow(failedJob, input.action);
+      await upsertOracleJobActivityFromKnownRow(failedJob, input.action);
+    },
+  });
 }
 
 async function listLatestUserIngestionJobsOracleFirst(
@@ -1522,6 +1916,29 @@ async function getLatestIngestionJobForScopeOracleFirst(input: {
   const normalizedScope = String(input.scope || '').trim();
   if (!normalizedScope) {
     return null;
+  }
+
+  if (oracleQueueLedgerEnabled && oracleControlPlane) {
+    try {
+      const mirrored = await getOracleLatestQueueJobForScope({
+        controlDb: oracleControlPlane,
+        scope: normalizedScope,
+      });
+      if (mirrored) {
+        return {
+          id: mirrored.id,
+          status: mirrored.status,
+          created_at: mirrored.created_at,
+          started_at: mirrored.started_at,
+        };
+      }
+    } catch (error) {
+      console.warn('[oracle-control-plane] queue_ledger_mirror_failed', JSON.stringify({
+        action: 'get_latest_ingestion_job_for_scope',
+        scope: normalizedScope,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
   }
 
   const serviceDb = getServiceSupabaseClient();
@@ -8737,17 +9154,13 @@ async function processAllActiveSubscriptionsJob(input: {
 async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, job: IngestionJobRow) {
   const scope = String(job.scope || '').trim();
   if (!isQueuedIngestionScope(scope)) {
-    await failIngestionJobWithHooks(db, {
-      jobId: job.id,
+    await failClaimedIngestionJobWithMirror(db, {
+      job,
       errorCode: 'UNSUPPORTED_SCOPE',
       errorMessage: `Unsupported queued scope: ${scope}`,
       scheduleRetryInSeconds: 0,
       maxAttempts: Number(job.max_attempts || 3),
-      currentAttempts: Number(job.attempts || 0),
-    }, {
-      afterFailedJob: async (failedJob) => {
-        await upsertOracleJobActivityFromKnownRow(failedJob, 'queued_job_fail_unsupported_scope');
-      },
+      action: 'queued_job_fail_unsupported_scope',
     });
     return;
   }
@@ -8767,22 +9180,11 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
   let mirrorHeartbeatActive = true;
   const runHeartbeat = () => {
     const heartbeatAtIso = new Date().toISOString();
-    void touchIngestionJobLeaseWithHooks(db, {
-      jobId: job.id,
+    void touchClaimedIngestionJobLeaseWithMirror(db, {
+      job,
       workerId: queuedWorkerId,
       leaseSeconds,
-    }, {
-      afterLeaseTouched: async ({ leaseSeconds: normalizedLeaseSeconds }) => {
-        if (!mirrorHeartbeatActive || !oracleJobActivityMirrorEnabled || !oracleControlPlane) {
-          return;
-        }
-        await recordOracleJobLeaseHeartbeat({
-          controlDb: oracleControlPlane,
-          job,
-          leaseSeconds: normalizedLeaseSeconds,
-          heartbeatAtIso,
-        });
-      },
+      heartbeatAtIso,
     }).then((ok) => {
       if (!ok && !heartbeatError) {
         heartbeatError = new Error('LEASE_HEARTBEAT_REJECTED');
@@ -8966,17 +9368,13 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
   } catch (error) {
     const classified = classifyQueuedJobError(error);
     const nextRetryDelay = Math.max(0, Math.floor(Number(classified.retryDelaySeconds) || 0));
-    await failIngestionJobWithHooks(db, {
-      jobId: job.id,
+    await failClaimedIngestionJobWithMirror(db, {
+      job,
       errorCode: classified.errorCode,
       errorMessage: classified.message,
       scheduleRetryInSeconds: nextRetryDelay,
       maxAttempts: Number(job.max_attempts || 3),
-      currentAttempts: Number(job.attempts || 0),
-    }, {
-      afterFailedJob: async (failedJob) => {
-        await upsertOracleJobActivityFromKnownRow(failedJob, 'queued_job_fail_transition');
-      },
+      action: 'queued_job_fail_transition',
     });
 
     logUnlockEvent('unlock_job_failed', { trace_id: traceId, job_id: job.id }, {
@@ -9033,7 +9431,7 @@ const queuedIngestionWorkerController = createQueuedIngestionWorkerController({
         nowIso,
       })
     : undefined,
-  claimQueuedIngestionJobs: (db, input) => claimQueuedIngestionJobsWithHooks(db, input, {
+  claimQueuedIngestionJobs: (db, input) => claimQueuedIngestionJobsWithLedger(db, input, {
     afterClaimedJobs: async (claimed) => {
       await upsertOracleJobActivityFromKnownRows(claimed, 'queued_job_claim_batch');
     },
@@ -9376,6 +9774,18 @@ async function bootstrapOracleControlPlaneState() {
     scope: 'all_active_subscriptions',
   });
 
+  let queueLedgerCount: number | null = null;
+  let queueLedgerActiveCount: number | null = null;
+  if (oracleQueueLedgerEnabled) {
+    const queueLedgerBootstrap = await syncOracleQueueLedgerFromSupabase({
+      controlDb: oracleControlPlane,
+      db,
+      recentLimit: oracleControlPlaneConfig.queueLedgerBootstrapLimit,
+    });
+    queueLedgerCount = queueLedgerBootstrap.rowCount;
+    queueLedgerActiveCount = queueLedgerBootstrap.activeCount;
+  }
+
   let queueAdmissionActiveCount: number | null = null;
   if (oracleControlPlaneConfig.queueAdmissionMirrorEnabled) {
     const queueAdmissionBootstrap = await syncOracleQueueAdmissionMirrorFromSupabase({
@@ -9399,12 +9809,16 @@ async function bootstrapOracleControlPlaneState() {
 
   console.log('[oracle-control-plane] bootstrap complete', JSON.stringify({
     scheduler_mode: oracleControlPlaneConfig.subscriptionSchedulerMode,
+    queue_ledger_mode: oracleQueueLedgerMode,
     sqlite_path: oracleControlPlane.sqlitePath,
     subscription_count: bootstrapResult.activeCount,
+    queue_ledger_count: queueLedgerCount,
+    queue_ledger_active_count: queueLedgerActiveCount,
     queue_admission_active_count: queueAdmissionActiveCount,
     job_activity_count: jobActivityCount,
     job_activity_active_count: jobActivityActiveCount,
     bootstrap_batch: oracleControlPlaneConfig.bootstrapBatch,
+    queue_ledger_bootstrap_limit: oracleControlPlaneConfig.queueLedgerBootstrapLimit,
     job_activity_bootstrap_limit: oracleControlPlaneConfig.jobActivityBootstrapLimit,
   }));
 }
@@ -10395,6 +10809,7 @@ console.log(`[agentic-backend] runtime_mode=${runtimeMode}`);
 if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
   console.log('[oracle-control-plane] enabled', JSON.stringify({
     scheduler_mode: oracleControlPlaneConfig.subscriptionSchedulerMode,
+    queue_ledger_mode: oracleQueueLedgerMode,
     sqlite_path: oracleControlPlane.sqlitePath,
     scheduler_tick_ms: oracleControlPlaneConfig.schedulerTickMs,
     primary_min_trigger_interval_ms: oracleControlPlaneConfig.primaryMinTriggerIntervalMs,
@@ -10418,6 +10833,7 @@ if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
     queue_medium_priority_backoff_multiplier: oracleControlPlaneConfig.queueMediumPriorityBackoffMultiplier,
     queue_low_priority_backoff_multiplier: oracleControlPlaneConfig.queueLowPriorityBackoffMultiplier,
     bootstrap_batch: oracleControlPlaneConfig.bootstrapBatch,
+    queue_ledger_bootstrap_limit: oracleControlPlaneConfig.queueLedgerBootstrapLimit,
     shadow_batch_limit: oracleControlPlaneConfig.shadowBatchLimit,
     shadow_lookahead_ms: oracleControlPlaneConfig.shadowLookaheadMs,
     active_revisit_ms: oracleControlPlaneConfig.activeRevisitMs,

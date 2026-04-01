@@ -118,6 +118,7 @@
     - service ops reads now follow that same pattern: latest-ingestion-job and queue-health snapshot reads resolve through centralized Oracle-first helpers, with any durable Supabase fallback kept in runtime helpers rather than the ops handler
     - hot enqueue/worker lifecycle transitions now update that Oracle job-activity mirror directly from the inserted/claimed/finalized/recovered `ingestion_jobs` rows in hand, instead of doing a second Supabase read just to refresh mirror state
     - queued-worker lease heartbeats now also refresh the Oracle job-activity mirror from the already-claimed job row, so long-running queue health stays warm locally without another Supabase mirror-read round trip
+    - Oracle queue-ledger ownership is now staged behind `ORACLE_QUEUE_LEDGER_MODE=supabase|dual|primary`: `dual` bootstraps and shadows a local durable queue ledger, while `primary` is the later mode where claim/lease/fail/finalize can run from that ledger with Supabase kept as compatibility shadow
     - queue-ledger bridge helpers now wrap claim / fail / lease-touch transitions centrally in `ingestionQueue`, so queued-worker/controller paths share one Oracle-aware seam for mirror updates instead of each call site carrying bespoke bridge logic
     - unlock reliability orphan-job recovery now also uses the same Oracle-aware failure path, so stale running unlock jobs no longer bypass mirror updates when they are forced terminal
     - user-triggered generation/sync handlers now also stay on that centralized Oracle-aware path: manual refresh, source-page unlock generation, search generation, and foreground subscription sync enqueue/finalize through shared helpers rather than inline `ingestion_jobs` writes
@@ -423,6 +424,8 @@ Required runtime variables:
 - `ORACLE_SUBSCRIPTION_REVISIT_QUIET_MS` (default `5400000`; quieter next-due interval after repeated no-op checks)
 - `ORACLE_SUBSCRIPTION_RETRY_ERROR_MS` (default `900000`; next-due retry interval after subscription sync failure)
 - `ORACLE_QUEUE_CONTROL_ENABLED` (default `false`; enables Oracle-local claim/backoff control for the queued worker while Supabase still stores durable queue truth)
+- `ORACLE_QUEUE_LEDGER_MODE` (default `supabase`; accepted values: `supabase`, `dual`, `primary`; stages local Oracle durable queue-ledger ownership for claim/lease/fail/finalize while Supabase remains compatibility shadow until later cutover)
+- `ORACLE_QUEUE_LEDGER_BOOTSTRAP_LIMIT` (default `1000`; number of recent durable `ingestion_jobs` rows loaded into the local Oracle queue ledger during bootstrap)
 - `ORACLE_QUEUE_SWEEP_CONTROL_ENABLED` (default `false`; enables Oracle-local sweep cadence/tier selection for the queued worker while Supabase still performs durable claim RPCs)
 - `ORACLE_QUEUE_ADMISSION_MIRROR_ENABLED` (default `false`; enables Oracle-local mirrored active queue counts for hot admission/backpressure reads while Supabase still stores the durable queued/running rows)
 - `ORACLE_QUEUE_ADMISSION_REFRESH_STALE_MS` (default `15000`; maximum tolerated age for Oracle-local mirrored queue-admission counts before the backend refreshes them from Supabase)

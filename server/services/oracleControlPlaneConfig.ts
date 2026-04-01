@@ -2,12 +2,15 @@ import path from 'node:path';
 import { parseRuntimeFlag } from './runtimeConfig';
 
 export type OracleSubscriptionSchedulerMode = 'supabase' | 'shadow' | 'primary';
+export type OracleQueueLedgerMode = 'supabase' | 'dual' | 'primary';
 
 export type OracleControlPlaneConfig = {
   enabled: boolean;
   subscriptionSchedulerMode: OracleSubscriptionSchedulerMode;
+  queueLedgerMode: OracleQueueLedgerMode;
   sqlitePath: string;
   bootstrapBatch: number;
+  queueLedgerBootstrapLimit: number;
   schedulerTickMs: number;
   primaryMinTriggerIntervalMs: number;
   primaryBatchLimit: number;
@@ -50,6 +53,13 @@ function normalizeOracleSubscriptionSchedulerMode(raw: string | undefined): Orac
   return 'supabase';
 }
 
+function normalizeOracleQueueLedgerMode(raw: string | undefined): OracleQueueLedgerMode {
+  const normalized = String(raw || '').trim().toLowerCase();
+  if (normalized === 'dual') return 'dual';
+  if (normalized === 'primary') return 'primary';
+  return 'supabase';
+}
+
 export function readOracleControlPlaneConfig(
   env: NodeJS.ProcessEnv,
   input?: { cwd?: string },
@@ -67,8 +77,17 @@ export function readOracleControlPlaneConfig(
     subscriptionSchedulerMode: enabled
       ? normalizeOracleSubscriptionSchedulerMode(env.ORACLE_SUBSCRIPTION_SCHEDULER_MODE)
       : 'supabase',
+    queueLedgerMode: enabled
+      ? normalizeOracleQueueLedgerMode(env.ORACLE_QUEUE_LEDGER_MODE)
+      : 'supabase',
     sqlitePath,
     bootstrapBatch: clampInt(env.ORACLE_SUBSCRIPTION_BOOTSTRAP_BATCH, 250, 10, 5000),
+    queueLedgerBootstrapLimit: clampInt(
+      env.ORACLE_QUEUE_LEDGER_BOOTSTRAP_LIMIT,
+      1_000,
+      50,
+      10_000,
+    ),
     schedulerTickMs: clampInt(env.ORACLE_SUBSCRIPTION_SCHEDULER_TICK_MS, 300_000, 5_000, 60 * 60_000),
     primaryMinTriggerIntervalMs: clampInt(
       env.ORACLE_SUBSCRIPTION_PRIMARY_MIN_TRIGGER_INTERVAL_MS,

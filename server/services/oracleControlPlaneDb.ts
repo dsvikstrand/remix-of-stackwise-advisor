@@ -110,6 +110,32 @@ type JobActivityStateTable = {
   updated_at: string;
 };
 
+type QueueLedgerStateTable = {
+  id: string;
+  trigger: string;
+  scope: string;
+  status: string;
+  requested_by_user_id: string | null;
+  subscription_id: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  processed_count: number;
+  inserted_count: number;
+  skipped_count: number;
+  error_code: string | null;
+  error_message: string | null;
+  attempts: number;
+  max_attempts: number;
+  next_run_at: string;
+  lease_expires_at: string | null;
+  last_heartbeat_at: string | null;
+  worker_id: string | null;
+  trace_id: string | null;
+  payload_json: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type OracleControlPlaneDatabase = {
   control_meta: ControlMetaTable;
   subscription_schedule_state: SubscriptionScheduleStateTable;
@@ -119,6 +145,7 @@ export type OracleControlPlaneDatabase = {
   queue_sweep_control_state: QueueSweepControlStateTable;
   queue_admission_count_state: QueueAdmissionCountStateTable;
   job_activity_state: JobActivityStateTable;
+  queue_ledger_state: QueueLedgerStateTable;
 };
 
 export type OracleControlPlaneDb = {
@@ -268,6 +295,41 @@ CREATE INDEX IF NOT EXISTS idx_job_activity_user_scope_status
 
 CREATE INDEX IF NOT EXISTS idx_job_activity_scope_status_started
   ON job_activity_state (scope_key, status, started_at);
+
+CREATE TABLE IF NOT EXISTS queue_ledger_state (
+  id TEXT PRIMARY KEY,
+  trigger TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  status TEXT NOT NULL,
+  requested_by_user_id TEXT,
+  subscription_id TEXT,
+  started_at TEXT,
+  finished_at TEXT,
+  processed_count INTEGER NOT NULL DEFAULT 0,
+  inserted_count INTEGER NOT NULL DEFAULT 0,
+  skipped_count INTEGER NOT NULL DEFAULT 0,
+  error_code TEXT,
+  error_message TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  max_attempts INTEGER NOT NULL DEFAULT 3,
+  next_run_at TEXT NOT NULL,
+  lease_expires_at TEXT,
+  last_heartbeat_at TEXT,
+  worker_id TEXT,
+  trace_id TEXT,
+  payload_json TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_queue_ledger_status_next_run
+  ON queue_ledger_state (status, next_run_at, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_queue_ledger_scope_status_next_run
+  ON queue_ledger_state (scope, status, next_run_at, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_queue_ledger_lease_expires
+  ON queue_ledger_state (lease_expires_at);
 `;
 
 export function openOracleControlPlaneDb(input: {
