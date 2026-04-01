@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { OracleControlPlaneDb } from './oracleControlPlaneDb';
 import { reconcileOracleQueueAdmissionJobState } from './oracleQueueAdmissionState';
+import { listOracleQueueLedgerJobs } from './oracleQueueLedgerState';
 
 type DbClient = SupabaseClient<any, 'public', any>;
 
@@ -259,6 +260,41 @@ export async function syncOracleJobActivityMirrorFromSupabase(input: {
   nowIso?: string;
 }) {
   const recentLimit = Math.max(50, Math.floor(Number(input.recentLimit) || 0));
+  const [activeLedgerRows, recentLedgerRows] = await Promise.all([
+    listOracleQueueLedgerJobs({
+      controlDb: input.controlDb,
+      statuses: ['queued', 'running'],
+      limit: 5000,
+      orderBy: 'created_desc',
+    }),
+    listOracleQueueLedgerJobs({
+      controlDb: input.controlDb,
+      limit: recentLimit,
+      orderBy: 'created_desc',
+    }),
+  ]);
+
+  if (activeLedgerRows.length > 0 || recentLedgerRows.length > 0) {
+    const merged = new Map<string, OracleMirroredIngestionJob>();
+    for (const row of recentLedgerRows) {
+      if (row?.id) merged.set(row.id, row);
+    }
+    for (const row of activeLedgerRows) {
+      if (row?.id) merged.set(row.id, row);
+    }
+
+    const result = await replaceOracleJobActivityMirror({
+      controlDb: input.controlDb,
+      jobs: [...merged.values()],
+      nowIso: input.nowIso,
+    });
+
+    return {
+      ...result,
+      recentCount: recentLedgerRows.length,
+    };
+  }
+
   const [activeRowsResult, recentRowsResult] = await Promise.all([
     input.db
       .from('ingestion_jobs')
@@ -305,6 +341,20 @@ export async function syncOracleJobActivityRowFromSupabaseById(input: {
   const jobId = String(input.jobId || '').trim();
   if (!jobId) return null;
 
+  const queueLedgerRows = await listOracleQueueLedgerJobs({
+    controlDb: input.controlDb,
+    jobIds: [jobId],
+    limit: 1,
+  });
+  const queueLedgerRow = queueLedgerRows[0];
+  if (queueLedgerRow) {
+    return upsertOracleJobActivityRow({
+      controlDb: input.controlDb,
+      job: queueLedgerRow,
+      nowIso: input.nowIso,
+    });
+  }
+
   const { data, error } = await input.db
     .from('ingestion_jobs')
     .select(INGESTION_JOB_ACTIVITY_SELECT)
@@ -333,6 +383,20 @@ export async function syncOracleJobActivityRowsFromSupabaseByIds(input: {
       .filter(Boolean),
   )];
   if (jobIds.length === 0) return [];
+
+  const queueLedgerRows = await listOracleQueueLedgerJobs({
+    controlDb: input.controlDb,
+    jobIds,
+    limit: jobIds.length,
+  });
+  if (queueLedgerRows.length > 0) {
+    await upsertOracleJobActivityRows({
+      controlDb: input.controlDb,
+      jobs: queueLedgerRows,
+      nowIso: input.nowIso,
+    });
+    return queueLedgerRows;
+  }
 
   const { data, error } = await input.db
     .from('ingestion_jobs')

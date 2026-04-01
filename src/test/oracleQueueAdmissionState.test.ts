@@ -6,8 +6,13 @@ import { openOracleControlPlaneDb } from '../../server/services/oracleControlPla
 import {
   readOracleQueueAdmissionCounts,
   replaceOracleQueueAdmissionMirror,
+  syncOracleQueueAdmissionMirrorFromSupabase,
   supportsOracleQueueAdmissionMirror,
 } from '../../server/services/oracleQueueAdmissionState';
+import {
+  buildOracleQueueLedgerJobFromInsertValues,
+  upsertOracleQueueLedgerRow,
+} from '../../server/services/oracleQueueLedgerState';
 
 const tempDirs: string[] = [];
 
@@ -99,5 +104,50 @@ describe('oracle queue admission state', () => {
     expect(supportsOracleQueueAdmissionMirror({ statuses: ['queued', 'running'] })).toBe(true);
     expect(supportsOracleQueueAdmissionMirror({ statuses: ['queued'] })).toBe(false);
     expect(supportsOracleQueueAdmissionMirror({})).toBe(false);
+  });
+
+  it('rebuilds queue admission counts from the Oracle queue ledger before Supabase fallback', async () => {
+    const controlDb = openOracleControlPlaneDb({
+      sqlitePath: createTempSqlitePath(),
+    });
+
+    try {
+      await upsertOracleQueueLedgerRow({
+        controlDb,
+        job: buildOracleQueueLedgerJobFromInsertValues({
+          nowIso: '2026-04-01T15:00:00.000Z',
+          values: {
+            id: 'job_ledger_queue',
+            trigger: 'user_sync',
+            scope: 'manual_refresh_selection',
+            status: 'queued',
+            requested_by_user_id: 'user_7',
+            next_run_at: '2026-04-01T15:00:00.000Z',
+            created_at: '2026-04-01T15:00:00.000Z',
+            updated_at: '2026-04-01T15:00:00.000Z',
+          },
+        }),
+      });
+
+      const refresh = await syncOracleQueueAdmissionMirrorFromSupabase({
+        controlDb,
+        db: {} as any,
+        nowIso: '2026-04-01T15:01:00.000Z',
+      });
+      const counts = await readOracleQueueAdmissionCounts({
+        controlDb,
+        db: {} as any,
+        refreshStaleMs: 60_000,
+        userId: 'user_7',
+        scope: 'manual_refresh_selection',
+        nowIso: '2026-04-01T15:01:10.000Z',
+      });
+
+      expect(refresh.activeCount).toBe(1);
+      expect(counts.queue_depth).toBe(1);
+      expect(counts.user_queue_depth).toBe(1);
+    } finally {
+      await controlDb.close();
+    }
   });
 });

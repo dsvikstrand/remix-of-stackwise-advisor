@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { OracleControlPlaneDb } from './oracleControlPlaneDb';
+import { listOracleQueueLedgerJobs } from './oracleQueueLedgerState';
 
 type DbClient = SupabaseClient<any, 'public', any>;
 type TransactionDb = OracleControlPlaneDb['db'];
@@ -328,6 +329,23 @@ export async function syncOracleQueueAdmissionMirrorFromSupabase(input: {
   nowIso?: string;
 }) {
   const nowIso = normalizeIsoOrNull(input.nowIso) || new Date().toISOString();
+  const queueLedgerRows = await listOracleQueueLedgerJobs({
+    controlDb: input.controlDb,
+    statuses: ['queued', 'running'],
+    limit: 5000,
+    orderBy: 'created_desc',
+  });
+  if (queueLedgerRows.length > 0) {
+    return replaceOracleQueueAdmissionMirror({
+      controlDb: input.controlDb,
+      activeRows: queueLedgerRows.map((row) => ({
+        scope: row.scope,
+        requested_by_user_id: row.requested_by_user_id ?? null,
+      })),
+      nowIso,
+    });
+  }
+
   const { data, error } = await input.db
     .from('ingestion_jobs')
     .select('scope, requested_by_user_id')

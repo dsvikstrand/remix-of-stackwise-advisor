@@ -13,8 +13,13 @@ import {
   listOracleLatestJobsForUserScope,
   listOracleRunningJobsByScope,
   recordOracleJobLeaseHeartbeat,
+  syncOracleJobActivityMirrorFromSupabase,
   upsertOracleJobActivityRow,
 } from '../../server/services/oracleJobActivityState';
+import {
+  buildOracleQueueLedgerJobFromInsertValues,
+  upsertOracleQueueLedgerRow,
+} from '../../server/services/oracleQueueLedgerState';
 import { readOracleQueueAdmissionCounts } from '../../server/services/oracleQueueAdmissionState';
 
 const tempDirs: string[] = [];
@@ -337,6 +342,50 @@ describe('oracle job activity state', () => {
         status: 'succeeded',
         finished_at: '2026-04-01T14:01:00.000Z',
         updated_at: '2026-04-01T14:01:00.000Z',
+      });
+    } finally {
+      await controlDb.close();
+    }
+  });
+
+  it('rebuilds the job activity mirror from the Oracle queue ledger before Supabase fallback', async () => {
+    const controlDb = openOracleControlPlaneDb({
+      sqlitePath: createTempSqlitePath(),
+    });
+
+    try {
+      await upsertOracleQueueLedgerRow({
+        controlDb,
+        job: buildOracleQueueLedgerJobFromInsertValues({
+          nowIso: '2026-04-01T14:00:00.000Z',
+          values: {
+            id: 'job_from_ledger',
+            trigger: 'service_cron',
+            scope: 'all_active_subscriptions',
+            status: 'queued',
+            next_run_at: '2026-04-01T14:00:00.000Z',
+            created_at: '2026-04-01T14:00:00.000Z',
+            updated_at: '2026-04-01T14:00:00.000Z',
+          },
+        }),
+      });
+
+      const result = await syncOracleJobActivityMirrorFromSupabase({
+        controlDb,
+        db: {} as any,
+        recentLimit: 100,
+        nowIso: '2026-04-01T14:01:00.000Z',
+      });
+      const latest = await getOracleLatestIngestionJob({
+        controlDb,
+      });
+
+      expect(result.rowCount).toBe(1);
+      expect(result.activeCount).toBe(1);
+      expect(latest).toMatchObject({
+        id: 'job_from_ledger',
+        scope: 'all_active_subscriptions',
+        status: 'queued',
       });
     } finally {
       await controlDb.close();
