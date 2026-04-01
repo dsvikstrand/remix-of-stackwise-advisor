@@ -9243,6 +9243,7 @@ registerSourceSubscriptionsRoutes(app, {
   getGenerationNotificationLinkPath,
   scheduleQueuedIngestionProcessing,
   enqueueIngestionJob: enqueueIngestionJobWithMirror,
+  finalizeIngestionJob: finalizeIngestionJobWithMirror,
   resolveGenerationTierAccess,
   resolveRequestedGenerationTier,
   normalizeRequestedGenerationTier,

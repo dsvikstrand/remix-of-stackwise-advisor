@@ -71,6 +71,8 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     emitGenerationStartedNotification: vi.fn(async () => undefined),
     getGenerationNotificationLinkPath: () => '/feed',
     scheduleQueuedIngestionProcessing: vi.fn(() => undefined),
+    enqueueIngestionJob: vi.fn(async () => ({ data: { id: 'job_1' }, error: null })),
+    finalizeIngestionJob: vi.fn(async () => ({ id: 'job_1' })),
     resolveGenerationTierAccess: () => ({ allowedTiers: ['tier'], defaultTier: 'tier', testModeEnabled: false }),
     resolveRequestedGenerationTier: () => 'tier',
     normalizeRequestedGenerationTier: (value: unknown) => value,
@@ -79,6 +81,10 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     getGenerationDailyCapStatus: vi.fn(async () => null),
     ...overrides,
   } as any;
+}
+
+function enqueueIntoMockDb(db: any, values: any) {
+  return db.from('ingestion_jobs').insert(values).select('*').single();
 }
 
 describe('source subscription refresh generate handler', () => {
@@ -370,6 +376,7 @@ describe('source subscription refresh generate handler', () => {
       getAuthedSupabaseClient: () => authDb,
       getServiceSupabaseClient: () => serviceDb,
       RefreshSubscriptionsGenerateSchema: { safeParse: () => ({ success: true, data: { items } }) },
+      enqueueIngestionJob: enqueueIntoMockDb,
     });
 
     await handleRefreshGenerate(req, res as any, deps);
@@ -448,6 +455,7 @@ describe('source subscription refresh generate handler', () => {
       getAuthedSupabaseClient: () => authDb,
       getServiceSupabaseClient: () => serviceDb,
       RefreshSubscriptionsGenerateSchema: { safeParse: () => ({ success: true, data: { items } }) },
+      enqueueIngestionJob: enqueueIntoMockDb,
       resolveVariantOrReady: vi.fn(async ({ sourceItemId }: { sourceItemId: string }) => {
         if (sourceItemId === 'source_video_ready') {
           return { state: 'ready', blueprintId: 'bp_ready' };

@@ -94,7 +94,8 @@ export type SourceSubscriptionsRouteDeps = {
   emitGenerationStartedNotification: any;
   getGenerationNotificationLinkPath: any;
   scheduleQueuedIngestionProcessing: any;
-  enqueueIngestionJob?: any;
+  enqueueIngestionJob: any;
+  finalizeIngestionJob: any;
   resolveGenerationTierAccess: any;
   resolveRequestedGenerationTier: any;
   normalizeRequestedGenerationTier: any;

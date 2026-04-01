@@ -1128,35 +1128,18 @@ app.post(
       });
     }
 
-    const jobInsert = enqueueIngestionJob
-      ? await enqueueIngestionJob(db, {
-          trigger: 'user_sync',
-          scope: 'search_video_generate',
-          status: 'queued',
-          requested_by_user_id: userId,
-          payload: {
-            user_id: userId,
-            items: queuedItems,
-            generation_tier: resolvedTier,
-          },
-          next_run_at: new Date().toISOString(),
-        })
-      : await db
-        .from('ingestion_jobs')
-        .insert({
-          trigger: 'user_sync',
-          scope: 'search_video_generate',
-          status: 'queued',
-          requested_by_user_id: userId,
-          payload: {
-            user_id: userId,
-            items: queuedItems,
-            generation_tier: resolvedTier,
-          },
-          next_run_at: new Date().toISOString(),
-        })
-        .select('id')
-        .single();
+    const jobInsert = await enqueueIngestionJob(db, {
+      trigger: 'user_sync',
+      scope: 'search_video_generate',
+      status: 'queued',
+      requested_by_user_id: userId,
+      payload: {
+        user_id: userId,
+        items: queuedItems,
+        generation_tier: resolvedTier,
+      },
+      next_run_at: new Date().toISOString(),
+    });
     const { data: job, error: jobCreateError } = jobInsert;
     if (jobCreateError) {
       for (const item of queuedItems) {

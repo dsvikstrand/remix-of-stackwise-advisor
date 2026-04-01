@@ -1255,39 +1255,20 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
     });
   }
 
-  const jobInsert = deps.enqueueIngestionJob
-    ? await deps.enqueueIngestionJob(db, {
-        trigger: 'user_sync',
-        scope: 'source_item_unlock_generation',
-        status: 'queued',
-        requested_by_user_id: userId,
-        trace_id: traceId,
-        payload: {
-          user_id: userId,
-          trace_id: traceId,
-          generation_tier: resolvedTier,
-          items: queueItems,
-        },
-        next_run_at: new Date().toISOString(),
-      })
-    : await db
-      .from('ingestion_jobs')
-      .insert({
-        trigger: 'user_sync',
-        scope: 'source_item_unlock_generation',
-        status: 'queued',
-        requested_by_user_id: userId,
-        trace_id: traceId,
-        payload: {
-          user_id: userId,
-          trace_id: traceId,
-          generation_tier: resolvedTier,
-          items: queueItems,
-        },
-        next_run_at: new Date().toISOString(),
-      })
-      .select('id')
-      .single();
+  const jobInsert = await deps.enqueueIngestionJob(db, {
+    trigger: 'user_sync',
+    scope: 'source_item_unlock_generation',
+    status: 'queued',
+    requested_by_user_id: userId,
+    trace_id: traceId,
+    payload: {
+      user_id: userId,
+      trace_id: traceId,
+      generation_tier: resolvedTier,
+      items: queueItems,
+    },
+    next_run_at: new Date().toISOString(),
+  });
   const { data: job, error: jobCreateError } = jobInsert;
   if (jobCreateError) {
     for (const item of queueItems) {

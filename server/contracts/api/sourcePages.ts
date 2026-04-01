@@ -107,7 +107,7 @@ export type SourcePagesRouteDeps = {
   emitGenerationStartedNotification: any;
   getGenerationNotificationLinkPath: any;
   scheduleQueuedIngestionProcessing: any;
-  enqueueIngestionJob?: any;
+  enqueueIngestionJob: any;
   settleReservation: any;
   completeUnlock: any;
   runYouTubePipeline: any;

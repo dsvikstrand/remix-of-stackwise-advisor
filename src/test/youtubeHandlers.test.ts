@@ -122,6 +122,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     emitGenerationStartedNotification: vi.fn(async () => undefined),
     getGenerationNotificationLinkPath: () => '/wall',
     scheduleQueuedIngestionProcessing: vi.fn(() => undefined),
+    enqueueIngestionJob: vi.fn(async () => ({ data: { id: 'job_1' }, error: null })),
     clampYouTubeChannelSearchLimit: (value: unknown, fallback: number) => {
       const numeric = typeof value === 'number' ? value : Number(value);
       if (!Number.isFinite(numeric)) return fallback;
@@ -174,6 +175,10 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     })),
     ...overrides,
   } as any;
+}
+
+function enqueueIntoMockDb(db: any, values: any) {
+  return db.from('ingestion_jobs').insert(values).select('*').single();
 }
 
 describe('youtube handlers', () => {
@@ -493,6 +498,7 @@ describe('youtube handlers', () => {
       getAuthedSupabaseClient: () => authDb,
       getServiceSupabaseClient: () => serviceDb,
       SearchVideosGenerateSchema: { safeParse: () => ({ success: true, data: { items } }) },
+      enqueueIngestionJob: enqueueIntoMockDb,
       loadExistingSourceVideoStateForUser: vi.fn(async () => new Map()),
       resolveVariantOrReady: vi.fn(async () => null),
     }));
@@ -558,6 +564,7 @@ describe('youtube handlers', () => {
       getAuthedSupabaseClient: () => authDb,
       getServiceSupabaseClient: () => serviceDb,
       SearchVideosGenerateSchema: { safeParse: () => ({ success: true, data: { items } }) },
+      enqueueIngestionJob: enqueueIntoMockDb,
       loadExistingSourceVideoStateForUser: vi.fn(async () => new Map([
         ['video_dup', {
           already_exists_for_user: true,

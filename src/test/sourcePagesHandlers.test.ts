@@ -121,6 +121,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     emitGenerationStartedNotification: vi.fn(async () => undefined),
     getGenerationNotificationLinkPath: () => '/s/youtube/channel_1',
     scheduleQueuedIngestionProcessing: vi.fn(() => undefined),
+    enqueueIngestionJob: vi.fn(async () => ({ data: { id: 'job_1' }, error: null })),
     settleReservation: vi.fn(async () => undefined),
     completeUnlock: vi.fn(async () => undefined),
     runYouTubePipeline: vi.fn(async () => undefined),

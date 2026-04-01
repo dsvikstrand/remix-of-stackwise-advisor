@@ -825,35 +825,18 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
     });
   }
 
-  const jobInsert = deps.enqueueIngestionJob
-    ? await deps.enqueueIngestionJob(db, {
-        trigger: 'user_sync',
-        scope: 'manual_refresh_selection',
-        status: 'queued',
-        requested_by_user_id: userId,
-        payload: {
-          user_id: userId,
-          generation_tier: resolvedTier,
-          items: queuedItems,
-        },
-        next_run_at: new Date().toISOString(),
-      })
-    : await db
-      .from('ingestion_jobs')
-      .insert({
-        trigger: 'user_sync',
-        scope: 'manual_refresh_selection',
-        status: 'queued',
-        requested_by_user_id: userId,
-        payload: {
-          user_id: userId,
-          generation_tier: resolvedTier,
-          items: queuedItems,
-        },
-        next_run_at: new Date().toISOString(),
-      })
-      .select('id')
-      .single();
+  const jobInsert = await deps.enqueueIngestionJob(db, {
+    trigger: 'user_sync',
+    scope: 'manual_refresh_selection',
+    status: 'queued',
+    requested_by_user_id: userId,
+    payload: {
+      user_id: userId,
+      generation_tier: resolvedTier,
+      items: queuedItems,
+    },
+    next_run_at: new Date().toISOString(),
+  });
   const { data: job, error: jobCreateError } = jobInsert;
   if (jobCreateError) {
     for (const item of queuedItems) {
@@ -994,31 +977,27 @@ export async function handleSyncSourceSubscription(req: express.Request, res: ex
   if (!subscription) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Subscription not found', data: null });
   if (!subscription.is_active) return res.status(400).json({ ok: false, error_code: 'INACTIVE_SUBSCRIPTION', message: 'Subscription is inactive', data: null });
 
-  const { data: job, error: jobCreateError } = await db
-    .from('ingestion_jobs')
-    .insert({
-      trigger: 'user_sync',
-      scope: 'subscription',
-      status: 'running',
-      requested_by_user_id: userId,
-      subscription_id: subscription.id,
-      started_at: new Date().toISOString(),
-    })
-    .select('id')
-    .single();
+  const { data: job, error: jobCreateError } = await deps.enqueueIngestionJob(db, {
+    trigger: 'user_sync',
+    scope: 'subscription',
+    status: 'running',
+    requested_by_user_id: userId,
+    subscription_id: subscription.id,
+    started_at: new Date().toISOString(),
+    next_run_at: new Date().toISOString(),
+  });
   if (jobCreateError) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: jobCreateError.message, data: null });
 
   try {
     const sync = await deps.syncSingleSubscription(db, subscription, { trigger: 'user_sync' });
-    await db.from('ingestion_jobs').update({
+    await deps.finalizeIngestionJob(db, {
+      jobId: job.id,
       status: 'succeeded',
-      finished_at: new Date().toISOString(),
-      processed_count: sync.processed,
-      inserted_count: sync.inserted,
-      skipped_count: sync.skipped,
-      error_code: null,
-      error_message: null,
-    }).eq('id', job.id);
+      processedCount: sync.processed,
+      insertedCount: sync.inserted,
+      skippedCount: sync.skipped,
+      action: 'subscription_sync_terminal',
+    });
 
     return res.json({
       ok: true,
@@ -1032,12 +1011,16 @@ export async function handleSyncSourceSubscription(req: express.Request, res: ex
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await deps.markSubscriptionSyncError(db, subscription, error);
-    await db.from('ingestion_jobs').update({
+    await deps.finalizeIngestionJob(db, {
+      jobId: job.id,
       status: 'failed',
-      finished_at: new Date().toISOString(),
-      error_code: 'SYNC_FAILED',
-      error_message: message.slice(0, 500),
-    }).eq('id', job.id);
+      processedCount: 0,
+      insertedCount: 0,
+      skippedCount: 0,
+      errorCode: 'SYNC_FAILED',
+      errorMessage: message.slice(0, 500),
+      action: 'subscription_sync_failed',
+    });
     return res.status(500).json({ ok: false, error_code: 'SYNC_FAILED', message, data: { job_id: job.id } });
   }
 }
