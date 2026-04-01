@@ -57,6 +57,12 @@ export type OpsRouteDeps = {
     started_at: string | null;
   } | null>;
   getLatestIngestionJob?: () => Promise<any | null>;
+  getLatestIngestionJobForScope?: (input: { scope: string }) => Promise<{
+    id: string | null;
+    status: string | null;
+    created_at: string | null;
+    started_at: string | null;
+  } | null>;
   getQueueHealthSnapshot?: (input: {
     snapshotAtIso: string;
     runningHeartbeatFreshMs: number;

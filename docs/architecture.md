@@ -119,6 +119,7 @@
     - The remaining user-triggered ingestion handlers now follow that same centralized Oracle-aware lifecycle path: manual refresh, source-page unlock generation, search generation, and foreground subscription sync enqueue/finalize through shared helpers instead of inline `ingestion_jobs` inserts/updates.
     - Service/debug ingestion control now follows it too: `/api/ingestion/jobs/trigger` and debug subscription simulation both use the shared Oracle-aware enqueue/finalize helpers rather than raw handler-level `ingestion_jobs` writes.
     - Service ops reads and Blueprint refresh pending-job dedupe now follow the same Oracle-first pattern as well: latest-job / queue-health / refresh pending checks resolve through centralized runtime helpers, with durable Supabase fallback kept underneath rather than duplicated in handlers/services.
+    - The queue-ledger bridge is now centralized one layer deeper too: `ingestionQueue` claim / fail / lease-touch paths expose Oracle-aware hooks, so queued-worker controllers can keep mirror updates and fallback behavior aligned without re-implementing those seams at every call site.
     - Durable queue rows, claim truth, lease truth, and retries still remain on Supabase.
     - Backend refactor a3 is completed with no behavior drift:
       - route registration is fully modular (`53` API routes across `server/routes/*` / route-domain modules)
@@ -157,6 +158,7 @@
     - shared handler preflight helpers now live in `server/services/generationPreflight.ts`:
       - Search/manual-refresh/source-page routes reuse typed helpers for duplicate/ready/in-progress classification, reservation-prefix handling, source-page subscription access, and queue/work-item admission reads.
       - queue admission/read helpers now honor explicit `scope` or `scopes` filters so refresh/ops guards and interactive admission checks use the intended queue slice rather than a silent full-queue scan.
+      - ops trigger scope-latest reads now route through centralized runtime helpers as well, so `all_active_subscriptions` gating no longer depends on a handler-local direct `ingestion_jobs` query in the normal path.
       - blueprint YouTube refresh scheduler now batches pending-job detection by refresh kind/candidate set instead of reading queued refresh payloads once per candidate.
       - direct URL generation remains intentionally separate because it does not use queue admission.
     - `POST /api/source-pages/:platform/:externalId/subscribe` (auth-only, idempotent source-page subscribe)
@@ -238,6 +240,7 @@
     - worker lease heartbeats are now lease-aware by default: a `90s` lease refreshes every `30s` instead of every `10s`, reducing Supabase lease-RPC churn without changing lease ownership semantics.
     - short-lived maintenance/enrichment scopes now also defer the first heartbeat deeper into that lease window (`45s` on the default `90s` lease), so many fast jobs complete without any lease-touch write while heavy scopes keep the usual cadence.
     - Oracle job-activity mirrors now also refresh directly from the worker’s known lifecycle rows: claimed batches upsert immediately, failure transitions can reuse the already-known `attempts` count, and lease-heartbeat refreshes keep Oracle queue health warm without a second Supabase mirror read.
+    - queued-worker mirror upkeep now uses centralized queue-ledger bridge helpers in `ingestionQueue`, so claim / fail / lease-touch paths share one Oracle-aware seam instead of each runtime caller owning a custom bridge wrapper.
     - ingestion user-status routes now consume centralized Oracle-first readers for job detail, latest-mine, active-mine, and queued ordering, rather than keeping route-local Supabase fallback branches.
     - unlock reliability orphan-job recovery now also uses a mirror-aware running-job failure helper, so stale running unlock jobs do not bypass Oracle job-activity updates when they are forced terminal.
     - low-priority idle claim sweeps now back off more aggressively than the default worker idle cadence, reducing `claim_ingestion_jobs` chatter when only low-priority scopes are being polled.

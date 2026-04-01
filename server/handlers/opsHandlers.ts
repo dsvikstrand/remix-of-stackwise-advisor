@@ -172,15 +172,28 @@ export async function handleIngestionJobsTrigger(req: express.Request, res: expr
   }
 
   if (!oraclePrimaryDecision) {
-    const { data: latestJob, error: latestJobError } = await db
-      .from('ingestion_jobs')
-      .select('id, status, created_at, started_at')
-      .eq('scope', 'all_active_subscriptions')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (latestJobError) {
-      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: latestJobError.message, data: null });
+    let latestJob = null as Awaited<ReturnType<NonNullable<OpsRouteDeps['getLatestIngestionJobForScope']>>> | null;
+    if (deps.getLatestIngestionJobForScope) {
+      try {
+        latestJob = await deps.getLatestIngestionJobForScope({
+          scope: 'all_active_subscriptions',
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message, data: null });
+      }
+    } else {
+      const latestResult = await db
+        .from('ingestion_jobs')
+        .select('id, status, created_at, started_at')
+        .eq('scope', 'all_active_subscriptions')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (latestResult.error) {
+        return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: latestResult.error.message, data: null });
+      }
+      latestJob = latestResult.data;
     }
 
     const recentTrigger = getRecentAllActiveSubscriptionsTrigger({

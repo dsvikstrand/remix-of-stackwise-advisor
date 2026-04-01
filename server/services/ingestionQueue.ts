@@ -73,6 +73,21 @@ export async function claimQueuedIngestionJobs(db: DbClient, input: {
   return (data || []) as IngestionJobRow[];
 }
 
+export async function claimQueuedIngestionJobsWithHooks(db: DbClient, input: {
+  scopes?: string[];
+  maxJobs?: number;
+  workerId: string;
+  leaseSeconds: number;
+}, hooks?: {
+  afterClaimedJobs?: (jobs: IngestionJobRow[]) => Promise<void> | void;
+}) {
+  const claimed = await claimQueuedIngestionJobs(db, input);
+  if (claimed.length > 0) {
+    await hooks?.afterClaimedJobs?.(claimed);
+  }
+  return claimed;
+}
+
 export async function touchIngestionJobLease(db: DbClient, input: {
   jobId: string;
   workerId: string;
@@ -86,6 +101,28 @@ export async function touchIngestionJobLease(db: DbClient, input: {
   });
   if (error) throw error;
   return Boolean(data);
+}
+
+export async function touchIngestionJobLeaseWithHooks(db: DbClient, input: {
+  jobId: string;
+  workerId: string;
+  leaseSeconds: number;
+}, hooks?: {
+  afterLeaseTouched?: (input: {
+    jobId: string;
+    workerId: string;
+    leaseSeconds: number;
+  }) => Promise<void> | void;
+}) {
+  const touched = await touchIngestionJobLease(db, input);
+  if (touched) {
+    await hooks?.afterLeaseTouched?.({
+      jobId: input.jobId,
+      workerId: input.workerId,
+      leaseSeconds: clampInt(input.leaseSeconds, 90, 5, 3600),
+    });
+  }
+  return touched;
 }
 
 export async function countQueueDepth(db: DbClient, input?: {
@@ -222,4 +259,21 @@ export async function failIngestionJob(db: DbClient, input: {
     .single();
   if (error) throw error;
   return data as IngestionJobRow;
+}
+
+export async function failIngestionJobWithHooks(db: DbClient, input: {
+  jobId: string;
+  errorCode: string;
+  errorMessage: string;
+  scheduleRetryInSeconds?: number;
+  maxAttempts?: number;
+  currentAttempts?: number | null;
+}, hooks?: {
+  afterFailedJob?: (job: IngestionJobRow) => Promise<void> | void;
+}) {
+  const failedJob = await failIngestionJob(db, input);
+  if (failedJob) {
+    await hooks?.afterFailedJob?.(failedJob);
+  }
+  return failedJob;
 }

@@ -183,11 +183,14 @@ import { createTranscriptFetchWithCacheBypass } from './services/transcriptFetch
 import { createCodexLane } from './services/codexLane';
 import {
   claimQueuedIngestionJobs,
+  claimQueuedIngestionJobsWithHooks,
   countQueueDepth,
   countQueueWorkItems,
   failIngestionJob,
+  failIngestionJobWithHooks,
   getQueuedJobWorkItemCount,
   touchIngestionJobLease,
+  touchIngestionJobLeaseWithHooks,
   type IngestionJobRow,
 } from './services/ingestionQueue';
 import {
@@ -1101,38 +1104,6 @@ async function enqueueIngestionJobWithMirror(
   return result;
 }
 
-async function claimQueuedIngestionJobsWithMirror(
-  db: ReturnType<typeof createClient>,
-  input: Parameters<typeof claimQueuedIngestionJobs>[1],
-) {
-  const claimed = await claimQueuedIngestionJobs(db, input);
-  await upsertOracleJobActivityFromKnownRows(claimed, 'queued_job_claim_batch');
-  return claimed;
-}
-
-async function failIngestionJobWithMirror(
-  db: ReturnType<typeof createClient>,
-  input: {
-    job: IngestionJobRow;
-    errorCode: string;
-    errorMessage: string;
-    scheduleRetryInSeconds?: number;
-    maxAttempts?: number;
-    action: string;
-  },
-) {
-  const failedJob = await failIngestionJob(db, {
-    jobId: input.job.id,
-    errorCode: input.errorCode,
-    errorMessage: input.errorMessage,
-    scheduleRetryInSeconds: input.scheduleRetryInSeconds,
-    maxAttempts: input.maxAttempts,
-    currentAttempts: Number(input.job.attempts || 0),
-  });
-  await upsertOracleJobActivityFromKnownRow(failedJob, input.action);
-  return failedJob;
-}
-
 async function markRunningIngestionJobsFailedWithMirror(
   db: ReturnType<typeof createClient>,
   input: {
@@ -1538,6 +1509,30 @@ async function getLatestIngestionJobOracleFirst() {
   const latestResult = await serviceDb
     .from('ingestion_jobs')
     .select('id, trigger, scope, status, started_at, finished_at, processed_count, inserted_count, skipped_count, error_code, error_message, attempts, max_attempts, next_run_at, lease_expires_at, trace_id')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (latestResult.error) throw latestResult.error;
+  return latestResult.data || null;
+}
+
+async function getLatestIngestionJobForScopeOracleFirst(input: {
+  scope: string;
+}) {
+  const normalizedScope = String(input.scope || '').trim();
+  if (!normalizedScope) {
+    return null;
+  }
+
+  const serviceDb = getServiceSupabaseClient();
+  if (!serviceDb) {
+    return null;
+  }
+
+  const latestResult = await serviceDb
+    .from('ingestion_jobs')
+    .select('id, status, created_at, started_at')
+    .eq('scope', normalizedScope)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -4129,9 +4124,6 @@ const blueprintYouTubeCommentsService = createBlueprintYouTubeCommentsService({
       blueprintIds,
       kind,
     })
-  ),
-  listOracleActiveRefreshJobs: async ({ scope, limit }) => (
-    await listActiveScopeJobsOracleFirst({ scope, limit }) || []
   ),
 });
 
@@ -8745,13 +8737,17 @@ async function processAllActiveSubscriptionsJob(input: {
 async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, job: IngestionJobRow) {
   const scope = String(job.scope || '').trim();
   if (!isQueuedIngestionScope(scope)) {
-    await failIngestionJobWithMirror(db, {
-      job,
+    await failIngestionJobWithHooks(db, {
+      jobId: job.id,
       errorCode: 'UNSUPPORTED_SCOPE',
       errorMessage: `Unsupported queued scope: ${scope}`,
       scheduleRetryInSeconds: 0,
       maxAttempts: Number(job.max_attempts || 3),
-      action: 'queued_job_fail_unsupported_scope',
+      currentAttempts: Number(job.attempts || 0),
+    }, {
+      afterFailedJob: async (failedJob) => {
+        await upsertOracleJobActivityFromKnownRow(failedJob, 'queued_job_fail_unsupported_scope');
+      },
     });
     return;
   }
@@ -8771,24 +8767,26 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
   let mirrorHeartbeatActive = true;
   const runHeartbeat = () => {
     const heartbeatAtIso = new Date().toISOString();
-    void touchIngestionJobLease(db, {
+    void touchIngestionJobLeaseWithHooks(db, {
       jobId: job.id,
       workerId: queuedWorkerId,
       leaseSeconds,
+    }, {
+      afterLeaseTouched: async ({ leaseSeconds: normalizedLeaseSeconds }) => {
+        if (!mirrorHeartbeatActive || !oracleJobActivityMirrorEnabled || !oracleControlPlane) {
+          return;
+        }
+        await recordOracleJobLeaseHeartbeat({
+          controlDb: oracleControlPlane,
+          job,
+          leaseSeconds: normalizedLeaseSeconds,
+          heartbeatAtIso,
+        });
+      },
     }).then((ok) => {
       if (!ok && !heartbeatError) {
         heartbeatError = new Error('LEASE_HEARTBEAT_REJECTED');
-        return;
       }
-      if (!ok || !mirrorHeartbeatActive || !oracleJobActivityMirrorEnabled || !oracleControlPlane) {
-        return;
-      }
-      void recordOracleJobLeaseHeartbeat({
-        controlDb: oracleControlPlane,
-        job,
-        leaseSeconds,
-        heartbeatAtIso,
-      });
     }).catch((error) => {
       if (!heartbeatError) heartbeatError = error;
     });
@@ -8968,13 +8966,17 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
   } catch (error) {
     const classified = classifyQueuedJobError(error);
     const nextRetryDelay = Math.max(0, Math.floor(Number(classified.retryDelaySeconds) || 0));
-    await failIngestionJobWithMirror(db, {
-      job,
+    await failIngestionJobWithHooks(db, {
+      jobId: job.id,
       errorCode: classified.errorCode,
       errorMessage: classified.message,
       scheduleRetryInSeconds: nextRetryDelay,
       maxAttempts: Number(job.max_attempts || 3),
-      action: 'queued_job_fail_transition',
+      currentAttempts: Number(job.attempts || 0),
+    }, {
+      afterFailedJob: async (failedJob) => {
+        await upsertOracleJobActivityFromKnownRow(failedJob, 'queued_job_fail_transition');
+      },
     });
 
     logUnlockEvent('unlock_job_failed', { trace_id: traceId, job_id: job.id }, {
@@ -9031,7 +9033,11 @@ const queuedIngestionWorkerController = createQueuedIngestionWorkerController({
         nowIso,
       })
     : undefined,
-  claimQueuedIngestionJobs,
+  claimQueuedIngestionJobs: (db, input) => claimQueuedIngestionJobsWithHooks(db, input, {
+    afterClaimedJobs: async (claimed) => {
+      await upsertOracleJobActivityFromKnownRows(claimed, 'queued_job_claim_batch');
+    },
+  }),
   shouldAttemptQueueClaim: oracleQueueClaimControlEnabled && oracleControlPlane
     ? async ({ tier, scopes, maxJobs, nowIso }) => shouldAttemptOracleQueueClaim({
         controlDb: oracleControlPlane,
@@ -9756,6 +9762,7 @@ registerOpsRoutes(app, {
   getServiceSupabaseClient,
   getActiveIngestionJobForScope: getActiveIngestionJobForScopeOracleFirst,
   getLatestIngestionJob: getLatestIngestionJobOracleFirst,
+  getLatestIngestionJobForScope: getLatestIngestionJobForScopeOracleFirst,
   getQueueHealthSnapshot: getQueueHealthSnapshotOracleFirst,
   recoverStaleIngestionJobs,
   runUnlockSweeps,

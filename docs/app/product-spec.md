@@ -165,6 +165,7 @@ b5) Subscription behavior (MVP simplified)
   - Oracle job-activity mirror writes now also happen directly from enqueue/claim/terminal/stale lifecycle transitions, so the hot worker/control-plane path no longer needs an extra Supabase read-after-write refresh for the same job row just to keep Oracle mirror state current.
   - Remaining user-triggered enqueue/finalize flows now follow that same centralized path: manual refresh, search generation, source-page unlock generation, and foreground subscription sync should use the Oracle-aware enqueue/finalize helpers rather than inline `ingestion_jobs` writes in handler code.
   - Service/debug ingestion control now follows that same rule too: `/api/ingestion/jobs/trigger` and debug subscription simulation enqueue/finalize through the centralized Oracle-aware helpers instead of direct handler-level `ingestion_jobs` writes.
+  - Queue-ledger bridge helpers now also wrap claim / fail / lease-touch transitions centrally in `ingestionQueue`, so the worker/controller path updates Oracle mirrors from already-known durable job rows instead of keeping queue-ledger mirror hooks scattered across controller/runtime callers.
   - Supabase still owns queued/running rows, claim/lease truth, and retries.
 - Auto-unlock toggle defaults to enabled (`auto_unlock_enabled=true`) for existing and new subscriptions.
 - Locked auto-billing policy is shared-cost:

@@ -118,10 +118,12 @@
     - service ops reads now follow that same pattern: latest-ingestion-job and queue-health snapshot reads resolve through centralized Oracle-first helpers, with any durable Supabase fallback kept in runtime helpers rather than the ops handler
     - hot enqueue/worker lifecycle transitions now update that Oracle job-activity mirror directly from the inserted/claimed/finalized/recovered `ingestion_jobs` rows in hand, instead of doing a second Supabase read just to refresh mirror state
     - queued-worker lease heartbeats now also refresh the Oracle job-activity mirror from the already-claimed job row, so long-running queue health stays warm locally without another Supabase mirror-read round trip
+    - queue-ledger bridge helpers now wrap claim / fail / lease-touch transitions centrally in `ingestionQueue`, so queued-worker/controller paths share one Oracle-aware seam for mirror updates instead of each call site carrying bespoke bridge logic
     - unlock reliability orphan-job recovery now also uses the same Oracle-aware failure path, so stale running unlock jobs no longer bypass mirror updates when they are forced terminal
     - user-triggered generation/sync handlers now also stay on that centralized Oracle-aware path: manual refresh, source-page unlock generation, search generation, and foreground subscription sync enqueue/finalize through shared helpers rather than inline `ingestion_jobs` writes
     - service/debug control now does the same: `/api/ingestion/jobs/trigger` and debug subscription simulation both enqueue/finalize through the shared Oracle-aware helpers instead of direct handler-local `ingestion_jobs` writes
     - Blueprint YouTube refresh pending-job dedupe now also goes through a centralized Oracle-first helper in runtime, so the refresh service does not own a separate hot-path `ingestion_jobs` fallback query during normal production operation
+    - ops trigger scope-latest checks now also route through a centralized runtime helper, so `all_active_subscriptions` suppression logic no longer depends on a handler-local direct `ingestion_jobs` query in the normal path
   - Durable generation trace writes are also slimmer:
     - generation run/event writes no longer request returned row payloads when callers do not consume them
     - event sequencing now reuses a per-run in-process cursor instead of re-reading the latest `seq` from Supabase before every event insert
