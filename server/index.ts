@@ -89,10 +89,13 @@ import {
 import {
   buildOracleQueueLedgerJobFromInsertValues,
   claimOracleQueuedIngestionJobs,
+  countOracleQueueLedgerJobs,
   deleteOracleQueueLedgerJob,
   failOracleQueueJob,
   finalizeOracleQueueJob,
+  getOracleLatestQueueJob,
   getOracleLatestQueueJobForScope,
+  listOracleQueueLedgerJobs,
   markOracleRunningJobsFailed,
   syncOracleQueueLedgerFromSupabase,
   touchOracleQueueJobLease,
@@ -896,6 +899,21 @@ async function countQueueDepthForAdmission(
     statuses?: string[];
   },
 ) {
+  const queueLedgerCount = await countOracleQueueLedgerJobsSafe({
+    action: 'count_queue_depth_queue_ledger',
+    scope: input?.scope,
+    scopes: input?.scopes,
+    userId: input?.userId,
+    statuses: Array.isArray(input?.statuses) && input?.statuses.length > 0
+      ? input?.statuses
+      : input?.includeRunning
+        ? ['queued', 'running']
+        : ['queued'],
+  });
+  if (queueLedgerCount != null) {
+    return queueLedgerCount;
+  }
+
   if (!oracleQueueAdmissionMirrorEnabled || !oracleControlPlane || !supportsOracleQueueAdmissionMirror(input)) {
     return countQueueDepth(db, input);
   }
@@ -929,6 +947,28 @@ async function countQueueWorkItemsForAdmission(
     statuses?: string[];
   },
 ) {
+  const queueLedgerRows = await listOracleQueueLedgerJobsSafe({
+    action: 'count_queue_work_items_queue_ledger',
+    scope: input?.scope,
+    scopes: input?.scopes,
+    userId: input?.userId,
+    statuses: Array.isArray(input?.statuses) && input?.statuses.length > 0
+      ? input?.statuses
+      : input?.includeRunning
+        ? ['queued', 'running']
+        : ['queued'],
+    limit: 5000,
+    orderBy: 'created_desc',
+  });
+  if (queueLedgerRows) {
+    return queueLedgerRows.reduce((total, row) => (
+      total + getQueuedJobWorkItemCount({
+        scope: row.scope,
+        payload: normalizeOracleJobPayload(row.payload),
+      })
+    ), 0);
+  }
+
   if (!oracleQueueAdmissionMirrorEnabled || !oracleControlPlane || !supportsOracleQueueAdmissionMirror(input)) {
     return countQueueWorkItems(db, input);
   }
@@ -1550,6 +1590,17 @@ async function listLatestUserIngestionJobsOracleFirst(
     limit: number;
   },
 ) {
+  const queueLedgerRows = await listOracleQueueLedgerJobsSafe({
+    action: 'list_latest_for_user_scope_queue_ledger',
+    scope: input.scope,
+    userId: input.userId,
+    limit: input.limit,
+    orderBy: 'created_desc',
+  });
+  if (queueLedgerRows) {
+    return queueLedgerRows;
+  }
+
   if (oracleJobActivityMirrorEnabled && oracleControlPlane) {
     try {
       const rows = await listOracleLatestJobsForUserScope({
@@ -1588,6 +1639,18 @@ async function listActiveUserIngestionJobsOracleFirst(
     limit: number;
   },
 ) {
+  const queueLedgerRows = await listOracleQueueLedgerJobsSafe({
+    action: 'list_active_for_user_queue_ledger',
+    scopes: input.scopes,
+    userId: input.userId,
+    statuses: ['queued', 'running'],
+    limit: input.limit,
+    orderBy: 'created_desc',
+  });
+  if (queueLedgerRows) {
+    return queueLedgerRows;
+  }
+
   if (oracleJobActivityMirrorEnabled && oracleControlPlane) {
     try {
       const rows = await listOracleActiveJobsForUser({
@@ -1636,6 +1699,16 @@ async function getUserIngestionJobByIdOracleFirst(
     return null;
   }
 
+  const queueLedgerRows = await listOracleQueueLedgerJobsSafe({
+    action: 'get_user_job_by_id_queue_ledger',
+    userId: input.userId,
+    jobIds: [normalizedJobId],
+    limit: 1,
+  });
+  if (queueLedgerRows && queueLedgerRows.length > 0) {
+    return queueLedgerRows[0];
+  }
+
   if (oracleJobActivityMirrorEnabled && oracleControlPlane) {
     try {
       const rows = await listOracleJobsByIds({
@@ -1670,6 +1743,22 @@ async function getUserIngestionJobByIdOracleFirst(
 async function getActiveIngestionJobForScopeOracleFirst(input: {
   scope: string;
 }) {
+  const queueLedgerRows = await listOracleQueueLedgerJobsSafe({
+    action: 'get_active_for_scope_queue_ledger',
+    scope: input.scope,
+    statuses: ['queued', 'running'],
+    limit: 1,
+    orderBy: 'created_desc',
+  });
+  const queueLedgerRow = queueLedgerRows?.[0];
+  if (queueLedgerRow) {
+    return {
+      id: queueLedgerRow.id,
+      status: queueLedgerRow.status,
+      started_at: queueLedgerRow.started_at,
+    };
+  }
+
   if (oracleJobActivityMirrorEnabled && oracleControlPlane) {
     try {
       const rows = await listOracleActiveJobsForScope({
@@ -1714,6 +1803,21 @@ async function getActiveIngestionJobForScopeOracleFirst(input: {
 async function listQueuedJobsForScopesOracleFirst(input: {
   scopes: string[];
 }) {
+  const queueLedgerRows = await listOracleQueueLedgerJobsSafe({
+    action: 'list_queued_jobs_for_scopes_queue_ledger',
+    scopes: input.scopes,
+    statuses: ['queued'],
+    limit: 5000,
+    orderBy: 'next_run_asc',
+  });
+  if (queueLedgerRows) {
+    return queueLedgerRows.map((row) => ({
+      id: row.id,
+      next_run_at: row.next_run_at,
+      created_at: row.created_at,
+    }));
+  }
+
   if (oracleJobActivityMirrorEnabled && oracleControlPlane) {
     try {
       const rows = await listOracleActiveJobsForScopes({
@@ -1769,10 +1873,91 @@ function normalizeOracleJobPayload(raw: unknown) {
     : null;
 }
 
+async function listOracleQueueLedgerJobsSafe(input: {
+  action: string;
+  scope?: string;
+  scopes?: string[];
+  userId?: string;
+  jobIds?: string[];
+  statuses?: string[];
+  startedBeforeIso?: string | null;
+  limit?: number;
+  orderBy?: 'created_desc' | 'next_run_asc' | 'started_asc';
+}) {
+  if (!oracleQueueLedgerEnabled || !oracleControlPlane) {
+    return null;
+  }
+
+  try {
+    return await listOracleQueueLedgerJobs({
+      controlDb: oracleControlPlane,
+      scope: input.scope,
+      scopes: input.scopes,
+      userId: input.userId,
+      jobIds: input.jobIds,
+      statuses: input.statuses,
+      startedBeforeIso: input.startedBeforeIso,
+      limit: input.limit,
+      orderBy: input.orderBy,
+    });
+  } catch (error) {
+    console.warn('[oracle-control-plane] queue_ledger_mirror_failed', JSON.stringify({
+      action: input.action,
+      scope: input.scope || null,
+      scopes: input.scopes || null,
+      user_id: input.userId || null,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    return null;
+  }
+}
+
+async function countOracleQueueLedgerJobsSafe(input: {
+  action: string;
+  scope?: string;
+  scopes?: string[];
+  userId?: string;
+  statuses?: string[];
+}) {
+  if (!oracleQueueLedgerEnabled || !oracleControlPlane) {
+    return null;
+  }
+
+  try {
+    return await countOracleQueueLedgerJobs({
+      controlDb: oracleControlPlane,
+      scope: input.scope,
+      scopes: input.scopes,
+      userId: input.userId,
+      statuses: input.statuses,
+    });
+  } catch (error) {
+    console.warn('[oracle-control-plane] queue_ledger_mirror_failed', JSON.stringify({
+      action: input.action,
+      scope: input.scope || null,
+      scopes: input.scopes || null,
+      user_id: input.userId || null,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    return null;
+  }
+}
+
 async function listActiveScopeJobsOracleFirst(input: {
   scope: string;
   limit?: number;
 }) {
+  const queueLedgerRows = await listOracleQueueLedgerJobsSafe({
+    action: 'list_active_for_scope_queue_ledger',
+    scope: input.scope,
+    statuses: ['queued', 'running'],
+    limit: input.limit,
+    orderBy: 'created_desc',
+  });
+  if (queueLedgerRows) {
+    return queueLedgerRows;
+  }
+
   if (!oracleJobActivityMirrorEnabled || !oracleControlPlane) {
     return null;
   }
@@ -1881,6 +2066,20 @@ async function listPendingRefreshBlueprintIdsOracleFirst(
 }
 
 async function getLatestIngestionJobOracleFirst() {
+  if (oracleQueueLedgerEnabled && oracleControlPlane) {
+    try {
+      const mirrored = await getOracleLatestQueueJob({
+        controlDb: oracleControlPlane,
+      });
+      if (mirrored) return mirrored;
+    } catch (error) {
+      console.warn('[oracle-control-plane] queue_ledger_mirror_failed', JSON.stringify({
+        action: 'get_latest_ingestion_job',
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+
   if (oracleJobActivityMirrorEnabled && oracleControlPlane) {
     try {
       const mirrored = await getOracleLatestIngestionJob({
@@ -1976,6 +2175,31 @@ async function getUnlockJobsByIdsOracleFirst(
     }>();
   }
 
+  const queueLedgerRows = await listOracleQueueLedgerJobsSafe({
+    action: 'get_unlock_jobs_by_ids_queue_ledger',
+    jobIds: normalizedIds,
+    limit: normalizedIds.length,
+  });
+  if (queueLedgerRows) {
+    const map = new Map<string, {
+      id: string;
+      status: string;
+      scope: string;
+      started_at: string | null;
+      updated_at: string | null;
+    }>();
+    for (const row of queueLedgerRows) {
+      map.set(row.id, {
+        id: row.id,
+        status: row.status,
+        scope: row.scope,
+        started_at: row.started_at,
+        updated_at: row.updated_at,
+      });
+    }
+    return map;
+  }
+
   if (oracleJobActivityMirrorEnabled && oracleControlPlane) {
     try {
       const rows = await listOracleJobsByIds({
@@ -2040,6 +2264,24 @@ async function listRunningUnlockJobsOracleFirst(
   limit: number,
   staleBeforeIso: string,
 ) {
+  const queueLedgerRows = await listOracleQueueLedgerJobsSafe({
+    action: 'list_running_unlock_jobs_queue_ledger',
+    scope: 'source_item_unlock_generation',
+    statuses: ['running'],
+    startedBeforeIso: staleBeforeIso,
+    limit,
+    orderBy: 'started_asc',
+  });
+  if (queueLedgerRows) {
+    return queueLedgerRows.map((row) => ({
+      id: row.id,
+      status: row.status,
+      scope: row.scope,
+      started_at: row.started_at,
+      updated_at: row.updated_at,
+    }));
+  }
+
   if (oracleJobActivityMirrorEnabled && oracleControlPlane) {
     try {
       const rows = await listOracleRunningJobsByScope({
@@ -2089,6 +2331,119 @@ async function getQueueHealthSnapshotOracleFirst(input: {
   runningHeartbeatFreshMs: number;
 }) {
   const snapshotMs = Date.parse(input.snapshotAtIso);
+  const queueLedgerRows = await listOracleQueueLedgerJobsSafe({
+    action: 'get_queue_health_snapshot_queue_ledger',
+    scopes: [...QUEUED_INGESTION_SCOPES],
+    statuses: ['queued', 'running'],
+    limit: 5000,
+    orderBy: 'created_desc',
+  });
+  if (queueLedgerRows) {
+    const byScope: Record<string, {
+      queued: number;
+      running: number;
+      queued_work_items: number;
+      running_work_items: number;
+      oldest_queued_age_ms: number | null;
+      oldest_running_age_ms: number | null;
+      priority: string;
+    }> = {};
+    for (const scope of QUEUED_INGESTION_SCOPES) {
+      byScope[scope] = {
+        queued: 0,
+        running: 0,
+        queued_work_items: 0,
+        running_work_items: 0,
+        oldest_queued_age_ms: null,
+        oldest_running_age_ms: null,
+        priority: getQueuePriorityTierForScope(scope),
+      };
+    }
+
+    let queueDepth = 0;
+    let runningDepth = 0;
+    let queueWorkItems = 0;
+    let runningWorkItems = 0;
+    let staleLeases = 0;
+    let oldestQueuedCreatedAt: string | null = null;
+    let oldestQueuedAgeMs: number | null = null;
+    let oldestRunningStartedAt: string | null = null;
+    let oldestRunningAgeMs: number | null = null;
+    let activeRunningJobs = 0;
+
+    for (const row of queueLedgerRows) {
+      const scope = String(row.scope || '').trim();
+      if (!isQueuedIngestionScope(scope) || !byScope[scope]) continue;
+      const workItemCount = getQueuedJobWorkItemCount({
+        scope,
+        payload: normalizeOracleJobPayload(row.payload),
+      });
+
+      if (row.status === 'queued') {
+        queueDepth += 1;
+        queueWorkItems += workItemCount;
+        byScope[scope].queued += 1;
+        byScope[scope].queued_work_items += workItemCount;
+        const createdAtMs = row.created_at ? Date.parse(row.created_at) : Number.NaN;
+        if (row.created_at && Number.isFinite(createdAtMs) && Number.isFinite(snapshotMs)) {
+          const ageMs = Math.max(0, snapshotMs - createdAtMs);
+          if (oldestQueuedAgeMs == null || ageMs > oldestQueuedAgeMs) {
+            oldestQueuedAgeMs = ageMs;
+            oldestQueuedCreatedAt = row.created_at;
+          }
+          if (byScope[scope].oldest_queued_age_ms == null || ageMs > byScope[scope].oldest_queued_age_ms) {
+            byScope[scope].oldest_queued_age_ms = ageMs;
+          }
+        }
+        continue;
+      }
+
+      if (row.status === 'running') {
+        runningDepth += 1;
+        runningWorkItems += workItemCount;
+        byScope[scope].running += 1;
+        byScope[scope].running_work_items += workItemCount;
+        const startedAtMs = row.started_at ? Date.parse(row.started_at) : Number.NaN;
+        if (row.started_at && Number.isFinite(startedAtMs) && Number.isFinite(snapshotMs)) {
+          const ageMs = Math.max(0, snapshotMs - startedAtMs);
+          if (oldestRunningAgeMs == null || ageMs > oldestRunningAgeMs) {
+            oldestRunningAgeMs = ageMs;
+            oldestRunningStartedAt = row.started_at;
+          }
+          if (byScope[scope].oldest_running_age_ms == null || ageMs > byScope[scope].oldest_running_age_ms) {
+            byScope[scope].oldest_running_age_ms = ageMs;
+          }
+        }
+
+        const leaseExpiresAtMs = row.lease_expires_at ? Date.parse(row.lease_expires_at) : Number.NaN;
+        const heartbeatAtMs = row.last_heartbeat_at ? Date.parse(row.last_heartbeat_at) : Number.NaN;
+        const hasFreshLease = Number.isFinite(leaseExpiresAtMs) && Number.isFinite(snapshotMs) && leaseExpiresAtMs > snapshotMs;
+        const hasFreshHeartbeat = Number.isFinite(heartbeatAtMs) && Number.isFinite(snapshotMs)
+          && (snapshotMs - heartbeatAtMs) <= input.runningHeartbeatFreshMs;
+        if (hasFreshLease || hasFreshHeartbeat) {
+          activeRunningJobs += 1;
+        }
+        if (Number.isFinite(leaseExpiresAtMs) && Number.isFinite(snapshotMs) && leaseExpiresAtMs <= snapshotMs) {
+          staleLeases += 1;
+        }
+      }
+    }
+
+    return {
+      worker_running: activeRunningJobs > 0,
+      queue_depth: queueDepth,
+      running_depth: runningDepth,
+      queue_work_items: queueWorkItems,
+      running_work_items: runningWorkItems,
+      oldest_queued_created_at: oldestQueuedCreatedAt,
+      oldest_queued_age_ms: oldestQueuedAgeMs,
+      oldest_running_started_at: oldestRunningStartedAt,
+      oldest_running_age_ms: oldestRunningAgeMs,
+      stale_leases: staleLeases,
+      by_scope: byScope,
+    };
+  }
+
   if (oracleJobActivityMirrorEnabled && oracleControlPlane) {
     try {
       const rows = await listOracleActiveJobsForScopes({

@@ -342,6 +342,136 @@ export async function getOracleLatestQueueJobForScope(input: {
   return row ? mapStateRowToJob(row as OracleQueueLedgerStateRow) : null;
 }
 
+export async function getOracleLatestQueueJob(input: {
+  controlDb: OracleControlPlaneDb;
+}) {
+  const row = await input.controlDb.db
+    .selectFrom('queue_ledger_state')
+    .selectAll()
+    .orderBy('created_at', 'desc')
+    .executeTakeFirst();
+
+  return row ? mapStateRowToJob(row as OracleQueueLedgerStateRow) : null;
+}
+
+export async function countOracleQueueLedgerJobs(input: {
+  controlDb: OracleControlPlaneDb;
+  scope?: string;
+  scopes?: readonly string[];
+  userId?: string;
+  statuses?: readonly string[];
+}) {
+  const scope = String(input.scope || '').trim();
+  const scopes = [...new Set(
+    (Array.isArray(input.scopes) ? input.scopes : [])
+      .map((candidate) => String(candidate || '').trim())
+      .filter(Boolean),
+  )];
+  const userId = String(input.userId || '').trim();
+  const statuses = [...new Set(
+    (Array.isArray(input.statuses) ? input.statuses : [])
+      .map((status) => String(status || '').trim())
+      .filter(Boolean),
+  )];
+
+  let query = input.controlDb.db
+    .selectFrom('queue_ledger_state')
+    .select(({ fn }) => fn.count<number>('id').as('count'));
+
+  if (scope) {
+    query = query.where('scope', '=', scope);
+  } else if (scopes.length > 0) {
+    query = query.where('scope', 'in', scopes);
+  }
+
+  if (userId) {
+    query = query.where('requested_by_user_id', '=', userId);
+  }
+
+  if (statuses.length > 0) {
+    query = query.where('status', 'in', statuses);
+  }
+
+  const row = await query.executeTakeFirst();
+  return Math.max(0, Number(row?.count || 0));
+}
+
+export async function listOracleQueueLedgerJobs(input: {
+  controlDb: OracleControlPlaneDb;
+  scope?: string;
+  scopes?: readonly string[];
+  userId?: string;
+  jobIds?: readonly string[];
+  statuses?: readonly string[];
+  startedBeforeIso?: string | null;
+  limit?: number;
+  orderBy?: 'created_desc' | 'next_run_asc' | 'started_asc';
+}) {
+  const scope = String(input.scope || '').trim();
+  const scopes = [...new Set(
+    (Array.isArray(input.scopes) ? input.scopes : [])
+      .map((candidate) => String(candidate || '').trim())
+      .filter(Boolean),
+  )];
+  const userId = String(input.userId || '').trim();
+  const jobIds = [...new Set(
+    (Array.isArray(input.jobIds) ? input.jobIds : [])
+      .map((jobId) => String(jobId || '').trim())
+      .filter(Boolean),
+  )];
+  const statuses = [...new Set(
+    (Array.isArray(input.statuses) ? input.statuses : [])
+      .map((status) => String(status || '').trim())
+      .filter(Boolean),
+  )];
+  const startedBeforeIso = normalizeIsoOrNull(input.startedBeforeIso);
+  const limit = Math.max(1, Math.floor(Number(input.limit) || 1000));
+  const orderBy = input.orderBy || 'created_desc';
+
+  let query = input.controlDb.db
+    .selectFrom('queue_ledger_state')
+    .selectAll();
+
+  if (scope) {
+    query = query.where('scope', '=', scope);
+  } else if (scopes.length > 0) {
+    query = query.where('scope', 'in', scopes);
+  }
+
+  if (userId) {
+    query = query.where('requested_by_user_id', '=', userId);
+  }
+
+  if (jobIds.length > 0) {
+    query = query.where('id', 'in', jobIds);
+  }
+
+  if (statuses.length > 0) {
+    query = query.where('status', 'in', statuses);
+  }
+
+  if (startedBeforeIso) {
+    query = query
+      .where('started_at', 'is not', null)
+      .where('started_at', '<', startedBeforeIso);
+  }
+
+  if (orderBy === 'next_run_asc') {
+    query = query
+      .orderBy('next_run_at', 'asc')
+      .orderBy('created_at', 'asc');
+  } else if (orderBy === 'started_asc') {
+    query = query
+      .orderBy('started_at', 'asc')
+      .orderBy('created_at', 'asc');
+  } else {
+    query = query.orderBy('created_at', 'desc');
+  }
+
+  const rows = await query.limit(limit).execute();
+  return rows.map((row) => mapStateRowToJob(row as OracleQueueLedgerStateRow));
+}
+
 export async function claimOracleQueuedIngestionJobs(input: {
   controlDb: OracleControlPlaneDb;
   scopes?: string[];

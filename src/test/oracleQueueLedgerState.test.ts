@@ -6,9 +6,12 @@ import { openOracleControlPlaneDb } from '../../server/services/oracleControlPla
 import {
   buildOracleQueueLedgerJobFromInsertValues,
   claimOracleQueuedIngestionJobs,
+  countOracleQueueLedgerJobs,
   failOracleQueueJob,
+  getOracleLatestQueueJob,
   finalizeOracleQueueJob,
   getOracleLatestQueueJobForScope,
+  listOracleQueueLedgerJobs,
   touchOracleQueueJobLease,
   upsertOracleQueueLedgerRow,
 } from '../../server/services/oracleQueueLedgerState';
@@ -193,6 +196,99 @@ describe('oracle queue ledger state', () => {
         skipped_count: 0,
         worker_id: null,
       });
+    } finally {
+      await controlDb.close();
+    }
+  });
+
+  it('lists and counts queue ledger jobs by scope, user, and status', async () => {
+    const controlDb = openOracleControlPlaneDb({
+      sqlitePath: createTempSqlitePath(),
+    });
+
+    try {
+      await upsertOracleQueueLedgerRow({
+        controlDb,
+        job: buildOracleQueueLedgerJobFromInsertValues({
+          nowIso: '2026-04-01T14:00:00.000Z',
+          values: {
+            id: 'job_user_queued',
+            trigger: 'user',
+            scope: 'manual_refresh_selection',
+            status: 'queued',
+            requested_by_user_id: 'user_1',
+            next_run_at: '2026-04-01T14:00:00.000Z',
+            payload: { items: [{ id: 'a' }, { id: 'b' }] },
+            created_at: '2026-04-01T14:00:00.000Z',
+            updated_at: '2026-04-01T14:00:00.000Z',
+          },
+        }),
+      });
+      await upsertOracleQueueLedgerRow({
+        controlDb,
+        job: buildOracleQueueLedgerJobFromInsertValues({
+          nowIso: '2026-04-01T14:01:00.000Z',
+          values: {
+            id: 'job_user_running',
+            trigger: 'user',
+            scope: 'manual_refresh_selection',
+            status: 'running',
+            requested_by_user_id: 'user_1',
+            next_run_at: '2026-04-01T14:00:00.000Z',
+            started_at: '2026-04-01T14:01:00.000Z',
+            created_at: '2026-04-01T14:01:00.000Z',
+            updated_at: '2026-04-01T14:01:00.000Z',
+          },
+        }),
+      });
+      await upsertOracleQueueLedgerRow({
+        controlDb,
+        job: buildOracleQueueLedgerJobFromInsertValues({
+          nowIso: '2026-04-01T14:02:00.000Z',
+          values: {
+            id: 'job_other_scope',
+            trigger: 'service_cron',
+            scope: 'all_active_subscriptions',
+            status: 'queued',
+            next_run_at: '2026-04-01T14:02:00.000Z',
+            created_at: '2026-04-01T14:02:00.000Z',
+            updated_at: '2026-04-01T14:02:00.000Z',
+          },
+        }),
+      });
+
+      const latestGlobal = await getOracleLatestQueueJob({
+        controlDb,
+      });
+      expect(latestGlobal?.id).toBe('job_other_scope');
+
+      const userRows = await listOracleQueueLedgerJobs({
+        controlDb,
+        userId: 'user_1',
+        statuses: ['queued', 'running'],
+        limit: 10,
+        orderBy: 'created_desc',
+      });
+      expect(userRows.map((row) => row.id)).toEqual(['job_user_running', 'job_user_queued']);
+
+      const queuedCount = await countOracleQueueLedgerJobs({
+        controlDb,
+        scope: 'manual_refresh_selection',
+        userId: 'user_1',
+        statuses: ['queued'],
+      });
+      expect(queuedCount).toBe(1);
+
+      const runningRows = await listOracleQueueLedgerJobs({
+        controlDb,
+        scope: 'manual_refresh_selection',
+        statuses: ['running'],
+        startedBeforeIso: '2026-04-01T14:05:00.000Z',
+        limit: 10,
+        orderBy: 'started_asc',
+      });
+      expect(runningRows).toHaveLength(1);
+      expect(runningRows[0]?.id).toBe('job_user_running');
     } finally {
       await controlDb.close();
     }
