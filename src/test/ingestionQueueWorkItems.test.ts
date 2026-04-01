@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   countQueueDepth,
   countQueueWorkItems,
+  failIngestionJob,
   getQueuedJobWorkItemCount,
 } from '../../server/services/ingestionQueue';
 import { createMockSupabase } from './helpers/mockSupabase';
@@ -62,5 +63,47 @@ describe('ingestion queue work item counting', () => {
       scope: 'search_video_generate',
       payload: { items: [] },
     })).toBe(0);
+  });
+
+  it('skips the attempts reread when a known attempt count is provided for failure transitions', async () => {
+    const db = createMockSupabase({
+      ingestion_jobs: [{
+        id: 'job_fail_1',
+        scope: 'search_video_generate',
+        status: 'running',
+        attempts: 2,
+        max_attempts: 3,
+        created_at: '2026-04-01T10:00:00.000Z',
+        updated_at: '2026-04-01T10:00:00.000Z',
+      }],
+    }) as any;
+
+    const originalFrom = db.from.bind(db);
+    const selectCalls: string[] = [];
+    db.from = (tableName: string) => {
+      const query = originalFrom(tableName);
+      const originalSelect = query.select.bind(query);
+      query.select = (columns?: string, options?: { head?: boolean; count?: string }) => {
+        selectCalls.push(String(columns || '*'));
+        return originalSelect(columns, options);
+      };
+      return query;
+    };
+
+    const failedJob = await failIngestionJob(db, {
+      jobId: 'job_fail_1',
+      errorCode: 'TRANSIENT_ERROR',
+      errorMessage: 'retry me',
+      scheduleRetryInSeconds: 60,
+      maxAttempts: 3,
+      currentAttempts: 2,
+    });
+
+    expect(selectCalls).not.toContain('id, attempts');
+    expect(failedJob).toMatchObject({
+      id: 'job_fail_1',
+      status: 'queued',
+      error_code: 'TRANSIENT_ERROR',
+    });
   });
 });

@@ -12,6 +12,7 @@ import {
   listOracleActiveJobsForUser,
   listOracleLatestJobsForUserScope,
   listOracleRunningJobsByScope,
+  recordOracleJobLeaseHeartbeat,
   upsertOracleJobActivityRow,
 } from '../../server/services/oracleJobActivityState';
 import { readOracleQueueAdmissionCounts } from '../../server/services/oracleQueueAdmissionState';
@@ -261,6 +262,82 @@ describe('oracle job activity state', () => {
       expect(runningRows.map((row) => row.id)).toEqual(['job_unlock_running']);
       expect(byIdRows.map((row) => row.id).sort()).toEqual(['job_retry_1', 'job_unlock_running']);
       expect(latestRow?.id).toBe('job_retry_1');
+    } finally {
+      await controlDb.close();
+    }
+  });
+
+  it('refreshes running lease heartbeats locally without reviving terminal rows', async () => {
+    const controlDb = openOracleControlPlaneDb({
+      sqlitePath: createTempSqlitePath(),
+    });
+
+    try {
+      const runningJob = {
+        id: 'job_running_heartbeat',
+        trigger: 'service_cron',
+        scope: 'all_active_subscriptions',
+        status: 'running',
+        started_at: '2026-04-01T14:00:00.000Z',
+        lease_expires_at: '2026-04-01T14:01:30.000Z',
+        created_at: '2026-04-01T13:59:30.000Z',
+        updated_at: '2026-04-01T14:00:00.000Z',
+      } as const;
+
+      await upsertOracleJobActivityRow({
+        controlDb,
+        nowIso: '2026-04-01T14:00:00.000Z',
+        job: runningJob,
+      });
+
+      await recordOracleJobLeaseHeartbeat({
+        controlDb,
+        job: runningJob,
+        leaseSeconds: 90,
+        heartbeatAtIso: '2026-04-01T14:00:30.000Z',
+      });
+
+      let byIdRows = await listOracleJobsByIds({
+        controlDb,
+        jobIds: ['job_running_heartbeat'],
+      });
+
+      expect(byIdRows[0]).toMatchObject({
+        id: 'job_running_heartbeat',
+        status: 'running',
+        lease_expires_at: '2026-04-01T14:02:00.000Z',
+        updated_at: '2026-04-01T14:00:30.000Z',
+      });
+
+      await upsertOracleJobActivityRow({
+        controlDb,
+        nowIso: '2026-04-01T14:01:00.000Z',
+        job: {
+          ...runningJob,
+          status: 'succeeded',
+          finished_at: '2026-04-01T14:01:00.000Z',
+          updated_at: '2026-04-01T14:01:00.000Z',
+        },
+      });
+
+      await recordOracleJobLeaseHeartbeat({
+        controlDb,
+        job: runningJob,
+        leaseSeconds: 90,
+        heartbeatAtIso: '2026-04-01T14:01:10.000Z',
+      });
+
+      byIdRows = await listOracleJobsByIds({
+        controlDb,
+        jobIds: ['job_running_heartbeat'],
+      });
+
+      expect(byIdRows[0]).toMatchObject({
+        id: 'job_running_heartbeat',
+        status: 'succeeded',
+        finished_at: '2026-04-01T14:01:00.000Z',
+        updated_at: '2026-04-01T14:01:00.000Z',
+      });
     } finally {
       await controlDb.close();
     }

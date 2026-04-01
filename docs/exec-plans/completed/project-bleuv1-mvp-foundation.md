@@ -93,6 +93,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Blueprint YouTube refresh bookkeeping should batch pending-job checks per refresh kind/candidate set and avoid re-registering an already-enabled refresh-state row on manual refresh entry.
 - Blueprint YouTube refresh bookkeeping should also avoid no-op persistence: unchanged source-item `view_count` fetches should not rewrite metadata, and refresh-state rows should only upsert when meaningful persisted fields change.
 - Queue worker lease heartbeats should stay lease-aware by default, so background maintenance does not keep hammering Supabase lease RPCs more often than the actual lease window requires.
+- Queue-worker lifecycle mirrors should also stay known-row driven: claimed jobs, retry/failure transitions, and lease-heartbeat refreshes should update Oracle from the row already in hand instead of forcing a second `ingestion_jobs` read just to warm queue-health/job-status mirrors.
 - Durable generation trace writes should stay lean by default, avoiding per-event `seq` reads and unnecessary returning payloads on write helpers.
 
 ### W2 - Channel Candidate Gating

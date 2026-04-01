@@ -184,21 +184,24 @@ export async function failIngestionJob(db: DbClient, input: {
   errorMessage: string;
   scheduleRetryInSeconds?: number;
   maxAttempts?: number;
+  currentAttempts?: number | null;
 }) {
   const now = new Date();
   const retryDelay = clampInt(input.scheduleRetryInSeconds, 0, 0, 24 * 3600);
   const nextRunAt = new Date(now.getTime() + retryDelay * 1000).toISOString();
   const maxAttempts = clampInt(input.maxAttempts, 3, 1, 20);
-
-  const { data: current, error: readError } = await db
-    .from('ingestion_jobs')
-    .select('id, attempts')
-    .eq('id', input.jobId)
-    .maybeSingle();
-  if (readError) throw readError;
-  if (!current) return null;
-
-  const attempts = Number(current.attempts || 0);
+  let attempts = Number(input.currentAttempts || 0);
+  if (!Number.isFinite(attempts)) attempts = 0;
+  if (input.currentAttempts == null) {
+    const { data: current, error: readError } = await db
+      .from('ingestion_jobs')
+      .select('id, attempts')
+      .eq('id', input.jobId)
+      .maybeSingle();
+    if (readError) throw readError;
+    if (!current) return null;
+    attempts = Number(current.attempts || 0);
+  }
   const shouldRetry = retryDelay > 0 && attempts < maxAttempts;
   const nextStatus = shouldRetry ? 'queued' : 'failed';
 

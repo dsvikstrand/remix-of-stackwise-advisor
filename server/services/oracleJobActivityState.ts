@@ -416,6 +416,41 @@ export async function upsertOracleJobActivityRows(input: {
   }
 }
 
+export async function recordOracleJobLeaseHeartbeat(input: {
+  controlDb: OracleControlPlaneDb;
+  job: OracleMirroredIngestionJob;
+  leaseSeconds: number;
+  heartbeatAtIso?: string;
+}) {
+  const jobId = String(input.job.id || '').trim();
+  if (!jobId) return null;
+
+  const heartbeatAtIso = normalizeIsoOrNull(input.heartbeatAtIso) || new Date().toISOString();
+  const leaseSeconds = Math.max(5, Math.floor(Number(input.leaseSeconds) || 0));
+  const existing = await input.controlDb.db
+    .selectFrom('job_activity_state')
+    .select(['status', 'started_at'])
+    .where('job_id', '=', jobId)
+    .executeTakeFirst();
+
+  if (existing && existing.status !== 'queued' && existing.status !== 'running') {
+    return null;
+  }
+
+  const leaseExpiresAtIso = new Date(Date.parse(heartbeatAtIso) + leaseSeconds * 1000).toISOString();
+  return upsertOracleJobActivityRow({
+    controlDb: input.controlDb,
+    nowIso: heartbeatAtIso,
+    job: {
+      ...input.job,
+      status: existing?.status || String(input.job.status || '').trim() || 'running',
+      started_at: existing?.started_at || input.job.started_at || heartbeatAtIso,
+      lease_expires_at: leaseExpiresAtIso,
+      updated_at: heartbeatAtIso,
+    },
+  });
+}
+
 export async function findOracleStaleRunningJobs(input: {
   controlDb: OracleControlPlaneDb;
   olderThanMs: number;
