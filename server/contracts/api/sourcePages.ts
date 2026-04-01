@@ -116,6 +116,7 @@ export type SourcePagesRouteDeps = {
   resolveYouTubeChannel: any;
   fetchYouTubeChannelAssetMap: any;
   ensureSourcePageFromYouTubeChannel: any;
+  syncOracleProductSubscriptions?: any;
   syncSingleSubscription: any;
   markSubscriptionSyncError: any;
   upsertSubscriptionNoticeSourceItem: any;

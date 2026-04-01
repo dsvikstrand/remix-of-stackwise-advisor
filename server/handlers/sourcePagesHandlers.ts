@@ -89,6 +89,7 @@ export function registerSourcePagesRouteHandlers(app: express.Express, deps: Sou
     resolveYouTubeChannel,
     fetchYouTubeChannelAssetMap,
     ensureSourcePageFromYouTubeChannel,
+    syncOracleProductSubscriptions,
     syncSingleSubscription,
     markSubscriptionSyncError,
     upsertSubscriptionNoticeSourceItem,
@@ -1831,6 +1832,7 @@ app.post('/api/source-pages/:platform/:externalId/subscribe', async (req, res) =
   if (upsertError) {
     return res.status(400).json({ ok: false, error_code: 'SOURCE_PAGE_SUBSCRIBE_FAILED', message: upsertError.message, data: null });
   }
+  await syncOracleProductSubscriptions?.([upserted], 'source_page_subscription_upsert');
 
   let sync: SyncSubscriptionResult | null = null;
   try {
@@ -1942,10 +1944,11 @@ app.delete('/api/source-pages/:platform/:externalId/subscribe', async (req, res)
     .eq('user_id', userId)
     .eq('source_type', 'youtube')
     .eq('source_channel_id', sourcePage.external_id)
-    .select('id, source_channel_id')
+    .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, source_page_id, mode, auto_unlock_enabled, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
     .maybeSingle();
   if (error) return res.status(400).json({ ok: false, error_code: 'SOURCE_PAGE_UNSUBSCRIBE_FAILED', message: error.message, data: null });
   if (!data) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Subscription not found', data: null });
+  await syncOracleProductSubscriptions?.([data], 'source_page_subscription_deactivate');
 
   return res.json({
     ok: true,

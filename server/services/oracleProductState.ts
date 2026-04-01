@@ -460,6 +460,36 @@ export async function upsertOracleProductFeedRows(input: {
   return rows;
 }
 
+export async function deleteOracleProductFeedRows(input: {
+  controlDb: OracleControlPlaneDb;
+  ids?: string[];
+  userId?: string | null;
+  sourceItemId?: string | null;
+  state?: string | null;
+}) {
+  const ids = [...new Set((input.ids || []).map((value) => String(value || '').trim()).filter(Boolean))];
+  const userId = String(input.userId || '').trim();
+  const sourceItemId = String(input.sourceItemId || '').trim();
+  const state = String(input.state || '').trim();
+
+  if (ids.length === 0 && !userId && !sourceItemId && !state) {
+    return 0;
+  }
+
+  let query = input.controlDb.db.deleteFrom('product_feed_state');
+
+  if (ids.length > 0) {
+    query = query.where('id', 'in', ids);
+  } else {
+    if (userId) query = query.where('user_id', '=', userId);
+    if (sourceItemId) query = query.where('source_item_id', '=', sourceItemId);
+    if (state) query = query.where('state', '=', state);
+  }
+
+  const result = await query.executeTakeFirst();
+  return Number(result.numDeletedRows || 0);
+}
+
 export async function syncOracleProductStateFromSupabase(input: {
   controlDb: OracleControlPlaneDb;
   db: DbClient;

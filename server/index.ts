@@ -104,6 +104,7 @@ import {
 } from './services/oracleQueueLedgerState';
 import {
   countOracleProductActiveSubscriptions,
+  deleteOracleProductFeedRows,
   getOracleProductSubscriptionState,
   getOracleProductUnlockBySourceItemId,
   listOracleProductActiveSubscriptionsForUser,
@@ -180,6 +181,7 @@ import {
   countActiveSubscribersForSourcePage,
   ensureSourceItemUnlock,
   failUnlock,
+  getSourceItemUnlockById,
   getSourceItemUnlockBySourceItemId,
   getSourceItemUnlocksBySourceItemIds,
   markUnlockProcessing,
@@ -2175,9 +2177,22 @@ async function getSourceItemUnlocksBySourceItemIdsOracleFirst(
         controlDb: oracleControlPlane,
         sourceItemIds: normalizedIds,
       });
-      if (mirrored.length > 0) {
+      const mirroredIds = new Set(
+        mirrored
+          .map((row) => String(row.source_item_id || '').trim())
+          .filter(Boolean),
+      );
+      if (mirroredIds.size >= normalizedIds.length) {
         return mirrored as SourceItemUnlockRow[];
       }
+
+      const missingIds = normalizedIds.filter((id) => !mirroredIds.has(id));
+      if (missingIds.length === 0) {
+        return mirrored as SourceItemUnlockRow[];
+      }
+
+      const fallbackRows = await getSourceItemUnlocksBySourceItemIds(db, missingIds);
+      return [...mirrored as SourceItemUnlockRow[], ...fallbackRows];
     } catch (error) {
       console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
         action: 'get_source_item_unlocks_by_source_item_ids',
@@ -2194,16 +2209,30 @@ async function listProductFeedRowsForUserOracleFirst(
   db: ReturnType<typeof createClient>,
   input: { userId: string; limit: number; sourceItemIds?: string[]; requireBlueprint?: boolean },
 ) {
+  const normalizedLimit = Math.max(1, Math.min(5000, Number(input.limit || 0) || 200));
+  const normalizedSourceItemIds = [...new Set(
+    (input.sourceItemIds || [])
+      .map((value) => String(value || '').trim())
+      .filter(Boolean),
+  )];
+
   if (oracleProductMirrorEnabled && oracleControlPlane) {
     try {
       const mirrored = await listOracleProductFeedRows({
         controlDb: oracleControlPlane,
         userId: input.userId,
-        limit: input.limit,
-        sourceItemIds: input.sourceItemIds,
+        limit: normalizedLimit,
+        sourceItemIds: normalizedSourceItemIds,
         requireBlueprint: input.requireBlueprint,
       });
-      if (mirrored.length > 0) {
+      const mirrorLooksComplete = normalizedSourceItemIds.length > 0
+        ? new Set(
+          mirrored
+            .map((row) => String(row.source_item_id || '').trim())
+            .filter(Boolean),
+        ).size >= normalizedSourceItemIds.length
+        : mirrored.length >= normalizedLimit;
+      if (mirrorLooksComplete) {
         return mirrored;
       }
     } catch (error) {
@@ -2220,10 +2249,10 @@ async function listProductFeedRowsForUserOracleFirst(
     .select('id, user_id, source_item_id, blueprint_id, state, last_decision_code, created_at, updated_at')
     .eq('user_id', input.userId)
     .order('created_at', { ascending: false })
-    .limit(input.limit);
+    .limit(normalizedLimit);
 
-  if (input.sourceItemIds && input.sourceItemIds.length > 0) {
-    query = query.in('source_item_id', input.sourceItemIds);
+  if (normalizedSourceItemIds.length > 0) {
+    query = query.in('source_item_id', normalizedSourceItemIds);
   }
   if (input.requireBlueprint) {
     query = query.not('blueprint_id', 'is', null);
@@ -2238,13 +2267,32 @@ async function listProductSourceItemsOracleFirst(
   db: ReturnType<typeof createClient>,
   input: { ids?: string[]; sourceNativeId?: string | null },
 ) {
+  const ids = [...new Set((input.ids || []).map((value) => String(value || '').trim()).filter(Boolean))];
+  const sourceNativeId = String(input.sourceNativeId || '').trim();
+
   if (oracleProductMirrorEnabled && oracleControlPlane) {
     try {
       const mirrored = await listOracleProductSourceItems({
         controlDb: oracleControlPlane,
-        ids: input.ids,
-        sourceNativeId: input.sourceNativeId,
+        ids,
+        sourceNativeId,
       });
+      if (ids.length > 0) {
+        const mirroredIds = new Set(mirrored.map((row) => String(row.id || '').trim()).filter(Boolean));
+        if (mirroredIds.size >= ids.length) {
+          return mirrored;
+        }
+        const missingIds = ids.filter((id) => !mirroredIds.has(id));
+        if (missingIds.length > 0) {
+          const { data, error } = await db
+            .from('source_items')
+            .select('id, source_type, source_native_id, canonical_key, source_url, title, published_at, ingest_status, source_channel_id, source_channel_title, source_page_id, thumbnail_url, metadata, created_at, updated_at')
+            .in('id', missingIds);
+          if (error) throw error;
+          return [...mirrored, ...(data || [])];
+        }
+        return mirrored;
+      }
       if (mirrored.length > 0) {
         return mirrored;
       }
@@ -2259,8 +2307,6 @@ async function listProductSourceItemsOracleFirst(
   let query = db
     .from('source_items')
     .select('id, source_type, source_native_id, canonical_key, source_url, title, published_at, ingest_status, source_channel_id, source_channel_title, source_page_id, thumbnail_url, metadata, created_at, updated_at');
-  const ids = [...new Set((input.ids || []).map((value) => String(value || '').trim()).filter(Boolean))];
-  const sourceNativeId = String(input.sourceNativeId || '').trim();
 
   if (ids.length > 0) {
     query = query.in('id', ids);
@@ -2307,6 +2353,113 @@ async function listActiveSubscriptionsForUserOracleFirst(
     .eq('is_active', true);
   if (error) throw error;
   return data || [];
+}
+
+async function syncOracleProductFeedRowsByIds(
+  db: ReturnType<typeof createClient>,
+  feedItemIds: string[],
+  action: string,
+) {
+  const normalizedIds = [...new Set(feedItemIds.map((value) => String(value || '').trim()).filter(Boolean))];
+  if (!oracleProductMirrorEnabled || !oracleControlPlane || normalizedIds.length === 0) {
+    return;
+  }
+
+  try {
+    const { data, error } = await db
+      .from('user_feed_items')
+      .select('id, user_id, source_item_id, blueprint_id, state, last_decision_code, created_at, updated_at')
+      .in('id', normalizedIds);
+    if (error) throw error;
+    await upsertOracleProductFeedRowsFromKnownRows((data || []) as Array<Record<string, unknown>>, action);
+  } catch (error) {
+    console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
+      action,
+      table: 'product_feed_state',
+      count: normalizedIds.length,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+}
+
+async function syncOracleSuppressedFeedRowsForSourceItemIds(
+  db: ReturnType<typeof createClient>,
+  sourceItemIds: string[],
+  decisionCode: string,
+  action: string,
+) {
+  const normalizedIds = [...new Set(sourceItemIds.map((value) => String(value || '').trim()).filter(Boolean))];
+  if (!oracleProductMirrorEnabled || !oracleControlPlane || normalizedIds.length === 0) {
+    return;
+  }
+
+  try {
+    const { data, error } = await db
+      .from('user_feed_items')
+      .select('id, user_id, source_item_id, blueprint_id, state, last_decision_code, created_at, updated_at')
+      .in('source_item_id', normalizedIds)
+      .is('blueprint_id', null)
+      .eq('state', 'my_feed_skipped')
+      .eq('last_decision_code', String(decisionCode || '').trim());
+    if (error) throw error;
+    await upsertOracleProductFeedRowsFromKnownRows((data || []) as Array<Record<string, unknown>>, action);
+  } catch (error) {
+    console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
+      action,
+      table: 'product_feed_state',
+      count: normalizedIds.length,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+}
+
+async function deleteOracleProductFeedRowsForSubscriptionNotice(
+  input: { userId: string; sourceItemId: string },
+) {
+  if (!oracleProductMirrorEnabled || !oracleControlPlane) {
+    return;
+  }
+
+  try {
+    await deleteOracleProductFeedRows({
+      controlDb: oracleControlPlane,
+      userId: input.userId,
+      sourceItemId: input.sourceItemId,
+      state: 'subscription_notice',
+    });
+  } catch (error) {
+    console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
+      action: 'delete_subscription_notice_feed_rows',
+      table: 'product_feed_state',
+      user_id: input.userId,
+      source_item_id: input.sourceItemId,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+}
+
+async function syncOracleProductUnlockById(
+  db: ReturnType<typeof createClient>,
+  unlockId: string,
+  action: string,
+) {
+  const normalizedUnlockId = String(unlockId || '').trim();
+  if (!oracleProductMirrorEnabled || !oracleControlPlane || !normalizedUnlockId) {
+    return;
+  }
+
+  try {
+    const unlock = await getSourceItemUnlockById(db, normalizedUnlockId);
+    if (!unlock) return;
+    await upsertOracleProductUnlocksFromKnownRows([unlock as unknown as Record<string, unknown>], action);
+  } catch (error) {
+    console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
+      action,
+      table: 'product_unlock_state',
+      unlock_id: normalizedUnlockId,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
 }
 
 async function ensureSourceItemUnlockWithMirror(
@@ -2404,6 +2557,49 @@ async function failUnlockWithMirror(
   const unlock = await failUnlock(db, input);
   await upsertOracleProductUnlocksFromKnownRows([unlock as unknown as Record<string, unknown>], 'fail_unlock');
   return unlock;
+}
+
+async function suppressUnlockableFeedRowsForSourceItemWithMirror(
+  db: ReturnType<typeof createClient>,
+  input: {
+    sourceItemId: string;
+    decisionCode: string;
+    traceId?: string;
+    sourceChannelId?: string | null;
+    videoId?: string | null;
+  },
+) {
+  const hiddenCount = await suppressUnlockableFeedRowsForSourceItem(db, input);
+  if (hiddenCount > 0) {
+    await syncOracleSuppressedFeedRowsForSourceItemIds(
+      db,
+      [input.sourceItemId],
+      input.decisionCode,
+      'suppress_unlockable_feed_rows_single',
+    );
+  }
+  return hiddenCount;
+}
+
+async function suppressUnlockableFeedRowsForSourceItemsWithMirror(
+  db: ReturnType<typeof createClient>,
+  input: {
+    sourceItemIds: string[];
+    decisionCode: string;
+    traceId?: string;
+    chunkSize?: number;
+  },
+) {
+  const hiddenCount = await suppressUnlockableFeedRowsForSourceItems(db, input);
+  if (hiddenCount > 0) {
+    await syncOracleSuppressedFeedRowsForSourceItemIds(
+      db,
+      input.sourceItemIds,
+      input.decisionCode,
+      'suppress_unlockable_feed_rows_bulk',
+    );
+  }
+  return hiddenCount;
 }
 
 async function listActiveScopeJobsOracleFirst(input: {
@@ -4065,11 +4261,28 @@ registerCoreRoutes(app, {
 registerProfileRoutes(app, {
   getServiceSupabaseClient,
   normalizeTranscriptTruthStatus,
+  readFeedRows: ({ db, userId, limit, sourceItemIds, requireBlueprint }: any) => listProductFeedRowsForUserOracleFirst(db, {
+    userId,
+    limit,
+    sourceItemIds,
+    requireBlueprint,
+  }),
+  readSourceRows: ({ db, sourceIds }: any) => listProductSourceItemsOracleFirst(db, { ids: sourceIds }),
+  readUnlockRows: ({ db, sourceIds }: any) => getSourceItemUnlocksBySourceItemIdsOracleFirst(db, sourceIds),
 });
 
 registerWallRoutes(app, {
   getServiceSupabaseClient,
   normalizeTranscriptTruthStatus,
+  readFeedRows: ({ db, userId, limit, sourceItemIds, requireBlueprint }: any) => listProductFeedRowsForUserOracleFirst(db, {
+    userId,
+    limit,
+    sourceItemIds,
+    requireBlueprint,
+  }),
+  readSourceRows: ({ db, sourceIds }: any) => listProductSourceItemsOracleFirst(db, { ids: sourceIds }),
+  readUnlockRows: ({ db, sourceIds }: any) => getSourceItemUnlocksBySourceItemIdsOracleFirst(db, sourceIds),
+  readActiveSubscriptions: ({ db, userId }: any) => listActiveSubscriptionsForUserOracleFirst(db, userId),
 });
 
 const blueprintVariantsService = createBlueprintVariantsService({
@@ -4582,6 +4795,7 @@ async function runAutoChannelForFeedItem(input: {
     gateMode: autoChannelGateMode,
     sourceTag: input.sourceTag,
   });
+  await syncOracleProductFeedRowsByIds(input.db, [input.userFeedItemId], 'run_auto_channel_for_feed_item');
 
   const logTag = result.decision === 'published' ? '[auto_channel_published]' : '[auto_channel_held]';
   console.log(logTag, JSON.stringify({
@@ -5927,14 +6141,14 @@ async function runTranscriptFeedSuppressionSweep(
 
   let hiddenRows = 0;
   if (permanentSourceItemIds.size > 0) {
-    hiddenRows += await suppressUnlockableFeedRowsForSourceItems(db, {
+    hiddenRows += await suppressUnlockableFeedRowsForSourceItemsWithMirror(db, {
       sourceItemIds: [...permanentSourceItemIds],
       decisionCode: 'NO_TRANSCRIPT_PERMANENT_AUTO',
       traceId: input?.traceId,
     });
   }
   if (transientSourceItemIds.size > 0) {
-    hiddenRows += await suppressUnlockableFeedRowsForSourceItems(db, {
+    hiddenRows += await suppressUnlockableFeedRowsForSourceItemsWithMirror(db, {
       sourceItemIds: [...transientSourceItemIds],
       decisionCode: 'TRANSCRIPT_UNAVAILABLE_AUTO',
       traceId: input?.traceId,
@@ -6110,6 +6324,7 @@ async function markUnlockTranscriptSuccess(db: ReturnType<typeof createClient>, 
       transcript_probe_meta: {},
     })
     .eq('id', unlockId);
+  await syncOracleProductUnlockById(db, unlockId, 'mark_unlock_transcript_success');
 }
 
 async function classifyTranscriptFailureForUnlock(input: {
@@ -6197,6 +6412,7 @@ async function classifyTranscriptFailureForUnlock(input: {
       transcript_probe_meta: probeMeta,
     })
     .eq('id', input.unlock.id);
+  await syncOracleProductUnlockById(input.db, input.unlock.id, 'classify_transcript_failure_for_unlock');
 
   if (confirmedPermanent) {
     logUnlockEvent('transcript_confirmed_no_speech', { trace_id: input.traceId, unlock_id: input.unlock.id }, {
@@ -8789,6 +9005,7 @@ async function processSourceItemUnlockGenerationJob(input: {
               last_error_message: 'Transcript temporarily unavailable after max retry attempts.',
             })
             .eq('id', item.unlock_id);
+          await syncOracleProductUnlockById(db, item.unlock_id, 'subscription_auto_unlock_retry_exhausted');
         } catch (exhaustionError) {
           logUnlockEvent(
             'auto_transcript_retry_exhausted_update_failed',
@@ -8896,7 +9113,7 @@ async function processSourceItemUnlockGenerationJob(input: {
               : errorCode === 'VIDEO_DURATION_UNAVAILABLE'
                 ? 'VIDEO_DURATION_UNAVAILABLE_AUTO'
                 : 'TRANSCRIPT_UNAVAILABLE_AUTO';
-          await suppressUnlockableFeedRowsForSourceItem(db, {
+          await suppressUnlockableFeedRowsForSourceItemWithMirror(db, {
             sourceItemId: item.source_item_id,
             decisionCode,
             traceId: input.traceId,
@@ -9091,6 +9308,7 @@ async function processSourceTranscriptRevalidateJob(input: {
           last_error_message: 'Transcript unavailable for this video.',
         })
         .eq('id', unlock.id);
+      await syncOracleProductUnlockById(db, unlock.id, 'source_transcript_revalidate_confirmed_no_speech');
       logUnlockEvent('transcript_probe_result', { trace_id: input.traceId, unlock_id: unlock.id }, {
         source_item_id: unlock.source_item_id,
         video_id: input.payload.video_id,
@@ -9115,6 +9333,7 @@ async function processSourceTranscriptRevalidateJob(input: {
           last_error_message: 'Transcript temporarily unavailable. Retry later.',
         })
         .eq('id', unlock.id);
+      await syncOracleProductUnlockById(db, unlock.id, 'source_transcript_revalidate_retrying');
       logUnlockEvent('transcript_revalidated_to_retryable', { trace_id: input.traceId, unlock_id: unlock.id }, {
         source_item_id: unlock.source_item_id,
         video_id: input.payload.video_id,
@@ -9225,7 +9444,8 @@ async function processSourceAutoUnlockRetryJob(input: {
         last_error_message: 'Transcript unavailable after max retry attempts.',
       })
       .eq('id', unlock.id);
-    await suppressUnlockableFeedRowsForSourceItem(db, {
+    await syncOracleProductUnlockById(db, unlock.id, 'source_auto_unlock_retry_confirmed_no_speech');
+    await suppressUnlockableFeedRowsForSourceItemWithMirror(db, {
       sourceItemId,
       decisionCode: 'NO_TRANSCRIPT_PERMANENT_AUTO',
       traceId: input.traceId,
@@ -9267,7 +9487,8 @@ async function processSourceAutoUnlockRetryJob(input: {
         last_error_message: 'Transcript temporarily unavailable after max retry attempts.',
       })
       .eq('id', unlock.id);
-    await suppressUnlockableFeedRowsForSourceItem(db, {
+    await syncOracleProductUnlockById(db, unlock.id, 'source_auto_unlock_retry_transient_error');
+    await suppressUnlockableFeedRowsForSourceItemWithMirror(db, {
       sourceItemId,
       decisionCode: 'TRANSCRIPT_UNAVAILABLE_AUTO',
       traceId: input.traceId,
@@ -10791,7 +11012,7 @@ function scheduleYouTubeRefreshScheduler(delayMs?: number) {
   youtubeRefreshSchedulerController.schedule(delayMs);
 }
 
-const sourceSubscriptionSyncService = createSourceSubscriptionSyncService({
+  const sourceSubscriptionSyncService = createSourceSubscriptionSyncService({
   fetchYouTubeFeed,
   isNewerThanCheckpoint,
   ingestionMaxPerSubscription,
@@ -10812,7 +11033,7 @@ const sourceSubscriptionSyncService = createSourceSubscriptionSyncService({
   getSourceItemUnlockBySourceItemId: getSourceItemUnlockBySourceItemIdOracleFirst,
   getTranscriptCooldownState,
   isConfirmedNoTranscriptUnlock,
-  suppressUnlockableFeedRowsForSourceItem,
+  suppressUnlockableFeedRowsForSourceItem: suppressUnlockableFeedRowsForSourceItemWithMirror,
   insertFeedItem,
 });
 const { syncSingleSubscription } = sourceSubscriptionSyncService;
@@ -10864,6 +11085,10 @@ async function cleanupSubscriptionNoticeForChannel(
         .eq('user_id', input.userId)
         .eq('source_item_id', noticeSource.id)
         .eq('state', 'subscription_notice');
+      await deleteOracleProductFeedRowsForSubscriptionNotice({
+        userId: input.userId,
+        sourceItemId: noticeSource.id,
+      });
     }
   } catch (cleanupError) {
     console.log('[subscription_notice_cleanup_failed]', JSON.stringify({
@@ -10992,6 +11217,7 @@ registerSourcePagesRoutes(app, {
   resolveYouTubeChannel,
   fetchYouTubeChannelAssetMap,
   ensureSourcePageFromYouTubeChannel,
+  syncOracleProductSubscriptions: upsertOracleProductSubscriptionsFromKnownRows,
   syncSingleSubscription,
   markSubscriptionSyncError,
   upsertSubscriptionNoticeSourceItem,
