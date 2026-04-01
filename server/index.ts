@@ -78,9 +78,12 @@ import {
   listOracleJobsByIds,
   listOracleLatestJobsForUserScope,
   listOracleRunningJobsByScope,
+  type OracleMirroredIngestionJob,
   syncOracleJobActivityMirrorFromSupabase,
   syncOracleJobActivityRowFromSupabaseById,
   syncOracleJobActivityRowsFromSupabaseByIds,
+  upsertOracleJobActivityRow,
+  upsertOracleJobActivityRows,
 } from './services/oracleJobActivityState';
 import {
   evaluateOraclePrimarySchedulerDecision,
@@ -977,6 +980,109 @@ async function syncOracleJobActivityByIds(
   }
 }
 
+async function upsertOracleJobActivityFromKnownRow(
+  job: OracleMirroredIngestionJob | IngestionJobRow | null | undefined,
+  action: string,
+) {
+  if (!oracleJobActivityMirrorEnabled || !oracleControlPlane || !job?.id) {
+    return;
+  }
+
+  try {
+    await upsertOracleJobActivityRow({
+      controlDb: oracleControlPlane,
+      job,
+    });
+  } catch (error) {
+    console.warn('[oracle-control-plane] job_activity_mirror_failed', JSON.stringify({
+      action,
+      job_id: String(job.id || '').trim(),
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+}
+
+async function upsertOracleJobActivityFromKnownRows(
+  jobs: Array<OracleMirroredIngestionJob | IngestionJobRow | null | undefined>,
+  action: string,
+) {
+  const normalizedJobs = jobs
+    .filter((job): job is OracleMirroredIngestionJob | IngestionJobRow => Boolean(job?.id))
+    .map((job) => ({ ...job }));
+  if (!oracleJobActivityMirrorEnabled || !oracleControlPlane || normalizedJobs.length === 0) {
+    return;
+  }
+
+  try {
+    await upsertOracleJobActivityRows({
+      controlDb: oracleControlPlane,
+      jobs: normalizedJobs,
+    });
+  } catch (error) {
+    console.warn('[oracle-control-plane] job_activity_mirror_failed', JSON.stringify({
+      action,
+      count: normalizedJobs.length,
+      job_ids: normalizedJobs.slice(0, 10).map((job) => String(job.id || '').trim()),
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+}
+
+async function updateIngestionJobWithMirror(
+  db: ReturnType<typeof createClient>,
+  input: {
+    jobId: string;
+    patch: Record<string, unknown>;
+    action: string;
+  },
+) {
+  const { data, error } = await db
+    .from('ingestion_jobs')
+    .update(input.patch)
+    .eq('id', input.jobId)
+    .select('*')
+    .single();
+  if (error) throw error;
+
+  await upsertOracleJobActivityFromKnownRow(data as IngestionJobRow, input.action);
+  return data as IngestionJobRow;
+}
+
+async function finalizeIngestionJobWithMirror(
+  db: ReturnType<typeof createClient>,
+  input: {
+    jobId: string;
+    status: 'succeeded' | 'failed';
+    processedCount: number;
+    insertedCount: number;
+    skippedCount: number;
+    errorCode?: string | null;
+    errorMessage?: string | null;
+    action: string;
+    finishedAt?: string;
+    heartbeatAt?: string;
+  },
+) {
+  const finishedAt = input.finishedAt || new Date().toISOString();
+  const heartbeatAt = input.heartbeatAt || finishedAt;
+  return updateIngestionJobWithMirror(db, {
+    jobId: input.jobId,
+    action: input.action,
+    patch: {
+      status: input.status,
+      finished_at: finishedAt,
+      processed_count: input.processedCount,
+      inserted_count: input.insertedCount,
+      skipped_count: input.skippedCount,
+      lease_expires_at: null,
+      worker_id: null,
+      last_heartbeat_at: heartbeatAt,
+      error_code: input.errorCode || null,
+      error_message: input.errorMessage || null,
+    },
+  });
+}
+
 async function enqueueIngestionJobWithMirror(
   db: ReturnType<typeof createClient>,
   values: Record<string, unknown>,
@@ -984,11 +1090,11 @@ async function enqueueIngestionJobWithMirror(
   const result = await db
     .from('ingestion_jobs')
     .insert(values)
-    .select('id')
+    .select('*')
     .single();
 
   if (!result.error && result.data?.id) {
-    await syncOracleJobActivityById(db, result.data.id);
+    await upsertOracleJobActivityFromKnownRow(result.data as IngestionJobRow, 'enqueue_insert');
   }
 
   return result;
@@ -5364,15 +5470,12 @@ async function recoverStaleIngestionJobsFromSupabase(
   if (input?.scope) query = query.eq('scope', input.scope);
   if (input?.requestedByUserId) query = query.eq('requested_by_user_id', input.requestedByUserId);
 
-  const { data, error } = await query.select('id, scope, requested_by_user_id');
+  const { data, error } = await query.select('*');
   if (error) {
     if (isMissingTableError(error)) return [];
     throw error;
   }
-  await syncOracleJobActivityByIds(
-    db,
-    (data || []).map((row) => String((row as { id?: string } | null)?.id || '')),
-  );
+  await upsertOracleJobActivityFromKnownRows((data || []) as IngestionJobRow[], 'recover_stale_jobs_supabase');
   return data || [];
 }
 
@@ -5406,10 +5509,10 @@ async function recoverStaleIngestionJobs(
         error_message: 'Recovered stale running job',
       })
       .in('id', staleIds)
-      .select('id, scope, requested_by_user_id');
+      .select('*');
     if (error) throw error;
 
-    await syncOracleJobActivityByIds(db, staleIds);
+    await upsertOracleJobActivityFromKnownRows((data || []) as IngestionJobRow[], 'recover_stale_jobs_oracle');
     return data || [];
   } catch (error) {
     console.warn('[oracle-control-plane] job_activity_mirror_failed', JSON.stringify({
@@ -5997,18 +6100,16 @@ async function processSearchVideoGenerateJob(input: {
     }
   }
 
-  await db.from('ingestion_jobs').update({
+  await finalizeIngestionJobWithMirror(db, {
+    jobId: input.jobId,
     status: failures.length ? 'failed' : 'succeeded',
-    finished_at: new Date().toISOString(),
-    processed_count: processed,
-    inserted_count: inserted,
-    skipped_count: skipped,
-    lease_expires_at: null,
-    worker_id: null,
-    last_heartbeat_at: new Date().toISOString(),
-    error_code: failures.length ? 'PARTIAL_FAILURE' : null,
-    error_message: failures.length ? JSON.stringify(failures).slice(0, 1000) : null,
-  }).eq('id', input.jobId);
+    processedCount: processed,
+    insertedCount: inserted,
+    skippedCount: skipped,
+    errorCode: failures.length ? 'PARTIAL_FAILURE' : null,
+    errorMessage: failures.length ? JSON.stringify(failures).slice(0, 1000) : null,
+    action: 'search_video_generate_terminal',
+  });
 
   await emitGenerationTerminalNotification(db, {
     userId: input.userId,
@@ -6355,18 +6456,16 @@ async function processManualRefreshGenerateJob(input: {
     }
   }
 
-  await db.from('ingestion_jobs').update({
+  await finalizeIngestionJobWithMirror(db, {
+    jobId: input.jobId,
     status: failures.length ? 'failed' : 'succeeded',
-    finished_at: new Date().toISOString(),
-    processed_count: processed,
-    inserted_count: inserted,
-    skipped_count: skipped,
-    lease_expires_at: null,
-    worker_id: null,
-    last_heartbeat_at: new Date().toISOString(),
-    error_code: failures.length ? 'PARTIAL_FAILURE' : null,
-    error_message: failures.length ? JSON.stringify(failures).slice(0, 1000) : null,
-  }).eq('id', input.jobId);
+    processedCount: processed,
+    insertedCount: inserted,
+    skippedCount: skipped,
+    errorCode: failures.length ? 'PARTIAL_FAILURE' : null,
+    errorMessage: failures.length ? JSON.stringify(failures).slice(0, 1000) : null,
+    action: 'manual_refresh_selection_terminal',
+  });
 
   await emitGenerationTerminalNotification(db, {
     userId: input.userId,
@@ -6515,18 +6614,16 @@ async function processSourcePageVideoLibraryJob(input: {
     }
   }
 
-  await db.from('ingestion_jobs').update({
+  await finalizeIngestionJobWithMirror(db, {
+    jobId: input.jobId,
     status: failures.length ? 'failed' : 'succeeded',
-    finished_at: new Date().toISOString(),
-    processed_count: processed,
-    inserted_count: inserted,
-    skipped_count: skipped,
-    lease_expires_at: null,
-    worker_id: null,
-    last_heartbeat_at: new Date().toISOString(),
-    error_code: failures.length ? 'PARTIAL_FAILURE' : null,
-    error_message: failures.length ? JSON.stringify(failures).slice(0, 1000) : null,
-  }).eq('id', input.jobId);
+    processedCount: processed,
+    insertedCount: inserted,
+    skippedCount: skipped,
+    errorCode: failures.length ? 'PARTIAL_FAILURE' : null,
+    errorMessage: failures.length ? JSON.stringify(failures).slice(0, 1000) : null,
+    action: 'source_page_video_library_terminal',
+  });
 
   await emitGenerationTerminalNotification(db, {
     userId: input.userId,
@@ -7278,18 +7375,16 @@ async function processSourceItemUnlockGenerationJob(input: {
     }
   }
 
-  await db.from('ingestion_jobs').update({
+  await finalizeIngestionJobWithMirror(db, {
+    jobId: input.jobId,
     status: failures.length ? 'failed' : 'succeeded',
-    finished_at: new Date().toISOString(),
-    processed_count: processed,
-    inserted_count: inserted,
-    skipped_count: skipped,
-    lease_expires_at: null,
-    worker_id: null,
-    last_heartbeat_at: new Date().toISOString(),
-    error_code: failures.length ? 'PARTIAL_FAILURE' : null,
-    error_message: failures.length ? JSON.stringify(failures).slice(0, 1000) : null,
-  }).eq('id', input.jobId);
+    processedCount: processed,
+    insertedCount: inserted,
+    skippedCount: skipped,
+    errorCode: failures.length ? 'PARTIAL_FAILURE' : null,
+    errorMessage: failures.length ? JSON.stringify(failures).slice(0, 1000) : null,
+    action: 'source_item_unlock_generation_terminal',
+  });
 
   await emitGenerationTerminalNotification(db, {
     userId: input.userId,
@@ -7334,18 +7429,14 @@ async function processSourceTranscriptRevalidateJob(input: {
 
   const unlock = await getSourceItemUnlockBySourceItemId(db, input.payload.source_item_id);
   if (!unlock || unlock.id !== input.payload.unlock_id) {
-    await db.from('ingestion_jobs').update({
+    await finalizeIngestionJobWithMirror(db, {
+      jobId: input.jobId,
       status: 'succeeded',
-      finished_at: new Date().toISOString(),
-      processed_count: 1,
-      inserted_count: 0,
-      skipped_count: 1,
-      lease_expires_at: null,
-      worker_id: null,
-      last_heartbeat_at: new Date().toISOString(),
-      error_code: null,
-      error_message: null,
-    }).eq('id', input.jobId);
+      processedCount: 1,
+      insertedCount: 0,
+      skippedCount: 1,
+      action: 'source_transcript_revalidate_missing_unlock',
+    });
     return;
   }
 
@@ -7403,33 +7494,25 @@ async function processSourceTranscriptRevalidateJob(input: {
       });
     }
   } else {
-    await db.from('ingestion_jobs').update({
+    await finalizeIngestionJobWithMirror(db, {
+      jobId: input.jobId,
       status: 'succeeded',
-      finished_at: new Date().toISOString(),
-      processed_count: 1,
-      inserted_count: 0,
-      skipped_count: 1,
-      lease_expires_at: null,
-      worker_id: null,
-      last_heartbeat_at: new Date().toISOString(),
-      error_code: null,
-      error_message: null,
-    }).eq('id', input.jobId);
+      processedCount: 1,
+      insertedCount: 0,
+      skippedCount: 1,
+      action: 'source_transcript_revalidate_skip',
+    });
     return;
   }
 
-  await db.from('ingestion_jobs').update({
+  await finalizeIngestionJobWithMirror(db, {
+    jobId: input.jobId,
     status: 'succeeded',
-    finished_at: new Date().toISOString(),
-    processed_count: 1,
-    inserted_count: 1,
-    skipped_count: 0,
-    lease_expires_at: null,
-    worker_id: null,
-    last_heartbeat_at: new Date().toISOString(),
-    error_code: null,
-    error_message: null,
-  }).eq('id', input.jobId);
+    processedCount: 1,
+    insertedCount: 1,
+    skippedCount: 0,
+    action: 'source_transcript_revalidate_terminal',
+  });
 }
 
 class AutoUnlockRetryableError extends Error {
@@ -7475,18 +7558,14 @@ async function processSourceAutoUnlockRetryJob(input: {
   });
 
   if (unlock.status !== 'available') {
-    await db.from('ingestion_jobs').update({
+    await finalizeIngestionJobWithMirror(db, {
+      jobId: input.jobId,
       status: 'succeeded',
-      finished_at: new Date().toISOString(),
-      processed_count: 1,
-      inserted_count: 0,
-      skipped_count: 1,
-      lease_expires_at: null,
-      worker_id: null,
-      last_heartbeat_at: new Date().toISOString(),
-      error_code: null,
-      error_message: null,
-    }).eq('id', input.jobId);
+      processedCount: 1,
+      insertedCount: 0,
+      skippedCount: 1,
+      action: 'source_auto_unlock_retry_unavailable',
+    });
 
     logUnlockEvent(
       'subscription_auto_unlock_retry_skipped',
@@ -7526,18 +7605,14 @@ async function processSourceAutoUnlockRetryJob(input: {
       sourceChannelId,
       videoId: input.payload.video_id,
     });
-    await db.from('ingestion_jobs').update({
+    await finalizeIngestionJobWithMirror(db, {
+      jobId: input.jobId,
       status: 'succeeded',
-      finished_at: new Date().toISOString(),
-      processed_count: 1,
-      inserted_count: 0,
-      skipped_count: 1,
-      lease_expires_at: null,
-      worker_id: null,
-      last_heartbeat_at: new Date().toISOString(),
-      error_code: null,
-      error_message: null,
-    }).eq('id', input.jobId);
+      processedCount: 1,
+      insertedCount: 0,
+      skippedCount: 1,
+      action: 'source_auto_unlock_retry_no_transcript_terminal',
+    });
 
     logUnlockEvent(
       'auto_transcript_retry_exhausted',
@@ -7572,18 +7647,14 @@ async function processSourceAutoUnlockRetryJob(input: {
       sourceChannelId,
       videoId: input.payload.video_id,
     });
-    await db.from('ingestion_jobs').update({
+    await finalizeIngestionJobWithMirror(db, {
+      jobId: input.jobId,
       status: 'succeeded',
-      finished_at: new Date().toISOString(),
-      processed_count: 1,
-      inserted_count: 0,
-      skipped_count: 1,
-      lease_expires_at: null,
-      worker_id: null,
-      last_heartbeat_at: new Date().toISOString(),
-      error_code: null,
-      error_message: null,
-    }).eq('id', input.jobId);
+      processedCount: 1,
+      insertedCount: 0,
+      skippedCount: 1,
+      action: 'source_auto_unlock_retry_transient_terminal',
+    });
 
     logUnlockEvent(
       'auto_transcript_retry_exhausted',
@@ -7645,18 +7716,14 @@ async function processSourceAutoUnlockRetryJob(input: {
       });
     }
 
-    await db.from('ingestion_jobs').update({
+    await finalizeIngestionJobWithMirror(db, {
+      jobId: input.jobId,
       status: 'succeeded',
-      finished_at: new Date().toISOString(),
-      processed_count: 1,
-      inserted_count: 0,
-      skipped_count: 1,
-      lease_expires_at: null,
-      worker_id: null,
-      last_heartbeat_at: new Date().toISOString(),
-      error_code: null,
-      error_message: null,
-    }).eq('id', input.jobId);
+      processedCount: 1,
+      insertedCount: 0,
+      skippedCount: 1,
+      action: 'source_auto_unlock_retry_not_queued',
+    });
 
     logUnlockEvent(
       'subscription_auto_unlock_retry_terminal',
@@ -7669,18 +7736,14 @@ async function processSourceAutoUnlockRetryJob(input: {
     return;
   }
 
-  await db.from('ingestion_jobs').update({
+  await finalizeIngestionJobWithMirror(db, {
+    jobId: input.jobId,
     status: 'succeeded',
-    finished_at: new Date().toISOString(),
-    processed_count: 1,
-    inserted_count: 1,
-    skipped_count: 0,
-    lease_expires_at: null,
-    worker_id: null,
-    last_heartbeat_at: new Date().toISOString(),
-    error_code: null,
-    error_message: null,
-  }).eq('id', input.jobId);
+    processedCount: 1,
+    insertedCount: 1,
+    skippedCount: 0,
+    action: 'source_auto_unlock_retry_terminal',
+  });
 
   logUnlockEvent(
     'subscription_auto_unlock_retry_queued',
@@ -8248,18 +8311,16 @@ async function processAllActiveSubscriptionsJob(input: {
       }
     }
 
-    await db.from('ingestion_jobs').update({
+    await finalizeIngestionJobWithMirror(db, {
+      jobId: input.jobId,
       status: failures.length ? 'failed' : 'succeeded',
-      finished_at: new Date().toISOString(),
-      processed_count: processed,
-      inserted_count: inserted,
-      skipped_count: skipped,
-      lease_expires_at: null,
-      worker_id: null,
-      last_heartbeat_at: new Date().toISOString(),
-      error_code: failures.length ? 'PARTIAL_FAILURE' : null,
-      error_message: failures.length ? JSON.stringify(failures).slice(0, 1000) : null,
-    }).eq('id', input.jobId);
+      processedCount: processed,
+      insertedCount: inserted,
+      skippedCount: skipped,
+      errorCode: failures.length ? 'PARTIAL_FAILURE' : null,
+      errorMessage: failures.length ? JSON.stringify(failures).slice(0, 1000) : null,
+      action: 'all_active_subscriptions_terminal',
+    });
   } catch (error) {
     if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
       await markOracleAllActiveSubscriptionsRunFinished({
@@ -8306,13 +8367,14 @@ async function processAllActiveSubscriptionsJob(input: {
 async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, job: IngestionJobRow) {
   const scope = String(job.scope || '').trim();
   if (!isQueuedIngestionScope(scope)) {
-    await failIngestionJob(db, {
+    const failedJob = await failIngestionJob(db, {
       jobId: job.id,
       errorCode: 'UNSUPPORTED_SCOPE',
       errorMessage: `Unsupported queued scope: ${scope}`,
       scheduleRetryInSeconds: 0,
       maxAttempts: Number(job.max_attempts || 3),
     });
+    await upsertOracleJobActivityFromKnownRow(failedJob, 'queued_job_fail_unsupported_scope');
     return;
   }
 
@@ -8348,7 +8410,7 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
   }, initialHeartbeatDelayMs);
 
   try {
-    await syncOracleJobActivityById(db, job.id);
+    await upsertOracleJobActivityFromKnownRow(job, 'queued_job_claim_start');
     await runWithExecutionTimeout(
       (async () => {
         if (scope === 'source_item_unlock_generation') {
@@ -8410,18 +8472,14 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
             explicitVideoId: enrichmentPayload.video_id,
             explicitSourceItemId: enrichmentPayload.source_item_id,
           });
-          await db.from('ingestion_jobs').update({
+          await finalizeIngestionJobWithMirror(db, {
+            jobId: job.id,
             status: 'succeeded',
-            finished_at: new Date().toISOString(),
-            processed_count: 1,
-            inserted_count: 1,
-            skipped_count: 0,
-            lease_expires_at: null,
-            worker_id: null,
-            last_heartbeat_at: new Date().toISOString(),
-            error_code: null,
-            error_message: null,
-          }).eq('id', job.id);
+            processedCount: 1,
+            insertedCount: 1,
+            skippedCount: 0,
+            action: 'blueprint_youtube_enrichment_terminal',
+          });
           return;
         }
 
@@ -8440,18 +8498,14 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
             sourceItemId: refreshPayload.source_item_id,
             triggeredByUserId: job.requested_by_user_id || null,
           });
-          await db.from('ingestion_jobs').update({
+          await finalizeIngestionJobWithMirror(db, {
+            jobId: job.id,
             status: 'succeeded',
-            finished_at: new Date().toISOString(),
-            processed_count: 1,
-            inserted_count: 1,
-            skipped_count: 0,
-            lease_expires_at: null,
-            worker_id: null,
-            last_heartbeat_at: new Date().toISOString(),
-            error_code: null,
-            error_message: null,
-          }).eq('id', job.id);
+            processedCount: 1,
+            insertedCount: 1,
+            skippedCount: 0,
+            action: 'blueprint_youtube_refresh_terminal',
+          });
           return;
         }
 
@@ -8515,8 +8569,6 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
       throw heartbeatError;
     }
 
-    await syncOracleJobActivityById(db, job.id);
-
     logUnlockEvent('unlock_job_finished', { trace_id: traceId, job_id: job.id }, {
       scope,
       duration_ms: Date.now() - jobStartMs,
@@ -8526,14 +8578,14 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
   } catch (error) {
     const classified = classifyQueuedJobError(error);
     const nextRetryDelay = Math.max(0, Math.floor(Number(classified.retryDelaySeconds) || 0));
-    await failIngestionJob(db, {
+    const failedJob = await failIngestionJob(db, {
       jobId: job.id,
       errorCode: classified.errorCode,
       errorMessage: classified.message,
       scheduleRetryInSeconds: nextRetryDelay,
       maxAttempts: Number(job.max_attempts || 3),
     });
-    await syncOracleJobActivityById(db, job.id);
+    await upsertOracleJobActivityFromKnownRow(failedJob, 'queued_job_fail_transition');
 
     logUnlockEvent('unlock_job_failed', { trace_id: traceId, job_id: job.id }, {
       scope,
