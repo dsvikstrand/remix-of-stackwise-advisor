@@ -883,4 +883,29 @@ describe('blueprint YouTube comments service', () => {
     });
     expect([...pendingIds]).toEqual(['bp_1']);
   });
+
+  it('prefers the centralized pending-refresh helper when provided', async () => {
+    const listPendingRefreshBlueprintIdsOracleFirst = vi.fn(async () => new Set(['bp_2']));
+    const service = createBlueprintYouTubeCommentsService({
+      apiKey: 'youtube-key',
+      fetchImpl: vi.fn() as unknown as typeof fetch,
+      listPendingRefreshBlueprintIdsOracleFirst,
+      listOracleActiveRefreshJobs: vi.fn(async () => {
+        throw new Error('legacy callback should not run when centralized helper is provided');
+      }),
+    });
+
+    const pendingIds = await service.listPendingRefreshBlueprintIds({
+      db: {} as any,
+      blueprintIds: ['bp_1', 'bp_2', 'bp_3'],
+      kind: 'comments',
+    });
+
+    expect(listPendingRefreshBlueprintIdsOracleFirst).toHaveBeenCalledWith({
+      db: {},
+      blueprintIds: ['bp_1', 'bp_2', 'bp_3'],
+      kind: 'comments',
+    });
+    expect([...pendingIds]).toEqual(['bp_2']);
+  });
 });

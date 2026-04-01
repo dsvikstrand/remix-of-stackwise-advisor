@@ -118,6 +118,7 @@
     - Oracle job-activity mirror lifecycle writes are now also direct on the hot path: enqueue, claim/start, terminal success/failure, and stale-running recovery update local Oracle mirror rows from the rows already in hand instead of doing an extra Supabase read-after-write refresh for the same `ingestion_jobs` row.
     - The remaining user-triggered ingestion handlers now follow that same centralized Oracle-aware lifecycle path: manual refresh, source-page unlock generation, search generation, and foreground subscription sync enqueue/finalize through shared helpers instead of inline `ingestion_jobs` inserts/updates.
     - Service/debug ingestion control now follows it too: `/api/ingestion/jobs/trigger` and debug subscription simulation both use the shared Oracle-aware enqueue/finalize helpers rather than raw handler-level `ingestion_jobs` writes.
+    - Service ops reads and Blueprint refresh pending-job dedupe now follow the same Oracle-first pattern as well: latest-job / queue-health / refresh pending checks resolve through centralized runtime helpers, with durable Supabase fallback kept underneath rather than duplicated in handlers/services.
     - Durable queue rows, claim truth, lease truth, and retries still remain on Supabase.
     - Backend refactor a3 is completed with no behavior drift:
       - route registration is fully modular (`53` API routes across `server/routes/*` / route-domain modules)

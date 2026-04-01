@@ -63,16 +63,10 @@ export async function handleIngestionJobsTrigger(req: express.Request, res: expr
 
   const selectExistingJob = async () => {
     if (deps.getActiveIngestionJobForScope) {
-      try {
-        const oracleJob = await deps.getActiveIngestionJobForScope({
-          scope: 'all_active_subscriptions',
-        });
-        if (oracleJob || deps.oraclePrimaryOwnsAllActiveSubscriptionsTrigger) {
-          return { data: oracleJob, error: null };
-        }
-      } catch {
-        // Fall through to Supabase for non-primary / transient mirror failures.
-      }
+      const oracleJob = await deps.getActiveIngestionJobForScope({
+        scope: 'all_active_subscriptions',
+      });
+      return { data: oracleJob, error: null };
     }
 
     return db
@@ -334,12 +328,11 @@ export async function handleIngestionJobsLatest(req: express.Request, res: expre
   if (deps.getLatestIngestionJob) {
     try {
       data = await deps.getLatestIngestionJob();
-    } catch {
-      data = null;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message, data: null });
     }
-  }
-
-  if (!data) {
+  } else {
     const latestResult = await db
       .from('ingestion_jobs')
       .select('id, trigger, scope, status, started_at, finished_at, processed_count, inserted_count, skipped_count, error_code, error_message, attempts, max_attempts, next_run_at, lease_expires_at, trace_id')
@@ -397,8 +390,9 @@ export async function handleQueueHealth(req: express.Request, res: express.Respo
         snapshotAtIso: nowIso,
         runningHeartbeatFreshMs,
       });
-    } catch {
-      queueSnapshot = null;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message, data: null });
     }
   }
 

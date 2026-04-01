@@ -285,6 +285,11 @@ export function createBlueprintYouTubeCommentsService(input: {
   commentsAutoFirstDelayMinutes?: number;
   commentsAutoSecondDelayHours?: number;
   commentsManualCooldownMinutes?: number;
+  listPendingRefreshBlueprintIdsOracleFirst?: (input: {
+    db: DbClient;
+    blueprintIds: string[];
+    kind: BlueprintYouTubeRefreshKind;
+  }) => Promise<Set<string>>;
   listOracleActiveRefreshJobs?: (input: {
     scope: string;
     limit: number;
@@ -310,6 +315,7 @@ export function createBlueprintYouTubeCommentsService(input: {
     input.commentsManualCooldownMinutes,
     DEFAULT_COMMENTS_MANUAL_COOLDOWN_MINUTES,
   );
+  const listPendingRefreshBlueprintIdsOracleFirst = input.listPendingRefreshBlueprintIdsOracleFirst;
   const listOracleActiveRefreshJobs = input.listOracleActiveRefreshJobs;
 
   async function resolveBlueprintYouTubeVideoId(args: {
@@ -852,6 +858,14 @@ export function createBlueprintYouTubeCommentsService(input: {
         .filter(Boolean),
     )];
     if (normalizedIds.length === 0) return new Set<string>();
+
+    if (listPendingRefreshBlueprintIdsOracleFirst) {
+      return listPendingRefreshBlueprintIdsOracleFirst({
+        db: args.db,
+        blueprintIds: normalizedIds,
+        kind: args.kind,
+      });
+    }
 
     if (listOracleActiveRefreshJobs) {
       const rows = await listOracleActiveRefreshJobs({
