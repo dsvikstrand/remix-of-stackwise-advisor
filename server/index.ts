@@ -103,6 +103,20 @@ import {
   upsertOracleQueueLedgerRows,
 } from './services/oracleQueueLedgerState';
 import {
+  countOracleProductActiveSubscriptions,
+  getOracleProductSubscriptionState,
+  getOracleProductUnlockBySourceItemId,
+  listOracleProductActiveSubscriptionsForUser,
+  listOracleProductFeedRows,
+  listOracleProductSourceItems,
+  listOracleProductUnlocks,
+  syncOracleProductStateFromSupabase,
+  upsertOracleProductFeedRows,
+  upsertOracleProductSourceItemRows,
+  upsertOracleProductSubscriptionRows,
+  upsertOracleProductUnlockRows,
+} from './services/oracleProductState';
+import {
   evaluateOraclePrimarySchedulerDecision,
   evaluateOracleShadowSchedulerDecision,
 } from './services/oracleSubscriptionScheduler';
@@ -603,6 +617,11 @@ const oracleQueueLedgerPrimaryEnabled = oracleQueueLedgerMode === 'primary';
 const oracleQueueSweepControlEnabled = (
   oracleControlPlaneConfig.enabled
   && oracleControlPlaneConfig.queueSweepControlEnabled
+  && Boolean(oracleControlPlane)
+);
+const oracleProductMirrorEnabled = (
+  oracleControlPlaneConfig.enabled
+  && oracleControlPlaneConfig.productMirrorEnabled
   && Boolean(oracleControlPlane)
 );
 const debugEndpointsEnabledRaw = String(process.env.ENABLE_DEBUG_ENDPOINTS || 'false').trim().toLowerCase();
@@ -1941,6 +1960,450 @@ async function countOracleQueueLedgerJobsSafe(input: {
     }));
     return null;
   }
+}
+
+async function upsertOracleProductSubscriptionsFromKnownRows(
+  rows: Array<Record<string, unknown> | null | undefined>,
+  action: string,
+) {
+  const normalizedRows = rows.filter((row): row is Record<string, unknown> => Boolean(row?.id));
+  if (!oracleProductMirrorEnabled || !oracleControlPlane || normalizedRows.length === 0) {
+    return;
+  }
+
+  try {
+    await upsertOracleProductSubscriptionRows({
+      controlDb: oracleControlPlane,
+      rows: normalizedRows,
+    });
+  } catch (error) {
+    console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
+      action,
+      table: 'product_subscription_state',
+      count: normalizedRows.length,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+}
+
+async function upsertOracleProductSourceItemsFromKnownRows(
+  rows: Array<Record<string, unknown> | null | undefined>,
+  action: string,
+) {
+  const normalizedRows = rows.filter((row): row is Record<string, unknown> => Boolean(row?.id));
+  if (!oracleProductMirrorEnabled || !oracleControlPlane || normalizedRows.length === 0) {
+    return;
+  }
+
+  try {
+    await upsertOracleProductSourceItemRows({
+      controlDb: oracleControlPlane,
+      rows: normalizedRows,
+    });
+  } catch (error) {
+    console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
+      action,
+      table: 'product_source_item_state',
+      count: normalizedRows.length,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+}
+
+async function upsertOracleProductUnlocksFromKnownRows(
+  rows: Array<Record<string, unknown> | null | undefined>,
+  action: string,
+) {
+  const normalizedRows = rows.filter((row): row is Record<string, unknown> => Boolean(row?.id));
+  if (!oracleProductMirrorEnabled || !oracleControlPlane || normalizedRows.length === 0) {
+    return;
+  }
+
+  try {
+    await upsertOracleProductUnlockRows({
+      controlDb: oracleControlPlane,
+      rows: normalizedRows,
+    });
+  } catch (error) {
+    console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
+      action,
+      table: 'product_unlock_state',
+      count: normalizedRows.length,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+}
+
+async function upsertOracleProductFeedRowsFromKnownRows(
+  rows: Array<Record<string, unknown> | null | undefined>,
+  action: string,
+) {
+  const normalizedRows = rows.filter((row): row is Record<string, unknown> => Boolean(row?.id));
+  if (!oracleProductMirrorEnabled || !oracleControlPlane || normalizedRows.length === 0) {
+    return;
+  }
+
+  try {
+    await upsertOracleProductFeedRows({
+      controlDb: oracleControlPlane,
+      rows: normalizedRows,
+    });
+  } catch (error) {
+    console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
+      action,
+      table: 'product_feed_state',
+      count: normalizedRows.length,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+}
+
+async function getUserSubscriptionStateForSourcePageOracleFirst(
+  db: ReturnType<typeof createClient>,
+  input: { userId: string; sourcePageId: string; sourceChannelId?: string | null },
+) {
+  if (oracleProductMirrorEnabled && oracleControlPlane) {
+    try {
+      const mirrored = await getOracleProductSubscriptionState({
+        controlDb: oracleControlPlane,
+        userId: input.userId,
+        sourcePageId: input.sourcePageId,
+        sourceChannelId: input.sourceChannelId,
+      });
+      if (mirrored) {
+        return {
+          subscribed: Boolean(mirrored.is_active),
+          subscription_id: mirrored.id || null,
+          is_active: Boolean(mirrored.is_active),
+        };
+      }
+    } catch (error) {
+      console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
+        action: 'get_user_subscription_state_for_source_page',
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+
+  return getUserSubscriptionStateForSourcePage(db, {
+    userId: input.userId,
+    sourcePageId: input.sourcePageId,
+  });
+}
+
+async function countActiveSubscribersForSourcePageOracleFirst(
+  db: ReturnType<typeof createClient>,
+  input: { sourcePageId?: string | null; sourceChannelId?: string | null },
+) {
+  const sourcePageId = String(input.sourcePageId || '').trim();
+  const sourceChannelId = String(input.sourceChannelId || '').trim();
+  if (oracleProductMirrorEnabled && oracleControlPlane) {
+    try {
+      const mirroredCount = await countOracleProductActiveSubscriptions({
+        controlDb: oracleControlPlane,
+        sourcePageId,
+        sourceChannelId,
+      });
+      if (mirroredCount > 0) {
+        return mirroredCount;
+      }
+    } catch (error) {
+      console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
+        action: 'count_active_subscribers_for_source_page',
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+
+  const pageCount = await countActiveSubscribersForSourcePage(db, sourcePageId);
+  if (pageCount > 0 || !sourceChannelId) {
+    return pageCount;
+  }
+
+  const { count, error } = await db
+    .from('user_source_subscriptions')
+    .select('id', { count: 'exact', head: true })
+    .eq('source_type', 'youtube')
+    .eq('source_channel_id', sourceChannelId)
+    .eq('is_active', true);
+  if (error) throw error;
+  return Number(count || 0);
+}
+
+async function getSourceItemUnlockBySourceItemIdOracleFirst(
+  db: ReturnType<typeof createClient>,
+  sourceItemId: string,
+) {
+  const normalizedSourceItemId = String(sourceItemId || '').trim();
+  if (!normalizedSourceItemId) return null;
+
+  if (oracleProductMirrorEnabled && oracleControlPlane) {
+    try {
+      const mirrored = await getOracleProductUnlockBySourceItemId({
+        controlDb: oracleControlPlane,
+        sourceItemId: normalizedSourceItemId,
+      });
+      if (mirrored) {
+        return mirrored;
+      }
+    } catch (error) {
+      console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
+        action: 'get_source_item_unlock_by_source_item_id',
+        source_item_id: normalizedSourceItemId,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+
+  return getSourceItemUnlockBySourceItemId(db, normalizedSourceItemId);
+}
+
+async function getSourceItemUnlocksBySourceItemIdsOracleFirst(
+  db: ReturnType<typeof createClient>,
+  sourceItemIds: string[],
+) {
+  const normalizedIds = [...new Set(
+    (Array.isArray(sourceItemIds) ? sourceItemIds : [])
+      .map((value) => String(value || '').trim())
+      .filter(Boolean),
+  )];
+  if (normalizedIds.length === 0) return [] as SourceItemUnlockRow[];
+
+  if (oracleProductMirrorEnabled && oracleControlPlane) {
+    try {
+      const mirrored = await listOracleProductUnlocks({
+        controlDb: oracleControlPlane,
+        sourceItemIds: normalizedIds,
+      });
+      if (mirrored.length > 0) {
+        return mirrored as SourceItemUnlockRow[];
+      }
+    } catch (error) {
+      console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
+        action: 'get_source_item_unlocks_by_source_item_ids',
+        count: normalizedIds.length,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+
+  return getSourceItemUnlocksBySourceItemIds(db, normalizedIds);
+}
+
+async function listProductFeedRowsForUserOracleFirst(
+  db: ReturnType<typeof createClient>,
+  input: { userId: string; limit: number; sourceItemIds?: string[]; requireBlueprint?: boolean },
+) {
+  if (oracleProductMirrorEnabled && oracleControlPlane) {
+    try {
+      const mirrored = await listOracleProductFeedRows({
+        controlDb: oracleControlPlane,
+        userId: input.userId,
+        limit: input.limit,
+        sourceItemIds: input.sourceItemIds,
+        requireBlueprint: input.requireBlueprint,
+      });
+      if (mirrored.length > 0) {
+        return mirrored;
+      }
+    } catch (error) {
+      console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
+        action: 'list_product_feed_rows_for_user',
+        user_id: input.userId,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+
+  let query = db
+    .from('user_feed_items')
+    .select('id, user_id, source_item_id, blueprint_id, state, last_decision_code, created_at, updated_at')
+    .eq('user_id', input.userId)
+    .order('created_at', { ascending: false })
+    .limit(input.limit);
+
+  if (input.sourceItemIds && input.sourceItemIds.length > 0) {
+    query = query.in('source_item_id', input.sourceItemIds);
+  }
+  if (input.requireBlueprint) {
+    query = query.not('blueprint_id', 'is', null);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+async function listProductSourceItemsOracleFirst(
+  db: ReturnType<typeof createClient>,
+  input: { ids?: string[]; sourceNativeId?: string | null },
+) {
+  if (oracleProductMirrorEnabled && oracleControlPlane) {
+    try {
+      const mirrored = await listOracleProductSourceItems({
+        controlDb: oracleControlPlane,
+        ids: input.ids,
+        sourceNativeId: input.sourceNativeId,
+      });
+      if (mirrored.length > 0) {
+        return mirrored;
+      }
+    } catch (error) {
+      console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
+        action: 'list_product_source_items',
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+
+  let query = db
+    .from('source_items')
+    .select('id, source_type, source_native_id, canonical_key, source_url, title, published_at, ingest_status, source_channel_id, source_channel_title, source_page_id, thumbnail_url, metadata, created_at, updated_at');
+  const ids = [...new Set((input.ids || []).map((value) => String(value || '').trim()).filter(Boolean))];
+  const sourceNativeId = String(input.sourceNativeId || '').trim();
+
+  if (ids.length > 0) {
+    query = query.in('id', ids);
+  } else if (sourceNativeId) {
+    query = query.eq('source_native_id', sourceNativeId);
+  } else {
+    return [];
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+async function listActiveSubscriptionsForUserOracleFirst(
+  db: ReturnType<typeof createClient>,
+  userId: string,
+) {
+  const normalizedUserId = String(userId || '').trim();
+  if (!normalizedUserId) return [];
+
+  if (oracleProductMirrorEnabled && oracleControlPlane) {
+    try {
+      const mirrored = await listOracleProductActiveSubscriptionsForUser({
+        controlDb: oracleControlPlane,
+        userId: normalizedUserId,
+      });
+      if (mirrored.length > 0) {
+        return mirrored;
+      }
+    } catch (error) {
+      console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
+        action: 'list_active_subscriptions_for_user',
+        user_id: normalizedUserId,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+
+  const { data, error } = await db
+    .from('user_source_subscriptions')
+    .select('source_page_id, source_channel_id')
+    .eq('user_id', normalizedUserId)
+    .eq('is_active', true);
+  if (error) throw error;
+  return data || [];
+}
+
+async function ensureSourceItemUnlockWithMirror(
+  db: ReturnType<typeof createClient>,
+  input: {
+    sourceItemId: string;
+    sourcePageId?: string | null;
+    estimatedCost: number;
+  },
+) {
+  const unlock = await ensureSourceItemUnlock(db, input);
+  await upsertOracleProductUnlocksFromKnownRows([unlock as unknown as Record<string, unknown>], 'ensure_source_item_unlock');
+  return unlock;
+}
+
+async function reserveUnlockWithMirror(
+  db: ReturnType<typeof createClient>,
+  input: {
+    unlock: SourceItemUnlockRow;
+    userId: string;
+    estimatedCost: number;
+    reservationSeconds: number;
+  },
+) {
+  const result = await reserveUnlock(db, input);
+  await upsertOracleProductUnlocksFromKnownRows([result.unlock as unknown as Record<string, unknown>], 'reserve_unlock');
+  return result;
+}
+
+async function attachReservationLedgerWithMirror(
+  db: ReturnType<typeof createClient>,
+  input: {
+    unlockId: string;
+    userId: string;
+    ledgerId: string | null;
+    amount: number;
+  },
+) {
+  const unlock = await attachReservationLedger(db, input);
+  await upsertOracleProductUnlocksFromKnownRows([unlock as unknown as Record<string, unknown>], 'attach_reservation_ledger');
+  return unlock;
+}
+
+async function attachAutoUnlockIntentWithMirror(
+  db: ReturnType<typeof createClient>,
+  input: {
+    unlockId: string;
+    userId: string;
+    intentId: string | null;
+    amount: number;
+  },
+) {
+  const unlock = await attachAutoUnlockIntent(db, input);
+  await upsertOracleProductUnlocksFromKnownRows([unlock as unknown as Record<string, unknown>], 'attach_auto_unlock_intent');
+  return unlock;
+}
+
+async function markUnlockProcessingWithMirror(
+  db: ReturnType<typeof createClient>,
+  input: {
+    unlockId: string;
+    userId: string;
+    jobId: string;
+    reservationSeconds?: number;
+  },
+) {
+  const unlock = await markUnlockProcessing(db, input);
+  await upsertOracleProductUnlocksFromKnownRows(unlock ? [unlock as unknown as Record<string, unknown>] : [], 'mark_unlock_processing');
+  return unlock;
+}
+
+async function completeUnlockWithMirror(
+  db: ReturnType<typeof createClient>,
+  input: {
+    unlockId: string;
+    blueprintId: string;
+    jobId: string;
+    expectedJobId?: string;
+  },
+) {
+  const unlock = await completeUnlock(db, input);
+  await upsertOracleProductUnlocksFromKnownRows([unlock as unknown as Record<string, unknown>], 'complete_unlock');
+  return unlock;
+}
+
+async function failUnlockWithMirror(
+  db: ReturnType<typeof createClient>,
+  input: {
+    unlockId: string;
+    errorCode: string;
+    errorMessage: string;
+    expectedJobId?: string;
+  },
+) {
+  const unlock = await failUnlock(db, input);
+  await upsertOracleProductUnlocksFromKnownRows([unlock as unknown as Record<string, unknown>], 'fail_unlock');
+  return unlock;
 }
 
 async function listActiveScopeJobsOracleFirst(input: {
@@ -4293,9 +4756,10 @@ async function upsertSourceItemFromVideo(db: ReturnType<typeof createClient>, in
       },
       { onConflict: 'canonical_key' },
     )
-    .select('id, source_url, source_native_id, source_page_id, source_channel_id, source_channel_title, title, published_at, thumbnail_url')
+    .select('id, source_type, source_native_id, canonical_key, source_url, title, published_at, ingest_status, source_page_id, source_channel_id, source_channel_title, thumbnail_url, metadata, created_at, updated_at')
     .single();
   if (error) throw error;
+  await upsertOracleProductSourceItemsFromKnownRows([data as Record<string, unknown>], 'upsert_source_item_from_video');
   return data;
 }
 
@@ -4330,9 +4794,10 @@ async function upsertSubscriptionNoticeSourceItem(db: ReturnType<typeof createCl
       },
       { onConflict: 'canonical_key' },
     )
-    .select('id')
+    .select('id, source_type, source_native_id, canonical_key, source_url, title, published_at, ingest_status, source_page_id, source_channel_id, source_channel_title, thumbnail_url, metadata, created_at, updated_at')
     .single();
   if (error) throw error;
+  await upsertOracleProductSourceItemsFromKnownRows([data as Record<string, unknown>], 'upsert_subscription_notice_source_item');
   return data;
 }
 
@@ -4369,6 +4834,16 @@ async function insertFeedItem(db: ReturnType<typeof createClient>, input: {
     if (code === '23505') return null;
     throw error;
   }
+  await upsertOracleProductFeedRowsFromKnownRows([{
+    id: data.id,
+    user_id: input.userId,
+    source_item_id: input.sourceItemId,
+    blueprint_id: input.blueprintId,
+    state: input.state,
+    last_decision_code: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }], 'insert_feed_item');
   return data;
 }
 
@@ -4396,6 +4871,16 @@ async function upsertFeedItemWithBlueprint(db: ReturnType<typeof createClient>, 
     .select('id, user_id')
     .single();
   if (error) throw error;
+  await upsertOracleProductFeedRowsFromKnownRows([{
+    id: data.id,
+    user_id: data.user_id,
+    source_item_id: input.sourceItemId,
+    blueprint_id: input.blueprintId,
+    state: input.state,
+    last_decision_code: null,
+    created_at: nowIso,
+    updated_at: nowIso,
+  }], 'upsert_feed_item_with_blueprint');
   return data as { id: string; user_id: string };
 }
 
@@ -5990,7 +6475,7 @@ async function attemptAutoUnlockForSourceItem(input: {
           : 'Unlock queue is currently busy.',
       });
     }
-    await failUnlock(db, {
+    await failUnlockWithMirror(db, {
       unlockId: reservedUnlock.id,
       errorCode: !unlockIntakeEnabled ? 'QUEUE_INTAKE_DISABLED' : 'QUEUE_BACKPRESSURE',
       errorMessage: !unlockIntakeEnabled
@@ -6044,7 +6529,7 @@ async function attemptAutoUnlockForSourceItem(input: {
         lastErrorMessage: jobError?.message || 'Could not enqueue auto-unlock job.',
       });
     }
-    await failUnlock(db, {
+    await failUnlockWithMirror(db, {
       unlockId: reservedUnlock.id,
       errorCode: 'SOURCE_VIDEO_GENERATE_FAILED',
       errorMessage: jobError?.message || 'Could not enqueue auto-unlock job.',
@@ -7865,7 +8350,7 @@ async function processSourceItemUnlockGenerationJob(input: {
     };
     processed += 1;
     try {
-      const processingUnlock = await markUnlockProcessing(db, {
+      const processingUnlock = await markUnlockProcessingWithMirror(db, {
         unlockId: item.unlock_id,
         userId: item.reserved_by_user_id,
         jobId: input.jobId,
@@ -7874,7 +8359,7 @@ async function processSourceItemUnlockGenerationJob(input: {
       processingUnlockRow = processingUnlock;
 
       if (!processingUnlock) {
-        const current = await getSourceItemUnlockBySourceItemId(db, item.source_item_id);
+        const current = await getSourceItemUnlockBySourceItemIdOracleFirst(db, item.source_item_id);
         const variantState = await resolveVariantOrReady({
           sourceItemId: item.source_item_id,
           generationTier: itemGenerationTier,
@@ -8091,7 +8576,7 @@ async function processSourceItemUnlockGenerationJob(input: {
       }
 
       if (!skipUnlockSettlement && processingUnlockRow) {
-        await completeUnlock(db, {
+        await completeUnlockWithMirror(db, {
           unlockId: item.unlock_id,
           blueprintId: generated.blueprintId,
           jobId: input.jobId,
@@ -8207,7 +8692,7 @@ async function processSourceItemUnlockGenerationJob(input: {
             );
           }
           try {
-            await failUnlock(db, {
+            await failUnlockWithMirror(db, {
               unlockId: item.unlock_id,
               errorCode: 'ALREADY_IN_PROGRESS',
               errorMessage: 'Variant generation already in progress.',
@@ -8249,7 +8734,7 @@ async function processSourceItemUnlockGenerationJob(input: {
       ) {
         let unlockForDecision = processingUnlockRow;
         if (!unlockForDecision) {
-          unlockForDecision = await getSourceItemUnlockBySourceItemId(db, item.source_item_id);
+          unlockForDecision = await getSourceItemUnlockBySourceItemIdOracleFirst(db, item.source_item_id);
         }
 
         if (unlockForDecision) {
@@ -8366,7 +8851,7 @@ async function processSourceItemUnlockGenerationJob(input: {
         }
 
         try {
-          await failUnlock(db, {
+          await failUnlockWithMirror(db, {
             unlockId: item.unlock_id,
             errorCode,
             errorMessage: message,
@@ -8569,7 +9054,7 @@ async function processSourceTranscriptRevalidateJob(input: {
     throw new Error('Service role client not configured');
   }
 
-  const unlock = await getSourceItemUnlockBySourceItemId(db, input.payload.source_item_id);
+  const unlock = await getSourceItemUnlockBySourceItemIdOracleFirst(db, input.payload.source_item_id);
   if (!unlock || unlock.id !== input.payload.unlock_id) {
     await finalizeIngestionJobWithMirror(db, {
       jobId: input.jobId,
@@ -8693,7 +9178,7 @@ async function processSourceAutoUnlockRetryJob(input: {
   // Current runtime keeps a flat unlock cost, so subscriber counting is
   // unnecessary in the hot auto-unlock retry path.
   const estimatedUnlockCost = computeUnlockCost(1);
-  const unlock = await ensureSourceItemUnlock(db, {
+  const unlock = await ensureSourceItemUnlockWithMirror(db, {
     sourceItemId,
     sourcePageId: input.payload.source_page_id || null,
     estimatedCost: estimatedUnlockCost,
@@ -8829,7 +9314,7 @@ async function processSourceAutoUnlockRetryJob(input: {
 
   if (!attempt.queued) {
     if (attempt.reason === 'TRANSCRIPT_COOLDOWN') {
-      const currentUnlock = await getSourceItemUnlockBySourceItemId(db, sourceItemId);
+      const currentUnlock = await getSourceItemUnlockBySourceItemIdOracleFirst(db, sourceItemId);
       const cooldownDelaySeconds = Math.max(
         5,
         getTranscriptRetryAfterSeconds(currentUnlock || unlock)
@@ -10162,6 +10647,22 @@ async function bootstrapOracleControlPlaneState() {
     jobActivityActiveCount = jobActivityBootstrap.activeCount;
   }
 
+  let productSubscriptionCount: number | null = null;
+  let productSourceItemCount: number | null = null;
+  let productUnlockCount: number | null = null;
+  let productFeedCount: number | null = null;
+  if (oracleProductMirrorEnabled) {
+    const productBootstrap = await syncOracleProductStateFromSupabase({
+      controlDb: oracleControlPlane,
+      db,
+      recentLimit: oracleControlPlaneConfig.productBootstrapLimit,
+    });
+    productSubscriptionCount = productBootstrap.subscriptionCount;
+    productSourceItemCount = productBootstrap.sourceItemCount;
+    productUnlockCount = productBootstrap.unlockCount;
+    productFeedCount = productBootstrap.feedCount;
+  }
+
   console.log('[oracle-control-plane] bootstrap complete', JSON.stringify({
     scheduler_mode: oracleControlPlaneConfig.subscriptionSchedulerMode,
     queue_ledger_mode: oracleQueueLedgerMode,
@@ -10172,9 +10673,14 @@ async function bootstrapOracleControlPlaneState() {
     queue_admission_active_count: queueAdmissionActiveCount,
     job_activity_count: jobActivityCount,
     job_activity_active_count: jobActivityActiveCount,
+    product_subscription_count: productSubscriptionCount,
+    product_source_item_count: productSourceItemCount,
+    product_unlock_count: productUnlockCount,
+    product_feed_count: productFeedCount,
     bootstrap_batch: oracleControlPlaneConfig.bootstrapBatch,
     queue_ledger_bootstrap_limit: oracleControlPlaneConfig.queueLedgerBootstrapLimit,
     job_activity_bootstrap_limit: oracleControlPlaneConfig.jobActivityBootstrapLimit,
+    product_bootstrap_limit: oracleControlPlaneConfig.productBootstrapLimit,
   }));
 }
 
@@ -10298,12 +10804,12 @@ const sourceSubscriptionSyncService = createSourceSubscriptionSyncService({
   fetchYouTubeVideoStates,
   upsertSourceItemFromVideo,
   getExistingFeedItem,
-  ensureSourceItemUnlock,
+  ensureSourceItemUnlock: ensureSourceItemUnlockWithMirror,
   computeUnlockCost,
   attemptAutoUnlockForSourceItem,
   getServiceSupabaseClient,
   enqueueSourceAutoUnlockRetryJob,
-  getSourceItemUnlockBySourceItemId,
+  getSourceItemUnlockBySourceItemId: getSourceItemUnlockBySourceItemIdOracleFirst,
   getTranscriptCooldownState,
   isConfirmedNoTranscriptUnlock,
   suppressUnlockableFeedRowsForSourceItem,
@@ -10370,6 +10876,7 @@ async function cleanupSubscriptionNoticeForChannel(
 }
 
 registerSourceSubscriptionsRoutes(app, {
+  syncOracleProductSubscriptions: upsertOracleProductSubscriptionsFromKnownRows,
   getAuthedSupabaseClient,
   getServiceSupabaseClient,
   resolveYouTubeChannel,
@@ -10429,7 +10936,7 @@ registerSourcePagesRoutes(app, {
   needsSourcePageAssetHydration,
   hydrateSourcePageAssetsForRow,
   youtubeDataApiKey,
-  getUserSubscriptionStateForSourcePage,
+  getUserSubscriptionStateForSourcePage: getUserSubscriptionStateForSourcePageOracleFirst,
   sourceVideoListBurstLimiter,
   sourceVideoListSustainedLimiter,
   sourceVideoUnlockBurstLimiter,
@@ -10440,9 +10947,9 @@ registerSourcePagesRoutes(app, {
   listYouTubeSourceVideos,
   YouTubeSourceVideosError,
   loadExistingSourceVideoStateForUser,
-  countActiveSubscribersForSourcePage,
+  countActiveSubscribersForSourcePage: countActiveSubscribersForSourcePageOracleFirst,
   computeUnlockCost,
-  getSourceItemUnlocksBySourceItemIds,
+  getSourceItemUnlocksBySourceItemIds: getSourceItemUnlocksBySourceItemIdsOracleFirst,
   toUnlockSnapshot,
   isConfirmedNoTranscriptUnlock,
   createUnlockTraceId,
@@ -10455,16 +10962,16 @@ registerSourcePagesRoutes(app, {
   logUnlockEvent,
   normalizeSourcePageVideoGenerateItem,
   upsertSourceItemFromVideo,
-  ensureSourceItemUnlock,
+  ensureSourceItemUnlock: ensureSourceItemUnlockWithMirror,
   getTranscriptCooldownState,
-  reserveUnlock,
+  reserveUnlock: reserveUnlockWithMirror,
   sourceUnlockReservationSeconds,
   reserveCredits,
   refundReservation,
   buildUnlockLedgerIdempotencyKey,
-  failUnlock,
-  attachReservationLedger,
-  markUnlockProcessing,
+  failUnlock: failUnlockWithMirror,
+  attachReservationLedger: attachReservationLedgerWithMirror,
+  markUnlockProcessing: markUnlockProcessingWithMirror,
   countQueueDepth: countQueueDepthForAdmission,
   countQueueWorkItems: countQueueWorkItemsForAdmission,
   unlockIntakeEnabled,
@@ -10478,7 +10985,7 @@ registerSourcePagesRoutes(app, {
   scheduleQueuedIngestionProcessing,
   enqueueIngestionJob: enqueueIngestionJobWithMirror,
   settleReservation,
-  completeUnlock,
+  completeUnlock: completeUnlockWithMirror,
   runYouTubePipeline: (pipelineInput: any) => runYouTubePipeline(pipelineInput),
   getFailureTransition,
   sourceTranscriptMaxAttempts,
@@ -11176,6 +11683,8 @@ if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
     queue_admission_refresh_stale_ms: oracleControlPlaneConfig.queueAdmissionRefreshStaleMs,
     job_activity_mirror_enabled: oracleControlPlaneConfig.jobActivityMirrorEnabled,
     job_activity_bootstrap_limit: oracleControlPlaneConfig.jobActivityBootstrapLimit,
+    product_mirror_enabled: oracleControlPlaneConfig.productMirrorEnabled,
+    product_bootstrap_limit: oracleControlPlaneConfig.productBootstrapLimit,
     queue_sweep_high_interval_ms: oracleControlPlaneConfig.queueSweepHighIntervalMs,
     queue_sweep_medium_interval_ms: oracleControlPlaneConfig.queueSweepMediumIntervalMs,
     queue_sweep_low_interval_ms: oracleControlPlaneConfig.queueSweepLowIntervalMs,

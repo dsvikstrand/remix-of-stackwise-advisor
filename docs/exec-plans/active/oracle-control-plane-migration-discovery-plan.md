@@ -1020,6 +1020,8 @@ an1) [have] **Recommended first-phase backend flags**
 - `ORACLE_CONTROL_PLANE_SQLITE_PATH=/home/ubuntu/agentic-runtime/control-plane.sqlite`
 - `ORACLE_SUBSCRIPTION_BOOTSTRAP_BATCH=...`
 - `ORACLE_SUBSCRIPTION_SCHEDULER_TICK_MS=...`
+- `ORACLE_PRODUCT_MIRROR_ENABLED=false|true`
+- `ORACLE_PRODUCT_BOOTSTRAP_LIMIT=...`
 
 an2) [have] **Meaning**
 - `supabase`

@@ -238,6 +238,7 @@ export async function handleCreateSourceSubscription(req: express.Request, res: 
     .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, source_page_id, mode, auto_unlock_enabled, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
     .single();
   if (upsertError) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: upsertError.message, data: null });
+  await deps.syncOracleProductSubscriptions?.([upserted], 'subscription_upsert');
 
   let sync: SyncSubscriptionResult | null = null;
   try {
@@ -920,6 +921,7 @@ export async function handlePatchSourceSubscription(req: express.Request, res: e
     .maybeSingle();
   if (error) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: error.message, data: null });
   if (!data) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Subscription not found', data: null });
+  await deps.syncOracleProductSubscriptions?.([data], 'subscription_patch');
 
   return res.json({
     ok: true,
@@ -948,6 +950,7 @@ export async function handleDeleteSourceSubscription(req: express.Request, res: 
     .maybeSingle();
   if (error) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: error.message, data: null });
   if (!data) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Subscription not found', data: null });
+  await deps.syncOracleProductSubscriptions?.([data], 'subscription_deactivate');
 
   return res.json({
     ok: true,

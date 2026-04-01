@@ -65,6 +65,9 @@ async function readProfileHistoryResponse(input: {
     db,
     userId: input.profileUserId,
     normalizeTranscriptTruthStatus: input.deps.normalizeTranscriptTruthStatus,
+    readFeedRows: input.deps.readFeedRows,
+    readSourceRows: input.deps.readSourceRows,
+    readUnlockRows: input.deps.readUnlockRows,
   });
 
   const data: ProfileHistoryResponse = {

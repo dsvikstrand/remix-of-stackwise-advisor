@@ -303,14 +303,33 @@ export async function resolveProfileHistory(input: {
   userId: string;
   normalizeTranscriptTruthStatus: (value: unknown) => string;
   limit?: number;
+  readFeedRows?: (args: {
+    db: DbClient;
+    userId: string;
+    limit: number;
+    sourceItemIds?: string[];
+    requireBlueprint?: boolean;
+  }) => Promise<any[]>;
+  readSourceRows?: (args: {
+    db: DbClient;
+    sourceIds: string[];
+  }) => Promise<any[]>;
+  readUnlockRows?: (args: {
+    db: DbClient;
+    sourceIds: string[];
+  }) => Promise<any[]>;
 }): Promise<ResolvedProfileHistory> {
   const limit = Math.max(1, Math.min(500, Number(input.limit || 120)));
-  const { data: feedRowsData, error: feedError } = await input.db
-    .from('user_feed_items')
-    .select('id, user_id, source_item_id, blueprint_id, state, last_decision_code, created_at')
-    .eq('user_id', input.userId)
-    .order('created_at', { ascending: false })
-    .limit(limit);
+  const feedRowsResult = input.readFeedRows
+    ? { data: await input.readFeedRows({ db: input.db, userId: input.userId, limit }), error: null }
+    : await input.db
+      .from('user_feed_items')
+      .select('id, user_id, source_item_id, blueprint_id, state, last_decision_code, created_at')
+      .eq('user_id', input.userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+  const feedRowsData = feedRowsResult.data;
+  const feedError = feedRowsResult.error;
 
   if (feedError) throw feedError;
 
@@ -342,10 +361,15 @@ export async function resolveProfileHistory(input: {
     { data: latestBlueprintRowsData, error: latestBlueprintError },
   ] = await Promise.all([
     sourceIds.length
-      ? input.db
-        .from('source_items')
-        .select('id, source_channel_id, source_page_id, source_url, title, source_channel_title, thumbnail_url, metadata')
-        .in('id', sourceIds)
+      ? (input.readSourceRows
+        ? Promise.resolve({
+          data: input.readSourceRows({ db: input.db, sourceIds }),
+          error: null,
+        }).then(async (result) => ({ data: await result.data, error: result.error }))
+        : input.db
+          .from('source_items')
+          .select('id, source_channel_id, source_page_id, source_url, title, source_channel_title, thumbnail_url, metadata')
+          .in('id', sourceIds))
       : Promise.resolve({ data: [], error: null }),
     feedItemIds.length
       ? input.db
@@ -355,10 +379,15 @@ export async function resolveProfileHistory(input: {
         .order('created_at', { ascending: false })
       : Promise.resolve({ data: [], error: null }),
     sourceIds.length
-      ? input.db
-        .from('source_item_unlocks')
-        .select('source_item_id, status, blueprint_id, last_error_code, transcript_status, updated_at')
-        .in('source_item_id', sourceIds)
+      ? (input.readUnlockRows
+        ? Promise.resolve({
+          data: input.readUnlockRows({ db: input.db, sourceIds }),
+          error: null,
+        }).then(async (result) => ({ data: await result.data, error: result.error }))
+        : input.db
+          .from('source_item_unlocks')
+          .select('source_item_id, status, blueprint_id, last_error_code, transcript_status, updated_at')
+          .in('source_item_id', sourceIds))
       : Promise.resolve({ data: [], error: null }),
     sourceIds.length
       ? input.db
@@ -369,13 +398,24 @@ export async function resolveProfileHistory(input: {
         .order('updated_at', { ascending: false })
       : Promise.resolve({ data: [], error: null }),
     sourceIds.length
-      ? input.db
-        .from('user_feed_items')
-        .select('id, user_id, source_item_id, blueprint_id, state, last_decision_code, created_at')
-        .eq('user_id', input.userId)
-        .in('source_item_id', sourceIds)
-        .not('blueprint_id', 'is', null)
-        .order('created_at', { ascending: false })
+      ? (input.readFeedRows
+        ? Promise.resolve({
+          data: input.readFeedRows({
+            db: input.db,
+            userId: input.userId,
+            limit,
+            sourceItemIds: sourceIds,
+            requireBlueprint: true,
+          }),
+          error: null,
+        }).then(async (result) => ({ data: await result.data, error: result.error }))
+        : input.db
+          .from('user_feed_items')
+          .select('id, user_id, source_item_id, blueprint_id, state, last_decision_code, created_at')
+          .eq('user_id', input.userId)
+          .in('source_item_id', sourceIds)
+          .not('blueprint_id', 'is', null)
+          .order('created_at', { ascending: false }))
       : Promise.resolve({ data: [], error: null }),
   ]);
 

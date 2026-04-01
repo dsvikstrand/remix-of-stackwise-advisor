@@ -11,6 +11,8 @@ export type OracleControlPlaneConfig = {
   sqlitePath: string;
   bootstrapBatch: number;
   queueLedgerBootstrapLimit: number;
+  productMirrorEnabled: boolean;
+  productBootstrapLimit: number;
   schedulerTickMs: number;
   primaryMinTriggerIntervalMs: number;
   primaryBatchLimit: number;
@@ -87,6 +89,13 @@ export function readOracleControlPlaneConfig(
       1_000,
       50,
       10_000,
+    ),
+    productMirrorEnabled: parseRuntimeFlag(env.ORACLE_PRODUCT_MIRROR_ENABLED, false),
+    productBootstrapLimit: clampInt(
+      env.ORACLE_PRODUCT_BOOTSTRAP_LIMIT,
+      2_000,
+      100,
+      20_000,
     ),
     schedulerTickMs: clampInt(env.ORACLE_SUBSCRIPTION_SCHEDULER_TICK_MS, 300_000, 5_000, 60 * 60_000),
     primaryMinTriggerIntervalMs: clampInt(

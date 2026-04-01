@@ -76,6 +76,10 @@ export function registerWallRoutes(app: express.Express, deps: WallRouteDeps) {
         db,
         userId,
         normalizeTranscriptTruthStatus: deps.normalizeTranscriptTruthStatus,
+        readFeedRows: deps.readFeedRows,
+        readSourceRows: deps.readSourceRows,
+        readUnlockRows: deps.readUnlockRows,
+        readActiveSubscriptions: deps.readActiveSubscriptions,
       });
       return res.json({
         ok: true,

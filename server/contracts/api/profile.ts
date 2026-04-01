@@ -41,4 +41,7 @@ export type ProfileHistoryResponse = {
 export type ProfileRouteDeps = {
   getServiceSupabaseClient: () => DbClient | null;
   normalizeTranscriptTruthStatus: (value: unknown) => string;
+  readFeedRows?: any;
+  readSourceRows?: any;
+  readUnlockRows?: any;
 };

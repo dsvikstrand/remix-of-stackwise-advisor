@@ -309,24 +309,16 @@ app.get('/api/source-pages/:platform/:externalId', async (req, res) => {
     });
   }
 
-  const { count: linkedFollowerCount, error: linkedFollowerCountError } = await db
-    .from('user_source_subscriptions')
-    .select('id', { count: 'exact', head: true })
-    .eq('source_page_id', sourcePage.id)
-    .eq('is_active', true);
-  if (linkedFollowerCountError) {
-    return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: linkedFollowerCountError.message, data: null });
-  }
-
-  let followerCount = Number(linkedFollowerCount || 0);
-  if (followerCount === 0 && platform === 'youtube') {
-    const { count: fallbackFollowerCount } = await db
-      .from('user_source_subscriptions')
-      .select('id', { count: 'exact', head: true })
-      .eq('source_type', 'youtube')
-      .eq('source_channel_id', sourcePage.external_id)
-      .eq('is_active', true);
-    followerCount = Number(fallbackFollowerCount || 0);
+  let followerCount = 0;
+  try {
+    followerCount = await deps.countActiveSubscribersForSourcePage(db, sourcePage.id, platform === 'youtube' ? sourcePage.external_id : null);
+  } catch (followerCountError) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: followerCountError instanceof Error ? followerCountError.message : String(followerCountError),
+      data: null,
+    });
   }
 
   const userId = (res.locals.user as { id?: string } | undefined)?.id || null;

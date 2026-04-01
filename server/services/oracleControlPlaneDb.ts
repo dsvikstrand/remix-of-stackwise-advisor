@@ -136,6 +136,78 @@ type QueueLedgerStateTable = {
   updated_at: string;
 };
 
+type ProductSubscriptionStateTable = {
+  id: string;
+  user_id: string;
+  source_type: string;
+  source_channel_id: string | null;
+  source_channel_url: string | null;
+  source_channel_title: string | null;
+  source_page_id: string | null;
+  mode: string | null;
+  auto_unlock_enabled: number;
+  is_active: number;
+  last_polled_at: string | null;
+  last_seen_published_at: string | null;
+  last_seen_video_id: string | null;
+  last_sync_error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type ProductSourceItemStateTable = {
+  id: string;
+  source_type: string | null;
+  source_native_id: string | null;
+  canonical_key: string | null;
+  source_url: string | null;
+  title: string | null;
+  published_at: string | null;
+  ingest_status: string | null;
+  source_channel_id: string | null;
+  source_channel_title: string | null;
+  source_page_id: string | null;
+  thumbnail_url: string | null;
+  metadata_json: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type ProductUnlockStateTable = {
+  id: string;
+  source_item_id: string;
+  source_page_id: string | null;
+  status: string;
+  estimated_cost: number;
+  reserved_by_user_id: string | null;
+  reservation_expires_at: string | null;
+  reserved_ledger_id: string | null;
+  auto_unlock_intent_id: string | null;
+  blueprint_id: string | null;
+  job_id: string | null;
+  last_error_code: string | null;
+  last_error_message: string | null;
+  transcript_status: string | null;
+  transcript_attempt_count: number;
+  transcript_no_caption_hits: number;
+  transcript_last_probe_at: string | null;
+  transcript_retry_after: string | null;
+  transcript_probe_meta_json: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type ProductFeedStateTable = {
+  id: string;
+  user_id: string;
+  source_item_id: string | null;
+  blueprint_id: string | null;
+  state: string;
+  last_decision_code: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type OracleControlPlaneDatabase = {
   control_meta: ControlMetaTable;
   subscription_schedule_state: SubscriptionScheduleStateTable;
@@ -146,6 +218,10 @@ export type OracleControlPlaneDatabase = {
   queue_admission_count_state: QueueAdmissionCountStateTable;
   job_activity_state: JobActivityStateTable;
   queue_ledger_state: QueueLedgerStateTable;
+  product_subscription_state: ProductSubscriptionStateTable;
+  product_source_item_state: ProductSourceItemStateTable;
+  product_unlock_state: ProductUnlockStateTable;
+  product_feed_state: ProductFeedStateTable;
 };
 
 export type OracleControlPlaneDb = {
@@ -330,6 +406,108 @@ CREATE INDEX IF NOT EXISTS idx_queue_ledger_scope_status_next_run
 
 CREATE INDEX IF NOT EXISTS idx_queue_ledger_lease_expires
   ON queue_ledger_state (lease_expires_at);
+
+CREATE TABLE IF NOT EXISTS product_subscription_state (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  source_type TEXT NOT NULL,
+  source_channel_id TEXT,
+  source_channel_url TEXT,
+  source_channel_title TEXT,
+  source_page_id TEXT,
+  mode TEXT,
+  auto_unlock_enabled INTEGER NOT NULL DEFAULT 0,
+  is_active INTEGER NOT NULL DEFAULT 0,
+  last_polled_at TEXT,
+  last_seen_published_at TEXT,
+  last_seen_video_id TEXT,
+  last_sync_error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_product_subscription_user_page
+  ON product_subscription_state (user_id, source_page_id, updated_at);
+
+CREATE INDEX IF NOT EXISTS idx_product_subscription_user_channel
+  ON product_subscription_state (user_id, source_channel_id, updated_at);
+
+CREATE INDEX IF NOT EXISTS idx_product_subscription_page_active
+  ON product_subscription_state (source_page_id, is_active, updated_at);
+
+CREATE INDEX IF NOT EXISTS idx_product_subscription_channel_active
+  ON product_subscription_state (source_channel_id, is_active, updated_at);
+
+CREATE TABLE IF NOT EXISTS product_source_item_state (
+  id TEXT PRIMARY KEY,
+  source_type TEXT,
+  source_native_id TEXT,
+  canonical_key TEXT,
+  source_url TEXT,
+  title TEXT,
+  published_at TEXT,
+  ingest_status TEXT,
+  source_channel_id TEXT,
+  source_channel_title TEXT,
+  source_page_id TEXT,
+  thumbnail_url TEXT,
+  metadata_json TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_product_source_item_native
+  ON product_source_item_state (source_native_id, updated_at);
+
+CREATE INDEX IF NOT EXISTS idx_product_source_item_page
+  ON product_source_item_state (source_page_id, updated_at);
+
+CREATE TABLE IF NOT EXISTS product_unlock_state (
+  id TEXT PRIMARY KEY,
+  source_item_id TEXT NOT NULL,
+  source_page_id TEXT,
+  status TEXT NOT NULL,
+  estimated_cost REAL NOT NULL DEFAULT 0,
+  reserved_by_user_id TEXT,
+  reservation_expires_at TEXT,
+  reserved_ledger_id TEXT,
+  auto_unlock_intent_id TEXT,
+  blueprint_id TEXT,
+  job_id TEXT,
+  last_error_code TEXT,
+  last_error_message TEXT,
+  transcript_status TEXT,
+  transcript_attempt_count INTEGER NOT NULL DEFAULT 0,
+  transcript_no_caption_hits INTEGER NOT NULL DEFAULT 0,
+  transcript_last_probe_at TEXT,
+  transcript_retry_after TEXT,
+  transcript_probe_meta_json TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_product_unlock_source_item
+  ON product_unlock_state (source_item_id, updated_at);
+
+CREATE INDEX IF NOT EXISTS idx_product_unlock_job
+  ON product_unlock_state (job_id, updated_at);
+
+CREATE TABLE IF NOT EXISTS product_feed_state (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  source_item_id TEXT,
+  blueprint_id TEXT,
+  state TEXT NOT NULL,
+  last_decision_code TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_product_feed_user_created
+  ON product_feed_state (user_id, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_product_feed_user_source_created
+  ON product_feed_state (user_id, source_item_id, created_at);
 `;
 
 export function openOracleControlPlaneDb(input: {

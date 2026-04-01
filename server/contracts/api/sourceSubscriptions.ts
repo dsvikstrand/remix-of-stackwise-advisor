@@ -65,6 +65,7 @@ export type SourceSubscriptionsRouteDeps = {
   fetchYouTubeChannelAssetMap: any;
   runSourcePageAssetSweep?: any;
   ensureSourcePageFromYouTubeChannel: any;
+  syncOracleProductSubscriptions?: any;
   syncSingleSubscription: any;
   markSubscriptionSyncError: any;
   upsertSubscriptionNoticeSourceItem: any;

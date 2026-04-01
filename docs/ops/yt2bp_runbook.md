@@ -433,6 +433,8 @@ Required runtime variables:
 - `ORACLE_QUEUE_ADMISSION_REFRESH_STALE_MS` (default `15000`; maximum tolerated age for Oracle-local mirrored queue-admission counts before the backend refreshes them from Supabase)
 - `ORACLE_JOB_ACTIVITY_MIRROR_ENABLED` (default `false`; enables Oracle-local mirrored ingestion job activity for stale-running recovery, manual-refresh duplicate guards, retry/refresh pending-job dedupe, unlock-reliability job lookups, and user/ops latest-job reads; once `ORACLE_QUEUE_LEDGER_MODE=primary`, normal reads prefer the Oracle queue ledger and this mirror becomes fallback/bootstrap compatibility state instead of the main hot-path store)
 - `ORACLE_JOB_ACTIVITY_BOOTSTRAP_LIMIT` (default `1000`; number of recent durable ingestion jobs loaded into the local Oracle job-activity mirror during bootstrap)
+- `ORACLE_PRODUCT_MIRROR_ENABLED` (default `false`; enables Oracle-local mirrored product-state rows for subscriptions, source items, source-item unlocks, and recent feed rows so source-page access and related trust checks can prefer Oracle-local reads)
+- `ORACLE_PRODUCT_BOOTSTRAP_LIMIT` (default `2000`; number of recent `source_items`, `source_item_unlocks`, and `user_feed_items` rows loaded into the Oracle product mirror during bootstrap, while active subscriptions are merged in full)
 - `ORACLE_QUEUE_SWEEP_HIGH_INTERVAL_MS` (default `5000`; Oracle-local due interval for high-priority queue sweeps)
 - `ORACLE_QUEUE_SWEEP_MEDIUM_INTERVAL_MS` (default `15000`; Oracle-local due interval for medium-priority queue sweeps)
 - `ORACLE_QUEUE_SWEEP_LOW_INTERVAL_MS` (default `60000`; Oracle-local due interval for low-priority queue sweeps)

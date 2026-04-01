@@ -377,18 +377,41 @@ export async function listWallForYouFeed(input: {
   userId: string;
   normalizeTranscriptTruthStatus: (value: unknown) => string;
   limit?: number;
+  readFeedRows?: (args: {
+    db: DbClient;
+    userId: string;
+    limit: number;
+  }) => Promise<any[]>;
+  readSourceRows?: (args: {
+    db: DbClient;
+    sourceIds: string[];
+  }) => Promise<any[]>;
+  readUnlockRows?: (args: {
+    db: DbClient;
+    sourceIds: string[];
+  }) => Promise<any[]>;
+  readActiveSubscriptions?: (args: {
+    db: DbClient;
+    userId: string;
+  }) => Promise<any[]>;
 }) {
   const { db, userId, normalizeTranscriptTruthStatus, limit = 100 } = input;
-  const { data: feedRows, error: feedError } = await db
-    .from('user_feed_items')
-    .select('id, source_item_id, blueprint_id, state, last_decision_code, created_at')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(limit);
+  const feedRows = input.readFeedRows
+    ? { data: await input.readFeedRows({ db, userId, limit }), error: null }
+    : await db
+      .from('user_feed_items')
+      .select('id, source_item_id, blueprint_id, state, last_decision_code, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+  const resolvedFeedRows = Array.isArray((feedRows as any)?.data)
+    ? (feedRows as any).data
+    : feedRows;
+  const feedError = (feedRows as any)?.error || null;
   if (feedError) throw feedError;
-  if (!feedRows || feedRows.length === 0) return [] as WallForYouItem[];
+  if (!resolvedFeedRows || resolvedFeedRows.length === 0) return [] as WallForYouItem[];
 
-  const filteredFeedRows = feedRows.filter((row: any) => {
+  const filteredFeedRows = resolvedFeedRows.filter((row: any) => {
     const isLegacyPendingWithoutBlueprint =
       !row.blueprint_id && (row.state === 'my_feed_pending_accept' || row.state === 'my_feed_skipped');
     return !isLegacyPendingWithoutBlueprint;
@@ -400,15 +423,21 @@ export async function listWallForYouFeed(input: {
   const feedItemIds = filteredFeedRows.map((row: any) => row.id);
 
   const [{ data: sources, error: sourcesError }, { data: blueprints, error: blueprintsError }, { data: candidates, error: candidatesError }, { data: unlocks, error: unlocksError }, { data: subscriptions, error: subscriptionsError }] = await Promise.all([
-    db.from('source_items').select('id, source_channel_id, source_page_id, source_url, title, source_channel_title, thumbnail_url, metadata').in('id', sourceIds),
+    input.readSourceRows
+      ? Promise.resolve({ data: await input.readSourceRows({ db, sourceIds }), error: null })
+      : db.from('source_items').select('id, source_channel_id, source_page_id, source_url, title, source_channel_title, thumbnail_url, metadata').in('id', sourceIds),
     blueprintIds.length
       ? db.from('blueprints').select('id, creator_user_id, title, banner_url, preview_summary, is_public, likes_count').in('id', blueprintIds)
       : Promise.resolve({ data: [], error: null }),
     db.from('channel_candidates').select('id, user_feed_item_id, channel_slug, status, created_at').in('user_feed_item_id', feedItemIds).order('created_at', { ascending: false }),
     sourceIds.length
-      ? db.from('source_item_unlocks').select('source_item_id, status, estimated_cost, blueprint_id, last_error_code, transcript_status').in('source_item_id', sourceIds)
+      ? (input.readUnlockRows
+        ? Promise.resolve({ data: await input.readUnlockRows({ db, sourceIds }), error: null })
+        : db.from('source_item_unlocks').select('source_item_id, status, estimated_cost, blueprint_id, last_error_code, transcript_status').in('source_item_id', sourceIds))
       : Promise.resolve({ data: [], error: null }),
-    db.from('user_source_subscriptions').select('source_page_id, source_channel_id').eq('user_id', userId).eq('is_active', true),
+    input.readActiveSubscriptions
+      ? Promise.resolve({ data: await input.readActiveSubscriptions({ db, userId }), error: null })
+      : db.from('user_source_subscriptions').select('source_page_id, source_channel_id').eq('user_id', userId).eq('is_active', true),
   ]);
   if (sourcesError || blueprintsError || candidatesError || unlocksError || subscriptionsError) {
     throw sourcesError || blueprintsError || candidatesError || unlocksError || subscriptionsError;
