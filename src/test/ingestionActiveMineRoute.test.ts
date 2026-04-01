@@ -6,9 +6,40 @@ import {
   estimateStartSeconds,
   parseScopeCsv,
   pickLatestRelevantIngestionJob,
+  registerIngestionUserRoutes,
   resolveQueuePositionScopes,
   type ActiveIngestionJobRow,
 } from '../../server/routes/ingestion';
+
+function createMockApp() {
+  const handlers: Record<string, (req: unknown, res: unknown) => Promise<unknown>> = {};
+  return {
+    handlers,
+    get(path: string, ...args: Array<(req: unknown, res: unknown) => Promise<unknown>>) {
+      handlers[`GET ${path}`] = args[args.length - 1];
+      return this;
+    },
+  };
+}
+
+function createResponse(userId = 'user_1', authToken = 'auth_1') {
+  return {
+    locals: {
+      user: userId ? { id: userId } : undefined,
+      authToken,
+    } as Record<string, unknown>,
+    statusCode: 200,
+    body: null as unknown,
+    status(code: number) {
+      this.statusCode = code;
+      return this;
+    },
+    json(payload: unknown) {
+      this.body = payload;
+      return this;
+    },
+  };
+}
 
 describe('ingestion active-mine payload helpers', () => {
   it('builds summary and queue estimate fields for running and queued jobs', () => {
@@ -121,6 +152,144 @@ describe('ingestion active-mine payload helpers', () => {
       queue_ahead_count: null,
       estimated_start_seconds: null,
       is_position_estimate: true,
+    });
+  });
+});
+
+describe('ingestion user routes', () => {
+  it('uses the Oracle job mirror for user job detail lookups before falling back to Supabase', async () => {
+    const app = createMockApp();
+    const getUserIngestionJobById = async (input: { userId: string; jobId: string }) => ({
+      id: input.jobId,
+      trigger: 'user_sync',
+      scope: 'manual_refresh_selection',
+      status: 'running',
+      started_at: '2026-04-01T09:00:00.000Z',
+      finished_at: null,
+      processed_count: 1,
+      inserted_count: 0,
+      skipped_count: 0,
+      error_code: null,
+      error_message: null,
+      attempts: 1,
+      max_attempts: 3,
+      next_run_at: null,
+      lease_expires_at: null,
+      trace_id: 'trace_job_detail',
+      created_at: '2026-04-01T08:59:00.000Z',
+      updated_at: '2026-04-01T09:00:00.000Z',
+      requested_by_user_id: input.userId,
+    });
+
+    registerIngestionUserRoutes(app as any, {
+      getAuthedSupabaseClient: () => ({
+        from() {
+          throw new Error('Supabase detail fallback should not run when Oracle returns the job');
+        },
+      }) as any,
+      getServiceSupabaseClient: () => null,
+      getUserIngestionJobById,
+      clampInt: (_raw, fallback) => fallback,
+      ingestionLatestMineLimiter: (_req, _res, next) => next(),
+      workerConcurrency: 2,
+      queuedIngestionScopes: ['manual_refresh_selection'],
+      isQueuedIngestionScope: () => true,
+    });
+
+    const handler = app.handlers['GET /api/ingestion/jobs/:id([0-9a-fA-F-]{36})'];
+    const res = createResponse();
+    await handler({
+      params: { id: '11111111-1111-1111-1111-111111111111' },
+    } as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        job_id: '11111111-1111-1111-1111-111111111111',
+        scope: 'manual_refresh_selection',
+        trace_id: 'trace_job_detail',
+      },
+    });
+  });
+
+  it('uses Oracle queued-job ordering for active-mine positions before Supabase', async () => {
+    const app = createMockApp();
+
+    registerIngestionUserRoutes(app as any, {
+      getAuthedSupabaseClient: () => ({
+        from() {
+          throw new Error('Authed Supabase reads should not run for Oracle-backed active-mine rows');
+        },
+      }) as any,
+      getServiceSupabaseClient: () => ({
+        from() {
+          throw new Error('Service Supabase queue-position fallback should not run when Oracle provides queued rows');
+        },
+      }) as any,
+      listActiveUserIngestionJobs: async () => [{
+        id: 'job_queue_target',
+        trigger: 'user_sync',
+        scope: 'manual_refresh_selection',
+        status: 'queued',
+        started_at: null,
+        finished_at: null,
+        processed_count: 0,
+        inserted_count: 0,
+        skipped_count: 0,
+        error_code: null,
+        error_message: null,
+        attempts: 0,
+        max_attempts: 3,
+        next_run_at: '2026-04-01T10:00:00.000Z',
+        lease_expires_at: null,
+        trace_id: null,
+        payload: {
+          items: [{ title: 'Queued item' }],
+        },
+        created_at: '2026-04-01T09:58:00.000Z',
+        updated_at: '2026-04-01T09:58:00.000Z',
+      }],
+      listQueuedJobsForScopes: async () => [
+        {
+          id: 'job_queue_ahead',
+          next_run_at: '2026-04-01T09:59:00.000Z',
+          created_at: '2026-04-01T09:57:00.000Z',
+        },
+        {
+          id: 'job_queue_target',
+          next_run_at: '2026-04-01T10:00:00.000Z',
+          created_at: '2026-04-01T09:58:00.000Z',
+        },
+      ],
+      clampInt: (_raw, fallback) => fallback,
+      ingestionLatestMineLimiter: (_req, _res, next) => next(),
+      workerConcurrency: 2,
+      queuedIngestionScopes: ['manual_refresh_selection'],
+      isQueuedIngestionScope: (scope) => scope === 'manual_refresh_selection',
+    });
+
+    const handler = app.handlers['GET /api/ingestion/jobs/active-mine'];
+    const res = createResponse();
+    await handler({
+      query: {
+        positions: '1',
+      },
+    } as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        items: [
+          {
+            job_id: 'job_queue_target',
+            queue_position: 2,
+            queue_ahead_count: 1,
+            estimated_start_seconds: 4,
+          },
+        ],
+      },
     });
   });
 });

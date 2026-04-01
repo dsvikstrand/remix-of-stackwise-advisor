@@ -113,6 +113,7 @@
     - the route now caps that recent-row read to `2` rows for the requested user/scope
     - `GET /api/ingestion/jobs/active-mine` queue-position scans now narrow to requested or visible queued scopes instead of every queued ingestion scope
     - shared source-unlock trust restore now uses a slower baseline (`5m` poll / `30m` stale window), and Home `For You` no longer forces an extra resume refetch on mount
+    - Oracle job-activity mirror now also serves owner-scoped `GET /api/ingestion/jobs/:id`, Oracle-first active `all_active_subscriptions` duplicate guards, and Oracle-backed queue-position reads for `GET /api/ingestion/jobs/active-mine` before Supabase fallback
   - Durable generation trace writes are also slimmer:
     - generation run/event writes no longer request returned row payloads when callers do not consume them
     - event sequencing now reuses a per-run in-process cursor instead of re-reading the latest `seq` from Supabase before every event insert

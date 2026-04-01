@@ -51,6 +51,11 @@ export type TranscriptProxyDebugMode = 'disabled' | 'explicit';
 export type OpsRouteDeps = {
   isServiceRequestAuthorized: (req: express.Request) => boolean;
   getServiceSupabaseClient: () => DbClient | null;
+  getActiveIngestionJobForScope?: (input: { scope: string }) => Promise<{
+    id: string;
+    status: string;
+    started_at: string | null;
+  } | null>;
   getLatestIngestionJob?: () => Promise<any | null>;
   getQueueHealthSnapshot?: (input: {
     snapshotAtIso: string;

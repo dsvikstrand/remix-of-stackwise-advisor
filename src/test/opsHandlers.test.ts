@@ -735,6 +735,48 @@ describe('ingestion trigger handler', () => {
     expect(observeOracleAllActiveSubscriptionsTrigger).toHaveBeenCalledTimes(1);
   });
 
+  it('uses Oracle-first active scope checks to reject duplicate all_active_subscriptions work before Supabase fallback', async () => {
+    const req = {
+      header: () => '1',
+    } as never;
+    const res = createMockResponse();
+    const getActiveIngestionJobForScope = vi.fn(async () => ({
+      id: 'job_oracle_active',
+      status: 'running',
+      started_at: '2026-04-01T09:00:00.000Z',
+    }));
+    const observeOracleAllActiveSubscriptionsTrigger = vi.fn(async () => undefined);
+
+    await handleIngestionJobsTrigger(req, res as never, createBaseDeps({
+      getServiceSupabaseClient: () => ({
+        from() {
+          throw new Error('Supabase existing-job fallback should not run when Oracle returns an active scope job');
+        },
+      }) as any,
+      getActiveIngestionJobForScope,
+      observeOracleAllActiveSubscriptionsTrigger,
+      oraclePrimaryOwnsAllActiveSubscriptionsTrigger: true,
+    }));
+
+    expect(getActiveIngestionJobForScope).toHaveBeenCalledWith({
+      scope: 'all_active_subscriptions',
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toMatchObject({
+      ok: false,
+      error_code: 'JOB_ALREADY_RUNNING',
+      data: {
+        job_id: 'job_oracle_active',
+        status: 'running',
+      },
+    });
+    expect(observeOracleAllActiveSubscriptionsTrigger).toHaveBeenCalledWith({
+      actualDecisionCode: 'actual_existing_job',
+      existingJobId: 'job_oracle_active',
+      existingJobStatus: 'running',
+    });
+  });
+
   it('suppresses enqueue when the latest all_active_subscriptions job is inside the minimum interval gate', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-03-23T12:00:00.000Z'));

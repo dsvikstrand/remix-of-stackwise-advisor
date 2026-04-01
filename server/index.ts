@@ -1048,6 +1048,97 @@ async function listActiveUserIngestionJobsOracleFirst(input: {
   }
 }
 
+async function getUserIngestionJobByIdOracleFirst(input: {
+  userId: string;
+  jobId: string;
+}) {
+  const normalizedJobId = String(input.jobId || '').trim();
+  if (!oracleJobActivityMirrorEnabled || !oracleControlPlane || !normalizedJobId) {
+    return null;
+  }
+
+  try {
+    const rows = await listOracleJobsByIds({
+      controlDb: oracleControlPlane,
+      jobIds: [normalizedJobId],
+    });
+    const row = rows.find((candidate) => (
+      String(candidate.id || '').trim() === normalizedJobId
+      && String(candidate.requested_by_user_id || '').trim() === String(input.userId || '').trim()
+    ));
+    return row || null;
+  } catch (error) {
+    console.warn('[oracle-control-plane] job_activity_mirror_failed', JSON.stringify({
+      action: 'get_user_job_by_id',
+      job_id: normalizedJobId,
+      user_id: input.userId,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    return null;
+  }
+}
+
+async function getActiveIngestionJobForScopeOracleFirst(input: {
+  scope: string;
+}) {
+  if (!oracleJobActivityMirrorEnabled || !oracleControlPlane) {
+    return null;
+  }
+
+  try {
+    const rows = await listOracleActiveJobsForScope({
+      controlDb: oracleControlPlane,
+      scope: input.scope,
+      limit: 10,
+    });
+    const activeRow = rows[0];
+    return activeRow
+      ? {
+          id: activeRow.id,
+          status: activeRow.status,
+          started_at: activeRow.started_at,
+        }
+      : null;
+  } catch (error) {
+    console.warn('[oracle-control-plane] job_activity_mirror_failed', JSON.stringify({
+      action: 'get_active_for_scope',
+      scope: input.scope,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    return null;
+  }
+}
+
+async function listQueuedJobsForScopesOracleFirst(input: {
+  scopes: string[];
+}) {
+  if (!oracleJobActivityMirrorEnabled || !oracleControlPlane) {
+    return null;
+  }
+
+  try {
+    const rows = await listOracleActiveJobsForScopes({
+      controlDb: oracleControlPlane,
+      scopes: input.scopes,
+      limit: 5000,
+    });
+    return rows
+      .filter((row) => row.status === 'queued')
+      .map((row) => ({
+        id: row.id,
+        next_run_at: row.next_run_at,
+        created_at: row.created_at,
+      }));
+  } catch (error) {
+    console.warn('[oracle-control-plane] job_activity_mirror_failed', JSON.stringify({
+      action: 'list_queued_jobs_for_scopes',
+      scopes: input.scopes,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    return null;
+  }
+}
+
 function normalizeOracleJobPayload(raw: unknown) {
   return raw && typeof raw === 'object' && !Array.isArray(raw)
     ? raw as Record<string, unknown>
@@ -9189,8 +9280,10 @@ registerSourcePagesRoutes(app, {
 registerIngestionUserRoutes(app, {
   getAuthedSupabaseClient,
   getServiceSupabaseClient,
+  getUserIngestionJobById: getUserIngestionJobByIdOracleFirst,
   getLatestUserIngestionJobs: listLatestUserIngestionJobsOracleFirst,
   listActiveUserIngestionJobs: listActiveUserIngestionJobsOracleFirst,
+  listQueuedJobsForScopes: listQueuedJobsForScopesOracleFirst,
   clampInt,
   ingestionLatestMineLimiter,
   workerConcurrency,
@@ -9217,6 +9310,7 @@ registerNotificationRoutes(app, {
 registerOpsRoutes(app, {
   isServiceRequestAuthorized,
   getServiceSupabaseClient,
+  getActiveIngestionJobForScope: getActiveIngestionJobForScopeOracleFirst,
   getLatestIngestionJob: getLatestIngestionJobOracleFirst,
   getQueueHealthSnapshot: getQueueHealthSnapshotOracleFirst,
   recoverStaleIngestionJobs,

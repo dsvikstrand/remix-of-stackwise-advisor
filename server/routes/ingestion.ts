@@ -211,15 +211,30 @@ export function registerIngestionUserRoutes(app: express.Express, deps: Ingestio
     const db = deps.getAuthedSupabaseClient(authToken);
     if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
 
-    const { data, error } = await db
-      .from('ingestion_jobs')
-      .select(INGESTION_JOB_DETAIL_SELECT_COLUMNS)
-      .eq('id', req.params.id)
-      .eq('requested_by_user_id', userId)
-      .maybeSingle();
+    let data: any | null = null;
+    if (deps.getUserIngestionJobById) {
+      try {
+        data = await deps.getUserIngestionJobById({
+          userId,
+          jobId: req.params.id,
+        });
+      } catch {
+        data = null;
+      }
+    }
 
-    if (error) {
-      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error.message, data: null });
+    if (!data) {
+      const result = await db
+        .from('ingestion_jobs')
+        .select(INGESTION_JOB_DETAIL_SELECT_COLUMNS)
+        .eq('id', req.params.id)
+        .eq('requested_by_user_id', userId)
+        .maybeSingle();
+
+      if (result.error) {
+        return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: result.error.message, data: null });
+      }
+      data = result.data || null;
     }
     if (!data) {
       return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Ingestion job not found', data: null });
@@ -381,29 +396,47 @@ export function registerIngestionUserRoutes(app: express.Express, deps: Ingestio
       .map((row) => row.id);
 
     if (includePositions && queuedJobIds.length > 0) {
-      const serviceDb = deps.getServiceSupabaseClient();
-      if (serviceDb) {
-        let queueQuery = serviceDb
-          .from('ingestion_jobs')
-          .select('id, next_run_at, created_at')
-          .eq('status', 'queued')
-          .order('next_run_at', { ascending: true })
-          .order('created_at', { ascending: true })
-          .order('id', { ascending: true });
+      const queuedScopes = resolveQueuePositionScopes({
+        requestedScopes: scopes,
+        rows,
+        queuedIngestionScopes: deps.queuedIngestionScopes,
+      });
 
-        const queuedScopes = resolveQueuePositionScopes({
-          requestedScopes: scopes,
-          rows,
-          queuedIngestionScopes: deps.queuedIngestionScopes,
-        });
-        if (queuedScopes.length > 0) {
-          queueQuery = queueQuery.in('scope', queuedScopes);
+      let queueRows: QueueOrderRow[] | null = null;
+      if (deps.listQueuedJobsForScopes) {
+        try {
+          queueRows = await deps.listQueuedJobsForScopes({
+            scopes: queuedScopes,
+          });
+        } catch {
+          queueRows = null;
         }
+      }
 
-        const { data: queueRows, error: queueError } = await queueQuery;
-        if (!queueError && Array.isArray(queueRows)) {
-          queueAheadByJobId = buildQueueAheadByJobId(queueRows as QueueOrderRow[]);
+      if (!queueRows) {
+        const serviceDb = deps.getServiceSupabaseClient();
+        if (serviceDb) {
+          let queueQuery = serviceDb
+            .from('ingestion_jobs')
+            .select('id, next_run_at, created_at')
+            .eq('status', 'queued')
+            .order('next_run_at', { ascending: true })
+            .order('created_at', { ascending: true })
+            .order('id', { ascending: true });
+
+          if (queuedScopes.length > 0) {
+            queueQuery = queueQuery.in('scope', queuedScopes);
+          }
+
+          const { data: fallbackRows, error: queueError } = await queueQuery;
+          if (!queueError && Array.isArray(fallbackRows)) {
+            queueRows = fallbackRows as QueueOrderRow[];
+          }
         }
+      }
+
+      if (Array.isArray(queueRows)) {
+        queueAheadByJobId = buildQueueAheadByJobId(queueRows);
       }
     }
 

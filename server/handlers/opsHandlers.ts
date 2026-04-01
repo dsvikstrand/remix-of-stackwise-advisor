@@ -61,14 +61,29 @@ export async function handleIngestionJobsTrigger(req: express.Request, res: expr
   };
   let oraclePrimaryDecision: Awaited<ReturnType<NonNullable<OpsRouteDeps['resolveOracleAllActiveSubscriptionsPrimaryDecision']>>> = null;
 
-  const selectExistingJob = async () => db
-    .from('ingestion_jobs')
-    .select('id, status, started_at')
-    .eq('scope', 'all_active_subscriptions')
-    .in('status', ['queued', 'running'])
-    .order('started_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const selectExistingJob = async () => {
+    if (deps.getActiveIngestionJobForScope) {
+      try {
+        const oracleJob = await deps.getActiveIngestionJobForScope({
+          scope: 'all_active_subscriptions',
+        });
+        if (oracleJob || deps.oraclePrimaryOwnsAllActiveSubscriptionsTrigger) {
+          return { data: oracleJob, error: null };
+        }
+      } catch {
+        // Fall through to Supabase for non-primary / transient mirror failures.
+      }
+    }
+
+    return db
+      .from('ingestion_jobs')
+      .select('id, status, started_at')
+      .eq('scope', 'all_active_subscriptions')
+      .in('status', ['queued', 'running'])
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+  };
   let { data: existingJob, error: runningJobError } = await selectExistingJob();
   if (runningJobError) {
     return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: runningJobError.message, data: null });
