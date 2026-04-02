@@ -6,7 +6,7 @@ import {
 
 type DbClient = any;
 
-function formatUnknownError(error: unknown) {
+export function formatUnknownError(error: unknown) {
   if (error instanceof Error) {
     const base = {
       message: error.message,
@@ -41,6 +41,36 @@ function formatUnknownError(error: unknown) {
   return {
     message: String(error),
   };
+}
+
+export function summarizeSubscriptionSyncError(error: unknown) {
+  const payload = formatUnknownError(error);
+  const summary = {
+    message: normalizeNullableText(payload.message) || 'Unknown error',
+  } as Record<string, string>;
+  const code = normalizeNullableText(payload.code);
+  const details = normalizeNullableText(payload.details);
+  const hint = normalizeNullableText(payload.hint);
+  if (code) summary.code = code;
+  if (details) summary.details = details;
+  if (hint) summary.hint = hint;
+  return summary;
+}
+
+export function formatSubscriptionSyncErrorMessage(error: unknown) {
+  const summary = summarizeSubscriptionSyncError(error);
+  const parts = [summary.code ? `${summary.code}: ${summary.message}` : summary.message];
+  if (summary.details && summary.details !== summary.message) {
+    parts.push(`details=${summary.details}`);
+  }
+  if (
+    summary.hint
+    && summary.hint !== summary.message
+    && summary.hint !== summary.details
+  ) {
+    parts.push(`hint=${summary.hint}`);
+  }
+  return parts.join(' | ').slice(0, 500);
 }
 
 type SyncSubscriptionResult = {

@@ -3,7 +3,9 @@ import {
   buildSubscriptionSyncErrorUpdate,
   buildSubscriptionSyncSuccessUpdate,
   createSourceSubscriptionSyncService,
+  formatSubscriptionSyncErrorMessage,
   SUBSCRIPTION_SYNC_ERROR_WRITE_HEARTBEAT_MINUTES,
+  summarizeSubscriptionSyncError,
 } from '../../server/services/sourceSubscriptionSync';
 import { createMockSupabase } from './helpers/mockSupabase';
 
@@ -432,6 +434,41 @@ describe('source subscription sync service', () => {
       last_polled_at: nowIso,
       last_sync_error: 'SYNC_FAILED',
     });
+  });
+
+  it('formats object-shaped subscription errors into readable text', () => {
+    expect(summarizeSubscriptionSyncError({
+      message: 'SYNC_FAILED',
+      code: '23505',
+      details: 'duplicate key value violates unique constraint',
+      hint: 'Retry with a different key',
+    })).toEqual({
+      message: 'SYNC_FAILED',
+      code: '23505',
+      details: 'duplicate key value violates unique constraint',
+      hint: 'Retry with a different key',
+    });
+
+    expect(formatSubscriptionSyncErrorMessage({
+      message: 'SYNC_FAILED',
+      code: '23505',
+      details: 'duplicate key value violates unique constraint',
+      hint: 'Retry with a different key',
+    })).toBe(
+      '23505: SYNC_FAILED | details=duplicate key value violates unique constraint | hint=Retry with a different key',
+    );
+  });
+
+  it('formats Error instances with structured fields into readable text', () => {
+    const error = Object.assign(new Error('WRITE_FAILED'), {
+      code: 'WRITE_FAILED',
+      details: 'source_item_id=abc',
+      hint: 'retry later',
+    });
+
+    expect(formatSubscriptionSyncErrorMessage(error)).toBe(
+      'WRITE_FAILED: WRITE_FAILED | details=source_item_id=abc | hint=retry later',
+    );
   });
 
   it('retries transient feed fetch failures before succeeding', async () => {

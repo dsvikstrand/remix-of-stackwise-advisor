@@ -143,6 +143,7 @@
     - Blueprint YouTube refresh pending-job dedupe now also goes through a centralized Oracle-first helper in runtime, so the refresh service does not own a separate hot-path `ingestion_jobs` fallback query during normal production operation
     - ops trigger scope-latest checks now also route through a centralized runtime helper, so `all_active_subscriptions` suppression logic no longer depends on a handler-local direct `ingestion_jobs` query in the normal path
     - subscription feed fetch failures are now classified/hardened on the Oracle-primary path: transient YouTube feed `5xx/network` errors retry inside the sync before being downgraded to soft per-subscription outcomes, `404` feed failures try stale-channel recovery from the stored channel URL before backing off to a quieter revisit interval, and soft per-subscription feed failures no longer poison an otherwise healthy `all_active_subscriptions` batch
+    - subscription cron hard failures now also persist readable `last_sync_error` and terminal `PARTIAL_FAILURE` samples (`message`, plus `code/details/hint` when present) and emit structured `subscription_sync_hard_failed` logs; `[object Object]` in these fields should now be treated as a regression
   - Durable generation trace writes are also slimmer:
     - generation run/event writes no longer request returned row payloads when callers do not consume them
     - event sequencing now reuses a per-run in-process cursor instead of re-reading the latest `seq` from Supabase before every event insert

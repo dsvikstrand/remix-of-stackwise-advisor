@@ -325,6 +325,8 @@ import { createAutoBannerQueueService } from './services/autoBannerQueue';
 import {
   buildSubscriptionSyncErrorUpdate,
   createSourceSubscriptionSyncService,
+  formatSubscriptionSyncErrorMessage,
+  summarizeSubscriptionSyncError,
 } from './services/sourceSubscriptionSync';
 import { createNotificationPushDispatcherController } from './services/notificationPushDispatcherController';
 import { createBlueprintCreationService } from './services/blueprintCreation';
@@ -13096,11 +13098,19 @@ async function processAllActiveSubscriptionsJob(input: {
             });
           }
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
+          const errorMessage = formatSubscriptionSyncErrorMessage(error);
           failures.push({
             subscription_id: subscription.id,
             error: errorMessage,
           });
+          console.log('[subscription_sync_hard_failed]', JSON.stringify({
+            subscription_id: subscription.id,
+            user_id: subscription.user_id,
+            source_channel_id: subscription.source_channel_id,
+            source_channel_title: subscription.source_channel_title || null,
+            trigger: 'service_cron',
+            error: summarizeSubscriptionSyncError(error),
+          }));
           await markSubscriptionSyncError(db, subscription, error);
           if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
             await recordOracleSubscriptionSyncOutcome({
@@ -13154,6 +13164,14 @@ async function processAllActiveSubscriptionsJob(input: {
         soft_failure_count: softFailureCount,
         hard_failure_count: failures.length,
         soft_failure_samples: softFailureSamples,
+      }));
+    }
+    if (failures.length > 0) {
+      console.log('[subscription_batch_hard_failure_summary]', JSON.stringify({
+        job_id: input.jobId,
+        batch_count: batchCount,
+        hard_failure_count: failures.length,
+        hard_failure_samples: failures.slice(0, 10),
       }));
     }
   } catch (error) {
@@ -14111,7 +14129,7 @@ async function markSubscriptionSyncError(
   subscription: string | { id: string; last_polled_at?: string | null; last_sync_error?: string | null },
   err: unknown,
 ) {
-  const message = err instanceof Error ? err.message : String(err);
+  const message = formatSubscriptionSyncErrorMessage(err);
   const nowIso = new Date().toISOString();
   const update = buildSubscriptionSyncErrorUpdate({
     subscription: typeof subscription === 'string' ? null : subscription,
