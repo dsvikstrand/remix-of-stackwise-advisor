@@ -84,7 +84,7 @@
   - `POST /api/source-pages/:platform/:externalId/videos/unlock` (auth shared unlock + async generation queue for selected source videos)
     - rate policy: burst `8/10s` + sustained `120/10m` per user/IP.
     - additive response field: `data.trace_id` for unlock tracing.
-    - failure semantics: if unlock preparation fails before queue insert, the route should return an explicit prepare-failed result instead of reporting `in_progress`; impossible `in_progress` responses with an `available` unlock row are a bug and should be rejected the same way. Oracle-primary unlock mutation errors should fall back to the base Supabase mutation path and then resync Oracle shadows from the known durable row.
+    - failure semantics: if unlock preparation fails before queue insert, the route should return an explicit prepare-failed result instead of reporting `in_progress`; impossible `in_progress` responses with an `available` unlock row are a bug and should be rejected the same way. Oracle-primary unlock mutation errors should fall back to the base Supabase mutation path and then resync Oracle shadows from the known durable row, and that fallback path now normalizes legacy `transcript_probe_meta = null` rows back to `{}` before reserve/ensure updates.
   - `POST /api/source-pages/:platform/:externalId/subscribe` (auth)
   - `DELETE /api/source-pages/:platform/:externalId/subscribe` (auth)
   - Frontend trust status now resumes unlock jobs via `GET /api/ingestion/jobs/latest-mine?scope=source_item_unlock_generation` after reload.

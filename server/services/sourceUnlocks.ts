@@ -15,6 +15,12 @@ function asNumber(value: string | number | null | undefined, fallback = 0) {
   return parsed;
 }
 
+function normalizeTranscriptProbeMeta(value: unknown) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
 export type SourceUnlockStatus = 'available' | 'reserved' | 'processing' | 'ready';
 export type UnlockTranscriptStatus = 'unknown' | 'retrying' | 'confirmed_no_speech' | 'transient_error';
 
@@ -123,6 +129,7 @@ export async function ensureSourceItemUnlock(db: DbClient, input: {
         .update({
           estimated_cost: nextCost,
           source_page_id: nextSourcePageId,
+          transcript_probe_meta: normalizeTranscriptProbeMeta(existing.transcript_probe_meta),
         })
         .eq('id', existing.id)
         .select(unlockSelect)
@@ -141,6 +148,7 @@ export async function ensureSourceItemUnlock(db: DbClient, input: {
       source_page_id: input.sourcePageId || null,
       status: 'available',
       estimated_cost: round3(input.estimatedCost),
+      transcript_probe_meta: {},
     })
     .select(unlockSelect)
     .single();
@@ -178,6 +186,7 @@ async function transitionToAvailable(db: DbClient, unlock: SourceItemUnlockRow) 
       reservation_expires_at: null,
       reserved_ledger_id: null,
       auto_unlock_intent_id: null,
+      transcript_probe_meta: normalizeTranscriptProbeMeta(unlock.transcript_probe_meta),
     })
     .eq('id', unlock.id)
     .eq('updated_at', unlock.updated_at)
@@ -240,6 +249,7 @@ export async function reserveUnlock(db: DbClient, input: {
       auto_unlock_intent_id: unlock.auto_unlock_intent_id || null,
       last_error_code: null,
       last_error_message: null,
+      transcript_probe_meta: normalizeTranscriptProbeMeta(unlock.transcript_probe_meta),
     })
     .eq('id', unlock.id)
     .eq('updated_at', unlock.updated_at)

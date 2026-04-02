@@ -16,6 +16,7 @@ function createAvailableUnlockRow(): SourceItemUnlockRow {
     job_id: null,
     last_error_code: null,
     last_error_message: null,
+    transcript_probe_meta: null,
     created_at: '2026-02-20T10:00:00.000Z',
     updated_at: '2026-02-20T10:00:00.000Z',
   };
@@ -68,5 +69,21 @@ describe('source unlock race semantics', () => {
     expect(result.reservedNow).toBe(false);
     expect(result.unlock.blueprint_id).toBe('bp_1');
   });
-});
 
+  it('normalizes legacy null transcript probe metadata during reserve', async () => {
+    const initialUnlock = createAvailableUnlockRow();
+    const db = createMockSupabase({
+      source_item_unlocks: [initialUnlock],
+    }) as any;
+
+    const result = await reserveUnlock(db, {
+      unlock: { ...initialUnlock, transcript_probe_meta: null },
+      userId: 'user_a',
+      estimatedCost: 1,
+      reservationSeconds: 300,
+    });
+
+    expect(result.state).toBe('reserved');
+    expect(result.unlock.transcript_probe_meta).toEqual({});
+  });
+});

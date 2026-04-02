@@ -4,7 +4,7 @@ Status: `on-pause`
 
 Update note 2026-04-02:
 - Personal feed consistency now requires reusable ready blueprints to rebind onto the viewer's existing feed row, not only exist globally, so `Generate` and Home stay aligned for search/manual generation.
-- Source-page unlock preparation now also treats Oracle-primary mutation wrapper failures as an explicit fallback case: runtime should fall back to the durable Supabase unlock mutation path, resync Oracle shadows from the known row, and only report `in_progress` when real work was queued or already running rather than an impossible still-`available` unlock row.
+- Source-page unlock preparation now also treats Oracle-primary mutation wrapper failures as an explicit fallback case: runtime should fall back to the durable Supabase unlock mutation path, resync Oracle shadows from the known row, and only report `in_progress` when real work was queued or already running rather than an impossible still-`available` unlock row; fallback reserve/ensure writes now also normalize legacy `transcript_probe_meta = null` unlock rows back to `{}` so the Supabase shadow update can succeed.
 
 ## Objective
 Deliver the remaining `bleuV1` MVP through a manual iterative build loop with clear checkpoints and low ambiguity.

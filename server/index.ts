@@ -2289,7 +2289,7 @@ function normalizeSourceItemUnlockRow(
     transcript_no_caption_hits: normalizeCount(input.transcript_no_caption_hits),
     transcript_last_probe_at: normalizeIsoDateOrNull(input.transcript_last_probe_at),
     transcript_retry_after: normalizeIsoDateOrNull(input.transcript_retry_after),
-    transcript_probe_meta: normalizeObject(input.transcript_probe_meta),
+    transcript_probe_meta: normalizeObject(input.transcript_probe_meta) || {},
     created_at: createdAt,
     updated_at: updatedAt,
   };
@@ -2321,7 +2321,7 @@ function buildPatchedSourceItemUnlockRow(input: {
     transcript_no_caption_hits: pickPatchedValue(input.patch, 'transcript_no_caption_hits', current?.transcript_no_caption_hits || 0),
     transcript_last_probe_at: pickPatchedValue(input.patch, 'transcript_last_probe_at', current?.transcript_last_probe_at || null),
     transcript_retry_after: pickPatchedValue(input.patch, 'transcript_retry_after', current?.transcript_retry_after || null),
-    transcript_probe_meta: pickPatchedValue(input.patch, 'transcript_probe_meta', current?.transcript_probe_meta || null),
+    transcript_probe_meta: pickPatchedValue(input.patch, 'transcript_probe_meta', current?.transcript_probe_meta || {}),
     created_at: pickPatchedValue(input.patch, 'created_at', current?.created_at || nowIso),
     updated_at: pickPatchedValue(input.patch, 'updated_at', nowIso),
   }, nowIso);
