@@ -4,16 +4,19 @@ import { parseRuntimeFlag } from './runtimeConfig';
 export type OracleSubscriptionSchedulerMode = 'supabase' | 'shadow' | 'primary';
 export type OracleQueueLedgerMode = 'supabase' | 'dual' | 'primary';
 export type OracleSubscriptionLedgerMode = 'supabase' | 'dual' | 'primary';
+export type OracleUnlockLedgerMode = 'supabase' | 'dual' | 'primary';
 
 export type OracleControlPlaneConfig = {
   enabled: boolean;
   subscriptionSchedulerMode: OracleSubscriptionSchedulerMode;
   queueLedgerMode: OracleQueueLedgerMode;
   subscriptionLedgerMode: OracleSubscriptionLedgerMode;
+  unlockLedgerMode: OracleUnlockLedgerMode;
   sqlitePath: string;
   bootstrapBatch: number;
   queueLedgerBootstrapLimit: number;
   subscriptionLedgerBootstrapLimit: number;
+  unlockLedgerBootstrapLimit: number;
   productMirrorEnabled: boolean;
   productBootstrapLimit: number;
   schedulerTickMs: number;
@@ -72,6 +75,13 @@ function normalizeOracleSubscriptionLedgerMode(raw: string | undefined): OracleS
   return 'supabase';
 }
 
+function normalizeOracleUnlockLedgerMode(raw: string | undefined): OracleUnlockLedgerMode {
+  const normalized = String(raw || '').trim().toLowerCase();
+  if (normalized === 'dual') return 'dual';
+  if (normalized === 'primary') return 'primary';
+  return 'supabase';
+}
+
 export function readOracleControlPlaneConfig(
   env: NodeJS.ProcessEnv,
   input?: { cwd?: string },
@@ -95,6 +105,9 @@ export function readOracleControlPlaneConfig(
     subscriptionLedgerMode: enabled
       ? normalizeOracleSubscriptionLedgerMode(env.ORACLE_SUBSCRIPTION_LEDGER_MODE)
       : 'supabase',
+    unlockLedgerMode: enabled
+      ? normalizeOracleUnlockLedgerMode(env.ORACLE_UNLOCK_LEDGER_MODE)
+      : 'supabase',
     sqlitePath,
     bootstrapBatch: clampInt(env.ORACLE_SUBSCRIPTION_BOOTSTRAP_BATCH, 250, 10, 5000),
     queueLedgerBootstrapLimit: clampInt(
@@ -105,6 +118,12 @@ export function readOracleControlPlaneConfig(
     ),
     subscriptionLedgerBootstrapLimit: clampInt(
       env.ORACLE_SUBSCRIPTION_LEDGER_BOOTSTRAP_LIMIT,
+      10_000,
+      100,
+      100_000,
+    ),
+    unlockLedgerBootstrapLimit: clampInt(
+      env.ORACLE_UNLOCK_LEDGER_BOOTSTRAP_LIMIT,
       10_000,
       100,
       100_000,

@@ -155,6 +155,30 @@ type SubscriptionLedgerStateTable = {
   updated_at: string;
 };
 
+type UnlockLedgerStateTable = {
+  id: string;
+  source_item_id: string;
+  source_page_id: string | null;
+  status: string;
+  estimated_cost: number;
+  reserved_by_user_id: string | null;
+  reservation_expires_at: string | null;
+  reserved_ledger_id: string | null;
+  auto_unlock_intent_id: string | null;
+  blueprint_id: string | null;
+  job_id: string | null;
+  last_error_code: string | null;
+  last_error_message: string | null;
+  transcript_status: string | null;
+  transcript_attempt_count: number;
+  transcript_no_caption_hits: number;
+  transcript_last_probe_at: string | null;
+  transcript_retry_after: string | null;
+  transcript_probe_meta_json: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 type ProductSubscriptionStateTable = {
   id: string;
   user_id: string;
@@ -238,6 +262,7 @@ export type OracleControlPlaneDatabase = {
   job_activity_state: JobActivityStateTable;
   queue_ledger_state: QueueLedgerStateTable;
   subscription_ledger_state: SubscriptionLedgerStateTable;
+  unlock_ledger_state: UnlockLedgerStateTable;
   product_subscription_state: ProductSubscriptionStateTable;
   product_source_item_state: ProductSourceItemStateTable;
   product_unlock_state: ProductUnlockStateTable;
@@ -463,6 +488,45 @@ CREATE INDEX IF NOT EXISTS idx_subscription_ledger_page_active_updated
 
 CREATE INDEX IF NOT EXISTS idx_subscription_ledger_channel_active_updated
   ON subscription_ledger_state (source_channel_id, is_active, updated_at);
+
+CREATE TABLE IF NOT EXISTS unlock_ledger_state (
+  id TEXT PRIMARY KEY,
+  source_item_id TEXT NOT NULL,
+  source_page_id TEXT,
+  status TEXT NOT NULL,
+  estimated_cost REAL NOT NULL DEFAULT 0,
+  reserved_by_user_id TEXT,
+  reservation_expires_at TEXT,
+  reserved_ledger_id TEXT,
+  auto_unlock_intent_id TEXT,
+  blueprint_id TEXT,
+  job_id TEXT,
+  last_error_code TEXT,
+  last_error_message TEXT,
+  transcript_status TEXT,
+  transcript_attempt_count INTEGER NOT NULL DEFAULT 0,
+  transcript_no_caption_hits INTEGER NOT NULL DEFAULT 0,
+  transcript_last_probe_at TEXT,
+  transcript_retry_after TEXT,
+  transcript_probe_meta_json TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_unlock_ledger_source_item_unique
+  ON unlock_ledger_state (source_item_id);
+
+CREATE INDEX IF NOT EXISTS idx_unlock_ledger_status_updated
+  ON unlock_ledger_state (status, updated_at);
+
+CREATE INDEX IF NOT EXISTS idx_unlock_ledger_status_reservation
+  ON unlock_ledger_state (status, reservation_expires_at, updated_at);
+
+CREATE INDEX IF NOT EXISTS idx_unlock_ledger_job_updated
+  ON unlock_ledger_state (job_id, updated_at);
+
+CREATE INDEX IF NOT EXISTS idx_unlock_ledger_page_updated
+  ON unlock_ledger_state (source_page_id, updated_at);
 
 CREATE TABLE IF NOT EXISTS product_subscription_state (
   id TEXT PRIMARY KEY,

@@ -158,6 +158,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Current runtime note: Source Page `Video Library` now loads on explicit user request instead of auto-fetching on page open.
 - Step 20 safety follow-up tunes source-page list limiter policy to burst+sustained guardrails and frontend caching to avoid normal-flow 429 churn.
 - Step 21 shared unlock + daily credit wallet adds wallet/ledger economics (`user_credit_wallets`, `credit_ledger`) plus source-video unlock state (`source_item_unlocks`) for one-generation-per-source-item.
+- Current runtime note: durable `source_item_unlocks` ownership is now also staged on Oracle behind `ORACLE_UNLOCK_LEDGER_MODE=supabase|dual|primary`, while wallet and credit-ledger truth remain on Supabase.
 - Step 21 source-page generation endpoint shifted to `POST /videos/unlock`; the earlier `/videos/generate` compatibility alias mentioned here was later retired, while subscription new uploads moved to `my_feed_unlockable` cards instead of immediate generation.
 - Step 21 follow-up removes strict unlock cooldown in favor of soft request caps (`8/10s` burst + `120/10m` sustained) and immediate credit cache refresh after unlock actions.
 - Step 22 Home scope split repurposes `/wall` `For You` to subscribed-source mixed stream (locked + unlocked) and adds `Your channels` as the unchanged followed-channel ranked lane.
