@@ -680,6 +680,63 @@ describe('source page handlers', () => {
     });
   });
 
+  it('rejects impossible in-progress unlock states', async () => {
+    const app = createMockApp();
+    const authDb = createMockSupabase({
+      user_source_subscriptions: [{
+        id: 'sub_1',
+        user_id: '00000000-0000-0000-0000-000000000001',
+        source_type: 'youtube',
+        source_channel_id: 'channel_1',
+        source_page_id: 'page_1',
+        is_active: true,
+      }],
+    }) as any;
+    const serviceDb = createMockSupabase({}) as any;
+
+    registerSourcePagesRouteHandlers(app as any, createDeps({
+      getAuthedSupabaseClient: () => authDb,
+      getServiceSupabaseClient: () => serviceDb,
+      reserveUnlock: vi.fn(async (db: any, input: any) => ({
+        ok: true,
+        state: 'in_progress',
+        reservedNow: false,
+        unlock: {
+          ...input.unlock,
+          status: 'available',
+        },
+      })),
+    }));
+
+    const handler = app.handlers['POST /api/source-pages/:platform/:externalId/videos/unlock'];
+    const req = {
+      params: { platform: 'youtube', externalId: 'channel_1' },
+      body: {
+        items: [{
+          video_id: 'video_weird',
+          video_url: 'https://youtube.com/watch?v=video_weird',
+          title: 'Weird Video',
+        }],
+      },
+    } as any;
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(500);
+    expect(res.body).toMatchObject({
+      ok: false,
+      error_code: 'SOURCE_VIDEO_GENERATE_FAILED',
+      data: {
+        prepare_failed_count: 1,
+        prepare_failed: [{
+          video_id: 'video_weird',
+          title: 'Weird Video',
+        }],
+      },
+    });
+  });
+
   it('blocks source page unlock generation for videos inside the 24h blueprint cooldown window', async () => {
     const app = createMockApp();
     const authDb = createMockSupabase({

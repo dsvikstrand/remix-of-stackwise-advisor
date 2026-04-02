@@ -4993,7 +4993,20 @@ async function reserveUnlockWithMirror(
         reservedNow: persisted.updated_at === nextRow.updated_at,
       };
     }
-    return { ok: true as const, state: 'in_progress' as const, unlock: persisted, reservedNow: false };
+    if (persisted.status === 'reserved' || persisted.status === 'processing') {
+      return { ok: true as const, state: 'in_progress' as const, unlock: persisted, reservedNow: false };
+    }
+
+    logUnlockPrimaryMutationFallback({
+      action: 'reserve_unlock_reconcile',
+      unlockId: input.unlock.id,
+      sourceItemId: input.unlock.source_item_id,
+      error: `UNEXPECTED_POST_RESERVE_STATE:${persisted.status}`,
+    });
+    const result = await reserveUnlock(db, input);
+    await upsertOracleUnlockLedgerFromKnownRow(result.unlock as unknown as Record<string, unknown>, 'reserve_unlock_reconcile_fallback');
+    await upsertOracleProductUnlocksFromKnownRows([result.unlock as unknown as Record<string, unknown>], 'reserve_unlock_reconcile_fallback');
+    return result;
   } catch (error) {
     logUnlockPrimaryMutationFallback({
       action: 'reserve_unlock',

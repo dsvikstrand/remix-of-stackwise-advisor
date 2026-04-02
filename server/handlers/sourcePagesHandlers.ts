@@ -981,6 +981,10 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       }
 
       if (reserveResult.state === 'in_progress') {
+        const unlockStatus = String(reserveResult.unlock?.status || '').trim().toLowerCase();
+        if (unlockStatus !== 'reserved' && unlockStatus !== 'processing') {
+          throw new Error(`INVALID_UNLOCK_IN_PROGRESS_STATE:${unlockStatus || 'unknown'}`);
+        }
         inProgressRows.push({
           video_id: item.video_id,
           title: item.title,

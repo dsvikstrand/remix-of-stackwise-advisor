@@ -4,7 +4,7 @@ Status: `on-pause`
 
 Update note 2026-04-02:
 - Search/manual generation ready-duplicate handling now upgrades an existing locked `user_feed_items` row via feed-row upsert instead of plain insert, fixing the case where the backend reports `skipped_existing` but the user wall remains locked.
-- Source-page unlock preparation now also treats Oracle-primary unlock wrapper failures as a safe fallback case: the route should fail explicitly instead of pretending the item is already `in_progress`, while runtime falls back to the durable Supabase unlock mutation path and resyncs Oracle shadows from the known row.
+- Source-page unlock preparation now also treats Oracle-primary unlock wrapper failures as a safe fallback case: the route should fail explicitly instead of pretending the item is already `in_progress`, including impossible still-`available` unlock rows, while runtime falls back to the durable Supabase unlock mutation path and resyncs Oracle shadows from the known row.
 
 ## Goal
 Convert the current feature-complete MVP into a stable, clear, and scalable product surface by hardening UX trust, runtime reliability, and engineering foundations.
