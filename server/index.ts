@@ -3474,10 +3474,17 @@ function normalizeSourceItemRow(row: Record<string, unknown>, nowIso?: string): 
 }
 
 function mergeSourceItemRows(rows: Array<Record<string, unknown> | null | undefined>) {
+  return mergeNormalizedSourceItemRows(
+    rows
+      .filter((row): row is Record<string, unknown> => Boolean(row))
+      .map((row) => normalizeSourceItemRow(row)),
+  );
+}
+
+function mergeNormalizedSourceItemRows(rows: Array<SourceItemRow | null | undefined>) {
   const merged = new Map<string, SourceItemRow>();
-  for (const row of rows) {
-    if (!row) continue;
-    const normalized = normalizeSourceItemRow(row as Record<string, unknown>);
+  for (const normalized of rows) {
+    if (!normalized) continue;
     if (!normalized.id) continue;
     const existing = merged.get(normalized.id);
     if (!existing || normalized.updated_at > existing.updated_at) {
@@ -3648,6 +3655,21 @@ async function getSourceItemByIdOracleFirst(
 ) {
   const sourceItemId = String(input.sourceItemId || '').trim();
   if (!sourceItemId) return null;
+  const action = String(input.action || 'get_source_item_by_id').trim() || 'get_source_item_by_id';
+
+  async function readSupabaseFallback(reason: string) {
+    try {
+      return await readSupabaseSourceItemById(db, { sourceItemId });
+    } catch (error) {
+      console.warn('[oracle-control-plane] source_item_fallback_failed', JSON.stringify({
+        action,
+        reason,
+        source_item_id: sourceItemId,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+      throw error;
+    }
+  }
 
   if (oracleSourceItemLedgerEnabled && oracleControlPlane) {
     try {
@@ -3660,10 +3682,11 @@ async function getSourceItemByIdOracleFirst(
       }
     } catch (error) {
       console.warn('[oracle-control-plane] source_item_ledger_failed', JSON.stringify({
-        action: input.action || 'get_source_item_by_id',
+        action,
         source_item_id: sourceItemId,
         error: error instanceof Error ? error.message : String(error),
       }));
+      return readSupabaseFallback('oracle_source_item_ledger_failed');
     }
   }
 
@@ -3678,14 +3701,15 @@ async function getSourceItemByIdOracleFirst(
       }
     } catch (error) {
       console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
-        action: input.action || 'get_source_item_by_id',
+        action,
         source_item_id: sourceItemId,
         error: error instanceof Error ? error.message : String(error),
       }));
+      return readSupabaseFallback('oracle_product_source_item_mirror_failed');
     }
   }
 
-  return readSupabaseSourceItemById(db, { sourceItemId });
+  return readSupabaseFallback('supabase_only');
 }
 
 async function persistSourceItemRowOracleAware(
@@ -3696,25 +3720,32 @@ async function persistSourceItemRowOracleAware(
   },
 ) {
   const normalizedBase = normalizeSourceItemRow(input.row as unknown as Record<string, unknown>);
-  const existingOracleById = (
-    oracleSourceItemLedgerEnabled && oracleControlPlane
-      ? await getOracleSourceItemLedgerById({
-          controlDb: oracleControlPlane,
-          sourceItemId: normalizedBase.id,
-        })
-      : null
-  );
-  const existingOracleByCanonical = (
-    !existingOracleById
-    && oracleSourceItemLedgerEnabled
-    && oracleControlPlane
-    && normalizedBase.canonical_key
-  )
-    ? await getOracleSourceItemLedgerByCanonicalKey({
+  let existingOracleById: SourceItemRow | null = null;
+  let existingOracleByCanonical: SourceItemRow | null = null;
+  if (oracleSourceItemLedgerEnabled && oracleControlPlane) {
+    try {
+      existingOracleById = await getOracleSourceItemLedgerById({
         controlDb: oracleControlPlane,
-        canonicalKey: normalizedBase.canonical_key,
-      })
-    : null;
+        sourceItemId: normalizedBase.id,
+      });
+      if (!existingOracleById && normalizedBase.canonical_key) {
+        existingOracleByCanonical = await getOracleSourceItemLedgerByCanonicalKey({
+          controlDb: oracleControlPlane,
+          canonicalKey: normalizedBase.canonical_key,
+        });
+      }
+    } catch (error) {
+      console.warn('[oracle-control-plane] source_item_ledger_failed', JSON.stringify({
+        action: `${input.action}_lookup_existing`,
+        source_item_id: normalizedBase.id,
+        canonical_key: normalizedBase.canonical_key || null,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+      if (oracleSourceItemLedgerPrimaryEnabled) {
+        throw error;
+      }
+    }
+  }
   const existingSupabaseById = !existingOracleById && !existingOracleByCanonical
     ? await readSupabaseSourceItemById(db, {
         sourceItemId: normalizedBase.id,
@@ -3742,7 +3773,19 @@ async function persistSourceItemRowOracleAware(
   }, existing?.created_at || normalizedBase.created_at);
 
   if (oracleSourceItemLedgerEnabled && oracleControlPlane) {
-    await upsertOracleSourceItemLedgerFromKnownRow(normalizedRow, input.action);
+    try {
+      await upsertOracleSourceItemLedgerFromKnownRow(normalizedRow, input.action);
+    } catch (error) {
+      if (oracleSourceItemLedgerPrimaryEnabled) {
+        throw error;
+      }
+      console.warn('[oracle-control-plane] source_item_ledger_shadow_failed', JSON.stringify({
+        action: input.action,
+        source_item_id: normalizedRow.id,
+        canonical_key: normalizedRow.canonical_key || null,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
   }
 
   try {
@@ -4444,11 +4487,29 @@ async function listPublicProductFeedRowsOracleFirst(
 
 async function listProductSourceItemsOracleFirst(
   db: ReturnType<typeof createClient>,
-  input: { ids?: string[]; sourceNativeId?: string | null; canonicalKeys?: string[] },
+  input: { ids?: string[]; sourceNativeId?: string | null; canonicalKeys?: string[]; action?: string },
 ) {
   const ids = [...new Set((input.ids || []).map((value) => String(value || '').trim()).filter(Boolean))];
   const sourceNativeId = String(input.sourceNativeId || '').trim();
   const canonicalKeys = [...new Set((input.canonicalKeys || []).map((value) => String(value || '').trim()).filter(Boolean))];
+  const action = String(input.action || 'list_product_source_items').trim() || 'list_product_source_items';
+
+  async function listSupabaseFallback(reason: string) {
+    try {
+      return await listSupabaseSourceItems(db, {
+        ids,
+        sourceNativeId,
+        canonicalKeys,
+      });
+    } catch (error) {
+      console.warn('[oracle-control-plane] source_item_fallback_failed', JSON.stringify({
+        action,
+        reason,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+      throw error;
+    }
+  }
 
   if (oracleSourceItemLedgerEnabled && oracleControlPlane) {
     try {
@@ -4474,17 +4535,14 @@ async function listProductSourceItemsOracleFirst(
         return durableRows;
       }
 
-      const fallbackRows = await listSupabaseSourceItems(db, {
-        ids: missingIds,
-        sourceNativeId,
-        canonicalKeys: missingCanonicalKeys,
-      });
-      return mergeSourceItemRows([...durableRows, ...fallbackRows]);
+      const fallbackRows = await listSupabaseFallback('oracle_source_item_ledger_incomplete');
+      return mergeNormalizedSourceItemRows([...durableRows, ...fallbackRows]);
     } catch (error) {
       console.warn('[oracle-control-plane] source_item_ledger_failed', JSON.stringify({
-        action: 'list_product_source_items',
+        action,
         error: error instanceof Error ? error.message : String(error),
       }));
+      return listSupabaseFallback('oracle_source_item_ledger_failed');
     }
   }
 
@@ -4502,30 +4560,27 @@ async function listProductSourceItemsOracleFirst(
         }
         const missingIds = ids.filter((id) => !mirroredIds.has(id));
         if (missingIds.length > 0) {
-          const fallbackRows = await listSupabaseSourceItems(db, { ids: missingIds });
-          return mergeSourceItemRows([...mirrored, ...fallbackRows]);
+          const fallbackRows = await listSupabaseFallback('oracle_product_source_item_mirror_incomplete_ids');
+          return mergeNormalizedSourceItemRows([...mirrored, ...fallbackRows]);
         }
         return mirrored;
       }
       if (mirrored.length > 0 && !canonicalKeys.length) {
         const fallbackRows = sourceNativeId
-          ? await listSupabaseSourceItems(db, { sourceNativeId })
+          ? await listSupabaseFallback('oracle_product_source_item_mirror_source_native_id')
           : [];
-        return mergeSourceItemRows([...mirrored, ...fallbackRows]);
+        return mergeNormalizedSourceItemRows([...mirrored, ...fallbackRows]);
       }
     } catch (error) {
       console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
-        action: 'list_product_source_items',
+        action,
         error: error instanceof Error ? error.message : String(error),
       }));
+      return listSupabaseFallback('oracle_product_source_item_mirror_failed');
     }
   }
 
-  return listSupabaseSourceItems(db, {
-    ids,
-    sourceNativeId,
-    canonicalKeys,
-  });
+  return listSupabaseFallback('supabase_only');
 }
 
 async function listActiveSubscriptionsForUserOracleFirst(
@@ -4586,7 +4641,10 @@ async function getBlueprintAvailabilityForVideoOracleFirst(
 ) {
   return readBlueprintAvailabilityForVideo(db, videoId, {
     listSourceItemsByVideoId: async (sourceNativeId) => (
-      await listProductSourceItemsOracleFirst(db, { sourceNativeId })
+      await listProductSourceItemsOracleFirst(db, {
+        sourceNativeId,
+        action: 'blueprint_availability_list_source_items_by_video_id',
+      })
     ).map((row) => ({ id: row.id || null })),
     listUnlockRowsBySourceItemIds: async (sourceItemIds) => (
       await getSourceItemUnlocksBySourceItemIdsOracleFirst(db, sourceItemIds)
@@ -6851,7 +6909,10 @@ registerProfileRoutes(app, {
     sourceItemIds,
     requireBlueprint,
   }),
-  readSourceRows: ({ db, sourceIds }: any) => listProductSourceItemsOracleFirst(db, { ids: sourceIds }),
+  readSourceRows: ({ db, sourceIds }: any) => listProductSourceItemsOracleFirst(db, {
+    ids: sourceIds,
+    action: 'wall_feed_read_source_rows',
+  }),
   readUnlockRows: ({ db, sourceIds }: any) => getSourceItemUnlocksBySourceItemIdsOracleFirst(db, sourceIds),
 });
 
@@ -6871,7 +6932,10 @@ registerWallRoutes(app, {
     sourceItemIds,
     requireBlueprint,
   }),
-  readSourceRows: ({ db, sourceIds }: any) => listProductSourceItemsOracleFirst(db, { ids: sourceIds }),
+  readSourceRows: ({ db, sourceIds }: any) => listProductSourceItemsOracleFirst(db, {
+    ids: sourceIds,
+    action: 'profile_history_read_source_rows',
+  }),
   readUnlockRows: ({ db, sourceIds }: any) => getSourceItemUnlocksBySourceItemIdsOracleFirst(db, sourceIds),
   readActiveSubscriptions: ({ db, userId }: any) => listActiveSubscriptionsForUserOracleFirst(db, userId),
 });
@@ -7554,6 +7618,7 @@ async function upsertSourceItemFromVideo(db: ReturnType<typeof createClient>, in
   const existing = (
     await listProductSourceItemsOracleFirst(db, {
       canonicalKeys: [canonicalKey],
+      action: 'upsert_source_item_from_video_lookup_existing',
     })
   )[0] || null;
   const existingMetadata = existing?.metadata && typeof existing.metadata === 'object' && !Array.isArray(existing.metadata)
@@ -7598,6 +7663,7 @@ async function upsertSubscriptionNoticeSourceItem(db: ReturnType<typeof createCl
   const existing = (
     await listProductSourceItemsOracleFirst(db, {
       canonicalKeys: [canonicalKey],
+      action: 'upsert_subscription_notice_source_item_lookup_existing',
     })
   )[0] || null;
   const existingMetadata = existing?.metadata && typeof existing.metadata === 'object' && !Array.isArray(existing.metadata)
@@ -8743,6 +8809,7 @@ async function loadExistingSourceVideoStateForUser(
   const canonicalKeys = uniqueVideoIds.map((videoId) => `youtube:${videoId}`);
   const sourceRows = await listProductSourceItemsOracleFirst(db, {
     canonicalKeys,
+    action: 'load_existing_source_video_state_for_user',
   });
 
   const sourceByCanonical = new Map<string, { id: string; canonical_key: string }>();
@@ -9985,6 +10052,7 @@ async function seedSourceTranscriptRevalidateJobs(
   ));
   const sourceRows = await listProductSourceItemsOracleFirst(db, {
     ids: sourceItemIds,
+    action: 'seed_source_transcript_revalidate_jobs',
   });
   const sourceById = new Map((sourceRows || []).map((row) => [row.id, row]));
 
@@ -10259,6 +10327,7 @@ async function collectRefreshCandidatesForUser(db: ReturnType<typeof createClien
     const canonicalKeys = candidates.map((candidate) => `youtube:${candidate.video_id}`);
     const existingSources = await listProductSourceItemsOracleFirst(db, {
       canonicalKeys,
+      action: 'collect_refresh_candidates_for_user_existing_sources',
     });
 
     const sourceIds = (existingSources || []).map((row) => row.id);
@@ -14052,7 +14121,10 @@ registerSourcePagesRoutes(app, {
     cursor,
     requireBlueprint,
   }),
-  readSourceRows: ({ db, sourceIds }: any) => listProductSourceItemsOracleFirst(db, { ids: sourceIds }),
+  readSourceRows: ({ db, sourceIds }: any) => listProductSourceItemsOracleFirst(db, {
+    ids: sourceIds,
+    action: 'source_page_blueprints_read_source_rows',
+  }),
   sourceVideoListBurstLimiter,
   sourceVideoListSustainedLimiter,
   sourceVideoUnlockBurstLimiter,

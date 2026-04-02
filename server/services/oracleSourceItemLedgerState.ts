@@ -76,6 +76,16 @@ function mapSourceItemLedgerRow(row: Record<string, unknown>, nowIso?: string): 
   };
 }
 
+function parseSourceItemLedgerMetadataJson(value: unknown) {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (!raw) return null;
+  try {
+    return normalizeObject(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
 export async function upsertOracleSourceItemLedgerRows(input: {
   controlDb: OracleControlPlaneDb;
   rows: Array<Record<string, unknown>>;
@@ -213,7 +223,7 @@ export async function getOracleSourceItemLedgerById(input: {
   return row
     ? mapSourceItemLedgerRow({
         ...row,
-        metadata: row.metadata_json ? JSON.parse(row.metadata_json) : null,
+        metadata: parseSourceItemLedgerMetadataJson(row.metadata_json),
       } as Record<string, unknown>)
     : null;
 }
@@ -235,7 +245,7 @@ export async function getOracleSourceItemLedgerByCanonicalKey(input: {
   return row
     ? mapSourceItemLedgerRow({
         ...row,
-        metadata: row.metadata_json ? JSON.parse(row.metadata_json) : null,
+        metadata: parseSourceItemLedgerMetadataJson(row.metadata_json),
       } as Record<string, unknown>)
     : null;
 }
@@ -299,7 +309,7 @@ export async function listOracleSourceItemLedgerRows(input: {
     for (const row of batch) {
       const normalized = mapSourceItemLedgerRow({
         ...row,
-        metadata: row.metadata_json ? JSON.parse(row.metadata_json) : null,
+        metadata: parseSourceItemLedgerMetadataJson(row.metadata_json),
       } as Record<string, unknown>);
       const existing = rows.get(normalized.id);
       if (!existing || normalized.updated_at > existing.updated_at) {

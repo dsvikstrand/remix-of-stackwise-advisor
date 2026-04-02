@@ -860,6 +860,9 @@ npm run ops:oracle-source-item-parity -- --json
     - `missing_in_supabase_count=0`
     - `mismatched_row_count=0`
     - duplicate canonical-key counts stay `0` on both sides
+    - live canary also stays clean:
+      - wall keeps receiving new feed rows
+      - `POST /api/source-pages/:platform/:externalId/videos/unlock` followed by `GET /api/source-pages/:platform/:externalId/videos` keeps the same item in `unlock_status=processing` / `unlock_in_progress=true` when work is already running
   - After the `dual -> primary` flip, rerun the same command and confirm:
     - `ORACLE_SOURCE_ITEM_LEDGER_MODE=primary`
     - parity still `PASS`
@@ -868,6 +871,7 @@ npm run ops:oracle-source-item-parity -- --json
     - set `ORACLE_SOURCE_ITEM_LEDGER_MODE=supabase`
     - restart `agentic-backend.service`
     - redeploy the fixed build before re-staging `dual`
+  - During `supabase|dual`, Oracle-first source-item read failures should now degrade to Supabase-backed reads; if user-facing wall/source-page traffic still breaks, treat that as a blocker and do not promote to `primary`.
 - YT2BP repro smoke:
 ```bash
 npm run smoke:yt2bp -- --base-url https://api.bleup.app

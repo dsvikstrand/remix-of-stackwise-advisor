@@ -152,4 +152,54 @@ describe('oracle source item ledger state', () => {
       await controlDb.close();
     }
   }, 15_000);
+
+  it('tolerates malformed metadata_json in stored Oracle source-item rows', async () => {
+    const controlDb = openOracleControlPlaneDb({
+      sqlitePath: createTempSqlitePath(),
+    });
+
+    try {
+      await controlDb.db
+        .insertInto('source_item_ledger_state')
+        .values({
+          id: 'source_bad_meta',
+          source_type: 'youtube',
+          source_native_id: 'video_bad_meta',
+          canonical_key: 'youtube:video_bad_meta',
+          source_url: 'https://youtube.com/watch?v=video_bad_meta',
+          title: 'Bad Metadata Video',
+          published_at: '2026-04-02T12:30:00.000Z',
+          ingest_status: 'ready',
+          source_channel_id: 'channel_bad',
+          source_channel_title: 'Channel Bad',
+          source_page_id: 'page_bad',
+          thumbnail_url: 'https://img.example.com/bad.jpg',
+          metadata_json: '{"broken":',
+          created_at: '2026-04-02T12:30:00.000Z',
+          updated_at: '2026-04-02T12:30:00.000Z',
+        })
+        .execute();
+
+      const byId = await getOracleSourceItemLedgerById({
+        controlDb,
+        sourceItemId: 'source_bad_meta',
+      });
+      const rows = await listOracleSourceItemLedgerRows({
+        controlDb,
+        ids: ['source_bad_meta'],
+      });
+
+      expect(byId).toMatchObject({
+        id: 'source_bad_meta',
+        metadata: null,
+      });
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        id: 'source_bad_meta',
+        metadata: null,
+      });
+    } finally {
+      await controlDb.close();
+    }
+  });
 });
