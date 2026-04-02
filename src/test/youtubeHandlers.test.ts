@@ -164,6 +164,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     markSubscriptionSyncError: vi.fn(async () => undefined),
     upsertSubscriptionNoticeSourceItem: vi.fn(async () => undefined),
     insertFeedItem: vi.fn(async () => undefined),
+    upsertFeedItemWithBlueprint: vi.fn(async () => ({ id: 'feed_upserted', user_id: '00000000-0000-0000-0000-000000000001' })),
     upsertSourceItemFromVideo: vi.fn(async (_db, input: any) => ({
       id: `source_${String(input?.video?.videoId || 'x')}`,
       source_url: input?.video?.url || '',
@@ -668,6 +669,74 @@ describe('youtube handlers', () => {
     expect(getBlueprintAvailabilityForVideo).toHaveBeenCalledWith(serviceDb, 'video_unavailable');
     expect(authDb.state.ingestion_jobs).toHaveLength(0);
     expect(serviceDb.state.credit_ledger).toHaveLength(0);
+  });
+
+  it('upgrades an existing locked feed row when search generation finds a ready blueprint', async () => {
+    const authDb = createMockSupabase({
+      ingestion_jobs: [],
+    });
+    const serviceDb = createMockSupabase({
+      user_credit_wallets: [{
+        user_id: '00000000-0000-0000-0000-000000000001',
+        balance: 5,
+        capacity: 5,
+        refill_rate_per_sec: 0,
+        last_refill_at: new Date().toISOString(),
+      }],
+    });
+    const app = createMockApp();
+    const upsertFeedItemWithBlueprint = vi.fn(async () => ({ id: 'feed_upgraded', user_id: '00000000-0000-0000-0000-000000000001' }));
+    const insertFeedItem = vi.fn(async () => undefined);
+    const items = [{
+      video_id: 'video_ready',
+      video_url: 'https://youtube.com/watch?v=video_ready',
+      title: 'Ready Video',
+      channel_id: 'channel_1',
+    }];
+    registerYouTubeRouteHandlers(app as any, createDeps({
+      getAuthedSupabaseClient: () => authDb,
+      getServiceSupabaseClient: () => serviceDb,
+      SearchVideosGenerateSchema: { safeParse: () => ({ success: true, data: { items } }) },
+      enqueueIngestionJob: enqueueIntoMockDb,
+      loadExistingSourceVideoStateForUser: vi.fn(async () => new Map()),
+      resolveVariantOrReady: vi.fn(async ({ sourceItemId }: { sourceItemId: string }) => {
+        if (sourceItemId === 'source_video_ready') {
+          return { state: 'ready', blueprintId: 'bp_ready' };
+        }
+        return null;
+      }),
+      insertFeedItem,
+      upsertFeedItemWithBlueprint,
+    }));
+
+    const handler = app.handlers['POST /api/search/videos/generate'];
+    const req = { body: { items } } as any;
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        queued_count: 0,
+        skipped_existing_count: 1,
+        skipped_existing: [
+          expect.objectContaining({
+            video_id: 'video_ready',
+            blueprint_id: 'bp_ready',
+          }),
+        ],
+      },
+    });
+    expect(upsertFeedItemWithBlueprint).toHaveBeenCalledWith(authDb, {
+      userId: '00000000-0000-0000-0000-000000000001',
+      sourceItemId: 'source_video_ready',
+      blueprintId: 'bp_ready',
+      state: 'my_feed_published',
+    });
+    expect(insertFeedItem).not.toHaveBeenCalled();
+    expect(authDb.state.ingestion_jobs).toHaveLength(0);
   });
 
   it('rejects search generate requests above the route cap', async () => {

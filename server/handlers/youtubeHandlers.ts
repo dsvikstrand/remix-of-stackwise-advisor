@@ -953,17 +953,17 @@ app.post(
         channelTitle: item.channel_title || null,
         sourcePageId: null,
       }),
-      resolveVariantOrReady: ({ sourceItemId, generationTier }) => resolveVariantOrReady({
+    resolveVariantOrReady: ({ sourceItemId, generationTier }) => resolveVariantOrReady({
+      sourceItemId,
+      generationTier,
+    }),
+    onReady: async ({ sourceItemId, blueprintId }) => {
+      await deps.upsertFeedItemWithBlueprint(db, {
+        userId,
         sourceItemId,
-        generationTier,
-      }),
-      onReady: async ({ sourceItemId, blueprintId }) => {
-        await insertFeedItem(db, {
-          userId,
-          sourceItemId,
-          blueprintId,
-          state: 'my_feed_published',
-        });
+        blueprintId,
+        state: 'my_feed_published',
+      });
       },
     });
     skippedExisting.push(...ready);

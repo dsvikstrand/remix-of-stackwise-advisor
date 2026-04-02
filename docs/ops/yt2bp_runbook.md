@@ -1,5 +1,9 @@
 # YT2BP Runbook
 
+## Ready-Duplicate Feed Attach Check
+- If a user reports `Generate` says `No new generation queued` or `skipped_existing`, but Home/For You still shows `Unlock available`, inspect whether that user already has a locked `user_feed_items` row for the same `user_id + source_item_id`.
+- Expected fixed behavior: search/manual ready handling should upsert that feed row with the discovered `blueprint_id` and published state, so the user wall stops rendering the item as locked.
+
 ## Doc Role
 - Supporting operational runbook only; not a primary MVP planning surface.
 - Launch gate status lives in `docs/ops/mvp-launch-readiness-checklist.md`.

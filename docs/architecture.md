@@ -243,6 +243,7 @@
     - queue-backed claims now record `active_job_id` on the variant row.
     - stale queued/running variants are reclaimed after a bounded timeout only when `active_job_id` is missing.
     - unlock-generation preflight now treats a current job that already owns the variant as same-job work, not generic `in_progress` work to skip.
+  - search/manual duplicate-ready attach now upgrades an existing per-user `user_feed_items` row by `user_id + source_item_id` when a reusable ready blueprint already exists, so personal wall/feed reads do not stay locked after the backend decides `skipped_existing`.
   - unlock reliability sweeps:
     - opportunistic sweeps on source-page video list/unlock routes.
     - service-cron ingestion trigger no longer force-runs these sweeps on its enqueue hot path.

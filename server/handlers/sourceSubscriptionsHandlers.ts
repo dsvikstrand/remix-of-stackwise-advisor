@@ -696,7 +696,7 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
       generationTier,
     }),
     onReady: async ({ sourceItemId, blueprintId }) => {
-      await deps.insertFeedItem(db, {
+      await deps.upsertFeedItemWithBlueprint(db, {
         userId,
         sourceItemId,
         blueprintId,

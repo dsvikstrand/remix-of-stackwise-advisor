@@ -75,6 +75,7 @@ export type SourceSubscriptionsRouteDeps = {
   markSubscriptionSyncError: any;
   upsertSubscriptionNoticeSourceItem: any;
   insertFeedItem: any;
+  upsertFeedItemWithBlueprint: any;
   upsertSourceItemFromVideo: any;
   buildSourcePagePath: any;
   cleanupSubscriptionNoticeForChannel: any;

@@ -2,6 +2,9 @@
 
 Status: `on-pause`
 
+Update note 2026-04-02:
+- Personal feed consistency now requires reusable ready blueprints to rebind onto the viewer's existing feed row, not only exist globally, so `Generate` and Home stay aligned for search/manual generation.
+
 ## Objective
 Deliver the remaining `bleuV1` MVP through a manual iterative build loop with clear checkpoints and low ambiguity.
 

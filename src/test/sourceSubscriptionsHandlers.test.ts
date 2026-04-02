@@ -77,6 +77,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     markSubscriptionSyncError: vi.fn(),
     upsertSubscriptionNoticeSourceItem: vi.fn(),
     insertFeedItem: vi.fn(async () => undefined),
+    upsertFeedItemWithBlueprint: vi.fn(async () => ({ id: 'feed_upserted', user_id: '00000000-0000-0000-0000-000000000001' })),
     upsertSourceItemFromVideo: vi.fn(async (_db, input: any) => ({
       id: `source_${String(input?.video?.videoId || 'x')}`,
     })),

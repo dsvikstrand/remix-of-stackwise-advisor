@@ -2,6 +2,9 @@
 
 Status: `on-pause`
 
+Update note 2026-04-02:
+- Search/manual generation ready-duplicate handling now upgrades an existing locked `user_feed_items` row via feed-row upsert instead of plain insert, fixing the case where the backend reports `skipped_existing` but the user wall remains locked.
+
 ## Goal
 Convert the current feature-complete MVP into a stable, clear, and scalable product surface by hardening UX trust, runtime reliability, and engineering foundations.
 
