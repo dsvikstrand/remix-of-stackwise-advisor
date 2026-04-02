@@ -2327,6 +2327,23 @@ function buildPatchedSourceItemUnlockRow(input: {
   }, nowIso);
 }
 
+function describeUnknownOracleControlPlaneError(error: unknown) {
+  if (error instanceof Error) {
+    const message = String(error.message || '').trim();
+    return message || error.name || 'Unknown error';
+  }
+  if (error && typeof error === 'object') {
+    try {
+      const serialized = JSON.stringify(error);
+      if (serialized && serialized !== '{}') return serialized;
+    } catch {
+      return '[unserializable_error_object]';
+    }
+    return '[error_object]';
+  }
+  return String(error || 'Unknown error');
+}
+
 async function readSupabaseSourceItemUnlockById(
   db: ReturnType<typeof createClient>,
   unlockId: string,
@@ -4779,6 +4796,20 @@ async function syncOracleProductUnlockById(
   }
 }
 
+function logUnlockPrimaryMutationFallback(input: {
+  action: string;
+  unlockId?: string | null;
+  sourceItemId?: string | null;
+  error: unknown;
+}) {
+  console.warn('[oracle-control-plane] unlock_ledger_primary_fallback', JSON.stringify({
+    action: input.action,
+    unlock_id: String(input.unlockId || '').trim() || null,
+    source_item_id: String(input.sourceItemId || '').trim() || null,
+    error: describeUnknownOracleControlPlaneError(input.error),
+  }));
+}
+
 async function ensureSourceItemUnlockWithMirror(
   db: ReturnType<typeof createClient>,
   input: {
@@ -4794,44 +4825,56 @@ async function ensureSourceItemUnlockWithMirror(
     return unlock;
   }
 
-  const current = await getSourceItemUnlockBySourceItemIdForPrimaryMutation(
-    db,
-    input.sourceItemId,
-    'ensure_source_item_unlock_current',
-  );
-  if (current) {
-    const nextCost = Number(input.estimatedCost);
-    const currentCost = Number(current.estimated_cost || 0);
-    const nextSourcePageId = input.sourcePageId || current.source_page_id || null;
-    if (currentCost === nextCost && nextSourcePageId === current.source_page_id) {
-      return current;
+  try {
+    const current = await getSourceItemUnlockBySourceItemIdForPrimaryMutation(
+      db,
+      input.sourceItemId,
+      'ensure_source_item_unlock_current',
+    );
+    if (current) {
+      const nextCost = Number(input.estimatedCost);
+      const currentCost = Number(current.estimated_cost || 0);
+      const nextSourcePageId = input.sourcePageId || current.source_page_id || null;
+      if (currentCost === nextCost && nextSourcePageId === current.source_page_id) {
+        return current;
+      }
+
+      return persistSourceItemUnlockRowOracleAware(db, {
+        row: buildPatchedSourceItemUnlockRow({
+          current,
+          patch: {
+            estimated_cost: nextCost,
+            source_page_id: nextSourcePageId,
+          },
+        }),
+        action: 'ensure_source_item_unlock',
+        expectedCurrent: current,
+      });
     }
 
     return persistSourceItemUnlockRowOracleAware(db, {
       row: buildPatchedSourceItemUnlockRow({
-        current,
         patch: {
-          estimated_cost: nextCost,
-          source_page_id: nextSourcePageId,
+          id: randomUUID(),
+          source_item_id: input.sourceItemId,
+          source_page_id: input.sourcePageId || null,
+          status: 'available',
+          estimated_cost: Number(input.estimatedCost),
         },
       }),
       action: 'ensure_source_item_unlock',
-      expectedCurrent: current,
     });
+  } catch (error) {
+    logUnlockPrimaryMutationFallback({
+      action: 'ensure_source_item_unlock',
+      sourceItemId: input.sourceItemId,
+      error,
+    });
+    const unlock = await ensureSourceItemUnlock(db, input);
+    await upsertOracleUnlockLedgerFromKnownRow(unlock as unknown as Record<string, unknown>, 'ensure_source_item_unlock_fallback');
+    await upsertOracleProductUnlocksFromKnownRows([unlock as unknown as Record<string, unknown>], 'ensure_source_item_unlock_fallback');
+    return unlock;
   }
-
-  return persistSourceItemUnlockRowOracleAware(db, {
-    row: buildPatchedSourceItemUnlockRow({
-      patch: {
-        id: randomUUID(),
-        source_item_id: input.sourceItemId,
-        source_page_id: input.sourcePageId || null,
-        status: 'available',
-        estimated_cost: Number(input.estimatedCost),
-      },
-    }),
-    action: 'ensure_source_item_unlock',
-  });
 }
 
 async function reserveUnlockWithMirror(
@@ -4850,106 +4893,119 @@ async function reserveUnlockWithMirror(
     return result;
   }
 
-  let unlock = await getSourceItemUnlockByIdForPrimaryMutation(
-    db,
-    input.unlock.id,
-    'reserve_unlock_current',
-  );
-  if (!unlock) {
-    unlock = await getSourceItemUnlockBySourceItemIdForPrimaryMutation(
+  try {
+    let unlock = await getSourceItemUnlockByIdForPrimaryMutation(
       db,
-      input.unlock.source_item_id,
-      'reserve_unlock_source_item_current',
+      input.unlock.id,
+      'reserve_unlock_current',
     );
-  }
-  if (!unlock) {
-    throw new Error('UNLOCK_NOT_FOUND');
-  }
+    if (!unlock) {
+      unlock = await getSourceItemUnlockBySourceItemIdForPrimaryMutation(
+        db,
+        input.unlock.source_item_id,
+        'reserve_unlock_source_item_current',
+      );
+    }
+    if (!unlock) {
+      throw new Error('UNLOCK_NOT_FOUND');
+    }
 
-  if (unlock.status === 'ready' && unlock.blueprint_id) {
-    return { ok: true as const, state: 'ready' as const, unlock, reservedNow: false };
-  }
+    if (unlock.status === 'ready' && unlock.blueprint_id) {
+      return { ok: true as const, state: 'ready' as const, unlock, reservedNow: false };
+    }
 
-  const reservationExpiresAt = new Date(
-    Date.now() + Math.max(30, input.reservationSeconds) * 1000,
-  ).toISOString();
-  const isExpiredReservation = (() => {
-    const parsed = Date.parse(String(unlock.reservation_expires_at || ''));
-    return Number.isFinite(parsed) && parsed <= Date.now();
-  })();
+    const reservationExpiresAt = new Date(
+      Date.now() + Math.max(30, input.reservationSeconds) * 1000,
+    ).toISOString();
+    const isExpiredReservation = (() => {
+      const parsed = Date.parse(String(unlock.reservation_expires_at || ''));
+      return Number.isFinite(parsed) && parsed <= Date.now();
+    })();
 
-  if (unlock.status === 'reserved' && !isExpiredReservation) {
-    if (unlock.reserved_by_user_id === input.userId) {
+    if (unlock.status === 'reserved' && !isExpiredReservation) {
+      if (unlock.reserved_by_user_id === input.userId) {
+        return { ok: true as const, state: 'reserved' as const, unlock, reservedNow: false };
+      }
+      return { ok: true as const, state: 'in_progress' as const, unlock, reservedNow: false };
+    }
+
+    if (unlock.status === 'processing' && !isExpiredReservation) {
+      return { ok: true as const, state: 'in_progress' as const, unlock, reservedNow: false };
+    }
+
+    if ((unlock.status === 'reserved' || unlock.status === 'processing') && isExpiredReservation) {
+      unlock = await persistSourceItemUnlockRowOracleAware(db, {
+        row: buildPatchedSourceItemUnlockRow({
+          current: unlock,
+          patch: {
+            status: 'available',
+            reserved_by_user_id: null,
+            reservation_expires_at: null,
+            reserved_ledger_id: null,
+            auto_unlock_intent_id: null,
+            job_id: null,
+          },
+        }),
+        action: 'unlock_transition_to_available',
+        expectedCurrent: unlock,
+      });
+    }
+
+    if (unlock.status === 'ready' && unlock.blueprint_id) {
+      return { ok: true as const, state: 'ready' as const, unlock, reservedNow: false };
+    }
+    if (unlock.status === 'processing') {
+      return { ok: true as const, state: 'in_progress' as const, unlock, reservedNow: false };
+    }
+    if (unlock.status === 'reserved' && unlock.reserved_by_user_id === input.userId) {
       return { ok: true as const, state: 'reserved' as const, unlock, reservedNow: false };
     }
-    return { ok: true as const, state: 'in_progress' as const, unlock, reservedNow: false };
-  }
+    if (unlock.status === 'reserved') {
+      return { ok: true as const, state: 'in_progress' as const, unlock, reservedNow: false };
+    }
 
-  if (unlock.status === 'processing' && !isExpiredReservation) {
-    return { ok: true as const, state: 'in_progress' as const, unlock, reservedNow: false };
-  }
-
-  if ((unlock.status === 'reserved' || unlock.status === 'processing') && isExpiredReservation) {
-    unlock = await persistSourceItemUnlockRowOracleAware(db, {
-      row: buildPatchedSourceItemUnlockRow({
-        current: unlock,
-        patch: {
-          status: 'available',
-          reserved_by_user_id: null,
-          reservation_expires_at: null,
-          reserved_ledger_id: null,
-          auto_unlock_intent_id: null,
-          job_id: null,
-        },
-      }),
-      action: 'unlock_transition_to_available',
+    const nextRow = buildPatchedSourceItemUnlockRow({
+      current: unlock,
+      patch: {
+        status: 'reserved',
+        estimated_cost: Number(input.estimatedCost),
+        reserved_by_user_id: input.userId,
+        reservation_expires_at: reservationExpiresAt,
+        auto_unlock_intent_id: unlock.auto_unlock_intent_id || null,
+        last_error_code: null,
+        last_error_message: null,
+      },
+    });
+    const persisted = await persistSourceItemUnlockRowOracleAware(db, {
+      row: nextRow,
+      action: 'reserve_unlock',
       expectedCurrent: unlock,
     });
-  }
 
-  if (unlock.status === 'ready' && unlock.blueprint_id) {
-    return { ok: true as const, state: 'ready' as const, unlock, reservedNow: false };
+    if (persisted.status === 'ready' && persisted.blueprint_id) {
+      return { ok: true as const, state: 'ready' as const, unlock: persisted, reservedNow: false };
+    }
+    if (persisted.status === 'reserved' && persisted.reserved_by_user_id === input.userId) {
+      return {
+        ok: true as const,
+        state: 'reserved' as const,
+        unlock: persisted,
+        reservedNow: persisted.updated_at === nextRow.updated_at,
+      };
+    }
+    return { ok: true as const, state: 'in_progress' as const, unlock: persisted, reservedNow: false };
+  } catch (error) {
+    logUnlockPrimaryMutationFallback({
+      action: 'reserve_unlock',
+      unlockId: input.unlock.id,
+      sourceItemId: input.unlock.source_item_id,
+      error,
+    });
+    const result = await reserveUnlock(db, input);
+    await upsertOracleUnlockLedgerFromKnownRow(result.unlock as unknown as Record<string, unknown>, 'reserve_unlock_fallback');
+    await upsertOracleProductUnlocksFromKnownRows([result.unlock as unknown as Record<string, unknown>], 'reserve_unlock_fallback');
+    return result;
   }
-  if (unlock.status === 'processing') {
-    return { ok: true as const, state: 'in_progress' as const, unlock, reservedNow: false };
-  }
-  if (unlock.status === 'reserved' && unlock.reserved_by_user_id === input.userId) {
-    return { ok: true as const, state: 'reserved' as const, unlock, reservedNow: false };
-  }
-  if (unlock.status === 'reserved') {
-    return { ok: true as const, state: 'in_progress' as const, unlock, reservedNow: false };
-  }
-
-  const nextRow = buildPatchedSourceItemUnlockRow({
-    current: unlock,
-    patch: {
-      status: 'reserved',
-      estimated_cost: Number(input.estimatedCost),
-      reserved_by_user_id: input.userId,
-      reservation_expires_at: reservationExpiresAt,
-      auto_unlock_intent_id: unlock.auto_unlock_intent_id || null,
-      last_error_code: null,
-      last_error_message: null,
-    },
-  });
-  const persisted = await persistSourceItemUnlockRowOracleAware(db, {
-    row: nextRow,
-    action: 'reserve_unlock',
-    expectedCurrent: unlock,
-  });
-
-  if (persisted.status === 'ready' && persisted.blueprint_id) {
-    return { ok: true as const, state: 'ready' as const, unlock: persisted, reservedNow: false };
-  }
-  if (persisted.status === 'reserved' && persisted.reserved_by_user_id === input.userId) {
-    return {
-      ok: true as const,
-      state: 'reserved' as const,
-      unlock: persisted,
-      reservedNow: persisted.updated_at === nextRow.updated_at,
-    };
-  }
-  return { ok: true as const, state: 'in_progress' as const, unlock: persisted, reservedNow: false };
 }
 
 async function attachReservationLedgerWithMirror(
@@ -4968,27 +5024,39 @@ async function attachReservationLedgerWithMirror(
     return unlock;
   }
 
-  const current = await getSourceItemUnlockByIdForPrimaryMutation(
-    db,
-    input.unlockId,
-    'attach_reservation_ledger_current',
-  );
-  if (!current) throw new Error('UNLOCK_NOT_FOUND');
+  try {
+    const current = await getSourceItemUnlockByIdForPrimaryMutation(
+      db,
+      input.unlockId,
+      'attach_reservation_ledger_current',
+    );
+    if (!current) throw new Error('UNLOCK_NOT_FOUND');
 
-  return persistSourceItemUnlockRowOracleAware(db, {
-    row: buildPatchedSourceItemUnlockRow({
-      current,
-      patch: {
-        reserved_ledger_id: input.ledgerId,
-        estimated_cost: Number(input.amount),
-        status: 'reserved',
-        reserved_by_user_id: input.userId,
-        auto_unlock_intent_id: null,
-      },
-    }),
-    action: 'attach_reservation_ledger',
-    expectedCurrent: current,
-  });
+    return persistSourceItemUnlockRowOracleAware(db, {
+      row: buildPatchedSourceItemUnlockRow({
+        current,
+        patch: {
+          reserved_ledger_id: input.ledgerId,
+          estimated_cost: Number(input.amount),
+          status: 'reserved',
+          reserved_by_user_id: input.userId,
+          auto_unlock_intent_id: null,
+        },
+      }),
+      action: 'attach_reservation_ledger',
+      expectedCurrent: current,
+    });
+  } catch (error) {
+    logUnlockPrimaryMutationFallback({
+      action: 'attach_reservation_ledger',
+      unlockId: input.unlockId,
+      error,
+    });
+    const unlock = await attachReservationLedger(db, input);
+    await upsertOracleUnlockLedgerFromKnownRow(unlock as unknown as Record<string, unknown>, 'attach_reservation_ledger_fallback');
+    await upsertOracleProductUnlocksFromKnownRows([unlock as unknown as Record<string, unknown>], 'attach_reservation_ledger_fallback');
+    return unlock;
+  }
 }
 
 async function attachAutoUnlockIntentWithMirror(
@@ -5007,27 +5075,39 @@ async function attachAutoUnlockIntentWithMirror(
     return unlock;
   }
 
-  const current = await getSourceItemUnlockByIdForPrimaryMutation(
-    db,
-    input.unlockId,
-    'attach_auto_unlock_intent_current',
-  );
-  if (!current) throw new Error('UNLOCK_NOT_FOUND');
+  try {
+    const current = await getSourceItemUnlockByIdForPrimaryMutation(
+      db,
+      input.unlockId,
+      'attach_auto_unlock_intent_current',
+    );
+    if (!current) throw new Error('UNLOCK_NOT_FOUND');
 
-  return persistSourceItemUnlockRowOracleAware(db, {
-    row: buildPatchedSourceItemUnlockRow({
-      current,
-      patch: {
-        auto_unlock_intent_id: input.intentId,
-        estimated_cost: Number(input.amount),
-        status: 'reserved',
-        reserved_by_user_id: input.userId,
-        reserved_ledger_id: null,
-      },
-    }),
-    action: 'attach_auto_unlock_intent',
-    expectedCurrent: current,
-  });
+    return persistSourceItemUnlockRowOracleAware(db, {
+      row: buildPatchedSourceItemUnlockRow({
+        current,
+        patch: {
+          auto_unlock_intent_id: input.intentId,
+          estimated_cost: Number(input.amount),
+          status: 'reserved',
+          reserved_by_user_id: input.userId,
+          reserved_ledger_id: null,
+        },
+      }),
+      action: 'attach_auto_unlock_intent',
+      expectedCurrent: current,
+    });
+  } catch (error) {
+    logUnlockPrimaryMutationFallback({
+      action: 'attach_auto_unlock_intent',
+      unlockId: input.unlockId,
+      error,
+    });
+    const unlock = await attachAutoUnlockIntent(db, input);
+    await upsertOracleUnlockLedgerFromKnownRow(unlock as unknown as Record<string, unknown>, 'attach_auto_unlock_intent_fallback');
+    await upsertOracleProductUnlocksFromKnownRows([unlock as unknown as Record<string, unknown>], 'attach_auto_unlock_intent_fallback');
+    return unlock;
+  }
 }
 
 async function markUnlockProcessingWithMirror(
@@ -5046,35 +5126,47 @@ async function markUnlockProcessingWithMirror(
     return unlock;
   }
 
-  const current = await getSourceItemUnlockByIdForPrimaryMutation(
-    db,
-    input.unlockId,
-    'mark_unlock_processing_current',
-  );
-  if (!current) return null;
-  if (current.reserved_by_user_id !== input.userId || current.status !== 'reserved') {
-    return null;
-  }
+  try {
+    const current = await getSourceItemUnlockByIdForPrimaryMutation(
+      db,
+      input.unlockId,
+      'mark_unlock_processing_current',
+    );
+    if (!current) return null;
+    if (current.reserved_by_user_id !== input.userId || current.status !== 'reserved') {
+      return null;
+    }
 
-  const unlock = await persistSourceItemUnlockRowOracleAware(db, {
-    row: buildPatchedSourceItemUnlockRow({
-      current,
-      patch: {
-        status: 'processing',
-        job_id: input.jobId,
-        reservation_expires_at: new Date(
-          Date.now() + Math.max(30, input.reservationSeconds || 300) * 1000,
-        ).toISOString(),
-      },
-    }),
-    action: 'mark_unlock_processing',
-    expectedCurrent: current,
-  });
+    const unlock = await persistSourceItemUnlockRowOracleAware(db, {
+      row: buildPatchedSourceItemUnlockRow({
+        current,
+        patch: {
+          status: 'processing',
+          job_id: input.jobId,
+          reservation_expires_at: new Date(
+            Date.now() + Math.max(30, input.reservationSeconds || 300) * 1000,
+          ).toISOString(),
+        },
+      }),
+      action: 'mark_unlock_processing',
+      expectedCurrent: current,
+    });
 
-  if (unlock.status !== 'processing' || unlock.job_id !== input.jobId) {
-    return null;
+    if (unlock.status !== 'processing' || unlock.job_id !== input.jobId) {
+      return null;
+    }
+    return unlock;
+  } catch (error) {
+    logUnlockPrimaryMutationFallback({
+      action: 'mark_unlock_processing',
+      unlockId: input.unlockId,
+      error,
+    });
+    const unlock = await markUnlockProcessing(db, input);
+    await upsertOracleUnlockLedgerFromKnownRow(unlock as unknown as Record<string, unknown>, 'mark_unlock_processing_fallback');
+    await upsertOracleProductUnlocksFromKnownRows(unlock ? [unlock as unknown as Record<string, unknown>] : [], 'mark_unlock_processing_fallback');
+    return unlock;
   }
-  return unlock;
 }
 
 async function completeUnlockWithMirror(
@@ -5093,35 +5185,47 @@ async function completeUnlockWithMirror(
     return unlock;
   }
 
-  const current = await getSourceItemUnlockByIdForPrimaryMutation(
-    db,
-    input.unlockId,
-    'complete_unlock_current',
-  );
-  if (!current) throw new Error('UNLOCK_NOT_FOUND');
+  try {
+    const current = await getSourceItemUnlockByIdForPrimaryMutation(
+      db,
+      input.unlockId,
+      'complete_unlock_current',
+    );
+    if (!current) throw new Error('UNLOCK_NOT_FOUND');
 
-  if (current.status === 'processing' && current.job_id === (input.expectedJobId || input.jobId)) {
-    return persistSourceItemUnlockRowOracleAware(db, {
-      row: buildPatchedSourceItemUnlockRow({
-        current,
-        patch: {
-          status: 'ready',
-          blueprint_id: input.blueprintId,
-          job_id: input.jobId,
-          reserved_by_user_id: null,
-          reservation_expires_at: null,
-          reserved_ledger_id: null,
-          auto_unlock_intent_id: null,
-          last_error_code: null,
-          last_error_message: null,
-        },
-      }),
+    if (current.status === 'processing' && current.job_id === (input.expectedJobId || input.jobId)) {
+      return persistSourceItemUnlockRowOracleAware(db, {
+        row: buildPatchedSourceItemUnlockRow({
+          current,
+          patch: {
+            status: 'ready',
+            blueprint_id: input.blueprintId,
+            job_id: input.jobId,
+            reserved_by_user_id: null,
+            reservation_expires_at: null,
+            reserved_ledger_id: null,
+            auto_unlock_intent_id: null,
+            last_error_code: null,
+            last_error_message: null,
+          },
+        }),
+        action: 'complete_unlock',
+        expectedCurrent: current,
+      });
+    }
+
+    return current;
+  } catch (error) {
+    logUnlockPrimaryMutationFallback({
       action: 'complete_unlock',
-      expectedCurrent: current,
+      unlockId: input.unlockId,
+      error,
     });
+    const unlock = await completeUnlock(db, input);
+    await upsertOracleUnlockLedgerFromKnownRow(unlock as unknown as Record<string, unknown>, 'complete_unlock_fallback');
+    await upsertOracleProductUnlocksFromKnownRows([unlock as unknown as Record<string, unknown>], 'complete_unlock_fallback');
+    return unlock;
   }
-
-  return current;
 }
 
 async function failUnlockWithMirror(
@@ -5140,37 +5244,49 @@ async function failUnlockWithMirror(
     return unlock;
   }
 
-  const current = await getSourceItemUnlockByIdForPrimaryMutation(
-    db,
-    input.unlockId,
-    'fail_unlock_current',
-  );
-  if (!current) throw new Error('UNLOCK_NOT_FOUND');
+  try {
+    const current = await getSourceItemUnlockByIdForPrimaryMutation(
+      db,
+      input.unlockId,
+      'fail_unlock_current',
+    );
+    if (!current) throw new Error('UNLOCK_NOT_FOUND');
 
-  if (
-    (current.status === 'processing' || current.status === 'reserved')
-    && (!input.expectedJobId || current.job_id === input.expectedJobId)
-  ) {
-    return persistSourceItemUnlockRowOracleAware(db, {
-      row: buildPatchedSourceItemUnlockRow({
-        current,
-        patch: {
-          status: 'available',
-          reserved_by_user_id: null,
-          reservation_expires_at: null,
-          reserved_ledger_id: null,
-          auto_unlock_intent_id: null,
-          job_id: null,
-          last_error_code: String(input.errorCode || '').slice(0, 120) || 'UNLOCK_GENERATION_FAILED',
-          last_error_message: String(input.errorMessage || '').slice(0, 500),
-        },
-      }),
+    if (
+      (current.status === 'processing' || current.status === 'reserved')
+      && (!input.expectedJobId || current.job_id === input.expectedJobId)
+    ) {
+      return persistSourceItemUnlockRowOracleAware(db, {
+        row: buildPatchedSourceItemUnlockRow({
+          current,
+          patch: {
+            status: 'available',
+            reserved_by_user_id: null,
+            reservation_expires_at: null,
+            reserved_ledger_id: null,
+            auto_unlock_intent_id: null,
+            job_id: null,
+            last_error_code: String(input.errorCode || '').slice(0, 120) || 'UNLOCK_GENERATION_FAILED',
+            last_error_message: String(input.errorMessage || '').slice(0, 500),
+          },
+        }),
+        action: 'fail_unlock',
+        expectedCurrent: current,
+      });
+    }
+
+    return current;
+  } catch (error) {
+    logUnlockPrimaryMutationFallback({
       action: 'fail_unlock',
-      expectedCurrent: current,
+      unlockId: input.unlockId,
+      error,
     });
+    const unlock = await failUnlock(db, input);
+    await upsertOracleUnlockLedgerFromKnownRow(unlock as unknown as Record<string, unknown>, 'fail_unlock_fallback');
+    await upsertOracleProductUnlocksFromKnownRows([unlock as unknown as Record<string, unknown>], 'fail_unlock_fallback');
+    return unlock;
   }
-
-  return current;
 }
 
 async function suppressUnlockableFeedRowsForSourceItemWithMirror(

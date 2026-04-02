@@ -24,6 +24,23 @@ import {
   getBlueprintUnavailableMessage,
 } from '../services/blueprintAvailability';
 
+function describeUnknownError(error: unknown) {
+  if (error instanceof Error) {
+    const message = String(error.message || '').trim();
+    return message || error.name || 'Unknown error';
+  }
+  if (error && typeof error === 'object') {
+    try {
+      const serialized = JSON.stringify(error);
+      if (serialized && serialized !== '{}') return serialized;
+    } catch {
+      return '[unserializable_error_object]';
+    }
+    return '[error_object]';
+  }
+  return String(error || 'Unknown error');
+}
+
 export function registerSourcePagesRouteHandlers(app: express.Express, deps: SourcePagesRouteDeps) {
   const {
     clampInt,
@@ -802,6 +819,7 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
   let userQueueDepth = 0;
   let queueWorkItems = 0;
   let userQueueWorkItems = 0;
+  const prepareFailedRows: Array<{ video_id: string; title: string; error: string }> = [];
   const inProgressRows: Array<{ video_id: string; title: string }> = [];
   const readyRows: Array<{ video_id: string; title: string; blueprint_id: string | null }> = [];
   const insufficientRows: Array<{ video_id: string; title: string; required: number; balance: number }> = [];
@@ -1056,16 +1074,18 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         },
       );
     } catch (error) {
+      const errorMessage = describeUnknownError(error);
       logUnlockEvent(
         'source_unlock_prepare_failed',
         { trace_id: traceId, user_id: userId, source_page_id: sourcePage.id, video_id: item.video_id },
         {
-          error: error instanceof Error ? error.message : String(error),
+          error: errorMessage,
         },
       );
-      inProgressRows.push({
+      prepareFailedRows.push({
         video_id: item.video_id,
         title: item.title,
+        error: errorMessage,
       });
     }
   }
@@ -1205,6 +1225,31 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
     });
   }
 
+  if (
+    queueItems.length === 0
+    && prepareFailedRows.length > 0
+    && insufficientRows.length === 0
+    && blueprintUnavailableRows.length === 0
+    && transcriptUnavailableRows.length === 0
+    && permanentNoTranscriptRows.length === 0
+    && readyRows.length === 0
+    && inProgressRows.length === 0
+    && duplicateRows.length === 0
+  ) {
+    return res.status(500).json({
+      ok: false,
+      error_code: 'SOURCE_VIDEO_GENERATE_FAILED',
+      message: prepareFailedRows[0]?.error || 'Could not start unlock generation.',
+      data: {
+        ...traceData,
+        prepare_failed_count: prepareFailedRows.length,
+        prepare_failed: prepareFailedRows,
+        duration_blocked_count: durationBlocked.length,
+        duration_blocked: durationBlocked,
+      },
+    });
+  }
+
   if (queueItems.length === 0) {
     return res.json({
       ok: true,
@@ -1225,6 +1270,8 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
         ready: readyRows,
         in_progress_count: inProgressRows.length,
         in_progress: inProgressRows,
+        prepare_failed_count: prepareFailedRows.length,
+        prepare_failed: prepareFailedRows,
         insufficient_count: insufficientRows.length,
         insufficient: insufficientRows,
         unavailable_count: blueprintUnavailableRows.length,
@@ -1404,6 +1451,8 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
       ready: readyRows,
       in_progress_count: inProgressRows.length,
       in_progress: inProgressRows,
+      prepare_failed_count: prepareFailedRows.length,
+      prepare_failed: prepareFailedRows,
       insufficient_count: insufficientRows.length,
       insufficient: insufficientRows,
       transcript_unavailable_count: transcriptUnavailableRows.length,

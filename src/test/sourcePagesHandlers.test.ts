@@ -626,6 +626,60 @@ describe('source page handlers', () => {
     expect(serviceDb.state.credit_ledger).toHaveLength(0);
   });
 
+  it('does not misreport unlock prepare failures as in-progress', async () => {
+    const app = createMockApp();
+    const authDb = createMockSupabase({
+      user_source_subscriptions: [{
+        id: 'sub_1',
+        user_id: '00000000-0000-0000-0000-000000000001',
+        source_type: 'youtube',
+        source_channel_id: 'channel_1',
+        source_page_id: 'page_1',
+        is_active: true,
+      }],
+    }) as any;
+    const serviceDb = createMockSupabase({}) as any;
+
+    registerSourcePagesRouteHandlers(app as any, createDeps({
+      getAuthedSupabaseClient: () => authDb,
+      getServiceSupabaseClient: () => serviceDb,
+      reserveUnlock: vi.fn(async () => {
+        throw {
+          code: 'RESERVE_FAILED',
+          message: 'reserve exploded',
+        };
+      }),
+    }));
+
+    const handler = app.handlers['POST /api/source-pages/:platform/:externalId/videos/unlock'];
+    const req = {
+      params: { platform: 'youtube', externalId: 'channel_1' },
+      body: {
+        items: [{
+          video_id: 'video_fail',
+          video_url: 'https://youtube.com/watch?v=video_fail',
+          title: 'Broken Video',
+        }],
+      },
+    } as any;
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(500);
+    expect(res.body).toMatchObject({
+      ok: false,
+      error_code: 'SOURCE_VIDEO_GENERATE_FAILED',
+      data: {
+        prepare_failed_count: 1,
+        prepare_failed: [{
+          video_id: 'video_fail',
+          title: 'Broken Video',
+        }],
+      },
+    });
+  });
+
   it('blocks source page unlock generation for videos inside the 24h blueprint cooldown window', async () => {
     const app = createMockApp();
     const authDb = createMockSupabase({
