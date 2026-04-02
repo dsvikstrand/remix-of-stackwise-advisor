@@ -43,7 +43,7 @@
     - unchanged successful writes to `user_source_subscriptions` are skipped unless checkpoint/title/error state changes
     - repeated identical error writes remain bounded by the `30m` heartbeat
     - hard failures persist readable `message/code/details/hint` text into `last_sync_error` and batch terminal summaries instead of collapsing object-shaped errors to `[object Object]`
-    - subscription sync shares the durable `source_item_unlocks` contract now, so fresh unlock rows must initialize `transcript_status='unknown'` instead of null
+    - subscription sync shares the durable `source_item_unlocks` contract now, so fresh unlock rows and Oracle-primary/shared unlock row normalizers must initialize `transcript_status='unknown'` instead of null
     - UI health semantics stay separate and still treat `<=60m` since last poll as healthy
     - Oracle cron may still call `/api/ingestion/jobs/trigger` every `3m`, but backend enqueue now gates `all_active_subscriptions` through the Oracle cadence window (`ORACLE_SUBSCRIPTION_PRIMARY_MIN_TRIGGER_INTERVAL_MS`, default `60m`)
   - Low-priority queue claim polling is also cadence-aware:
