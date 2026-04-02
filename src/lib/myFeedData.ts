@@ -16,9 +16,10 @@ function parseSourceViewCount(metadata: Record<string, unknown> | null) {
   return null;
 }
 
-function isPermanentNoTranscriptErrorCode(code: string | null | undefined) {
+function isTranscriptUnavailableForDisplayErrorCode(code: string | null | undefined) {
   const normalized = String(code || '').trim().toUpperCase();
-  return normalized === 'NO_TRANSCRIPT_PERMANENT';
+  return normalized === 'NO_TRANSCRIPT_PERMANENT'
+    || normalized === 'TRANSCRIPT_INSUFFICIENT_CONTEXT';
 }
 
 function buildSourcePagePath(platform: string, externalId: string) {
@@ -153,7 +154,7 @@ export async function listMyFeedItemsFromDb(input: {
         const transcriptStatus = String((row as { transcript_status?: unknown }).transcript_status || '').trim().toLowerCase();
         if (transcriptStatus === 'confirmed_no_speech' || transcriptStatus === 'retrying') return true;
         const lastErrorCode = String(row.last_error_code || '').trim().toUpperCase();
-        return isPermanentNoTranscriptErrorCode(lastErrorCode) || lastErrorCode === 'TRANSCRIPT_UNAVAILABLE';
+        return isTranscriptUnavailableForDisplayErrorCode(lastErrorCode) || lastErrorCode === 'TRANSCRIPT_UNAVAILABLE';
       })
       .map((row: any) => String(row.source_item_id || '').trim())
       .filter(Boolean),

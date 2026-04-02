@@ -618,6 +618,59 @@ describe('wall feed service', () => {
     });
   });
 
+  it('hides locked rows during transcript insufficient-context cooldowns', async () => {
+    const db = createMockSupabase({
+      user_feed_items: [
+        {
+          id: 'ufi_locked',
+          user_id: 'viewer_1',
+          source_item_id: 'source_short',
+          blueprint_id: null,
+          state: 'my_feed_unlockable',
+          last_decision_code: null,
+          created_at: '2026-03-06T10:00:00.000Z',
+        },
+      ],
+      source_items: [
+        {
+          id: 'source_short',
+          source_channel_id: 'channel_1',
+          source_page_id: 'page_1',
+          source_url: 'https://youtube.com/watch?v=short',
+          title: 'Short Video',
+          source_channel_title: 'Channel 1',
+          thumbnail_url: null,
+          metadata: null,
+        },
+      ],
+      source_item_unlocks: [
+        {
+          source_item_id: 'source_short',
+          status: 'available',
+          estimated_cost: 1,
+          blueprint_id: null,
+          last_error_code: 'TRANSCRIPT_INSUFFICIENT_CONTEXT',
+          transcript_status: null,
+        },
+      ],
+      user_source_subscriptions: [
+        { user_id: 'viewer_1', source_page_id: 'page_1', source_channel_id: 'channel_1', is_active: true },
+      ],
+      source_pages: [
+        { id: 'page_1', external_id: 'channel_1', platform: 'youtube', avatar_url: null },
+      ],
+    }) as any;
+
+    const items = await listWallForYouFeed({
+      db,
+      userId: 'viewer_1',
+      normalizeTranscriptTruthStatus: () => '',
+      limit: 10,
+    });
+
+    expect(items).toHaveLength(0);
+  });
+
   it('includes personally unlocked blueprint rows from non-subscribed sources but not future locked rows from that source', async () => {
     const db = createMockSupabase({
       user_feed_items: [

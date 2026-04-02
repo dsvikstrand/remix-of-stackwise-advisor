@@ -4,6 +4,13 @@
 - If a user reports `Generate` says `No new generation queued` or `skipped_existing`, but Home/For You still shows `Unlock available`, inspect whether that user already has a locked `user_feed_items` row for the same `user_id + source_item_id`.
 - Expected fixed behavior: search/manual ready handling should upsert that feed row with the discovered `blueprint_id` and published state, so the user wall stops rendering the item as locked.
 
+## Short-Transcript Cooldown Check
+- If a source-page/wall unlock request really queues but the resulting generation fails with `TRANSCRIPT_INSUFFICIENT_CONTEXT`, verify the transcript is genuinely below the live minimum word count before treating it as a pipeline bug.
+- Expected fixed behavior after that failure:
+  - repeat unlock attempts should resolve through blueprint-availability cooldown (`VIDEO_BLUEPRINT_UNAVAILABLE`) instead of immediately requeueing
+  - Home/Profile locked-card readers should stop showing that item as normal `Unlock available`
+  - Source Page follow-up reads should only show `processing` when the linked variant is truly `queued` or `running`, not when variant resolution falls back to `needs_generation`
+
 ## Doc Role
 - Supporting operational runbook only; not a primary MVP planning surface.
 - Launch gate status lives in `docs/ops/mvp-launch-readiness-checklist.md`.

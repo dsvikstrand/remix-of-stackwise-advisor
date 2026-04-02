@@ -168,6 +168,10 @@ function applyVariantStateToUnlockSnapshot(input: {
   };
 }
 
+type SourcePageVariantOverlayState =
+  | { state: 'ready'; blueprintId?: string | null }
+  | { state: 'in_progress' };
+
 function decodeSourcePageBlueprintCursor(raw: string) {
   const value = String(raw || '').trim();
   if (!value) return null;
@@ -583,10 +587,7 @@ app.get(
       }));
     }
   }
-  let variantStateBySourceItemId = new Map<
-    string,
-    { state: 'ready'; blueprintId?: string | null } | { state: 'in_progress' }
-  >();
+  let variantStateBySourceItemId = new Map<string, SourcePageVariantOverlayState>();
   if (sourceItemIds.length > 0) {
     const variantEntries = await Promise.all(sourceItemIds.map(async (sourceItemId) => {
       try {
@@ -594,7 +595,8 @@ app.get(
           sourceItemId,
           generationTier: 'tier',
         });
-        return variantState ? ([sourceItemId, variantState] as const) : null;
+        if (!variantState || variantState.state === 'needs_generation') return null;
+        return [sourceItemId, variantState] as const;
       } catch (error) {
         console.log('[source_video_variant_lookup_failed]', JSON.stringify({
           source_item_id: sourceItemId,
@@ -605,7 +607,7 @@ app.get(
       }
     }));
     variantStateBySourceItemId = new Map(
-      variantEntries.filter((entry): entry is readonly [string, { state: 'ready'; blueprintId?: string | null } | { state: 'in_progress' }] => Boolean(entry)),
+      variantEntries.filter((entry): entry is readonly [string, SourcePageVariantOverlayState] => Boolean(entry)),
     );
   }
 

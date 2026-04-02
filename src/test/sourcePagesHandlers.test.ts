@@ -282,6 +282,78 @@ describe('source page handlers', () => {
     });
   });
 
+  it('does not mislabel needs-generation variants as processing in the source page video list', async () => {
+    const app = createMockApp();
+    const authDb = createMockSupabase({}) as any;
+    const serviceDb = createMockSupabase({}) as any;
+
+    registerSourcePagesRouteHandlers(app as any, createDeps({
+      getAuthedSupabaseClient: () => authDb,
+      getServiceSupabaseClient: () => serviceDb,
+      getUserSubscriptionStateForSourcePage: vi.fn(async () => ({
+        subscribed: true,
+        subscription_id: 'sub_1',
+      })),
+      listYouTubeSourceVideos: vi.fn(async () => ({
+        results: [{
+          video_id: 'video_needs_generation',
+          video_url: 'https://youtube.com/watch?v=video_needs_generation',
+          title: 'Needs Generation Video',
+          description: null,
+          thumbnail_url: 'https://thumb/needs-generation.jpg',
+          published_at: '2026-04-02T13:00:00.000Z',
+          duration_seconds: 123,
+          channel_id: 'channel_1',
+          channel_title: 'Channel 1',
+        }],
+        nextPageToken: null,
+      })),
+      loadExistingSourceVideoStateForUser: vi.fn(async () => new Map([
+        ['video_needs_generation', {
+          source_item_id: 'source_video_needs_generation',
+          already_exists_for_user: false,
+          existing_blueprint_id: null,
+          existing_feed_item_id: null,
+        }],
+      ])),
+      getSourceItemUnlocksBySourceItemIds: vi.fn(async () => []),
+      toUnlockSnapshot: vi.fn(() => ({
+        unlock_status: 'available',
+        unlock_cost: 1,
+        unlock_in_progress: false,
+        ready_blueprint_id: null,
+        unlock_id: null,
+      })),
+      resolveVariantOrReady: vi.fn(async ({ sourceItemId }: { sourceItemId: string }) => {
+        if (sourceItemId === 'source_video_needs_generation') {
+          return { state: 'needs_generation', variant: null };
+        }
+        return null;
+      }),
+    }));
+
+    const handler = app.handlers['GET /api/source-pages/:platform/:externalId/videos'];
+    const req = {
+      params: { platform: 'youtube', externalId: 'channel_1' },
+      query: {},
+    } as any;
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        items: [{
+          video_id: 'video_needs_generation',
+          unlock_status: 'available',
+          unlock_in_progress: false,
+        }],
+      },
+    });
+  });
+
   it('supports Oracle-first public feed and source readers for source page blueprints', async () => {
     const app = createMockApp();
     const serviceDb = createMockSupabase({

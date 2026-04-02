@@ -76,8 +76,10 @@ function getSourceVideoLibraryErrorMessage(error: unknown, fallback: string) {
       case 'RATE_LIMITED':
       case 'INSUFFICIENT_CREDITS':
       case 'DAILY_GENERATION_CAP_REACHED':
+      case 'VIDEO_BLUEPRINT_UNAVAILABLE':
       case 'TRANSCRIPT_UNAVAILABLE':
       case 'NO_TRANSCRIPT_PERMANENT':
+      case 'TRANSCRIPT_INSUFFICIENT_CONTEXT':
       case 'QUEUE_BACKPRESSURE':
       case 'QUEUE_INTAKE_DISABLED':
       case 'SOURCE_PAGE_NOT_FOUND':

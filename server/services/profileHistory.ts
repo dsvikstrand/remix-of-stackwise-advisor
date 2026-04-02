@@ -185,7 +185,11 @@ function buildTranscriptHiddenSourceIdSet(
     }
 
     const normalizedErrorCode = String(row.last_error_code || '').trim().toUpperCase();
-    if (normalizedErrorCode === 'NO_TRANSCRIPT_PERMANENT' || normalizedErrorCode === 'TRANSCRIPT_UNAVAILABLE') {
+    if (
+      normalizedErrorCode === 'NO_TRANSCRIPT_PERMANENT'
+      || normalizedErrorCode === 'TRANSCRIPT_UNAVAILABLE'
+      || normalizedErrorCode === 'TRANSCRIPT_INSUFFICIENT_CONTEXT'
+    ) {
       hidden.add(sourceItemId);
     }
   }

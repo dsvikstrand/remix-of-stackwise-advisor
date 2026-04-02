@@ -37,6 +37,7 @@ const COOLDOWN_TRIGGER_CODES = new Set([
   'NO_TRANSCRIPT_PERMANENT',
   'NO_CAPTIONS',
   'TRANSCRIPT_EMPTY',
+  'TRANSCRIPT_INSUFFICIENT_CONTEXT',
 ]);
 
 function clampInt(raw: unknown, fallback: number, min: number, max: number) {
