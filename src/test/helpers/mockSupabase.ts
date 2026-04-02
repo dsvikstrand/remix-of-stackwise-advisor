@@ -41,6 +41,7 @@ class QueryBuilder {
   private selectColumns: string | null = null;
   private orderRules: OrderRule[] = [];
   private limitCount: number | null = null;
+  private offsetCount = 0;
   private filters: FilterRule[] = [];
   private mode: 'select' | 'insert' | 'update' = 'select';
   private insertPayload: Row[] = [];
@@ -151,6 +152,14 @@ class QueryBuilder {
     return this;
   }
 
+  range(from: number, to: number) {
+    const start = Math.max(0, Math.floor(Number(from) || 0));
+    const end = Math.max(start, Math.floor(Number(to) || 0));
+    this.offsetCount = start;
+    this.limitCount = end - start + 1;
+    return this;
+  }
+
   async maybeSingle() {
     const result = await this.execute();
     if (result.error) return { data: null, error: result.error };
@@ -205,8 +214,9 @@ class QueryBuilder {
   }
 
   private applyLimit(rows: Row[]) {
-    if (this.limitCount == null) return rows;
-    return rows.slice(0, this.limitCount);
+    const start = Math.max(0, this.offsetCount);
+    if (this.limitCount == null) return rows.slice(start);
+    return rows.slice(start, start + this.limitCount);
   }
 
   private ensureCreditLedgerUnique(rows: Row[]) {

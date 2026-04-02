@@ -218,6 +218,7 @@
   - source-identity foundation: `source_pages` table and FK links from `user_source_subscriptions` + `source_items` via `source_page_id`.
   - shared unlock foundation: `source_item_unlocks` (status/cost/reservation/ready blueprint) + `user_credit_wallets` + immutable `credit_ledger`.
   - Oracle durable unlock staging: `ORACLE_UNLOCK_LEDGER_MODE=supabase|dual|primary` can now mirror or own `source_item_unlocks` in local SQLite, while wallet and credit-ledger truth remain on Supabase.
+  - `dual` unlock-ledger rollout now relies on an explicit parity audit (`npm run ops:oracle-unlock-parity -- --json`) and paginated bootstrap/sync reads so Oracle can load and compare the full configured unlock set before `primary`.
   - historical transcript-bridge parity:
     - `transcript_requests` remains in migration history because the linked Supabase project already contains earlier Oracle/Paperspace bridge experiments.
     - current YT2BP transcript-provider runtime does not read or write `transcript_requests`; the active launch path still runs through the existing provider seam plus `youtube_transcript_cache`.

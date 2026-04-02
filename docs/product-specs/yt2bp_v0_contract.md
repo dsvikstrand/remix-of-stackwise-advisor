@@ -254,7 +254,7 @@
 - Installed-PWA push subscription/config routes (`/api/notifications/push-subscriptions*`) and push delivery queue processing are intentionally outside this endpoint contract.
 - Service queue operations (`POST /api/ingestion/jobs/trigger`, `GET /api/ingestion/jobs/latest`, `GET /api/ops/queue/health`) are intentionally outside this endpoint contract.
 - Daily-credit wallet and source-unlock persistence (`user_credit_wallets`, `credit_ledger`, `source_item_unlocks`, `/api/credits`) are intentionally outside this endpoint contract.
-- Oracle durable unlock-ledger staging (`ORACLE_UNLOCK_LEDGER_MODE`, local `source_item_unlocks` ownership/shadowing behavior) is intentionally outside this endpoint contract.
+- Oracle durable unlock-ledger staging (`ORACLE_UNLOCK_LEDGER_MODE`, local `source_item_unlocks` ownership/shadowing behavior, paginated bootstrap, and `ops:oracle-unlock-parity` audit) is intentionally outside this endpoint contract.
 - Queue-work-item budgeting and queue-health work-size reporting (`queue_work_items`, `running_work_items`, per-scope work-item fields) are intentionally outside this endpoint contract.
 - Backend runtime bootstrap composition (`server/services/runtimeConfig.ts`, queued worker controller, YouTube refresh scheduler controller) is intentionally outside this endpoint contract.
 - Backend env-source selection (`server/loadEnv.ts`, `/etc/agentic-backend.env`, local repo `.env` fallback) is intentionally outside this endpoint contract.

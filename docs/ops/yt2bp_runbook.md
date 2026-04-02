@@ -815,6 +815,16 @@ npm run smoke:release -- --api-base-url https://api.bleup.app --frontend-base-ur
 ```bash
 npm run ops:oracle-primary-check -- --json
 ```
+- Oracle unlock-ledger parity snapshot during `ORACLE_UNLOCK_LEDGER_MODE=dual`:
+```bash
+npm run ops:oracle-unlock-parity -- --json
+```
+  - Good `dual` verdict for `source_item_unlocks`:
+    - `ORACLE_UNLOCK_LEDGER_MODE=dual`
+    - `missing_in_oracle_count=0`
+    - `missing_in_supabase_count=0`
+    - `mismatched_row_count=0`
+    - no duplicate `source_item_id` rows on either side
 - YT2BP repro smoke:
 ```bash
 npm run smoke:yt2bp -- --base-url https://api.bleup.app

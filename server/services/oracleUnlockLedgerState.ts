@@ -268,14 +268,26 @@ export async function syncOracleUnlockLedgerFromSupabase(input: {
   nowIso?: string;
 }) {
   const limit = Math.max(100, Math.floor(Number(input.limit) || 0));
-  const { data, error } = await input.db
-    .from('source_item_unlocks')
-    .select(UNLOCK_LEDGER_SELECT)
-    .order('updated_at', { ascending: false })
-    .limit(limit);
-  if (error) throw error;
+  const pageSize = Math.min(1000, limit);
+  const rows: Array<Record<string, unknown>> = [];
 
-  const rows = (data || []) as Array<Record<string, unknown>>;
+  for (let from = 0; from < limit; from += pageSize) {
+    const to = Math.min(limit, from + pageSize) - 1;
+    const { data, error } = await input.db
+      .from('source_item_unlocks')
+      .select(UNLOCK_LEDGER_SELECT)
+      .order('updated_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, to);
+    if (error) throw error;
+
+    const batch = (data || []) as Array<Record<string, unknown>>;
+    rows.push(...batch);
+    if (batch.length < pageSize) {
+      break;
+    }
+  }
+
   await input.controlDb.db.deleteFrom('unlock_ledger_state').execute();
   const synced = await upsertOracleUnlockLedgerRows({
     controlDb: input.controlDb,

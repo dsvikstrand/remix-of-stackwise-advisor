@@ -303,6 +303,8 @@ d7) [have] Onboarding state table for new-user YouTube setup (`user_youtube_onbo
 d8) [have] Source-page foundation tables/links (`source_pages`, `user_source_subscriptions.source_page_id`, `source_items.source_page_id`).
 d9) [have] Daily-credit + unlock tables (`user_credit_wallets`, `credit_ledger`, `source_item_unlocks`).
 d9a) [have] Oracle runtime now also stages durable unlock-row truth for `source_item_unlocks` behind `ORACLE_UNLOCK_LEDGER_MODE`, while wallet and credit-ledger truth stay on Supabase.
+d9b) [have] Oracle unlock-ledger `dual` soak now also has a required parity check via `npm run ops:oracle-unlock-parity -- --json`; a healthy pre-`primary` result shows full row coverage on both sides plus zero durable-field drift.
+d9c) [have] Oracle unlock-ledger bootstrap now pages through recent `source_item_unlocks` rows so the configured `ORACLE_UNLOCK_LEDGER_BOOTSTRAP_LIMIT` can hydrate fully instead of stopping at the first backend page.
 d10) [have] Historical transcript-bridge table `transcript_requests` exists in schema history for earlier Oracle/Paperspace experiments; current transcript-provider runtime does not depend on it.
 
 ## Subscription Interfaces (MVP)
