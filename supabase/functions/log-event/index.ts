@@ -1,13 +1,13 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Authorization, Content-Type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// Allow specific origins
 const allowedOrigins = [
+  "https://bleup.app",
+  "https://www.bleup.app",
   "https://dsvikstrand.github.io",
   "http://localhost:8080",
 ];
@@ -17,12 +17,23 @@ function getCorsHeaders(origin: string | null) {
     return {
       ...corsHeaders,
       "Access-Control-Allow-Origin": origin,
+      "Vary": "Origin",
     };
   }
-  // Default to first allowed origin for non-browser requests
+  if (!origin) {
+    return {
+      ...corsHeaders,
+      "Access-Control-Allow-Origin": allowedOrigins[0],
+    };
+  }
+  return null;
+}
+
+function getForbiddenHeaders(origin: string | null) {
   return {
     ...corsHeaders,
-    "Access-Control-Allow-Origin": allowedOrigins[0],
+    ...(origin ? { "Vary": "Origin" } : {}),
+    "Content-Type": "application/json",
   };
 }
 
@@ -30,7 +41,13 @@ Deno.serve(async (req) => {
   const origin = req.headers.get("Origin");
   const headers = getCorsHeaders(origin);
 
-  // Handle CORS preflight
+  if (!headers) {
+    return new Response(JSON.stringify({ error: "Origin not allowed" }), {
+      status: 403,
+      headers: getForbiddenHeaders(origin),
+    });
+  }
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers });
   }
