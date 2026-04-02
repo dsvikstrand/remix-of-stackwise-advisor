@@ -76,6 +76,7 @@
   - `GET /api/source-pages/:platform/:externalId/blueprints` (public source-page feed, deduped by source video, cursor-paginated, includes additive `source_thumbnail_url`)
   - `GET /api/source-pages/:platform/:externalId/videos` (auth source-page video-library list, supports `kind=full|shorts`; UI loads it only on explicit user request)
     - rate policy: burst `4/15s` + sustained `40/10m` per user/IP.
+    - follow-up consistency note: this read now also overlays queued/running `source_item_blueprint_variants` state, so an item returned as `in_progress` by `POST /videos/unlock` should immediately come back as `unlock_in_progress=true` / `unlock_status=processing` on the next library refresh.
   - `POST /api/source-pages/:platform/:externalId/videos/unlock` (auth shared unlock + async generation queue for selected source videos)
     - rate policy: burst `8/10s` + sustained `120/10m` per user/IP.
     - additive response field: `data.trace_id` for unlock tracing.
@@ -439,6 +440,7 @@ Required runtime variables:
 - `ORACLE_FEED_LEDGER_BOOTSTRAP_LIMIT` (default `10000`; number of recent durable `user_feed_items` rows loaded into the local Oracle feed ledger during bootstrap)
 - `ORACLE_SOURCE_ITEM_LEDGER_MODE` (default `supabase`; accepted values: `supabase`, `dual`, `primary`; stages local Oracle durable `source_items` ownership so source-item upserts, metadata/view-count updates, execution-path source lookups, and Oracle-first wall/profile/source-page source-row reads can move onto local SQLite while Supabase remains compatibility shadow; if Oracle-first source-item reads regress, set this back to `supabase` before redeploying a fix)
 - `ORACLE_SOURCE_ITEM_LEDGER_BOOTSTRAP_LIMIT` (default `10000`; number of recent durable `source_items` rows loaded into the local Oracle source-item ledger during bootstrap)
+- Source-page follow-up trust note: if `POST /api/source-pages/:platform/:externalId/videos/unlock` returns `in_progress`, the next `GET /videos` should now reflect that same running variant state even before `source_item_unlocks` changes.
 - Once `ORACLE_UNLOCK_LEDGER_MODE=primary` is live, unlock-specific truth reads and unlock mutation preconditions should come from the Oracle unlock ledger directly; the older Oracle product unlock mirror is compatibility/read-plane support only.
 - `ORACLE_QUEUE_SWEEP_CONTROL_ENABLED` (default `false`; enables Oracle-local sweep cadence/tier selection for the queued worker while Supabase still performs durable claim RPCs)
 - `ORACLE_QUEUE_ADMISSION_MIRROR_ENABLED` (default `false`; enables Oracle-local mirrored active queue counts; once `ORACLE_QUEUE_LEDGER_MODE=primary`, normal admission reads prefer the Oracle queue ledger directly and this mirror becomes fallback/bootstrap compatibility state)

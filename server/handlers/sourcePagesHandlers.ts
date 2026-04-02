@@ -123,6 +123,34 @@ function encodeSourcePageBlueprintCursor(input: SourcePageBlueprintCursor) {
   return Buffer.from(payload, 'utf8').toString('base64url');
 }
 
+function applyVariantStateToUnlockSnapshot(input: {
+  snapshot: {
+    unlock_status: 'available' | 'reserved' | 'processing' | 'ready';
+    unlock_cost: number;
+    unlock_in_progress: boolean;
+    ready_blueprint_id: string | null;
+    unlock_id: string | null;
+  };
+  variantState: { state: 'ready'; blueprintId?: string | null } | { state: 'in_progress' } | null;
+}) {
+  if (!input.variantState) return input.snapshot;
+  if (input.variantState.state === 'ready' && input.variantState.blueprintId) {
+    return {
+      ...input.snapshot,
+      unlock_status: 'ready',
+      unlock_in_progress: false,
+      ready_blueprint_id: input.variantState.blueprintId,
+    };
+  }
+  return {
+    ...input.snapshot,
+    unlock_status: input.snapshot.unlock_status === 'available'
+      ? 'processing'
+      : input.snapshot.unlock_status,
+    unlock_in_progress: true,
+  };
+}
+
 function decodeSourcePageBlueprintCursor(raw: string) {
   const value = String(raw || '').trim();
   if (!value) return null;
@@ -538,11 +566,43 @@ app.get(
       }));
     }
   }
+  let variantStateBySourceItemId = new Map<
+    string,
+    { state: 'ready'; blueprintId?: string | null } | { state: 'in_progress' }
+  >();
+  if (sourceItemIds.length > 0) {
+    const variantEntries = await Promise.all(sourceItemIds.map(async (sourceItemId) => {
+      try {
+        const variantState = await resolveVariantOrReady({
+          sourceItemId,
+          generationTier: 'tier',
+        });
+        return variantState ? ([sourceItemId, variantState] as const) : null;
+      } catch (error) {
+        console.log('[source_video_variant_lookup_failed]', JSON.stringify({
+          source_item_id: sourceItemId,
+          source_page_id: sourcePage.id,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+        return null;
+      }
+    }));
+    variantStateBySourceItemId = new Map(
+      variantEntries.filter((entry): entry is readonly [string, { state: 'ready'; blueprintId?: string | null } | { state: 'in_progress' }] => Boolean(entry)),
+    );
+  }
 
   const items = page.results
     .map((item) => {
       const existing = existingByVideoId.get(item.video_id);
       const unlock = existing?.source_item_id ? unlockBySourceItemId.get(existing.source_item_id) || null : null;
+      const snapshot = applyVariantStateToUnlockSnapshot({
+        snapshot: toUnlockSnapshot({
+          unlock,
+          fallbackCost: fallbackUnlockCost,
+        }),
+        variantState: existing?.source_item_id ? variantStateBySourceItemId.get(existing.source_item_id) || null : null,
+      });
       return {
         unlock,
         payload: {
@@ -558,10 +618,7 @@ app.get(
           already_exists_for_user: Boolean(existing?.already_exists_for_user),
           existing_blueprint_id: existing?.existing_blueprint_id || null,
           existing_feed_item_id: existing?.existing_feed_item_id || null,
-          ...toUnlockSnapshot({
-            unlock,
-            fallbackCost: fallbackUnlockCost,
-          }),
+          ...snapshot,
         },
       };
     })
