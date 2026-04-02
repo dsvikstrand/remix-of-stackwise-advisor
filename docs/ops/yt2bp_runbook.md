@@ -437,7 +437,7 @@ Required runtime variables:
 - `ORACLE_UNLOCK_LEDGER_BOOTSTRAP_LIMIT` (default `10000`; number of recent durable `source_item_unlocks` rows loaded into the local Oracle unlock ledger during bootstrap)
 - `ORACLE_FEED_LEDGER_MODE` (default `supabase`; accepted values: `supabase`, `dual`, `primary`; stages local Oracle durable `user_feed_items` ownership so feed insert/update/delete transitions and Oracle-first wall/profile/public feed reads plus shared feed-state mutations can move onto local SQLite while Supabase remains compatibility shadow)
 - `ORACLE_FEED_LEDGER_BOOTSTRAP_LIMIT` (default `10000`; number of recent durable `user_feed_items` rows loaded into the local Oracle feed ledger during bootstrap)
-- `ORACLE_SOURCE_ITEM_LEDGER_MODE` (default `supabase`; accepted values: `supabase`, `dual`, `primary`; stages local Oracle durable `source_items` ownership so source-item upserts, metadata/view-count updates, execution-path source lookups, and Oracle-first wall/profile/source-page source-row reads can move onto local SQLite while Supabase remains compatibility shadow)
+- `ORACLE_SOURCE_ITEM_LEDGER_MODE` (default `supabase`; accepted values: `supabase`, `dual`, `primary`; stages local Oracle durable `source_items` ownership so source-item upserts, metadata/view-count updates, execution-path source lookups, and Oracle-first wall/profile/source-page source-row reads can move onto local SQLite while Supabase remains compatibility shadow; if Oracle-first source-item reads regress, set this back to `supabase` before redeploying a fix)
 - `ORACLE_SOURCE_ITEM_LEDGER_BOOTSTRAP_LIMIT` (default `10000`; number of recent durable `source_items` rows loaded into the local Oracle source-item ledger during bootstrap)
 - Once `ORACLE_UNLOCK_LEDGER_MODE=primary` is live, unlock-specific truth reads and unlock mutation preconditions should come from the Oracle unlock ledger directly; the older Oracle product unlock mirror is compatibility/read-plane support only.
 - `ORACLE_QUEUE_SWEEP_CONTROL_ENABLED` (default `false`; enables Oracle-local sweep cadence/tier selection for the queued worker while Supabase still performs durable claim RPCs)
@@ -862,6 +862,10 @@ npm run ops:oracle-source-item-parity -- --json
     - `ORACLE_SOURCE_ITEM_LEDGER_MODE=primary`
     - parity still `PASS`
     - source-item upserts, source-item execution reads, and metadata/view-count updates stay on the Oracle source-item ledger path with zero parity drift
+  - If live wall posts or source-page unlock generation start failing with `source_item_ledger_failed`, roll back immediately:
+    - set `ORACLE_SOURCE_ITEM_LEDGER_MODE=supabase`
+    - restart `agentic-backend.service`
+    - redeploy the fixed build before re-staging `dual`
 - YT2BP repro smoke:
 ```bash
 npm run smoke:yt2bp -- --base-url https://api.bleup.app

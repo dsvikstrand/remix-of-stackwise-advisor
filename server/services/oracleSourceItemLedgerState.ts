@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { OracleControlPlaneDb } from './oracleControlPlaneDb';
+import {
+  normalizeIsoOrNull,
+  normalizeObject,
+  normalizeRequiredIso,
+  normalizeStringOrNull,
+} from './oracleValueNormalization';
 
 type DbClient = SupabaseClient<any, 'public', any>;
 
@@ -39,27 +45,6 @@ const SOURCE_ITEM_LEDGER_SELECT = [
   'created_at',
   'updated_at',
 ].join(', ');
-
-function normalizeIsoOrNull(value: unknown) {
-  const normalized = String(value || '').trim();
-  if (!normalized) return null;
-  const parsed = Date.parse(normalized);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
-}
-
-function normalizeRequiredIso(value: unknown, fallbackIso?: string) {
-  return normalizeIsoOrNull(value) || fallbackIso || new Date().toISOString();
-}
-
-function normalizeStringOrNull(value: unknown) {
-  const normalized = String(value || '').trim();
-  return normalized || null;
-}
-
-function normalizeObject(value: unknown) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
-}
 
 function chunkArray<T>(items: T[], chunkSize: number) {
   const chunks: T[][] = [];
