@@ -193,4 +193,51 @@ describe('oracle unlock ledger state', () => {
       await controlDb.close();
     }
   });
+
+  it('bootstraps across multiple Supabase pages when the limit exceeds 1000 rows', async () => {
+    const controlDb = openOracleControlPlaneDb({
+      sqlitePath: createTempSqlitePath(),
+    });
+    const rows = Array.from({ length: 1005 }, (_, index) => ({
+      id: `unlock_page_${index + 1}`,
+      source_item_id: `source_page_${index + 1}`,
+      source_page_id: `page_${index + 1}`,
+      status: index === 1004 ? 'processing' : 'available',
+      estimated_cost: 1,
+      reserved_by_user_id: index === 1004 ? 'user_page' : null,
+      reservation_expires_at: index === 1004 ? '2026-04-02T09:00:00.000Z' : null,
+      job_id: index === 1004 ? 'job_page' : null,
+      updated_at: new Date(Date.UTC(2026, 3, 2, 8, 0, 0, index)).toISOString(),
+      created_at: new Date(Date.UTC(2026, 3, 2, 8, 0, 0, index)).toISOString(),
+    }));
+    const db = createMockSupabase({
+      source_item_unlocks: rows,
+    }) as any;
+
+    try {
+      const result = await syncOracleUnlockLedgerFromSupabase({
+        controlDb,
+        db,
+        limit: 5000,
+      });
+
+      expect(result).toMatchObject({
+        rowCount: 1005,
+        activeCount: 1,
+      });
+
+      const tailRow = await getOracleUnlockLedgerBySourceItemId({
+        controlDb,
+        sourceItemId: 'source_page_1005',
+      });
+      expect(tailRow).toMatchObject({
+        id: 'unlock_page_1005',
+        source_item_id: 'source_page_1005',
+        status: 'processing',
+        job_id: 'job_page',
+      });
+    } finally {
+      await controlDb.close();
+    }
+  }, 15_000);
 });

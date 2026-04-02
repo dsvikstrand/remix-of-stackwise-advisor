@@ -434,6 +434,7 @@ Required runtime variables:
 - `ORACLE_SUBSCRIPTION_LEDGER_BOOTSTRAP_LIMIT` (default `10000`; number of recent `user_source_subscriptions` rows loaded into the local Oracle subscription ledger during bootstrap)
 - `ORACLE_UNLOCK_LEDGER_MODE` (default `supabase`; accepted values: `supabase`, `dual`, `primary`; stages local Oracle durable `source_item_unlocks` ownership so unlock reservation/processing/ready/transcript-retry writes and Oracle-first unlock reads can move onto local SQLite while Supabase remains compatibility shadow)
 - `ORACLE_UNLOCK_LEDGER_BOOTSTRAP_LIMIT` (default `10000`; number of recent durable `source_item_unlocks` rows loaded into the local Oracle unlock ledger during bootstrap)
+- Once `ORACLE_UNLOCK_LEDGER_MODE=primary` is live, unlock-specific truth reads and unlock mutation preconditions should come from the Oracle unlock ledger directly; the older Oracle product unlock mirror is compatibility/read-plane support only.
 - `ORACLE_QUEUE_SWEEP_CONTROL_ENABLED` (default `false`; enables Oracle-local sweep cadence/tier selection for the queued worker while Supabase still performs durable claim RPCs)
 - `ORACLE_QUEUE_ADMISSION_MIRROR_ENABLED` (default `false`; enables Oracle-local mirrored active queue counts; once `ORACLE_QUEUE_LEDGER_MODE=primary`, normal admission reads prefer the Oracle queue ledger directly and this mirror becomes fallback/bootstrap compatibility state)
 - `ORACLE_QUEUE_ADMISSION_REFRESH_STALE_MS` (default `15000`; maximum tolerated age for Oracle-local mirrored queue-admission counts before the backend refreshes them from Supabase)
@@ -825,6 +826,10 @@ npm run ops:oracle-unlock-parity -- --json
     - `missing_in_supabase_count=0`
     - `mismatched_row_count=0`
     - no duplicate `source_item_id` rows on either side
+- After the `dual -> primary` flip, rerun the same command and confirm:
+  - `ORACLE_UNLOCK_LEDGER_MODE=primary`
+  - parity still `PASS`
+  - Oracle/Supabase row counts still match exactly
 - YT2BP repro smoke:
 ```bash
 npm run smoke:yt2bp -- --base-url https://api.bleup.app

@@ -2356,6 +2356,68 @@ async function upsertOracleUnlockLedgerFromKnownRow(
   }
 }
 
+async function getSourceItemUnlockByIdForPrimaryMutation(
+  db: ReturnType<typeof createClient>,
+  unlockId: string,
+  action: string,
+) {
+  const normalizedUnlockId = String(unlockId || '').trim();
+  if (!normalizedUnlockId) return null;
+
+  if (!oracleUnlockLedgerPrimaryEnabled || !oracleControlPlane) {
+    return getSourceItemUnlockByIdOracleFirst(db, normalizedUnlockId);
+  }
+
+  try {
+    const durable = await getOracleUnlockLedgerById({
+      controlDb: oracleControlPlane,
+      unlockId: normalizedUnlockId,
+    });
+    if (durable) {
+      return normalizeSourceItemUnlockRow(durable as unknown as Record<string, unknown>);
+    }
+  } catch (error) {
+    console.warn('[oracle-control-plane] unlock_ledger_failed', JSON.stringify({
+      action,
+      unlock_id: normalizedUnlockId,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+
+  return readSupabaseSourceItemUnlockById(db, normalizedUnlockId);
+}
+
+async function getSourceItemUnlockBySourceItemIdForPrimaryMutation(
+  db: ReturnType<typeof createClient>,
+  sourceItemId: string,
+  action: string,
+) {
+  const normalizedSourceItemId = String(sourceItemId || '').trim();
+  if (!normalizedSourceItemId) return null;
+
+  if (!oracleUnlockLedgerPrimaryEnabled || !oracleControlPlane) {
+    return getSourceItemUnlockBySourceItemIdOracleFirst(db, normalizedSourceItemId);
+  }
+
+  try {
+    const durable = await getOracleUnlockLedgerBySourceItemId({
+      controlDb: oracleControlPlane,
+      sourceItemId: normalizedSourceItemId,
+    });
+    if (durable) {
+      return normalizeSourceItemUnlockRow(durable as unknown as Record<string, unknown>);
+    }
+  } catch (error) {
+    console.warn('[oracle-control-plane] unlock_ledger_failed', JSON.stringify({
+      action,
+      source_item_id: normalizedSourceItemId,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+
+  return readSupabaseSourceItemUnlockBySourceItemId(db, normalizedSourceItemId);
+}
+
 async function writeSupabaseSourceItemUnlockShadow(
   db: ReturnType<typeof createClient>,
   row: SourceItemUnlockRow,
@@ -2488,7 +2550,11 @@ async function patchSourceItemUnlockOracleAware(
     current?: SourceItemUnlockRow | null;
   },
 ) {
-  const current = input.current ?? await getSourceItemUnlockByIdOracleFirst(db, input.unlockId);
+  const current = input.current ?? await getSourceItemUnlockByIdForPrimaryMutation(
+    db,
+    input.unlockId,
+    `${input.action}_current`,
+  );
   if (!current) return null;
 
   return persistSourceItemUnlockRowOracleAware(db, {
@@ -3059,7 +3125,7 @@ async function getSourceItemUnlockBySourceItemIdOracleFirst(
     }
   }
 
-  if (oracleProductMirrorEnabled && oracleControlPlane) {
+  if (!oracleUnlockLedgerEnabled && oracleProductMirrorEnabled && oracleControlPlane) {
     try {
       const mirrored = await getOracleProductUnlockBySourceItemId({
         controlDb: oracleControlPlane,
@@ -3125,7 +3191,7 @@ async function getSourceItemUnlocksBySourceItemIdsOracleFirst(
     }
   }
 
-  if (oracleProductMirrorEnabled && oracleControlPlane) {
+  if (!oracleUnlockLedgerEnabled && oracleProductMirrorEnabled && oracleControlPlane) {
     try {
       const mirrored = await listOracleProductUnlocks({
         controlDb: oracleControlPlane,
@@ -3683,7 +3749,11 @@ async function syncOracleProductUnlockById(
   }
 
   try {
-    const unlock = await getSourceItemUnlockByIdOracleFirst(db, normalizedUnlockId);
+    const unlock = await getSourceItemUnlockByIdForPrimaryMutation(
+      db,
+      normalizedUnlockId,
+      'sync_product_unlock_by_id',
+    );
     if (!unlock) return;
     await upsertOracleProductUnlocksFromKnownRows([unlock as unknown as Record<string, unknown>], action);
   } catch (error) {
@@ -3711,7 +3781,11 @@ async function ensureSourceItemUnlockWithMirror(
     return unlock;
   }
 
-  const current = await getSourceItemUnlockBySourceItemIdOracleFirst(db, input.sourceItemId);
+  const current = await getSourceItemUnlockBySourceItemIdForPrimaryMutation(
+    db,
+    input.sourceItemId,
+    'ensure_source_item_unlock_current',
+  );
   if (current) {
     const nextCost = Number(input.estimatedCost);
     const currentCost = Number(current.estimated_cost || 0);
@@ -3763,9 +3837,17 @@ async function reserveUnlockWithMirror(
     return result;
   }
 
-  let unlock = await getSourceItemUnlockByIdOracleFirst(db, input.unlock.id);
+  let unlock = await getSourceItemUnlockByIdForPrimaryMutation(
+    db,
+    input.unlock.id,
+    'reserve_unlock_current',
+  );
   if (!unlock) {
-    unlock = await getSourceItemUnlockBySourceItemIdOracleFirst(db, input.unlock.source_item_id);
+    unlock = await getSourceItemUnlockBySourceItemIdForPrimaryMutation(
+      db,
+      input.unlock.source_item_id,
+      'reserve_unlock_source_item_current',
+    );
   }
   if (!unlock) {
     throw new Error('UNLOCK_NOT_FOUND');
@@ -3873,7 +3955,11 @@ async function attachReservationLedgerWithMirror(
     return unlock;
   }
 
-  const current = await getSourceItemUnlockByIdOracleFirst(db, input.unlockId);
+  const current = await getSourceItemUnlockByIdForPrimaryMutation(
+    db,
+    input.unlockId,
+    'attach_reservation_ledger_current',
+  );
   if (!current) throw new Error('UNLOCK_NOT_FOUND');
 
   return persistSourceItemUnlockRowOracleAware(db, {
@@ -3908,7 +3994,11 @@ async function attachAutoUnlockIntentWithMirror(
     return unlock;
   }
 
-  const current = await getSourceItemUnlockByIdOracleFirst(db, input.unlockId);
+  const current = await getSourceItemUnlockByIdForPrimaryMutation(
+    db,
+    input.unlockId,
+    'attach_auto_unlock_intent_current',
+  );
   if (!current) throw new Error('UNLOCK_NOT_FOUND');
 
   return persistSourceItemUnlockRowOracleAware(db, {
@@ -3943,7 +4033,11 @@ async function markUnlockProcessingWithMirror(
     return unlock;
   }
 
-  const current = await getSourceItemUnlockByIdOracleFirst(db, input.unlockId);
+  const current = await getSourceItemUnlockByIdForPrimaryMutation(
+    db,
+    input.unlockId,
+    'mark_unlock_processing_current',
+  );
   if (!current) return null;
   if (current.reserved_by_user_id !== input.userId || current.status !== 'reserved') {
     return null;
@@ -3986,7 +4080,11 @@ async function completeUnlockWithMirror(
     return unlock;
   }
 
-  const current = await getSourceItemUnlockByIdOracleFirst(db, input.unlockId);
+  const current = await getSourceItemUnlockByIdForPrimaryMutation(
+    db,
+    input.unlockId,
+    'complete_unlock_current',
+  );
   if (!current) throw new Error('UNLOCK_NOT_FOUND');
 
   if (current.status === 'processing' && current.job_id === (input.expectedJobId || input.jobId)) {
@@ -4029,7 +4127,11 @@ async function failUnlockWithMirror(
     return unlock;
   }
 
-  const current = await getSourceItemUnlockByIdOracleFirst(db, input.unlockId);
+  const current = await getSourceItemUnlockByIdForPrimaryMutation(
+    db,
+    input.unlockId,
+    'fail_unlock_current',
+  );
   if (!current) throw new Error('UNLOCK_NOT_FOUND');
 
   if (
