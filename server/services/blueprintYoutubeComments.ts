@@ -285,6 +285,11 @@ export function createBlueprintYouTubeCommentsService(input: {
   commentsAutoFirstDelayMinutes?: number;
   commentsAutoSecondDelayHours?: number;
   commentsManualCooldownMinutes?: number;
+  storeSourceItemViewCountOracleAware?: (input: {
+    db: DbClient;
+    sourceItemId: string;
+    viewCount: number | null;
+  }) => Promise<boolean>;
   listPendingRefreshBlueprintIdsOracleFirst?: (input: {
     db: DbClient;
     blueprintIds: string[];
@@ -315,6 +320,7 @@ export function createBlueprintYouTubeCommentsService(input: {
     input.commentsManualCooldownMinutes,
     DEFAULT_COMMENTS_MANUAL_COOLDOWN_MINUTES,
   );
+  const storeSourceItemViewCountOracleAware = input.storeSourceItemViewCountOracleAware;
   const listPendingRefreshBlueprintIdsOracleFirst = input.listPendingRefreshBlueprintIdsOracleFirst;
   const listOracleActiveRefreshJobs = input.listOracleActiveRefreshJobs;
 
@@ -977,11 +983,17 @@ export function createBlueprintYouTubeCommentsService(input: {
 
       try {
         const viewCount = await fetchYouTubeViewCount({ videoId: args.youtubeVideoId });
-        const storedOnSourceItem = await storeSourceItemViewCount({
-          db: args.db,
-          sourceItemId,
-          viewCount,
-        });
+        const storedOnSourceItem = storeSourceItemViewCountOracleAware
+          ? await storeSourceItemViewCountOracleAware({
+              db: args.db,
+              sourceItemId,
+              viewCount,
+            })
+          : await storeSourceItemViewCount({
+              db: args.db,
+              sourceItemId,
+              viewCount,
+            });
         const status = storedOnSourceItem ? 'ok' : 'skipped';
         await upsertRefreshState({
           db: args.db,
@@ -1219,11 +1231,17 @@ export function createBlueprintYouTubeCommentsService(input: {
       const sourceItemId = String(args.explicitSourceItemId || '').trim();
       let storedOnSourceItem = false;
       if (sourceItemId) {
-        storedOnSourceItem = await storeSourceItemViewCount({
-          db: args.db,
-          sourceItemId,
-          viewCount,
-        });
+        storedOnSourceItem = storeSourceItemViewCountOracleAware
+          ? await storeSourceItemViewCountOracleAware({
+              db: args.db,
+              sourceItemId,
+              viewCount,
+            })
+          : await storeSourceItemViewCount({
+              db: args.db,
+              sourceItemId,
+              viewCount,
+            });
       }
       if (args.traceDb) {
         await appendGenerationEvent(args.traceDb, {

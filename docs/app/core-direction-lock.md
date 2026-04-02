@@ -78,6 +78,7 @@ Status: `canonical`
 44. Blueprint feed cards are interaction-minimal in MVP (like/comment only; no share action button).
 45. Subscription sync must skip pre-release YouTube premieres (`upcoming`) so unreleased videos do not appear as unlock cards before publish.
 46. If a sync batch contains skipped upcoming premieres, subscription checkpoint advancement is held for that run to avoid missing those videos once they release.
+47. Source-item truth may be staged behind the Oracle durable source-item ledger (`ORACLE_SOURCE_ITEM_LEDGER_MODE=supabase|dual|primary`), but Supabase remains the compatibility shadow until that ledger is explicitly promoted; user-facing source/feed behavior must stay consistent across both stores during the rollout.
 47. Permanent no-transcript source videos (`NO_TRANSCRIPT_PERMANENT` / legacy `NO_CAPTIONS`) must not remain as unlockable feed cards; only transient transcript-unavailable cases may retry.
 48. YouTube-source banners are thumbnail-first across feed/detail/source surfaces: source flows should write/use thumbnail URLs (stored source thumbnail or deterministic `ytimg` fallback) and should not rely on auto-banner queueing.
 49. Subscription sync persistence is write-throttled for backend efficiency: unchanged successful sync writes to `user_source_subscriptions` should be skipped unless checkpoint/title/error state changes, while repeated identical error writes remain bounded by the `30m` poll heartbeat; user-facing subscription health remains a `60m` UX window.

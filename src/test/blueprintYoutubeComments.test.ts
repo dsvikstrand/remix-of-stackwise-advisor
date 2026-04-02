@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createBlueprintYouTubeCommentsService } from '../../server/services/blueprintYoutubeComments';
+import { createMockSupabase } from './helpers/mockSupabase';
 
 describe('blueprint YouTube comments service', () => {
   it('normalizes top-level comments from the YouTube API response', async () => {
@@ -192,6 +193,48 @@ describe('blueprint YouTube comments service', () => {
     expect(stored).toBe(true);
     expect(update).toHaveBeenCalledTimes(1);
     expect(maybeSingle).toHaveBeenCalledTimes(1);
+  });
+
+  it('executeRefresh uses the injected Oracle-aware source-item view writer when present', async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        items: [
+          {
+            id: 'abc123def45',
+            statistics: {
+              viewCount: '12345',
+            },
+          },
+        ],
+      }),
+    })) as unknown as typeof fetch;
+    const storeSourceItemViewCountOracleAware = vi.fn(async () => true);
+    const db = createMockSupabase({
+      blueprint_youtube_refresh_state: [],
+    }) as any;
+
+    const service = createBlueprintYouTubeCommentsService({
+      apiKey: 'youtube-key',
+      fetchImpl,
+      storeSourceItemViewCountOracleAware,
+    });
+
+    await service.executeRefresh({
+      db,
+      blueprintId: 'bp_1',
+      kind: 'view_count',
+      youtubeVideoId: 'abc123def45',
+      sourceItemId: 'src_1',
+    });
+
+    expect(storeSourceItemViewCountOracleAware).toHaveBeenCalledTimes(1);
+    expect(storeSourceItemViewCountOracleAware).toHaveBeenCalledWith({
+      db,
+      sourceItemId: 'src_1',
+      viewCount: 12345,
+    });
   });
 
   it('registerRefreshStateForBlueprint no-ops when no video id can be resolved', async () => {

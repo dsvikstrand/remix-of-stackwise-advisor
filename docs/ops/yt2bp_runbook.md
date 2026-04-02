@@ -437,6 +437,8 @@ Required runtime variables:
 - `ORACLE_UNLOCK_LEDGER_BOOTSTRAP_LIMIT` (default `10000`; number of recent durable `source_item_unlocks` rows loaded into the local Oracle unlock ledger during bootstrap)
 - `ORACLE_FEED_LEDGER_MODE` (default `supabase`; accepted values: `supabase`, `dual`, `primary`; stages local Oracle durable `user_feed_items` ownership so feed insert/update/delete transitions and Oracle-first wall/profile/public feed reads plus shared feed-state mutations can move onto local SQLite while Supabase remains compatibility shadow)
 - `ORACLE_FEED_LEDGER_BOOTSTRAP_LIMIT` (default `10000`; number of recent durable `user_feed_items` rows loaded into the local Oracle feed ledger during bootstrap)
+- `ORACLE_SOURCE_ITEM_LEDGER_MODE` (default `supabase`; accepted values: `supabase`, `dual`, `primary`; stages local Oracle durable `source_items` ownership so source-item upserts, metadata/view-count updates, execution-path source lookups, and Oracle-first wall/profile/source-page source-row reads can move onto local SQLite while Supabase remains compatibility shadow)
+- `ORACLE_SOURCE_ITEM_LEDGER_BOOTSTRAP_LIMIT` (default `10000`; number of recent durable `source_items` rows loaded into the local Oracle source-item ledger during bootstrap)
 - Once `ORACLE_UNLOCK_LEDGER_MODE=primary` is live, unlock-specific truth reads and unlock mutation preconditions should come from the Oracle unlock ledger directly; the older Oracle product unlock mirror is compatibility/read-plane support only.
 - `ORACLE_QUEUE_SWEEP_CONTROL_ENABLED` (default `false`; enables Oracle-local sweep cadence/tier selection for the queued worker while Supabase still performs durable claim RPCs)
 - `ORACLE_QUEUE_ADMISSION_MIRROR_ENABLED` (default `false`; enables Oracle-local mirrored active queue counts; once `ORACLE_QUEUE_LEDGER_MODE=primary`, normal admission reads prefer the Oracle queue ledger directly and this mirror becomes fallback/bootstrap compatibility state)
@@ -846,6 +848,20 @@ npm run ops:oracle-feed-parity -- --json
     - `ORACLE_FEED_LEDGER_MODE=primary`
     - parity still `PASS`
     - shared feed transitions (`/api/my-feed`, channel-candidate state changes, auto-channel publish/reject, suppression-driven skips) stay on the Oracle feed ledger path with zero parity drift
+- Oracle source-item-ledger parity snapshot during `ORACLE_SOURCE_ITEM_LEDGER_MODE=dual`:
+```bash
+npm run ops:oracle-source-item-parity -- --json
+```
+  - Good `dual` verdict for `source_items`:
+    - `ORACLE_SOURCE_ITEM_LEDGER_MODE=dual`
+    - `missing_in_oracle_count=0`
+    - `missing_in_supabase_count=0`
+    - `mismatched_row_count=0`
+    - duplicate canonical-key counts stay `0` on both sides
+  - After the `dual -> primary` flip, rerun the same command and confirm:
+    - `ORACLE_SOURCE_ITEM_LEDGER_MODE=primary`
+    - parity still `PASS`
+    - source-item upserts, source-item execution reads, and metadata/view-count updates stay on the Oracle source-item ledger path with zero parity drift
 - YT2BP repro smoke:
 ```bash
 npm run smoke:yt2bp -- --base-url https://api.bleup.app

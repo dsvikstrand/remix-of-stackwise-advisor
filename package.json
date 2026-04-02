@@ -26,6 +26,7 @@
     "ops:oracle-primary-check": "./scripts/with-node20.sh node scripts/oracle_primary_check.mjs",
     "ops:oracle-unlock-parity": "./scripts/with-node20.sh node scripts/oracle_unlock_parity_check.mjs",
     "ops:oracle-feed-parity": "./scripts/with-node20.sh node scripts/oracle_feed_parity_check.mjs",
+    "ops:oracle-source-item-parity": "./scripts/with-node20.sh node scripts/oracle_source_item_parity_check.mjs",
     "release:metadata": "./scripts/with-node20.sh node scripts/write_release_metadata.mjs",
     "metrics:yt2bp": "./scripts/with-node20.sh node scripts/yt2bp_metrics_from_logs.mjs",
     "metrics:queue": "./scripts/with-node20.sh node scripts/queue_metrics_from_logs.mjs",

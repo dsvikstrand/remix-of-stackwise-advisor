@@ -6,6 +6,7 @@ export type OracleQueueLedgerMode = 'supabase' | 'dual' | 'primary';
 export type OracleSubscriptionLedgerMode = 'supabase' | 'dual' | 'primary';
 export type OracleUnlockLedgerMode = 'supabase' | 'dual' | 'primary';
 export type OracleFeedLedgerMode = 'supabase' | 'dual' | 'primary';
+export type OracleSourceItemLedgerMode = 'supabase' | 'dual' | 'primary';
 
 export type OracleControlPlaneConfig = {
   enabled: boolean;
@@ -14,12 +15,14 @@ export type OracleControlPlaneConfig = {
   subscriptionLedgerMode: OracleSubscriptionLedgerMode;
   unlockLedgerMode: OracleUnlockLedgerMode;
   feedLedgerMode: OracleFeedLedgerMode;
+  sourceItemLedgerMode: OracleSourceItemLedgerMode;
   sqlitePath: string;
   bootstrapBatch: number;
   queueLedgerBootstrapLimit: number;
   subscriptionLedgerBootstrapLimit: number;
   unlockLedgerBootstrapLimit: number;
   feedLedgerBootstrapLimit: number;
+  sourceItemLedgerBootstrapLimit: number;
   productMirrorEnabled: boolean;
   productBootstrapLimit: number;
   schedulerTickMs: number;
@@ -92,6 +95,13 @@ function normalizeOracleFeedLedgerMode(raw: string | undefined): OracleFeedLedge
   return 'supabase';
 }
 
+function normalizeOracleSourceItemLedgerMode(raw: string | undefined): OracleSourceItemLedgerMode {
+  const normalized = String(raw || '').trim().toLowerCase();
+  if (normalized === 'dual') return 'dual';
+  if (normalized === 'primary') return 'primary';
+  return 'supabase';
+}
+
 export function readOracleControlPlaneConfig(
   env: NodeJS.ProcessEnv,
   input?: { cwd?: string },
@@ -121,6 +131,9 @@ export function readOracleControlPlaneConfig(
     feedLedgerMode: enabled
       ? normalizeOracleFeedLedgerMode(env.ORACLE_FEED_LEDGER_MODE)
       : 'supabase',
+    sourceItemLedgerMode: enabled
+      ? normalizeOracleSourceItemLedgerMode(env.ORACLE_SOURCE_ITEM_LEDGER_MODE)
+      : 'supabase',
     sqlitePath,
     bootstrapBatch: clampInt(env.ORACLE_SUBSCRIPTION_BOOTSTRAP_BATCH, 250, 10, 5000),
     queueLedgerBootstrapLimit: clampInt(
@@ -143,6 +156,12 @@ export function readOracleControlPlaneConfig(
     ),
     feedLedgerBootstrapLimit: clampInt(
       env.ORACLE_FEED_LEDGER_BOOTSTRAP_LIMIT,
+      10_000,
+      100,
+      100_000,
+    ),
+    sourceItemLedgerBootstrapLimit: clampInt(
+      env.ORACLE_SOURCE_ITEM_LEDGER_BOOTSTRAP_LIMIT,
       10_000,
       100,
       100_000,

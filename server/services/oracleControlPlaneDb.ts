@@ -251,6 +251,24 @@ type FeedLedgerStateTable = {
   updated_at: string;
 };
 
+type SourceItemLedgerStateTable = {
+  id: string;
+  source_type: string | null;
+  source_native_id: string | null;
+  canonical_key: string | null;
+  source_url: string | null;
+  title: string | null;
+  published_at: string | null;
+  ingest_status: string | null;
+  source_channel_id: string | null;
+  source_channel_title: string | null;
+  source_page_id: string | null;
+  thumbnail_url: string | null;
+  metadata_json: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 type ProductFeedStateTable = {
   id: string;
   user_id: string;
@@ -275,6 +293,7 @@ export type OracleControlPlaneDatabase = {
   subscription_ledger_state: SubscriptionLedgerStateTable;
   unlock_ledger_state: UnlockLedgerStateTable;
   feed_ledger_state: FeedLedgerStateTable;
+  source_item_ledger_state: SourceItemLedgerStateTable;
   product_subscription_state: ProductSubscriptionStateTable;
   product_source_item_state: ProductSourceItemStateTable;
   product_unlock_state: ProductUnlockStateTable;
@@ -562,6 +581,36 @@ CREATE INDEX IF NOT EXISTS idx_feed_ledger_blueprint_created
 
 CREATE INDEX IF NOT EXISTS idx_feed_ledger_state_created
   ON feed_ledger_state (state, created_at);
+
+CREATE TABLE IF NOT EXISTS source_item_ledger_state (
+  id TEXT PRIMARY KEY,
+  source_type TEXT,
+  source_native_id TEXT,
+  canonical_key TEXT,
+  source_url TEXT,
+  title TEXT,
+  published_at TEXT,
+  ingest_status TEXT,
+  source_channel_id TEXT,
+  source_channel_title TEXT,
+  source_page_id TEXT,
+  thumbnail_url TEXT,
+  metadata_json TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_source_item_ledger_canonical_unique
+  ON source_item_ledger_state (canonical_key);
+
+CREATE INDEX IF NOT EXISTS idx_source_item_ledger_native_updated
+  ON source_item_ledger_state (source_native_id, updated_at);
+
+CREATE INDEX IF NOT EXISTS idx_source_item_ledger_page_updated
+  ON source_item_ledger_state (source_page_id, updated_at);
+
+CREATE INDEX IF NOT EXISTS idx_source_item_ledger_updated
+  ON source_item_ledger_state (updated_at);
 
 CREATE TABLE IF NOT EXISTS product_subscription_state (
   id TEXT PRIMARY KEY,
