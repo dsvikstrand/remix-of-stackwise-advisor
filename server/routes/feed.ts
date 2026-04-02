@@ -86,6 +86,7 @@ export function registerFeedRoutes(app: express.Express, deps: FeedRouteDeps) {
       .maybeSingle();
     if (sourceError || !sourceRow?.source_url || !sourceRow.source_native_id) {
       await db.from('user_feed_items').update({ state: 'my_feed_skipped', last_decision_code: 'SOURCE_MISSING' }).eq('id', feedItem.id);
+      await deps.syncFeedRowsByIds(db, [feedItem.id], 'feed_route_accept_source_missing');
       return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: sourceError?.message || 'Source item missing', data: null });
     }
 
@@ -103,6 +104,7 @@ export function registerFeedRoutes(app: express.Express, deps: FeedRouteDeps) {
         state: 'my_feed_published',
         last_decision_code: null,
       }).eq('id', feedItem.id).eq('user_id', userId);
+      await deps.syncFeedRowsByIds(db, [feedItem.id], 'feed_route_accept_generated');
 
       let responseState: string = 'my_feed_published';
       let responseReasonCode: string | null = null;
@@ -155,6 +157,7 @@ export function registerFeedRoutes(app: express.Express, deps: FeedRouteDeps) {
         state: 'my_feed_pending_accept',
         last_decision_code: errorCode || 'GENERATION_FAILED',
       }).eq('id', feedItem.id).eq('user_id', userId);
+      await deps.syncFeedRowsByIds(db, [feedItem.id], 'feed_route_accept_failed');
 
       if (errorCode === 'DAILY_GENERATION_CAP_REACHED') {
         return res.status(429).json({
@@ -196,6 +199,7 @@ export function registerFeedRoutes(app: express.Express, deps: FeedRouteDeps) {
       .maybeSingle();
     if (error) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: error.message, data: null });
     if (!data) return res.status(409).json({ ok: false, error_code: 'INVALID_STATE', message: 'Only pending items can be skipped', data: null });
+    await deps.syncFeedRowsByIds(db, [data.id], 'feed_route_skip');
 
     return res.json({
       ok: true,

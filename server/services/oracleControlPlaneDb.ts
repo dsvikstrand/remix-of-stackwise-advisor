@@ -240,6 +240,17 @@ type ProductUnlockStateTable = {
   updated_at: string;
 };
 
+type FeedLedgerStateTable = {
+  id: string;
+  user_id: string;
+  source_item_id: string | null;
+  blueprint_id: string | null;
+  state: string;
+  last_decision_code: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 type ProductFeedStateTable = {
   id: string;
   user_id: string;
@@ -263,6 +274,7 @@ export type OracleControlPlaneDatabase = {
   queue_ledger_state: QueueLedgerStateTable;
   subscription_ledger_state: SubscriptionLedgerStateTable;
   unlock_ledger_state: UnlockLedgerStateTable;
+  feed_ledger_state: FeedLedgerStateTable;
   product_subscription_state: ProductSubscriptionStateTable;
   product_source_item_state: ProductSourceItemStateTable;
   product_unlock_state: ProductUnlockStateTable;
@@ -527,6 +539,29 @@ CREATE INDEX IF NOT EXISTS idx_unlock_ledger_job_updated
 
 CREATE INDEX IF NOT EXISTS idx_unlock_ledger_page_updated
   ON unlock_ledger_state (source_page_id, updated_at);
+
+CREATE TABLE IF NOT EXISTS feed_ledger_state (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  source_item_id TEXT,
+  blueprint_id TEXT,
+  state TEXT NOT NULL,
+  last_decision_code TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_feed_ledger_user_created
+  ON feed_ledger_state (user_id, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_feed_ledger_user_source_created
+  ON feed_ledger_state (user_id, source_item_id, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_feed_ledger_blueprint_created
+  ON feed_ledger_state (blueprint_id, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_feed_ledger_state_created
+  ON feed_ledger_state (state, created_at);
 
 CREATE TABLE IF NOT EXISTS product_subscription_state (
   id TEXT PRIMARY KEY,

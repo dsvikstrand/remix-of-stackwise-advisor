@@ -8,6 +8,7 @@ export type ChannelsRouteDeps = {
   rejectLegacyManualFlowIfDisabled: (res: express.Response) => boolean;
   getAuthedSupabaseClient: (authToken: string) => DbClient | null;
   getServiceSupabaseClient: () => DbClient | null;
+  syncFeedRowsByIds: (db: DbClient, feedItemIds: string[], action: string) => Promise<void>;
   evaluateCandidateForChannel: (input: {
     title: string;
     llmReview: string | null;

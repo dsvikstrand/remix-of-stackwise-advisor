@@ -5,6 +5,7 @@ export type OracleSubscriptionSchedulerMode = 'supabase' | 'shadow' | 'primary';
 export type OracleQueueLedgerMode = 'supabase' | 'dual' | 'primary';
 export type OracleSubscriptionLedgerMode = 'supabase' | 'dual' | 'primary';
 export type OracleUnlockLedgerMode = 'supabase' | 'dual' | 'primary';
+export type OracleFeedLedgerMode = 'supabase' | 'dual' | 'primary';
 
 export type OracleControlPlaneConfig = {
   enabled: boolean;
@@ -12,11 +13,13 @@ export type OracleControlPlaneConfig = {
   queueLedgerMode: OracleQueueLedgerMode;
   subscriptionLedgerMode: OracleSubscriptionLedgerMode;
   unlockLedgerMode: OracleUnlockLedgerMode;
+  feedLedgerMode: OracleFeedLedgerMode;
   sqlitePath: string;
   bootstrapBatch: number;
   queueLedgerBootstrapLimit: number;
   subscriptionLedgerBootstrapLimit: number;
   unlockLedgerBootstrapLimit: number;
+  feedLedgerBootstrapLimit: number;
   productMirrorEnabled: boolean;
   productBootstrapLimit: number;
   schedulerTickMs: number;
@@ -82,6 +85,13 @@ function normalizeOracleUnlockLedgerMode(raw: string | undefined): OracleUnlockL
   return 'supabase';
 }
 
+function normalizeOracleFeedLedgerMode(raw: string | undefined): OracleFeedLedgerMode {
+  const normalized = String(raw || '').trim().toLowerCase();
+  if (normalized === 'dual') return 'dual';
+  if (normalized === 'primary') return 'primary';
+  return 'supabase';
+}
+
 export function readOracleControlPlaneConfig(
   env: NodeJS.ProcessEnv,
   input?: { cwd?: string },
@@ -108,6 +118,9 @@ export function readOracleControlPlaneConfig(
     unlockLedgerMode: enabled
       ? normalizeOracleUnlockLedgerMode(env.ORACLE_UNLOCK_LEDGER_MODE)
       : 'supabase',
+    feedLedgerMode: enabled
+      ? normalizeOracleFeedLedgerMode(env.ORACLE_FEED_LEDGER_MODE)
+      : 'supabase',
     sqlitePath,
     bootstrapBatch: clampInt(env.ORACLE_SUBSCRIPTION_BOOTSTRAP_BATCH, 250, 10, 5000),
     queueLedgerBootstrapLimit: clampInt(
@@ -124,6 +137,12 @@ export function readOracleControlPlaneConfig(
     ),
     unlockLedgerBootstrapLimit: clampInt(
       env.ORACLE_UNLOCK_LEDGER_BOOTSTRAP_LIMIT,
+      10_000,
+      100,
+      100_000,
+    ),
+    feedLedgerBootstrapLimit: clampInt(
+      env.ORACLE_FEED_LEDGER_BOOTSTRAP_LIMIT,
       10_000,
       100,
       100_000,

@@ -23,6 +23,7 @@ export type FeedRouteDeps = {
   autoChannelPipelineEnabled: boolean;
   getAuthedSupabaseClient: (authToken: string) => DbClient | null;
   getServiceSupabaseClient: () => DbClient | null;
+  syncFeedRowsByIds: (db: DbClient, feedItemIds: string[], action: string) => Promise<void>;
   createBlueprintFromVideo: (db: DbClient, input: {
     userId: string;
     videoUrl: string;

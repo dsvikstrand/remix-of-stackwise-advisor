@@ -141,6 +141,14 @@ import {
   upsertOracleUnlockLedgerRow,
 } from './services/oracleUnlockLedgerState';
 import {
+  deleteOracleFeedLedgerRows,
+  getOracleFeedLedgerByUserSourceItem,
+  listOracleFeedLedgerRows,
+  syncOracleFeedLedgerFromSupabase,
+  upsertOracleFeedLedgerRow,
+  upsertOracleFeedLedgerRows,
+} from './services/oracleFeedLedgerState';
+import {
   evaluateOraclePrimarySchedulerDecision,
   evaluateOracleShadowSchedulerDecision,
 } from './services/oracleSubscriptionScheduler';
@@ -647,6 +655,12 @@ const oracleUnlockLedgerMode = (
 )
   ? oracleControlPlaneConfig.unlockLedgerMode
   : 'supabase';
+const oracleFeedLedgerMode = (
+  oracleControlPlaneConfig.enabled
+  && oracleControlPlane
+)
+  ? oracleControlPlaneConfig.feedLedgerMode
+  : 'supabase';
 const oracleQueueLedgerEnabled = (
   oracleQueueLedgerMode === 'dual'
   || oracleQueueLedgerMode === 'primary'
@@ -661,6 +675,11 @@ const oracleUnlockLedgerEnabled = (
   || oracleUnlockLedgerMode === 'primary'
 );
 const oracleUnlockLedgerPrimaryEnabled = oracleUnlockLedgerMode === 'primary';
+const oracleFeedLedgerEnabled = (
+  oracleFeedLedgerMode === 'dual'
+  || oracleFeedLedgerMode === 'primary'
+);
+const oracleFeedLedgerPrimaryEnabled = oracleFeedLedgerMode === 'primary';
 const oracleQueueSweepControlEnabled = (
   oracleControlPlaneConfig.enabled
   && oracleControlPlaneConfig.queueSweepControlEnabled
@@ -2959,6 +2978,30 @@ async function upsertOracleProductFeedRowsFromKnownRows(
   }
 }
 
+async function upsertOracleFeedLedgerRowsFromKnownRows(
+  rows: Array<Record<string, unknown> | null | undefined>,
+  action: string,
+) {
+  const normalizedRows = rows.filter((row): row is Record<string, unknown> => Boolean(row?.id));
+  if (!oracleFeedLedgerEnabled || !oracleControlPlane || normalizedRows.length === 0) {
+    return;
+  }
+
+  try {
+    await upsertOracleFeedLedgerRows({
+      controlDb: oracleControlPlane,
+      rows: normalizedRows,
+    });
+  } catch (error) {
+    console.warn('[oracle-control-plane] feed_ledger_failed', JSON.stringify({
+      action,
+      table: 'feed_ledger_state',
+      count: normalizedRows.length,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+}
+
 async function getUserSubscriptionStateForSourcePageOracleFirst(
   db: ReturnType<typeof createClient>,
   input: { userId: string; sourcePageId: string; sourceChannelId?: string | null },
@@ -3334,6 +3377,34 @@ async function listProductFeedRowsForUserOracleFirst(
       .filter(Boolean),
   )];
 
+  if (oracleFeedLedgerEnabled && oracleControlPlane) {
+    try {
+      const durable = await listOracleFeedLedgerRows({
+        controlDb: oracleControlPlane,
+        userId: input.userId,
+        limit: normalizedLimit,
+        sourceItemIds: normalizedSourceItemIds,
+        requireBlueprint: input.requireBlueprint,
+      });
+      const ledgerLooksComplete = normalizedSourceItemIds.length > 0
+        ? new Set(
+          durable
+            .map((row) => String(row.source_item_id || '').trim())
+            .filter(Boolean),
+        ).size >= normalizedSourceItemIds.length
+        : durable.length >= normalizedLimit;
+      if (ledgerLooksComplete) {
+        return durable;
+      }
+    } catch (error) {
+      console.warn('[oracle-control-plane] feed_ledger_failed', JSON.stringify({
+        action: 'list_product_feed_rows_for_user',
+        user_id: input.userId,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+
   if (oracleProductMirrorEnabled && oracleControlPlane) {
     try {
       const mirrored = await listOracleProductFeedRows({
@@ -3476,6 +3547,36 @@ async function listPublicProductFeedRowsOracleFirst(
   const state = String(input.state || '').trim();
   const normalizedLimit = Math.max(1, Math.min(5000, Number(input.limit || 0) || (blueprintIds.length > 0 ? 5000 : 200)));
   const cursor = normalizePublicProductFeedCursor(input.cursor);
+
+  if (oracleFeedLedgerEnabled && oracleControlPlane) {
+    try {
+      const durable = await listOracleFeedLedgerRows({
+        controlDb: oracleControlPlane,
+        blueprintIds,
+        state,
+        limit: normalizedLimit,
+        cursor,
+        requireBlueprint: input.requireBlueprint,
+      });
+      const ledgerLooksComplete = blueprintIds.length > 0
+        ? new Set(
+          durable
+            .map((row) => String(row.blueprint_id || '').trim())
+            .filter(Boolean),
+        ).size >= blueprintIds.length
+        : durable.length >= normalizedLimit;
+      if (ledgerLooksComplete) {
+        return sortMergedProductFeedRows(durable).slice(0, normalizedLimit);
+      }
+    } catch (error) {
+      console.warn('[oracle-control-plane] feed_ledger_failed', JSON.stringify({
+        action: 'list_public_product_feed_rows',
+        state: state || null,
+        blueprint_count: blueprintIds.length,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
 
   if (oracleProductMirrorEnabled && oracleControlPlane) {
     try {
@@ -3661,7 +3762,7 @@ async function syncOracleProductFeedRowsByIds(
   action: string,
 ) {
   const normalizedIds = [...new Set(feedItemIds.map((value) => String(value || '').trim()).filter(Boolean))];
-  if (!oracleProductMirrorEnabled || !oracleControlPlane || normalizedIds.length === 0) {
+  if ((!oracleProductMirrorEnabled && !oracleFeedLedgerEnabled) || !oracleControlPlane || normalizedIds.length === 0) {
     return;
   }
 
@@ -3671,11 +3772,13 @@ async function syncOracleProductFeedRowsByIds(
       .select('id, user_id, source_item_id, blueprint_id, state, last_decision_code, created_at, updated_at')
       .in('id', normalizedIds);
     if (error) throw error;
-    await upsertOracleProductFeedRowsFromKnownRows((data || []) as Array<Record<string, unknown>>, action);
+    const rows = (data || []) as Array<Record<string, unknown>>;
+    await upsertOracleFeedLedgerRowsFromKnownRows(rows, action);
+    await upsertOracleProductFeedRowsFromKnownRows(rows, action);
   } catch (error) {
-    console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
+    console.warn('[oracle-control-plane] feed_sync_failed', JSON.stringify({
       action,
-      table: 'product_feed_state',
+      table: oracleFeedLedgerEnabled ? 'feed_ledger_state' : 'product_feed_state',
       count: normalizedIds.length,
       error: error instanceof Error ? error.message : String(error),
     }));
@@ -3689,7 +3792,7 @@ async function syncOracleSuppressedFeedRowsForSourceItemIds(
   action: string,
 ) {
   const normalizedIds = [...new Set(sourceItemIds.map((value) => String(value || '').trim()).filter(Boolean))];
-  if (!oracleProductMirrorEnabled || !oracleControlPlane || normalizedIds.length === 0) {
+  if ((!oracleProductMirrorEnabled && !oracleFeedLedgerEnabled) || !oracleControlPlane || normalizedIds.length === 0) {
     return;
   }
 
@@ -3702,11 +3805,13 @@ async function syncOracleSuppressedFeedRowsForSourceItemIds(
       .eq('state', 'my_feed_skipped')
       .eq('last_decision_code', String(decisionCode || '').trim());
     if (error) throw error;
-    await upsertOracleProductFeedRowsFromKnownRows((data || []) as Array<Record<string, unknown>>, action);
+    const rows = (data || []) as Array<Record<string, unknown>>;
+    await upsertOracleFeedLedgerRowsFromKnownRows(rows, action);
+    await upsertOracleProductFeedRowsFromKnownRows(rows, action);
   } catch (error) {
-    console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
+    console.warn('[oracle-control-plane] feed_sync_failed', JSON.stringify({
       action,
-      table: 'product_feed_state',
+      table: oracleFeedLedgerEnabled ? 'feed_ledger_state' : 'product_feed_state',
       count: normalizedIds.length,
       error: error instanceof Error ? error.message : String(error),
     }));
@@ -3716,11 +3821,19 @@ async function syncOracleSuppressedFeedRowsForSourceItemIds(
 async function deleteOracleProductFeedRowsForSubscriptionNotice(
   input: { userId: string; sourceItemId: string },
 ) {
-  if (!oracleProductMirrorEnabled || !oracleControlPlane) {
+  if ((!oracleProductMirrorEnabled && !oracleFeedLedgerEnabled) || !oracleControlPlane) {
     return;
   }
 
   try {
+    if (oracleFeedLedgerEnabled) {
+      await deleteOracleFeedLedgerRows({
+        controlDb: oracleControlPlane,
+        userId: input.userId,
+        sourceItemId: input.sourceItemId,
+        state: 'subscription_notice',
+      });
+    }
     await deleteOracleProductFeedRows({
       controlDb: oracleControlPlane,
       userId: input.userId,
@@ -3728,9 +3841,9 @@ async function deleteOracleProductFeedRowsForSubscriptionNotice(
       state: 'subscription_notice',
     });
   } catch (error) {
-    console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
+    console.warn('[oracle-control-plane] feed_sync_failed', JSON.stringify({
       action: 'delete_subscription_notice_feed_rows',
-      table: 'product_feed_state',
+      table: oracleFeedLedgerEnabled ? 'feed_ledger_state' : 'product_feed_state',
       user_id: input.userId,
       source_item_id: input.sourceItemId,
       error: error instanceof Error ? error.message : String(error),
@@ -6625,6 +6738,30 @@ async function upsertSubscriptionNoticeSourceItem(db: ReturnType<typeof createCl
 }
 
 async function getExistingFeedItem(db: ReturnType<typeof createClient>, userId: string, sourceItemId: string) {
+  if (oracleFeedLedgerEnabled && oracleControlPlane) {
+    try {
+      const durable = await getOracleFeedLedgerByUserSourceItem({
+        controlDb: oracleControlPlane,
+        userId,
+        sourceItemId,
+      });
+      if (durable) {
+        return {
+          id: durable.id,
+          state: durable.state,
+          blueprint_id: durable.blueprint_id,
+        };
+      }
+    } catch (error) {
+      console.warn('[oracle-control-plane] feed_ledger_failed', JSON.stringify({
+        action: 'get_existing_feed_item',
+        user_id: userId,
+        source_item_id: sourceItemId,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+
   const { data, error } = await db
     .from('user_feed_items')
     .select('id, state, blueprint_id')
@@ -6635,12 +6772,69 @@ async function getExistingFeedItem(db: ReturnType<typeof createClient>, userId: 
   return data;
 }
 
+function mapFeedItemToSupabaseShadowValues(row: {
+  id: string;
+  user_id: string;
+  source_item_id: string;
+  blueprint_id: string | null;
+  state: string;
+  last_decision_code: string | null;
+  created_at: string;
+  updated_at: string;
+}) {
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    source_item_id: row.source_item_id,
+    blueprint_id: row.blueprint_id,
+    state: row.state,
+    last_decision_code: row.last_decision_code,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
 async function insertFeedItem(db: ReturnType<typeof createClient>, input: {
   userId: string;
   sourceItemId: string;
   blueprintId: string | null;
   state: string;
 }) {
+  const nowIso = new Date().toISOString();
+  const feedRow = {
+    id: randomUUID(),
+    user_id: input.userId,
+    source_item_id: input.sourceItemId,
+    blueprint_id: input.blueprintId,
+    state: input.state,
+    last_decision_code: null,
+    created_at: nowIso,
+    updated_at: nowIso,
+  };
+
+  if (oracleFeedLedgerPrimaryEnabled && oracleControlPlane) {
+    await upsertOracleFeedLedgerRow({
+      controlDb: oracleControlPlane,
+      row: feedRow,
+    });
+    const { error } = await db
+      .from('user_feed_items')
+      .insert(mapFeedItemToSupabaseShadowValues(feedRow))
+      .select('id')
+      .single();
+    if (error) {
+      await deleteOracleFeedLedgerRows({
+        controlDb: oracleControlPlane,
+        ids: [feedRow.id],
+      });
+      const code = (error as { code?: string }).code;
+      if (code === '23505') return null;
+      throw error;
+    }
+    await upsertOracleProductFeedRowsFromKnownRows([feedRow], 'insert_feed_item');
+    return { id: feedRow.id };
+  }
+
   const { data, error } = await db
     .from('user_feed_items')
     .insert({
@@ -6657,6 +6851,16 @@ async function insertFeedItem(db: ReturnType<typeof createClient>, input: {
     if (code === '23505') return null;
     throw error;
   }
+  await upsertOracleFeedLedgerRowsFromKnownRows([{
+    id: data.id,
+    user_id: input.userId,
+    source_item_id: input.sourceItemId,
+    blueprint_id: input.blueprintId,
+    state: input.state,
+    last_decision_code: null,
+    created_at: nowIso,
+    updated_at: nowIso,
+  }], 'insert_feed_item');
   await upsertOracleProductFeedRowsFromKnownRows([{
     id: data.id,
     user_id: input.userId,
@@ -6664,8 +6868,8 @@ async function insertFeedItem(db: ReturnType<typeof createClient>, input: {
     blueprint_id: input.blueprintId,
     state: input.state,
     last_decision_code: null,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    created_at: nowIso,
+    updated_at: nowIso,
   }], 'insert_feed_item');
   return data;
 }
@@ -6677,6 +6881,39 @@ async function upsertFeedItemWithBlueprint(db: ReturnType<typeof createClient>, 
   state: string;
 }) {
   const nowIso = new Date().toISOString();
+  if (oracleFeedLedgerPrimaryEnabled && oracleControlPlane) {
+    const current = await getOracleFeedLedgerByUserSourceItem({
+      controlDb: oracleControlPlane,
+      userId: input.userId,
+      sourceItemId: input.sourceItemId,
+    });
+    const nextRow = {
+      id: current?.id || randomUUID(),
+      user_id: input.userId,
+      source_item_id: input.sourceItemId,
+      blueprint_id: input.blueprintId,
+      state: input.state,
+      last_decision_code: null,
+      created_at: nowIso,
+      updated_at: nowIso,
+    };
+    await upsertOracleFeedLedgerRow({
+      controlDb: oracleControlPlane,
+      row: nextRow,
+    });
+    const { error } = await db
+      .from('user_feed_items')
+      .upsert(
+        mapFeedItemToSupabaseShadowValues(nextRow),
+        { onConflict: 'user_id,source_item_id' },
+      )
+      .select('id, user_id')
+      .single();
+    if (error) throw error;
+    await upsertOracleProductFeedRowsFromKnownRows([nextRow], 'upsert_feed_item_with_blueprint');
+    return { id: nextRow.id, user_id: nextRow.user_id };
+  }
+
   const { data, error } = await db
     .from('user_feed_items')
     .upsert(
@@ -6694,6 +6931,16 @@ async function upsertFeedItemWithBlueprint(db: ReturnType<typeof createClient>, 
     .select('id, user_id')
     .single();
   if (error) throw error;
+  await upsertOracleFeedLedgerRowsFromKnownRows([{
+    id: data.id,
+    user_id: data.user_id,
+    source_item_id: input.sourceItemId,
+    blueprint_id: input.blueprintId,
+    state: input.state,
+    last_decision_code: null,
+    created_at: nowIso,
+    updated_at: nowIso,
+  }], 'upsert_feed_item_with_blueprint');
   await upsertOracleProductFeedRowsFromKnownRows([{
     id: data.id,
     user_id: data.user_id,
@@ -6858,11 +7105,11 @@ async function fetchPublishedChannelSlugMapForBlueprints(db: ReturnType<typeof c
   const uniqueBlueprintIds = Array.from(new Set(blueprintIds.filter(Boolean)));
   if (!uniqueBlueprintIds.length) return map;
 
-  const { data: feedItems, error: feedError } = await db
-    .from('user_feed_items')
-    .select('id, blueprint_id')
-    .in('blueprint_id', uniqueBlueprintIds);
-  if (feedError) throw feedError;
+  const feedItems = await listPublicProductFeedRowsOracleFirst(db, {
+    blueprintIds: uniqueBlueprintIds,
+    limit: 5000,
+    requireBlueprint: true,
+  });
 
   const feedToBlueprint = new Map<string, string>();
   const feedIds: string[] = [];
@@ -9119,19 +9366,19 @@ async function collectRefreshCandidatesForUser(db: ReturnType<typeof createClien
       .in('canonical_key', canonicalKeys);
     if (existingSourcesError) throw existingSourcesError;
 
-    const sourceIds = (existingSources || []).map((row) => row.id);
-    const sourceIdsWithFeedItems = new Set<string>();
-    if (sourceIds.length > 0) {
-      const { data: existingFeedRows, error: existingFeedRowsError } = await db
-        .from('user_feed_items')
-        .select('source_item_id')
-        .eq('user_id', userId)
-        .in('source_item_id', sourceIds);
-      if (existingFeedRowsError) throw existingFeedRowsError;
+  const sourceIds = (existingSources || []).map((row) => row.id);
+  const sourceIdsWithFeedItems = new Set<string>();
+  if (sourceIds.length > 0) {
+      const existingFeedRows = await listProductFeedRowsForUserOracleFirst(db, {
+        userId,
+        limit: Math.max(200, sourceIds.length * 3),
+        sourceItemIds: sourceIds,
+        requireBlueprint: true,
+      });
       for (const row of existingFeedRows || []) {
-        if (row.source_item_id) sourceIdsWithFeedItems.add(row.source_item_id);
+        if (row.source_item_id) sourceIdsWithFeedItems.add(String(row.source_item_id).trim());
       }
-    }
+  }
 
     const canonicalKeysWithFeedItems = new Set<string>();
     for (const source of existingSources || []) {
@@ -12526,6 +12773,18 @@ async function bootstrapOracleControlPlaneState() {
     unlockLedgerActiveCount = unlockLedgerBootstrap.activeCount;
   }
 
+  let feedLedgerCount: number | null = null;
+  let feedLedgerActiveCount: number | null = null;
+  if (oracleFeedLedgerEnabled) {
+    const feedLedgerBootstrap = await syncOracleFeedLedgerFromSupabase({
+      controlDb: oracleControlPlane,
+      db,
+      limit: oracleControlPlaneConfig.feedLedgerBootstrapLimit,
+    });
+    feedLedgerCount = feedLedgerBootstrap.rowCount;
+    feedLedgerActiveCount = feedLedgerBootstrap.activeCount;
+  }
+
   let queueAdmissionActiveCount: number | null = null;
   if (oracleControlPlaneConfig.queueAdmissionMirrorEnabled) {
     const queueAdmissionBootstrap = await syncOracleQueueAdmissionMirrorFromSupabase({
@@ -12568,6 +12827,7 @@ async function bootstrapOracleControlPlaneState() {
     queue_ledger_mode: oracleQueueLedgerMode,
     subscription_ledger_mode: oracleSubscriptionLedgerMode,
     unlock_ledger_mode: oracleUnlockLedgerMode,
+    feed_ledger_mode: oracleFeedLedgerMode,
     sqlite_path: oracleControlPlane.sqlitePath,
     subscription_count: bootstrapResult.activeCount,
     queue_ledger_count: queueLedgerCount,
@@ -12576,6 +12836,8 @@ async function bootstrapOracleControlPlaneState() {
     subscription_ledger_active_count: subscriptionLedgerActiveCount,
     unlock_ledger_count: unlockLedgerCount,
     unlock_ledger_active_count: unlockLedgerActiveCount,
+    feed_ledger_count: feedLedgerCount,
+    feed_ledger_active_count: feedLedgerActiveCount,
     queue_admission_active_count: queueAdmissionActiveCount,
     job_activity_count: jobActivityCount,
     job_activity_active_count: jobActivityActiveCount,
@@ -12587,6 +12849,7 @@ async function bootstrapOracleControlPlaneState() {
     queue_ledger_bootstrap_limit: oracleControlPlaneConfig.queueLedgerBootstrapLimit,
     subscription_ledger_bootstrap_limit: oracleControlPlaneConfig.subscriptionLedgerBootstrapLimit,
     unlock_ledger_bootstrap_limit: oracleControlPlaneConfig.unlockLedgerBootstrapLimit,
+    feed_ledger_bootstrap_limit: oracleControlPlaneConfig.feedLedgerBootstrapLimit,
     job_activity_bootstrap_limit: oracleControlPlaneConfig.jobActivityBootstrapLimit,
     product_bootstrap_limit: oracleControlPlaneConfig.productBootstrapLimit,
   }));
@@ -13045,6 +13308,7 @@ registerFeedRoutes(app, {
   autoChannelPipelineEnabled,
   getAuthedSupabaseClient,
   getServiceSupabaseClient,
+  syncFeedRowsByIds: syncOracleProductFeedRowsByIds,
   createBlueprintFromVideo,
   runAutoChannelForFeedItem,
 });
@@ -13053,6 +13317,7 @@ registerChannelCandidateRoutes(app, {
   rejectLegacyManualFlowIfDisabled,
   getAuthedSupabaseClient,
   getServiceSupabaseClient,
+  syncFeedRowsByIds: syncOracleProductFeedRowsByIds,
   evaluateCandidateForChannel,
 });
 
@@ -13625,6 +13890,7 @@ if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
     queue_ledger_mode: oracleQueueLedgerMode,
     subscription_ledger_mode: oracleSubscriptionLedgerMode,
     unlock_ledger_mode: oracleUnlockLedgerMode,
+    feed_ledger_mode: oracleFeedLedgerMode,
     sqlite_path: oracleControlPlane.sqlitePath,
     scheduler_tick_ms: oracleControlPlaneConfig.schedulerTickMs,
     primary_min_trigger_interval_ms: oracleControlPlaneConfig.primaryMinTriggerIntervalMs,
@@ -13638,6 +13904,7 @@ if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
     job_activity_bootstrap_limit: oracleControlPlaneConfig.jobActivityBootstrapLimit,
     subscription_ledger_bootstrap_limit: oracleControlPlaneConfig.subscriptionLedgerBootstrapLimit,
     unlock_ledger_bootstrap_limit: oracleControlPlaneConfig.unlockLedgerBootstrapLimit,
+    feed_ledger_bootstrap_limit: oracleControlPlaneConfig.feedLedgerBootstrapLimit,
     product_mirror_enabled: oracleControlPlaneConfig.productMirrorEnabled,
     product_bootstrap_limit: oracleControlPlaneConfig.productBootstrapLimit,
     queue_sweep_high_interval_ms: oracleControlPlaneConfig.queueSweepHighIntervalMs,

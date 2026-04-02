@@ -229,6 +229,7 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
       .from('user_feed_items')
       .update({ blueprint_id: feedItem.blueprint_id, state: 'candidate_submitted', last_decision_code: null })
       .eq('id', userFeedItemId);
+    await deps.syncFeedRowsByIds(db, [userFeedItemId], 'channel_route_candidate_submitted');
 
     return res.json({
       ok: true,
@@ -346,6 +347,7 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
       .from('user_feed_items')
       .update({ blueprint_id: feedItem.blueprint_id, state: evaluation.feedState, last_decision_code: evaluation.reasonCode })
       .eq('id', candidate.user_feed_item_id);
+    await deps.syncFeedRowsByIds(db, [candidate.user_feed_item_id], 'channel_route_candidate_evaluated');
 
     console.log('[candidate_gate_result]', JSON.stringify({
       candidate_id: candidate.id,
@@ -443,6 +445,7 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
       .from('user_feed_items')
       .update({ blueprint_id: feedItem.blueprint_id, state: 'channel_published', last_decision_code: 'ALL_GATES_PASS' })
       .eq('id', candidate.user_feed_item_id);
+    await deps.syncFeedRowsByIds(db, [candidate.user_feed_item_id], 'channel_route_candidate_published');
 
     console.log('[candidate_published]', JSON.stringify({
       candidate_id: candidate.id,
@@ -496,6 +499,7 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
       .from('user_feed_items')
       .update({ blueprint_id: feedItem?.blueprint_id || null, state: 'channel_rejected', last_decision_code: reasonCode })
       .eq('id', candidate.user_feed_item_id);
+    await deps.syncFeedRowsByIds(db, [candidate.user_feed_item_id], 'channel_route_candidate_rejected');
 
     console.log('[candidate_rejected]', JSON.stringify({
       candidate_id: candidate.id,
