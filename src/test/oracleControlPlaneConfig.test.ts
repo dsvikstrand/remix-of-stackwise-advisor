@@ -29,9 +29,11 @@ describe('oracle control-plane config', () => {
       enabled: false,
       subscriptionSchedulerMode: 'supabase',
       queueLedgerMode: 'supabase',
+      subscriptionLedgerMode: 'supabase',
       sqlitePath: path.resolve(cwd, '.runtime', 'control-plane.sqlite'),
       bootstrapBatch: 250,
       queueLedgerBootstrapLimit: 1_000,
+      subscriptionLedgerBootstrapLimit: 10_000,
       productMirrorEnabled: false,
       productBootstrapLimit: 2_000,
       schedulerTickMs: 300_000,
@@ -71,9 +73,11 @@ describe('oracle control-plane config', () => {
       ORACLE_CONTROL_PLANE_ENABLED: 'true',
       ORACLE_SUBSCRIPTION_SCHEDULER_MODE: 'shadow',
       ORACLE_QUEUE_LEDGER_MODE: 'dual',
+      ORACLE_SUBSCRIPTION_LEDGER_MODE: 'primary',
       ORACLE_CONTROL_PLANE_SQLITE_PATH: '/tmp/agentic-runtime/control-plane.sqlite',
       ORACLE_SUBSCRIPTION_BOOTSTRAP_BATCH: '123',
       ORACLE_QUEUE_LEDGER_BOOTSTRAP_LIMIT: '1400',
+      ORACLE_SUBSCRIPTION_LEDGER_BOOTSTRAP_LIMIT: '2200',
       ORACLE_SUBSCRIPTION_SCHEDULER_TICK_MS: '45000',
       ORACLE_SUBSCRIPTION_PRIMARY_MIN_TRIGGER_INTERVAL_MS: '1800000',
       ORACLE_SUBSCRIPTION_PRIMARY_BATCH_LIMIT: '222',
@@ -105,9 +109,11 @@ describe('oracle control-plane config', () => {
       enabled: true,
       subscriptionSchedulerMode: 'shadow',
       queueLedgerMode: 'dual',
+      subscriptionLedgerMode: 'primary',
       sqlitePath: path.resolve(cwd, '/tmp/agentic-runtime/control-plane.sqlite'),
       bootstrapBatch: 123,
       queueLedgerBootstrapLimit: 1_400,
+      subscriptionLedgerBootstrapLimit: 2_200,
       productMirrorEnabled: false,
       productBootstrapLimit: 2_000,
       schedulerTickMs: 45_000,
@@ -156,5 +162,14 @@ describe('oracle control-plane config', () => {
       ORACLE_CONTROL_PLANE_ENABLED: 'true',
       ORACLE_QUEUE_LEDGER_MODE: 'unknown',
     }, { cwd }).queueLedgerMode).toBe('supabase');
+  });
+
+  it('falls back to supabase subscription-ledger mode when the mode is unknown', () => {
+    const cwd = createTempDir();
+
+    expect(readOracleControlPlaneConfig({
+      ORACLE_CONTROL_PLANE_ENABLED: 'true',
+      ORACLE_SUBSCRIPTION_LEDGER_MODE: 'unknown',
+    }, { cwd }).subscriptionLedgerMode).toBe('supabase');
   });
 });

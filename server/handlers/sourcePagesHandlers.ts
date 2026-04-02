@@ -91,7 +91,8 @@ export function registerSourcePagesRouteHandlers(app: express.Express, deps: Sou
     resolveYouTubeChannel,
     fetchYouTubeChannelAssetMap,
     ensureSourcePageFromYouTubeChannel,
-    syncOracleProductSubscriptions,
+    upsertSourceSubscription,
+    deactivateSourceSubscriptionByChannel,
     syncSingleSubscription,
     markSubscriptionSyncError,
     upsertSubscriptionNoticeSourceItem,
@@ -1841,38 +1842,31 @@ app.post('/api/source-pages/:platform/:externalId/subscribe', async (req, res) =
     });
   }
 
-  const { data: existingSub } = await db
-    .from('user_source_subscriptions')
-    .select('id, is_active, auto_unlock_enabled')
-    .eq('user_id', userId)
-    .eq('source_type', 'youtube')
-    .eq('source_channel_id', resolved.channelId)
-    .maybeSingle();
-  const isCreateOrReactivate = !existingSub || !existingSub.is_active;
-
-  const { data: upserted, error: upsertError } = await db
-    .from('user_source_subscriptions')
-    .upsert(
-      {
-        user_id: userId,
-        source_type: 'youtube',
-        source_channel_id: resolved.channelId,
-        source_channel_url: resolved.channelUrl,
-        source_channel_title: resolved.channelTitle,
-        source_page_id: sourcePage.id,
-        mode: 'auto',
-        auto_unlock_enabled: existingSub?.auto_unlock_enabled ?? true,
-        is_active: true,
-        last_sync_error: null,
-      },
-      { onConflict: 'user_id,source_type,source_channel_id' },
-    )
-    .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, source_page_id, mode, auto_unlock_enabled, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
-    .single();
-  if (upsertError) {
-    return res.status(400).json({ ok: false, error_code: 'SOURCE_PAGE_SUBSCRIBE_FAILED', message: upsertError.message, data: null });
+  let upserted;
+  let previousSubscription = null;
+  try {
+    const result = await upsertSourceSubscription(db, {
+      userId,
+      sourceType: 'youtube',
+      sourceChannelId: resolved.channelId,
+      sourceChannelUrl: resolved.channelUrl,
+      sourceChannelTitle: resolved.channelTitle,
+      sourcePageId: sourcePage.id,
+      mode: 'auto',
+      isActive: true,
+      lastSyncError: null,
+    });
+    upserted = result.row;
+    previousSubscription = result.current;
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_SUBSCRIBE_FAILED',
+      message: error instanceof Error ? error.message : String(error),
+      data: null,
+    });
   }
-  await syncOracleProductSubscriptions?.([upserted], 'source_page_subscription_upsert');
+  const isCreateOrReactivate = !previousSubscription || !previousSubscription.is_active;
 
   let sync: SyncSubscriptionResult | null = null;
   try {
@@ -1978,17 +1972,23 @@ app.delete('/api/source-pages/:platform/:externalId/subscribe', async (req, res)
     });
   }
 
-  const { data, error } = await db
-    .from('user_source_subscriptions')
-    .update({ is_active: false })
-    .eq('user_id', userId)
-    .eq('source_type', 'youtube')
-    .eq('source_channel_id', sourcePage.external_id)
-    .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, source_page_id, mode, auto_unlock_enabled, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
-    .maybeSingle();
-  if (error) return res.status(400).json({ ok: false, error_code: 'SOURCE_PAGE_UNSUBSCRIBE_FAILED', message: error.message, data: null });
+  let data;
+  try {
+    data = await deactivateSourceSubscriptionByChannel(db, {
+      userId,
+      sourceType: 'youtube',
+      sourceChannelId: sourcePage.external_id,
+      action: 'source_page_subscription_deactivate',
+    });
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'SOURCE_PAGE_UNSUBSCRIBE_FAILED',
+      message: error instanceof Error ? error.message : String(error),
+      data: null,
+    });
+  }
   if (!data) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Subscription not found', data: null });
-  await syncOracleProductSubscriptions?.([data], 'source_page_subscription_deactivate');
 
   return res.json({
     ok: true,

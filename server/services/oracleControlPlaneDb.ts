@@ -136,6 +136,25 @@ type QueueLedgerStateTable = {
   updated_at: string;
 };
 
+type SubscriptionLedgerStateTable = {
+  id: string;
+  user_id: string;
+  source_type: string;
+  source_channel_id: string | null;
+  source_channel_url: string | null;
+  source_channel_title: string | null;
+  source_page_id: string | null;
+  mode: string | null;
+  auto_unlock_enabled: number;
+  is_active: number;
+  last_polled_at: string | null;
+  last_seen_published_at: string | null;
+  last_seen_video_id: string | null;
+  last_sync_error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 type ProductSubscriptionStateTable = {
   id: string;
   user_id: string;
@@ -218,6 +237,7 @@ export type OracleControlPlaneDatabase = {
   queue_admission_count_state: QueueAdmissionCountStateTable;
   job_activity_state: JobActivityStateTable;
   queue_ledger_state: QueueLedgerStateTable;
+  subscription_ledger_state: SubscriptionLedgerStateTable;
   product_subscription_state: ProductSubscriptionStateTable;
   product_source_item_state: ProductSourceItemStateTable;
   product_unlock_state: ProductUnlockStateTable;
@@ -406,6 +426,43 @@ CREATE INDEX IF NOT EXISTS idx_queue_ledger_scope_status_next_run
 
 CREATE INDEX IF NOT EXISTS idx_queue_ledger_lease_expires
   ON queue_ledger_state (lease_expires_at);
+
+CREATE TABLE IF NOT EXISTS subscription_ledger_state (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  source_type TEXT NOT NULL,
+  source_channel_id TEXT,
+  source_channel_url TEXT,
+  source_channel_title TEXT,
+  source_page_id TEXT,
+  mode TEXT,
+  auto_unlock_enabled INTEGER NOT NULL DEFAULT 0,
+  is_active INTEGER NOT NULL DEFAULT 0,
+  last_polled_at TEXT,
+  last_seen_published_at TEXT,
+  last_seen_video_id TEXT,
+  last_sync_error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_subscription_ledger_user_source_unique
+  ON subscription_ledger_state (user_id, source_type, source_channel_id);
+
+CREATE INDEX IF NOT EXISTS idx_subscription_ledger_user_updated
+  ON subscription_ledger_state (user_id, updated_at);
+
+CREATE INDEX IF NOT EXISTS idx_subscription_ledger_user_active_updated
+  ON subscription_ledger_state (user_id, is_active, updated_at);
+
+CREATE INDEX IF NOT EXISTS idx_subscription_ledger_user_page_updated
+  ON subscription_ledger_state (user_id, source_page_id, updated_at);
+
+CREATE INDEX IF NOT EXISTS idx_subscription_ledger_page_active_updated
+  ON subscription_ledger_state (source_page_id, is_active, updated_at);
+
+CREATE INDEX IF NOT EXISTS idx_subscription_ledger_channel_active_updated
+  ON subscription_ledger_state (source_channel_id, is_active, updated_at);
 
 CREATE TABLE IF NOT EXISTS product_subscription_state (
   id TEXT PRIMARY KEY,

@@ -305,6 +305,14 @@ export type SourceSubscriptionSyncDeps = {
     rows: Array<Record<string, unknown> | null | undefined>,
     action: string,
   ) => Promise<void>;
+  persistSourceSubscriptionPatch?: (
+    db: DbClient,
+    input: {
+      subscription: SubscriptionSyncRow;
+      patch: Record<string, unknown>;
+      action: string;
+    },
+  ) => Promise<Record<string, unknown> | null>;
 };
 
 function sleep(ms: number) {
@@ -332,34 +340,44 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
       updated_at: nowIso,
     };
 
-    await input.db
-      .from('user_source_subscriptions')
-      .update(patch)
-      .eq('id', input.subscription.id);
+    if (deps.persistSourceSubscriptionPatch) {
+      await deps.persistSourceSubscriptionPatch(input.db, {
+        subscription: input.subscription,
+        patch,
+        action: 'subscription_feed_channel_recovered',
+      });
+    } else {
+      await input.db
+        .from('user_source_subscriptions')
+        .update(patch)
+        .eq('id', input.subscription.id);
+    }
 
     input.subscription.source_channel_id = patch.source_channel_id;
     input.subscription.source_channel_url = patch.source_channel_url;
     input.subscription.source_channel_title = patch.source_channel_title;
     input.subscription.updated_at = nowIso;
 
-    await deps.syncOracleProductSubscriptions?.([{
-      id: input.subscription.id,
-      user_id: input.subscription.user_id,
-      source_type: input.subscription.source_type || 'youtube',
-      source_channel_id: input.subscription.source_channel_id,
-      source_channel_url: input.subscription.source_channel_url || null,
-      source_channel_title: input.subscription.source_channel_title || null,
-      source_page_id: input.subscription.source_page_id || null,
-      mode: input.subscription.mode || null,
-      auto_unlock_enabled: input.subscription.auto_unlock_enabled !== false,
-      is_active: input.subscription.is_active !== false,
-      last_polled_at: input.subscription.last_polled_at || null,
-      last_seen_published_at: input.subscription.last_seen_published_at,
-      last_seen_video_id: input.subscription.last_seen_video_id,
-      last_sync_error: input.subscription.last_sync_error || null,
-      created_at: input.subscription.created_at || nowIso,
-      updated_at: nowIso,
-    }], 'subscription_feed_channel_recovered');
+    if (!deps.persistSourceSubscriptionPatch) {
+      await deps.syncOracleProductSubscriptions?.([{
+        id: input.subscription.id,
+        user_id: input.subscription.user_id,
+        source_type: input.subscription.source_type || 'youtube',
+        source_channel_id: input.subscription.source_channel_id,
+        source_channel_url: input.subscription.source_channel_url || null,
+        source_channel_title: input.subscription.source_channel_title || null,
+        source_page_id: input.subscription.source_page_id || null,
+        mode: input.subscription.mode || null,
+        auto_unlock_enabled: input.subscription.auto_unlock_enabled !== false,
+        is_active: input.subscription.is_active !== false,
+        last_polled_at: input.subscription.last_polled_at || null,
+        last_seen_published_at: input.subscription.last_seen_published_at,
+        last_seen_video_id: input.subscription.last_seen_video_id,
+        last_sync_error: input.subscription.last_sync_error || null,
+        created_at: input.subscription.created_at || nowIso,
+        updated_at: nowIso,
+      }], 'subscription_feed_channel_recovered');
+    }
   }
 
   async function markSoftFeedFetchFailure(input: {
@@ -375,10 +393,18 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
     });
     if (!update) return;
 
-    await input.db
-      .from('user_source_subscriptions')
-      .update(update)
-      .eq('id', input.subscription.id);
+    if (deps.persistSourceSubscriptionPatch) {
+      await deps.persistSourceSubscriptionPatch(input.db, {
+        subscription: input.subscription,
+        patch: update,
+        action: 'subscription_feed_soft_failure',
+      });
+    } else {
+      await input.db
+        .from('user_source_subscriptions')
+        .update(update)
+        .eq('id', input.subscription.id);
+    }
 
     input.subscription.last_polled_at = update.last_polled_at;
     input.subscription.last_sync_error = update.last_sync_error;
@@ -860,10 +886,18 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
       nowIso: finalPolledAt,
     });
     if (successUpdate) {
-      await db
-        .from('user_source_subscriptions')
-        .update(successUpdate)
-        .eq('id', subscription.id);
+      if (deps.persistSourceSubscriptionPatch) {
+        await deps.persistSourceSubscriptionPatch(db, {
+          subscription,
+          patch: successUpdate,
+          action: 'subscription_sync_success',
+        });
+      } else {
+        await db
+          .from('user_source_subscriptions')
+          .update(successUpdate)
+          .eq('id', subscription.id);
+      }
     }
     if (skippedByDurationPolicy > 0) {
       console.log('[subscription_duration_policy_summary]', JSON.stringify({

@@ -3,14 +3,17 @@ import { parseRuntimeFlag } from './runtimeConfig';
 
 export type OracleSubscriptionSchedulerMode = 'supabase' | 'shadow' | 'primary';
 export type OracleQueueLedgerMode = 'supabase' | 'dual' | 'primary';
+export type OracleSubscriptionLedgerMode = 'supabase' | 'dual' | 'primary';
 
 export type OracleControlPlaneConfig = {
   enabled: boolean;
   subscriptionSchedulerMode: OracleSubscriptionSchedulerMode;
   queueLedgerMode: OracleQueueLedgerMode;
+  subscriptionLedgerMode: OracleSubscriptionLedgerMode;
   sqlitePath: string;
   bootstrapBatch: number;
   queueLedgerBootstrapLimit: number;
+  subscriptionLedgerBootstrapLimit: number;
   productMirrorEnabled: boolean;
   productBootstrapLimit: number;
   schedulerTickMs: number;
@@ -62,6 +65,13 @@ function normalizeOracleQueueLedgerMode(raw: string | undefined): OracleQueueLed
   return 'supabase';
 }
 
+function normalizeOracleSubscriptionLedgerMode(raw: string | undefined): OracleSubscriptionLedgerMode {
+  const normalized = String(raw || '').trim().toLowerCase();
+  if (normalized === 'dual') return 'dual';
+  if (normalized === 'primary') return 'primary';
+  return 'supabase';
+}
+
 export function readOracleControlPlaneConfig(
   env: NodeJS.ProcessEnv,
   input?: { cwd?: string },
@@ -82,6 +92,9 @@ export function readOracleControlPlaneConfig(
     queueLedgerMode: enabled
       ? normalizeOracleQueueLedgerMode(env.ORACLE_QUEUE_LEDGER_MODE)
       : 'supabase',
+    subscriptionLedgerMode: enabled
+      ? normalizeOracleSubscriptionLedgerMode(env.ORACLE_SUBSCRIPTION_LEDGER_MODE)
+      : 'supabase',
     sqlitePath,
     bootstrapBatch: clampInt(env.ORACLE_SUBSCRIPTION_BOOTSTRAP_BATCH, 250, 10, 5000),
     queueLedgerBootstrapLimit: clampInt(
@@ -89,6 +102,12 @@ export function readOracleControlPlaneConfig(
       1_000,
       50,
       10_000,
+    ),
+    subscriptionLedgerBootstrapLimit: clampInt(
+      env.ORACLE_SUBSCRIPTION_LEDGER_BOOTSTRAP_LIMIT,
+      10_000,
+      100,
+      100_000,
     ),
     productMirrorEnabled: parseRuntimeFlag(env.ORACLE_PRODUCT_MIRROR_ENABLED, false),
     productBootstrapLimit: clampInt(

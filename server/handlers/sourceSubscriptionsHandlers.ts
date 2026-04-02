@@ -209,36 +209,31 @@ export async function handleCreateSourceSubscription(req: express.Request, res: 
     });
   }
 
-  const { data: existingSub } = await db
-    .from('user_source_subscriptions')
-    .select('id, is_active, auto_unlock_enabled')
-    .eq('user_id', userId)
-    .eq('source_type', 'youtube')
-    .eq('source_channel_id', resolved.channelId)
-    .maybeSingle();
-  const isCreateOrReactivate = !existingSub || !existingSub.is_active;
-
-  const { data: upserted, error: upsertError } = await db
-    .from('user_source_subscriptions')
-    .upsert(
-      {
-        user_id: userId,
-        source_type: 'youtube',
-        source_channel_id: resolved.channelId,
-        source_channel_url: resolved.channelUrl,
-        source_channel_title: resolved.channelTitle,
-        source_page_id: sourcePage.id,
-        mode: 'auto',
-        auto_unlock_enabled: existingSub?.auto_unlock_enabled ?? true,
-        is_active: true,
-        last_sync_error: null,
-      },
-      { onConflict: 'user_id,source_type,source_channel_id' },
-    )
-    .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, source_page_id, mode, auto_unlock_enabled, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
-    .single();
-  if (upsertError) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: upsertError.message, data: null });
-  await deps.syncOracleProductSubscriptions?.([upserted], 'subscription_upsert');
+  let upserted;
+  let previousSubscription = null;
+  try {
+    const result = await deps.upsertSourceSubscription(db, {
+      userId,
+      sourceType: 'youtube',
+      sourceChannelId: resolved.channelId,
+      sourceChannelUrl: resolved.channelUrl,
+      sourceChannelTitle: resolved.channelTitle,
+      sourcePageId: sourcePage.id,
+      mode: 'auto',
+      isActive: true,
+      lastSyncError: null,
+    });
+    upserted = result.row;
+    previousSubscription = result.current;
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'WRITE_FAILED',
+      message: error instanceof Error ? error.message : String(error),
+      data: null,
+    });
+  }
+  const isCreateOrReactivate = !previousSubscription || !previousSubscription.is_active;
 
   let sync: SyncSubscriptionResult | null = null;
   try {
@@ -407,14 +402,17 @@ export async function handleListSourceSubscriptions(_req: express.Request, res: 
   if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
   const sourcePageDb = deps.getServiceSupabaseClient?.() || db;
 
-  const { data, error } = await db
-    .from('user_source_subscriptions')
-    .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, source_page_id, mode, auto_unlock_enabled, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
-    .eq('user_id', userId)
-    .order('updated_at', { ascending: false });
-  if (error) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error.message, data: null });
-
-  const rows = Array.isArray(data) ? data : [];
+  let rows = [] as Array<Record<string, unknown>>;
+  try {
+    rows = await deps.listSourceSubscriptionsForUser(db, userId);
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: error instanceof Error ? error.message : String(error),
+      data: null,
+    });
+  }
   try {
     const storedAssets = await loadStoredSourcePageAssets(sourcePageDb, rows);
     const withAvatars = rows.map((row) => {
@@ -912,16 +910,23 @@ export async function handlePatchSourceSubscription(req: express.Request, res: e
   const db = deps.getAuthedSupabaseClient(authToken);
   if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
 
-  const { data, error } = await db
-    .from('user_source_subscriptions')
-    .update(updates)
-    .eq('id', req.params.id)
-    .eq('user_id', userId)
-    .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, source_page_id, mode, auto_unlock_enabled, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
-    .maybeSingle();
-  if (error) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: error.message, data: null });
+  let data;
+  try {
+    data = await deps.patchSourceSubscriptionById(db, {
+      subscriptionId: req.params.id,
+      userId,
+      patch: updates,
+      action: 'subscription_patch',
+    });
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'WRITE_FAILED',
+      message: error instanceof Error ? error.message : String(error),
+      data: null,
+    });
+  }
   if (!data) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Subscription not found', data: null });
-  await deps.syncOracleProductSubscriptions?.([data], 'subscription_patch');
 
   return res.json({
     ok: true,
@@ -941,16 +946,22 @@ export async function handleDeleteSourceSubscription(req: express.Request, res: 
   const db = deps.getAuthedSupabaseClient(authToken);
   if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
 
-  const { data, error } = await db
-    .from('user_source_subscriptions')
-    .update({ is_active: false })
-    .eq('id', req.params.id)
-    .eq('user_id', userId)
-    .select('id, source_channel_id, source_page_id')
-    .maybeSingle();
-  if (error) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: error.message, data: null });
+  let data;
+  try {
+    data = await deps.deactivateSourceSubscriptionById(db, {
+      subscriptionId: req.params.id,
+      userId,
+      action: 'subscription_deactivate',
+    });
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'WRITE_FAILED',
+      message: error instanceof Error ? error.message : String(error),
+      data: null,
+    });
+  }
   if (!data) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Subscription not found', data: null });
-  await deps.syncOracleProductSubscriptions?.([data], 'subscription_deactivate');
 
   return res.json({
     ok: true,
@@ -970,13 +981,20 @@ export async function handleSyncSourceSubscription(req: express.Request, res: ex
   const db = deps.getAuthedSupabaseClient(authToken);
   if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
 
-  const { data: subscription, error: subscriptionError } = await db
-    .from('user_source_subscriptions')
-    .select('id, user_id, mode, source_type, source_channel_id, source_channel_url, source_channel_title, source_page_id, auto_unlock_enabled, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, is_active, created_at, updated_at')
-    .eq('id', req.params.id)
-    .eq('user_id', userId)
-    .maybeSingle();
-  if (subscriptionError) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: subscriptionError.message, data: null });
+  let subscription;
+  try {
+    subscription = await deps.getSourceSubscriptionById(db, {
+      subscriptionId: req.params.id,
+      userId,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: error instanceof Error ? error.message : String(error),
+      data: null,
+    });
+  }
   if (!subscription) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Subscription not found', data: null });
   if (!subscription.is_active) return res.status(400).json({ ok: false, error_code: 'INACTIVE_SUBSCRIPTION', message: 'Subscription is inactive', data: null });
 

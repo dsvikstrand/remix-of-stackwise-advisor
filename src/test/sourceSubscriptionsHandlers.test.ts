@@ -40,6 +40,39 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     fetchYouTubeChannelAssetMap: vi.fn(async () => new Map()),
     runSourcePageAssetSweep: vi.fn(async () => null),
     ensureSourcePageFromYouTubeChannel: vi.fn(),
+    upsertSourceSubscription: vi.fn(async (_db, input: any) => ({
+      current: null,
+      row: {
+        id: 'sub_new',
+        user_id: input.userId,
+        source_type: input.sourceType,
+        source_channel_id: input.sourceChannelId,
+        source_channel_url: input.sourceChannelUrl || null,
+        source_channel_title: input.sourceChannelTitle || null,
+        source_page_id: input.sourcePageId || null,
+        mode: input.mode || 'auto',
+        auto_unlock_enabled: input.autoUnlockEnabled ?? true,
+        is_active: input.isActive ?? true,
+        last_polled_at: null,
+        last_seen_published_at: null,
+        last_seen_video_id: null,
+        last_sync_error: input.lastSyncError ?? null,
+        created_at: '2026-04-01T10:00:00.000Z',
+        updated_at: '2026-04-01T10:00:00.000Z',
+      },
+    })),
+    listSourceSubscriptionsForUser: vi.fn(async (db: any, userId: string) => {
+      const { data, error } = await db
+        .from('user_source_subscriptions')
+        .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, source_page_id, mode, auto_unlock_enabled, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    }),
+    getSourceSubscriptionById: vi.fn(async () => null),
+    patchSourceSubscriptionById: vi.fn(async () => null),
+    deactivateSourceSubscriptionById: vi.fn(async () => null),
     syncSingleSubscription: vi.fn(),
     markSubscriptionSyncError: vi.fn(),
     upsertSubscriptionNoticeSourceItem: vi.fn(),
