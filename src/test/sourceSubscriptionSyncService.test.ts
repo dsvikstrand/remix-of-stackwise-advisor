@@ -433,4 +433,267 @@ describe('source subscription sync service', () => {
       last_sync_error: 'SYNC_FAILED',
     });
   });
+
+  it('retries transient feed fetch failures before succeeding', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const db = createMockSupabase({
+        user_source_subscriptions: [{
+          id: 'sub_1',
+          user_id: 'user_1',
+          source_channel_id: 'channel_1',
+          source_channel_url: 'https://youtube.com/channel/channel_1',
+          source_channel_title: 'Channel 1',
+          source_page_id: 'page_1',
+          last_seen_published_at: null,
+          last_seen_video_id: null,
+          last_sync_error: null,
+        }],
+        user_feed_items: [],
+      }) as any;
+
+      const fetchYouTubeFeed = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('FEED_FETCH_FAILED:500'))
+        .mockResolvedValueOnce({
+          channelTitle: 'Channel 1',
+          videos: [{
+            videoId: 'video_new',
+            url: 'https://youtube.com/watch?v=video_new',
+            title: 'Video New',
+            publishedAt: '2026-03-19T10:00:00.000Z',
+            thumbnailUrl: null,
+            durationSeconds: 120,
+          }],
+        });
+
+      const service = createSourceSubscriptionSyncService({
+        fetchYouTubeFeed,
+        isNewerThanCheckpoint: vi.fn(() => false),
+        ingestionMaxPerSubscription: 20,
+        youtubeDataApiKey: '',
+        generationDurationCapEnabled: false,
+        generationMaxVideoSeconds: 2700,
+        generationBlockUnknownDuration: true,
+        generationDurationLookupTimeoutMs: 8000,
+        fetchYouTubeDurationMap: vi.fn(async () => new Map()),
+        fetchYouTubeVideoStates: vi.fn(async () => new Map()),
+        upsertSourceItemFromVideo: vi.fn(),
+        getExistingFeedItem: vi.fn(),
+        ensureSourceItemUnlock: vi.fn(),
+        computeUnlockCost: vi.fn(() => 1),
+        attemptAutoUnlockForSourceItem: vi.fn(),
+        getServiceSupabaseClient: () => null,
+        enqueueSourceAutoUnlockRetryJob: vi.fn(),
+        getSourceItemUnlockBySourceItemId: vi.fn(),
+        getTranscriptCooldownState: vi.fn(() => ({ active: false })),
+        isConfirmedNoTranscriptUnlock: vi.fn(() => false),
+        suppressUnlockableFeedRowsForSourceItem: vi.fn(),
+        insertFeedItem: vi.fn(),
+      } as any);
+
+      const promise = service.syncSingleSubscription(
+        db,
+        {
+          id: 'sub_1',
+          user_id: 'user_1',
+          mode: 'auto',
+          source_channel_id: 'channel_1',
+          source_channel_url: 'https://youtube.com/channel/channel_1',
+          source_channel_title: 'Channel 1',
+          source_page_id: 'page_1',
+          last_seen_published_at: null,
+          last_seen_video_id: null,
+        },
+        { trigger: 'service_cron' },
+      );
+
+      await vi.runAllTimersAsync();
+      const result = await promise;
+
+      expect(fetchYouTubeFeed).toHaveBeenCalledTimes(2);
+      expect(result).toMatchObject({
+        resultCode: 'bootstrap',
+        newestVideoId: 'video_new',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('returns a soft feed-not-found result for service cron instead of throwing', async () => {
+    const db = createMockSupabase({
+      user_source_subscriptions: [{
+        id: 'sub_1',
+        user_id: 'user_1',
+        source_channel_id: 'channel_1',
+        source_channel_url: 'https://youtube.com/channel/channel_1',
+        source_channel_title: 'Channel 1',
+        source_page_id: 'page_1',
+        last_polled_at: '2026-03-19T11:00:00.000Z',
+        last_seen_published_at: '2026-03-19T10:00:00.000Z',
+        last_seen_video_id: 'video_old',
+        last_sync_error: null,
+      }],
+      user_feed_items: [],
+    }) as any;
+
+    const service = createSourceSubscriptionSyncService({
+      fetchYouTubeFeed: vi.fn(async () => {
+        throw new Error('FEED_FETCH_FAILED:404');
+      }),
+      isNewerThanCheckpoint: vi.fn(() => false),
+      ingestionMaxPerSubscription: 20,
+      youtubeDataApiKey: '',
+      generationDurationCapEnabled: false,
+      generationMaxVideoSeconds: 2700,
+      generationBlockUnknownDuration: true,
+      generationDurationLookupTimeoutMs: 8000,
+      fetchYouTubeDurationMap: vi.fn(async () => new Map()),
+      fetchYouTubeVideoStates: vi.fn(async () => new Map()),
+      upsertSourceItemFromVideo: vi.fn(),
+      getExistingFeedItem: vi.fn(),
+      ensureSourceItemUnlock: vi.fn(),
+      computeUnlockCost: vi.fn(() => 1),
+      attemptAutoUnlockForSourceItem: vi.fn(),
+      getServiceSupabaseClient: () => null,
+      enqueueSourceAutoUnlockRetryJob: vi.fn(),
+      getSourceItemUnlockBySourceItemId: vi.fn(),
+      getTranscriptCooldownState: vi.fn(() => ({ active: false })),
+      isConfirmedNoTranscriptUnlock: vi.fn(() => false),
+      suppressUnlockableFeedRowsForSourceItem: vi.fn(),
+      insertFeedItem: vi.fn(),
+    } as any);
+
+    const result = await service.syncSingleSubscription(
+      db,
+      {
+        id: 'sub_1',
+        user_id: 'user_1',
+        mode: 'auto',
+        source_channel_id: 'channel_1',
+        source_channel_url: 'https://youtube.com/channel/channel_1',
+        source_channel_title: 'Channel 1',
+        source_page_id: 'page_1',
+        last_polled_at: '2026-03-19T11:00:00.000Z',
+        last_seen_published_at: '2026-03-19T10:00:00.000Z',
+        last_seen_video_id: 'video_old',
+        last_sync_error: null,
+      },
+      { trigger: 'service_cron' },
+    );
+
+    expect(result).toMatchObject({
+      resultCode: 'feed_not_found',
+      errorMessage: 'FEED_FETCH_FAILED:404',
+    });
+    expect(db.state.user_source_subscriptions[0]).toMatchObject({
+      last_sync_error: 'FEED_FETCH_FAILED:404',
+    });
+  });
+
+  it('re-resolves the channel and retries the feed when a stored channel id goes stale', async () => {
+    const db = createMockSupabase({
+      user_source_subscriptions: [{
+        id: 'sub_1',
+        user_id: 'user_1',
+        source_type: 'youtube',
+        source_channel_id: 'channel_old',
+        source_channel_url: 'https://youtube.com/@channel-handle',
+        source_channel_title: 'Old Channel',
+        source_page_id: 'page_1',
+        auto_unlock_enabled: true,
+        is_active: true,
+        last_seen_published_at: null,
+        last_seen_video_id: null,
+        last_sync_error: null,
+        created_at: '2026-03-19T09:00:00.000Z',
+        updated_at: '2026-03-19T09:00:00.000Z',
+      }],
+      user_feed_items: [],
+    }) as any;
+
+    const fetchYouTubeFeed = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('FEED_FETCH_FAILED:404'))
+      .mockResolvedValueOnce({
+        channelTitle: 'Recovered Channel',
+        videos: [{
+          videoId: 'video_new',
+          url: 'https://youtube.com/watch?v=video_new',
+          title: 'Video New',
+          publishedAt: '2026-03-19T10:00:00.000Z',
+          thumbnailUrl: null,
+          durationSeconds: 120,
+        }],
+      });
+
+    const syncOracleProductSubscriptions = vi.fn(async () => undefined);
+    const service = createSourceSubscriptionSyncService({
+      fetchYouTubeFeed,
+      isNewerThanCheckpoint: vi.fn(() => false),
+      ingestionMaxPerSubscription: 20,
+      youtubeDataApiKey: '',
+      generationDurationCapEnabled: false,
+      generationMaxVideoSeconds: 2700,
+      generationBlockUnknownDuration: true,
+      generationDurationLookupTimeoutMs: 8000,
+      fetchYouTubeDurationMap: vi.fn(async () => new Map()),
+      fetchYouTubeVideoStates: vi.fn(async () => new Map()),
+      upsertSourceItemFromVideo: vi.fn(),
+      getExistingFeedItem: vi.fn(),
+      ensureSourceItemUnlock: vi.fn(),
+      computeUnlockCost: vi.fn(() => 1),
+      attemptAutoUnlockForSourceItem: vi.fn(),
+      getServiceSupabaseClient: () => null,
+      enqueueSourceAutoUnlockRetryJob: vi.fn(),
+      getSourceItemUnlockBySourceItemId: vi.fn(),
+      getTranscriptCooldownState: vi.fn(() => ({ active: false })),
+      isConfirmedNoTranscriptUnlock: vi.fn(() => false),
+      suppressUnlockableFeedRowsForSourceItem: vi.fn(),
+      insertFeedItem: vi.fn(),
+      resolveYouTubeChannel: vi.fn(async () => ({
+        channelId: 'channel_new',
+        channelUrl: 'https://youtube.com/channel/channel_new',
+        channelTitle: 'Recovered Channel',
+      })),
+      syncOracleProductSubscriptions,
+    } as any);
+
+    const result = await service.syncSingleSubscription(
+      db,
+      {
+        id: 'sub_1',
+        user_id: 'user_1',
+        mode: 'auto',
+        source_type: 'youtube',
+        source_channel_id: 'channel_old',
+        source_channel_url: 'https://youtube.com/@channel-handle',
+        source_channel_title: 'Old Channel',
+        source_page_id: 'page_1',
+        auto_unlock_enabled: true,
+        is_active: true,
+        last_seen_published_at: null,
+        last_seen_video_id: null,
+        last_sync_error: null,
+        created_at: '2026-03-19T09:00:00.000Z',
+        updated_at: '2026-03-19T09:00:00.000Z',
+      },
+      { trigger: 'user_sync' },
+    );
+
+    expect(fetchYouTubeFeed).toHaveBeenNthCalledWith(1, 'channel_old', 20);
+    expect(fetchYouTubeFeed).toHaveBeenNthCalledWith(2, 'channel_new', 20);
+    expect(db.state.user_source_subscriptions[0]).toMatchObject({
+      source_channel_id: 'channel_new',
+      source_channel_url: 'https://youtube.com/channel/channel_new',
+      source_channel_title: 'Recovered Channel',
+    });
+    expect(syncOracleProductSubscriptions).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      resultCode: 'bootstrap',
+      channelTitle: 'Recovered Channel',
+    });
+  });
 });

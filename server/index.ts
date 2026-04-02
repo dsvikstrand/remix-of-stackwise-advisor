@@ -10160,7 +10160,7 @@ async function runWithExecutionTimeout<T>(task: Promise<T>, timeoutMs: number): 
 }
 
 async function loadAllActiveSubscriptionsBatchForRun(db: ReturnType<typeof getServiceSupabaseClient>) {
-  const selectColumns = 'id, user_id, mode, source_channel_id, source_channel_title, source_page_id, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, is_active';
+  const selectColumns = 'id, user_id, mode, source_type, source_channel_id, source_channel_url, source_channel_title, source_page_id, auto_unlock_enabled, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, is_active, created_at, updated_at';
   if (
     oracleControlPlaneConfig.enabled
     && oracleControlPlane
@@ -10258,6 +10258,9 @@ async function processAllActiveSubscriptionsJob(input: {
   let inserted = 0;
   let skipped = 0;
   let batchCount = 0;
+  let completedSubscriptionCount = 0;
+  let softFailureCount = 0;
+  const softFailureSamples: Array<{ subscription_id: string; error: string }> = [];
   const failures: Array<{ subscription_id: string; error: string }> = [];
   try {
     const maxBatchRuns = (
@@ -10280,6 +10283,17 @@ async function processAllActiveSubscriptionsJob(input: {
           processed += sync.processed;
           inserted += sync.inserted;
           skipped += sync.skipped;
+          if (isFeedSoftFailureResultCode(sync.resultCode)) {
+            softFailureCount += 1;
+            if (softFailureSamples.length < 10) {
+              softFailureSamples.push({
+                subscription_id: subscription.id,
+                error: String(sync.errorMessage || sync.resultCode),
+              });
+            }
+          } else {
+            completedSubscriptionCount += 1;
+          }
           if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
             await recordOracleSubscriptionSyncOutcome({
               controlDb: oracleControlPlane,
@@ -10293,6 +10307,7 @@ async function processAllActiveSubscriptionsJob(input: {
               inserted: sync.inserted,
               skipped: sync.skipped,
               trigger: 'service_cron',
+              errorMessage: sync.errorMessage,
             });
           }
         } catch (error) {
@@ -10332,16 +10347,30 @@ async function processAllActiveSubscriptionsJob(input: {
       }
     }
 
+    const shouldFailBatch = failures.length > 0 || (softFailureCount > 0 && completedSubscriptionCount === 0);
     await finalizeIngestionJobWithMirror(db, {
       jobId: input.jobId,
-      status: failures.length ? 'failed' : 'succeeded',
+      status: shouldFailBatch ? 'failed' : 'succeeded',
       processedCount: processed,
       insertedCount: inserted,
       skippedCount: skipped,
-      errorCode: failures.length ? 'PARTIAL_FAILURE' : null,
-      errorMessage: failures.length ? JSON.stringify(failures).slice(0, 1000) : null,
+      errorCode: shouldFailBatch ? 'PARTIAL_FAILURE' : null,
+      errorMessage: shouldFailBatch
+        ? JSON.stringify(failures.length > 0 ? failures : softFailureSamples).slice(0, 1000)
+        : null,
       action: 'all_active_subscriptions_terminal',
     });
+
+    if (softFailureCount > 0) {
+      console.log('[subscription_batch_soft_failure_summary]', JSON.stringify({
+        job_id: input.jobId,
+        batch_count: batchCount,
+        completed_subscription_count: completedSubscriptionCount,
+        soft_failure_count: softFailureCount,
+        hard_failure_count: failures.length,
+        soft_failure_samples: softFailureSamples,
+      }));
+    }
   } catch (error) {
     if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
       await markOracleAllActiveSubscriptionsRunFinished({
@@ -10350,18 +10379,21 @@ async function processAllActiveSubscriptionsJob(input: {
         inserted,
         skipped,
         failureCount: Math.max(1, failures.length),
+        softFailureCount,
       });
     }
     throw error;
   }
 
   if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
+    const shouldFailBatch = failures.length > 0 || (softFailureCount > 0 && completedSubscriptionCount === 0);
     await markOracleAllActiveSubscriptionsRunFinished({
       controlDb: oracleControlPlane,
       processed,
       inserted,
       skipped,
-      failureCount: failures.length,
+      failureCount: shouldFailBatch ? Math.max(failures.length, softFailureCount) : 0,
+      softFailureCount,
     });
   }
 
@@ -10373,6 +10405,7 @@ async function processAllActiveSubscriptionsJob(input: {
       inserted,
       skipped,
       failures: failures.length,
+      soft_failures: softFailureCount,
     }));
   }
 
@@ -10382,6 +10415,7 @@ async function processAllActiveSubscriptionsJob(input: {
     inserted,
     skipped,
     failures: failures.length,
+    soft_failures: softFailureCount,
   });
 }
 
@@ -11208,8 +11242,13 @@ function scheduleYouTubeRefreshScheduler(delayMs?: number) {
   isConfirmedNoTranscriptUnlock,
   suppressUnlockableFeedRowsForSourceItem: suppressUnlockableFeedRowsForSourceItemWithMirror,
   insertFeedItem,
+  resolveYouTubeChannel,
+  syncOracleProductSubscriptions: upsertOracleProductSubscriptionsFromKnownRows,
 });
-const { syncSingleSubscription } = sourceSubscriptionSyncService;
+const {
+  syncSingleSubscription,
+  isFeedSoftFailureResultCode,
+} = sourceSubscriptionSyncService;
 
 const DebugSimulateSubscriptionRequestSchema = z.object({
   rewind_days: z.coerce.number().int().min(1).max(365).optional(),

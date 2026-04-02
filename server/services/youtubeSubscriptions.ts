@@ -59,6 +59,32 @@ export type YouTubeVideoState = {
   isLiveNow: boolean;
 };
 
+export type YouTubeFeedFetchErrorKind =
+  | 'feed_not_found'
+  | 'feed_upstream_unavailable'
+  | 'feed_request_failed';
+
+export class YouTubeFeedFetchError extends Error {
+  channelId: string;
+  status: number | null;
+  kind: YouTubeFeedFetchErrorKind;
+  retryable: boolean;
+
+  constructor(input: {
+    channelId: string;
+    status: number | null;
+    kind: YouTubeFeedFetchErrorKind;
+    retryable: boolean;
+    message: string;
+  }) {
+    super(input.message);
+    this.channelId = input.channelId;
+    this.status = input.status;
+    this.kind = input.kind;
+    this.retryable = input.retryable;
+  }
+}
+
 const CHANNEL_ID_RE = /^UC[a-zA-Z0-9_-]{20,}$/;
 const HANDLE_RE = /^@[a-zA-Z0-9._-]{3,30}$/;
 const BARE_HANDLE_RE = /^[a-zA-Z0-9._-]{3,30}$/;
@@ -80,6 +106,51 @@ function parseFirst(text: string, re: RegExp): string | null {
 
 function getCanonicalChannelUrl(channelId: string) {
   return `https://www.youtube.com/channel/${channelId}`;
+}
+
+function classifyYouTubeFeedFetchStatus(status: number | null): {
+  kind: YouTubeFeedFetchErrorKind;
+  retryable: boolean;
+} {
+  if (status === 404) {
+    return {
+      kind: 'feed_not_found',
+      retryable: false,
+    };
+  }
+  if (status != null && status >= 500) {
+    return {
+      kind: 'feed_upstream_unavailable',
+      retryable: true,
+    };
+  }
+  return {
+    kind: 'feed_request_failed',
+    retryable: status == null,
+  };
+}
+
+export function toYouTubeFeedFetchError(error: unknown, channelId?: string): YouTubeFeedFetchError | null {
+  if (error instanceof YouTubeFeedFetchError) {
+    return error;
+  }
+
+  const message = error instanceof Error ? error.message : String(error || '');
+  const statusMatch = message.match(/^FEED_FETCH_FAILED:(\d{3}|network|unknown)$/);
+  if (statusMatch) {
+    const rawStatus = statusMatch[1];
+    const status = /^\d{3}$/.test(rawStatus) ? Number.parseInt(rawStatus, 10) : null;
+    const classified = classifyYouTubeFeedFetchStatus(status);
+    return new YouTubeFeedFetchError({
+      channelId: String(channelId || '').trim(),
+      status,
+      kind: classified.kind,
+      retryable: classified.retryable,
+      message,
+    });
+  }
+
+  return null;
 }
 
 function normalizeHandleValue(value: string) {
@@ -199,11 +270,29 @@ function extractTitleFromHtml(html: string): string | null {
 
 export async function fetchYouTubeFeed(channelId: string, maxItems = 15): Promise<{ channelTitle: string | null; videos: YouTubeFeedVideo[] }> {
   const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`;
-  const response = await fetch(feedUrl, {
-    headers: { 'User-Agent': 'bleuv1-subscriptions/1.0 (+https://api.bleup.app)' },
-  });
+  let response: Response;
+  try {
+    response = await fetch(feedUrl, {
+      headers: { 'User-Agent': 'bleuv1-subscriptions/1.0 (+https://api.bleup.app)' },
+    });
+  } catch {
+    throw new YouTubeFeedFetchError({
+      channelId,
+      status: null,
+      kind: 'feed_upstream_unavailable',
+      retryable: true,
+      message: 'FEED_FETCH_FAILED:network',
+    });
+  }
   if (!response.ok) {
-    throw new Error(`FEED_FETCH_FAILED:${response.status}`);
+    const classified = classifyYouTubeFeedFetchStatus(response.status);
+    throw new YouTubeFeedFetchError({
+      channelId,
+      status: response.status,
+      kind: classified.kind,
+      retryable: classified.retryable,
+      message: `FEED_FETCH_FAILED:${response.status}`,
+    });
   }
   const xml = await response.text();
 

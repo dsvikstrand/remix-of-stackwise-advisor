@@ -1,4 +1,8 @@
 import { classifyVideoDuration, toDurationSeconds } from './videoDurationPolicy';
+import {
+  toYouTubeFeedFetchError,
+  type ResolvedYouTubeChannel,
+} from './youtubeSubscriptions';
 
 type DbClient = any;
 
@@ -46,7 +50,16 @@ type SyncSubscriptionResult = {
   newestVideoId: string | null;
   newestPublishedAt: string | null;
   channelTitle: string | null;
-  resultCode: 'bootstrap' | 'new_items' | 'checked_no_insert' | 'noop';
+  resultCode:
+    | 'bootstrap'
+    | 'new_items'
+    | 'checked_no_insert'
+    | 'noop'
+    | 'feed_transient_error'
+    | 'feed_not_found';
+  errorMessage?: string | null;
+  sourceChannelId?: string | null;
+  sourceChannelTitle?: string | null;
 };
 
 type SubscriptionSyncRow = {
@@ -54,12 +67,18 @@ type SubscriptionSyncRow = {
   user_id: string;
   mode: string;
   source_channel_id: string;
+  source_channel_url?: string | null;
   source_channel_title?: string | null;
   source_page_id?: string | null;
+  source_type?: string | null;
+  auto_unlock_enabled?: boolean | null;
   last_polled_at?: string | null;
   last_seen_published_at: string | null;
   last_seen_video_id: string | null;
   last_sync_error?: string | null;
+  is_active?: boolean | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 type SubscriptionSyncOptions = {
@@ -70,6 +89,8 @@ export const SUBSCRIPTION_SYNC_WRITE_HEARTBEAT_MINUTES = 60;
 export const SUBSCRIPTION_SYNC_ERROR_WRITE_HEARTBEAT_MINUTES = 120;
 const SUBSCRIPTION_SYNC_WRITE_HEARTBEAT_MS = SUBSCRIPTION_SYNC_WRITE_HEARTBEAT_MINUTES * 60_000;
 const SUBSCRIPTION_SYNC_ERROR_WRITE_HEARTBEAT_MS = SUBSCRIPTION_SYNC_ERROR_WRITE_HEARTBEAT_MINUTES * 60_000;
+const SUBSCRIPTION_FEED_FETCH_MAX_ATTEMPTS = 2;
+const SUBSCRIPTION_FEED_FETCH_RETRY_BACKOFF_MS = 750;
 
 function normalizeNullableText(value: unknown) {
   const normalized = String(value ?? '').trim();
@@ -279,15 +300,237 @@ export type SourceSubscriptionSyncDeps = {
       state: 'my_feed_unlockable' | 'my_feed_generated' | 'subscription_notice';
     },
   ) => Promise<{ id: string } | null>;
+  resolveYouTubeChannel?: (input: string) => Promise<ResolvedYouTubeChannel>;
+  syncOracleProductSubscriptions?: (
+    rows: Array<Record<string, unknown> | null | undefined>,
+    action: string,
+  ) => Promise<void>;
 };
 
+function sleep(ms: number) {
+  if (ms <= 0) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function isFeedSoftFailureResultCode(resultCode: SyncSubscriptionResult['resultCode']) {
+  return resultCode === 'feed_transient_error' || resultCode === 'feed_not_found';
+}
+
 export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSyncDeps) {
+  async function updateRecoveredSubscriptionChannel(input: {
+    db: DbClient;
+    subscription: SubscriptionSyncRow;
+    resolved: ResolvedYouTubeChannel;
+  }) {
+    const nowIso = new Date().toISOString();
+    const patch = {
+      source_channel_id: input.resolved.channelId,
+      source_channel_url: input.resolved.channelUrl,
+      source_channel_title: input.resolved.channelTitle || input.subscription.source_channel_title || null,
+      updated_at: nowIso,
+    };
+
+    await input.db
+      .from('user_source_subscriptions')
+      .update(patch)
+      .eq('id', input.subscription.id);
+
+    input.subscription.source_channel_id = patch.source_channel_id;
+    input.subscription.source_channel_url = patch.source_channel_url;
+    input.subscription.source_channel_title = patch.source_channel_title;
+    input.subscription.updated_at = nowIso;
+
+    await deps.syncOracleProductSubscriptions?.([{
+      id: input.subscription.id,
+      user_id: input.subscription.user_id,
+      source_type: input.subscription.source_type || 'youtube',
+      source_channel_id: input.subscription.source_channel_id,
+      source_channel_url: input.subscription.source_channel_url || null,
+      source_channel_title: input.subscription.source_channel_title || null,
+      source_page_id: input.subscription.source_page_id || null,
+      mode: input.subscription.mode || null,
+      auto_unlock_enabled: input.subscription.auto_unlock_enabled !== false,
+      is_active: input.subscription.is_active !== false,
+      last_polled_at: input.subscription.last_polled_at || null,
+      last_seen_published_at: input.subscription.last_seen_published_at,
+      last_seen_video_id: input.subscription.last_seen_video_id,
+      last_sync_error: input.subscription.last_sync_error || null,
+      created_at: input.subscription.created_at || nowIso,
+      updated_at: nowIso,
+    }], 'subscription_feed_channel_recovered');
+  }
+
+  async function markSoftFeedFetchFailure(input: {
+    db: DbClient;
+    subscription: SubscriptionSyncRow;
+    errorMessage: string;
+  }) {
+    const nowIso = new Date().toISOString();
+    const update = buildSubscriptionSyncErrorUpdate({
+      subscription: input.subscription,
+      errorMessage: input.errorMessage,
+      nowIso,
+    });
+    if (!update) return;
+
+    await input.db
+      .from('user_source_subscriptions')
+      .update(update)
+      .eq('id', input.subscription.id);
+
+    input.subscription.last_polled_at = update.last_polled_at;
+    input.subscription.last_sync_error = update.last_sync_error;
+  }
+
+  async function loadFeedWithHardening(
+    db: DbClient,
+    subscription: SubscriptionSyncRow,
+    options: SubscriptionSyncOptions,
+  ): Promise<
+    | { kind: 'success'; feed: Awaited<ReturnType<SourceSubscriptionSyncDeps['fetchYouTubeFeed']>> }
+    | {
+      kind: 'soft_failure';
+      resultCode: Extract<SyncSubscriptionResult['resultCode'], 'feed_transient_error' | 'feed_not_found'>;
+      errorMessage: string;
+    }
+  > {
+    let attempts = 0;
+    let attemptedChannelRecovery = false;
+    while (attempts < SUBSCRIPTION_FEED_FETCH_MAX_ATTEMPTS) {
+      attempts += 1;
+      try {
+        const feed = await deps.fetchYouTubeFeed(subscription.source_channel_id, 20);
+        return {
+          kind: 'success',
+          feed,
+        };
+      } catch (error) {
+        const feedError = toYouTubeFeedFetchError(error, subscription.source_channel_id);
+        if (!feedError) {
+          throw error;
+        }
+
+        if (
+          feedError.kind === 'feed_not_found'
+          && !attemptedChannelRecovery
+          && deps.resolveYouTubeChannel
+          && subscription.source_channel_url
+        ) {
+          attemptedChannelRecovery = true;
+          try {
+            const resolved = await deps.resolveYouTubeChannel(subscription.source_channel_url);
+            if (resolved.channelId && resolved.channelId !== subscription.source_channel_id) {
+              await updateRecoveredSubscriptionChannel({
+                db,
+                subscription,
+                resolved,
+              });
+              console.log('[subscription_channel_recovered]', JSON.stringify({
+                subscription_id: subscription.id,
+                user_id: subscription.user_id,
+                previous_source_channel_id: feedError.channelId || null,
+                source_channel_id: subscription.source_channel_id,
+                source_channel_url: subscription.source_channel_url || null,
+                source_channel_title: subscription.source_channel_title || null,
+                trigger: options.trigger,
+              }));
+              continue;
+            }
+          } catch (recoveryError) {
+            console.log('[subscription_channel_recovery_failed]', JSON.stringify({
+              subscription_id: subscription.id,
+              user_id: subscription.user_id,
+              source_channel_id: subscription.source_channel_id,
+              source_channel_url: subscription.source_channel_url || null,
+              trigger: options.trigger,
+              error: recoveryError instanceof Error ? recoveryError.message : String(recoveryError),
+            }));
+          }
+        }
+
+        if (feedError.retryable && attempts < SUBSCRIPTION_FEED_FETCH_MAX_ATTEMPTS) {
+          console.log('[subscription_feed_fetch_retrying]', JSON.stringify({
+            subscription_id: subscription.id,
+            user_id: subscription.user_id,
+            source_channel_id: subscription.source_channel_id,
+            source_channel_title: subscription.source_channel_title || null,
+            attempt: attempts,
+            max_attempts: SUBSCRIPTION_FEED_FETCH_MAX_ATTEMPTS,
+            trigger: options.trigger,
+            error: feedError.message,
+          }));
+          await sleep(SUBSCRIPTION_FEED_FETCH_RETRY_BACKOFF_MS * attempts);
+          continue;
+        }
+
+        if (options.trigger === 'service_cron') {
+          await markSoftFeedFetchFailure({
+            db,
+            subscription,
+            errorMessage: feedError.message,
+          });
+          console.log('[subscription_feed_fetch_soft_failed]', JSON.stringify({
+            subscription_id: subscription.id,
+            user_id: subscription.user_id,
+            source_channel_id: subscription.source_channel_id,
+            source_channel_title: subscription.source_channel_title || null,
+            source_channel_url: subscription.source_channel_url || null,
+            trigger: options.trigger,
+            failure_kind: feedError.kind,
+            retryable: feedError.retryable,
+            error: feedError.message,
+          }));
+          return {
+            kind: 'soft_failure',
+            resultCode: feedError.kind === 'feed_not_found' ? 'feed_not_found' : 'feed_transient_error',
+            errorMessage: feedError.message,
+          };
+        }
+
+        throw feedError;
+      }
+    }
+
+    const fallbackError = `FEED_FETCH_FAILED:unknown:${subscription.source_channel_id}`;
+    if (options.trigger === 'service_cron') {
+      await markSoftFeedFetchFailure({
+        db,
+        subscription,
+        errorMessage: fallbackError,
+      });
+      return {
+        kind: 'soft_failure',
+        resultCode: 'feed_transient_error',
+        errorMessage: fallbackError,
+      };
+    }
+    throw new Error(fallbackError);
+  }
+
   async function syncSingleSubscription(
     db: DbClient,
     subscription: SubscriptionSyncRow,
     options: SubscriptionSyncOptions,
   ): Promise<SyncSubscriptionResult> {
-    const feed = await deps.fetchYouTubeFeed(subscription.source_channel_id, 20);
+    const feedLoad = await loadFeedWithHardening(db, subscription, options);
+    if (feedLoad.kind === 'soft_failure') {
+      return {
+        processed: 0,
+        inserted: 0,
+        skipped: 0,
+        newestVideoId: null,
+        newestPublishedAt: null,
+        channelTitle: subscription.source_channel_title || null,
+        resultCode: feedLoad.resultCode,
+        errorMessage: feedLoad.errorMessage,
+        sourceChannelId: subscription.source_channel_id,
+        sourceChannelTitle: subscription.source_channel_title || null,
+      };
+    }
+
+    const feed = feedLoad.feed;
     const newest = feed.videos[0] || null;
     const bootstrapPolledAt = new Date().toISOString();
 
@@ -311,6 +554,8 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
         newestPublishedAt: newest?.publishedAt || null,
         channelTitle: feed.channelTitle,
         resultCode: 'bootstrap',
+        sourceChannelId: subscription.source_channel_id,
+        sourceChannelTitle: feed.channelTitle,
       };
     }
 
@@ -642,10 +887,13 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
         : processed > 0
           ? 'checked_no_insert'
           : 'noop',
+      sourceChannelId: subscription.source_channel_id,
+      sourceChannelTitle: feed.channelTitle,
     };
   }
 
   return {
     syncSingleSubscription,
+    isFeedSoftFailureResultCode,
   };
 }

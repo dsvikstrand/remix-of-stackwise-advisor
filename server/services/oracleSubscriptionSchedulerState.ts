@@ -13,6 +13,8 @@ export type OracleSubscriptionSyncResultCode =
   | 'new_items'
   | 'checked_no_insert'
   | 'noop'
+  | 'feed_transient_error'
+  | 'feed_not_found'
   | 'error';
 
 export type OracleScopeDecisionCode =
@@ -95,6 +97,12 @@ export function resolveOracleNextDueAtFromOutcome(input: {
   const nowIso = normalizeIsoOrNull(input.nowIso) || new Date().toISOString();
   if (input.resultCode === 'error') {
     return addMsToIso(nowIso, input.errorRetryMs);
+  }
+  if (input.resultCode === 'feed_transient_error') {
+    return addMsToIso(nowIso, input.errorRetryMs);
+  }
+  if (input.resultCode === 'feed_not_found') {
+    return addMsToIso(nowIso, input.quietRevisitMs);
   }
   if (input.resultCode === 'new_items') {
     return addMsToIso(nowIso, input.activeRevisitMs);
@@ -394,9 +402,11 @@ export async function markOracleAllActiveSubscriptionsRunFinished(input: {
   inserted: number;
   skipped: number;
   failureCount: number;
+  softFailureCount?: number;
 }) {
   const nowIso = normalizeIsoOrNull(input.nowIso) || new Date().toISOString();
   const failureCount = normalizeInt(input.failureCount);
+  const softFailureCount = normalizeInt(input.softFailureCount);
   await upsertScopeControlState({
     controlDb: input.controlDb,
     scope: input.scope || 'all_active_subscriptions',
@@ -410,6 +420,7 @@ export async function markOracleAllActiveSubscriptionsRunFinished(input: {
         inserted: normalizeInt(input.inserted),
         skipped: normalizeInt(input.skipped),
         failure_count: failureCount,
+        soft_failure_count: softFailureCount,
       }),
     },
   });
@@ -446,7 +457,10 @@ export async function recordOracleSubscriptionSyncOutcome(input: {
     .executeTakeFirst();
   if (!existing) return;
 
-  const isError = input.resultCode === 'error';
+  const isError =
+    input.resultCode === 'error'
+    || input.resultCode === 'feed_transient_error'
+    || input.resultCode === 'feed_not_found';
   const isNoop = input.resultCode === 'noop' || input.resultCode === 'checked_no_insert';
   const consecutiveNoopCount = isNoop
     ? normalizeInt(existing.consecutive_noop_count) + 1
