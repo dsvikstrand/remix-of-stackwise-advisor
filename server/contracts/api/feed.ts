@@ -19,11 +19,38 @@ export type AutoChannelResult = {
   classifierConfidence?: number | null;
 };
 
+export type RouteFeedItemRow = {
+  id: string;
+  user_id: string;
+  source_item_id: string | null;
+  blueprint_id: string | null;
+  state: string;
+  last_decision_code: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RouteFeedItemPatch = {
+  blueprint_id?: string | null;
+  state?: string;
+  last_decision_code?: string | null;
+};
+
 export type FeedRouteDeps = {
   autoChannelPipelineEnabled: boolean;
   getAuthedSupabaseClient: (authToken: string) => DbClient | null;
   getServiceSupabaseClient: () => DbClient | null;
-  syncFeedRowsByIds: (db: DbClient, feedItemIds: string[], action: string) => Promise<void>;
+  getFeedItemById: (db: DbClient, input: {
+    feedItemId: string;
+    userId?: string | null;
+  }) => Promise<RouteFeedItemRow | null>;
+  patchFeedItemById: (db: DbClient, input: {
+    feedItemId: string;
+    userId?: string | null;
+    patch: RouteFeedItemPatch;
+    action: string;
+    current?: RouteFeedItemRow | null;
+  }) => Promise<RouteFeedItemRow | null>;
   createBlueprintFromVideo: (db: DbClient, input: {
     userId: string;
     videoUrl: string;

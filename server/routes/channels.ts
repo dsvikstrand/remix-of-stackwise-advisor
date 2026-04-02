@@ -195,16 +195,24 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
     const db = deps.getAuthedSupabaseClient(authToken);
     if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
 
-    const { data: feedItem, error: feedError } = await db
-      .from('user_feed_items')
-      .select('id, blueprint_id')
-      .eq('id', userFeedItemId)
-      .maybeSingle();
-    if (feedError || !feedItem) {
+    let feedItem: Awaited<ReturnType<typeof deps.getFeedItemById>>;
+    try {
+      feedItem = await deps.getFeedItemById(db, {
+        feedItemId: userFeedItemId,
+      });
+    } catch (error) {
       return res.status(400).json({
         ok: false,
         error_code: 'READ_FAILED',
-        message: feedError?.message || 'Feed item missing',
+        message: error instanceof Error ? error.message : 'Feed item missing',
+        data: null,
+      });
+    }
+    if (!feedItem) {
+      return res.status(400).json({
+        ok: false,
+        error_code: 'READ_FAILED',
+        message: 'Feed item missing',
         data: null,
       });
     }
@@ -225,11 +233,16 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
 
     if (error) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: error.message, data: null });
 
-    await db
-      .from('user_feed_items')
-      .update({ blueprint_id: feedItem.blueprint_id, state: 'candidate_submitted', last_decision_code: null })
-      .eq('id', userFeedItemId);
-    await deps.syncFeedRowsByIds(db, [userFeedItemId], 'channel_route_candidate_submitted');
+    await deps.patchFeedItemById(db, {
+      feedItemId: userFeedItemId,
+      current: feedItem,
+      patch: {
+        blueprint_id: feedItem.blueprint_id,
+        state: 'candidate_submitted',
+        last_decision_code: null,
+      },
+      action: 'channel_route_candidate_submitted',
+    });
 
     return res.json({
       ok: true,
@@ -295,12 +308,15 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
     if (candidateError) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: candidateError.message, data: null });
     if (!candidate) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Candidate not found', data: null });
 
-    const { data: feedItem, error: feedError } = await db
-      .from('user_feed_items')
-      .select('id, blueprint_id')
-      .eq('id', candidate.user_feed_item_id)
-      .maybeSingle();
-    if (feedError || !feedItem) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: feedError?.message || 'Feed item missing', data: null });
+    let feedItem: Awaited<ReturnType<typeof deps.getFeedItemById>>;
+    try {
+      feedItem = await deps.getFeedItemById(db, {
+        feedItemId: candidate.user_feed_item_id,
+      });
+    } catch (error) {
+      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error instanceof Error ? error.message : 'Feed item missing', data: null });
+    }
+    if (!feedItem) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: 'Feed item missing', data: null });
 
     const { data: blueprint, error: blueprintError } = await db
       .from('blueprints')
@@ -343,11 +359,16 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
     if (insertError) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: insertError.message, data: null });
 
     await db.from('channel_candidates').update({ status: evaluation.candidateStatus }).eq('id', candidate.id);
-    await db
-      .from('user_feed_items')
-      .update({ blueprint_id: feedItem.blueprint_id, state: evaluation.feedState, last_decision_code: evaluation.reasonCode })
-      .eq('id', candidate.user_feed_item_id);
-    await deps.syncFeedRowsByIds(db, [candidate.user_feed_item_id], 'channel_route_candidate_evaluated');
+    await deps.patchFeedItemById(db, {
+      feedItemId: candidate.user_feed_item_id,
+      current: feedItem,
+      patch: {
+        blueprint_id: feedItem.blueprint_id,
+        state: evaluation.feedState,
+        last_decision_code: evaluation.reasonCode,
+      },
+      action: 'channel_route_candidate_evaluated',
+    });
 
     console.log('[candidate_gate_result]', JSON.stringify({
       candidate_id: candidate.id,
@@ -407,12 +428,15 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
       .maybeSingle();
     if (candidateError || !candidate) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: candidateError?.message || 'Candidate not found', data: null });
 
-    const { data: feedItem, error: feedError } = await db
-      .from('user_feed_items')
-      .select('id, blueprint_id')
-      .eq('id', candidate.user_feed_item_id)
-      .maybeSingle();
-    if (feedError || !feedItem) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: feedError?.message || 'Feed item missing', data: null });
+    let feedItem: Awaited<ReturnType<typeof deps.getFeedItemById>>;
+    try {
+      feedItem = await deps.getFeedItemById(db, {
+        feedItemId: candidate.user_feed_item_id,
+      });
+    } catch (error) {
+      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error instanceof Error ? error.message : 'Feed item missing', data: null });
+    }
+    if (!feedItem) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: 'Feed item missing', data: null });
 
     const { error: publishError } = await db
       .from('blueprints')
@@ -441,11 +465,16 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
     if (tagLinkError) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: tagLinkError.message, data: null });
 
     await db.from('channel_candidates').update({ status: 'published' }).eq('id', candidate.id);
-    await db
-      .from('user_feed_items')
-      .update({ blueprint_id: feedItem.blueprint_id, state: 'channel_published', last_decision_code: 'ALL_GATES_PASS' })
-      .eq('id', candidate.user_feed_item_id);
-    await deps.syncFeedRowsByIds(db, [candidate.user_feed_item_id], 'channel_route_candidate_published');
+    await deps.patchFeedItemById(db, {
+      feedItemId: candidate.user_feed_item_id,
+      current: feedItem,
+      patch: {
+        blueprint_id: feedItem.blueprint_id,
+        state: 'channel_published',
+        last_decision_code: 'ALL_GATES_PASS',
+      },
+      action: 'channel_route_candidate_published',
+    });
 
     console.log('[candidate_published]', JSON.stringify({
       candidate_id: candidate.id,
@@ -488,18 +517,26 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
       .maybeSingle();
     if (candidateError || !candidate) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: candidateError?.message || 'Candidate not found', data: null });
 
-    const { data: feedItem } = await db
-      .from('user_feed_items')
-      .select('blueprint_id')
-      .eq('id', candidate.user_feed_item_id)
-      .maybeSingle();
+    let feedItem: Awaited<ReturnType<typeof deps.getFeedItemById>>;
+    try {
+      feedItem = await deps.getFeedItemById(db, {
+        feedItemId: candidate.user_feed_item_id,
+      });
+    } catch (error) {
+      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error instanceof Error ? error.message : 'Feed item missing', data: null });
+    }
 
     await db.from('channel_candidates').update({ status: 'rejected' }).eq('id', candidate.id);
-    await db
-      .from('user_feed_items')
-      .update({ blueprint_id: feedItem?.blueprint_id || null, state: 'channel_rejected', last_decision_code: reasonCode })
-      .eq('id', candidate.user_feed_item_id);
-    await deps.syncFeedRowsByIds(db, [candidate.user_feed_item_id], 'channel_route_candidate_rejected');
+    await deps.patchFeedItemById(db, {
+      feedItemId: candidate.user_feed_item_id,
+      current: feedItem,
+      patch: {
+        blueprint_id: feedItem?.blueprint_id || null,
+        state: 'channel_rejected',
+        last_decision_code: reasonCode,
+      },
+      action: 'channel_route_candidate_rejected',
+    });
 
     console.log('[candidate_rejected]', JSON.stringify({
       candidate_id: candidate.id,

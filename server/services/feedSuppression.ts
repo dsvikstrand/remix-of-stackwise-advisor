@@ -76,6 +76,7 @@ export async function suppressUnlockableFeedRowsForSourceItem(
     traceId?: string;
     sourceChannelId?: string | null;
     videoId?: string | null;
+    applyPatch?: (sourceItemIds: string[], decisionCode: string) => Promise<number>;
   },
 ) {
   const sourceItemId = String(input.sourceItemId || '').trim();
@@ -85,20 +86,24 @@ export async function suppressUnlockableFeedRowsForSourceItem(
   const sourceItemIds = filterRecentlySuppressedSourceItemIds([sourceItemId], decisionCode, nowMs);
   if (sourceItemIds.length === 0) return 0;
 
-  const { count, error } = await db
-    .from('user_feed_items')
-    .update({
-      state: 'my_feed_skipped',
-      last_decision_code: decisionCode,
-    })
-    .eq('source_item_id', sourceItemId)
-    .is('blueprint_id', null)
-    .in('state', [...SUPPRESSIBLE_FEED_STATES])
-    .select('id', { head: true, count: 'exact' });
-  if (error) throw error;
+  const hiddenCount = input.applyPatch
+    ? await input.applyPatch(sourceItemIds, decisionCode)
+    : await (async () => {
+        const { count, error } = await db
+          .from('user_feed_items')
+          .update({
+            state: 'my_feed_skipped',
+            last_decision_code: decisionCode,
+          })
+          .eq('source_item_id', sourceItemId)
+          .is('blueprint_id', null)
+          .in('state', [...SUPPRESSIBLE_FEED_STATES])
+          .select('id', { head: true, count: 'exact' });
+        if (error) throw error;
+        return Math.max(0, Number(count) || 0);
+      })();
   markRecentSuppressionAttempts(sourceItemIds, decisionCode, nowMs);
 
-  const hiddenCount = Math.max(0, Number(count) || 0);
   if (hiddenCount > 0) {
     logUnlockEvent(
       'auto_transcript_hidden_feed_row',
@@ -125,6 +130,7 @@ export async function suppressUnlockableFeedRowsForSourceItems(
     decisionCode: string;
     traceId?: string;
     chunkSize?: number;
+    applyPatch?: (sourceItemIds: string[], decisionCode: string) => Promise<number>;
   },
 ) {
   const normalizedSourceItemIds = normalizeSourceItemIds(input.sourceItemIds || []);
@@ -135,19 +141,23 @@ export async function suppressUnlockableFeedRowsForSourceItems(
 
   let hiddenCount = 0;
   const chunks = chunkSourceItemIds(sourceItemIds, input.chunkSize);
-  for (const chunk of chunks) {
-    const { count, error } = await db
-      .from('user_feed_items')
-      .update({
-        state: 'my_feed_skipped',
-        last_decision_code: decisionCode,
-      })
-      .in('source_item_id', chunk)
-      .is('blueprint_id', null)
-      .in('state', [...SUPPRESSIBLE_FEED_STATES])
-      .select('id', { head: true, count: 'exact' });
-    if (error) throw error;
-    hiddenCount += Math.max(0, Number(count) || 0);
+  if (input.applyPatch) {
+    hiddenCount = await input.applyPatch(sourceItemIds, decisionCode);
+  } else {
+    for (const chunk of chunks) {
+      const { count, error } = await db
+        .from('user_feed_items')
+        .update({
+          state: 'my_feed_skipped',
+          last_decision_code: decisionCode,
+        })
+        .in('source_item_id', chunk)
+        .is('blueprint_id', null)
+        .in('state', [...SUPPRESSIBLE_FEED_STATES])
+        .select('id', { head: true, count: 'exact' });
+      if (error) throw error;
+      hiddenCount += Math.max(0, Number(count) || 0);
+    }
   }
   markRecentSuppressionAttempts(sourceItemIds, decisionCode, nowMs);
 

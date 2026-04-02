@@ -33,6 +33,41 @@ function createResponse() {
   };
 }
 
+function buildFeedRouteDeps(db: any) {
+  return {
+    getFeedItemById: async (innerDb: any, input: { feedItemId: string; userId?: string | null }) => {
+      let query = innerDb
+        .from('user_feed_items')
+        .select('id, user_id, source_item_id, blueprint_id, state, last_decision_code, created_at, updated_at')
+        .eq('id', input.feedItemId);
+      if (input.userId) {
+        query = query.eq('user_id', input.userId);
+      }
+      const { data, error } = await query.maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    patchFeedItemById: async (innerDb: any, input: {
+      feedItemId: string;
+      userId?: string | null;
+      patch: Record<string, unknown>;
+    }) => {
+      let query = innerDb
+        .from('user_feed_items')
+        .update(input.patch)
+        .eq('id', input.feedItemId);
+      if (input.userId) {
+        query = query.eq('user_id', input.userId);
+      }
+      const { data, error } = await query
+        .select('id, user_id, source_item_id, blueprint_id, state, last_decision_code, created_at, updated_at')
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  };
+}
+
 describe('channel feed route', () => {
   it('returns paged top channel feed items from the backend route', async () => {
     const app = createMockApp();
@@ -62,6 +97,7 @@ describe('channel feed route', () => {
       rejectLegacyManualFlowIfDisabled: () => false,
       getAuthedSupabaseClient: () => db,
       getServiceSupabaseClient: () => db,
+      ...buildFeedRouteDeps(db),
       evaluateCandidateForChannel: () => ({
         aggregate: 'pass',
         candidateStatus: 'passed',
@@ -142,6 +178,7 @@ describe('channel feed route', () => {
       rejectLegacyManualFlowIfDisabled: () => false,
       getAuthedSupabaseClient: () => db,
       getServiceSupabaseClient: () => db,
+      ...buildFeedRouteDeps(db),
       evaluateCandidateForChannel: () => ({
         aggregate: 'pass',
         candidateStatus: 'passed',
@@ -171,6 +208,60 @@ describe('channel feed route', () => {
           },
         ],
       },
+    });
+  });
+
+  it('updates the feed row through the shared feed patch helper when submitting a candidate', async () => {
+    const app = createMockApp();
+    const db = createMockSupabase({
+      user_feed_items: [
+        {
+          id: 'ufi_1',
+          user_id: 'user_1',
+          source_item_id: 'source_1',
+          blueprint_id: 'bp_1',
+          state: 'my_feed_published',
+          last_decision_code: null,
+          created_at: '2026-03-27T10:00:00.000Z',
+          updated_at: '2026-03-27T10:00:00.000Z',
+        },
+      ],
+      channel_candidates: [],
+    }) as any;
+
+    registerChannelCandidateRoutes(app as any, {
+      rejectLegacyManualFlowIfDisabled: () => false,
+      getAuthedSupabaseClient: () => db,
+      getServiceSupabaseClient: () => db,
+      ...buildFeedRouteDeps(db),
+      evaluateCandidateForChannel: () => ({
+        aggregate: 'pass',
+        candidateStatus: 'passed',
+        feedState: 'channel_published',
+        reasonCode: 'ALL_GATES_PASS',
+        mode: 'test',
+        decisions: [],
+      }),
+    });
+
+    const handler = app.handlers['POST /api/channel-candidates'];
+    const res = createResponse();
+    res.locals.user = { id: 'user_1' };
+    res.locals.authToken = 'token_1';
+
+    await handler({
+      body: {
+        user_feed_item_id: 'ufi_1',
+        channel_slug: 'fitness-training',
+      },
+    } as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    expect(db.state.user_feed_items[0]).toMatchObject({
+      id: 'ufi_1',
+      state: 'candidate_submitted',
+      blueprint_id: 'bp_1',
+      last_decision_code: null,
     });
   });
 });

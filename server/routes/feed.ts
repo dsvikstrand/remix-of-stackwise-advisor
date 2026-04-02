@@ -53,13 +53,15 @@ export function registerFeedRoutes(app: express.Express, deps: FeedRouteDeps) {
     if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
 
     const feedItemId = req.params.id;
-    const { data: feedItem, error: readError } = await db
-      .from('user_feed_items')
-      .select('id, user_id, source_item_id, blueprint_id, state')
-      .eq('id', feedItemId)
-      .eq('user_id', userId)
-      .maybeSingle();
-    if (readError) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: readError.message, data: null });
+    let feedItem: Awaited<ReturnType<typeof deps.getFeedItemById>>;
+    try {
+      feedItem = await deps.getFeedItemById(db, {
+        feedItemId,
+        userId,
+      });
+    } catch (error) {
+      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error instanceof Error ? error.message : 'Failed to load feed item', data: null });
+    }
     if (!feedItem) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Feed item not found', data: null });
 
     if (feedItem.blueprint_id && feedItem.state === 'my_feed_published') {
@@ -85,8 +87,16 @@ export function registerFeedRoutes(app: express.Express, deps: FeedRouteDeps) {
       .eq('id', feedItem.source_item_id)
       .maybeSingle();
     if (sourceError || !sourceRow?.source_url || !sourceRow.source_native_id) {
-      await db.from('user_feed_items').update({ state: 'my_feed_skipped', last_decision_code: 'SOURCE_MISSING' }).eq('id', feedItem.id);
-      await deps.syncFeedRowsByIds(db, [feedItem.id], 'feed_route_accept_source_missing');
+      await deps.patchFeedItemById(db, {
+        feedItemId: feedItem.id,
+        userId,
+        current: feedItem,
+        patch: {
+          state: 'my_feed_skipped',
+          last_decision_code: 'SOURCE_MISSING',
+        },
+        action: 'feed_route_accept_source_missing',
+      });
       return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: sourceError?.message || 'Source item missing', data: null });
     }
 
@@ -99,12 +109,17 @@ export function registerFeedRoutes(app: express.Express, deps: FeedRouteDeps) {
         sourceItemId: sourceRow.id,
       });
 
-      await db.from('user_feed_items').update({
-        blueprint_id: generated.blueprintId,
-        state: 'my_feed_published',
-        last_decision_code: null,
-      }).eq('id', feedItem.id).eq('user_id', userId);
-      await deps.syncFeedRowsByIds(db, [feedItem.id], 'feed_route_accept_generated');
+      await deps.patchFeedItemById(db, {
+        feedItemId: feedItem.id,
+        userId,
+        current: feedItem,
+        patch: {
+          blueprint_id: generated.blueprintId,
+          state: 'my_feed_published',
+          last_decision_code: null,
+        },
+        action: 'feed_route_accept_generated',
+      });
 
       let responseState: string = 'my_feed_published';
       let responseReasonCode: string | null = null;
@@ -153,11 +168,16 @@ export function registerFeedRoutes(app: express.Express, deps: FeedRouteDeps) {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const errorCode = String((error as { code?: unknown } | null)?.code || '').trim().toUpperCase();
-      await db.from('user_feed_items').update({
-        state: 'my_feed_pending_accept',
-        last_decision_code: errorCode || 'GENERATION_FAILED',
-      }).eq('id', feedItem.id).eq('user_id', userId);
-      await deps.syncFeedRowsByIds(db, [feedItem.id], 'feed_route_accept_failed');
+      await deps.patchFeedItemById(db, {
+        feedItemId: feedItem.id,
+        userId,
+        current: feedItem,
+        patch: {
+          state: 'my_feed_pending_accept',
+          last_decision_code: errorCode || 'GENERATION_FAILED',
+        },
+        action: 'feed_route_accept_failed',
+      });
 
       if (errorCode === 'DAILY_GENERATION_CAP_REACHED') {
         return res.status(429).json({
@@ -189,17 +209,36 @@ export function registerFeedRoutes(app: express.Express, deps: FeedRouteDeps) {
     const db = deps.getAuthedSupabaseClient(authToken);
     if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
 
-    const { data, error } = await db
-      .from('user_feed_items')
-      .update({ state: 'my_feed_skipped', last_decision_code: 'SKIPPED_BY_USER' })
-      .eq('id', req.params.id)
-      .eq('user_id', userId)
-      .eq('state', 'my_feed_pending_accept')
-      .select('id, state')
-      .maybeSingle();
-    if (error) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: error.message, data: null });
+    let feedItem: Awaited<ReturnType<typeof deps.getFeedItemById>>;
+    try {
+      feedItem = await deps.getFeedItemById(db, {
+        feedItemId: req.params.id,
+        userId,
+      });
+    } catch (error) {
+      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error instanceof Error ? error.message : 'Failed to load feed item', data: null });
+    }
+    if (!feedItem) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Feed item not found', data: null });
+    if (feedItem.state !== 'my_feed_pending_accept') {
+      return res.status(409).json({ ok: false, error_code: 'INVALID_STATE', message: 'Only pending items can be skipped', data: null });
+    }
+
+    let data: Awaited<ReturnType<typeof deps.patchFeedItemById>>;
+    try {
+      data = await deps.patchFeedItemById(db, {
+        feedItemId: feedItem.id,
+        userId,
+        current: feedItem,
+        patch: {
+          state: 'my_feed_skipped',
+          last_decision_code: 'SKIPPED_BY_USER',
+        },
+        action: 'feed_route_skip',
+      });
+    } catch (error) {
+      return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: error instanceof Error ? error.message : 'Failed to update feed item', data: null });
+    }
     if (!data) return res.status(409).json({ ok: false, error_code: 'INVALID_STATE', message: 'Only pending items can be skipped', data: null });
-    await deps.syncFeedRowsByIds(db, [data.id], 'feed_route_skip');
 
     return res.json({
       ok: true,
@@ -229,13 +268,15 @@ export function registerFeedRoutes(app: express.Express, deps: FeedRouteDeps) {
     const db = deps.getAuthedSupabaseClient(authToken);
     if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
 
-    const { data: feedItem, error: readError } = await db
-      .from('user_feed_items')
-      .select('id, user_id, source_item_id, blueprint_id')
-      .eq('id', req.params.id)
-      .eq('user_id', userId)
-      .maybeSingle();
-    if (readError) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: readError.message, data: null });
+    let feedItem: Awaited<ReturnType<typeof deps.getFeedItemById>>;
+    try {
+      feedItem = await deps.getFeedItemById(db, {
+        feedItemId: req.params.id,
+        userId,
+      });
+    } catch (error) {
+      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error instanceof Error ? error.message : 'Failed to load feed item', data: null });
+    }
     if (!feedItem) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Feed item not found', data: null });
     if (!feedItem.blueprint_id) {
       return res.status(409).json({

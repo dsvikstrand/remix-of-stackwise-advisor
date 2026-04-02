@@ -36,6 +36,41 @@ function createMockApp() {
   };
 }
 
+function buildFeedRouteDeps(db: any) {
+  return {
+    getFeedItemById: async (innerDb: any, input: { feedItemId: string; userId?: string | null }) => {
+      let query = innerDb
+        .from('user_feed_items')
+        .select('id, user_id, source_item_id, blueprint_id, state, last_decision_code, created_at, updated_at')
+        .eq('id', input.feedItemId);
+      if (input.userId) {
+        query = query.eq('user_id', input.userId);
+      }
+      const { data, error } = await query.maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    patchFeedItemById: async (innerDb: any, input: {
+      feedItemId: string;
+      userId?: string | null;
+      patch: Record<string, unknown>;
+    }) => {
+      let query = innerDb
+        .from('user_feed_items')
+        .update(input.patch)
+        .eq('id', input.feedItemId);
+      if (input.userId) {
+        query = query.eq('user_id', input.userId);
+      }
+      const { data, error } = await query
+        .select('id, user_id, source_item_id, blueprint_id, state, last_decision_code, created_at, updated_at')
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  };
+}
+
 describe('my feed route', () => {
   it('returns hydrated items and hides transcript-unavailable source-only rows', async () => {
     const app = createMockApp();
@@ -185,6 +220,7 @@ describe('my feed route', () => {
       autoChannelPipelineEnabled: true,
       getAuthedSupabaseClient: () => db,
       getServiceSupabaseClient: () => db,
+      ...buildFeedRouteDeps(db),
       createBlueprintFromVideo: async () => ({ blueprintId: 'bp_new', runId: null }),
       runAutoChannelForFeedItem: async () => null,
     });
@@ -247,6 +283,7 @@ describe('my feed route', () => {
       autoChannelPipelineEnabled: true,
       getAuthedSupabaseClient: () => null,
       getServiceSupabaseClient: () => null,
+      ...buildFeedRouteDeps(createMockSupabase() as any),
       createBlueprintFromVideo: async () => ({ blueprintId: 'bp_new', runId: null }),
       runAutoChannelForFeedItem: async () => null,
     });
@@ -259,6 +296,51 @@ describe('my feed route', () => {
     expect(res.body).toMatchObject({
       ok: false,
       error_code: 'AUTH_REQUIRED',
+    });
+  });
+
+  it('skips a pending feed item through the shared feed patch helper path', async () => {
+    const app = createMockApp();
+    const db = createMockSupabase({
+      user_feed_items: [
+        {
+          id: 'feed_pending',
+          user_id: 'user_1',
+          source_item_id: 'source_1',
+          blueprint_id: null,
+          state: 'my_feed_pending_accept',
+          last_decision_code: null,
+          created_at: '2026-03-20T09:00:00.000Z',
+          updated_at: '2026-03-20T09:00:00.000Z',
+        },
+      ],
+    }) as any;
+
+    registerFeedRoutes(app as any, {
+      autoChannelPipelineEnabled: true,
+      getAuthedSupabaseClient: () => db,
+      getServiceSupabaseClient: () => db,
+      ...buildFeedRouteDeps(db),
+      createBlueprintFromVideo: async () => ({ blueprintId: 'bp_new', runId: null }),
+      runAutoChannelForFeedItem: async () => null,
+    });
+
+    const handler = app.handlers['POST /api/my-feed/items/:id/skip'];
+    const res = createResponse('user_1');
+    await handler({ params: { id: 'feed_pending' } } as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        user_feed_item_id: 'feed_pending',
+        state: 'my_feed_skipped',
+      },
+    });
+    expect(db.state.user_feed_items[0]).toMatchObject({
+      id: 'feed_pending',
+      state: 'my_feed_skipped',
+      last_decision_code: 'SKIPPED_BY_USER',
     });
   });
 });

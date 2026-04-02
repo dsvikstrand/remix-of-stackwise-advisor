@@ -142,6 +142,7 @@ import {
 } from './services/oracleUnlockLedgerState';
 import {
   deleteOracleFeedLedgerRows,
+  getOracleFeedLedgerById,
   getOracleFeedLedgerByUserSourceItem,
   listOracleFeedLedgerRows,
   syncOracleFeedLedgerFromSupabase,
@@ -3366,6 +3367,347 @@ async function countActiveUnlockLinksForJobsOracleFirst(
   return map;
 }
 
+type FeedItemRow = {
+  id: string;
+  user_id: string;
+  source_item_id: string | null;
+  blueprint_id: string | null;
+  state: string;
+  last_decision_code: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+const FEED_ITEM_SELECT = 'id, user_id, source_item_id, blueprint_id, state, last_decision_code, created_at, updated_at';
+
+function normalizeFeedItemRow(row: Record<string, unknown>, nowIso?: string): FeedItemRow {
+  const createdAt = normalizeRequiredIso(row.created_at, nowIso);
+  const updatedAt = normalizeRequiredIso(row.updated_at, createdAt);
+  return {
+    id: String(row.id || '').trim() || randomUUID(),
+    user_id: String(row.user_id || '').trim(),
+    source_item_id: normalizeStringOrNull(row.source_item_id),
+    blueprint_id: normalizeStringOrNull(row.blueprint_id),
+    state: String(row.state || '').trim() || 'my_feed_unlockable',
+    last_decision_code: normalizeStringOrNull(row.last_decision_code),
+    created_at: createdAt,
+    updated_at: updatedAt,
+  };
+}
+
+async function readSupabaseFeedItemById(
+  db: ReturnType<typeof createClient>,
+  input: { feedItemId: string; userId?: string | null },
+) {
+  const feedItemId = String(input.feedItemId || '').trim();
+  const userId = String(input.userId || '').trim();
+  if (!feedItemId) return null;
+
+  let query = db
+    .from('user_feed_items')
+    .select(FEED_ITEM_SELECT)
+    .eq('id', feedItemId);
+  if (userId) {
+    query = query.eq('user_id', userId);
+  }
+
+  const { data, error } = await query.maybeSingle();
+  if (error) throw error;
+  return data
+    ? normalizeFeedItemRow(data as Record<string, unknown>)
+    : null;
+}
+
+async function readSupabaseFeedItemByUserSourceItem(
+  db: ReturnType<typeof createClient>,
+  input: { userId: string; sourceItemId: string },
+) {
+  const userId = String(input.userId || '').trim();
+  const sourceItemId = String(input.sourceItemId || '').trim();
+  if (!userId || !sourceItemId) return null;
+
+  const { data, error } = await db
+    .from('user_feed_items')
+    .select(FEED_ITEM_SELECT)
+    .eq('user_id', userId)
+    .eq('source_item_id', sourceItemId)
+    .maybeSingle();
+  if (error) throw error;
+  return data
+    ? normalizeFeedItemRow(data as Record<string, unknown>)
+    : null;
+}
+
+async function getFeedItemByIdOracleFirst(
+  db: ReturnType<typeof createClient>,
+  input: { feedItemId: string; userId?: string | null },
+) {
+  const feedItemId = String(input.feedItemId || '').trim();
+  const userId = String(input.userId || '').trim();
+  if (!feedItemId) return null;
+
+  if (oracleFeedLedgerEnabled && oracleControlPlane) {
+    try {
+      const durable = await getOracleFeedLedgerById({
+        controlDb: oracleControlPlane,
+        feedItemId,
+        userId,
+      });
+      if (durable) {
+        return normalizeFeedItemRow(durable as unknown as Record<string, unknown>);
+      }
+    } catch (error) {
+      console.warn('[oracle-control-plane] feed_ledger_failed', JSON.stringify({
+        action: 'get_feed_item_by_id',
+        feed_item_id: feedItemId,
+        user_id: userId || null,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+
+  return readSupabaseFeedItemById(db, { feedItemId, userId });
+}
+
+async function getFeedItemByIdForPrimaryMutation(
+  db: ReturnType<typeof createClient>,
+  input: { feedItemId: string; action: string; userId?: string | null },
+) {
+  const feedItemId = String(input.feedItemId || '').trim();
+  const userId = String(input.userId || '').trim();
+  if (!feedItemId) return null;
+
+  if (!oracleFeedLedgerPrimaryEnabled || !oracleControlPlane) {
+    return getFeedItemByIdOracleFirst(db, { feedItemId, userId });
+  }
+
+  try {
+    const durable = await getOracleFeedLedgerById({
+      controlDb: oracleControlPlane,
+      feedItemId,
+      userId,
+    });
+    if (durable) {
+      return normalizeFeedItemRow(durable as unknown as Record<string, unknown>);
+    }
+  } catch (error) {
+    console.warn('[oracle-control-plane] feed_ledger_failed', JSON.stringify({
+      action: input.action,
+      feed_item_id: feedItemId,
+      user_id: userId || null,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+
+  return readSupabaseFeedItemById(db, { feedItemId, userId });
+}
+
+function buildPatchedFeedItemRow(input: {
+  current: FeedItemRow;
+  patch: {
+    blueprint_id?: string | null;
+    state?: string;
+    last_decision_code?: string | null;
+    created_at?: string | null;
+    updated_at?: string | null;
+  };
+}) {
+  const updatedAt = normalizeRequiredIso(input.patch.updated_at, new Date().toISOString());
+  return normalizeFeedItemRow({
+    ...input.current,
+    ...input.patch,
+    id: input.current.id,
+    user_id: input.current.user_id,
+    source_item_id: input.current.source_item_id,
+    created_at: input.patch.created_at ?? input.current.created_at,
+    updated_at: updatedAt,
+  }, input.current.created_at);
+}
+
+async function writeSupabaseFeedItemShadow(
+  db: ReturnType<typeof createClient>,
+  row: FeedItemRow,
+) {
+  const existingById = await readSupabaseFeedItemById(db, {
+    feedItemId: row.id,
+    userId: row.user_id,
+  });
+
+  if (existingById) {
+    const { data, error } = await db
+      .from('user_feed_items')
+      .update(mapFeedItemToSupabaseShadowValues(row))
+      .eq('id', existingById.id)
+      .select(FEED_ITEM_SELECT)
+      .single();
+    if (error) throw error;
+    return normalizeFeedItemRow(data as Record<string, unknown>);
+  }
+
+  const existingByUserSource = row.source_item_id
+    ? await readSupabaseFeedItemByUserSourceItem(db, {
+        userId: row.user_id,
+        sourceItemId: row.source_item_id,
+      })
+    : null;
+  if (existingByUserSource && existingByUserSource.id !== row.id) {
+    throw new Error(`FEED_SHADOW_ID_MISMATCH:${existingByUserSource.id}:${row.id}`);
+  }
+
+  const { data, error } = await db
+    .from('user_feed_items')
+    .insert(mapFeedItemToSupabaseShadowValues(row))
+    .select(FEED_ITEM_SELECT)
+    .single();
+  if (error) {
+    const code = String((error as { code?: string }).code || '').trim();
+    if (code === '23505') {
+      const reloaded = await readSupabaseFeedItemById(db, {
+        feedItemId: row.id,
+        userId: row.user_id,
+      }) || (
+        row.source_item_id
+          ? await readSupabaseFeedItemByUserSourceItem(db, {
+              userId: row.user_id,
+              sourceItemId: row.source_item_id,
+            })
+          : null
+      );
+      if (reloaded) return reloaded;
+    }
+    throw error;
+  }
+
+  return normalizeFeedItemRow(data as Record<string, unknown>);
+}
+
+async function persistFeedItemRowOracleAware(
+  db: ReturnType<typeof createClient>,
+  input: {
+    row: FeedItemRow;
+    action: string;
+  },
+) {
+  const normalizedRow = normalizeFeedItemRow(input.row as unknown as Record<string, unknown>);
+  const previousOracle = (
+    oracleFeedLedgerEnabled && oracleControlPlane
+      ? await getOracleFeedLedgerById({
+          controlDb: oracleControlPlane,
+          feedItemId: normalizedRow.id,
+        })
+      : null
+  );
+
+  if (oracleFeedLedgerEnabled && oracleControlPlane) {
+    await upsertOracleFeedLedgerRow({
+      controlDb: oracleControlPlane,
+      row: normalizedRow,
+    });
+  }
+
+  try {
+    const shadowRow = await writeSupabaseFeedItemShadow(db, normalizedRow);
+    await upsertOracleProductFeedRowsFromKnownRows([shadowRow], input.action);
+    return shadowRow;
+  } catch (error) {
+    if (oracleFeedLedgerEnabled && oracleControlPlane) {
+      if (previousOracle) {
+        await upsertOracleFeedLedgerRow({
+          controlDb: oracleControlPlane,
+          row: previousOracle,
+        });
+      } else {
+        await deleteOracleFeedLedgerRows({
+          controlDb: oracleControlPlane,
+          ids: [normalizedRow.id],
+        });
+      }
+    }
+    throw error;
+  }
+}
+
+async function patchFeedItemByIdOracleAware(
+  db: ReturnType<typeof createClient>,
+  input: {
+    feedItemId: string;
+    userId?: string | null;
+    patch: {
+      blueprint_id?: string | null;
+      state?: string;
+      last_decision_code?: string | null;
+      created_at?: string | null;
+      updated_at?: string | null;
+    };
+    action: string;
+    current?: FeedItemRow | null;
+  },
+) {
+  const current = input.current ?? await getFeedItemByIdForPrimaryMutation(db, {
+    feedItemId: input.feedItemId,
+    userId: input.userId,
+    action: `${input.action}_current`,
+  });
+  if (!current) return null;
+
+  return persistFeedItemRowOracleAware(db, {
+    row: buildPatchedFeedItemRow({
+      current,
+      patch: input.patch,
+    }),
+    action: input.action,
+  });
+}
+
+async function patchFeedRowsBySourceItemIdsOracleAware(
+  db: ReturnType<typeof createClient>,
+  input: {
+    sourceItemIds: string[];
+    expectedStates?: string[];
+    requireBlueprintNull?: boolean;
+    patch: {
+      state?: string;
+      last_decision_code?: string | null;
+    };
+    action: string;
+  },
+) {
+  if (!oracleFeedLedgerPrimaryEnabled || !oracleControlPlane) {
+    throw new Error('FEED_LEDGER_PRIMARY_REQUIRED');
+  }
+
+  const sourceItemIds = [...new Set(
+    (input.sourceItemIds || [])
+      .map((value) => String(value || '').trim())
+      .filter(Boolean),
+  )];
+  if (sourceItemIds.length === 0) return 0;
+
+  const currentRows = await listOracleFeedLedgerRows({
+    controlDb: oracleControlPlane,
+    sourceItemIds,
+    limit: 5000,
+  });
+
+  let patchedCount = 0;
+  for (const currentRow of currentRows) {
+    const current = normalizeFeedItemRow(currentRow as unknown as Record<string, unknown>);
+    if (input.requireBlueprintNull && current.blueprint_id) continue;
+    if ((input.expectedStates || []).length > 0 && !(input.expectedStates || []).includes(current.state)) continue;
+
+    await persistFeedItemRowOracleAware(db, {
+      row: buildPatchedFeedItemRow({
+        current,
+        patch: input.patch,
+      }),
+      action: input.action,
+    });
+    patchedCount += 1;
+  }
+
+  return patchedCount;
+}
+
 async function listProductFeedRowsForUserOracleFirst(
   db: ReturnType<typeof createClient>,
   input: { userId: string; limit: number; sourceItemIds?: string[]; requireBlueprint?: boolean },
@@ -3376,10 +3718,11 @@ async function listProductFeedRowsForUserOracleFirst(
       .map((value) => String(value || '').trim())
       .filter(Boolean),
   )];
+  let durableRows: any[] = [];
 
   if (oracleFeedLedgerEnabled && oracleControlPlane) {
     try {
-      const durable = await listOracleFeedLedgerRows({
+      durableRows = await listOracleFeedLedgerRows({
         controlDb: oracleControlPlane,
         userId: input.userId,
         limit: normalizedLimit,
@@ -3388,13 +3731,13 @@ async function listProductFeedRowsForUserOracleFirst(
       });
       const ledgerLooksComplete = normalizedSourceItemIds.length > 0
         ? new Set(
-          durable
+          durableRows
             .map((row) => String(row.source_item_id || '').trim())
             .filter(Boolean),
         ).size >= normalizedSourceItemIds.length
-        : durable.length >= normalizedLimit;
+        : durableRows.length >= normalizedLimit;
       if (ledgerLooksComplete) {
-        return durable;
+        return durableRows;
       }
     } catch (error) {
       console.warn('[oracle-control-plane] feed_ledger_failed', JSON.stringify({
@@ -3403,6 +3746,26 @@ async function listProductFeedRowsForUserOracleFirst(
         error: error instanceof Error ? error.message : String(error),
       }));
     }
+  }
+
+  if (oracleFeedLedgerPrimaryEnabled) {
+    let query = db
+      .from('user_feed_items')
+      .select(FEED_ITEM_SELECT)
+      .eq('user_id', input.userId)
+      .order('created_at', { ascending: false })
+      .limit(normalizedLimit);
+
+    if (normalizedSourceItemIds.length > 0) {
+      query = query.in('source_item_id', normalizedSourceItemIds);
+    }
+    if (input.requireBlueprint) {
+      query = query.not('blueprint_id', 'is', null);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return mergeProductFeedRows([...(durableRows || []), ...((data || []) as any[])]).slice(0, normalizedLimit);
   }
 
   if (oracleProductMirrorEnabled && oracleControlPlane) {
@@ -3547,10 +3910,11 @@ async function listPublicProductFeedRowsOracleFirst(
   const state = String(input.state || '').trim();
   const normalizedLimit = Math.max(1, Math.min(5000, Number(input.limit || 0) || (blueprintIds.length > 0 ? 5000 : 200)));
   const cursor = normalizePublicProductFeedCursor(input.cursor);
+  let durableRows: any[] = [];
 
   if (oracleFeedLedgerEnabled && oracleControlPlane) {
     try {
-      const durable = await listOracleFeedLedgerRows({
+      durableRows = await listOracleFeedLedgerRows({
         controlDb: oracleControlPlane,
         blueprintIds,
         state,
@@ -3560,13 +3924,13 @@ async function listPublicProductFeedRowsOracleFirst(
       });
       const ledgerLooksComplete = blueprintIds.length > 0
         ? new Set(
-          durable
+          durableRows
             .map((row) => String(row.blueprint_id || '').trim())
             .filter(Boolean),
         ).size >= blueprintIds.length
-        : durable.length >= normalizedLimit;
+        : durableRows.length >= normalizedLimit;
       if (ledgerLooksComplete) {
-        return sortMergedProductFeedRows(durable).slice(0, normalizedLimit);
+        return sortMergedProductFeedRows(durableRows).slice(0, normalizedLimit);
       }
     } catch (error) {
       console.warn('[oracle-control-plane] feed_ledger_failed', JSON.stringify({
@@ -3576,6 +3940,17 @@ async function listPublicProductFeedRowsOracleFirst(
         error: error instanceof Error ? error.message : String(error),
       }));
     }
+  }
+
+  if (oracleFeedLedgerPrimaryEnabled) {
+    const fallbackRows = await listPublicProductFeedRowsFromSupabase(db, {
+      blueprintIds,
+      state,
+      limit: normalizedLimit,
+      cursor,
+      requireBlueprint: input.requireBlueprint,
+    });
+    return mergeProductFeedRows([...(durableRows || []), ...fallbackRows]).slice(0, normalizedLimit);
   }
 
   if (oracleProductMirrorEnabled && oracleControlPlane) {
@@ -4283,8 +4658,22 @@ async function suppressUnlockableFeedRowsForSourceItemWithMirror(
     videoId?: string | null;
   },
 ) {
-  const hiddenCount = await suppressUnlockableFeedRowsForSourceItem(db, input);
-  if (hiddenCount > 0) {
+  const hiddenCount = await suppressUnlockableFeedRowsForSourceItem(db, {
+    ...input,
+    applyPatch: oracleFeedLedgerPrimaryEnabled
+      ? async (sourceItemIds, decisionCode) => patchFeedRowsBySourceItemIdsOracleAware(db, {
+          sourceItemIds,
+          expectedStates: ['my_feed_unlockable', 'my_feed_unlocking'],
+          requireBlueprintNull: true,
+          patch: {
+            state: 'my_feed_skipped',
+            last_decision_code: decisionCode,
+          },
+          action: 'suppress_unlockable_feed_rows_single',
+        })
+      : undefined,
+  });
+  if (hiddenCount > 0 && !oracleFeedLedgerPrimaryEnabled) {
     await syncOracleSuppressedFeedRowsForSourceItemIds(
       db,
       [input.sourceItemId],
@@ -4304,8 +4693,22 @@ async function suppressUnlockableFeedRowsForSourceItemsWithMirror(
     chunkSize?: number;
   },
 ) {
-  const hiddenCount = await suppressUnlockableFeedRowsForSourceItems(db, input);
-  if (hiddenCount > 0) {
+  const hiddenCount = await suppressUnlockableFeedRowsForSourceItems(db, {
+    ...input,
+    applyPatch: oracleFeedLedgerPrimaryEnabled
+      ? async (sourceItemIds, decisionCode) => patchFeedRowsBySourceItemIdsOracleAware(db, {
+          sourceItemIds,
+          expectedStates: ['my_feed_unlockable', 'my_feed_unlocking'],
+          requireBlueprintNull: true,
+          patch: {
+            state: 'my_feed_skipped',
+            last_decision_code: decisionCode,
+          },
+          action: 'suppress_unlockable_feed_rows_bulk',
+        })
+      : undefined,
+  });
+  if (hiddenCount > 0 && !oracleFeedLedgerPrimaryEnabled) {
     await syncOracleSuppressedFeedRowsForSourceItemIds(
       db,
       input.sourceItemIds,
@@ -6516,8 +6919,18 @@ async function runAutoChannelForFeedItem(input: {
     classifierMode: autoChannelClassifierMode,
     gateMode: autoChannelGateMode,
     sourceTag: input.sourceTag,
+    patchFeedItemById: async ({ db, feedItemId, userId, patch, action }) => {
+      await patchFeedItemByIdOracleAware(db, {
+        feedItemId,
+        userId,
+        patch,
+        action,
+      });
+    },
   });
-  await syncOracleProductFeedRowsByIds(input.db, [input.userFeedItemId], 'run_auto_channel_for_feed_item');
+  if (!oracleFeedLedgerPrimaryEnabled) {
+    await syncOracleProductFeedRowsByIds(input.db, [input.userFeedItemId], 'run_auto_channel_for_feed_item');
+  }
 
   const logTag = result.decision === 'published' ? '[auto_channel_published]' : '[auto_channel_held]';
   console.log(logTag, JSON.stringify({
@@ -13308,7 +13721,8 @@ registerFeedRoutes(app, {
   autoChannelPipelineEnabled,
   getAuthedSupabaseClient,
   getServiceSupabaseClient,
-  syncFeedRowsByIds: syncOracleProductFeedRowsByIds,
+  getFeedItemById: getFeedItemByIdOracleFirst,
+  patchFeedItemById: patchFeedItemByIdOracleAware,
   createBlueprintFromVideo,
   runAutoChannelForFeedItem,
 });
@@ -13317,7 +13731,8 @@ registerChannelCandidateRoutes(app, {
   rejectLegacyManualFlowIfDisabled,
   getAuthedSupabaseClient,
   getServiceSupabaseClient,
-  syncFeedRowsByIds: syncOracleProductFeedRowsByIds,
+  getFeedItemById: getFeedItemByIdOracleFirst,
+  patchFeedItemById: patchFeedItemByIdOracleAware,
   evaluateCandidateForChannel,
 });
 

@@ -100,6 +100,17 @@ export type AutoChannelPipelineInput = {
   sourceTag: string;
   classifierMode: AutoChannelClassifierMode;
   resolver?: AutoChannelResolver;
+  patchFeedItemById?: (input: {
+    db: DbClient;
+    feedItemId: string;
+    userId: string;
+    patch: {
+      blueprint_id?: string | null;
+      state?: string;
+      last_decision_code?: string | null;
+    };
+    action: string;
+  }) => Promise<unknown>;
 };
 
 export type AutoChannelPipelineResult = {
@@ -317,12 +328,26 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
       .eq('id', candidate.id);
     if (candidatePublishError) throw new Error(candidatePublishError.message);
 
-    const { error: feedPublishError } = await input.db
-      .from('user_feed_items')
-      .update({ blueprint_id: input.blueprintId, state: 'channel_published', last_decision_code: evaluation.reasonCode })
-      .eq('id', input.userFeedItemId)
-      .eq('user_id', input.userId);
-    if (feedPublishError) throw new Error(feedPublishError.message);
+    if (input.patchFeedItemById) {
+      await input.patchFeedItemById({
+        db: input.db,
+        feedItemId: input.userFeedItemId,
+        userId: input.userId,
+        patch: {
+          blueprint_id: input.blueprintId,
+          state: 'channel_published',
+          last_decision_code: evaluation.reasonCode,
+        },
+        action: 'auto_channel_pipeline_publish',
+      });
+    } else {
+      const { error: feedPublishError } = await input.db
+        .from('user_feed_items')
+        .update({ blueprint_id: input.blueprintId, state: 'channel_published', last_decision_code: evaluation.reasonCode })
+        .eq('id', input.userFeedItemId)
+        .eq('user_id', input.userId);
+      if (feedPublishError) throw new Error(feedPublishError.message);
+    }
 
     return {
       userFeedItemId: input.userFeedItemId,
@@ -346,12 +371,26 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
     .eq('id', candidate.id);
   if (candidateRejectError) throw new Error(candidateRejectError.message);
 
-  const { error: feedRejectError } = await input.db
-    .from('user_feed_items')
-    .update({ blueprint_id: input.blueprintId, state: 'channel_rejected', last_decision_code: evaluation.reasonCode })
-    .eq('id', input.userFeedItemId)
-    .eq('user_id', input.userId);
-  if (feedRejectError) throw new Error(feedRejectError.message);
+  if (input.patchFeedItemById) {
+    await input.patchFeedItemById({
+      db: input.db,
+      feedItemId: input.userFeedItemId,
+      userId: input.userId,
+      patch: {
+        blueprint_id: input.blueprintId,
+        state: 'channel_rejected',
+        last_decision_code: evaluation.reasonCode,
+      },
+      action: 'auto_channel_pipeline_reject',
+    });
+  } else {
+    const { error: feedRejectError } = await input.db
+      .from('user_feed_items')
+      .update({ blueprint_id: input.blueprintId, state: 'channel_rejected', last_decision_code: evaluation.reasonCode })
+      .eq('id', input.userFeedItemId)
+      .eq('user_id', input.userId);
+    if (feedRejectError) throw new Error(feedRejectError.message);
+  }
 
   return {
     userFeedItemId: input.userFeedItemId,

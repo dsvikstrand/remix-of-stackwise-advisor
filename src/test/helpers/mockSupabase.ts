@@ -43,9 +43,10 @@ class QueryBuilder {
   private limitCount: number | null = null;
   private offsetCount = 0;
   private filters: FilterRule[] = [];
-  private mode: 'select' | 'insert' | 'update' = 'select';
+  private mode: 'select' | 'insert' | 'update' | 'upsert' = 'select';
   private insertPayload: Row[] = [];
   private updatePayload: Row | null = null;
+  private upsertOptions: { onConflict?: string; ignoreDuplicates?: boolean } | null = null;
   private headOnly = false;
   private countMode: string | null = null;
 
@@ -74,36 +75,10 @@ class QueryBuilder {
   }
 
   upsert(values: Row | Row[], options?: { onConflict?: string; ignoreDuplicates?: boolean }) {
-    const table = this.getTable();
-    const rows = Array.isArray(values) ? values : [values];
-    const onConflict = String(options?.onConflict || '').trim();
-    const nowIso = new Date().toISOString();
-
-    for (const raw of rows) {
-      const row = cloneRow(raw);
-      if (!onConflict) {
-        table.push({
-          ...row,
-          created_at: row.created_at || nowIso,
-          updated_at: row.updated_at || nowIso,
-        });
-        continue;
-      }
-
-      const existing = table.find((candidate) => String(candidate[onConflict] || '') === String(row[onConflict] || ''));
-      if (existing) {
-        if (options?.ignoreDuplicates) continue;
-        Object.assign(existing, row, { updated_at: nowIso });
-        continue;
-      }
-      table.push({
-        ...row,
-        created_at: row.created_at || nowIso,
-        updated_at: row.updated_at || nowIso,
-      });
-    }
-
-    return Promise.resolve({ data: null, error: null });
+    this.mode = 'upsert';
+    this.insertPayload = Array.isArray(values) ? values.map((row) => cloneRow(row)) : [cloneRow(values)];
+    this.upsertOptions = options || null;
+    return this;
   }
 
   eq(field: string, value: any) {
@@ -293,6 +268,44 @@ class QueryBuilder {
       const count = this.countMode ? updated.length : null;
       const limited = this.applyLimit(this.applyOrder(updated));
       return { data: this.headOnly ? null : limited, error: null, count };
+    }
+
+    if (this.mode === 'upsert') {
+      const upserted: Row[] = [];
+      const onConflictFields = String(this.upsertOptions?.onConflict || '')
+        .split(',')
+        .map((field) => field.trim())
+        .filter(Boolean);
+
+      for (const payload of this.insertPayload) {
+        const row = cloneRow(payload);
+        const existing = onConflictFields.length > 0
+          ? table.find((candidate) => onConflictFields.every((field) => String(candidate[field] || '') === String(row[field] || '')))
+          : null;
+
+        if (existing) {
+          if (this.upsertOptions?.ignoreDuplicates) continue;
+          Object.assign(existing, row);
+          if (!Object.prototype.hasOwnProperty.call(row, 'updated_at')) {
+            existing.updated_at = nowIso;
+          }
+          upserted.push(projectRow(existing, this.selectColumns));
+          continue;
+        }
+
+        const generatedId = `${this.tableName}_${table.length + upserted.length + 1}`;
+        const nextRow: Row = {
+          id: row.id || generatedId,
+          created_at: row.created_at || nowIso,
+          updated_at: row.updated_at || nowIso,
+          ...row,
+        };
+        table.push(nextRow);
+        upserted.push(projectRow(nextRow, this.selectColumns));
+      }
+
+      const limited = this.applyLimit(this.applyOrder(upserted));
+      return { data: this.headOnly ? null : limited, error: null };
     }
 
     const filtered = this.applyFilters(table);
