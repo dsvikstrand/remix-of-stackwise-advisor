@@ -832,6 +832,15 @@ npm run ops:oracle-unlock-parity -- --json
 - After the `dual -> primary` flip, rerun the same command and confirm:
   - `ORACLE_UNLOCK_LEDGER_MODE=primary`
   - parity still `PASS`
+- Oracle feed-ledger parity snapshot during `ORACLE_FEED_LEDGER_MODE=dual`:
+```bash
+npm run ops:oracle-feed-parity -- --json
+```
+  - Good `dual` verdict for `user_feed_items`:
+    - `ORACLE_FEED_LEDGER_MODE=dual`
+    - `missing_in_oracle_count=0`
+    - `missing_in_supabase_count=0`
+    - `mismatched_row_count=0`
   - Oracle/Supabase row counts still match exactly
 - YT2BP repro smoke:
 ```bash
