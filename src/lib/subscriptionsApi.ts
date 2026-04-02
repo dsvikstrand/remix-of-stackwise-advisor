@@ -420,6 +420,8 @@ export async function listActiveMyIngestionJobs(input?: {
   if (Number.isFinite(input?.limit)) {
     query.set('limit', String(input?.limit));
   }
+  // Queue UI depends on estimated position/ETA metadata for queued rows.
+  query.set('positions', '1');
   const suffix = query.toString();
   const response = await apiRequest<ActiveIngestionJobsResponse>(`/ingestion/jobs/active-mine${suffix ? `?${suffix}` : ''}`, {
     method: 'GET',
