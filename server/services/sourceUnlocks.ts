@@ -21,6 +21,19 @@ function normalizeTranscriptProbeMeta(value: unknown) {
     : {};
 }
 
+function normalizeTranscriptStatus(value: unknown): UnlockTranscriptStatus {
+  const normalized = String(value || '').trim();
+  if (
+    normalized === 'unknown'
+    || normalized === 'retrying'
+    || normalized === 'confirmed_no_speech'
+    || normalized === 'transient_error'
+  ) {
+    return normalized;
+  }
+  return 'unknown';
+}
+
 export type SourceUnlockStatus = 'available' | 'reserved' | 'processing' | 'ready';
 export type UnlockTranscriptStatus = 'unknown' | 'retrying' | 'confirmed_no_speech' | 'transient_error';
 
@@ -129,6 +142,7 @@ export async function ensureSourceItemUnlock(db: DbClient, input: {
         .update({
           estimated_cost: nextCost,
           source_page_id: nextSourcePageId,
+          transcript_status: normalizeTranscriptStatus(existing.transcript_status),
           transcript_probe_meta: normalizeTranscriptProbeMeta(existing.transcript_probe_meta),
         })
         .eq('id', existing.id)
@@ -148,6 +162,7 @@ export async function ensureSourceItemUnlock(db: DbClient, input: {
       source_page_id: input.sourcePageId || null,
       status: 'available',
       estimated_cost: round3(input.estimatedCost),
+      transcript_status: 'unknown',
       transcript_probe_meta: {},
     })
     .select(unlockSelect)
