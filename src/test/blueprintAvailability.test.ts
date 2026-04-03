@@ -31,4 +31,36 @@ describe('blueprint availability', () => {
     });
     expect(result.retryAfterSeconds).toBeGreaterThan(0);
   });
+
+  it('supports Oracle-first source and unlock readers without direct source_items reads', async () => {
+    const db = createMockSupabase({
+      source_items: [],
+      source_item_unlocks: [],
+      generation_runs: [],
+    }) as any;
+
+    const result = await getBlueprintAvailabilityForVideo(db, 'video_short', {
+      listSourceItemsByVideoId: async (videoId) => (
+        videoId === 'video_short'
+          ? [{ id: 'source_1' }]
+          : []
+      ),
+      listUnlockRowsBySourceItemIds: async (sourceItemIds) => (
+        sourceItemIds.includes('source_1')
+          ? [{
+            updated_at: new Date().toISOString(),
+            last_error_code: 'TRANSCRIPT_INSUFFICIENT_CONTEXT',
+            last_error_message: 'This video has very limited speech.',
+          }]
+          : []
+      ),
+    });
+
+    expect(result).toMatchObject({
+      status: 'cooldown_active',
+      videoId: 'video_short',
+      failureSource: 'source_item_unlocks',
+      lastErrorCode: 'TRANSCRIPT_INSUFFICIENT_CONTEXT',
+    });
+  });
 });

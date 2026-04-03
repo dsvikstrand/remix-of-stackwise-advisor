@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { repairProfileHistoryBlueprintIdsForUser, resolveProfileHistory } from '../../server/services/profileHistory';
 import { createMockSupabase } from './helpers/mockSupabase';
 
@@ -299,6 +299,79 @@ describe('profile history service', () => {
       { feedItemId: 'feed_fallback_current', blueprintId: 'bp_fallback', origin: 'feed-fallback' },
     ]);
     expect(result.unresolvedItemIds).toEqual(['feed_unresolved']);
+  });
+
+  it('supports Oracle-first source readers for profile history without direct source_items reads', async () => {
+    const db = createMockSupabase({
+      user_feed_items: [
+        {
+          id: 'feed_direct',
+          user_id: 'user_1',
+          source_item_id: 'source_direct',
+          blueprint_id: 'bp_direct',
+          state: 'channel_published',
+          last_decision_code: null,
+          created_at: '2026-03-10T11:00:00.000Z',
+        },
+      ],
+      source_items: [],
+      source_pages: [
+        {
+          id: 'page_creator',
+          platform: 'youtube',
+          external_id: 'UC_creator',
+          title: 'Creator Alpha',
+          avatar_url: 'https://img.example.com/source-page-avatar.jpg',
+        },
+      ],
+      source_item_unlocks: [],
+      source_item_blueprint_variants: [],
+      blueprints: [
+        { id: 'bp_direct', title: 'Direct Blueprint', banner_url: 'https://img.example.com/direct-banner.jpg' },
+      ],
+      channel_candidates: [
+        {
+          id: 'candidate_direct',
+          user_feed_item_id: 'feed_direct',
+          channel_slug: 'fitness',
+          status: 'published',
+          created_at: '2026-03-10T11:05:00.000Z',
+        },
+      ],
+    }) as any;
+
+    const readSourceRows = vi.fn(async () => ([
+      {
+        id: 'source_direct',
+        source_page_id: 'page_creator',
+        source_channel_id: 'UC_creator',
+        source_url: 'https://www.youtube.com/watch?v=direct1',
+        title: 'Direct video',
+        source_channel_title: 'Creator Alpha',
+        thumbnail_url: 'https://img.example.com/direct-thumb.jpg',
+        metadata: {},
+      },
+    ]));
+
+    const result = await resolveProfileHistory({
+      db,
+      userId: 'user_1',
+      normalizeTranscriptTruthStatus,
+      readSourceRows,
+    });
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({
+      id: 'feed_direct',
+      kind: 'blueprint',
+      title: 'Direct Blueprint',
+      subtitle: 'Creator Alpha',
+      href: '/blueprint/bp_direct',
+    });
+    expect(readSourceRows).toHaveBeenCalledWith({
+      db,
+      sourceIds: ['source_direct'],
+    });
   });
 
   it('repairs missing blueprint ids idempotently and reports unresolved rows', async () => {

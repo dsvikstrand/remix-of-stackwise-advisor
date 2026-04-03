@@ -3699,6 +3699,7 @@ async function getSourceItemByIdOracleFirst(
       if (durable) {
         return normalizeSourceItemRow(durable as unknown as Record<string, unknown>);
       }
+      return readSupabaseFallback('oracle_source_item_ledger_missing');
     } catch (error) {
       console.warn('[oracle-control-plane] source_item_ledger_failed', JSON.stringify({
         action,
@@ -3709,7 +3710,7 @@ async function getSourceItemByIdOracleFirst(
     }
   }
 
-  if (oracleProductMirrorEnabled && oracleControlPlane) {
+  if (!oracleSourceItemLedgerEnabled && oracleProductMirrorEnabled && oracleControlPlane) {
     try {
       const mirrored = await listOracleProductSourceItems({
         controlDb: oracleControlPlane,
@@ -4512,6 +4513,7 @@ async function listProductSourceItemsOracleFirst(
   const sourceNativeId = String(input.sourceNativeId || '').trim();
   const canonicalKeys = [...new Set((input.canonicalKeys || []).map((value) => String(value || '').trim()).filter(Boolean))];
   const action = String(input.action || 'list_product_source_items').trim() || 'list_product_source_items';
+  const sourceNativeIdOnlyRequest = Boolean(sourceNativeId) && ids.length === 0 && canonicalKeys.length === 0;
 
   async function listSupabaseFallback(reason: string) {
     try {
@@ -4550,6 +4552,13 @@ async function listProductSourceItemsOracleFirst(
       const missingIds = ids.filter((id) => !durableIdSet.has(id));
       const missingCanonicalKeys = canonicalKeys.filter((canonicalKey) => !durableCanonicalKeySet.has(canonicalKey));
 
+      if (oracleSourceItemLedgerPrimaryEnabled && sourceNativeIdOnlyRequest) {
+        if (durableRows.length > 0) {
+          return durableRows;
+        }
+        return listSupabaseFallback('oracle_source_item_ledger_missing_source_native_id');
+      }
+
       if (!sourceNativeId && missingIds.length === 0 && missingCanonicalKeys.length === 0) {
         return durableRows;
       }
@@ -4565,7 +4574,7 @@ async function listProductSourceItemsOracleFirst(
     }
   }
 
-  if (oracleProductMirrorEnabled && oracleControlPlane) {
+  if (!oracleSourceItemLedgerEnabled && oracleProductMirrorEnabled && oracleControlPlane) {
     try {
       const mirrored = await listOracleProductSourceItems({
         controlDb: oracleControlPlane,
@@ -7042,7 +7051,7 @@ registerProfileRoutes(app, {
   }),
   readSourceRows: ({ db, sourceIds }: any) => listProductSourceItemsOracleFirst(db, {
     ids: sourceIds,
-    action: 'wall_feed_read_source_rows',
+    action: 'profile_history_read_source_rows',
   }),
   readUnlockRows: ({ db, sourceIds }: any) => getSourceItemUnlocksBySourceItemIdsOracleFirst(db, sourceIds),
 });
@@ -7065,7 +7074,7 @@ registerWallRoutes(app, {
   }),
   readSourceRows: ({ db, sourceIds }: any) => listProductSourceItemsOracleFirst(db, {
     ids: sourceIds,
-    action: 'profile_history_read_source_rows',
+    action: 'wall_feed_read_source_rows',
   }),
   readUnlockRows: ({ db, sourceIds }: any) => getSourceItemUnlocksBySourceItemIdsOracleFirst(db, sourceIds),
   readActiveSubscriptions: ({ db, userId }: any) => listActiveSubscriptionsForUserOracleFirst(db, userId),
