@@ -65,6 +65,7 @@ export type OracleScopeControlStateRow = {
 };
 
 const QUIET_AFTER_CONSECUTIVE_NOOPS = 3;
+const FEED_NOT_FOUND_BACKOFF_MAX_MS = 24 * 60 * 60_000;
 
 function normalizeInt(value: unknown, fallback = 0) {
   const parsed = Number(value);
@@ -85,10 +86,26 @@ function addMsToIso(value: string, ms: number) {
   return new Date(parsed + Math.max(0, Math.floor(ms))).toISOString();
 }
 
+function resolveFeedNotFoundRevisitMs(baseMs: number, consecutiveFeedNotFoundCount?: number) {
+  const base = Math.max(0, Math.floor(Number(baseMs) || 0));
+  const count = Math.max(1, Math.floor(Number(consecutiveFeedNotFoundCount) || 1));
+  let multiplier = 1;
+  if (count >= 5) {
+    multiplier = 8;
+  } else if (count >= 3) {
+    multiplier = 4;
+  } else if (count >= 2) {
+    multiplier = 2;
+  }
+  const maxMs = Math.max(base, FEED_NOT_FOUND_BACKOFF_MAX_MS);
+  return Math.min(base * multiplier, maxMs);
+}
+
 export function resolveOracleNextDueAtFromOutcome(input: {
   nowIso?: string;
   resultCode: OracleSubscriptionSyncResultCode;
   consecutiveNoopCount?: number;
+  consecutiveFeedNotFoundCount?: number;
   activeRevisitMs: number;
   normalRevisitMs: number;
   quietRevisitMs: number;
@@ -102,7 +119,10 @@ export function resolveOracleNextDueAtFromOutcome(input: {
     return addMsToIso(nowIso, input.errorRetryMs);
   }
   if (input.resultCode === 'feed_not_found') {
-    return addMsToIso(nowIso, input.quietRevisitMs);
+    return addMsToIso(
+      nowIso,
+      resolveFeedNotFoundRevisitMs(input.quietRevisitMs, input.consecutiveFeedNotFoundCount),
+    );
   }
   if (input.resultCode === 'new_items') {
     return addMsToIso(nowIso, input.activeRevisitMs);
@@ -448,6 +468,7 @@ export async function recordOracleSubscriptionSyncOutcome(input: {
     .selectFrom('subscription_schedule_state')
     .select([
       'subscription_id',
+      'last_result_code',
       'consecutive_noop_count',
       'consecutive_error_count',
       'starvation_score',
@@ -468,10 +489,16 @@ export async function recordOracleSubscriptionSyncOutcome(input: {
   const consecutiveErrorCount = isError
     ? normalizeInt(existing.consecutive_error_count) + 1
     : 0;
+  const consecutiveFeedNotFoundCount = input.resultCode === 'feed_not_found'
+    ? (existing.last_result_code === 'feed_not_found'
+      ? normalizeInt(existing.consecutive_error_count) + 1
+      : 1)
+    : 0;
   const nextDueAt = resolveOracleNextDueAtFromOutcome({
     nowIso,
     resultCode: input.resultCode,
     consecutiveNoopCount,
+    consecutiveFeedNotFoundCount,
     activeRevisitMs: input.activeRevisitMs,
     normalRevisitMs: input.normalRevisitMs,
     quietRevisitMs: input.quietRevisitMs,

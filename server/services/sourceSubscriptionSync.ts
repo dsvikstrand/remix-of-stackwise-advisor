@@ -454,6 +454,7 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
   > {
     let attempts = 0;
     let attemptedChannelRecovery = false;
+    let recoveredChannelChanged = false;
     while (attempts < SUBSCRIPTION_FEED_FETCH_MAX_ATTEMPTS) {
       attempts += 1;
       try {
@@ -478,6 +479,7 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
           try {
             const resolved = await deps.resolveYouTubeChannel(subscription.source_channel_url);
             if (resolved.channelId && resolved.channelId !== subscription.source_channel_id) {
+              recoveredChannelChanged = true;
               await updateRecoveredSubscriptionChannel({
                 db,
                 subscription,
@@ -535,6 +537,8 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
             source_channel_url: subscription.source_channel_url || null,
             trigger: options.trigger,
             failure_kind: feedError.kind,
+            recovery_attempted: attemptedChannelRecovery,
+            recovery_changed_channel: recoveredChannelChanged,
             retryable: feedError.retryable,
             error: feedError.message,
           }));

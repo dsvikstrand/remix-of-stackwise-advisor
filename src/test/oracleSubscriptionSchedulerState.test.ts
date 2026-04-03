@@ -413,6 +413,30 @@ describe('oracle subscription scheduler bootstrap', () => {
         last_result_code: 'feed_not_found',
         consecutive_error_count: 2,
       });
+
+      await recordOracleSubscriptionSyncOutcome({
+        controlDb,
+        subscriptionId: 'sub_1',
+        nowIso: '2026-03-31T13:45:00.000Z',
+        resultCode: 'feed_not_found',
+        activeRevisitMs: 15 * 60_000,
+        normalRevisitMs: 30 * 60_000,
+        quietRevisitMs: 90 * 60_000,
+        errorRetryMs: 15 * 60_000,
+        errorMessage: 'FEED_FETCH_FAILED:404',
+      });
+
+      const afterRepeatedNotFound = await controlDb.db
+        .selectFrom('subscription_schedule_state')
+        .select(['next_due_at', 'last_result_code', 'consecutive_error_count'])
+        .where('subscription_id', '=', 'sub_1')
+        .executeTakeFirstOrThrow();
+
+      expect(afterRepeatedNotFound).toEqual({
+        next_due_at: '2026-03-31T19:45:00.000Z',
+        last_result_code: 'feed_not_found',
+        consecutive_error_count: 3,
+      });
     } finally {
       await controlDb.close();
     }
