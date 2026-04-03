@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, LoaderCircle, MessageCircleReply, Sparkles, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -65,6 +65,8 @@ export function NotificationsBell() {
   const {
     items: activeJobs,
     isLoading: isQueueLoading,
+    isFetching: isQueueFetching,
+    refetch: refetchQueue,
   } = useGenerationQueue({
     pollMs: 15_000,
     idlePollMs: 120_000,
@@ -72,6 +74,12 @@ export function NotificationsBell() {
     enabled: isEnabled && isOpen,
   });
   const liveQueueTop = useMemo(() => activeJobs.slice(0, 3), [activeJobs]);
+  const isQueuePreviewLoading = liveQueueTop.length === 0 && (isQueueLoading || isQueueFetching);
+
+  useEffect(() => {
+    if (!isEnabled || !isOpen) return;
+    void refetchQueue();
+  }, [isEnabled, isOpen, refetchQueue]);
 
   const handleOpenItem = async (item: NotificationItem) => {
     const scope = getNotificationScope(item);
@@ -119,7 +127,7 @@ export function NotificationsBell() {
               View full queue
             </Button>
           </div>
-          {isQueueLoading && liveQueueTop.length === 0 ? (
+          {isQueuePreviewLoading ? (
             <p className="text-xs text-muted-foreground">Checking queue...</p>
           ) : liveQueueTop.length === 0 ? (
             <p className="text-xs text-muted-foreground">No active generations.</p>
