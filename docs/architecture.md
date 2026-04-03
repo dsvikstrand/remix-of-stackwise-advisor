@@ -253,6 +253,7 @@
     - per-event trace sequencing now reuses a per-run in-process cursor instead of re-reading the latest `seq` from Supabase before every event insert.
     - terminal `generation_runs` status writes now persist outside the best-effort event-write wrapper so trace-event append failures do not leave runs stuck in `running`.
     - Oracle generation-state migration currently covers `generation_runs` summaries and `source_item_blueprint_variants` first; `generation_run_events` intentionally remain on Supabase in this chapter to keep the first execution-truth move narrower.
+    - rapid interactive queue bursts now also have an in-flight refill path for `source_item_unlock_generation`, `search_video_generate`, and `manual_refresh_selection`, so a later interactive job can be claimed while an earlier one is still running if worker capacity remains.
   - `source_item_blueprint_variants` is the canonical queue-claim guard for shared source-video generation.
     - queue-backed claims now record `active_job_id` on the variant row.
     - stale queued/running variants are reclaimed after a bounded timeout only when `active_job_id` is missing.

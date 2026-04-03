@@ -1003,6 +1003,11 @@ const QUEUED_INGESTION_SCOPES = [
   'all_active_subscriptions',
 ] as const;
 type QueuedIngestionScope = (typeof QUEUED_INGESTION_SCOPES)[number];
+const INTERACTIVE_QUEUE_REFILL_SCOPES = new Set<QueuedIngestionScope>([
+  'source_item_unlock_generation',
+  'search_video_generate',
+  'manual_refresh_selection',
+]);
 
 function getQueueSweepConfigByTier(tier: QueuePriorityTier) {
   if (oracleQueueSweepControlEnabled) {
@@ -6196,6 +6201,7 @@ async function getQueueHealthSnapshotOracleFirst(input: {
 }
 
 const queuedWorkerId = `ingestion-worker-${process.pid}`;
+let activeQueuedClaimedJobs = 0;
 
 function normalizeGateMode(raw: unknown, fallback: GateMode): GateMode {
   const normalized = String(raw || '').trim().toLowerCase();
@@ -14045,11 +14051,22 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
 async function processClaimedIngestionJobs(db: ReturnType<typeof createClient>, jobs: IngestionJobRow[]) {
   const queue = jobs.slice();
   const concurrency = Math.max(1, Math.min(workerConcurrency, queue.length));
+  const incrementActiveClaimedJobs = () => {
+    activeQueuedClaimedJobs += 1;
+  };
+  const decrementActiveClaimedJobs = () => {
+    activeQueuedClaimedJobs = Math.max(0, activeQueuedClaimedJobs - 1);
+  };
   const workers = Array.from({ length: concurrency }, () => (async () => {
     while (queue.length > 0) {
       const next = queue.shift();
       if (!next) return;
-      await processClaimedIngestionJob(db, next);
+      incrementActiveClaimedJobs();
+      try {
+        await processClaimedIngestionJob(db, next);
+      } finally {
+        decrementActiveClaimedJobs();
+      }
     }
   })());
   await Promise.all(workers);
@@ -14062,6 +14079,8 @@ const queuedIngestionWorkerController = createQueuedIngestionWorkerController({
   queuedIngestionScopes: QUEUED_INGESTION_SCOPES,
   queuedWorkerId,
   workerLeaseMs,
+  workerConcurrency,
+  getActiveClaimedJobCount: () => activeQueuedClaimedJobs,
   keepAliveEnabled: runIngestionWorker,
   keepAliveDelayMs: workerKeepAliveDelayMs,
   keepAliveIdleBaseDelayMs: workerIdleBackoffBaseMs,
@@ -14212,6 +14231,19 @@ function normalizeQueuedIngestionScheduleInput(input?: QueuedIngestionScheduleIn
 function scheduleQueuedIngestionProcessing(input?: QueuedIngestionScheduleInput) {
   const normalized = normalizeQueuedIngestionScheduleInput(input);
   const runSchedule = () => {
+    const shouldRequestInteractiveRefill = (
+      normalized.delayMs === 0
+      && normalized.scopes.length > 0
+      && normalized.scopes.every((scope) => INTERACTIVE_QUEUE_REFILL_SCOPES.has(scope as QueuedIngestionScope))
+    );
+    if (shouldRequestInteractiveRefill) {
+      queuedIngestionWorkerController.requestRefill({
+        delayMs: normalized.delayMs,
+        scopes: normalized.scopes,
+        reason: normalized.reason,
+      });
+      return;
+    }
     queuedIngestionWorkerController.schedule(normalized.delayMs);
   };
 

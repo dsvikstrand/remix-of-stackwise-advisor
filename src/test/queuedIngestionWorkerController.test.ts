@@ -387,6 +387,66 @@ describe('queued ingestion worker controller', () => {
     }));
   });
 
+  it('claims an interactive refill promptly while another interactive job is still running', async () => {
+    const db = { tag: 'db' };
+    let activeClaimedJobs = 0;
+    let releaseFirstJob: (() => void) | null = null;
+    const firstJobDone = new Promise<void>((resolve) => {
+      releaseFirstJob = resolve;
+    });
+    const runUnlockSweeps = vi.fn(async () => undefined);
+    const claimQueuedIngestionJobs = vi.fn()
+      .mockResolvedValueOnce([{ id: 'job_1' }])
+      .mockResolvedValueOnce([{ id: 'job_2' }])
+      .mockResolvedValueOnce([]);
+
+    const processClaimedIngestionJobs = vi.fn(async (_db, jobs: Array<{ id: string }>) => {
+      const jobId = jobs[0]?.id;
+      if (jobId === 'job_1') {
+        activeClaimedJobs = 1;
+        await firstJobDone;
+        activeClaimedJobs = 0;
+        return;
+      }
+      if (jobId === 'job_2') {
+        return;
+      }
+    });
+
+    const controller = createQueuedIngestionWorkerController({
+      getServiceSupabaseClient: () => db,
+      runUnlockSweeps,
+      recoverStaleIngestionJobs: vi.fn(async () => []),
+      queuedIngestionScopes: ['source_item_unlock_generation'],
+      queuedWorkerId: 'worker_1',
+      workerLeaseMs: 90_000,
+      workerConcurrency: 2,
+      getActiveClaimedJobCount: () => activeClaimedJobs,
+      keepAliveEnabled: false,
+      getQueueSweepPlan: () => [{ tier: 'high', scopes: ['source_item_unlock_generation'], maxJobs: 8 }],
+      claimQueuedIngestionJobs,
+      processClaimedIngestionJobs,
+    });
+
+    controller.start(0);
+    await vi.advanceTimersByTimeAsync(0);
+    controller.requestRefill({
+      scopes: ['source_item_unlock_generation'],
+      reason: 'test_interactive_refill',
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(claimQueuedIngestionJobs).toHaveBeenCalledTimes(2);
+    expect(claimQueuedIngestionJobs).toHaveBeenNthCalledWith(2, db, expect.objectContaining({
+      scopes: ['source_item_unlock_generation'],
+      maxJobs: 1,
+    }));
+    expect(processClaimedIngestionJobs).toHaveBeenCalledWith(db, [{ id: 'job_2' }]);
+
+    releaseFirstJob?.();
+    await vi.advanceTimersByTimeAsync(0);
+  });
+
   it('uses the Oracle-selected sweep plan when provided', async () => {
     const runUnlockSweeps = vi.fn(async () => undefined);
     const claimQueuedIngestionJobs = vi.fn(async () => []);

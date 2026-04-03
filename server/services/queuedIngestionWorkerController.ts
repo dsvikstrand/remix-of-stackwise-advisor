@@ -11,6 +11,7 @@ export type QueueSweepPlanEntry = {
 export type QueuedIngestionWorkerController = {
   start: (delayMs?: number) => void;
   schedule: (delayMs?: number) => void;
+  requestRefill: (input?: { delayMs?: number; scopes?: readonly string[]; reason?: string | null }) => void;
   getRunning: () => boolean;
 };
 
@@ -21,6 +22,8 @@ export type QueuedIngestionWorkerControllerDeps<DbClient> = {
   queuedIngestionScopes: readonly string[];
   queuedWorkerId: string;
   workerLeaseMs: number;
+  workerConcurrency?: number;
+  getActiveClaimedJobCount?: () => number;
   keepAliveEnabled: boolean;
   keepAliveDelayMs?: number;
   keepAliveIdleBaseDelayMs?: number;
@@ -122,6 +125,19 @@ export function resolveWorkerLeaseHeartbeatStartupDelayMs(input: {
   );
 }
 
+function filterQueueSweepPlanByScopes(
+  basePlan: readonly QueueSweepPlanEntry[],
+  scopes: readonly string[],
+) {
+  const requestedScopes = new Set(
+    scopes
+      .map((scope) => String(scope || '').trim())
+      .filter(Boolean),
+  );
+  if (requestedScopes.size === 0) return [];
+  return basePlan.filter((entry) => entry.scopes.some((scope) => requestedScopes.has(scope)));
+}
+
 export function createQueuedIngestionWorkerController<DbClient>(
   deps: QueuedIngestionWorkerControllerDeps<DbClient>,
 ): QueuedIngestionWorkerController {
@@ -145,6 +161,12 @@ export function createQueuedIngestionWorkerController<DbClient>(
   let queuedWorkerRequested = false;
   let idlePollStreak = 0;
   let lastMaintenanceRunAt = 0;
+  let refillTimer: ReturnType<typeof setTimeout> | null = null;
+  let refillNextRunAt = 0;
+  let refillRunning = false;
+  let refillRequested = false;
+  let refillReason: string | null = null;
+  const refillScopes = new Set<string>();
 
   function computeIdleDelayMs(input?: { lowPriorityOnly?: boolean }) {
     const lowPriorityOnly = Boolean(input?.lowPriorityOnly);
@@ -292,6 +314,80 @@ export function createQueuedIngestionWorkerController<DbClient>(
     }
   }
 
+  async function runQueuedIngestionRefill() {
+    if (refillRunning) {
+      refillRequested = true;
+      return;
+    }
+    if (!queuedWorkerRunning) {
+      const requestedDelayMs = refillNextRunAt > 0 ? Math.max(0, refillNextRunAt - Date.now()) : 0;
+      refillScopes.clear();
+      refillReason = null;
+      refillRequested = false;
+      schedule(requestedDelayMs);
+      return;
+    }
+    const db = deps.getServiceSupabaseClient();
+    if (!db) return;
+
+    const workerConcurrency = Math.max(1, Math.floor(Number(deps.workerConcurrency) || 1));
+    let availableCapacity = Math.max(
+      0,
+      workerConcurrency - Math.max(0, Math.floor(Number(deps.getActiveClaimedJobCount?.() || 0))),
+    );
+    if (availableCapacity <= 0) {
+      return;
+    }
+
+    const requestedScopes = [...refillScopes];
+    const requestedReason = refillReason;
+    refillScopes.clear();
+    refillReason = null;
+    refillRequested = false;
+
+    const refillPlan = filterQueueSweepPlanByScopes(deps.getQueueSweepPlan(), requestedScopes);
+    if (refillPlan.length === 0) {
+      return;
+    }
+
+    refillRunning = true;
+    try {
+      console.log('[interactive_queue_refill_requested]', JSON.stringify({
+        scopes: requestedScopes,
+        reason: requestedReason,
+        available_capacity: availableCapacity,
+      }));
+
+      for (const planEntry of refillPlan) {
+        if (availableCapacity <= 0) break;
+        const claimed = await deps.claimQueuedIngestionJobs(db, {
+          scopes: [...planEntry.scopes],
+          maxJobs: Math.min(planEntry.maxJobs, availableCapacity),
+          workerId: deps.queuedWorkerId,
+          leaseSeconds: Math.max(5, Math.ceil(deps.workerLeaseMs / 1000)),
+        });
+        if (claimed.length === 0) continue;
+
+        console.log('[interactive_queue_refill_claimed]', JSON.stringify({
+          scopes: planEntry.scopes,
+          reason: requestedReason,
+          claimed_count: claimed.length,
+        }));
+        availableCapacity = Math.max(0, availableCapacity - claimed.length);
+        await deps.processClaimedIngestionJobs(db, claimed);
+      }
+    } finally {
+      refillRunning = false;
+      if (refillRequested && queuedWorkerRunning) {
+        requestRefill({
+          delayMs: 0,
+          scopes: [...refillScopes],
+          reason: refillReason,
+        });
+      }
+    }
+  }
+
   function schedule(delayMs = 0) {
     if (queuedWorkerRunning) {
       queuedWorkerRequested = true;
@@ -317,11 +413,56 @@ export function createQueuedIngestionWorkerController<DbClient>(
     }, waitMs);
   }
 
+  function requestRefill(input?: { delayMs?: number; scopes?: readonly string[]; reason?: string | null }) {
+    const scopes = (input?.scopes || [])
+      .map((scope) => String(scope || '').trim())
+      .filter(Boolean);
+    if (scopes.length === 0) {
+      schedule(Math.max(0, Math.floor(Number(input?.delayMs) || 0)));
+      return;
+    }
+
+    for (const scope of scopes) refillScopes.add(scope);
+    const normalizedReason = String(input?.reason || '').trim();
+    if (normalizedReason) {
+      refillReason = normalizedReason;
+    }
+
+    const waitMs = Math.max(0, Math.floor(Number(input?.delayMs) || 0));
+    if (!queuedWorkerRunning) {
+      schedule(waitMs);
+      return;
+    }
+    if (refillRunning) {
+      refillRequested = true;
+      return;
+    }
+
+    const nextRunAt = Date.now() + waitMs;
+    if (refillTimer) {
+      if (nextRunAt >= refillNextRunAt) {
+        return;
+      }
+      clearTimeout(refillTimer);
+      refillTimer = null;
+      refillNextRunAt = 0;
+    }
+
+    refillRequested = true;
+    refillNextRunAt = nextRunAt;
+    refillTimer = setTimeout(() => {
+      refillTimer = null;
+      refillNextRunAt = 0;
+      void runQueuedIngestionRefill();
+    }, waitMs);
+  }
+
   return {
     start(delayMs = 0) {
       schedule(delayMs);
     },
     schedule,
+    requestRefill,
     getRunning() {
       return queuedWorkerRunning;
     },

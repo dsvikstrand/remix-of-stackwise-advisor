@@ -116,6 +116,7 @@ c5) [todo] Add explicit smoke playbook for mobile OAuth callback edge cases and 
 c6) [have] Notifications MVP foundation is live (`comment_reply`, `generation_succeeded`, `generation_failed`) with header bell inbox and read/read-all controls.
 c6a) [have] Unlock-generation terminal failures now also surface through the same `generation_failed` notification path from real failed item counts, instead of suppressing retryable transcript/provider misses from `Recent Results`.
 c6b) [have] Rapid multi-job enqueue no longer coalesces `generation_started` across different jobs in the same scope window; start notifications align with terminal per-job semantics again.
+c6c) [have] Rapid interactive generation bursts now also request in-flight queue refill, reducing the wait for later manual jobs when worker concurrency is still available.
 
 ### P2 - Maintainability and Scale-readiness
 d1) [todo] Split `server/index.ts` into route modules (`source pages`, `subscriptions`, `unlock/credits`, `ingestion jobs`).

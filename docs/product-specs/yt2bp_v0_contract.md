@@ -266,6 +266,7 @@
 - Silent auto transcript retry/feed suppression behavior and Source Page `+Add`-only speech warning scope are intentionally outside this endpoint contract.
 - Notifications inbox flows (`/api/notifications*`) and event emission for replies/generation terminal outcomes are intentionally outside this endpoint contract.
 - Additive note: `generation_started` inbox rows now emit per queued job again, with dedupe limited to repeated emits for the same `jobId`.
+- Additive note: rapid interactive generate bursts now also use an in-flight queue-refill path for queued manual/search/source-page jobs; this remains runtime behavior outside the endpoint envelope.
 - 2026-03-23 note: terminal `source_item_unlock_generation` failures now emit `generation_failed` notifications from actual failed item counts even when transcript/provider retry policy remains active; additive and outside this endpoint envelope.
 - Installed-PWA push subscription/config routes (`/api/notifications/push-subscriptions*`) and push delivery queue processing are intentionally outside this endpoint contract.
 - Service queue operations (`POST /api/ingestion/jobs/trigger`, `GET /api/ingestion/jobs/latest`, `GET /api/ops/queue/health`) are intentionally outside this endpoint contract.
