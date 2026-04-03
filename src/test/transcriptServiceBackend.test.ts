@@ -97,6 +97,46 @@ describe('transcript service modularity (backend)', () => {
     expect(resolveTranscriptOperationTimeoutMs(200000)).toBe(200000);
   });
 
+  it('uses request-scoped transcript retry overrides when provided', async () => {
+    const providers: TranscriptProviderAdapter[] = [
+      {
+        id: 'videotranscriber_temp',
+        getTranscript: async () => ({
+          text: 'ok',
+          source: 'videotranscriber_temp',
+          confidence: null,
+        }),
+      },
+    ];
+    const seenOptions: Array<{ maxAttempts: number; timeoutMs: number }> = [];
+
+    const service = buildService(providers, {
+      runWithProviderRetry: async (options, task) => {
+        seenOptions.push({
+          maxAttempts: Number(options.maxAttempts || 0),
+          timeoutMs: Number(options.timeoutMs || 0),
+        });
+        return task(1);
+      },
+    });
+
+    const result = await service.getTranscriptForVideo('video123', {
+      enableFallback: true,
+      retryDefaultsOverride: {
+        transcriptAttempts: 1,
+        transcriptTimeoutMs: 4321,
+      },
+    });
+
+    expect(result.source).toBe('videotranscriber_temp');
+    expect(seenOptions).toEqual([
+      {
+        maxAttempts: 1,
+        timeoutMs: 4321,
+      },
+    ]);
+  });
+
   it('keeps probe matrix semantics for mixed success and failure outcomes', async () => {
     const providers: TranscriptProviderAdapter[] = [
       {

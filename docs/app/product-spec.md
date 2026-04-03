@@ -47,6 +47,7 @@ a22) [have] Legacy `My Feed` compatibility card footer still shows read-only aut
 a23) [have] Search-generated saves now carry source channel context so legacy `My Feed` compatibility subtitle rows can show channel name instead of duplicated post title.
 a24) [have] Legacy `My Feed` subtitle resolution falls back to source metadata channel title when `source_channel_title` is missing, preventing title duplication for search-generated content.
 a25) [have] `/youtube` now runs core generation first and performs optional AI review as an async post-step; banner generation is intentionally off and `Save to Home` remains non-blocking.
+a25a) [have] Queued manual YT2BP work now preserves interactive request class all the way through the worker path: search/manual/source-page generation can use tighter interactive transcript/LLM retry budgets, emits additive per-stage timing logs for the one-step pipeline, and keeps the slower retry profile for background ingestion.
 a26) [have] Banner generation prompt is now explicitly visual-only (no readable text/typography/logos/watermarks) to keep card backgrounds clean.
 a27) [have] `/subscriptions` now includes `Refresh` popup flow: scan new videos from active subscriptions, select videos, and start background blueprint generation async.
 a28) [have] Manual refresh endpoints now enforce per-user cooldown limits and background-job concurrency guards to prevent duplicate/overlapping runs.

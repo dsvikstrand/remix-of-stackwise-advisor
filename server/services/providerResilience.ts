@@ -29,6 +29,13 @@ export type ProviderRetryOptions = {
   timeoutErrorFactory?: (timeoutMs: number) => unknown;
 };
 
+export type ProviderRetryDefaults = {
+  transcriptAttempts: number;
+  transcriptTimeoutMs: number;
+  llmAttempts: number;
+  llmTimeoutMs: number;
+};
+
 function defaultIsRetryable(error: unknown) {
   if (error instanceof CodexExecError) {
     return error.code === 'RATE_LIMITED' || error.code === 'TIMEOUT' || error.code === 'PROCESS_FAIL';
@@ -117,5 +124,63 @@ export function getProviderRetryDefaults() {
     transcriptTimeoutMs: clampInt(process.env.TRANSCRIPT_TIMEOUT_MS, 25_000, 1000, 90_000),
     llmAttempts: clampInt(process.env.LLM_MAX_ATTEMPTS, 2, 1, 4),
     llmTimeoutMs: clampInt(process.env.LLM_TIMEOUT_MS, 60_000, 1000, 180_000),
+  };
+}
+
+export function resolveProviderRetryDefaultsForRequestClass(
+  requestClass: 'interactive' | 'background',
+  baseDefaults: ProviderRetryDefaults,
+): ProviderRetryDefaults {
+  if (requestClass !== 'interactive') {
+    return {
+      transcriptAttempts: clampInt(baseDefaults.transcriptAttempts, 2, 1, 4),
+      transcriptTimeoutMs: clampInt(baseDefaults.transcriptTimeoutMs, 25_000, 1000, 90_000),
+      llmAttempts: clampInt(baseDefaults.llmAttempts, 2, 1, 4),
+      llmTimeoutMs: clampInt(baseDefaults.llmTimeoutMs, 60_000, 1000, 180_000),
+    };
+  }
+
+  const transcriptAttempts = Math.min(
+    clampInt(baseDefaults.transcriptAttempts, 2, 1, 4),
+    clampInt(
+      process.env.INTERACTIVE_TRANSCRIPT_MAX_ATTEMPTS,
+      Math.min(clampInt(baseDefaults.transcriptAttempts, 2, 1, 4), 1),
+      1,
+      4,
+    ),
+  );
+  const transcriptTimeoutMs = Math.min(
+    clampInt(baseDefaults.transcriptTimeoutMs, 25_000, 1000, 90_000),
+    clampInt(
+      process.env.INTERACTIVE_TRANSCRIPT_TIMEOUT_MS,
+      Math.min(clampInt(baseDefaults.transcriptTimeoutMs, 25_000, 1000, 90_000), 15_000),
+      1000,
+      90_000,
+    ),
+  );
+  const llmAttempts = Math.min(
+    clampInt(baseDefaults.llmAttempts, 2, 1, 4),
+    clampInt(
+      process.env.INTERACTIVE_LLM_MAX_ATTEMPTS,
+      Math.min(clampInt(baseDefaults.llmAttempts, 2, 1, 4), 1),
+      1,
+      4,
+    ),
+  );
+  const llmTimeoutMs = Math.min(
+    clampInt(baseDefaults.llmTimeoutMs, 60_000, 1000, 180_000),
+    clampInt(
+      process.env.INTERACTIVE_LLM_TIMEOUT_MS,
+      Math.min(clampInt(baseDefaults.llmTimeoutMs, 60_000, 1000, 180_000), 45_000),
+      1000,
+      180_000,
+    ),
+  );
+
+  return {
+    transcriptAttempts,
+    transcriptTimeoutMs,
+    llmAttempts,
+    llmTimeoutMs,
   };
 }

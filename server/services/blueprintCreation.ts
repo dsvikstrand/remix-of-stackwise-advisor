@@ -29,6 +29,7 @@ type CreateBlueprintFromVideoInput = {
   subscriptionId?: string | null;
   jobId?: string | null;
   generationTier?: GenerationTier;
+  requestClass?: 'interactive' | 'background';
   onBeforeFirstModelDispatch?: () => Promise<void>;
 };
 
@@ -171,6 +172,13 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
     const normalizedSourceItemId = String(input.sourceItemId || '').trim();
     const generationTier: GenerationTier = 'tier';
     const generationModelProfile = deps.resolveGenerationModelProfile(generationTier);
+    const requestClass = (
+      input.requestClass === 'interactive'
+      || input.sourceTag === 'youtube_search_direct'
+      || input.sourceTag === 'manual_refresh_generate'
+      || input.sourceTag === 'source_page_video_library'
+      || input.sourceTag === 'source_unlock_generation'
+    ) ? 'interactive' : 'background';
     let claimedVariant = false;
 
     if (normalizedSourceItemId) {
@@ -255,7 +263,7 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
         authToken: '',
         generationTier,
         generationModelProfile,
-        requestClass: 'background',
+        requestClass,
         trace: {
           db: traceDb,
           userId: input.userId,

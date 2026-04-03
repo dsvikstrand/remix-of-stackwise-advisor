@@ -60,6 +60,7 @@ export type TranscriptServiceDeps = {
 export type GetTranscriptForVideoOptions = {
   enableFallback?: boolean;
   db?: DbClient | null;
+  retryDefaultsOverride?: Partial<TranscriptRetryDefaults> | null;
 };
 
 const DEFAULT_TRANSCRIPT_TIMEOUT_MS = 25_000;
@@ -244,18 +245,24 @@ export function createTranscriptService(partialDeps: Partial<TranscriptServiceDe
   async function getTranscriptForVideoWithProviderResilience(
     videoId: string,
     provider: TranscriptProvider,
-    options?: { db?: DbClient | null },
+    options?: { db?: DbClient | null; retryDefaultsOverride?: Partial<TranscriptRetryDefaults> | null },
   ): Promise<TranscriptResult> {
     const providerAdapter = getProviderAdapter(provider);
+    const transcriptAttempts = Number.isFinite(Number(options?.retryDefaultsOverride?.transcriptAttempts))
+      ? Math.max(1, Math.floor(Number(options?.retryDefaultsOverride?.transcriptAttempts)))
+      : deps.providerRetryDefaults.transcriptAttempts;
+    const transcriptTimeoutMs = Number.isFinite(Number(options?.retryDefaultsOverride?.transcriptTimeoutMs))
+      ? Math.max(1000, Math.floor(Number(options?.retryDefaultsOverride?.transcriptTimeoutMs)))
+      : deps.providerRetryDefaults.transcriptTimeoutMs;
     const timeoutMs = Math.max(
-      deps.providerRetryDefaults.transcriptTimeoutMs,
+      transcriptTimeoutMs,
       getProviderTimeoutMs(providerAdapter),
     );
     return deps.runWithProviderRetry(
       {
         providerKey: buildTranscriptProviderRetryKey(provider),
         db: options?.db || null,
-        maxAttempts: deps.providerRetryDefaults.transcriptAttempts,
+        maxAttempts: transcriptAttempts,
         timeoutMs,
         baseDelayMs: TRANSCRIPT_RETRY_BASE_DELAY_MS,
         jitterMs: TRANSCRIPT_RETRY_JITTER_MS,
@@ -269,7 +276,7 @@ export function createTranscriptService(partialDeps: Partial<TranscriptServiceDe
   async function getTranscriptForVideoWithFallback(
     videoId: string,
     primaryProvider?: TranscriptProvider | null,
-    options?: { db?: DbClient | null },
+    options?: { db?: DbClient | null; retryDefaultsOverride?: Partial<TranscriptRetryDefaults> | null },
   ): Promise<TranscriptResult> {
     const orderedProviders = deps.listProvidersForFallback(primaryProvider);
     const timedtextCooldownRemainingSeconds = getTranscriptProviderCooldownRemainingSeconds('youtube_timedtext');
@@ -291,6 +298,7 @@ export function createTranscriptService(partialDeps: Partial<TranscriptServiceDe
       try {
         const transcript = await getTranscriptForVideoWithProviderResilience(videoId, provider.id, {
           db: options?.db || null,
+          retryDefaultsOverride: options?.retryDefaultsOverride || null,
         });
         attempts.push({
           provider: provider.id,
@@ -347,10 +355,12 @@ export function createTranscriptService(partialDeps: Partial<TranscriptServiceDe
     const transcript = options?.enableFallback
       ? await getTranscriptForVideoWithFallback(videoId, provider, {
         db: options?.db || null,
+        retryDefaultsOverride: options?.retryDefaultsOverride || null,
       })
       : withProviderTrace(
         await getTranscriptForVideoWithProviderResilience(videoId, provider, {
           db: options?.db || null,
+          retryDefaultsOverride: options?.retryDefaultsOverride || null,
         }),
         {
           attempts: [{

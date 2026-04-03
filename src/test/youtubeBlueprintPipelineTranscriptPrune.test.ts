@@ -8,6 +8,7 @@ import {
   type TranscriptPruningConfig,
 } from '../../server/services/transcriptPruning';
 import { YOUTUBE_BLUEPRINT_PROMPT_TEMPLATE_PATH_DEFAULT } from '../../server/llm/prompts';
+import type { ProviderRetryOptions } from '../../server/services/providerResilience';
 
 type EventRow = {
   event: string;
@@ -38,6 +39,10 @@ function buildDeps(input: {
   appendGenerationEventImpl?: (_db: unknown, row: EventRow) => Promise<void>;
   finalizeGenerationRunSuccessImpl?: () => Promise<void>;
   finalizeGenerationRunFailureImpl?: () => Promise<void>;
+  runWithProviderRetryImpl?: (
+    options: ProviderRetryOptions,
+    fn: () => Promise<unknown>,
+  ) => Promise<unknown>;
   gateResults?: Array<{
     pass: boolean;
     issues: string[];
@@ -72,7 +77,7 @@ function buildDeps(input: {
       }
       input.events.push(row);
     },
-    runWithProviderRetry: async (_config: unknown, fn: () => Promise<unknown>) => fn(),
+    runWithProviderRetry: input.runWithProviderRetryImpl || (async (_config: unknown, fn: () => Promise<unknown>) => fn()),
     providerRetryDefaults: {
       transcriptAttempts: 1,
       transcriptTimeoutMs: 2000,
@@ -186,6 +191,61 @@ function buildDeps(input: {
 }
 
 describe('youtubeBlueprintPipeline transcript pruning', () => {
+  it('uses interactive provider retry budgets for interactive pipeline runs', async () => {
+    const originalInteractiveLlmAttempts = process.env.INTERACTIVE_LLM_MAX_ATTEMPTS;
+    const originalInteractiveLlmTimeoutMs = process.env.INTERACTIVE_LLM_TIMEOUT_MS;
+    process.env.INTERACTIVE_LLM_MAX_ATTEMPTS = '1';
+    process.env.INTERACTIVE_LLM_TIMEOUT_MS = '45000';
+
+    try {
+      const events: EventRow[] = [];
+      const pass1Transcripts: string[] = [];
+      const pass2Transcripts: string[] = [];
+      const pass1PromptTemplatePaths: string[] = [];
+      const seenOptions: ProviderRetryOptions[] = [];
+      const service = createYouTubeBlueprintPipelineService(buildDeps({
+        transcriptText: 'one two three four five six seven eight nine ten',
+        pruningConfig: {
+          enabled: false,
+          budgetChars: 4500,
+          thresholds: [4500, 9000],
+          windows: [1, 4],
+        },
+        events,
+        pass1Transcripts,
+        pass2Transcripts,
+        pass1PromptTemplatePaths,
+        runWithProviderRetryImpl: async (options, fn) => {
+          seenOptions.push(options);
+          return fn();
+        },
+      }));
+
+      await service.runYouTubePipeline({
+        runId: 'run-interactive-budgets',
+        videoId: 'video123',
+        videoUrl: 'https://youtube.com/watch?v=video123',
+        videoTitle: 'Video',
+        durationSeconds: 60,
+        generateReview: false,
+        generateBanner: false,
+        authToken: '',
+        requestClass: 'interactive',
+      });
+
+      const generationCall = seenOptions.find((row) => row.providerKey === 'llm_generate_blueprint');
+      expect(generationCall).toMatchObject({
+        maxAttempts: 1,
+        timeoutMs: 2000,
+      });
+    } finally {
+      if (originalInteractiveLlmAttempts == null) delete process.env.INTERACTIVE_LLM_MAX_ATTEMPTS;
+      else process.env.INTERACTIVE_LLM_MAX_ATTEMPTS = originalInteractiveLlmAttempts;
+      if (originalInteractiveLlmTimeoutMs == null) delete process.env.INTERACTIVE_LLM_TIMEOUT_MS;
+      else process.env.INTERACTIVE_LLM_TIMEOUT_MS = originalInteractiveLlmTimeoutMs;
+    }
+  });
+
   it('clamps takeaways by dropping trailing bullets until budget is met', () => {
     const notes = [
       '- one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twentyone twentytwo twentythree twentyfour twentyfive twentysix twentyseven twentyeight twentynine thirty',

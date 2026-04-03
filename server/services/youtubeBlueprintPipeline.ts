@@ -3,6 +3,7 @@ import type {
   GenerationPromptEvent,
 } from '../llm/types';
 import type { GenerationTier } from './generationTierAccess';
+import { resolveProviderRetryDefaultsForRequestClass } from './providerResilience';
 import {
   buildLegacyDraftStepsFromBlueprintSections,
   type BlueprintSectionsV1,
@@ -296,6 +297,88 @@ async function runYouTubePipeline(input: {
   onBeforeFirstModelDispatch?: () => Promise<void>;
 }) {
   const startedAt = Date.now();
+  const requestClass = input.requestClass === 'interactive' ? 'interactive' : 'background';
+  const effectiveProviderRetryDefaults = resolveProviderRetryDefaultsForRequestClass(
+    requestClass,
+    providerRetryDefaults,
+  );
+  const stageTimings = {
+    duration_policy_ms: null as number | null,
+    transcript_fetch_ms: null as number | null,
+    llm_generate_first_ms: null as number | null,
+    llm_generate_total_ms: 0,
+    quality_judge_total_ms: 0,
+    content_safety_total_ms: 0,
+    review_ms: null as number | null,
+    banner_ms: null as number | null,
+    total_ms: null as number | null,
+  };
+  const parseNonNegativeInt = (raw: unknown, fallback: number, max: number) => {
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.max(0, Math.min(max, Math.floor(parsed)));
+  };
+  const resolveInteractiveRetryBudget = (
+    baseBudget: number,
+    envKey: string,
+    fallback: number,
+    max: number,
+  ) => requestClass === 'interactive'
+    ? Math.min(baseBudget, parseNonNegativeInt(process.env[envKey], Math.min(baseBudget, fallback), max))
+    : baseBudget;
+  const runTimedProviderRetry = async <T>(inputTimed: {
+    providerKey: string;
+    maxAttempts: number;
+    timeoutMs: number;
+    baseDelayMs: number;
+    jitterMs: number;
+    timingKey: keyof typeof stageTimings;
+    trackFirstGeneration?: boolean;
+    task: () => Promise<T>;
+  }) => {
+    const stageStartedAt = Date.now();
+    try {
+      return await runWithProviderRetry(
+        {
+          providerKey: inputTimed.providerKey,
+          db: serviceDb,
+          maxAttempts: inputTimed.maxAttempts,
+          timeoutMs: inputTimed.timeoutMs,
+          baseDelayMs: inputTimed.baseDelayMs,
+          jitterMs: inputTimed.jitterMs,
+        },
+        async () => inputTimed.task(),
+      );
+    } finally {
+      const durationMs = Date.now() - stageStartedAt;
+      const current = stageTimings[inputTimed.timingKey];
+      if (typeof current === 'number') {
+        stageTimings[inputTimed.timingKey] = current + durationMs;
+      } else {
+        stageTimings[inputTimed.timingKey] = durationMs as never;
+      }
+      if (inputTimed.trackFirstGeneration && stageTimings.llm_generate_first_ms == null) {
+        stageTimings.llm_generate_first_ms = durationMs;
+      }
+    }
+  };
+  const logStageTimings = (outcome: 'succeeded' | 'failed', errorCode?: string | null) => {
+    stageTimings.total_ms = Date.now() - startedAt;
+    console.log('[yt2bp_stage_timing]', JSON.stringify({
+      run_id: input.runId,
+      video_id: input.videoId,
+      request_class: requestClass,
+      outcome,
+      error_code: errorCode || null,
+      retry_profile: {
+        transcript_attempts: effectiveProviderRetryDefaults.transcriptAttempts,
+        transcript_timeout_ms: effectiveProviderRetryDefaults.transcriptTimeoutMs,
+        llm_attempts: effectiveProviderRetryDefaults.llmAttempts,
+        llm_timeout_ms: effectiveProviderRetryDefaults.llmTimeoutMs,
+      },
+      stage_timings: stageTimings,
+    }));
+  };
   const normalizeBlueprintTitle = (raw: unknown) => {
     const cleaned = String(raw || '')
       .replace(/[\u200B-\u200D\uFEFF]/g, '')
@@ -365,12 +448,14 @@ async function runYouTubePipeline(input: {
   }
 
   try {
+    const durationPolicyStartedAt = Date.now();
     const resolvedDurationSeconds = await enforceVideoDurationPolicy({
       videoId: input.videoId,
       videoTitle: null,
       durationSeconds: input.durationSeconds ?? null,
       userAgent: 'bleuv1-youtube-pipeline/1.0 (+https://api.bleup.app)',
     });
+    stageTimings.duration_policy_ms = Date.now() - durationPolicyStartedAt;
     if (traceContext.db && traceContext.userId) {
       await safeGenerationTraceWrite({
         runId: input.runId,
@@ -387,11 +472,12 @@ async function runYouTubePipeline(input: {
         },
       });
     }
-    const requestClass = input.requestClass === 'interactive' ? 'interactive' : 'background';
+    const transcriptFetchStartedAt = Date.now();
     const transcript = await getTranscriptForVideo(input.videoId, {
       requestClass,
       reason: 'pipeline_transcript_fetch',
     });
+    stageTimings.transcript_fetch_ms = Date.now() - transcriptFetchStartedAt;
     const rawTranscriptText = String(transcript.text || '').trim();
     const transcriptPruning = pruneTranscriptForGeneration({
       transcriptText: rawTranscriptText,
@@ -614,8 +700,21 @@ async function runYouTubePipeline(input: {
     };
     const qualityConfig = readYt2bpQualityConfig();
     const contentSafetyConfig = readYt2bpContentSafetyConfig();
-    const qualityAttempts = qualityConfig.enabled ? 1 + qualityConfig.retry_policy.max_retries : 1;
-    const safetyRetryBudget = contentSafetyConfig.enabled ? contentSafetyConfig.retry_policy.max_retries : 0;
+    const qualityJudgeRetryBudgetBase = qualityConfig.enabled ? qualityConfig.retry_policy.max_retries : 0;
+    const qualityJudgeRetryBudget = resolveInteractiveRetryBudget(
+      qualityJudgeRetryBudgetBase,
+      'INTERACTIVE_YT2BP_QUALITY_MAX_RETRIES',
+      0,
+      3,
+    );
+    const qualityAttempts = qualityConfig.enabled ? 1 + qualityJudgeRetryBudget : 1;
+    const safetyRetryBudgetBase = contentSafetyConfig.enabled ? contentSafetyConfig.retry_policy.max_retries : 0;
+    const safetyRetryBudget = resolveInteractiveRetryBudget(
+      safetyRetryBudgetBase,
+      'INTERACTIVE_YT2BP_CONTENT_SAFETY_MAX_RETRIES',
+      0,
+      3,
+    );
   const generationTrace = {
     trace_version: traceContext.traceVersion,
     run_id: input.runId,
@@ -628,6 +727,17 @@ async function runYouTubePipeline(input: {
       confidence: transcript.confidence,
       pruning: transcriptPruning?.meta || null,
     },
+    request_class: requestClass,
+    retry_profile: {
+      transcript_attempts: effectiveProviderRetryDefaults.transcriptAttempts,
+      transcript_timeout_ms: effectiveProviderRetryDefaults.transcriptTimeoutMs,
+      llm_attempts: effectiveProviderRetryDefaults.llmAttempts,
+      llm_timeout_ms: effectiveProviderRetryDefaults.llmTimeoutMs,
+      quality_judge_retry_budget: qualityJudgeRetryBudget,
+      content_safety_retry_budget: safetyRetryBudget,
+      postprocess_retry_budget: 0 as number,
+    },
+    stage_timings: stageTimings,
     summary_variants: {
       default_chars: null as number | null,
       eli5_chars: null as number | null,
@@ -870,16 +980,15 @@ async function runYouTubePipeline(input: {
     while (attemptRunCount < maxRunsForAttempt) {
       attemptRunCount += 1;
       const globalRunIndex = (attempt - 1) * maxRunsForAttempt + attemptRunCount;
-      const rawDraft = await runWithProviderRetry(
-        {
-          providerKey: 'llm_generate_blueprint',
-          db: serviceDb,
-          maxAttempts: providerRetryDefaults.llmAttempts,
-          timeoutMs: providerRetryDefaults.llmTimeoutMs,
-          baseDelayMs: 300,
-          jitterMs: 200,
-        },
-        async () => {
+      const rawDraft = await runTimedProviderRetry({
+        providerKey: 'llm_generate_blueprint',
+        maxAttempts: effectiveProviderRetryDefaults.llmAttempts,
+        timeoutMs: effectiveProviderRetryDefaults.llmTimeoutMs,
+        baseDelayMs: 300,
+        jitterMs: 200,
+        timingKey: 'llm_generate_total_ms',
+        trackFirstGeneration: true,
+        task: async () => {
           await notifyBeforeFirstModelDispatch();
           return client.generateYouTubeBlueprint({
             videoUrl: input.videoUrl,
@@ -894,7 +1003,7 @@ async function runYouTubePipeline(input: {
             generationProfile: input.generationModelProfile,
           });
         },
-      );
+      });
       await captureRawOutputEvent({
         rawResponse: rawDraft?.raw_response,
         attempt,
@@ -955,17 +1064,15 @@ async function runYouTubePipeline(input: {
         break;
       }
       try {
-        const graded = await runWithProviderRetry(
-          {
-            providerKey: 'llm_quality_judge',
-            db: serviceDb,
-            maxAttempts: providerRetryDefaults.llmAttempts,
-            timeoutMs: providerRetryDefaults.llmTimeoutMs,
-            baseDelayMs: 250,
-            jitterMs: 200,
-          },
-          async () => scoreYt2bpQuality(draft, qualityConfig, normalizedGenerationTier),
-        );
+        const graded = await runTimedProviderRetry({
+          providerKey: 'llm_quality_judge',
+          maxAttempts: effectiveProviderRetryDefaults.llmAttempts,
+          timeoutMs: effectiveProviderRetryDefaults.llmTimeoutMs,
+          baseDelayMs: 250,
+          jitterMs: 200,
+          timingKey: 'quality_judge_total_ms',
+          task: async () => scoreYt2bpQuality(draft, qualityConfig, normalizedGenerationTier),
+        });
         const failIds = graded.failures.join(',') || 'none';
         generationTrace.quality_judge_runs.push({
           attempt,
@@ -1008,17 +1115,15 @@ async function runYouTubePipeline(input: {
 
         let safetyPassed = !contentSafetyConfig.enabled;
         if (contentSafetyConfig.enabled) {
-          const safetyScore = await runWithProviderRetry(
-            {
-              providerKey: 'llm_safety_judge',
-              db: serviceDb,
-              maxAttempts: providerRetryDefaults.llmAttempts,
-              timeoutMs: providerRetryDefaults.llmTimeoutMs,
-              baseDelayMs: 250,
-              jitterMs: 200,
-            },
-            async () => scoreYt2bpContentSafety(draft, contentSafetyConfig, normalizedGenerationTier),
-          );
+          const safetyScore = await runTimedProviderRetry({
+            providerKey: 'llm_safety_judge',
+            maxAttempts: effectiveProviderRetryDefaults.llmAttempts,
+            timeoutMs: effectiveProviderRetryDefaults.llmTimeoutMs,
+            baseDelayMs: 250,
+            jitterMs: 200,
+            timingKey: 'content_safety_total_ms',
+            task: async () => scoreYt2bpContentSafety(draft, contentSafetyConfig, normalizedGenerationTier),
+          });
           const flagged = safetyScore.failedCriteria.join(',') || 'none';
           generationTrace.content_safety_runs.push({
             attempt,
@@ -1156,7 +1261,14 @@ async function runYouTubePipeline(input: {
     tags: (draft.tags || []).map((tag) => String(tag || '').trim()).filter(Boolean).slice(0, 5),
   };
   const useDeterministicPostProcessing = yt2bpOutputMode === 'deterministic';
-  const qualityRetryBudget = Math.min(2, Math.max(0, Math.floor(Number(GOLDEN_QUALITY_MAX_RETRIES) || 0)));
+  const qualityRetryBudgetBase = Math.min(2, Math.max(0, Math.floor(Number(GOLDEN_QUALITY_MAX_RETRIES) || 0)));
+  const qualityRetryBudget = resolveInteractiveRetryBudget(
+    qualityRetryBudgetBase,
+    'INTERACTIVE_YT2BP_QUALITY_MAX_RETRIES',
+    0,
+    2,
+  );
+  generationTrace.retry_profile.postprocess_retry_budget = qualityRetryBudget;
   const qualityAttemptBudget = 1 + qualityRetryBudget;
   let qualityRetriesUsed = 0;
   let qualityFinalMode: 'direct' | 'retry_pass' | 'repaired_after_retry' | 'llm_native_direct' | 'terminal_publish_anyway' = useDeterministicPostProcessing
@@ -1264,16 +1376,14 @@ async function runYouTubePipeline(input: {
         previousOutput,
       });
 
-      const retryRawDraft = await runWithProviderRetry(
-        {
-          providerKey: 'llm_generate_blueprint',
-          db: serviceDb,
-          maxAttempts: providerRetryDefaults.llmAttempts,
-          timeoutMs: providerRetryDefaults.llmTimeoutMs,
-          baseDelayMs: 300,
-          jitterMs: 200,
-        },
-        async () => {
+      const retryRawDraft = await runTimedProviderRetry({
+        providerKey: 'llm_generate_blueprint',
+        maxAttempts: effectiveProviderRetryDefaults.llmAttempts,
+        timeoutMs: effectiveProviderRetryDefaults.llmTimeoutMs,
+        baseDelayMs: 300,
+        jitterMs: 200,
+        timingKey: 'llm_generate_total_ms',
+        task: async () => {
           await notifyBeforeFirstModelDispatch();
           return client.generateYouTubeBlueprint({
             videoUrl: input.videoUrl,
@@ -1290,7 +1400,7 @@ async function runYouTubePipeline(input: {
             generationProfile: input.generationModelProfile,
           });
         },
-      );
+      });
       await captureRawOutputEvent({
         rawResponse: retryRawDraft?.raw_response,
         attempt: retryAttempt,
@@ -1542,16 +1652,14 @@ Keep section bullets concise:
 - Takeaways: if the bullets drift into dense analyst-style compression or become too long to skim, treat that as a quality miss and rewrite them more simply.
 - Storyline: 2-3 substantial paragraphs/slides. Avoid thin one-liners or fragmented slide stacks.`;
 
-      const retryRawDraft = await runWithProviderRetry(
-        {
-          providerKey: 'llm_generate_blueprint',
-          db: serviceDb,
-          maxAttempts: providerRetryDefaults.llmAttempts,
-          timeoutMs: providerRetryDefaults.llmTimeoutMs,
-          baseDelayMs: 300,
-          jitterMs: 200,
-        },
-        async () => {
+      const retryRawDraft = await runTimedProviderRetry({
+        providerKey: 'llm_generate_blueprint',
+        maxAttempts: effectiveProviderRetryDefaults.llmAttempts,
+        timeoutMs: effectiveProviderRetryDefaults.llmTimeoutMs,
+        baseDelayMs: 300,
+        jitterMs: 200,
+        timingKey: 'llm_generate_total_ms',
+        task: async () => {
           await notifyBeforeFirstModelDispatch();
           return client.generateYouTubeBlueprint({
             videoUrl: input.videoUrl,
@@ -1567,7 +1675,7 @@ Keep section bullets concise:
             generationProfile: input.generationModelProfile,
           });
         },
-      );
+      });
       await captureRawOutputEvent({
         rawResponse: retryRawDraft?.raw_response,
         attempt: retryAttempt,
@@ -1757,16 +1865,14 @@ Keep section bullets concise:
     const selectedItems = {
       transcript: draft.steps.map((step) => ({ name: step.name, context: step.timestamp || undefined })),
     };
-    reviewSummary = await runWithProviderRetry(
-      {
-        providerKey: 'llm_review',
-        db: serviceDb,
-        maxAttempts: providerRetryDefaults.llmAttempts,
-        timeoutMs: providerRetryDefaults.llmTimeoutMs,
-        baseDelayMs: 300,
-        jitterMs: 200,
-      },
-      async () => client.analyzeBlueprint({
+    reviewSummary = await runTimedProviderRetry({
+      providerKey: 'llm_review',
+      maxAttempts: effectiveProviderRetryDefaults.llmAttempts,
+      timeoutMs: effectiveProviderRetryDefaults.llmTimeoutMs,
+      baseDelayMs: 300,
+      jitterMs: 200,
+      timingKey: 'review_ms',
+      task: async () => client.analyzeBlueprint({
         title: draft.title,
         inventoryTitle: 'YouTube transcript',
         selectedItems,
@@ -1775,26 +1881,24 @@ Keep section bullets concise:
         reviewSections: ['Overview', 'Strengths', 'Suggestions'],
         includeScore: true,
       }),
-    );
+    });
   }
 
   let bannerUrl: string | null = null;
   if (input.generateBanner && input.authToken && supabaseUrl) {
-    const banner = await runWithProviderRetry(
-      {
-        providerKey: 'llm_banner',
-        db: serviceDb,
-        maxAttempts: providerRetryDefaults.llmAttempts,
-        timeoutMs: providerRetryDefaults.llmTimeoutMs,
-        baseDelayMs: 300,
-        jitterMs: 200,
-      },
-      async () => client.generateBanner({
+    const banner = await runTimedProviderRetry({
+      providerKey: 'llm_banner',
+      maxAttempts: effectiveProviderRetryDefaults.llmAttempts,
+      timeoutMs: effectiveProviderRetryDefaults.llmTimeoutMs,
+      baseDelayMs: 300,
+      jitterMs: 200,
+      timingKey: 'banner_ms',
+      task: async () => client.generateBanner({
         title: draft.title,
         inventoryTitle: 'YouTube transcript',
         tags: draft.tags,
       }),
-    );
+    });
     bannerUrl = await uploadBannerToSupabase(banner.buffer.toString('base64'), banner.mimeType, input.authToken);
   }
 
@@ -1803,6 +1907,7 @@ Keep section bullets concise:
       eli5_chars: draft.summaryVariants.eli5.length,
     };
 
+    logStageTimings('succeeded');
     if (traceContext.db && traceContext.userId) {
       await safeGenerationTraceWrite({
         runId: input.runId,
@@ -1860,6 +1965,7 @@ Keep section bullets concise:
         generation_tier: normalizedGenerationTier,
         generation_model_primary: input.generationModelProfile?.model || traceContext.modelPrimary || null,
         bp_trace_version: generationTrace.trace_version,
+        request_class: requestClass,
         bp_trace: generationTrace,
         duration_ms: Date.now() - startedAt,
       },
@@ -1867,6 +1973,7 @@ Keep section bullets concise:
   } catch (error) {
     if (traceContext.db && traceContext.userId) {
       const failure = mapPipelineError(error);
+      logStageTimings('failed', failure?.error_code || 'GENERATION_FAIL');
       await safeGenerationTraceWrite({
         runId: input.runId,
         op: 'event_pipeline_failed',
@@ -1894,9 +2001,13 @@ Keep section bullets concise:
           run_id: input.runId,
           video_id: input.videoId,
           source_tag: traceContext.sourceTag || 'unknown',
+          request_class: requestClass,
+          stage_timings: stageTimings,
           duration_ms: Date.now() - startedAt,
         },
       });
+    } else {
+      logStageTimings('failed', mapPipelineError(error)?.error_code || 'GENERATION_FAIL');
     }
     throw error;
   }

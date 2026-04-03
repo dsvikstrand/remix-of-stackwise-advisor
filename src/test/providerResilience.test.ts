@@ -1,8 +1,48 @@
-import { describe, expect, it } from 'vitest';
-import { runWithProviderRetry } from '../../server/services/providerResilience';
+import { afterEach, describe, expect, it } from 'vitest';
+import {
+  resolveProviderRetryDefaultsForRequestClass,
+  runWithProviderRetry,
+} from '../../server/services/providerResilience';
 import { TranscriptProviderError } from '../../server/transcript/types';
 
+const originalInteractiveTranscriptAttempts = process.env.INTERACTIVE_TRANSCRIPT_MAX_ATTEMPTS;
+const originalInteractiveTranscriptTimeoutMs = process.env.INTERACTIVE_TRANSCRIPT_TIMEOUT_MS;
+const originalInteractiveLlmAttempts = process.env.INTERACTIVE_LLM_MAX_ATTEMPTS;
+const originalInteractiveLlmTimeoutMs = process.env.INTERACTIVE_LLM_TIMEOUT_MS;
+
+afterEach(() => {
+  if (originalInteractiveTranscriptAttempts == null) delete process.env.INTERACTIVE_TRANSCRIPT_MAX_ATTEMPTS;
+  else process.env.INTERACTIVE_TRANSCRIPT_MAX_ATTEMPTS = originalInteractiveTranscriptAttempts;
+  if (originalInteractiveTranscriptTimeoutMs == null) delete process.env.INTERACTIVE_TRANSCRIPT_TIMEOUT_MS;
+  else process.env.INTERACTIVE_TRANSCRIPT_TIMEOUT_MS = originalInteractiveTranscriptTimeoutMs;
+  if (originalInteractiveLlmAttempts == null) delete process.env.INTERACTIVE_LLM_MAX_ATTEMPTS;
+  else process.env.INTERACTIVE_LLM_MAX_ATTEMPTS = originalInteractiveLlmAttempts;
+  if (originalInteractiveLlmTimeoutMs == null) delete process.env.INTERACTIVE_LLM_TIMEOUT_MS;
+  else process.env.INTERACTIVE_LLM_TIMEOUT_MS = originalInteractiveLlmTimeoutMs;
+});
+
 describe('providerResilience', () => {
+  it('caps interactive retry defaults below the background profile', () => {
+    process.env.INTERACTIVE_TRANSCRIPT_MAX_ATTEMPTS = '1';
+    process.env.INTERACTIVE_TRANSCRIPT_TIMEOUT_MS = '15000';
+    process.env.INTERACTIVE_LLM_MAX_ATTEMPTS = '1';
+    process.env.INTERACTIVE_LLM_TIMEOUT_MS = '45000';
+
+    const result = resolveProviderRetryDefaultsForRequestClass('interactive', {
+      transcriptAttempts: 3,
+      transcriptTimeoutMs: 25000,
+      llmAttempts: 2,
+      llmTimeoutMs: 60000,
+    });
+
+    expect(result).toEqual({
+      transcriptAttempts: 1,
+      transcriptTimeoutMs: 15000,
+      llmAttempts: 1,
+      llmTimeoutMs: 45000,
+    });
+  });
+
   it('retries plain fetch failed transport errors', async () => {
     let attempts = 0;
 

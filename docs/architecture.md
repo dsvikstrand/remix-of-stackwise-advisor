@@ -66,6 +66,7 @@
     - the default one-step prompt template is `docs/golden_blueprint/golden_bp_prompt_contract_one_step_v5.md`; it keeps the same schema, uses the existing `open_questions` field for a human-facing `Caveats` section, retunes `Takeaways` toward lighter plain-English skim value, and requires `Storyline` to stay `2-3` substantial paragraphs/slides.
     - display/render surfaces now label that final section as `Caveats`, while runtime/storage keys stay `open_questions` and legacy `Open Questions` titles remain parse-compatible.
     - in `llm_native` mode, retry-driving quality gates now stay limited to blocking structure/shape misses; soft issues like `TAKEAWAYS_TOO_LONG` are still logged but do not cause regeneration by themselves.
+    - queued manual generation now preserves interactive request class through the worker path, so search/manual/source-page generation can use tighter transcript/LLM retry budgets than background ingestion and emit additive `yt2bp_stage_timing` logs for duration policy, transcript fetch, first/total LLM generation, quality, safety, review, banner, and total runtime.
     - `draft.steps`, `draft.summaryVariants`, and `draft.notes` are compatibility carryovers during the contract cutover and should not be treated as equal current-runtime blueprint shapes.
     - YouTube-source banners are thumbnail-first (`source_items.thumbnail_url` with deterministic `ytimg` fallback), not generated-banner-first.
     - banner prompt path is constrained to visual-only output (no readable text/typography/logos/watermarks).

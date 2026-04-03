@@ -258,7 +258,11 @@ import {
 import type { BlueprintSectionsV1 } from './services/blueprintSections';
 import { evaluateLlmNativeGate, normalizeSummaryVariantText } from './services/llmNativeQualityGate';
 import { ProviderCircuitOpenError, getProviderCircuitSnapshot } from './services/providerCircuit';
-import { getProviderRetryDefaults, runWithProviderRetry } from './services/providerResilience';
+import {
+  getProviderRetryDefaults,
+  resolveProviderRetryDefaultsForRequestClass,
+  runWithProviderRetry,
+} from './services/providerResilience';
 import { createTranscriptThrottle, type TranscriptRequestClass } from './services/transcriptThrottle';
 import { createTranscriptFetchWithCacheBypass } from './services/transcriptFetchWithCacheBypass';
 import { createCodexLane } from './services/codexLane';
@@ -861,6 +865,10 @@ const autoChannelLegacyManualFlowEnabledRaw = String(process.env.AUTO_CHANNEL_LE
 const autoChannelLegacyManualFlowEnabled = !(autoChannelLegacyManualFlowEnabledRaw === 'false' || autoChannelLegacyManualFlowEnabledRaw === '0' || autoChannelLegacyManualFlowEnabledRaw === 'off');
 const autoChannelGateMode = normalizeGateMode(process.env.AUTO_CHANNEL_GATE_MODE, 'enforce');
 const providerRetryDefaults = getProviderRetryDefaults();
+const pipelineProviderRetryDefaults = {
+  ...providerRetryDefaults,
+  transcriptTimeoutMs: resolveTranscriptOperationTimeoutMs(providerRetryDefaults.transcriptTimeoutMs),
+};
 const transcriptThrottleEnabledRaw = String(process.env.TRANSCRIPT_THROTTLE_ENABLED || 'false').trim().toLowerCase();
 const transcriptThrottleEnabled = (
   transcriptThrottleEnabledRaw === 'true'
@@ -10807,6 +10815,7 @@ async function processSearchVideoGenerateJob(input: {
           subscriptionId: null,
           jobId: input.jobId,
           generationTier,
+          requestClass: 'interactive',
           onBeforeFirstModelDispatch: settleReservationOnce,
         });
       } catch (primaryError) {
@@ -11117,6 +11126,7 @@ async function processManualRefreshGenerateJob(input: {
           subscriptionId: subscription.id,
           jobId: input.jobId,
           generationTier,
+          requestClass: 'interactive',
           onBeforeFirstModelDispatch: settleReservationOnce,
         });
       } catch (primaryError) {
@@ -11370,6 +11380,7 @@ async function processSourcePageVideoLibraryJob(input: {
         sourceItemId: source.id,
         subscriptionId: null,
         jobId: input.jobId,
+        requestClass: 'interactive',
       });
 
       const insertedItem = await insertFeedItem(db, {
@@ -11717,6 +11728,7 @@ async function processSourceItemUnlockGenerationJob(input: {
           subscriptionId: null,
           jobId: input.jobId,
           generationTier: itemGenerationTier,
+          requestClass: 'interactive',
           onBeforeFirstModelDispatch: autoIntentId ? settleAutoIntentOnce : undefined,
         });
       } catch (primaryError) {
@@ -14911,15 +14923,24 @@ async function getTranscriptForVideoWithThrottle(
     reason?: string;
   },
 ) {
+  const requestClass = options?.requestClass === 'interactive' ? 'interactive' : 'background';
+  const effectiveRetryDefaults = resolveProviderRetryDefaultsForRequestClass(
+    requestClass,
+    pipelineProviderRetryDefaults,
+  );
   return runTranscriptTaskWithThrottle(
     {
-      requestClass: options?.requestClass,
+      requestClass,
       reason: options?.reason || 'pipeline_transcript_fetch',
       videoId,
     },
     () => getTranscriptForVideo(videoId, {
       db: getServiceSupabaseClient(),
       enableFallback: true,
+      retryDefaultsOverride: {
+        transcriptAttempts: effectiveRetryDefaults.transcriptAttempts,
+        transcriptTimeoutMs: effectiveRetryDefaults.transcriptTimeoutMs,
+      },
     }),
   );
 }
@@ -15075,10 +15096,7 @@ const youtubeBlueprintPipelineService = createYouTubeBlueprintPipelineService({
   startGenerationRun,
   appendGenerationEvent,
   runWithProviderRetry,
-  providerRetryDefaults: {
-    ...providerRetryDefaults,
-    transcriptTimeoutMs: resolveTranscriptOperationTimeoutMs(providerRetryDefaults.transcriptTimeoutMs),
-  },
+  providerRetryDefaults: pipelineProviderRetryDefaults,
   getTranscriptForVideo: getTranscriptForVideoWithCacheBypass,
   createYouTubeGenerationLLMClient,
   updateGenerationModelInfo,
