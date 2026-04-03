@@ -243,6 +243,7 @@
     - `transcript_requests` remains in migration history because the linked Supabase project already contains earlier Oracle/Paperspace bridge experiments.
     - current YT2BP transcript-provider runtime does not read or write `transcript_requests`; the active launch path still runs through the existing provider seam plus `youtube_transcript_cache`.
   - notifications foundation: `notifications` table with owner-read/update RLS and dedupe key support (`user_id + dedupe_key`).
+    - `generation_started` rows now dedupe by `generation_started:<scope>:<jobId>` only; cross-job scope-window coalescing is not part of the live contract.
   - installed-PWA push extension:
     - `notification_push_subscriptions` stores active browser/device subscription endpoints per user
     - `notification_push_dispatch_queue` derives push delivery from `notifications` rows for eligible event types

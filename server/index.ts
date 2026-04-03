@@ -11224,37 +11224,6 @@ async function emitGenerationStartedNotification(
   if (queuedCount <= 0) return;
 
   try {
-    const noisyWindowMs = 30_000;
-    const { data: latestUnread, error: latestUnreadError } = await db
-      .from('notifications')
-      .select('id, created_at, metadata')
-      .eq('user_id', params.userId)
-      .eq('type', 'generation_started')
-      .eq('is_read', false)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (!latestUnreadError && latestUnread) {
-      const createdAtMs = Date.parse(String(latestUnread.created_at || ''));
-      const scope = latestUnread.metadata && typeof latestUnread.metadata === 'object'
-        ? String((latestUnread.metadata as Record<string, unknown>).scope || '').trim()
-        : '';
-      if (
-        Number.isFinite(createdAtMs)
-        && Date.now() - createdAtMs <= noisyWindowMs
-        && scope === params.scope
-      ) {
-        console.log('[notification_generation_started_skipped]', JSON.stringify({
-          user_id: params.userId,
-          job_id: params.jobId,
-          scope: params.scope,
-          reason: 'scope_coalesce_window',
-          noisy_window_ms: noisyWindowMs,
-        }));
-        return;
-      }
-    }
-
     await createNotificationFromEvent(db, {
       kind: 'generation_started',
       userId: params.userId,

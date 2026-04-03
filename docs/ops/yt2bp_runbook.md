@@ -162,6 +162,7 @@
     - `POST /api/notifications/push-subscriptions`
     - `DELETE /api/notifications/push-subscriptions`
     - emitted event families: `comment_reply`, `generation_succeeded`, `generation_failed`.
+    - `generation_started` should now appear once per queued job; if rapid multi-job enqueue only shows one start item while completions appear per job, treat that as a regression.
     - terminal unlock-generation failures now emit `generation_failed` from actual failed item counts, even when transcript/provider retry policy still treats the underlying outage as retryable.
   - Search-page video behavior:
     - `/search` video mode is now single-video lookup, not broad paginated discovery.

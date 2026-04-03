@@ -405,6 +405,7 @@ si65) auth endpoint: `GET /api/notifications?limit=<1..50>&cursor=<opaque?>` ret
 si66) auth endpoint: `POST /api/notifications/:id/read` marks one notification read.
 si67) auth endpoint: `POST /api/notifications/read-all` marks all unread notifications read.
 si68) comment reply notifications are produced by DB trigger on `wall_comments` reply inserts (self-replies ignored; dedupe key is `comment_reply:<reply_comment_id>`).
+si68a) `generation_started` inbox notifications now emit per queued job again; distinct rapid-fire jobs should each surface a start item, while duplicate emits for the same `jobId` still dedupe safely.
 si69) auth endpoints: `GET /api/notifications/push-subscriptions/config`, `POST /api/notifications/push-subscriptions`, and `DELETE /api/notifications/push-subscriptions` manage installed-PWA browser push opt-in and subscription lifecycle.
 si70) installed-PWA push delivery is derived from the existing `notifications` table via a push-dispatch queue; it is not a separate notification product.
 si69) generation surfaces are gated by the daily credit wallet (`free=3.00`, `plus=20.00`, reset `00:00 UTC`, no rollover); manual routes queue only the affordable new-item prefix and return launch-safe credit denial/skip copy.
