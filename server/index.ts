@@ -160,6 +160,25 @@ import {
   upsertOracleSourceItemLedgerRow,
 } from './services/oracleSourceItemLedgerState';
 import {
+  attachOracleBlueprintToGenerationRun,
+  claimOracleGenerationVariantForGeneration,
+  finalizeOracleGenerationRunFailure,
+  finalizeOracleGenerationRunSuccess,
+  findOracleGenerationVariantsByBlueprintId,
+  getOracleGenerationRunByRunId,
+  getOracleLatestGenerationRunByBlueprintId,
+  listOracleFailedGenerationRunsByVideoId,
+  listOracleGenerationVariantsForSourceItem,
+  markOracleGenerationVariantFailed,
+  markOracleGenerationVariantReady,
+  resolveOracleGenerationVariantOrReady,
+  startOracleGenerationRun,
+  syncOracleGenerationStateFromSupabase,
+  updateOracleGenerationRunModelInfo,
+  upsertOracleGenerationRunRow,
+  upsertOracleGenerationVariantRow,
+} from './services/oracleGenerationState';
+import {
   normalizeIsoOrNull,
   normalizeObject,
   normalizeRequiredIso,
@@ -298,14 +317,14 @@ import {
 } from './services/notificationPush';
 import {
   appendGenerationEvent,
-  attachBlueprintToRun,
-  finalizeGenerationRunFailure,
-  finalizeGenerationRunSuccess,
-  getGenerationRunByRunId,
-  getLatestGenerationRunByBlueprintId,
+  attachBlueprintToRun as attachBlueprintToRunSupabase,
+  finalizeGenerationRunFailure as finalizeGenerationRunFailureSupabase,
+  finalizeGenerationRunSuccess as finalizeGenerationRunSuccessSupabase,
+  getGenerationRunByRunId as getGenerationRunByRunIdSupabase,
+  getLatestGenerationRunByBlueprintId as getLatestGenerationRunByBlueprintIdSupabase,
   listGenerationRunEvents,
-  startGenerationRun,
-  updateGenerationModelInfo,
+  startGenerationRun as startGenerationRunSupabase,
+  updateGenerationModelInfo as updateGenerationModelInfoSupabase,
 } from './services/generationTrace';
 import {
   clampInt,
@@ -690,6 +709,12 @@ const oracleSourceItemLedgerMode = (
 )
   ? oracleControlPlaneConfig.sourceItemLedgerMode
   : 'supabase';
+const oracleGenerationStateMode = (
+  oracleControlPlaneConfig.enabled
+  && oracleControlPlane
+)
+  ? oracleControlPlaneConfig.generationStateMode
+  : 'supabase';
 const oracleQueueLedgerEnabled = (
   oracleQueueLedgerMode === 'dual'
   || oracleQueueLedgerMode === 'primary'
@@ -714,6 +739,11 @@ const oracleSourceItemLedgerEnabled = (
   || oracleSourceItemLedgerMode === 'primary'
 );
 const oracleSourceItemLedgerPrimaryEnabled = oracleSourceItemLedgerMode === 'primary';
+const oracleGenerationStateEnabled = (
+  oracleGenerationStateMode === 'dual'
+  || oracleGenerationStateMode === 'primary'
+);
+const oracleGenerationStatePrimaryEnabled = oracleGenerationStateMode === 'primary';
 const oracleQueueSweepControlEnabled = (
   oracleControlPlaneConfig.enabled
   && oracleControlPlaneConfig.queueSweepControlEnabled
@@ -4704,6 +4734,9 @@ async function getBlueprintAvailabilityForVideoOracleFirst(
       last_error_code: String((row as any)?.last_error_code || '').trim() || null,
       last_error_message: String((row as any)?.last_error_message || '').trim() || null,
     })),
+    listFailedGenerationRunsByVideoId: async (videoIdValue) => (
+      await listFailedGenerationRunsByVideoIdOracleFirst(db, videoIdValue)
+    ),
   });
 }
 
@@ -7107,13 +7140,537 @@ const blueprintVariantsService = createBlueprintVariantsService({
   getServiceSupabaseClient,
 });
 const {
-  claimVariantForGeneration,
-  markVariantReady,
-  markVariantFailed,
-  listVariantsForSourceItem,
-  findVariantsByBlueprintId,
-  resolveVariantOrReady,
+  claimVariantForGeneration: claimVariantForGenerationSupabase,
+  markVariantReady: markVariantReadySupabase,
+  markVariantFailed: markVariantFailedSupabase,
+  listVariantsForSourceItem: listVariantsForSourceItemSupabase,
+  findVariantsByBlueprintId: findVariantsByBlueprintIdSupabase,
+  resolveVariantOrReady: resolveVariantOrReadySupabase,
 } = blueprintVariantsService;
+
+function logOracleGenerationStateError(input: {
+  action: string;
+  error: unknown;
+  sourceItemId?: string | null;
+  generationTier?: string | null;
+  runId?: string | null;
+  blueprintId?: string | null;
+  videoId?: string | null;
+}) {
+  console.warn('[oracle-control-plane] generation_state_failed', JSON.stringify({
+    action: input.action,
+    source_item_id: String(input.sourceItemId || '').trim() || null,
+    generation_tier: String(input.generationTier || '').trim() || null,
+    run_id: String(input.runId || '').trim() || null,
+    blueprint_id: String(input.blueprintId || '').trim() || null,
+    video_id: String(input.videoId || '').trim() || null,
+    error: input.error instanceof Error ? input.error.message : String(input.error),
+  }));
+}
+
+function logOracleGenerationStateShadowError(input: {
+  action: string;
+  error: unknown;
+  sourceItemId?: string | null;
+  generationTier?: string | null;
+  runId?: string | null;
+  blueprintId?: string | null;
+  videoId?: string | null;
+}) {
+  console.warn('[oracle-control-plane] generation_state_shadow_failed', JSON.stringify({
+    action: input.action,
+    source_item_id: String(input.sourceItemId || '').trim() || null,
+    generation_tier: String(input.generationTier || '').trim() || null,
+    run_id: String(input.runId || '').trim() || null,
+    blueprint_id: String(input.blueprintId || '').trim() || null,
+    video_id: String(input.videoId || '').trim() || null,
+    error: input.error instanceof Error ? input.error.message : String(input.error),
+  }));
+}
+
+async function resolveVariantOrReady(input: Parameters<typeof resolveVariantOrReadySupabase>[0]) {
+  if (oracleGenerationStateEnabled && oracleControlPlane) {
+    try {
+      const durable = await resolveOracleGenerationVariantOrReady({
+        controlDb: oracleControlPlane,
+        sourceItemId: input.sourceItemId,
+        generationTier: input.generationTier,
+        jobId: input.jobId || null,
+      });
+      if (durable.state !== 'needs_generation' || oracleGenerationStatePrimaryEnabled) {
+        return durable;
+      }
+    } catch (error) {
+      logOracleGenerationStateError({
+        action: 'resolve_variant_or_ready',
+        sourceItemId: input.sourceItemId,
+        generationTier: input.generationTier,
+        error,
+      });
+      if (oracleGenerationStatePrimaryEnabled) {
+        return resolveVariantOrReadySupabase(input);
+      }
+    }
+  }
+
+  return resolveVariantOrReadySupabase(input);
+}
+
+async function claimVariantForGeneration(input: Parameters<typeof claimVariantForGenerationSupabase>[0]) {
+  if (oracleGenerationStateEnabled && oracleControlPlane) {
+    try {
+      const durable = await claimOracleGenerationVariantForGeneration({
+        controlDb: oracleControlPlane,
+        sourceItemId: input.sourceItemId,
+        generationTier: input.generationTier,
+        userId: input.userId || null,
+        jobId: input.jobId || null,
+        targetStatus: input.targetStatus,
+      });
+
+      if (durable.outcome === 'claimed') {
+        try {
+          await claimVariantForGenerationSupabase(input);
+        } catch (error) {
+          logOracleGenerationStateShadowError({
+            action: 'claim_variant_for_generation',
+            sourceItemId: input.sourceItemId,
+            generationTier: input.generationTier,
+            error,
+          });
+        }
+      }
+
+      return durable;
+    } catch (error) {
+      logOracleGenerationStateError({
+        action: 'claim_variant_for_generation',
+        sourceItemId: input.sourceItemId,
+        generationTier: input.generationTier,
+        error,
+      });
+    }
+  }
+
+  return claimVariantForGenerationSupabase(input);
+}
+
+async function markVariantReady(input: Parameters<typeof markVariantReadySupabase>[0]) {
+  if (oracleGenerationStateEnabled && oracleControlPlane) {
+    try {
+      const durable = await markOracleGenerationVariantReady({
+        controlDb: oracleControlPlane,
+        sourceItemId: input.sourceItemId,
+        generationTier: input.generationTier,
+        blueprintId: input.blueprintId,
+      });
+      try {
+        await markVariantReadySupabase(input);
+      } catch (error) {
+        logOracleGenerationStateShadowError({
+          action: 'mark_variant_ready',
+          sourceItemId: input.sourceItemId,
+          generationTier: input.generationTier,
+          blueprintId: input.blueprintId,
+          error,
+        });
+      }
+      return durable;
+    } catch (error) {
+      logOracleGenerationStateError({
+        action: 'mark_variant_ready',
+        sourceItemId: input.sourceItemId,
+        generationTier: input.generationTier,
+        blueprintId: input.blueprintId,
+        error,
+      });
+    }
+  }
+
+  return markVariantReadySupabase(input);
+}
+
+async function markVariantFailed(input: Parameters<typeof markVariantFailedSupabase>[0]) {
+  if (oracleGenerationStateEnabled && oracleControlPlane) {
+    try {
+      const durable = await markOracleGenerationVariantFailed({
+        controlDb: oracleControlPlane,
+        sourceItemId: input.sourceItemId,
+        generationTier: input.generationTier,
+        errorCode: input.errorCode,
+        errorMessage: input.errorMessage,
+      });
+      try {
+        await markVariantFailedSupabase(input);
+      } catch (error) {
+        logOracleGenerationStateShadowError({
+          action: 'mark_variant_failed',
+          sourceItemId: input.sourceItemId,
+          generationTier: input.generationTier,
+          error,
+        });
+      }
+      return durable;
+    } catch (error) {
+      logOracleGenerationStateError({
+        action: 'mark_variant_failed',
+        sourceItemId: input.sourceItemId,
+        generationTier: input.generationTier,
+        error,
+      });
+    }
+  }
+
+  return markVariantFailedSupabase(input);
+}
+
+async function listVariantsForSourceItem(sourceItemId: string) {
+  const normalizedSourceItemId = String(sourceItemId || '').trim();
+  if (!normalizedSourceItemId) {
+    return [] as Awaited<ReturnType<typeof listVariantsForSourceItemSupabase>>;
+  }
+
+  if (oracleGenerationStateEnabled && oracleControlPlane) {
+    try {
+      const durable = await listOracleGenerationVariantsForSourceItem({
+        controlDb: oracleControlPlane,
+        sourceItemId: normalizedSourceItemId,
+      });
+      if (durable.length > 0 || oracleGenerationStatePrimaryEnabled) {
+        return durable as Awaited<ReturnType<typeof listVariantsForSourceItemSupabase>>;
+      }
+    } catch (error) {
+      logOracleGenerationStateError({
+        action: 'list_variants_for_source_item',
+        sourceItemId: normalizedSourceItemId,
+        error,
+      });
+    }
+  }
+
+  return listVariantsForSourceItemSupabase(normalizedSourceItemId);
+}
+
+async function findVariantsByBlueprintId(blueprintId: string) {
+  const normalizedBlueprintId = String(blueprintId || '').trim();
+  if (!normalizedBlueprintId) return null;
+
+  if (oracleGenerationStateEnabled && oracleControlPlane) {
+    try {
+      const durable = await findOracleGenerationVariantsByBlueprintId({
+        controlDb: oracleControlPlane,
+        blueprintId: normalizedBlueprintId,
+      });
+      if (durable || oracleGenerationStatePrimaryEnabled) {
+        return durable;
+      }
+    } catch (error) {
+      logOracleGenerationStateError({
+        action: 'find_variants_by_blueprint_id',
+        blueprintId: normalizedBlueprintId,
+        error,
+      });
+    }
+  }
+
+  return findVariantsByBlueprintIdSupabase(normalizedBlueprintId);
+}
+
+async function startGenerationRun(
+  db: ReturnType<typeof createClient>,
+  input: Parameters<typeof startGenerationRunSupabase>[1],
+) {
+  if (oracleGenerationStateEnabled && oracleControlPlane) {
+    try {
+      await startOracleGenerationRun({
+        controlDb: oracleControlPlane,
+        runId: input.runId,
+        userId: input.userId,
+        sourceScope: input.sourceScope || null,
+        sourceTag: input.sourceTag || null,
+        videoId: input.videoId || null,
+        videoUrl: input.videoUrl || null,
+        modelPrimary: input.modelPrimary || null,
+        reasoningEffort: input.reasoningEffort || null,
+        traceVersion: input.traceVersion || null,
+      });
+    } catch (error) {
+      logOracleGenerationStateError({
+        action: 'start_generation_run',
+        runId: input.runId,
+        videoId: input.videoId || null,
+        error,
+      });
+    }
+  }
+
+  try {
+    return await startGenerationRunSupabase(db, input);
+  } catch (error) {
+    if (oracleGenerationStateEnabled && oracleControlPlane) {
+      logOracleGenerationStateShadowError({
+        action: 'start_generation_run',
+        runId: input.runId,
+        videoId: input.videoId || null,
+        error,
+      });
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function updateGenerationModelInfo(
+  db: ReturnType<typeof createClient>,
+  input: Parameters<typeof updateGenerationModelInfoSupabase>[1],
+) {
+  if (oracleGenerationStateEnabled && oracleControlPlane) {
+    try {
+      await updateOracleGenerationRunModelInfo({
+        controlDb: oracleControlPlane,
+        runId: input.runId,
+        modelPrimary: input.modelPrimary,
+        modelUsed: input.modelUsed,
+        fallbackUsed: input.fallbackUsed,
+        fallbackModel: input.fallbackModel,
+        reasoningEffort: input.reasoningEffort,
+      });
+    } catch (error) {
+      logOracleGenerationStateError({
+        action: 'update_generation_model_info',
+        runId: input.runId,
+        error,
+      });
+    }
+  }
+
+  try {
+    return await updateGenerationModelInfoSupabase(db, input);
+  } catch (error) {
+    if (oracleGenerationStateEnabled && oracleControlPlane) {
+      logOracleGenerationStateShadowError({
+        action: 'update_generation_model_info',
+        runId: input.runId,
+        error,
+      });
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function attachBlueprintToRun(
+  db: ReturnType<typeof createClient>,
+  input: Parameters<typeof attachBlueprintToRunSupabase>[1],
+) {
+  if (oracleGenerationStateEnabled && oracleControlPlane) {
+    try {
+      await attachOracleBlueprintToGenerationRun({
+        controlDb: oracleControlPlane,
+        runId: input.runId,
+        blueprintId: input.blueprintId || '',
+      });
+    } catch (error) {
+      logOracleGenerationStateError({
+        action: 'attach_blueprint_to_run',
+        runId: input.runId,
+        blueprintId: input.blueprintId || null,
+        error,
+      });
+    }
+  }
+
+  try {
+    return await attachBlueprintToRunSupabase(db, input);
+  } catch (error) {
+    if (oracleGenerationStateEnabled && oracleControlPlane) {
+      logOracleGenerationStateShadowError({
+        action: 'attach_blueprint_to_run',
+        runId: input.runId,
+        blueprintId: input.blueprintId || null,
+        error,
+      });
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function finalizeGenerationRunSuccess(
+  db: ReturnType<typeof createClient>,
+  input: Parameters<typeof finalizeGenerationRunSuccessSupabase>[1],
+) {
+  if (oracleGenerationStateEnabled && oracleControlPlane) {
+    try {
+      await finalizeOracleGenerationRunSuccess({
+        controlDb: oracleControlPlane,
+        runId: input.runId,
+        qualityOk: input.qualityOk,
+        qualityIssues: input.qualityIssues,
+        qualityRetriesUsed: input.qualityRetriesUsed,
+        qualityFinalMode: input.qualityFinalMode,
+        traceVersion: input.traceVersion || null,
+        summary: input.summary || null,
+      });
+    } catch (error) {
+      logOracleGenerationStateError({
+        action: 'finalize_generation_run_success',
+        runId: input.runId,
+        error,
+      });
+    }
+  }
+
+  try {
+    return await finalizeGenerationRunSuccessSupabase(db, input);
+  } catch (error) {
+    if (oracleGenerationStateEnabled && oracleControlPlane) {
+      logOracleGenerationStateShadowError({
+        action: 'finalize_generation_run_success',
+        runId: input.runId,
+        error,
+      });
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function finalizeGenerationRunFailure(
+  db: ReturnType<typeof createClient>,
+  input: Parameters<typeof finalizeGenerationRunFailureSupabase>[1],
+) {
+  if (oracleGenerationStateEnabled && oracleControlPlane) {
+    try {
+      await finalizeOracleGenerationRunFailure({
+        controlDb: oracleControlPlane,
+        runId: input.runId,
+        errorCode: input.errorCode,
+        errorMessage: input.errorMessage,
+        traceVersion: input.traceVersion || null,
+        summary: input.summary || null,
+      });
+    } catch (error) {
+      logOracleGenerationStateError({
+        action: 'finalize_generation_run_failure',
+        runId: input.runId,
+        error,
+      });
+    }
+  }
+
+  try {
+    return await finalizeGenerationRunFailureSupabase(db, input);
+  } catch (error) {
+    if (oracleGenerationStateEnabled && oracleControlPlane) {
+      logOracleGenerationStateShadowError({
+        action: 'finalize_generation_run_failure',
+        runId: input.runId,
+        error,
+      });
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function getGenerationRunByRunId(
+  db: ReturnType<typeof createClient>,
+  runId: string,
+) {
+  const normalizedRunId = String(runId || '').trim();
+  if (!normalizedRunId) return null;
+
+  if (oracleGenerationStateEnabled && oracleControlPlane) {
+    try {
+      const durable = await getOracleGenerationRunByRunId({
+        controlDb: oracleControlPlane,
+        runId: normalizedRunId,
+      });
+      if (durable) return durable;
+    } catch (error) {
+      logOracleGenerationStateError({
+        action: 'get_generation_run_by_run_id',
+        runId: normalizedRunId,
+        error,
+      });
+    }
+  }
+
+  return getGenerationRunByRunIdSupabase(db, normalizedRunId);
+}
+
+async function getLatestGenerationRunByBlueprintId(
+  db: ReturnType<typeof createClient>,
+  blueprintId: string,
+) {
+  const normalizedBlueprintId = String(blueprintId || '').trim();
+  if (!normalizedBlueprintId) return null;
+
+  if (oracleGenerationStateEnabled && oracleControlPlane) {
+    try {
+      const durable = await getOracleLatestGenerationRunByBlueprintId({
+        controlDb: oracleControlPlane,
+        blueprintId: normalizedBlueprintId,
+      });
+      if (durable) return durable;
+    } catch (error) {
+      logOracleGenerationStateError({
+        action: 'get_latest_generation_run_by_blueprint_id',
+        blueprintId: normalizedBlueprintId,
+        error,
+      });
+    }
+  }
+
+  return getLatestGenerationRunByBlueprintIdSupabase(db, normalizedBlueprintId);
+}
+
+async function listFailedGenerationRunsByVideoIdOracleFirst(
+  db: ReturnType<typeof createClient>,
+  videoId: string,
+) {
+  const normalizedVideoId = String(videoId || '').trim();
+  if (!normalizedVideoId) return [] as Array<{
+    updated_at: string | null;
+    error_code: string | null;
+    error_message: string | null;
+  }>;
+
+  if (oracleGenerationStateEnabled && oracleControlPlane) {
+    try {
+      const durable = await listOracleFailedGenerationRunsByVideoId({
+        controlDb: oracleControlPlane,
+        videoId: normalizedVideoId,
+      });
+      if (durable.length > 0 || oracleGenerationStatePrimaryEnabled) {
+        return durable.map((row) => ({
+          updated_at: String(row.updated_at || '').trim() || null,
+          error_code: String(row.error_code || '').trim() || null,
+          error_message: String(row.error_message || '').trim() || null,
+        }));
+      }
+    } catch (error) {
+      logOracleGenerationStateError({
+        action: 'list_failed_generation_runs_by_video_id',
+        videoId: normalizedVideoId,
+        error,
+      });
+    }
+  }
+
+  const { data, error } = await db
+    .from('generation_runs')
+    .select('updated_at, error_code, error_message')
+    .eq('video_id', normalizedVideoId)
+    .eq('status', 'failed');
+  if (error) throw error;
+  return (data || []).map((row: any) => ({
+    updated_at: String(row?.updated_at || '').trim() || null,
+    error_code: String(row?.error_code || '').trim() || null,
+    error_message: String(row?.error_message || '').trim() || null,
+  }));
+}
 const youtubeSearchCacheService = createYouTubeSearchCacheService();
 const youtubeQuotaGuardService = createYouTubeQuotaGuardService({
   providerKey: 'youtube_data_api',
@@ -14042,6 +14599,22 @@ async function bootstrapOracleControlPlaneState() {
     sourceItemLedgerCount = sourceItemLedgerBootstrap.rowCount;
   }
 
+  let generationVariantCount: number | null = null;
+  let generationVariantActiveCount: number | null = null;
+  let generationRunCount: number | null = null;
+  let generationRunActiveCount: number | null = null;
+  if (oracleGenerationStateEnabled) {
+    const generationStateBootstrap = await syncOracleGenerationStateFromSupabase({
+      controlDb: oracleControlPlane,
+      db,
+      limit: oracleControlPlaneConfig.generationStateBootstrapLimit,
+    });
+    generationVariantCount = generationStateBootstrap.variantCount;
+    generationVariantActiveCount = generationStateBootstrap.variantActiveCount;
+    generationRunCount = generationStateBootstrap.runCount;
+    generationRunActiveCount = generationStateBootstrap.runActiveCount;
+  }
+
   let queueAdmissionActiveCount: number | null = null;
   if (oracleControlPlaneConfig.queueAdmissionMirrorEnabled) {
     const queueAdmissionBootstrap = await syncOracleQueueAdmissionMirrorFromSupabase({
@@ -14086,6 +14659,7 @@ async function bootstrapOracleControlPlaneState() {
     unlock_ledger_mode: oracleUnlockLedgerMode,
     feed_ledger_mode: oracleFeedLedgerMode,
     source_item_ledger_mode: oracleSourceItemLedgerMode,
+    generation_state_mode: oracleGenerationStateMode,
     sqlite_path: oracleControlPlane.sqlitePath,
     subscription_count: bootstrapResult.activeCount,
     queue_ledger_count: queueLedgerCount,
@@ -14097,6 +14671,10 @@ async function bootstrapOracleControlPlaneState() {
     feed_ledger_count: feedLedgerCount,
     feed_ledger_active_count: feedLedgerActiveCount,
     source_item_ledger_count: sourceItemLedgerCount,
+    generation_variant_count: generationVariantCount,
+    generation_variant_active_count: generationVariantActiveCount,
+    generation_run_count: generationRunCount,
+    generation_run_active_count: generationRunActiveCount,
     queue_admission_active_count: queueAdmissionActiveCount,
     job_activity_count: jobActivityCount,
     job_activity_active_count: jobActivityActiveCount,
@@ -14110,6 +14688,7 @@ async function bootstrapOracleControlPlaneState() {
     unlock_ledger_bootstrap_limit: oracleControlPlaneConfig.unlockLedgerBootstrapLimit,
     feed_ledger_bootstrap_limit: oracleControlPlaneConfig.feedLedgerBootstrapLimit,
     source_item_ledger_bootstrap_limit: oracleControlPlaneConfig.sourceItemLedgerBootstrapLimit,
+    generation_state_bootstrap_limit: oracleControlPlaneConfig.generationStateBootstrapLimit,
     job_activity_bootstrap_limit: oracleControlPlaneConfig.jobActivityBootstrapLimit,
     product_bootstrap_limit: oracleControlPlaneConfig.productBootstrapLimit,
   }));
@@ -15164,6 +15743,7 @@ if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
     unlock_ledger_mode: oracleUnlockLedgerMode,
     feed_ledger_mode: oracleFeedLedgerMode,
     source_item_ledger_mode: oracleSourceItemLedgerMode,
+    generation_state_mode: oracleGenerationStateMode,
     sqlite_path: oracleControlPlane.sqlitePath,
     scheduler_tick_ms: oracleControlPlaneConfig.schedulerTickMs,
     primary_min_trigger_interval_ms: oracleControlPlaneConfig.primaryMinTriggerIntervalMs,
@@ -15179,6 +15759,7 @@ if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
     unlock_ledger_bootstrap_limit: oracleControlPlaneConfig.unlockLedgerBootstrapLimit,
     feed_ledger_bootstrap_limit: oracleControlPlaneConfig.feedLedgerBootstrapLimit,
     source_item_ledger_bootstrap_limit: oracleControlPlaneConfig.sourceItemLedgerBootstrapLimit,
+    generation_state_bootstrap_limit: oracleControlPlaneConfig.generationStateBootstrapLimit,
     product_mirror_enabled: oracleControlPlaneConfig.productMirrorEnabled,
     product_bootstrap_limit: oracleControlPlaneConfig.productBootstrapLimit,
     queue_sweep_high_interval_ms: oracleControlPlaneConfig.queueSweepHighIntervalMs,

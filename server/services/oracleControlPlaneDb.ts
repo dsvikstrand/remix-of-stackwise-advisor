@@ -269,6 +269,49 @@ type SourceItemLedgerStateTable = {
   updated_at: string;
 };
 
+type GenerationVariantStateTable = {
+  id: string;
+  source_item_id: string;
+  generation_tier: string;
+  status: string;
+  blueprint_id: string | null;
+  active_job_id: string | null;
+  last_error_code: string | null;
+  last_error_message: string | null;
+  created_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type GenerationRunStateTable = {
+  id: string;
+  run_id: string;
+  user_id: string;
+  blueprint_id: string | null;
+  source_scope: string | null;
+  source_tag: string | null;
+  video_id: string | null;
+  video_url: string | null;
+  status: string;
+  model_primary: string | null;
+  model_used: string | null;
+  fallback_used: number | null;
+  fallback_model: string | null;
+  reasoning_effort: string | null;
+  quality_ok: number | null;
+  quality_issues_json: string | null;
+  quality_retries_used: number | null;
+  quality_final_mode: string | null;
+  trace_version: string | null;
+  summary_json: string | null;
+  error_code: string | null;
+  error_message: string | null;
+  started_at: string;
+  finished_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 type ProductFeedStateTable = {
   id: string;
   user_id: string;
@@ -294,6 +337,8 @@ export type OracleControlPlaneDatabase = {
   unlock_ledger_state: UnlockLedgerStateTable;
   feed_ledger_state: FeedLedgerStateTable;
   source_item_ledger_state: SourceItemLedgerStateTable;
+  generation_variant_state: GenerationVariantStateTable;
+  generation_run_state: GenerationRunStateTable;
   product_subscription_state: ProductSubscriptionStateTable;
   product_source_item_state: ProductSourceItemStateTable;
   product_unlock_state: ProductUnlockStateTable;
@@ -611,6 +656,67 @@ CREATE INDEX IF NOT EXISTS idx_source_item_ledger_page_updated
 
 CREATE INDEX IF NOT EXISTS idx_source_item_ledger_updated
   ON source_item_ledger_state (updated_at);
+
+CREATE TABLE IF NOT EXISTS generation_variant_state (
+  id TEXT PRIMARY KEY,
+  source_item_id TEXT NOT NULL,
+  generation_tier TEXT NOT NULL,
+  status TEXT NOT NULL,
+  blueprint_id TEXT,
+  active_job_id TEXT,
+  last_error_code TEXT,
+  last_error_message TEXT,
+  created_by_user_id TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_generation_variant_source_tier_unique
+  ON generation_variant_state (source_item_id, generation_tier);
+
+CREATE INDEX IF NOT EXISTS idx_generation_variant_blueprint
+  ON generation_variant_state (blueprint_id, updated_at);
+
+CREATE INDEX IF NOT EXISTS idx_generation_variant_status_updated
+  ON generation_variant_state (status, updated_at);
+
+CREATE TABLE IF NOT EXISTS generation_run_state (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  blueprint_id TEXT,
+  source_scope TEXT,
+  source_tag TEXT,
+  video_id TEXT,
+  video_url TEXT,
+  status TEXT NOT NULL,
+  model_primary TEXT,
+  model_used TEXT,
+  fallback_used INTEGER,
+  fallback_model TEXT,
+  reasoning_effort TEXT,
+  quality_ok INTEGER,
+  quality_issues_json TEXT,
+  quality_retries_used INTEGER,
+  quality_final_mode TEXT,
+  trace_version TEXT,
+  summary_json TEXT,
+  error_code TEXT,
+  error_message TEXT,
+  started_at TEXT NOT NULL,
+  finished_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_generation_run_run_id_unique
+  ON generation_run_state (run_id);
+
+CREATE INDEX IF NOT EXISTS idx_generation_run_blueprint_created
+  ON generation_run_state (blueprint_id, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_generation_run_video_status_updated
+  ON generation_run_state (video_id, status, updated_at);
 
 CREATE TABLE IF NOT EXISTS product_subscription_state (
   id TEXT PRIMARY KEY,

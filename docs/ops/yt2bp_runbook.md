@@ -457,7 +457,10 @@ Required runtime variables:
 - `ORACLE_FEED_LEDGER_BOOTSTRAP_LIMIT` (default `10000`; number of recent durable `user_feed_items` rows loaded into the local Oracle feed ledger during bootstrap)
 - `ORACLE_SOURCE_ITEM_LEDGER_MODE` (default `supabase`; accepted values: `supabase`, `dual`, `primary`; stages local Oracle durable `source_items` ownership so source-item upserts, metadata/view-count updates, execution-path source lookups, and Oracle-first wall/profile/source-page source-row reads can move onto local SQLite while Supabase remains compatibility shadow; if Oracle-first source-item reads regress, set this back to `supabase` before redeploying a fix)
 - `ORACLE_SOURCE_ITEM_LEDGER_BOOTSTRAP_LIMIT` (default `10000`; number of recent durable `source_items` rows loaded into the local Oracle source-item ledger during bootstrap)
+- `ORACLE_GENERATION_STATE_MODE` (default `supabase`; accepted values: `supabase`, `dual`, `primary`; stages local Oracle durable execution-state ownership for `source_item_blueprint_variants` and `generation_runs`, so variant claim/ready/failed state plus generation run summaries can move onto local SQLite while Supabase remains compatibility shadow)
+- `ORACLE_GENERATION_STATE_BOOTSTRAP_LIMIT` (default `10000`; number of recent durable `source_item_blueprint_variants` and `generation_runs` rows loaded into the local Oracle generation-state ledger during bootstrap)
 - In `primary`, normal source-item by-id and by-video reads should resolve from the Oracle source-item ledger first; the older product-source-item mirror is compatibility/bootstrap state, not the steady-state source-item reader.
+- In `primary`, normal variant ownership/ready-state checks and generation-run summary reads should resolve from Oracle generation state first; `generation_run_events` remain on Supabase for now.
 - Source-page follow-up trust note: if `POST /api/source-pages/:platform/:externalId/videos/unlock` returns `in_progress`, the next `GET /videos` should now reflect that same running variant state even before `source_item_unlocks` changes.
 - Once `ORACLE_UNLOCK_LEDGER_MODE=primary` is live, unlock-specific truth reads and unlock mutation preconditions should come from the Oracle unlock ledger directly; the older Oracle product unlock mirror is compatibility/read-plane support only.
 - `ORACLE_QUEUE_SWEEP_CONTROL_ENABLED` (default `false`; enables Oracle-local sweep cadence/tier selection for the queued worker while Supabase still performs durable claim RPCs)
@@ -902,6 +905,24 @@ npm run ops:oracle-source-item-parity -- --json
     - restart `agentic-backend.service`
     - redeploy the fixed build before re-staging `dual`
   - During `supabase|dual`, Oracle-first source-item read failures should now degrade to Supabase-backed reads; if user-facing wall/source-page traffic still breaks, treat that as a blocker and do not promote to `primary`.
+- Oracle generation-state parity snapshot during `ORACLE_GENERATION_STATE_MODE=dual`:
+```bash
+npm run ops:oracle-generation-state-parity -- --json
+```
+  - Good `dual` verdict for generation state:
+    - `ORACLE_GENERATION_STATE_MODE=dual`
+    - variant counts match
+    - recent run counts match
+    - `missing_in_oracle_count=0`
+    - `missing_in_supabase_count=0`
+    - `mismatched_row_count=0`
+  - After the `dual -> primary` flip, rerun the same command and confirm:
+    - `ORACLE_GENERATION_STATE_MODE=primary`
+    - parity still `PASS`
+    - interactive generate/unlock canaries still show the expected queued/running/ready variant state
+  - Keep scope explicit:
+    - `generation_runs` summary truth moves in this chapter
+    - `generation_run_events` still stay on Supabase until a later trace-events chapter
 - YT2BP repro smoke:
 ```bash
 npm run smoke:yt2bp -- --base-url https://api.bleup.app

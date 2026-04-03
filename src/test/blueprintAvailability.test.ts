@@ -63,4 +63,33 @@ describe('blueprint availability', () => {
       lastErrorCode: 'TRANSCRIPT_INSUFFICIENT_CONTEXT',
     });
   });
+
+  it('supports Oracle-first failed generation-run readers without direct generation_runs reads', async () => {
+    const db = createMockSupabase({
+      source_items: [],
+      source_item_unlocks: [],
+      generation_runs: [],
+    }) as any;
+
+    const result = await getBlueprintAvailabilityForVideo(db, 'video_failed', {
+      listSourceItemsByVideoId: async () => [],
+      listFailedGenerationRunsByVideoId: async (videoId) => (
+        videoId === 'video_failed'
+          ? [{
+            updated_at: new Date().toISOString(),
+            error_code: 'TRANSCRIPT_INSUFFICIENT_CONTEXT',
+            error_message: 'Transcript too short for generation.',
+          }]
+          : []
+      ),
+    });
+
+    expect(result).toMatchObject({
+      status: 'cooldown_active',
+      videoId: 'video_failed',
+      failureSource: 'generation_runs',
+      lastErrorCode: 'TRANSCRIPT_INSUFFICIENT_CONTEXT',
+      lastErrorMessage: 'Transcript too short for generation.',
+    });
+  });
 });

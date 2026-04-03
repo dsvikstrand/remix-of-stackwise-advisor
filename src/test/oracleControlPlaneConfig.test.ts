@@ -33,6 +33,7 @@ describe('oracle control-plane config', () => {
       unlockLedgerMode: 'supabase',
       feedLedgerMode: 'supabase',
       sourceItemLedgerMode: 'supabase',
+      generationStateMode: 'supabase',
       sqlitePath: path.resolve(cwd, '.runtime', 'control-plane.sqlite'),
       bootstrapBatch: 250,
       queueLedgerBootstrapLimit: 1_000,
@@ -40,6 +41,7 @@ describe('oracle control-plane config', () => {
       unlockLedgerBootstrapLimit: 10_000,
       feedLedgerBootstrapLimit: 10_000,
       sourceItemLedgerBootstrapLimit: 10_000,
+      generationStateBootstrapLimit: 10_000,
       productMirrorEnabled: false,
       productBootstrapLimit: 2_000,
       schedulerTickMs: 300_000,
@@ -83,6 +85,7 @@ describe('oracle control-plane config', () => {
       ORACLE_UNLOCK_LEDGER_MODE: 'dual',
       ORACLE_FEED_LEDGER_MODE: 'dual',
       ORACLE_SOURCE_ITEM_LEDGER_MODE: 'dual',
+      ORACLE_GENERATION_STATE_MODE: 'dual',
       ORACLE_CONTROL_PLANE_SQLITE_PATH: '/tmp/agentic-runtime/control-plane.sqlite',
       ORACLE_SUBSCRIPTION_BOOTSTRAP_BATCH: '123',
       ORACLE_QUEUE_LEDGER_BOOTSTRAP_LIMIT: '1400',
@@ -90,6 +93,7 @@ describe('oracle control-plane config', () => {
       ORACLE_UNLOCK_LEDGER_BOOTSTRAP_LIMIT: '3300',
       ORACLE_FEED_LEDGER_BOOTSTRAP_LIMIT: '4400',
       ORACLE_SOURCE_ITEM_LEDGER_BOOTSTRAP_LIMIT: '5500',
+      ORACLE_GENERATION_STATE_BOOTSTRAP_LIMIT: '6600',
       ORACLE_SUBSCRIPTION_SCHEDULER_TICK_MS: '45000',
       ORACLE_SUBSCRIPTION_PRIMARY_MIN_TRIGGER_INTERVAL_MS: '1800000',
       ORACLE_SUBSCRIPTION_PRIMARY_BATCH_LIMIT: '222',
@@ -125,6 +129,7 @@ describe('oracle control-plane config', () => {
       unlockLedgerMode: 'dual',
       feedLedgerMode: 'dual',
       sourceItemLedgerMode: 'dual',
+      generationStateMode: 'dual',
       sqlitePath: path.resolve(cwd, '/tmp/agentic-runtime/control-plane.sqlite'),
       bootstrapBatch: 123,
       queueLedgerBootstrapLimit: 1_400,
@@ -132,6 +137,7 @@ describe('oracle control-plane config', () => {
       unlockLedgerBootstrapLimit: 3_300,
       feedLedgerBootstrapLimit: 4_400,
       sourceItemLedgerBootstrapLimit: 5_500,
+      generationStateBootstrapLimit: 6_600,
       productMirrorEnabled: false,
       productBootstrapLimit: 2_000,
       schedulerTickMs: 45_000,
@@ -216,5 +222,14 @@ describe('oracle control-plane config', () => {
       ORACLE_CONTROL_PLANE_ENABLED: 'true',
       ORACLE_SOURCE_ITEM_LEDGER_MODE: 'unknown',
     }, { cwd }).sourceItemLedgerMode).toBe('supabase');
+  });
+
+  it('falls back to supabase generation-state mode when the mode is unknown', () => {
+    const cwd = createTempDir();
+
+    expect(readOracleControlPlaneConfig({
+      ORACLE_CONTROL_PLANE_ENABLED: 'true',
+      ORACLE_GENERATION_STATE_MODE: 'unknown',
+    }, { cwd }).generationStateMode).toBe('supabase');
   });
 });

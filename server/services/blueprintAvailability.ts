@@ -12,9 +12,16 @@ export type BlueprintAvailabilityUnlockLookupRow = {
   last_error_message: string | null;
 };
 
+export type BlueprintAvailabilityGenerationRunLookupRow = {
+  updated_at: string | null;
+  error_code: string | null;
+  error_message: string | null;
+};
+
 export type BlueprintAvailabilityReaders = {
   listSourceItemsByVideoId?: (videoId: string) => Promise<BlueprintAvailabilitySourceItemLookupRow[]>;
   listUnlockRowsBySourceItemIds?: (sourceItemIds: string[]) => Promise<BlueprintAvailabilityUnlockLookupRow[]>;
+  listFailedGenerationRunsByVideoId?: (videoId: string) => Promise<BlueprintAvailabilityGenerationRunLookupRow[]>;
 };
 
 export type BlueprintAvailabilityStatus = 'available' | 'cooldown_active';
@@ -154,13 +161,22 @@ async function readLatestUnlockCooldownCandidate(
   return latest;
 }
 
-async function readLatestGenerationRunCooldownCandidate(db: DbClient, videoId: string) {
-  const { data, error } = await db
-    .from('generation_runs')
-    .select('updated_at, error_code, error_message')
-    .eq('video_id', videoId)
-    .eq('status', 'failed');
-  if (error) throw error;
+async function readLatestGenerationRunCooldownCandidate(
+  db: DbClient,
+  videoId: string,
+  readers?: BlueprintAvailabilityReaders,
+) {
+  const rows = readers?.listFailedGenerationRunsByVideoId
+    ? await readers.listFailedGenerationRunsByVideoId(videoId)
+    : await (async () => {
+      const { data, error } = await db
+        .from('generation_runs')
+        .select('updated_at, error_code, error_message')
+        .eq('video_id', videoId)
+        .eq('status', 'failed');
+      if (error) throw error;
+      return (data || []) as BlueprintAvailabilityGenerationRunLookupRow[];
+    })();
 
   let latest: {
     atMs: number;
@@ -168,7 +184,7 @@ async function readLatestGenerationRunCooldownCandidate(db: DbClient, videoId: s
     lastErrorMessage: string | null;
   } | null = null;
 
-  for (const row of (data || [])) {
+  for (const row of (rows || [])) {
     const lastErrorCode = normalizeErrorCode((row as any)?.error_code);
     if (!shouldStartCooldown(lastErrorCode)) continue;
     const atMs = toDateMs((row as any)?.updated_at);
@@ -198,7 +214,7 @@ export async function getBlueprintAvailabilityForVideo(
 
   const [unlockCandidate, generationCandidate] = await Promise.all([
     readLatestUnlockCooldownCandidate(db, normalizedVideoId, readers),
-    readLatestGenerationRunCooldownCandidate(db, normalizedVideoId),
+    readLatestGenerationRunCooldownCandidate(db, normalizedVideoId, readers),
   ]);
 
   const cooldownWindowMs = getCooldownWindowMs();
