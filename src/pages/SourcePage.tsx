@@ -263,7 +263,10 @@ export default function SourcePage() {
         clearOptimisticUnlocking(context?.optimisticKeys || []);
       }
       setSelectedVideoIds({});
-      queryClient.invalidateQueries({ queryKey: ['source-page-videos', platform, externalId, user?.id] });
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['source-page-videos', platform, externalId, user?.id] }),
+        queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] }),
+      ]);
     },
     onError: (error, _items, context) => {
       toast({

@@ -53,10 +53,16 @@ export function NotificationsBell() {
     unreadCount,
     isEnabled,
     isLoading,
+    isFetching: isNotificationsFetching,
     isOfflineSnapshot,
     lastSyncedAt,
     markAllRead,
-  } = useNotifications({ limit: 15 });
+    refetch: refetchNotifications,
+  } = useNotifications({
+    limit: 15,
+    staleTimeMs: isOpen ? 0 : 300_000,
+    refetchIntervalMs: isOpen ? 15_000 : 300_000,
+  });
 
   const sortedItems = useMemo(
     () => [...items].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)),
@@ -78,8 +84,9 @@ export function NotificationsBell() {
 
   useEffect(() => {
     if (!isEnabled || !isOpen) return;
+    void refetchNotifications();
     void refetchQueue();
-  }, [isEnabled, isOpen, refetchQueue]);
+  }, [isEnabled, isOpen, refetchNotifications, refetchQueue]);
 
   const handleOpenItem = async (item: NotificationItem) => {
     const scope = getNotificationScope(item);
@@ -153,8 +160,13 @@ export function NotificationsBell() {
         ) : null}
         <DropdownMenuSeparator />
         <div className="max-h-[420px] overflow-y-auto">
+          {isOpen && isNotificationsFetching && !isLoading ? (
+            <div className="px-3 py-2 text-[11px] text-muted-foreground">Checking notifications...</div>
+          ) : null}
           {isLoading ? (
             <div className="px-3 py-4 text-sm text-muted-foreground">Loading notifications...</div>
+          ) : isOpen && isNotificationsFetching && sortedItems.length === 0 ? (
+            <div className="px-3 py-4 text-sm text-muted-foreground">Checking notifications...</div>
           ) : sortedItems.length === 0 ? (
             <div className="px-3 py-4 text-sm text-muted-foreground">No notifications yet.</div>
           ) : (

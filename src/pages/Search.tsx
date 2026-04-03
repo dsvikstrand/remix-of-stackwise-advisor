@@ -443,6 +443,8 @@ export default function SearchPage() {
         }],
       });
 
+      await queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
+
       let finalJob = await getIngestionJob(queued.job_id);
       let pollCount = 0;
       while (finalJob.status === 'queued' || finalJob.status === 'running') {

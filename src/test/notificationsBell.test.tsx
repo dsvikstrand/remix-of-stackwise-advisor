@@ -6,12 +6,14 @@ import { NotificationsBell } from '@/components/shared/NotificationsBell';
 const {
   navigateMock,
   markAllReadMock,
+  refetchNotificationsMock,
   refetchQueueMock,
   notificationsState,
   generationQueueState,
 } = vi.hoisted(() => ({
   navigateMock: vi.fn(),
   markAllReadMock: vi.fn(async () => undefined),
+  refetchNotificationsMock: vi.fn(async () => undefined),
   refetchQueueMock: vi.fn(async () => undefined),
   notificationsState: {
     current: {
@@ -19,6 +21,7 @@ const {
       unreadCount: 0,
       isEnabled: true,
       isLoading: false,
+      isFetching: false,
       isOfflineSnapshot: false,
       lastSyncedAt: null,
     },
@@ -47,6 +50,7 @@ vi.mock('@/hooks/useNotifications', () => ({
   useNotifications: () => ({
     ...notificationsState.current,
     markAllRead: markAllReadMock,
+    refetch: refetchNotificationsMock,
   }),
 }));
 
@@ -120,12 +124,14 @@ describe('NotificationsBell', () => {
   beforeEach(() => {
     navigateMock.mockReset();
     markAllReadMock.mockClear();
+    refetchNotificationsMock.mockClear();
     refetchQueueMock.mockClear();
     notificationsState.current = {
       items: [],
       unreadCount: 0,
       isEnabled: true,
       isLoading: false,
+      isFetching: false,
       isOfflineSnapshot: false,
       lastSyncedAt: null,
     };
@@ -159,9 +165,43 @@ describe('NotificationsBell', () => {
       openButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
+    expect(refetchNotificationsMock).toHaveBeenCalledTimes(1);
     expect(refetchQueueMock).toHaveBeenCalledTimes(1);
     expect(container.innerHTML).toContain('Checking queue...');
     expect(container.innerHTML).not.toContain('No active generations.');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('shows notification checking while a fresh notification refetch is in flight', async () => {
+    notificationsState.current = {
+      items: [],
+      unreadCount: 0,
+      isEnabled: true,
+      isLoading: false,
+      isFetching: true,
+      isOfflineSnapshot: false,
+      lastSyncedAt: null,
+    };
+
+    const container = document.createElement('div');
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(<NotificationsBell />);
+    });
+
+    const openButton = container.querySelector('button');
+    expect(openButton).not.toBeNull();
+
+    await act(async () => {
+      openButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.innerHTML).toContain('Checking notifications...');
+    expect(container.innerHTML).not.toContain('No notifications yet.');
 
     await act(async () => {
       root.unmount();

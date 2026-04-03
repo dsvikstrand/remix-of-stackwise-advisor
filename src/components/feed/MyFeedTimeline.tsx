@@ -408,8 +408,11 @@ export function MyFeedTimeline({
     },
     onSuccess: (result, item) => {
       invalidateFeedQueries();
-      queryClient.invalidateQueries({ queryKey: ['source-page-videos'] });
-      queryClient.invalidateQueries({ queryKey: ['source-page-blueprints'] });
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['source-page-videos'] }),
+        queryClient.invalidateQueries({ queryKey: ['source-page-blueprints'] }),
+        queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] }),
+      ]);
       if (result.job_id) {
         unlockTracker.start(result.job_id);
         return;

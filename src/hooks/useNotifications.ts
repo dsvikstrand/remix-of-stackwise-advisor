@@ -14,22 +14,31 @@ import {
   writeNotificationSnapshot,
 } from '@/lib/notificationSnapshots';
 
-export function useNotifications(input?: { limit?: number; enabled?: boolean }) {
+type UseNotificationsInput = {
+  limit?: number;
+  enabled?: boolean;
+  staleTimeMs?: number;
+  refetchIntervalMs?: number;
+};
+
+export function useNotifications(input?: UseNotificationsInput) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const limit = Math.max(1, Math.min(50, Number(input?.limit || 20)));
   const fetchLimit = 50;
   const queryKey = ['notifications', user?.id];
   const isQueryEnabled = Boolean(user?.id) && (input?.enabled ?? true);
+  const staleTimeMs = Math.max(0, Math.floor(Number(input?.staleTimeMs ?? 300_000)));
+  const refetchIntervalMs = Math.max(1_000, Math.floor(Number(input?.refetchIntervalMs ?? 300_000)));
 
   const query = useQuery({
     queryKey,
     queryFn: () => listNotifications({ limit: fetchLimit }),
     enabled: isQueryEnabled,
-    staleTime: 300_000,
+    staleTime: staleTimeMs,
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
-    refetchInterval: 300_000,
+    refetchInterval: refetchIntervalMs,
     retry: false,
   });
 

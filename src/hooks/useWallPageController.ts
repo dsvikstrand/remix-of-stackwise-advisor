@@ -360,6 +360,7 @@ export function useWallPageController() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['ai-credits'] }),
         queryClient.invalidateQueries({ queryKey: ['wall-for-you', user?.id || 'anon'] }),
+        queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] }),
       ]);
     },
     onError: (error, item) => {
