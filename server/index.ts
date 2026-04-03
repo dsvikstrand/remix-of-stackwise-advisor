@@ -55,10 +55,12 @@ import { readOracleControlPlaneConfig } from './services/oracleControlPlaneConfi
 import { openOracleControlPlaneDb } from './services/oracleControlPlaneDb';
 import { createOracleSubscriptionSchedulerController } from './services/oracleSubscriptionSchedulerController';
 import {
+  clearOracleQueueClaimCooldowns,
   recordOracleQueueClaimResult,
   shouldAttemptOracleQueueClaim,
 } from './services/oracleQueueClaimGovernor';
 import {
+  expediteOracleQueueSweeps,
   getOracleQueueSweepNextDelayMs,
   recordOracleQueueSweepResult,
   selectDueOracleQueueSweeps,
@@ -1000,6 +1002,19 @@ function getQueueSweepPlan() {
     scopes: [...QUEUED_INGESTION_SCOPES],
     maxJobs: workerBatchSize,
   }];
+}
+
+function resolveQueueSweepPlanEntriesForScopes(scopes: readonly string[]) {
+  const requestedScopes = new Set(
+    scopes
+      .map((scope) => String(scope || '').trim())
+      .filter(Boolean),
+  );
+  if (requestedScopes.size === 0) return [];
+
+  return getQueueSweepPlan().filter((entry) => (
+    entry.scopes.some((scope) => requestedScopes.has(scope))
+  ));
 }
 
 async function countQueueDepthForAdmission(
@@ -13248,6 +13263,10 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
   const payload = asObjectPayload(job.payload);
   const traceId = String(job.trace_id || payload.trace_id || '').trim() || createUnlockTraceId();
   const jobStartMs = Date.now();
+  const queuedAtMs = Date.parse(String(job.created_at || '').trim());
+  const queueWaitMs = Number.isFinite(queuedAtMs)
+    ? Math.max(0, jobStartMs - queuedAtMs)
+    : null;
   const leaseSeconds = Math.max(5, Math.ceil(workerLeaseMs / 1000));
   const initialHeartbeatDelayMs = resolveWorkerLeaseHeartbeatStartupDelayMs({
     scope,
@@ -13280,6 +13299,14 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
   }, initialHeartbeatDelayMs);
 
   try {
+    console.log('[queued_job_claim_started]', JSON.stringify({
+      job_id: job.id,
+      scope,
+      trace_id: traceId,
+      requested_by_user_id: job.requested_by_user_id || null,
+      queued_at: job.created_at || null,
+      queue_wait_ms: queueWaitMs,
+    }));
     await upsertOracleJobActivityFromKnownRow(job, 'queued_job_claim_start');
     await runWithExecutionTimeout(
       (async () => {
@@ -13611,8 +13638,99 @@ const notificationPushDispatcherController = createNotificationPushDispatcherCon
   runCycle: runNotificationPushDispatcherCycle,
 });
 
-function scheduleQueuedIngestionProcessing(delayMs = 0) {
-  queuedIngestionWorkerController.schedule(delayMs);
+type QueuedIngestionScheduleInput =
+  | number
+  | {
+    delayMs?: number;
+    scopes?: readonly string[];
+    expedite?: boolean;
+    reason?: string;
+  };
+
+function normalizeQueuedIngestionScheduleInput(input?: QueuedIngestionScheduleInput) {
+  if (typeof input === 'number') {
+    return {
+      delayMs: Math.max(0, Math.floor(input)),
+      scopes: [] as string[],
+      expedite: false,
+      reason: null as string | null,
+    };
+  }
+
+  const delayMs = Math.max(0, Math.floor(Number(input?.delayMs) || 0));
+  const scopes = Array.from(new Set(
+    (input?.scopes || [])
+      .map((scope) => String(scope || '').trim())
+      .filter(Boolean),
+  ));
+  return {
+    delayMs,
+    scopes,
+    expedite: Boolean(input?.expedite),
+    reason: String(input?.reason || '').trim() || null,
+  };
+}
+
+function scheduleQueuedIngestionProcessing(input?: QueuedIngestionScheduleInput) {
+  const normalized = normalizeQueuedIngestionScheduleInput(input);
+  const runSchedule = () => {
+    queuedIngestionWorkerController.schedule(normalized.delayMs);
+  };
+
+  if (
+    !normalized.expedite
+    || normalized.delayMs > 0
+    || normalized.scopes.length === 0
+    || !oracleControlPlane
+    || (!oracleQueueSweepControlEnabled && !oracleQueueClaimControlEnabled)
+  ) {
+    runSchedule();
+    return;
+  }
+
+  const planEntries = resolveQueueSweepPlanEntriesForScopes(normalized.scopes);
+  if (planEntries.length === 0) {
+    runSchedule();
+    return;
+  }
+
+  void (async () => {
+    const nowIso = new Date().toISOString();
+
+    if (oracleQueueSweepControlEnabled) {
+      await expediteOracleQueueSweeps({
+        controlDb: oracleControlPlane,
+        planEntries,
+        nowIso,
+      });
+    }
+
+    if (oracleQueueClaimControlEnabled) {
+      for (const planEntry of planEntries) {
+        await clearOracleQueueClaimCooldowns({
+          controlDb: oracleControlPlane,
+          tier: planEntry.tier,
+          scopes: planEntry.scopes,
+          maxJobs: planEntry.maxJobs,
+          nowIso,
+        });
+      }
+    }
+
+    console.log('[queued_ingestion_expedited]', JSON.stringify({
+      scopes: normalized.scopes,
+      reason: normalized.reason,
+      queue_sweep_control_enabled: oracleQueueSweepControlEnabled,
+      queue_claim_control_enabled: oracleQueueClaimControlEnabled,
+      expedited_plan_count: planEntries.length,
+    }));
+  })().catch((error) => {
+    console.warn('[queued_ingestion_expedite_failed]', JSON.stringify({
+      scopes: normalized.scopes,
+      reason: normalized.reason,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }).finally(runSchedule);
 }
 
 async function runOraclePrimarySubscriptionSchedulerCycle() {

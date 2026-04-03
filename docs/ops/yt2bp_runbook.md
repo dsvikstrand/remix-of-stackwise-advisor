@@ -114,6 +114,9 @@
   - Low-priority queue claim polling is also coarsened:
     - idle low-priority claim sweeps now back off more aggressively than the default worker idle cadence
     - claimed-work reschedules remain fast, and lease-heartbeat behavior is unchanged
+  - High-priority manual generation now has an expedite path:
+    - fresh `source_item_unlock_generation`, `search_video_generate`, and `manual_refresh_selection` enqueues clear their own Oracle-local high-priority sweep/claim cooldowns before waking the worker
+    - if manual generation starts feeling slow again, inspect `queued_ingestion_expedited` and `queued_job_claim_started` logs first to compare queue wait before/after claim
   - Combined-worker maintenance is also coarsened:
     - unlock sweeps and stale-job recovery remain enabled, but the worker only runs that maintenance once per coarse interval (`15m` default) instead of every idle keep-alive cycle
   - Source-video generation claim state is now self-healing:

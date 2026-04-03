@@ -163,3 +163,42 @@ export async function recordOracleQueueClaimResult(input: {
     }))
     .execute();
 }
+
+export async function clearOracleQueueClaimCooldowns(input: {
+  controlDb: OracleControlPlaneDb;
+  tier?: QueuePriorityTier | null;
+  scopes: readonly string[];
+  maxJobs: number;
+  nowIso?: string;
+}) {
+  const tier = normalizeTier(input.tier);
+  const scopeKey = normalizeScopes(input.scopes).join(',');
+  const claimKey = buildOracleQueueClaimKey({
+    tier,
+    scopes: input.scopes,
+    maxJobs: input.maxJobs,
+  });
+  const nowIso = normalizeIsoOrNull(input.nowIso) || new Date().toISOString();
+
+  await input.controlDb.db
+    .insertInto('queue_claim_control_state')
+    .values({
+      claim_key: claimKey,
+      priority_tier: tier,
+      scope_key: scopeKey,
+      next_allowed_claim_at: null,
+      last_attempted_at: null,
+      last_claimed_at: null,
+      consecutive_empty_claims: 0,
+      last_claimed_count: 0,
+      updated_at: nowIso,
+    })
+    .onConflict((oc) => oc.column('claim_key').doUpdateSet({
+      priority_tier: tier,
+      scope_key: scopeKey,
+      next_allowed_claim_at: null,
+      consecutive_empty_claims: 0,
+      updated_at: nowIso,
+    }))
+    .execute();
+}

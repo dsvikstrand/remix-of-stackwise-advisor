@@ -852,7 +852,11 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
     itemTitle: queuedItems[0]?.title || null,
     linkPath: deps.getGenerationNotificationLinkPath({ scope: 'manual_refresh_selection' }),
   });
-  deps.scheduleQueuedIngestionProcessing();
+  deps.scheduleQueuedIngestionProcessing({
+    scopes: ['manual_refresh_selection'],
+    expedite: true,
+    reason: 'manual_refresh_selection',
+  });
 
   return res.status(202).json({
     ok: true,

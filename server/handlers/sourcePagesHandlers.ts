@@ -1427,7 +1427,11 @@ async function handleSourcePageVideosUnlock(req: express.Request, res: express.R
     }),
   });
 
-  scheduleQueuedIngestionProcessing();
+  scheduleQueuedIngestionProcessing({
+    scopes: ['source_item_unlock_generation'],
+    expedite: true,
+    reason: 'source_page_unlock_generate',
+  });
 
   return res.status(202).json({
     ok: true,

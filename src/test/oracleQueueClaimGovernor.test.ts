@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { openOracleControlPlaneDb } from '../../server/services/oracleControlPlaneDb';
 import {
+  clearOracleQueueClaimCooldowns,
   recordOracleQueueClaimResult,
   shouldAttemptOracleQueueClaim,
 } from '../../server/services/oracleQueueClaimGovernor';
@@ -124,6 +125,61 @@ describe('oracle queue claim governor', () => {
         nowIso: '2026-04-01T10:00:21.000Z',
       });
       expect(afterClaim).toMatchObject({
+        allowed: true,
+        consecutiveEmptyClaims: 0,
+        nextAllowedAt: null,
+      });
+    } finally {
+      await controlDb.close();
+    }
+  });
+
+  it('can clear a blocked high-priority claim cooldown for interactive work', async () => {
+    const controlDb = openOracleControlPlaneDb({
+      sqlitePath: createTempSqlitePath(),
+    });
+
+    try {
+      await recordOracleQueueClaimResult({
+        controlDb,
+        config: {
+          emptyBackoffMinMs: 15_000,
+          emptyBackoffMaxMs: 180_000,
+          mediumPriorityMultiplier: 2,
+          lowPriorityMultiplier: 4,
+        },
+        tier: 'high',
+        scopes: ['source_item_unlock_generation'],
+        maxJobs: 8,
+        claimedCount: 0,
+        nowIso: '2026-04-01T10:00:00.000Z',
+      });
+
+      const blocked = await shouldAttemptOracleQueueClaim({
+        controlDb,
+        tier: 'high',
+        scopes: ['source_item_unlock_generation'],
+        maxJobs: 8,
+        nowIso: '2026-04-01T10:00:10.000Z',
+      });
+      expect(blocked.allowed).toBe(false);
+
+      await clearOracleQueueClaimCooldowns({
+        controlDb,
+        tier: 'high',
+        scopes: ['source_item_unlock_generation'],
+        maxJobs: 8,
+        nowIso: '2026-04-01T10:00:10.000Z',
+      });
+
+      const expedited = await shouldAttemptOracleQueueClaim({
+        controlDb,
+        tier: 'high',
+        scopes: ['source_item_unlock_generation'],
+        maxJobs: 8,
+        nowIso: '2026-04-01T10:00:10.000Z',
+      });
+      expect(expedited).toMatchObject({
         allowed: true,
         consecutiveEmptyClaims: 0,
         nextAllowedAt: null,

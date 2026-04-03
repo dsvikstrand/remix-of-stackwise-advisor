@@ -253,6 +253,50 @@ export async function recordOracleQueueSweepResult(input: {
     .execute();
 }
 
+export async function expediteOracleQueueSweeps(input: {
+  controlDb: OracleControlPlaneDb;
+  planEntries: readonly QueueSweepPlanEntry[];
+  nowIso?: string;
+}) {
+  const nowIso = normalizeIsoOrNull(input.nowIso) || new Date().toISOString();
+
+  for (const planEntry of input.planEntries) {
+    const tier = normalizeTier(planEntry.tier);
+    const maxJobs = Math.max(1, Math.floor(Number(planEntry.maxJobs) || 1));
+    const scopeKey = normalizeScopes(planEntry.scopes).join(',');
+    const sweepKey = buildOracleQueueSweepKey({
+      tier,
+      scopes: planEntry.scopes,
+      maxJobs,
+    });
+
+    await input.controlDb.db
+      .insertInto('queue_sweep_control_state')
+      .values({
+        sweep_key: sweepKey,
+        priority_tier: tier,
+        scope_key: scopeKey,
+        next_due_at: nowIso,
+        last_attempted_at: null,
+        last_claimed_at: null,
+        consecutive_empty_sweeps: 0,
+        last_claimed_count: 0,
+        last_batch_size: maxJobs,
+        inflight_until: null,
+        updated_at: nowIso,
+      })
+      .onConflict((oc) => oc.column('sweep_key').doUpdateSet({
+        priority_tier: tier,
+        scope_key: scopeKey,
+        next_due_at: nowIso,
+        consecutive_empty_sweeps: 0,
+        inflight_until: null,
+        updated_at: nowIso,
+      }))
+      .execute();
+  }
+}
+
 export async function getOracleQueueSweepNextDelayMs(input: {
   controlDb: OracleControlPlaneDb;
   basePlan: readonly QueueSweepPlanEntry[];

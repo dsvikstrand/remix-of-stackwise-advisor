@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { openOracleControlPlaneDb } from '../../server/services/oracleControlPlaneDb';
 import {
+  expediteOracleQueueSweeps,
   getOracleQueueSweepNextDelayMs,
   recordOracleQueueSweepResult,
   selectDueOracleQueueSweeps,
@@ -114,6 +115,56 @@ describe('oracle queue sweep scheduler', () => {
       });
 
       expect(nextDelayMs).toBe(50_000);
+    } finally {
+      await controlDb.close();
+    }
+  });
+
+  it('can expedite a blocked high-priority sweep for interactive work', async () => {
+    const controlDb = openOracleControlPlaneDb({
+      sqlitePath: createTempSqlitePath(),
+    });
+
+    try {
+      const basePlan = [{ tier: 'high' as const, scopes: ['source_item_unlock_generation'], maxJobs: 8 }];
+      await selectDueOracleQueueSweeps({
+        controlDb,
+        config: baseConfig,
+        basePlan,
+        nowIso: '2026-04-01T10:00:00.000Z',
+      });
+
+      await recordOracleQueueSweepResult({
+        controlDb,
+        config: baseConfig,
+        tier: 'high',
+        scopes: ['source_item_unlock_generation'],
+        maxJobs: 8,
+        claimedCount: 0,
+        nowIso: '2026-04-01T10:00:00.000Z',
+      });
+
+      const blocked = await selectDueOracleQueueSweeps({
+        controlDb,
+        config: baseConfig,
+        basePlan,
+        nowIso: '2026-04-01T10:00:10.000Z',
+      });
+      expect(blocked).toEqual([]);
+
+      await expediteOracleQueueSweeps({
+        controlDb,
+        planEntries: basePlan,
+        nowIso: '2026-04-01T10:00:10.000Z',
+      });
+
+      const expedited = await selectDueOracleQueueSweeps({
+        controlDb,
+        config: baseConfig,
+        basePlan,
+        nowIso: '2026-04-01T10:00:10.000Z',
+      });
+      expect(expedited).toEqual(basePlan);
     } finally {
       await controlDb.close();
     }

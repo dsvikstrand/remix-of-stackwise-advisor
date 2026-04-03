@@ -1157,7 +1157,11 @@ app.post(
       linkPath: getGenerationNotificationLinkPath({ scope: 'search_video_generate' }),
     });
 
-    scheduleQueuedIngestionProcessing();
+    scheduleQueuedIngestionProcessing({
+      scopes: ['search_video_generate'],
+      expedite: true,
+      reason: 'search_video_generate',
+    });
 
     return res.status(202).json({
       ok: true,
