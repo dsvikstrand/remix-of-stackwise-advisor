@@ -7236,7 +7236,10 @@ async function claimVariantForGeneration(input: Parameters<typeof claimVariantFo
 
       if (durable.outcome === 'claimed') {
         try {
-          await claimVariantForGenerationSupabase(input);
+          await claimVariantForGenerationSupabase({
+            ...input,
+            variantId: durable.variant?.id || null,
+          });
         } catch (error) {
           logOracleGenerationStateShadowError({
             action: 'claim_variant_for_generation',

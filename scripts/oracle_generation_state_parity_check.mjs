@@ -208,9 +208,40 @@ def normalize_json(value):
     return value
 
 
+def normalize_issues(value):
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        return []
+    normalized = []
+    seen = set()
+    for item in value:
+        text = normalize_text(item)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        normalized.append(text)
+    return normalized
+
+
+def variant_key(row):
+    return f"{normalize_text(row.get('source_item_id')) or ''}::{normalize_text(row.get('generation_tier')) or ''}"
+
+
+def parse_iso_ms(value):
+    text = normalize_iso(value)
+    if not text:
+        return None
+    try:
+        return int(datetime.fromisoformat(text.replace('Z', '+00:00')).timestamp() * 1000)
+    except Exception:
+        return None
+
+
 def normalize_variant_row(row):
     return {
         'id': normalize_text(row.get('id')),
+        'variant_key': variant_key(row),
         'source_item_id': normalize_text(row.get('source_item_id')),
         'generation_tier': normalize_text(row.get('generation_tier')),
         'status': normalize_text(row.get('status')),
@@ -241,7 +272,7 @@ def normalize_run_row(row):
         'fallback_model': normalize_text(row.get('fallback_model')),
         'reasoning_effort': normalize_text(row.get('reasoning_effort')),
         'quality_ok': normalize_bool(row.get('quality_ok')),
-        'quality_issues': normalize_json(row.get('quality_issues')),
+        'quality_issues': normalize_issues(row.get('quality_issues')),
         'quality_retries_used': normalize_int(row.get('quality_retries_used')),
         'quality_final_mode': normalize_text(row.get('quality_final_mode')),
         'trace_version': normalize_text(row.get('trace_version')),
@@ -387,6 +418,17 @@ def fetch_supabase_runs(supabase_url, service_role_key):
     return rows
 
 
+def values_equivalent(field, left_value, right_value):
+    if field == 'quality_issues':
+        return normalize_issues(left_value) == normalize_issues(right_value)
+    if field.endswith('_at'):
+        left_ms = parse_iso_ms(left_value)
+        right_ms = parse_iso_ms(right_value)
+        if left_ms is not None and right_ms is not None:
+            return abs(left_ms - right_ms) <= 1000
+    return left_value == right_value
+
+
 def compare_rows(left_rows, right_rows, key_field, compare_fields):
     left_map = {row[key_field]: row for row in left_rows if row.get(key_field)}
     right_map = {row[key_field]: row for row in right_rows if row.get(key_field)}
@@ -398,7 +440,7 @@ def compare_rows(left_rows, right_rows, key_field, compare_fields):
         right = right_map[key]
         diff = {}
         for field in compare_fields:
-            if left.get(field) != right.get(field):
+            if not values_equivalent(field, left.get(field), right.get(field)):
                 diff[field] = {'oracle': left.get(field), 'supabase': right.get(field)}
         if diff:
             mismatches.append({key_field: key, 'diff': diff})
@@ -425,7 +467,7 @@ oracle_runs = load_oracle_runs(SQLITE_PATH)
 supabase_variants = fetch_supabase_variants(supabase_url, service_role_key)
 supabase_runs = fetch_supabase_runs(supabase_url, service_role_key)
 
-variant_result = compare_rows(oracle_variants, supabase_variants, 'id', VARIANT_COMPARE_FIELDS)
+variant_result = compare_rows(oracle_variants, supabase_variants, 'variant_key', VARIANT_COMPARE_FIELDS)
 run_result = compare_rows(oracle_runs, supabase_runs, 'run_id', RUN_COMPARE_FIELDS)
 
 summary = {

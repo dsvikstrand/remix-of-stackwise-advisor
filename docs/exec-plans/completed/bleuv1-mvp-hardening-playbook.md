@@ -117,6 +117,7 @@ c6) [have] Notifications MVP foundation is live (`comment_reply`, `generation_su
 c6a) [have] Unlock-generation terminal failures now also surface through the same `generation_failed` notification path from real failed item counts, instead of suppressing retryable transcript/provider misses from `Recent Results`.
 c6b) [have] Rapid multi-job enqueue no longer coalesces `generation_started` across different jobs in the same scope window; start notifications align with terminal per-job semantics again.
 c6c) [have] Rapid interactive generation bursts now also request in-flight queue refill, reducing the wait for later manual jobs when worker concurrency is still available.
+c6d) [have] Generation-state dual hardening now preserves Oracle variant ids on future Supabase shadow rows and narrows parity failure policy to meaningful execution-state drift instead of backend-local UUID or sub-second timestamp noise.
 
 ### P2 - Maintainability and Scale-readiness
 d1) [todo] Split `server/index.ts` into route modules (`source pages`, `subscriptions`, `unlock/credits`, `ingestion jobs`).

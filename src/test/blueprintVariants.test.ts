@@ -184,4 +184,33 @@ describe('blueprintVariants service', () => {
       },
     });
   });
+
+  it('reuses the provided variant id when ensuring a new shadow row', async () => {
+    const db = createMockSupabase({
+      source_item_blueprint_variants: [],
+    }) as any;
+
+    const service = createBlueprintVariantsService({
+      getServiceSupabaseClient: () => db,
+    });
+
+    const result = await service.claimVariantForGeneration({
+      sourceItemId: 'source_shadow',
+      generationTier: 'tier',
+      userId: 'user_shadow',
+      jobId: 'job_shadow',
+      targetStatus: 'running',
+      variantId: 'variant_shadow',
+    });
+
+    expect(result).toMatchObject({
+      outcome: 'claimed',
+      variant: {
+        id: 'variant_shadow',
+        source_item_id: 'source_shadow',
+        active_job_id: 'job_shadow',
+      },
+    });
+    expect(db.state.source_item_blueprint_variants[0]?.id).toBe('variant_shadow');
+  });
 });

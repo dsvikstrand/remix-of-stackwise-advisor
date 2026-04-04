@@ -125,7 +125,7 @@ function normalizeIntOrNull(value: unknown, min = 0, max = 100_000) {
 }
 
 function normalizeIssues(value: unknown) {
-  if (!Array.isArray(value)) return null;
+  if (!Array.isArray(value)) return [];
   const normalized = value
     .map((item) => String(item || '').trim())
     .filter(Boolean);
@@ -144,12 +144,12 @@ function parseJsonObject(value: unknown) {
 
 function parseJsonArray(value: unknown) {
   const raw = typeof value === 'string' ? value.trim() : '';
-  if (!raw) return null;
+  if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
     return normalizeIssues(parsed);
   } catch {
-    return null;
+    return [];
   }
 }
 
@@ -639,7 +639,7 @@ export async function startOracleGenerationRun(input: {
       fallback_model: null,
       reasoning_effort: input.reasoningEffort || null,
       quality_ok: null,
-      quality_issues: null,
+      quality_issues: [],
       quality_retries_used: null,
       quality_final_mode: null,
       trace_version: input.traceVersion || null,

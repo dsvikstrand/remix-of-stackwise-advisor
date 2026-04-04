@@ -64,6 +64,19 @@ describe('generationTrace service', () => {
     expect(run?.model_used).toBe('o4-mini');
     expect(run?.fallback_used).toBe(true);
     expect(run?.quality_final_mode).toBe('retry_pass');
+    expect(run?.quality_issues).toEqual([]);
+  });
+
+  it('initializes quality_issues as an empty array on run start', async () => {
+    const db = createMockSupabase({
+      generation_runs: [],
+      generation_run_events: [],
+    }) as any;
+
+    await startGenerationRun(db, { runId: 'run_quality_init', userId: 'user_quality_init' });
+
+    const run = await getGenerationRunByRunId(db, 'run_quality_init');
+    expect(run?.quality_issues).toEqual([]);
   });
 
   it('stores sequenced events and paginates with cursor', async () => {

@@ -129,6 +129,7 @@ describe('oracle generation state', () => {
         status: 'succeeded',
         model_used: 'gpt-5.2',
         quality_ok: true,
+        quality_issues: [],
         quality_final_mode: 'direct',
         summary: { total_duration_ms: 1234 },
       });
@@ -158,6 +159,7 @@ describe('oracle generation state', () => {
         status: 'failed',
         error_code: 'TRANSCRIPT_EMPTY',
         error_message: 'Transcript was empty.',
+        quality_issues: [],
         summary: { stage: 'transcript' },
       });
     } finally {

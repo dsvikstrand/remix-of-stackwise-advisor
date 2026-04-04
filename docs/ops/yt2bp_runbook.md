@@ -11,6 +11,16 @@
   - Home/Profile locked-card readers should stop showing that item as normal `Unlock available`
   - Source Page follow-up reads should only show `processing` when the linked variant is truly `queued` or `running`, not when variant resolution falls back to `needs_generation`
 
+## Generation-State Dual Parity Check
+- If `npm run ops:oracle-generation-state-parity -- --json` fails during `ORACLE_GENERATION_STATE_MODE=dual`, classify the failure before considering rollback.
+- Expected non-blocking parity noise:
+  - sub-second `*_at` skew between Oracle and Supabase shadow writes
+  - normalized empty `quality_issues` represented as `[]` vs prior nullish storage
+- Treat as blocking drift:
+  - missing variant rows by logical key (`source_item_id + generation_tier`)
+  - mismatched variant `status`, `blueprint_id`, `active_job_id`, `last_error_code`
+  - mismatched run `status`, `blueprint_id`, `error_code`, or materially different summary payloads
+
 ## Doc Role
 - Supporting operational runbook only; not a primary MVP planning surface.
 - Launch gate status lives in `docs/ops/mvp-launch-readiness-checklist.md`.

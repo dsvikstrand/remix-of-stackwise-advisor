@@ -75,6 +75,15 @@ function normalizeObject(input: unknown): Record<string, unknown> {
   return input as Record<string, unknown>;
 }
 
+function normalizeIssues(input: unknown) {
+  if (!Array.isArray(input)) return [] as string[];
+  return Array.from(new Set(
+    input
+      .map((value) => String(value || '').trim())
+      .filter(Boolean),
+  ));
+}
+
 function clampInt(value: unknown, fallback: number, min: number, max: number) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return fallback;
@@ -162,6 +171,7 @@ export async function startGenerationRun(
     status: 'running' as GenerationRunStatus,
     model_primary: String(input.modelPrimary || '').trim() || null,
     reasoning_effort: String(input.reasoningEffort || '').trim() || null,
+    quality_issues: [],
     trace_version: String(input.traceVersion || '').trim() || null,
     started_at: nowIso,
     finished_at: null,
@@ -295,7 +305,7 @@ export async function finalizeGenerationRunSuccess(
     .update({
       status: 'succeeded',
       quality_ok: Boolean(input.qualityOk),
-      quality_issues: Array.from(new Set((input.qualityIssues || []).map((value) => String(value || '').trim()).filter(Boolean))),
+      quality_issues: normalizeIssues(input.qualityIssues),
       quality_retries_used: clampInt(input.qualityRetriesUsed, 0, 0, 20),
       quality_final_mode: String(input.qualityFinalMode || '').trim() || null,
       trace_version: String(input.traceVersion || '').trim() || null,

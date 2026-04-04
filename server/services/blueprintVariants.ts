@@ -138,9 +138,11 @@ export function createBlueprintVariantsService(deps: {
     sourceItemId: string;
     generationTier: GenerationTier;
     createdByUserId?: string | null;
+    variantId?: string | null;
   }) {
     const db = getDb();
     const payload = {
+      id: String(input.variantId || '').trim() || undefined,
       source_item_id: input.sourceItemId,
       generation_tier: input.generationTier,
       status: 'available',
@@ -232,6 +234,7 @@ export function createBlueprintVariantsService(deps: {
     userId?: string | null;
     jobId?: string | null;
     targetStatus?: Extract<VariantStatus, 'queued' | 'running'>;
+    variantId?: string | null;
   }) {
     const db = getDb();
     const targetStatus = input.targetStatus || 'running';
@@ -259,6 +262,7 @@ export function createBlueprintVariantsService(deps: {
       sourceItemId: input.sourceItemId,
       generationTier: input.generationTier,
       createdByUserId: input.userId || null,
+      variantId: input.variantId || null,
     });
 
     let claimed = await tryClaim();
@@ -275,6 +279,7 @@ export function createBlueprintVariantsService(deps: {
         sourceItemId: input.sourceItemId,
         generationTier: input.generationTier,
         createdByUserId: input.userId || null,
+        variantId: input.variantId || null,
       });
       claimed = await tryClaim();
       if (claimed) {
