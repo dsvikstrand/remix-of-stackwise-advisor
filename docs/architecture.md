@@ -106,7 +106,9 @@
   - Queue runtime ownership is now split cleanly:
     - Oracle queue-ledger `primary` is the normal source for hot queue status reads (`active by scope`, `latest`, owner job detail/order) and those reads treat an empty Oracle result as authoritative instead of automatically falling through to Supabase.
     - Supabase `ingestion_jobs` remains compatibility shadow for queue lifecycle writes, but lease-heartbeat-only refreshes no longer perform a full shadow upsert on every touch.
+    - In queue-ledger `primary`, claim-to-`running` transitions now also skip the Supabase compatibility upsert; Oracle remains the authoritative live worker-state store while Supabase is refreshed again on later queued/retry/terminal transitions only.
     - Remaining queue reads that still reach Supabase in `primary` are explicit fallback paths and are logged as `queue_fallback_read` for attribution and egress tracking.
+    - That fallback coverage now also includes latest-for-user, active-for-user, refresh-pending dedupe, unlock-job lookup, and retry-dedupe queue reads, so queue egress attribution can separate hidden fallback reads from normal Oracle-first operation.
   - Subscription runtime ownership now follows the same Oracle-first pattern:
     - Oracle subscription-ledger `primary` is the normal source for hot subscription reads (`by id`, `by user + channel`, source-page subscription access, active lists, subscriber counts) and those reads treat an empty Oracle result as authoritative instead of automatically falling through to Supabase.
     - Supabase `user_source_subscriptions` remains compatibility shadow, but no-op shadow patches are skipped when the meaningful persisted fields are already unchanged.

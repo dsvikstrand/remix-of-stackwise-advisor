@@ -2,7 +2,7 @@
 
 Status: `active`
 Owner: `Codex / David`
-Last updated: `2026-04-04`
+Last updated: `2026-04-04` (queue part 2 + subscription wave landed)
 
 ## Purpose
 
@@ -88,7 +88,7 @@ d5) [todo] Re-run the attribution report after each wave and record whether the 
 
 ## Wave Order
 
-e1) [todo] **Wave 1: queue / `ingestion_jobs`**
+e1) [have] **Wave 1: queue / `ingestion_jobs`**
 
 Reason:
 - top current backend family in the attribution sample
@@ -137,7 +137,7 @@ Acceptance:
 - sampled `source_items` family drops
 - wall/profile/source-page flows stay correct
 
-e3) [todo] **Wave 3: `user_source_subscriptions` churn**
+e3) [have] **Wave 3: `user_source_subscriptions` churn**
 
 Reason:
 - historically noisy and patch-heavy
@@ -158,6 +158,24 @@ Acceptance:
 - no subscription freshness/correctness regression beyond accepted tradeoffs
 
 e4) [todo] **Wave 4: `source_item_unlocks` + `user_feed_items` cleanup**
+
+e5) [have] **Queue follow-up: part 2**
+
+Reason:
+- queue remained a top backend service-role family after the first queue + subscription passes
+
+Primary files:
+- [server/index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts)
+
+Landed scope:
+- claim-to-`running` queue transitions now skip the Supabase `ingestion_jobs` compatibility upsert in queue-ledger `primary`
+- queue fallback logging now also covers latest-for-user, active-for-user, refresh-pending dedupe, unlock-job lookup, and retry-dedupe paths
+
+Verification:
+- `npm run typecheck`
+- focused Vitest around queue/ops/source-page/unlock paths
+- `npm run docs:refresh-check -- --json`
+- `npm run docs:link-check`
 
 Reason:
 - important but narrower than the earlier systemic families

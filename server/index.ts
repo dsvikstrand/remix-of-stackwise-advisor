@@ -1382,6 +1382,20 @@ function logQueueSupabaseFallbackRead(input: {
   }));
 }
 
+function logQueueShadowWriteSkipped(input: {
+  action: string;
+  jobId?: string | null;
+  scope?: string | null;
+  reason: string;
+}) {
+  console.log('[oracle-control-plane] queue_shadow_write_skipped', JSON.stringify({
+    action: input.action,
+    job_id: input.jobId || null,
+    scope: input.scope || null,
+    reason: input.reason,
+  }));
+}
+
 function logSubscriptionSupabaseFallbackRead(input: {
   action: string;
   userId?: string | null;
@@ -1641,15 +1655,12 @@ async function claimQueuedIngestionJobsWithLedger(
       leaseSeconds: input.leaseSeconds,
     });
     for (const job of claimed) {
-      try {
-        await upsertSupabaseQueueShadow(db, job);
-      } catch (error) {
-        logOracleQueueLedgerShadowWriteError({
-          action: 'queued_job_claim_shadow',
-          jobId: job.id,
-          error,
-        });
-      }
+      logQueueShadowWriteSkipped({
+        action: 'queued_job_claim_shadow',
+        jobId: job.id,
+        scope: job.scope,
+        reason: 'oracle_primary_claim_state',
+      });
     }
     await hooks?.afterClaimedJobs?.(claimed);
     return claimed;
@@ -1812,6 +1823,13 @@ async function listLatestUserIngestionJobsOracleFirst(
       }));
     }
   }
+  if (oracleQueueLedgerPrimaryEnabled) {
+    logQueueSupabaseFallbackRead({
+      action: 'list_latest_for_user_scope',
+      scope: input.scope,
+      userId: input.userId,
+    });
+  }
   const latestResult = await db
     .from('ingestion_jobs')
     .select('id, trigger, scope, status, started_at, finished_at, processed_count, inserted_count, skipped_count, error_code, error_message, attempts, max_attempts, next_run_at, lease_expires_at, trace_id, created_at, updated_at')
@@ -1862,6 +1880,13 @@ async function listActiveUserIngestionJobsOracleFirst(
     }
   }
 
+  if (oracleQueueLedgerPrimaryEnabled) {
+    logQueueSupabaseFallbackRead({
+      action: 'list_active_for_user',
+      scopes: input.scopes,
+      userId: input.userId,
+    });
+  }
   let query = db
     .from('ingestion_jobs')
     .select('id, trigger, scope, status, started_at, finished_at, processed_count, inserted_count, skipped_count, error_code, error_message, attempts, max_attempts, next_run_at, lease_expires_at, trace_id, payload, created_at, updated_at')
@@ -5646,6 +5671,12 @@ async function listPendingRefreshBlueprintIdsOracleFirst(
     return pendingIds;
   }
 
+  if (oracleQueueLedgerPrimaryEnabled) {
+    logQueueSupabaseFallbackRead({
+      action: 'list_pending_refresh_blueprint_ids',
+      scope: 'blueprint_youtube_refresh',
+    });
+  }
   let query = db
     .from('ingestion_jobs')
     .select('payload')
@@ -5848,6 +5879,12 @@ async function getUnlockJobsByIdsOracleFirst(
     }
   }
 
+  if (oracleQueueLedgerPrimaryEnabled) {
+    logQueueSupabaseFallbackRead({
+      action: 'get_unlock_jobs_by_ids',
+      jobId: normalizedIds.length === 1 ? normalizedIds[0] : null,
+    });
+  }
   const { data, error } = await db
     .from('ingestion_jobs')
     .select('id, status, scope, started_at, updated_at')
@@ -5922,6 +5959,12 @@ async function listRunningUnlockJobsOracleFirst(
     }
   }
 
+  if (oracleQueueLedgerPrimaryEnabled) {
+    logQueueSupabaseFallbackRead({
+      action: 'list_running_unlock_jobs',
+      scope: 'source_item_unlock_generation',
+    });
+  }
   const { data, error } = await db
     .from('ingestion_jobs')
     .select('id, status, scope, started_at, updated_at')
@@ -10459,6 +10502,12 @@ async function hasPendingSourceAutoUnlockRetryJob(
     return oraclePending;
   }
 
+  if (oracleQueueLedgerPrimaryEnabled) {
+    logQueueSupabaseFallbackRead({
+      action: 'has_pending_source_auto_unlock_retry_job',
+      scope: 'source_auto_unlock_retry',
+    });
+  }
   const { data, error } = await db
     .from('ingestion_jobs')
     .select('id')
@@ -10520,6 +10569,12 @@ async function hasPendingSourceTranscriptRevalidateJob(
     return oraclePending;
   }
 
+  if (oracleQueueLedgerPrimaryEnabled) {
+    logQueueSupabaseFallbackRead({
+      action: 'has_pending_source_transcript_revalidate_job',
+      scope: 'source_transcript_revalidate',
+    });
+  }
   const { data, error } = await db
     .from('ingestion_jobs')
     .select('id')
