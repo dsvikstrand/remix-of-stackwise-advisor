@@ -131,7 +131,7 @@ This file is the authoritative active/reference/deserted/completed registry for 
 - Historical PWA/runtime-simplification/egress reference plans are archived under `docs/exec-plans/completed/`.
 - Backend egress skip candidates + Phase 1 child plan are completed and archived under `docs/exec-plans/completed/`.
 - Frontend read-surface egress follow-up is completed and archived under `docs/exec-plans/completed/`.
-- Backend aggressive egress tuning is currently paused under `docs/exec-plans/active/on-pause/`.
+- Backend aggressive egress tuning is currently preserved under `docs/exec-plans/deserted/backend-aggressive-egress-tuning-plan.md`.
 - Blueprint prompt `v5` Caveats rollout is completed.
 - TanStack Query tuning is completed.
 - Transcript-provider robustness work is completed, with later live-proof items carried into the proof tail.
