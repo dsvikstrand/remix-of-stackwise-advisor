@@ -279,6 +279,33 @@ export async function listOracleSubscriptionLedgerRowsForUser(input: {
   return rows.map((row) => mapSubscriptionLedgerRow(row as unknown as Record<string, unknown>));
 }
 
+export async function listOracleSubscriptionLedgerRowsByIds(input: {
+  controlDb: OracleControlPlaneDb;
+  subscriptionIds: string[];
+  userId?: string | null;
+}) {
+  const subscriptionIds = [...new Set(
+    (Array.isArray(input.subscriptionIds) ? input.subscriptionIds : [])
+      .map((value) => String(value || '').trim())
+      .filter(Boolean),
+  )];
+  const userId = String(input.userId || '').trim();
+  if (subscriptionIds.length === 0) return [] as OracleSubscriptionLedgerRow[];
+
+  let query = input.controlDb.db
+    .selectFrom('subscription_ledger_state')
+    .selectAll()
+    .where('id', 'in', subscriptionIds)
+    .orderBy('updated_at', 'desc');
+
+  if (userId) {
+    query = query.where('user_id', '=', userId);
+  }
+
+  const rows = await query.execute();
+  return rows.map((row) => mapSubscriptionLedgerRow(row as unknown as Record<string, unknown>));
+}
+
 export async function listOracleSubscriptionLedgerActiveSubscriptionsForUser(input: {
   controlDb: OracleControlPlaneDb;
   userId: string;
@@ -332,4 +359,44 @@ export async function countOracleSubscriptionLedgerActiveSubscriptions(input: {
 
   const rows = await query.execute();
   return rows.length;
+}
+
+export async function listOracleSubscriptionLedgerActiveUserIdsForSource(input: {
+  controlDb: OracleControlPlaneDb;
+  sourcePageId?: string | null;
+  sourceChannelId?: string | null;
+  autoUnlockEnabled?: boolean;
+}) {
+  const sourcePageId = String(input.sourcePageId || '').trim();
+  const sourceChannelId = String(input.sourceChannelId || '').trim();
+  if (!sourcePageId && !sourceChannelId) return [] as string[];
+
+  let query = input.controlDb.db
+    .selectFrom('subscription_ledger_state')
+    .select('user_id')
+    .where('is_active', '=', 1);
+
+  if (input.autoUnlockEnabled === true) {
+    query = query.where('auto_unlock_enabled', '=', 1);
+  }
+
+  if (sourcePageId && sourceChannelId) {
+    query = query.where((eb) => eb.or([
+      eb('source_page_id', '=', sourcePageId),
+      eb('source_channel_id', '=', sourceChannelId),
+    ]));
+  } else if (sourcePageId) {
+    query = query.where('source_page_id', '=', sourcePageId);
+  } else {
+    query = query
+      .where('source_type', '=', 'youtube')
+      .where('source_channel_id', '=', sourceChannelId);
+  }
+
+  const rows = await query.execute();
+  return [...new Set(
+    rows
+      .map((row) => String(row.user_id || '').trim())
+      .filter(Boolean),
+  )];
 }

@@ -2,7 +2,7 @@
 
 Status: `active`
 Owner: `Codex / David`
-Last updated: `2026-04-04` (queue part 2 + subscription wave landed)
+Last updated: `2026-04-04` (queue part 2 + subscription wave 2 landed)
 
 ## Purpose
 
@@ -34,12 +34,11 @@ a3) [have] Current Supabase management analytics for the last `24h` show:
 
 a4) [have] The first attribution sample from `scripts/supabase_rest_attribution_report.mjs` points primarily at backend service-role traffic, not browser traffic.
 
-a5) [have] The latest sample’s top backend REST families are currently:
-- queue / `ingestion_jobs`
-- `source_items`
-- `user_source_subscriptions`
-- `source_item_unlocks`
-- `user_feed_items`
+a5) [have] The latest post-deploy sample has shifted to:
+- `subscriptions` ~`29.5%`
+- `queue` ~`25.3%`
+- `product_readwrite` ~`21.1%`
+- `source_items` ~`7.4%`
 
 a6) [have] The latest sample’s actor split is effectively:
 - `backend_service_role`: dominant
@@ -114,11 +113,33 @@ Acceptance:
 - no slowdown in interactive queue behavior
 - no queue correctness regressions
 
-e2) [todo] **Wave 2: `source_items` compatibility/fallback/shadow traffic**
+e2) [have] **Wave 2: `user_source_subscriptions` churn**
 
 Reason:
-- likely the next broad backend read surface after queue
-- source-item compatibility/fallback reads can be expensive and frequent
+- subscriptions became the top sampled backend family after the first queue wave
+- the remaining hot shapes were mainly `GET` by `user/channel` or `id:in` plus `PATCH /user_source_subscriptions?id:eq`
+
+Primary files:
+- [server/index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts)
+- [server/services/sourceSubscriptionSync.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/sourceSubscriptionSync.ts)
+- [server/services/oracleSubscriptionLedgerState.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/oracleSubscriptionLedgerState.ts)
+- [server/handlers/sourceSubscriptionsHandlers.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/handlers/sourceSubscriptionsHandlers.ts)
+- [server/handlers/sourcePagesHandlers.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/handlers/sourcePagesHandlers.ts)
+
+Landed scope:
+- Oracle-first batch hydration by subscription `id` for due-batch sync and manual refresh paths
+- Oracle-first active-user fan-out for source-page/channel subscriber attach and auto-unlock eligibility
+- no-op Supabase compatibility writes now skip unchanged material fields and log `subscription_shadow_write_skipped`
+- remaining Supabase rereads stay attributable through `subscription_fallback_read`
+
+Acceptance:
+- sampled `user_source_subscriptions` share should drop without regressing source-page subscription state, sync, or manual refresh checkpoint behavior
+
+e3) [todo] **Wave 3: `source_items` compatibility/fallback/shadow traffic**
+
+Reason:
+- likely the next broad backend read surface after queue/subscriptions
+- source-item compatibility/fallback reads can still be expensive and frequent
 
 Primary files:
 - [server/index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts)
@@ -136,26 +157,6 @@ Target work:
 Acceptance:
 - sampled `source_items` family drops
 - wall/profile/source-page flows stay correct
-
-e3) [have] **Wave 3: `user_source_subscriptions` churn**
-
-Reason:
-- historically noisy and patch-heavy
-- likely still a meaningful backend cost family after queue/source-items
-
-Primary files:
-- [server/services/sourceSubscriptionSync.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/sourceSubscriptionSync.ts)
-- [server/services/sourceUnlocks.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/sourceUnlocks.ts)
-- [server/index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts)
-
-Target work:
-- trim repeated existence/count/checkpoint reads
-- skip no-op subscription patches more aggressively
-- keep subscription behavior intact while lowering write churn
-
-Acceptance:
-- sampled `user_source_subscriptions` read/write share drops
-- no subscription freshness/correctness regression beyond accepted tradeoffs
 
 e4) [todo] **Wave 4: `source_item_unlocks` + `user_feed_items` cleanup**
 

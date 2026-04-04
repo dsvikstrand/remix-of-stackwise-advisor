@@ -125,7 +125,9 @@ import {
   getOracleSubscriptionLedgerById,
   getOracleSubscriptionLedgerByUserChannel,
   getOracleSubscriptionLedgerState,
+  listOracleSubscriptionLedgerActiveUserIdsForSource,
   listOracleSubscriptionLedgerActiveSubscriptionsForUser,
+  listOracleSubscriptionLedgerRowsByIds,
   listOracleSubscriptionLedgerRowsForUser,
   syncOracleSubscriptionLedgerFromSupabase,
   upsertOracleSubscriptionLedgerRow,
@@ -1411,6 +1413,20 @@ function logSubscriptionSupabaseFallbackRead(input: {
     source_type: input.sourceType || null,
     source_channel_id: input.sourceChannelId || null,
     source_page_id: input.sourcePageId || null,
+  }));
+}
+
+function logSubscriptionShadowWriteSkipped(input: {
+  action: string;
+  subscriptionId?: string | null;
+  userId?: string | null;
+  reason: string;
+}) {
+  console.log('[oracle-control-plane] subscription_shadow_write_skipped', JSON.stringify({
+    action: input.action,
+    subscription_id: input.subscriptionId || null,
+    user_id: input.userId || null,
+    reason: input.reason,
   }));
 }
 
@@ -2778,11 +2794,20 @@ async function writeSupabaseSourceSubscriptionShadow(
   db: ReturnType<typeof createClient>,
   row: SourceSubscriptionRow,
 ) {
-  const existing = await readSupabaseSourceSubscriptionByUserChannel(db, {
-    userId: row.user_id,
-    sourceType: row.source_type,
-    sourceChannelId: String(row.source_channel_id || '').trim(),
-  });
+  const existing = (
+    await readSupabaseSourceSubscriptionById(db, {
+      subscriptionId: row.id,
+      userId: row.user_id,
+    })
+  ) || (
+    String(row.source_channel_id || '').trim()
+      ? await readSupabaseSourceSubscriptionByUserChannel(db, {
+          userId: row.user_id,
+          sourceType: row.source_type,
+          sourceChannelId: String(row.source_channel_id || '').trim(),
+        })
+      : null
+  );
 
   if (existing) {
     if (existing.id !== row.id) {
@@ -2802,6 +2827,12 @@ async function writeSupabaseSourceSubscriptionShadow(
       && existing.last_sync_error === row.last_sync_error
     );
     if (unchanged) {
+      logSubscriptionShadowWriteSkipped({
+        action: 'subscription_shadow_update',
+        subscriptionId: existing.id,
+        userId: existing.user_id,
+        reason: 'unchanged_material_fields',
+      });
       return existing;
     }
 
@@ -4846,6 +4877,71 @@ async function listActiveSubscriptionsForUserOracleFirst(
     .eq('is_active', true);
   if (error) throw error;
   return data || [];
+}
+
+async function listUserSourceSubscriptionsByIdsOracleFirst(
+  db: ReturnType<typeof createClient>,
+  input: {
+    subscriptionIds: string[];
+    userId?: string | null;
+    activeOnly?: boolean;
+    sourceType?: string | null;
+  },
+) {
+  const subscriptionIds = [...new Set(
+    (Array.isArray(input.subscriptionIds) ? input.subscriptionIds : [])
+      .map((value) => String(value || '').trim())
+      .filter(Boolean),
+  )];
+  if (subscriptionIds.length === 0) return [] as SourceSubscriptionRow[];
+
+  if (oracleSubscriptionLedgerEnabled && oracleControlPlane) {
+    try {
+      const ledgerRows = await listOracleSubscriptionLedgerRowsByIds({
+        controlDb: oracleControlPlane,
+        subscriptionIds,
+        userId: input.userId || null,
+      });
+      const filteredRows = ledgerRows.filter((row) => (
+        (!input.activeOnly || row.is_active)
+        && (!input.sourceType || row.source_type === String(input.sourceType || '').trim())
+      ));
+      if (filteredRows.length > 0 || oracleSubscriptionLedgerPrimaryEnabled) {
+        return filteredRows;
+      }
+    } catch (error) {
+      console.warn('[oracle-control-plane] subscription_ledger_failed', JSON.stringify({
+        action: 'list_subscriptions_by_ids',
+        user_id: input.userId || null,
+        count: subscriptionIds.length,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+
+  if (oracleSubscriptionLedgerPrimaryEnabled) {
+    logSubscriptionSupabaseFallbackRead({
+      action: 'list_subscriptions_by_ids',
+      userId: input.userId || null,
+    });
+  }
+
+  let query = db
+    .from('user_source_subscriptions')
+    .select(SOURCE_SUBSCRIPTION_SELECT)
+    .in('id', subscriptionIds);
+  if (input.userId) {
+    query = query.eq('user_id', String(input.userId || '').trim());
+  }
+  if (input.activeOnly) {
+    query = query.eq('is_active', true);
+  }
+  if (input.sourceType) {
+    query = query.eq('source_type', String(input.sourceType || '').trim());
+  }
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []).map((row) => normalizeSourceSubscriptionRow(row as Record<string, unknown>));
 }
 
 async function getBlueprintAvailabilityForVideoOracleFirst(
@@ -8812,30 +8908,87 @@ async function attachBlueprintToSubscribedUsers(db: ReturnType<typeof createClie
   const targetUsers = new Set<string>([input.unlockingUserId]);
 
   if (input.sourcePageId) {
-    const { data: subscriptions, error: subscriptionsError } = await db
-      .from('user_source_subscriptions')
-      .select('user_id')
-      .eq('source_page_id', input.sourcePageId)
-      .eq('is_active', true);
-    if (subscriptionsError) throw subscriptionsError;
-    for (const row of subscriptions || []) {
-      const userId = String(row.user_id || '').trim();
-      if (userId) targetUsers.add(userId);
+    if (oracleSubscriptionLedgerEnabled && oracleControlPlane) {
+      try {
+        const userIds = await listOracleSubscriptionLedgerActiveUserIdsForSource({
+          controlDb: oracleControlPlane,
+          sourcePageId: input.sourcePageId,
+        });
+        for (const userId of userIds) {
+          if (userId) targetUsers.add(userId);
+        }
+      } catch (error) {
+        console.warn('[oracle-control-plane] subscription_ledger_failed', JSON.stringify({
+          action: 'attach_blueprint_to_subscribed_users_by_page',
+          source_page_id: input.sourcePageId,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+        const { data: subscriptions, error: subscriptionsError } = await db
+          .from('user_source_subscriptions')
+          .select('user_id')
+          .eq('source_page_id', input.sourcePageId)
+          .eq('is_active', true);
+        if (subscriptionsError) throw subscriptionsError;
+        for (const row of subscriptions || []) {
+          const userId = String(row.user_id || '').trim();
+          if (userId) targetUsers.add(userId);
+        }
+      }
+    } else {
+      const { data: subscriptions, error: subscriptionsError } = await db
+        .from('user_source_subscriptions')
+        .select('user_id')
+        .eq('source_page_id', input.sourcePageId)
+        .eq('is_active', true);
+      if (subscriptionsError) throw subscriptionsError;
+      for (const row of subscriptions || []) {
+        const userId = String(row.user_id || '').trim();
+        if (userId) targetUsers.add(userId);
+      }
     }
   }
 
   const sourceChannelId = String(input.sourceChannelId || '').trim();
   if (sourceChannelId) {
-    const { data: subscriptions, error: subscriptionsError } = await db
-      .from('user_source_subscriptions')
-      .select('user_id')
-      .eq('source_type', 'youtube')
-      .eq('source_channel_id', sourceChannelId)
-      .eq('is_active', true);
-    if (subscriptionsError) throw subscriptionsError;
-    for (const row of subscriptions || []) {
-      const userId = String(row.user_id || '').trim();
-      if (userId) targetUsers.add(userId);
+    if (oracleSubscriptionLedgerEnabled && oracleControlPlane) {
+      try {
+        const userIds = await listOracleSubscriptionLedgerActiveUserIdsForSource({
+          controlDb: oracleControlPlane,
+          sourceChannelId,
+        });
+        for (const userId of userIds) {
+          if (userId) targetUsers.add(userId);
+        }
+      } catch (error) {
+        console.warn('[oracle-control-plane] subscription_ledger_failed', JSON.stringify({
+          action: 'attach_blueprint_to_subscribed_users_by_channel',
+          source_channel_id: sourceChannelId,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+        const { data: subscriptions, error: subscriptionsError } = await db
+          .from('user_source_subscriptions')
+          .select('user_id')
+          .eq('source_type', 'youtube')
+          .eq('source_channel_id', sourceChannelId)
+          .eq('is_active', true);
+        if (subscriptionsError) throw subscriptionsError;
+        for (const row of subscriptions || []) {
+          const userId = String(row.user_id || '').trim();
+          if (userId) targetUsers.add(userId);
+        }
+      }
+    } else {
+      const { data: subscriptions, error: subscriptionsError } = await db
+        .from('user_source_subscriptions')
+        .select('user_id')
+        .eq('source_type', 'youtube')
+        .eq('source_channel_id', sourceChannelId)
+        .eq('is_active', true);
+      if (subscriptionsError) throw subscriptionsError;
+      for (const row of subscriptions || []) {
+        const userId = String(row.user_id || '').trim();
+        if (userId) targetUsers.add(userId);
+      }
     }
   }
 
@@ -10232,31 +10385,92 @@ async function listEligibleAutoUnlockUsers(
   const sourceChannelId = String(input.sourceChannelId || '').trim();
 
   if (sourcePageId) {
-    const { data, error } = await db
-      .from('user_source_subscriptions')
-      .select('user_id')
-      .eq('is_active', true)
-      .eq('auto_unlock_enabled', true)
-      .eq('source_page_id', sourcePageId);
-    if (error) throw error;
-    for (const row of data || []) {
-      const userId = String(row.user_id || '').trim();
-      if (userId) userIds.add(userId);
+    if (oracleSubscriptionLedgerEnabled && oracleControlPlane) {
+      try {
+        const ledgerUserIds = await listOracleSubscriptionLedgerActiveUserIdsForSource({
+          controlDb: oracleControlPlane,
+          sourcePageId,
+          autoUnlockEnabled: true,
+        });
+        for (const userId of ledgerUserIds) {
+          if (userId) userIds.add(userId);
+        }
+      } catch (error) {
+        console.warn('[oracle-control-plane] subscription_ledger_failed', JSON.stringify({
+          action: 'get_auto_unlock_eligible_users_by_page',
+          source_page_id: sourcePageId,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+        const { data, error: fallbackError } = await db
+          .from('user_source_subscriptions')
+          .select('user_id')
+          .eq('is_active', true)
+          .eq('auto_unlock_enabled', true)
+          .eq('source_page_id', sourcePageId);
+        if (fallbackError) throw fallbackError;
+        for (const row of data || []) {
+          const userId = String(row.user_id || '').trim();
+          if (userId) userIds.add(userId);
+        }
+      }
+    } else {
+      const { data, error } = await db
+        .from('user_source_subscriptions')
+        .select('user_id')
+        .eq('is_active', true)
+        .eq('auto_unlock_enabled', true)
+        .eq('source_page_id', sourcePageId);
+      if (error) throw error;
+      for (const row of data || []) {
+        const userId = String(row.user_id || '').trim();
+        if (userId) userIds.add(userId);
+      }
     }
   }
 
   if (sourceChannelId) {
-    const { data, error } = await db
-      .from('user_source_subscriptions')
-      .select('user_id')
-      .eq('source_type', 'youtube')
-      .eq('is_active', true)
-      .eq('auto_unlock_enabled', true)
-      .eq('source_channel_id', sourceChannelId);
-    if (error) throw error;
-    for (const row of data || []) {
-      const userId = String(row.user_id || '').trim();
-      if (userId) userIds.add(userId);
+    if (oracleSubscriptionLedgerEnabled && oracleControlPlane) {
+      try {
+        const ledgerUserIds = await listOracleSubscriptionLedgerActiveUserIdsForSource({
+          controlDb: oracleControlPlane,
+          sourceChannelId,
+          autoUnlockEnabled: true,
+        });
+        for (const userId of ledgerUserIds) {
+          if (userId) userIds.add(userId);
+        }
+      } catch (error) {
+        console.warn('[oracle-control-plane] subscription_ledger_failed', JSON.stringify({
+          action: 'get_auto_unlock_eligible_users_by_channel',
+          source_channel_id: sourceChannelId,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+        const { data, error: fallbackError } = await db
+          .from('user_source_subscriptions')
+          .select('user_id')
+          .eq('source_type', 'youtube')
+          .eq('is_active', true)
+          .eq('auto_unlock_enabled', true)
+          .eq('source_channel_id', sourceChannelId);
+        if (fallbackError) throw fallbackError;
+        for (const row of data || []) {
+          const userId = String(row.user_id || '').trim();
+          if (userId) userIds.add(userId);
+        }
+      }
+    } else {
+      const { data, error } = await db
+        .from('user_source_subscriptions')
+        .select('user_id')
+        .eq('source_type', 'youtube')
+        .eq('is_active', true)
+        .eq('auto_unlock_enabled', true)
+        .eq('source_channel_id', sourceChannelId);
+      if (error) throw error;
+      for (const row of data || []) {
+        const userId = String(row.user_id || '').trim();
+        if (userId) userIds.add(userId);
+      }
     }
   }
 
@@ -11168,14 +11382,9 @@ async function collectRefreshCandidatesForUser(db: ReturnType<typeof createClien
   const maxPerSubscription = Math.max(1, Math.min(20, options?.maxPerSubscription || ingestionMaxPerSubscription));
   const maxTotal = Math.max(1, Math.min(200, options?.maxTotal || 100));
 
-  const { data: subscriptions, error: subscriptionsError } = await db
-    .from('user_source_subscriptions')
-    .select('id, source_channel_id, source_channel_title, source_channel_url, last_seen_published_at, last_seen_video_id, is_active')
-    .eq('user_id', userId)
-    .eq('is_active', true)
-    .eq('source_type', 'youtube')
-    .order('updated_at', { ascending: false });
-  if (subscriptionsError) throw subscriptionsError;
+  const subscriptions = await listUserSourceSubscriptionsForUserOracleFirst(db, userId);
+  const activeYoutubeSubscriptions = subscriptions
+    .filter((subscription) => subscription.is_active && subscription.source_type === 'youtube');
 
   const scanErrors: Array<{ subscription_id: string; error: string }> = [];
   const rawCandidates: RefreshScanCandidate[] = [];
@@ -11185,7 +11394,7 @@ async function collectRefreshCandidatesForUser(db: ReturnType<typeof createClien
     unknown: 0,
   };
 
-  for (const subscription of subscriptions || []) {
+  for (const subscription of activeYoutubeSubscriptions) {
     try {
       const feed = await fetchYouTubeFeed(subscription.source_channel_id, 20);
       const candidates = feed.videos
@@ -11738,14 +11947,13 @@ async function processManualRefreshGenerateJob(input: {
   };
 
   const subscriptionIds = Array.from(new Set(input.items.map((item) => item.subscription_id)));
-  const { data: subscriptions, error: subscriptionsError } = await db
-    .from('user_source_subscriptions')
-    .select('id, user_id, source_channel_id, source_channel_title, source_page_id, last_seen_published_at, last_seen_video_id')
-    .eq('user_id', input.userId)
-    .eq('is_active', true)
-    .in('id', subscriptionIds);
-  if (subscriptionsError) throw subscriptionsError;
-  const subscriptionById = new Map((subscriptions || []).map((row) => [row.id, row]));
+  const subscriptions = await listUserSourceSubscriptionsByIdsOracleFirst(db, {
+    subscriptionIds,
+    userId: input.userId,
+    activeOnly: true,
+    sourceType: 'youtube',
+  });
+  const subscriptionById = new Map(subscriptions.map((row) => [row.id, row]));
   const dualGenerateEnabled = false;
   const generationTier: GenerationTier = CANONICAL_GENERATION_TIER;
 
@@ -11976,22 +12184,24 @@ async function processManualRefreshGenerateJob(input: {
     );
     if (!shouldAdvance) continue;
 
-    const { error: checkpointError } = await db
-      .from('user_source_subscriptions')
-      .update({
-        last_seen_published_at: checkpoint.publishedAt,
-        last_seen_video_id: checkpoint.videoId,
-        last_polled_at: checkpointUpdatedAt,
-        last_sync_error: null,
-      })
-      .eq('id', subscriptionId)
-      .eq('user_id', input.userId);
-    if (checkpointError) {
+    try {
+      await patchUserSourceSubscriptionOracleAware(db, {
+        subscriptionId,
+        userId: input.userId,
+        patch: {
+          last_seen_published_at: checkpoint.publishedAt,
+          last_seen_video_id: checkpoint.videoId,
+          last_polled_at: checkpointUpdatedAt,
+          last_sync_error: null,
+        },
+        action: 'subscription_manual_refresh_checkpoint',
+      });
+    } catch (checkpointError) {
       console.log('[subscription_manual_refresh_checkpoint_update_failed]', JSON.stringify({
         job_id: input.jobId,
         user_id: input.userId,
         subscription_id: subscriptionId,
-        error: checkpointError.message,
+        error: checkpointError instanceof Error ? checkpointError.message : String(checkpointError),
       }));
     }
   }
@@ -13713,15 +13923,12 @@ async function loadAllActiveSubscriptionsBatchForRun(db: ReturnType<typeof getSe
         };
       }
 
-      const { data, error } = await db
-        .from('user_source_subscriptions')
-        .select(selectColumns)
-        .eq('is_active', true)
-        .eq('source_type', 'youtube')
-        .in('id', dueSubscriptionIds);
-      if (error) throw error;
-
-      const rowMap = new Map((data || []).map((row) => [row.id, row]));
+      const data = await listUserSourceSubscriptionsByIdsOracleFirst(db, {
+        subscriptionIds: dueSubscriptionIds,
+        activeOnly: true,
+        sourceType: 'youtube',
+      });
+      const rowMap = new Map(data.map((row) => [row.id, row]));
       const orderedSubscriptions = dueSubscriptionIds
         .map((subscriptionId) => rowMap.get(subscriptionId))
         .filter((subscription): subscription is NonNullable<(typeof data)[number]> => Boolean(subscription));

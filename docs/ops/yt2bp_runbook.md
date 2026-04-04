@@ -167,6 +167,7 @@
     - in subscription-ledger `primary`, empty Oracle results for hot subscription lookups are now authoritative and should not trigger a normal-path Supabase reread
     - unchanged compatibility shadow rows now skip no-op `user_source_subscriptions` patch writes when the meaningful persisted fields already match
     - any remaining Supabase subscription reads in that mode now log `subscription_fallback_read`
+    - Oracle-backed subscription helpers now also cover batch hydration by subscription `id` plus active-user fan-out by source page/channel, so due-batch sync selection, manual refresh checkpoint writes, shared blueprint attach, and auto-unlock eligibility should stay on Oracle before any compatibility fallback
     - Oracle durable feed truth is now also staged behind `ORACLE_FEED_LEDGER_MODE=supabase|dual|primary`: `dual` bootstraps and shadows a local SQLite ledger for `user_feed_items`, while `primary` now lets wall/profile/public feed readers and shared feed mutation paths prefer Oracle-backed feed rows with Supabase kept as compatibility shadow
     - queue-ledger bridge helpers now wrap claim / fail / lease-touch transitions centrally in `ingestionQueue`, so queued-worker/controller paths share one Oracle-aware seam for mirror updates instead of each call site carrying bespoke bridge logic
     - unlock reliability orphan-job recovery now also uses the same Oracle-aware failure path, so stale running unlock jobs no longer bypass mirror updates when they are forced terminal
