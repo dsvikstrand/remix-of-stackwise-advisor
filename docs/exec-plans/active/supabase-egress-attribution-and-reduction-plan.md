@@ -2,7 +2,7 @@
 
 Status: `active`
 Owner: `Codex / David`
-Last updated: `2026-04-04` (queue part 2 + subscription wave 2 landed)
+Last updated: `2026-04-04` (source-items wave landed; next is product attribution split)
 
 ## Purpose
 
@@ -34,16 +34,16 @@ a3) [have] Current Supabase management analytics for the last `24h` show:
 
 a4) [have] The first attribution sample from `scripts/supabase_rest_attribution_report.mjs` points primarily at backend service-role traffic, not browser traffic.
 
-a5) [have] The latest post-deploy sample has shifted to:
-- `subscriptions` ~`29.5%`
-- `queue` ~`25.3%`
-- `product_readwrite` ~`21.1%`
-- `source_items` ~`7.4%`
+a5) [have] The latest post-deploy sample has shifted to a more mixed shape:
+- `product_readwrite` / product-facing reads-writes are now a top bucket
+- `blueprint_youtube_comments` is also separately visible
+- `source_items`, `queue`, and `subscriptions` have all become smaller and closer together than before
 
-a6) [have] The latest sample’s actor split is effectively:
-- `backend_service_role`: dominant
+a6) [have] The latest sample’s actor split is no longer purely backend-dominated:
+- `backend_service_role` is still the majority
+- but `frontend_authenticated` is now material enough that product-traffic attribution matters
 
-a7) [todo] We still need fuller attribution over time, but we already have enough signal to start a narrow first reduction wave.
+a7) [todo] We now need a finer split of the old `product_readwrite` bucket before choosing the next reduction wave safely.
 
 ## Goal
 
@@ -64,7 +64,7 @@ c2) [todo] Prefer shrinking compatibility/shadow/fallback traffic before inventi
 
 c3) [todo] Work one backend family at a time so before/after measurement stays interpretable.
 
-c4) [todo] Do not mix frontend read-surface tuning into the first backend wave unless attribution shows browser traffic is a first-order driver again.
+c4) [todo] Do not change mixed frontend/product traffic blindly; split attribution first, then target one clear subfamily.
 
 ## Measurement Baseline
 
@@ -135,7 +135,7 @@ Landed scope:
 Acceptance:
 - sampled `user_source_subscriptions` share should drop without regressing source-page subscription state, sync, or manual refresh checkpoint behavior
 
-e3) [todo] **Wave 3: `source_items` compatibility/fallback/shadow traffic**
+e3) [have] **Wave 3: `source_items` compatibility/fallback/shadow traffic**
 
 Reason:
 - likely the next broad backend read surface after queue/subscriptions
@@ -149,16 +149,36 @@ Primary files:
 - [server/services/profileHistory.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/profileHistory.ts)
 - [server/handlers/sourcePagesHandlers.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/handlers/sourcePagesHandlers.ts)
 
-Target work:
-- narrow remaining Supabase source-item fallback reads
-- trim compatibility reads that are no longer needed in Oracle-primary
-- keep only explicit recovery/error fallbacks
+Landed scope:
+- Oracle-primary source-item reads now treat empty Oracle results as authoritative for hot by-id / by-canonical-key / by-video-id and batch hydration paths
+- unchanged Supabase `source_items` compatibility rows now skip no-op updates
+- remaining source-item compatibility rereads are attributable through `source_item_fallback_read`
 
 Acceptance:
 - sampled `source_items` family drops
 - wall/profile/source-page flows stay correct
 
-e4) [todo] **Wave 4: `source_item_unlocks` + `user_feed_items` cleanup**
+e4) [todo] **Wave 4: `product_readwrite` attribution split**
+
+Reason:
+- `product_readwrite` is now the largest mixed bucket
+- it combines frontend-authenticated and backend behavior
+- cutting it blindly would be riskier than the backend-only waves
+
+Primary files:
+- [scripts/supabase_rest_attribution_report.mjs](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/scripts/supabase_rest_attribution_report.mjs)
+- [src/hooks/useBlueprints.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useBlueprints.ts)
+- [src/hooks/useUserProfile.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useUserProfile.ts)
+- [src/hooks/useBlueprintYoutubeComments.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useBlueprintYoutubeComments.ts)
+
+Target work:
+- split `product_readwrite` into narrower families such as `blueprint_comments`, `blueprints`, `profiles`, `blueprint_likes`, and `blueprint_tags`
+- map the hottest resulting endpoints back to exact UI/hooks
+- choose one narrow reduction wave from that split instead of optimizing broad product traffic
+
+Acceptance:
+- the attribution report no longer hides top product traffic behind one catch-all family
+- the next reduction wave can be chosen from concrete evidence
 
 e5) [have] **Queue follow-up: part 2**
 
@@ -178,9 +198,32 @@ Verification:
 - `npm run docs:refresh-check -- --json`
 - `npm run docs:link-check`
 
+e6) [todo] **Wave 5: `blueprint_youtube_comments` churn**
+
+Reason:
+- it is now visible as its own family in recent attribution
+- likely driven by refresh delete/reinsert behavior and repeated reads
+- easier to isolate than the broader product bucket once Wave 4 lands
+
+Primary files:
+- [src/hooks/useBlueprintYoutubeComments.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useBlueprintYoutubeComments.ts)
+- [server/services/blueprintYoutubeComments.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/blueprintYoutubeComments.ts)
+- [server/services/blueprintCreation.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/blueprintCreation.ts)
+
+Target work:
+- inspect whether comment refresh is rewriting rows unnecessarily
+- reduce avoidable delete/reinsert churn if the fetched comment set is unchanged
+- preserve current blueprint comment UX and refresh semantics
+
+Acceptance:
+- sampled `blueprint_youtube_comments` traffic drops
+- comment refresh behavior stays correct
+
+e7) [todo] **Wave 6: `source_item_unlocks` + `user_feed_items` cleanup**
+
 Reason:
 - important but narrower than the earlier systemic families
-- better handled after queue/source-items/subscription churn are reduced
+- better handled after queue/source-items/subscription churn and product/comment attribution are reduced
 
 Primary files:
 - [server/services/sourceUnlocks.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/sourceUnlocks.ts)

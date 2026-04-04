@@ -22,7 +22,7 @@ This file is the authoritative active/reference/deserted/completed registry for 
 
 ## Reference Plans
 - These files remain valid historical reference plans, but they are not the current implementation focus.
-- `docs/exec-plans/active/on-pause/backend-aggressive-egress-tuning-plan.md`
+- `docs/exec-plans/deserted/backend-aggressive-egress-tuning-plan.md`
   Paused backend egress tuning root retained in case the team chooses to resume the remaining aggressive-but-acceptable freshness/cadence trims later.
 - `docs/exec-plans/completed/bleup-pwa-program.md`
   Deferred until Android/install-update proof work becomes active again.

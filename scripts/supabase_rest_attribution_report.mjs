@@ -169,12 +169,18 @@ function classifyFamily(path) {
     case 'generation_runs':
     case 'generation_run_events':
       return 'generation_state';
-    case 'profiles':
-    case 'blueprints':
-    case 'blueprint_tags':
-    case 'blueprint_likes':
     case 'blueprint_comments':
-      return 'product_readwrite';
+      return 'blueprint_comments';
+    case 'blueprint_youtube_comments':
+      return 'blueprint_youtube_comments';
+    case 'blueprint_likes':
+      return 'blueprint_likes';
+    case 'blueprint_tags':
+      return 'blueprint_tags';
+    case 'blueprints':
+      return 'blueprints';
+    case 'profiles':
+      return 'profiles';
     case 'storage':
       return 'storage';
     default:
