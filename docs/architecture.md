@@ -103,6 +103,10 @@
     - import selection defaults to none selected; users explicitly choose channels to import.
     - disconnect revokes+unlinks OAuth tokens but keeps existing app subscriptions unchanged.
     - includes manual `Refresh` popup flow: scan new subscription videos, select items, and start async background generation.
+  - Queue runtime ownership is now split cleanly:
+    - Oracle queue-ledger `primary` is the normal source for hot queue status reads (`active by scope`, `latest`, owner job detail/order) and those reads treat an empty Oracle result as authoritative instead of automatically falling through to Supabase.
+    - Supabase `ingestion_jobs` remains compatibility shadow for queue lifecycle writes, but lease-heartbeat-only refreshes no longer perform a full shadow upsert on every touch.
+    - Remaining queue reads that still reach Supabase in `primary` are explicit fallback paths and are logged as `queue_fallback_read` for attribution and egress tracking.
   - Onboarding setup surface in `src/pages/WelcomeOnboarding.tsx`:
     - reuses the same manual-first creator setup surface as `/subscriptions`
     - keeps creator add/import optional

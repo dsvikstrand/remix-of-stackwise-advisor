@@ -121,6 +121,9 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Queue worker lease heartbeats should stay lease-aware by default, so background maintenance does not keep hammering Supabase lease RPCs more often than the actual lease window requires.
 - Queue-worker lifecycle mirrors should also stay known-row driven: claimed jobs, retry/failure transitions, and lease-heartbeat refreshes should update Oracle from the row already in hand instead of forcing a second `ingestion_jobs` read just to warm queue-health/job-status mirrors.
 - User-facing ingestion status routes and unlock orphan-job recovery should also stay on those centralized Oracle-aware readers/writers once they exist, instead of keeping route-local or sweep-local `ingestion_jobs` fallback branches.
+- Current runtime follow-up now also treats empty Oracle queue-ledger results as authoritative in `primary` for hot owner/scope/latest queue reads, so normal status lookups do not fall through to Supabase just because Oracle found no matching row.
+- Current runtime follow-up now also trims queue-shadow churn further: lease-heartbeat-only refreshes no longer emit a full Supabase `ingestion_jobs` upsert when queue-ledger `primary` already owns the live lease row.
+- Current runtime follow-up now also logs any remaining Supabase queue reads in that mode as `queue_fallback_read`, so the egress-reduction chapter can attribute compatibility queue traffic precisely.
 - Durable generation trace writes should stay lean by default, avoiding per-event `seq` reads and unnecessary returning payloads on write helpers.
 
 ### W2 - Channel Candidate Gating

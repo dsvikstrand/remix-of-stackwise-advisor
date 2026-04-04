@@ -13,8 +13,8 @@ This file is the authoritative active/reference/deserted/completed registry for 
   Canonical launch gate board and proof log.
 
 ## Active Root
-- `docs/exec-plans/active/oracle-control-plane-migration-discovery-plan.md`
-  Current active migration-discovery root; defines the pre-implementation inspection and design work for moving hot control-plane state from Supabase-backed decisions toward Oracle-owned local state.
+- `docs/exec-plans/active/supabase-egress-attribution-and-reduction-plan.md`
+  Current active implementation root for post-migration Supabase REST attribution and staged backend egress reduction.
 - `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
   Current proof/deferred carry-forward tail. This is the only standing active-tail support file.
 - `docs/exec-plans/tech-debt-tracker.md`
@@ -124,7 +124,7 @@ This file is the authoritative active/reference/deserted/completed registry for 
 ## Current Program Snapshot
 - Core identity lock: `docs/app/core-direction-lock.md`.
 - Current runtime/ops truth: `docs/architecture.md`, `docs/ops/yt2bp_runbook.md`, and `docs/ops/mvp-launch-readiness-checklist.md`.
-- Current active implementation plan: `docs/exec-plans/active/oracle-control-plane-migration-discovery-plan.md`.
+- Current active implementation plan: `docs/exec-plans/active/supabase-egress-attribution-and-reduction-plan.md`.
 - Current active proof/deferred tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`.
 - Current post-launch debt board: `docs/exec-plans/tech-debt-tracker.md`.
 - Latest completed implementation plans: `docs/exec-plans/completed/transcript-provider-launch-plan.md` and `docs/exec-plans/completed/pre-launch-ui-ux-plan.md`.

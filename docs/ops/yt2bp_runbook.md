@@ -1,5 +1,19 @@
 # YT2BP Runbook
 
+## Supabase REST Attribution Check
+- Use `npm run ops:supabase-rest-attribution -- --json` when Supabase request/egress cost needs attribution by endpoint family before removing more compatibility/shadow traffic.
+- Use `npm run ops:supabase-rest-attribution -- --json --full-range` when you want a slower broader crawl across the whole window; default mode is the latest matching `100` logs because the Supabase management logs API is rate-limited and capped.
+- The report pulls official Supabase analytics/logs API data for the last `24h` by default and summarizes:
+  - total request mix from `usage.api-counts`
+  - top REST paths
+  - top normalized REST endpoints
+  - actor split (`backend_service_role`, `frontend_authenticated`, etc.)
+  - family split (`queue`, `subscriptions`, `unlocks`, `feed`, `source_items`, `generation_state`, ...)
+- Current operational interpretation:
+  - `backend_service_role` heavy traffic usually means Oracle backend compatibility/shadow/fallback/ops traffic
+  - browser-auth/anon traffic usually means direct frontend Supabase usage
+  - use the top path list first, then map those tables/RPCs back to repo callers before trimming traffic
+
 ## Ready-Duplicate Feed Attach Check
 - If a user reports `Generate` says `No new generation queued` or `skipped_existing`, but Home/For You still shows `Unlock available`, inspect whether that user already has a locked `user_feed_items` row for the same `user_id + source_item_id`.
 - Expected fixed behavior: search/manual ready handling should upsert that feed row with the discovered `blueprint_id` and published state, so the user wall stops rendering the item as locked.
