@@ -3723,6 +3723,38 @@ function mergeNormalizedSourceItemRows(rows: Array<SourceItemRow | null | undefi
   return [...merged.values()];
 }
 
+function logSourceItemSupabaseFallbackRead(input: {
+  action: string;
+  reason: string;
+  sourceItemId?: string | null;
+  ids?: string[];
+  canonicalKeys?: string[];
+  sourceNativeId?: string | null;
+}) {
+  console.log('[oracle-control-plane] source_item_fallback_read', JSON.stringify({
+    action: input.action,
+    reason: input.reason,
+    source_item_id: input.sourceItemId || null,
+    ids: Array.isArray(input.ids) && input.ids.length > 0 ? input.ids : null,
+    canonical_keys: Array.isArray(input.canonicalKeys) && input.canonicalKeys.length > 0 ? input.canonicalKeys : null,
+    source_native_id: input.sourceNativeId || null,
+  }));
+}
+
+function logSourceItemShadowWriteSkipped(input: {
+  action: string;
+  sourceItemId?: string | null;
+  canonicalKey?: string | null;
+  reason: string;
+}) {
+  console.log('[oracle-control-plane] source_item_shadow_write_skipped', JSON.stringify({
+    action: input.action,
+    source_item_id: input.sourceItemId || null,
+    canonical_key: input.canonicalKey || null,
+    reason: input.reason,
+  }));
+}
+
 async function readSupabaseSourceItemById(
   db: ReturnType<typeof createClient>,
   input: { sourceItemId: string },
@@ -3826,6 +3858,25 @@ function mapSourceItemToSupabaseShadowValues(row: SourceItemRow) {
   };
 }
 
+function sourceItemShadowRowsEquivalent(left: SourceItemRow, right: SourceItemRow) {
+  return (
+    left.source_type === right.source_type
+    && left.source_native_id === right.source_native_id
+    && left.canonical_key === right.canonical_key
+    && left.source_url === right.source_url
+    && left.title === right.title
+    && left.published_at === right.published_at
+    && left.ingest_status === right.ingest_status
+    && left.source_channel_id === right.source_channel_id
+    && left.source_channel_title === right.source_channel_title
+    && left.source_page_id === right.source_page_id
+    && left.thumbnail_url === right.thumbnail_url
+    && JSON.stringify(left.metadata || null) === JSON.stringify(right.metadata || null)
+    && left.created_at === right.created_at
+    && left.updated_at === right.updated_at
+  );
+}
+
 async function writeSupabaseSourceItemShadow(
   db: ReturnType<typeof createClient>,
   row: SourceItemRow,
@@ -3847,6 +3898,16 @@ async function writeSupabaseSourceItemShadow(
   if (existing) {
     if (existing.id !== row.id) {
       throw new Error(`SOURCE_ITEM_SHADOW_ID_MISMATCH:${existing.id}:${row.id}`);
+    }
+
+    if (sourceItemShadowRowsEquivalent(existing, row)) {
+      logSourceItemShadowWriteSkipped({
+        action: 'source_item_shadow_update',
+        sourceItemId: existing.id,
+        canonicalKey: existing.canonical_key,
+        reason: 'unchanged_material_fields',
+      });
+      return existing;
     }
 
     const { data, error } = await db
@@ -3887,6 +3948,13 @@ async function getSourceItemByIdOracleFirst(
   const action = String(input.action || 'get_source_item_by_id').trim() || 'get_source_item_by_id';
 
   async function readSupabaseFallback(reason: string) {
+    if (oracleSourceItemLedgerPrimaryEnabled) {
+      logSourceItemSupabaseFallbackRead({
+        action,
+        reason,
+        sourceItemId,
+      });
+    }
     try {
       return await readSupabaseSourceItemById(db, { sourceItemId });
     } catch (error) {
@@ -3908,6 +3976,9 @@ async function getSourceItemByIdOracleFirst(
       });
       if (durable) {
         return normalizeSourceItemRow(durable as unknown as Record<string, unknown>);
+      }
+      if (oracleSourceItemLedgerPrimaryEnabled) {
+        return null;
       }
       return readSupabaseFallback('oracle_source_item_ledger_missing');
     } catch (error) {
@@ -4723,9 +4794,17 @@ async function listProductSourceItemsOracleFirst(
   const sourceNativeId = String(input.sourceNativeId || '').trim();
   const canonicalKeys = [...new Set((input.canonicalKeys || []).map((value) => String(value || '').trim()).filter(Boolean))];
   const action = String(input.action || 'list_product_source_items').trim() || 'list_product_source_items';
-  const sourceNativeIdOnlyRequest = Boolean(sourceNativeId) && ids.length === 0 && canonicalKeys.length === 0;
 
   async function listSupabaseFallback(reason: string) {
+    if (oracleSourceItemLedgerPrimaryEnabled) {
+      logSourceItemSupabaseFallbackRead({
+        action,
+        reason,
+        ids,
+        canonicalKeys,
+        sourceNativeId,
+      });
+    }
     try {
       return await listSupabaseSourceItems(db, {
         ids,
@@ -4762,11 +4841,8 @@ async function listProductSourceItemsOracleFirst(
       const missingIds = ids.filter((id) => !durableIdSet.has(id));
       const missingCanonicalKeys = canonicalKeys.filter((canonicalKey) => !durableCanonicalKeySet.has(canonicalKey));
 
-      if (oracleSourceItemLedgerPrimaryEnabled && sourceNativeIdOnlyRequest) {
-        if (durableRows.length > 0) {
-          return durableRows;
-        }
-        return listSupabaseFallback('oracle_source_item_ledger_missing_source_native_id');
+      if (oracleSourceItemLedgerPrimaryEnabled) {
+        return durableRows;
       }
 
       if (!sourceNativeId && missingIds.length === 0 && missingCanonicalKeys.length === 0) {
