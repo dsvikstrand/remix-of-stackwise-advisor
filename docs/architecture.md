@@ -107,6 +107,10 @@
     - Oracle queue-ledger `primary` is the normal source for hot queue status reads (`active by scope`, `latest`, owner job detail/order) and those reads treat an empty Oracle result as authoritative instead of automatically falling through to Supabase.
     - Supabase `ingestion_jobs` remains compatibility shadow for queue lifecycle writes, but lease-heartbeat-only refreshes no longer perform a full shadow upsert on every touch.
     - Remaining queue reads that still reach Supabase in `primary` are explicit fallback paths and are logged as `queue_fallback_read` for attribution and egress tracking.
+  - Subscription runtime ownership now follows the same Oracle-first pattern:
+    - Oracle subscription-ledger `primary` is the normal source for hot subscription reads (`by id`, `by user + channel`, source-page subscription access, active lists, subscriber counts) and those reads treat an empty Oracle result as authoritative instead of automatically falling through to Supabase.
+    - Supabase `user_source_subscriptions` remains compatibility shadow, but no-op shadow patches are skipped when the meaningful persisted fields are already unchanged.
+    - Remaining subscription reads that still reach Supabase in `primary` are explicit fallback paths and are logged as `subscription_fallback_read` for attribution and egress tracking.
   - Onboarding setup surface in `src/pages/WelcomeOnboarding.tsx`:
     - reuses the same manual-first creator setup surface as `/subscriptions`
     - keeps creator add/import optional

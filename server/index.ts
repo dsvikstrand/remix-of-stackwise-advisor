@@ -724,6 +724,7 @@ const oracleSubscriptionLedgerEnabled = (
   oracleSubscriptionLedgerMode === 'dual'
   || oracleSubscriptionLedgerMode === 'primary'
 );
+const oracleSubscriptionLedgerPrimaryEnabled = oracleSubscriptionLedgerMode === 'primary';
 const oracleUnlockLedgerEnabled = (
   oracleUnlockLedgerMode === 'dual'
   || oracleUnlockLedgerMode === 'primary'
@@ -1378,6 +1379,24 @@ function logQueueSupabaseFallbackRead(input: {
     scopes: input.scopes || null,
     user_id: input.userId || null,
     job_id: input.jobId || null,
+  }));
+}
+
+function logSubscriptionSupabaseFallbackRead(input: {
+  action: string;
+  userId?: string | null;
+  subscriptionId?: string | null;
+  sourceType?: string | null;
+  sourceChannelId?: string | null;
+  sourcePageId?: string | null;
+}) {
+  console.warn('[oracle-control-plane] subscription_fallback_read', JSON.stringify({
+    action: input.action,
+    user_id: input.userId || null,
+    subscription_id: input.subscriptionId || null,
+    source_type: input.sourceType || null,
+    source_channel_id: input.sourceChannelId || null,
+    source_page_id: input.sourcePageId || null,
   }));
 }
 
@@ -2745,6 +2764,22 @@ async function writeSupabaseSourceSubscriptionShadow(
       throw new Error(`SUBSCRIPTION_SHADOW_ID_MISMATCH:${existing.id}:${row.id}`);
     }
 
+    const unchanged = (
+      existing.source_channel_url === row.source_channel_url
+      && existing.source_channel_title === row.source_channel_title
+      && existing.source_page_id === row.source_page_id
+      && existing.mode === row.mode
+      && existing.auto_unlock_enabled === row.auto_unlock_enabled
+      && existing.is_active === row.is_active
+      && existing.last_polled_at === row.last_polled_at
+      && existing.last_seen_published_at === row.last_seen_published_at
+      && existing.last_seen_video_id === row.last_seen_video_id
+      && existing.last_sync_error === row.last_sync_error
+    );
+    if (unchanged) {
+      return existing;
+    }
+
     const { data, error } = await db
       .from('user_source_subscriptions')
       .update({
@@ -2831,8 +2866,8 @@ async function getUserSourceSubscriptionByIdOracleFirst(
         subscriptionId: input.subscriptionId,
         userId: input.userId,
       });
-      if (ledgerRow) {
-        return ledgerRow;
+      if (ledgerRow || oracleSubscriptionLedgerPrimaryEnabled) {
+        return ledgerRow || null;
       }
     } catch (error) {
       console.warn('[oracle-control-plane] subscription_ledger_failed', JSON.stringify({
@@ -2844,6 +2879,13 @@ async function getUserSourceSubscriptionByIdOracleFirst(
     }
   }
 
+  if (oracleSubscriptionLedgerPrimaryEnabled) {
+    logSubscriptionSupabaseFallbackRead({
+      action: 'get_subscription_by_id',
+      userId: input.userId || null,
+      subscriptionId: input.subscriptionId,
+    });
+  }
   return readSupabaseSourceSubscriptionById(db, input);
 }
 
@@ -2859,8 +2901,8 @@ async function getUserSourceSubscriptionByUserChannelOracleFirst(
         sourceType: input.sourceType,
         sourceChannelId: input.sourceChannelId,
       });
-      if (ledgerRow) {
-        return ledgerRow;
+      if (ledgerRow || oracleSubscriptionLedgerPrimaryEnabled) {
+        return ledgerRow || null;
       }
     } catch (error) {
       console.warn('[oracle-control-plane] subscription_ledger_failed', JSON.stringify({
@@ -2873,6 +2915,14 @@ async function getUserSourceSubscriptionByUserChannelOracleFirst(
     }
   }
 
+  if (oracleSubscriptionLedgerPrimaryEnabled) {
+    logSubscriptionSupabaseFallbackRead({
+      action: 'get_subscription_by_user_channel',
+      userId: input.userId,
+      sourceType: input.sourceType,
+      sourceChannelId: input.sourceChannelId,
+    });
+  }
   return readSupabaseSourceSubscriptionByUserChannel(db, input);
 }
 
@@ -2889,7 +2939,7 @@ async function listUserSourceSubscriptionsForUserOracleFirst(
         controlDb: oracleControlPlane,
         userId: normalizedUserId,
       });
-      if (ledgerRows.length > 0) {
+      if (ledgerRows.length > 0 || oracleSubscriptionLedgerPrimaryEnabled) {
         return ledgerRows;
       }
     } catch (error) {
@@ -2901,6 +2951,12 @@ async function listUserSourceSubscriptionsForUserOracleFirst(
     }
   }
 
+  if (oracleSubscriptionLedgerPrimaryEnabled) {
+    logSubscriptionSupabaseFallbackRead({
+      action: 'list_subscriptions_for_user',
+      userId: normalizedUserId,
+    });
+  }
   return listSupabaseSourceSubscriptionsForUser(db, normalizedUserId);
 }
 
@@ -3158,7 +3214,14 @@ async function getUserSubscriptionStateForSourcePageOracleFirst(
         sourcePageId: input.sourcePageId,
         sourceChannelId: input.sourceChannelId,
       });
-      if (durable) {
+      if (durable || oracleSubscriptionLedgerPrimaryEnabled) {
+        if (!durable) {
+          return {
+            subscribed: false,
+            subscription_id: null,
+            is_active: false,
+          };
+        }
         return {
           subscribed: Boolean(durable.is_active),
           subscription_id: durable.id || null,
@@ -3173,6 +3236,14 @@ async function getUserSubscriptionStateForSourcePageOracleFirst(
     }
   }
 
+  if (oracleSubscriptionLedgerPrimaryEnabled) {
+    logSubscriptionSupabaseFallbackRead({
+      action: 'get_user_subscription_state_for_source_page',
+      userId: input.userId,
+      sourcePageId: input.sourcePageId,
+      sourceChannelId: input.sourceChannelId || null,
+    });
+  }
   if (oracleProductMirrorEnabled && oracleControlPlane) {
     try {
       const mirrored = await getOracleProductSubscriptionState({
@@ -3215,7 +3286,7 @@ async function countActiveSubscribersForSourcePageOracleFirst(
         sourcePageId,
         sourceChannelId,
       });
-      if (durableCount > 0) {
+      if (durableCount > 0 || oracleSubscriptionLedgerPrimaryEnabled) {
         return durableCount;
       }
     } catch (error) {
@@ -3226,6 +3297,13 @@ async function countActiveSubscribersForSourcePageOracleFirst(
     }
   }
 
+  if (oracleSubscriptionLedgerPrimaryEnabled) {
+    logSubscriptionSupabaseFallbackRead({
+      action: 'count_active_subscribers_for_source_page',
+      sourcePageId,
+      sourceChannelId,
+    });
+  }
   if (oracleProductMirrorEnabled && oracleControlPlane) {
     try {
       const mirroredCount = await countOracleProductActiveSubscriptions({
@@ -4700,7 +4778,7 @@ async function listActiveSubscriptionsForUserOracleFirst(
         controlDb: oracleControlPlane,
         userId: normalizedUserId,
       });
-      if (durable.length > 0) {
+      if (durable.length > 0 || oracleSubscriptionLedgerPrimaryEnabled) {
         return durable;
       }
     } catch (error) {
@@ -4712,6 +4790,12 @@ async function listActiveSubscriptionsForUserOracleFirst(
     }
   }
 
+  if (oracleSubscriptionLedgerPrimaryEnabled) {
+    logSubscriptionSupabaseFallbackRead({
+      action: 'list_active_subscriptions_for_user',
+      userId: normalizedUserId,
+    });
+  }
   if (oracleProductMirrorEnabled && oracleControlPlane) {
     try {
       const mirrored = await listOracleProductActiveSubscriptionsForUser({

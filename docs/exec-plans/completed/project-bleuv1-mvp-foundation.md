@@ -124,6 +124,9 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Current runtime follow-up now also treats empty Oracle queue-ledger results as authoritative in `primary` for hot owner/scope/latest queue reads, so normal status lookups do not fall through to Supabase just because Oracle found no matching row.
 - Current runtime follow-up now also trims queue-shadow churn further: lease-heartbeat-only refreshes no longer emit a full Supabase `ingestion_jobs` upsert when queue-ledger `primary` already owns the live lease row.
 - Current runtime follow-up now also logs any remaining Supabase queue reads in that mode as `queue_fallback_read`, so the egress-reduction chapter can attribute compatibility queue traffic precisely.
+- Current runtime follow-up now also treats empty Oracle subscription-ledger results as authoritative in `primary` for hot subscription lookups, so normal source-page/list/count checks do not fall through to Supabase just because Oracle found no matching subscription row.
+- Current runtime follow-up now also trims subscription-shadow churn further: unchanged compatibility rows no longer emit a no-op `user_source_subscriptions` patch when the meaningful persisted fields already match.
+- Current runtime follow-up now also logs any remaining Supabase subscription reads in that mode as `subscription_fallback_read`, so the egress-reduction chapter can attribute compatibility subscription traffic precisely.
 - Durable generation trace writes should stay lean by default, avoiding per-event `seq` reads and unnecessary returning payloads on write helpers.
 
 ### W2 - Channel Candidate Gating

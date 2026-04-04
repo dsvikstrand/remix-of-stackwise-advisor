@@ -342,19 +342,23 @@ export async function handlePreviewPublicYouTubeSubscriptions(
     .map((item: { channelId?: string | null }) => String(item.channelId || '').trim())
     .filter(Boolean);
 
-  const { data: existing, error: existingError } = channelIds.length === 0
-    ? { data: [] as Array<{ source_channel_id: string; is_active: boolean }>, error: null }
-    : await db
-      .from('user_source_subscriptions')
-      .select('source_channel_id, is_active')
-      .eq('user_id', userId)
-      .eq('source_type', 'youtube')
-      .in('source_channel_id', channelIds);
-  if (existingError) {
+  let existing: Array<{ source_channel_id: string; is_active: boolean }> = [];
+  try {
+    const rows = channelIds.length === 0
+      ? []
+      : await deps.listSourceSubscriptionsForUser(db, userId);
+    existing = rows
+      .filter((row: any) => String(row.source_type || '').trim() === 'youtube')
+      .filter((row: any) => channelIds.includes(String(row.source_channel_id || '').trim()))
+      .map((row: any) => ({
+        source_channel_id: String(row.source_channel_id || '').trim(),
+        is_active: row.is_active === true,
+      }));
+  } catch (existingError) {
     return res.status(400).json({
       ok: false,
       error_code: 'READ_FAILED',
-      message: existingError.message,
+      message: existingError instanceof Error ? existingError.message : String(existingError),
       data: null,
     });
   }
@@ -560,15 +564,25 @@ export async function handleRefreshGenerate(req: express.Request, res: express.R
     });
   }
 
-  const subscriptionIds = Array.from(new Set(parsed.data.items.map((item) => item.subscription_id)));
-  const { data: subscriptions, error: subscriptionsError } = await db
-    .from('user_source_subscriptions')
-    .select('id, source_channel_id, is_active')
-    .eq('user_id', userId)
-    .eq('is_active', true)
-    .in('id', subscriptionIds);
-  if (subscriptionsError) {
-    return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: subscriptionsError.message, data: null });
+  const subscriptionIds = new Set(parsed.data.items.map((item) => item.subscription_id));
+  let subscriptions: Array<{ id: string; source_channel_id: string; is_active: boolean }> = [];
+  try {
+    const rows = await deps.listSourceSubscriptionsForUser(db, userId);
+    subscriptions = rows
+      .filter((row: any) => subscriptionIds.has(String(row.id || '').trim()))
+      .map((row: any) => ({
+        id: String(row.id || '').trim(),
+        source_channel_id: String(row.source_channel_id || '').trim(),
+        is_active: row.is_active === true,
+      }))
+      .filter((row) => row.is_active);
+  } catch (subscriptionsError) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: subscriptionsError instanceof Error ? subscriptionsError.message : String(subscriptionsError),
+      data: null,
+    });
   }
 
   const activeById = new Map((subscriptions || []).map((row) => [row.id, row]));

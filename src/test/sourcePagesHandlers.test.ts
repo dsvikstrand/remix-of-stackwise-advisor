@@ -505,6 +505,10 @@ describe('source page handlers', () => {
     registerSourcePagesRouteHandlers(app as any, createDeps({
       getAuthedSupabaseClient: () => authDb,
       getServiceSupabaseClient: () => serviceDb,
+      getUserSubscriptionStateForSourcePage: vi.fn(async () => ({
+        subscribed: true,
+        subscription_id: 'sub_1',
+      })),
       logUnlockEvent: vi.fn(() => undefined),
       reserveCredits: vi.fn(async (db: any, input: any) => {
         const wallet = db.state.user_credit_wallets[0];
@@ -649,6 +653,10 @@ describe('source page handlers', () => {
     registerSourcePagesRouteHandlers(app as any, createDeps({
       getAuthedSupabaseClient: () => authDb,
       getServiceSupabaseClient: () => serviceDb,
+      getUserSubscriptionStateForSourcePage: vi.fn(async () => ({
+        subscribed: true,
+        subscription_id: 'sub_1',
+      })),
       loadExistingSourceVideoStateForUser: vi.fn(async () => new Map([
         ['video_dup', {
           already_exists_for_user: true,
@@ -715,6 +723,10 @@ describe('source page handlers', () => {
     registerSourcePagesRouteHandlers(app as any, createDeps({
       getAuthedSupabaseClient: () => authDb,
       getServiceSupabaseClient: () => serviceDb,
+      getUserSubscriptionStateForSourcePage: vi.fn(async () => ({
+        subscribed: true,
+        subscription_id: 'sub_1',
+      })),
       reserveUnlock: vi.fn(async () => {
         throw {
           code: 'RESERVE_FAILED',
@@ -769,6 +781,10 @@ describe('source page handlers', () => {
     registerSourcePagesRouteHandlers(app as any, createDeps({
       getAuthedSupabaseClient: () => authDb,
       getServiceSupabaseClient: () => serviceDb,
+      getUserSubscriptionStateForSourcePage: vi.fn(async () => ({
+        subscribed: true,
+        subscription_id: 'sub_1',
+      })),
       reserveUnlock: vi.fn(async (db: any, input: any) => ({
         ok: true,
         state: 'in_progress',
@@ -871,6 +887,10 @@ describe('source page handlers', () => {
     registerSourcePagesRouteHandlers(app as any, createDeps({
       getAuthedSupabaseClient: () => authDb,
       getServiceSupabaseClient: () => serviceDb,
+      getUserSubscriptionStateForSourcePage: vi.fn(async () => ({
+        subscribed: true,
+        subscription_id: 'sub_1',
+      })),
       getBlueprintAvailabilityForVideo,
       upsertSourceItemFromVideo: vi.fn(async () => ({
         id: 'source_video_blocked',

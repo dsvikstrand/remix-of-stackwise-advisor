@@ -45,17 +45,9 @@ export async function resolveSourcePageSubscriptionAccess(input: {
     };
   }
 
-  const { data: fallbackSub } = await input.db
-    .from('user_source_subscriptions')
-    .select('id, is_active')
-    .eq('user_id', input.userId)
-    .eq('source_type', 'youtube')
-    .eq('source_channel_id', input.sourceChannelId)
-    .maybeSingle();
-
   return {
-    subscribed: Boolean(fallbackSub?.is_active),
-    subscription_id: fallbackSub?.is_active ? fallbackSub.id : null,
+    subscribed: false,
+    subscription_id: null,
   };
 }
 
