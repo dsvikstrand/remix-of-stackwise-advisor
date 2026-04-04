@@ -1,7 +1,7 @@
 # Supabase Egress Attribution And Reduction Plan
 
-Status: `active`  
-Owner: `Codex / David`  
+Status: `active`
+Owner: `Codex / David`
 Last updated: `2026-04-04`
 
 ## Purpose
