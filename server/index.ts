@@ -1430,6 +1430,49 @@ function logSubscriptionShadowWriteSkipped(input: {
   }));
 }
 
+function sourceSubscriptionRowsEquivalent(
+  left: Pick<
+    SourceSubscriptionRow,
+    | 'source_channel_url'
+    | 'source_channel_title'
+    | 'source_page_id'
+    | 'mode'
+    | 'auto_unlock_enabled'
+    | 'is_active'
+    | 'last_polled_at'
+    | 'last_seen_published_at'
+    | 'last_seen_video_id'
+    | 'last_sync_error'
+  > | null | undefined,
+  right: Pick<
+    SourceSubscriptionRow,
+    | 'source_channel_url'
+    | 'source_channel_title'
+    | 'source_page_id'
+    | 'mode'
+    | 'auto_unlock_enabled'
+    | 'is_active'
+    | 'last_polled_at'
+    | 'last_seen_published_at'
+    | 'last_seen_video_id'
+    | 'last_sync_error'
+  > | null | undefined,
+) {
+  if (!left || !right) return false;
+  return (
+    left.source_channel_url === right.source_channel_url
+    && left.source_channel_title === right.source_channel_title
+    && left.source_page_id === right.source_page_id
+    && left.mode === right.mode
+    && left.auto_unlock_enabled === right.auto_unlock_enabled
+    && left.is_active === right.is_active
+    && left.last_polled_at === right.last_polled_at
+    && left.last_seen_published_at === right.last_seen_published_at
+    && left.last_seen_video_id === right.last_seen_video_id
+    && left.last_sync_error === right.last_sync_error
+  );
+}
+
 async function finalizeIngestionJobWithMirror(
   db: ReturnType<typeof createClient>,
   input: {
@@ -2793,42 +2836,62 @@ async function upsertOracleSubscriptionLedgerFromKnownRow(
 async function writeSupabaseSourceSubscriptionShadow(
   db: ReturnType<typeof createClient>,
   row: SourceSubscriptionRow,
+  options?: { current?: SourceSubscriptionRow | null; action?: string },
 ) {
-  const existing = (
-    await readSupabaseSourceSubscriptionById(db, {
+  const current = options?.current || null;
+  const action = String(options?.action || 'subscription_shadow_write').trim() || 'subscription_shadow_write';
+
+  if (current?.id === row.id && sourceSubscriptionRowsEquivalent(current, row)) {
+    logSubscriptionShadowWriteSkipped({
+      action,
       subscriptionId: row.id,
       userId: row.user_id,
+      reason: 'unchanged_oracle_material_fields',
+    });
+    return row;
+  }
+
+  const { data: updatedById, error: updateByIdError } = await db
+    .from('user_source_subscriptions')
+    .update({
+      source_channel_url: row.source_channel_url,
+      source_channel_title: row.source_channel_title,
+      source_page_id: row.source_page_id,
+      mode: row.mode,
+      auto_unlock_enabled: row.auto_unlock_enabled,
+      is_active: row.is_active,
+      last_polled_at: row.last_polled_at,
+      last_seen_published_at: row.last_seen_published_at,
+      last_seen_video_id: row.last_seen_video_id,
+      last_sync_error: row.last_sync_error,
+      updated_at: row.updated_at,
     })
-  ) || (
-    String(row.source_channel_id || '').trim()
-      ? await readSupabaseSourceSubscriptionByUserChannel(db, {
-          userId: row.user_id,
-          sourceType: row.source_type,
-          sourceChannelId: String(row.source_channel_id || '').trim(),
-        })
-      : null
-  );
+    .eq('id', row.id)
+    .eq('user_id', row.user_id)
+    .select(SOURCE_SUBSCRIPTION_SELECT)
+    .maybeSingle();
+  if (updateByIdError) throw updateByIdError;
+  if (updatedById) {
+    return normalizeSourceSubscriptionRow(updatedById as Record<string, unknown>);
+  }
+
+  const existing = String(row.source_channel_id || '').trim()
+    ? await readSupabaseSourceSubscriptionByUserChannel(db, {
+        userId: row.user_id,
+        sourceType: row.source_type,
+        sourceChannelId: String(row.source_channel_id || '').trim(),
+      })
+    : null;
 
   if (existing) {
     if (existing.id !== row.id) {
       throw new Error(`SUBSCRIPTION_SHADOW_ID_MISMATCH:${existing.id}:${row.id}`);
     }
 
-    const unchanged = (
-      existing.source_channel_url === row.source_channel_url
-      && existing.source_channel_title === row.source_channel_title
-      && existing.source_page_id === row.source_page_id
-      && existing.mode === row.mode
-      && existing.auto_unlock_enabled === row.auto_unlock_enabled
-      && existing.is_active === row.is_active
-      && existing.last_polled_at === row.last_polled_at
-      && existing.last_seen_published_at === row.last_seen_published_at
-      && existing.last_seen_video_id === row.last_seen_video_id
-      && existing.last_sync_error === row.last_sync_error
-    );
+    const unchanged = sourceSubscriptionRowsEquivalent(existing, row);
     if (unchanged) {
       logSubscriptionShadowWriteSkipped({
-        action: 'subscription_shadow_update',
+        action,
         subscriptionId: existing.id,
         userId: existing.user_id,
         reason: 'unchanged_material_fields',
@@ -2876,10 +2939,11 @@ async function persistSourceSubscriptionRowOracleAware(
   input: {
     row: SourceSubscriptionRow;
     action: string;
+    current?: SourceSubscriptionRow | null;
   },
 ) {
   const normalizedRow = normalizeSourceSubscriptionRow(input.row as unknown as Record<string, unknown>);
-  const previousOracle = (
+  const previousOracle = input.current || (
     oracleSubscriptionLedgerEnabled && oracleControlPlane
       ? await getOracleSubscriptionLedgerById({
           controlDb: oracleControlPlane,
@@ -2893,7 +2957,10 @@ async function persistSourceSubscriptionRowOracleAware(
   }
 
   try {
-    const shadowRow = await writeSupabaseSourceSubscriptionShadow(db, normalizedRow);
+    const shadowRow = await writeSupabaseSourceSubscriptionShadow(db, normalizedRow, {
+      current: previousOracle,
+      action: input.action,
+    });
     await upsertOracleProductSubscriptionsFromKnownRows([shadowRow], input.action);
     return shadowRow;
   } catch (error) {
@@ -3058,6 +3125,7 @@ async function upsertUserSourceSubscriptionOracleAware(
   const persisted = await persistSourceSubscriptionRowOracleAware(db, {
     row,
     action: 'subscription_write',
+    current,
   });
 
   return {
@@ -3088,6 +3156,7 @@ async function patchUserSourceSubscriptionOracleAware(
   return persistSourceSubscriptionRowOracleAware(db, {
     row,
     action: input.action,
+    current,
   });
 }
 
@@ -3112,6 +3181,7 @@ async function deactivateUserSourceSubscriptionByChannelOracleAware(
   return persistSourceSubscriptionRowOracleAware(db, {
     row,
     action: input.action,
+    current,
   });
 }
 
