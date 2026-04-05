@@ -1,0 +1,40 @@
+type SourceItemShadowRowLike = {
+  source_type: string | null;
+  source_native_id: string | null;
+  canonical_key: string | null;
+  source_url: string | null;
+  title: string | null;
+  published_at: string | null;
+  ingest_status: string | null;
+  source_channel_id: string | null;
+  source_channel_title: string | null;
+  source_page_id: string | null;
+  thumbnail_url: string | null;
+  metadata: Record<string, unknown> | null;
+  updated_at: string;
+};
+
+export function shouldLookupSupabaseSourceItemCurrent(input: {
+  primaryEnabled: boolean;
+  hasOracleCurrent: boolean;
+}) {
+  return !input.primaryEnabled && !input.hasOracleCurrent;
+}
+
+export function mapSourceItemShadowUpdateValues(row: SourceItemShadowRowLike) {
+  return {
+    source_type: row.source_type,
+    source_native_id: row.source_native_id,
+    canonical_key: row.canonical_key,
+    source_url: row.source_url,
+    title: row.title,
+    published_at: row.published_at,
+    ingest_status: row.ingest_status,
+    source_channel_id: row.source_channel_id,
+    source_channel_title: row.source_channel_title,
+    source_page_id: row.source_page_id,
+    thumbnail_url: row.thumbnail_url,
+    metadata: row.metadata,
+    updated_at: row.updated_at,
+  };
+}

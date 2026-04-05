@@ -360,6 +360,10 @@ import {
   getSubscriptionShadowChangedFields,
   shouldSkipSupabaseSubscriptionShadowWrite,
 } from './services/subscriptionShadowPolicy';
+import {
+  mapSourceItemShadowUpdateValues,
+  shouldLookupSupabaseSourceItemCurrent,
+} from './services/sourceItemShadowPolicy';
 import { createBlueprintCreationService } from './services/blueprintCreation';
 import {
   createBlueprintYouTubeCommentsService,
@@ -3974,44 +3978,30 @@ function sourceItemShadowRowsEquivalent(left: SourceItemRow, right: SourceItemRo
 async function writeSupabaseSourceItemShadow(
   db: ReturnType<typeof createClient>,
   row: SourceItemRow,
+  options?: { current?: SourceItemRow | null; action?: string },
 ) {
-  const existingById = await readSupabaseSourceItemById(db, {
-    sourceItemId: row.id,
-  });
-  const existingByCanonical = row.canonical_key
-    ? await readSupabaseSourceItemByCanonicalKey(db, {
-        canonicalKey: row.canonical_key,
-      })
-    : null;
+  const action = String(options?.action || 'source_item_shadow_update').trim() || 'source_item_shadow_update';
+  const current = options?.current || null;
 
-  if (existingById && existingByCanonical && existingById.id !== existingByCanonical.id) {
-    throw new Error(`SOURCE_ITEM_SHADOW_DUPLICATE_CANONICAL:${existingById.id}:${existingByCanonical.id}`);
+  if (current?.id === row.id && sourceItemShadowRowsEquivalent(current, row)) {
+    logSourceItemShadowWriteSkipped({
+      action,
+      sourceItemId: current.id,
+      canonicalKey: current.canonical_key,
+      reason: 'unchanged_material_fields',
+    });
+    return current;
   }
 
-  const existing = existingById || existingByCanonical;
-  if (existing) {
-    if (existing.id !== row.id) {
-      throw new Error(`SOURCE_ITEM_SHADOW_ID_MISMATCH:${existing.id}:${row.id}`);
-    }
-
-    if (sourceItemShadowRowsEquivalent(existing, row)) {
-      logSourceItemShadowWriteSkipped({
-        action: 'source_item_shadow_update',
-        sourceItemId: existing.id,
-        canonicalKey: existing.canonical_key,
-        reason: 'unchanged_material_fields',
-      });
-      return existing;
-    }
-
-    const { data, error } = await db
-      .from('source_items')
-      .update(mapSourceItemToSupabaseShadowValues(row))
-      .eq('id', existing.id)
-      .select(SOURCE_ITEM_SELECT)
-      .single();
-    if (error) throw error;
-    return normalizeSourceItemRow(data as Record<string, unknown>);
+  const { data: updatedById, error: updateByIdError } = await db
+    .from('source_items')
+    .update(mapSourceItemToSupabaseShadowUpdateValues(row))
+    .eq('id', row.id)
+    .select(SOURCE_ITEM_SELECT)
+    .maybeSingle();
+  if (updateByIdError) throw updateByIdError;
+  if (updatedById) {
+    return normalizeSourceItemRow(updatedById as Record<string, unknown>);
   }
 
   const { data, error } = await db
@@ -4025,7 +4015,12 @@ async function writeSupabaseSourceItemShadow(
       const reloaded = await readSupabaseSourceItemByCanonicalKey(db, {
         canonicalKey: row.canonical_key,
       });
-      if (reloaded) return reloaded;
+      if (reloaded) {
+        if (reloaded.id !== row.id) {
+          throw new Error(`SOURCE_ITEM_SHADOW_ID_MISMATCH:${reloaded.id}:${row.id}`);
+        }
+        return reloaded;
+      }
     }
     throw error;
   }
@@ -4142,6 +4137,10 @@ async function persistSourceItemRowOracleAware(
     }
   }
   const existingSupabaseById = !existingOracleById && !existingOracleByCanonical
+    && shouldLookupSupabaseSourceItemCurrent({
+      primaryEnabled: oracleSourceItemLedgerPrimaryEnabled,
+      hasOracleCurrent: Boolean(existingOracleById || existingOracleByCanonical),
+    })
     ? await readSupabaseSourceItemById(db, {
         sourceItemId: normalizedBase.id,
       })
@@ -4150,6 +4149,10 @@ async function persistSourceItemRowOracleAware(
     !existingOracleById
     && !existingOracleByCanonical
     && !existingSupabaseById
+    && shouldLookupSupabaseSourceItemCurrent({
+      primaryEnabled: oracleSourceItemLedgerPrimaryEnabled,
+      hasOracleCurrent: Boolean(existingOracleById || existingOracleByCanonical),
+    })
     && normalizedBase.canonical_key
   )
     ? await readSupabaseSourceItemByCanonicalKey(db, {
@@ -4184,7 +4187,10 @@ async function persistSourceItemRowOracleAware(
   }
 
   try {
-    const shadowRow = await writeSupabaseSourceItemShadow(db, normalizedRow);
+    const shadowRow = await writeSupabaseSourceItemShadow(db, normalizedRow, {
+      current: existing || null,
+      action: input.action,
+    });
     await upsertOracleProductSourceItemsFromKnownRows([shadowRow], input.action);
     return shadowRow;
   } catch (error) {
