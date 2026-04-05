@@ -53,7 +53,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
         source_channel_title: input.sourceChannelTitle || null,
         source_page_id: input.sourcePageId || null,
         mode: input.mode || 'auto',
-        auto_unlock_enabled: input.autoUnlockEnabled ?? true,
+        auto_unlock_enabled: input.autoUnlockEnabled ?? false,
         is_active: input.isActive ?? true,
         last_polled_at: null,
         last_seen_published_at: null,
@@ -215,6 +215,35 @@ describe('source subscription refresh generate handler', () => {
         state: 'my_feed_unlockable',
       }),
     ]));
+  });
+
+  it('defaults new subscriptions to manual auto-unlock off', async () => {
+    const req = {
+      body: { channel_input: '@channel_1' },
+    } as any;
+    const res = createResponse();
+    const authDb = createMockSupabase({}) as any;
+    const serviceDb = createMockSupabase({}) as any;
+    const deps = createDeps({
+      getAuthedSupabaseClient: () => authDb,
+      getServiceSupabaseClient: () => serviceDb,
+      resolveYouTubeChannel: vi.fn(async () => ({
+        channelId: 'channel_1',
+        channelTitle: 'Channel 1',
+        channelUrl: 'https://youtube.com/channel/channel_1',
+      })),
+      ensureSourcePageFromYouTubeChannel: vi.fn(async () => ({
+        id: 'page_1',
+        platform: 'youtube',
+        external_id: 'channel_1',
+      })),
+    });
+
+    await handleCreateSourceSubscription(req, res as any, deps);
+
+    expect(deps.upsertSourceSubscription).toHaveBeenCalledTimes(1);
+    expect(res.statusCode).toBe(200);
+    expect((res.body as any)?.data?.subscription?.auto_unlock_enabled).toBe(false);
   });
 
   it('previews public YouTube subscriptions with existing subscription state', async () => {

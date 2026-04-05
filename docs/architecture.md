@@ -91,6 +91,7 @@
   - Subscription management surface in `src/pages/Subscriptions.tsx` (MVP-simplified: popup creator lookup + subscribe + active-list `Unsubscribe`; aggregate health summary hidden for user clarity; row avatars shown when available).
     - page-level OAuth/import/manual-refresh orchestration now lives in a dedicated frontend controller hook so the route component primarily owns rendering.
     - per-row `Auto unlock` toggle (`auto_unlock_enabled`) controls whether that subscription participates in new-video auto unlock attempts.
+    - new manual/source-page/imported subscriptions now default `auto_unlock_enabled=false`; reactivating an existing subscription preserves that row's prior saved toggle value.
     - stored subscription `mode` values may still be `manual` or `auto` for compatibility, but runtime auto behavior should be read from `auto_unlock_enabled`.
     - manual creator add now uses explicit lookup modes (`Handle`, `Creator name`, `Channel URL / ID`) so the UI does not infer user intent from one mixed input field.
   - Source page surface in `src/pages/SourcePage.tsx` at `/s/:platform/:externalId`:
@@ -179,7 +180,7 @@
     - `POST|GET|PATCH|DELETE /api/source-subscriptions`
       - `GET` returns optional `source_channel_avatar_url` from stored `source_pages` metadata and never blocks on live YouTube asset fetches
       - rows now carry `source_page_id` and `source_page_path` when resolvable.
-      - rows now include `auto_unlock_enabled` (default `true`) and `PATCH` accepts `auto_unlock_enabled` updates.
+    - rows now include `auto_unlock_enabled`; new subscriptions default it to `false`, reactivations preserve the prior saved value, and `PATCH` accepts explicit `auto_unlock_enabled` updates.
       - `POST` notice insertion stores channel avatar + optional banner metadata for personal-lane notice-card rendering (including legacy `My Feed` compatibility views)
       - `POST` ensures a platform-agnostic source-page row and dual-writes `source_page_id`.
       - `DELETE` deactivates subscription and removes user-scoped `subscription_notice` feed row for that channel

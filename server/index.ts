@@ -3142,7 +3142,7 @@ async function upsertUserSourceSubscriptionOracleAware(
       source_channel_title: input.sourceChannelTitle ?? current?.source_channel_title ?? null,
       source_page_id: input.sourcePageId ?? current?.source_page_id ?? null,
       mode: input.mode ?? current?.mode ?? null,
-      auto_unlock_enabled: input.autoUnlockEnabled ?? current?.auto_unlock_enabled ?? true,
+      auto_unlock_enabled: input.autoUnlockEnabled ?? current?.auto_unlock_enabled ?? false,
       is_active: input.isActive ?? true,
       last_sync_error: Object.prototype.hasOwnProperty.call(input, 'lastSyncError')
         ? input.lastSyncError

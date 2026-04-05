@@ -206,7 +206,7 @@
 - Profile feed read endpoint:
   - `GET /api/profile/:userId/feed` (optional auth; public profiles readable, private profiles owner-only)
 - Subscription auto-unlock policy:
-  - `user_source_subscriptions.auto_unlock_enabled` defaults to `true` for existing and new rows.
+  - `user_source_subscriptions.auto_unlock_enabled` now defaults to `false` for new subscriptions; reactivating an existing row preserves the prior saved value.
   - runtime policy is funded-subscriber shared-cost auto generation: one `1.00` credit event per source video, split across the funded auto-enabled subscriber snapshot for that release.
   - funded subset selection uses deterministic fixed-point recomputation at reservation time; remainder cents go to the lowest stable user ids.
   - admin entitlement users participate as bypass-funded users and should not be excluded solely due to wallet balance.

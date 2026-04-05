@@ -157,7 +157,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
         source_channel_title: input.sourceChannelTitle || null,
         source_page_id: input.sourcePageId || null,
         mode: input.mode || 'auto',
-        auto_unlock_enabled: input.autoUnlockEnabled ?? true,
+        auto_unlock_enabled: input.autoUnlockEnabled ?? false,
         is_active: input.isActive ?? true,
         last_polled_at: null,
         last_seen_published_at: null,
@@ -210,6 +210,30 @@ describe('source page handlers', () => {
       error_code: 'SOURCE_PAGE_SUBSCRIPTION_REQUIRED',
     });
     expect(listYouTubeSourceVideos).not.toHaveBeenCalled();
+  });
+
+  it('defaults source-page subscriptions to manual auto-unlock off', async () => {
+    const app = createMockApp();
+    const authDb = createMockSupabase({}) as any;
+    const serviceDb = createMockSupabase({}) as any;
+    const deps = createDeps({
+      getAuthedSupabaseClient: () => authDb,
+      getServiceSupabaseClient: () => serviceDb,
+    });
+
+    registerSourcePagesRouteHandlers(app as any, deps);
+
+    const handler = app.handlers['POST /api/source-pages/:platform/:externalId/subscribe'];
+    const req = {
+      params: { platform: 'youtube', externalId: '@channel_1' },
+    } as any;
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(deps.upsertSourceSubscription).toHaveBeenCalledTimes(1);
+    expect(res.statusCode).toBe(200);
+    expect((res.body as any)?.data?.subscription?.auto_unlock_enabled).toBe(false);
   });
 
   it('shows in-progress unlock state in the source page video list when a variant is already running', async () => {
