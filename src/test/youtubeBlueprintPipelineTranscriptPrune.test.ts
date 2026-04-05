@@ -207,8 +207,8 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
         transcriptText: 'one two three four five six seven eight nine ten',
         pruningConfig: {
           enabled: false,
-          budgetChars: 4500,
-          thresholds: [4500, 9000],
+          budgetChars: 5000,
+          thresholds: [5000, 9000],
           windows: [1, 4],
         },
         events,
@@ -300,8 +300,8 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
     const transcriptText = `BEGIN_SENTINEL ${'a'.repeat(7000)} MID_SENTINEL ${'b'.repeat(7000)} END_SENTINEL`;
     const pruningConfig: TranscriptPruningConfig = {
       enabled: true,
-      budgetChars: 4500,
-      thresholds: [4500, 9000, 16000],
+      budgetChars: 5000,
+      thresholds: [5000, 9000, 16000],
       windows: [1, 4, 6, 8],
       separator: '\n\n...\n\n',
       minWindowChars: 120,
@@ -336,9 +336,9 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
     expect(pass1Transcripts.length).toBeGreaterThan(0);
     expect(pass2Transcripts.length).toBe(0);
     expect(YOUTUBE_BLUEPRINT_PROMPT_TEMPLATE_PATH_DEFAULT).toBe('docs/golden_blueprint/golden_bp_prompt_contract_one_step_v5.md');
-    expect(pass1Transcripts[0].length).toBeLessThanOrEqual(4500);
+    expect(pass1Transcripts[0].length).toBeLessThanOrEqual(5000);
     expect(result.meta.transcript_pruning?.applied).toBe(true);
-    expect(result.meta.transcript_pruning?.pruned_chars).toBeLessThanOrEqual(4500);
+    expect(result.meta.transcript_pruning?.pruned_chars).toBeLessThanOrEqual(5000);
     expect(events.some((row) => row.event === 'transcript_pruning_applied')).toBe(true);
   });
 
@@ -350,8 +350,8 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
     const transcriptText = `BEGIN ${'x'.repeat(6000)} END`;
     const pruningConfig: TranscriptPruningConfig = {
       enabled: false,
-      budgetChars: 4500,
-      thresholds: [4500, 9000, 16000],
+      budgetChars: 5000,
+      thresholds: [5000, 9000, 16000],
       windows: [1, 4, 6, 8],
       separator: '\n\n...\n\n',
       minWindowChars: 120,
@@ -395,8 +395,8 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
     const transcriptText = `BEGIN ${'x'.repeat(5200)} END`;
     const pruningConfig: TranscriptPruningConfig = {
       enabled: true,
-      budgetChars: 4500,
-      thresholds: [4500, 9000, 16000],
+      budgetChars: 5000,
+      thresholds: [5000, 9000, 16000],
       windows: [1, 4, 6, 8],
       separator: '\n\n...\n\n',
       minWindowChars: 120,
@@ -455,8 +455,8 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
     const transcriptText = 'tiny transcript';
     const pruningConfig: TranscriptPruningConfig = {
       enabled: true,
-      budgetChars: 4500,
-      thresholds: [4500, 9000, 16000],
+      budgetChars: 5000,
+      thresholds: [5000, 9000, 16000],
       windows: [1, 4, 6, 8],
       separator: '\n\n...\n\n',
       minWindowChars: 120,
@@ -504,8 +504,8 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
     const transcriptText = `BEGIN ${'x'.repeat(2200)} END`;
     const pruningConfig: TranscriptPruningConfig = {
       enabled: true,
-      budgetChars: 4500,
-      thresholds: [4500, 9000, 16000],
+      budgetChars: 5000,
+      thresholds: [5000, 9000, 16000],
       windows: [1, 4, 6, 8],
       separator: '\n\n...\n\n',
       minWindowChars: 120,
@@ -568,8 +568,8 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
       transcriptText: `BEGIN ${'x'.repeat(1800)} END`,
       pruningConfig: {
         enabled: true,
-        budgetChars: 4500,
-        thresholds: [4500, 9000, 16000],
+        budgetChars: 5000,
+        thresholds: [5000, 9000, 16000],
         windows: [1, 4, 6, 8],
         separator: '\n\n...\n\n',
         minWindowChars: 120,

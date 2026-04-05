@@ -31,8 +31,8 @@ const DEFAULT_SEPARATOR = '\n\n...\n\n';
 
 const DEFAULT_CONFIG: TranscriptPruningConfig = {
   enabled: true,
-  budgetChars: 4500,
-  thresholds: [4500, 9000, 16000],
+  budgetChars: 5000,
+  thresholds: [5000, 9000, 16000],
   windows: [1, 4, 6, 8],
   separator: DEFAULT_SEPARATOR,
   minWindowChars: 120,
@@ -129,7 +129,7 @@ export function readTranscriptPruningConfigFromEnv(env: Record<string, unknown> 
 
   let budgetChars = parsePositiveInt(env.YT2BP_TRANSCRIPT_PRUNE_BUDGET_CHARS) || DEFAULT_CONFIG.budgetChars;
   if (!parsePositiveInt(env.YT2BP_TRANSCRIPT_PRUNE_BUDGET_CHARS) && String(env.YT2BP_TRANSCRIPT_PRUNE_BUDGET_CHARS || '').trim()) {
-    warnings.push('YT2BP_TRANSCRIPT_PRUNE_BUDGET_CHARS is invalid. Falling back to 4500.');
+    warnings.push('YT2BP_TRANSCRIPT_PRUNE_BUDGET_CHARS is invalid. Falling back to 5000.');
   }
   budgetChars = clamp(budgetChars, 500, 200_000);
 
@@ -143,10 +143,10 @@ export function readTranscriptPruningConfigFromEnv(env: Record<string, unknown> 
     ) {
       thresholds = [parsedThresholds[0], parsedThresholds[1], parsedThresholds[2]];
     } else {
-      warnings.push('YT2BP_TRANSCRIPT_PRUNE_THRESHOLDS is invalid. Falling back to 4500,9000,16000.');
+      warnings.push('YT2BP_TRANSCRIPT_PRUNE_THRESHOLDS is invalid. Falling back to 5000,9000,16000.');
     }
   } else if (String(env.YT2BP_TRANSCRIPT_PRUNE_THRESHOLDS || '').trim()) {
-    warnings.push('YT2BP_TRANSCRIPT_PRUNE_THRESHOLDS is invalid. Falling back to 4500,9000,16000.');
+    warnings.push('YT2BP_TRANSCRIPT_PRUNE_THRESHOLDS is invalid. Falling back to 5000,9000,16000.');
   }
 
   const parsedWindows = parseCsvPositiveInts(env.YT2BP_TRANSCRIPT_PRUNE_WINDOWS);

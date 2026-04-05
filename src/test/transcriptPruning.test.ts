@@ -13,8 +13,8 @@ describe('transcriptPruning', () => {
   it('passes through under-budget transcripts', () => {
     const config: TranscriptPruningConfig = {
       enabled: true,
-      budgetChars: 4500,
-      thresholds: [4500, 9000, 16000],
+      budgetChars: 5000,
+      thresholds: [5000, 9000, 16000],
       windows: [1, 4, 6, 8],
       separator: '\n\n...\n\n',
       minWindowChars: 120,
@@ -27,14 +27,14 @@ describe('transcriptPruning', () => {
 
     expect(result.meta.applied).toBe(false);
     expect(result.meta.original_chars).toBe(result.meta.pruned_chars);
-    expect(result.text.length).toBeLessThanOrEqual(4500);
+    expect(result.text.length).toBeLessThanOrEqual(5000);
   });
 
   it('selects dynamic window counts for each threshold bucket', () => {
     const config: TranscriptPruningConfig = {
       enabled: true,
-      budgetChars: 4500,
-      thresholds: [4500, 9000, 16000],
+      budgetChars: 5000,
+      thresholds: [5000, 9000, 16000],
       windows: [1, 4, 6, 8],
       separator: '\n\n...\n\n',
       minWindowChars: 120,
@@ -61,8 +61,8 @@ describe('transcriptPruning', () => {
   it('keeps output within budget and retains first/last timeline coverage', () => {
     const config: TranscriptPruningConfig = {
       enabled: true,
-      budgetChars: 4500,
-      thresholds: [4500, 9000, 16000],
+      budgetChars: 5000,
+      thresholds: [5000, 9000, 16000],
       windows: [1, 4, 6, 8],
       separator: '\n\n...\n\n',
       minWindowChars: 120,
@@ -81,7 +81,7 @@ describe('transcriptPruning', () => {
     });
 
     expect(result.meta.applied).toBe(true);
-    expect(result.text.length).toBeLessThanOrEqual(4500);
+    expect(result.text.length).toBeLessThanOrEqual(5000);
     expect(result.text.includes('BEGIN_SENTINEL')).toBe(true);
     expect(result.text.includes('END_SENTINEL')).toBe(true);
   });
@@ -90,13 +90,13 @@ describe('transcriptPruning', () => {
     const parsed = readTranscriptPruningConfigFromEnv({
       YT2BP_TRANSCRIPT_PRUNE_ENABLED: 'true',
       YT2BP_TRANSCRIPT_PRUNE_BUDGET_CHARS: 'not-a-number',
-      YT2BP_TRANSCRIPT_PRUNE_THRESHOLDS: '4500,9000',
+      YT2BP_TRANSCRIPT_PRUNE_THRESHOLDS: '5000,9000',
       YT2BP_TRANSCRIPT_PRUNE_WINDOWS: '2,three,7',
     });
 
     expect(parsed.config.enabled).toBe(true);
-    expect(parsed.config.budgetChars).toBe(4500);
-    expect(parsed.config.thresholds).toEqual([4500, 9000, 16000]);
+    expect(parsed.config.budgetChars).toBe(5000);
+    expect(parsed.config.thresholds).toEqual([5000, 9000, 16000]);
     expect(parsed.config.windows).toEqual([1, 4, 6, 8]);
     expect(parsed.warnings.length).toBeGreaterThan(0);
   });
