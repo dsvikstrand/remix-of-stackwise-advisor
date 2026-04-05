@@ -110,6 +110,29 @@ function rankChannelSearchResult(result: YouTubeChannelSearchResult, normalizedQ
   ], normalizedQuery);
 }
 
+export function filterChannelSearchResultsForDisplay(input: {
+  mode: YouTubeChannelSearchMode;
+  results: YouTubeChannelSearchResult[];
+  normalizedQuery: string;
+}) {
+  if (!input.normalizedQuery || input.mode === 'handle') {
+    return input.results;
+  }
+
+  return input.results
+    .map((result, index) => ({
+      result,
+      index,
+      rank: rankChannelSearchResult(result, input.normalizedQuery),
+    }))
+    .filter((entry) => Number.isFinite(entry.rank))
+    .sort((left, right) => {
+      if (left.rank !== right.rank) return left.rank - right.rank;
+      return left.index - right.index;
+    })
+    .map((entry) => entry.result);
+}
+
 function rankPublicPreviewItem(item: PublicYouTubeSubscriptionPreviewItem, normalizedQuery: string) {
   return getFilterRank([
     item.channel_title || '',
@@ -328,20 +351,12 @@ export function useCreatorSetupController() {
   );
 
   const filteredChannelSearchResults = useMemo(() => {
-    if (!normalizedChannelSearchQuery) return channelSearchResults;
-    return channelSearchResults
-      .map((result, index) => ({
-        result,
-        index,
-        rank: rankChannelSearchResult(result, normalizedChannelSearchQuery),
-      }))
-      .filter((entry) => Number.isFinite(entry.rank))
-      .sort((left, right) => {
-        if (left.rank !== right.rank) return left.rank - right.rank;
-        return left.index - right.index;
-      })
-      .map((entry) => entry.result);
-  }, [channelSearchResults, normalizedChannelSearchQuery]);
+    return filterChannelSearchResultsForDisplay({
+      mode: channelSearchMode,
+      results: channelSearchResults,
+      normalizedQuery: normalizedChannelSearchQuery,
+    });
+  }, [channelSearchMode, channelSearchResults, normalizedChannelSearchQuery]);
 
   const publicYouTubePreviewCreators = publicYouTubePreview?.creators || [];
   const selectedPublicYouTubeCreators = useMemo(
