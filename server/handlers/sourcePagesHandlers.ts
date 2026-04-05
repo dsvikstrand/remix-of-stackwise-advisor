@@ -23,6 +23,7 @@ import { getBlueprintGenerationChargePolicy } from '../services/generationCharge
 import {
   getBlueprintUnavailableMessage,
 } from '../services/blueprintAvailability';
+import { backfillSubscribedCreatorForSparseForYou } from '../services/subscriptionBackfill';
 
 function describeUnknownError(error: unknown) {
   if (error instanceof Error) {
@@ -114,6 +115,7 @@ export function registerSourcePagesRouteHandlers(app: express.Express, deps: Sou
     markSubscriptionSyncError,
     upsertSubscriptionNoticeSourceItem,
     insertFeedItem,
+    upsertFeedItemWithBlueprint,
     resolveGenerationTierAccess,
     resolveRequestedGenerationTier,
     normalizeRequestedGenerationTier,
@@ -2011,6 +2013,30 @@ app.post('/api/source-pages/:platform/:externalId/subscribe', async (req, res) =
         user_id: userId,
         source_channel_id: resolved.channelId,
         error: noticeError instanceof Error ? noticeError.message : String(noticeError),
+      }));
+    }
+
+    try {
+      await backfillSubscribedCreatorForSparseForYou({
+        db,
+        sourcePageDb,
+        userId,
+        sourcePageId: sourcePage.id,
+        channelId: resolved.channelId,
+        channelTitle: resolved.channelTitle,
+        youtubeDataApiKey,
+        listYouTubeSourceVideos,
+        upsertSourceItemFromVideo,
+        resolveVariantOrReady,
+        insertFeedItem,
+        upsertFeedItemWithBlueprint,
+      });
+    } catch (backfillError) {
+      console.log('[subscription_backfill_failed]', JSON.stringify({
+        user_id: userId,
+        source_channel_id: resolved.channelId,
+        source_page_id: sourcePage.id,
+        error: backfillError instanceof Error ? backfillError.message : String(backfillError),
       }));
     }
   }

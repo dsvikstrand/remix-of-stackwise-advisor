@@ -1056,8 +1056,9 @@ curl -sS -X POST https://api.bleup.app/api/source-subscriptions \
   --data '{"channel_input":"https://www.youtube.com/@AliAbdaal"}'
 ```
 Expected behavior:
-- first subscribe sets checkpoint only (no old-video prefill).
-- one `subscription_notice` feed item is inserted for this user/channel.
+- first subscribe sets the ongoing checkpoint and inserts one `subscription_notice` feed item for this user/channel.
+- if Home `For You` currently has fewer than `20` visible cards, subscribe/reactivate may also backfill up to the latest `5` creator videos.
+- historical backfill prefers an already-ready reusable blueprint row when available; otherwise it inserts a locked `my_feed_unlockable` card and does not auto-generate that historical item.
 - future uploads are ingested automatically.
 - subscription rows returned by `GET /api/source-subscriptions` may include `source_channel_avatar_url` from stored `source_pages` metadata; missing avatars return `null` and should not trigger live YouTube asset fetches on the request path.
 - `subscription_notice` source metadata may include `channel_banner_url` for notice-card backgrounds.

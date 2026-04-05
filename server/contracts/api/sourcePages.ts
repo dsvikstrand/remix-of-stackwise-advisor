@@ -126,6 +126,7 @@ export type SourcePagesRouteDeps = {
   markSubscriptionSyncError: any;
   upsertSubscriptionNoticeSourceItem: any;
   insertFeedItem: any;
+  upsertFeedItemWithBlueprint: any;
   cleanupSubscriptionNoticeForChannel: any;
   resolveGenerationTierAccess: any;
   resolveRequestedGenerationTier: any;

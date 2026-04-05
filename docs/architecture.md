@@ -329,9 +329,9 @@
    - user opens `/subscriptions`, launches `Add Subscription`, looks up a creator by channel URL, handle, channel id, or name, then clicks subscribe.
    - optional onboarding accelerator: user can add creators manually or import selected public YouTube subscriptions from `/subscriptions` or `/welcome`.
    - user can unsubscribe existing active rows from `/subscriptions`; sync/reactivate UI is deferred.
-   - resolve channel id and set first-sync checkpoint only (`last_seen_published_at`, `last_seen_video_id`).
+   - resolve channel id and set first-sync checkpoint (`last_seen_published_at`, `last_seen_video_id`).
    - ensure platform-agnostic source page row (`source_pages`) and link subscription/source items via `source_page_id`.
-   - no historical prefill on first subscribe in MVP.
+   - if Home `For You` is still sparse (`<20` visible cards), subscribe/reactivate may also backfill up to the creator's latest `5` videos into the personal lane; historical backfill rows stay locked and do not auto-generate, but reusable ready blueprints should attach as ready feed rows instead of locked placeholders.
    - create one persistent notice card (`user_feed_items.state = subscription_notice`) with avatar + optional banner metadata.
    - current unsubscribe deactivates the subscription without spending extra request-path work removing that notice card.
 4. Subscription sync after checkpoint:

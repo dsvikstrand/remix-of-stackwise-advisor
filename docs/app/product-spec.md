@@ -221,6 +221,7 @@ b5) Subscription behavior (MVP simplified)
   - source flows bypass auto-banner enqueue by default.
   - `SUBSCRIPTION_AUTO_BANNER_MODE` remains as compatibility control for non-source/legacy banner worker paths.
 - A persistent notice card is inserted into the personal lane with state `subscription_notice` and is surfaced on Home `For You` (with legacy `My Feed` compatibility support retained).
+- Subscribe/reactivate may also backfill up to the latest `5` creator videos when the user currently has fewer than `20` visible Home `For You` cards; historical backfill rows stay locked (`my_feed_unlockable`) unless the backend already has a reusable ready blueprint for that source item, in which case the feed row is attached/upgraded to the ready blueprint instead.
 - Notice cards are visualized with channel avatar and optional banner background when metadata is available.
 - API compatibility note: `mode` remains a legacy compatibility field on subscription endpoints and stored rows may still contain `manual` or `auto`, but runtime auto behavior is controlled by `auto_unlock_enabled`.
 - Manual refresh reliability policy:
@@ -279,7 +280,7 @@ f2) User can unsubscribe from active channels directly on `/subscriptions` (unsu
 f3) User enters search/create via header `Create` (which routes to `/search`) and looks up one specific YouTube video by link, video id, or title match (not persisted until generate).
 f4) User selects `Generate Blueprint` on a result to generate and save directly into Home `For You`.
 f5) User can subscribe to a result’s channel from the same search card.
-f6) On subscribe/reactivate, user gets one subscription notice card and future uploads ingest automatically into Home `For You`.
+f6) On subscribe/reactivate, user gets one subscription notice card; sparse Home `For You` walls (`<20` visible cards) may also receive up to the latest `5` creator videos as historical backfill, preferring ready blueprint rows when reusable output already exists and otherwise inserting locked cards only.
 f7) Auto-channel pipeline publishes eligible items automatically and labels Home `For You` cards with posted channel outcomes.
 f8) User scans, remixes, and adds insights.
 f9) Eligible items are promoted to Home feed channels after gates.

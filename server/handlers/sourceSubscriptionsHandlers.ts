@@ -21,6 +21,7 @@ import {
   reserveManualGenerationWorkPrefix,
   wouldExceedQueueAdmission,
 } from '../services/generationPreflight';
+import { backfillSubscribedCreatorForSparseForYou } from '../services/subscriptionBackfill';
 
 type StoredSourcePageAssetRow = {
   id: string;
@@ -262,6 +263,30 @@ export async function handleCreateSourceSubscription(req: express.Request, res: 
         user_id: userId,
         source_channel_id: resolved.channelId,
         error: noticeError instanceof Error ? noticeError.message : String(noticeError),
+      }));
+    }
+
+    try {
+      await backfillSubscribedCreatorForSparseForYou({
+        db,
+        sourcePageDb,
+        userId,
+        sourcePageId: sourcePage.id,
+        channelId: resolved.channelId,
+        channelTitle: resolved.channelTitle,
+        youtubeDataApiKey: deps.youtubeDataApiKey,
+        listYouTubeSourceVideos: deps.listYouTubeSourceVideos,
+        upsertSourceItemFromVideo: deps.upsertSourceItemFromVideo,
+        resolveVariantOrReady: deps.resolveVariantOrReady,
+        insertFeedItem: deps.insertFeedItem,
+        upsertFeedItemWithBlueprint: deps.upsertFeedItemWithBlueprint,
+      });
+    } catch (backfillError) {
+      console.log('[subscription_backfill_failed]', JSON.stringify({
+        user_id: userId,
+        source_channel_id: resolved.channelId,
+        source_page_id: sourcePage.id,
+        error: backfillError instanceof Error ? backfillError.message : String(backfillError),
       }));
     }
   }

@@ -156,7 +156,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 
 ### W5 - Subscription Intake And Sync
 - Support YouTube channel subscriptions with auto-only MVP UX.
-- First subscribe sets checkpoint only (new-uploads-only, no historical prefill).
+- First subscribe/reactivate still sets the ongoing checkpoint, but current runtime may also backfill up to the latest `5` creator videos into sparse Home `For You` walls (`<20` visible cards); those historical rows stay locked unless a reusable ready blueprint already exists for that source item.
 - Insert persistent `subscription_notice` item in the personal lane per subscribed channel; current runtime surfaces it on Home `For You`, with legacy `My Feed` compatibility retained separately.
 - Add `/subscriptions` page as first-class management surface (Step 1 foundation + Step 2 simplification).
 - Step 2 simplified actions on `/subscriptions`: active-list `Unsubscribe` only (sync/reactivate UI deferred).

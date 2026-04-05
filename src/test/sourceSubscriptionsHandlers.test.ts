@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  handleCreateSourceSubscription,
   handleListSourceSubscriptions,
   handlePreviewPublicYouTubeSubscriptions,
   handleRefreshGenerate,
@@ -38,6 +39,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     youtubeDataApiKey: '',
     fetchPublicYouTubeSubscriptions: vi.fn(async () => ({ items: [], nextPageToken: null, hasMore: false })),
     fetchYouTubeChannelAssetMap: vi.fn(async () => new Map()),
+    listYouTubeSourceVideos: vi.fn(async () => ({ results: [], nextPageToken: null })),
     runSourcePageAssetSweep: vi.fn(async () => null),
     ensureSourcePageFromYouTubeChannel: vi.fn(),
     upsertSourceSubscription: vi.fn(async (_db, input: any) => ({
@@ -122,6 +124,99 @@ function enqueueIntoMockDb(db: any, values: any) {
 }
 
 describe('source subscription refresh generate handler', () => {
+  it('backfills sparse For You with locked and ready rows on subscribe', async () => {
+    const authDb = createMockSupabase({
+      user_feed_items: [],
+    });
+    const serviceDb = createMockSupabase({});
+    const req = {
+      body: { channel_input: '@creator' },
+    } as any;
+    const res = createResponse();
+    const deps = createDeps({
+      youtubeDataApiKey: 'yt-key',
+      getAuthedSupabaseClient: () => authDb,
+      getServiceSupabaseClient: () => serviceDb,
+      resolveYouTubeChannel: vi.fn(async () => ({
+        channelId: 'channel_1',
+        channelTitle: 'Creator 1',
+        channelUrl: 'https://youtube.com/channel/channel_1',
+      })),
+      ensureSourcePageFromYouTubeChannel: vi.fn(async () => ({
+        id: 'page_1',
+        platform: 'youtube',
+        external_id: 'channel_1',
+      })),
+      syncSingleSubscription: vi.fn(async () => ({ processed: 0, inserted: 0, skipped: 0 })),
+      upsertSubscriptionNoticeSourceItem: vi.fn(async () => ({ id: 'notice_source_1' })),
+      listYouTubeSourceVideos: vi.fn(async () => ({
+        results: [
+          {
+            video_id: 'video_ready',
+            video_url: 'https://youtube.com/watch?v=video_ready',
+            title: 'Ready Video',
+            channel_id: 'channel_1',
+            channel_title: 'Creator 1',
+          },
+          {
+            video_id: 'video_locked',
+            video_url: 'https://youtube.com/watch?v=video_locked',
+            title: 'Locked Video',
+            channel_id: 'channel_1',
+            channel_title: 'Creator 1',
+          },
+        ],
+        nextPageToken: null,
+      })),
+      insertFeedItem: vi.fn(async (db: any, input: any) => {
+        await db.from('user_feed_items').insert({
+          user_id: input.userId,
+          source_item_id: input.sourceItemId,
+          blueprint_id: input.blueprintId,
+          state: input.state,
+          last_decision_code: null,
+        }).select('id').single();
+        return { id: `feed_${input.sourceItemId}` };
+      }),
+      upsertFeedItemWithBlueprint: vi.fn(async (db: any, input: any) => {
+        await db.from('user_feed_items').upsert({
+          user_id: input.userId,
+          source_item_id: input.sourceItemId,
+          blueprint_id: input.blueprintId,
+          state: input.state,
+          last_decision_code: null,
+        }, { onConflict: 'user_id,source_item_id' }).select('id').single();
+        return { id: `feed_${input.sourceItemId}` };
+      }),
+      resolveVariantOrReady: vi.fn(async ({ sourceItemId }: { sourceItemId: string }) => {
+        if (sourceItemId === 'source_video_ready') {
+          return { state: 'ready', blueprintId: 'bp_ready' };
+        }
+        return null;
+      }),
+    });
+
+    await handleCreateSourceSubscription(req, res as any, deps);
+
+    expect(res.statusCode).toBe(200);
+    expect(authDb.state.user_feed_items).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        source_item_id: 'notice_source_1',
+        state: 'subscription_notice',
+      }),
+      expect.objectContaining({
+        source_item_id: 'source_video_ready',
+        blueprint_id: 'bp_ready',
+        state: 'my_feed_published',
+      }),
+      expect.objectContaining({
+        source_item_id: 'source_video_locked',
+        blueprint_id: null,
+        state: 'my_feed_unlockable',
+      }),
+    ]));
+  });
+
   it('previews public YouTube subscriptions with existing subscription state', async () => {
     const authDb = createMockSupabase({
       user_source_subscriptions: [
