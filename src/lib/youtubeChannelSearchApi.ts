@@ -16,6 +16,8 @@ export type YouTubeChannelSearchPage = {
   next_page_token: string | null;
 };
 
+export type YouTubeChannelSearchMode = 'auto' | 'handle' | 'creator_name' | 'channel_url_or_id';
+
 type ApiEnvelope<T> = {
   ok: boolean;
   error_code: string | null;
@@ -32,6 +34,18 @@ export class ApiRequestError extends Error {
     this.status = status;
     this.errorCode = errorCode;
   }
+}
+
+function normalizeChannelSearchMode(rawMode?: string): YouTubeChannelSearchMode {
+  if (rawMode === 'handle' || rawMode === 'creator_name' || rawMode === 'channel_url_or_id') {
+    return rawMode;
+  }
+  return 'auto';
+}
+
+function looksLikeChannelUrlOrId(value: string) {
+  return /^UC[a-zA-Z0-9_-]{20,}$/.test(value)
+    || /^(?:https?:\/\/)?(?:www\.)?(?:youtube\.com|m\.youtube\.com)\//i.test(value);
 }
 
 function getApiBase() {
@@ -51,15 +65,36 @@ export function clampChannelSearchLimit(rawLimit?: number) {
   return Math.max(1, Math.min(3, Math.floor(rawLimit)));
 }
 
-export function validateChannelSearchQuery(rawQuery: string) {
+export function validateChannelSearchQuery(rawQuery: string, rawMode?: string) {
+  const mode = normalizeChannelSearchMode(rawMode);
   const query = rawQuery.trim();
   if (!query) {
-    return { ok: false as const, message: 'Enter a channel link, handle, channel id, or creator name.' };
+    const message = mode === 'handle'
+      ? 'Enter a YouTube handle.'
+      : mode === 'creator_name'
+        ? 'Enter a creator name.'
+        : mode === 'channel_url_or_id'
+          ? 'Enter a YouTube channel link or channel id.'
+          : 'Enter a channel link, handle, channel id, or creator name.';
+    return { ok: false as const, message };
+  }
+  if (mode === 'handle') {
+    const normalizedHandle = query.replace(/^@+/, '');
+    if (normalizedHandle.length < 3) {
+      return { ok: false as const, message: 'Enter a valid YouTube handle.' };
+    }
+    return { ok: true as const, query, mode };
+  }
+  if (mode === 'channel_url_or_id') {
+    if (!looksLikeChannelUrlOrId(query)) {
+      return { ok: false as const, message: 'Enter a valid channel link or channel id.' };
+    }
+    return { ok: true as const, query, mode };
   }
   if (query.length < 2 && !query.startsWith('@') && !query.startsWith('http')) {
     return { ok: false as const, message: 'Add a little more detail so we can find the right creator.' };
   }
-  return { ok: true as const, query };
+  return { ok: true as const, query, mode };
 }
 
 export function normalizeYouTubeChannelSearchResult(raw: unknown): YouTubeChannelSearchResult | null {
@@ -81,12 +116,12 @@ export function normalizeYouTubeChannelSearchResult(raw: unknown): YouTubeChanne
   };
 }
 
-export async function searchYouTubeChannels(input: { q: string; limit?: number; pageToken?: string }) {
+export async function searchYouTubeChannels(input: { q: string; limit?: number; pageToken?: string; mode?: YouTubeChannelSearchMode }) {
   const base = getApiBase();
   if (!base) {
     throw new ApiRequestError(503, 'Backend API is not configured.', 'API_NOT_CONFIGURED');
   }
-  const validQuery = validateChannelSearchQuery(input.q);
+  const validQuery = validateChannelSearchQuery(input.q, input.mode);
   if (!validQuery.ok) {
     throw new ApiRequestError(400, validQuery.message, 'INVALID_QUERY');
   }
@@ -95,6 +130,9 @@ export async function searchYouTubeChannels(input: { q: string; limit?: number; 
   const params = new URLSearchParams();
   params.set('q', validQuery.query);
   params.set('limit', String(clampChannelSearchLimit(input.limit)));
+  if (validQuery.mode !== 'auto') {
+    params.set('mode', validQuery.mode);
+  }
 
   const response = await fetch(`${base}/youtube-channel-search?${params.toString()}`, {
     method: 'GET',

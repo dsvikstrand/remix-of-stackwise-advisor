@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { CreatorSetupController } from '@/hooks/useCreatorSetupController';
 
@@ -41,6 +42,18 @@ export function CreatorSetupSection({
   controller,
   showBackendDisabledHint = false,
 }: CreatorSetupSectionProps) {
+  const searchPlaceholder = controller.channelSearchMode === 'handle'
+    ? 'Enter @handle or handle'
+    : controller.channelSearchMode === 'creator_name'
+      ? 'Enter creator name'
+      : 'Paste a channel link or UC... id';
+
+  const searchDescription = controller.channelSearchMode === 'handle'
+    ? 'Use the creator handle directly, for example @DaveAspreyBPR.'
+    : controller.channelSearchMode === 'creator_name'
+      ? 'Search by creator name without guessing a handle.'
+      : 'Use a YouTube channel URL or a UC... channel id.';
+
   return (
     <div className="space-y-4">
       {showBackendDisabledHint && !controller.subscriptionsEnabled ? (
@@ -93,18 +106,35 @@ export function CreatorSetupSection({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <form onSubmit={controller.handleChannelSearchSubmit} className="flex flex-col gap-2 sm:flex-row">
-              <Input
-                value={controller.channelSearchQuery}
-                onChange={(event) => controller.setChannelSearchQuery(event.target.value)}
-                placeholder="Paste a channel link, handle, channel id, or creator name"
-              />
-              <Button type="submit" size="sm" disabled={controller.channelSearchMutation.isPending || !controller.subscriptionsEnabled}>
-                {controller.channelSearchMutation.isPending ? 'Finding...' : 'Find creator'}
-              </Button>
+            <form onSubmit={controller.handleChannelSearchSubmit} className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Select
+                  value={controller.channelSearchMode}
+                  onValueChange={(value) => controller.setChannelSearchMode(value as typeof controller.channelSearchMode)}
+                >
+                  <SelectTrigger className="sm:w-[200px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="handle">Handle</SelectItem>
+                    <SelectItem value="creator_name">Creator name</SelectItem>
+                    <SelectItem value="channel_url_or_id">Channel URL / ID</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input
+                  value={controller.channelSearchQuery}
+                  onChange={(event) => controller.setChannelSearchQuery(event.target.value)}
+                  placeholder={searchPlaceholder}
+                />
+                <Button type="submit" size="sm" disabled={controller.channelSearchMutation.isPending || !controller.subscriptionsEnabled}>
+                  {controller.channelSearchMutation.isPending ? 'Finding...' : 'Find creator'}
+                </Button>
+              </div>
             </form>
             <p className="text-xs text-muted-foreground">
-              Nothing changes until you click Subscribe.
+              {searchDescription} Nothing changes until you click Subscribe.
             </p>
             {controller.channelSearchError ? <p className="text-sm text-destructive">{controller.channelSearchError}</p> : null}
 

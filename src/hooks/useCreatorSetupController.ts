@@ -19,6 +19,7 @@ import {
 import {
   ApiRequestError as ChannelSearchApiRequestError,
   searchYouTubeChannels,
+  type YouTubeChannelSearchMode,
   type YouTubeChannelSearchResult,
 } from '@/lib/youtubeChannelSearchApi';
 
@@ -26,7 +27,7 @@ function getChannelSearchErrorMessage(error: unknown) {
   if (error instanceof ChannelSearchApiRequestError) {
     switch (error.errorCode) {
       case 'INVALID_QUERY':
-        return 'Enter a creator link, handle, channel id, or creator name.';
+        return error.message;
       case 'SEARCH_DISABLED':
         return 'Creator lookup is currently unavailable.';
       case 'RATE_LIMITED':
@@ -128,6 +129,7 @@ export function useCreatorSetupController() {
   const [isAddSubscriptionOpen, setIsAddSubscriptionOpen] = useState(false);
   const [isPublicYouTubeImportOpen, setIsPublicYouTubeImportOpen] = useState(false);
   const [channelSearchQuery, setChannelSearchQuery] = useState('');
+  const [channelSearchMode, setChannelSearchMode] = useState<YouTubeChannelSearchMode>('handle');
   const [channelSearchSubmittedQuery, setChannelSearchSubmittedQuery] = useState('');
   const [channelSearchResults, setChannelSearchResults] = useState<YouTubeChannelSearchResult[]>([]);
   const [channelSearchError, setChannelSearchError] = useState<string | null>(null);
@@ -150,6 +152,7 @@ export function useCreatorSetupController() {
 
   const resetSearchDialogState = useCallback(() => {
     setChannelSearchQuery('');
+    setChannelSearchMode('handle');
     setChannelSearchSubmittedQuery('');
     setChannelSearchResults([]);
     setChannelSearchError(null);
@@ -277,13 +280,15 @@ export function useCreatorSetupController() {
   }, [resetPublicYouTubeImportDialogState]);
 
   const channelSearchMutation = useMutation({
-    mutationFn: async (input: { query: string }) => {
+    mutationFn: async (input: { query: string; mode: YouTubeChannelSearchMode }) => {
       const data = await searchYouTubeChannels({
         q: input.query,
         limit: 3,
+        mode: input.mode,
       });
       return {
         query: input.query,
+        mode: input.mode,
         ...data,
       };
     },
@@ -445,11 +450,16 @@ export function useCreatorSetupController() {
     event.preventDefault();
     const query = channelSearchQuery.trim();
     if (!query) {
-      setChannelSearchError('Enter a creator link, handle, channel id, or creator name.');
+      const message = channelSearchMode === 'handle'
+        ? 'Enter a YouTube handle.'
+        : channelSearchMode === 'creator_name'
+          ? 'Enter a creator name.'
+          : 'Enter a YouTube channel link or channel id.';
+      setChannelSearchError(message);
       return;
     }
-    channelSearchMutation.mutate({ query });
-  }, [channelSearchMutation, channelSearchQuery]);
+    channelSearchMutation.mutate({ query, mode: channelSearchMode });
+  }, [channelSearchMode, channelSearchMutation, channelSearchQuery]);
 
   const runSubscribe = useCallback(async (input: string, successTitle = 'Subscription saved') => {
     await createMutation.mutateAsync(input);
@@ -474,6 +484,7 @@ export function useCreatorSetupController() {
     isAddSubscriptionOpen,
     isPublicYouTubeImportOpen,
     channelSearchQuery,
+    channelSearchMode,
     channelSearchSubmittedQuery,
     channelSearchResults: filteredChannelSearchResults,
     channelSearchError,
@@ -492,6 +503,7 @@ export function useCreatorSetupController() {
     filteredPublicYouTubePreviewCreators,
     selectedPublicYouTubeCreators,
     setChannelSearchQuery,
+    setChannelSearchMode,
     setPublicYouTubeChannelInput,
     setPublicYouTubePreviewFilterQuery,
     handleAddSubscriptionDialogChange,

@@ -28,6 +28,12 @@ describe('youtubeChannelSearchApi utils', () => {
     if (valid.ok) {
       expect(valid.query).toBe('Doctor Mike');
     }
+
+    const handleMode = validateChannelSearchQuery(' DaveAspreyBPR ', 'handle');
+    expect(handleMode.ok).toBe(true);
+
+    const channelMode = validateChannelSearchQuery(' Doctor Mike ', 'channel_url_or_id');
+    expect(channelMode.ok).toBe(false);
   });
 
   it('normalizes channel results with fallback url', () => {

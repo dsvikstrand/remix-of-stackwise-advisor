@@ -173,6 +173,7 @@
     - in source-item-ledger `primary`, empty Oracle results for hot source-item lookups are now authoritative and should not trigger a normal-path Supabase reread
     - unchanged compatibility shadow rows now skip no-op `source_items` writes when the meaningful persisted fields already match, and normal compatibility writes now update by durable `id` before any canonical-key conflict fallback instead of eagerly rereading Supabase by `id` + `canonical_key`
     - any remaining Supabase source-item reads in that mode should now log `source_item_fallback_read`
+    - manual creator lookup now also accepts explicit `mode=handle|creator_name|channel_url_or_id`; handle mode should prefer official YouTube `forHandle` resolution before any HTML fallback when diagnosing lookup misses
     - queue-ledger bridge helpers now wrap claim / fail / lease-touch transitions centrally in `ingestionQueue`, so queued-worker/controller paths share one Oracle-aware seam for mirror updates instead of each call site carrying bespoke bridge logic
     - unlock reliability orphan-job recovery now also uses the same Oracle-aware failure path, so stale running unlock jobs no longer bypass mirror updates when they are forced terminal
     - user-triggered generation/sync handlers now also stay on that centralized Oracle-aware path: manual refresh, source-page unlock generation, search generation, and foreground subscription sync enqueue/finalize through shared helpers rather than inline `ingestion_jobs` writes

@@ -1210,6 +1210,8 @@ app.get('/api/youtube-channel-search', searchApiLimiter, async (req, res) => {
   const rawLimit = typeof req.query.limit === 'string' ? Number(req.query.limit) : undefined;
   const limit = clampYouTubeChannelSearchLimit(rawLimit, 10);
   const pageToken = typeof req.query.page_token === 'string' ? req.query.page_token.trim() : '';
+  const mode = typeof req.query.mode === 'string' ? req.query.mode.trim() : undefined;
+  const cacheQuery = mode && mode !== 'auto' ? `${mode}:${query}` : query;
   const serviceDb = getServiceSupabaseClient();
 
   const normalizeCachedPayload = (value: unknown) => {
@@ -1232,7 +1234,7 @@ app.get('/api/youtube-channel-search', searchApiLimiter, async (req, res) => {
         db: serviceDb,
         enabled: youtubeSearchCacheEnabled,
         kind: 'channel_search',
-        query,
+        query: cacheQuery,
         limit,
         pageToken: pageToken || null,
         staleMaxSeconds: youtubeSearchStaleMaxSeconds,
@@ -1306,9 +1308,11 @@ app.get('/api/youtube-channel-search', searchApiLimiter, async (req, res) => {
 
   try {
     const result = await searchYouTubeChannels({
+      apiKey: youtubeDataApiKey || undefined,
       query,
       limit,
       pageToken: pageToken || undefined,
+      mode: mode as any,
     });
     if (youtubeSearchCacheEnabled && serviceDb && youtubeSearchCacheService?.writeCache) {
       try {
@@ -1316,7 +1320,7 @@ app.get('/api/youtube-channel-search', searchApiLimiter, async (req, res) => {
           db: serviceDb,
           enabled: youtubeSearchCacheEnabled,
           kind: 'channel_search',
-          query,
+          query: cacheQuery,
           limit,
           pageToken: pageToken || null,
           response: {

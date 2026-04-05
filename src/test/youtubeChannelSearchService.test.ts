@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { youtubeiCreateMock, resolveYouTubeChannelMock } = vi.hoisted(() => ({
+const { youtubeiCreateMock, resolvePublicYouTubeChannelMock, resolveYouTubeChannelMock } = vi.hoisted(() => ({
   youtubeiCreateMock: vi.fn(),
+  resolvePublicYouTubeChannelMock: vi.fn(),
   resolveYouTubeChannelMock: vi.fn(),
 }));
 
@@ -12,6 +13,7 @@ vi.mock('youtubei.js', () => ({
 }));
 
 vi.mock('../../server/services/youtubeSubscriptions', () => ({
+  resolvePublicYouTubeChannel: resolvePublicYouTubeChannelMock,
   resolveYouTubeChannel: resolveYouTubeChannelMock,
 }));
 
@@ -44,6 +46,7 @@ describe('youtubeChannelSearch service', () => {
   beforeEach(() => {
     resetYouTubeChannelLookupHelpersForTest();
     youtubeiCreateMock.mockReset();
+    resolvePublicYouTubeChannelMock.mockReset();
     resolveYouTubeChannelMock.mockReset();
     void resetTranscriptProxyDispatcher();
     for (const key of LOOKUP_PROXY_ENV_KEYS) {
@@ -130,6 +133,77 @@ describe('youtubeChannelSearch service', () => {
         subscriber_count: null,
       }],
       nextPageToken: null,
+    });
+  });
+
+  it('uses official forHandle lookup first in explicit handle mode', async () => {
+    resolvePublicYouTubeChannelMock.mockResolvedValue({
+      channelId: 'UC12345678901234567890',
+      channelUrl: 'https://www.youtube.com/channel/UC12345678901234567890',
+      channelTitle: 'Dave Asprey',
+    });
+    youtubeiCreateMock.mockResolvedValue({
+      getChannel: vi.fn(async () => ({
+        header: {
+          author: {
+            name: 'Dave Asprey',
+            thumbnails: [{ url: 'https://img.example.com/dave.jpg' }],
+          },
+          channel_handle: { toString: () => '@DaveAspreyBPR' },
+          subscribers: { toString: () => '1.2M subscribers' },
+        },
+        metadata: {
+          description: 'Biohacking and performance',
+        },
+      })),
+    });
+
+    const page = await searchYouTubeChannels({
+      apiKey: 'yt-key',
+      query: '@DaveAspreyBPR',
+      mode: 'handle',
+      limit: 3,
+    });
+
+    expect(resolvePublicYouTubeChannelMock).toHaveBeenCalledWith({
+      channelInput: '@DaveAspreyBPR',
+      apiKey: 'yt-key',
+    });
+    expect(resolveYouTubeChannelMock).not.toHaveBeenCalled();
+    expect(page.results[0]).toMatchObject({
+      channel_id: 'UC12345678901234567890',
+      channel_url: 'https://www.youtube.com/@DaveAspreyBPR',
+      channel_title: 'Dave Asprey',
+    });
+  });
+
+  it('uses bounded search only in explicit creator-name mode', async () => {
+    youtubeiCreateMock.mockResolvedValue({
+      search: vi.fn(async () => ({
+        results: [{
+          type: 'Channel',
+          id: 'UC12345678901234567890',
+          author: {
+            id: 'UC12345678901234567890',
+            name: 'Dave Asprey',
+            url: 'https://www.youtube.com/@DaveAspreyBPR',
+          },
+          description_snippet: { toString: () => 'Biohacking and performance' },
+        }],
+      })),
+    });
+
+    const page = await searchYouTubeChannels({
+      query: 'Dave Asprey',
+      mode: 'creator_name',
+      limit: 3,
+    });
+
+    expect(resolvePublicYouTubeChannelMock).not.toHaveBeenCalled();
+    expect(resolveYouTubeChannelMock).not.toHaveBeenCalled();
+    expect(page.results).toHaveLength(1);
+    expect(page.results[0]).toMatchObject({
+      channel_id: 'UC12345678901234567890',
     });
   });
 

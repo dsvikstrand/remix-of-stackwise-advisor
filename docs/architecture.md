@@ -92,6 +92,7 @@
     - page-level OAuth/import/manual-refresh orchestration now lives in a dedicated frontend controller hook so the route component primarily owns rendering.
     - per-row `Auto unlock` toggle (`auto_unlock_enabled`) controls whether that subscription participates in new-video auto unlock attempts.
     - stored subscription `mode` values may still be `manual` or `auto` for compatibility, but runtime auto behavior should be read from `auto_unlock_enabled`.
+    - manual creator add now uses explicit lookup modes (`Handle`, `Creator name`, `Channel URL / ID`) so the UI does not infer user intent from one mixed input field.
   - Source page surface in `src/pages/SourcePage.tsx` at `/s/:platform/:externalId`:
     - public-readable source header (avatar/title/follower count + source link)
     - authenticated subscribe/unsubscribe actions
@@ -219,7 +220,7 @@
     - `GET /api/blueprints/:id/generation-trace` (auth owner or service token; returns latest durable generation trace by blueprint with optional event pagination)
     - `GET /api/generation-runs/:runId` (auth owner or service token; returns durable generation trace by run id with optional event pagination)
     - `GET /api/youtube-search` (auth-only single-video lookup: URL/id first, title fallback second; no broad paging contract)
-    - `GET /api/youtube-channel-search` (auth-only creator lookup: exact channel URL / handle / channel id first, bare-handle input accepted without requiring `@`, helper-backed name lookup second, tiny candidate set only)
+    - `GET /api/youtube-channel-search` (auth-only creator lookup: exact channel URL / handle / channel id first, optional `mode=<auto|handle|creator_name|channel_url_or_id>`, explicit handle mode prefers official `forHandle` resolution before HTML fallback, bare-handle input is still accepted without requiring `@`, helper-backed name lookup returns only a tiny candidate set)
     - Supabase edge functions used directly from the web app must echo the active browser origin for CORS (`https://bleup.app`, `https://www.bleup.app`, local dev origins) and must not silently default browser traffic to a stale legacy origin such as `https://dsvikstrand.github.io`.
     - known-channel video-library routes (`GET /api/youtube/channels/:channelId/videos`, `GET /api/source-pages/:platform/:externalId/videos`) now use `channels.list(part=contentDetails,snippet)` + `playlistItems.list` rather than `search.list`, so the expensive 100-unit search cost is limited to broad discovery routes
     - `GET /api/youtube/connection/status` (auth-only YouTube OAuth status)

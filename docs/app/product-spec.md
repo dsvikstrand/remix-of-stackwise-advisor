@@ -31,6 +31,8 @@ a8) [have] `/subscriptions` is simplified for MVP to two visible actions: `Add S
 a9) [have] `/subscriptions` hides the aggregate ingestion-health summary box to reduce new-user confusion.
 a10) [have] Auth-only `Search` route (`/search`) now treats video lookup as a direct-find flow: paste a YouTube link, video id, or specific title, then generate only when the app finds a confident match.
 a11) [have] `/subscriptions` now supports auth-only creator lookup with popup-based subscribe flow: channel URL, handle, and channel id are preferred, while creator-name lookup returns only a tiny helper-backed candidate set.
+a11a) [have] Manual `Add Subscription` lookup now uses explicit input modes (`Handle`, `Creator name`, `Channel URL / ID`) instead of guessing user intent from one mixed free-text path.
+a11b) [have] Explicit handle-mode lookup now prefers official YouTube `forHandle` resolution before any legacy handle-page scraping fallback, so valid `@handle` input is more stable.
 a12) [have] Subscription rows now render channel avatar thumbnails (when available) and hide technical status/mode badges from row UI.
 a13) [have] Legacy `My Feed` compatibility blueprint rows retain channel-feed-style visual cards with status-driven auto-channel outcomes.
 a14) [have] Manual/search YouTube generation defaults to AI review enabled while banner generation stays off in the current thumbnail-first flow.
@@ -351,11 +353,11 @@ si6) `POST /api/ingestion/jobs/trigger` (service auth for cron)
 si7) `POST /api/my-feed/items/:id/accept`
 si8) `POST /api/my-feed/items/:id/skip`
 si9) debug-only endpoint (service auth + env gate): `POST /api/debug/subscriptions/:id/simulate-new-uploads` (`ENABLE_DEBUG_ENDPOINTS=true` required, authenticated by `x-service-token`, no user bearer token required)
-si10) YouTube channel resolver accepts handle/channel URL/channel ID and uses `browseId` fallback parsing for handle pages where `channelId` is absent.
+si10) YouTube channel resolver accepts handle/channel URL/channel ID and still keeps `browseId` fallback parsing for legacy handle pages where `channelId` is absent, but explicit creator-search handle mode now prefers official `forHandle` resolution first.
 si11) service-ops endpoint: `GET /api/ingestion/jobs/latest` (service auth; latest ingestion health snapshot)
 si11b) service-ops endpoint: `GET /api/ops/queue/health` (service auth; queue depth/stale lease/provider circuit state snapshot)
 si12) YouTube video lookup endpoint: `GET /api/youtube-search?q=<link|video_id|title>` (single confident-hit semantics via helper-backed title fallback; no broad paging contract)
-si13) YouTube creator lookup endpoint: `GET /api/youtube-channel-search?q=<channel_url|handle|channel_id|creator_name>&limit=<1..3>` (exact identifiers first; bare-handle input is supported without requiring `@`, helper-backed name lookup returns only a tiny candidate set, and there is no official `search.list` dependency)
+si13) YouTube creator lookup endpoint: `GET /api/youtube-channel-search?q=<channel_url|handle|channel_id|creator_name>&limit=<1..3>&mode=<auto|handle|creator_name|channel_url_or_id>` (exact identifiers first; explicit handle mode prefers official `forHandle` resolution, bare-handle input is still supported without requiring `@`, helper-backed name lookup returns only a tiny candidate set, and there is no official `search.list` dependency)
 si13b) Shared YouTube live-call budgeting now uses an atomic backend quota consume path; when the quota schema is present, retry timing comes from the DB decision rather than app-side best-effort counters.
 si13c) Known-channel video-library listing (`GET /api/youtube/channels/:channelId/videos`, `GET /api/source-pages/:platform/:externalId/videos`) now uses the channel uploads-playlist path (`channels.list -> playlistItems.list`) instead of `search.list`, so those routes no longer carry the 100-unit search cost per page.
 si14) `GET /api/source-subscriptions` now includes optional `source_channel_avatar_url` per subscription row from stored `source_pages` metadata; normal reads do not block on live YouTube API asset fetches.

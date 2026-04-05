@@ -270,6 +270,7 @@ describe('youtube handlers', () => {
         q: '@DoctorMike',
         limit: '25',
         page_token: 'PAGE_2',
+        mode: 'handle',
       },
     } as any;
     const res = createMockResponse();
@@ -277,9 +278,11 @@ describe('youtube handlers', () => {
     await handler(req, res);
 
     expect(searchYouTubeChannels).toHaveBeenCalledWith({
+      apiKey: undefined,
       query: '@DoctorMike',
       limit: 3,
       pageToken: 'PAGE_2',
+      mode: 'handle',
     });
     expect(res.statusCode).toBe(200);
     expect(res.body).toMatchObject({

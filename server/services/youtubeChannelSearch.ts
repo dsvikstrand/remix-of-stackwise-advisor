@@ -1,6 +1,10 @@
 import Innertube from 'youtubei.js';
 import { decodeHtmlEntities } from '../lib/decodeHtmlEntities';
-import { resolveYouTubeChannel } from './youtubeSubscriptions';
+import {
+  resolvePublicYouTubeChannel,
+  resolveYouTubeChannel,
+  YouTubeChannelLookupError,
+} from './youtubeSubscriptions';
 import { getWebshareLookupFetch } from './webshareProxy';
 
 export type YouTubeChannelSearchResult = {
@@ -17,6 +21,8 @@ export type YouTubeChannelSearchPage = {
   results: YouTubeChannelSearchResult[];
   nextPageToken: string | null;
 };
+
+export type YouTubeChannelSearchMode = 'auto' | 'handle' | 'creator_name' | 'channel_url_or_id';
 
 type YouTubeChannelSearchErrorCode =
   | 'INVALID_QUERY'
@@ -54,6 +60,18 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string)
   return Promise.race([promise, timeoutPromise]).finally(() => {
     if (timer) clearTimeout(timer);
   });
+}
+
+function normalizeYouTubeChannelSearchMode(rawMode?: string): YouTubeChannelSearchMode {
+  if (rawMode === 'handle' || rawMode === 'creator_name' || rawMode === 'channel_url_or_id') {
+    return rawMode;
+  }
+  return 'auto';
+}
+
+function normalizeHandleQuery(rawValue: string) {
+  const value = String(rawValue || '').trim().replace(/^@+/, '');
+  return value ? `@${value}` : '';
 }
 
 function normalizePotentialYouTubeUrl(rawValue: string) {
@@ -123,12 +141,66 @@ function isDirectChannelLookupInput(rawValue: string) {
   }
 }
 
-export function validateYouTubeChannelLookupQuery(rawQuery: string) {
+export function validateYouTubeChannelLookupQuery(rawQuery: string, rawMode?: string) {
+  const mode = normalizeYouTubeChannelSearchMode(rawMode);
   const query = String(rawQuery || '').trim();
   if (!query) {
     return {
       ok: false as const,
-      message: 'Enter a channel link, handle, channel id, or creator name.',
+      message: mode === 'handle'
+        ? 'Enter a YouTube handle.'
+        : mode === 'creator_name'
+          ? 'Enter a creator name.'
+          : mode === 'channel_url_or_id'
+            ? 'Enter a YouTube channel link or channel id.'
+            : 'Enter a channel link, handle, channel id, or creator name.',
+    };
+  }
+
+  if (mode === 'handle') {
+    const normalizedHandle = normalizeHandleQuery(query);
+    if (!HANDLE_RE.test(normalizedHandle)) {
+      return {
+        ok: false as const,
+        message: 'Enter a valid YouTube handle.',
+      };
+    }
+    return {
+      ok: true as const,
+      query: normalizedHandle,
+      direct: true,
+      mode,
+    };
+  }
+
+  if (mode === 'creator_name') {
+    if (query.length < 2) {
+      return {
+        ok: false as const,
+        message: 'Add a little more detail so we can find the right creator.',
+      };
+    }
+    return {
+      ok: true as const,
+      query,
+      direct: false,
+      mode,
+      bareHandleCandidate: false,
+    };
+  }
+
+  if (mode === 'channel_url_or_id') {
+    if (!isDirectChannelLookupInput(query)) {
+      return {
+        ok: false as const,
+        message: 'Please use a YouTube channel link or channel id.',
+      };
+    }
+    return {
+      ok: true as const,
+      query,
+      direct: true,
+      mode,
     };
   }
 
@@ -137,6 +209,7 @@ export function validateYouTubeChannelLookupQuery(rawQuery: string) {
       ok: true as const,
       query,
       direct: true,
+      mode,
     };
   }
 
@@ -158,6 +231,7 @@ export function validateYouTubeChannelLookupQuery(rawQuery: string) {
     ok: true as const,
     query,
     direct: false,
+    mode,
     bareHandleCandidate: BARE_HANDLE_RE.test(query) && !query.includes(' '),
   };
 }
@@ -340,6 +414,52 @@ async function resolveDirectYouTubeChannel(query: string): Promise<YouTubeChanne
   }
 }
 
+async function resolveOfficialHandleChannel(query: string, apiKey?: string): Promise<YouTubeChannelSearchResult[] | null> {
+  const normalizedHandle = normalizeHandleQuery(query);
+  if (!HANDLE_RE.test(normalizedHandle)) return [];
+
+  const trimmedApiKey = String(apiKey || '').trim();
+  if (!trimmedApiKey) return null;
+
+  try {
+    const resolved = await withTimeout(
+      resolvePublicYouTubeChannel({
+        channelInput: normalizedHandle,
+        apiKey: trimmedApiKey,
+      }),
+      YOUTUBEI_TIMEOUT_MS,
+      'Creator lookup is taking longer than expected. Please try again.',
+    );
+
+    try {
+      const client = await getYouTubeiClientWithTimeout(
+        'Creator lookup is taking longer than expected. Please try again.',
+      );
+      const info = await withTimeout(
+        client.getChannel(resolved.channelId),
+        YOUTUBEI_TIMEOUT_MS,
+        'Creator lookup is taking longer than expected. Please try again.',
+      );
+      return [normalizeYouTubeiChannelDetail(resolved.channelId, info, resolved.channelTitle)];
+    } catch {
+      return [{
+        channel_id: resolved.channelId,
+        channel_title: resolved.channelTitle || resolved.channelId,
+        channel_url: resolved.channelUrl || getCanonicalChannelUrl(resolved.channelId),
+        description: '',
+        thumbnail_url: null,
+        published_at: null,
+        subscriber_count: null,
+      }];
+    }
+  } catch (error) {
+    if (error instanceof YouTubeChannelLookupError && error.code === 'CHANNEL_NOT_FOUND') {
+      return [];
+    }
+    return null;
+  }
+}
+
 async function searchYouTubeChannelsByName(query: string, limit: number): Promise<YouTubeChannelSearchResult[] | null> {
   try {
     const client = await getYouTubeiClientWithTimeout(
@@ -441,13 +561,56 @@ export async function searchYouTubeChannels(input: {
   query: string;
   limit?: number;
   pageToken?: string;
+  mode?: YouTubeChannelSearchMode;
 }): Promise<YouTubeChannelSearchPage> {
-  const validation = validateYouTubeChannelLookupQuery(input.query);
+  const validation = validateYouTubeChannelLookupQuery(input.query, input.mode);
   if (!validation.ok) {
     throw new YouTubeChannelSearchError('INVALID_QUERY', validation.message);
   }
 
   const limit = clampYouTubeChannelSearchLimit(input.limit, 3);
+  if (validation.mode === 'handle') {
+    const officialHandleResults = await resolveOfficialHandleChannel(validation.query, input.apiKey);
+    if (officialHandleResults && officialHandleResults.length > 0) {
+      return {
+        results: officialHandleResults,
+        nextPageToken: null,
+      };
+    }
+
+    const directResults = await resolveDirectYouTubeChannel(validation.query);
+    if (directResults === null) {
+      throw new YouTubeChannelSearchError('SEARCH_DISABLED', 'Creator lookup is currently unavailable.');
+    }
+    return {
+      results: directResults,
+      nextPageToken: null,
+    };
+  }
+
+  if (validation.mode === 'channel_url_or_id') {
+    const directResults = await resolveDirectYouTubeChannel(validation.query);
+    if (directResults === null) {
+      throw new YouTubeChannelSearchError('SEARCH_DISABLED', 'Creator lookup is currently unavailable.');
+    }
+    return {
+      results: directResults,
+      nextPageToken: null,
+    };
+  }
+
+  if (validation.mode === 'creator_name') {
+    const results = await searchYouTubeChannelsByName(validation.query, limit);
+    if (results === null) {
+      throw new YouTubeChannelSearchError('SEARCH_DISABLED', 'Creator lookup is currently unavailable.');
+    }
+
+    return {
+      results,
+      nextPageToken: null,
+    };
+  }
+
   if (validation.direct) {
     const directResults = await resolveDirectYouTubeChannel(validation.query);
     if (directResults === null) {
