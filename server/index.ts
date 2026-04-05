@@ -3995,7 +3995,7 @@ async function writeSupabaseSourceItemShadow(
 
   const { data: updatedById, error: updateByIdError } = await db
     .from('source_items')
-    .update(mapSourceItemToSupabaseShadowUpdateValues(row))
+    .update(mapSourceItemShadowUpdateValues(row))
     .eq('id', row.id)
     .select(SOURCE_ITEM_SELECT)
     .maybeSingle();
