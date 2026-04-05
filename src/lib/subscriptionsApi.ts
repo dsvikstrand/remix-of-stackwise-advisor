@@ -24,6 +24,11 @@ export type SourceSubscription = {
   updated_at: string;
 };
 
+export type SourceSubscriptionListPage = {
+  items: SourceSubscription[];
+  next_offset: number | null;
+};
+
 export type PublicYouTubeSubscriptionPreviewItem = {
   channel_id: string;
   channel_title: string;
@@ -173,6 +178,18 @@ async function apiRequestInternal<T>(path: string, init: RequestInit | undefined
 
 export async function listSourceSubscriptions() {
   const response = await apiRequest<SourceSubscription[]>('/source-subscriptions', { method: 'GET' });
+  return response.data;
+}
+
+export async function listSourceSubscriptionsPage(input?: { limit?: number; offset?: number }) {
+  const params = new URLSearchParams();
+  const limit = Math.max(1, Math.min(50, Number(input?.limit || 50)));
+  const offset = Math.max(0, Number(input?.offset || 0));
+  params.set('limit', String(Number.isFinite(limit) ? limit : 50));
+  params.set('offset', String(Number.isFinite(offset) ? offset : 0));
+  const response = await apiRequest<SourceSubscriptionListPage>(`/source-subscriptions?${params.toString()}`, {
+    method: 'GET',
+  });
   return response.data;
 }
 

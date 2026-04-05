@@ -128,6 +128,7 @@ import {
   listOracleSubscriptionLedgerActiveUserIdsForSource,
   listOracleSubscriptionLedgerActiveSubscriptionsForUser,
   listOracleSubscriptionLedgerRowsByIds,
+  listOracleSubscriptionLedgerRowsPageForUser,
   listOracleSubscriptionLedgerRowsForUser,
   syncOracleSubscriptionLedgerFromSupabase,
   upsertOracleSubscriptionLedgerRow,
@@ -2416,6 +2417,36 @@ async function listSupabaseSourceSubscriptionsForUser(
   return (data || []).map((row) => normalizeSourceSubscriptionRow(row as Record<string, unknown>));
 }
 
+async function listSupabaseSourceSubscriptionsPageForUser(
+  db: ReturnType<typeof createClient>,
+  input: { userId: string; limit?: number; offset?: number },
+) {
+  const normalizedUserId = String(input.userId || '').trim();
+  const limit = Math.max(1, Math.min(Math.floor(Number(input.limit || 50)), 50));
+  const offset = Math.max(0, Math.floor(Number(input.offset || 0)));
+  if (!normalizedUserId) {
+    return {
+      items: [] as SourceSubscriptionRow[],
+      next_offset: null as number | null,
+    };
+  }
+
+  const { data, error } = await db
+    .from('user_source_subscriptions')
+    .select(SOURCE_SUBSCRIPTION_SELECT)
+    .eq('user_id', normalizedUserId)
+    .order('updated_at', { ascending: false })
+    .order('id', { ascending: false })
+    .range(offset, offset + limit);
+  if (error) throw error;
+
+  const rows = (data || []).map((row) => normalizeSourceSubscriptionRow(row as Record<string, unknown>));
+  return {
+    items: rows.slice(0, limit),
+    next_offset: rows.length > limit ? offset + limit : null,
+  };
+}
+
 const SOURCE_ITEM_UNLOCK_SELECT = [
   'id',
   'source_item_id',
@@ -3109,6 +3140,55 @@ async function listUserSourceSubscriptionsForUserOracleFirst(
     });
   }
   return listSupabaseSourceSubscriptionsForUser(db, normalizedUserId);
+}
+
+async function listUserSourceSubscriptionsPageForUserOracleFirst(
+  db: ReturnType<typeof createClient>,
+  input: { userId: string; limit?: number; offset?: number },
+) {
+  const normalizedUserId = String(input.userId || '').trim();
+  const limit = Math.max(1, Math.min(Math.floor(Number(input.limit || 50)), 50));
+  const offset = Math.max(0, Math.floor(Number(input.offset || 0)));
+  if (!normalizedUserId) {
+    return {
+      items: [] as SourceSubscriptionRow[],
+      next_offset: null as number | null,
+    };
+  }
+
+  if (oracleSubscriptionLedgerEnabled && oracleControlPlane) {
+    try {
+      const ledgerPage = await listOracleSubscriptionLedgerRowsPageForUser({
+        controlDb: oracleControlPlane,
+        userId: normalizedUserId,
+        limit,
+        offset,
+      });
+      if (ledgerPage.items.length > 0 || oracleSubscriptionLedgerPrimaryEnabled) {
+        return ledgerPage;
+      }
+    } catch (error) {
+      console.warn('[oracle-control-plane] subscription_ledger_failed', JSON.stringify({
+        action: 'list_subscriptions_page_for_user',
+        user_id: normalizedUserId,
+        limit,
+        offset,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+
+  if (oracleSubscriptionLedgerPrimaryEnabled) {
+    logSubscriptionSupabaseFallbackRead({
+      action: 'list_subscriptions_page_for_user',
+      userId: normalizedUserId,
+    });
+  }
+  return listSupabaseSourceSubscriptionsPageForUser(db, {
+    userId: normalizedUserId,
+    limit,
+    offset,
+  });
 }
 
 async function upsertUserSourceSubscriptionOracleAware(
@@ -15473,6 +15553,7 @@ registerSourceSubscriptionsRoutes(app, {
   ensureSourcePageFromYouTubeChannel,
   upsertSourceSubscription: upsertUserSourceSubscriptionOracleAware,
   listSourceSubscriptionsForUser: listUserSourceSubscriptionsForUserOracleFirst,
+  listSourceSubscriptionsPageForUser: listUserSourceSubscriptionsPageForUserOracleFirst,
   getSourceSubscriptionById: getUserSourceSubscriptionByIdOracleFirst,
   patchSourceSubscriptionById: patchUserSourceSubscriptionOracleAware,
   deactivateSourceSubscriptionById: (db: ReturnType<typeof createClient>, input: {

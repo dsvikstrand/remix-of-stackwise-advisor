@@ -59,6 +59,8 @@ export default function Subscriptions() {
     youtubeImportMutation,
     refreshJobQuery,
     filteredActiveSubscriptions,
+    hasMoreSubscriptions,
+    isLoadingMoreSubscriptions,
     filteredYouTubeImportResults,
     selectedYouTubeImportChannels,
     refreshJobStatus,
@@ -79,6 +81,7 @@ export default function Subscriptions() {
     handleRefreshQueued,
     handleUnsubscribe,
     handleAutoUnlockToggle,
+    handleLoadMoreSubscriptions,
   } = useSubscriptionsPageController();
 
   useEffect(() => {
@@ -329,91 +332,104 @@ export default function Subscriptions() {
                     No subscriptions match "{subscriptionFilterQuery.trim()}".
                   </p>
                 ) : (
-                  filteredActiveSubscriptions.map((subscription) => {
-                    const sourcePagePath = getSourcePagePath(subscription);
-                    return (
-                      <div key={subscription.id} className="rounded-md border border-border/40 p-3 space-y-2">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-center gap-3 min-w-0 flex-1">
-                            {sourcePagePath ? (
-                              <Link to={sourcePagePath} className="shrink-0">
-                                {subscription.source_channel_avatar_url ? (
-                                  <img
-                                    src={subscription.source_channel_avatar_url}
-                                    alt={subscription.source_channel_title || subscription.source_channel_id}
-                                    className="h-10 w-10 rounded-full object-cover border border-border/40"
-                                  />
-                                ) : (
-                                  <div className="h-10 w-10 rounded-full border border-border/40 bg-muted text-xs font-semibold flex items-center justify-center">
-                                    {getChannelInitials(subscription)}
-                                  </div>
-                                )}
-                              </Link>
-                            ) : (
-                              <div className="shrink-0">
-                                {subscription.source_channel_avatar_url ? (
-                                  <img
-                                    src={subscription.source_channel_avatar_url}
-                                    alt={subscription.source_channel_title || subscription.source_channel_id}
-                                    className="h-10 w-10 rounded-full object-cover border border-border/40"
-                                  />
-                                ) : (
-                                  <div className="h-10 w-10 rounded-full border border-border/40 bg-muted text-xs font-semibold flex items-center justify-center">
-                                    {getChannelInitials(subscription)}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                            <div className="min-w-0">
+                  <>
+                    {filteredActiveSubscriptions.map((subscription) => {
+                      const sourcePagePath = getSourcePagePath(subscription);
+                      return (
+                        <div key={subscription.id} className="rounded-md border border-border/40 p-3 space-y-2">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
                               {sourcePagePath ? (
-                                <Link to={sourcePagePath} className="text-sm font-medium truncate min-w-0 hover:underline block">
-                                  {subscription.source_channel_title || subscription.source_channel_id}
+                                <Link to={sourcePagePath} className="shrink-0">
+                                  {subscription.source_channel_avatar_url ? (
+                                    <img
+                                      src={subscription.source_channel_avatar_url}
+                                      alt={subscription.source_channel_title || subscription.source_channel_id}
+                                      className="h-10 w-10 rounded-full object-cover border border-border/40"
+                                    />
+                                  ) : (
+                                    <div className="h-10 w-10 rounded-full border border-border/40 bg-muted text-xs font-semibold flex items-center justify-center">
+                                      {getChannelInitials(subscription)}
+                                    </div>
+                                  )}
                                 </Link>
                               ) : (
-                                <p className="text-sm font-medium truncate min-w-0">
-                                  {subscription.source_channel_title || subscription.source_channel_id}
-                                </p>
+                                <div className="shrink-0">
+                                  {subscription.source_channel_avatar_url ? (
+                                    <img
+                                      src={subscription.source_channel_avatar_url}
+                                      alt={subscription.source_channel_title || subscription.source_channel_id}
+                                      className="h-10 w-10 rounded-full object-cover border border-border/40"
+                                    />
+                                  ) : (
+                                    <div className="h-10 w-10 rounded-full border border-border/40 bg-muted text-xs font-semibold flex items-center justify-center">
+                                      {getChannelInitials(subscription)}
+                                    </div>
+                                  )}
+                                </div>
                               )}
-                              <a
-                                href={getChannelUrl(subscription)}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-xs text-muted-foreground underline underline-offset-2"
+                              <div className="min-w-0">
+                                {sourcePagePath ? (
+                                  <Link to={sourcePagePath} className="text-sm font-medium truncate min-w-0 hover:underline block">
+                                    {subscription.source_channel_title || subscription.source_channel_id}
+                                  </Link>
+                                ) : (
+                                  <p className="text-sm font-medium truncate min-w-0">
+                                    {subscription.source_channel_title || subscription.source_channel_id}
+                                  </p>
+                                )}
+                                <a
+                                  href={getChannelUrl(subscription)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-xs text-muted-foreground underline underline-offset-2"
+                                >
+                                  Open on YouTube
+                                </a>
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-2">
+                              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <span>{Boolean(subscription.auto_unlock_enabled) ? 'Auto generate' : 'Manual only'}</span>
+                                <Switch
+                                  checked={Boolean(subscription.auto_unlock_enabled)}
+                                  onCheckedChange={(checked) => handleAutoUnlockToggle(subscription, checked)}
+                                  disabled={!subscriptionsEnabled || isRowPending(subscription.id)}
+                                />
+                              </label>
+                              <p className="max-w-[12rem] text-right text-[11px] text-muted-foreground">
+                                {Boolean(subscription.auto_unlock_enabled)
+                                  ? 'New videos can use credits automatically.'
+                                  : 'You choose which videos become blueprints.'}
+                              </p>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => handleUnsubscribe(subscription)}
+                                disabled={!subscriptionsEnabled || isRowPending(subscription.id)}
                               >
-                                Open on YouTube
-                              </a>
+                                {isRowPending(subscription.id) ? 'Unsubscribing...' : 'Unsubscribe'}
+                              </Button>
                             </div>
                           </div>
-                          <div className="flex flex-col items-end gap-2">
-                            <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <span>{Boolean(subscription.auto_unlock_enabled) ? 'Auto generate' : 'Manual only'}</span>
-                              <Switch
-                                checked={Boolean(subscription.auto_unlock_enabled)}
-                                onCheckedChange={(checked) => handleAutoUnlockToggle(subscription, checked)}
-                                disabled={!subscriptionsEnabled || isRowPending(subscription.id)}
-                              />
-                            </label>
-                            <p className="max-w-[12rem] text-right text-[11px] text-muted-foreground">
-                              {Boolean(subscription.auto_unlock_enabled)
-                                ? 'New videos can use credits automatically.'
-                                : 'You choose which videos become blueprints.'}
-                            </p>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => handleUnsubscribe(subscription)}
-                              disabled={!subscriptionsEnabled || isRowPending(subscription.id)}
-                            >
-                              {isRowPending(subscription.id) ? 'Unsubscribing...' : 'Unsubscribe'}
-                            </Button>
-                          </div>
+                          {subscription.last_sync_error ? (
+                            <p className="text-xs text-red-600/90">Sync issue: {subscription.last_sync_error}</p>
+                          ) : null}
                         </div>
-                        {subscription.last_sync_error ? (
-                          <p className="text-xs text-red-600/90">Sync issue: {subscription.last_sync_error}</p>
-                        ) : null}
+                      );
+                    })}
+                    {hasMoreSubscriptions ? (
+                      <div className="flex justify-center pt-1">
+                        <Button
+                          variant="outline"
+                          onClick={handleLoadMoreSubscriptions}
+                          disabled={isLoadingMoreSubscriptions}
+                        >
+                          {isLoadingMoreSubscriptions ? 'Loading...' : 'Load more'}
+                        </Button>
                       </div>
-                    );
-                  })
+                    ) : null}
+                  </>
                 )}
               </CardContent>
             </Card>

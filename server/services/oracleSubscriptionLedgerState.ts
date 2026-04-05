@@ -279,6 +279,39 @@ export async function listOracleSubscriptionLedgerRowsForUser(input: {
   return rows.map((row) => mapSubscriptionLedgerRow(row as unknown as Record<string, unknown>));
 }
 
+export async function listOracleSubscriptionLedgerRowsPageForUser(input: {
+  controlDb: OracleControlPlaneDb;
+  userId: string;
+  limit?: number;
+  offset?: number;
+}) {
+  const userId = String(input.userId || '').trim();
+  const limit = Math.max(1, Math.min(Math.floor(Number(input.limit || 50)), 50));
+  const offset = Math.max(0, Math.floor(Number(input.offset || 0)));
+  if (!userId) {
+    return {
+      items: [] as OracleSubscriptionLedgerRow[],
+      next_offset: null as number | null,
+    };
+  }
+
+  const rows = await input.controlDb.db
+    .selectFrom('subscription_ledger_state')
+    .selectAll()
+    .where('user_id', '=', userId)
+    .orderBy('updated_at', 'desc')
+    .orderBy('id', 'desc')
+    .limit(limit + 1)
+    .offset(offset)
+    .execute();
+
+  const mappedRows = rows.map((row) => mapSubscriptionLedgerRow(row as unknown as Record<string, unknown>));
+  return {
+    items: mappedRows.slice(0, limit),
+    next_offset: mappedRows.length > limit ? offset + limit : null,
+  };
+}
+
 export async function listOracleSubscriptionLedgerRowsByIds(input: {
   controlDb: OracleControlPlaneDb;
   subscriptionIds: string[];

@@ -72,6 +72,23 @@ function createDeps(overrides: Record<string, unknown> = {}) {
       if (error) throw error;
       return data || [];
     }),
+    listSourceSubscriptionsPageForUser: vi.fn(async (db: any, input: { userId: string; limit?: number; offset?: number }) => {
+      const limit = Math.max(1, Math.min(Math.floor(Number(input.limit || 50)), 50));
+      const offset = Math.max(0, Math.floor(Number(input.offset || 0)));
+      const { data, error } = await db
+        .from('user_source_subscriptions')
+        .select('id, user_id, source_type, source_channel_id, source_channel_url, source_channel_title, source_page_id, mode, auto_unlock_enabled, is_active, last_polled_at, last_seen_published_at, last_seen_video_id, last_sync_error, created_at, updated_at')
+        .eq('user_id', input.userId)
+        .order('updated_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(offset, offset + limit);
+      if (error) throw error;
+      const rows = data || [];
+      return {
+        items: rows.slice(0, limit),
+        next_offset: rows.length > limit ? offset + limit : null,
+      };
+    }),
     getSourceSubscriptionById: vi.fn(async () => null),
     patchSourceSubscriptionById: vi.fn(async () => null),
     deactivateSourceSubscriptionById: vi.fn(async () => null),
@@ -494,6 +511,56 @@ describe('source subscription refresh generate handler', () => {
         id: 'sub_1',
         source_channel_avatar_url: null,
       }],
+    });
+  });
+
+  it('returns subscriptions pages with next_offset when limit is provided', async () => {
+    const authDb = createMockSupabase({
+      user_source_subscriptions: Array.from({ length: 3 }, (_, index) => ({
+        id: `sub_${index + 1}`,
+        user_id: '00000000-0000-0000-0000-000000000001',
+        source_type: 'youtube',
+        source_channel_id: `channel_${index + 1}`,
+        source_channel_url: `https://youtube.com/channel/channel_${index + 1}`,
+        source_channel_title: `Channel ${index + 1}`,
+        source_page_id: `page_${index + 1}`,
+        is_active: true,
+        updated_at: `2026-03-0${3 - index}T10:00:00.000Z`,
+      })),
+    });
+    const serviceDb = createMockSupabase({
+      source_pages: Array.from({ length: 3 }, (_, index) => ({
+        id: `page_${index + 1}`,
+        platform: 'youtube',
+        external_id: `channel_${index + 1}`,
+        avatar_url: `https://img.example.com/channel_${index + 1}.jpg`,
+        banner_url: `https://img.example.com/banner_${index + 1}.jpg`,
+      })),
+    });
+    const req = {
+      query: {
+        limit: '2',
+        offset: '0',
+      },
+    } as any;
+    const res = createResponse();
+    const deps = createDeps({
+      getAuthedSupabaseClient: () => authDb,
+      getServiceSupabaseClient: () => serviceDb,
+    });
+
+    await handleListSourceSubscriptions(req, res as any, deps);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        next_offset: 2,
+        items: [
+          expect.objectContaining({ id: 'sub_1', source_channel_avatar_url: 'https://img.example.com/channel_1.jpg' }),
+          expect.objectContaining({ id: 'sub_2', source_channel_avatar_url: 'https://img.example.com/channel_2.jpg' }),
+        ],
+      },
     });
   });
 

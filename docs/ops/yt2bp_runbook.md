@@ -118,6 +118,9 @@
     - failure semantics: if unlock preparation fails before queue insert, the route should return an explicit prepare-failed result instead of reporting `in_progress`; impossible `in_progress` responses with an `available` unlock row are a bug and should be rejected the same way. Oracle-primary unlock mutation errors should fall back to the base Supabase mutation path and then resync Oracle shadows from the known durable row, and that fallback path now normalizes legacy `transcript_probe_meta = null` rows back to `{}` before reserve/ensure updates.
   - `POST /api/source-pages/:platform/:externalId/subscribe` (auth)
   - `DELETE /api/source-pages/:platform/:externalId/subscribe` (auth)
+  - `GET /api/source-subscriptions`
+    - compatibility/default behavior: returns the full active+inactive subscription array for older callers.
+    - paginated behavior: `GET /api/source-subscriptions?limit=<1..50>&offset=<0..>` returns `{ items, next_offset }` for the subscriptions management page load-more flow.
   - Frontend trust status now resumes unlock jobs via `GET /api/ingestion/jobs/latest-mine?scope=source_item_unlock_generation` after reload.
   - Subscription sync persistence is intentionally coarse-grained:
     - unchanged successful writes to `user_source_subscriptions` are skipped unless checkpoint/title/error state changed

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { config } from '@/config/runtime';
@@ -9,7 +9,7 @@ import {
   deactivateSourceSubscription,
   getIngestionJob,
   getLatestMyIngestionJob,
-  listSourceSubscriptions,
+  listSourceSubscriptionsPage,
   type IngestionJobStatus,
   type SourceSubscription,
   updateSourceSubscription,
@@ -146,6 +146,8 @@ function getYouTubeImportFilterRank(item: YouTubeImportPreviewItem, normalizedQu
   return bestRank;
 }
 
+const SUBSCRIPTIONS_PAGE_SIZE = 50;
+
 export function useSubscriptionsPageController() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -230,10 +232,15 @@ export function useSubscriptionsPageController() {
     }
   }, [isRowPending, markRowPending]);
 
-  const subscriptionsQuery = useQuery({
-    queryKey: ['source-subscriptions', user?.id],
+  const subscriptionsQuery = useInfiniteQuery({
+    queryKey: ['source-subscriptions', user?.id, 'page', SUBSCRIPTIONS_PAGE_SIZE],
     enabled: Boolean(user) && subscriptionsEnabled,
-    queryFn: listSourceSubscriptions,
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) => listSourceSubscriptionsPage({
+      limit: SUBSCRIPTIONS_PAGE_SIZE,
+      offset: Number(pageParam || 0),
+    }),
+    getNextPageParam: (lastPage) => lastPage.next_offset ?? undefined,
   });
 
   const youtubeConnectionQuery = useQuery({
@@ -434,7 +441,10 @@ export function useSubscriptionsPageController() {
     startYouTubeConnectMutation.mutate();
   }, [startYouTubeConnectMutation]);
 
-  const subscriptions = subscriptionsQuery.data || [];
+  const subscriptions = useMemo(
+    () => subscriptionsQuery.data?.pages.flatMap((page) => page.items) || [],
+    [subscriptionsQuery.data],
+  );
   const youtubeConnection = youtubeConnectionQuery.data;
   const activeSubscriptions = useMemo(
     () => subscriptions.filter((subscription) => subscription.is_active),
@@ -604,6 +614,8 @@ export function useSubscriptionsPageController() {
     youtubeDisconnectMutation,
     refreshJobQuery,
     filteredActiveSubscriptions,
+    hasMoreSubscriptions: Boolean(subscriptionsQuery.hasNextPage),
+    isLoadingMoreSubscriptions: subscriptionsQuery.isFetchingNextPage,
     filteredYouTubeImportResults,
     selectedYouTubeImportChannels,
     refreshJobStatus,
@@ -627,5 +639,6 @@ export function useSubscriptionsPageController() {
     handleRefreshQueued,
     handleUnsubscribe,
     handleAutoUnlockToggle,
+    handleLoadMoreSubscriptions: () => subscriptionsQuery.fetchNextPage(),
   };
 }

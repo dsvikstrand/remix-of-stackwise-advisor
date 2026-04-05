@@ -1,6 +1,7 @@
 import type express from 'express';
 import type {
   RefreshScanCandidate,
+  SourceSubscriptionsListPage,
   SourceSubscriptionsRouteDeps,
   SyncSubscriptionResult,
 } from '../contracts/api/sourceSubscriptions';
@@ -32,6 +33,36 @@ type StoredSourcePageAssetRow = {
 
 const PUBLIC_YOUTUBE_PREVIEW_DEFAULT_PAGE_SIZE = 50;
 const PUBLIC_YOUTUBE_PREVIEW_MAX_PAGE_SIZE = 50;
+const SOURCE_SUBSCRIPTIONS_DEFAULT_PAGE_SIZE = 50;
+const SOURCE_SUBSCRIPTIONS_MAX_PAGE_SIZE = 50;
+
+function parseOptionalNonNegativeInt(raw: unknown) {
+  if (raw === undefined || raw === null || raw === '') return null;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return Math.floor(parsed);
+}
+
+function mapSourceSubscriptionRowsWithAssets(
+  rows: Array<Record<string, unknown>>,
+  deps: SourceSubscriptionsRouteDeps,
+  storedAssets: Awaited<ReturnType<typeof loadStoredSourcePageAssets>> | null,
+) {
+  return rows.map((row) => {
+    const sourcePageId = String(row.source_page_id || '').trim();
+    const sourceChannelId = String(row.source_channel_id || '').trim();
+    const assetRow = storedAssets
+      ? ((sourcePageId ? storedAssets.byPageId.get(sourcePageId) : null)
+        || (sourceChannelId ? storedAssets.byChannelId.get(sourceChannelId) : null)
+        || null)
+      : null;
+    return {
+      ...row,
+      source_channel_avatar_url: assetRow?.avatar_url || null,
+      source_page_path: sourceChannelId ? deps.buildSourcePagePath('youtube', sourceChannelId) : null,
+    };
+  });
+}
 
 async function loadStoredSourcePageAssets(
   db: any,
@@ -420,20 +451,47 @@ export async function handlePreviewPublicYouTubeSubscriptions(
   });
 }
 
-export async function handleListSourceSubscriptions(_req: express.Request, res: express.Response, deps: SourceSubscriptionsRouteDeps) {
+export async function handleListSourceSubscriptions(req: express.Request, res: express.Response, deps: SourceSubscriptionsRouteDeps) {
   const userId = (res.locals.user as { id?: string } | undefined)?.id;
   const authToken = (res.locals.authToken as string | undefined) ?? '';
   if (!userId || !authToken) {
     return res.status(401).json({ ok: false, error_code: 'AUTH_REQUIRED', message: 'Unauthorized', data: null });
   }
 
+  const query = req.query || {};
+  const hasPaginationRequest = query.limit !== undefined || query.offset !== undefined;
+  const requestedLimit = parseOptionalNonNegativeInt(query.limit);
+  const requestedOffset = parseOptionalNonNegativeInt(query.offset);
+  if ((query.limit !== undefined && requestedLimit === null) || (query.offset !== undefined && requestedOffset === null)) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'INVALID_INPUT',
+      message: 'Invalid subscriptions page request.',
+      data: null,
+    });
+  }
+  const pageLimit = requestedLimit === null
+    ? SOURCE_SUBSCRIPTIONS_DEFAULT_PAGE_SIZE
+    : Math.max(1, Math.min(requestedLimit, SOURCE_SUBSCRIPTIONS_MAX_PAGE_SIZE));
+  const pageOffset = requestedOffset ?? 0;
+
   const db = deps.getAuthedSupabaseClient(authToken);
   if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
   const sourcePageDb = deps.getServiceSupabaseClient?.() || db;
 
   let rows = [] as Array<Record<string, unknown>>;
+  let page: SourceSubscriptionsListPage | null = null;
   try {
-    rows = await deps.listSourceSubscriptionsForUser(db, userId);
+    if (hasPaginationRequest) {
+      page = await deps.listSourceSubscriptionsPageForUser(db, {
+        userId,
+        limit: pageLimit,
+        offset: pageOffset,
+      });
+      rows = Array.isArray(page?.items) ? page.items : [];
+    } else {
+      rows = await deps.listSourceSubscriptionsForUser(db, userId);
+    }
   } catch (error) {
     return res.status(400).json({
       ok: false,
@@ -444,24 +502,18 @@ export async function handleListSourceSubscriptions(_req: express.Request, res: 
   }
   try {
     const storedAssets = await loadStoredSourcePageAssets(sourcePageDb, rows);
-    const withAvatars = rows.map((row) => {
-      const sourcePageId = String(row.source_page_id || '').trim();
-      const sourceChannelId = String(row.source_channel_id || '').trim();
-      const assetRow = (sourcePageId ? storedAssets.byPageId.get(sourcePageId) : null)
-        || (sourceChannelId ? storedAssets.byChannelId.get(sourceChannelId) : null)
-        || null;
-      return {
-        ...row,
-        source_channel_avatar_url: assetRow?.avatar_url || null,
-        source_page_path: sourceChannelId ? deps.buildSourcePagePath('youtube', sourceChannelId) : null,
-      };
-    });
+    const withAvatars = mapSourceSubscriptionRowsWithAssets(rows, deps, storedAssets);
 
     return res.json({
       ok: true,
       error_code: null,
       message: 'subscriptions fetched',
-      data: withAvatars,
+      data: hasPaginationRequest
+        ? {
+          items: withAvatars,
+          next_offset: page?.next_offset ?? null,
+        }
+        : withAvatars,
     });
   } catch (avatarError) {
     console.log('[subscription_stored_assets_lookup_failed]', JSON.stringify({
@@ -474,14 +526,12 @@ export async function handleListSourceSubscriptions(_req: express.Request, res: 
     ok: true,
     error_code: null,
     message: 'subscriptions fetched',
-    data: rows.map((row) => {
-      const sourceChannelId = String(row.source_channel_id || '').trim();
-      return {
-        ...row,
-        source_channel_avatar_url: null,
-        source_page_path: sourceChannelId ? deps.buildSourcePagePath('youtube', sourceChannelId) : null,
-      };
-    }),
+    data: hasPaginationRequest
+      ? {
+        items: mapSourceSubscriptionRowsWithAssets(rows, deps, null),
+        next_offset: page?.next_offset ?? null,
+      }
+      : mapSourceSubscriptionRowsWithAssets(rows, deps, null),
   });
 }
 

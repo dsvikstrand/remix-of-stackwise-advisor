@@ -308,6 +308,7 @@ r13) [have] Personal workspace is profile-first: `/u/:userId` tabs are `Feed / C
 r14) [have] Header `Create` action (next to profile) is the primary entrypoint to `/search`.
 r15) [have] Optional onboarding route: `/welcome` (auth-only, first-login entrypoint for new users only).
 r16) [have] Source page route: `/s/:platform/:externalId` (public-readable, subscribe/unsubscribe capable for authenticated users).
+r17) [have] `/subscriptions` now preloads `50` rows at a time and appends more with explicit `Load more`, so large subscription libraries do not render the entire list on first paint.
 
 ## Scope Boundaries (MVP)
 s1) In scope

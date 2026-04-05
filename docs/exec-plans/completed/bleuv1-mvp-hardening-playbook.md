@@ -10,6 +10,7 @@ Update note 2026-04-02:
 - Deterministic long-transcript pruning for YT2BP now defaults to a `5000`-character budget with threshold buckets `5000/9000/16000`; the same evenly spaced window sampler remains in place before the final hard trim.
 - Subscription-ledger `primary` now also keeps due-batch hydration, manual-refresh checkpoint lookup, source-page/channel subscriber fan-out, and auto-unlock eligibility on Oracle-first helpers; unchanged Supabase compatibility rows skip no-op updates, normal compatibility updates prefer direct `id` writes before any user/channel reread, and the remaining rereads are explicitly logged as `subscription_fallback_read`.
 - New source subscriptions now default to manual auto-unlock off (`auto_unlock_enabled=false`), while reactivating an existing subscription preserves that row's prior saved toggle value across direct subscribe, source-page subscribe, and YouTube import flows.
+- `/subscriptions` now supports incremental list loading: the page requests `50` rows at a time and appends more through an explicit `Load more` action, while older full-list callers still keep the compatibility response shape.
 
 ## Goal
 Convert the current feature-complete MVP into a stable, clear, and scalable product surface by hardening UX trust, runtime reliability, and engineering foundations.

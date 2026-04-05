@@ -43,6 +43,7 @@ Status: `canonical`
 14. YouTube disconnect revokes+unlinks OAuth tokens but preserves existing app subscriptions.
 15. Import selection defaults to none-selected, and import is idempotent with inactive-row reactivation.
 16. New-account optional onboarding uses `/welcome` as a first-login setup entrypoint; existing accounts are not auto-prompted.
+16a. `/subscriptions` must scale for large libraries: the page should preload only the first `50` active rows and append more through an explicit `Load more` action rather than rendering the full subscription corpus on first paint.
 17. Onboarding creator setup is optional; completion requires joining at least one Bleu channel, not importing YouTube subscriptions.
 18. Source identity is moving to platform-agnostic `Source Pages` (`/s/:platform/:externalId`), with YouTube channel `UC...` as the current canonical key.
 19. Source pages are public-readable and subscribe/unsubscribe capable; legacy `/api/source-subscriptions*` endpoints remain compatibility-safe during migration.

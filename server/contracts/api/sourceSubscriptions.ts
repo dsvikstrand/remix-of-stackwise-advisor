@@ -55,6 +55,11 @@ export type PublicYouTubeSubscriptionsPreviewResult = {
   creators: PublicYouTubeSubscriptionPreviewItem[];
 };
 
+export type SourceSubscriptionsListPage = {
+  items: Array<Record<string, any>>;
+  next_offset: number | null;
+};
+
 export type SourceSubscriptionsRouteDeps = {
   getAuthedSupabaseClient: any;
   getServiceSupabaseClient: any;
@@ -68,6 +73,7 @@ export type SourceSubscriptionsRouteDeps = {
   ensureSourcePageFromYouTubeChannel: any;
   upsertSourceSubscription: any;
   listSourceSubscriptionsForUser: any;
+  listSourceSubscriptionsPageForUser: any;
   getSourceSubscriptionById: any;
   patchSourceSubscriptionById: any;
   deactivateSourceSubscriptionById: any;
