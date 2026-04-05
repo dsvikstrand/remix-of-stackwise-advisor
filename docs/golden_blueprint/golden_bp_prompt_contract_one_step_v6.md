@@ -1,0 +1,211 @@
+# Golden BP Prompt Contract v6
+
+Version: `v6`
+Status: Canonical (current)
+Owner intent: Generate high-value blueprints with a stable Bluep quality stamp, lighter fast-skim takeaways, a stricter storyline substance floor, and a more useful Caveats section that behaves like calibrated context instead of harsh evidence-policing.
+
+
+## What Bluep Is
+
+Bluep is a community-driven blueprint reading product where people discover source-grounded summaries, react to them, and discuss them. The social loop is built around usefulness: if a blueprint is clear, specific, and worth talking about, likes/comments follow naturally. If it reads like generic AI text, engagement drops even when facts are technically correct.
+
+The trust model is simple: users know content is AI-assisted, so the product does not need to hide authorship. Trust is earned through clarity, fidelity to source, practical value, and honest boundaries.
+
+## What a Blueprint Is
+
+A blueprint is a compressed value artifact made from a source video transcript. It is not a transcript rewrite, not a Reddit-style personal post, and not a generic top-level summary. A strong blueprint should let the reader say, "I got the core value fast, I understand the decision logic, and I know what to do next."
+
+Blueprints are optimized for two reading modes: a fast skim that still yields value and a fuller read that provides deeper reasoning. Content should be compact, but never shallow or placeholder-like.
+
+## Human Vibe Principle
+
+The target voice is person-to-person, creator-like, and grounded. It should sound like a strong explainer talking to an informed reader, not like a template engine output. The writing should carry rhythm and intent, with concrete wording and clean transitions.
+
+The tone must stay useful over polished. If a sentence sounds impressive but does not add actionable or interpretive value, it should be removed or rewritten. Confidence should be calibrated: state what is known, what is likely, and what remains uncertain without hedging every line.
+
+## Strict Rule Sets
+
+### Output style rules
+
+When bullets are used, each bullet must be complete and readable on its own. A complete bullet states the core claim, explains why it matters in context, and, when natural, lands on a practical implication. Bullet fragments, clipped lines, and stub artifacts are invalid output.
+
+Keep bullets tight. `Takeaways`, `Deep Dive`, `Practical Rules`, and `Caveats` bullets should be one to two sentences max. Do not write paragraph-length bullets.
+
+For `Takeaways` specifically, optimize for immediate grasp and curiosity. Lead with the clearest plain-English point first. Prefer reader-facing phrasing over analyst-style compression, and do not force every takeaway bullet to carry mechanism, caveat, and implication all at once. If the takeaway bullets become too dense, too technical, or too long to skim quickly, the output is treated as a quality miss.
+
+### Golden structure target
+
+The required section sequence is `Summary`, `Takeaways`, `Storyline`, `Deep Dive`, `Practical Rules`, and `Caveats`. All six are mandatory. If any required section is missing or empty, the output is considered a failed generation and should be retried. `Summary` is the intro context layer, `Takeaways` is the fast-value entry point, `Storyline` is the core narrative section, and the remaining sections convert understanding into mechanism clarity, execution rules, and calibrated skepticism.
+
+Sections must not duplicate each other semantically. If a sentence appears in one section, it should not reappear with minor wording changes elsewhere.
+
+
+## Source and Style Rules
+
+- Use `{{SOURCE_TRANSCRIPT_CONTEXT}}` as the only factual source.
+- Use Reddit POS references for tone, pacing, and readability only.
+- Do not import facts, numbers, examples, topic claims, or distinctive wording from POS references.
+- Ignore sponsorship, paid-promotion, and affiliate transcript segments completely.
+- Avoid meta framing like "this video," "this blueprint," or "the transcript."
+- Long transcripts may be deterministically pruned to fit the runtime input budget. Treat that as normal runtime shaping, not as a source defect, not as a bug, and not as a caveat by itself.
+
+## Required Sections
+
+Every output must include all six required sections:
+- `Summary`
+- `Takeaways`
+- `Storyline`
+- `Deep Dive`
+- `Practical Rules`
+- `Caveats`
+
+`Caveats` is the human section label. In the JSON output, return that section in the existing `open_questions` field. Do not rename the key.
+
+## Section Contract
+
+### Summary
+
+Summary is the opening context layer and should orient the reader to the topic quickly before detailed reasoning starts. It should explain what the topic is about, why it matters, and what baseline prerequisites or assumptions the reader should keep in mind. Keep it concise, readable, and general enough to help first-pass comprehension. Do not use Summary to dump detailed mechanisms or dense evidence blocks; those belong in `Storyline` and `Deep Dive`.
+
+### Takeaways
+
+Takeaways is the highest-value skim section and should deliver immediate payoff in three to four complete bullets. Each bullet must stand alone and give the reader one meaningful thing they can retain or use right away. This section is not a keyword list and not a teaser. It should read like distilled insight with practical consequence, but in a lighter, more inviting register than `Storyline` or `Deep Dive`. Write for a curious non-expert first: lead with what is interesting or important in plain English, then briefly say why it matters. Practical consequence is welcome when natural, but do not force every bullet to include mechanism, caveat, and implication. Avoid mechanism-heavy openings when simpler phrasing works, and avoid stacking multiple qualifiers or caveats into one bullet. If a technical term is necessary, translate it quickly in plain English. Keep the whole section skimmable in seconds, not dense enough to feel like compressed analyst notes. Not following these takeaway rules can trigger a retry. Depth should be concise but non-trivial: enough specificity to be useful, short enough to scan in seconds. Target total read time is roughly ten to twenty seconds.
+
+### Storyline
+
+Storyline is the narrative core and should read like a coherent mini-essay in two to three content-rich paragraphs/slides. It carries the main through-line: what matters, why it matters, and how to interpret it in practice. This section should feel human, connected, and intentional, not stitched together from note fragments. It should not degrade into bullet artifacts or duplicate sentences from Takeaways. Each paragraph/slide should be substantial enough to stand on its own and should usually contain two to four sentences. Avoid thin one-liners, fragmented slide stacks, or padding the storyline into extra slides without real content. Target depth is enough for a full read to feel satisfying without requiring the original video.
+
+### Deep Dive
+
+Deep Dive explains mechanism and reasoning. It should provide three to five complete bullets that show how or why outcomes happen, under what conditions they hold, and where boundaries appear. Language should stay domain-native and specific to the topic, not generic framework filler. This section should make the reader feel more precise, not simply more verbose.
+
+### Practical Rules
+
+Practical Rules turns understanding into repeatable action. It should provide three to five complete bullets that a reader can apply without guesswork. Rules should be operational, ideally in simple conditional framing when helpful, and should reduce ambiguity rather than introduce it. This section should prioritize real-world decision clarity over motivational language.
+
+### Caveats
+
+Caveats should act like calibrated context, not a hostile review. It should provide three to five complete bullets that help the reader hold the topic with better nuance: where context may change the advice, where alternatives may also work, where the mechanism may be directionally useful without being the whole story, and where a claim should be applied more as a heuristic than as a universal rule.
+
+Prefer reader-useful balancing moves over generic critique. Good caveats often sound like: another valid interpretation may also fit, this may vary by person or goal, this framing is useful but not complete, or the headline advice may work even if the explanation is simplified. Keep the section transcript-grounded, but do not default to repetitive "the source does not provide evidence for X" or "the transcript does not explain why X is better than Y" phrasing unless the source makes an unusually strong claim that clearly requires that qualification.
+
+Do not mention expected runtime transcript pruning, truncation, excerpt gaps, or "some points may be missing because the transcript was shortened" as caveats. Those are normal input-shaping rules, not reader-facing limitations to repeat back.
+
+Negative pattern examples to avoid:
+- "The transcript does not provide evidence for X."
+- "The transcript does not explain why X is better than Y."
+- "The transcript is truncated, so some points may be missing."
+
+Positive pattern examples to prefer:
+- "X may be useful, but in practice Y can work just as well depending on the person and goal."
+- "This mechanism is a helpful lens, but it is probably not the whole story behind the outcome."
+- "The advice is strongest as a practical heuristic, not as a universal rule for every context."
+
+## Representation Contract (Shape and Completeness)
+
+| Section | Required shape | Depth target | Fail conditions |
+|---|---|---|---|
+| `Summary` | concise intro context paragraph block | orientation + prerequisites without detail overload |
+| `Takeaways` | 3-4 complete bullets, each 1-2 sentences | fast-skim value in ~10-20 seconds | clipped bullets, generic labels, keyword-only lines, overlong bullets |
+| `Storyline` | 2-3 substantial coherent content-rich paragraphs/slides | primary narrative payload | random fact stacking, duplicated lines, thin slide fragments, list artifacts |
+| `Deep Dive` | 3-5 complete bullets, each 1-2 sentences | mechanism/context clarity | generic off-domain bullets, stubs, repeated boilerplate tails, overlong bullets |
+| `Practical Rules` | 3-5 complete bullets, each 1-2 sentences | actionable decisions | non-operational advice, abstract slogans, overlong bullets |
+| `Caveats` | 3-5 complete bullets, each 1-2 sentences | calibrated context, useful nuance, grounded balancing | generic filler caveats, repetitive missing-evidence complaints, pruning/truncation meta, imported outside fact-checking, hostile intent claims, overlong bullets |
+
+## Transcript Precedence Rule
+
+Transcript context is the top authority for all factual statements. Vibe references can shape tone and readability only. If there is any ambiguity, choose transcript fidelity over stylistic flourish.
+Paid promotion/sponsorship/affiliate transcript segments are explicitly excluded from content extraction and should not appear in output.
+
+## Anti-Slop Rules
+
+Avoid the most common failure patterns:
+- no repeated sentences or near-duplicate points across sections
+- no clipped bullets or bullet fragments
+- no generic boilerplate endings like repeated “why it matters” filler
+- no domain drift; use topic-native language
+
+## Reddit Reference Policy (Vibe Only, Never Content)
+
+Positive Reddit examples are allowed as style calibration inputs for feel, pacing, readability, and engagement energy. They are not allowed as content sources. We borrow narrative signal, not facts. The provided Reddit post are cherry picked based on high comment and like count, and based on a community value that the post seemed to proved. We want the blueprint to have the same "community value" feel.
+
+## Strict JSON Contract
+
+Return one complete JSON object only.
+
+- No markdown fences
+- No commentary before or after JSON
+- No extra braces
+- No missing commas
+- No malformed arrays or objects
+- Do not rename keys
+- Do not use alternate keys such as `bleup`
+- Do not flatten object fields into strings
+
+Field-shape requirements:
+- `summary` must be an object with one key: `text`
+- `storyline` must be an object with one key: `text`
+- `takeaways`, `deep_dive`, `practical_rules`, and `open_questions` must be objects with one key: `bullets`
+- use `open_questions` for the `Caveats` section
+- `bullets` values must be arrays of strings
+
+Check that braces, commas, arrays, and objects are complete and balanced before returning.
+
+## Response Format
+
+Title is assigned by backend from `{{VIDEO_TITLE}}`, so do not include a `title` field.
+
+```json
+{
+  "schema_version": "blueprint_sections_v1",
+  "tags": ["string"],
+  "summary": {
+    "text": "string"
+  },
+  "takeaways": {
+    "bullets": ["string"]
+  },
+  "storyline": {
+    "text": "string"
+  },
+  "deep_dive": {
+    "bullets": ["string"]
+  },
+  "practical_rules": {
+    "bullets": ["string"]
+  },
+  "open_questions": {
+    "bullets": ["string"]
+  }
+}
+```
+
+## Runtime Payload
+
+Video URL: {{VIDEO_URL}}
+Video title: {{VIDEO_TITLE}}
+Transcript source: {{TRANSCRIPT_SOURCE}}
+
+Oracle POS vibe directory: {{ORACLE_POS_DIR}}
+
+Selected positive reference paths:
+{{POSITIVE_REFERENCE_PATHS}}
+
+Injected positive reference excerpts (vibe only, not factual source):
+{{POSITIVE_REFERENCE_EXCERPTS}}
+
+Quality issue codes (retry only, else `none`):
+{{QUALITY_ISSUE_CODES}}
+
+Quality issue details (retry only, else `none`):
+{{QUALITY_ISSUE_DETAILS}}
+
+Additional instructions:
+{{ADDITIONAL_INSTRUCTIONS}}
+
+Source transcript context (ONLY factual source of truth):
+{{SOURCE_TRANSCRIPT_CONTEXT}}
+
+## Final Directive
+
+Generate now using transcript context as the only factual source. Use POS references only for vibe calibration. Include all required sections in the exact JSON schema above, with the exact field names and field shapes shown above. Write the final human section as `Caveats`, but return it through the `open_questions` field.

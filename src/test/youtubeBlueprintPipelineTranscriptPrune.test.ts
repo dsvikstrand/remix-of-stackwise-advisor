@@ -335,7 +335,7 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
 
     expect(pass1Transcripts.length).toBeGreaterThan(0);
     expect(pass2Transcripts.length).toBe(0);
-    expect(YOUTUBE_BLUEPRINT_PROMPT_TEMPLATE_PATH_DEFAULT).toBe('docs/golden_blueprint/golden_bp_prompt_contract_one_step_v5.md');
+    expect(YOUTUBE_BLUEPRINT_PROMPT_TEMPLATE_PATH_DEFAULT).toBe('docs/golden_blueprint/golden_bp_prompt_contract_one_step_v6.md');
     expect(pass1Transcripts[0].length).toBeLessThanOrEqual(5000);
     expect(result.meta.transcript_pruning?.applied).toBe(true);
     expect(result.meta.transcript_pruning?.pruned_chars).toBeLessThanOrEqual(5000);
@@ -554,6 +554,7 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
     expect(pass1Requests[1].additionalInstructions).toContain('Summary, Takeaways, Storyline, Deep Dive, Practical Rules, Caveats.');
     expect(pass1Requests[2].additionalInstructions).toContain('Summary, Takeaways, Storyline, Deep Dive, Practical Rules, Caveats.');
     expect(pass1Requests[0].additionalInstructions).toContain('Return Caveats content in the existing open_questions field.');
+    expect(pass1Requests[0].additionalInstructions).toContain('Do not treat expected transcript pruning/truncation as a caveat by itself');
     expect(pass2Transcripts.length).toBe(0);
     expect(events.some((row) => row.event === 'gate_failed_terminal')).toBe(true);
     expect(events.some((row) => row.event === 'gate_published_anyway')).toBe(true);

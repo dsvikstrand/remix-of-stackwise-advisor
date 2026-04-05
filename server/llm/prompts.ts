@@ -47,7 +47,7 @@ Write the review now following the format rules.`;
 
 export const YOUTUBE_BLUEPRINT_SYSTEM_PROMPT = '';
 
-export const YOUTUBE_BLUEPRINT_PROMPT_TEMPLATE_PATH_DEFAULT = 'docs/golden_blueprint/golden_bp_prompt_contract_one_step_v5.md';
+export const YOUTUBE_BLUEPRINT_PROMPT_TEMPLATE_PATH_DEFAULT = 'docs/golden_blueprint/golden_bp_prompt_contract_one_step_v6.md';
 const YOUTUBE_PASS2_PROMPT_TEMPLATE_RELATIVE_PATH = 'docs/golden_blueprint/golden_bp_pass2_transform_prompt_v1.md';
 const YOUTUBE_POS_VIBE_ORACLE_DIR = '/home/ubuntu/remix-of-stackwise-advisor/docs/golden_blueprint/reddit/clean/pos';
 const YOUTUBE_REQUIRED_TEMPLATE_KEYS = [
@@ -397,6 +397,8 @@ export function buildYouTubeQualityRetryInstructions(input: {
     'Do not use meta framing like "this video", "this blueprint", or "the transcript".',
     'All required sections must be present and non-empty: Summary, Takeaways, Storyline, Deep Dive, Practical Rules, Caveats.',
     'Return Caveats content in the existing open_questions field. Do not rename the key.',
+    'Do not treat expected transcript pruning/truncation as a caveat by itself.',
+    'Prefer nuanced balancing caveats over repetitive missing-evidence complaints.',
     'Make sure the JSON is correctly formatted before returning it.',
     'Do not add extra braces, missing commas, trailing commentary, malformed arrays/objects, or alternate field names.',
     'Return one complete JSON object only.',
