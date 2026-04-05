@@ -114,6 +114,7 @@
     - Oracle subscription-ledger `primary` is the normal source for hot subscription reads (`by id`, `by user + channel`, source-page subscription access, active lists, subscriber counts) and those reads treat an empty Oracle result as authoritative instead of automatically falling through to Supabase.
     - Supabase `user_source_subscriptions` remains compatibility shadow, but no-op shadow patches are skipped when the meaningful persisted fields are already unchanged.
     - Remaining subscription reads that still reach Supabase in `primary` are explicit fallback paths and are logged as `subscription_fallback_read` for attribution and egress tracking.
+    - Recurring subscription sync/checkpoint/error writes may now also stop at the Oracle ledger when only operational fields (`last_polled_at`, `last_seen_*`, `last_sync_error`) changed; Supabase compatibility shadowing is still preserved for identity/activation changes that matter to fallback and user-facing semantics.
   - Onboarding setup surface in `src/pages/WelcomeOnboarding.tsx`:
     - reuses the same manual-first creator setup surface as `/subscriptions`
     - keeps creator add/import optional

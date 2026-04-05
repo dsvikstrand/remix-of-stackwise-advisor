@@ -356,6 +356,10 @@ import {
   summarizeSubscriptionSyncError,
 } from './services/sourceSubscriptionSync';
 import { createNotificationPushDispatcherController } from './services/notificationPushDispatcherController';
+import {
+  getSubscriptionShadowChangedFields,
+  shouldSkipSupabaseSubscriptionShadowWrite,
+} from './services/subscriptionShadowPolicy';
 import { createBlueprintCreationService } from './services/blueprintCreation';
 import {
   createBlueprintYouTubeCommentsService,
@@ -1421,12 +1425,14 @@ function logSubscriptionShadowWriteSkipped(input: {
   subscriptionId?: string | null;
   userId?: string | null;
   reason: string;
+  changedFields?: string[] | null;
 }) {
   console.log('[oracle-control-plane] subscription_shadow_write_skipped', JSON.stringify({
     action: input.action,
     subscription_id: input.subscriptionId || null,
     user_id: input.userId || null,
     reason: input.reason,
+    changed_fields: Array.isArray(input.changedFields) ? input.changedFields : null,
   }));
 }
 
@@ -2840,6 +2846,7 @@ async function writeSupabaseSourceSubscriptionShadow(
 ) {
   const current = options?.current || null;
   const action = String(options?.action || 'subscription_shadow_write').trim() || 'subscription_shadow_write';
+  const changedFields = getSubscriptionShadowChangedFields(current, row);
 
   if (current?.id === row.id && sourceSubscriptionRowsEquivalent(current, row)) {
     logSubscriptionShadowWriteSkipped({
@@ -2847,6 +2854,22 @@ async function writeSupabaseSourceSubscriptionShadow(
       subscriptionId: row.id,
       userId: row.user_id,
       reason: 'unchanged_oracle_material_fields',
+      changedFields,
+    });
+    return row;
+  }
+
+  if (shouldSkipSupabaseSubscriptionShadowWrite({
+    action,
+    primaryEnabled: oracleSubscriptionLedgerPrimaryEnabled,
+    changedFields,
+  })) {
+    logSubscriptionShadowWriteSkipped({
+      action,
+      subscriptionId: row.id,
+      userId: row.user_id,
+      reason: 'oracle_primary_hot_sync_fields_only',
+      changedFields,
     });
     return row;
   }
@@ -2895,6 +2918,7 @@ async function writeSupabaseSourceSubscriptionShadow(
         subscriptionId: existing.id,
         userId: existing.user_id,
         reason: 'unchanged_material_fields',
+        changedFields: getSubscriptionShadowChangedFields(existing, row),
       });
       return existing;
     }

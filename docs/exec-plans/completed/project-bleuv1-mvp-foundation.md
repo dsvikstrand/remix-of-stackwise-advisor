@@ -130,6 +130,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Current runtime follow-up now also skips the Supabase `ingestion_jobs` compatibility upsert for queue claim-to-`running` transitions in queue-ledger `primary`, and extends `queue_fallback_read` coverage across latest-for-user, active-for-user, refresh-pending dedupe, unlock-job lookup, and retry-dedupe queue reads.
 - Current runtime follow-up now also treats empty Oracle subscription-ledger results as authoritative in `primary` for hot subscription lookups, so normal source-page/list/count checks do not fall through to Supabase just because Oracle found no matching subscription row.
 - Current runtime follow-up now also trims subscription-shadow churn further: unchanged compatibility rows no longer emit a no-op `user_source_subscriptions` patch when the meaningful persisted fields already match.
+- Current runtime follow-up now also lets Oracle-primary sync/checkpoint/error-only subscription writes stay Oracle-local when only operational fields changed, so Supabase compatibility rows no longer need to mirror every `last_polled_at` / checkpoint / `last_sync_error` refresh.
 - Current runtime follow-up now also logs any remaining Supabase subscription reads in that mode as `subscription_fallback_read`, so the egress-reduction chapter can attribute compatibility subscription traffic precisely.
 - Durable generation trace writes should stay lean by default, avoiding per-event `seq` reads and unnecessary returning payloads on write helpers.
 
