@@ -250,7 +250,7 @@ Acceptance:
 
 ## Next Candidate Waves
 
-f1) [todo] **Candidate 1: `blueprint_youtube_comments` churn**
+f1) [have] **Candidate 1: `blueprint_youtube_comments` churn**
 
 Reason:
 - it is now visible as its own family in recent attribution
@@ -270,6 +270,26 @@ Target work:
 Acceptance:
 - sampled `blueprint_youtube_comments` traffic drops
 - comment refresh behavior stays correct
+
+Update:
+- unchanged refresh snapshots now skip the `blueprint_youtube_comments` delete/reinsert cycle entirely and emit explicit changed/skipped refresh logs
+
+f1a) [have] **Queue write-churn follow-up**
+
+Reason:
+- the post-comments soak now shows queue back on top, with the remaining heat concentrated in `POST /rest/v1/ingestion_jobs?on_conflict` and `POST /rest/v1/ingestion_jobs`
+
+Primary files:
+- [server/index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts)
+- [server/services/queueShadowPolicy.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/queueShadowPolicy.ts)
+
+Landed scope:
+- queue-ledger primary compatibility writes now update existing `ingestion_jobs` rows by durable `id` first
+- Supabase insert is now reserved for real shadow misses instead of every existing-row transition taking the `on_conflict` path
+
+Acceptance:
+- sampled `POST /rest/v1/ingestion_jobs?on_conflict` traffic drops
+- queue behavior stays unchanged
 
 f2) [todo] **Candidate 2: `profiles` read attribution / reduction**
 

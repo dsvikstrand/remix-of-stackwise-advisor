@@ -134,6 +134,7 @@
     - manual comments refresh reads existing refresh state first and only registers a row when refresh state is missing or uninitialized
     - unchanged `source_items.metadata.view_count` fetches no longer rewrite metadata just to bump a fetch timestamp
     - unchanged `blueprint_youtube_comments` snapshots now skip the delete/reinsert rewrite entirely and emit explicit changed/skipped refresh logs
+    - queue-ledger primary compatibility writes now update existing `ingestion_jobs` rows by durable id first and only insert on a real miss, reducing `on_conflict` queue shadow churn
     - no-op `blueprint_youtube_refresh_state` upserts are skipped when the persisted refresh fields would remain unchanged
   - Queue lease maintenance is also coarsened:
     - worker lease heartbeats now refresh at a lease-aware cadence (`30s` on the default `90s` lease) instead of the older `10s` default

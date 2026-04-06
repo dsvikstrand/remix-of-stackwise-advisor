@@ -365,6 +365,10 @@ import {
   mapSourceItemShadowUpdateValues,
   shouldLookupSupabaseSourceItemCurrent,
 } from './services/sourceItemShadowPolicy';
+import {
+  mapQueueShadowInsertValues,
+  mapQueueShadowUpdateValues,
+} from './services/queueShadowPolicy';
 import { createBlueprintCreationService } from './services/blueprintCreation';
 import {
   createBlueprintYouTubeCommentsService,
@@ -1324,44 +1328,33 @@ async function upsertOracleQueueLedgerFromKnownRows(
   }
 }
 
-function mapIngestionJobToSupabaseShadowValues(job: IngestionJobRow) {
-  return {
-    id: job.id,
-    trigger: job.trigger,
-    scope: job.scope,
-    status: job.status,
-    requested_by_user_id: job.requested_by_user_id,
-    subscription_id: job.subscription_id,
-    started_at: job.started_at,
-    finished_at: job.finished_at,
-    processed_count: job.processed_count,
-    inserted_count: job.inserted_count,
-    skipped_count: job.skipped_count,
-    error_code: job.error_code,
-    error_message: job.error_message,
-    attempts: job.attempts,
-    max_attempts: job.max_attempts,
-    next_run_at: job.next_run_at,
-    lease_expires_at: job.lease_expires_at,
-    last_heartbeat_at: job.last_heartbeat_at,
-    worker_id: job.worker_id,
-    trace_id: job.trace_id,
-    payload: job.payload,
-    created_at: job.created_at,
-    updated_at: job.updated_at,
-  };
-}
-
 async function upsertSupabaseQueueShadow(
   db: ReturnType<typeof createClient>,
   job: IngestionJobRow,
+  options?: {
+    action?: string;
+  },
 ) {
-  const { error } = await db
+  const updateResult = await db
     .from('ingestion_jobs')
-    .upsert(mapIngestionJobToSupabaseShadowValues(job), {
-      onConflict: 'id',
-    });
-  if (error) throw error;
+    .update(mapQueueShadowUpdateValues(job))
+    .eq('id', job.id)
+    .select('id')
+    .maybeSingle();
+  if (updateResult.error) throw updateResult.error;
+  if (updateResult.data?.id) return job;
+
+  const insertResult = await db
+    .from('ingestion_jobs')
+    .insert(mapQueueShadowInsertValues(job));
+  if (insertResult.error) throw insertResult.error;
+
+  console.log('[oracle-control-plane] queue_shadow_write', JSON.stringify({
+    action: String(options?.action || 'queue_shadow_write').trim() || 'queue_shadow_write',
+    job_id: job.id,
+    scope: job.scope,
+    mode: 'insert_on_miss',
+  }));
   return job;
 }
 
@@ -1517,7 +1510,9 @@ async function finalizeIngestionJobWithMirror(
     if (!finalizedJob) return null;
 
     try {
-      await upsertSupabaseQueueShadow(db, finalizedJob);
+      await upsertSupabaseQueueShadow(db, finalizedJob, {
+        action: `${input.action}_finalize_shadow`,
+      });
     } catch (error) {
       logOracleQueueLedgerShadowWriteError({
         action: `${input.action}_finalize_shadow`,
@@ -1580,7 +1575,7 @@ async function enqueueIngestionJobWithMirror(
     });
     const result = await db
       .from('ingestion_jobs')
-      .insert(mapIngestionJobToSupabaseShadowValues(normalizedJob))
+      .insert(mapQueueShadowInsertValues(normalizedJob))
       .select('*')
       .single();
     if (result.error) {
@@ -1598,7 +1593,7 @@ async function enqueueIngestionJobWithMirror(
   }
   const result = await db
     .from('ingestion_jobs')
-    .insert(mapIngestionJobToSupabaseShadowValues(normalizedJob))
+    .insert(mapQueueShadowInsertValues(normalizedJob))
     .select('*')
     .single();
 
@@ -1652,7 +1647,9 @@ async function markRunningIngestionJobsFailedWithMirror(
     });
     for (const job of updatedRows) {
       try {
-        await upsertSupabaseQueueShadow(db, job);
+        await upsertSupabaseQueueShadow(db, job, {
+          action: `${input.action}_mark_failed_shadow`,
+        });
       } catch (error) {
         logOracleQueueLedgerShadowWriteError({
           action: `${input.action}_mark_failed_shadow`,
@@ -1828,7 +1825,9 @@ async function failClaimedIngestionJobWithMirror(
     if (!failedJob) return null;
 
     try {
-      await upsertSupabaseQueueShadow(db, failedJob);
+      await upsertSupabaseQueueShadow(db, failedJob, {
+        action: `${input.action}_shadow`,
+      });
     } catch (error) {
       logOracleQueueLedgerShadowWriteError({
         action: `${input.action}_shadow`,

@@ -12,6 +12,7 @@ Update note 2026-04-02:
 - New source subscriptions now default to manual auto-unlock off (`auto_unlock_enabled=false`), while reactivating an existing subscription preserves that row's prior saved toggle value across direct subscribe, source-page subscribe, and YouTube import flows.
 - `/subscriptions` now pages large subscription libraries in `50`-row slices with an explicit `Load more` action, while compatibility callers can still request the historical full-list response shape.
 - Blueprint YouTube comments refresh now skips unchanged `blueprint_youtube_comments` rewrites and logs explicit changed/skipped decisions, narrowing the remaining comments egress without changing visible comment UX.
+- Queue-ledger `primary` compatibility writes now update existing `ingestion_jobs` rows by durable `id` before falling back to insert-on-miss, reducing Supabase `on_conflict` queue shadow churn without changing queue outcomes.
 
 ## Objective
 Deliver the remaining `bleuV1` MVP through a manual iterative build loop with clear checkpoints and low ambiguity.
