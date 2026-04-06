@@ -2,7 +2,7 @@
 
 Status: `active`
 Owner: `Codex / David`
-Last updated: `2026-04-06` (subscription part 4 + source-items part 2 soaked; next targets reordered from live attribution)
+Last updated: `2026-04-06` (queue write-churn landed; source-items part 3 landed; next targets reordered from live attribution)
 
 ## Purpose
 
@@ -247,6 +247,24 @@ Landed scope:
 
 Acceptance:
 - `source_items` is still visible, but it is no longer the clear dominant problem family
+
+e8) [have] **Source-items follow-up: part 3**
+
+Reason:
+- after the earlier source-item waves, the remaining safe write-churn cut was still compatibility patches triggered only by `updated_at`
+- that bookkeeping-only churn still paid Supabase patch cost without changing any meaningful source-item field
+
+Primary files:
+- [server/index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts)
+- [server/services/sourceItemShadowPolicy.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/sourceItemShadowPolicy.ts)
+
+Landed scope:
+- source-item shadow change detection is now centralized in `sourceItemShadowPolicy`
+- `updated_at`-only source-item changes no longer count as material shadow differences
+- Oracle-primary source-item bookkeeping churn now stays Oracle-local unless a meaningful persisted field actually changed
+
+Acceptance:
+- steady-state `PATCH /rest/v1/source_items?id:eq` churn should drop further without changing source-page, wall, or profile source metadata
 
 ## Next Candidate Waves
 

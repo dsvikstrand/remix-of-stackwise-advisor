@@ -362,6 +362,7 @@ import {
   shouldSkipSupabaseSubscriptionShadowWrite,
 } from './services/subscriptionShadowPolicy';
 import {
+  getSourceItemShadowChangedFields,
   mapSourceItemShadowUpdateValues,
   shouldLookupSupabaseSourceItemCurrent,
 } from './services/sourceItemShadowPolicy';
@@ -4035,25 +4036,6 @@ function mapSourceItemToSupabaseShadowValues(row: SourceItemRow) {
   };
 }
 
-function sourceItemShadowRowsEquivalent(left: SourceItemRow, right: SourceItemRow) {
-  return (
-    left.source_type === right.source_type
-    && left.source_native_id === right.source_native_id
-    && left.canonical_key === right.canonical_key
-    && left.source_url === right.source_url
-    && left.title === right.title
-    && left.published_at === right.published_at
-    && left.ingest_status === right.ingest_status
-    && left.source_channel_id === right.source_channel_id
-    && left.source_channel_title === right.source_channel_title
-    && left.source_page_id === right.source_page_id
-    && left.thumbnail_url === right.thumbnail_url
-    && JSON.stringify(left.metadata || null) === JSON.stringify(right.metadata || null)
-    && left.created_at === right.created_at
-    && left.updated_at === right.updated_at
-  );
-}
-
 async function writeSupabaseSourceItemShadow(
   db: ReturnType<typeof createClient>,
   row: SourceItemRow,
@@ -4061,8 +4043,11 @@ async function writeSupabaseSourceItemShadow(
 ) {
   const action = String(options?.action || 'source_item_shadow_update').trim() || 'source_item_shadow_update';
   const current = options?.current || null;
+  const changedFields = current?.id === row.id
+    ? getSourceItemShadowChangedFields(current, row)
+    : null;
 
-  if (current?.id === row.id && sourceItemShadowRowsEquivalent(current, row)) {
+  if (current?.id === row.id && changedFields && changedFields.length === 0) {
     logSourceItemShadowWriteSkipped({
       action,
       sourceItemId: current.id,
