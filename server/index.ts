@@ -367,6 +367,7 @@ import {
   shouldLookupSupabaseSourceItemCurrent,
 } from './services/sourceItemShadowPolicy';
 import {
+  getQueueShadowActionClass,
   getQueueShadowChangedFields,
   getQueueShadowSkipReason,
   mapQueueShadowInsertValues,
@@ -1344,13 +1345,21 @@ async function upsertSupabaseQueueShadow(
   const changedFields = current?.id === job.id
     ? getQueueShadowChangedFields(current, job)
     : null;
+  const actionClass = getQueueShadowActionClass({
+    action,
+    current,
+    next: job,
+    changedFields,
+  });
 
   if (current?.id === job.id && changedFields && changedFields.length === 0) {
     logQueueShadowWriteSkipped({
       action,
+      actionClass,
       jobId: job.id,
       scope: job.scope,
       reason: 'unchanged_material_fields',
+      changedFields,
     });
     return job;
   }
@@ -1358,26 +1367,44 @@ async function upsertSupabaseQueueShadow(
   const skipReason = getQueueShadowSkipReason({
     action,
     primaryEnabled: oracleQueueLedgerPrimaryEnabled,
+    current,
     next: job,
+    changedFields,
   });
   if (skipReason) {
     logQueueShadowWriteSkipped({
       action,
+      actionClass,
       jobId: job.id,
       scope: job.scope,
       reason: skipReason,
+      changedFields,
     });
     return job;
   }
 
   const updateResult = await db
     .from('ingestion_jobs')
-    .update(mapQueueShadowUpdateValues(job))
+    .update(mapQueueShadowUpdateValues(job, {
+      action,
+      current,
+      changedFields,
+    }))
     .eq('id', job.id)
     .select('id')
     .maybeSingle();
   if (updateResult.error) throw updateResult.error;
-  if (updateResult.data?.id) return job;
+  if (updateResult.data?.id) {
+    console.log('[oracle-control-plane] queue_shadow_write', JSON.stringify({
+      action,
+      action_class: actionClass,
+      job_id: job.id,
+      scope: job.scope,
+      mode: 'update',
+      changed_fields: changedFields,
+    }));
+    return job;
+  }
 
   const insertResult = await db
     .from('ingestion_jobs')
@@ -1386,9 +1413,11 @@ async function upsertSupabaseQueueShadow(
 
   console.log('[oracle-control-plane] queue_shadow_write', JSON.stringify({
     action,
+    action_class: actionClass,
     job_id: job.id,
     scope: job.scope,
     mode: 'insert_on_miss',
+    changed_fields: changedFields,
   }));
   return job;
 }
@@ -1423,15 +1452,19 @@ function logQueueSupabaseFallbackRead(input: {
 
 function logQueueShadowWriteSkipped(input: {
   action: string;
+  actionClass?: string | null;
   jobId?: string | null;
   scope?: string | null;
   reason: string;
+  changedFields?: string[] | null;
 }) {
   console.log('[oracle-control-plane] queue_shadow_write_skipped', JSON.stringify({
     action: input.action,
+    action_class: input.actionClass || null,
     job_id: input.jobId || null,
     scope: input.scope || null,
     reason: input.reason,
+    changed_fields: Array.isArray(input.changedFields) ? input.changedFields : null,
   }));
 }
 

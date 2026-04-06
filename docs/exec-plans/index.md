@@ -13,8 +13,8 @@ This file is the authoritative active/reference/deserted/completed registry for 
   Canonical launch gate board and proof log.
 
 ## Active Root
-- `docs/exec-plans/active/supabase-egress-attribution-and-reduction-plan.md`
-  Current active implementation root for post-migration Supabase REST attribution and staged backend egress reduction.
+- `docs/exec-plans/active/oracle-deeper-ownership-and-supabase-reduction-plan.md`
+  Current active implementation root for the post-migration architecture chapter that deepens Oracle ownership and narrows backend dependence on Supabase by domain.
 - `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
   Current proof/deferred carry-forward tail. This is the only standing active-tail support file.
 - `docs/exec-plans/tech-debt-tracker.md`
@@ -38,6 +38,8 @@ This file is the authoritative active/reference/deserted/completed registry for 
   Historical broader backend/frontend egress reduction plan retained as reference.
 - `docs/exec-plans/completed/backend-aggregation-plan.md`
   Historical structural read-aggregation plan retained as follow-up reference.
+- `docs/exec-plans/completed/supabase-egress-attribution-and-reduction-plan.md`
+  Completed reference for the post-migration Supabase REST attribution and staged backend egress reduction chapter.
 - `docs/exec-plans/completed/post-d3d0239-debloat-plan.md`
   Paused narrow debloat track for auditing the post-`d3d0239` reaction commits, with special scrutiny on the larger stale-state recovery hardening before starting provider-specific investigation.
 ## Deserted / Superseded
@@ -124,11 +126,12 @@ This file is the authoritative active/reference/deserted/completed registry for 
 ## Current Program Snapshot
 - Core identity lock: `docs/app/core-direction-lock.md`.
 - Current runtime/ops truth: `docs/architecture.md`, `docs/ops/yt2bp_runbook.md`, and `docs/ops/mvp-launch-readiness-checklist.md`.
-- Current active implementation plan: `docs/exec-plans/active/supabase-egress-attribution-and-reduction-plan.md`.
+- Current active implementation plan: `docs/exec-plans/active/oracle-deeper-ownership-and-supabase-reduction-plan.md`.
 - Current active proof/deferred tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`.
 - Current post-launch debt board: `docs/exec-plans/tech-debt-tracker.md`.
 - Latest completed implementation plans: `docs/exec-plans/completed/transcript-provider-launch-plan.md` and `docs/exec-plans/completed/pre-launch-ui-ux-plan.md`.
 - Historical PWA/runtime-simplification/egress reference plans are archived under `docs/exec-plans/completed/`.
+- The prior Supabase egress attribution/reduction chapter is completed and now serves as reference context for the deeper Oracle ownership chapter.
 - Backend egress skip candidates + Phase 1 child plan are completed and archived under `docs/exec-plans/completed/`.
 - Frontend read-surface egress follow-up is completed and archived under `docs/exec-plans/completed/`.
 - Backend aggressive egress tuning is currently preserved under `docs/exec-plans/deserted/backend-aggressive-egress-tuning-plan.md`.

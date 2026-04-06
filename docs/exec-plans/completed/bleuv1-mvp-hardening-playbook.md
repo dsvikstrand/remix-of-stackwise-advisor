@@ -13,6 +13,7 @@ Update note 2026-04-02:
 - `/subscriptions` now supports incremental list loading: the page requests `50` rows at a time and appends more through an explicit `Load more` action, while older full-list callers still keep the compatibility response shape.
 - Blueprint YouTube comments refresh now skips the `blueprint_youtube_comments` delete/reinsert cycle when the normalized fetched snapshot is unchanged, and emits explicit changed/skipped refresh logs instead of silently rewriting identical rows.
 - Queue-ledger `primary` compatibility writes now update existing `ingestion_jobs` rows by durable `id` before falling back to insert-on-miss, reducing Supabase `on_conflict` queue shadow churn without changing queue outcomes.
+- Queue-ledger follow-up now also makes the remaining `ingestion_jobs` shadow patches lifecycle-aware, so terminal vs retry/claim/lease updates can be classified explicitly and Supabase queue patches only send the fields needed for that class instead of restamping the full queue row.
 
 ## Goal
 Convert the current feature-complete MVP into a stable, clear, and scalable product surface by hardening UX trust, runtime reliability, and engineering foundations.

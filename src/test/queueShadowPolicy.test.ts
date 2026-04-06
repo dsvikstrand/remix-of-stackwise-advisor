@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getQueueShadowActionClass,
   getQueueShadowChangedFields,
   getQueueShadowSkipReason,
   mapQueueShadowInsertValues,
@@ -41,31 +42,31 @@ describe('queue shadow policy', () => {
     expect(payload.updated_at).toBe('2026-04-06T06:59:00.000Z');
   });
 
-  it('builds update payloads without id or created_at', () => {
-    const payload = mapQueueShadowUpdateValues(job);
+  it('builds trimmed terminal update payloads without id or created_at', () => {
+    const payload = mapQueueShadowUpdateValues({
+      ...job,
+      status: 'succeeded',
+      finished_at: '2026-04-06T07:05:00.000Z',
+      processed_count: 2,
+      inserted_count: 1,
+      updated_at: '2026-04-06T07:05:00.000Z',
+    }, {
+      action: 'queued_job_terminal_finalize_shadow',
+      current: job,
+    });
 
     expect(payload).toEqual({
-      trigger: 'service_cron',
-      scope: 'blueprint_youtube_refresh',
-      status: 'queued',
-      requested_by_user_id: 'user_1',
-      subscription_id: 'sub_1',
-      started_at: null,
-      finished_at: null,
-      processed_count: 0,
-      inserted_count: 0,
+      status: 'succeeded',
+      finished_at: '2026-04-06T07:05:00.000Z',
+      processed_count: 2,
+      inserted_count: 1,
       skipped_count: 0,
-      error_code: null,
-      error_message: null,
-      attempts: 0,
-      max_attempts: 3,
-      next_run_at: '2026-04-06T07:00:00.000Z',
       lease_expires_at: null,
       last_heartbeat_at: null,
       worker_id: null,
-      trace_id: 'trace_1',
-      payload: { refresh_kind: 'comments' },
-      updated_at: '2026-04-06T06:59:00.000Z',
+      error_code: null,
+      error_message: null,
+      updated_at: '2026-04-06T07:05:00.000Z',
     });
     expect('id' in payload).toBe(false);
     expect('created_at' in payload).toBe(false);
@@ -89,10 +90,46 @@ describe('queue shadow policy', () => {
     ]);
   });
 
+  it('classifies queue shadow action classes from state transitions', () => {
+    expect(getQueueShadowActionClass({
+      action: 'queued_job_fail_transition_shadow',
+      current: {
+        ...job,
+        status: 'running',
+      },
+      next: {
+        ...job,
+        status: 'queued',
+        next_run_at: '2026-04-06T07:10:00.000Z',
+        error_code: 'PROVIDER_DEGRADED',
+        error_message: 'Retry later.',
+      },
+      changedFields: ['status', 'next_run_at', 'error_code', 'error_message'],
+    })).toBe('retry_requeue');
+
+    expect(getQueueShadowActionClass({
+      action: 'queued_job_terminal_finalize_shadow',
+      current: {
+        ...job,
+        status: 'running',
+      },
+      next: {
+        ...job,
+        status: 'succeeded',
+        finished_at: '2026-04-06T07:05:00.000Z',
+      },
+      changedFields: ['status', 'finished_at'],
+    })).toBe('terminal');
+  });
+
   it('skips Oracle-primary retry-state queue shadows', () => {
     expect(getQueueShadowSkipReason({
       action: 'queued_job_fail_transition_shadow',
       primaryEnabled: true,
+      current: {
+        ...job,
+        status: 'running',
+      },
       next: {
         ...job,
         status: 'queued',
@@ -101,6 +138,7 @@ describe('queue shadow policy', () => {
         next_run_at: '2026-04-06T07:10:00.000Z',
         updated_at: '2026-04-06T07:05:00.000Z',
       },
+      changedFields: ['status', 'next_run_at', 'error_code', 'error_message'],
     })).toBe('oracle_primary_retry_state');
   });
 
@@ -108,6 +146,10 @@ describe('queue shadow policy', () => {
     expect(getQueueShadowSkipReason({
       action: 'queued_job_fail_transition_shadow',
       primaryEnabled: true,
+      current: {
+        ...job,
+        status: 'running',
+      },
       next: {
         ...job,
         status: 'failed',
@@ -116,11 +158,16 @@ describe('queue shadow policy', () => {
         finished_at: '2026-04-06T07:05:00.000Z',
         updated_at: '2026-04-06T07:05:00.000Z',
       },
+      changedFields: ['status', 'finished_at', 'error_code', 'error_message'],
     })).toBeNull();
 
     expect(getQueueShadowSkipReason({
       action: 'queued_job_fail_transition_shadow',
       primaryEnabled: false,
+      current: {
+        ...job,
+        status: 'running',
+      },
       next: {
         ...job,
         status: 'queued',
@@ -129,6 +176,7 @@ describe('queue shadow policy', () => {
         next_run_at: '2026-04-06T07:10:00.000Z',
         updated_at: '2026-04-06T07:05:00.000Z',
       },
+      changedFields: ['status', 'next_run_at', 'error_code', 'error_message'],
     })).toBeNull();
   });
 });

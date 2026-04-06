@@ -13,6 +13,7 @@ Update note 2026-04-02:
 - `/subscriptions` now pages large subscription libraries in `50`-row slices with an explicit `Load more` action, while compatibility callers can still request the historical full-list response shape.
 - Blueprint YouTube comments refresh now skips unchanged `blueprint_youtube_comments` rewrites and logs explicit changed/skipped decisions, narrowing the remaining comments egress without changing visible comment UX.
 - Queue-ledger `primary` compatibility writes now update existing `ingestion_jobs` rows by durable `id` before falling back to insert-on-miss, reducing Supabase `on_conflict` queue shadow churn without changing queue outcomes.
+- Queue-ledger follow-up now also classifies the remaining `ingestion_jobs` shadow patches by lifecycle class, so terminal vs retry/claim/lease shadows can use narrower Supabase patch payloads instead of rewriting the full queue row every time.
 
 ## Objective
 Deliver the remaining `bleuV1` MVP through a manual iterative build loop with clear checkpoints and low ambiguity.
