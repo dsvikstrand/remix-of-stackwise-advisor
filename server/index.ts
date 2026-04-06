@@ -15479,6 +15479,8 @@ function scheduleYouTubeRefreshScheduler(delayMs?: number) {
   isConfirmedNoTranscriptUnlock,
   suppressUnlockableFeedRowsForSourceItem: suppressUnlockableFeedRowsForSourceItemWithMirror,
   insertFeedItem,
+  upsertFeedItemWithBlueprint,
+  resolveVariantOrReady,
   resolveYouTubeChannel,
   syncOracleProductSubscriptions: upsertOracleProductSubscriptionsFromKnownRows,
   persistSourceSubscriptionPatch: (db, input) => patchUserSourceSubscriptionOracleAware(db, {

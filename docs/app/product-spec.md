@@ -228,6 +228,7 @@ b5) Subscription behavior (MVP simplified)
   - `SUBSCRIPTION_AUTO_BANNER_MODE` remains as compatibility control for non-source/legacy banner worker paths.
 - A persistent notice card is inserted into the personal lane with state `subscription_notice` and is surfaced on Home `For You` (with legacy `My Feed` compatibility support retained).
 - Subscribe/reactivate may also backfill up to the latest `5` creator videos when the user currently has fewer than `20` visible Home `For You` cards; historical backfill rows stay locked (`my_feed_unlockable`) unless the backend already has a reusable ready blueprint for that source item, in which case the feed row is attached/upgraded to the ready blueprint instead.
+- Subscription sync should prefer early Home arrival for genuinely new creator uploads: when reusable ready output already exists, attach the ready blueprint row immediately; otherwise insert the locked/unlockable row as soon as the source item is confirmed and let later auto-unlock completion upgrade that same row.
 - Notice cards are visualized with channel avatar and optional banner background when metadata is available.
 - API compatibility note: `mode` remains a legacy compatibility field on subscription endpoints and stored rows may still contain `manual` or `auto`, but runtime auto behavior is controlled by `auto_unlock_enabled`.
 - Manual refresh reliability policy:

@@ -330,6 +330,20 @@ export type SourceSubscriptionSyncDeps = {
       state: 'my_feed_unlockable' | 'my_feed_generated' | 'subscription_notice';
     },
   ) => Promise<{ id: string } | null>;
+  upsertFeedItemWithBlueprint?: (
+    db: DbClient,
+    input: {
+      userId: string;
+      sourceItemId: string;
+      blueprintId: string;
+      state: 'my_feed_published';
+    },
+  ) => Promise<{ id: string } | null>;
+  resolveVariantOrReady?: (input: {
+    sourceItemId: string;
+    generationTier: 'tier';
+    jobId?: string | null;
+  }) => Promise<{ state: 'ready'; blueprintId?: string | null } | { state: 'in_progress' } | { state: 'needs_generation' } | null>;
   resolveYouTubeChannel?: (input: string) => Promise<ResolvedYouTubeChannel>;
   syncOracleProductSubscriptions?: (
     rows: Array<Record<string, unknown> | null | undefined>,
@@ -354,6 +368,43 @@ function sleep(ms: number) {
 
 function isFeedSoftFailureResultCode(resultCode: SyncSubscriptionResult['resultCode']) {
   return resultCode === 'feed_transient_error' || resultCode === 'feed_not_found';
+}
+
+function logSubscriptionWallArrival(input: {
+  subscriptionId: string;
+  userId: string;
+  sourceItemId: string;
+  sourceChannelId: string;
+  videoId: string;
+  trigger: SubscriptionSyncOptions['trigger'];
+  publishedAt: string | null;
+  detectedAt: string;
+  insertedAt: string;
+  wallState: 'ready' | 'unlockable';
+  source: 'existing_ready_variant' | 'early_unlockable' | 'late_unlockable';
+}) {
+  const publishedAtMs = parseDateMs(input.publishedAt);
+  const insertedAtMs = parseDateMs(input.insertedAt);
+  const detectedAtMs = parseDateMs(input.detectedAt);
+  console.log('[subscription_wall_arrived]', JSON.stringify({
+    subscription_id: input.subscriptionId,
+    user_id: input.userId,
+    source_item_id: input.sourceItemId,
+    source_channel_id: input.sourceChannelId,
+    video_id: input.videoId,
+    trigger: input.trigger,
+    published_at: input.publishedAt,
+    detected_at: input.detectedAt,
+    inserted_at: input.insertedAt,
+    detect_lag_ms: publishedAtMs != null && detectedAtMs != null
+      ? Math.max(0, detectedAtMs - publishedAtMs)
+      : null,
+    wall_lag_ms: publishedAtMs != null && insertedAtMs != null
+      ? Math.max(0, insertedAtMs - publishedAtMs)
+      : null,
+    wall_state: input.wallState,
+    source: input.source,
+  }));
 }
 
 export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSyncDeps) {
@@ -745,7 +796,59 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
         sourcePageId: subscription.source_page_id || null,
       });
 
+      const detectedAtIso = new Date().toISOString();
+      const publishedAtMs = parseDateMs(video.publishedAt);
+      const detectedAtMs = parseDateMs(detectedAtIso);
+      console.log('[subscription_new_video_detected]', JSON.stringify({
+        subscription_id: subscription.id,
+        user_id: subscription.user_id,
+        source_item_id: source.id,
+        source_channel_id: subscription.source_channel_id,
+        video_id: video.videoId,
+        trigger: options.trigger,
+        published_at: video.publishedAt || null,
+        detected_at: detectedAtIso,
+        detect_lag_ms: publishedAtMs != null && detectedAtMs != null
+          ? Math.max(0, detectedAtMs - publishedAtMs)
+          : null,
+      }));
+
       const existingFeedItem = await deps.getExistingFeedItem(db, subscription.user_id, source.id);
+      const variantState = deps.resolveVariantOrReady
+        ? await deps.resolveVariantOrReady({
+          sourceItemId: source.id,
+          generationTier: 'tier',
+        })
+        : null;
+      if (
+        variantState?.state === 'ready'
+        && variantState.blueprintId
+        && deps.upsertFeedItemWithBlueprint
+      ) {
+        const insertedAtIso = new Date().toISOString();
+        await deps.upsertFeedItemWithBlueprint(db, {
+          userId: subscription.user_id,
+          sourceItemId: source.id,
+          blueprintId: variantState.blueprintId,
+          state: 'my_feed_published',
+        });
+        if (existingFeedItem) skipped += 1;
+        else inserted += 1;
+        logSubscriptionWallArrival({
+          subscriptionId: subscription.id,
+          userId: subscription.user_id,
+          sourceItemId: source.id,
+          sourceChannelId: subscription.source_channel_id,
+          videoId: video.videoId,
+          trigger: options.trigger,
+          publishedAt: video.publishedAt || null,
+          detectedAt: detectedAtIso,
+          insertedAt: insertedAtIso,
+          wallState: 'ready',
+          source: 'existing_ready_variant',
+        });
+        continue;
+      }
       if (existingFeedItem) {
         skipped += 1;
         continue;
@@ -756,6 +859,38 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
         sourcePageId: subscription.source_page_id || source.source_page_id || null,
         estimatedCost: estimatedUnlockCost,
       });
+
+      const unlockBeforeAutoAttempt = await deps.getSourceItemUnlockBySourceItemId(db, source.id);
+      const transcriptCooldownBeforeAutoAttempt = deps.getTranscriptCooldownState(unlockBeforeAutoAttempt);
+      const isTranscriptBlockedBeforeAutoAttempt = transcriptCooldownBeforeAutoAttempt.active
+        || deps.isConfirmedNoTranscriptUnlock(unlockBeforeAutoAttempt);
+      let insertedUnlockableEarly = false;
+      if (unlock.status === 'available' && !isTranscriptBlockedBeforeAutoAttempt) {
+        const insertedAtIso = new Date().toISOString();
+        const insertedItem = await deps.insertFeedItem(db, {
+          userId: subscription.user_id,
+          sourceItemId: source.id,
+          blueprintId: null,
+          state: 'my_feed_unlockable',
+        });
+        if (insertedItem) {
+          inserted += 1;
+          insertedUnlockableEarly = true;
+          logSubscriptionWallArrival({
+            subscriptionId: subscription.id,
+            userId: subscription.user_id,
+            sourceItemId: source.id,
+            sourceChannelId: subscription.source_channel_id,
+            videoId: video.videoId,
+            trigger: options.trigger,
+            publishedAt: video.publishedAt || null,
+            detectedAt: detectedAtIso,
+            insertedAt: insertedAtIso,
+            wallState: 'unlockable',
+            source: 'early_unlockable',
+          });
+        }
+      }
 
       let autoAttempt = null;
       let autoAttemptError: unknown = null;
@@ -889,14 +1024,33 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
         })();
 
       if (shouldInsertUnlockable) {
-        const insertedItem = await deps.insertFeedItem(db, {
-          userId: subscription.user_id,
-          sourceItemId: source.id,
-          blueprintId: null,
-          state: 'my_feed_unlockable',
-        });
-        if (insertedItem) inserted += 1;
-        else skipped += 1;
+        if (!insertedUnlockableEarly) {
+          const insertedAtIso = new Date().toISOString();
+          const insertedItem = await deps.insertFeedItem(db, {
+            userId: subscription.user_id,
+            sourceItemId: source.id,
+            blueprintId: null,
+            state: 'my_feed_unlockable',
+          });
+          if (insertedItem) {
+            inserted += 1;
+            logSubscriptionWallArrival({
+              subscriptionId: subscription.id,
+              userId: subscription.user_id,
+              sourceItemId: source.id,
+              sourceChannelId: subscription.source_channel_id,
+              videoId: video.videoId,
+              trigger: options.trigger,
+              publishedAt: video.publishedAt || null,
+              detectedAt: detectedAtIso,
+              insertedAt: insertedAtIso,
+              wallState: 'unlockable',
+              source: 'late_unlockable',
+            });
+          } else {
+            skipped += 1;
+          }
+        }
 
         console.log('[subscription_auto_unlockable]', JSON.stringify({
           subscription_id: subscription.id,
@@ -905,7 +1059,7 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
           estimated_unlock_cost: estimatedUnlockCost,
           trigger: options.trigger,
         }));
-      } else {
+      } else if (!insertedUnlockableEarly) {
         skipped += 1;
       }
     }
