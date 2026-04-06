@@ -18,6 +18,10 @@
 - If a user reports `Generate` says `No new generation queued` or `skipped_existing`, but Home/For You still shows `Unlock available`, inspect whether that user already has a locked `user_feed_items` row for the same `user_id + source_item_id`.
 - Expected fixed behavior: search/manual ready handling should upsert that feed row with the discovered `blueprint_id` and published state, so the user wall stops rendering the item as locked.
 
+## Wall Timestamp Check
+- If a user reports that a Home `For You` card jumped back to the top after later generation/attach work, inspect whether the feed row was recreated versus upgraded in place.
+- Expected fixed behavior: upgrading an existing `user_feed_items` row to a blueprint-backed published row preserves the row's original `created_at`, so wall ordering reflects first wall arrival rather than later enrichment time.
+
 ## Short-Transcript Cooldown Check
 - If a source-page/wall unlock request really queues but the resulting generation fails with `TRANSCRIPT_INSUFFICIENT_CONTEXT`, verify the transcript is genuinely below the live minimum word count before treating it as a pipeline bug.
 - Expected fixed behavior after that failure:

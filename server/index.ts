@@ -373,6 +373,7 @@ import {
   mapQueueShadowInsertValues,
   mapQueueShadowUpdateValues,
 } from './services/queueShadowPolicy';
+import { resolveFeedItemWallCreatedAt } from './services/feedItemWallPolicy';
 import { createBlueprintCreationService } from './services/blueprintCreation';
 import {
   createBlueprintYouTubeCommentsService,
@@ -9139,6 +9140,10 @@ async function upsertFeedItemWithBlueprint(db: ReturnType<typeof createClient>, 
       userId: input.userId,
       sourceItemId: input.sourceItemId,
     });
+    const createdAt = resolveFeedItemWallCreatedAt({
+      existingCreatedAt: current?.created_at || null,
+      nowIso,
+    });
     const nextRow = {
       id: current?.id || randomUUID(),
       user_id: input.userId,
@@ -9146,7 +9151,7 @@ async function upsertFeedItemWithBlueprint(db: ReturnType<typeof createClient>, 
       blueprint_id: input.blueprintId,
       state: input.state,
       last_decision_code: null,
-      created_at: nowIso,
+      created_at: createdAt,
       updated_at: nowIso,
     };
     await upsertOracleFeedLedgerRow({
@@ -9166,6 +9171,14 @@ async function upsertFeedItemWithBlueprint(db: ReturnType<typeof createClient>, 
     return { id: nextRow.id, user_id: nextRow.user_id };
   }
 
+  const current = await readSupabaseFeedItemByUserSourceItem(db, {
+    userId: input.userId,
+    sourceItemId: input.sourceItemId,
+  });
+  const createdAt = resolveFeedItemWallCreatedAt({
+    existingCreatedAt: current?.created_at || null,
+    nowIso,
+  });
   const { data, error } = await db
     .from('user_feed_items')
     .upsert(
@@ -9175,8 +9188,7 @@ async function upsertFeedItemWithBlueprint(db: ReturnType<typeof createClient>, 
         blueprint_id: input.blueprintId,
         state: input.state,
         last_decision_code: null,
-        // Treat unlock completion as fresh feed content for ordering.
-        created_at: nowIso,
+        created_at: createdAt,
       },
       { onConflict: 'user_id,source_item_id' },
     )
@@ -9190,7 +9202,7 @@ async function upsertFeedItemWithBlueprint(db: ReturnType<typeof createClient>, 
     blueprint_id: input.blueprintId,
     state: input.state,
     last_decision_code: null,
-    created_at: nowIso,
+    created_at: createdAt,
     updated_at: nowIso,
   }], 'upsert_feed_item_with_blueprint');
   await upsertOracleProductFeedRowsFromKnownRows([{
@@ -9200,7 +9212,7 @@ async function upsertFeedItemWithBlueprint(db: ReturnType<typeof createClient>, 
     blueprint_id: input.blueprintId,
     state: input.state,
     last_decision_code: null,
-    created_at: nowIso,
+    created_at: createdAt,
     updated_at: nowIso,
   }], 'upsert_feed_item_with_blueprint');
   return data as { id: string; user_id: string };
