@@ -11,6 +11,7 @@ Update note 2026-04-02:
 - Subscription-ledger `primary` now also keeps due-batch hydration, manual-refresh checkpoint lookup, source-page/channel subscriber fan-out, and auto-unlock eligibility on Oracle-first helpers; unchanged Supabase compatibility rows skip no-op updates, normal compatibility updates prefer direct `id` writes before any user/channel reread, and the remaining rereads are explicitly logged as `subscription_fallback_read`.
 - New source subscriptions now default to manual auto-unlock off (`auto_unlock_enabled=false`), while reactivating an existing subscription preserves that row's prior saved toggle value across direct subscribe, source-page subscribe, and YouTube import flows.
 - `/subscriptions` now pages large subscription libraries in `50`-row slices with an explicit `Load more` action, while compatibility callers can still request the historical full-list response shape.
+- Blueprint YouTube comments refresh now skips unchanged `blueprint_youtube_comments` rewrites and logs explicit changed/skipped decisions, narrowing the remaining comments egress without changing visible comment UX.
 
 ## Objective
 Deliver the remaining `bleuV1` MVP through a manual iterative build loop with clear checkpoints and low ambiguity.

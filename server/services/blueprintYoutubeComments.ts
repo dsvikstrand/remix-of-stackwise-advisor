@@ -16,6 +16,13 @@ export type StoredBlueprintYouTubeComment = {
   like_count: number | null;
 };
 
+type StoreBlueprintYouTubeCommentsResult = {
+  changed: boolean;
+  skipped: boolean;
+  previous_count: number;
+  next_count: number;
+};
+
 const YOUTUBE_COMMENT_SNAPSHOT_LIMIT = 20;
 const DEFAULT_REFRESH_VIEW_INTERVAL_HOURS = 24;
 const DEFAULT_COMMENTS_AUTO_FIRST_DELAY_MINUTES = 60;
@@ -278,6 +285,67 @@ function normalizeCommentItems(payload: unknown): StoredBlueprintYouTubeComment[
   return comments;
 }
 
+function normalizeStoredCommentComparableValue(raw: unknown) {
+  if (raw == null) return null;
+  if (typeof raw === 'string') return raw.trim() || null;
+  if (typeof raw === 'number') return Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : null;
+  return raw;
+}
+
+function commentsSnapshotMatches(args: {
+  existing: Array<Record<string, unknown>>;
+  next: StoredBlueprintYouTubeComment[];
+}) {
+  if (args.existing.length !== args.next.length) return false;
+  for (let index = 0; index < args.next.length; index += 1) {
+    const existing = args.existing[index] || {};
+    const next = args.next[index];
+    if (
+      normalizeStoredCommentComparableValue(existing.source_comment_id)
+      !== normalizeStoredCommentComparableValue(next.source_comment_id)
+    ) {
+      return false;
+    }
+    if (
+      normalizeStoredCommentComparableValue(existing.display_order)
+      !== normalizeStoredCommentComparableValue(next.display_order)
+    ) {
+      return false;
+    }
+    if (
+      normalizeStoredCommentComparableValue(existing.author_name)
+      !== normalizeStoredCommentComparableValue(next.author_name)
+    ) {
+      return false;
+    }
+    if (
+      normalizeStoredCommentComparableValue(existing.author_avatar_url)
+      !== normalizeStoredCommentComparableValue(next.author_avatar_url)
+    ) {
+      return false;
+    }
+    if (
+      normalizeStoredCommentComparableValue(existing.content)
+      !== normalizeStoredCommentComparableValue(next.content)
+    ) {
+      return false;
+    }
+    if (
+      normalizeStoredCommentComparableValue(existing.published_at)
+      !== normalizeStoredCommentComparableValue(next.published_at)
+    ) {
+      return false;
+    }
+    if (
+      normalizeStoredCommentComparableValue(existing.like_count)
+      !== normalizeStoredCommentComparableValue(next.like_count)
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export function createBlueprintYouTubeCommentsService(input: {
   apiKey?: string | null;
   fetchImpl?: typeof fetch;
@@ -421,10 +489,52 @@ export function createBlueprintYouTubeCommentsService(input: {
     videoId: string;
     sortMode: YouTubeCommentSortMode;
     comments: StoredBlueprintYouTubeComment[];
-  }) {
+  }): Promise<StoreBlueprintYouTubeCommentsResult> {
     const normalizedVideoId = String(args.videoId || '').trim();
-    if (!normalizedVideoId) return;
+    if (!normalizedVideoId) {
+      return {
+        changed: false,
+        skipped: true,
+        previous_count: 0,
+        next_count: 0,
+      };
+    }
     const comments = Array.isArray(args.comments) ? args.comments : [];
+
+    const existingQuery = await args.db
+      .from('blueprint_youtube_comments')
+      .select('source_comment_id, display_order, author_name, author_avatar_url, content, published_at, like_count')
+      .eq('blueprint_id', args.blueprintId)
+      .eq('sort_mode', args.sortMode)
+      .order('display_order', { ascending: true });
+    if (existingQuery?.error) {
+      if (isMissingRelationError(existingQuery.error, 'blueprint_youtube_comments')) {
+        return {
+          changed: false,
+          skipped: true,
+          previous_count: 0,
+          next_count: comments.length,
+        };
+      }
+      throw existingQuery.error;
+    }
+    const existingRows = Array.isArray(existingQuery?.data)
+      ? existingQuery.data as Array<Record<string, unknown>>
+      : [];
+    if (commentsSnapshotMatches({ existing: existingRows, next: comments })) {
+      console.log('[blueprint_youtube_comments_refresh_skipped]', JSON.stringify({
+        blueprint_id: args.blueprintId,
+        youtube_video_id: normalizedVideoId,
+        sort_mode: args.sortMode,
+        comment_count: comments.length,
+      }));
+      return {
+        changed: false,
+        skipped: true,
+        previous_count: existingRows.length,
+        next_count: comments.length,
+      };
+    }
 
     const deleteQuery = await args.db
       .from('blueprint_youtube_comments')
@@ -432,11 +542,32 @@ export function createBlueprintYouTubeCommentsService(input: {
       .eq('blueprint_id', args.blueprintId)
       .eq('sort_mode', args.sortMode);
     if (deleteQuery?.error) {
-      if (isMissingRelationError(deleteQuery.error, 'blueprint_youtube_comments')) return;
+      if (isMissingRelationError(deleteQuery.error, 'blueprint_youtube_comments')) {
+        return {
+          changed: false,
+          skipped: true,
+          previous_count: existingRows.length,
+          next_count: comments.length,
+        };
+      }
       throw deleteQuery.error;
     }
 
-    if (comments.length === 0) return;
+    if (comments.length === 0) {
+      console.log('[blueprint_youtube_comments_refresh_changed]', JSON.stringify({
+        blueprint_id: args.blueprintId,
+        youtube_video_id: normalizedVideoId,
+        sort_mode: args.sortMode,
+        previous_count: existingRows.length,
+        next_count: 0,
+      }));
+      return {
+        changed: true,
+        skipped: false,
+        previous_count: existingRows.length,
+        next_count: 0,
+      };
+    }
 
     const { error } = await args.db
       .from('blueprint_youtube_comments')
@@ -455,9 +586,29 @@ export function createBlueprintYouTubeCommentsService(input: {
         })),
       );
     if (error) {
-      if (isMissingRelationError(error, 'blueprint_youtube_comments')) return;
+      if (isMissingRelationError(error, 'blueprint_youtube_comments')) {
+        return {
+          changed: false,
+          skipped: true,
+          previous_count: existingRows.length,
+          next_count: comments.length,
+        };
+      }
       throw error;
     }
+    console.log('[blueprint_youtube_comments_refresh_changed]', JSON.stringify({
+      blueprint_id: args.blueprintId,
+      youtube_video_id: normalizedVideoId,
+      sort_mode: args.sortMode,
+      previous_count: existingRows.length,
+      next_count: comments.length,
+    }));
+    return {
+      changed: true,
+      skipped: false,
+      previous_count: existingRows.length,
+      next_count: comments.length,
+    };
   }
 
   async function storeSourceItemViewCount(args: {
@@ -1092,14 +1243,14 @@ export function createBlueprintYouTubeCommentsService(input: {
         videoId: args.youtubeVideoId,
         sortMode: 'new',
       });
-      await storeBlueprintYouTubeComments({
+      const topWrite = await storeBlueprintYouTubeComments({
         db: args.db,
         blueprintId: args.blueprintId,
         videoId: args.youtubeVideoId,
         sortMode: 'top',
         comments: topComments,
       });
-      await storeBlueprintYouTubeComments({
+      const newWrite = await storeBlueprintYouTubeComments({
         db: args.db,
         blueprintId: args.blueprintId,
         videoId: args.youtubeVideoId,
@@ -1142,12 +1293,16 @@ export function createBlueprintYouTubeCommentsService(input: {
           ...eventPayloadBase,
           top_count: topComments.length,
           new_count: newComments.length,
+          top_skipped: topWrite.skipped,
+          new_skipped: newWrite.skipped,
         },
       });
       console.log('[youtube_refresh_succeeded]', JSON.stringify({
         ...eventPayloadBase,
         top_count: topComments.length,
         new_count: newComments.length,
+        top_skipped: topWrite.skipped,
+        new_skipped: newWrite.skipped,
       }));
     } catch (error) {
       const previousFailures = await getRefreshFailureCount({

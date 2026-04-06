@@ -195,6 +195,140 @@ describe('blueprint YouTube comments service', () => {
     expect(maybeSingle).toHaveBeenCalledTimes(1);
   });
 
+  it('storeBlueprintYouTubeComments skips delete/insert when the snapshot is unchanged', async () => {
+    const existingRows = [
+      {
+        source_comment_id: 'comment_1',
+        display_order: 0,
+        author_name: 'Alice',
+        author_avatar_url: 'https://example.com/a.png',
+        content: 'Same comment',
+        published_at: '2026-04-01T10:00:00.000Z',
+        like_count: 7,
+      },
+    ];
+    const order = vi.fn(async () => ({ data: existingRows, error: null }));
+    const eqSort = vi.fn(() => ({ order }));
+    const eqBlueprint = vi.fn(() => ({ eq: eqSort }));
+    const select = vi.fn(() => ({ eq: eqBlueprint }));
+    const deleteFn = vi.fn(() => {
+      throw new Error('delete should not run for unchanged comment snapshots');
+    });
+    const insert = vi.fn(async () => ({ error: null }));
+
+    const db = {
+      from(table: string) {
+        if (table === 'blueprint_youtube_comments') {
+          return {
+            select,
+            delete: deleteFn,
+            insert,
+          };
+        }
+        throw new Error(`Unexpected table: ${table}`);
+      },
+    };
+
+    const service = createBlueprintYouTubeCommentsService({
+      apiKey: 'youtube-key',
+      fetchImpl: vi.fn() as unknown as typeof fetch,
+    });
+
+    const result = await service.storeBlueprintYouTubeComments({
+      db,
+      blueprintId: 'bp_1',
+      videoId: 'abc123def45',
+      sortMode: 'top',
+      comments: [
+        {
+          source_comment_id: 'comment_1',
+          display_order: 0,
+          author_name: 'Alice',
+          author_avatar_url: 'https://example.com/a.png',
+          content: 'Same comment',
+          published_at: '2026-04-01T10:00:00.000Z',
+          like_count: 7,
+        },
+      ],
+    });
+
+    expect(result).toEqual({
+      changed: false,
+      skipped: true,
+      previous_count: 1,
+      next_count: 1,
+    });
+    expect(deleteFn).not.toHaveBeenCalled();
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it('storeBlueprintYouTubeComments rewrites rows when the snapshot changed', async () => {
+    const deleteEqSort = vi.fn(async () => ({ error: null }));
+    const deleteEqBlueprint = vi.fn(() => ({ eq: deleteEqSort }));
+    const insert = vi.fn(async () => ({ error: null }));
+    const order = vi.fn(async () => ({
+      data: [
+        {
+          source_comment_id: 'comment_1',
+          display_order: 0,
+          author_name: 'Alice',
+          author_avatar_url: 'https://example.com/a.png',
+          content: 'Old comment',
+          published_at: '2026-04-01T10:00:00.000Z',
+          like_count: 7,
+        },
+      ],
+      error: null,
+    }));
+    const eqSort = vi.fn(() => ({ order }));
+    const eqBlueprint = vi.fn(() => ({ eq: eqSort }));
+    const select = vi.fn(() => ({ eq: eqBlueprint }));
+
+    const db = {
+      from(table: string) {
+        if (table === 'blueprint_youtube_comments') {
+          return {
+            select,
+            delete: vi.fn(() => ({ eq: deleteEqBlueprint })),
+            insert,
+          };
+        }
+        throw new Error(`Unexpected table: ${table}`);
+      },
+    };
+
+    const service = createBlueprintYouTubeCommentsService({
+      apiKey: 'youtube-key',
+      fetchImpl: vi.fn() as unknown as typeof fetch,
+    });
+
+    const result = await service.storeBlueprintYouTubeComments({
+      db,
+      blueprintId: 'bp_1',
+      videoId: 'abc123def45',
+      sortMode: 'top',
+      comments: [
+        {
+          source_comment_id: 'comment_1',
+          display_order: 0,
+          author_name: 'Alice',
+          author_avatar_url: 'https://example.com/a.png',
+          content: 'New comment',
+          published_at: '2026-04-01T10:00:00.000Z',
+          like_count: 7,
+        },
+      ],
+    });
+
+    expect(result).toEqual({
+      changed: true,
+      skipped: false,
+      previous_count: 1,
+      next_count: 1,
+    });
+    expect(insert).toHaveBeenCalledTimes(1);
+  });
+
   it('executeRefresh uses the injected Oracle-aware source-item view writer when present', async () => {
     const fetchImpl = vi.fn(async () => ({
       ok: true,
@@ -476,7 +610,11 @@ describe('blueprint YouTube comments service', () => {
   it('executeRefresh(comments) stores top/new snapshots and updates refresh state', async () => {
     const commentDeleteEq2 = vi.fn(async () => ({ error: null }));
     const commentDeleteEq1 = vi.fn(() => ({ eq: commentDeleteEq2 }));
+    const commentSelectOrder = vi.fn(async () => ({ data: [], error: null }));
+    const commentSelectEq2 = vi.fn(() => ({ order: commentSelectOrder }));
+    const commentSelectEq1 = vi.fn(() => ({ eq: commentSelectEq2 }));
     const commentsTable = {
+      select: vi.fn(() => ({ eq: commentSelectEq1 })),
       delete: vi.fn(() => ({ eq: commentDeleteEq1 })),
       insert: vi.fn(async () => ({ error: null })),
     };
@@ -625,7 +763,11 @@ describe('blueprint YouTube comments service', () => {
   it('executeRefresh(comments) manual trigger sets cooldown and keeps auto stage', async () => {
     const commentDeleteEq2 = vi.fn(async () => ({ error: null }));
     const commentDeleteEq1 = vi.fn(() => ({ eq: commentDeleteEq2 }));
+    const commentSelectOrder = vi.fn(async () => ({ data: [], error: null }));
+    const commentSelectEq2 = vi.fn(() => ({ order: commentSelectOrder }));
+    const commentSelectEq1 = vi.fn(() => ({ eq: commentSelectEq2 }));
     const commentsTable = {
+      select: vi.fn(() => ({ eq: commentSelectEq1 })),
       delete: vi.fn(() => ({ eq: commentDeleteEq1 })),
       insert: vi.fn(async () => ({ error: null })),
     };
@@ -707,7 +849,11 @@ describe('blueprint YouTube comments service', () => {
   it('executeRefresh(comments) manual trigger before bootstrap completion advances to stage one and keeps a delayed auto follow-up', async () => {
     const commentDeleteEq2 = vi.fn(async () => ({ error: null }));
     const commentDeleteEq1 = vi.fn(() => ({ eq: commentDeleteEq2 }));
+    const commentSelectOrder = vi.fn(async () => ({ data: [], error: null }));
+    const commentSelectEq2 = vi.fn(() => ({ order: commentSelectOrder }));
+    const commentSelectEq1 = vi.fn(() => ({ eq: commentSelectEq2 }));
     const commentsTable = {
+      select: vi.fn(() => ({ eq: commentSelectEq1 })),
       delete: vi.fn(() => ({ eq: commentDeleteEq1 })),
       insert: vi.fn(async () => ({ error: null })),
     };

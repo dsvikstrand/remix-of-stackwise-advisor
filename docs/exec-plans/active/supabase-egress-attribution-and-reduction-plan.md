@@ -2,7 +2,7 @@
 
 Status: `active`
 Owner: `Codex / David`
-Last updated: `2026-04-04` (source-items wave landed; next is product attribution split)
+Last updated: `2026-04-06` (subscription part 4 + source-items part 2 soaked; next targets reordered from live attribution)
 
 ## Purpose
 
@@ -25,25 +25,37 @@ a1) [have] Oracle is now primary for the major hot runtime/product surfaces:
 
 a2) [have] The recent Oracle migration chapter is complete enough that the next work is no longer migration correctness.
 
-a3) [have] Current Supabase management analytics for the last `24h` show:
-- total requests: `9,510`
-- REST requests: `9,074`
-- auth requests: `427`
-- storage requests: `9`
+a3) [have] The latest April 6 live management analytics for the last `24h` now show a much lower steady-state window than the earlier migration-heavy periods:
+- total requests: `4,563`
+- REST requests: `4,342`
+- auth requests: `208`
+- storage requests: `13`
 - realtime requests: `0`
 
-a4) [have] The first attribution sample from `scripts/supabase_rest_attribution_report.mjs` points primarily at backend service-role traffic, not browser traffic.
+a4) [have] The attribution chapter has already completed several landed cleanup waves:
+- queue reduction wave
+- queue follow-up wave
+- subscription reduction waves through part 4
+- source-item reduction waves through part 2
+- product-readwrite attribution split
 
-a5) [have] The latest post-deploy sample has shifted to a more mixed shape:
-- `product_readwrite` / product-facing reads-writes are now a top bucket
-- `blueprint_youtube_comments` is also separately visible
-- `source_items`, `queue`, and `subscriptions` have all become smaller and closer together than before
+a5) [have] The latest sampled attribution window is now mixed and no longer dominated by the older subscription hotspot:
+- `blueprint_youtube_comments` `10.6%`
+- `profiles` `10.6%`
+- `source_items` `9.4%`
+- `blueprint_comments` `8.2%`
 
-a6) [have] The latest sample’s actor split is no longer purely backend-dominated:
-- `backend_service_role` is still the majority
-- but `frontend_authenticated` is now material enough that product-traffic attribution matters
+a6) [have] The current actor split is also mixed:
+- `backend_service_role` `49.4%`
+- `frontend_authenticated` `34.1%`
+- `frontend_unknown_role` `7.1%`
 
-a7) [todo] We now need a finer split of the old `product_readwrite` bucket before choosing the next reduction wave safely.
+a7) [have] The old `product_readwrite` bucket has already been split into narrower families in the attribution tool, so product-facing traffic is now visible as concrete families rather than one catch-all bucket.
+
+a8) [have] The current live read means the plan is still active, but its next-wave order has changed:
+- `subscriptions` is no longer the dominant steady-state family
+- `source_items` is smaller than before but still visible
+- `blueprint_youtube_comments`, `profiles`, and `blueprint_comments` are now the leading candidate families
 
 ## Goal
 
@@ -85,7 +97,7 @@ d4) [have] Interpretation rules:
 
 d5) [todo] Re-run the attribution report after each wave and record whether the targeted family actually moved.
 
-## Wave Order
+## Completed Waves
 
 e1) [have] **Wave 1: queue / `ingestion_jobs`**
 
@@ -158,12 +170,12 @@ Acceptance:
 - sampled `source_items` family drops
 - wall/profile/source-page flows stay correct
 
-e4) [todo] **Wave 4: `product_readwrite` attribution split**
+e4) [have] **Wave 4: `product_readwrite` attribution split**
 
 Reason:
-- `product_readwrite` is now the largest mixed bucket
-- it combines frontend-authenticated and backend behavior
-- cutting it blindly would be riskier than the backend-only waves
+- product-facing reads/writes had become the largest mixed bucket
+- it combined frontend-authenticated and backend behavior
+- cutting it blindly would have been riskier than the backend-only waves
 
 Primary files:
 - [scripts/supabase_rest_attribution_report.mjs](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/scripts/supabase_rest_attribution_report.mjs)
@@ -171,10 +183,10 @@ Primary files:
 - [src/hooks/useUserProfile.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useUserProfile.ts)
 - [src/hooks/useBlueprintYoutubeComments.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useBlueprintYoutubeComments.ts)
 
-Target work:
+Landed scope:
 - split `product_readwrite` into narrower families such as `blueprint_comments`, `blueprints`, `profiles`, `blueprint_likes`, and `blueprint_tags`
-- map the hottest resulting endpoints back to exact UI/hooks
-- choose one narrow reduction wave from that split instead of optimizing broad product traffic
+- made the attribution output concrete enough to distinguish mixed frontend/product traffic from backend churn
+- let later wave-order decisions follow the new family split instead of the old catch-all bucket
 
 Acceptance:
 - the attribution report no longer hides top product traffic behind one catch-all family
@@ -198,7 +210,47 @@ Verification:
 - `npm run docs:refresh-check -- --json`
 - `npm run docs:link-check`
 
-e6) [todo] **Wave 5: `blueprint_youtube_comments` churn**
+e6) [have] **Subscription follow-up waves: parts 3 and 4**
+
+Reason:
+- after the first subscription pass, the remaining dominant shape became `PATCH /rest/v1/user_source_subscriptions?id:eq&user_id:eq`
+- this required a narrower write-churn cleanup instead of broad subscription reread work
+
+Primary files:
+- [server/index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts)
+- [server/services/sourceSubscriptionSync.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/sourceSubscriptionSync.ts)
+- [server/services/subscriptionShadowPolicy.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/subscriptionShadowPolicy.ts)
+
+Landed scope:
+- normal compatibility updates prefer direct `id + user_id` writes before broader rereads
+- callers that already have the Oracle/current row pass it through instead of reloading the same subscription again
+- Oracle-primary sync/checkpoint/error-only updates now skip the Supabase shadow write when they only change hot operational fields
+
+Acceptance:
+- the former `PATCH /rest/v1/user_source_subscriptions?id:eq&user_id:eq` hotspot is no longer the dominant family in the latest soaked sample
+
+e7) [have] **Source-items follow-up: part 2**
+
+Reason:
+- after subscription cleanup, `source_items` rose again as the top backend family
+- the remaining cost still showed repeated by-id / by-canonical-key read and write-path churn
+
+Primary files:
+- [server/index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts)
+- [server/services/sourceItemShadowPolicy.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/sourceItemShadowPolicy.ts)
+
+Landed scope:
+- Oracle-primary source-item writes no longer reread Supabase `source_items` by `id` and `canonical_key` before every shadow write
+- compatibility updates now go by durable `id` first
+- canonical-key reload is reserved for the conflict fallback path
+- no-op source-item shadow writes can skip earlier when Oracle already has the current row
+
+Acceptance:
+- `source_items` is still visible, but it is no longer the clear dominant problem family
+
+## Next Candidate Waves
+
+f1) [todo] **Candidate 1: `blueprint_youtube_comments` churn**
 
 Reason:
 - it is now visible as its own family in recent attribution
@@ -219,11 +271,46 @@ Acceptance:
 - sampled `blueprint_youtube_comments` traffic drops
 - comment refresh behavior stays correct
 
-e7) [todo] **Wave 6: `source_item_unlocks` + `user_feed_items` cleanup**
+f2) [todo] **Candidate 2: `profiles` read attribution / reduction**
+
+Reason:
+- `profiles` is now tied for the top sampled family
+- a meaningful part of it is frontend-authenticated traffic, so it should not be cut blindly
+- this is the clearest reader-facing follow-up after the product bucket split
+
+Primary files:
+- [src/hooks/useUserProfile.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useUserProfile.ts)
+- profile-related readers under [src](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src)
+
+Target work:
+- confirm whether the current `profiles` traffic is legitimate page data, duplicate fetches, or avoidable invalidation churn
+- only then choose a narrow read-surface reduction
+
+Acceptance:
+- the team can distinguish valid profile reads from avoidable repeat traffic before any UI-facing cut is made
+
+f3) [todo] **Candidate 3: residual `source_items` follow-up**
+
+Reason:
+- `source_items` remains visible in the current sample
+- the top lingering shapes are now smaller, so any further source-item work should be based on a fresh narrow read of the exact remaining endpoints
+
+Primary files:
+- [server/index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts)
+- [server/services/oracleSourceItemLedgerState.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/oracleSourceItemLedgerState.ts)
+
+Target work:
+- re-measure the remaining by-id / by-canonical-key shapes after the latest soak
+- only open another source-item wave if they clearly rise back above the new mixed product/comment families
+
+Acceptance:
+- any new source-item work is evidence-backed instead of reopening that family by default
+
+f4) [todo] **Candidate 4: `source_item_unlocks` + `user_feed_items` cleanup**
 
 Reason:
 - important but narrower than the earlier systemic families
-- better handled after queue/source-items/subscription churn and product/comment attribution are reduced
+- better handled after the current comments/profile/source-item next-candidate set is clarified
 
 Primary files:
 - [server/services/sourceUnlocks.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/sourceUnlocks.ts)
@@ -243,32 +330,32 @@ Acceptance:
 
 ## Execution Rules
 
-f1) [todo] Always start each wave with a short attribution snapshot and end with a second snapshot.
+g1) [todo] Always start each wave with a short attribution snapshot and end with a second snapshot.
 
-f2) [todo] Keep each wave narrow; do not mix multiple major families in one implementation pass unless attribution proves they are inseparable.
+g2) [todo] Keep each wave narrow; do not mix multiple major families in one implementation pass unless attribution proves they are inseparable.
 
-f3) [todo] Prefer editing existing Oracle-aware helpers before adding new abstractions.
+g3) [todo] Prefer editing existing Oracle-aware helpers before adding new abstractions.
 
-f4) [todo] Preserve already-working runtime behavior unless a tradeoff is explicitly accepted.
+g4) [todo] Preserve already-working runtime behavior unless a tradeoff is explicitly accepted.
 
-f5) [todo] If a wave’s before/after measurement is inconclusive, pause and improve attribution rather than broadening the code changes.
+g5) [todo] If a wave’s before/after measurement is inconclusive, pause and improve attribution rather than broadening the code changes.
 
 ## Verification
 
-g1) [todo] For every wave, run:
+h1) [todo] For every wave, run:
 - `npm run typecheck`
 - targeted Vitest for the touched area
 - `npm run docs:refresh-check -- --json`
 - `npm run docs:link-check`
 
-g2) [todo] For every wave, record:
+h2) [todo] For every wave, record:
 - `npm run ops:supabase-rest-attribution -- --json`
 - optional `--full-range` if needed and practical
 
-g3) [todo] For queue/runtime-sensitive waves, also run:
+h3) [todo] For queue/runtime-sensitive waves, also run:
 - `npm run ops:oracle-primary-check -- --json`
 
-g4) [todo] Keep user-facing canaries aligned with the touched family:
+h4) [todo] Keep user-facing canaries aligned with the touched family:
 - generation/queue for queue wave
 - wall/source-page/profile for source-item wave
 - subscription behavior for subscription wave
@@ -276,12 +363,12 @@ g4) [todo] Keep user-facing canaries aligned with the touched family:
 
 ## Exit Criteria
 
-h1) [todo] This plan is complete when:
+i1) [todo] This plan is complete when:
 - queue, source-items, subscriptions, and unlock/feed waves have each been either reduced or explicitly judged not worth further tuning
-- Supabase REST attribution is materially lower than the current baseline
+- Supabase REST attribution is materially lower than the earlier migration-heavy baseline and the remaining top families are understood
 - the remaining Supabase traffic is understood well enough to distinguish intentional compatibility traffic from avoidable churn
 
-h2) [todo] After this plan, the next decision should be one of:
+i2) [todo] After this plan, the next decision should be one of:
 - stop because Supabase cost is now acceptable
 - continue with one narrower residual cleanup plan
 - or open a brand-new chapter if a different family becomes the dominant cost

@@ -133,6 +133,7 @@
     - scheduler pending checks batch by refresh kind + candidate blueprint set instead of reading queued job payloads once per candidate
     - manual comments refresh reads existing refresh state first and only registers a row when refresh state is missing or uninitialized
     - unchanged `source_items.metadata.view_count` fetches no longer rewrite metadata just to bump a fetch timestamp
+    - unchanged `blueprint_youtube_comments` snapshots now skip the delete/reinsert rewrite entirely and emit explicit changed/skipped refresh logs
     - no-op `blueprint_youtube_refresh_state` upserts are skipped when the persisted refresh fields would remain unchanged
   - Queue lease maintenance is also coarsened:
     - worker lease heartbeats now refresh at a lease-aware cadence (`30s` on the default `90s` lease) instead of the older `10s` default

@@ -11,6 +11,7 @@ Update note 2026-04-02:
 - Subscription-ledger `primary` now also keeps due-batch hydration, manual-refresh checkpoint lookup, source-page/channel subscriber fan-out, and auto-unlock eligibility on Oracle-first helpers; unchanged Supabase compatibility rows skip no-op updates, normal compatibility updates prefer direct `id` writes before any user/channel reread, and the remaining rereads are explicitly logged as `subscription_fallback_read`.
 - New source subscriptions now default to manual auto-unlock off (`auto_unlock_enabled=false`), while reactivating an existing subscription preserves that row's prior saved toggle value across direct subscribe, source-page subscribe, and YouTube import flows.
 - `/subscriptions` now supports incremental list loading: the page requests `50` rows at a time and appends more through an explicit `Load more` action, while older full-list callers still keep the compatibility response shape.
+- Blueprint YouTube comments refresh now skips the `blueprint_youtube_comments` delete/reinsert cycle when the normalized fetched snapshot is unchanged, and emits explicit changed/skipped refresh logs instead of silently rewriting identical rows.
 
 ## Goal
 Convert the current feature-complete MVP into a stable, clear, and scalable product surface by hardening UX trust, runtime reliability, and engineering foundations.
