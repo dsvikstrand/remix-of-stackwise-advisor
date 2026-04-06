@@ -367,6 +367,8 @@ import {
   shouldLookupSupabaseSourceItemCurrent,
 } from './services/sourceItemShadowPolicy';
 import {
+  getQueueShadowChangedFields,
+  getQueueShadowSkipReason,
   mapQueueShadowInsertValues,
   mapQueueShadowUpdateValues,
 } from './services/queueShadowPolicy';
@@ -1334,8 +1336,40 @@ async function upsertSupabaseQueueShadow(
   job: IngestionJobRow,
   options?: {
     action?: string;
+    current?: IngestionJobRow | null;
   },
 ) {
+  const action = String(options?.action || 'queue_shadow_write').trim() || 'queue_shadow_write';
+  const current = options?.current || null;
+  const changedFields = current?.id === job.id
+    ? getQueueShadowChangedFields(current, job)
+    : null;
+
+  if (current?.id === job.id && changedFields && changedFields.length === 0) {
+    logQueueShadowWriteSkipped({
+      action,
+      jobId: job.id,
+      scope: job.scope,
+      reason: 'unchanged_material_fields',
+    });
+    return job;
+  }
+
+  const skipReason = getQueueShadowSkipReason({
+    action,
+    primaryEnabled: oracleQueueLedgerPrimaryEnabled,
+    next: job,
+  });
+  if (skipReason) {
+    logQueueShadowWriteSkipped({
+      action,
+      jobId: job.id,
+      scope: job.scope,
+      reason: skipReason,
+    });
+    return job;
+  }
+
   const updateResult = await db
     .from('ingestion_jobs')
     .update(mapQueueShadowUpdateValues(job))
@@ -1351,7 +1385,7 @@ async function upsertSupabaseQueueShadow(
   if (insertResult.error) throw insertResult.error;
 
   console.log('[oracle-control-plane] queue_shadow_write', JSON.stringify({
-    action: String(options?.action || 'queue_shadow_write').trim() || 'queue_shadow_write',
+    action,
     job_id: job.id,
     scope: job.scope,
     mode: 'insert_on_miss',
@@ -1828,6 +1862,7 @@ async function failClaimedIngestionJobWithMirror(
     try {
       await upsertSupabaseQueueShadow(db, failedJob, {
         action: `${input.action}_shadow`,
+        current: input.job,
       });
     } catch (error) {
       logOracleQueueLedgerShadowWriteError({

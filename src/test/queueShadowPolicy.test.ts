@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getQueueShadowChangedFields,
+  getQueueShadowSkipReason,
   mapQueueShadowInsertValues,
   mapQueueShadowUpdateValues,
 } from '../../server/services/queueShadowPolicy';
@@ -67,5 +69,66 @@ describe('queue shadow policy', () => {
     });
     expect('id' in payload).toBe(false);
     expect('created_at' in payload).toBe(false);
+  });
+
+  it('surfaces material queue shadow changes', () => {
+    const changedFields = getQueueShadowChangedFields(job, {
+      ...job,
+      status: 'failed',
+      error_code: 'WORKER_TIMEOUT',
+      error_message: 'Job timed out.',
+      finished_at: '2026-04-06T07:05:00.000Z',
+      updated_at: '2026-04-06T07:05:00.000Z',
+    });
+
+    expect(changedFields).toEqual([
+      'status',
+      'finished_at',
+      'error_code',
+      'error_message',
+    ]);
+  });
+
+  it('skips Oracle-primary retry-state queue shadows', () => {
+    expect(getQueueShadowSkipReason({
+      action: 'queued_job_fail_transition_shadow',
+      primaryEnabled: true,
+      next: {
+        ...job,
+        status: 'queued',
+        error_code: 'PROVIDER_DEGRADED',
+        error_message: 'Retry later.',
+        next_run_at: '2026-04-06T07:10:00.000Z',
+        updated_at: '2026-04-06T07:05:00.000Z',
+      },
+    })).toBe('oracle_primary_retry_state');
+  });
+
+  it('keeps terminal or non-primary queue shadows', () => {
+    expect(getQueueShadowSkipReason({
+      action: 'queued_job_fail_transition_shadow',
+      primaryEnabled: true,
+      next: {
+        ...job,
+        status: 'failed',
+        error_code: 'WORKER_TIMEOUT',
+        error_message: 'Terminal failure.',
+        finished_at: '2026-04-06T07:05:00.000Z',
+        updated_at: '2026-04-06T07:05:00.000Z',
+      },
+    })).toBeNull();
+
+    expect(getQueueShadowSkipReason({
+      action: 'queued_job_fail_transition_shadow',
+      primaryEnabled: false,
+      next: {
+        ...job,
+        status: 'queued',
+        error_code: 'PROVIDER_DEGRADED',
+        error_message: 'Retry later.',
+        next_run_at: '2026-04-06T07:10:00.000Z',
+        updated_at: '2026-04-06T07:05:00.000Z',
+      },
+    })).toBeNull();
   });
 });
