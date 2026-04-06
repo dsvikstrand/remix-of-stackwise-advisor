@@ -1180,6 +1180,7 @@ export type Database = {
         Row: {
           blueprint_id: string | null
           created_at: string
+          generated_at_on_wall: string | null
           id: string
           last_decision_code: string | null
           source_item_id: string | null
@@ -1190,6 +1191,7 @@ export type Database = {
         Insert: {
           blueprint_id?: string | null
           created_at?: string
+          generated_at_on_wall?: string | null
           id?: string
           last_decision_code?: string | null
           source_item_id?: string | null
@@ -1200,6 +1202,7 @@ export type Database = {
         Update: {
           blueprint_id?: string | null
           created_at?: string
+          generated_at_on_wall?: string | null
           id?: string
           last_decision_code?: string | null
           source_item_id?: string | null

@@ -373,7 +373,11 @@ import {
   mapQueueShadowInsertValues,
   mapQueueShadowUpdateValues,
 } from './services/queueShadowPolicy';
-import { resolveFeedItemWallCreatedAt } from './services/feedItemWallPolicy';
+import {
+  resolveFeedItemGeneratedAtOnWall,
+  resolveFeedItemWallCreatedAt,
+  resolveFeedItemWallDisplayAt,
+} from './services/feedItemWallPolicy';
 import { createBlueprintCreationService } from './services/blueprintCreation';
 import {
   createBlueprintYouTubeCommentsService,
@@ -4390,11 +4394,12 @@ type FeedItemRow = {
   blueprint_id: string | null;
   state: string;
   last_decision_code: string | null;
+  generated_at_on_wall: string | null;
   created_at: string;
   updated_at: string;
 };
 
-const FEED_ITEM_SELECT = 'id, user_id, source_item_id, blueprint_id, state, last_decision_code, created_at, updated_at';
+const FEED_ITEM_SELECT = 'id, user_id, source_item_id, blueprint_id, state, last_decision_code, generated_at_on_wall, created_at, updated_at';
 
 function normalizeFeedItemRow(row: Record<string, unknown>, nowIso?: string): FeedItemRow {
   const createdAt = normalizeRequiredIso(row.created_at, nowIso);
@@ -4406,6 +4411,7 @@ function normalizeFeedItemRow(row: Record<string, unknown>, nowIso?: string): Fe
     blueprint_id: normalizeStringOrNull(row.blueprint_id),
     state: String(row.state || '').trim() || 'my_feed_unlockable',
     last_decision_code: normalizeStringOrNull(row.last_decision_code),
+    generated_at_on_wall: normalizeIsoOrNull(row.generated_at_on_wall),
     created_at: createdAt,
     updated_at: updatedAt,
   };
@@ -4524,6 +4530,7 @@ function buildPatchedFeedItemRow(input: {
     blueprint_id?: string | null;
     state?: string;
     last_decision_code?: string | null;
+    generated_at_on_wall?: string | null;
     created_at?: string | null;
     updated_at?: string | null;
   };
@@ -4535,6 +4542,7 @@ function buildPatchedFeedItemRow(input: {
     id: input.current.id,
     user_id: input.current.user_id,
     source_item_id: input.current.source_item_id,
+    generated_at_on_wall: input.patch.generated_at_on_wall ?? input.current.generated_at_on_wall,
     created_at: input.patch.created_at ?? input.current.created_at,
     updated_at: updatedAt,
   }, input.current.created_at);
@@ -4744,6 +4752,7 @@ async function listProductFeedRowsForUserOracleFirst(
         limit: normalizedLimit,
         sourceItemIds: normalizedSourceItemIds,
         requireBlueprint: input.requireBlueprint,
+        orderByWallActivity: true,
       });
       const ledgerLooksComplete = normalizedSourceItemIds.length > 0
         ? new Set(
@@ -4769,6 +4778,7 @@ async function listProductFeedRowsForUserOracleFirst(
       .from('user_feed_items')
       .select(FEED_ITEM_SELECT)
       .eq('user_id', input.userId)
+      .order('generated_at_on_wall', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
       .limit(normalizedLimit);
 
@@ -4781,7 +4791,7 @@ async function listProductFeedRowsForUserOracleFirst(
 
     const { data, error } = await query;
     if (error) throw error;
-    return mergeProductFeedRows([...(durableRows || []), ...((data || []) as any[])]).slice(0, normalizedLimit);
+    return mergePersonalProductFeedRows([...(durableRows || []), ...((data || []) as any[])]).slice(0, normalizedLimit);
   }
 
   if (oracleProductMirrorEnabled && oracleControlPlane) {
@@ -4792,6 +4802,7 @@ async function listProductFeedRowsForUserOracleFirst(
         limit: normalizedLimit,
         sourceItemIds: normalizedSourceItemIds,
         requireBlueprint: input.requireBlueprint,
+        orderByWallActivity: true,
       });
       const mirrorLooksComplete = normalizedSourceItemIds.length > 0
         ? new Set(
@@ -4814,8 +4825,9 @@ async function listProductFeedRowsForUserOracleFirst(
 
   let query = db
     .from('user_feed_items')
-    .select('id, user_id, source_item_id, blueprint_id, state, last_decision_code, created_at, updated_at')
+    .select(FEED_ITEM_SELECT)
     .eq('user_id', input.userId)
+    .order('generated_at_on_wall', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false })
     .limit(normalizedLimit);
 
@@ -4829,6 +4841,46 @@ async function listProductFeedRowsForUserOracleFirst(
   const { data, error } = await query;
   if (error) throw error;
   return data || [];
+}
+
+function getPersonalFeedRowSortTimestamp(row: any) {
+  return resolveFeedItemWallDisplayAt({
+    blueprintId: row?.blueprint_id,
+    createdAt: row?.created_at,
+    generatedAtOnWall: row?.generated_at_on_wall,
+  });
+}
+
+function sortMergedPersonalProductFeedRows(rows: any[]) {
+  return [...rows].sort((left, right) => {
+    const leftDisplayAt = Date.parse(String(getPersonalFeedRowSortTimestamp(left) || ''));
+    const rightDisplayAt = Date.parse(String(getPersonalFeedRowSortTimestamp(right) || ''));
+    const safeLeftDisplayAt = Number.isFinite(leftDisplayAt) ? leftDisplayAt : 0;
+    const safeRightDisplayAt = Number.isFinite(rightDisplayAt) ? rightDisplayAt : 0;
+    if (safeRightDisplayAt !== safeLeftDisplayAt) {
+      return safeRightDisplayAt - safeLeftDisplayAt;
+    }
+    const leftCreatedAt = Date.parse(String(left?.created_at || ''));
+    const rightCreatedAt = Date.parse(String(right?.created_at || ''));
+    const safeLeftCreatedAt = Number.isFinite(leftCreatedAt) ? leftCreatedAt : 0;
+    const safeRightCreatedAt = Number.isFinite(rightCreatedAt) ? rightCreatedAt : 0;
+    if (safeRightCreatedAt !== safeLeftCreatedAt) {
+      return safeRightCreatedAt - safeLeftCreatedAt;
+    }
+    const leftId = String(left?.id || '');
+    const rightId = String(right?.id || '');
+    return rightId.localeCompare(leftId);
+  });
+}
+
+function mergePersonalProductFeedRows(rows: any[]) {
+  const rowsById = new Map<string, any>();
+  for (const row of rows) {
+    const id = String(row?.id || '').trim();
+    if (!id || rowsById.has(id)) continue;
+    rowsById.set(id, row);
+  }
+  return sortMergedPersonalProductFeedRows([...rowsById.values()]);
 }
 
 function normalizePublicProductFeedCursor(input: { createdAt?: string | null; feedItemId?: string | null } | null | undefined) {
@@ -9032,6 +9084,7 @@ function mapFeedItemToSupabaseShadowValues(row: {
   blueprint_id: string | null;
   state: string;
   last_decision_code: string | null;
+  generated_at_on_wall: string | null;
   created_at: string;
   updated_at: string;
 }) {
@@ -9042,6 +9095,7 @@ function mapFeedItemToSupabaseShadowValues(row: {
     blueprint_id: row.blueprint_id,
     state: row.state,
     last_decision_code: row.last_decision_code,
+    generated_at_on_wall: row.generated_at_on_wall,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -9061,6 +9115,7 @@ async function insertFeedItem(db: ReturnType<typeof createClient>, input: {
     blueprint_id: input.blueprintId,
     state: input.state,
     last_decision_code: null,
+    generated_at_on_wall: input.blueprintId ? nowIso : null,
     created_at: nowIso,
     updated_at: nowIso,
   };
@@ -9111,6 +9166,7 @@ async function insertFeedItem(db: ReturnType<typeof createClient>, input: {
     blueprint_id: input.blueprintId,
     state: input.state,
     last_decision_code: null,
+    generated_at_on_wall: input.blueprintId ? nowIso : null,
     created_at: nowIso,
     updated_at: nowIso,
   }], 'insert_feed_item');
@@ -9121,6 +9177,7 @@ async function insertFeedItem(db: ReturnType<typeof createClient>, input: {
     blueprint_id: input.blueprintId,
     state: input.state,
     last_decision_code: null,
+    generated_at_on_wall: input.blueprintId ? nowIso : null,
     created_at: nowIso,
     updated_at: nowIso,
   }], 'insert_feed_item');
@@ -9144,6 +9201,12 @@ async function upsertFeedItemWithBlueprint(db: ReturnType<typeof createClient>, 
       existingCreatedAt: current?.created_at || null,
       nowIso,
     });
+    const generatedAtOnWall = resolveFeedItemGeneratedAtOnWall({
+      existingGeneratedAtOnWall: current?.generated_at_on_wall || null,
+      existingBlueprintId: current?.blueprint_id || null,
+      nextBlueprintId: input.blueprintId,
+      nowIso,
+    });
     const nextRow = {
       id: current?.id || randomUUID(),
       user_id: input.userId,
@@ -9151,6 +9214,7 @@ async function upsertFeedItemWithBlueprint(db: ReturnType<typeof createClient>, 
       blueprint_id: input.blueprintId,
       state: input.state,
       last_decision_code: null,
+      generated_at_on_wall: generatedAtOnWall,
       created_at: createdAt,
       updated_at: nowIso,
     };
@@ -9179,6 +9243,12 @@ async function upsertFeedItemWithBlueprint(db: ReturnType<typeof createClient>, 
     existingCreatedAt: current?.created_at || null,
     nowIso,
   });
+  const generatedAtOnWall = resolveFeedItemGeneratedAtOnWall({
+    existingGeneratedAtOnWall: current?.generated_at_on_wall || null,
+    existingBlueprintId: current?.blueprint_id || null,
+    nextBlueprintId: input.blueprintId,
+    nowIso,
+  });
   const { data, error } = await db
     .from('user_feed_items')
     .upsert(
@@ -9188,6 +9258,7 @@ async function upsertFeedItemWithBlueprint(db: ReturnType<typeof createClient>, 
         blueprint_id: input.blueprintId,
         state: input.state,
         last_decision_code: null,
+        generated_at_on_wall: generatedAtOnWall,
         created_at: createdAt,
       },
       { onConflict: 'user_id,source_item_id' },
@@ -9202,6 +9273,7 @@ async function upsertFeedItemWithBlueprint(db: ReturnType<typeof createClient>, 
     blueprint_id: input.blueprintId,
     state: input.state,
     last_decision_code: null,
+    generated_at_on_wall: generatedAtOnWall,
     created_at: createdAt,
     updated_at: nowIso,
   }], 'upsert_feed_item_with_blueprint');
@@ -9212,6 +9284,7 @@ async function upsertFeedItemWithBlueprint(db: ReturnType<typeof createClient>, 
     blueprint_id: input.blueprintId,
     state: input.state,
     last_decision_code: null,
+    generated_at_on_wall: generatedAtOnWall,
     created_at: createdAt,
     updated_at: nowIso,
   }], 'upsert_feed_item_with_blueprint');

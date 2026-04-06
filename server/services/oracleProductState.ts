@@ -71,6 +71,7 @@ export type OracleProductFeedRow = {
   blueprint_id: string | null;
   state: string;
   last_decision_code: string | null;
+  generated_at_on_wall: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -155,6 +156,7 @@ const FEED_SELECT = [
   'blueprint_id',
   'state',
   'last_decision_code',
+  'generated_at_on_wall',
   'created_at',
   'updated_at',
 ].join(', ');
@@ -286,6 +288,7 @@ function mapFeedRow(row: Record<string, unknown>, nowIso?: string): OracleProduc
     blueprint_id: normalizeStringOrNull(row.blueprint_id),
     state: String(row.state || '').trim(),
     last_decision_code: normalizeStringOrNull(row.last_decision_code),
+    generated_at_on_wall: normalizeIsoOrNull(row.generated_at_on_wall),
     created_at: createdAt,
     updated_at: updatedAt,
   };
@@ -791,6 +794,7 @@ export async function listOracleProductFeedRows(input: {
   blueprintIds?: string[];
   requireBlueprint?: boolean;
   cursor?: OracleProductFeedCursor | null;
+  orderByWallActivity?: boolean;
 }) {
   const userId = String(input.userId || '').trim();
   const state = String(input.state || '').trim();
@@ -806,9 +810,18 @@ export async function listOracleProductFeedRows(input: {
   let query = input.controlDb.db
     .selectFrom('product_feed_state')
     .selectAll()
-    .orderBy('created_at', 'desc')
-    .orderBy('id', 'desc')
     .limit(Math.max(1, Math.min(5000, Number(input.limit || 200))));
+
+  if (input.orderByWallActivity) {
+    query = query
+      .orderBy('generated_at_on_wall', 'desc')
+      .orderBy('created_at', 'desc')
+      .orderBy('id', 'desc');
+  } else {
+    query = query
+      .orderBy('created_at', 'desc')
+      .orderBy('id', 'desc');
+  }
 
   if (userId) {
     query = query.where('user_id', '=', userId);
@@ -843,6 +856,7 @@ export async function listOracleProductFeedRows(input: {
     blueprint_id: row.blueprint_id,
     state: row.state,
     last_decision_code: row.last_decision_code,
+    generated_at_on_wall: row.generated_at_on_wall,
     created_at: row.created_at,
     updated_at: row.updated_at,
   }));

@@ -169,6 +169,104 @@ describe('wall feed service', () => {
     });
   });
 
+  it('surfaces generated blueprints by generated_at_on_wall ahead of newer locked cards', async () => {
+    const db = createMockSupabase({
+      user_feed_items: [
+        {
+          id: 'ufi_blueprint',
+          user_id: 'viewer_1',
+          source_item_id: 'source_1',
+          blueprint_id: 'bp_1',
+          state: 'my_feed_published',
+          generated_at_on_wall: '2026-04-06T12:00:00.000Z',
+          created_at: '2026-04-06T08:00:00.000Z',
+        },
+        {
+          id: 'ufi_locked',
+          user_id: 'viewer_1',
+          source_item_id: 'source_2',
+          blueprint_id: null,
+          state: 'my_feed_unlockable',
+          generated_at_on_wall: null,
+          created_at: '2026-04-06T11:00:00.000Z',
+        },
+      ],
+      blueprints: [
+        {
+          id: 'bp_1',
+          creator_user_id: 'creator_1',
+          title: 'Generated Blueprint',
+          preview_summary: 'Preview summary',
+          banner_url: null,
+          likes_count: 0,
+        },
+      ],
+      blueprint_tags: [],
+      blueprint_likes: [],
+      source_items: [
+        {
+          id: 'source_1',
+          source_page_id: 'page_1',
+          source_channel_id: 'channel_1',
+          source_channel_title: 'Channel 1',
+          title: 'Source One',
+          source_url: 'https://youtube.com/watch?v=1',
+          thumbnail_url: 'https://thumb/1.jpg',
+          metadata: { view_count: 10, source_channel_avatar_url: 'https://avatar/1.jpg' },
+        },
+        {
+          id: 'source_2',
+          source_page_id: 'page_1',
+          source_channel_id: 'channel_1',
+          source_channel_title: 'Channel 1',
+          title: 'Locked Source',
+          source_url: 'https://youtube.com/watch?v=2',
+          thumbnail_url: 'https://thumb/2.jpg',
+          metadata: { view_count: 11, source_channel_avatar_url: 'https://avatar/1.jpg' },
+        },
+      ],
+      source_item_unlocks: [
+        {
+          source_item_id: 'source_2',
+          status: 'available',
+          estimated_cost: 1,
+          blueprint_id: null,
+          last_error_code: null,
+          transcript_status: null,
+        },
+      ],
+      user_source_subscriptions: [
+        {
+          user_id: 'viewer_1',
+          source_page_id: 'page_1',
+          source_channel_id: 'channel_1',
+          is_active: true,
+        },
+      ],
+      channel_candidates: [],
+    }) as any;
+
+    const items = await listWallForYouFeed({
+      db,
+      userId: 'viewer_1',
+      normalizeTranscriptTruthStatus: () => 'ready',
+      limit: 10,
+    });
+
+    expect(items.map((item) => ({ kind: item.kind, id: item.feedItemId, createdAt: item.createdAt }))).toEqual([
+      {
+        kind: 'blueprint',
+        id: 'ufi_blueprint',
+        createdAt: '2026-04-06T12:00:00.000Z',
+      },
+      {
+        kind: 'locked',
+        id: 'ufi_locked',
+        createdAt: '2026-04-06T11:00:00.000Z',
+      },
+    ]);
+  });
+
   it('filters joined lane and channel scopes by published channel slug only', async () => {
     const db = createMockSupabase({
       blueprints: [

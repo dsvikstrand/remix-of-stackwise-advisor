@@ -290,6 +290,7 @@ f3) User enters search/create via header `Create` (which routes to `/search`) an
 f4) User selects `Generate Blueprint` on a result to generate and save directly into Home `For You`.
 f5) User can subscribe to a result’s channel from the same search card.
 f6) On subscribe/reactivate, user gets one subscription notice card; sparse Home `For You` walls (`<20` visible cards) may also receive up to the latest `5` creator videos as historical backfill, preferring ready blueprint rows when reusable output already exists and otherwise inserting locked cards only.
+f6a) Home `For You` uses two ordering clocks for personal feed rows: locked/unlockable cards are ordered by first wall arrival, while the first locked -> generated blueprint promotion gets a fresh generated wall timestamp so that blueprint can resurface once when it becomes usable.
 f7) Auto-channel pipeline publishes eligible items automatically and labels Home `For You` cards with posted channel outcomes.
 f8) User scans, remixes, and adds insights.
 f9) Eligible items are promoted to Home feed channels after gates.
@@ -348,6 +349,7 @@ d9b) [have] Oracle unlock-ledger `dual` soak now also has a required parity chec
 d9c) [have] Oracle unlock-ledger bootstrap now pages through recent `source_item_unlocks` rows so the configured `ORACLE_UNLOCK_LEDGER_BOOTSTRAP_LIMIT` can hydrate fully instead of stopping at the first backend page.
 d9d) [have] Once `ORACLE_UNLOCK_LEDGER_MODE=primary` is live, unlock-specific truth reads and unlock mutation preconditions should resolve from the durable Oracle unlock ledger first; the older Oracle product unlock mirror stays as compatibility/read-plane support rather than the main unlock-truth source.
 d9e) [have] Oracle runtime now also supports staging durable source-item truth for `source_items` behind `ORACLE_SOURCE_ITEM_LEDGER_MODE`, with Oracle-aware source-item upserts, metadata/view-count updates, and Oracle-first execution/feed read paths ready for `dual|primary`; if those Oracle-first source reads regress, live runtime should stay or fall back to `supabase` until the fixed build is redeployed.
+d9ea) [have] `user_feed_items` now also carry additive `generated_at_on_wall` wall-order metadata so the personal lane can preserve locked arrival order while republishing the first generated blueprint completion separately from later feed-row updates.
 d10) [have] Historical transcript-bridge table `transcript_requests` exists in schema history for earlier Oracle/Paperspace experiments; current transcript-provider runtime does not depend on it.
 
 ## Subscription Interfaces (MVP)

@@ -20,7 +20,7 @@
 
 ## Wall Timestamp Check
 - If a user reports that a Home `For You` card jumped back to the top after later generation/attach work, inspect whether the feed row was recreated versus upgraded in place.
-- Expected fixed behavior: upgrading an existing `user_feed_items` row to a blueprint-backed published row preserves the row's original `created_at`, so wall ordering reflects first wall arrival rather than later enrichment time.
+- Expected current behavior: Home `For You` uses two wall clocks. Locked/unlockable rows keep their original `created_at`, while the first locked -> generated/published promotion stamps `generated_at_on_wall` so the usable blueprint resurfaces once at generation completion time. Later blueprint-side updates should not refresh that generated wall timestamp again.
 
 ## Short-Transcript Cooldown Check
 - If a source-page/wall unlock request really queues but the resulting generation fails with `TRANSCRIPT_INSUFFICIENT_CONTEXT`, verify the transcript is genuinely below the live minimum word count before treating it as a pipeline bug.

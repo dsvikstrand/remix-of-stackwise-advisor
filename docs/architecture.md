@@ -92,7 +92,8 @@
     - page-level OAuth/import/manual-refresh orchestration now lives in a dedicated frontend controller hook so the route component primarily owns rendering.
     - per-row `Auto unlock` toggle (`auto_unlock_enabled`) controls whether that subscription participates in new-video auto unlock attempts.
     - subscription sync now tries to land newly discovered uploads on Home `For You` earlier: reusable ready blueprints can attach immediately, and otherwise the unlockable feed row may be inserted before the slower auto-unlock branch finishes.
-    - once a `For You` row already exists, later blueprint attachment preserves that feed row's original `created_at`; wall position reflects first arrival on the wall, not later enrichment time.
+    - Home `For You` now uses two feed-row clocks: locked/unlockable rows keep their original `created_at`, while the first locked -> generated/published promotion stamps `generated_at_on_wall` so the resulting blueprint can surface once at generation completion time.
+    - later updates on an already-generated feed row do not refresh `generated_at_on_wall`; the republish happens only on first blueprint promotion.
     - new manual/source-page/imported subscriptions now default `auto_unlock_enabled=false`; reactivating an existing subscription preserves that row's prior saved toggle value.
     - large subscription libraries now load incrementally on `/subscriptions`: the initial page fetch returns `50` rows and the UI appends more via an explicit `Load more` action instead of eagerly rendering the full corpus.
     - stored subscription `mode` values may still be `manual` or `auto` for compatibility, but runtime auto behavior should be read from `auto_unlock_enabled`.

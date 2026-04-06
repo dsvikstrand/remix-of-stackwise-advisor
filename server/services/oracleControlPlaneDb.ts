@@ -247,6 +247,7 @@ type FeedLedgerStateTable = {
   blueprint_id: string | null;
   state: string;
   last_decision_code: string | null;
+  generated_at_on_wall: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -319,6 +320,7 @@ type ProductFeedStateTable = {
   blueprint_id: string | null;
   state: string;
   last_decision_code: string | null;
+  generated_at_on_wall: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -611,6 +613,7 @@ CREATE TABLE IF NOT EXISTS feed_ledger_state (
   blueprint_id TEXT,
   state TEXT NOT NULL,
   last_decision_code TEXT,
+  generated_at_on_wall TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -810,6 +813,7 @@ CREATE TABLE IF NOT EXISTS product_feed_state (
   blueprint_id TEXT,
   state TEXT NOT NULL,
   last_decision_code TEXT,
+  generated_at_on_wall TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -820,6 +824,18 @@ CREATE INDEX IF NOT EXISTS idx_product_feed_user_created
 CREATE INDEX IF NOT EXISTS idx_product_feed_user_source_created
   ON product_feed_state (user_id, source_item_id, created_at);
 `;
+
+function ensureSqliteColumn(input: {
+  sqlite: BetterSqlite3.Database;
+  tableName: string;
+  columnName: string;
+  columnSql: string;
+}) {
+  const rows = input.sqlite.prepare(`PRAGMA table_info(${input.tableName})`).all() as Array<{ name?: string }>;
+  const exists = rows.some((row) => String(row?.name || '').trim() === input.columnName);
+  if (exists) return;
+  input.sqlite.exec(`ALTER TABLE ${input.tableName} ADD COLUMN ${input.columnSql}`);
+}
 
 export function openOracleControlPlaneDb(input: {
   sqlitePath: string;
@@ -834,6 +850,18 @@ export function openOracleControlPlaneDb(input: {
   sqlite.pragma('busy_timeout = 5000');
   sqlite.pragma('foreign_keys = ON');
   sqlite.exec(CONTROL_PLANE_SCHEMA_SQL);
+  ensureSqliteColumn({
+    sqlite,
+    tableName: 'feed_ledger_state',
+    columnName: 'generated_at_on_wall',
+    columnSql: 'generated_at_on_wall TEXT',
+  });
+  ensureSqliteColumn({
+    sqlite,
+    tableName: 'product_feed_state',
+    columnName: 'generated_at_on_wall',
+    columnSql: 'generated_at_on_wall TEXT',
+  });
 
   const db = new Kysely<OracleControlPlaneDatabase>({
     dialect: new SqliteDialect({

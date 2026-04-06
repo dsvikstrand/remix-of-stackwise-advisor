@@ -1,5 +1,6 @@
 import { CHANNELS_CATALOG } from '../../src/lib/channelsCatalog';
 import { buildFeedSummary } from '../../src/lib/feedPreview';
+import { resolveFeedItemWallDisplayAt } from './feedItemWallPolicy';
 
 type DbClient = {
   from: (table: string) => any;
@@ -432,8 +433,9 @@ export async function listWallForYouFeed(input: {
     ? { data: await input.readFeedRows({ db, userId, limit }), error: null }
     : await db
       .from('user_feed_items')
-      .select('id, source_item_id, blueprint_id, state, last_decision_code, created_at')
+      .select('id, source_item_id, blueprint_id, state, last_decision_code, generated_at_on_wall, created_at')
       .eq('user_id', userId)
+      .order('generated_at_on_wall', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
       .limit(limit);
   const resolvedFeedRows = Array.isArray((feedRows as any)?.data)
@@ -545,7 +547,11 @@ export async function listWallForYouFeed(input: {
         kind: 'blueprint',
         feedItemId: row.id,
         sourceItemId: source.id,
-        createdAt: row.created_at,
+        createdAt: resolveFeedItemWallDisplayAt({
+          blueprintId: row.blueprint_id,
+          createdAt: row.created_at,
+          generatedAtOnWall: row.generated_at_on_wall,
+        }),
         blueprintId: blueprint.id,
         title: blueprint.title,
         sourceChannelTitle,
@@ -571,7 +577,11 @@ export async function listWallForYouFeed(input: {
       kind: 'locked',
       feedItemId: row.id,
       sourceItemId: source.id,
-      createdAt: row.created_at,
+      createdAt: resolveFeedItemWallDisplayAt({
+        blueprintId: row.blueprint_id,
+        createdAt: row.created_at,
+        generatedAtOnWall: row.generated_at_on_wall,
+      }),
       title: source.title,
       sourceChannelTitle,
       sourceChannelAvatarUrl,
