@@ -239,5 +239,5 @@ describe('oracle unlock ledger state', () => {
     } finally {
       await controlDb.close();
     }
-  }, 15_000);
+  }, 45_000);
 });

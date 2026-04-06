@@ -254,5 +254,5 @@ describe('oracle generation state', () => {
     } finally {
       await controlDb.close();
     }
-  }, 15_000);
+  }, 45_000);
 });

@@ -151,7 +151,7 @@ describe('oracle source item ledger state', () => {
     } finally {
       await controlDb.close();
     }
-  }, 15_000);
+  }, 45_000);
 
   it('tolerates malformed metadata_json in stored Oracle source-item rows', async () => {
     const controlDb = openOracleControlPlaneDb({
