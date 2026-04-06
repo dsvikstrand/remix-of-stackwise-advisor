@@ -126,7 +126,8 @@
     - unchanged successful writes to `user_source_subscriptions` are skipped unless checkpoint/title/error state changed
     - repeated identical error writes remain bounded by the `30m` poll heartbeat
     - this is an egress-control measure only; frontend subscription health still evaluates on a `60m` window
-    - Oracle cron may still hit `/api/ingestion/jobs/trigger` every `3m`, but in the current live rollout Oracle-primary now owns `all_active_subscriptions` cadence with a `15m` override (`ORACLE_SUBSCRIPTION_PRIMARY_MIN_TRIGGER_INTERVAL_MS=900000`)
+    - Oracle cron may still hit `/api/ingestion/jobs/trigger` every `3m`, but in the current live rollout Oracle-primary now owns `all_active_subscriptions` cadence with a `5m` override (`ORACLE_SUBSCRIPTION_PRIMARY_MIN_TRIGGER_INTERVAL_MS=300000`)
+    - current live discovery tuning also uses `ORACLE_SUBSCRIPTION_REVISIT_ACTIVE_MS=300000`, so subscriptions with fresh new-item outcomes get rechecked on a tighter `5m` loop while normal/quiet channels stay on the wider revisit windows
     - the same trigger path no longer force-runs unlock sweeps, source-page asset sweeps, or transcript revalidate seeding before enqueue eligibility is known
     - each `all_active_subscriptions` worker run now prioritizes Oracle-local due rows, caps each due batch to `150` subscriptions, and may drain up to `2` batches in one job before yielding
   - Blueprint YouTube refresh bookkeeping is also egress-conscious:
@@ -480,13 +481,13 @@ Required runtime variables:
 - `ORACLE_SUBSCRIPTION_SCHEDULER_MODE` (default `supabase`; accepted values: `supabase`, `shadow`, `primary`)
 - `ORACLE_CONTROL_PLANE_SQLITE_PATH` (default `.runtime/control-plane.sqlite`; local SQLite path for Oracle control-plane state)
 - `ORACLE_SUBSCRIPTION_BOOTSTRAP_BATCH` (default `250`; active YouTube subscriptions fetched per bootstrap page)
-- `ORACLE_SUBSCRIPTION_SCHEDULER_TICK_MS` (default `300000`; cadence reference for Oracle-local scheduler state and fallback retry windows)
-- `ORACLE_SUBSCRIPTION_PRIMARY_MIN_TRIGGER_INTERVAL_MS` (default `3600000`; Oracle-primary per-scope cadence window for `all_active_subscriptions` enqueue, independent of the legacy Supabase latest-job gate)
+- `ORACLE_SUBSCRIPTION_SCHEDULER_TICK_MS` (default `60000`; cadence reference for Oracle-local scheduler state and fallback retry windows)
+- `ORACLE_SUBSCRIPTION_PRIMARY_MIN_TRIGGER_INTERVAL_MS` (default `300000`; Oracle-primary per-scope cadence window for `all_active_subscriptions` enqueue, independent of the legacy Supabase latest-job gate)
 - `ORACLE_SUBSCRIPTION_PRIMARY_BATCH_LIMIT` (default `150`; Oracle-primary due-batch cap for each `all_active_subscriptions` run)
 - `ORACLE_SUBSCRIPTION_PRIMARY_MAX_BATCHES_PER_RUN` (default `2`; Oracle-primary cap on how many due batches one `all_active_subscriptions` job may drain before yielding)
 - `ORACLE_SUBSCRIPTION_SHADOW_BATCH_LIMIT` (default `75`; max local due-subscription sample evaluated per shadow decision)
 - `ORACLE_SUBSCRIPTION_SHADOW_LOOKAHEAD_MS` (default `60000`; lookahead window for considering subscriptions due in shadow mode)
-- `ORACLE_SUBSCRIPTION_REVISIT_ACTIVE_MS` (default `900000`; next-due interval after Oracle sees newly inserted subscription content)
+- `ORACLE_SUBSCRIPTION_REVISIT_ACTIVE_MS` (default `300000`; next-due interval after Oracle sees newly inserted subscription content)
 - `ORACLE_SUBSCRIPTION_REVISIT_NORMAL_MS` (default `1800000`; normal next-due interval after a no-new-items check)
 - `ORACLE_SUBSCRIPTION_REVISIT_QUIET_MS` (default `5400000`; quieter next-due interval after repeated no-op checks)
 - `ORACLE_SUBSCRIPTION_RETRY_ERROR_MS` (default `900000`; next-due retry interval after subscription sync failure)

@@ -45,7 +45,7 @@
     - hard failures persist readable `message/code/details/hint` text into `last_sync_error` and batch terminal summaries instead of collapsing object-shaped errors to `[object Object]`
     - subscription sync shares the durable `source_item_unlocks` contract now, so fresh unlock rows and Oracle-primary/shared unlock row normalizers must initialize `transcript_status='unknown'` instead of null
     - UI health semantics stay separate and still treat `<=60m` since last poll as healthy
-    - Oracle cron may still call `/api/ingestion/jobs/trigger` every `3m`, but backend enqueue now gates `all_active_subscriptions` through the Oracle cadence window (`ORACLE_SUBSCRIPTION_PRIMARY_MIN_TRIGGER_INTERVAL_MS`, default `60m`)
+    - Oracle cron may still call `/api/ingestion/jobs/trigger` every `3m`, but backend enqueue now gates `all_active_subscriptions` through the Oracle cadence window (`ORACLE_SUBSCRIPTION_PRIMARY_MIN_TRIGGER_INTERVAL_MS`, default `5m`)
   - Low-priority queue claim polling is also cadence-aware:
     - idle claim sweeps for low-priority scopes back off more aggressively than the default worker idle cadence
     - claimed-work reschedules and lease-heartbeat behavior remain unchanged
@@ -299,7 +299,8 @@
     - unlock reliability orphan-job recovery now also uses a mirror-aware running-job failure helper, so stale running unlock jobs do not bypass Oracle job-activity updates when they are forced terminal.
     - low-priority idle claim sweeps now back off more aggressively than the default worker idle cadence, reducing `claim_ingestion_jobs` chatter when only low-priority scopes are being polled.
     - queue maintenance is now time-gated as well: unlock sweeps and stale-job recovery still run in the combined worker loop, but only once per coarse maintenance window (`15m` default) instead of every idle keep-alive cycle.
-    - service-cron subscription enqueue is also cadence-aware now: the route still receives the `*/3m` Oracle trigger, but in the current live Oracle-primary rollout `all_active_subscriptions` is re-enqueued on the Oracle cadence window with a `15m` override (`ORACLE_SUBSCRIPTION_PRIMARY_MIN_TRIGGER_INTERVAL_MS=900000` on Oracle).
+    - service-cron subscription enqueue is also cadence-aware now: the route still receives the `*/3m` Oracle trigger, but in the current live Oracle-primary rollout `all_active_subscriptions` is re-enqueued on the Oracle cadence window with a `5m` override (`ORACLE_SUBSCRIPTION_PRIMARY_MIN_TRIGGER_INTERVAL_MS=300000` on Oracle).
+    - active subscription revisit now follows the same `5m` live override (`ORACLE_SUBSCRIPTION_REVISIT_ACTIVE_MS=300000` on Oracle), so newly productive creators are rechecked faster while normal/quiet revisit windows remain conservative.
     - `all_active_subscriptions` execution is Oracle-bounded: each run prioritizes Oracle-local due rows first, currently caps each due batch to `150` subscriptions, and may drain up to `2` due batches in one job before yielding.
     - YouTube refresh bookkeeping now skips unchanged `source_items.metadata.view_count` writes, unchanged `blueprint_youtube_comments` snapshot rewrites, no-op `blueprint_youtube_refresh_state` upserts, and existing queue shadow transitions now update `ingestion_jobs` by durable id before falling back to insert-on-miss, reducing refresh and queue compatibility churn without changing runtime UX.
     - frontend list/detail query tuning now complements the backend egress work by keeping non-live query surfaces on explicit conservative stale windows instead of implicit focus churn.
