@@ -370,10 +370,7 @@ import {
 import {
   getQueueShadowActionClass,
   getQueueShadowChangedFields,
-  getQueueShadowSkipReason,
-  isOracleOnlyQueueEnabled,
   mapQueueShadowInsertValues,
-  mapQueueShadowUpdateValues,
 } from './services/queueShadowPolicy';
 import {
   resolveFeedItemGeneratedAtOnWall,
@@ -746,14 +743,7 @@ const oracleQueueLedgerEnabled = (
   || oracleQueueLedgerMode === 'primary'
 );
 const oracleQueueLedgerPrimaryEnabled = oracleQueueLedgerMode === 'primary';
-const oracleQueueSupabaseCompatEnabled = parseRuntimeFlag(
-  process.env.ORACLE_QUEUE_SUPABASE_COMPAT_ENABLED,
-  false,
-);
-const oracleQueueOracleOnlyEnabled = isOracleOnlyQueueEnabled({
-  primaryEnabled: oracleQueueLedgerPrimaryEnabled,
-  supabaseCompatEnabled: oracleQueueSupabaseCompatEnabled,
-});
+const oracleQueueOracleOnlyEnabled = oracleQueueLedgerPrimaryEnabled;
 const oracleSubscriptionLedgerEnabled = (
   oracleSubscriptionLedgerMode === 'dual'
   || oracleSubscriptionLedgerMode === 'primary'
@@ -1387,134 +1377,6 @@ async function upsertOracleQueueLedgerFromKnownRows(
   }
 }
 
-async function upsertSupabaseQueueShadow(
-  db: ReturnType<typeof createClient>,
-  job: IngestionJobRow,
-  options?: {
-    action?: string;
-    current?: IngestionJobRow | null;
-  },
-) {
-  const action = String(options?.action || 'queue_shadow_write').trim() || 'queue_shadow_write';
-  const current = options?.current || null;
-  if (oracleQueueOracleOnlyEnabled) {
-    logQueueShadowWriteSkipped({
-      action,
-      actionClass: 'generic',
-      jobId: job.id,
-      scope: job.scope,
-      reason: 'oracle_primary_oracle_only',
-    });
-    return job;
-  }
-  const changedFields = current?.id === job.id
-    ? getQueueShadowChangedFields(current, job)
-    : null;
-  const actionClass = getQueueShadowActionClass({
-    action,
-    current,
-    next: job,
-    changedFields,
-  });
-
-  if (current?.id === job.id && changedFields && changedFields.length === 0) {
-    logQueueShadowWriteSkipped({
-      action,
-      actionClass,
-      jobId: job.id,
-      scope: job.scope,
-      reason: 'unchanged_material_fields',
-      changedFields,
-    });
-    return job;
-  }
-
-  const skipReason = getQueueShadowSkipReason({
-    action,
-    primaryEnabled: oracleQueueLedgerPrimaryEnabled,
-    current,
-    next: job,
-    changedFields,
-  });
-  if (skipReason) {
-    logQueueShadowWriteSkipped({
-      action,
-      actionClass,
-      jobId: job.id,
-      scope: job.scope,
-      reason: skipReason,
-      changedFields,
-    });
-    return job;
-  }
-
-  const updateResult = await db
-    .from('ingestion_jobs')
-    .update(mapQueueShadowUpdateValues(job, {
-      action,
-      current,
-      changedFields,
-    }))
-    .eq('id', job.id)
-    .select('id')
-    .maybeSingle();
-  if (updateResult.error) throw updateResult.error;
-  if (updateResult.data?.id) {
-    console.log('[oracle-control-plane] queue_shadow_write', JSON.stringify({
-      action,
-      action_class: actionClass,
-      job_id: job.id,
-      scope: job.scope,
-      mode: 'update',
-      changed_fields: changedFields,
-    }));
-    return job;
-  }
-
-  const insertResult = await db
-    .from('ingestion_jobs')
-    .insert(mapQueueShadowInsertValues(job));
-  if (insertResult.error) throw insertResult.error;
-
-  console.log('[oracle-control-plane] queue_shadow_write', JSON.stringify({
-    action,
-    action_class: actionClass,
-    job_id: job.id,
-    scope: job.scope,
-    mode: 'insert_on_miss',
-    changed_fields: changedFields,
-  }));
-  return job;
-}
-
-function logOracleQueueLedgerShadowWriteError(input: {
-  action: string;
-  jobId?: string | null;
-  error: unknown;
-}) {
-  console.warn('[oracle-control-plane] queue_ledger_shadow_write_failed', JSON.stringify({
-    action: input.action,
-    job_id: input.jobId || null,
-    error: input.error instanceof Error ? input.error.message : String(input.error),
-  }));
-}
-
-function logQueueSupabaseFallbackRead(input: {
-  action: string;
-  scope?: string | null;
-  scopes?: string[] | null;
-  userId?: string | null;
-  jobId?: string | null;
-}) {
-  console.warn('[oracle-control-plane] queue_fallback_read', JSON.stringify({
-    action: input.action,
-    scope: input.scope || null,
-    scopes: input.scopes || null,
-    user_id: input.userId || null,
-    job_id: input.jobId || null,
-  }));
-}
-
 function logQueueOracleOnlyBypass(input: {
   action: string;
   scope?: string | null;
@@ -1659,31 +1521,13 @@ async function finalizeIngestionJobWithMirror(
       heartbeatAt,
     });
     if (!finalizedJob) return null;
-
-    if (oracleQueueOracleOnlyEnabled) {
-      logQueueShadowWriteSkipped({
-        action: `${input.action}_finalize_shadow`,
-        actionClass: 'terminal',
-        jobId: finalizedJob.id,
-        scope: finalizedJob.scope,
-        reason: 'oracle_primary_oracle_only',
-      });
-      await upsertOracleJobActivityFromKnownRow(finalizedJob, input.action);
-      return finalizedJob;
-    }
-
-    try {
-      await upsertSupabaseQueueShadow(db, finalizedJob, {
-        action: `${input.action}_finalize_shadow`,
-      });
-    } catch (error) {
-      logOracleQueueLedgerShadowWriteError({
-        action: `${input.action}_finalize_shadow`,
-        jobId: finalizedJob.id,
-        error,
-      });
-    }
-
+    logQueueShadowWriteSkipped({
+      action: `${input.action}_finalize_shadow`,
+      actionClass: 'terminal',
+      jobId: finalizedJob.id,
+      scope: finalizedJob.scope,
+      reason: 'oracle_primary_oracle_only',
+    });
     await upsertOracleJobActivityFromKnownRow(finalizedJob, input.action);
     return finalizedJob;
   }
@@ -1736,32 +1580,13 @@ async function enqueueIngestionJobWithMirror(
       controlDb: oracleControlPlane,
       job: normalizedJob,
     });
-    if (oracleQueueOracleOnlyEnabled) {
-      logQueueShadowWriteSkipped({
-        action: 'enqueue_insert_shadow',
-        actionClass: 'generic',
-        jobId: normalizedJob.id,
-        scope: normalizedJob.scope,
-        reason: 'oracle_primary_oracle_only',
-      });
-      await upsertOracleJobActivityFromKnownRow(normalizedJob, 'enqueue_insert');
-      return {
-        data: normalizedJob,
-        error: null,
-      };
-    }
-    const result = await db
-      .from('ingestion_jobs')
-      .insert(mapQueueShadowInsertValues(normalizedJob))
-      .select('*')
-      .single();
-    if (result.error) {
-      await deleteOracleQueueLedgerJob({
-        controlDb: oracleControlPlane,
-        jobId: normalizedJob.id,
-      });
-      return result;
-    }
+    logQueueShadowWriteSkipped({
+      action: 'enqueue_insert_shadow',
+      actionClass: 'generic',
+      jobId: normalizedJob.id,
+      scope: normalizedJob.scope,
+      reason: 'oracle_primary_oracle_only',
+    });
     await upsertOracleJobActivityFromKnownRow(normalizedJob, 'enqueue_insert');
     return {
       data: normalizedJob,
@@ -1823,28 +1648,13 @@ async function markRunningIngestionJobsFailedWithMirror(
       finishedAt,
     });
     for (const job of updatedRows) {
-      if (oracleQueueOracleOnlyEnabled) {
-        logQueueShadowWriteSkipped({
-          action: `${input.action}_mark_failed_shadow`,
-          actionClass: 'terminal',
-          jobId: job.id,
-          scope: job.scope,
-          reason: 'oracle_primary_oracle_only',
-        });
-        await upsertOracleJobActivityFromKnownRow(job, input.action);
-        continue;
-      }
-      try {
-        await upsertSupabaseQueueShadow(db, job, {
-          action: `${input.action}_mark_failed_shadow`,
-        });
-      } catch (error) {
-        logOracleQueueLedgerShadowWriteError({
-          action: `${input.action}_mark_failed_shadow`,
-          jobId: job.id,
-          error,
-        });
-      }
+      logQueueShadowWriteSkipped({
+        action: `${input.action}_mark_failed_shadow`,
+        actionClass: 'terminal',
+        jobId: job.id,
+        scope: job.scope,
+        reason: 'oracle_primary_oracle_only',
+      });
       await upsertOracleJobActivityFromKnownRow(job, input.action);
     }
     return updatedRows.length;
@@ -2011,40 +1821,21 @@ async function failClaimedIngestionJobWithMirror(
       currentAttempts: Number(input.job.attempts || 0),
     });
     if (!failedJob) return null;
-
-    if (oracleQueueOracleOnlyEnabled) {
-      logQueueShadowWriteSkipped({
-        action: `${input.action}_shadow`,
-        actionClass: getQueueShadowActionClass({
-          action: `${input.action}_shadow`,
-          current: input.job,
-          next: failedJob,
-          changedFields: input.job.id === failedJob.id
-            ? getQueueShadowChangedFields(input.job, failedJob)
-            : null,
-        }),
-        jobId: failedJob.id,
-        scope: failedJob.scope,
-        reason: 'oracle_primary_oracle_only',
-      });
-      await upsertOracleJobActivityFromKnownRow(failedJob, input.action);
-      return failedJob;
-    }
-
-    try {
-      await upsertSupabaseQueueShadow(db, failedJob, {
+    await upsertOracleJobActivityFromKnownRow(failedJob, input.action);
+    logQueueShadowWriteSkipped({
+      action: `${input.action}_shadow`,
+      actionClass: getQueueShadowActionClass({
         action: `${input.action}_shadow`,
         current: input.job,
-      });
-    } catch (error) {
-      logOracleQueueLedgerShadowWriteError({
-        action: `${input.action}_shadow`,
-        jobId: failedJob.id,
-        error,
-      });
-    }
-
-    await upsertOracleJobActivityFromKnownRow(failedJob, input.action);
+        next: failedJob,
+        changedFields: input.job.id === failedJob.id
+          ? getQueueShadowChangedFields(input.job, failedJob)
+          : null,
+      }),
+      jobId: failedJob.id,
+      scope: failedJob.scope,
+      reason: 'oracle_primary_oracle_only',
+    });
     return failedJob;
   }
 
@@ -2100,7 +1891,7 @@ async function listLatestUserIngestionJobsOracleFirst(
       }));
     }
   }
-  if (oracleQueueOracleOnlyEnabled) {
+  if (oracleQueueLedgerPrimaryEnabled) {
     logQueueOracleOnlyBypass({
       action: 'list_latest_for_user_scope',
       scope: input.scope,
@@ -2108,13 +1899,6 @@ async function listLatestUserIngestionJobsOracleFirst(
       reason: 'oracle_only_primary',
     });
     return [];
-  }
-  if (oracleQueueLedgerPrimaryEnabled) {
-    logQueueSupabaseFallbackRead({
-      action: 'list_latest_for_user_scope',
-      scope: input.scope,
-      userId: input.userId,
-    });
   }
   const latestResult = await db
     .from('ingestion_jobs')
@@ -2166,7 +1950,7 @@ async function listActiveUserIngestionJobsOracleFirst(
     }
   }
 
-  if (oracleQueueOracleOnlyEnabled) {
+  if (oracleQueueLedgerPrimaryEnabled) {
     logQueueOracleOnlyBypass({
       action: 'list_active_for_user',
       scopes: input.scopes,
@@ -2174,13 +1958,6 @@ async function listActiveUserIngestionJobsOracleFirst(
       reason: 'oracle_only_primary',
     });
     return [];
-  }
-  if (oracleQueueLedgerPrimaryEnabled) {
-    logQueueSupabaseFallbackRead({
-      action: 'list_active_for_user',
-      scopes: input.scopes,
-      userId: input.userId,
-    });
   }
   let query = db
     .from('ingestion_jobs')
@@ -2242,7 +2019,7 @@ async function getUserIngestionJobByIdOracleFirst(
     }
   }
 
-  if (oracleQueueOracleOnlyEnabled) {
+  if (oracleQueueLedgerPrimaryEnabled) {
     logQueueOracleOnlyBypass({
       action: 'get_user_job_by_id',
       userId: input.userId,
@@ -2250,13 +2027,6 @@ async function getUserIngestionJobByIdOracleFirst(
       reason: 'oracle_only_primary',
     });
     return null;
-  }
-  if (oracleQueueLedgerPrimaryEnabled) {
-    logQueueSupabaseFallbackRead({
-      action: 'get_user_job_by_id',
-      userId: input.userId,
-      jobId: normalizedJobId,
-    });
   }
   const result = await db
     .from('ingestion_jobs')
@@ -2315,7 +2085,7 @@ async function getActiveIngestionJobForScopeOracleFirst(input: {
   }
 
   const serviceDb = getServiceSupabaseClient();
-  if (oracleQueueOracleOnlyEnabled) {
+  if (oracleQueueLedgerPrimaryEnabled) {
     logQueueOracleOnlyBypass({
       action: 'get_active_for_scope',
       scope: input.scope,
@@ -2327,12 +2097,6 @@ async function getActiveIngestionJobForScopeOracleFirst(input: {
     return null;
   }
 
-  if (oracleQueueLedgerPrimaryEnabled) {
-    logQueueSupabaseFallbackRead({
-      action: 'get_active_for_scope',
-      scope: input.scope,
-    });
-  }
   const { data, error } = await serviceDb
     .from('ingestion_jobs')
     .select('id, status, started_at')
@@ -2387,7 +2151,7 @@ async function listQueuedJobsForScopesOracleFirst(input: {
   }
 
   const serviceDb = getServiceSupabaseClient();
-  if (oracleQueueOracleOnlyEnabled) {
+  if (oracleQueueLedgerPrimaryEnabled) {
     logQueueOracleOnlyBypass({
       action: 'list_queued_jobs_for_scopes',
       scopes: input.scopes,
@@ -6305,19 +6069,13 @@ async function listPendingRefreshBlueprintIdsOracleFirst(
     return pendingIds;
   }
 
-  if (oracleQueueOracleOnlyEnabled) {
+  if (oracleQueueLedgerPrimaryEnabled) {
     logQueueOracleOnlyBypass({
       action: 'list_pending_refresh_blueprint_ids',
       scope: 'blueprint_youtube_refresh',
       reason: 'oracle_only_primary',
     });
     return new Set<string>();
-  }
-  if (oracleQueueLedgerPrimaryEnabled) {
-    logQueueSupabaseFallbackRead({
-      action: 'list_pending_refresh_blueprint_ids',
-      scope: 'blueprint_youtube_refresh',
-    });
   }
   let query = db
     .from('ingestion_jobs')
@@ -6371,7 +6129,7 @@ async function getLatestIngestionJobOracleFirst() {
     }
   }
 
-  if (oracleQueueOracleOnlyEnabled) {
+  if (oracleQueueLedgerPrimaryEnabled) {
     logQueueOracleOnlyBypass({
       action: 'get_latest_ingestion_job',
       reason: 'oracle_only_primary',
@@ -6381,12 +6139,6 @@ async function getLatestIngestionJobOracleFirst() {
   const serviceDb = getServiceSupabaseClient();
   if (!serviceDb) {
     return null;
-  }
-
-  if (oracleQueueLedgerPrimaryEnabled) {
-    logQueueSupabaseFallbackRead({
-      action: 'get_latest_ingestion_job',
-    });
   }
   const latestResult = await serviceDb
     .from('ingestion_jobs')
@@ -6430,7 +6182,7 @@ async function getLatestIngestionJobForScopeOracleFirst(input: {
     }
   }
 
-  if (oracleQueueOracleOnlyEnabled) {
+  if (oracleQueueLedgerPrimaryEnabled) {
     logQueueOracleOnlyBypass({
       action: 'get_latest_ingestion_job_for_scope',
       scope: normalizedScope,
@@ -6441,13 +6193,6 @@ async function getLatestIngestionJobForScopeOracleFirst(input: {
   const serviceDb = getServiceSupabaseClient();
   if (!serviceDb) {
     return null;
-  }
-
-  if (oracleQueueLedgerPrimaryEnabled) {
-    logQueueSupabaseFallbackRead({
-      action: 'get_latest_ingestion_job_for_scope',
-      scope: normalizedScope,
-    });
   }
   const latestResult = await serviceDb
     .from('ingestion_jobs')
@@ -6536,7 +6281,7 @@ async function getUnlockJobsByIdsOracleFirst(
     }
   }
 
-  if (oracleQueueOracleOnlyEnabled) {
+  if (oracleQueueLedgerPrimaryEnabled) {
     logQueueOracleOnlyBypass({
       action: 'get_unlock_jobs_by_ids',
       jobId: normalizedIds.length === 1 ? normalizedIds[0] : null,
@@ -6549,12 +6294,6 @@ async function getUnlockJobsByIdsOracleFirst(
       started_at: string | null;
       updated_at: string | null;
     }>();
-  }
-  if (oracleQueueLedgerPrimaryEnabled) {
-    logQueueSupabaseFallbackRead({
-      action: 'get_unlock_jobs_by_ids',
-      jobId: normalizedIds.length === 1 ? normalizedIds[0] : null,
-    });
   }
   const { data, error } = await db
     .from('ingestion_jobs')
@@ -6630,19 +6369,13 @@ async function listRunningUnlockJobsOracleFirst(
     }
   }
 
-  if (oracleQueueOracleOnlyEnabled) {
+  if (oracleQueueLedgerPrimaryEnabled) {
     logQueueOracleOnlyBypass({
       action: 'list_running_unlock_jobs',
       scope: 'source_item_unlock_generation',
       reason: 'oracle_only_primary',
     });
     return [];
-  }
-  if (oracleQueueLedgerPrimaryEnabled) {
-    logQueueSupabaseFallbackRead({
-      action: 'list_running_unlock_jobs',
-      scope: 'source_item_unlock_generation',
-    });
   }
   const { data, error } = await db
     .from('ingestion_jobs')
@@ -6898,7 +6631,7 @@ async function getQueueHealthSnapshotOracleFirst(input: {
     }
   }
 
-  if (oracleQueueOracleOnlyEnabled) {
+  if (oracleQueueLedgerPrimaryEnabled) {
     logQueueOracleOnlyBypass({
       action: 'get_queue_health_snapshot',
       scopes: [...QUEUED_INGESTION_SCOPES],
@@ -11339,19 +11072,13 @@ async function hasPendingSourceAutoUnlockRetryJob(
     return oraclePending;
   }
 
-  if (oracleQueueOracleOnlyEnabled) {
+  if (oracleQueueLedgerPrimaryEnabled) {
     logQueueOracleOnlyBypass({
       action: 'has_pending_source_auto_unlock_retry_job',
       scope: 'source_auto_unlock_retry',
       reason: 'oracle_only_primary',
     });
     return false;
-  }
-  if (oracleQueueLedgerPrimaryEnabled) {
-    logQueueSupabaseFallbackRead({
-      action: 'has_pending_source_auto_unlock_retry_job',
-      scope: 'source_auto_unlock_retry',
-    });
   }
   const { data, error } = await db
     .from('ingestion_jobs')
@@ -11414,19 +11141,13 @@ async function hasPendingSourceTranscriptRevalidateJob(
     return oraclePending;
   }
 
-  if (oracleQueueOracleOnlyEnabled) {
+  if (oracleQueueLedgerPrimaryEnabled) {
     logQueueOracleOnlyBypass({
       action: 'has_pending_source_transcript_revalidate_job',
       scope: 'source_transcript_revalidate',
       reason: 'oracle_only_primary',
     });
     return false;
-  }
-  if (oracleQueueLedgerPrimaryEnabled) {
-    logQueueSupabaseFallbackRead({
-      action: 'has_pending_source_transcript_revalidate_job',
-      scope: 'source_transcript_revalidate',
-    });
   }
   const { data, error } = await db
     .from('ingestion_jobs')
@@ -11922,7 +11643,7 @@ async function recoverStaleIngestionJobs(
       return [];
     }
 
-    if (oracleQueueOracleOnlyEnabled) {
+    if (oracleQueueLedgerPrimaryEnabled) {
       const nowIso = new Date().toISOString();
       const updatedRows = await markOracleRunningJobsFailed({
         controlDb: oracleControlPlane,
@@ -11957,6 +11678,15 @@ async function recoverStaleIngestionJobs(
       requested_by_user_id: input?.requestedByUserId || null,
       error: error instanceof Error ? error.message : String(error),
     }));
+    if (oracleQueueLedgerPrimaryEnabled) {
+      logQueueOracleOnlyBypass({
+        action: 'recover_stale_jobs',
+        scope: input?.scope || null,
+        userId: input?.requestedByUserId || null,
+        reason: 'oracle_only_primary',
+      });
+      return [];
+    }
     return recoverStaleIngestionJobsFromSupabase(db, input);
   }
 }
@@ -12002,7 +11732,7 @@ async function getActiveManualRefreshJob(db: ReturnType<typeof createClient>, us
       user_id: userId,
       error: error instanceof Error ? error.message : String(error),
     }));
-    if (oracleQueueOracleOnlyEnabled) {
+    if (oracleQueueLedgerPrimaryEnabled) {
       logQueueOracleOnlyBypass({
         action: 'get_active_manual_refresh_job',
         userId,
@@ -15696,7 +15426,6 @@ async function bootstrapOracleControlPlaneState() {
   console.log('[oracle-control-plane] bootstrap complete', JSON.stringify({
     scheduler_mode: oracleControlPlaneConfig.subscriptionSchedulerMode,
     queue_ledger_mode: oracleQueueLedgerMode,
-    queue_supabase_compat_enabled: oracleQueueSupabaseCompatEnabled,
     queue_oracle_only_enabled: oracleQueueOracleOnlyEnabled,
     subscription_ledger_mode: oracleSubscriptionLedgerMode,
     unlock_ledger_mode: oracleUnlockLedgerMode,
@@ -16788,7 +16517,6 @@ if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
   console.log('[oracle-control-plane] enabled', JSON.stringify({
     scheduler_mode: oracleControlPlaneConfig.subscriptionSchedulerMode,
     queue_ledger_mode: oracleQueueLedgerMode,
-    queue_supabase_compat_enabled: oracleQueueSupabaseCompatEnabled,
     queue_oracle_only_enabled: oracleQueueOracleOnlyEnabled,
     subscription_ledger_mode: oracleSubscriptionLedgerMode,
     unlock_ledger_mode: oracleUnlockLedgerMode,

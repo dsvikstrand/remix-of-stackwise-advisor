@@ -115,7 +115,7 @@
   - Queue runtime ownership is now split cleanly:
     - Oracle queue-ledger `primary` is now the intended normal operational queue system for enqueue, claim/start, lease, retry/requeue, terminal state, and hot queue status reads (`active by scope`, `latest`, owner job detail/order).
     - In the current cutover baseline, Oracle-primary queue runtime defaults to Oracle-only behavior: normal queue writes and normal queue read misses no longer fall through to Supabase `ingestion_jobs`.
-    - The temporary rollback lever is explicit: setting `ORACLE_QUEUE_SUPABASE_COMPAT_ENABLED=true` restores the older Supabase queue compatibility path while Oracle-only queue is still burning in.
+    - Oracle-primary queue runtime is now unconditional Oracle-only behavior for normal runtime paths; the older Supabase queue compatibility path is no longer part of steady-state runtime.
     - Oracle queue reads continue to treat empty Oracle results as authoritative in `primary`; any queue bypass during Oracle-only mode is logged as `queue_oracle_only_bypass` rather than silently rereading Supabase.
   - Subscription runtime ownership now follows the same Oracle-first pattern:
     - Oracle subscription-ledger `primary` is the normal source for hot subscription reads (`by id`, `by user + channel`, source-page subscription access, active lists, subscriber counts) and those reads treat an empty Oracle result as authoritative instead of automatically falling through to Supabase.

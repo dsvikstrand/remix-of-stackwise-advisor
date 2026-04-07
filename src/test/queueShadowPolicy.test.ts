@@ -3,7 +3,6 @@ import {
   getQueueShadowActionClass,
   getQueueShadowChangedFields,
   getQueueShadowSkipReason,
-  isOracleOnlyQueueEnabled,
   mapQueueShadowInsertValues,
   mapQueueShadowUpdateValues,
 } from '../../server/services/queueShadowPolicy';
@@ -179,22 +178,5 @@ describe('queue shadow policy', () => {
       },
       changedFields: ['status', 'next_run_at', 'error_code', 'error_message'],
     })).toBeNull();
-  });
-
-  it('treats primary mode without compat as Oracle-only queue', () => {
-    expect(isOracleOnlyQueueEnabled({
-      primaryEnabled: true,
-      supabaseCompatEnabled: false,
-    })).toBe(true);
-
-    expect(isOracleOnlyQueueEnabled({
-      primaryEnabled: true,
-      supabaseCompatEnabled: true,
-    })).toBe(false);
-
-    expect(isOracleOnlyQueueEnabled({
-      primaryEnabled: false,
-      supabaseCompatEnabled: false,
-    })).toBe(false);
   });
 });
