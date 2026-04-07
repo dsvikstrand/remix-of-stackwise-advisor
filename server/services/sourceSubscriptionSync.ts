@@ -345,6 +345,7 @@ export type SourceSubscriptionSyncDeps = {
     jobId?: string | null;
   }) => Promise<{ state: 'ready'; blueprintId?: string | null } | { state: 'in_progress' } | { state: 'needs_generation' } | null>;
   resolveYouTubeChannel?: (input: string) => Promise<ResolvedYouTubeChannel>;
+  resolveYouTubeChannelByCreatorName?: (query: string) => Promise<ResolvedYouTubeChannel | null>;
   syncOracleProductSubscriptions?: (
     rows: Array<Record<string, unknown> | null | undefined>,
     action: string,
@@ -523,13 +524,59 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
         if (
           feedError.kind === 'feed_not_found'
           && !attemptedChannelRecovery
-          && deps.resolveYouTubeChannel
-          && subscription.source_channel_url
+          && (deps.resolveYouTubeChannel || deps.resolveYouTubeChannelByCreatorName)
         ) {
           attemptedChannelRecovery = true;
+          let recoveredVia: 'channel_url' | 'creator_name' | null = null;
+          let resolved: ResolvedYouTubeChannel | null = null;
           try {
-            const resolved = await deps.resolveYouTubeChannel(subscription.source_channel_url);
-            if (resolved.channelId && resolved.channelId !== subscription.source_channel_id) {
+            if (deps.resolveYouTubeChannel && subscription.source_channel_url) {
+              try {
+                const urlResolved = await deps.resolveYouTubeChannel(subscription.source_channel_url);
+                if (urlResolved.channelId && urlResolved.channelId !== subscription.source_channel_id) {
+                  resolved = urlResolved;
+                  recoveredVia = 'channel_url';
+                }
+              } catch (recoveryError) {
+                console.log('[subscription_channel_recovery_url_failed]', JSON.stringify({
+                  subscription_id: subscription.id,
+                  user_id: subscription.user_id,
+                  source_channel_id: subscription.source_channel_id,
+                  source_channel_url: subscription.source_channel_url || null,
+                  source_channel_title: subscription.source_channel_title || null,
+                  trigger: options.trigger,
+                  error: recoveryError instanceof Error ? recoveryError.message : String(recoveryError),
+                }));
+              }
+            }
+
+            if (
+              !resolved
+              && deps.resolveYouTubeChannelByCreatorName
+              && normalizeNullableText(subscription.source_channel_title)
+            ) {
+              try {
+                const titleResolved = await deps.resolveYouTubeChannelByCreatorName(
+                  normalizeNullableText(subscription.source_channel_title)!,
+                );
+                if (titleResolved?.channelId && titleResolved.channelId !== subscription.source_channel_id) {
+                  resolved = titleResolved;
+                  recoveredVia = 'creator_name';
+                }
+              } catch (recoveryError) {
+                console.log('[subscription_channel_recovery_name_failed]', JSON.stringify({
+                  subscription_id: subscription.id,
+                  user_id: subscription.user_id,
+                  source_channel_id: subscription.source_channel_id,
+                  source_channel_url: subscription.source_channel_url || null,
+                  source_channel_title: subscription.source_channel_title || null,
+                  trigger: options.trigger,
+                  error: recoveryError instanceof Error ? recoveryError.message : String(recoveryError),
+                }));
+              }
+            }
+
+            if (resolved?.channelId && resolved.channelId !== subscription.source_channel_id) {
               recoveredChannelChanged = true;
               await updateRecoveredSubscriptionChannel({
                 db,
@@ -543,6 +590,7 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
                 source_channel_id: subscription.source_channel_id,
                 source_channel_url: subscription.source_channel_url || null,
                 source_channel_title: subscription.source_channel_title || null,
+                recovery_method: recoveredVia,
                 trigger: options.trigger,
               }));
               continue;
@@ -553,6 +601,7 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
               user_id: subscription.user_id,
               source_channel_id: subscription.source_channel_id,
               source_channel_url: subscription.source_channel_url || null,
+              source_channel_title: subscription.source_channel_title || null,
               trigger: options.trigger,
               error: recoveryError instanceof Error ? recoveryError.message : String(recoveryError),
             }));

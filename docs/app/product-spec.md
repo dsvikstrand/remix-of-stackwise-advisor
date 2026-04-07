@@ -424,6 +424,7 @@ si57) profile-header refresh entrypoint may launch `/subscriptions?refresh=1&ret
 si58) user-menu credits panel remains compact (balance + bar only) without extra refill/activity detail lines in this iteration.
 si59) subscription sync now enriches candidate video states via YouTube `videos.list` and skips unreleased premieres (`upcoming`) before source-item/feed insertion.
 si60) when one or more upcoming premieres are skipped in a sync run, subscription checkpoint (`last_seen_*`) is held for that run to avoid dropping release-time ingestion.
+si60a) repeated subscription feed `404` misses now attempt bounded self-heal before quiet stale handling: stored channel URL recovery stays first, and a creator-title fallback may repair the channel mapping only when one strong canonical channel match is found.
 si61) transcript truth model distinguishes temporary transcript failures from confirmed no-speech outcomes; `NO_CAPTIONS` is retryable until confirmation quorum is reached.
 si62) `NO_TRANSCRIPT_PERMANENT` is now set only after bounded confirmation retries, and confirmed no-speech rows are hidden from unlockable feed/video-library surfaces.
 si63) auto subscription transcript failures now use silent bounded retries with explicit retry-after ladder; feed-card rows are suppressed during retry/permanent states instead of shown as unlockable locks.

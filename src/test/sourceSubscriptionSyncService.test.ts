@@ -1026,4 +1026,117 @@ describe('source subscription sync service', () => {
       errorMessage: 'FEED_FETCH_FAILED:404',
     });
   });
+
+  it('recovers a feed-not-found subscription through creator-name fallback when url recovery fails', async () => {
+    const db = createMockSupabase({
+      user_source_subscriptions: [{
+        id: 'sub_1',
+        user_id: 'user_1',
+        source_type: 'youtube',
+        source_channel_id: 'channel_old',
+        source_channel_url: 'https://youtube.com/@stale-handle',
+        source_channel_title: 'Recovered Channel',
+        source_page_id: 'page_1',
+        auto_unlock_enabled: true,
+        is_active: true,
+        last_polled_at: '2026-03-19T11:00:00.000Z',
+        last_seen_published_at: null,
+        last_seen_video_id: null,
+        last_sync_error: null,
+        created_at: '2026-03-19T09:00:00.000Z',
+        updated_at: '2026-03-19T09:00:00.000Z',
+      }],
+      user_feed_items: [],
+    }) as any;
+
+    const fetchYouTubeFeed = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('FEED_FETCH_FAILED:404'))
+      .mockResolvedValueOnce({
+        channelTitle: 'Recovered Channel',
+        videos: [{
+          videoId: 'video_new',
+          url: 'https://youtube.com/watch?v=video_new',
+          title: 'Recovered Video',
+          publishedAt: '2026-03-19T10:00:00.000Z',
+          thumbnailUrl: null,
+          durationSeconds: 120,
+        }],
+      });
+    const resolveYouTubeChannel = vi.fn(async () => {
+      throw new Error('INVALID_CHANNEL');
+    });
+    const resolveYouTubeChannelByCreatorName = vi.fn(async () => ({
+      channelId: 'channel_new',
+      channelUrl: 'https://youtube.com/channel/channel_new',
+      channelTitle: 'Recovered Channel',
+    }));
+    const syncOracleProductSubscriptions = vi.fn(async () => undefined);
+
+    const service = createSourceSubscriptionSyncService({
+      fetchYouTubeFeed,
+      isNewerThanCheckpoint: vi.fn(() => false),
+      ingestionMaxPerSubscription: 20,
+      youtubeDataApiKey: '',
+      generationDurationCapEnabled: false,
+      generationMaxVideoSeconds: 2700,
+      generationBlockUnknownDuration: true,
+      generationDurationLookupTimeoutMs: 8000,
+      fetchYouTubeDurationMap: vi.fn(async () => new Map()),
+      fetchYouTubeVideoStates: vi.fn(async () => new Map()),
+      upsertSourceItemFromVideo: vi.fn(),
+      getExistingFeedItem: vi.fn(),
+      ensureSourceItemUnlock: vi.fn(),
+      computeUnlockCost: vi.fn(() => 1),
+      attemptAutoUnlockForSourceItem: vi.fn(),
+      getServiceSupabaseClient: () => null,
+      enqueueSourceAutoUnlockRetryJob: vi.fn(),
+      getSourceItemUnlockBySourceItemId: vi.fn(),
+      getTranscriptCooldownState: vi.fn(() => ({ active: false })),
+      isConfirmedNoTranscriptUnlock: vi.fn(() => false),
+      suppressUnlockableFeedRowsForSourceItem: vi.fn(),
+      insertFeedItem: vi.fn(),
+      resolveYouTubeChannel,
+      resolveYouTubeChannelByCreatorName,
+      syncOracleProductSubscriptions,
+    } as any);
+
+    const result = await service.syncSingleSubscription(
+      db,
+      {
+        id: 'sub_1',
+        user_id: 'user_1',
+        mode: 'auto',
+        source_type: 'youtube',
+        source_channel_id: 'channel_old',
+        source_channel_url: 'https://youtube.com/@stale-handle',
+        source_channel_title: 'Recovered Channel',
+        source_page_id: 'page_1',
+        auto_unlock_enabled: true,
+        is_active: true,
+        last_polled_at: '2026-03-19T11:00:00.000Z',
+        last_seen_published_at: null,
+        last_seen_video_id: null,
+        last_sync_error: null,
+        created_at: '2026-03-19T09:00:00.000Z',
+        updated_at: '2026-03-19T09:00:00.000Z',
+      },
+      { trigger: 'user_sync' },
+    );
+
+    expect(fetchYouTubeFeed).toHaveBeenNthCalledWith(1, 'channel_old', 20);
+    expect(fetchYouTubeFeed).toHaveBeenNthCalledWith(2, 'channel_new', 20);
+    expect(resolveYouTubeChannel).toHaveBeenCalledTimes(1);
+    expect(resolveYouTubeChannelByCreatorName).toHaveBeenCalledWith('Recovered Channel');
+    expect(db.state.user_source_subscriptions[0]).toMatchObject({
+      source_channel_id: 'channel_new',
+      source_channel_url: 'https://youtube.com/channel/channel_new',
+      source_channel_title: 'Recovered Channel',
+    });
+    expect(syncOracleProductSubscriptions).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      resultCode: 'bootstrap',
+      channelTitle: 'Recovered Channel',
+    });
+  });
 });

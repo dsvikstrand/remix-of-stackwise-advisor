@@ -222,6 +222,7 @@ import {
 } from './services/youtubeSourceVideos';
 import {
   clampYouTubeChannelSearchLimit,
+  resolveStrongYouTubeChannelByCreatorName,
   searchYouTubeChannels,
   YouTubeChannelSearchError,
 } from './services/youtubeChannelSearch';
@@ -15600,6 +15601,7 @@ function scheduleYouTubeRefreshScheduler(delayMs?: number) {
   upsertFeedItemWithBlueprint,
   resolveVariantOrReady,
   resolveYouTubeChannel,
+  resolveYouTubeChannelByCreatorName: resolveStrongYouTubeChannelByCreatorName,
   syncOracleProductSubscriptions: upsertOracleProductSubscriptionsFromKnownRows,
   persistSourceSubscriptionPatch: (db, input) => patchUserSourceSubscriptionOracleAware(db, {
     subscriptionId: input.subscription.id,

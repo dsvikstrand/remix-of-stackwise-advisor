@@ -98,6 +98,7 @@
     - large subscription libraries now load incrementally on `/subscriptions`: the initial page fetch returns `50` rows and the UI appends more via an explicit `Load more` action instead of eagerly rendering the full corpus.
     - stored subscription `mode` values may still be `manual` or `auto` for compatibility, but runtime auto behavior should be read from `auto_unlock_enabled`.
     - manual creator add now uses explicit lookup modes (`Handle`, `Creator name`, `Channel URL / ID`) so the UI does not infer user intent from one mixed input field.
+    - repeated subscription feed `404` misses now attempt bounded self-heal before being treated as stale input: stored channel URL recovery still runs first, and a creator-title fallback may repair the subscription only when creator-name search yields one strong canonical winner.
   - Source page surface in `src/pages/SourcePage.tsx` at `/s/:platform/:externalId`:
     - public-readable source header (avatar/title/follower count + source link)
     - authenticated subscribe/unsubscribe actions

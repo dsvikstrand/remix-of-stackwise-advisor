@@ -24,6 +24,12 @@ export type YouTubeChannelSearchPage = {
 
 export type YouTubeChannelSearchMode = 'auto' | 'handle' | 'creator_name' | 'channel_url_or_id';
 
+export type ResolvedYouTubeChannelSearchResult = {
+  channelId: string;
+  channelUrl: string;
+  channelTitle: string | null;
+};
+
 type YouTubeChannelSearchErrorCode =
   | 'INVALID_QUERY'
   | 'SEARCH_DISABLED'
@@ -492,6 +498,31 @@ async function searchYouTubeChannelsByName(query: string, limit: number): Promis
   } catch {
     return null;
   }
+}
+
+export async function resolveStrongYouTubeChannelByCreatorName(
+  query: string,
+): Promise<ResolvedYouTubeChannelSearchResult | null> {
+  const normalizedQuery = String(query || '').trim();
+  if (normalizedQuery.length < 2) return null;
+
+  const results = await searchYouTubeChannelsByName(normalizedQuery, 2);
+  if (!results || results.length === 0) return null;
+
+  const top = results[0];
+  const topScore = scoreYouTubeChannelMatch(normalizedQuery, top);
+  const secondScore = results[1] ? scoreYouTubeChannelMatch(normalizedQuery, results[1]) : null;
+  const safelySingleWinner = results.length === 1
+    ? topScore >= 0.74
+    : topScore >= 0.9 && secondScore !== null && topScore - secondScore >= 0.12;
+
+  if (!safelySingleWinner) return null;
+
+  return {
+    channelId: top.channel_id,
+    channelUrl: top.channel_url,
+    channelTitle: top.channel_title || null,
+  };
 }
 
 function dedupeChannelResults(results: YouTubeChannelSearchResult[]) {

@@ -19,6 +19,7 @@ vi.mock('../../server/services/youtubeSubscriptions', () => ({
 
 import {
   resetYouTubeChannelLookupHelpersForTest,
+  resolveStrongYouTubeChannelByCreatorName,
   scoreYouTubeChannelMatch,
   searchYouTubeChannels,
   YouTubeChannelSearchError,
@@ -205,6 +206,57 @@ describe('youtubeChannelSearch service', () => {
     expect(page.results[0]).toMatchObject({
       channel_id: 'UC12345678901234567890',
     });
+  });
+
+  it('resolves a single strong creator-name winner for recovery', async () => {
+    youtubeiCreateMock.mockResolvedValue({
+      search: vi.fn(async () => ({
+        results: [{
+          type: 'Channel',
+          id: 'UC12345678901234567890',
+          author: {
+            id: 'UC12345678901234567890',
+            name: 'Dave Asprey',
+            url: 'https://www.youtube.com/@DaveAspreyBPR',
+          },
+          description_snippet: { toString: () => 'Biohacking and performance' },
+        }],
+      })),
+    });
+
+    await expect(resolveStrongYouTubeChannelByCreatorName('Dave Asprey')).resolves.toEqual({
+      channelId: 'UC12345678901234567890',
+      channelUrl: 'https://www.youtube.com/@DaveAspreyBPR',
+      channelTitle: 'Dave Asprey',
+    });
+  });
+
+  it('refuses ambiguous creator-name recovery candidates', async () => {
+    youtubeiCreateMock.mockResolvedValue({
+      search: vi.fn(async () => ({
+        results: [{
+          type: 'Channel',
+          id: 'UC1111111111111111111111',
+          author: {
+            id: 'UC1111111111111111111111',
+            name: 'Dr. Mike Hanson',
+            url: 'https://www.youtube.com/@DrMikeHanson',
+          },
+          description_snippet: { toString: () => 'Health topics' },
+        }, {
+          type: 'Channel',
+          id: 'UC2222222222222222222222',
+          author: {
+            id: 'UC2222222222222222222222',
+            name: 'Dr. Mike Wellness',
+            url: 'https://www.youtube.com/@DrMikeWellness',
+          },
+          description_snippet: { toString: () => 'Wellness and health' },
+        }],
+      })),
+    });
+
+    await expect(resolveStrongYouTubeChannelByCreatorName('Dr Mike')).resolves.toBeNull();
   });
 
   it('supports bare handles without requiring the @ prefix', async () => {
