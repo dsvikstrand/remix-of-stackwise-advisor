@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { computeUnlockCost, ensureSourceItemUnlock } from '../../server/services/sourceUnlocks';
+import {
+  computeUnlockCost,
+  ensureSourceItemUnlock,
+  normalizeSupabaseUnlockShadowRow,
+  type SourceItemUnlockRow,
+} from '../../server/services/sourceUnlocks';
 import { createMockSupabase } from './helpers/mockSupabase';
 
 describe('source unlock pricing', () => {
@@ -67,5 +72,45 @@ describe('ensureSourceItemUnlock', () => {
       transcript_status: 'unknown',
       transcript_probe_meta: {},
     });
+  });
+});
+
+describe('normalizeSupabaseUnlockShadowRow', () => {
+  const baseRow: SourceItemUnlockRow = {
+    id: 'unlock_1',
+    source_item_id: 'source_1',
+    source_page_id: 'page_1',
+    status: 'processing',
+    estimated_cost: 1,
+    reserved_by_user_id: 'user_1',
+    reservation_expires_at: '2026-04-07T00:05:00.000Z',
+    reserved_ledger_id: null,
+    auto_unlock_intent_id: null,
+    blueprint_id: null,
+    job_id: 'job_1',
+    last_error_code: null,
+    last_error_message: null,
+    transcript_status: 'unknown',
+    transcript_attempt_count: 0,
+    transcript_no_caption_hits: 0,
+    transcript_last_probe_at: null,
+    transcript_retry_after: null,
+    transcript_probe_meta: {},
+    created_at: '2026-04-07T00:00:00.000Z',
+    updated_at: '2026-04-07T00:00:00.000Z',
+  };
+
+  it('clears Supabase shadow job_id in Oracle queue primary mode', () => {
+    expect(normalizeSupabaseUnlockShadowRow({
+      row: baseRow,
+      oracleQueuePrimaryEnabled: true,
+    }).job_id).toBeNull();
+  });
+
+  it('preserves job_id outside Oracle queue primary mode', () => {
+    expect(normalizeSupabaseUnlockShadowRow({
+      row: baseRow,
+      oracleQueuePrimaryEnabled: false,
+    }).job_id).toBe('job_1');
   });
 });

@@ -64,6 +64,20 @@ export type SourceItemUnlockRow = {
   updated_at: string;
 };
 
+export function normalizeSupabaseUnlockShadowRow(input: {
+  row: SourceItemUnlockRow;
+  oracleQueuePrimaryEnabled: boolean;
+}) {
+  if (!input.oracleQueuePrimaryEnabled || !input.row.job_id) {
+    return input.row;
+  }
+
+  return {
+    ...input.row,
+    job_id: null,
+  };
+}
+
 export function computeUnlockCost(activeSubscriberCount: number) {
   void activeSubscriberCount;
   return round3(MANUAL_UNLOCK_COST);

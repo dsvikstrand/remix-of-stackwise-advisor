@@ -257,6 +257,7 @@ import {
   getSourceItemUnlockBySourceItemId,
   getSourceItemUnlocksBySourceItemIds,
   markUnlockProcessing,
+  normalizeSupabaseUnlockShadowRow,
   reserveUnlock,
   type SourceItemUnlockRow,
 } from './services/sourceUnlocks';
@@ -2821,9 +2822,14 @@ async function persistSourceItemUnlockRowOracleAware(
   }
 
   try {
-    const shadowRow = await writeSupabaseSourceItemUnlockShadow(db, normalizedRow);
-    await upsertOracleProductUnlocksFromKnownRows([shadowRow], input.action);
-    return shadowRow;
+    const shadowInput = normalizeSupabaseUnlockShadowRow({
+      row: normalizedRow,
+      oracleQueuePrimaryEnabled: oracleQueueLedgerPrimaryEnabled,
+    });
+    const shadowRow = await writeSupabaseSourceItemUnlockShadow(db, shadowInput);
+    const authoritativeRow = oracleUnlockLedgerPrimaryEnabled ? normalizedRow : shadowRow;
+    await upsertOracleProductUnlocksFromKnownRows([authoritativeRow], input.action);
+    return authoritativeRow;
   } catch (error) {
     if (oracleUnlockLedgerEnabled && oracleControlPlane) {
       if (previousOracle) {
@@ -13233,7 +13239,7 @@ async function processSourceItemUnlockGenerationJob(input: {
         );
         continue;
       }
-      const message = error instanceof Error ? error.message : String(error);
+      const message = describeUnknownOracleControlPlaneError(error);
       const rawErrorCode = String(error instanceof PipelineError
         ? error.errorCode
         : getSupabaseErrorCode(error) || 'UNLOCK_GENERATION_FAILED').trim().toUpperCase();
