@@ -13331,7 +13331,30 @@ async function processSourceItemUnlockGenerationJob(input: {
         lastErrorMessage: message,
       });
 
-      if (processingUnlockRow) {
+      let unlockRowForFailure = processingUnlockRow;
+      if (!unlockRowForFailure) {
+        try {
+          const currentUnlock = await getSourceItemUnlockBySourceItemIdOracleFirst(db, item.source_item_id);
+          if (
+            currentUnlock
+            && currentUnlock.id === item.unlock_id
+            && (currentUnlock.status === 'reserved' || currentUnlock.status === 'processing')
+            && (!currentUnlock.reserved_by_user_id || currentUnlock.reserved_by_user_id === item.reserved_by_user_id)
+          ) {
+            unlockRowForFailure = currentUnlock;
+          }
+        } catch (unlockReadError) {
+          logUnlockEvent(
+            'source_unlock_fail_transition_lookup_failed',
+            { trace_id: input.traceId, job_id: input.jobId, unlock_id: item.unlock_id },
+            {
+              error: unlockReadError instanceof Error ? unlockReadError.message : String(unlockReadError),
+            },
+          );
+        }
+      }
+
+      if (unlockRowForFailure) {
         try {
           if (item.reserved_cost > 0) {
             await refundReservation(db, {
@@ -13375,6 +13398,7 @@ async function processSourceItemUnlockGenerationJob(input: {
             unlockId: item.unlock_id,
             errorCode,
             errorMessage: message,
+            expectedJobId: unlockRowForFailure.status === 'processing' ? input.jobId : undefined,
           });
         } catch (unlockError) {
           logUnlockEvent(
