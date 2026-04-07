@@ -1,6 +1,6 @@
 # Oracle Deeper Ownership And Supabase Reduction Plan
 
-Status: `active`
+Status: `paused`
 Owner: `Codex / David`
 Last updated: `2026-04-06` (new chapter opened after the post-migration egress reduction chapter reached functional closure)
 
