@@ -1,8 +1,8 @@
 # Oracle Queue Full Ownership Cutover Plan
 
-Status: `active`
+Status: `completed`
 Owner: `Codex / David`
-Last updated: `2026-04-07` (rewritten for fast cutover while the app is still in developer-mode tolerance)
+Last updated: `2026-04-08` (closed after Oracle-only queue burn-in stayed healthy)
 
 ## Purpose
 
@@ -28,7 +28,7 @@ a2) [have] Normal runtime queue behavior no longer performs Supabase `ingestion_
 - no `PATCH /rest/v1/ingestion_jobs`
 - no queue-status fallback reads from Supabase in normal paths
 
-a3) [todo] Queue correctness, worker behavior, user-facing job status, and recovery behavior must stay intact through burn-in.
+a3) [have] Queue correctness, worker behavior, user-facing job status, and recovery behavior stayed intact through the accepted burn-in window.
 
 a4) [have] The temporary rollback lever has now been removed from normal runtime; closure depends on burn-in confidence rather than dual-path fallback.
 
@@ -55,8 +55,8 @@ c2) [have] Queue Ownership Pass 1 and Pass 2 already landed before cutover:
 
 c3) [have] Live Oracle primary checks remain green after those passes.
 
-c4) [have] Oracle-only queue cutover is now landed in live runtime:
-- SHA `8fe457c9e615077a49f864783f470138d1cf5a9d`
+c4) [have] Oracle-only queue cutover is now landed in live runtime and remained healthy through later deploys:
+- live runtime SHA during closure proof: `7865d961bcb38e26912de1781dab111638fedd01`
 - Oracle primary check `PASS`
 - queue shadow writes are skipped in logs with `reason:"oracle_primary_oracle_only"`
 - queue is no longer a leading Supabase family in the latest burn-in samples
@@ -135,7 +135,7 @@ It should be treated as a cutover, not as another optimization pass.
 
 ## Phase 2: Short Burn-In / Canary
 
-i1) [todo] Prove that Oracle-only queue works under:
+i1) [have] Oracle-only queue proved itself under:
 - manual generation
 - source-page unlock generation
 - search generation
@@ -145,32 +145,32 @@ i1) [todo] Prove that Oracle-only queue works under:
 
 i2) [have] Burn-in now proceeds without the old rollback lever in runtime; remaining proof comes from health, logs, and attribution.
 
-i3) [todo] Success target:
+i3) [have] Burn-in evidence accepted:
 - one meaningful burn-in window with queue correctness intact
 - no unresolved user-visible queue regressions
-- no hidden Supabase queue dependency surfacing in logs
+- no hidden Supabase queue dependency surfaced in logs
 
 ## Phase 3: Cleanup And Closure
 
 j1) [have] Obsolete normal-runtime Supabase queue compatibility code and the rollback env gate have now been removed from the active queue path.
 
-j2) [todo] Keep canonical docs aligned as burn-in evidence accumulates.
+j2) [have] Canonical docs were kept aligned through the closure proof window.
 
-j3) [todo] Move this plan to `completed/` once:
+j3) [have] This plan is now moved to `completed/` because:
 - Supabase queue runtime work is zero
 - rollback is no longer needed
 - canary/proof evidence is logged
 
 ## Proof Gates
 
-m1) [todo] Required proof before declaring queue cutover complete:
+m1) [have] Required proof before declaring queue cutover complete:
 - Oracle primary check green
 - public/local health green
 - queue-specific runtime canaries green
 - no unresolved stale-running recovery gaps
 - Supabase attribution shows queue queue-work at or near zero in normal runtime
 
-m2) [todo] Required proof before closing the chapter:
+m2) [have] Required proof before closing the chapter:
 - at least one meaningful burn-in window on Oracle-only queue
 - no unresolved queue correctness incidents
 - no hidden queue read/write dependency still found in logs or route behavior
@@ -179,7 +179,7 @@ m2) [todo] Required proof before closing the chapter:
 
 n1) [have] The old rollback lever was intentionally temporary and has now been removed from normal runtime.
 
-n2) [todo] Any future emergency rollback would require an explicit follow-up code change, not an environment toggle.
+n2) [have] Any future emergency rollback would require an explicit follow-up code change, not an environment toggle.
 
 ## Success Criteria
 
@@ -187,9 +187,9 @@ o1) [have] Oracle now fully owns normal queue operations in runtime.
 
 o2) [have] Supabase `ingestion_jobs` no longer does normal runtime work.
 
-o3) [todo] Queue behavior must remain correct and observable through burn-in.
+o3) [have] Queue behavior remained correct and observable through burn-in.
 
-o4) [todo] The first backend domain with full Oracle ownership is complete once burn-in is accepted and the plan is moved to `completed/`.
+o4) [have] The first backend domain with full Oracle ownership is complete now that burn-in is accepted and the plan is moved to `completed/`.
 
 ## Relationship To Paused Chapter
 

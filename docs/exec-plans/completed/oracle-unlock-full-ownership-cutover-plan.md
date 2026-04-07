@@ -1,6 +1,6 @@
 # Oracle Unlock Full Ownership Cutover Plan
 
-Status: `active`
+Status: `completed`
 Owner: `Codex / David`
 Last updated: `2026-04-08`
 
@@ -40,8 +40,8 @@ a4) [have] Unlock correctness, retry behavior, and user-visible unlock states re
 b1) [have] The broader Oracle-ownership chapter is paused at:
 - [oracle-deeper-ownership-and-supabase-reduction-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/active/on-pause/oracle-deeper-ownership-and-supabase-reduction-plan.md)
 
-b2) [have] The queue full-ownership chapter is also now paused as context:
-- [oracle-queue-full-ownership-cutover-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/active/on-pause/oracle-queue-full-ownership-cutover-plan.md)
+b2) [have] The queue full-ownership chapter is also now completed context:
+- [oracle-queue-full-ownership-cutover-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/completed/oracle-queue-full-ownership-cutover-plan.md)
 
 b3) [have] Recent unlock regressions showed that the main risk is not Oracle itself.
 The main risk is dual-state behavior:
@@ -195,12 +195,12 @@ j2) [have] Success target:
 
 k1) [have] Removed the remaining meaningful Supabase unlock compatibility/product-read residue from the active runtime surfaces and synced canonical docs to the final Oracle-owned posture.
 
-k2) [todo] Move this plan to `completed/` once:
+k2) [have] This plan is now moved to `completed/` because:
 - Supabase unlock runtime work is zero
 - no rehydration remains
 - burn-in evidence is accepted
 
-k3) [have] Functionally, the unlock cutover chapter is complete and ready to archive once the next active implementation root is chosen.
+k3) [have] The unlock cutover chapter is complete and archived.
 
 ## Proof Gates
 
@@ -238,8 +238,8 @@ o4) [have] Unlock behavior remained correct and observable through burn-in.
 p1) [have] The broader Oracle-ownership chapter remains paused as context:
 - [oracle-deeper-ownership-and-supabase-reduction-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/active/on-pause/oracle-deeper-ownership-and-supabase-reduction-plan.md)
 
-p2) [have] The queue full-ownership chapter also remains paused as completed-context:
-- [oracle-queue-full-ownership-cutover-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/active/on-pause/oracle-queue-full-ownership-cutover-plan.md)
+p2) [have] The queue full-ownership chapter also remains completed context:
+- [oracle-queue-full-ownership-cutover-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/completed/oracle-queue-full-ownership-cutover-plan.md)
 
 p3) [have] This unlock plan is the next explicit child chapter for one sharper destination:
 - full Oracle unlock ownership
