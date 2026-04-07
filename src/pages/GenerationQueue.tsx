@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { AppFooter } from '@/components/shared/AppFooter';
 import { AppHeader } from '@/components/shared/AppHeader';
@@ -6,15 +7,18 @@ import { PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
 import { GenerationQueueRow } from '@/components/queue/GenerationQueueRow';
 import { PwaPushCta } from '@/components/pwa/PwaPushCta';
 import { useGenerationQueue } from '@/hooks/useGenerationQueue';
 import { useNotifications, type NotificationItem } from '@/hooks/useNotifications';
+import { ApiRequestError } from '@/lib/subscriptionsApi';
 import {
   getGenerationQueueScopeLabel,
   getGenerationResultActionLabel,
   resolveGenerationResultLinkPath,
 } from '@/lib/generationQueueLabels';
+import { unlockSourcePageVideos } from '@/lib/sourcePagesApi';
 
 type RecentResultRow = {
   id: string;
@@ -27,6 +31,16 @@ type RecentResultRow = {
   insertedCount: number;
   skippedCount: number;
   failedCount: number;
+  retryAction: {
+    platform: 'youtube';
+    externalId: string;
+    item: {
+      video_id: string;
+      video_url: string;
+      title: string;
+      duration_seconds?: number | null;
+    };
+  } | null;
 };
 
 function toInt(value: unknown) {
@@ -43,6 +57,31 @@ function parseRecentResult(item: NotificationItem): RecentResultRow | null {
   const insertedCount = toInt(metadata.inserted_count);
   const skippedCount = toInt(metadata.skipped_count);
   const failedCount = toInt(metadata.failed_count);
+  const rawRetryAction = metadata.retry_action;
+  const retryAction = (() => {
+    if (!rawRetryAction || typeof rawRetryAction !== 'object') return null;
+    const action = rawRetryAction as Record<string, unknown>;
+    if (String(action.kind || '').trim() !== 'retry_source_unlock') return null;
+    if (String(action.platform || '').trim() !== 'youtube') return null;
+    const externalId = String(action.external_id || '').trim();
+    const rawItem = action.item;
+    if (!externalId || !rawItem || typeof rawItem !== 'object') return null;
+    const payload = rawItem as Record<string, unknown>;
+    const videoId = String(payload.video_id || '').trim();
+    const videoUrl = String(payload.video_url || '').trim();
+    const title = String(payload.title || '').trim();
+    if (!videoId || !videoUrl || !title) return null;
+    return {
+      platform: 'youtube' as const,
+      externalId,
+      item: {
+        video_id: videoId,
+        video_url: videoUrl,
+        title,
+        duration_seconds: payload.duration_seconds == null ? null : Number(payload.duration_seconds),
+      },
+    };
+  })();
   return {
     id: item.id,
     type: item.type,
@@ -54,7 +93,14 @@ function parseRecentResult(item: NotificationItem): RecentResultRow | null {
     insertedCount,
     skippedCount,
     failedCount,
+    retryAction,
   };
+}
+
+function getRetryActionErrorMessage(error: unknown) {
+  if (error instanceof ApiRequestError) return error.message || 'Could not restart blueprint generation.';
+  if (error instanceof Error) return error.message || 'Could not restart blueprint generation.';
+  return 'Could not restart blueprint generation.';
 }
 
 function formatRelativeTime(iso: string) {
@@ -72,6 +118,8 @@ function formatRelativeTime(iso: string) {
 
 export default function GenerationQueue() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   const {
     items: activeItems,
@@ -99,6 +147,36 @@ export default function GenerationQueue() {
       .filter((item): item is RecentResultRow => Boolean(item))
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
   }, [notifications]);
+
+  const retrySourceUnlockMutation = useMutation({
+    mutationFn: async (item: RecentResultRow) => {
+      if (!item.retryAction) throw new Error('Retry action unavailable.');
+      return unlockSourcePageVideos({
+        platform: item.retryAction.platform,
+        externalId: item.retryAction.externalId,
+        items: [item.retryAction.item],
+      });
+    },
+    onSuccess: async (_result, item) => {
+      toast({
+        title: 'Blueprint generation restarted',
+        description: item.retryAction?.item.title || 'Queued a new source unlock generation.',
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+        queryClient.invalidateQueries({ queryKey: ['generation-queue-active-jobs'] }),
+        queryClient.invalidateQueries({ queryKey: ['wall-for-you'] }),
+        queryClient.invalidateQueries({ queryKey: ['source-page-videos'] }),
+      ]);
+    },
+    onError: (error) => {
+      toast({
+        title: 'Re-generate failed',
+        description: getRetryActionErrorMessage(error),
+        variant: 'destructive',
+      });
+    },
+  });
 
   return (
     <PageRoot>
@@ -179,8 +257,11 @@ export default function GenerationQueue() {
             ) : (
               recentResults.map((item) => {
                 const isSucceeded = item.type === 'generation_succeeded';
-                const actionLabel = getGenerationResultActionLabel(item.type, item.scope, item.linkPath);
                 const actionPath = resolveGenerationResultLinkPath(item.scope, item.linkPath);
+                const actionLabel = item.retryAction
+                  ? 'Re-generate'
+                  : getGenerationResultActionLabel(item.type, item.scope, item.linkPath);
+                const retryPending = retrySourceUnlockMutation.isPending && retrySourceUnlockMutation.variables?.id === item.id;
                 return (
                   <div key={item.id} className="rounded-lg border border-border/50 bg-background px-3 py-2.5">
                     <div className="flex items-start justify-between gap-2">
@@ -207,9 +288,16 @@ export default function GenerationQueue() {
                         variant="outline"
                         size="sm"
                         className="h-7 px-2 text-[11px]"
-                        onClick={() => navigate(actionPath)}
+                        disabled={retryPending}
+                        onClick={() => {
+                          if (item.retryAction) {
+                            retrySourceUnlockMutation.mutate(item);
+                            return;
+                          }
+                          navigate(actionPath);
+                        }}
                       >
-                        {actionLabel}
+                        {retryPending ? 'Re-generating...' : actionLabel}
                       </Button>
                     </div>
                   </div>

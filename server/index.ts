@@ -11910,6 +11910,7 @@ async function emitGenerationTerminalNotification(
     traceId?: string | null;
     firstBlueprintId?: string | null;
     linkPath?: string | null;
+    retryAction?: import('./services/notifications').RetrySourceUnlockNotificationAction | null;
   },
 ) {
   if (params.inserted <= 0 && params.failed <= 0) return;
@@ -11928,6 +11929,7 @@ async function emitGenerationTerminalNotification(
       traceId: params.traceId || null,
       linkPath: params.linkPath || null,
       firstBlueprintId: params.firstBlueprintId || null,
+      retryAction: params.retryAction || null,
     });
   } catch (notificationError) {
     console.log('[notification_emit_failed]', JSON.stringify({
@@ -13573,6 +13575,27 @@ async function processSourceItemUnlockGenerationJob(input: {
     traceId: input.traceId,
     linkPath: getGenerationNotificationLinkPath({ scope: 'source_item_unlock_generation' }),
     firstBlueprintId,
+    retryAction: (() => {
+      const firstFailure = failures[0];
+      if (!firstFailure || firstFailure.error_code !== 'TRANSCRIPT_UNAVAILABLE') return null;
+      const retryItem = input.items.find((item) => item.unlock_id === firstFailure.unlock_id);
+      const externalId = String(retryItem?.source_channel_id || '').trim();
+      const videoId = String(retryItem?.video_id || '').trim();
+      const videoUrl = String(retryItem?.video_url || '').trim();
+      const title = String(retryItem?.title || '').trim();
+      if (!retryItem || !externalId || !videoId || !videoUrl || !title) return null;
+      return {
+        kind: 'retry_source_unlock' as const,
+        platform: 'youtube' as const,
+        external_id: externalId,
+        item: {
+          video_id: videoId,
+          video_url: videoUrl,
+          title,
+          duration_seconds: retryItem.duration_seconds ?? null,
+        },
+      };
+    })(),
   });
 
   logUnlockEvent(

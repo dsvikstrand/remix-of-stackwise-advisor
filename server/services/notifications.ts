@@ -2,6 +2,18 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 type DbClient = SupabaseClient<any, 'public', any>;
 
+export type RetrySourceUnlockNotificationAction = {
+  kind: 'retry_source_unlock';
+  platform: 'youtube';
+  external_id: string;
+  item: {
+    video_id: string;
+    video_url: string;
+    title: string;
+    duration_seconds?: number | null;
+  };
+};
+
 export type NotificationType =
   | 'comment_reply'
   | 'generation_started'
@@ -48,6 +60,7 @@ export type NotificationEvent =
       traceId?: string | null;
       linkPath?: string | null;
       firstBlueprintId?: string | null;
+      retryAction?: RetrySourceUnlockNotificationAction | null;
     };
 
 type NotificationInsertInput = {
@@ -200,6 +213,7 @@ function buildGenerationTerminalEvent(
       blueprint_title: blueprintTitle || null,
       failure_summary: failureSummary || null,
       trace_id: event.traceId || null,
+      retry_action: event.retryAction || null,
     },
     dedupeKey,
   };
