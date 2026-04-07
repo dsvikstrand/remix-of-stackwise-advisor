@@ -61,6 +61,10 @@
 - Runtime mode: single-service `combined`
 - Keep-alive background work switch: `RUN_INGESTION_WORKER=true`
 - Live backend config source: `/etc/agentic-backend.env`
+- Current queue cutover posture:
+  - `ORACLE_QUEUE_LEDGER_MODE=primary` is expected for the active Oracle-owned queue runtime.
+  - normal queue runtime should now be Oracle-only by default.
+  - `ORACLE_QUEUE_SUPABASE_COMPAT_ENABLED=true` is the short-lived rollback lever if queue cutover regressions need the older Supabase compatibility path restored.
 - Node runtime contract:
   - local repo baseline is Node `20.20.0` from `.nvmrc`
   - Oracle systemd is pinned to `/home/ubuntu/.nvm/versions/node/v20.20.0/bin/node`

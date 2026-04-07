@@ -371,6 +371,7 @@ import {
   getQueueShadowActionClass,
   getQueueShadowChangedFields,
   getQueueShadowSkipReason,
+  isOracleOnlyQueueEnabled,
   mapQueueShadowInsertValues,
   mapQueueShadowUpdateValues,
 } from './services/queueShadowPolicy';
@@ -745,6 +746,14 @@ const oracleQueueLedgerEnabled = (
   || oracleQueueLedgerMode === 'primary'
 );
 const oracleQueueLedgerPrimaryEnabled = oracleQueueLedgerMode === 'primary';
+const oracleQueueSupabaseCompatEnabled = parseRuntimeFlag(
+  process.env.ORACLE_QUEUE_SUPABASE_COMPAT_ENABLED,
+  false,
+);
+const oracleQueueOracleOnlyEnabled = isOracleOnlyQueueEnabled({
+  primaryEnabled: oracleQueueLedgerPrimaryEnabled,
+  supabaseCompatEnabled: oracleQueueSupabaseCompatEnabled,
+});
 const oracleSubscriptionLedgerEnabled = (
   oracleSubscriptionLedgerMode === 'dual'
   || oracleSubscriptionLedgerMode === 'primary'
@@ -1112,6 +1121,16 @@ async function countQueueDepthForAdmission(
   }
 
   if (!oracleQueueAdmissionMirrorEnabled || !oracleControlPlane || !supportsOracleQueueAdmissionMirror(input)) {
+    if (oracleQueueOracleOnlyEnabled) {
+      logQueueOracleOnlyBypass({
+        action: 'count_queue_depth',
+        scope: input?.scope,
+        scopes: input?.scopes,
+        userId: input?.userId,
+        reason: 'oracle_only_no_supabase_fallback',
+      });
+      return 0;
+    }
     return countQueueDepth(db, input);
   }
 
@@ -1130,6 +1149,16 @@ async function countQueueDepthForAdmission(
       action: 'count_queue_depth',
       error: error instanceof Error ? error.message : String(error),
     }));
+    if (oracleQueueOracleOnlyEnabled) {
+      logQueueOracleOnlyBypass({
+        action: 'count_queue_depth',
+        scope: input?.scope,
+        scopes: input?.scopes,
+        userId: input?.userId,
+        reason: 'oracle_only_admission_mirror_failed',
+      });
+      return 0;
+    }
     return countQueueDepth(db, input);
   }
 }
@@ -1167,6 +1196,16 @@ async function countQueueWorkItemsForAdmission(
   }
 
   if (!oracleQueueAdmissionMirrorEnabled || !oracleControlPlane || !supportsOracleQueueAdmissionMirror(input)) {
+    if (oracleQueueOracleOnlyEnabled) {
+      logQueueOracleOnlyBypass({
+        action: 'count_queue_work_items',
+        scope: input?.scope,
+        scopes: input?.scopes,
+        userId: input?.userId,
+        reason: 'oracle_only_no_supabase_fallback',
+      });
+      return 0;
+    }
     return countQueueWorkItems(db, input);
   }
 
@@ -1185,6 +1224,16 @@ async function countQueueWorkItemsForAdmission(
       action: 'count_queue_work_items',
       error: error instanceof Error ? error.message : String(error),
     }));
+    if (oracleQueueOracleOnlyEnabled) {
+      logQueueOracleOnlyBypass({
+        action: 'count_queue_work_items',
+        scope: input?.scope,
+        scopes: input?.scopes,
+        userId: input?.userId,
+        reason: 'oracle_only_admission_mirror_failed',
+      });
+      return 0;
+    }
     return countQueueWorkItems(db, input);
   }
 }
@@ -1348,6 +1397,16 @@ async function upsertSupabaseQueueShadow(
 ) {
   const action = String(options?.action || 'queue_shadow_write').trim() || 'queue_shadow_write';
   const current = options?.current || null;
+  if (oracleQueueOracleOnlyEnabled) {
+    logQueueShadowWriteSkipped({
+      action,
+      actionClass: 'generic',
+      jobId: job.id,
+      scope: job.scope,
+      reason: 'oracle_primary_oracle_only',
+    });
+    return job;
+  }
   const changedFields = current?.id === job.id
     ? getQueueShadowChangedFields(current, job)
     : null;
@@ -1453,6 +1512,24 @@ function logQueueSupabaseFallbackRead(input: {
     scopes: input.scopes || null,
     user_id: input.userId || null,
     job_id: input.jobId || null,
+  }));
+}
+
+function logQueueOracleOnlyBypass(input: {
+  action: string;
+  scope?: string | null;
+  scopes?: string[] | null;
+  userId?: string | null;
+  jobId?: string | null;
+  reason: string;
+}) {
+  console.warn('[oracle-control-plane] queue_oracle_only_bypass', JSON.stringify({
+    action: input.action,
+    scope: input.scope || null,
+    scopes: input.scopes || null,
+    user_id: input.userId || null,
+    job_id: input.jobId || null,
+    reason: input.reason,
   }));
 }
 
@@ -1583,6 +1660,18 @@ async function finalizeIngestionJobWithMirror(
     });
     if (!finalizedJob) return null;
 
+    if (oracleQueueOracleOnlyEnabled) {
+      logQueueShadowWriteSkipped({
+        action: `${input.action}_finalize_shadow`,
+        actionClass: 'terminal',
+        jobId: finalizedJob.id,
+        scope: finalizedJob.scope,
+        reason: 'oracle_primary_oracle_only',
+      });
+      await upsertOracleJobActivityFromKnownRow(finalizedJob, input.action);
+      return finalizedJob;
+    }
+
     try {
       await upsertSupabaseQueueShadow(db, finalizedJob, {
         action: `${input.action}_finalize_shadow`,
@@ -1647,6 +1736,20 @@ async function enqueueIngestionJobWithMirror(
       controlDb: oracleControlPlane,
       job: normalizedJob,
     });
+    if (oracleQueueOracleOnlyEnabled) {
+      logQueueShadowWriteSkipped({
+        action: 'enqueue_insert_shadow',
+        actionClass: 'generic',
+        jobId: normalizedJob.id,
+        scope: normalizedJob.scope,
+        reason: 'oracle_primary_oracle_only',
+      });
+      await upsertOracleJobActivityFromKnownRow(normalizedJob, 'enqueue_insert');
+      return {
+        data: normalizedJob,
+        error: null,
+      };
+    }
     const result = await db
       .from('ingestion_jobs')
       .insert(mapQueueShadowInsertValues(normalizedJob))
@@ -1720,6 +1823,17 @@ async function markRunningIngestionJobsFailedWithMirror(
       finishedAt,
     });
     for (const job of updatedRows) {
+      if (oracleQueueOracleOnlyEnabled) {
+        logQueueShadowWriteSkipped({
+          action: `${input.action}_mark_failed_shadow`,
+          actionClass: 'terminal',
+          jobId: job.id,
+          scope: job.scope,
+          reason: 'oracle_primary_oracle_only',
+        });
+        await upsertOracleJobActivityFromKnownRow(job, input.action);
+        continue;
+      }
       try {
         await upsertSupabaseQueueShadow(db, job, {
           action: `${input.action}_mark_failed_shadow`,
@@ -1898,6 +2012,25 @@ async function failClaimedIngestionJobWithMirror(
     });
     if (!failedJob) return null;
 
+    if (oracleQueueOracleOnlyEnabled) {
+      logQueueShadowWriteSkipped({
+        action: `${input.action}_shadow`,
+        actionClass: getQueueShadowActionClass({
+          action: `${input.action}_shadow`,
+          current: input.job,
+          next: failedJob,
+          changedFields: input.job.id === failedJob.id
+            ? getQueueShadowChangedFields(input.job, failedJob)
+            : null,
+        }),
+        jobId: failedJob.id,
+        scope: failedJob.scope,
+        reason: 'oracle_primary_oracle_only',
+      });
+      await upsertOracleJobActivityFromKnownRow(failedJob, input.action);
+      return failedJob;
+    }
+
     try {
       await upsertSupabaseQueueShadow(db, failedJob, {
         action: `${input.action}_shadow`,
@@ -1967,6 +2100,15 @@ async function listLatestUserIngestionJobsOracleFirst(
       }));
     }
   }
+  if (oracleQueueOracleOnlyEnabled) {
+    logQueueOracleOnlyBypass({
+      action: 'list_latest_for_user_scope',
+      scope: input.scope,
+      userId: input.userId,
+      reason: 'oracle_only_primary',
+    });
+    return [];
+  }
   if (oracleQueueLedgerPrimaryEnabled) {
     logQueueSupabaseFallbackRead({
       action: 'list_latest_for_user_scope',
@@ -2024,6 +2166,15 @@ async function listActiveUserIngestionJobsOracleFirst(
     }
   }
 
+  if (oracleQueueOracleOnlyEnabled) {
+    logQueueOracleOnlyBypass({
+      action: 'list_active_for_user',
+      scopes: input.scopes,
+      userId: input.userId,
+      reason: 'oracle_only_primary',
+    });
+    return [];
+  }
   if (oracleQueueLedgerPrimaryEnabled) {
     logQueueSupabaseFallbackRead({
       action: 'list_active_for_user',
@@ -2091,6 +2242,15 @@ async function getUserIngestionJobByIdOracleFirst(
     }
   }
 
+  if (oracleQueueOracleOnlyEnabled) {
+    logQueueOracleOnlyBypass({
+      action: 'get_user_job_by_id',
+      userId: input.userId,
+      jobId: normalizedJobId,
+      reason: 'oracle_only_primary',
+    });
+    return null;
+  }
   if (oracleQueueLedgerPrimaryEnabled) {
     logQueueSupabaseFallbackRead({
       action: 'get_user_job_by_id',
@@ -2155,6 +2315,14 @@ async function getActiveIngestionJobForScopeOracleFirst(input: {
   }
 
   const serviceDb = getServiceSupabaseClient();
+  if (oracleQueueOracleOnlyEnabled) {
+    logQueueOracleOnlyBypass({
+      action: 'get_active_for_scope',
+      scope: input.scope,
+      reason: 'oracle_only_primary',
+    });
+    return null;
+  }
   if (!serviceDb) {
     return null;
   }
@@ -2219,6 +2387,14 @@ async function listQueuedJobsForScopesOracleFirst(input: {
   }
 
   const serviceDb = getServiceSupabaseClient();
+  if (oracleQueueOracleOnlyEnabled) {
+    logQueueOracleOnlyBypass({
+      action: 'list_queued_jobs_for_scopes',
+      scopes: input.scopes,
+      reason: 'oracle_only_primary',
+    });
+    return [];
+  }
   if (!serviceDb) {
     return [];
   }
@@ -6129,6 +6305,14 @@ async function listPendingRefreshBlueprintIdsOracleFirst(
     return pendingIds;
   }
 
+  if (oracleQueueOracleOnlyEnabled) {
+    logQueueOracleOnlyBypass({
+      action: 'list_pending_refresh_blueprint_ids',
+      scope: 'blueprint_youtube_refresh',
+      reason: 'oracle_only_primary',
+    });
+    return new Set<string>();
+  }
   if (oracleQueueLedgerPrimaryEnabled) {
     logQueueSupabaseFallbackRead({
       action: 'list_pending_refresh_blueprint_ids',
@@ -6187,6 +6371,13 @@ async function getLatestIngestionJobOracleFirst() {
     }
   }
 
+  if (oracleQueueOracleOnlyEnabled) {
+    logQueueOracleOnlyBypass({
+      action: 'get_latest_ingestion_job',
+      reason: 'oracle_only_primary',
+    });
+    return null;
+  }
   const serviceDb = getServiceSupabaseClient();
   if (!serviceDb) {
     return null;
@@ -6239,6 +6430,14 @@ async function getLatestIngestionJobForScopeOracleFirst(input: {
     }
   }
 
+  if (oracleQueueOracleOnlyEnabled) {
+    logQueueOracleOnlyBypass({
+      action: 'get_latest_ingestion_job_for_scope',
+      scope: normalizedScope,
+      reason: 'oracle_only_primary',
+    });
+    return null;
+  }
   const serviceDb = getServiceSupabaseClient();
   if (!serviceDb) {
     return null;
@@ -6337,6 +6536,20 @@ async function getUnlockJobsByIdsOracleFirst(
     }
   }
 
+  if (oracleQueueOracleOnlyEnabled) {
+    logQueueOracleOnlyBypass({
+      action: 'get_unlock_jobs_by_ids',
+      jobId: normalizedIds.length === 1 ? normalizedIds[0] : null,
+      reason: 'oracle_only_primary',
+    });
+    return new Map<string, {
+      id: string;
+      status: string;
+      scope: string;
+      started_at: string | null;
+      updated_at: string | null;
+    }>();
+  }
   if (oracleQueueLedgerPrimaryEnabled) {
     logQueueSupabaseFallbackRead({
       action: 'get_unlock_jobs_by_ids',
@@ -6417,6 +6630,14 @@ async function listRunningUnlockJobsOracleFirst(
     }
   }
 
+  if (oracleQueueOracleOnlyEnabled) {
+    logQueueOracleOnlyBypass({
+      action: 'list_running_unlock_jobs',
+      scope: 'source_item_unlock_generation',
+      reason: 'oracle_only_primary',
+    });
+    return [];
+  }
   if (oracleQueueLedgerPrimaryEnabled) {
     logQueueSupabaseFallbackRead({
       action: 'list_running_unlock_jobs',
@@ -6677,6 +6898,14 @@ async function getQueueHealthSnapshotOracleFirst(input: {
     }
   }
 
+  if (oracleQueueOracleOnlyEnabled) {
+    logQueueOracleOnlyBypass({
+      action: 'get_queue_health_snapshot',
+      scopes: [...QUEUED_INGESTION_SCOPES],
+      reason: 'oracle_only_primary',
+    });
+    return null;
+  }
   const serviceDb = getServiceSupabaseClient();
   if (!serviceDb) {
     return null;
@@ -11110,6 +11339,14 @@ async function hasPendingSourceAutoUnlockRetryJob(
     return oraclePending;
   }
 
+  if (oracleQueueOracleOnlyEnabled) {
+    logQueueOracleOnlyBypass({
+      action: 'has_pending_source_auto_unlock_retry_job',
+      scope: 'source_auto_unlock_retry',
+      reason: 'oracle_only_primary',
+    });
+    return false;
+  }
   if (oracleQueueLedgerPrimaryEnabled) {
     logQueueSupabaseFallbackRead({
       action: 'has_pending_source_auto_unlock_retry_job',
@@ -11177,6 +11414,14 @@ async function hasPendingSourceTranscriptRevalidateJob(
     return oraclePending;
   }
 
+  if (oracleQueueOracleOnlyEnabled) {
+    logQueueOracleOnlyBypass({
+      action: 'has_pending_source_transcript_revalidate_job',
+      scope: 'source_transcript_revalidate',
+      reason: 'oracle_only_primary',
+    });
+    return false;
+  }
   if (oracleQueueLedgerPrimaryEnabled) {
     logQueueSupabaseFallbackRead({
       action: 'has_pending_source_transcript_revalidate_job',
@@ -11677,6 +11922,19 @@ async function recoverStaleIngestionJobs(
       return [];
     }
 
+    if (oracleQueueOracleOnlyEnabled) {
+      const nowIso = new Date().toISOString();
+      const updatedRows = await markOracleRunningJobsFailed({
+        controlDb: oracleControlPlane,
+        jobIds: staleIds,
+        errorCode: 'STALE_RUNNING_RECOVERY',
+        errorMessage: 'Recovered stale running job',
+        finishedAt: nowIso,
+      });
+      await upsertOracleJobActivityFromKnownRows(updatedRows, 'recover_stale_jobs_oracle_only');
+      return updatedRows;
+    }
+
     const nowIso = new Date().toISOString();
     const { data, error } = await db
       .from('ingestion_jobs')
@@ -11744,6 +12002,15 @@ async function getActiveManualRefreshJob(db: ReturnType<typeof createClient>, us
       user_id: userId,
       error: error instanceof Error ? error.message : String(error),
     }));
+    if (oracleQueueOracleOnlyEnabled) {
+      logQueueOracleOnlyBypass({
+        action: 'get_active_manual_refresh_job',
+        userId,
+        scope: 'manual_refresh_selection',
+        reason: 'oracle_only_primary',
+      });
+      return null;
+    }
     return getActiveManualRefreshJobFromSupabase(db, userId);
   }
 }
@@ -15429,6 +15696,8 @@ async function bootstrapOracleControlPlaneState() {
   console.log('[oracle-control-plane] bootstrap complete', JSON.stringify({
     scheduler_mode: oracleControlPlaneConfig.subscriptionSchedulerMode,
     queue_ledger_mode: oracleQueueLedgerMode,
+    queue_supabase_compat_enabled: oracleQueueSupabaseCompatEnabled,
+    queue_oracle_only_enabled: oracleQueueOracleOnlyEnabled,
     subscription_ledger_mode: oracleSubscriptionLedgerMode,
     unlock_ledger_mode: oracleUnlockLedgerMode,
     feed_ledger_mode: oracleFeedLedgerMode,
@@ -16519,6 +16788,8 @@ if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
   console.log('[oracle-control-plane] enabled', JSON.stringify({
     scheduler_mode: oracleControlPlaneConfig.subscriptionSchedulerMode,
     queue_ledger_mode: oracleQueueLedgerMode,
+    queue_supabase_compat_enabled: oracleQueueSupabaseCompatEnabled,
+    queue_oracle_only_enabled: oracleQueueOracleOnlyEnabled,
     subscription_ledger_mode: oracleSubscriptionLedgerMode,
     unlock_ledger_mode: oracleUnlockLedgerMode,
     feed_ledger_mode: oracleFeedLedgerMode,

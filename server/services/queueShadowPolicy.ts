@@ -52,6 +52,13 @@ export type QueueShadowActionClass =
   | 'heartbeat_lease'
   | 'generic';
 
+export function isOracleOnlyQueueEnabled(input: {
+  primaryEnabled: boolean;
+  supabaseCompatEnabled: boolean;
+}) {
+  return input.primaryEnabled && !input.supabaseCompatEnabled;
+}
+
 function normalizeComparableValue(job: IngestionJobRow | null | undefined, field: QueueShadowComparableField) {
   if (field === 'payload') {
     return JSON.stringify(job?.payload || null);

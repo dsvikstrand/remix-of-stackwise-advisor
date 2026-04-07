@@ -113,12 +113,10 @@
     - disconnect revokes+unlinks OAuth tokens but keeps existing app subscriptions unchanged.
     - includes manual `Refresh` popup flow: scan new subscription videos, select items, and start async background generation.
   - Queue runtime ownership is now split cleanly:
-    - Oracle queue-ledger `primary` is the normal source for hot queue status reads (`active by scope`, `latest`, owner job detail/order) and those reads treat an empty Oracle result as authoritative instead of automatically falling through to Supabase.
-    - Supabase `ingestion_jobs` remains compatibility shadow for queue lifecycle writes, but lease-heartbeat-only refreshes no longer perform a full shadow upsert on every touch.
-    - In queue-ledger `primary`, claim-to-`running` transitions now also skip the Supabase compatibility upsert; Oracle remains the authoritative live worker-state store while Supabase is refreshed again on later queued/retry/terminal transitions only.
-    - Oracle-primary retry requeues now also stay Oracle-local: when a claimed job is rescheduled back to `queued`, the runtime no longer patches Supabase just to mirror that retry-state transition.
-    - Remaining queue reads that still reach Supabase in `primary` are explicit fallback paths and are logged as `queue_fallback_read` for attribution and egress tracking.
-    - That fallback coverage now also includes latest-for-user, active-for-user, refresh-pending dedupe, unlock-job lookup, and retry-dedupe queue reads, so queue egress attribution can separate hidden fallback reads from normal Oracle-first operation.
+    - Oracle queue-ledger `primary` is now the intended normal operational queue system for enqueue, claim/start, lease, retry/requeue, terminal state, and hot queue status reads (`active by scope`, `latest`, owner job detail/order).
+    - In the current cutover baseline, Oracle-primary queue runtime defaults to Oracle-only behavior: normal queue writes and normal queue read misses no longer fall through to Supabase `ingestion_jobs`.
+    - The temporary rollback lever is explicit: setting `ORACLE_QUEUE_SUPABASE_COMPAT_ENABLED=true` restores the older Supabase queue compatibility path while Oracle-only queue is still burning in.
+    - Oracle queue reads continue to treat empty Oracle results as authoritative in `primary`; any queue bypass during Oracle-only mode is logged as `queue_oracle_only_bypass` rather than silently rereading Supabase.
   - Subscription runtime ownership now follows the same Oracle-first pattern:
     - Oracle subscription-ledger `primary` is the normal source for hot subscription reads (`by id`, `by user + channel`, source-page subscription access, active lists, subscriber counts) and those reads treat an empty Oracle result as authoritative instead of automatically falling through to Supabase.
     - Supabase `user_source_subscriptions` remains compatibility shadow, but no-op shadow patches are skipped when the meaningful persisted fields are already unchanged.

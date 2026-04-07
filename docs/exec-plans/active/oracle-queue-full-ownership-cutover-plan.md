@@ -2,16 +2,22 @@
 
 Status: `active`
 Owner: `Codex / David`
-Last updated: `2026-04-07`
+Last updated: `2026-04-07` (rewritten for fast cutover while the app is still in developer-mode tolerance)
 
 ## Purpose
 
 Make Oracle the only normal operational queue system for Bleu.
 
-This is not a “deeper ownership” exploration plan. It is a cutover plan with an explicit end state:
+This is not a “deeper ownership” exploration plan. It is a fast cutover plan with an explicit end state:
 - Oracle owns enqueue, claim, lease, retry, terminal state, and normal queue reads
 - Supabase `ingestion_jobs` stops participating in normal runtime queue behavior
 - any remaining Supabase queue usage becomes rollback-only, manual migration tooling, or retired code
+
+This plan intentionally optimizes for speed over maximum caution because the app is still operating in developer-mode tolerance:
+- temporary downtime is acceptable
+- debugging pain is acceptable
+- long incremental soak ladders are not the priority
+- the priority is to reach Oracle-only queue ownership quickly
 
 ## Explicit End State
 
@@ -24,7 +30,7 @@ a2) [todo] Normal runtime queue behavior no longer performs Supabase `ingestion_
 
 a3) [todo] Queue correctness, worker behavior, user-facing job status, and recovery behavior remain intact under Oracle-only operation.
 
-a4) [todo] Rollback remains explicit until the cutover is fully proven.
+a4) [todo] Rollback remains explicit until the Oracle-only queue path survives a short burn-in window.
 
 ## Why This Plan Exists
 
@@ -58,6 +64,10 @@ c5) [have] That means the system is ready for a real queue cutover question:
 - not “can Oracle be queue-primary?”
 - but “what still prevents Oracle-only queue?”
 
+c6) [have] The current operating assumption for this plan is:
+- the team prefers a fast Oracle-only queue cutover now
+- rather than several more small shadow-reduction passes with long verification gaps
+
 ## Scope Lock
 
 d1) [todo] This plan is queue-only.
@@ -85,74 +95,47 @@ e2) [have] Main queue operations to sever from Supabase:
 - terminal finalize/fail
 - owner/latest/status reads
 
-## Queue Cutover Ladder
+## Fast Cutover Shape
 
-f1) [have] Stage 1: `primary + full shadow`
-- historical state before the recent queue passes
+f1) [have] Historical ladder context:
+- `primary + full shadow` -> `primary + minimal shadow` has already happened
 
-f2) [have] Stage 2: `primary + minimal shadow`
-- current live state after Queue Pass 1 and Pass 2
+f2) [todo] This plan now aims directly for:
+- `Oracle-only operational path`
 
-f3) [todo] Stage 3: `primary + fallback-only`
-- Oracle handles all normal queue writes and reads
-- Supabase queue access is disabled in normal runtime and retained only behind an explicit rollback/fallback lever
+f3) [todo] Intermediate `fallback-only` is a temporary execution aid if needed during the cutover, not the desired resting state.
 
-f4) [todo] Stage 4: `Oracle-only operational path`
-- Supabase queue codepaths are no longer part of runtime behavior
-- rollback is retired after proof closure
+## Phase 0: One Fast Inventory
 
-## Phase 0: Dependency Inventory
+g1) [todo] Do one fast but complete inventory of every remaining Supabase queue touchpoint.
 
-g1) [todo] Inventory every remaining normal-path Supabase queue read/write.
-
-g2) [todo] Classify each as:
-- true runtime requirement
+g2) [todo] Inventory buckets:
+- normal runtime write
+- normal runtime read
+- stale-job / retry / dedupe dependency
+- user/ops status dependency
 - rollback-only dependency
-- debug/ops dependency
-- stale legacy compatibility
 
-g3) [todo] Output of this phase:
-- one concrete inventory of everything that still touches Supabase `ingestion_jobs`
-- one keep/remove decision per touchpoint
+g3) [todo] Output:
+- one explicit remove/keep-for-rollback decision per remaining Supabase queue touchpoint
 
-## Phase 1: Hidden Dependency Audit
+g4) [todo] This phase should be short and decisive, not a long audit chapter.
 
-h1) [todo] Audit every user/ops/runtime path that may still assume Supabase queue truth exists.
+## Phase 1: Oracle-Only Cutover Wave
 
-h2) [todo] Required audit buckets:
-- user job status reads
-- latest active job lookups
-- queue-depth / health / position reads
-- stale-job recovery
-- retry dedupe / pending dedupe
-- debug/ops endpoints
+h1) [todo] Cut normal runtime queue writes and reads over to Oracle in one focused implementation wave.
 
-h3) [todo] Output of this phase:
-- no unresolved “surprise” queue dependency remains before cutover
+h2) [todo] Target in this wave:
+- remove Supabase queue writes from enqueue/start/lease/retry/terminal
+- remove Supabase queue reads from owner/latest/status/health/dedupe paths
+- keep only one explicit rollback path if Oracle queue behavior regresses
 
-## Phase 2: Oracle-Only Queue Writes
+h3) [todo] This is the main chapter event.
+It should be treated as a cutover, not as another optimization pass.
 
-i1) [todo] Remove Supabase queue writes from normal enqueue/start/lease/retry/terminal flows.
+## Phase 2: Short Burn-In / Canary
 
-i2) [todo] Keep a temporary rollback lever so the prior shadow mode can be restored quickly if Oracle queue behavior regresses.
-
-i3) [todo] Success target:
-- normal runtime queue writes to Supabase fall to zero
-
-## Phase 3: Oracle-Only Queue Reads
-
-j1) [todo] Remove Supabase queue reads from normal runtime paths.
-
-j2) [todo] User-facing and ops-facing queue status should read Oracle-backed queue truth only.
-
-j3) [todo] Any remaining Supabase queue read should be:
-- rollback-only
-- explicit operator tooling
-- or deleted
-
-## Phase 4: Soak, Canary, And Rollback Proof
-
-k1) [todo] Prove that Oracle-only queue works under:
+i1) [todo] Prove that Oracle-only queue works under:
 - manual generation
 - source-page unlock generation
 - search generation
@@ -160,20 +143,20 @@ k1) [todo] Prove that Oracle-only queue works under:
 - stale-running recovery
 - retry/requeue paths
 
-k2) [todo] Keep rollback explicit during this phase.
+i2) [todo] Keep rollback explicit during this short burn-in window.
 
-k3) [todo] Success target:
-- multiple soak windows with queue correctness intact
-- no queue-ledger parity regressions
-- no user-visible job-state regressions
+i3) [todo] Success target:
+- one meaningful burn-in window with queue correctness intact
+- no unresolved user-visible queue regressions
+- no hidden Supabase queue dependency surfacing in logs
 
-## Phase 5: Runtime Cleanup And Closure
+## Phase 3: Cleanup And Closure
 
-l1) [todo] Remove obsolete Supabase queue compatibility code after Oracle-only operation is proven.
+j1) [todo] Remove obsolete Supabase queue compatibility code after Oracle-only operation is proven.
 
-l2) [todo] Update canonical docs so queue is documented as Oracle-only operationally.
+j2) [todo] Update canonical docs so queue is documented as Oracle-only operationally.
 
-l3) [todo] Move this plan to `completed/` once:
+j3) [todo] Move this plan to `completed/` once:
 - Supabase queue runtime work is zero
 - rollback is no longer needed
 - canary/proof evidence is logged
@@ -188,7 +171,7 @@ m1) [todo] Required proof before declaring queue cutover complete:
 - Supabase attribution shows queue queue-work at or near zero in normal runtime
 
 m2) [todo] Required proof before removing rollback:
-- at least one meaningful soak window on Oracle-only queue
+- at least one meaningful burn-in window on Oracle-only queue
 - no unresolved queue correctness incidents
 - no hidden queue read/write dependency still found in logs or route behavior
 
@@ -203,6 +186,8 @@ n3) [todo] Rollback trigger examples:
 - stuck jobs caused by missing Oracle-only handling
 - missing user-visible job updates
 - failed stale-running recovery
+
+n4) [todo] Rollback should be treated as a short-lived escape hatch, not a permanent dual-system operating mode.
 
 ## Success Criteria
 
