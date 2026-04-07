@@ -429,15 +429,16 @@ export async function listWallForYouFeed(input: {
   }) => Promise<any[]>;
 }) {
   const { db, userId, normalizeTranscriptTruthStatus, limit = 100 } = input;
+  const fetchLimit = Math.min(Math.max(limit * 3, limit), 500);
   const feedRows = input.readFeedRows
-    ? { data: await input.readFeedRows({ db, userId, limit }), error: null }
+    ? { data: await input.readFeedRows({ db, userId, limit: fetchLimit }), error: null }
     : await db
       .from('user_feed_items')
       .select('id, source_item_id, blueprint_id, state, last_decision_code, generated_at_on_wall, created_at')
       .eq('user_id', userId)
       .order('generated_at_on_wall', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
-      .limit(limit);
+      .limit(fetchLimit);
   const resolvedFeedRows = Array.isArray((feedRows as any)?.data)
     ? (feedRows as any).data
     : feedRows;
@@ -593,5 +594,12 @@ export async function listWallForYouFeed(input: {
     });
   }
 
-  return items;
+  items.sort((left, right) => {
+    const rightMs = Number.isFinite(Date.parse(right.createdAt)) ? Date.parse(right.createdAt) : 0;
+    const leftMs = Number.isFinite(Date.parse(left.createdAt)) ? Date.parse(left.createdAt) : 0;
+    if (rightMs !== leftMs) return rightMs - leftMs;
+    return String(right.feedItemId).localeCompare(String(left.feedItemId));
+  });
+
+  return items.slice(0, limit);
 }

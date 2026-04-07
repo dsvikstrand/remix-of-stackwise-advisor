@@ -94,6 +94,7 @@
     - subscription sync now tries to land newly discovered uploads on Home `For You` earlier: reusable ready blueprints can attach immediately, and otherwise the unlockable feed row may be inserted before the slower auto-unlock branch finishes.
     - Home `For You` now uses two feed-row clocks: locked/unlockable rows keep their original `created_at`, while the first locked -> generated/published promotion stamps `generated_at_on_wall` so the resulting blueprint can surface once at generation completion time.
     - later updates on an already-generated feed row do not refresh `generated_at_on_wall`; the republish happens only on first blueprint promotion.
+    - mixed `For You` ordering still uses one effective wall timestamp across card kinds: generated rows sort by `generated_at_on_wall || created_at`, while locked rows sort by `created_at`, so generated rows do not pin above newer locked rows just because `generated_at_on_wall` is non-null.
     - new manual/source-page/imported subscriptions now default `auto_unlock_enabled=false`; reactivating an existing subscription preserves that row's prior saved toggle value.
     - large subscription libraries now load incrementally on `/subscriptions`: the initial page fetch returns `50` rows and the UI appends more via an explicit `Load more` action instead of eagerly rendering the full corpus.
     - stored subscription `mode` values may still be `manual` or `auto` for compatibility, but runtime auto behavior should be read from `auto_unlock_enabled`.

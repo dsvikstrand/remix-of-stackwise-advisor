@@ -291,6 +291,7 @@ f4) User selects `Generate Blueprint` on a result to generate and save directly 
 f5) User can subscribe to a result’s channel from the same search card.
 f6) On subscribe/reactivate, user gets one subscription notice card; sparse Home `For You` walls (`<20` visible cards) may also receive up to the latest `5` creator videos as historical backfill, preferring ready blueprint rows when reusable output already exists and otherwise inserting locked cards only.
 f6a) Home `For You` uses two ordering clocks for personal feed rows: locked/unlockable cards are ordered by first wall arrival, while the first locked -> generated blueprint promotion gets a fresh generated wall timestamp so that blueprint can resurface once when it becomes usable.
+f6b) Mixed Home `For You` ordering is still one unified latest-first feed: locked cards sort by wall arrival, generated cards sort by generated wall time when present, and generated cards must not outrank newer locked cards solely because they are generated.
 f7) Auto-channel pipeline publishes eligible items automatically and labels Home `For You` cards with posted channel outcomes.
 f8) User scans, remixes, and adds insights.
 f9) Eligible items are promoted to Home feed channels after gates.
