@@ -15402,13 +15402,19 @@ async function bootstrapOracleControlPlaneState() {
   let unlockLedgerCount: number | null = null;
   let unlockLedgerActiveCount: number | null = null;
   if (oracleUnlockLedgerEnabled) {
-    const unlockLedgerBootstrap = await syncOracleUnlockLedgerFromSupabase({
-      controlDb: oracleControlPlane,
-      db,
-      limit: oracleControlPlaneConfig.unlockLedgerBootstrapLimit,
-    });
-    unlockLedgerCount = unlockLedgerBootstrap.rowCount;
-    unlockLedgerActiveCount = unlockLedgerBootstrap.activeCount;
+    const [unlockLedgerCountRow, unlockLedgerActiveCountRow] = await Promise.all([
+      oracleControlPlane.db
+        .selectFrom('unlock_ledger_state')
+        .select(({ fn }) => fn.count<number>('id').as('count'))
+        .executeTakeFirst(),
+      oracleControlPlane.db
+        .selectFrom('unlock_ledger_state')
+        .select(({ fn }) => fn.count<number>('id').as('count'))
+        .where('status', 'in', ['reserved', 'processing'])
+        .executeTakeFirst(),
+    ]);
+    unlockLedgerCount = Number(unlockLedgerCountRow?.count || 0);
+    unlockLedgerActiveCount = Number(unlockLedgerActiveCountRow?.count || 0);
   }
 
   let feedLedgerCount: number | null = null;

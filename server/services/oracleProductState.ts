@@ -197,6 +197,17 @@ function normalizeObject(value: unknown) {
   return value as Record<string, unknown>;
 }
 
+function normalizeJsonObject(value: unknown) {
+  if (typeof value === 'string') {
+    try {
+      return normalizeObject(JSON.parse(value));
+    } catch {
+      return null;
+    }
+  }
+  return normalizeObject(value);
+}
+
 function chunkArray<T>(items: T[], chunkSize: number) {
   const chunks: T[][] = [];
   for (let index = 0; index < items.length; index += chunkSize) {
@@ -509,7 +520,6 @@ export async function syncOracleProductStateFromSupabase(input: {
     activeSubscriptionsResult,
     recentSubscriptionsResult,
     sourceItemsResult,
-    unlocksResult,
     feedResult,
   ] = await Promise.all([
     input.db
@@ -527,11 +537,6 @@ export async function syncOracleProductStateFromSupabase(input: {
       .order('updated_at', { ascending: false })
       .limit(recentLimit),
     input.db
-      .from('source_item_unlocks')
-      .select(UNLOCK_SELECT)
-      .order('updated_at', { ascending: false })
-      .limit(recentLimit),
-    input.db
       .from('user_feed_items')
       .select(FEED_SELECT)
       .order('created_at', { ascending: false })
@@ -541,7 +546,6 @@ export async function syncOracleProductStateFromSupabase(input: {
   if (activeSubscriptionsResult.error) throw activeSubscriptionsResult.error;
   if (recentSubscriptionsResult.error) throw recentSubscriptionsResult.error;
   if (sourceItemsResult.error) throw sourceItemsResult.error;
-  if (unlocksResult.error) throw unlocksResult.error;
   if (feedResult.error) throw feedResult.error;
 
   const subscriptionMap = new Map<string, Record<string, unknown>>();
@@ -553,6 +557,18 @@ export async function syncOracleProductStateFromSupabase(input: {
     const id = String((row as Record<string, unknown>).id || '').trim();
     if (id) subscriptionMap.set(id, row as Record<string, unknown>);
   }
+
+  const unlockLedgerRows = await input.controlDb.db
+    .selectFrom('unlock_ledger_state')
+    .selectAll()
+    .orderBy('updated_at', 'desc')
+    .limit(recentLimit)
+    .execute();
+
+  const unlockRows = unlockLedgerRows.map((row) => ({
+    ...row,
+    transcript_probe_meta: normalizeJsonObject(row.transcript_probe_meta_json),
+  }));
 
   const nowIso = normalizeRequiredIso(input.nowIso);
   await input.controlDb.db.transaction().execute(async (trx) => {
@@ -575,7 +591,7 @@ export async function syncOracleProductStateFromSupabase(input: {
     }),
     upsertOracleProductUnlockRows({
       controlDb: input.controlDb,
-      rows: (unlocksResult.data || []) as Array<Record<string, unknown>>,
+      rows: unlockRows as Array<Record<string, unknown>>,
       nowIso,
     }),
     upsertOracleProductFeedRows({

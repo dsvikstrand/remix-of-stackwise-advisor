@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { openOracleControlPlaneDb } from '../../server/services/oracleControlPlaneDb';
+import { upsertOracleUnlockLedgerRows } from '../../server/services/oracleUnlockLedgerState';
 import {
   countOracleProductActiveSubscriptions,
   getOracleProductSubscriptionState,
@@ -169,7 +170,7 @@ describe('oracle product state', () => {
     }
   });
 
-  it('bootstraps mirrored product state from Supabase rows', async () => {
+  it('bootstraps mirrored product state from Supabase rows while sourcing unlocks from the Oracle unlock ledger', async () => {
     const controlDb = openOracleControlPlaneDb({
       sqlitePath: createTempSqlitePath(),
     });
@@ -201,10 +202,10 @@ describe('oracle product state', () => {
       ],
       source_item_unlocks: [
         {
-          id: 'unlock_bootstrap',
+          id: 'unlock_stale_supabase_shadow',
           source_item_id: 'source_bootstrap',
           source_page_id: 'page_1',
-          status: 'available',
+          status: 'processing',
           estimated_cost: 1,
           updated_at: '2026-04-01T11:06:00.000Z',
           created_at: '2026-04-01T11:06:00.000Z',
@@ -224,6 +225,21 @@ describe('oracle product state', () => {
     }) as any;
 
     try {
+      await upsertOracleUnlockLedgerRows({
+        controlDb,
+        rows: [
+          {
+            id: 'unlock_bootstrap_oracle',
+            source_item_id: 'source_bootstrap',
+            source_page_id: 'page_1',
+            status: 'available',
+            estimated_cost: 1,
+            updated_at: '2026-04-01T11:06:30.000Z',
+            created_at: '2026-04-01T11:06:30.000Z',
+          },
+        ],
+      });
+
       const result = await syncOracleProductStateFromSupabase({
         controlDb,
         db,
@@ -237,10 +253,18 @@ describe('oracle product state', () => {
         feedCount: 1,
       });
 
+      const mirroredUnlock = await getOracleProductUnlockBySourceItemId({
+        controlDb,
+        sourceItemId: 'source_bootstrap',
+      });
       const mirroredFeedRows = await listOracleProductFeedRows({
         controlDb,
         userId: 'user_1',
         limit: 10,
+      });
+      expect(mirroredUnlock).toMatchObject({
+        id: 'unlock_bootstrap_oracle',
+        status: 'available',
       });
       expect(mirroredFeedRows[0]).toMatchObject({
         id: 'feed_bootstrap',
