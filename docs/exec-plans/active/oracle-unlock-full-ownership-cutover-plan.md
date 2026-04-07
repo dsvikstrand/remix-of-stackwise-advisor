@@ -75,6 +75,12 @@ c6) [have] Supabase unlock shadow can still exist as compatibility residue, but 
 c7) [have] The current chapter question is no longer “should Oracle own unlocks operationally?”
 - it is “how quickly do we remove Supabase unlock participation entirely?”
 
+c8) [have] Phase 2 now lands the runtime severing wave:
+- Oracle-primary unlock mutations no longer mirror `source_item_unlocks`
+- Oracle-primary unlock readers no longer reread Supabase on miss
+- transcript suppression / transcript revalidate seeding now read Oracle unlock ledger
+- server-side `My Feed` unlock status now reads through injected Oracle-aware unlock loaders
+
 ## Scope Lock
 
 d1) [todo] This plan is unlock-only.
@@ -143,15 +149,15 @@ h3) [have] This is the first decisive cut because it removes the most harmful du
 
 ## Phase 2: Oracle-Only Unlock Runtime
 
-i1) [todo] Remove remaining normal-runtime Supabase unlock writes and reads.
+i1) [have] Removed remaining normal-runtime Supabase unlock writes and Oracle-primary fallback reads from the main unlock mutation/read seams.
 
-i2) [todo] Land in this wave:
+i2) [have] Landed in this wave:
 - reservation/processing/fail/ready transitions stay Oracle-only
 - stale-hold sweeps stay Oracle-only
-- wall/source-page unlock reads no longer depend on Supabase unlock rows
+- wall/source-page unlock reads no longer depend on Supabase unlock rows in the main server runtime
 - transient/permanent transcript failure handling remains correct
 
-i3) [todo] After this phase, Supabase unlock shadow should no longer matter to runtime correctness.
+i3) [have] After this phase, Supabase unlock shadow no longer matters to the main server runtime correctness path.
 
 ## Phase 3: Short Burn-In / Canary
 
@@ -162,6 +168,8 @@ j1) [todo] Prove Oracle-only unlock behavior under:
 - transcript permanent failure
 - stale reservation cleanup
 - wall/source-page unlock state refresh
+
+j3) [todo] Confirm any remaining Supabase `source_item_unlocks` touchpoints are non-runtime/manual residue and remove them in closure.
 
 j2) [todo] Success target:
 - no unresolved stuck unlock rows

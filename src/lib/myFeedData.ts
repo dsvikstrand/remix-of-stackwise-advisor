@@ -96,6 +96,18 @@ export interface MyFeedItemView {
 export async function listMyFeedItemsFromDb(input: {
   db: DbClient;
   userId: string;
+  readUnlockRows?: (input: {
+    db: DbClient;
+    sourceIds: string[];
+  }) => Promise<Array<{
+    source_item_id: string;
+    status: string;
+    estimated_cost: number | string;
+    reservation_expires_at: string | null;
+    blueprint_id: string | null;
+    last_error_code: string | null;
+    transcript_status: string | null;
+  }>>;
 }): Promise<MyFeedItemView[]> {
   const { db, userId } = input;
 
@@ -136,10 +148,15 @@ export async function listMyFeedItemsFromDb(input: {
       .in('user_feed_item_id', feedItemIds)
       .order('created_at', { ascending: false }),
     sourceIds.length
-      ? db
-        .from('source_item_unlocks')
-        .select('source_item_id, status, estimated_cost, reservation_expires_at, blueprint_id, last_error_code, transcript_status')
-        .in('source_item_id', sourceIds)
+      ? (input.readUnlockRows
+        ? Promise.resolve({
+          data: input.readUnlockRows({ db, sourceIds }),
+          error: null,
+        }).then(async (result) => ({ data: await result.data, error: result.error }))
+        : db
+          .from('source_item_unlocks')
+          .select('source_item_id, status, estimated_cost, reservation_expires_at, blueprint_id, last_error_code, transcript_status')
+          .in('source_item_id', sourceIds))
       : Promise.resolve({ data: [], error: null }),
   ]);
 

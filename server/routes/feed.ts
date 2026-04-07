@@ -25,7 +25,13 @@ export function registerFeedRoutes(app: express.Express, deps: FeedRouteDeps) {
     }
 
     try {
-      const items = await listMyFeedItems({ db, userId });
+      const items = await listMyFeedItems({
+        db,
+        userId,
+        readUnlockRows: deps.readUnlockRows
+          ? ({ db: innerDb, sourceIds }) => deps.readUnlockRows!(innerDb, sourceIds)
+          : undefined,
+      });
       return res.json({
         ok: true,
         error_code: null,

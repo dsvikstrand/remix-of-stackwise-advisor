@@ -264,6 +264,7 @@
   - Oracle durable unlock staging: `ORACLE_UNLOCK_LEDGER_MODE=supabase|dual|primary` can now mirror or own `source_item_unlocks` in local SQLite, while wallet and credit-ledger truth remain on Supabase.
   - `dual` unlock-ledger rollout relied on an explicit parity audit (`npm run ops:oracle-unlock-parity -- --json`) and paginated bootstrap/sync reads so Oracle could compare the configured unlock set before `primary`; once `primary` is live, Oracle unlock bootstrap should not rehydrate from Supabase unlock shadow.
   - Once unlock-ledger `primary` is live, unlock-specific truth reads and mutation preconditions should resolve from that durable Oracle ledger directly; the older Oracle product unlock mirror becomes compatibility/read-plane state rather than the normal unlock-truth source.
+  - In unlock-ledger `primary`, normal unlock reservation/processing/fail/ready mutations, expired-hold scans, transcript suppression/revalidate seed reads, and server-side legacy `My Feed` unlock hydration should stay on Oracle-owned unlock state instead of rereading or rewriting Supabase `source_item_unlocks`.
   - Under Oracle-only queue runtime, the Supabase `source_item_unlocks` compatibility shadow must no longer persist queue `job_id` values that depend on a Supabase `ingestion_jobs` row; Oracle unlock/product mirrors keep the real job id instead.
   - historical transcript-bridge parity:
     - `transcript_requests` remains in migration history because the linked Supabase project already contains earlier Oracle/Paperspace bridge experiments.

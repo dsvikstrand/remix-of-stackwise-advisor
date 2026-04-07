@@ -139,10 +139,10 @@ import {
   getOracleUnlockLedgerById,
   getOracleUnlockLedgerBySourceItemId,
   listOracleUnlockLedgerExpiredReservedRows,
+  type OracleUnlockLedgerRow,
   listOracleUnlockLedgerProcessingRows,
   listOracleUnlockLedgerRowsBySourceItemIds,
   replaceOracleUnlockLedgerRow,
-  syncOracleUnlockLedgerFromSupabase,
   upsertOracleUnlockLedgerRow,
 } from './services/oracleUnlockLedgerState';
 import {
@@ -2687,7 +2687,7 @@ async function getSourceItemUnlockByIdForPrimaryMutation(
     }));
   }
 
-  return readSupabaseSourceItemUnlockById(db, normalizedUnlockId);
+  return oracleUnlockLedgerPrimaryEnabled ? null : readSupabaseSourceItemUnlockById(db, normalizedUnlockId);
 }
 
 async function getSourceItemUnlockBySourceItemIdForPrimaryMutation(
@@ -2718,7 +2718,7 @@ async function getSourceItemUnlockBySourceItemIdForPrimaryMutation(
     }));
   }
 
-  return readSupabaseSourceItemUnlockBySourceItemId(db, normalizedSourceItemId);
+  return oracleUnlockLedgerPrimaryEnabled ? null : readSupabaseSourceItemUnlockBySourceItemId(db, normalizedSourceItemId);
 }
 
 async function writeSupabaseSourceItemUnlockShadow(
@@ -2825,15 +2825,19 @@ async function persistSourceItemUnlockRowOracleAware(
     }
   }
 
+  if (oracleUnlockLedgerPrimaryEnabled) {
+    await upsertOracleProductUnlocksFromKnownRows([normalizedRow], input.action);
+    return normalizedRow;
+  }
+
   try {
     const shadowInput = normalizeSupabaseUnlockShadowRow({
       row: normalizedRow,
       oracleQueuePrimaryEnabled: oracleQueueLedgerPrimaryEnabled,
     });
     const shadowRow = await writeSupabaseSourceItemUnlockShadow(db, shadowInput);
-    const authoritativeRow = oracleUnlockLedgerPrimaryEnabled ? normalizedRow : shadowRow;
-    await upsertOracleProductUnlocksFromKnownRows([authoritativeRow], input.action);
-    return authoritativeRow;
+    await upsertOracleProductUnlocksFromKnownRows([shadowRow], input.action);
+    return shadowRow;
   } catch (error) {
     if (oracleUnlockLedgerEnabled && oracleControlPlane) {
       if (previousOracle) {
@@ -3620,6 +3624,9 @@ async function getSourceItemUnlockByIdOracleFirst(
     }
   }
 
+  if (oracleUnlockLedgerPrimaryEnabled) {
+    return null;
+  }
   return readSupabaseSourceItemUnlockById(db, normalizedUnlockId);
 }
 
@@ -3648,6 +3655,9 @@ async function getSourceItemUnlockBySourceItemIdOracleFirst(
     }
   }
 
+  if (oracleUnlockLedgerPrimaryEnabled) {
+    return null;
+  }
   if (!oracleUnlockLedgerEnabled && oracleProductMirrorEnabled && oracleControlPlane) {
     try {
       const mirrored = await getOracleProductUnlockBySourceItemId({
@@ -3691,7 +3701,7 @@ async function getSourceItemUnlocksBySourceItemIdsOracleFirst(
           .map((row) => String(row.source_item_id || '').trim())
           .filter(Boolean),
       );
-      if (durableIds.size >= normalizedIds.length) {
+      if (durableIds.size >= normalizedIds.length || oracleUnlockLedgerPrimaryEnabled) {
         return durable.map((row) => normalizeSourceItemUnlockRow(row as unknown as Record<string, unknown>));
       }
 
@@ -3714,6 +3724,9 @@ async function getSourceItemUnlocksBySourceItemIdsOracleFirst(
     }
   }
 
+  if (oracleUnlockLedgerPrimaryEnabled) {
+    return [] as SourceItemUnlockRow[];
+  }
   if (!oracleUnlockLedgerEnabled && oracleProductMirrorEnabled && oracleControlPlane) {
     try {
       const mirrored = await listOracleProductUnlocks({
@@ -3769,6 +3782,9 @@ async function findExpiredReservedUnlocksOracleFirst(
     }
   }
 
+  if (oracleUnlockLedgerPrimaryEnabled) {
+    return [] as SourceItemUnlockRow[];
+  }
   return findExpiredReservedUnlocks(db, limit);
 }
 
@@ -3794,6 +3810,9 @@ async function listProcessingUnlockRowsOracleFirst(
     }
   }
 
+  if (oracleUnlockLedgerPrimaryEnabled) {
+    return [] as SourceItemUnlockRow[];
+  }
   const { data, error } = await db
     .from('source_item_unlocks')
     .select(SOURCE_ITEM_UNLOCK_SELECT)
@@ -3830,6 +3849,9 @@ async function countActiveUnlockLinksForJobsOracleFirst(
     }
   }
 
+  if (oracleUnlockLedgerPrimaryEnabled) {
+    return new Map<string, number>();
+  }
   const map = new Map<string, number>();
   const { data, error } = await db
     .from('source_item_unlocks')
@@ -5403,13 +5425,13 @@ async function syncOracleProductUnlockById(
   }
 }
 
-function logUnlockPrimaryMutationFallback(input: {
+function logUnlockPrimaryMutationFailure(input: {
   action: string;
   unlockId?: string | null;
   sourceItemId?: string | null;
   error: unknown;
 }) {
-  console.warn('[oracle-control-plane] unlock_ledger_primary_fallback', JSON.stringify({
+  console.warn('[oracle-control-plane] unlock_ledger_primary_failed', JSON.stringify({
     action: input.action,
     unlock_id: String(input.unlockId || '').trim() || null,
     source_item_id: String(input.sourceItemId || '').trim() || null,
@@ -5472,15 +5494,12 @@ async function ensureSourceItemUnlockWithMirror(
       action: 'ensure_source_item_unlock',
     });
   } catch (error) {
-    logUnlockPrimaryMutationFallback({
+    logUnlockPrimaryMutationFailure({
       action: 'ensure_source_item_unlock',
       sourceItemId: input.sourceItemId,
       error,
     });
-    const unlock = await ensureSourceItemUnlock(db, input);
-    await upsertOracleUnlockLedgerFromKnownRow(unlock as unknown as Record<string, unknown>, 'ensure_source_item_unlock_fallback');
-    await upsertOracleProductUnlocksFromKnownRows([unlock as unknown as Record<string, unknown>], 'ensure_source_item_unlock_fallback');
-    return unlock;
+    throw error;
   }
 }
 
@@ -5604,27 +5623,21 @@ async function reserveUnlockWithMirror(
       return { ok: true as const, state: 'in_progress' as const, unlock: persisted, reservedNow: false };
     }
 
-    logUnlockPrimaryMutationFallback({
+    logUnlockPrimaryMutationFailure({
       action: 'reserve_unlock_reconcile',
       unlockId: input.unlock.id,
       sourceItemId: input.unlock.source_item_id,
       error: `UNEXPECTED_POST_RESERVE_STATE:${persisted.status}`,
     });
-    const result = await reserveUnlock(db, input);
-    await upsertOracleUnlockLedgerFromKnownRow(result.unlock as unknown as Record<string, unknown>, 'reserve_unlock_reconcile_fallback');
-    await upsertOracleProductUnlocksFromKnownRows([result.unlock as unknown as Record<string, unknown>], 'reserve_unlock_reconcile_fallback');
-    return result;
+    throw new Error(`UNEXPECTED_POST_RESERVE_STATE:${persisted.status}`);
   } catch (error) {
-    logUnlockPrimaryMutationFallback({
+    logUnlockPrimaryMutationFailure({
       action: 'reserve_unlock',
       unlockId: input.unlock.id,
       sourceItemId: input.unlock.source_item_id,
       error,
     });
-    const result = await reserveUnlock(db, input);
-    await upsertOracleUnlockLedgerFromKnownRow(result.unlock as unknown as Record<string, unknown>, 'reserve_unlock_fallback');
-    await upsertOracleProductUnlocksFromKnownRows([result.unlock as unknown as Record<string, unknown>], 'reserve_unlock_fallback');
-    return result;
+    throw error;
   }
 }
 
@@ -5667,15 +5680,12 @@ async function attachReservationLedgerWithMirror(
       expectedCurrent: current,
     });
   } catch (error) {
-    logUnlockPrimaryMutationFallback({
+    logUnlockPrimaryMutationFailure({
       action: 'attach_reservation_ledger',
       unlockId: input.unlockId,
       error,
     });
-    const unlock = await attachReservationLedger(db, input);
-    await upsertOracleUnlockLedgerFromKnownRow(unlock as unknown as Record<string, unknown>, 'attach_reservation_ledger_fallback');
-    await upsertOracleProductUnlocksFromKnownRows([unlock as unknown as Record<string, unknown>], 'attach_reservation_ledger_fallback');
-    return unlock;
+    throw error;
   }
 }
 
@@ -5718,15 +5728,12 @@ async function attachAutoUnlockIntentWithMirror(
       expectedCurrent: current,
     });
   } catch (error) {
-    logUnlockPrimaryMutationFallback({
+    logUnlockPrimaryMutationFailure({
       action: 'attach_auto_unlock_intent',
       unlockId: input.unlockId,
       error,
     });
-    const unlock = await attachAutoUnlockIntent(db, input);
-    await upsertOracleUnlockLedgerFromKnownRow(unlock as unknown as Record<string, unknown>, 'attach_auto_unlock_intent_fallback');
-    await upsertOracleProductUnlocksFromKnownRows([unlock as unknown as Record<string, unknown>], 'attach_auto_unlock_intent_fallback');
-    return unlock;
+    throw error;
   }
 }
 
@@ -5777,15 +5784,12 @@ async function markUnlockProcessingWithMirror(
     }
     return unlock;
   } catch (error) {
-    logUnlockPrimaryMutationFallback({
+    logUnlockPrimaryMutationFailure({
       action: 'mark_unlock_processing',
       unlockId: input.unlockId,
       error,
     });
-    const unlock = await markUnlockProcessing(db, input);
-    await upsertOracleUnlockLedgerFromKnownRow(unlock as unknown as Record<string, unknown>, 'mark_unlock_processing_fallback');
-    await upsertOracleProductUnlocksFromKnownRows(unlock ? [unlock as unknown as Record<string, unknown>] : [], 'mark_unlock_processing_fallback');
-    return unlock;
+    throw error;
   }
 }
 
@@ -5836,15 +5840,12 @@ async function completeUnlockWithMirror(
 
     return current;
   } catch (error) {
-    logUnlockPrimaryMutationFallback({
+    logUnlockPrimaryMutationFailure({
       action: 'complete_unlock',
       unlockId: input.unlockId,
       error,
     });
-    const unlock = await completeUnlock(db, input);
-    await upsertOracleUnlockLedgerFromKnownRow(unlock as unknown as Record<string, unknown>, 'complete_unlock_fallback');
-    await upsertOracleProductUnlocksFromKnownRows([unlock as unknown as Record<string, unknown>], 'complete_unlock_fallback');
-    return unlock;
+    throw error;
   }
 }
 
@@ -5897,16 +5898,145 @@ async function failUnlockWithMirror(
 
     return current;
   } catch (error) {
-    logUnlockPrimaryMutationFallback({
+    logUnlockPrimaryMutationFailure({
       action: 'fail_unlock',
       unlockId: input.unlockId,
       error,
     });
-    const unlock = await failUnlock(db, input);
-    await upsertOracleUnlockLedgerFromKnownRow(unlock as unknown as Record<string, unknown>, 'fail_unlock_fallback');
-    await upsertOracleProductUnlocksFromKnownRows([unlock as unknown as Record<string, unknown>], 'fail_unlock_fallback');
-    return unlock;
+    throw error;
   }
+}
+
+type UnlockTranscriptSweepRow = Pick<
+  SourceItemUnlockRow,
+  'id' | 'source_item_id' | 'source_page_id' | 'status' | 'last_error_code' | 'transcript_status' | 'updated_at'
+>;
+
+function mapOracleUnlockTranscriptSweepRow(row: OracleUnlockLedgerRow): UnlockTranscriptSweepRow {
+  return {
+    id: row.id,
+    source_item_id: row.source_item_id,
+    source_page_id: row.source_page_id,
+    status: row.status,
+    last_error_code: row.last_error_code,
+    transcript_status: row.transcript_status,
+    updated_at: row.updated_at,
+  };
+}
+
+async function listTranscriptSuppressedUnlockRowsOracleFirst(
+  db: ReturnType<typeof createClient>,
+  limit: number,
+) {
+  const normalizedLimit = Math.max(1, Math.min(1000, Math.floor(Number(limit) || 0)));
+  if (oracleUnlockLedgerEnabled && oracleControlPlane) {
+    try {
+      const rows = await oracleControlPlane.db
+        .selectFrom('unlock_ledger_state')
+        .select([
+          'id',
+          'source_item_id',
+          'source_page_id',
+          'status',
+          'last_error_code',
+          'transcript_status',
+          'updated_at',
+        ])
+        .where((eb) => eb.or([
+          eb('transcript_status', '=', 'retrying'),
+          eb('transcript_status', '=', 'confirmed_no_speech'),
+          eb('last_error_code', '=', 'NO_TRANSCRIPT_PERMANENT'),
+          eb('last_error_code', '=', 'TRANSCRIPT_UNAVAILABLE'),
+        ]))
+        .orderBy('updated_at', 'desc')
+        .limit(normalizedLimit)
+        .execute();
+      return rows.map((row) => mapOracleUnlockTranscriptSweepRow(row as unknown as OracleUnlockLedgerRow));
+    } catch (error) {
+      console.warn('[oracle-control-plane] unlock_ledger_failed', JSON.stringify({
+        action: 'list_transcript_suppressed_unlock_rows',
+        limit: normalizedLimit,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+
+  if (oracleUnlockLedgerPrimaryEnabled) {
+    return [] as UnlockTranscriptSweepRow[];
+  }
+
+  const { data, error } = await db
+    .from('source_item_unlocks')
+    .select('id, source_item_id, source_page_id, status, transcript_status, last_error_code, updated_at')
+    .or('transcript_status.eq.retrying,transcript_status.eq.confirmed_no_speech,last_error_code.eq.NO_TRANSCRIPT_PERMANENT,last_error_code.eq.TRANSCRIPT_UNAVAILABLE')
+    .order('updated_at', { ascending: false })
+    .limit(normalizedLimit);
+  if (error) throw error;
+  return (data || []).map((row) => ({
+    id: String((row as any).id || '').trim(),
+    source_item_id: String((row as any).source_item_id || '').trim(),
+    source_page_id: String((row as any).source_page_id || '').trim() || null,
+    status: String((row as any).status || '').trim() || 'available',
+    transcript_status: normalizeStringOrNull((row as any).transcript_status),
+    last_error_code: normalizeStringOrNull((row as any).last_error_code),
+    updated_at: normalizeIsoOrNull((row as any).updated_at),
+  }));
+}
+
+async function listPermanentTranscriptAvailableUnlockRowsOracleFirst(
+  db: ReturnType<typeof createClient>,
+  limit: number,
+) {
+  const normalizedLimit = Math.max(1, Math.min(1000, Math.floor(Number(limit) || 0)));
+  if (oracleUnlockLedgerEnabled && oracleControlPlane) {
+    try {
+      const rows = await oracleControlPlane.db
+        .selectFrom('unlock_ledger_state')
+        .select([
+          'id',
+          'source_item_id',
+          'source_page_id',
+          'status',
+          'last_error_code',
+          'transcript_status',
+          'updated_at',
+        ])
+        .where('status', '=', 'available')
+        .where('last_error_code', '=', 'NO_TRANSCRIPT_PERMANENT')
+        .orderBy('updated_at', 'asc')
+        .limit(normalizedLimit)
+        .execute();
+      return rows.map((row) => mapOracleUnlockTranscriptSweepRow(row as unknown as OracleUnlockLedgerRow));
+    } catch (error) {
+      console.warn('[oracle-control-plane] unlock_ledger_failed', JSON.stringify({
+        action: 'list_permanent_transcript_available_unlock_rows',
+        limit: normalizedLimit,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+
+  if (oracleUnlockLedgerPrimaryEnabled) {
+    return [] as UnlockTranscriptSweepRow[];
+  }
+
+  const { data, error } = await db
+    .from('source_item_unlocks')
+    .select('id, source_item_id, source_page_id, status, last_error_code, transcript_status, updated_at')
+    .eq('status', 'available')
+    .eq('last_error_code', 'NO_TRANSCRIPT_PERMANENT')
+    .order('updated_at', { ascending: true })
+    .limit(normalizedLimit);
+  if (error) throw error;
+  return (data || []).map((row) => ({
+    id: String((row as any).id || '').trim(),
+    source_item_id: String((row as any).source_item_id || '').trim(),
+    source_page_id: String((row as any).source_page_id || '').trim() || null,
+    status: String((row as any).status || '').trim() || 'available',
+    transcript_status: normalizeStringOrNull((row as any).transcript_status),
+    last_error_code: normalizeStringOrNull((row as any).last_error_code),
+    updated_at: normalizeIsoOrNull((row as any).updated_at),
+  }));
 }
 
 async function suppressUnlockableFeedRowsForSourceItemWithMirror(
@@ -10342,17 +10472,17 @@ async function runTranscriptFeedSuppressionSweep(
   }
   transcriptFeedSuppressionSweepLastRunMs = nowMs;
 
-  const { data, error } = await db
-    .from('source_item_unlocks')
-    .select('source_item_id, transcript_status, last_error_code, updated_at')
-    .or('transcript_status.eq.retrying,transcript_status.eq.confirmed_no_speech,last_error_code.eq.NO_TRANSCRIPT_PERMANENT,last_error_code.eq.TRANSCRIPT_UNAVAILABLE')
-    .order('updated_at', { ascending: false })
-    .limit(Math.min(15, Math.max(10, Math.floor(sourceUnlockSweepBatch / 2))));
-  if (error) {
+  let rows: UnlockTranscriptSweepRow[];
+  try {
+    rows = await listTranscriptSuppressedUnlockRowsOracleFirst(
+      db,
+      Math.min(15, Math.max(10, Math.floor(sourceUnlockSweepBatch / 2))),
+    );
+  } catch (error) {
     logUnlockEvent(
       'transcript_feed_sweep_failed',
       { trace_id: String(input?.traceId || '').trim() || createUnlockTraceId() },
-      { error: error.message },
+      { error: error instanceof Error ? error.message : String(error) },
     );
     return;
   }
@@ -10360,7 +10490,7 @@ async function runTranscriptFeedSuppressionSweep(
   const permanentSourceItemIds = new Set<string>();
   const transientSourceItemIds = new Set<string>();
 
-  for (const row of data || []) {
+  for (const row of rows) {
     const sourceItemId = String(row.source_item_id || '').trim();
     if (!sourceItemId) continue;
     const isPermanent =
@@ -11523,14 +11653,7 @@ async function seedSourceTranscriptRevalidateJobs(
   limit = 50,
 ) {
   const cappedLimit = Math.max(1, Math.min(500, Math.floor(Number(limit) || 50)));
-  const { data: unlockRows, error: unlockError } = await db
-    .from('source_item_unlocks')
-    .select('id, source_item_id, source_page_id, status, last_error_code, transcript_status')
-    .eq('status', 'available')
-    .eq('last_error_code', 'NO_TRANSCRIPT_PERMANENT')
-    .order('updated_at', { ascending: true })
-    .limit(cappedLimit);
-  if (unlockError) throw unlockError;
+  const unlockRows = await listPermanentTranscriptAvailableUnlockRowsOracleFirst(db, cappedLimit);
 
   const pending = (unlockRows || [])
     .filter((row) => normalizeTranscriptTruthStatus((row as { transcript_status?: unknown }).transcript_status) !== 'confirmed_no_speech');
@@ -15998,6 +16121,7 @@ registerFeedRoutes(app, {
   autoChannelPipelineEnabled,
   getAuthedSupabaseClient,
   getServiceSupabaseClient,
+  readUnlockRows: (db, sourceIds) => getSourceItemUnlocksBySourceItemIdsOracleFirst(db, sourceIds),
   getFeedItemById: getFeedItemByIdOracleFirst,
   patchFeedItemById: patchFeedItemByIdOracleAware,
   createBlueprintFromVideo,

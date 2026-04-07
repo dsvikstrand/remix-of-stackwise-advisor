@@ -40,6 +40,15 @@ export type FeedRouteDeps = {
   autoChannelPipelineEnabled: boolean;
   getAuthedSupabaseClient: (authToken: string) => DbClient | null;
   getServiceSupabaseClient: () => DbClient | null;
+  readUnlockRows?: (db: DbClient, sourceIds: string[]) => Promise<Array<{
+    source_item_id: string;
+    status: string;
+    estimated_cost: number | string;
+    reservation_expires_at: string | null;
+    blueprint_id: string | null;
+    last_error_code: string | null;
+    transcript_status: string | null;
+  }>>;
   getFeedItemById: (db: DbClient, input: {
     feedItemId: string;
     userId?: string | null;
