@@ -100,16 +100,34 @@ export function useUserLikedBlueprints(userId: string | undefined, limit = 4) {
       const profileMap = new Map((profiles || []).map((p) => [p.user_id, p]));
       const publicBlueprintIds = (blueprints || []).map((bp) => bp.id);
 
-      const { data: unlockRows } = publicBlueprintIds.length > 0
+      const { data: variantRows } = publicBlueprintIds.length > 0
         ? await supabase
-          .from('source_item_unlocks')
+          .from('source_item_blueprint_variants')
           .select('blueprint_id, source_item_id, updated_at')
           .in('blueprint_id', publicBlueprintIds)
           .order('updated_at', { ascending: false })
         : { data: [] as Array<{ blueprint_id: string; source_item_id: string | null; updated_at: string | null }> };
 
       const sourceItemIdByBlueprint = new Map<string, string>();
-      (unlockRows || []).forEach((row) => {
+      (variantRows || []).forEach((row) => {
+        const blueprintId = String(row.blueprint_id || '').trim();
+        const sourceItemId = String(row.source_item_id || '').trim();
+        if (!blueprintId || !sourceItemId) return;
+        if (!sourceItemIdByBlueprint.has(blueprintId)) {
+          sourceItemIdByBlueprint.set(blueprintId, sourceItemId);
+        }
+      });
+
+      const unresolvedBlueprintIds = publicBlueprintIds.filter((blueprintId) => !sourceItemIdByBlueprint.has(blueprintId));
+      const { data: feedRows } = unresolvedBlueprintIds.length > 0
+        ? await supabase
+          .from('user_feed_items')
+          .select('blueprint_id, source_item_id, created_at')
+          .in('blueprint_id', unresolvedBlueprintIds)
+          .order('created_at', { ascending: false })
+        : { data: [] as Array<{ blueprint_id: string; source_item_id: string | null; created_at: string | null }> };
+
+      (feedRows || []).forEach((row) => {
         const blueprintId = String(row.blueprint_id || '').trim();
         const sourceItemId = String(row.source_item_id || '').trim();
         if (!blueprintId || !sourceItemId) return;

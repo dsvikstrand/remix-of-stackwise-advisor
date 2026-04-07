@@ -14,7 +14,7 @@ This file is the authoritative active/reference/deserted/completed registry for 
 
 ## Active Root
 - `docs/exec-plans/active/oracle-unlock-full-ownership-cutover-plan.md`
-  Current active implementation root for the explicit unlock cutover chapter whose end state is full Oracle ownership and zero normal-runtime Supabase unlock work.
+  Current active implementation root for the explicit unlock cutover chapter whose end state is full Oracle ownership and zero normal-runtime Supabase unlock work; functionally complete and ready to archive once the next active implementation root is chosen.
 - `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
   Current proof/deferred carry-forward tail. This is the only standing active-tail support file.
 - `docs/exec-plans/tech-debt-tracker.md`
@@ -131,6 +131,7 @@ This file is the authoritative active/reference/deserted/completed registry for 
 - Core identity lock: `docs/app/core-direction-lock.md`.
 - Current runtime/ops truth: `docs/architecture.md`, `docs/ops/yt2bp_runbook.md`, and `docs/ops/mvp-launch-readiness-checklist.md`.
 - Current active implementation plan: `docs/exec-plans/active/oracle-unlock-full-ownership-cutover-plan.md`.
+  The chapter is functionally complete and awaiting archive when the next active implementation root is chosen.
 - Paused broader Oracle-ownership context: `docs/exec-plans/active/on-pause/oracle-deeper-ownership-and-supabase-reduction-plan.md`.
 - Paused queue full-ownership chapter: `docs/exec-plans/active/on-pause/oracle-queue-full-ownership-cutover-plan.md`.
 - Current active proof/deferred tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`.

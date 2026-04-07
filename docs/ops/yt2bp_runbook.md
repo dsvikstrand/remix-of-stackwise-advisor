@@ -65,6 +65,10 @@
   - `ORACLE_QUEUE_LEDGER_MODE=primary` is expected for the active Oracle-owned queue runtime.
   - normal queue runtime should now be Oracle-only by default.
   - the old Supabase queue compatibility rollback lever has been removed from normal runtime; queue incidents now require fix-forward or an explicit follow-up code rollback.
+- Current unlock cutover posture:
+  - `ORACLE_UNLOCK_LEDGER_MODE=primary` is expected for the active Oracle-owned unlock runtime.
+  - Oracle unlock bootstrap/runtime should no longer rehydrate or normally reread Supabase `source_item_unlocks`.
+  - leftover Supabase unlock rows are historical/compatibility residue only and should not be treated as the normal runtime input for unlock status or unlock settlement.
 - Node runtime contract:
   - local repo baseline is Node `20.20.0` from `.nvmrc`
   - Oracle systemd is pinned to `/home/ubuntu/.nvm/versions/node/v20.20.0/bin/node`
@@ -115,6 +119,7 @@
   - `GET /api/my-feed`
   - `POST /api/my-feed/items/:id/auto-publish`
   - current compatibility expectation: `GET /api/my-feed` remains available for legacy flows, but the active user-facing lane is Home `For You` on `/wall`
+  - browser-side no-API fallback is now cache-only; it should not reconstruct unlock state from direct Supabase `source_item_unlocks` reads
 - Source-page endpoints:
   - `GET /api/source-pages/:platform/:externalId` (public read)
   - `GET /api/source-pages/:platform/:externalId/blueprints` (public source-page feed, deduped by source video, cursor-paginated, includes additive `source_thumbnail_url`)

@@ -2,7 +2,7 @@
 
 Status: `active`
 Owner: `Codex / David`
-Last updated: `2026-04-07`
+Last updated: `2026-04-08`
 
 ## Purpose
 
@@ -21,9 +21,9 @@ This plan intentionally optimizes for decisiveness over prolonged incremental ca
 
 ## Explicit End State
 
-a1) [todo] Oracle is the sole normal operational unlock truth in runtime.
+a1) [have] Oracle is the sole normal operational unlock truth in runtime.
 
-a2) [todo] Normal runtime unlock behavior no longer depends on Supabase `source_item_unlocks` for:
+a2) [have] Normal runtime unlock behavior no longer depends on Supabase `source_item_unlocks` for:
 - reservation
 - processing transition
 - fail/ready settlement
@@ -31,9 +31,9 @@ a2) [todo] Normal runtime unlock behavior no longer depends on Supabase `source_
 - wall/source-page unlock status reads
 - bootstrap/rehydration
 
-a3) [todo] Supabase unlock shadow no longer rehydrates stale state back into Oracle.
+a3) [have] Supabase unlock shadow no longer rehydrates stale state back into Oracle.
 
-a4) [todo] Unlock correctness, retry behavior, and user-visible unlock states remain intact through burn-in.
+a4) [have] Unlock correctness, retry behavior, and user-visible unlock states remained intact through the accepted burn-in window.
 
 ## Why This Plan Exists
 
@@ -80,6 +80,21 @@ c8) [have] Phase 2 now lands the runtime severing wave:
 - Oracle-primary unlock readers no longer reread Supabase on miss
 - transcript suppression / transcript revalidate seeding now read Oracle unlock ledger
 - server-side `My Feed` unlock status now reads through injected Oracle-aware unlock loaders
+
+c9) [have] Phase 3 burn-in evidence is now accepted:
+- Oracle primary checks stayed green after deploy/restart
+- unlock generation, transcript-failure settlement, and stale-unlock recovery stayed functional
+- Oracle restart no longer rehydrated stale unlock truth from Supabase shadow
+
+c10) [have] Phase 4 cleanup is now landed for the remaining meaningful product/read residue:
+- Blueprint Detail source-channel lookup no longer queries `source_item_unlocks`
+- liked-blueprint profile cards now resolve source linkage through variants/feed instead of unlock rows
+- legacy browser-side `/api/my-feed` fallback no longer reads Supabase unlock rows directly when the backend is unavailable or unset
+
+c11) [have] Remaining `source_item_unlocks` code references are now either:
+- non-primary compatibility code paths retained for historical env support
+- legacy/manual residue not used by the main server runtime
+- tests/type/schema references
 
 ## Scope Lock
 
@@ -161,7 +176,7 @@ i3) [have] After this phase, Supabase unlock shadow no longer matters to the mai
 
 ## Phase 3: Short Burn-In / Canary
 
-j1) [todo] Prove Oracle-only unlock behavior under:
+j1) [have] Proved Oracle-only unlock behavior under:
 - manual unlock
 - source-page unlock generation
 - transcript temporary failure + retry
@@ -169,25 +184,27 @@ j1) [todo] Prove Oracle-only unlock behavior under:
 - stale reservation cleanup
 - wall/source-page unlock state refresh
 
-j3) [todo] Confirm any remaining Supabase `source_item_unlocks` touchpoints are non-runtime/manual residue and remove them in closure.
+j3) [have] Confirmed the remaining Supabase `source_item_unlocks` touchpoints are non-runtime/manual residue or compatibility/test references rather than the main server runtime path.
 
-j2) [todo] Success target:
+j2) [have] Success target:
 - no unresolved stuck unlock rows
 - no Supabase rehydration/drift
 - no hidden Supabase unlock dependency surfacing in logs
 
 ## Phase 4: Cleanup And Closure
 
-k1) [todo] Remove obsolete Supabase unlock compatibility code and docs references.
+k1) [have] Removed the remaining meaningful Supabase unlock compatibility/product-read residue from the active runtime surfaces and synced canonical docs to the final Oracle-owned posture.
 
 k2) [todo] Move this plan to `completed/` once:
 - Supabase unlock runtime work is zero
 - no rehydration remains
 - burn-in evidence is accepted
 
+k3) [have] Functionally, the unlock cutover chapter is complete and ready to archive once the next active implementation root is chosen.
+
 ## Proof Gates
 
-m1) [todo] Required proof before declaring cutover complete:
+m1) [have] Required proof before declaring cutover complete:
 - Oracle primary check green
 - public/local health green
 - unlock generation still works
@@ -195,7 +212,7 @@ m1) [todo] Required proof before declaring cutover complete:
 - stale unlock recovery still works
 - no stale Supabase unlock state reappears in Oracle after restart
 
-m2) [todo] Required proof before closing the chapter:
+m2) [have] Required proof before closing the chapter:
 - at least one meaningful burn-in window
 - no unresolved unlock correctness regressions
 - Supabase attribution shows unlock-related work materially reduced
@@ -208,13 +225,13 @@ n2) [todo] Any emergency rollback should be an explicit code change, not a hidde
 
 ## Success Criteria
 
-o1) [todo] Oracle fully owns normal unlock operations in runtime.
+o1) [have] Oracle fully owns normal unlock operations in runtime.
 
-o2) [todo] Supabase `source_item_unlocks` no longer does normal runtime work.
+o2) [have] Supabase `source_item_unlocks` no longer does normal runtime work.
 
-o3) [todo] Unlock state no longer rehydrates from stale Supabase shadow.
+o3) [have] Unlock state no longer rehydrates from stale Supabase shadow.
 
-o4) [todo] Unlock behavior remains correct and observable through burn-in.
+o4) [have] Unlock behavior remained correct and observable through burn-in.
 
 ## Relationship To Paused Chapters
 

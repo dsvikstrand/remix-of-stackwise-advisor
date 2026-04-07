@@ -4,7 +4,7 @@ import { normalizeTag } from '@/lib/tagging';
 import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
 import { evaluateCandidateGates } from '@/lib/candidateGates';
 import { buildYouTubeThumbnailUrl, extractYouTubeVideoId, toYouTubeIdentity } from '@/lib/sourceIdentity';
-import { listMyFeedItemsFromDb, type MyFeedItemView } from '@/lib/myFeedData';
+import type { MyFeedItemView } from '@/lib/myFeedData';
 
 export async function ensureSourceItemForYouTube(input: {
   videoUrl: string;
@@ -117,7 +117,7 @@ export type MyFeedListResult = {
   items: MyFeedItemView[];
   staleFallback: boolean;
   staleReason: string | null;
-  source: 'api' | 'cache' | 'supabase_local';
+  source: 'api' | 'cache';
 };
 
 export class ApiRequestError extends Error {
@@ -217,24 +217,19 @@ function writeCachedMyFeedItems(userId: string, items: MyFeedItemView[]) {
   }
 }
 
-async function listMyFeedItemsFallback(userId: string) {
-  return listMyFeedItemsFromDb({
-    db: supabase as any,
-    userId,
-  });
-}
-
 export async function listMyFeedItems(userId: string): Promise<MyFeedListResult> {
   const apiBase = getApiBase();
   if (!apiBase) {
-    const items = await listMyFeedItemsFallback(userId);
-    writeCachedMyFeedItems(userId, items);
-    return {
-      items,
-      staleFallback: false,
-      staleReason: null,
-      source: 'supabase_local',
-    };
+    const cachedItems = readCachedMyFeedItems(userId);
+    if (cachedItems) {
+      return {
+        items: cachedItems,
+        staleFallback: true,
+        staleReason: 'Showing the last saved feed snapshot because the backend API is not configured.',
+        source: 'cache',
+      };
+    }
+    throw new Error('Backend API is not configured.');
   }
   try {
     const response = await apiRequest<{ items: MyFeedItemView[] }>('/my-feed', {

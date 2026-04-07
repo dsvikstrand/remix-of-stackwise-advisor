@@ -313,14 +313,14 @@ export default function BlueprintDetail() {
       }
       let sourceItemId: string | null = null;
 
-      const { data: unlockRow } = await supabase
-        .from('source_item_unlocks')
+      const { data: variantRow } = await supabase
+        .from('source_item_blueprint_variants')
         .select('source_item_id, updated_at')
         .eq('blueprint_id', blueprint.id)
         .order('updated_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-      sourceItemId = String(unlockRow?.source_item_id || '').trim() || null;
+      sourceItemId = String(variantRow?.source_item_id || '').trim() || null;
 
       if (!sourceItemId) {
         const { data: feedRow } = await supabase

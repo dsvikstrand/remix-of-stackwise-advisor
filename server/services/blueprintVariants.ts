@@ -406,17 +406,6 @@ export function createBlueprintVariantsService(deps: {
     let sourceItemId = matchedVariant?.source_item_id || null;
 
     if (!sourceItemId) {
-      const { data: unlockRow } = await db
-        .from('source_item_unlocks')
-        .select('source_item_id, updated_at')
-        .eq('blueprint_id', normalizedBlueprintId)
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      sourceItemId = String(unlockRow?.source_item_id || '').trim() || null;
-    }
-
-    if (!sourceItemId) {
       const { data: feedRow } = await db
         .from('user_feed_items')
         .select('source_item_id, created_at')
