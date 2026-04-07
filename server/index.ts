@@ -188,6 +188,10 @@ import {
   normalizeStringOrNull,
 } from './services/oracleValueNormalization';
 import {
+  getEffectiveUnlockDisplayStatus,
+  isEffectiveUnlockDisplayInProgress,
+} from './services/unlockDisplayState';
+import {
   evaluateOraclePrimarySchedulerDecision,
   evaluateOracleShadowSchedulerDecision,
 } from './services/oracleSubscriptionScheduler';
@@ -10413,14 +10417,20 @@ function toUnlockSnapshot(input: {
     };
   }
 
-  const status = unlock.status;
+  const status = getEffectiveUnlockDisplayStatus({
+    status: unlock.status,
+    reservation_expires_at: unlock.reservation_expires_at,
+  });
   const cost = status === 'ready'
     ? Math.max(0, Number(unlock.estimated_cost || input.fallbackCost))
     : Math.max(0, Number(input.fallbackCost));
   return {
     unlock_status: status,
     unlock_cost: cost,
-    unlock_in_progress: status === 'reserved' || status === 'processing',
+    unlock_in_progress: isEffectiveUnlockDisplayInProgress({
+      status: unlock.status,
+      reservation_expires_at: unlock.reservation_expires_at,
+    }),
     ready_blueprint_id: status === 'ready' ? unlock.blueprint_id || null : null,
     unlock_id: unlock.id,
   };

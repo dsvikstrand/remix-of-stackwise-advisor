@@ -1,7 +1,15 @@
 import { buildFeedSummary } from '@/lib/feedPreview';
+import { getEffectiveUnlockDisplayStatus, isEffectiveUnlockDisplayInProgress } from '@/lib/unlockDisplayState';
 
 type DbClient = {
   from: (table: string) => any;
+};
+
+type UnlockRowLike = {
+  status?: string | null;
+  reservation_expires_at?: string | null;
+  estimated_cost?: number | null;
+  blueprint_id?: string | null;
 };
 
 function parseSourceViewCount(metadata: Record<string, unknown> | null) {
@@ -130,7 +138,7 @@ export async function listMyFeedItemsFromDb(input: {
     sourceIds.length
       ? db
         .from('source_item_unlocks')
-        .select('source_item_id, status, estimated_cost, blueprint_id, last_error_code, transcript_status')
+        .select('source_item_id, status, estimated_cost, reservation_expires_at, blueprint_id, last_error_code, transcript_status')
         .in('source_item_id', sourceIds)
       : Promise.resolve({ data: [], error: null }),
   ]);
@@ -229,16 +237,27 @@ export async function listMyFeedItemsFromDb(input: {
                 ? String((source.metadata as Record<string, unknown>).channel_banner_url || '') || null
                 : null,
             viewCount: parseSourceViewCount(sourceMetadata),
-            unlockStatus:
-              sourceUnlock?.status === 'available'
-              || sourceUnlock?.status === 'reserved'
-              || sourceUnlock?.status === 'processing'
-              || sourceUnlock?.status === 'ready'
-                ? sourceUnlock.status
-                : null,
+            unlockStatus: (() => {
+              const effectiveStatus = getEffectiveUnlockDisplayStatus({
+                status: (sourceUnlock as UnlockRowLike | null)?.status || null,
+                reservationExpiresAt: (sourceUnlock as UnlockRowLike | null)?.reservation_expires_at || null,
+              });
+              return effectiveStatus === 'available'
+                || effectiveStatus === 'reserved'
+                || effectiveStatus === 'processing'
+                || effectiveStatus === 'ready'
+                ? effectiveStatus
+                : null;
+            })(),
             unlockCost: sourceUnlock ? Number(sourceUnlock.estimated_cost || 0) : null,
-            unlockInProgress: sourceUnlock?.status === 'reserved' || sourceUnlock?.status === 'processing',
-            readyBlueprintId: sourceUnlock?.status === 'ready'
+            unlockInProgress: isEffectiveUnlockDisplayInProgress({
+              status: (sourceUnlock as UnlockRowLike | null)?.status || null,
+              reservationExpiresAt: (sourceUnlock as UnlockRowLike | null)?.reservation_expires_at || null,
+            }),
+            readyBlueprintId: getEffectiveUnlockDisplayStatus({
+              status: (sourceUnlock as UnlockRowLike | null)?.status || null,
+              reservationExpiresAt: (sourceUnlock as UnlockRowLike | null)?.reservation_expires_at || null,
+            }) === 'ready'
               ? (sourceUnlock.blueprint_id || null)
               : null,
           }

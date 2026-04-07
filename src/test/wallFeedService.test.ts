@@ -354,6 +354,71 @@ describe('wall feed service', () => {
     expect(items.map((item) => item.feedItemId)).toEqual(['ufi_blueprint', 'ufi_locked']);
   });
 
+  it('treats expired locked-card holds as unlockable instead of in progress', async () => {
+    const db = createMockSupabase({
+      user_feed_items: [
+        {
+          id: 'ufi_locked',
+          user_id: 'viewer_1',
+          source_item_id: 'source_2',
+          blueprint_id: null,
+          state: 'my_feed_unlockable',
+          generated_at_on_wall: null,
+          created_at: '2026-04-06T11:00:00.000Z',
+        },
+      ],
+      blueprints: [],
+      blueprint_tags: [],
+      blueprint_likes: [],
+      source_items: [
+        {
+          id: 'source_2',
+          source_page_id: 'page_1',
+          source_channel_id: 'channel_1',
+          source_channel_title: 'Channel 1',
+          title: 'Locked Source',
+          source_url: 'https://youtube.com/watch?v=2',
+          thumbnail_url: 'https://thumb/2.jpg',
+          metadata: { view_count: 11, source_channel_avatar_url: 'https://avatar/1.jpg' },
+        },
+      ],
+      source_item_unlocks: [
+        {
+          source_item_id: 'source_2',
+          status: 'reserved',
+          estimated_cost: 1,
+          reservation_expires_at: '2026-04-06T10:00:00.000Z',
+          blueprint_id: null,
+          last_error_code: null,
+          transcript_status: null,
+        },
+      ],
+      user_source_subscriptions: [
+        {
+          user_id: 'viewer_1',
+          source_page_id: 'page_1',
+          source_channel_id: 'channel_1',
+          is_active: true,
+        },
+      ],
+      channel_candidates: [],
+    }) as any;
+
+    const items = await listWallForYouFeed({
+      db,
+      userId: 'viewer_1',
+      normalizeTranscriptTruthStatus: () => 'ready',
+      limit: 10,
+    });
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      kind: 'locked',
+      feedItemId: 'ufi_locked',
+      unlockInProgress: false,
+    });
+  });
+
   it('filters joined lane and channel scopes by published channel slug only', async () => {
     const db = createMockSupabase({
       blueprints: [

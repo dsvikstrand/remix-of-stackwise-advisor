@@ -1,6 +1,7 @@
 import { CHANNELS_CATALOG } from '../../src/lib/channelsCatalog';
 import { buildFeedSummary } from '../../src/lib/feedPreview';
 import { resolveFeedItemWallDisplayAt } from './feedItemWallPolicy';
+import { isEffectiveUnlockDisplayInProgress } from './unlockDisplayState';
 
 type DbClient = {
   from: (table: string) => any;
@@ -468,7 +469,7 @@ export async function listWallForYouFeed(input: {
     sourceIds.length
       ? (input.readUnlockRows
         ? Promise.resolve({ data: await input.readUnlockRows({ db, sourceIds }), error: null })
-        : db.from('source_item_unlocks').select('source_item_id, status, estimated_cost, blueprint_id, last_error_code, transcript_status').in('source_item_id', sourceIds))
+        : db.from('source_item_unlocks').select('source_item_id, status, estimated_cost, reservation_expires_at, blueprint_id, last_error_code, transcript_status').in('source_item_id', sourceIds))
       : Promise.resolve({ data: [], error: null }),
     input.readActiveSubscriptions
       ? Promise.resolve({ data: await input.readActiveSubscriptions({ db, userId }), error: null })
@@ -590,7 +591,10 @@ export async function listWallForYouFeed(input: {
       unlockCost: sourceUnlock ? Number(sourceUnlock.estimated_cost || 0) : 0,
       sourcePageId,
       sourceChannelId,
-      unlockInProgress: sourceUnlock?.status === 'reserved' || sourceUnlock?.status === 'processing',
+      unlockInProgress: isEffectiveUnlockDisplayInProgress({
+        status: sourceUnlock?.status,
+        reservation_expires_at: sourceUnlock?.reservation_expires_at,
+      }),
     });
   }
 
