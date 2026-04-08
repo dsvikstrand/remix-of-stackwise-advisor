@@ -26,6 +26,8 @@ This file is the authoritative active/reference/deserted/completed registry for 
   Paused broader Oracle-ownership architecture chapter retained as context after the narrower queue and unlock full-ownership cutovers completed.
 - `docs/exec-plans/active/on-pause/oracle-feed-full-ownership-cutover-plan.md`
   Passive feed burn-in/closure chapter retained while source-items becomes the next active ownership execution track.
+- `docs/exec-plans/active/on-pause/oracle-generation-state-full-ownership-cutover-plan.md`
+  Queued next ownership chapter for full Oracle generation-state cutover; Phase 0 inventory is complete and the next concrete implementation wave is the bootstrap/rehydration cut.
 - `docs/exec-plans/deserted/backend-aggressive-egress-tuning-plan.md`
   Paused backend egress tuning root retained in case the team chooses to resume the remaining aggressive-but-acceptable freshness/cadence trims later.
 - `docs/exec-plans/completed/bleup-pwa-program.md`
@@ -138,6 +140,8 @@ This file is the authoritative active/reference/deserted/completed registry for 
   Source items are now the active ownership chapter because current Supabase attribution still shows `source_items` as one of the largest remaining backend-owned families after the queue/unlock cutovers and the main feed cutover passes.
 - Passive ownership burn-in chapter: `docs/exec-plans/active/on-pause/oracle-feed-full-ownership-cutover-plan.md`.
   Feed remains in passive burn-in after the main Oracle-only rehydration/write/read severing passes.
+- Queued next ownership chapter: `docs/exec-plans/active/on-pause/oracle-generation-state-full-ownership-cutover-plan.md`.
+  Generation-state is the next planned Oracle-only cutover because the current Supabase attribution sample is now led by `generation_runs` and `source_item_blueprint_variants`, and Phase 0 inventory has isolated the first decisive seam as bootstrap/rehydration from Supabase.
 - Paused broader Oracle-ownership context: `docs/exec-plans/active/on-pause/oracle-deeper-ownership-and-supabase-reduction-plan.md`.
 - Current active proof/deferred tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`.
 - Current post-launch debt board: `docs/exec-plans/tech-debt-tracker.md`.
