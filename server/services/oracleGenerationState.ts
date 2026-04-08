@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import type { OracleControlPlaneDb } from './oracleControlPlaneDb';
 import {
   normalizeIsoOrNull,
@@ -7,8 +6,6 @@ import {
   normalizeRequiredIso,
   normalizeStringOrNull,
 } from './oracleValueNormalization';
-
-type DbClient = SupabaseClient<any, 'public', any>;
 
 export type OracleGenerationVariantRow = {
   id: string;
@@ -829,63 +826,34 @@ export async function listOracleFailedGenerationRunsByVideoId(input: {
   } as Record<string, unknown>));
 }
 
-export async function syncOracleGenerationStateFromSupabase(input: {
+export async function countOracleGenerationStateRows(input: {
   controlDb: OracleControlPlaneDb;
-  db: DbClient;
-  limit: number;
-  nowIso?: string;
 }) {
-  const limit = Math.max(100, Math.floor(Number(input.limit) || 0));
-  const pageSize = Math.min(1000, limit);
-  const variantRows: Array<Record<string, unknown>> = [];
-  const runRows: Array<Record<string, unknown>> = [];
-
-  for (let from = 0; from < limit; from += pageSize) {
-    const to = Math.min(limit, from + pageSize) - 1;
-    const { data, error } = await input.db
-      .from('source_item_blueprint_variants')
-      .select(VARIANT_SELECT)
-      .order('updated_at', { ascending: false })
-      .order('id', { ascending: false })
-      .range(from, to);
-    if (error) throw error;
-    const batch = (data || []) as Array<Record<string, unknown>>;
-    variantRows.push(...batch);
-    if (batch.length < pageSize) break;
-  }
-
-  for (let from = 0; from < limit; from += pageSize) {
-    const to = Math.min(limit, from + pageSize) - 1;
-    const { data, error } = await input.db
-      .from('generation_runs')
-      .select(RUN_SELECT)
-      .order('updated_at', { ascending: false })
-      .order('run_id', { ascending: false })
-      .range(from, to);
-    if (error) throw error;
-    const batch = (data || []) as Array<Record<string, unknown>>;
-    runRows.push(...batch);
-    if (batch.length < pageSize) break;
-  }
-
-  await input.controlDb.db.deleteFrom('generation_variant_state').execute();
-  await input.controlDb.db.deleteFrom('generation_run_state').execute();
-
-  const syncedVariants = await upsertOracleGenerationVariantRows({
-    controlDb: input.controlDb,
-    rows: variantRows,
-    nowIso: input.nowIso,
-  });
-  const syncedRuns = await upsertOracleGenerationRunRows({
-    controlDb: input.controlDb,
-    rows: runRows,
-    nowIso: input.nowIso,
-  });
+  const [variantCountRow, variantActiveCountRow, runCountRow, runActiveCountRow] = await Promise.all([
+    input.controlDb.db
+      .selectFrom('generation_variant_state')
+      .select(({ fn }) => fn.count<number>('id').as('count'))
+      .executeTakeFirst(),
+    input.controlDb.db
+      .selectFrom('generation_variant_state')
+      .select(({ fn }) => fn.count<number>('id').as('count'))
+      .where('status', 'in', ['queued', 'running'])
+      .executeTakeFirst(),
+    input.controlDb.db
+      .selectFrom('generation_run_state')
+      .select(({ fn }) => fn.count<number>('id').as('count'))
+      .executeTakeFirst(),
+    input.controlDb.db
+      .selectFrom('generation_run_state')
+      .select(({ fn }) => fn.count<number>('id').as('count'))
+      .where('status', '=', 'running')
+      .executeTakeFirst(),
+  ]);
 
   return {
-    variantCount: syncedVariants.length,
-    variantActiveCount: syncedVariants.filter((row) => row.status === 'queued' || row.status === 'running').length,
-    runCount: syncedRuns.length,
-    runActiveCount: syncedRuns.filter((row) => row.status === 'running').length,
+    variantCount: Number(variantCountRow?.count || 0),
+    variantActiveCount: Number(variantActiveCountRow?.count || 0),
+    runCount: Number(runCountRow?.count || 0),
+    runActiveCount: Number(runActiveCountRow?.count || 0),
   };
 }

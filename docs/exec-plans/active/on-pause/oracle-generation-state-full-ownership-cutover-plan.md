@@ -173,14 +173,14 @@ g10) [have] Output of Phase 0:
 
 ## Phase 1: Stop Supabase Generation-State Rehydration / Residual Input
 
-h1) [todo] Remove the main Oracle generation-state bootstrap/rehydration input that still accepts Supabase generation truth as authoritative runtime input.
+h1) [have] Removed the main Oracle generation-state bootstrap/rehydration input that accepted Supabase generation truth as authoritative runtime input.
 
-h2) [todo] Land in this wave:
+h2) [have] Landed in this wave:
 - Oracle generation bootstrap keeps durable truth from Oracle generation-state tables
 - Oracle product/generation mirrors rebuild from Oracle-owned generation-state rows
 - Supabase generation-state stops acting as runtime input during restart/bootstrap
 
-h3) [todo] This is the first decisive cut because it removes the most dangerous dual-state input before all other severing.
+h3) [have] This first decisive cut removes the most dangerous dual-state input before all other severing.
 
 ## Phase 2: Oracle-Only Generation-State Writes
 

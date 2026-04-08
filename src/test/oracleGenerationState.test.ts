@@ -5,15 +5,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { openOracleControlPlaneDb } from '../../server/services/oracleControlPlaneDb';
 import {
   claimOracleGenerationVariantForGeneration,
+  countOracleGenerationStateRows,
   finalizeOracleGenerationRunFailure,
   finalizeOracleGenerationRunSuccess,
   getOracleGenerationRunByRunId,
   getOracleGenerationVariant,
   startOracleGenerationRun,
-  syncOracleGenerationStateFromSupabase,
   updateOracleGenerationRunModelInfo,
+  upsertOracleGenerationRunRows,
+  upsertOracleGenerationVariantRows,
 } from '../../server/services/oracleGenerationState';
-import { createMockSupabase } from './helpers/mockSupabase';
 
 const tempDirs: string[] = [];
 
@@ -167,7 +168,7 @@ describe('oracle generation state', () => {
     }
   });
 
-  it('bootstraps Oracle generation state from Supabase rows across multiple pages', async () => {
+  it('counts Oracle generation state rows without rehydrating from Supabase', async () => {
     const controlDb = openOracleControlPlaneDb({
       sqlitePath: createTempSqlitePath(),
     });
@@ -212,16 +213,19 @@ describe('oracle generation state', () => {
       created_at: new Date(Date.UTC(2026, 3, 3, 9, 10, 0, index)).toISOString(),
       updated_at: new Date(Date.UTC(2026, 3, 3, 9, 10, 5, index)).toISOString(),
     }));
-    const db = createMockSupabase({
-      source_item_blueprint_variants: variantRows,
-      generation_runs: runRows,
-    }) as any;
 
     try {
-      const result = await syncOracleGenerationStateFromSupabase({
+      await upsertOracleGenerationVariantRows({
         controlDb,
-        db,
-        limit: 5000,
+        rows: variantRows,
+      });
+      await upsertOracleGenerationRunRows({
+        controlDb,
+        rows: runRows,
+      });
+
+      const result = await countOracleGenerationStateRows({
+        controlDb,
       });
 
       expect(result).toMatchObject({

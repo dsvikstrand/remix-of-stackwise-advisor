@@ -174,7 +174,7 @@ import {
   markOracleGenerationVariantReady,
   resolveOracleGenerationVariantOrReady,
   startOracleGenerationRun,
-  syncOracleGenerationStateFromSupabase,
+  countOracleGenerationStateRows,
   updateOracleGenerationRunModelInfo,
   upsertOracleGenerationRunRow,
   upsertOracleGenerationVariantRow,
@@ -15607,10 +15607,8 @@ async function bootstrapOracleControlPlaneState() {
   let generationRunCount: number | null = null;
   let generationRunActiveCount: number | null = null;
   if (oracleGenerationStateEnabled) {
-    const generationStateBootstrap = await syncOracleGenerationStateFromSupabase({
+    const generationStateBootstrap = await countOracleGenerationStateRows({
       controlDb: oracleControlPlane,
-      db,
-      limit: oracleControlPlaneConfig.generationStateBootstrapLimit,
     });
     generationVariantCount = generationStateBootstrap.variantCount;
     generationVariantActiveCount = generationStateBootstrap.variantActiveCount;

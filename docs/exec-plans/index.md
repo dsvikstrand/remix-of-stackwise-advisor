@@ -27,7 +27,7 @@ This file is the authoritative active/reference/deserted/completed registry for 
 - `docs/exec-plans/active/on-pause/oracle-feed-full-ownership-cutover-plan.md`
   Passive feed burn-in/closure chapter retained while source-items becomes the next active ownership execution track.
 - `docs/exec-plans/active/on-pause/oracle-generation-state-full-ownership-cutover-plan.md`
-  Queued next ownership chapter for full Oracle generation-state cutover; Phase 0 inventory is complete and the next concrete implementation wave is the bootstrap/rehydration cut.
+  Queued next ownership chapter for full Oracle generation-state cutover; Phase 0 inventory and Phase 1 bootstrap/rehydration removal are complete, with write/read severing still queued.
 - `docs/exec-plans/deserted/backend-aggressive-egress-tuning-plan.md`
   Paused backend egress tuning root retained in case the team chooses to resume the remaining aggressive-but-acceptable freshness/cadence trims later.
 - `docs/exec-plans/completed/bleup-pwa-program.md`
@@ -141,7 +141,7 @@ This file is the authoritative active/reference/deserted/completed registry for 
 - Passive ownership burn-in chapter: `docs/exec-plans/active/on-pause/oracle-feed-full-ownership-cutover-plan.md`.
   Feed remains in passive burn-in after the main Oracle-only rehydration/write/read severing passes.
 - Queued next ownership chapter: `docs/exec-plans/active/on-pause/oracle-generation-state-full-ownership-cutover-plan.md`.
-  Generation-state is the next planned Oracle-only cutover because the current Supabase attribution sample is now led by `generation_runs` and `source_item_blueprint_variants`, and Phase 0 inventory has isolated the first decisive seam as bootstrap/rehydration from Supabase.
+  Generation-state is the next planned Oracle-only cutover because the current Supabase attribution sample is now led by `generation_runs` and `source_item_blueprint_variants`; the bootstrap/rehydration cut is already landed, and the next runtime passes are Oracle-only writes then Oracle-only reads.
 - Paused broader Oracle-ownership context: `docs/exec-plans/active/on-pause/oracle-deeper-ownership-and-supabase-reduction-plan.md`.
 - Current active proof/deferred tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`.
 - Current post-launch debt board: `docs/exec-plans/tech-debt-tracker.md`.
