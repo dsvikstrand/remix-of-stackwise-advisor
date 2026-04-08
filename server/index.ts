@@ -150,7 +150,6 @@ import {
   getOracleFeedLedgerById,
   getOracleFeedLedgerByUserSourceItem,
   listOracleFeedLedgerRows,
-  syncOracleFeedLedgerFromSupabase,
   upsertOracleFeedLedgerRow,
   upsertOracleFeedLedgerRows,
 } from './services/oracleFeedLedgerState';
@@ -15543,13 +15542,19 @@ async function bootstrapOracleControlPlaneState() {
   let feedLedgerCount: number | null = null;
   let feedLedgerActiveCount: number | null = null;
   if (oracleFeedLedgerEnabled) {
-    const feedLedgerBootstrap = await syncOracleFeedLedgerFromSupabase({
-      controlDb: oracleControlPlane,
-      db,
-      limit: oracleControlPlaneConfig.feedLedgerBootstrapLimit,
-    });
-    feedLedgerCount = feedLedgerBootstrap.rowCount;
-    feedLedgerActiveCount = feedLedgerBootstrap.activeCount;
+    const [feedLedgerCountRow, feedLedgerActiveCountRow] = await Promise.all([
+      oracleControlPlane.db
+        .selectFrom('feed_ledger_state')
+        .select(({ fn }) => fn.count<number>('id').as('count'))
+        .executeTakeFirst(),
+      oracleControlPlane.db
+        .selectFrom('feed_ledger_state')
+        .select(({ fn }) => fn.count<number>('id').as('count'))
+        .where('state', 'in', ['my_feed_unlockable', 'my_feed_unlocking'])
+        .executeTakeFirst(),
+    ]);
+    feedLedgerCount = Number(feedLedgerCountRow?.count || 0);
+    feedLedgerActiveCount = Number(feedLedgerActiveCountRow?.count || 0);
   }
 
   let sourceItemLedgerCount: number | null = null;

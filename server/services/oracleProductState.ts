@@ -149,18 +149,6 @@ const UNLOCK_SELECT = [
   'updated_at',
 ].join(', ');
 
-const FEED_SELECT = [
-  'id',
-  'user_id',
-  'source_item_id',
-  'blueprint_id',
-  'state',
-  'last_decision_code',
-  'generated_at_on_wall',
-  'created_at',
-  'updated_at',
-].join(', ');
-
 function normalizeIsoOrNull(value: unknown) {
   const normalized = String(value || '').trim();
   if (!normalized) return null;
@@ -520,7 +508,7 @@ export async function syncOracleProductStateFromSupabase(input: {
     activeSubscriptionsResult,
     recentSubscriptionsResult,
     sourceItemsResult,
-    feedResult,
+    feedLedgerRows,
   ] = await Promise.all([
     input.db
       .from('user_source_subscriptions')
@@ -536,18 +524,17 @@ export async function syncOracleProductStateFromSupabase(input: {
       .select(SOURCE_ITEM_SELECT)
       .order('updated_at', { ascending: false })
       .limit(recentLimit),
-    input.db
-      .from('user_feed_items')
-      .select(FEED_SELECT)
-      .order('created_at', { ascending: false })
-      .limit(recentLimit),
+    input.controlDb.db
+      .selectFrom('feed_ledger_state')
+      .selectAll()
+      .orderBy('created_at', 'desc')
+      .limit(recentLimit)
+      .execute(),
   ]);
 
   if (activeSubscriptionsResult.error) throw activeSubscriptionsResult.error;
   if (recentSubscriptionsResult.error) throw recentSubscriptionsResult.error;
   if (sourceItemsResult.error) throw sourceItemsResult.error;
-  if (feedResult.error) throw feedResult.error;
-
   const subscriptionMap = new Map<string, Record<string, unknown>>();
   for (const row of recentSubscriptionsResult.data || []) {
     const id = String((row as Record<string, unknown>).id || '').trim();
@@ -596,7 +583,7 @@ export async function syncOracleProductStateFromSupabase(input: {
     }),
     upsertOracleProductFeedRows({
       controlDb: input.controlDb,
-      rows: (feedResult.data || []) as Array<Record<string, unknown>>,
+      rows: (feedLedgerRows || []) as Array<Record<string, unknown>>,
       nowIso,
     }),
   ]);

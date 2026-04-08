@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { openOracleControlPlaneDb } from '../../server/services/oracleControlPlaneDb';
+import { upsertOracleFeedLedgerRows } from '../../server/services/oracleFeedLedgerState';
 import { upsertOracleUnlockLedgerRows } from '../../server/services/oracleUnlockLedgerState';
 import {
   countOracleProductActiveSubscriptions,
@@ -239,6 +240,20 @@ describe('oracle product state', () => {
           },
         ],
       });
+      await upsertOracleFeedLedgerRows({
+        controlDb,
+        rows: [
+          {
+            id: 'feed_bootstrap_oracle',
+            user_id: 'user_1',
+            source_item_id: 'source_bootstrap',
+            blueprint_id: null,
+            state: 'my_feed_unlocking',
+            created_at: '2026-04-01T11:07:30.000Z',
+            updated_at: '2026-04-01T11:07:30.000Z',
+          },
+        ],
+      });
 
       const result = await syncOracleProductStateFromSupabase({
         controlDb,
@@ -267,8 +282,8 @@ describe('oracle product state', () => {
         status: 'available',
       });
       expect(mirroredFeedRows[0]).toMatchObject({
-        id: 'feed_bootstrap',
-        state: 'my_feed_unlockable',
+        id: 'feed_bootstrap_oracle',
+        state: 'my_feed_unlocking',
       });
     } finally {
       await controlDb.close();

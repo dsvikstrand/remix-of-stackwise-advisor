@@ -13,8 +13,8 @@ This file is the authoritative active/reference/deserted/completed registry for 
   Canonical launch gate board and proof log.
 
 ## Active Root
-- No current active implementation root is selected.
-  The last two ownership cutover chapters were completed and archived; only the proof tail and debt tracker remain active until the next implementation root is chosen.
+- `docs/exec-plans/active/oracle-feed-full-ownership-cutover-plan.md`
+  Current active implementation root for the explicit feed cutover chapter whose end state is full Oracle ownership and zero normal-runtime Supabase feed work.
 - `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
   Current proof/deferred carry-forward tail. This is the only standing active-tail support file.
 - `docs/exec-plans/tech-debt-tracker.md`
@@ -132,12 +132,13 @@ This file is the authoritative active/reference/deserted/completed registry for 
 ## Current Program Snapshot
 - Core identity lock: `docs/app/core-direction-lock.md`.
 - Current runtime/ops truth: `docs/architecture.md`, `docs/ops/yt2bp_runbook.md`, and `docs/ops/mvp-launch-readiness-checklist.md`.
-- Current active implementation plan: none selected yet.
-  The last implementation roots, queue and unlock full-ownership cutovers, are now archived under `docs/exec-plans/completed/`.
+- Current active implementation plan: `docs/exec-plans/active/oracle-feed-full-ownership-cutover-plan.md`.
+  Feed is now the next ownership chapter because current Supabase attribution is dominated by `user_feed_items` activity after queue/unlock severing.
 - Paused broader Oracle-ownership context: `docs/exec-plans/active/on-pause/oracle-deeper-ownership-and-supabase-reduction-plan.md`.
 - Current active proof/deferred tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`.
 - Current post-launch debt board: `docs/exec-plans/tech-debt-tracker.md`.
 - Latest completed ownership chapters: `docs/exec-plans/completed/oracle-queue-full-ownership-cutover-plan.md` and `docs/exec-plans/completed/oracle-unlock-full-ownership-cutover-plan.md`.
+- Current active ownership chapter: `docs/exec-plans/active/oracle-feed-full-ownership-cutover-plan.md`.
 - Latest completed implementation plans: `docs/exec-plans/completed/transcript-provider-launch-plan.md` and `docs/exec-plans/completed/pre-launch-ui-ux-plan.md`.
 - Historical PWA/runtime-simplification/egress reference plans are archived under `docs/exec-plans/completed/`.
 - The prior Supabase egress attribution/reduction chapter is completed and now serves as reference context for the paused broader Oracle-ownership chapter and the completed queue/unlock cutover chapters.
