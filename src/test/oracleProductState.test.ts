@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { openOracleControlPlaneDb } from '../../server/services/oracleControlPlaneDb';
 import { upsertOracleFeedLedgerRows } from '../../server/services/oracleFeedLedgerState';
+import { upsertOracleSourceItemLedgerRows } from '../../server/services/oracleSourceItemLedgerState';
 import { upsertOracleUnlockLedgerRows } from '../../server/services/oracleUnlockLedgerState';
 import {
   countOracleProductActiveSubscriptions,
@@ -171,7 +172,7 @@ describe('oracle product state', () => {
     }
   });
 
-  it('bootstraps mirrored product state from Supabase rows while sourcing unlocks from the Oracle unlock ledger', async () => {
+  it('bootstraps mirrored product state from Oracle source/unlock/feed ledgers instead of Supabase shadows', async () => {
     const controlDb = openOracleControlPlaneDb({
       sqlitePath: createTempSqlitePath(),
     });
@@ -186,19 +187,6 @@ describe('oracle product state', () => {
           is_active: true,
           updated_at: '2026-04-01T11:00:00.000Z',
           created_at: '2026-04-01T11:00:00.000Z',
-        },
-      ],
-      source_items: [
-        {
-          id: 'source_bootstrap',
-          source_type: 'youtube',
-          source_native_id: 'video_bootstrap',
-          source_channel_id: 'channel_1',
-          source_page_id: 'page_1',
-          source_url: 'https://youtube.com/watch?v=video_bootstrap',
-          title: 'Bootstrap Video',
-          updated_at: '2026-04-01T11:05:00.000Z',
-          created_at: '2026-04-01T11:05:00.000Z',
         },
       ],
       source_item_unlocks: [
@@ -226,6 +214,22 @@ describe('oracle product state', () => {
     }) as any;
 
     try {
+      await upsertOracleSourceItemLedgerRows({
+        controlDb,
+        rows: [
+          {
+            id: 'source_bootstrap',
+            source_type: 'youtube',
+            source_native_id: 'video_bootstrap',
+            source_channel_id: 'channel_1',
+            source_page_id: 'page_1',
+            source_url: 'https://youtube.com/watch?v=video_bootstrap',
+            title: 'Bootstrap Video',
+            updated_at: '2026-04-01T11:05:30.000Z',
+            created_at: '2026-04-01T11:05:30.000Z',
+          },
+        ],
+      });
       await upsertOracleUnlockLedgerRows({
         controlDb,
         rows: [
@@ -277,9 +281,18 @@ describe('oracle product state', () => {
         userId: 'user_1',
         limit: 10,
       });
+      const mirroredSourceRows = await listOracleProductSourceItems({
+        controlDb,
+        ids: ['source_bootstrap'],
+      });
       expect(mirroredUnlock).toMatchObject({
         id: 'unlock_bootstrap_oracle',
         status: 'available',
+      });
+      expect(mirroredSourceRows[0]).toMatchObject({
+        id: 'source_bootstrap',
+        source_native_id: 'video_bootstrap',
+        title: 'Bootstrap Video',
       });
       expect(mirroredFeedRows[0]).toMatchObject({
         id: 'feed_bootstrap_oracle',

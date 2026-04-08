@@ -13,8 +13,8 @@ This file is the authoritative active/reference/deserted/completed registry for 
   Canonical launch gate board and proof log.
 
 ## Active Root
-- `docs/exec-plans/active/oracle-feed-full-ownership-cutover-plan.md`
-  Current active implementation root for the explicit feed cutover chapter whose end state is full Oracle ownership and zero normal-runtime Supabase feed work.
+- `docs/exec-plans/active/oracle-source-item-full-ownership-cutover-plan.md`
+  Current active implementation root for the explicit source-item cutover chapter whose end state is full Oracle ownership and zero normal-runtime Supabase source-item work.
 - `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
   Current proof/deferred carry-forward tail. This is the only standing active-tail support file.
 - `docs/exec-plans/tech-debt-tracker.md`
@@ -24,6 +24,8 @@ This file is the authoritative active/reference/deserted/completed registry for 
 - These files remain valid historical reference plans, but they are not the current implementation focus.
 - `docs/exec-plans/active/on-pause/oracle-deeper-ownership-and-supabase-reduction-plan.md`
   Paused broader Oracle-ownership architecture chapter retained as context after the narrower queue and unlock full-ownership cutovers completed.
+- `docs/exec-plans/active/on-pause/oracle-feed-full-ownership-cutover-plan.md`
+  Passive feed burn-in/closure chapter retained while source-items becomes the next active ownership execution track.
 - `docs/exec-plans/deserted/backend-aggressive-egress-tuning-plan.md`
   Paused backend egress tuning root retained in case the team chooses to resume the remaining aggressive-but-acceptable freshness/cadence trims later.
 - `docs/exec-plans/completed/bleup-pwa-program.md`
@@ -132,13 +134,15 @@ This file is the authoritative active/reference/deserted/completed registry for 
 ## Current Program Snapshot
 - Core identity lock: `docs/app/core-direction-lock.md`.
 - Current runtime/ops truth: `docs/architecture.md`, `docs/ops/yt2bp_runbook.md`, and `docs/ops/mvp-launch-readiness-checklist.md`.
-- Current active implementation plan: `docs/exec-plans/active/oracle-feed-full-ownership-cutover-plan.md`.
-  Feed is now the next ownership chapter because current Supabase attribution is dominated by `user_feed_items` activity after queue/unlock severing.
+- Current active implementation plan: `docs/exec-plans/active/oracle-source-item-full-ownership-cutover-plan.md`.
+  Source items are now the active ownership chapter because current Supabase attribution still shows `source_items` as one of the largest remaining backend-owned families after the queue/unlock cutovers and the main feed cutover passes.
+- Passive ownership burn-in chapter: `docs/exec-plans/active/on-pause/oracle-feed-full-ownership-cutover-plan.md`.
+  Feed remains in passive burn-in after the main Oracle-only rehydration/write/read severing passes.
 - Paused broader Oracle-ownership context: `docs/exec-plans/active/on-pause/oracle-deeper-ownership-and-supabase-reduction-plan.md`.
 - Current active proof/deferred tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`.
 - Current post-launch debt board: `docs/exec-plans/tech-debt-tracker.md`.
 - Latest completed ownership chapters: `docs/exec-plans/completed/oracle-queue-full-ownership-cutover-plan.md` and `docs/exec-plans/completed/oracle-unlock-full-ownership-cutover-plan.md`.
-- Current active ownership chapter: `docs/exec-plans/active/oracle-feed-full-ownership-cutover-plan.md`.
+- Current active ownership chapter: `docs/exec-plans/active/oracle-source-item-full-ownership-cutover-plan.md`.
 - Latest completed implementation plans: `docs/exec-plans/completed/transcript-provider-launch-plan.md` and `docs/exec-plans/completed/pre-launch-ui-ux-plan.md`.
 - Historical PWA/runtime-simplification/egress reference plans are archived under `docs/exec-plans/completed/`.
 - The prior Supabase egress attribution/reduction chapter is completed and now serves as reference context for the paused broader Oracle-ownership chapter and the completed queue/unlock cutover chapters.

@@ -3,6 +3,7 @@
 Status: `on-pause`
 
 Update note 2026-04-02:
+- Source-item ownership Pass 1 now removes Supabase `source_items` from Oracle restart/bootstrap input in `primary`: Oracle source-item truth stays in `source_item_ledger_state`, and Oracle product bootstrap mirrors recent source rows from that ledger instead of rereading Supabase source rows.
 - Search/manual generation ready-duplicate handling now upgrades an existing locked `user_feed_items` row via feed-row upsert instead of plain insert, fixing the case where the backend reports `skipped_existing` but the user wall remains locked.
 - Source-page unlock preparation now also treats Oracle-primary unlock wrapper failures as a safe fallback case: the route should fail explicitly instead of pretending the item is already `in_progress`, including impossible still-`available` unlock rows, while runtime falls back to the durable Supabase unlock mutation path and resyncs Oracle shadows from the known row. That fallback path now also normalizes legacy `transcript_probe_meta = null` unlock rows back to `{}` so the Supabase write does not fail on the live schema.
 - Short-transcript failures (`TRANSCRIPT_INSUFFICIENT_CONTEXT`) now also need UX hardening: repeated unlock attempts should be blocked by blueprint cooldown instead of silently requeueing, Home/Profile locked readers should hide those rows during cooldown, and Source Page variant overlays must only show `processing` for true queued/running variants.

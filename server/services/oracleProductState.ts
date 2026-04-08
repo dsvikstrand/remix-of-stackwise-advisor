@@ -507,7 +507,7 @@ export async function syncOracleProductStateFromSupabase(input: {
   const [
     activeSubscriptionsResult,
     recentSubscriptionsResult,
-    sourceItemsResult,
+    sourceItemLedgerRows,
     feedLedgerRows,
   ] = await Promise.all([
     input.db
@@ -519,11 +519,12 @@ export async function syncOracleProductStateFromSupabase(input: {
       .select(SUBSCRIPTION_SELECT)
       .order('updated_at', { ascending: false })
       .limit(recentLimit),
-    input.db
-      .from('source_items')
-      .select(SOURCE_ITEM_SELECT)
-      .order('updated_at', { ascending: false })
-      .limit(recentLimit),
+    input.controlDb.db
+      .selectFrom('source_item_ledger_state')
+      .selectAll()
+      .orderBy('updated_at', 'desc')
+      .limit(recentLimit)
+      .execute(),
     input.controlDb.db
       .selectFrom('feed_ledger_state')
       .selectAll()
@@ -534,7 +535,6 @@ export async function syncOracleProductStateFromSupabase(input: {
 
   if (activeSubscriptionsResult.error) throw activeSubscriptionsResult.error;
   if (recentSubscriptionsResult.error) throw recentSubscriptionsResult.error;
-  if (sourceItemsResult.error) throw sourceItemsResult.error;
   const subscriptionMap = new Map<string, Record<string, unknown>>();
   for (const row of recentSubscriptionsResult.data || []) {
     const id = String((row as Record<string, unknown>).id || '').trim();
@@ -573,7 +573,10 @@ export async function syncOracleProductStateFromSupabase(input: {
     }),
     upsertOracleProductSourceItemRows({
       controlDb: input.controlDb,
-      rows: (sourceItemsResult.data || []) as Array<Record<string, unknown>>,
+      rows: sourceItemLedgerRows.map((row) => ({
+        ...row,
+        metadata: normalizeJsonObject(row.metadata_json),
+      })) as Array<Record<string, unknown>>,
       nowIso,
     }),
     upsertOracleProductUnlockRows({

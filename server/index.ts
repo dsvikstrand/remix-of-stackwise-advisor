@@ -158,7 +158,6 @@ import {
   getOracleSourceItemLedgerByCanonicalKey,
   getOracleSourceItemLedgerById,
   listOracleSourceItemLedgerRows,
-  syncOracleSourceItemLedgerFromSupabase,
   upsertOracleSourceItemLedgerRow,
 } from './services/oracleSourceItemLedgerState';
 import {
@@ -15600,12 +15599,11 @@ async function bootstrapOracleControlPlaneState() {
 
   let sourceItemLedgerCount: number | null = null;
   if (oracleSourceItemLedgerEnabled) {
-    const sourceItemLedgerBootstrap = await syncOracleSourceItemLedgerFromSupabase({
-      controlDb: oracleControlPlane,
-      db,
-      limit: oracleControlPlaneConfig.sourceItemLedgerBootstrapLimit,
-    });
-    sourceItemLedgerCount = sourceItemLedgerBootstrap.rowCount;
+    const sourceItemLedgerCountRow = await oracleControlPlane.db
+      .selectFrom('source_item_ledger_state')
+      .select(({ fn }) => fn.count<number>('id').as('count'))
+      .executeTakeFirst();
+    sourceItemLedgerCount = Number(sourceItemLedgerCountRow?.count || 0);
   }
 
   let generationVariantCount: number | null = null;

@@ -1,6 +1,6 @@
 # Oracle Feed Full Ownership Cutover Plan
 
-Status: `active`
+Status: `on-pause`
 Owner: `Codex / David`
 Last updated: `2026-04-08`
 
@@ -237,5 +237,5 @@ p2) [have] Queue and unlock full-ownership chapters are completed context:
 - [oracle-queue-full-ownership-cutover-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/completed/oracle-queue-full-ownership-cutover-plan.md)
 - [oracle-unlock-full-ownership-cutover-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/completed/oracle-unlock-full-ownership-cutover-plan.md)
 
-p3) [have] This feed plan is the next explicit child chapter for one sharper destination:
+p3) [have] This feed plan remains the passive burn-in child chapter for one sharper destination:
 - full Oracle feed ownership

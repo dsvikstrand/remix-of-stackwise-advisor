@@ -69,6 +69,10 @@
   - `ORACLE_UNLOCK_LEDGER_MODE=primary` is expected for the active Oracle-owned unlock runtime.
   - Oracle unlock bootstrap/runtime should no longer rehydrate or normally reread Supabase `source_item_unlocks`.
   - leftover Supabase unlock rows are historical/compatibility residue only and should not be treated as the normal runtime input for unlock status or unlock settlement.
+- Current source-item cutover posture:
+  - `ORACLE_SOURCE_ITEM_LEDGER_MODE=primary` is expected for the active Oracle-owned source-item runtime.
+  - current Pass 1 removes Supabase `source_items` from Oracle restart/bootstrap input.
+  - Oracle product/source mirrors should now rebuild recent source rows from `source_item_ledger_state`, not from Supabase `source_items`.
 - Node runtime contract:
   - local repo baseline is Node `20.20.0` from `.nvmrc`
   - Oracle systemd is pinned to `/home/ubuntu/.nvm/versions/node/v20.20.0/bin/node`

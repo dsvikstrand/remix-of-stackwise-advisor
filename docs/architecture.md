@@ -118,6 +118,9 @@
   - Queue runtime ownership is now split cleanly:
     - Oracle queue-ledger `primary` is now the intended normal operational queue system for enqueue, claim/start, lease, retry/requeue, terminal state, and hot queue status reads (`active by scope`, `latest`, owner job detail/order).
     - In the current cutover baseline, Oracle-primary queue runtime defaults to Oracle-only behavior: normal queue writes and normal queue read misses no longer fall through to Supabase `ingestion_jobs`.
+  - Source-item ownership is now entering the same cutover pattern:
+    - Oracle source-item-ledger `primary` remains the normal Oracle source-item state surface for hot by-id/by-video lookups.
+    - current source-item Pass 1 removes Supabase `source_items` as restart/bootstrap input: Oracle source-item bootstrap keeps durable truth from `source_item_ledger_state`, and Oracle product bootstrap now mirrors recent source rows from that Oracle ledger instead of rereading Supabase `source_items`.
     - Oracle-primary queue runtime is now unconditional Oracle-only behavior for normal runtime paths; the older Supabase queue compatibility path is no longer part of steady-state runtime.
     - Oracle queue reads continue to treat empty Oracle results as authoritative in `primary`; any queue bypass during Oracle-only mode is logged as `queue_oracle_only_bypass` rather than silently rereading Supabase.
   - Subscription runtime ownership now follows the same Oracle-first pattern:
