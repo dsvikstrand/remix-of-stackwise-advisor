@@ -152,14 +152,16 @@ h3) [have] This is the first decisive cut because it removes the most dangerous 
 
 ## Phase 2: Oracle-Only Source-Item Writes
 
-i1) [todo] Remove the main normal-runtime Supabase source-item writes from Oracle-primary insert/update seams.
+i1) [have] Removed the main normal-runtime Supabase source-item writes from Oracle-primary insert/update seams.
 
-i2) [todo] Land in this wave:
+i2) [have] Land in this wave:
 - source-item insert/upsert stays Oracle-only
 - metadata/view-count/thumbnail updates stay Oracle-only
 - source-page/source attribution write helpers stop writing normal-runtime `source_items` shadows
+- Oracle-primary source-item mutations now write Oracle source-item ledger + Oracle product-source mirror only
+- Oracle-primary current-row resolution no longer rereads Supabase just to support a removed shadow write
 
-i3) [todo] After this phase, Supabase `source_items` no longer matters to normal source-item mutation correctness.
+i3) [have] After this phase, Supabase `source_items` no longer matters to normal source-item mutation correctness.
 
 ## Phase 3: Oracle-Only Source-Item Reads
 

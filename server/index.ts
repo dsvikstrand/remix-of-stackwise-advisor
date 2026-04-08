@@ -369,6 +369,7 @@ import {
   getSourceItemShadowChangedFields,
   mapSourceItemShadowUpdateValues,
   shouldLookupSupabaseSourceItemCurrent,
+  shouldWriteSupabaseSourceItemShadow,
 } from './services/sourceItemShadowPolicy';
 import {
   getQueueShadowActionClass,
@@ -3346,6 +3347,7 @@ async function upsertOracleProductSubscriptionsFromKnownRows(
 async function upsertOracleProductSourceItemsFromKnownRows(
   rows: Array<Record<string, unknown> | null | undefined>,
   action: string,
+  options?: { strict?: boolean },
 ) {
   const normalizedRows = rows.filter((row): row is Record<string, unknown> => Boolean(row?.id));
   if (!oracleProductMirrorEnabled || !oracleControlPlane || normalizedRows.length === 0) {
@@ -3364,6 +3366,9 @@ async function upsertOracleProductSourceItemsFromKnownRows(
       count: normalizedRows.length,
       error: error instanceof Error ? error.message : String(error),
     }));
+    if (options?.strict) {
+      throw error;
+    }
   }
 }
 
@@ -4244,11 +4249,12 @@ async function persistSourceItemRowOracleAware(
       }
     }
   }
+  const allowSupabaseCurrentLookup = shouldLookupSupabaseSourceItemCurrent({
+    primaryEnabled: oracleSourceItemLedgerPrimaryEnabled,
+    hasOracleCurrent: Boolean(existingOracleById || existingOracleByCanonical),
+  });
   const existingSupabaseById = !existingOracleById && !existingOracleByCanonical
-    && shouldLookupSupabaseSourceItemCurrent({
-      primaryEnabled: oracleSourceItemLedgerPrimaryEnabled,
-      hasOracleCurrent: Boolean(existingOracleById || existingOracleByCanonical),
-    })
+    && allowSupabaseCurrentLookup
     ? await readSupabaseSourceItemById(db, {
         sourceItemId: normalizedBase.id,
       })
@@ -4257,10 +4263,7 @@ async function persistSourceItemRowOracleAware(
     !existingOracleById
     && !existingOracleByCanonical
     && !existingSupabaseById
-    && shouldLookupSupabaseSourceItemCurrent({
-      primaryEnabled: oracleSourceItemLedgerPrimaryEnabled,
-      hasOracleCurrent: Boolean(existingOracleById || existingOracleByCanonical),
-    })
+    && allowSupabaseCurrentLookup
     && normalizedBase.canonical_key
   )
     ? await readSupabaseSourceItemByCanonicalKey(db, {
@@ -4291,6 +4294,32 @@ async function persistSourceItemRowOracleAware(
         canonical_key: normalizedRow.canonical_key || null,
         error: error instanceof Error ? error.message : String(error),
       }));
+    }
+  }
+
+  if (!shouldWriteSupabaseSourceItemShadow({
+    primaryEnabled: oracleSourceItemLedgerPrimaryEnabled,
+  })) {
+    try {
+      await upsertOracleProductSourceItemsFromKnownRows([normalizedRow], input.action, {
+        strict: true,
+      });
+      return normalizedRow;
+    } catch (error) {
+      if (oracleSourceItemLedgerEnabled && oracleControlPlane) {
+        if (existingOracleById || existingOracleByCanonical) {
+          await upsertOracleSourceItemLedgerFromKnownRow(
+            existingOracleById || existingOracleByCanonical,
+            `${input.action}_rollback`,
+          );
+        } else {
+          await deleteOracleSourceItemLedgerRows({
+            controlDb: oracleControlPlane,
+            ids: [normalizedRow.id],
+          });
+        }
+      }
+      throw error;
     }
   }
 

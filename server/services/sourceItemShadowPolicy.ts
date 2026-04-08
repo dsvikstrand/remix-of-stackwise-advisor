@@ -40,6 +40,12 @@ export function shouldLookupSupabaseSourceItemCurrent(input: {
   return !input.primaryEnabled && !input.hasOracleCurrent;
 }
 
+export function shouldWriteSupabaseSourceItemShadow(input: {
+  primaryEnabled: boolean;
+}) {
+  return !input.primaryEnabled;
+}
+
 export function getSourceItemShadowChangedFields(
   current: SourceItemShadowRowLike | null | undefined,
   next: SourceItemShadowRowLike,

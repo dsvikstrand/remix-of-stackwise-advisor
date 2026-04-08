@@ -3,6 +3,7 @@ import {
   getSourceItemShadowChangedFields,
   mapSourceItemShadowUpdateValues,
   shouldLookupSupabaseSourceItemCurrent,
+  shouldWriteSupabaseSourceItemShadow,
 } from '../../server/services/sourceItemShadowPolicy';
 
 describe('source item shadow policy', () => {
@@ -21,6 +22,16 @@ describe('source item shadow policy', () => {
       primaryEnabled: false,
       hasOracleCurrent: true,
     })).toBe(false);
+  });
+
+  it('skips Supabase shadow writes when Oracle primary owns source-item mutations', () => {
+    expect(shouldWriteSupabaseSourceItemShadow({
+      primaryEnabled: true,
+    })).toBe(false);
+
+    expect(shouldWriteSupabaseSourceItemShadow({
+      primaryEnabled: false,
+    })).toBe(true);
   });
 
   it('builds update payloads without id or created_at fields', () => {
