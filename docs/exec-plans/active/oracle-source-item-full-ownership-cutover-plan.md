@@ -165,15 +165,15 @@ i3) [have] After this phase, Supabase `source_items` no longer matters to normal
 
 ## Phase 3: Oracle-Only Source-Item Reads
 
-j1) [todo] Remove remaining normal-runtime Supabase source-item reads and read fallbacks from wall/profile/source-page/detail surfaces.
+j1) [have] Removed the main normal-runtime Supabase source-item reads and primary-mode read fallbacks from wall/profile/source-page/detail surfaces.
 
-j2) [todo] Land in this wave:
+j2) [have] Landed in this wave:
 - wall reads Oracle source-item state only
 - source-page reads Oracle source-item state only
 - profile/detail source attribution no longer requires Supabase `source_items`
 - browser/server source consumers stop depending on direct Supabase source-item reads
 
-j3) [todo] After this phase, Supabase `source_items` no longer matters to normal runtime source-item read correctness.
+j3) [have] After this phase, Supabase `source_items` no longer matters to normal runtime source-item read correctness.
 
 ## Phase 4: Short Burn-In / Canary
 
@@ -201,7 +201,7 @@ l2) [todo] Move this plan to `completed/` once:
 
 ## Proof Gates
 
-m1) [todo] Required proof before declaring source-item cutover complete:
+m1) [have] Required proof before declaring source-item cutover complete:
 - Oracle primary check green
 - public/local health green
 - wall/source-page/profile/detail still render correct source metadata

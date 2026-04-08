@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { lookupSourceItems } from '@/lib/sourceItemsApi';
 
 export interface PublicProfile {
   id: string;
@@ -119,31 +120,18 @@ export function useUserLikedBlueprints(userId: string | undefined, limit = 4) {
       });
 
       const unresolvedBlueprintIds = publicBlueprintIds.filter((blueprintId) => !sourceItemIdByBlueprint.has(blueprintId));
-      const { data: feedRows } = unresolvedBlueprintIds.length > 0
-        ? await supabase
-          .from('user_feed_items')
-          .select('blueprint_id, source_item_id, created_at')
-          .in('blueprint_id', unresolvedBlueprintIds)
-          .order('created_at', { ascending: false })
-        : { data: [] as Array<{ blueprint_id: string; source_item_id: string | null; created_at: string | null }> };
+      const sourceLookup = await lookupSourceItems({
+        sourceIds: Array.from(new Set(Array.from(sourceItemIdByBlueprint.values()).filter(Boolean))),
+        blueprintIds: unresolvedBlueprintIds,
+      });
 
-      (feedRows || []).forEach((row) => {
-        const blueprintId = String(row.blueprint_id || '').trim();
-        const sourceItemId = String(row.source_item_id || '').trim();
-        if (!blueprintId || !sourceItemId) return;
-        if (!sourceItemIdByBlueprint.has(blueprintId)) {
+      Object.entries(sourceLookup.source_item_id_by_blueprint_id).forEach(([blueprintId, sourceItemId]) => {
+        if (!sourceItemIdByBlueprint.has(blueprintId) && sourceItemId) {
           sourceItemIdByBlueprint.set(blueprintId, sourceItemId);
         }
       });
 
-      const sourceItemIds = Array.from(new Set(Array.from(sourceItemIdByBlueprint.values()).filter(Boolean)));
-      const { data: sourceRows } = sourceItemIds.length > 0
-        ? await supabase
-          .from('source_items')
-          .select('id, source_page_id, source_channel_id, source_channel_title, metadata')
-          .in('id', sourceItemIds)
-        : { data: [] as Array<{ id: string; source_page_id: string | null; source_channel_id: string | null; source_channel_title: string | null; metadata: unknown }> };
-      const sourceById = new Map((sourceRows || []).map((row) => [row.id, row]));
+      const sourceById = new Map((sourceLookup.items || []).map((row) => [row.id, row]));
 
       return (blueprints || []).map((bp) => ({
         ...bp,

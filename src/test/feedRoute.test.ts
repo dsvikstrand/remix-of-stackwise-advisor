@@ -422,6 +422,73 @@ describe('my feed route', () => {
       last_decision_code: 'SKIPPED_BY_USER',
     });
   });
+
+  it('serves source-item lookup through injected Oracle-aware feed/source readers', async () => {
+    const app = createMockApp();
+    const db = createMockSupabase({}) as any;
+    const readPublicFeedRows = vi.fn(async () => [
+      {
+        id: 'feed_1',
+        user_id: 'user_1',
+        source_item_id: 'source_lookup',
+        blueprint_id: 'bp_lookup',
+        state: 'my_feed_published',
+        created_at: '2026-03-20T10:00:00.000Z',
+      },
+    ]);
+    const readSourceRows = vi.fn(async () => [
+      {
+        id: 'source_lookup',
+        source_page_id: 'page_lookup',
+        source_channel_id: 'UC_lookup',
+        source_url: 'https://www.youtube.com/watch?v=lookup123',
+        title: 'Lookup video',
+        source_channel_title: 'Lookup creator',
+        thumbnail_url: 'https://img.example.com/lookup.jpg',
+        metadata: {},
+        source_native_id: 'lookup123',
+      },
+    ]);
+
+    registerFeedRoutes(app as any, {
+      autoChannelPipelineEnabled: true,
+      getAuthedSupabaseClient: () => db,
+      getServiceSupabaseClient: () => db,
+      readPublicFeedRows,
+      readSourceRows,
+      ...buildFeedRouteDeps(db),
+      createBlueprintFromVideo: async () => ({ blueprintId: 'bp_new', runId: null }),
+      runAutoChannelForFeedItem: async () => null,
+    });
+
+    const handler = app.handlers['POST /api/source-items/lookup'];
+    const res = createResponse('user_1');
+    await handler({
+      body: {
+        blueprint_ids: ['bp_lookup'],
+      },
+    } as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    expect(readPublicFeedRows).toHaveBeenCalledTimes(1);
+    expect(readSourceRows).toHaveBeenCalledWith({
+      db,
+      sourceIds: ['source_lookup'],
+    });
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        items: [
+          {
+            id: 'source_lookup',
+          },
+        ],
+        source_item_id_by_blueprint_id: {
+          bp_lookup: 'source_lookup',
+        },
+      },
+    });
+  });
 });
 
 type MyFeedRouteItem = {

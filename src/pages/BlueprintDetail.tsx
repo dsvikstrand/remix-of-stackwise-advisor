@@ -30,6 +30,7 @@ import { resolveEffectiveBanner } from '@/lib/bannerResolver';
 import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities';
 import { splitSummaryIntoSlides } from '@/lib/summarySlides';
 import { buildSourcePagePath } from '@/lib/sourcePagesApi';
+import { lookupSourceItems } from '@/lib/sourceItemsApi';
 import {
   buildRenderBlocksFromBlueprintSections,
   parseBlueprintSectionsV1,
@@ -322,15 +323,11 @@ export default function BlueprintDetail() {
         .maybeSingle();
       sourceItemId = String(variantRow?.source_item_id || '').trim() || null;
 
-      if (!sourceItemId) {
-        const { data: feedRow } = await supabase
-          .from('user_feed_items')
-          .select('source_item_id, created_at')
-          .eq('blueprint_id', blueprint.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        sourceItemId = String(feedRow?.source_item_id || '').trim() || null;
+      const initialLookup = !sourceItemId
+        ? await lookupSourceItems({ blueprintIds: [blueprint.id] })
+        : null;
+      if (!sourceItemId && initialLookup) {
+        sourceItemId = initialLookup.source_item_id_by_blueprint_id[blueprint.id] || null;
       }
 
       if (!sourceItemId) {
@@ -341,11 +338,10 @@ export default function BlueprintDetail() {
         }
         return;
       }
-      const { data: source, error: sourceError } = await supabase
-        .from('source_items')
-        .select('title, source_url, source_page_id, source_channel_id, source_channel_title, thumbnail_url, metadata')
-        .eq('id', sourceItemId)
-        .maybeSingle();
+      const source = initialLookup?.items.find((row) => row.id === sourceItemId)
+        || (await lookupSourceItems({ sourceIds: [sourceItemId] })).items[0]
+        || null;
+      const sourceError = null;
       if (sourceError || !source) {
         if (!cancelled) {
           setSourceChannel(null);

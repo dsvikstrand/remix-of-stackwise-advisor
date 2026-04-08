@@ -4149,27 +4149,6 @@ async function getSourceItemByIdOracleFirst(
   if (!sourceItemId) return null;
   const action = String(input.action || 'get_source_item_by_id').trim() || 'get_source_item_by_id';
 
-  async function readSupabaseFallback(reason: string) {
-    if (oracleSourceItemLedgerPrimaryEnabled) {
-      logSourceItemSupabaseFallbackRead({
-        action,
-        reason,
-        sourceItemId,
-      });
-    }
-    try {
-      return await readSupabaseSourceItemById(db, { sourceItemId });
-    } catch (error) {
-      console.warn('[oracle-control-plane] source_item_fallback_failed', JSON.stringify({
-        action,
-        reason,
-        source_item_id: sourceItemId,
-        error: error instanceof Error ? error.message : String(error),
-      }));
-      throw error;
-    }
-  }
-
   if (oracleSourceItemLedgerEnabled && oracleControlPlane) {
     try {
       const durable = await getOracleSourceItemLedgerById({
@@ -4182,14 +4161,17 @@ async function getSourceItemByIdOracleFirst(
       if (oracleSourceItemLedgerPrimaryEnabled) {
         return null;
       }
-      return readSupabaseFallback('oracle_source_item_ledger_missing');
+      return await readSupabaseSourceItemById(db, { sourceItemId });
     } catch (error) {
       console.warn('[oracle-control-plane] source_item_ledger_failed', JSON.stringify({
         action,
         source_item_id: sourceItemId,
         error: error instanceof Error ? error.message : String(error),
       }));
-      return readSupabaseFallback('oracle_source_item_ledger_failed');
+      if (oracleSourceItemLedgerPrimaryEnabled) {
+        throw error;
+      }
+      return await readSupabaseSourceItemById(db, { sourceItemId });
     }
   }
 
@@ -5095,32 +5077,6 @@ async function listProductSourceItemsOracleFirst(
   const canonicalKeys = [...new Set((input.canonicalKeys || []).map((value) => String(value || '').trim()).filter(Boolean))];
   const action = String(input.action || 'list_product_source_items').trim() || 'list_product_source_items';
 
-  async function listSupabaseFallback(reason: string) {
-    if (oracleSourceItemLedgerPrimaryEnabled) {
-      logSourceItemSupabaseFallbackRead({
-        action,
-        reason,
-        ids,
-        canonicalKeys,
-        sourceNativeId,
-      });
-    }
-    try {
-      return await listSupabaseSourceItems(db, {
-        ids,
-        sourceNativeId,
-        canonicalKeys,
-      });
-    } catch (error) {
-      console.warn('[oracle-control-plane] source_item_fallback_failed', JSON.stringify({
-        action,
-        reason,
-        error: error instanceof Error ? error.message : String(error),
-      }));
-      throw error;
-    }
-  }
-
   if (oracleSourceItemLedgerEnabled && oracleControlPlane) {
     try {
       const durable = await listOracleSourceItemLedgerRows({
@@ -5149,14 +5105,25 @@ async function listProductSourceItemsOracleFirst(
         return durableRows;
       }
 
-      const fallbackRows = await listSupabaseFallback('oracle_source_item_ledger_incomplete');
+      const fallbackRows = await listSupabaseSourceItems(db, {
+        ids,
+        sourceNativeId,
+        canonicalKeys,
+      });
       return mergeNormalizedSourceItemRows([...durableRows, ...fallbackRows]);
     } catch (error) {
       console.warn('[oracle-control-plane] source_item_ledger_failed', JSON.stringify({
         action,
         error: error instanceof Error ? error.message : String(error),
       }));
-      return listSupabaseFallback('oracle_source_item_ledger_failed');
+      if (oracleSourceItemLedgerPrimaryEnabled) {
+        throw error;
+      }
+      return await listSupabaseSourceItems(db, {
+        ids,
+        sourceNativeId,
+        canonicalKeys,
+      });
     }
   }
 
@@ -16196,10 +16163,21 @@ registerFeedRoutes(app, {
   autoChannelPipelineEnabled,
   getAuthedSupabaseClient,
   getServiceSupabaseClient,
+  readSourceRows: ({ db, sourceIds }: any) => listProductSourceItemsOracleFirst(db, {
+    ids: sourceIds,
+    action: 'feed_route_read_source_rows',
+  }),
   readFeedRows: ({ db, userId, limit, sourceItemIds, requireBlueprint }: any) => listProductFeedRowsForUserOracleFirst(db, {
     userId,
     limit,
     sourceItemIds,
+    requireBlueprint,
+  }),
+  readPublicFeedRows: ({ db, blueprintIds, state, limit, cursor, requireBlueprint }: any) => listPublicProductFeedRowsOracleFirst(db, {
+    blueprintIds,
+    state,
+    limit,
+    cursor,
     requireBlueprint,
   }),
   readUnlockRows: (db, sourceIds) => getSourceItemUnlocksBySourceItemIdsOracleFirst(db, sourceIds),

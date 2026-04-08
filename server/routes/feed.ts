@@ -37,6 +37,12 @@ export function registerFeedRoutes(app: express.Express, deps: FeedRouteDeps) {
               requireBlueprint,
             })
           : undefined,
+        readSourceRows: deps.readSourceRows
+          ? ({ db: innerDb, sourceIds }) => deps.readSourceRows!({
+              db: innerDb,
+              sourceIds,
+            })
+          : undefined,
         readUnlockRows: deps.readUnlockRows
           ? ({ db: innerDb, sourceIds }) => deps.readUnlockRows!(innerDb, sourceIds)
           : undefined,
@@ -96,11 +102,20 @@ export function registerFeedRoutes(app: express.Express, deps: FeedRouteDeps) {
       return res.status(409).json({ ok: false, error_code: 'INVALID_STATE', message: 'Only pending items can be accepted', data: null });
     }
 
-    const { data: sourceRow, error: sourceError } = await db
-      .from('source_items')
-      .select('id, source_url, source_native_id')
-      .eq('id', feedItem.source_item_id)
-      .maybeSingle();
+    const sourceRowsResult = deps.readSourceRows
+      ? { data: await deps.readSourceRows({
+          db,
+          sourceIds: [String(feedItem.source_item_id || '').trim()],
+        }), error: null }
+      : await db
+        .from('source_items')
+        .select('id, source_url, source_native_id')
+        .eq('id', feedItem.source_item_id)
+        .maybeSingle();
+    const sourceRow = Array.isArray((sourceRowsResult as any)?.data)
+      ? (sourceRowsResult as any).data[0]
+      : (sourceRowsResult as any)?.data || null;
+    const sourceError = (sourceRowsResult as any)?.error || null;
     if (sourceError || !sourceRow?.source_url || !sourceRow.source_native_id) {
       await deps.patchFeedItemById(db, {
         feedItemId: feedItem.id,
@@ -347,6 +362,70 @@ export function registerFeedRoutes(app: express.Express, deps: FeedRouteDeps) {
         data: {
           user_feed_item_id: feedItem.id,
         },
+      });
+    }
+  });
+
+  app.post('/api/source-items/lookup', async (req, res) => {
+    const db = deps.getServiceSupabaseClient();
+    if (!db) {
+      return res.status(500).json({
+        ok: false,
+        error_code: 'CONFIG_ERROR',
+        message: 'Service role client is not configured',
+        data: null,
+      });
+    }
+
+    const body = (req.body && typeof req.body === 'object') ? req.body as Record<string, unknown> : {};
+    const sourceIds = [...new Set((Array.isArray(body.source_ids) ? body.source_ids : []).map((value) => String(value || '').trim()).filter(Boolean))];
+    const blueprintIds = [...new Set((Array.isArray(body.blueprint_ids) ? body.blueprint_ids : []).map((value) => String(value || '').trim()).filter(Boolean))];
+
+    try {
+      const sourceItemIdByBlueprintId = new Map<string, string>();
+      if (blueprintIds.length && deps.readPublicFeedRows) {
+        const feedRows = await deps.readPublicFeedRows({
+          db,
+          blueprintIds,
+          limit: Math.max(blueprintIds.length * 5, 25),
+          requireBlueprint: true,
+        });
+        for (const row of feedRows || []) {
+          const blueprintId = String(row.blueprint_id || '').trim();
+          const sourceItemId = String(row.source_item_id || '').trim();
+          if (!blueprintId || !sourceItemId || sourceItemIdByBlueprintId.has(blueprintId)) continue;
+          sourceItemIdByBlueprintId.set(blueprintId, sourceItemId);
+        }
+      }
+
+      const effectiveSourceIds = [...new Set([
+        ...sourceIds,
+        ...Array.from(sourceItemIdByBlueprintId.values()),
+      ])];
+      const items = effectiveSourceIds.length
+        ? (deps.readSourceRows
+          ? await deps.readSourceRows({ db, sourceIds: effectiveSourceIds })
+          : ((await db
+            .from('source_items')
+            .select('id, source_page_id, source_channel_id, source_url, title, source_channel_title, thumbnail_url, metadata, source_native_id')
+            .in('id', effectiveSourceIds)).data || []))
+        : [];
+
+      return res.json({
+        ok: true,
+        error_code: null,
+        message: 'source items',
+        data: {
+          items,
+          source_item_id_by_blueprint_id: Object.fromEntries(sourceItemIdByBlueprintId),
+        },
+      });
+    } catch (error) {
+      return res.status(400).json({
+        ok: false,
+        error_code: 'READ_FAILED',
+        message: error instanceof Error ? error.message : 'Failed to load source items',
+        data: null,
       });
     }
   });

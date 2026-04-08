@@ -24,6 +24,19 @@ export async function listMyFeedItems(input: {
     created_at: string;
     updated_at?: string;
   }>>;
+  readSourceRows?: (input: {
+    db: DbClient;
+    sourceIds: string[];
+  }) => Promise<Array<{
+    id: string;
+    source_channel_id?: string | null;
+    source_page_id?: string | null;
+    source_url?: string | null;
+    title?: string | null;
+    source_channel_title?: string | null;
+    thumbnail_url?: string | null;
+    metadata?: unknown;
+  }>>;
   readUnlockRows?: (input: { db: DbClient; sourceIds: string[] }) => Promise<Array<{
     source_item_id: string;
     status: string;

@@ -40,6 +40,20 @@ export type FeedRouteDeps = {
   autoChannelPipelineEnabled: boolean;
   getAuthedSupabaseClient: (authToken: string) => DbClient | null;
   getServiceSupabaseClient: () => DbClient | null;
+  readSourceRows?: (input: {
+    db: DbClient;
+    sourceIds: string[];
+  }) => Promise<Array<{
+    id: string;
+    source_channel_id?: string | null;
+    source_page_id?: string | null;
+    source_url?: string | null;
+    title?: string | null;
+    source_channel_title?: string | null;
+    thumbnail_url?: string | null;
+    metadata?: unknown;
+    source_native_id?: string | null;
+  }>>;
   readFeedRows?: (input: {
     db: DbClient;
     userId: string;
@@ -53,6 +67,27 @@ export type FeedRouteDeps = {
     blueprint_id: string | null;
     state: string;
     last_decision_code: string | null;
+    generated_at_on_wall?: string | null;
+    created_at: string;
+    updated_at?: string;
+  }>>;
+  readPublicFeedRows?: (input: {
+    db: DbClient;
+    blueprintIds?: string[];
+    state?: string;
+    limit: number;
+    cursor?: {
+      created_at: string;
+      id: string;
+    } | null;
+    requireBlueprint?: boolean;
+  }) => Promise<Array<{
+    id: string;
+    user_id: string;
+    source_item_id: string | null;
+    blueprint_id: string | null;
+    state: string;
+    last_decision_code?: string | null;
     generated_at_on_wall?: string | null;
     created_at: string;
     updated_at?: string;
