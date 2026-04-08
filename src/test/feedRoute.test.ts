@@ -299,6 +299,85 @@ describe('my feed route', () => {
     });
   });
 
+  it('uses injected Oracle-aware feed reads for the read endpoint', async () => {
+    const app = createMockApp();
+    const db = createMockSupabase({
+      user_feed_items: [],
+      source_items: [
+        {
+          id: 'source_oracle',
+          source_channel_id: 'UC_oracle',
+          source_page_id: 'page_oracle',
+          source_url: 'https://www.youtube.com/watch?v=oracle123',
+          title: 'Oracle video',
+          source_channel_title: 'Oracle Creator',
+          thumbnail_url: 'https://img.example.com/oracle.jpg',
+          metadata: {},
+        },
+      ],
+      source_item_unlocks: [
+        {
+          source_item_id: 'source_oracle',
+          status: 'available',
+          estimated_cost: 1,
+          blueprint_id: null,
+          last_error_code: null,
+          transcript_status: null,
+        },
+      ],
+      blueprints: [],
+      channel_candidates: [],
+      blueprint_tags: [],
+      tags: [],
+      source_pages: [
+        {
+          id: 'page_oracle',
+          platform: 'youtube',
+          external_id: 'UC_oracle',
+          avatar_url: 'https://img.example.com/oracle-avatar.jpg',
+        },
+      ],
+    }) as any;
+
+    registerFeedRoutes(app as any, {
+      autoChannelPipelineEnabled: true,
+      getAuthedSupabaseClient: () => db,
+      getServiceSupabaseClient: () => db,
+      readFeedRows: async () => [
+        {
+          id: 'feed_oracle',
+          user_id: 'user_1',
+          source_item_id: 'source_oracle',
+          blueprint_id: null,
+          state: 'my_feed_unlockable',
+          last_decision_code: null,
+          created_at: '2026-03-20T09:30:00.000Z',
+          updated_at: '2026-03-20T09:30:00.000Z',
+        },
+      ],
+      ...buildFeedRouteDeps(db),
+      createBlueprintFromVideo: async () => ({ blueprintId: 'bp_new', runId: null }),
+      runAutoChannelForFeedItem: async () => null,
+    });
+
+    const handler = app.handlers['GET /api/my-feed'];
+    const res = createResponse('user_1');
+    await handler({} as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        items: [
+          expect.objectContaining({
+            id: 'feed_oracle',
+            state: 'my_feed_unlockable',
+          }),
+        ],
+      },
+    });
+  });
+
   it('skips a pending feed item through the shared feed patch helper path', async () => {
     const app = createMockApp();
     const db = createMockSupabase({

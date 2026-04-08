@@ -148,15 +148,16 @@ h3) [have] This is the first decisive cut because it removes the most harmful du
 
 ## Phase 2: Oracle-Only Feed Writes
 
-i1) [todo] Remove remaining normal-runtime Supabase feed writes from the main insert/upsert seams.
+i1) [have] Removed the main normal-runtime Supabase feed writes from the Oracle-primary insert/upsert seams.
 
-i2) [todo] Land in this wave:
+i2) [have] Landed in this wave:
 - locked feed insert stays Oracle-only
 - generated promotion/update stays Oracle-only
 - feed ordering timestamps are persisted Oracle-only
-- no normal runtime `POST/PATCH /rest/v1/user_feed_items...`
+- no normal runtime `POST/PATCH /rest/v1/user_feed_items...` from the shared Oracle-primary feed mutation path
+- server-side personal/channel feed readers that would otherwise miss new Oracle-only feed rows were switched to Oracle-aware feed loaders
 
-i3) [todo] After this phase, Supabase feed shadow should no longer matter to feed mutation correctness.
+i3) [have] After this phase, Supabase feed shadow no longer matters to normal feed mutation correctness.
 
 ## Phase 3: Oracle-Only Feed Reads
 

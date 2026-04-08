@@ -211,6 +211,65 @@ describe('channel feed route', () => {
     });
   });
 
+  it('uses the shared feed reader when published channel candidates reference Oracle-only feed rows', async () => {
+    const app = createMockApp();
+    const db = createMockSupabase({
+      channel_candidates: [
+        { user_feed_item_id: 'ufi_oracle', channel_slug: 'fitness-training', status: 'published', created_at: '2026-03-27T10:00:00.000Z' },
+      ],
+      user_feed_items: [],
+      blueprints: [
+        { id: 'bp_oracle', title: 'Oracle Blueprint', preview_summary: 'Oracle', likes_count: 7, created_at: '2026-03-27T11:00:00.000Z', is_public: true },
+      ],
+      blueprint_tags: [],
+    }) as any;
+
+    registerChannelCandidateRoutes(app as any, {
+      rejectLegacyManualFlowIfDisabled: () => false,
+      getAuthedSupabaseClient: () => db,
+      getServiceSupabaseClient: () => db,
+      getFeedItemById: async () => ({
+        id: 'ufi_oracle',
+        user_id: 'user_1',
+        source_item_id: 'source_oracle',
+        blueprint_id: 'bp_oracle',
+        state: 'channel_published',
+        last_decision_code: null,
+        created_at: '2026-03-27T10:00:00.000Z',
+        updated_at: '2026-03-27T10:00:00.000Z',
+      }),
+      patchFeedItemById: async () => null,
+      evaluateCandidateForChannel: () => ({
+        aggregate: 'pass',
+        candidateStatus: 'passed',
+        feedState: 'channel_published',
+        reasonCode: 'ALL_GATES_PASS',
+        mode: 'test',
+        decisions: [],
+      }),
+    });
+
+    const handler = app.handlers['GET /api/channels/:channelSlug/feed'];
+    const res = createResponse();
+    await handler({
+      params: { channelSlug: 'fitness-training' },
+      query: { tab: 'recent', limit: '20', offset: '0' },
+    } as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        items: [
+          expect.objectContaining({
+            id: 'bp_oracle',
+            title: 'Oracle Blueprint',
+          }),
+        ],
+      },
+    });
+  });
+
   it('updates the feed row through the shared feed patch helper when submitting a candidate', async () => {
     const app = createMockApp();
     const db = createMockSupabase({

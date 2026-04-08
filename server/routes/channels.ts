@@ -65,11 +65,13 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
       }
 
       const feedItemIds = candidateRows.map((row) => row.user_feed_item_id).filter(Boolean);
-      const { data: feedItems, error: feedItemsError } = await db
-        .from('user_feed_items')
-        .select('id, blueprint_id')
-        .in('id', feedItemIds);
-      if (feedItemsError) throw feedItemsError;
+      const feedItems = (
+        await Promise.all(
+          feedItemIds.map((feedItemId) => deps.getFeedItemById(db, {
+            feedItemId: String(feedItemId || '').trim(),
+          })),
+        )
+      ).filter(Boolean);
 
       const blueprintIdByFeedItemId = new Map<string, string>(
         (feedItems || [])

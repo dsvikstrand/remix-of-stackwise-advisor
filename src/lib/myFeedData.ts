@@ -96,6 +96,23 @@ export interface MyFeedItemView {
 export async function listMyFeedItemsFromDb(input: {
   db: DbClient;
   userId: string;
+  readFeedRows?: (input: {
+    db: DbClient;
+    userId: string;
+    limit: number;
+    sourceItemIds?: string[];
+    requireBlueprint?: boolean;
+  }) => Promise<Array<{
+    id: string;
+    user_id: string;
+    source_item_id: string | null;
+    blueprint_id: string | null;
+    state: string;
+    last_decision_code: string | null;
+    generated_at_on_wall?: string | null;
+    created_at: string;
+    updated_at?: string;
+  }>>;
   readUnlockRows?: (input: {
     db: DbClient;
     sourceIds: string[];
@@ -111,11 +128,17 @@ export async function listMyFeedItemsFromDb(input: {
 }): Promise<MyFeedItemView[]> {
   const { db, userId } = input;
 
-  const { data: feedRows, error: feedError } = await db
-    .from('user_feed_items')
-    .select('id, source_item_id, blueprint_id, state, last_decision_code, created_at')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
+  const feedRowsResult = input.readFeedRows
+    ? { data: await input.readFeedRows({ db, userId, limit: 5000 }), error: null }
+    : await db
+      .from('user_feed_items')
+      .select('id, source_item_id, blueprint_id, state, last_decision_code, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+  const feedRows = Array.isArray((feedRowsResult as any)?.data)
+    ? (feedRowsResult as any).data
+    : [];
+  const feedError = (feedRowsResult as any)?.error || null;
 
   if (feedError) throw feedError;
   if (!feedRows || feedRows.length === 0) return [];

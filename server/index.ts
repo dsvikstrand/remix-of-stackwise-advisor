@@ -4602,9 +4602,8 @@ async function persistFeedItemRowOracleAware(
   }
 
   try {
-    const shadowRow = await writeSupabaseFeedItemShadow(db, normalizedRow);
-    await upsertOracleProductFeedRowsFromKnownRows([shadowRow], input.action);
-    return shadowRow;
+    await upsertOracleProductFeedRowsFromKnownRows([normalizedRow], input.action);
+    return normalizedRow;
   } catch (error) {
     if (oracleFeedLedgerEnabled && oracleControlPlane) {
       if (previousOracle) {
@@ -9227,21 +9226,15 @@ async function insertFeedItem(db: ReturnType<typeof createClient>, input: {
       controlDb: oracleControlPlane,
       row: feedRow,
     });
-    const { error } = await db
-      .from('user_feed_items')
-      .insert(mapFeedItemToSupabaseShadowValues(feedRow))
-      .select('id')
-      .single();
-    if (error) {
+    try {
+      await upsertOracleProductFeedRowsFromKnownRows([feedRow], 'insert_feed_item');
+    } catch (error) {
       await deleteOracleFeedLedgerRows({
         controlDb: oracleControlPlane,
         ids: [feedRow.id],
       });
-      const code = (error as { code?: string }).code;
-      if (code === '23505') return null;
       throw error;
     }
-    await upsertOracleProductFeedRowsFromKnownRows([feedRow], 'insert_feed_item');
     return { id: feedRow.id };
   }
 
@@ -9324,15 +9317,6 @@ async function upsertFeedItemWithBlueprint(db: ReturnType<typeof createClient>, 
       controlDb: oracleControlPlane,
       row: nextRow,
     });
-    const { error } = await db
-      .from('user_feed_items')
-      .upsert(
-        mapFeedItemToSupabaseShadowValues(nextRow),
-        { onConflict: 'user_id,source_item_id' },
-      )
-      .select('id, user_id')
-      .single();
-    if (error) throw error;
     await upsertOracleProductFeedRowsFromKnownRows([nextRow], 'upsert_feed_item_with_blueprint');
     return { id: nextRow.id, user_id: nextRow.user_id };
   }
@@ -10361,13 +10345,12 @@ async function loadExistingSourceVideoStateForUser(
   const sourceIds = Array.from(new Set(Array.from(sourceByCanonical.values()).map((row) => row.id)));
   const feedBySourceItemId = new Map<string, { id: string; blueprint_id: string | null }>();
   if (sourceIds.length > 0) {
-    const { data: feedRows, error: feedRowsError } = await db
-      .from('user_feed_items')
-      .select('id, source_item_id, blueprint_id')
-      .eq('user_id', userId)
-      .not('blueprint_id', 'is', null)
-      .in('source_item_id', sourceIds);
-    if (feedRowsError) throw feedRowsError;
+    const feedRows = await listProductFeedRowsForUserOracleFirst(db, {
+      userId,
+      limit: Math.max(sourceIds.length, 1),
+      sourceItemIds: sourceIds,
+      requireBlueprint: true,
+    });
 
     for (const row of feedRows || []) {
       const sourceItemId = String(row.source_item_id || '').trim();
@@ -15855,12 +15838,14 @@ async function cleanupSubscriptionNoticeForChannel(
       .maybeSingle();
 
     if (noticeSource?.id) {
-      await db
-        .from('user_feed_items')
-        .delete()
-        .eq('user_id', input.userId)
-        .eq('source_item_id', noticeSource.id)
-        .eq('state', 'subscription_notice');
+      if (!oracleFeedLedgerPrimaryEnabled) {
+        await db
+          .from('user_feed_items')
+          .delete()
+          .eq('user_id', input.userId)
+          .eq('source_item_id', noticeSource.id)
+          .eq('state', 'subscription_notice');
+      }
       await deleteOracleProductFeedRowsForSubscriptionNotice({
         userId: input.userId,
         sourceItemId: noticeSource.id,
@@ -16126,6 +16111,12 @@ registerFeedRoutes(app, {
   autoChannelPipelineEnabled,
   getAuthedSupabaseClient,
   getServiceSupabaseClient,
+  readFeedRows: ({ db, userId, limit, sourceItemIds, requireBlueprint }: any) => listProductFeedRowsForUserOracleFirst(db, {
+    userId,
+    limit,
+    sourceItemIds,
+    requireBlueprint,
+  }),
   readUnlockRows: (db, sourceIds) => getSourceItemUnlocksBySourceItemIdsOracleFirst(db, sourceIds),
   getFeedItemById: getFeedItemByIdOracleFirst,
   patchFeedItemById: patchFeedItemByIdOracleAware,
