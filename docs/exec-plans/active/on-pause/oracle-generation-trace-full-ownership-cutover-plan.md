@@ -197,19 +197,23 @@ i5) [have] Oracle trace event writes now land in control-plane state while calle
 
 ## Phase 3: Oracle-Only Generation Trace Reads
 
-j1) [todo] Remove remaining normal-runtime Supabase `generation_run_events` reads from trace/detail surfaces.
+j1) [have] Removed remaining normal-runtime Supabase `generation_run_events` reads from trace/detail surfaces.
 
-j2) [todo] Land in this wave:
+j2) [have] Landed in this wave:
 - run trace reads use Oracle only
 - blueprint/run detail event pagination uses Oracle only
 - any trace-derived helper stops rereading Supabase in normal runtime
 
-j3) [todo] After this phase, Supabase generation trace no longer matters to normal runtime read correctness.
+j3) [have] After this phase, Supabase generation trace no longer matters to normal runtime read correctness.
 
-j4) [todo] Primary code seams for Pass 3:
+j4) [have] Primary code seams for Pass 3:
 - [generationTrace.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/generationTrace.ts)
 - [tracing.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/routes/tracing.ts)
   - move paginated trace reads fully onto Oracle-owned event state
+
+j5) [have] Oracle-primary trace detail reads now stay on Oracle event state through the shared service seam.
+- `listGenerationRunEvents(...)` now resolves through Oracle control-plane event state in `primary`
+- route contracts stay unchanged while event pagination no longer depends on Supabase `generation_run_events`
 
 ## Phase 4: Short Burn-In / Canary
 

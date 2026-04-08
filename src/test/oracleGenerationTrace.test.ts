@@ -11,6 +11,7 @@ import {
 import {
   appendGenerationEvent,
   configureGenerationTraceOracleWriteAdapter,
+  listGenerationRunEvents,
 } from '../../server/services/generationTrace';
 
 const tempDirs: string[] = [];
@@ -49,6 +50,14 @@ describe('oracle generation trace', () => {
             payload: input.payload,
           });
         },
+        async listEvents(input) {
+          return listOracleGenerationRunEvents({
+            controlDb,
+            runId: input.runId,
+            limit: input.limit,
+            cursor: input.cursor,
+          });
+        },
       });
 
       await Promise.all([
@@ -70,8 +79,7 @@ describe('oracle generation trace', () => {
         }),
       ]);
 
-      const page = await listOracleGenerationRunEvents({
-        controlDb,
+      const page = await listGenerationRunEvents({} as any, {
         runId: 'run_oracle_trace',
         limit: 10,
       });
@@ -106,6 +114,14 @@ describe('oracle generation trace', () => {
             payload: input.payload,
           });
         },
+        async listEvents(input) {
+          return listOracleGenerationRunEvents({
+            controlDb,
+            runId: input.runId,
+            limit: input.limit,
+            cursor: input.cursor,
+          });
+        },
       });
 
       await appendGenerationEvent({} as any, {
@@ -120,8 +136,7 @@ describe('oracle generation trace', () => {
         payload: { kept: true },
       });
 
-      const page = await listOracleGenerationRunEvents({
-        controlDb,
+      const page = await listGenerationRunEvents({} as any, {
         runId: 'run_oracle_quiet',
         limit: 10,
       });

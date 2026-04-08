@@ -52,6 +52,14 @@ type GenerationTraceOracleWriteAdapter = {
     level: GenerationTraceLevel;
     payload: Record<string, unknown>;
   }) => Promise<unknown>;
+  listEvents?: (input: {
+    runId: string;
+    limit?: number;
+    cursor?: string | null;
+  }) => Promise<{
+    items: GenerationRunEventRow[];
+    next_cursor: string | null;
+  }>;
 };
 
 const nextGenerationEventSeqByRunId = new Map<string, Promise<number>>();
@@ -425,6 +433,14 @@ export async function listGenerationRunEvents(
 
   const limit = clampInt(input.limit, 50, 1, 200);
   const cursor = decodeEventCursor(input.cursor);
+
+  if (generationTraceOracleWriteAdapter?.listEvents) {
+    return generationTraceOracleWriteAdapter.listEvents({
+      runId,
+      limit,
+      cursor: input.cursor,
+    });
+  }
 
   let query = db
     .from('generation_run_events')

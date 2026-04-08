@@ -337,6 +337,7 @@ import {
 import {
   appendOracleGenerationTraceEvent,
   clearOracleGenerationTraceSeqCursor,
+  listOracleGenerationRunEvents,
 } from './services/oracleGenerationTrace';
 import {
   clampInt,
@@ -792,6 +793,14 @@ configureGenerationTraceOracleWriteAdapter(
             event: input.event,
             level: input.level,
             payload: input.payload,
+          });
+        },
+        async listEvents(input) {
+          return listOracleGenerationRunEvents({
+            controlDb: oracleControlPlane,
+            runId: input.runId,
+            limit: input.limit,
+            cursor: input.cursor,
           });
         },
       }
