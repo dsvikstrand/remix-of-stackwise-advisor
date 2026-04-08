@@ -7975,7 +7975,7 @@ async function claimVariantForGeneration(input: Parameters<typeof claimVariantFo
         targetStatus: input.targetStatus,
       });
 
-      if (durable.outcome === 'claimed') {
+      if (durable.outcome === 'claimed' && !oracleGenerationStatePrimaryEnabled) {
         try {
           await claimVariantForGenerationSupabase({
             ...input,
@@ -8014,16 +8014,18 @@ async function markVariantReady(input: Parameters<typeof markVariantReadySupabas
         generationTier: input.generationTier,
         blueprintId: input.blueprintId,
       });
-      try {
-        await markVariantReadySupabase(input);
-      } catch (error) {
-        logOracleGenerationStateShadowError({
-          action: 'mark_variant_ready',
-          sourceItemId: input.sourceItemId,
-          generationTier: input.generationTier,
-          blueprintId: input.blueprintId,
-          error,
-        });
+      if (!oracleGenerationStatePrimaryEnabled) {
+        try {
+          await markVariantReadySupabase(input);
+        } catch (error) {
+          logOracleGenerationStateShadowError({
+            action: 'mark_variant_ready',
+            sourceItemId: input.sourceItemId,
+            generationTier: input.generationTier,
+            blueprintId: input.blueprintId,
+            error,
+          });
+        }
       }
       return durable;
     } catch (error) {
@@ -8050,15 +8052,17 @@ async function markVariantFailed(input: Parameters<typeof markVariantFailedSupab
         errorCode: input.errorCode,
         errorMessage: input.errorMessage,
       });
-      try {
-        await markVariantFailedSupabase(input);
-      } catch (error) {
-        logOracleGenerationStateShadowError({
-          action: 'mark_variant_failed',
-          sourceItemId: input.sourceItemId,
-          generationTier: input.generationTier,
-          error,
-        });
+      if (!oracleGenerationStatePrimaryEnabled) {
+        try {
+          await markVariantFailedSupabase(input);
+        } catch (error) {
+          logOracleGenerationStateShadowError({
+            action: 'mark_variant_failed',
+            sourceItemId: input.sourceItemId,
+            generationTier: input.generationTier,
+            error,
+          });
+        }
       }
       return durable;
     } catch (error) {
@@ -8130,6 +8134,7 @@ async function startGenerationRun(
   db: ReturnType<typeof createClient>,
   input: Parameters<typeof startGenerationRunSupabase>[1],
 ) {
+  const shouldShadowSupabase = !(oracleGenerationStateEnabled && oracleControlPlane && oracleGenerationStatePrimaryEnabled);
   if (oracleGenerationStateEnabled && oracleControlPlane) {
     try {
       await startOracleGenerationRun({
@@ -8154,6 +8159,10 @@ async function startGenerationRun(
     }
   }
 
+  if (!shouldShadowSupabase) {
+    return null;
+  }
+
   try {
     return await startGenerationRunSupabase(db, input);
   } catch (error) {
@@ -8174,6 +8183,7 @@ async function updateGenerationModelInfo(
   db: ReturnType<typeof createClient>,
   input: Parameters<typeof updateGenerationModelInfoSupabase>[1],
 ) {
+  const shouldShadowSupabase = !(oracleGenerationStateEnabled && oracleControlPlane && oracleGenerationStatePrimaryEnabled);
   if (oracleGenerationStateEnabled && oracleControlPlane) {
     try {
       await updateOracleGenerationRunModelInfo({
@@ -8192,6 +8202,10 @@ async function updateGenerationModelInfo(
         error,
       });
     }
+  }
+
+  if (!shouldShadowSupabase) {
+    return null;
   }
 
   try {
@@ -8213,6 +8227,7 @@ async function attachBlueprintToRun(
   db: ReturnType<typeof createClient>,
   input: Parameters<typeof attachBlueprintToRunSupabase>[1],
 ) {
+  const shouldShadowSupabase = !(oracleGenerationStateEnabled && oracleControlPlane && oracleGenerationStatePrimaryEnabled);
   if (oracleGenerationStateEnabled && oracleControlPlane) {
     try {
       await attachOracleBlueprintToGenerationRun({
@@ -8228,6 +8243,10 @@ async function attachBlueprintToRun(
         error,
       });
     }
+  }
+
+  if (!shouldShadowSupabase) {
+    return null;
   }
 
   try {
@@ -8250,6 +8269,7 @@ async function finalizeGenerationRunSuccess(
   db: ReturnType<typeof createClient>,
   input: Parameters<typeof finalizeGenerationRunSuccessSupabase>[1],
 ) {
+  const shouldShadowSupabase = !(oracleGenerationStateEnabled && oracleControlPlane && oracleGenerationStatePrimaryEnabled);
   if (oracleGenerationStateEnabled && oracleControlPlane) {
     try {
       await finalizeOracleGenerationRunSuccess({
@@ -8271,6 +8291,10 @@ async function finalizeGenerationRunSuccess(
     }
   }
 
+  if (!shouldShadowSupabase) {
+    return null;
+  }
+
   try {
     return await finalizeGenerationRunSuccessSupabase(db, input);
   } catch (error) {
@@ -8290,6 +8314,7 @@ async function finalizeGenerationRunFailure(
   db: ReturnType<typeof createClient>,
   input: Parameters<typeof finalizeGenerationRunFailureSupabase>[1],
 ) {
+  const shouldShadowSupabase = !(oracleGenerationStateEnabled && oracleControlPlane && oracleGenerationStatePrimaryEnabled);
   if (oracleGenerationStateEnabled && oracleControlPlane) {
     try {
       await finalizeOracleGenerationRunFailure({
@@ -8307,6 +8332,10 @@ async function finalizeGenerationRunFailure(
         error,
       });
     }
+  }
+
+  if (!shouldShadowSupabase) {
+    return null;
   }
 
   try {

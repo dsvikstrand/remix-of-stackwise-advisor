@@ -184,15 +184,15 @@ h3) [have] This first decisive cut removes the most dangerous dual-state input b
 
 ## Phase 2: Oracle-Only Generation-State Writes
 
-i1) [todo] Remove the main normal-runtime Supabase generation-state writes from Oracle-primary variant/run mutation seams.
+i1) [have] Removed the main normal-runtime Supabase generation-state writes from Oracle-primary variant/run mutation seams.
 
-i2) [todo] Land in this wave:
+i2) [have] Landed in this wave:
 - variant claim / ready / failed / retry writes stay Oracle-only
 - generation-run lifecycle writes stay Oracle-only
 - stale variant ownership recovery stays Oracle-only
 - Oracle-primary mutation helpers stop writing normal-runtime Supabase generation-state shadows
 
-i3) [todo] After this phase, Supabase generation-state no longer matters to normal mutation correctness.
+i3) [have] After this phase, Supabase generation-state no longer matters to normal mutation correctness.
 
 ## Phase 3: Oracle-Only Generation-State Reads
 
