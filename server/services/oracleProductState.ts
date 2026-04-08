@@ -790,6 +790,7 @@ export async function getOracleProductUnlockBySourceItemId(input: {
 
 export async function listOracleProductFeedRows(input: {
   controlDb: OracleControlPlaneDb;
+  ids?: string[];
   userId?: string | null;
   state?: string | null;
   limit?: number;
@@ -799,6 +800,7 @@ export async function listOracleProductFeedRows(input: {
   cursor?: OracleProductFeedCursor | null;
   orderByWallActivity?: boolean;
 }) {
+  const ids = [...new Set((input.ids || []).map((value) => String(value || '').trim()).filter(Boolean))];
   const userId = String(input.userId || '').trim();
   const state = String(input.state || '').trim();
   const blueprintIds = [...new Set((input.blueprintIds || []).map((value) => String(value || '').trim()).filter(Boolean))];
@@ -806,7 +808,7 @@ export async function listOracleProductFeedRows(input: {
   const cursorCreatedAt = String(input.cursor?.createdAt || '').trim();
   const cursorFeedItemId = String(input.cursor?.feedItemId || '').trim();
   const hasCursor = Boolean(cursorCreatedAt && cursorFeedItemId);
-  if (!userId && !state && blueprintIds.length === 0 && sourceItemIds.length === 0) {
+  if (ids.length === 0 && !userId && !state && blueprintIds.length === 0 && sourceItemIds.length === 0) {
     return [] as OracleProductFeedRow[];
   }
 
@@ -828,6 +830,9 @@ export async function listOracleProductFeedRows(input: {
 
   if (userId) {
     query = query.where('user_id', '=', userId);
+  }
+  if (ids.length > 0) {
+    query = query.where('id', 'in', ids);
   }
   if (state) {
     query = query.where('state', '=', state);

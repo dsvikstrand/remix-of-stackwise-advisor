@@ -161,15 +161,15 @@ i3) [have] After this phase, Supabase feed shadow no longer matters to normal fe
 
 ## Phase 3: Oracle-Only Feed Reads
 
-j1) [todo] Remove remaining normal-runtime Supabase feed reads and read fallbacks from wall/my-feed/product surfaces.
+j1) [have] Removed the main normal-runtime Supabase feed reads and read fallbacks from wall/my-feed/product surfaces.
 
-j2) [todo] Land in this wave:
+j2) [have] Landed in this wave:
 - wall reads Oracle feed state only
 - my-feed reads Oracle feed state only
 - product/read shaping no longer requires `user_feed_items`
 - browser/server feed consumers stop depending on direct Supabase feed reads
 
-j3) [todo] After this phase, Supabase feed rows should no longer matter to normal runtime feed read correctness.
+j3) [have] After this phase, Supabase feed rows should no longer matter to normal runtime feed read correctness.
 
 ## Phase 4: Short Burn-In / Canary
 

@@ -4460,6 +4460,28 @@ async function getFeedItemByIdOracleFirst(
     }
   }
 
+  if (oracleFeedLedgerPrimaryEnabled && oracleProductMirrorEnabled && oracleControlPlane) {
+    try {
+      const mirrored = await listOracleProductFeedRows({
+        controlDb: oracleControlPlane,
+        ids: [feedItemId],
+        userId: userId || null,
+        limit: 1,
+      });
+      if (mirrored[0]) {
+        return normalizeFeedItemRow(mirrored[0] as unknown as Record<string, unknown>);
+      }
+    } catch (error) {
+      console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
+        action: 'get_feed_item_by_id',
+        feed_item_id: feedItemId,
+        user_id: userId || null,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+    return null;
+  }
+
   return readSupabaseFeedItemById(db, { feedItemId, userId });
 }
 
@@ -4493,7 +4515,28 @@ async function getFeedItemByIdForPrimaryMutation(
     }));
   }
 
-  return readSupabaseFeedItemById(db, { feedItemId, userId });
+  if (oracleProductMirrorEnabled && oracleControlPlane) {
+    try {
+      const mirrored = await listOracleProductFeedRows({
+        controlDb: oracleControlPlane,
+        ids: [feedItemId],
+        userId: userId || null,
+        limit: 1,
+      });
+      if (mirrored[0]) {
+        return normalizeFeedItemRow(mirrored[0] as unknown as Record<string, unknown>);
+      }
+    } catch (error) {
+      console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
+        action: input.action,
+        feed_item_id: feedItemId,
+        user_id: userId || null,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+
+  return null;
 }
 
 function buildPatchedFeedItemRow(input: {
@@ -4714,6 +4757,7 @@ async function listProductFeedRowsForUserOracleFirst(
       .filter(Boolean),
   )];
   let durableRows: any[] = [];
+  let mirroredRows: any[] = [];
 
   if (oracleFeedLedgerEnabled && oracleControlPlane) {
     try {
@@ -4744,30 +4788,9 @@ async function listProductFeedRowsForUserOracleFirst(
     }
   }
 
-  if (oracleFeedLedgerPrimaryEnabled) {
-    let query = db
-      .from('user_feed_items')
-      .select(FEED_ITEM_SELECT)
-      .eq('user_id', input.userId)
-      .order('generated_at_on_wall', { ascending: false, nullsFirst: false })
-      .order('created_at', { ascending: false })
-      .limit(normalizedLimit);
-
-    if (normalizedSourceItemIds.length > 0) {
-      query = query.in('source_item_id', normalizedSourceItemIds);
-    }
-    if (input.requireBlueprint) {
-      query = query.not('blueprint_id', 'is', null);
-    }
-
-    const { data, error } = await query;
-    if (error) throw error;
-    return mergePersonalProductFeedRows([...(durableRows || []), ...((data || []) as any[])]).slice(0, normalizedLimit);
-  }
-
   if (oracleProductMirrorEnabled && oracleControlPlane) {
     try {
-      const mirrored = await listOracleProductFeedRows({
+      mirroredRows = await listOracleProductFeedRows({
         controlDb: oracleControlPlane,
         userId: input.userId,
         limit: normalizedLimit,
@@ -4777,13 +4800,13 @@ async function listProductFeedRowsForUserOracleFirst(
       });
       const mirrorLooksComplete = normalizedSourceItemIds.length > 0
         ? new Set(
-          mirrored
+          mirroredRows
             .map((row) => String(row.source_item_id || '').trim())
             .filter(Boolean),
         ).size >= normalizedSourceItemIds.length
-        : mirrored.length >= normalizedLimit;
+        : mirroredRows.length >= normalizedLimit;
       if (mirrorLooksComplete) {
-        return mirrored;
+        return mergePersonalProductFeedRows([...(durableRows || []), ...mirroredRows]).slice(0, normalizedLimit);
       }
     } catch (error) {
       console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
@@ -4792,6 +4815,10 @@ async function listProductFeedRowsForUserOracleFirst(
         error: error instanceof Error ? error.message : String(error),
       }));
     }
+  }
+
+  if (oracleFeedLedgerPrimaryEnabled) {
+    return mergePersonalProductFeedRows([...(durableRows || []), ...(mirroredRows || [])]).slice(0, normalizedLimit);
   }
 
   let query = db
@@ -4950,6 +4977,7 @@ async function listPublicProductFeedRowsOracleFirst(
   const normalizedLimit = Math.max(1, Math.min(5000, Number(input.limit || 0) || (blueprintIds.length > 0 ? 5000 : 200)));
   const cursor = normalizePublicProductFeedCursor(input.cursor);
   let durableRows: any[] = [];
+  let mirroredRows: any[] = [];
 
   if (oracleFeedLedgerEnabled && oracleControlPlane) {
     try {
@@ -4981,20 +5009,9 @@ async function listPublicProductFeedRowsOracleFirst(
     }
   }
 
-  if (oracleFeedLedgerPrimaryEnabled) {
-    const fallbackRows = await listPublicProductFeedRowsFromSupabase(db, {
-      blueprintIds,
-      state,
-      limit: normalizedLimit,
-      cursor,
-      requireBlueprint: input.requireBlueprint,
-    });
-    return mergeProductFeedRows([...(durableRows || []), ...fallbackRows]).slice(0, normalizedLimit);
-  }
-
   if (oracleProductMirrorEnabled && oracleControlPlane) {
     try {
-      const mirrored = await listOracleProductFeedRows({
+      mirroredRows = await listOracleProductFeedRows({
         controlDb: oracleControlPlane,
         blueprintIds,
         state,
@@ -5005,24 +5022,19 @@ async function listPublicProductFeedRowsOracleFirst(
 
       const mirrorLooksComplete = blueprintIds.length > 0
         ? new Set(
-          mirrored
+          mirroredRows
             .map((row) => String(row.blueprint_id || '').trim())
             .filter(Boolean),
         ).size >= blueprintIds.length
-        : mirrored.length >= normalizedLimit;
+        : mirroredRows.length >= normalizedLimit;
 
       if (mirrorLooksComplete) {
-        return sortMergedProductFeedRows(mirrored).slice(0, normalizedLimit);
+        return mergeProductFeedRows([...(durableRows || []), ...mirroredRows]).slice(0, normalizedLimit);
       }
 
-      const fallbackRows = await listPublicProductFeedRowsFromSupabase(db, {
-        blueprintIds,
-        state,
-        limit: normalizedLimit,
-        cursor,
-        requireBlueprint: input.requireBlueprint,
-      });
-      return mergeProductFeedRows([...mirrored, ...fallbackRows]).slice(0, normalizedLimit);
+      if (oracleFeedLedgerPrimaryEnabled) {
+        return mergeProductFeedRows([...(durableRows || []), ...mirroredRows]).slice(0, normalizedLimit);
+      }
     } catch (error) {
       console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
         action: 'list_public_product_feed_rows',
@@ -5031,6 +5043,10 @@ async function listPublicProductFeedRowsOracleFirst(
         error: error instanceof Error ? error.message : String(error),
       }));
     }
+  }
+
+  if (oracleFeedLedgerPrimaryEnabled) {
+    return mergeProductFeedRows([...(durableRows || []), ...(mirroredRows || [])]).slice(0, normalizedLimit);
   }
 
   return listPublicProductFeedRowsFromSupabase(db, {
@@ -7859,6 +7875,21 @@ registerWallRoutes(app, {
 
 const blueprintVariantsService = createBlueprintVariantsService({
   getServiceSupabaseClient,
+  findLatestFeedRowByBlueprintId: async (blueprintId) => {
+    const db = getServiceSupabaseClient();
+    if (!db) return null;
+    const rows = await listPublicProductFeedRowsOracleFirst(db, {
+      blueprintIds: [blueprintId],
+      limit: 1,
+      requireBlueprint: true,
+    });
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      source_item_id: String(row.source_item_id || '').trim() || null,
+      created_at: String(row.created_at || '').trim() || null,
+    };
+  },
 });
 const {
   claimVariantForGeneration: claimVariantForGenerationSupabase,
@@ -9166,6 +9197,33 @@ async function getExistingFeedItem(db: ReturnType<typeof createClient>, userId: 
         error: error instanceof Error ? error.message : String(error),
       }));
     }
+  }
+
+  if (oracleFeedLedgerPrimaryEnabled && oracleProductMirrorEnabled && oracleControlPlane) {
+    try {
+      const mirrored = await listOracleProductFeedRows({
+        controlDb: oracleControlPlane,
+        userId,
+        sourceItemIds: [sourceItemId],
+        limit: 1,
+      });
+      const row = mirrored[0];
+      if (row) {
+        return {
+          id: row.id,
+          state: row.state,
+          blueprint_id: row.blueprint_id,
+        };
+      }
+    } catch (error) {
+      console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
+        action: 'get_existing_feed_item',
+        user_id: userId,
+        source_item_id: sourceItemId,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+    return null;
   }
 
   const { data, error } = await db

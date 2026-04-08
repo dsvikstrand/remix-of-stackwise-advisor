@@ -34,10 +34,23 @@ function makeFeedItem(overrides: Partial<FeedItemFixture> = {}) {
     publishedAt: '2026-03-27T10:00:00.000Z',
     createdAt: '2026-03-27T10:00:00.000Z',
     updatedAt: '2026-03-27T10:00:00.000Z',
-    sourceItemId: 'si_1',
-    sourceItemTitle: 'Saved blueprint',
-    sourceItemUrl: 'https://youtube.com/watch?v=abc12345678',
-    sourceType: 'youtube',
+    source: {
+      id: 'si_1',
+      sourceChannelId: null,
+      sourcePageId: null,
+      sourcePagePath: null,
+      sourceUrl: 'https://youtube.com/watch?v=abc12345678',
+      title: overrides.title || 'Saved blueprint',
+      sourceChannelTitle: null,
+      sourceChannelAvatarUrl: null,
+      thumbnailUrl: null,
+      channelBannerUrl: null,
+      viewCount: null,
+      unlockStatus: null,
+      unlockCost: null,
+      unlockInProgress: false,
+      readyBlueprintId: overrides.blueprintId || 'bp_1',
+    },
     blueprint: {
       id: overrides.blueprintId || 'bp_1',
       title: overrides.title || 'Saved blueprint',
@@ -133,6 +146,58 @@ describe('listMyFeedItems', () => {
     const { listMyFeedItems } = await import('@/lib/myFeedApi');
 
     await expect(listMyFeedItems('user_2')).rejects.toThrow('service unavailable');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('getExistingUserFeedItem', () => {
+  beforeEach(() => {
+    getSessionMock.mockReset();
+    getSessionMock.mockResolvedValue({
+      data: {
+        session: {
+          access_token: 'token-123',
+        },
+      },
+    });
+    vi.stubGlobal('fetch', vi.fn());
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.resetModules();
+    window.localStorage.clear();
+  });
+
+  it('uses the API-backed my-feed snapshot before falling back to Supabase', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        ok: true,
+        error_code: null,
+        message: 'ok',
+        data: {
+          items: [
+            makeFeedItem({
+              id: 'ufi_existing',
+              blueprintId: 'bp_existing',
+              title: 'Existing blueprint',
+            }),
+          ],
+        },
+      }),
+    } as Response);
+
+    const { getExistingUserFeedItem } = await import('@/lib/myFeedApi');
+
+    await expect(getExistingUserFeedItem('user_1', 'si_1')).resolves.toEqual({
+      id: 'ufi_existing',
+      blueprint_id: 'bp_existing',
+      state: 'my_feed_published',
+    });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

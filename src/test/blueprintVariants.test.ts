@@ -213,4 +213,47 @@ describe('blueprintVariants service', () => {
     });
     expect(db.state.source_item_blueprint_variants[0]?.id).toBe('variant_shadow');
   });
+
+  it('uses the injected Oracle-aware feed lookup when resolving variants by blueprint id', async () => {
+    const db = createMockSupabase({
+      source_item_blueprint_variants: [
+        {
+          id: 'variant_ready',
+          source_item_id: 'source_oracle',
+          generation_tier: 'tier',
+          status: 'ready',
+          blueprint_id: null,
+          active_job_id: null,
+          last_error_code: null,
+          last_error_message: null,
+          created_by_user_id: 'user_oracle',
+          created_at: '2026-03-23T15:20:00.000Z',
+          updated_at: '2026-03-23T15:55:00.000Z',
+        },
+      ],
+      user_feed_items: [],
+    }) as any;
+
+    const findLatestFeedRowByBlueprintId = vi.fn(async () => ({
+      source_item_id: 'source_oracle',
+      created_at: '2026-03-23T15:56:00.000Z',
+    }));
+
+    const service = createBlueprintVariantsService({
+      getServiceSupabaseClient: () => db,
+      findLatestFeedRowByBlueprintId,
+    });
+
+    const result = await service.findVariantsByBlueprintId('bp_oracle');
+
+    expect(findLatestFeedRowByBlueprintId).toHaveBeenCalledWith('bp_oracle');
+    expect(result).toMatchObject({
+      sourceItemId: 'source_oracle',
+      variants: [
+        expect.objectContaining({
+          source_item_id: 'source_oracle',
+        }),
+      ],
+    });
+  });
 });

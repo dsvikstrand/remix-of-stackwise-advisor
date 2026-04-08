@@ -113,6 +113,10 @@ export class BlueprintVariantInProgressError extends Error {
 
 export function createBlueprintVariantsService(deps: {
   getServiceSupabaseClient: () => DbClient | null;
+  findLatestFeedRowByBlueprintId?: (blueprintId: string) => Promise<{
+    source_item_id: string | null;
+    created_at?: string | null;
+  } | null>;
 }) {
   const getDb = () => {
     const db = deps.getServiceSupabaseClient();
@@ -406,13 +410,16 @@ export function createBlueprintVariantsService(deps: {
     let sourceItemId = matchedVariant?.source_item_id || null;
 
     if (!sourceItemId) {
-      const { data: feedRow } = await db
-        .from('user_feed_items')
-        .select('source_item_id, created_at')
-        .eq('blueprint_id', normalizedBlueprintId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const feedRow = deps.findLatestFeedRowByBlueprintId
+        ? await deps.findLatestFeedRowByBlueprintId(normalizedBlueprintId)
+        : await db
+            .from('user_feed_items')
+            .select('source_item_id, created_at')
+            .eq('blueprint_id', normalizedBlueprintId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+            .then((result: any) => result.data || null);
       sourceItemId = String(feedRow?.source_item_id || '').trim() || null;
     }
 

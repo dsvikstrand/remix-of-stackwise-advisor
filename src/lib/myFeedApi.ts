@@ -66,6 +66,24 @@ export async function ensureSourceItemForYouTube(input: {
 }
 
 export async function getExistingUserFeedItem(userId: string, sourceItemId: string) {
+  const apiBase = getApiBase();
+  if (apiBase) {
+    try {
+      const feed = await listMyFeedItems(userId);
+      const existing = feed.items.find((item) => item.source?.id === sourceItemId);
+      if (existing) {
+        return {
+          id: existing.id,
+          blueprint_id: existing.blueprint?.id || null,
+          state: existing.state,
+        };
+      }
+      return null;
+    } catch (error) {
+      if (!shouldFallbackToSupabase(error)) throw error;
+    }
+  }
+
   const { data, error } = await supabase
     .from('user_feed_items')
     .select('id, blueprint_id, state')
