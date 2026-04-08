@@ -530,10 +530,11 @@ Required runtime variables:
 - `ORACLE_GENERATION_STATE_MODE` (default `supabase`; accepted values: `supabase`, `dual`, `primary`; stages local Oracle durable execution-state ownership for `source_item_blueprint_variants` and `generation_runs`, so variant claim/ready/failed state plus generation run summaries can move onto local SQLite while Supabase remains compatibility shadow)
 - `ORACLE_GENERATION_STATE_BOOTSTRAP_LIMIT` (default `10000`; legacy pre-primary bootstrap limit for generation-state import; once `ORACLE_GENERATION_STATE_MODE=primary` is live, Oracle bootstrap should not repopulate from Supabase `source_item_blueprint_variants` or `generation_runs`)
 - In `primary`, normal source-item by-id and by-video reads should resolve from the Oracle source-item ledger first; the older product-source-item mirror is compatibility/bootstrap state, not the steady-state source-item reader.
-- In `primary`, normal variant ownership/ready-state checks and generation-run summary reads should resolve from Oracle generation state first; `generation_run_events` remain on Supabase for now.
+- In `primary`, normal variant ownership/ready-state checks and generation-run summary reads should resolve from Oracle generation state first; the adjacent trace-events chapter now owns runtime `generation_run_events` writes while trace detail reads remain the next cut there.
 - In `primary`, Oracle startup count reporting for generation state should come from `generation_variant_state` and `generation_run_state`, not from a restart-time reread of Supabase generation-state tables.
 - In `primary`, Oracle generation-state writes should now also be Oracle-only for normal runtime mutation paths: variant claim/ready/failed transitions plus generation-run lifecycle writes should not shadow Supabase `source_item_blueprint_variants` or `generation_runs`.
 - In `primary`, Oracle generation-state reads should now also be Oracle-only for normal runtime paths: shared variant/run readers, blueprint-availability cooldown checks, and profile/detail generation attribution should not reread Supabase `source_item_blueprint_variants` or `generation_runs` on ordinary runtime misses.
+- In `primary`, Oracle generation-trace writes should now also be Oracle-only for normal runtime event paths: shared milestone/terminal event appends and per-run `seq` allocation should not shadow Supabase `generation_run_events`; trace detail reads remain the next severing pass.
 - Source-page follow-up trust note: if `POST /api/source-pages/:platform/:externalId/videos/unlock` returns `in_progress`, the next `GET /videos` should now reflect that same running variant state even before `source_item_unlocks` changes.
 - Once `ORACLE_UNLOCK_LEDGER_MODE=primary` is live, unlock-specific truth reads and unlock mutation preconditions should come from the Oracle unlock ledger directly; the older Oracle product unlock mirror is compatibility/read-plane support only.
 - `ORACLE_QUEUE_SWEEP_CONTROL_ENABLED` (default `false`; enables Oracle-local sweep cadence/tier selection for the queued worker while Supabase still performs durable claim RPCs)
@@ -995,7 +996,7 @@ npm run ops:oracle-generation-state-parity -- --json
     - interactive generate/unlock canaries still show the expected queued/running/ready variant state
   - Keep scope explicit:
     - `generation_runs` summary truth moves in this chapter
-    - `generation_run_events` still stay on Supabase until a later trace-events chapter
+    - `generation_run_events` write truth now also moves in the later trace-events chapter, while trace detail reads are still the remaining Supabase surface there
 - YT2BP repro smoke:
 ```bash
 npm run smoke:yt2bp -- --base-url https://api.bleup.app

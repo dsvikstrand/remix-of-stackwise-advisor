@@ -313,6 +313,16 @@ type GenerationRunStateTable = {
   updated_at: string;
 };
 
+type GenerationRunEventStateTable = {
+  id: number;
+  run_id: string;
+  seq: number;
+  level: string;
+  event: string;
+  payload_json: string | null;
+  created_at: string;
+};
+
 type ProductFeedStateTable = {
   id: string;
   user_id: string;
@@ -341,6 +351,7 @@ export type OracleControlPlaneDatabase = {
   source_item_ledger_state: SourceItemLedgerStateTable;
   generation_variant_state: GenerationVariantStateTable;
   generation_run_state: GenerationRunStateTable;
+  generation_run_event_state: GenerationRunEventStateTable;
   product_subscription_state: ProductSubscriptionStateTable;
   product_source_item_state: ProductSourceItemStateTable;
   product_unlock_state: ProductUnlockStateTable;
@@ -720,6 +731,25 @@ CREATE INDEX IF NOT EXISTS idx_generation_run_blueprint_created
 
 CREATE INDEX IF NOT EXISTS idx_generation_run_video_status_updated
   ON generation_run_state (video_id, status, updated_at);
+
+CREATE TABLE IF NOT EXISTS generation_run_event_state (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  level TEXT NOT NULL,
+  event TEXT NOT NULL,
+  payload_json TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_generation_run_event_run_seq_unique
+  ON generation_run_event_state (run_id, seq);
+
+CREATE INDEX IF NOT EXISTS idx_generation_run_event_run_id_desc
+  ON generation_run_event_state (run_id, id DESC);
+
+CREATE INDEX IF NOT EXISTS idx_generation_run_event_created_desc
+  ON generation_run_event_state (created_at DESC);
 
 CREATE TABLE IF NOT EXISTS product_subscription_state (
   id TEXT PRIMARY KEY,

@@ -44,7 +44,18 @@ export type GenerationRunEventRow = {
   created_at: string;
 };
 
+type GenerationTraceOracleWriteAdapter = {
+  resetRun?: (runId: string) => void;
+  appendEvent: (input: {
+    runId: string;
+    event: string;
+    level: GenerationTraceLevel;
+    payload: Record<string, unknown>;
+  }) => Promise<unknown>;
+};
+
 const nextGenerationEventSeqByRunId = new Map<string, Promise<number>>();
+let generationTraceOracleWriteAdapter: GenerationTraceOracleWriteAdapter | null = null;
 const generationTraceVerboseEnabled = ['1', 'true', 'yes', 'on'].includes(
   String(process.env.GENERATION_TRACE_VERBOSE ?? '').trim().toLowerCase(),
 );
@@ -141,6 +152,10 @@ function shouldPersistGenerationEvent(eventName: string, level: GenerationTraceL
   return level === 'info' && generationTraceMilestoneEvents.has(eventName);
 }
 
+export function configureGenerationTraceOracleWriteAdapter(adapter: GenerationTraceOracleWriteAdapter | null) {
+  generationTraceOracleWriteAdapter = adapter;
+}
+
 export async function startGenerationRun(
   db: DbClient,
   input: {
@@ -159,6 +174,7 @@ export async function startGenerationRun(
   const userId = String(input.userId || '').trim();
   if (!runId || !userId) return null;
   nextGenerationEventSeqByRunId.delete(runId);
+  generationTraceOracleWriteAdapter?.resetRun?.(runId);
   const nowIso = new Date().toISOString();
 
   const basePayload = {
@@ -219,9 +235,19 @@ export async function appendGenerationEvent(
   if (!runId || !eventName) return null;
   const level = (input.level || 'info') as GenerationTraceLevel;
   if (!shouldPersistGenerationEvent(eventName, level)) return null;
+  const payload = normalizeObject(input.payload);
+
+  if (generationTraceOracleWriteAdapter) {
+    await generationTraceOracleWriteAdapter.appendEvent({
+      runId,
+      event: eventName,
+      level,
+      payload,
+    });
+    return null;
+  }
 
   const nextSeq = await reserveGenerationEventSeq(db, runId);
-  const payload = normalizeObject(input.payload);
   const { error } = await db
     .from('generation_run_events')
     .insert({

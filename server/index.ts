@@ -325,6 +325,7 @@ import {
 import {
   appendGenerationEvent,
   attachBlueprintToRun as attachBlueprintToRunSupabase,
+  configureGenerationTraceOracleWriteAdapter,
   finalizeGenerationRunFailure as finalizeGenerationRunFailureSupabase,
   finalizeGenerationRunSuccess as finalizeGenerationRunSuccessSupabase,
   getGenerationRunByRunId as getGenerationRunByRunIdSupabase,
@@ -333,6 +334,10 @@ import {
   startGenerationRun as startGenerationRunSupabase,
   updateGenerationModelInfo as updateGenerationModelInfoSupabase,
 } from './services/generationTrace';
+import {
+  appendOracleGenerationTraceEvent,
+  clearOracleGenerationTraceSeqCursor,
+} from './services/oracleGenerationTrace';
 import {
   clampInt,
   getFailureTransition,
@@ -773,6 +778,25 @@ const oracleGenerationStateEnabled = (
   || oracleGenerationStateMode === 'primary'
 );
 const oracleGenerationStatePrimaryEnabled = oracleGenerationStateMode === 'primary';
+
+configureGenerationTraceOracleWriteAdapter(
+  oracleGenerationStateEnabled && oracleControlPlane && oracleGenerationStatePrimaryEnabled
+    ? {
+        resetRun(runId: string) {
+          clearOracleGenerationTraceSeqCursor(runId);
+        },
+        async appendEvent(input) {
+          await appendOracleGenerationTraceEvent({
+            controlDb: oracleControlPlane,
+            runId: input.runId,
+            event: input.event,
+            level: input.level,
+            payload: input.payload,
+          });
+        },
+      }
+    : null,
+);
 const oracleQueueSweepControlEnabled = (
   oracleControlPlaneConfig.enabled
   && oracleControlPlaneConfig.queueSweepControlEnabled
@@ -8161,6 +8185,7 @@ async function startGenerationRun(
   const shouldShadowSupabase = !(oracleGenerationStateEnabled && oracleControlPlane && oracleGenerationStatePrimaryEnabled);
   if (oracleGenerationStateEnabled && oracleControlPlane) {
     try {
+      clearOracleGenerationTraceSeqCursor(input.runId);
       await startOracleGenerationRun({
         controlDb: oracleControlPlane,
         runId: input.runId,

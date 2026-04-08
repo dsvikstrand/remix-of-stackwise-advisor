@@ -29,7 +29,7 @@ This file is the authoritative active/reference/deserted/completed registry for 
 - `docs/exec-plans/active/on-pause/oracle-generation-state-full-ownership-cutover-plan.md`
   Queued next ownership chapter for full Oracle generation-state cutover; Phase 0 inventory and Phase 1 bootstrap/rehydration removal are complete, with write/read severing still queued.
 - `docs/exec-plans/active/on-pause/oracle-generation-trace-full-ownership-cutover-plan.md`
-  Queued next ownership chapter for full Oracle generation-trace cutover; Phase 0 inventory is complete and shows `generation_run_events` is an append/read runtime surface with no meaningful bootstrap phase before Oracle-only write/read severing.
+  Queued next ownership chapter for full Oracle generation-trace cutover; Phase 0 inventory is complete and Oracle-only event writes are landed, with trace-read severing next.
 - `docs/exec-plans/deserted/backend-aggressive-egress-tuning-plan.md`
   Paused backend egress tuning root retained in case the team chooses to resume the remaining aggressive-but-acceptable freshness/cadence trims later.
 - `docs/exec-plans/completed/bleup-pwa-program.md`
@@ -145,7 +145,7 @@ This file is the authoritative active/reference/deserted/completed registry for 
 - Queued next ownership chapter: `docs/exec-plans/active/on-pause/oracle-generation-state-full-ownership-cutover-plan.md`.
   Generation-state is the next planned Oracle-only cutover because the current Supabase attribution sample is now led by `generation_runs` and `source_item_blueprint_variants`; the bootstrap/rehydration cut is already landed, and the next runtime passes are Oracle-only writes then Oracle-only reads.
 - Queued follow-up ownership chapter after generation-state: `docs/exec-plans/active/on-pause/oracle-generation-trace-full-ownership-cutover-plan.md`.
-  Generation trace is the next egress-focused backend chapter because the latest attribution sample is now led by `POST /rest/v1/generation_run_events`, and Phase 0 inventory now shows the first real code wave should be Oracle-only event writes.
+  Generation trace is the next egress-focused backend chapter because the latest attribution sample is led by `POST /rest/v1/generation_run_events`; inventory is complete and Oracle-only event writes are already landed.
 - Paused broader Oracle-ownership context: `docs/exec-plans/active/on-pause/oracle-deeper-ownership-and-supabase-reduction-plan.md`.
 - Current active proof/deferred tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`.
 - Current post-launch debt board: `docs/exec-plans/tech-debt-tracker.md`.

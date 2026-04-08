@@ -175,21 +175,25 @@ h2) [have] This phase is effectively trivial, so the next real code wave is Orac
 
 ## Phase 2: Oracle-Only Generation Trace Writes
 
-i1) [todo] Remove the main normal-runtime Supabase `generation_run_events` writes from append/event-recording paths.
+i1) [have] Removed the main normal-runtime Supabase `generation_run_events` writes from append/event-recording paths.
 
-i2) [todo] Land in this wave:
+i2) [have] Landed in this wave:
 - pipeline milestone writes stay Oracle-only
 - terminal/failure event writes stay Oracle-only
 - sequence allocation stays Oracle-only
 
-i3) [todo] After this phase, Supabase generation trace no longer matters to normal event append correctness.
+i3) [have] After this phase, Supabase generation trace no longer matters to normal event append correctness.
 
-i4) [todo] Primary code seams for Pass 2:
+i4) [have] Primary code seams for Pass 2:
 - [generationTrace.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/generationTrace.ts)
   - replace Supabase-backed event sequencing and append writes with Oracle-backed equivalents
 - [youtubeBlueprintPipeline.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/youtubeBlueprintPipeline.ts)
 - [blueprintYoutubeComments.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/blueprintYoutubeComments.ts)
   - keep callers stable while changing only the event sink
+
+i5) [have] Oracle trace event writes now land in control-plane state while caller contracts remain unchanged.
+- `appendGenerationEvent(...)` remains the shared event API
+- Oracle-primary wiring now redirects that shared append seam to Oracle event state instead of Supabase `generation_run_events`
 
 ## Phase 3: Oracle-Only Generation Trace Reads
 
