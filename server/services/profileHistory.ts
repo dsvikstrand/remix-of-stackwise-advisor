@@ -322,6 +322,10 @@ export async function resolveProfileHistory(input: {
     db: DbClient;
     sourceIds: string[];
   }) => Promise<any[]>;
+  readVariantRows?: (args: {
+    db: DbClient;
+    sourceIds: string[];
+  }) => Promise<any[]>;
 }): Promise<ResolvedProfileHistory> {
   const limit = Math.max(1, Math.min(500, Number(input.limit || 120)));
   const feedRowsResult = input.readFeedRows
@@ -394,12 +398,17 @@ export async function resolveProfileHistory(input: {
           .in('source_item_id', sourceIds))
       : Promise.resolve({ data: [], error: null }),
     sourceIds.length
-      ? input.db
-        .from('source_item_blueprint_variants')
-        .select('source_item_id, status, blueprint_id, updated_at')
-        .eq('status', 'ready')
-        .in('source_item_id', sourceIds)
-        .order('updated_at', { ascending: false })
+      ? (input.readVariantRows
+        ? Promise.resolve({
+          data: input.readVariantRows({ db: input.db, sourceIds }),
+          error: null,
+        }).then(async (result) => ({ data: await result.data, error: result.error }))
+        : input.db
+          .from('source_item_blueprint_variants')
+          .select('source_item_id, status, blueprint_id, updated_at')
+          .eq('status', 'ready')
+          .in('source_item_id', sourceIds)
+          .order('updated_at', { ascending: false }))
       : Promise.resolve({ data: [], error: null }),
     sourceIds.length
       ? (input.readFeedRows

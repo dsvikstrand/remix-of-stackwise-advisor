@@ -312,23 +312,8 @@ export default function BlueprintDetail() {
         setIsSourceChannelResolved(true);
         return;
       }
-      let sourceItemId: string | null = null;
-
-      const { data: variantRow } = await supabase
-        .from('source_item_blueprint_variants')
-        .select('source_item_id, updated_at')
-        .eq('blueprint_id', blueprint.id)
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      sourceItemId = String(variantRow?.source_item_id || '').trim() || null;
-
-      const initialLookup = !sourceItemId
-        ? await lookupSourceItems({ blueprintIds: [blueprint.id] })
-        : null;
-      if (!sourceItemId && initialLookup) {
-        sourceItemId = initialLookup.source_item_id_by_blueprint_id[blueprint.id] || null;
-      }
+      const initialLookup = await lookupSourceItems({ blueprintIds: [blueprint.id] });
+      const sourceItemId = initialLookup.source_item_id_by_blueprint_id[blueprint.id] || null;
 
       if (!sourceItemId) {
         if (!cancelled) {

@@ -68,6 +68,7 @@ async function readProfileHistoryResponse(input: {
     readFeedRows: input.deps.readFeedRows,
     readSourceRows: input.deps.readSourceRows,
     readUnlockRows: input.deps.readUnlockRows,
+    readVariantRows: input.deps.readVariantRows,
   });
 
   const data: ProfileHistoryResponse = {

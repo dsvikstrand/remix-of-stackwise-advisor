@@ -7842,6 +7842,21 @@ registerProfileRoutes(app, {
     action: 'profile_history_read_source_rows',
   }),
   readUnlockRows: ({ db, sourceIds }: any) => getSourceItemUnlocksBySourceItemIdsOracleFirst(db, sourceIds),
+  readVariantRows: async ({ sourceIds }: any) => {
+    const normalizedSourceIds = [...new Set(
+      (Array.isArray(sourceIds) ? sourceIds : [])
+        .map((value) => String(value || '').trim())
+        .filter(Boolean),
+    )];
+    const rows = await Promise.all(
+      normalizedSourceIds.map(async (sourceItemId) => (
+        await listVariantsForSourceItem(sourceItemId)
+      )),
+    );
+    return rows
+      .flat()
+      .filter((row: any) => String(row?.status || '').trim().toLowerCase() === 'ready');
+  },
 });
 
 registerWallRoutes(app, {
@@ -7955,11 +7970,14 @@ async function resolveVariantOrReady(input: Parameters<typeof resolveVariantOrRe
         error,
       });
       if (oracleGenerationStatePrimaryEnabled) {
-        return resolveVariantOrReadySupabase(input);
+        return { state: 'needs_generation', variant: null };
       }
     }
   }
 
+  if (oracleGenerationStatePrimaryEnabled) {
+    return { state: 'needs_generation', variant: null };
+  }
   return resolveVariantOrReadySupabase(input);
 }
 
@@ -8102,6 +8120,9 @@ async function listVariantsForSourceItem(sourceItemId: string) {
     }
   }
 
+  if (oracleGenerationStatePrimaryEnabled) {
+    return [] as Awaited<ReturnType<typeof listVariantsForSourceItemSupabase>>;
+  }
   return listVariantsForSourceItemSupabase(normalizedSourceItemId);
 }
 
@@ -8127,6 +8148,9 @@ async function findVariantsByBlueprintId(blueprintId: string) {
     }
   }
 
+  if (oracleGenerationStatePrimaryEnabled) {
+    return null;
+  }
   return findVariantsByBlueprintIdSupabase(normalizedBlueprintId);
 }
 
@@ -8376,6 +8400,9 @@ async function getGenerationRunByRunId(
     }
   }
 
+  if (oracleGenerationStatePrimaryEnabled) {
+    return null;
+  }
   return getGenerationRunByRunIdSupabase(db, normalizedRunId);
 }
 
@@ -8402,6 +8429,9 @@ async function getLatestGenerationRunByBlueprintId(
     }
   }
 
+  if (oracleGenerationStatePrimaryEnabled) {
+    return null;
+  }
   return getLatestGenerationRunByBlueprintIdSupabase(db, normalizedBlueprintId);
 }
 
@@ -8438,6 +8468,13 @@ async function listFailedGenerationRunsByVideoIdOracleFirst(
     }
   }
 
+  if (oracleGenerationStatePrimaryEnabled) {
+    return [] as Array<{
+      updated_at: string | null;
+      error_code: string | null;
+      error_message: string | null;
+    }>;
+  }
   const { data, error } = await db
     .from('generation_runs')
     .select('updated_at, error_code, error_message')

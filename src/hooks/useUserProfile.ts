@@ -101,29 +101,10 @@ export function useUserLikedBlueprints(userId: string | undefined, limit = 4) {
       const profileMap = new Map((profiles || []).map((p) => [p.user_id, p]));
       const publicBlueprintIds = (blueprints || []).map((bp) => bp.id);
 
-      const { data: variantRows } = publicBlueprintIds.length > 0
-        ? await supabase
-          .from('source_item_blueprint_variants')
-          .select('blueprint_id, source_item_id, updated_at')
-          .in('blueprint_id', publicBlueprintIds)
-          .order('updated_at', { ascending: false })
-        : { data: [] as Array<{ blueprint_id: string; source_item_id: string | null; updated_at: string | null }> };
-
       const sourceItemIdByBlueprint = new Map<string, string>();
-      (variantRows || []).forEach((row) => {
-        const blueprintId = String(row.blueprint_id || '').trim();
-        const sourceItemId = String(row.source_item_id || '').trim();
-        if (!blueprintId || !sourceItemId) return;
-        if (!sourceItemIdByBlueprint.has(blueprintId)) {
-          sourceItemIdByBlueprint.set(blueprintId, sourceItemId);
-        }
-      });
-
-      const unresolvedBlueprintIds = publicBlueprintIds.filter((blueprintId) => !sourceItemIdByBlueprint.has(blueprintId));
-      const sourceLookup = await lookupSourceItems({
-        sourceIds: Array.from(new Set(Array.from(sourceItemIdByBlueprint.values()).filter(Boolean))),
-        blueprintIds: unresolvedBlueprintIds,
-      });
+      const sourceLookup = publicBlueprintIds.length > 0
+        ? await lookupSourceItems({ blueprintIds: publicBlueprintIds })
+        : { items: [], source_item_id_by_blueprint_id: {} };
 
       Object.entries(sourceLookup.source_item_id_by_blueprint_id).forEach(([blueprintId, sourceItemId]) => {
         if (!sourceItemIdByBlueprint.has(blueprintId) && sourceItemId) {

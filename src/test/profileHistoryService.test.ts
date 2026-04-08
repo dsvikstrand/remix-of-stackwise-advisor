@@ -374,6 +374,87 @@ describe('profile history service', () => {
     });
   });
 
+  it('supports Oracle-first variant readers for profile history without direct source_item_blueprint_variants reads', async () => {
+    const db = createMockSupabase({
+      user_feed_items: [
+        {
+          id: 'feed_variant',
+          user_id: 'user_1',
+          source_item_id: 'source_variant',
+          blueprint_id: null,
+          state: 'channel_published',
+          last_decision_code: null,
+          created_at: '2026-03-10T10:00:00.000Z',
+        },
+      ],
+      source_items: [
+        {
+          id: 'source_variant',
+          source_page_id: 'page_variant',
+          source_channel_id: 'UC_variant',
+          source_url: 'https://www.youtube.com/watch?v=variant1',
+          title: 'Variant video',
+          source_channel_title: 'Creator Beta',
+          thumbnail_url: 'https://img.example.com/variant-thumb.jpg',
+          metadata: {},
+        },
+      ],
+      source_pages: [
+        {
+          id: 'page_variant',
+          platform: 'youtube',
+          external_id: 'UC_variant',
+          title: 'Creator Beta',
+          avatar_url: 'https://img.example.com/variant-avatar.jpg',
+        },
+      ],
+      source_item_unlocks: [],
+      source_item_blueprint_variants: [],
+      blueprints: [
+        { id: 'bp_variant', title: 'Variant Blueprint', banner_url: 'https://img.example.com/variant-banner.jpg' },
+      ],
+      channel_candidates: [
+        {
+          id: 'candidate_variant',
+          user_feed_item_id: 'feed_variant',
+          channel_slug: 'science',
+          status: 'published',
+          created_at: '2026-03-10T10:05:00.000Z',
+        },
+      ],
+    }) as any;
+
+    const readVariantRows = vi.fn(async () => ([
+      {
+        source_item_id: 'source_variant',
+        status: 'ready',
+        blueprint_id: 'bp_variant',
+        updated_at: '2026-03-10T10:10:00.000Z',
+      },
+    ]));
+
+    const result = await resolveProfileHistory({
+      db,
+      userId: 'user_1',
+      normalizeTranscriptTruthStatus,
+      readVariantRows,
+    });
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({
+      id: 'feed_variant',
+      kind: 'blueprint',
+      title: 'Variant Blueprint',
+      subtitle: 'Creator Beta',
+      href: '/blueprint/bp_variant',
+      statusText: 'Published to science',
+    });
+    expect(readVariantRows).toHaveBeenCalledWith({
+      db,
+      sourceIds: ['source_variant'],
+    });
+  });
+
   it('repairs missing blueprint ids idempotently and reports unresolved rows', async () => {
     const db = createMockSupabase({
       user_feed_items: [

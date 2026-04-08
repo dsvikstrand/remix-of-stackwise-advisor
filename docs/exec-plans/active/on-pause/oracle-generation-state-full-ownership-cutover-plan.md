@@ -196,15 +196,15 @@ i3) [have] After this phase, Supabase generation-state no longer matters to norm
 
 ## Phase 3: Oracle-Only Generation-State Reads
 
-j1) [todo] Remove remaining normal-runtime Supabase generation-state reads and read fallbacks from source-page / availability / duplicate-check surfaces.
+j1) [have] Removed remaining normal-runtime Supabase generation-state reads and read fallbacks from source-page / availability / duplicate-check surfaces.
 
-j2) [todo] Land in this wave:
+j2) [have] Landed in this wave:
 - Source Page generation overlays read Oracle generation-state only
 - cooldown / availability reads Oracle generation-state only
 - duplicate / already-running / already-ready readers stop depending on Supabase generation-state
 - browser/server generation-state consumers stop depending on direct Supabase reads
 
-j3) [todo] After this phase, Supabase generation-state no longer matters to normal runtime read correctness.
+j3) [have] After this phase, Supabase generation-state no longer matters to normal runtime read correctness.
 
 ## Phase 4: Short Burn-In / Canary
 

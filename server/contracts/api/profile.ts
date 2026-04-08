@@ -44,4 +44,5 @@ export type ProfileRouteDeps = {
   readFeedRows?: any;
   readSourceRows?: any;
   readUnlockRows?: any;
+  readVariantRows?: any;
 };
