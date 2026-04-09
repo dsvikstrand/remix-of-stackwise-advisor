@@ -10,22 +10,22 @@ interface HomeOnboardingCardProps {
 const STEPS = [
   {
     title: 'Home is where things land, the main flow of the app.',
-    description: '"For You" shows your YouTube subscriptions content. "Channels" shows blueprints from the channels you follow. All shows every public blueprint.',
+    description: '\'For You\' shows your YouTube subscriptions content. \'Channels\' shows blueprints from the channels you follow. All shows every public blueprint.',
     icon: Home,
   },
   {
     title: 'Subscriptions follow creators',
-    description: 'When a new video is uploaded, you can turn it into a blueprint by unlocking it from the "For You" feed.',
+    description: 'When a new video is uploaded, you can turn it into a blueprint by unlocking it from the \'For You\' feed.',
     icon: Rss,
   },
   {
-    title: 'Channels follow topics',
-    description: 'Channels shows blueprints posted into the channels you follow. Each blueprint is auto-classified into a channel.',
+    title: 'Channels organize discovery',
+    description: 'Channels group blueprints by topic, so your \'Channels\' feed stays focused on the subjects you want to explore.',
     icon: Sparkles,
   },
   {
-    title: 'All is for everything',
-    description: 'Each new public blueprint can be found in the "All" feed.',
+    title: 'Add is for manual generation',
+    description: 'Use Add when you want to turn a specific video into a blueprint right away.',
     icon: SquarePlus,
   },
 ];
@@ -40,7 +40,7 @@ export function HomeOnboardingCard({ onDismiss }: HomeOnboardingCardProps) {
             <div className="space-y-1">
               <h2 className="text-base font-semibold">A quick guide to how Bleup works</h2>
               <p className="text-sm text-muted-foreground">
-                Learn the difference between blueprints, creators, channels, and your three Home streams before you dive in.
+                Learn the difference between creators, channels, and your three Home streams before you dive in.
               </p>
             </div>
           </div>
