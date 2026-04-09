@@ -1,9 +1,12 @@
 import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, BookOpenText, PlaySquare, Search, Sparkles, Users } from 'lucide-react';
+import { ArrowRight, BookOpenText, PlaySquare, Search, Sparkles, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { supabase } from '@/integrations/supabase/client';
 import { LANDING_BLUEPRINT_PREVIEWS, LANDING_HOW_IT_WORKS, LANDING_VALUE_POINTS } from '@/lib/landingStory';
+import { buildLandingPreviewFromBlueprint, pickStableItem } from '@/lib/landingPreview';
 
 interface LandingProofSectionsProps {
   isSignedIn: boolean;
@@ -14,23 +17,34 @@ const STEP_ICONS = [Search, BookOpenText, PlaySquare];
 const VALUE_ICONS = [Sparkles, Search, Users];
 
 export function LandingProofSections({ isSignedIn, onFinalCtaClick }: LandingProofSectionsProps) {
-  const [activeBlueprintIndex, setActiveBlueprintIndex] = useState(0);
-  const activeBlueprint = useMemo(
-    () => LANDING_BLUEPRINT_PREVIEWS[activeBlueprintIndex] ?? LANDING_BLUEPRINT_PREVIEWS[0],
-    [activeBlueprintIndex],
+  const [previewSeed] = useState(() => Math.floor(Math.random() * 1_000_000));
+  const landingPreviewQuery = useQuery({
+    queryKey: ['landing-preview-blueprint'],
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('blueprints')
+        .select('id, title, banner_url, preview_summary, sections_json')
+        .eq('is_public', true)
+        .not('sections_json', 'is', null)
+        .not('banner_url', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(18);
+
+      if (error) throw error;
+      return data || [];
+    },
+  });
+  const fallbackPreview = useMemo(
+    () => pickStableItem(LANDING_BLUEPRINT_PREVIEWS, previewSeed) ?? LANDING_BLUEPRINT_PREVIEWS[0],
+    [previewSeed],
   );
-
-  const showPreviousBlueprint = () => {
-    setActiveBlueprintIndex((current) =>
-      current === 0 ? LANDING_BLUEPRINT_PREVIEWS.length - 1 : current - 1,
-    );
-  };
-
-  const showNextBlueprint = () => {
-    setActiveBlueprintIndex((current) =>
-      current === LANDING_BLUEPRINT_PREVIEWS.length - 1 ? 0 : current + 1,
-    );
-  };
+  const activeBlueprint = useMemo(() => {
+    const sampled = pickStableItem(landingPreviewQuery.data || [], previewSeed);
+    if (!sampled) return fallbackPreview;
+    return buildLandingPreviewFromBlueprint(sampled, fallbackPreview) || fallbackPreview;
+  }, [fallbackPreview, landingPreviewQuery.data, previewSeed]);
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-20 px-4 py-20 md:px-6 lg:px-10">
@@ -73,43 +87,13 @@ export function LandingProofSections({ isSignedIn, onFinalCtaClick }: LandingPro
           <p className="text-base leading-relaxed text-muted-foreground">
             These are compact examples to give you the idea, not the full blueprint experience.
           </p>
-          <div className="flex items-center gap-2 pt-2">
-            <div className="flex items-center gap-2">
-              {LANDING_BLUEPRINT_PREVIEWS.map((preview, index) => (
-                <button
-                  key={preview.id}
-                  type="button"
-                  aria-label={`Open ${preview.title}`}
-                  onClick={() => setActiveBlueprintIndex(index)}
-                  className={`h-2.5 rounded-full transition-all ${
-                    index === activeBlueprintIndex ? 'w-8 bg-primary' : 'w-2.5 bg-primary/25 hover:bg-primary/40'
-                  }`}
-                />
-              ))}
-            </div>
-          </div>
+          {landingPreviewQuery.isError ? (
+            <p className="text-xs text-muted-foreground">Showing a fallback preview while the live sample is unavailable.</p>
+          ) : (
+            <p className="text-xs text-muted-foreground">Showing one live public blueprint sample.</p>
+          )}
         </div>
         <div className="relative rounded-[2rem] border border-border/50 bg-gradient-to-br from-card via-card to-accent/20 p-3 shadow-soft-xl">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            aria-label="Previous blueprint"
-            onClick={showPreviousBlueprint}
-            className="absolute -left-4 top-1/2 z-10 hidden h-11 w-11 -translate-y-1/2 rounded-full border-border/60 bg-background/90 shadow-soft md:flex"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            aria-label="Next blueprint"
-            onClick={showNextBlueprint}
-            className="absolute -right-4 top-1/2 z-10 hidden h-11 w-11 -translate-y-1/2 rounded-full border-border/60 bg-background/90 shadow-soft md:flex"
-          >
-            <ArrowRight className="h-4 w-4" />
-          </Button>
           <Card className="rounded-[1.75rem] border-border/50 bg-background/90 shadow-none">
             <CardContent className="space-y-6 p-6">
               <div className="overflow-hidden rounded-[1.35rem] border border-border/50 bg-muted/20">
@@ -151,27 +135,6 @@ export function LandingProofSections({ isSignedIn, onFinalCtaClick }: LandingPro
                     </div>
                   ))}
                 </div>
-              </div>
-
-              <div className="flex items-center justify-center gap-3 md:hidden">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  aria-label="Previous blueprint"
-                  onClick={showPreviousBlueprint}
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  aria-label="Next blueprint"
-                  onClick={showNextBlueprint}
-                >
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
               </div>
             </CardContent>
           </Card>
