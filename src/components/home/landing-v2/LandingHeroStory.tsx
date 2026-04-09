@@ -321,7 +321,6 @@ function DesktopLandingHeroStory({
                   transition={{ duration: prefersReducedMotion ? 0 : 0.2, ease: [0.22, 1, 0.36, 1] }}
                   className="absolute inset-0 space-y-5"
                 >
-                  <p className="text-sm font-semibold uppercase tracking-[0.25em] text-primary/80">{scene.eyebrow}</p>
                   <h1 className="max-w-3xl text-4xl font-black tracking-tight text-balance text-foreground sm:text-5xl md:text-6xl xl:text-7xl">
                     {scene.headline}
                   </h1>
@@ -445,7 +444,6 @@ function MobileLandingHeroStory({
               <CarouselItem key={scene.id} className="pl-0">
                 <div className="space-y-6">
                   <div className="space-y-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.25em] text-primary/80">{scene.eyebrow}</p>
                     <h1 className="text-4xl font-black tracking-tight text-balance text-foreground sm:text-5xl">
                       {scene.headline}
                     </h1>

@@ -102,7 +102,7 @@ export const LANDING_HOW_IT_WORKS: LandingStep[] = [
   },
   {
     id: 'generate',
-    title: 'Generate the useful version',
+    title: 'Generate a blueprint',
     description: 'Turn long videos into structured blueprints you can scan in seconds.',
   },
   {

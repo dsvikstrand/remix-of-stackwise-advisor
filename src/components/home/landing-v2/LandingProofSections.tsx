@@ -68,10 +68,10 @@ export function LandingProofSections({ isSignedIn, onFinalCtaClick }: LandingPro
         <div className="max-w-xl space-y-4">
           <p className="text-sm font-semibold uppercase tracking-[0.22em] text-primary">Blueprint preview</p>
           <h2 className="text-3xl font-black tracking-tight text-foreground sm:text-4xl">
-            See what a blueprint actually looks like.
+            Preview what a blueprint can look like.
           </h2>
           <p className="text-base leading-relaxed text-muted-foreground">
-            Bleup is easiest to understand when you see the output. These are curated examples from real blueprint generations, shown in a compact preview format.
+            These are compact examples to give you the idea, not the full blueprint experience.
           </p>
           <div className="flex items-center gap-2 pt-2">
             <div className="flex items-center gap-2">
