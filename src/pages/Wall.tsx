@@ -245,7 +245,7 @@ export default function Wall() {
             <p className="text-sm font-semibold text-primary uppercase tracking-wide">Home</p>
             <h1 className="text-2xl font-semibold">Your streams:</h1>
             <p className="text-sm text-muted-foreground">
-              Bleup turns YouTube videos into Blueprints. &quot;For You&quot; shows content from creators you subscribe to. &quot;Channels&quot; shows blueprints from the channels you follow. &quot;All&quot; shows every public blueprint on Bleup.
+              Bleup turns YouTube videos into Blueprints. &apos;For You&apos; shows content from creators you subscribe to. &apos;Channels&apos; shows blueprints from the channels you follow. &apos;All&apos; shows every public blueprint on Bleup.
             </p>
           </div>
         </section>
