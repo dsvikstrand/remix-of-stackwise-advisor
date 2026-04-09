@@ -49,7 +49,7 @@ export function CreatorSetupSection({
       : 'Paste a channel link or UC... id';
 
   const searchDescription = controller.channelSearchMode === 'handle'
-    ? 'Use the creator handle directly, for example @DaveAspreyBPR.'
+    ? 'Use the creator handle directly. Nothing changes until you click Subscribe.'
     : controller.channelSearchMode === 'creator_name'
       ? 'Search by creator name without guessing a handle.'
       : 'Use a YouTube channel URL or a UC... channel id.';
@@ -63,19 +63,21 @@ export function CreatorSetupSection({
       ) : null}
 
       <div className="rounded-2xl border border-primary/15 bg-primary/5 p-5">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="space-y-4">
           <div className="space-y-1">
             <p className="text-base font-semibold text-foreground">Search creators</p>
             <p className="text-sm text-muted-foreground">
               Find the creator you already have in mind and subscribe in one click.
             </p>
           </div>
-          <Button
-            onClick={() => controller.handleAddSubscriptionDialogChange(true)}
-            disabled={!controller.subscriptionsEnabled}
-          >
-            Search creators
-          </Button>
+          <div>
+            <Button
+              onClick={() => controller.handleAddSubscriptionDialogChange(true)}
+              disabled={!controller.subscriptionsEnabled}
+            >
+              Search creators
+            </Button>
+          </div>
         </div>
       </div>
 

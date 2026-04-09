@@ -14,7 +14,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User, LogOut, Settings, LifeBuoy, HelpCircle, Moon, Sun, Compass, Sparkles } from 'lucide-react';
 import { useAiCredits } from '@/hooks/useAiCredits';
-import { requestHomeOnboardingOpen } from '@/lib/homeOnboarding';
+import { requestHomeOnboardingDialogOpen } from '@/lib/homeOnboarding';
 
 interface UserMenuProps {
   onOpenHelp?: () => void;
@@ -97,8 +97,7 @@ export function UserMenu({ onOpenHelp }: UserMenuProps) {
 
   const handleOpenOnboarding = () => {
     setMenuOpen(false);
-    requestHomeOnboardingOpen();
-    navigate('/wall');
+    requestHomeOnboardingDialogOpen();
   };
 
   return (

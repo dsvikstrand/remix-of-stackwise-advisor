@@ -7,6 +7,11 @@ import { BlueprintFreeBadge } from '@/components/shared/BlueprintFreeBadge';
 import { UserMenu } from '@/components/shared/UserMenu';
 import { useAuth } from '@/contexts/AuthContext';
 import { HelpOverlay } from '@/components/shared/HelpOverlay';
+import { HomeOnboardingDialog } from '@/components/onboarding/HomeOnboardingDialog';
+import {
+  consumeHomeOnboardingDialogOpenRequest,
+  HOME_ONBOARDING_DIALOG_REOPEN_EVENT,
+} from '@/lib/homeOnboarding';
 
 interface AppHeaderProps {
   actions?: ReactNode;
@@ -16,6 +21,7 @@ interface AppHeaderProps {
 export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
   const { user } = useAuth();
   const [showHelp, setShowHelp] = useState(false);
+  const [showOnboardingDialog, setShowOnboardingDialog] = useState(false);
   const [hideFloatingNav, setHideFloatingNav] = useState(false);
 
   const navMode = user ? 'all' : 'public';
@@ -44,6 +50,26 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, [showFloatingNav]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    if (!user) {
+      setShowOnboardingDialog(false);
+      return undefined;
+    }
+
+    if (consumeHomeOnboardingDialogOpenRequest()) {
+      setShowOnboardingDialog(true);
+    }
+
+    const handleOpenOnboardingDialog = () => {
+      consumeHomeOnboardingDialogOpenRequest();
+      setShowOnboardingDialog(true);
+    };
+
+    window.addEventListener(HOME_ONBOARDING_DIALOG_REOPEN_EVENT, handleOpenOnboardingDialog);
+    return () => window.removeEventListener(HOME_ONBOARDING_DIALOG_REOPEN_EVENT, handleOpenOnboardingDialog);
+  }, [user]);
 
   return (
     <>
@@ -78,6 +104,7 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
         </div>
       )}
       <HelpOverlay open={showHelp} onOpenChange={setShowHelp} />
+      <HomeOnboardingDialog open={showOnboardingDialog} onOpenChange={setShowOnboardingDialog} />
     </>
   );
 }

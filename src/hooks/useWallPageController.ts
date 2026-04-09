@@ -90,8 +90,8 @@ export function useWallPageController() {
   );
   const defaultScope = !user
     ? SCOPE_ALL
-    : sourceSubscriptionsQuery.status === 'success' && activeSourceSubscriptionCount < 10
-      ? SCOPE_ALL
+    : sourceSubscriptionsQuery.status === 'success' && activeSourceSubscriptionCount < 5
+      ? SCOPE_JOINED
       : SCOPE_FOR_YOU;
   const feedScope = scopeValues.has(normalizedScopeParam) ? normalizedScopeParam : defaultScope;
   const requestedSort: FeedSort = sortParam === 'trending' ? 'trending' : 'latest';

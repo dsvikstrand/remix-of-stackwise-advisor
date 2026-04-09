@@ -2,9 +2,11 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Home, Rss, Sparkles, SquarePlus } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface HomeOnboardingCardProps {
   onDismiss: () => void;
+  className?: string;
 }
 
 const STEPS = [
@@ -30,9 +32,9 @@ const STEPS = [
   },
 ];
 
-export function HomeOnboardingCard({ onDismiss }: HomeOnboardingCardProps) {
+export function HomeOnboardingCard({ onDismiss, className }: HomeOnboardingCardProps) {
   return (
-    <Card className="mx-3 sm:mx-4 border border-primary/20 bg-gradient-to-br from-primary/5 via-background to-accent/5">
+    <Card className={cn("mx-3 sm:mx-4 border border-primary/20 bg-gradient-to-br from-primary/5 via-background to-accent/5", className)}>
       <CardContent className="p-4 sm:p-5 space-y-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-2">

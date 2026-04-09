@@ -340,11 +340,6 @@ export default function Wall() {
                 </SelectContent>
               </Select>
             </div>
-            {user && activeSourceSubscriptionCount > 0 && activeSourceSubscriptionCount < 10 ? (
-              <p className="mt-2 text-xs text-muted-foreground">
-                Showing <span className="font-medium text-foreground">All</span> by default while For You is still getting started.
-              </p>
-            ) : null}
             <p className="mt-2 text-xs text-muted-foreground">
               {activeLane === 'for-you'
                 ? 'For You shows blueprints from creators you subscribe to.'
