@@ -65,7 +65,7 @@ export function CreatorSetupSection({
       <div className="rounded-2xl border border-primary/15 bg-primary/5 p-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1">
-            <p className="text-base font-semibold text-foreground">Add creators manually</p>
+            <p className="text-base font-semibold text-foreground">Search creators</p>
             <p className="text-sm text-muted-foreground">
               Find the creator you already have in mind and subscribe in one click.
             </p>
@@ -74,7 +74,7 @@ export function CreatorSetupSection({
             onClick={() => controller.handleAddSubscriptionDialogChange(true)}
             disabled={!controller.subscriptionsEnabled}
           >
-            Add creators manually
+            Search creators
           </Button>
         </div>
       </div>

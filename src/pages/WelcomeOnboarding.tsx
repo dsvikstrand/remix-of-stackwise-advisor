@@ -254,9 +254,9 @@ export default function WelcomeOnboarding() {
 
         <Card className="border-border/40">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Step 1: Add creators</CardTitle>
+            <CardTitle className="text-base">Step 1: Add YouTube creators (optional)</CardTitle>
             <CardDescription>
-              Optional. Add creators manually first, or import your YouTube subscriptions by handle.
+              Optional. Search creators first, or import your YouTube subscriptions by handle.
             </CardDescription>
           </CardHeader>
           <CardContent>
