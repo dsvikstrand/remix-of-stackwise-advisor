@@ -1,12 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { ArrowRight, BookOpenText, PlaySquare, Search, Sparkles, Users } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookOpenText, PlaySquare, Search, Sparkles, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { LANDING_BLUEPRINT_PREVIEWS, LANDING_HOW_IT_WORKS, LANDING_VALUE_POINTS } from '@/lib/landingStory';
-import { buildLandingPreviewFromBlueprint, pickStableItem } from '@/lib/landingPreview';
+import { buildLandingPreviewFromBlueprint, pickStableItems } from '@/lib/landingPreview';
 
 interface LandingProofSectionsProps {
   isSignedIn: boolean;
@@ -15,9 +15,13 @@ interface LandingProofSectionsProps {
 
 const STEP_ICONS = [Search, BookOpenText, PlaySquare];
 const VALUE_ICONS = [Sparkles, Search, Users];
+const LANDING_PREVIEW_COUNT = 3;
+const SWIPE_THRESHOLD_PX = 40;
 
 export function LandingProofSections({ isSignedIn, onFinalCtaClick }: LandingProofSectionsProps) {
   const [previewSeed] = useState(() => Math.floor(Math.random() * 1_000_000));
+  const [activePreviewIndex, setActivePreviewIndex] = useState(0);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const landingPreviewQuery = useQuery({
     queryKey: ['landing-preview-blueprint'],
     staleTime: 5 * 60_000,
@@ -36,15 +40,55 @@ export function LandingProofSections({ isSignedIn, onFinalCtaClick }: LandingPro
       return data || [];
     },
   });
-  const fallbackPreview = useMemo(
-    () => pickStableItem(LANDING_BLUEPRINT_PREVIEWS, previewSeed) ?? LANDING_BLUEPRINT_PREVIEWS[0],
-    [previewSeed],
-  );
-  const activeBlueprint = useMemo(() => {
-    const sampled = pickStableItem(landingPreviewQuery.data || [], previewSeed);
-    if (!sampled) return fallbackPreview;
-    return buildLandingPreviewFromBlueprint(sampled, fallbackPreview) || fallbackPreview;
-  }, [fallbackPreview, landingPreviewQuery.data, previewSeed]);
+  const fallbackPreviews = useMemo(() => {
+    const sampledFallbacks = pickStableItems(LANDING_BLUEPRINT_PREVIEWS, previewSeed, LANDING_PREVIEW_COUNT);
+    return sampledFallbacks.length ? sampledFallbacks : LANDING_BLUEPRINT_PREVIEWS.slice(0, LANDING_PREVIEW_COUNT);
+  }, [previewSeed]);
+  const previewOptions = useMemo(() => {
+    const liveRows = pickStableItems(landingPreviewQuery.data || [], previewSeed, LANDING_PREVIEW_COUNT * 2);
+    const livePreviews = liveRows
+      .map((row, index) => buildLandingPreviewFromBlueprint(row, fallbackPreviews[index % fallbackPreviews.length] ?? fallbackPreviews[0]))
+      .filter((preview): preview is NonNullable<typeof preview> => Boolean(preview));
+
+    const merged = [...livePreviews];
+    for (const fallbackPreview of fallbackPreviews) {
+      if (merged.length >= LANDING_PREVIEW_COUNT) break;
+      if (merged.some((preview) => preview.id === fallbackPreview.id)) continue;
+      merged.push(fallbackPreview);
+    }
+
+    return merged.slice(0, LANDING_PREVIEW_COUNT);
+  }, [fallbackPreviews, landingPreviewQuery.data, previewSeed]);
+  const activeBlueprint = previewOptions[activePreviewIndex] ?? previewOptions[0];
+
+  useEffect(() => {
+    if (activePreviewIndex < previewOptions.length) return;
+    setActivePreviewIndex(0);
+  }, [activePreviewIndex, previewOptions.length]);
+
+  const showPreviousPreview = () => {
+    setActivePreviewIndex((current) => (current === 0 ? previewOptions.length - 1 : current - 1));
+  };
+
+  const showNextPreview = () => {
+    setActivePreviewIndex((current) => (current === previewOptions.length - 1 ? 0 : current + 1));
+  };
+
+  const handlePreviewTouchStart = (clientX: number) => {
+    setTouchStartX(clientX);
+  };
+
+  const handlePreviewTouchEnd = (clientX: number) => {
+    if (touchStartX === null) return;
+    const delta = clientX - touchStartX;
+    setTouchStartX(null);
+    if (Math.abs(delta) < SWIPE_THRESHOLD_PX || previewOptions.length < 2) return;
+    if (delta < 0) {
+      showNextPreview();
+      return;
+    }
+    showPreviousPreview();
+  };
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-20 px-4 py-20 md:px-6 lg:px-10">
@@ -89,33 +133,63 @@ export function LandingProofSections({ isSignedIn, onFinalCtaClick }: LandingPro
           </p>
           {landingPreviewQuery.isError ? (
             <p className="text-xs text-muted-foreground">Showing a fallback preview while the live sample is unavailable.</p>
+          ) : previewOptions.length > 1 ? (
+            <p className="text-xs text-muted-foreground">Showing 3 live public blueprint samples. Swipe or tap the dots to browse.</p>
           ) : (
             <p className="text-xs text-muted-foreground">Showing one live public blueprint sample.</p>
           )}
         </div>
-        <div className="relative rounded-[2rem] border border-border/50 bg-gradient-to-br from-card via-card to-accent/20 p-3 shadow-soft-xl">
+        <div
+          className="relative rounded-[2rem] border border-border/50 bg-gradient-to-br from-card via-card to-accent/20 p-3 shadow-soft-xl"
+          onTouchStart={(event) => handlePreviewTouchStart(event.touches[0]?.clientX ?? 0)}
+          onTouchEnd={(event) => handlePreviewTouchEnd(event.changedTouches[0]?.clientX ?? touchStartX ?? 0)}
+        >
+          {previewOptions.length > 1 ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="Previous preview"
+              onClick={showPreviousPreview}
+              className="absolute -left-4 top-1/2 z-10 hidden h-11 w-11 -translate-y-1/2 rounded-full border-border/60 bg-background/90 shadow-soft md:flex"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          ) : null}
+          {previewOptions.length > 1 ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="Next preview"
+              onClick={showNextPreview}
+              className="absolute -right-4 top-1/2 z-10 hidden h-11 w-11 -translate-y-1/2 rounded-full border-border/60 bg-background/90 shadow-soft md:flex"
+            >
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          ) : null}
           <Card className="rounded-[1.75rem] border-border/50 bg-background/90 shadow-none">
             <CardContent className="space-y-6 p-6">
               <div className="overflow-hidden rounded-[1.35rem] border border-border/50 bg-muted/20">
-                  <img
-                    src={activeBlueprint.thumbnailUrl}
-                    alt={activeBlueprint.title}
-                    className="aspect-[7/2] w-full object-cover"
-                    loading="lazy"
-                  />
-                </div>
+                <img
+                  src={activeBlueprint.thumbnailUrl}
+                  alt={activeBlueprint.title}
+                  className="aspect-[7/2] w-full object-cover"
+                  loading="lazy"
+                />
+              </div>
 
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="space-y-2">
-                    <div className="inline-flex rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-                      {activeBlueprint.channel}
-                    </div>
-                    <div>
-                      <h3 className="text-2xl font-semibold tracking-tight text-foreground">{activeBlueprint.title}</h3>
-                      <p className="mt-1 text-sm text-muted-foreground">From {activeBlueprint.creator}</p>
-                    </div>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-2">
+                  <div className="inline-flex rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+                    {activeBlueprint.channel}
                   </div>
-                  <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
+                  <div>
+                    <h3 className="text-2xl font-semibold tracking-tight text-foreground">{activeBlueprint.title}</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">From {activeBlueprint.creator}</p>
+                  </div>
+                </div>
+                <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
                   {activeBlueprint.statsLabel}
                 </span>
               </div>
@@ -136,6 +210,22 @@ export function LandingProofSections({ isSignedIn, onFinalCtaClick }: LandingPro
                   ))}
                 </div>
               </div>
+
+              {previewOptions.length > 1 ? (
+                <div className="flex items-center justify-center gap-2 pt-1">
+                  {previewOptions.map((preview, index) => (
+                    <button
+                      key={preview.id}
+                      type="button"
+                      aria-label={`Open preview ${index + 1}`}
+                      onClick={() => setActivePreviewIndex(index)}
+                      className={`h-2.5 rounded-full transition-all ${
+                        index === activePreviewIndex ? 'w-8 bg-primary' : 'w-2.5 bg-primary/25 hover:bg-primary/40'
+                      }`}
+                    />
+                  ))}
+                </div>
+              ) : null}
             </CardContent>
           </Card>
         </div>

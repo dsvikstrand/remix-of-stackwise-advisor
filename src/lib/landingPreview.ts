@@ -89,3 +89,22 @@ export function pickStableItem<T>(items: T[], seed: number): T | null {
   const index = Math.abs(seed) % items.length;
   return items[index] ?? null;
 }
+
+export function pickStableItems<T>(items: T[], seed: number, count: number): T[] {
+  if (!items.length || count <= 0) return [];
+
+  const picked: T[] = [];
+  const usedIndexes = new Set<number>();
+  const startIndex = Math.abs(seed) % items.length;
+
+  for (let offset = 0; offset < items.length && picked.length < count; offset += 1) {
+    const index = (startIndex + offset) % items.length;
+    if (usedIndexes.has(index)) continue;
+    const item = items[index];
+    if (!item) continue;
+    usedIndexes.add(index);
+    picked.push(item);
+  }
+
+  return picked;
+}

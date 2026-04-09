@@ -4,6 +4,7 @@ import {
   buildLandingPreviewFromBlueprint,
   extractLandingPreviewTakeaways,
   pickStableItem,
+  pickStableItems,
 } from '@/lib/landingPreview';
 
 const fallback = {
@@ -100,5 +101,15 @@ describe('buildLandingPreviewFromBlueprint', () => {
 describe('pickStableItem', () => {
   it('returns a stable item for a given seed', () => {
     expect(pickStableItem(['a', 'b', 'c'], 4)).toBe('b');
+  });
+});
+
+describe('pickStableItems', () => {
+  it('returns a stable unique slice for a given seed', () => {
+    expect(pickStableItems(['a', 'b', 'c', 'd'], 2, 3)).toEqual(['c', 'd', 'a']);
+  });
+
+  it('caps at the number of available items', () => {
+    expect(pickStableItems(['a', 'b'], 1, 3)).toEqual(['b', 'a']);
   });
 });
