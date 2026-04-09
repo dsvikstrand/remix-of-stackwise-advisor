@@ -9,23 +9,23 @@ interface HomeOnboardingCardProps {
 
 const STEPS = [
   {
-    title: 'Home is where things land',
-    description: 'For You follows your subscriptions. Channels shows blueprints from the channels you follow. All shows every public blueprint.',
+    title: 'Home is where things land, the main flow of the app.',
+    description: '"For You" shows your YouTube subscriptions content. "Channels" shows blueprints from the channels you follow. All shows every public blueprint.',
     icon: Home,
   },
   {
     title: 'Subscriptions follow creators',
-    description: 'Use Auto generate if you want new creator videos turned into blueprints automatically.',
+    description: 'When a new video is uploaded, you can turn it into a blueprint by unlocking it.',
     icon: Rss,
   },
   {
     title: 'Channels follow topics',
-    description: 'Channels shows blueprints posted into the channels you follow.',
+    description: 'Channels shows blueprints posted into the channels you follow. Each blueprint is auto-classified into a channel.',
     icon: Sparkles,
   },
   {
-    title: 'Add is for intentional generation',
-    description: 'Use Add when you want to turn a creator or video into a blueprint right now.',
+    title: 'Add is for manually adding new blueprints',
+    description: 'Use Add when you want to turn an older video into a blueprint right now.',
     icon: SquarePlus,
   },
 ];
@@ -40,7 +40,7 @@ export function HomeOnboardingCard({ onDismiss }: HomeOnboardingCardProps) {
             <div className="space-y-1">
               <h2 className="text-base font-semibold">A quick guide to how Bleup works</h2>
               <p className="text-sm text-muted-foreground">
-                Learn the difference between creators, topics, and your three Home streams before you dive in.
+                Learn the difference between blueprints, creators, channels, and your three Home streams before you dive in.
               </p>
             </div>
           </div>
@@ -67,10 +67,6 @@ export function HomeOnboardingCard({ onDismiss }: HomeOnboardingCardProps) {
             );
           })}
         </div>
-
-        <p className="text-xs text-muted-foreground">
-          Tip: Manual only subscriptions can place locked items in For You. When you are ready, it costs 1 credit to turn one into a blueprint.
-        </p>
       </CardContent>
     </Card>
   );

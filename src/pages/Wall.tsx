@@ -243,9 +243,9 @@ export default function Wall() {
         <section className="mb-6 px-3 sm:px-4 hidden sm:block">
           <div className="flex flex-col gap-2">
             <p className="text-sm font-semibold text-primary uppercase tracking-wide">Home</p>
-            <h1 className="text-2xl font-semibold">Your blueprint streams</h1>
+            <h1 className="text-2xl font-semibold">Your streams:</h1>
             <p className="text-sm text-muted-foreground">
-              For You follows creators you subscribe to. Channels shows blueprints from the channels you follow. All shows every public blueprint on Bleup.
+              Bleup turns YouTube videos into Blueprints. &quot;For You&quot; shows content from creators you subscribe to. &quot;Channels&quot; shows blueprints from the channels you follow. &quot;All&quot; shows every public blueprint on Bleup.
             </p>
           </div>
         </section>
