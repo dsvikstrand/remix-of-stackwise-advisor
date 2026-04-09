@@ -15,7 +15,7 @@ const STEPS = [
   },
   {
     title: 'Subscriptions follow creators',
-    description: 'When a new video is uploaded, you can turn it into a blueprint by unlocking it.',
+    description: 'When a new video is uploaded, you can turn it into a blueprint by unlocking it from the "For You" feed.',
     icon: Rss,
   },
   {
@@ -24,8 +24,8 @@ const STEPS = [
     icon: Sparkles,
   },
   {
-    title: 'Add is for manually adding new blueprints',
-    description: 'Use Add when you want to turn an older video into a blueprint right now.',
+    title: 'All is for everything',
+    description: 'Each new public blueprint can be found in the "All" feed.',
     icon: SquarePlus,
   },
 ];
