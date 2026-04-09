@@ -26,10 +26,24 @@ export class BlueprintYoutubeCommentsRefreshError extends Error {
   }
 }
 
+type ApiEnvelope<T> = {
+  ok: boolean;
+  error_code: string | null;
+  message: string;
+  data: T;
+};
+
 function isMissingRelationError(error: unknown, relation: string) {
   const e = error as { message?: unknown; details?: unknown; hint?: unknown } | null;
   const hay = `${String(e?.message || '')} ${String(e?.details || '')} ${String(e?.hint || '')}`.toLowerCase();
   return hay.includes('does not exist') && hay.includes(relation.toLowerCase());
+}
+
+async function getOptionalAuthHeader() {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return {};
+  return { Authorization: `Bearer ${token}` };
 }
 
 export function useBlueprintYoutubeComments(
@@ -41,6 +55,29 @@ export function useBlueprintYoutubeComments(
     enabled: !!blueprintId,
     queryFn: async () => {
       if (!blueprintId) return [] as BlueprintYoutubeComment[];
+
+      if (config.agenticBackendUrl) {
+        const authHeader = await getOptionalAuthHeader();
+        const response = await fetch(getFunctionUrl(`blueprints/${encodeURIComponent(blueprintId)}/youtube-comments?sort_mode=${encodeURIComponent(sortMode)}`), {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeader,
+          },
+        });
+
+        const payload = (await response.json().catch(() => null)) as ApiEnvelope<{
+          items?: BlueprintYoutubeComment[];
+        }> | null;
+
+        if (!response.ok || !payload?.ok) {
+          throw new Error(payload?.message || `Request failed (${response.status})`);
+        }
+
+        return Array.isArray(payload.data?.items)
+          ? payload.data.items
+          : ([] as BlueprintYoutubeComment[]);
+      }
 
       const { data, error } = await supabase
         .from('blueprint_youtube_comments')

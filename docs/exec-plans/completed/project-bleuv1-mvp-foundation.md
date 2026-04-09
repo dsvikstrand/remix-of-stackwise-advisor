@@ -15,6 +15,7 @@ Update note 2026-04-02:
 - New source subscriptions now default to manual auto-unlock off (`auto_unlock_enabled=false`), while reactivating an existing subscription preserves that row's prior saved toggle value across direct subscribe, source-page subscribe, and YouTube import flows.
 - `/subscriptions` now pages large subscription libraries in `50`-row slices with an explicit `Load more` action, while compatibility callers can still request the historical full-list response shape.
 - Blueprint YouTube comments refresh now skips unchanged `blueprint_youtube_comments` rewrites and logs explicit changed/skipped decisions, narrowing the remaining comments egress without changing visible comment UX.
+- Follow-up comments ownership work now also routes normal runtime blueprint YouTube comment refresh/delete-reseed writes and backend comment reads through Oracle comment state, leaving direct Supabase `blueprint_youtube_comments` access as compatibility residue.
 - Queue-ledger `primary` compatibility writes now update existing `ingestion_jobs` rows by durable `id` before falling back to insert-on-miss, reducing Supabase `on_conflict` queue shadow churn without changing queue outcomes.
 - Queue-ledger follow-up now also classifies the remaining `ingestion_jobs` shadow patches by lifecycle class, so terminal vs retry/claim/lease shadows can use narrower Supabase patch payloads instead of rewriting the full queue row every time.
 

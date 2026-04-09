@@ -329,6 +329,69 @@ describe('blueprint YouTube comments service', () => {
     expect(insert).toHaveBeenCalledTimes(1);
   });
 
+  it('storeBlueprintYouTubeComments uses the injected Oracle-aware writer when present', async () => {
+    const storeBlueprintYouTubeCommentsOracleAware = vi.fn(async () => ({
+      changed: true,
+      skipped: false,
+      previous_count: 0,
+      next_count: 1,
+    }));
+    const db = {
+      from() {
+        throw new Error('Supabase comment writes should not be used when Oracle writer is injected');
+      },
+    };
+
+    const service = createBlueprintYouTubeCommentsService({
+      apiKey: 'youtube-key',
+      fetchImpl: vi.fn() as unknown as typeof fetch,
+      storeBlueprintYouTubeCommentsOracleAware,
+    });
+
+    const result = await service.storeBlueprintYouTubeComments({
+      db: db as any,
+      blueprintId: 'bp_1',
+      videoId: 'abc123def45',
+      sortMode: 'top',
+      comments: [
+        {
+          source_comment_id: 'comment_1',
+          display_order: 0,
+          author_name: 'Alice',
+          author_avatar_url: 'https://example.com/a.png',
+          content: 'Oracle comment',
+          published_at: '2026-04-01T10:00:00.000Z',
+          like_count: 7,
+        },
+      ],
+    });
+
+    expect(storeBlueprintYouTubeCommentsOracleAware).toHaveBeenCalledTimes(1);
+    expect(storeBlueprintYouTubeCommentsOracleAware).toHaveBeenCalledWith({
+      db,
+      blueprintId: 'bp_1',
+      videoId: 'abc123def45',
+      sortMode: 'top',
+      comments: [
+        {
+          source_comment_id: 'comment_1',
+          display_order: 0,
+          author_name: 'Alice',
+          author_avatar_url: 'https://example.com/a.png',
+          content: 'Oracle comment',
+          published_at: '2026-04-01T10:00:00.000Z',
+          like_count: 7,
+        },
+      ],
+    });
+    expect(result).toEqual({
+      changed: true,
+      skipped: false,
+      previous_count: 0,
+      next_count: 1,
+    });
+  });
+
   it('executeRefresh uses the injected Oracle-aware source-item view writer when present', async () => {
     const fetchImpl = vi.fn(async () => ({
       ok: true,

@@ -184,6 +184,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
       cooldown_until: null,
       queue_depth: 0,
     })),
+    listBlueprintYouTubeComments: vi.fn(async () => []),
     ...overrides,
   } as any;
 }
@@ -847,6 +848,96 @@ describe('youtube handlers', () => {
     expect(res.body).toMatchObject({
       ok: false,
       error_code: 'COMMENTS_REFRESH_COOLDOWN_ACTIVE',
+    });
+  });
+
+  it('lists blueprint YouTube comments through the backend reader', async () => {
+    const app = createMockApp();
+    const serviceDb = createMockSupabase({
+      blueprints: [{
+        id: '00000000-0000-0000-0000-000000000999',
+        creator_user_id: '00000000-0000-0000-0000-000000000001',
+        is_public: true,
+      }],
+    });
+    const listBlueprintYouTubeComments = vi.fn(async () => ([
+      {
+        id: 'bp_comment_1',
+        blueprint_id: '00000000-0000-0000-0000-000000000999',
+        youtube_video_id: 'abc123def45',
+        sort_mode: 'top' as const,
+        source_comment_id: 'yt_comment_1',
+        display_order: 0,
+        author_name: 'Alice',
+        author_avatar_url: 'https://example.com/a.png',
+        content: 'Useful comment',
+        published_at: '2026-04-09T08:00:00.000Z',
+        like_count: 7,
+      },
+    ]));
+    registerYouTubeRouteHandlers(app as any, createDeps({
+      getServiceSupabaseClient: () => serviceDb,
+      listBlueprintYouTubeComments,
+    }));
+
+    const handler = app.handlers['GET /api/blueprints/:id/youtube-comments'];
+    const req = {
+      params: { id: '00000000-0000-0000-0000-000000000999' },
+      query: { sort_mode: 'top' },
+    } as any;
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(listBlueprintYouTubeComments).toHaveBeenCalledTimes(1);
+    expect(listBlueprintYouTubeComments).toHaveBeenCalledWith({
+      db: serviceDb,
+      blueprintId: '00000000-0000-0000-0000-000000000999',
+      sortMode: 'top',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        items: [
+          {
+            id: 'bp_comment_1',
+            content: 'Useful comment',
+          },
+        ],
+      },
+    });
+  });
+
+  it('hides blueprint YouTube comments for private blueprints when the user is not the owner', async () => {
+    const app = createMockApp();
+    const serviceDb = createMockSupabase({
+      blueprints: [{
+        id: '00000000-0000-0000-0000-000000000999',
+        creator_user_id: '00000000-0000-0000-0000-000000000777',
+        is_public: false,
+      }],
+    });
+    const listBlueprintYouTubeComments = vi.fn(async () => []);
+    registerYouTubeRouteHandlers(app as any, createDeps({
+      getServiceSupabaseClient: () => serviceDb,
+      listBlueprintYouTubeComments,
+    }));
+
+    const handler = app.handlers['GET /api/blueprints/:id/youtube-comments'];
+    const req = {
+      params: { id: '00000000-0000-0000-0000-000000000999' },
+      query: { sort_mode: 'new' },
+    } as any;
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(listBlueprintYouTubeComments).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toMatchObject({
+      ok: false,
+      error_code: 'NOT_FOUND',
     });
   });
 

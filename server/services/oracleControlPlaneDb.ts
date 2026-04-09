@@ -323,6 +323,22 @@ type GenerationRunEventStateTable = {
   created_at: string;
 };
 
+type BlueprintYoutubeCommentStateTable = {
+  id: string;
+  blueprint_id: string;
+  youtube_video_id: string;
+  sort_mode: string;
+  source_comment_id: string;
+  display_order: number;
+  author_name: string | null;
+  author_avatar_url: string | null;
+  content: string;
+  published_at: string | null;
+  like_count: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
 type ProductFeedStateTable = {
   id: string;
   user_id: string;
@@ -352,6 +368,7 @@ export type OracleControlPlaneDatabase = {
   generation_variant_state: GenerationVariantStateTable;
   generation_run_state: GenerationRunStateTable;
   generation_run_event_state: GenerationRunEventStateTable;
+  blueprint_youtube_comment_state: BlueprintYoutubeCommentStateTable;
   product_subscription_state: ProductSubscriptionStateTable;
   product_source_item_state: ProductSourceItemStateTable;
   product_unlock_state: ProductUnlockStateTable;
@@ -750,6 +767,28 @@ CREATE INDEX IF NOT EXISTS idx_generation_run_event_run_id_desc
 
 CREATE INDEX IF NOT EXISTS idx_generation_run_event_created_desc
   ON generation_run_event_state (created_at DESC);
+
+CREATE TABLE IF NOT EXISTS blueprint_youtube_comment_state (
+  id TEXT PRIMARY KEY,
+  blueprint_id TEXT NOT NULL,
+  youtube_video_id TEXT NOT NULL,
+  sort_mode TEXT NOT NULL,
+  source_comment_id TEXT NOT NULL,
+  display_order INTEGER NOT NULL,
+  author_name TEXT,
+  author_avatar_url TEXT,
+  content TEXT NOT NULL,
+  published_at TEXT,
+  like_count INTEGER,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_blueprint_youtube_comment_unique
+  ON blueprint_youtube_comment_state (blueprint_id, sort_mode, source_comment_id);
+
+CREATE INDEX IF NOT EXISTS idx_blueprint_youtube_comment_display
+  ON blueprint_youtube_comment_state (blueprint_id, sort_mode, display_order, id);
 
 CREATE TABLE IF NOT EXISTS product_subscription_state (
   id TEXT PRIMARY KEY,

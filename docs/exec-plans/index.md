@@ -24,6 +24,8 @@ This file is the authoritative active/reference/deserted/completed registry for 
 - These files remain valid historical reference plans, but they are not the current implementation focus.
 - `docs/exec-plans/active/on-pause/oracle-deeper-ownership-and-supabase-reduction-plan.md`
   Paused broader Oracle-ownership architecture chapter retained as context after the narrower queue and unlock full-ownership cutovers completed.
+- `docs/exec-plans/active/on-pause/oracle-blueprint-youtube-comments-full-ownership-cutover-plan.md`
+  Queued next ownership chapter for full Oracle `blueprint_youtube_comments` cutover after current generation-trace burn-in/closure; this is the strongest remaining Supabase family in the latest 24h sample.
 - `docs/exec-plans/completed/oracle-feed-full-ownership-cutover-plan.md`
   Completed Oracle-only feed cutover; retained as reference while later chapters pursued remaining Supabase-owned runtime surfaces.
 - `docs/exec-plans/completed/oracle-generation-state-full-ownership-cutover-plan.md`
@@ -144,6 +146,8 @@ This file is the authoritative active/reference/deserted/completed registry for 
 - Current runtime/ops truth: `docs/architecture.md`, `docs/ops/yt2bp_runbook.md`, and `docs/ops/mvp-launch-readiness-checklist.md`.
 - Current active implementation plan: `docs/exec-plans/active/oracle-generation-trace-full-ownership-cutover-plan.md`.
   Generation trace is now the only open ownership chapter because Oracle-only event write/read severing is landed and the remaining work is burn-in plus closure after the most recent trace-specific follow-up.
+- Queued next ownership chapter: `docs/exec-plans/active/on-pause/oracle-blueprint-youtube-comments-full-ownership-cutover-plan.md`.
+  Blueprint YouTube comments are now the strongest next migration target because the latest 24h attribution sample is led by `blueprint_youtube_comments` read/write/delete traffic.
 - Paused broader Oracle-ownership context: `docs/exec-plans/active/on-pause/oracle-deeper-ownership-and-supabase-reduction-plan.md`.
 - Current active proof/deferred tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`.
 - Current post-launch debt board: `docs/exec-plans/tech-debt-tracker.md`.

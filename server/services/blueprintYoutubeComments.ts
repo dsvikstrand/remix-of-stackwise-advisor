@@ -16,6 +16,20 @@ export type StoredBlueprintYouTubeComment = {
   like_count: number | null;
 };
 
+export type StoredBlueprintYouTubeCommentRow = {
+  id: string;
+  blueprint_id: string;
+  youtube_video_id?: string | null;
+  sort_mode: YouTubeCommentSortMode;
+  source_comment_id: string;
+  display_order: number;
+  author_name: string | null;
+  author_avatar_url: string | null;
+  content: string;
+  published_at: string | null;
+  like_count: number | null;
+};
+
 type StoreBlueprintYouTubeCommentsResult = {
   changed: boolean;
   skipped: boolean;
@@ -369,6 +383,18 @@ export function createBlueprintYouTubeCommentsService(input: {
   }) => Promise<Array<{
     payload: Record<string, unknown> | null;
   }>>;
+  storeBlueprintYouTubeCommentsOracleAware?: (input: {
+    db: DbClient;
+    blueprintId: string;
+    videoId: string;
+    sortMode: YouTubeCommentSortMode;
+    comments: StoredBlueprintYouTubeComment[];
+  }) => Promise<StoreBlueprintYouTubeCommentsResult>;
+  listBlueprintYouTubeCommentsOracleAware?: (input: {
+    db: DbClient;
+    blueprintId: string;
+    sortMode: YouTubeCommentSortMode;
+  }) => Promise<StoredBlueprintYouTubeCommentRow[]>;
 }) {
   const apiKey = String(input.apiKey || '').trim();
   const fetchImpl = input.fetchImpl || fetch;
@@ -391,6 +417,53 @@ export function createBlueprintYouTubeCommentsService(input: {
   const storeSourceItemViewCountOracleAware = input.storeSourceItemViewCountOracleAware;
   const listPendingRefreshBlueprintIdsOracleFirst = input.listPendingRefreshBlueprintIdsOracleFirst;
   const listOracleActiveRefreshJobs = input.listOracleActiveRefreshJobs;
+  const storeBlueprintYouTubeCommentsOracleAware = input.storeBlueprintYouTubeCommentsOracleAware;
+  const listBlueprintYouTubeCommentsOracleAware = input.listBlueprintYouTubeCommentsOracleAware;
+
+  async function listBlueprintYouTubeComments(args: {
+    db: DbClient;
+    blueprintId: string;
+    sortMode: YouTubeCommentSortMode;
+  }) {
+    const blueprintId = String(args.blueprintId || '').trim();
+    if (!blueprintId) return [] as StoredBlueprintYouTubeCommentRow[];
+
+    if (listBlueprintYouTubeCommentsOracleAware) {
+      return listBlueprintYouTubeCommentsOracleAware({
+        db: args.db,
+        blueprintId,
+        sortMode: args.sortMode,
+      });
+    }
+
+    const { data, error } = await args.db
+      .from('blueprint_youtube_comments')
+      .select('id, blueprint_id, youtube_video_id, sort_mode, source_comment_id, display_order, author_name, author_avatar_url, content, published_at, like_count')
+      .eq('blueprint_id', blueprintId)
+      .eq('sort_mode', args.sortMode)
+      .order('display_order', { ascending: true });
+
+    if (error) {
+      if (isMissingRelationError(error, 'blueprint_youtube_comments')) {
+        return [] as StoredBlueprintYouTubeCommentRow[];
+      }
+      throw error;
+    }
+
+    return ((data || []) as Array<Record<string, unknown>>).map((row) => ({
+      id: String(row.id || '').trim(),
+      blueprint_id: String(row.blueprint_id || '').trim(),
+      youtube_video_id: String(row.youtube_video_id || '').trim() || null,
+      sort_mode: String(row.sort_mode || '').trim().toLowerCase() === 'new' ? 'new' : 'top',
+      source_comment_id: String(row.source_comment_id || '').trim(),
+      display_order: Number.isFinite(Number(row.display_order)) ? Math.max(0, Math.floor(Number(row.display_order))) : 0,
+      author_name: String(row.author_name || '').trim() || null,
+      author_avatar_url: String(row.author_avatar_url || '').trim() || null,
+      content: String(row.content || '').trim(),
+      published_at: String(row.published_at || '').trim() || null,
+      like_count: row.like_count == null ? null : (Number.isFinite(Number(row.like_count)) ? Math.max(0, Math.floor(Number(row.like_count))) : null),
+    }));
+  }
 
   async function resolveBlueprintYouTubeVideoId(args: {
     db: DbClient;
@@ -500,6 +573,16 @@ export function createBlueprintYouTubeCommentsService(input: {
       };
     }
     const comments = Array.isArray(args.comments) ? args.comments : [];
+
+    if (storeBlueprintYouTubeCommentsOracleAware) {
+      return storeBlueprintYouTubeCommentsOracleAware({
+        db: args.db,
+        blueprintId: args.blueprintId,
+        videoId: normalizedVideoId,
+        sortMode: args.sortMode,
+        comments,
+      });
+    }
 
     const existingQuery = await args.db
       .from('blueprint_youtube_comments')
@@ -1475,6 +1558,7 @@ export function createBlueprintYouTubeCommentsService(input: {
     fetchYouTubeCommentSnapshot,
     fetchYouTubeViewCount,
     storeBlueprintYouTubeComments,
+    listBlueprintYouTubeComments,
     storeSourceItemViewCount,
     registerRefreshStateForBlueprint,
     getRefreshStateForBlueprint,

@@ -170,4 +170,21 @@ export type YouTubeRouteDeps = {
     | { ok: false; code: 'COMMENTS_REFRESH_COOLDOWN_ACTIVE'; retry_at: string | null }
     | { ok: false; code: 'COMMENTS_REFRESH_QUEUE_GUARDED'; retry_after_seconds: number; queue_depth: number }
   >;
+  listBlueprintYouTubeComments: (input: {
+    db: any;
+    blueprintId: string;
+    sortMode: 'top' | 'new';
+  }) => Promise<Array<{
+    id: string;
+    blueprint_id: string;
+    youtube_video_id?: string | null;
+    sort_mode: 'top' | 'new';
+    source_comment_id: string;
+    display_order: number;
+    author_name: string | null;
+    author_avatar_url: string | null;
+    content: string;
+    published_at: string | null;
+    like_count: number | null;
+  }>>;
 };

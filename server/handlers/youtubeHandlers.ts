@@ -127,6 +127,7 @@ export function registerYouTubeRouteHandlers(app: express.Express, deps: YouTube
     resolveVariantOrReady,
     findVariantsByBlueprintId,
     requestManualBlueprintYouTubeCommentsRefresh,
+    listBlueprintYouTubeComments,
   } = deps;
 app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt2bpAuthLimiter, async (req, res) => {
   if (!yt2bpEnabled) {
@@ -515,6 +516,71 @@ app.post('/api/blueprints/:id/youtube-comments/refresh', async (req, res) => {
       ok: false,
       error_code: 'COMMENTS_REFRESH_FAILED',
       message: error instanceof Error ? error.message : 'Could not request YouTube refresh.',
+      data: null,
+    });
+  }
+});
+
+app.get('/api/blueprints/:id/youtube-comments', async (req, res) => {
+  const userId = (res.locals.user as { id?: string } | undefined)?.id;
+  const blueprintId = String(req.params.id || '').trim();
+  const sortMode = String(req.query.sort_mode || 'top').trim().toLowerCase() === 'new' ? 'new' : 'top';
+  if (!blueprintId) {
+    return res.status(400).json({ ok: false, error_code: 'INVALID_INPUT', message: 'Blueprint id required.', data: null });
+  }
+  const db = getServiceSupabaseClient();
+  if (!db) {
+    return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Service role client not configured', data: null });
+  }
+
+  try {
+    const { data: blueprint, error: blueprintError } = await db
+      .from('blueprints')
+      .select('id, creator_user_id, is_public')
+      .eq('id', blueprintId)
+      .maybeSingle();
+    if (blueprintError) {
+      return res.status(400).json({
+        ok: false,
+        error_code: 'READ_FAILED',
+        message: blueprintError.message,
+        data: null,
+      });
+    }
+
+    const isOwner = Boolean(
+      blueprint
+      && userId
+      && String(blueprint.creator_user_id || '').trim() === String(userId || '').trim(),
+    );
+    if (!blueprint || (!isOwner && !Boolean(blueprint.is_public))) {
+      return res.status(404).json({
+        ok: false,
+        error_code: 'NOT_FOUND',
+        message: 'Blueprint not found.',
+        data: null,
+      });
+    }
+
+    const items = await listBlueprintYouTubeComments({
+      db,
+      blueprintId,
+      sortMode,
+    });
+
+    return res.json({
+      ok: true,
+      error_code: null,
+      message: 'youtube comments',
+      data: {
+        items,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: error instanceof Error ? error.message : 'Could not load YouTube comments.',
       data: null,
     });
   }

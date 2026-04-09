@@ -340,6 +340,10 @@ import {
   listOracleGenerationRunEvents,
 } from './services/oracleGenerationTrace';
 import {
+  listOracleBlueprintYoutubeComments,
+  replaceOracleBlueprintYoutubeCommentsSnapshot,
+} from './services/oracleBlueprintYoutubeCommentsState';
+import {
   clampInt,
   getFailureTransition,
   normalizeAutoBannerMode,
@@ -4400,6 +4404,55 @@ async function storeSourceItemViewCountOracleAware(
     action: 'store_source_item_view_count',
   });
   return true;
+}
+
+async function storeBlueprintYouTubeCommentsOracleAware(
+  _db: ReturnType<typeof createClient>,
+  input: {
+    blueprintId: string;
+    videoId: string;
+    sortMode: 'top' | 'new';
+    comments: Array<{
+      source_comment_id: string;
+      display_order: number;
+      author_name: string | null;
+      author_avatar_url: string | null;
+      content: string;
+      published_at: string | null;
+      like_count: number | null;
+    }>;
+  },
+) {
+  if (!oracleControlPlane) {
+    return {
+      changed: false,
+      skipped: true,
+      previous_count: 0,
+      next_count: Array.isArray(input.comments) ? input.comments.length : 0,
+    };
+  }
+  return replaceOracleBlueprintYoutubeCommentsSnapshot({
+    controlDb: oracleControlPlane,
+    blueprintId: input.blueprintId,
+    youtubeVideoId: input.videoId,
+    sortMode: input.sortMode,
+    comments: input.comments,
+  });
+}
+
+async function listBlueprintYouTubeCommentsOracleAware(
+  _db: ReturnType<typeof createClient>,
+  input: {
+    blueprintId: string;
+    sortMode: 'top' | 'new';
+  },
+) {
+  if (!oracleControlPlane) return [];
+  return listOracleBlueprintYoutubeComments({
+    controlDb: oracleControlPlane,
+    blueprintId: input.blueprintId,
+    sortMode: input.sortMode,
+  });
 }
 
 type FeedItemRow = {
@@ -8628,6 +8681,13 @@ registerYouTubeRoutes(app, {
   resolveVariantOrReady: (variantInput: any) => resolveVariantOrReady(variantInput),
   findVariantsByBlueprintId: (variantInput: any) => findVariantsByBlueprintId(variantInput),
   requestManualBlueprintYouTubeCommentsRefresh,
+  listBlueprintYouTubeComments: async ({ db, blueprintId, sortMode }) => (
+    blueprintYouTubeCommentsService.listBlueprintYouTubeComments({
+      db,
+      blueprintId,
+      sortMode,
+    })
+  ),
 });
 
 async function fetchYouTubeChannelAssetMap(input: {
@@ -10091,6 +10151,22 @@ const blueprintYouTubeCommentsService = createBlueprintYouTubeCommentsService({
       kind,
     })
   ),
+  ...(oracleControlPlane ? {
+    storeBlueprintYouTubeCommentsOracleAware: async ({ db, blueprintId, videoId, sortMode, comments }) => (
+      storeBlueprintYouTubeCommentsOracleAware(db, {
+        blueprintId,
+        videoId,
+        sortMode,
+        comments,
+      })
+    ),
+    listBlueprintYouTubeCommentsOracleAware: async ({ db, blueprintId, sortMode }) => (
+      listBlueprintYouTubeCommentsOracleAware(db, {
+        blueprintId,
+        sortMode,
+      })
+    ),
+  } : {}),
 });
 
 const blueprintCreationService = createBlueprintCreationService({
