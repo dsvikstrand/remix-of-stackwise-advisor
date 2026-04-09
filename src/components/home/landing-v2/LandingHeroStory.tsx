@@ -54,16 +54,13 @@ function HeroCtaRail({
         ) : (
           <>
             <Button asChild size="lg" className="gap-2" onClick={() => onHeroCtaClick('primary')}>
-              <Link to="/youtube">
-                Try a video
+              <Link to="/auth">
+                Create a free account
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>
             <Button asChild size="lg" variant="outline" onClick={() => onHeroCtaClick('secondary')}>
               <a href="#how-it-works">See how it works</a>
-            </Button>
-            <Button asChild size="lg" variant="ghost" onClick={() => onHeroCtaClick('tertiary')}>
-              <Link to="/auth">Sign in to save your feed</Link>
             </Button>
           </>
         )}

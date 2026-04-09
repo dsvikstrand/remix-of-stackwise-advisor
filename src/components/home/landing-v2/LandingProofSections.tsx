@@ -36,12 +36,12 @@ export function LandingProofSections({ isSignedIn, onFinalCtaClick }: LandingPro
     <div className="mx-auto w-full max-w-7xl space-y-20 px-4 py-20 md:px-6 lg:px-10">
       <section id="how-it-works" className="space-y-6">
         <div className="max-w-2xl space-y-3">
-          <p className="text-sm font-semibold uppercase tracking-[0.22em] text-primary">How Bleu works</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.22em] text-primary">How Bleup works</p>
           <h2 className="text-3xl font-black tracking-tight text-foreground sm:text-4xl">
             A better way to keep up with valuable YouTube.
           </h2>
           <p className="text-base leading-relaxed text-muted-foreground">
-            Bleu is built around a simple loop: follow strong creators, generate the useful version, and browse by topic when you want wider discovery.
+            Bleup is built around a simple loop: follow YouTube creators you like, generate blueprint versions of their videos, and browse by topic when you want wider discovery.
           </p>
         </div>
         <div className="grid gap-4 md:grid-cols-3">
@@ -71,7 +71,7 @@ export function LandingProofSections({ isSignedIn, onFinalCtaClick }: LandingPro
             See what a blueprint actually looks like.
           </h2>
           <p className="text-base leading-relaxed text-muted-foreground">
-            Bleu is easiest to understand when you see the output. These are curated examples from real blueprint generations, shown in a compact preview format.
+            Bleup is easiest to understand when you see the output. These are curated examples from real blueprint generations, shown in a compact preview format.
           </p>
           <div className="flex items-center gap-2 pt-2">
             <div className="flex items-center gap-2">
@@ -185,7 +185,7 @@ export function LandingProofSections({ isSignedIn, onFinalCtaClick }: LandingPro
             Better discovery. Better consumption. Less wasted attention.
           </h2>
           <p className="text-base leading-relaxed text-muted-foreground">
-            Bleu is not just about summaries. It is about turning YouTube into something easier to follow, easier to discover, and easier to return to later.
+            Bleup is not just about summaries. It is about turning YouTube into something easier to follow, easier to discover, and easier to return to later.
           </p>
         </div>
         <div className="grid gap-4 md:grid-cols-3">
@@ -215,9 +215,7 @@ export function LandingProofSections({ isSignedIn, onFinalCtaClick }: LandingPro
             Import creators from your public YouTube subscriptions.
           </h2>
           <p className="text-base leading-relaxed text-muted-foreground">
-            Manual creator add is the default path. If you want a faster start, make your YouTube subscriptions public
-            temporarily and Bleup can import the creators you already follow without requiring direct account
-            connection in the public MVP path.
+            If you want a quick start, make your YouTube subscriptions public and Bleup can import the creators you already follow.
           </p>
         </div>
         <div className="rounded-[1.5rem] border border-border/50 bg-background/85 p-5 shadow-soft">
@@ -244,7 +242,7 @@ export function LandingProofSections({ isSignedIn, onFinalCtaClick }: LandingPro
               Stop losing the good parts to endless watch time.
             </h2>
             <p className="max-w-2xl text-base leading-relaxed text-muted-foreground">
-              Try one video, see one blueprint, and then decide how you want Bleu to fit into your feed.
+              Start right now and generate your blueprints without any cost.
             </p>
           </div>
           <div className="flex flex-col items-start justify-center gap-3">
@@ -263,13 +261,10 @@ export function LandingProofSections({ isSignedIn, onFinalCtaClick }: LandingPro
             ) : (
               <>
                 <Button asChild size="lg" className="gap-2" onClick={() => onFinalCtaClick('primary')}>
-                  <Link to="/youtube">
-                    Try a video
+                  <Link to="/auth">
+                    Create a free account
                     <ArrowRight className="h-4 w-4" />
                   </Link>
-                </Button>
-                <Button asChild size="lg" variant="outline" onClick={() => onFinalCtaClick('secondary')}>
-                  <Link to="/auth">Sign in to save your feed</Link>
                 </Button>
               </>
             )}

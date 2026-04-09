@@ -61,14 +61,14 @@ export const LANDING_STORY_SCENES: LandingStoryScene[] = [
     eyebrow: 'Too much to watch',
     headline: 'YouTube is full of value. Most of it gets buried.',
     subheadline:
-      'Great videos compete with endless watch time. Bleu starts by pulling the useful parts to the surface.',
+      'Great videos compete with endless watch time. Bleup turns the ones worth keeping into blueprints.',
     demoVariant: 'signal',
     accentClass: 'from-primary/25 via-amber-200/30 to-orange-300/20',
   },
   {
     id: 'blueprint-fast',
     eyebrow: 'Scan, do, move on',
-    headline: 'Bleu turns long videos into blueprints you can scan in seconds.',
+    headline: 'Bleup turns long videos into blueprints you can scan in seconds.',
     subheadline:
       'Instead of rewatching or scrubbing timestamps, get the structure, takeaways, and next steps in one place.',
     demoVariant: 'blueprint',
@@ -79,7 +79,7 @@ export const LANDING_STORY_SCENES: LandingStoryScene[] = [
     eyebrow: 'Personalized discovery',
     headline: "Get your favorite creators' new videos as blueprints.",
     subheadline:
-      'For You stays creator-driven. Channels keeps you in the loop on the topics you actually care about.',
+      'Keep up with the creators you trust and discover more around the topics you care about.',
     demoVariant: 'lanes',
     accentClass: 'from-primary/20 via-rose-200/20 to-amber-100/30',
   },
@@ -88,7 +88,7 @@ export const LANDING_STORY_SCENES: LandingStoryScene[] = [
     eyebrow: 'Stay current without the hours',
     headline: 'Find the best new videos without spending hours watching everything.',
     subheadline:
-      'One unlock can help everyone. Bleu turns good finds into reusable knowledge and better discovery.',
+      'One unlock can help everyone. Bleup turns good finds into reusable knowledge and better discovery.',
     demoVariant: 'community',
     accentClass: 'from-amber-200/30 via-primary/15 to-orange-200/25',
   },
@@ -98,7 +98,7 @@ export const LANDING_HOW_IT_WORKS: LandingStep[] = [
   {
     id: 'follow',
     title: 'Follow the right creators',
-    description: 'Follow creators you trust so their new uploads land in For You.',
+    description: 'Follow creators you trust so their new uploads land in your feed.',
   },
   {
     id: 'generate',
@@ -108,7 +108,7 @@ export const LANDING_HOW_IT_WORKS: LandingStep[] = [
   {
     id: 'discover',
     title: 'Discover by topic',
-    description: 'Join Bleu channels to browse the best published blueprints by interest.',
+    description: 'Join Bleup channels to browse the best published blueprints by interest.',
   },
 ];
 

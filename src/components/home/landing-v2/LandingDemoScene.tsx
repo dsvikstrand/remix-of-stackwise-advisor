@@ -31,9 +31,9 @@ function SignalScene({ onOpenDemo }: { onOpenDemo: (variant: LandingDemoVariant)
         </div>
         <div className="space-y-3">
           {[
-            ['New longevity routine', '42 min'],
-            ['Top AI stack for creators', '31 min'],
-            ['What I eat in a week', '27 min'],
+            ['New longevity routine', 'Available'],
+            ['Top AI stack for creators', 'Available'],
+            ['What I eat in a week', 'Available'],
           ].map(([title, duration], index) => (
             <div key={title} className={cn('rounded-2xl border p-3', index === 0 ? 'border-primary/30 bg-primary/5' : 'border-border/40 bg-card/70')}>
               <div className="flex items-start justify-between gap-3">
@@ -49,7 +49,7 @@ function SignalScene({ onOpenDemo }: { onOpenDemo: (variant: LandingDemoVariant)
         <div className="rounded-2xl border border-primary/25 bg-primary/10 p-4">
           <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <Sparkles className="h-4 w-4 text-primary" />
-            Bleu pulls out the useful version.
+            Bleup pulls out the useful version.
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
             Instead of watching all twelve, open the ones worth turning into blueprints.
