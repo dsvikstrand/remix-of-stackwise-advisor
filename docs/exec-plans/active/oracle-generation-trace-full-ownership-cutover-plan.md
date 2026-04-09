@@ -1,8 +1,8 @@
 # Oracle Generation Trace Full Ownership Cutover Plan
 
-Status: `on-pause`
+Status: `active`
 Owner: `Codex / David`
-Last updated: `2026-04-08`
+Last updated: `2026-04-09`
 
 ## Purpose
 
@@ -217,17 +217,25 @@ j5) [have] Oracle-primary trace detail reads now stay on Oracle event state thro
 
 ## Phase 4: Short Burn-In / Canary
 
-k1) [todo] Prove Oracle-only generation trace behavior under:
+k1) [have] Current burn-in evidence on `2026-04-09` is directionally good:
+- Oracle primary check is green
+- public/local health are green
+- sampled Supabase attribution no longer shows `generation_trace` as a leading family
+- `generation_trace_read_failed` count is `0` over the last `24h`
+- `generation_trace_write_failed` count is `0` over the last `12h`
+
+k2) [todo] Continue burn-in for Oracle-only generation trace behavior under:
 - manual generation
 - source-page unlock generation
 - queued/background generation
 - failure and retry paths
 - trace detail reads
 
-k2) [todo] Success target:
+k3) [todo] Remaining success target:
 - event append still works
 - trace detail reads still work
 - no missing terminal event sequences
+- no fresh `generation_trace_write_failed` events recur across a full burn-in window
 - no hidden Supabase trace dependency resurfaces
 
 ## Phase 5: Cleanup And Closure

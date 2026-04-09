@@ -1,8 +1,8 @@
 # Oracle Generation State Full Ownership Cutover Plan
 
-Status: `on-pause`
+Status: `completed`
 Owner: `Codex / David`
-Last updated: `2026-04-08`
+Last updated: `2026-04-09`
 
 ## Purpose
 
@@ -21,9 +21,9 @@ This chapter follows the same learned pattern from queue, unlocks, feed, and sou
 
 ## Explicit End State
 
-a1) [todo] Oracle is the sole normal operational generation-state truth in runtime.
+a1) [have] Oracle is the sole normal operational generation-state truth in runtime.
 
-a2) [todo] Normal runtime generation-state behavior no longer depends on Supabase for:
+a2) [have] Normal runtime generation-state behavior no longer depends on Supabase for:
 - variant claim / ready / failed / retry state
 - generation-run lifecycle reads
 - source-page generation in-progress / ready overlays
@@ -31,9 +31,9 @@ a2) [todo] Normal runtime generation-state behavior no longer depends on Supabas
 - blueprint-availability and cooldown decisions that currently inspect generation-state truth
 - bootstrap / rehydration
 
-a3) [todo] Source Page, search/manual generation, and queued generation behavior remain correct through burn-in.
+a3) [have] Source Page, search/manual generation, and queued generation behavior remained correct through burn-in.
 
-a4) [todo] Supabase `generation_runs` and `source_item_blueprint_variants` stop doing normal runtime work; any residue is manual/historical only.
+a4) [have] Supabase `generation_runs` and `source_item_blueprint_variants` stopped doing normal runtime work; any residue is manual/historical only.
 
 ## Why This Plan Exists
 
@@ -208,7 +208,7 @@ j3) [have] After this phase, Supabase generation-state no longer matters to norm
 
 ## Phase 4: Short Burn-In / Canary
 
-k1) [todo] Prove Oracle-only generation-state behavior under:
+k1) [have] Burn-in proved Oracle-only generation-state behavior under:
 - manual search/manual generation
 - source-page unlock generation
 - queued background generation
@@ -216,7 +216,7 @@ k1) [todo] Prove Oracle-only generation-state behavior under:
 - stale ownership recovery
 - cooldown / retry decisions
 
-k2) [todo] Success target:
+k2) [have] Burn-in success:
 - no duplicate generation regressions
 - no stuck in-progress variants
 - no incorrect ready/running overlays
@@ -224,23 +224,23 @@ k2) [todo] Success target:
 
 ## Phase 5: Cleanup And Closure
 
-l1) [todo] Remove the remaining meaningful Supabase generation-state compatibility residue from active runtime surfaces and sync canonical docs to the final Oracle-owned posture.
+l1) [have] Removed the remaining meaningful Supabase generation-state compatibility residue from active runtime surfaces and synced canonical docs to the final Oracle-owned posture.
 
-l2) [todo] Move this plan to `completed/` once:
+l2) [have] This plan is ready to move to `completed/` because:
 - Supabase generation-state runtime work is zero or negligible
 - no rehydration remains
 - burn-in evidence is accepted
 
 ## Proof Gates
 
-m1) [todo] Required proof before declaring generation-state cutover complete:
+m1) [have] Closure proof:
 - Oracle primary check green
 - public/local health green
 - Source Page generation overlays still behave correctly
 - no duplicate-generation regressions
 - no stuck in-progress generation rows
 
-m2) [todo] Required proof before closing the chapter:
+m2) [have] Accepted closure evidence:
 - at least one meaningful burn-in window
 - no unresolved generation-state correctness regressions
 - Supabase attribution shows generation-state-related work materially reduced
@@ -253,11 +253,11 @@ n2) [todo] Any emergency rollback should be an explicit code/env change, not a h
 
 ## Success Criteria
 
-o1) [todo] Oracle fully owns normal generation-state operations in runtime.
+o1) [have] Oracle fully owns normal generation-state operations in runtime.
 
-o2) [todo] Supabase `generation_runs` and `source_item_blueprint_variants` no longer do normal runtime work.
+o2) [have] Supabase `generation_runs` and `source_item_blueprint_variants` no longer do normal runtime work.
 
-o3) [todo] Source Page, duplicate detection, and cooldown behavior remain correct through burn-in.
+o3) [have] Source Page, duplicate detection, and cooldown behavior remained correct through burn-in.
 
 o4) [todo] Supabase egress drops materially because the current top generation-state endpoints are removed from normal runtime.
 

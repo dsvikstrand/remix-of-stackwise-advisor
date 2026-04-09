@@ -1,8 +1,8 @@
 # Oracle Source Item Full Ownership Cutover Plan
 
-Status: `active`
+Status: `completed`
 Owner: `Codex / David`
-Last updated: `2026-04-08`
+Last updated: `2026-04-09`
 
 ## Purpose
 
@@ -21,18 +21,18 @@ This chapter follows the same lesson learned from queue, unlocks, and feed:
 
 ## Explicit End State
 
-a1) [todo] Oracle is the sole normal operational source-item truth in runtime.
+a1) [have] Oracle is the sole normal operational source-item truth in runtime.
 
-a2) [todo] Normal runtime source-item behavior no longer depends on Supabase `source_items` for:
+a2) [have] Normal runtime source-item behavior no longer depends on Supabase `source_items` for:
 - source-item insert/upsert
 - metadata/view-count/thumbnail updates
 - source-page feed and video-library hydration
 - wall/profile/blueprint-detail source attribution
 - bootstrap/rehydration
 
-a3) [todo] Source attribution, thumbnails, and source-page consistency remain intact through burn-in.
+a3) [have] Source attribution, thumbnails, and source-page consistency remained intact through burn-in.
 
-a4) [todo] Supabase `source_items` stops doing normal runtime work; any residue is manual/historical only.
+a4) [have] Supabase `source_items` stopped doing normal runtime work; any residue is manual/historical only.
 
 ## Why This Plan Exists
 
@@ -177,14 +177,14 @@ j3) [have] After this phase, Supabase `source_items` no longer matters to normal
 
 ## Phase 4: Short Burn-In / Canary
 
-k1) [todo] Prove Oracle-only source-item behavior under:
+k1) [have] Burn-in proved Oracle-only source-item behavior under:
 - new source-item insert/upsert
 - source-page video-library hydration
 - wall/profile/detail source attribution
 - source thumbnail/channel metadata updates
 - duplicate and in-progress source-page states
 
-k2) [todo] Success target:
+k2) [have] Burn-in success:
 - no missing/incorrect source attribution
 - no source-page regression
 - no thumbnail/source-link drift
@@ -192,9 +192,9 @@ k2) [todo] Success target:
 
 ## Phase 5: Cleanup And Closure
 
-l1) [todo] Remove the remaining meaningful Supabase source-item compatibility residue from active runtime surfaces and sync canonical docs to the final Oracle-owned posture.
+l1) [have] Removed the remaining meaningful Supabase source-item compatibility residue from active runtime surfaces and synced canonical docs to the final Oracle-owned posture.
 
-l2) [todo] Move this plan to `completed/` once:
+l2) [have] This plan is ready to move to `completed/` because:
 - Supabase source-item runtime work is zero
 - no rehydration remains
 - burn-in evidence is accepted
@@ -208,7 +208,7 @@ m1) [have] Required proof before declaring source-item cutover complete:
 - no source attribution regressions
 - source-page duplicate/in-progress behavior stays correct
 
-m2) [todo] Required proof before closing the chapter:
+m2) [have] Accepted closure evidence:
 - at least one meaningful burn-in window
 - no unresolved source-item correctness regressions
 - Supabase attribution shows source-item-related work materially reduced
@@ -221,13 +221,13 @@ n2) [todo] Any emergency rollback should be an explicit code/env change, not a h
 
 ## Success Criteria
 
-o1) [todo] Oracle fully owns normal source-item operations in runtime.
+o1) [have] Oracle fully owns normal source-item operations in runtime.
 
-o2) [todo] Supabase `source_items` no longer does normal runtime work.
+o2) [have] Supabase `source_items` no longer does normal runtime work.
 
-o3) [todo] Source attribution and source-page behavior remain correct through burn-in.
+o3) [have] Source attribution and source-page behavior remained correct through burn-in.
 
-o4) [todo] Supabase egress drops materially because the current top `source_items` endpoints are removed from normal runtime.
+o4) [have] Supabase egress dropped materially because the prior top `source_items` endpoints were removed from normal runtime.
 
 ## Relationship To Other Chapters
 

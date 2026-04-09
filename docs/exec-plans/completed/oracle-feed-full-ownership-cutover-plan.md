@@ -1,8 +1,8 @@
 # Oracle Feed Full Ownership Cutover Plan
 
-Status: `on-pause`
+Status: `completed`
 Owner: `Codex / David`
-Last updated: `2026-04-08`
+Last updated: `2026-04-09`
 
 ## Purpose
 
@@ -22,9 +22,9 @@ This plan intentionally optimizes for decisiveness over prolonged incremental ca
 
 ## Explicit End State
 
-a1) [todo] Oracle is the sole normal operational feed truth in runtime.
+a1) [have] Oracle is the sole normal operational feed truth in runtime.
 
-a2) [todo] Normal runtime feed behavior no longer depends on Supabase `user_feed_items` for:
+a2) [have] Normal runtime feed behavior no longer depends on Supabase `user_feed_items` for:
 - feed row insert/upsert
 - locked-to-generated promotion
 - wall ordering clocks
@@ -32,9 +32,9 @@ a2) [todo] Normal runtime feed behavior no longer depends on Supabase `user_feed
 - source-page feed linkage
 - bootstrap/rehydration
 
-a3) [todo] Feed correctness, ordering, and user-visible wall behavior remain intact through burn-in.
+a3) [have] Feed correctness, ordering, and user-visible wall behavior remained intact through burn-in.
 
-a4) [todo] Supabase `user_feed_items` stops doing normal runtime work; any residue is manual/historical only.
+a4) [have] Supabase `user_feed_items` stopped doing normal runtime work; any residue is manual/historical only.
 
 ## Why This Plan Exists
 
@@ -173,7 +173,7 @@ j3) [have] After this phase, Supabase feed rows should no longer matter to norma
 
 ## Phase 4: Short Burn-In / Canary
 
-k1) [todo] Prove Oracle-only feed behavior under:
+k1) [have] Burn-in proved Oracle-only feed behavior under:
 - new locked card arrival
 - locked-to-generated promotion
 - two-clock ordering
@@ -182,7 +182,7 @@ k1) [todo] Prove Oracle-only feed behavior under:
 - source-page/wall consistency
 - duplicate suppression
 
-k2) [todo] Success target:
+k2) [have] Burn-in success:
 - no duplicate or missing feed rows
 - no ordering regressions
 - no stale locked/generated display drift
@@ -190,16 +190,16 @@ k2) [todo] Success target:
 
 ## Phase 5: Cleanup And Closure
 
-l1) [todo] Remove the remaining meaningful Supabase feed compatibility/product-read residue from active runtime surfaces and sync canonical docs to the final Oracle-owned posture.
+l1) [have] Removed the remaining meaningful Supabase feed compatibility/product-read residue from active runtime surfaces and synced canonical docs to the final Oracle-owned posture.
 
-l2) [todo] Move this plan to `completed/` once:
+l2) [have] This plan is ready to move to `completed/` because:
 - Supabase feed runtime work is zero
 - no rehydration remains
 - burn-in evidence is accepted
 
 ## Proof Gates
 
-m1) [todo] Required proof before declaring feed cutover complete:
+m1) [have] Closure proof:
 - Oracle primary check green
 - public/local health green
 - wall/my-feed still render correctly
@@ -207,7 +207,7 @@ m1) [todo] Required proof before declaring feed cutover complete:
 - no duplicate feed rows
 - source-page and wall remain consistent
 
-m2) [todo] Required proof before closing the chapter:
+m2) [have] Accepted closure evidence:
 - at least one meaningful burn-in window
 - no unresolved feed correctness regressions
 - Supabase attribution shows feed-related work materially reduced
@@ -220,13 +220,13 @@ n2) [todo] Any emergency rollback should be an explicit code change, not a hidde
 
 ## Success Criteria
 
-o1) [todo] Oracle fully owns normal feed operations in runtime.
+o1) [have] Oracle fully owns normal feed operations in runtime.
 
-o2) [todo] Supabase `user_feed_items` no longer does normal runtime work.
+o2) [have] Supabase `user_feed_items` no longer does normal runtime work.
 
-o3) [todo] Feed ordering and wall behavior remain correct through burn-in.
+o3) [have] Feed ordering and wall behavior remained correct through burn-in.
 
-o4) [todo] Supabase egress drops materially because the current top feed-heavy endpoints are removed from normal runtime.
+o4) [have] Supabase egress dropped materially because the prior top feed-heavy endpoints were removed from normal runtime.
 
 ## Relationship To Paused/Completed Chapters
 
