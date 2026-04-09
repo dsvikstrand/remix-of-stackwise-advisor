@@ -12,7 +12,7 @@ interface HomeOnboardingCardProps {
 const STEPS = [
   {
     title: 'Home is where things land, the main flow of the app.',
-    description: '\'For You\' shows your YouTube subscriptions content. \'Channels\' shows blueprints from the channels you follow. All shows every public blueprint.',
+    description: '\'For You\' shows your YouTube subscriptions content. \'Channels\' shows blueprints from the channels you follow. \'All\' shows every public blueprint.',
     icon: Home,
   },
   {

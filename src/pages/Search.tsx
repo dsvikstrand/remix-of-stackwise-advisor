@@ -511,7 +511,7 @@ export default function SearchPage() {
       <AppHeader />
       <PageMain className="space-y-6">
         <PageSection className="space-y-2">
-          <p className="text-sm font-semibold text-primary uppercase tracking-wide">Create</p>
+          <p className="text-sm font-semibold text-primary uppercase tracking-wide">Add</p>
           <h1 className="text-2xl font-semibold">Find the YouTube video you already have in mind</h1>
           <p className="text-sm text-muted-foreground">
             Paste a YouTube link, add a video id, or type the title. If we find the right match, you can turn it into a blueprint right away.
