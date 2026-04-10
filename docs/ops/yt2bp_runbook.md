@@ -75,6 +75,10 @@
   - Oracle product/source mirrors should now rebuild recent source rows from `source_item_ledger_state`, not from Supabase `source_items`.
   - current Pass 2 removes normal-runtime Supabase `source_items` writes from Oracle-primary mutation paths.
   - current Pass 3 removes the main normal-runtime Supabase `source_items` reads from Oracle-primary feed/profile/detail source hydration paths.
+- Current blueprint-tags cutover posture:
+  - main backend blueprint-tag writes now land in Oracle `blueprint_tag_state` for blueprint creation, auto-channel publish, and manual channel publish.
+  - coupled backend tag reads for auto-channel classification, channel feed/evaluate, and auto-banner now prefer Oracle rows and only fall back per-blueprint to Supabase for pre-cutover residue.
+  - direct browser `blueprint_tags` readers/writers are still explicit cleanup residue and should be tracked separately from the main backend ownership path.
 - Node runtime contract:
   - local repo baseline is Node `20.20.0` from `.nvmrc`
   - Oracle systemd is pinned to `/home/ubuntu/.nvm/versions/node/v20.20.0/bin/node`

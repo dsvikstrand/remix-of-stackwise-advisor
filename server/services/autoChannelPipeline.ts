@@ -100,6 +100,14 @@ export type AutoChannelPipelineInput = {
   sourceTag: string;
   classifierMode: AutoChannelClassifierMode;
   resolver?: AutoChannelResolver;
+  listBlueprintTagSlugs?: (input: {
+    blueprintId: string;
+  }) => Promise<string[]>;
+  attachBlueprintTag?: (input: {
+    blueprintId: string;
+    tagId: string;
+    tagSlug: string;
+  }) => Promise<void>;
   patchFeedItemById?: (input: {
     db: DbClient;
     feedItemId: string;
@@ -191,7 +199,9 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
     throw new Error(blueprintError?.message || 'Blueprint not found');
   }
 
-  const tagSlugs = await getBlueprintTagSlugs(input.db, input.blueprintId);
+  const tagSlugs = input.listBlueprintTagSlugs
+    ? await input.listBlueprintTagSlugs({ blueprintId: input.blueprintId })
+    : await getBlueprintTagSlugs(input.db, input.blueprintId);
   const summary = getBlueprintSummaryText({
     sectionsJson: blueprint.sections_json,
     steps: blueprint.steps,
@@ -317,10 +327,18 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
       .eq('id', input.blueprintId);
     if (publicError) throw new Error(publicError.message);
 
-    const { error: tagLinkError } = await input.db
-      .from('blueprint_tags')
-      .upsert({ blueprint_id: input.blueprintId, tag_id: tagId }, { onConflict: 'blueprint_id,tag_id' });
-    if (tagLinkError) throw new Error(tagLinkError.message);
+    if (input.attachBlueprintTag) {
+      await input.attachBlueprintTag({
+        blueprintId: input.blueprintId,
+        tagId,
+        tagSlug: channelSlug,
+      });
+    } else {
+      const { error: tagLinkError } = await input.db
+        .from('blueprint_tags')
+        .upsert({ blueprint_id: input.blueprintId, tag_id: tagId }, { onConflict: 'blueprint_id,tag_id' });
+      if (tagLinkError) throw new Error(tagLinkError.message);
+    }
 
     const { error: candidatePublishError } = await input.db
       .from('channel_candidates')

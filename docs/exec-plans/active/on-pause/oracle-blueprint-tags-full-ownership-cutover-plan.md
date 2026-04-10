@@ -206,26 +206,37 @@ g8) [have] Recommended first real code wave after inventory:
 
 ## Phase 1: Stop Any Supabase Blueprint-Tag Bootstrap / Residual Input
 
-h1) [todo] Verify whether `blueprint_tags` has any meaningful startup/bootstrap dependence.
+h1) [have] Verified `blueprint_tags` does not have a meaningful startup/bootstrap or rehydration dependency.
 
-h2) [todo] If bootstrap/input exists:
-- remove that Supabase input first
-- make Oracle tag state the only accepted bootstrap/runtime input
+h2) [have] This chapter behaves like generation-trace and blueprint YouTube comments:
+- the live seams are runtime read/write joins
+- there is no separate bootstrap/input phase worth cutting first
 
-h3) [todo] If no bootstrap/input exists:
-- mark this phase trivial
-- move directly to Oracle-only writes
+h3) [have] Phase 1 is therefore trivial and complete.
+- the first real implementation wave is Oracle-owned writes
+- no separate bootstrap cut was required
 
 ## Phase 2: Oracle-Only Blueprint-Tag Writes
 
-i1) [todo] Remove the main normal-runtime Supabase `blueprint_tags` writes from assignment/upsert paths.
+i1) [have] Added Oracle-owned `blueprint_tag_state` control-plane storage for blueprint-to-tag joins.
 
-i2) [todo] Target this wave to land:
-- tag assignment writes stay Oracle-only
-- backend derivation/mirror helpers stop writing normal-runtime Supabase tag-join rows
-- `POST /rest/v1/blueprint_tags?on_conflict` disappears from normal runtime behavior
+i2) [have] Backend normal-runtime blueprint-tag writes now land in Oracle-owned state for the main assignment/publish paths:
+- [server/services/blueprintCreation.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/blueprintCreation.ts)
+- [server/services/autoChannelPipeline.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/autoChannelPipeline.ts)
+- [server/routes/channels.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/routes/channels.ts)
 
-i3) [todo] After this phase, Supabase tag joins should no longer matter to normal mutation correctness.
+i3) [have] A narrow Oracle-aware backend read bridge landed with this write pass so the coupled product/runtime paths do not drift immediately:
+- auto-channel classification now reads Oracle-owned tag slugs first
+- manual channel publish/evaluate paths now read Oracle-owned tag joins first
+- auto-banner generation now reads Oracle-owned tag slugs first
+- missing pre-cutover Oracle rows fall back per-blueprint to Supabase reads until the broader read cut lands
+
+i4) [todo] Browser/manual residue still exists outside the main backend write paths:
+- [src/hooks/useBlueprints.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useBlueprints.ts)
+- [src/lib/myFeedApi.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/lib/myFeedApi.ts)
+
+i5) [have] After this pass, Supabase `blueprint_tags` no longer matter to the main backend mutation correctness path.
+- the remaining work is broader read severing plus the explicit browser/manual residue cleanup decision
 
 ## Phase 3: Oracle-Only Blueprint-Tag Reads
 

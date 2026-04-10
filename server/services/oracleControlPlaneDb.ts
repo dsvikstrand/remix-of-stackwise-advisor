@@ -339,6 +339,15 @@ type BlueprintYoutubeCommentStateTable = {
   updated_at: string;
 };
 
+type BlueprintTagStateTable = {
+  id: string;
+  blueprint_id: string;
+  tag_id: string;
+  tag_slug: string;
+  created_at: string;
+  updated_at: string;
+};
+
 type ProductFeedStateTable = {
   id: string;
   user_id: string;
@@ -369,6 +378,7 @@ export type OracleControlPlaneDatabase = {
   generation_run_state: GenerationRunStateTable;
   generation_run_event_state: GenerationRunEventStateTable;
   blueprint_youtube_comment_state: BlueprintYoutubeCommentStateTable;
+  blueprint_tag_state: BlueprintTagStateTable;
   product_subscription_state: ProductSubscriptionStateTable;
   product_source_item_state: ProductSourceItemStateTable;
   product_unlock_state: ProductUnlockStateTable;
@@ -789,6 +799,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_blueprint_youtube_comment_unique
 
 CREATE INDEX IF NOT EXISTS idx_blueprint_youtube_comment_display
   ON blueprint_youtube_comment_state (blueprint_id, sort_mode, display_order, id);
+
+CREATE TABLE IF NOT EXISTS blueprint_tag_state (
+  id TEXT PRIMARY KEY,
+  blueprint_id TEXT NOT NULL,
+  tag_id TEXT NOT NULL,
+  tag_slug TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_blueprint_tag_state_blueprint_tag_unique
+  ON blueprint_tag_state (blueprint_id, tag_id);
+
+CREATE INDEX IF NOT EXISTS idx_blueprint_tag_state_blueprint_slug
+  ON blueprint_tag_state (blueprint_id, tag_slug);
+
+CREATE INDEX IF NOT EXISTS idx_blueprint_tag_state_slug
+  ON blueprint_tag_state (tag_slug, updated_at);
 
 CREATE TABLE IF NOT EXISTS product_subscription_state (
   id TEXT PRIMARY KEY,

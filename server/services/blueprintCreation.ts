@@ -106,6 +106,11 @@ export type BlueprintCreationDeps = {
   }>;
   toTagSlug: (value: string) => string;
   ensureTagId: (db: DbClient, userId: string, tagSlug: string) => Promise<string>;
+  attachBlueprintTag?: (db: DbClient, input: {
+    blueprintId: string;
+    tagId: string;
+    tagSlug: string;
+  }) => Promise<void>;
   attachBlueprintToRun: (db: DbClient, input: { runId: string; blueprintId: string }) => Promise<void>;
   youtubeVideoIdRegex: RegExp;
   resolveGenerationModelProfile: (
@@ -323,9 +328,17 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
       for (const tagSlug of draftTags) {
         if (!tagSlug) continue;
         const tagId = await deps.ensureTagId(db, input.userId, tagSlug);
-        await db
-          .from('blueprint_tags')
-          .upsert({ blueprint_id: blueprint.id, tag_id: tagId }, { onConflict: 'blueprint_id,tag_id' });
+        if (deps.attachBlueprintTag) {
+          await deps.attachBlueprintTag(db, {
+            blueprintId: blueprint.id,
+            tagId,
+            tagSlug,
+          });
+        } else {
+          await db
+            .from('blueprint_tags')
+            .upsert({ blueprint_id: blueprint.id, tag_id: tagId }, { onConflict: 'blueprint_id,tag_id' });
+        }
       }
 
       if (normalizedSourceItemId) {
