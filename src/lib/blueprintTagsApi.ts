@@ -1,4 +1,3 @@
-import { config } from '@/config/runtime';
 import { supabase } from '@/integrations/supabase/client';
 
 export type BlueprintTagRow = {
@@ -15,8 +14,10 @@ type ApiEnvelope<T> = {
 };
 
 function getApiBase() {
-  if (!config.agenticBackendUrl) return null;
-  return `${config.agenticBackendUrl.replace(/\/$/, '')}/api`;
+  const viteEnv = (import.meta as any)?.env || {};
+  const agenticBackendUrl = String(viteEnv.VITE_AGENTIC_BACKEND_URL || '').trim();
+  if (!agenticBackendUrl) return null;
+  return `${agenticBackendUrl.replace(/\/$/, '')}/api`;
 }
 
 async function fetchBlueprintTagRowsFromSupabase(input: {
