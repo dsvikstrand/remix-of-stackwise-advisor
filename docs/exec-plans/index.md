@@ -26,6 +26,8 @@ This file is the authoritative active/reference/deserted/completed registry for 
   Paused broader Oracle-ownership architecture chapter retained as context after the narrower queue and unlock full-ownership cutovers completed.
 - `docs/exec-plans/active/on-pause/oracle-blueprint-youtube-comments-full-ownership-cutover-plan.md`
   Queued next ownership chapter for full Oracle `blueprint_youtube_comments` cutover after current generation-trace burn-in/closure; this is the strongest remaining Supabase family in the latest 24h sample.
+- `docs/exec-plans/active/on-pause/oracle-blueprint-tags-full-ownership-cutover-plan.md`
+  Queued follow-up ownership chapter for full Oracle `blueprint_tags` cutover after the current active/burn-in work and the narrower blueprint-YouTube-comments chapter.
 - `docs/exec-plans/completed/oracle-feed-full-ownership-cutover-plan.md`
   Completed Oracle-only feed cutover; retained as reference while later chapters pursued remaining Supabase-owned runtime surfaces.
 - `docs/exec-plans/completed/oracle-generation-state-full-ownership-cutover-plan.md`
@@ -148,6 +150,8 @@ This file is the authoritative active/reference/deserted/completed registry for 
   Generation trace is now the only open ownership chapter because Oracle-only event write/read severing is landed and the remaining work is burn-in plus closure after the most recent trace-specific follow-up.
 - Queued next ownership chapter: `docs/exec-plans/active/on-pause/oracle-blueprint-youtube-comments-full-ownership-cutover-plan.md`.
   Blueprint YouTube comments are now the strongest next migration target because the latest 24h attribution sample is led by `blueprint_youtube_comments` read/write/delete traffic.
+- Queued follow-up ownership chapter: `docs/exec-plans/active/on-pause/oracle-blueprint-tags-full-ownership-cutover-plan.md`.
+  Blueprint tags are the next strong cost/simplicity candidate after that because the latest sampled 24h Supabase attribution materially leads with `blueprint_tags` reads/writes.
 - Paused broader Oracle-ownership context: `docs/exec-plans/active/on-pause/oracle-deeper-ownership-and-supabase-reduction-plan.md`.
 - Current active proof/deferred tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`.
 - Current post-launch debt board: `docs/exec-plans/tech-debt-tracker.md`.
