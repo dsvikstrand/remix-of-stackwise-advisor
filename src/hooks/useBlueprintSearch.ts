@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { buildFeedSummary } from '@/lib/feedPreview';
+import { collectBlueprintTagMap, listBlueprintTagRows } from '@/lib/blueprintTagsApi';
 import { normalizeTag } from '@/lib/tagging';
 
 export interface BlueprintRow {
@@ -33,30 +34,6 @@ export type BlueprintSort = 'popular' | 'latest';
 export const BLUEPRINT_FIELDS = 'id, inventory_id, creator_user_id, title, banner_url, preview_summary, is_public, likes_count, created_at, updated_at';
 const DEFAULT_BLUEPRINT_LIST_LIMIT = 24;
 
-function collectJoinedTags(
-  rows: Array<{ blueprint_id: string; tags?: { id?: string; slug?: string } | Array<{ id?: string; slug?: string }> | null }>,
-) {
-  const blueprintTags = new Map<string, BlueprintTag[]>();
-
-  rows.forEach((row) => {
-    const blueprintId = String(row.blueprint_id || '').trim();
-    if (!blueprintId) return;
-    const existing = blueprintTags.get(blueprintId) || [];
-    const joined = row.tags;
-    const tagCandidates = Array.isArray(joined) ? joined : joined ? [joined] : [];
-    for (const candidate of tagCandidates) {
-      const id = String(candidate?.id || '').trim();
-      const slug = String(candidate?.slug || '').trim();
-      if (!id || !slug) continue;
-      if (existing.some((tag) => tag.id === id)) continue;
-      existing.push({ id, slug });
-    }
-    blueprintTags.set(blueprintId, existing);
-  });
-
-  return blueprintTags;
-}
-
 function applyVisibilityFilter(query: any, userId?: string | null) {
   if (userId) {
     return query.or(`is_public.eq.true,creator_user_id.eq.${userId}`);
@@ -71,7 +48,7 @@ export async function hydrateBlueprints(rows: BlueprintRow[], userId?: string | 
   const inventoryIds = rows.map((row) => row.inventory_id).filter(Boolean) as string[];
 
   const [tagsRes, likesRes, inventoriesRes] = await Promise.all([
-    supabase.from('blueprint_tags').select('blueprint_id, tags(id, slug)').in('blueprint_id', blueprintIds),
+    listBlueprintTagRows({ blueprintIds }),
     userId
       ? supabase.from('blueprint_likes').select('blueprint_id').eq('user_id', userId).in('blueprint_id', blueprintIds)
       : Promise.resolve({ data: [] as { blueprint_id: string }[] }),
@@ -80,10 +57,7 @@ export async function hydrateBlueprints(rows: BlueprintRow[], userId?: string | 
       : Promise.resolve({ data: [] as { id: string; title: string }[] }),
   ]);
 
-  const blueprintTags = collectJoinedTags((tagsRes.data || []) as Array<{
-    blueprint_id: string;
-    tags?: { id?: string; slug?: string } | Array<{ id?: string; slug?: string }> | null;
-  }>);
+  const blueprintTags = collectBlueprintTagMap(tagsRes || []);
 
   const likedIds = new Set((likesRes.data || []).map((row) => row.blueprint_id));
   const inventoryMap = new Map((inventoriesRes.data || []).map((inv) => [inv.id, inv.title]));
@@ -142,12 +116,8 @@ export function useBlueprintSearch(search: string, sort: BlueprintSort) {
       if (tagSlug) {
         const { data: tagData } = await supabase.from('tags').select('id').eq('slug', tagSlug).maybeSingle();
         if (tagData?.id) {
-          const { data: blueprintTagRows } = await supabase
-            .from('blueprint_tags')
-            .select('blueprint_id')
-            .eq('tag_id', tagData.id);
-
-          const blueprintIds = (blueprintTagRows || []).map((row) => row.blueprint_id);
+          const blueprintTagRows = await listBlueprintTagRows({ tagIds: [tagData.id] });
+          const blueprintIds = blueprintTagRows.map((row) => row.blueprint_id);
           if (blueprintIds.length > 0) {
             let tagQuery = supabase
               .from('blueprints')

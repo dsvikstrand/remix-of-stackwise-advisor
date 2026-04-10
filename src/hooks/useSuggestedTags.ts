@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { listBlueprintTagRows } from '@/lib/blueprintTagsApi';
 
 export interface SuggestedTag {
   id: string;
@@ -58,23 +59,15 @@ export function useSuggestedTags(limit = 12) {
       const followedTagIds = Array.from(followedIds);
 
       // Get blueprints that have the user's followed tags
-      const { data: blueprintLinks } = await supabase
-        .from('blueprint_tags')
-        .select('blueprint_id')
-        .in('tag_id', followedTagIds);
-
-      const blueprintIds = [...new Set((blueprintLinks || []).map((l) => l.blueprint_id))];
+      const blueprintLinks = await listBlueprintTagRows({ tagIds: followedTagIds });
+      const blueprintIds = [...new Set(blueprintLinks.map((l) => l.blueprint_id))];
 
       // Get other tags on those blueprints
       const relatedTagCounts = new Map<string, number>();
       if (blueprintIds.length > 0) {
-        const { data: relatedLinks } = await supabase
-          .from('blueprint_tags')
-          .select('tag_id')
-          .in('blueprint_id', blueprintIds.slice(0, 50)) // Limit for performance
-          .not('tag_id', 'in', `(${followedTagIds.join(',')})`);
+        const relatedLinks = await listBlueprintTagRows({ blueprintIds: blueprintIds.slice(0, 50) });
 
-        (relatedLinks || []).forEach((link) => {
+        relatedLinks.forEach((link) => {
           if (!followedIds.has(link.tag_id)) {
             relatedTagCounts.set(link.tag_id, (relatedTagCounts.get(link.tag_id) || 0) + 1);
           }

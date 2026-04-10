@@ -138,3 +138,95 @@ export async function listOracleBlueprintTagSlugs(input: {
       .filter(Boolean),
   ));
 }
+
+export async function listOracleBlueprintTagRowsByTagIds(input: {
+  controlDb: OracleControlPlaneDb;
+  tagIds: string[];
+}) {
+  const tagIds = [...new Set((input.tagIds || []).map((value) => normalizeRequiredString(value)).filter(Boolean))];
+  if (tagIds.length === 0) return [] as OracleBlueprintTagRow[];
+
+  const rows = await input.controlDb.db
+    .selectFrom('blueprint_tag_state')
+    .selectAll()
+    .where('tag_id', 'in', tagIds)
+    .orderBy('tag_id', 'asc')
+    .orderBy('blueprint_id', 'asc')
+    .orderBy('id', 'asc')
+    .execute();
+
+  return rows.map((row) => mapBlueprintTagRow(row as unknown as Record<string, unknown>));
+}
+
+export async function listOracleBlueprintTagRowsByTagSlugs(input: {
+  controlDb: OracleControlPlaneDb;
+  tagSlugs: string[];
+}) {
+  const tagSlugs = [...new Set((input.tagSlugs || []).map((value) => normalizeTagSlug(value)).filter(Boolean))];
+  if (tagSlugs.length === 0) return [] as OracleBlueprintTagRow[];
+
+  const rows = await input.controlDb.db
+    .selectFrom('blueprint_tag_state')
+    .selectAll()
+    .where('tag_slug', 'in', tagSlugs)
+    .orderBy('tag_slug', 'asc')
+    .orderBy('blueprint_id', 'asc')
+    .orderBy('id', 'asc')
+    .execute();
+
+  return rows.map((row) => mapBlueprintTagRow(row as unknown as Record<string, unknown>));
+}
+
+export async function syncOracleBlueprintTagRowsFromSupabase(input: {
+  controlDb: OracleControlPlaneDb;
+  db: {
+    from: (table: string) => any;
+  };
+  batchSize?: number;
+}) {
+  const batchSize = Math.max(50, Math.min(1000, Math.floor(Number(input.batchSize || 250))));
+  const rows: Array<Record<string, unknown>> = [];
+  let from = 0;
+
+  while (true) {
+    const to = from + batchSize - 1;
+    const { data, error } = await input.db
+      .from('blueprint_tags')
+      .select('blueprint_id, tag_id, tags(slug)')
+      .order('blueprint_id', { ascending: true })
+      .order('tag_id', { ascending: true })
+      .range(from, to);
+    if (error) throw error;
+    if (!data?.length) break;
+
+    for (const row of data) {
+      const blueprintId = normalizeRequiredString((row as { blueprint_id?: unknown }).blueprint_id);
+      const tagId = normalizeRequiredString((row as { tag_id?: unknown }).tag_id);
+      const joined = (row as {
+        tags?: { slug?: string } | Array<{ slug?: string }> | null;
+      }).tags;
+      const tagCandidates = Array.isArray(joined) ? joined : joined ? [joined] : [];
+      for (const candidate of tagCandidates) {
+        const tagSlug = normalizeTagSlug(candidate?.slug);
+        if (!blueprintId || !tagId || !tagSlug) continue;
+        rows.push({
+          blueprint_id: blueprintId,
+          tag_id: tagId,
+          tag_slug: tagSlug,
+        });
+      }
+    }
+
+    from += data.length;
+    if (data.length < batchSize) break;
+  }
+
+  await upsertOracleBlueprintTagRows({
+    controlDb: input.controlDb,
+    rows,
+  });
+
+  return {
+    rowCount: rows.length,
+  };
+}

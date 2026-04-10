@@ -77,6 +77,8 @@
   - current Pass 3 removes the main normal-runtime Supabase `source_items` reads from Oracle-primary feed/profile/detail source hydration paths.
 - Current blueprint-tags cutover posture:
   - main backend blueprint-tag writes now land in Oracle `blueprint_tag_state` for blueprint creation, auto-channel publish, and manual channel publish.
+  - bootstrap now seeds existing Supabase blueprint-tag joins into Oracle `blueprint_tag_state` on startup.
+  - main runtime blueprint-tag reads now resolve through Oracle-backed rows for wall/channels/source-page/search-oriented surfaces instead of direct Supabase `blueprint_tags`.
   - coupled backend tag reads for auto-channel classification, channel feed/evaluate, and auto-banner now prefer Oracle rows and only fall back per-blueprint to Supabase for pre-cutover residue.
   - direct browser `blueprint_tags` readers/writers are still explicit cleanup residue and should be tracked separately from the main backend ownership path.
 - Node runtime contract:

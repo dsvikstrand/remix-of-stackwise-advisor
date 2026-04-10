@@ -229,7 +229,7 @@ i3) [have] A narrow Oracle-aware backend read bridge landed with this write pass
 - auto-channel classification now reads Oracle-owned tag slugs first
 - manual channel publish/evaluate paths now read Oracle-owned tag joins first
 - auto-banner generation now reads Oracle-owned tag slugs first
-- missing pre-cutover Oracle rows fall back per-blueprint to Supabase reads until the broader read cut lands
+- pre-read-cut compatibility was intentionally limited to the coupled backend seams only
 
 i4) [todo] Browser/manual residue still exists outside the main backend write paths:
 - [src/hooks/useBlueprints.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useBlueprints.ts)
@@ -240,14 +240,18 @@ i5) [have] After this pass, Supabase `blueprint_tags` no longer matter to the ma
 
 ## Phase 3: Oracle-Only Blueprint-Tag Reads
 
-j1) [todo] Remove the main normal-runtime Supabase `blueprint_tags` reads from product surfaces.
+j1) [have] Main normal-runtime Supabase `blueprint_tags` reads were cut from the current product/runtime surfaces.
 
-j2) [todo] Target this wave to land:
-- blueprint-to-tag reads use Oracle only
-- batch tag-join lookup reads use Oracle only
-- browser/server consumers stop depending on direct Supabase `blueprint_tags` queries
+j2) [have] This wave landed:
+- Oracle bootstrap now seeds `blueprint_tag_state` from Supabase so existing public/runtime tag joins exist before request handling settles
+- backend product reads now use Oracle-owned blueprint-tag rows for wall, `For You`, channels, and source-page blueprint hydration
+- frontend/browser tag-join reads now use the Oracle-aware backend `GET /api/blueprint-tags` path instead of direct Supabase `blueprint_tags` queries on the main search/suggestion/landing/feed fallback surfaces
 
-j3) [todo] After this phase, Supabase tag joins should no longer matter to normal runtime read correctness in the Oracle-backed path.
+j3) [have] After this phase, Supabase tag joins should no longer matter to normal runtime read correctness in the Oracle-backed path.
+
+j4) [todo] Explicit manual/browser residue still to review separately:
+- [src/hooks/useBlueprints.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/hooks/useBlueprints.ts)
+- [src/lib/myFeedApi.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/lib/myFeedApi.ts)
 
 ## Phase 4: Short Burn-In / Canary
 

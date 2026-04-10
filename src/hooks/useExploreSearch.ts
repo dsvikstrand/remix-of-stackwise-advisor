@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { collectBlueprintTagSlugMap, listBlueprintTagRows } from '@/lib/blueprintTagsApi';
 import { buildFeedSummary } from '@/lib/feedPreview';
 import { normalizeTag } from '@/lib/tagging';
 import { searchSourcePages } from '@/lib/sourcePagesApi';
@@ -61,14 +62,10 @@ async function searchBlueprints(query: string, isTagSearch: boolean): Promise<Bl
 
     const tagIds = tagMatches.map(t => t.id);
 
-    const { data: blueprintTags } = await supabase
-      .from('blueprint_tags')
-      .select('blueprint_id')
-      .in('tag_id', tagIds);
+    const blueprintTags = await listBlueprintTagRows({ tagIds });
+    if (blueprintTags.length === 0) return [];
 
-    if (!blueprintTags || blueprintTags.length === 0) return [];
-
-    const blueprintIds = [...new Set(blueprintTags.map(bt => bt.blueprint_id))];
+    const blueprintIds = [...new Set(blueprintTags.map((bt) => bt.blueprint_id))];
 
     const { data: blueprints, error } = await supabase
       .from('blueprints')
@@ -81,19 +78,8 @@ async function searchBlueprints(query: string, isTagSearch: boolean): Promise<Bl
     if (error || !blueprints) return [];
 
     // Fetch tags for each blueprint
-    const { data: allTags } = await supabase
-      .from('blueprint_tags')
-      .select('blueprint_id, tags(slug)')
-      .in('blueprint_id', blueprintIds);
-
-    const tagsByBlueprint = new Map<string, string[]>();
-    allTags?.forEach(bt => {
-      const existing = tagsByBlueprint.get(bt.blueprint_id) || [];
-      if (bt.tags && typeof bt.tags === 'object' && 'slug' in bt.tags) {
-        existing.push((bt.tags as { slug: string }).slug);
-      }
-      tagsByBlueprint.set(bt.blueprint_id, existing);
-    });
+    const allTags = await listBlueprintTagRows({ blueprintIds });
+    const tagsByBlueprint = collectBlueprintTagSlugMap(allTags);
 
     return blueprints.map(b => ({
       type: 'blueprint' as const,
@@ -125,19 +111,8 @@ async function searchBlueprints(query: string, isTagSearch: boolean): Promise<Bl
 
   // Fetch tags
   const blueprintIds = blueprints.map(b => b.id);
-  const { data: allTags } = await supabase
-    .from('blueprint_tags')
-    .select('blueprint_id, tags(slug)')
-    .in('blueprint_id', blueprintIds);
-
-  const tagsByBlueprint = new Map<string, string[]>();
-  allTags?.forEach(bt => {
-    const existing = tagsByBlueprint.get(bt.blueprint_id) || [];
-    if (bt.tags && typeof bt.tags === 'object' && 'slug' in bt.tags) {
-      existing.push((bt.tags as { slug: string }).slug);
-    }
-    tagsByBlueprint.set(bt.blueprint_id, existing);
-  });
+  const allTags = await listBlueprintTagRows({ blueprintIds });
+  const tagsByBlueprint = collectBlueprintTagSlugMap(allTags);
 
   const titleResults = blueprints.map(b => ({
     type: 'blueprint' as const,

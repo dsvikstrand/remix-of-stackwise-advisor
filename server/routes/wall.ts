@@ -31,6 +31,7 @@ export function registerWallRoutes(app: express.Express, deps: WallRouteDeps) {
         scope: normalizeScope(req.query.scope),
         sort: normalizeSort(req.query.sort),
         viewerUserId,
+        listBlueprintTagRows: deps.listBlueprintTagRows,
         readPublicFeedRows: deps.readPublicFeedRows,
         readSourceRows: deps.readSourceRows,
       });
@@ -78,6 +79,7 @@ export function registerWallRoutes(app: express.Express, deps: WallRouteDeps) {
         db,
         userId,
         normalizeTranscriptTruthStatus: deps.normalizeTranscriptTruthStatus,
+        listBlueprintTagRows: deps.listBlueprintTagRows,
         readFeedRows: deps.readFeedRows,
         readSourceRows: deps.readSourceRows,
         readUnlockRows: deps.readUnlockRows,

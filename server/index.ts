@@ -345,7 +345,10 @@ import {
 } from './services/oracleBlueprintYoutubeCommentsState';
 import {
   listOracleBlueprintTagRows,
+  listOracleBlueprintTagRowsByTagIds,
+  listOracleBlueprintTagRowsByTagSlugs,
   listOracleBlueprintTagSlugs,
+  syncOracleBlueprintTagRowsFromSupabase,
   upsertOracleBlueprintTagRow,
 } from './services/oracleBlueprintTagState';
 import {
@@ -434,6 +437,7 @@ import { registerYouTubeRoutes } from './routes/youtube';
 import { registerSourceSubscriptionsRoutes } from './routes/sourceSubscriptions';
 import { registerSourcePagesRoutes } from './routes/sourcePages';
 import { registerWallRoutes } from './routes/wall';
+import { registerBlueprintTagReadRoutes } from './routes/blueprintTags';
 
 const app = express();
 const port = Number(process.env.PORT) || 8787;
@@ -4530,20 +4534,12 @@ async function listBlueprintTagRowsOracleAware(
     controlDb: oracleControlPlane,
     blueprintIds,
   });
-  const coveredBlueprintIds = new Set(oracleRows.map((row) => row.blueprint_id));
-  const missingBlueprintIds = blueprintIds.filter((blueprintId) => !coveredBlueprintIds.has(blueprintId));
-  const supabaseRows = missingBlueprintIds.length > 0
-    ? await readSupabaseBlueprintTagRows(db, { blueprintIds: missingBlueprintIds })
-    : [];
 
-  return [
-    ...oracleRows.map((row) => ({
-      blueprint_id: row.blueprint_id,
-      tag_id: row.tag_id,
-      tag_slug: row.tag_slug,
-    })),
-    ...supabaseRows,
-  ];
+  return oracleRows.map((row) => ({
+    blueprint_id: row.blueprint_id,
+    tag_id: row.tag_id,
+    tag_slug: row.tag_slug,
+  }));
 }
 
 async function listBlueprintTagSlugsOracleAware(
@@ -4560,9 +4556,7 @@ async function listBlueprintTagSlugsOracleAware(
       controlDb: oracleControlPlane,
       blueprintId,
     });
-    if (oracleSlugs.length > 0) {
-      return oracleSlugs;
-    }
+    return oracleSlugs;
   }
 
   const rows = await readSupabaseBlueprintTagRows(db, {
@@ -4573,6 +4567,83 @@ async function listBlueprintTagSlugsOracleAware(
       .map((row) => String(row.tag_slug || '').trim().toLowerCase())
       .filter(Boolean),
   ));
+}
+
+async function listBlueprintTagRowsByFiltersOracleAware(
+  db: ReturnType<typeof createClient>,
+  input: {
+    tagIds?: string[];
+    tagSlugs?: string[];
+  },
+) {
+  const tagIds = [...new Set((input.tagIds || []).map((value) => String(value || '').trim()).filter(Boolean))];
+  const tagSlugs = [...new Set((input.tagSlugs || []).map((value) => String(value || '').trim().toLowerCase()).filter(Boolean))];
+  if (tagIds.length === 0 && tagSlugs.length === 0) {
+    return [] as Array<{
+      blueprint_id: string;
+      tag_id: string;
+      tag_slug: string;
+    }>;
+  }
+
+  if (!oracleControlPlane) {
+    let resolvedTagIds = [...tagIds];
+    if (tagSlugs.length > 0) {
+      const { data: tagRows, error: tagError } = await db
+        .from('tags')
+        .select('id, slug')
+        .in('slug', tagSlugs);
+      if (tagError) throw tagError;
+      resolvedTagIds = Array.from(new Set([
+        ...resolvedTagIds,
+        ...(tagRows || []).map((row: any) => String(row.id || '').trim()).filter(Boolean),
+      ]));
+    }
+    if (resolvedTagIds.length === 0) return [];
+    const { data, error } = await db
+      .from('blueprint_tags')
+      .select('blueprint_id, tag_id, tags(slug)')
+      .in('tag_id', resolvedTagIds);
+    if (error) throw error;
+    const rows: Array<{ blueprint_id: string; tag_id: string; tag_slug: string }> = [];
+    for (const row of data || []) {
+      const blueprintId = String((row as any).blueprint_id || '').trim();
+      const tagId = String((row as any).tag_id || '').trim();
+      const joined = (row as any).tags;
+      const tagCandidates = Array.isArray(joined) ? joined : joined ? [joined] : [];
+      for (const candidate of tagCandidates) {
+        const tagSlug = String(candidate?.slug || '').trim().toLowerCase();
+        if (!blueprintId || !tagId || !tagSlug) continue;
+        rows.push({ blueprint_id: blueprintId, tag_id: tagId, tag_slug: tagSlug });
+      }
+    }
+    return rows;
+  }
+
+  const [rowsById, rowsBySlug] = await Promise.all([
+    tagIds.length > 0
+      ? listOracleBlueprintTagRowsByTagIds({
+        controlDb: oracleControlPlane,
+        tagIds,
+      })
+      : Promise.resolve([]),
+    tagSlugs.length > 0
+      ? listOracleBlueprintTagRowsByTagSlugs({
+        controlDb: oracleControlPlane,
+        tagSlugs,
+      })
+      : Promise.resolve([]),
+  ]);
+
+  const deduped = new Map<string, { blueprint_id: string; tag_id: string; tag_slug: string }>();
+  for (const row of [...rowsById, ...rowsBySlug]) {
+    deduped.set(`${row.blueprint_id}:${row.tag_id}`, {
+      blueprint_id: row.blueprint_id,
+      tag_id: row.tag_id,
+      tag_slug: row.tag_slug,
+    });
+  }
+  return Array.from(deduped.values());
 }
 
 async function attachBlueprintTagOracleAware(
@@ -8099,6 +8170,7 @@ registerProfileRoutes(app, {
 registerWallRoutes(app, {
   getServiceSupabaseClient,
   normalizeTranscriptTruthStatus,
+  listBlueprintTagRows: ({ blueprintIds }: any) => listBlueprintTagRowsOracleAware(getServiceSupabaseClient()!, { blueprintIds }),
   readPublicFeedRows: ({ db, blueprintIds, state, limit, cursor, requireBlueprint }: any) => listPublicProductFeedRowsOracleFirst(db, {
     blueprintIds,
     state,
@@ -8118,6 +8190,15 @@ registerWallRoutes(app, {
   }),
   readUnlockRows: ({ db, sourceIds }: any) => getSourceItemUnlocksBySourceItemIdsOracleFirst(db, sourceIds),
   readActiveSubscriptions: ({ db, userId }: any) => listActiveSubscriptionsForUserOracleFirst(db, userId),
+});
+
+registerBlueprintTagReadRoutes(app, {
+  getServiceSupabaseClient,
+  listBlueprintTagRows: ({ blueprintIds }) => listBlueprintTagRowsOracleAware(getServiceSupabaseClient()!, { blueprintIds }),
+  listBlueprintTagRowsByFilters: ({ tagIds, tagSlugs }) => listBlueprintTagRowsByFiltersOracleAware(getServiceSupabaseClient()!, {
+    tagIds,
+    tagSlugs,
+  }),
 });
 
 const blueprintVariantsService = createBlueprintVariantsService({
@@ -15942,6 +16023,16 @@ async function bootstrapOracleControlPlaneState() {
     generationRunActiveCount = generationStateBootstrap.runActiveCount;
   }
 
+  let blueprintTagCount: number | null = null;
+  if (oracleControlPlane) {
+    const blueprintTagBootstrap = await syncOracleBlueprintTagRowsFromSupabase({
+      controlDb: oracleControlPlane,
+      db,
+      batchSize: oracleControlPlaneConfig.bootstrapBatch,
+    });
+    blueprintTagCount = blueprintTagBootstrap.rowCount;
+  }
+
   let queueAdmissionActiveCount: number | null = null;
   if (oracleControlPlaneConfig.queueAdmissionMirrorEnabled) {
     const queueAdmissionBootstrap = await syncOracleQueueAdmissionMirrorFromSupabase({
@@ -16003,6 +16094,7 @@ async function bootstrapOracleControlPlaneState() {
     generation_variant_active_count: generationVariantActiveCount,
     generation_run_count: generationRunCount,
     generation_run_active_count: generationRunActiveCount,
+    blueprint_tag_count: blueprintTagCount,
     queue_admission_active_count: queueAdmissionActiveCount,
     job_activity_count: jobActivityCount,
     job_activity_active_count: jobActivityActiveCount,
@@ -16316,6 +16408,7 @@ registerSourcePagesRoutes(app, {
   youtubeDataApiKey,
   getUserSubscriptionStateForSourcePage: getUserSubscriptionStateForSourcePageOracleFirst,
   getBlueprintAvailabilityForVideo: getBlueprintAvailabilityForVideoOracleFirst,
+  listBlueprintTagRows: ({ blueprintIds }: any) => listBlueprintTagRowsOracleAware(getServiceSupabaseClient()!, { blueprintIds }),
   readPublicFeedRows: ({ db, blueprintIds, state, limit, cursor, requireBlueprint }: any) => listPublicProductFeedRowsOracleFirst(db, {
     blueprintIds,
     state,

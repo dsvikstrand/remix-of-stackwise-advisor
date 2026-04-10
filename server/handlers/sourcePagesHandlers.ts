@@ -53,6 +53,7 @@ export function registerSourcePagesRouteHandlers(app: express.Express, deps: Sou
     youtubeDataApiKey,
     getUserSubscriptionStateForSourcePage,
     getBlueprintAvailabilityForVideo,
+    listBlueprintTagRows,
     readPublicFeedRows,
     readSourceRows,
     sourceVideoListBurstLimiter,
@@ -1724,10 +1725,15 @@ app.get('/api/source-pages/:platform/:externalId/blueprints', async (req, res) =
       .from('blueprints')
       .select('id, title, llm_review, banner_url, sections_json, steps, is_public')
       .in('id', blueprintIds),
-    db
-      .from('blueprint_tags')
-      .select('blueprint_id, tag_id')
-      .in('blueprint_id', blueprintIds),
+    listBlueprintTagRows
+      ? Promise.resolve({
+        data: await listBlueprintTagRows({ blueprintIds }),
+        error: null,
+      })
+      : db
+        .from('blueprint_tags')
+        .select('blueprint_id, tag_id')
+        .in('blueprint_id', blueprintIds),
   ]);
 
   if (blueprintRowsError || tagRowsError) {
@@ -1815,7 +1821,7 @@ app.get('/api/source-pages/:platform/:externalId/blueprints', async (req, res) =
   for (const row of tagRowsData || []) {
     const blueprintId = String(row.blueprint_id || '').trim();
     const tagId = String(row.tag_id || '').trim();
-    const tagSlug = tagDefMap.get(tagId);
+    const tagSlug = String((row as { tag_slug?: unknown }).tag_slug || '').trim() || tagDefMap.get(tagId);
     if (!blueprintId || !tagId || !tagSlug) continue;
     const list = tagsByBlueprint.get(blueprintId) || [];
     list.push({ id: tagId, slug: tagSlug });

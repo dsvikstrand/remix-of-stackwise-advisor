@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { listBlueprintTagRows } from '@/lib/blueprintTagsApi';
 import { supabase } from '@/integrations/supabase/client';
 import { FALLBACK_PROOF_BLUEPRINT } from '@/lib/landingFallbacks';
 
@@ -55,11 +56,7 @@ export function LandingProofCard({ onOpenExample }: LandingProofCardProps) {
       if (!blueprint) return null;
 
       const [{ data: tagsRows }, { data: profile }] = await Promise.all([
-        supabase
-          .from('blueprint_tags')
-          .select('tag_id, tags(slug)')
-          .eq('blueprint_id', blueprint.id)
-          .limit(4),
+        Promise.resolve(listBlueprintTagRows({ blueprintIds: [blueprint.id] })),
         supabase
           .from('profiles')
           .select('display_name')
@@ -68,7 +65,7 @@ export function LandingProofCard({ onOpenExample }: LandingProofCardProps) {
       ]);
 
       const tags = (tagsRows || [])
-        .map((row: any) => row.tags?.slug)
+        .map((row: any) => row.tag_slug)
         .filter((slug: unknown): slug is string => typeof slug === 'string')
         .slice(0, 4);
 

@@ -157,7 +157,7 @@ a92) [have] YouTube refresh bookkeeping now skips unchanged `source_items.metada
 a92a) [have] The default one-step YT2BP prompt contract is now `docs/golden_blueprint/golden_bp_prompt_contract_one_step_v6.md`: it preserves the same `draft.sectionsJson` schema, keeps `Takeaways` lighter/plain-English, keeps `Storyline` at `2-3` substantial paragraphs/slides, treats long transcript pruning as normal runtime shaping rather than a caveat trigger, and uses the existing `open_questions` field for a more reader-useful `Caveats` section built around balancing nuance instead of repetitive evidence-policing.
 a92b) [have] Display/render surfaces now label that final section as `Caveats`, while the runtime/storage field remains `open_questions` and legacy `Open Questions` labels remain accepted as compatibility aliases.
 a92c) [have] In `llm_native` mode, YT2BP retries now stay focused on blocking structure/shape failures; `TAKEAWAYS_TOO_LONG` is still logged for telemetry but no longer triggers regeneration on its own.
-a92d) [have] Main backend blueprint-tag ownership now writes tag joins into Oracle `blueprint_tag_state` for blueprint creation and channel publish flows, while coupled backend tag reads for classification/channel feed/auto-banner prefer Oracle rows and only fall back per-blueprint to Supabase for older residue.
+a92d) [have] Main backend blueprint-tag ownership now writes tag joins into Oracle `blueprint_tag_state` for blueprint creation and channel publish flows. Oracle bootstrap seeds existing joins into `blueprint_tag_state`, and current wall/channel/source-page/search-oriented runtime reads now resolve through Oracle-backed tag rows instead of direct Supabase `blueprint_tags`.
 
 ## Core Model
 b1) `Source Item`

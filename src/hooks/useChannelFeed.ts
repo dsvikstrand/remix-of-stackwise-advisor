@@ -1,5 +1,6 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { collectBlueprintTagSlugMap, listBlueprintTagRows } from '@/lib/blueprintTagsApi';
 import { config } from '@/config/runtime';
 import { buildFeedSummary } from '@/lib/feedPreview';
 
@@ -108,28 +109,8 @@ async function listChannelFeedFallback(input: {
 
   const pagedBaseRows = pageBaseRows.slice(offset, offset + limit);
   const pageBlueprintIds = pagedBaseRows.map((row) => row.id);
-  const { data: tagRows, error: tagError } = pageBlueprintIds.length > 0
-    ? await supabase
-        .from('blueprint_tags')
-        .select('blueprint_id, tags(slug)')
-        .in('blueprint_id', pageBlueprintIds)
-    : { data: [], error: null };
-  if (tagError) throw tagError;
-
-  const tagsByBlueprintId = new Map<string, string[]>();
-  (tagRows || []).forEach((row) => {
-    const list = tagsByBlueprintId.get(row.blueprint_id) || [];
-    if (Array.isArray(row.tags)) {
-      row.tags.forEach((tag) => {
-        if (tag && typeof tag === 'object' && 'slug' in tag) {
-          list.push(String((tag as { slug: string }).slug));
-        }
-      });
-    } else if (row.tags && typeof row.tags === 'object' && 'slug' in row.tags) {
-      list.push(String((row.tags as { slug: string }).slug));
-    }
-    tagsByBlueprintId.set(row.blueprint_id, list);
-  });
+  const tagRows = pageBlueprintIds.length > 0 ? await listBlueprintTagRows({ blueprintIds: pageBlueprintIds }) : [];
+  const tagsByBlueprintId = collectBlueprintTagSlugMap(tagRows);
 
   const items = pagedBaseRows.map((row) => ({
     ...row,

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { listBlueprintTagRows } from '@/lib/blueprintTagsApi';
 import { useAuth } from '@/contexts/AuthContext';
 import { BLUEPRINT_FIELDS, hydrateBlueprints, type BlueprintListItem, type BlueprintRow } from './useBlueprintSearch';
 
@@ -21,24 +22,16 @@ export function useSuggestedBlueprints(limit = 6) {
         const likedIds = (likedBlueprints || []).map((row) => row.blueprint_id);
 
         if (likedIds.length > 0) {
-          const { data: tagRows } = await supabase
-            .from('blueprint_tags')
-            .select('tag_id')
-            .in('blueprint_id', likedIds);
-
-          suggestedTagIds = [...new Set((tagRows || []).map((row) => row.tag_id))];
+          const tagRows = await listBlueprintTagRows({ blueprintIds: likedIds });
+          suggestedTagIds = [...new Set(tagRows.map((row) => row.tag_id))];
         }
       }
 
       let blueprints: BlueprintRow[] = [];
 
       if (suggestedTagIds.length > 0 && user?.id) {
-        const { data: blueprintTagRows } = await supabase
-          .from('blueprint_tags')
-          .select('blueprint_id')
-          .in('tag_id', suggestedTagIds);
-
-        const candidateIds = [...new Set((blueprintTagRows || []).map((row) => row.blueprint_id))];
+        const blueprintTagRows = await listBlueprintTagRows({ tagIds: suggestedTagIds });
+        const candidateIds = [...new Set(blueprintTagRows.map((row) => row.blueprint_id))];
 
         const { data: userLikes } = await supabase
           .from('blueprint_likes')

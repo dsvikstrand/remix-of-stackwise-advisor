@@ -1,4 +1,5 @@
 import { buildFeedSummary } from '@/lib/feedPreview';
+import { collectBlueprintTagSlugMap, listBlueprintTagRows } from '@/lib/blueprintTagsApi';
 import { getEffectiveUnlockDisplayStatus, isEffectiveUnlockDisplayInProgress } from '@/lib/unlockDisplayState';
 
 type DbClient = {
@@ -32,26 +33,6 @@ function isTranscriptUnavailableForDisplayErrorCode(code: string | null | undefi
 
 function buildSourcePagePath(platform: string, externalId: string) {
   return `/s/${encodeURIComponent(platform)}/${encodeURIComponent(externalId)}`;
-}
-
-function collectJoinedTagSlugs(
-  rows: Array<{ blueprint_id: string; tags?: { slug?: string } | Array<{ slug?: string }> | null }>,
-) {
-  const tagsByBlueprint = new Map<string, string[]>();
-  for (const row of rows) {
-    const blueprintId = String(row.blueprint_id || '').trim();
-    if (!blueprintId) continue;
-    const existing = tagsByBlueprint.get(blueprintId) || [];
-    const joined = row.tags;
-    const tagCandidates = Array.isArray(joined) ? joined : joined ? [joined] : [];
-    for (const candidate of tagCandidates) {
-      const slug = String(candidate?.slug || '').trim();
-      if (!slug || existing.includes(slug)) continue;
-      existing.push(slug);
-    }
-    tagsByBlueprint.set(blueprintId, existing);
-  }
-  return tagsByBlueprint;
 }
 
 export interface MyFeedItemView {
@@ -201,16 +182,8 @@ export async function listMyFeedItemsFromDb(input: {
       : Promise.resolve({ data: [], error: null }),
   ]);
 
-  const { data: tagRows } = blueprintIds.length
-    ? await db
-      .from('blueprint_tags')
-      .select('blueprint_id, tags(slug)')
-      .in('blueprint_id', blueprintIds)
-    : { data: [] as Array<{ blueprint_id: string; tags?: { slug?: string } | Array<{ slug?: string }> | null }> };
-  const tagsByBlueprint = collectJoinedTagSlugs((tagRows || []) as Array<{
-    blueprint_id: string;
-    tags?: { slug?: string } | Array<{ slug?: string }> | null;
-  }>);
+  const tagRows = blueprintIds.length > 0 ? await listBlueprintTagRows({ blueprintIds }) : [];
+  const tagsByBlueprint = collectBlueprintTagSlugMap(tagRows);
 
   const sourceMap = new Map((sources || []).map((row: any) => [row.id, row]));
   const unlockMap = new Map((unlocks || []).map((row: any) => [row.source_item_id, row]));
