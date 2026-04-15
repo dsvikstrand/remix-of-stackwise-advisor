@@ -1,8 +1,8 @@
 # Oracle Generation Trace Full Ownership Cutover Plan
 
-Status: `active`
+Status: `completed`
 Owner: `Codex / David`
-Last updated: `2026-04-09`
+Last updated: `2026-04-12`
 
 ## Purpose
 
@@ -21,17 +21,17 @@ This chapter follows the same learned pattern from queue, unlocks, feed, source-
 
 ## Explicit End State
 
-a1) [todo] Oracle is the sole normal operational generation-trace truth in runtime.
+a1) [have] Oracle is the sole normal operational generation-trace truth in runtime.
 
-a2) [todo] Normal runtime generation-trace behavior no longer depends on Supabase for:
+a2) [have] Normal runtime generation-trace behavior no longer depends on Supabase for:
 - event append sequencing
 - generation trace event reads by `run_id`
 - generation trace event pagination for blueprint/run detail views
 - event retention/purge behavior needed for runtime correctness
 
-a3) [todo] Generation trace append/read behavior remains correct through burn-in.
+a3) [have] Generation trace append/read behavior remained correct through burn-in.
 
-a4) [todo] Supabase `generation_run_events` stops doing normal runtime work; any residue is manual/historical only.
+a4) [have] Supabase `generation_run_events` stopped doing normal runtime work; any residue is manual/historical only.
 
 ## Why This Plan Exists
 
@@ -107,10 +107,10 @@ f1) [have] Historical context:
 - generation-state main runtime cutover is landed
 - generation trace is now the next large backend-owned Supabase surface
 
-f2) [todo] This plan aims directly for:
+f2) [have] This plan aimed directly for:
 - `Oracle-only operational generation-trace path`
 
-f3) [todo] Intermediate “Oracle-first but still normal-runtime Supabase generation trace participation” is only an execution aid, not the desired resting state.
+f3) [have] Intermediate “Oracle-first but still normal-runtime Supabase generation trace participation” was only an execution aid, not the resting state.
 
 ## Phase 0: One Fast Inventory
 
@@ -217,45 +217,46 @@ j5) [have] Oracle-primary trace detail reads now stay on Oracle event state thro
 
 ## Phase 4: Short Burn-In / Canary
 
-k1) [have] Current burn-in evidence on `2026-04-09` is directionally good:
+k1) [have] Burn-in evidence accepted on `2026-04-12`:
 - Oracle primary check is green
 - public/local health are green
 - sampled Supabase attribution no longer shows `generation_trace` as a leading family
-- `generation_trace_read_failed` count is `0` over the last `24h`
-- `generation_trace_write_failed` count is `0` over the last `12h`
+- `generation_trace_read_failed` count is `0` over the last `24h+`
+- `generation_trace_write_failed` count is `0` over the last `24h+`
+- sampled Supabase attribution no longer shows `generation_run_events` as a leading endpoint
 
-k2) [todo] Continue burn-in for Oracle-only generation trace behavior under:
+k2) [have] Burn-in covered Oracle-only generation trace behavior under:
 - manual generation
 - source-page unlock generation
 - queued/background generation
 - failure and retry paths
 - trace detail reads
 
-k3) [todo] Remaining success target:
+k3) [have] Burn-in success targets were satisfied:
 - event append still works
 - trace detail reads still work
 - no missing terminal event sequences
-- no fresh `generation_trace_write_failed` events recur across a full burn-in window
-- no hidden Supabase trace dependency resurfaces
+- no fresh `generation_trace_write_failed` events recurred across a full burn-in window
+- no hidden Supabase trace dependency resurfaced
 
 ## Phase 5: Cleanup And Closure
 
-l1) [todo] Remove remaining meaningful Supabase generation-trace compatibility residue from active runtime surfaces and sync canonical docs to the final Oracle-owned posture.
+l1) [have] Remaining meaningful Supabase generation-trace compatibility residue was removed from active runtime surfaces, and canonical docs now reflect the Oracle-owned posture.
 
-l2) [todo] Move this plan to `completed/` once:
+l2) [have] This plan is ready to move to `completed/` because:
 - Supabase generation-trace runtime work is zero or negligible
 - no hidden dependency remains
 - burn-in evidence is accepted
 
 ## Proof Gates
 
-m1) [todo] Required proof before declaring generation-trace cutover complete:
+m1) [have] Required proof before declaring generation-trace cutover complete:
 - Oracle primary check green
 - public/local health green
 - trace append succeeds in normal runtime
 - trace read/detail surfaces still return expected event history
 
-m2) [todo] Required proof before closing the chapter:
+m2) [have] Required proof before closing the chapter:
 - at least one meaningful burn-in window
 - no unresolved trace correctness regressions
 - Supabase attribution shows `generation_run_events` materially reduced
@@ -268,8 +269,8 @@ n2) [todo] Any emergency rollback should be an explicit code/env change, not a h
 
 ## Success Criteria
 
-o1) [todo] Oracle fully owns normal generation-trace operations in runtime.
+o1) [have] Oracle fully owns normal generation-trace operations in runtime.
 
-o2) [todo] Supabase `generation_run_events` no longer does normal runtime work.
+o2) [have] Supabase `generation_run_events` no longer does normal runtime work.
 
-o3) [todo] Trace append/read behavior remains correct through burn-in.
+o3) [have] Trace append/read behavior remained correct through burn-in.

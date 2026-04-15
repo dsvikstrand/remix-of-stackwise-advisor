@@ -13,8 +13,8 @@ This file is the authoritative active/reference/deserted/completed registry for 
   Canonical launch gate board and proof log.
 
 ## Active Root
-- `docs/exec-plans/active/oracle-generation-trace-full-ownership-cutover-plan.md`
-  Current active implementation root for the explicit generation-trace cutover chapter whose end state is full Oracle ownership and zero normal-runtime Supabase `generation_run_events` work.
+- `docs/exec-plans/active/oracle-provider-circuit-state-full-ownership-cutover-plan.md`
+  Current active implementation root for the 48h Oracle-only `provider_circuit_state` cutover chapter. This is the fastest bounded full migration available from the current Supabase egress leaders.
 - `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
   Current proof/deferred carry-forward tail. This is the only standing active-tail support file.
 - `docs/exec-plans/tech-debt-tracker.md`
@@ -26,12 +26,18 @@ This file is the authoritative active/reference/deserted/completed registry for 
   Paused broader Oracle-ownership architecture chapter retained as context after the narrower queue and unlock full-ownership cutovers completed.
 - `docs/exec-plans/active/on-pause/oracle-blueprint-youtube-comments-full-ownership-cutover-plan.md`
   Queued next ownership chapter for full Oracle `blueprint_youtube_comments` cutover after current generation-trace burn-in/closure; this is the strongest remaining Supabase family in the latest 24h sample.
+- `channel_candidates` / `notifications`
+  Remaining safer near-term migration direction after `provider_circuit_state`. These surfaces remain preferred ahead of broader catalog work because they are more bounded and carry lower user-facing blast radius than `tags`.
 - `docs/exec-plans/active/on-pause/oracle-blueprint-tags-full-ownership-cutover-plan.md`
   Queued follow-up ownership chapter for full Oracle `blueprint_tags` cutover after the current active/burn-in work and the narrower blueprint-YouTube-comments chapter.
+- `docs/exec-plans/active/on-pause/oracle-tags-full-ownership-cutover-plan.md`
+  Queued full ownership chapter for Oracle `tags`, treated as a separate catalog-style migration rather than a quick `blueprint_tags` follow-up. It remains a later chapter because the latest safer near-term candidates are `provider_circuit_state`, `channel_candidates`, and `notifications`.
 - `docs/exec-plans/completed/oracle-feed-full-ownership-cutover-plan.md`
   Completed Oracle-only feed cutover; retained as reference while later chapters pursued remaining Supabase-owned runtime surfaces.
 - `docs/exec-plans/completed/oracle-generation-state-full-ownership-cutover-plan.md`
   Completed Oracle-only generation-state cutover; retained as reference after bootstrap/write/read severing and accepted burn-in.
+- `docs/exec-plans/completed/oracle-generation-trace-full-ownership-cutover-plan.md`
+  Completed Oracle-only generation-trace cutover; retained as reference after accepted burn-in and closure with zero normal-runtime Supabase `generation_run_events` dependency.
 - `docs/exec-plans/deserted/backend-aggressive-egress-tuning-plan.md`
   Paused backend egress tuning root retained in case the team chooses to resume the remaining aggressive-but-acceptable freshness/cadence trims later.
 - `docs/exec-plans/completed/bleup-pwa-program.md`
@@ -146,17 +152,22 @@ This file is the authoritative active/reference/deserted/completed registry for 
 ## Current Program Snapshot
 - Core identity lock: `docs/app/core-direction-lock.md`.
 - Current runtime/ops truth: `docs/architecture.md`, `docs/ops/yt2bp_runbook.md`, and `docs/ops/mvp-launch-readiness-checklist.md`.
-- Current active implementation plan: `docs/exec-plans/active/oracle-generation-trace-full-ownership-cutover-plan.md`.
-  Generation trace is now the only open ownership chapter because Oracle-only event write/read severing is landed and the remaining work is burn-in plus closure after the most recent trace-specific follow-up.
+- Current active implementation plan: `docs/exec-plans/active/oracle-provider-circuit-state-full-ownership-cutover-plan.md`.
+  This is the active 48h migration root because `provider_circuit_state` is currently the safest bounded full migration from the leading Supabase egress families.
+- Remaining safer near-term migration direction after that:
+  - `channel_candidates`
+  - `notifications`
+  These remain preferred ahead of broader catalog work because they appear more bounded and lower-risk than `tags`.
 - Queued next ownership chapter: `docs/exec-plans/active/on-pause/oracle-blueprint-youtube-comments-full-ownership-cutover-plan.md`.
   Blueprint YouTube comments are now the strongest next migration target because the latest 24h attribution sample is led by `blueprint_youtube_comments` read/write/delete traffic.
 - Queued follow-up ownership chapter: `docs/exec-plans/active/on-pause/oracle-blueprint-tags-full-ownership-cutover-plan.md`.
   Blueprint tags are the next strong cost/simplicity candidate after that because the latest sampled 24h Supabase attribution materially leads with `blueprint_tags` reads/writes.
+- Queued full ownership chapter: `docs/exec-plans/active/on-pause/oracle-tags-full-ownership-cutover-plan.md`.
+  Tags are now tracked as their own full migration chapter because the latest sampled 24h Supabase attribution is led by `tags`, and the table likely behaves like a shared catalog rather than a narrow join surface. That also makes it a broader later migration, not the safest immediate move while tester stability matters.
 - Paused broader Oracle-ownership context: `docs/exec-plans/active/on-pause/oracle-deeper-ownership-and-supabase-reduction-plan.md`.
 - Current active proof/deferred tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`.
 - Current post-launch debt board: `docs/exec-plans/tech-debt-tracker.md`.
-- Latest completed ownership chapters: `docs/exec-plans/completed/oracle-feed-full-ownership-cutover-plan.md`, `docs/exec-plans/completed/oracle-source-item-full-ownership-cutover-plan.md`, and `docs/exec-plans/completed/oracle-generation-state-full-ownership-cutover-plan.md`.
-- Current active ownership chapter: `docs/exec-plans/active/oracle-generation-trace-full-ownership-cutover-plan.md`.
+- Latest completed ownership chapters: `docs/exec-plans/completed/oracle-feed-full-ownership-cutover-plan.md`, `docs/exec-plans/completed/oracle-source-item-full-ownership-cutover-plan.md`, `docs/exec-plans/completed/oracle-generation-state-full-ownership-cutover-plan.md`, and `docs/exec-plans/completed/oracle-generation-trace-full-ownership-cutover-plan.md`.
 - Latest completed implementation plans: `docs/exec-plans/completed/transcript-provider-launch-plan.md` and `docs/exec-plans/completed/pre-launch-ui-ux-plan.md`.
 - Historical PWA/runtime-simplification/egress reference plans are archived under `docs/exec-plans/completed/`.
 - The prior Supabase egress attribution/reduction chapter is completed and now serves as reference context for the paused broader Oracle-ownership chapter and the completed queue/unlock cutover chapters.
