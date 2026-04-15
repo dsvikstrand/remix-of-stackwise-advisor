@@ -16,6 +16,9 @@ type ProviderCircuitRow = {
 };
 
 type ProviderCircuitOracleWriteAdapter = {
+  getRow?: (input: {
+    providerKey: string;
+  }) => Promise<ProviderCircuitRow | null>;
   upsertRow: (input: {
     providerKey: string;
     patch: Partial<ProviderCircuitRow>;
@@ -51,6 +54,11 @@ function parseIsoMs(value: string | null | undefined) {
 }
 
 async function getCircuitRow(db: DbClient | null | undefined, providerKey: string) {
+  if (providerCircuitOracleWriteAdapter?.getRow) {
+    return providerCircuitOracleWriteAdapter.getRow({
+      providerKey,
+    });
+  }
   if (!db) return null;
   const { data, error } = await db
     .from('provider_circuit_state')
@@ -116,7 +124,8 @@ export async function assertProviderAvailable(
   db: DbClient | null | undefined,
   providerKey: string,
 ) {
-  if (!PROVIDER_FAIL_FAST_MODE || !db) return;
+  if (!PROVIDER_FAIL_FAST_MODE) return;
+  if (!providerCircuitOracleWriteAdapter?.getRow && !db) return;
   const row = await getCircuitRow(db, providerKey);
   if (!row) return;
 
@@ -141,7 +150,7 @@ export async function recordProviderSuccess(
   db: DbClient | null | undefined,
   providerKey: string,
 ) {
-  if (!db) return;
+  if (!providerCircuitOracleWriteAdapter && !db) return;
   await upsertCircuitRow(db, providerKey, {
     state: 'closed',
     opened_at: null,
@@ -156,7 +165,7 @@ export async function recordProviderFailure(
   providerKey: string,
   errorMessage: string,
 ) {
-  if (!db) return;
+  if (!providerCircuitOracleWriteAdapter && !db) return;
   const now = new Date();
   const nowIso = now.toISOString();
   const existing = await getCircuitRow(db, providerKey);

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { openOracleControlPlaneDb } from '../../server/services/oracleControlPlaneDb';
 import { getOracleProviderCircuitRow, upsertOracleProviderCircuitRow } from '../../server/services/oracleProviderCircuitState';
 import {
@@ -11,9 +11,13 @@ import {
 } from '../../server/services/providerCircuit';
 
 const tempDirs: string[] = [];
+const originalProviderFailFastMode = process.env.PROVIDER_FAIL_FAST_MODE;
 
 afterEach(() => {
   configureProviderCircuitOracleWriteAdapter(null);
+  if (originalProviderFailFastMode == null) delete process.env.PROVIDER_FAIL_FAST_MODE;
+  else process.env.PROVIDER_FAIL_FAST_MODE = originalProviderFailFastMode;
+  vi.resetModules();
   while (tempDirs.length > 0) {
     const next = tempDirs.pop();
     if (next) fs.rmSync(next, { recursive: true, force: true });
@@ -147,6 +151,61 @@ describe('providerCircuit write adapter', () => {
         last_error: null,
       });
     } finally {
+      await controlDb.close();
+    }
+  });
+});
+
+describe('providerCircuit read adapter', () => {
+  it('uses Oracle-backed reads for fail-fast availability checks', async () => {
+    process.env.PROVIDER_FAIL_FAST_MODE = 'true';
+    vi.resetModules();
+
+    const controlDb = openOracleControlPlaneDb({
+      sqlitePath: createTempSqlitePath(),
+    });
+
+    const providerCircuitModule = await import('../../server/services/providerCircuit');
+
+    providerCircuitModule.configureProviderCircuitOracleWriteAdapter({
+      getRow: async (input) => getOracleProviderCircuitRow({
+        controlDb,
+        providerKey: input.providerKey,
+      }),
+      upsertRow: async (input) => upsertOracleProviderCircuitRow({
+        controlDb,
+        providerKey: input.providerKey,
+        patch: input.patch,
+        nowIso: input.nowIso,
+      }),
+    });
+
+    try {
+      await upsertOracleProviderCircuitRow({
+        controlDb,
+        providerKey: 'youtube_timedtext',
+        patch: {
+          state: 'open',
+          opened_at: '2026-04-15T08:00:00.000Z',
+          cooldown_until: '2999-01-01T00:00:00.000Z',
+          failure_count: 5,
+          last_error: 'Provider degraded',
+        },
+        nowIso: '2026-04-15T08:00:00.000Z',
+      });
+
+      await expect(
+        providerCircuitModule.assertProviderAvailable(null, 'youtube_timedtext'),
+      ).rejects.toBeInstanceOf(providerCircuitModule.ProviderCircuitOpenError);
+
+      const snapshot = await providerCircuitModule.getProviderCircuitSnapshot(null, 'youtube_timedtext');
+      expect(snapshot).toMatchObject({
+        provider_key: 'youtube_timedtext',
+        state: 'open',
+        failure_count: 5,
+      });
+    } finally {
+      providerCircuitModule.configureProviderCircuitOracleWriteAdapter(null);
       await controlDb.close();
     }
   });

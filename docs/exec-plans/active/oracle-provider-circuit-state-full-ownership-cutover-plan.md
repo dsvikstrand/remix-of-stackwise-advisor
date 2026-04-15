@@ -112,7 +112,7 @@ e3) [have] Primary regression coverage targets:
 
 f1) [have] Phase 0: One fast inventory and seam confirmation
 f2) [have] Phase 1: Oracle-only provider circuit writes
-f3) [todo] Phase 2: Oracle-only provider circuit reads
+f3) [have] Phase 2: Oracle-only provider circuit reads
 f4) [todo] Phase 3: Short burn-in / canary
 f5) [todo] Phase 4: Cleanup and closure
 
@@ -180,13 +180,28 @@ h6) [have] Regression coverage added for Pass 1:
 
 ## Phase 2: Oracle-Only Provider Circuit Reads
 
-i1) [todo] Replace Supabase-backed `provider_circuit_state` reads with Oracle-backed state reads.
+i1) [have] Replaced Supabase-backed `provider_circuit_state` reads with Oracle-backed state reads.
 
-i2) [todo] Keep fail-fast behavior and cooldown timing unchanged.
+i2) [have] Kept fail-fast behavior and cooldown timing unchanged.
 
-i3) [todo] Move ops/provider circuit snapshots onto Oracle-backed state.
+i3) [have] Moved ops/provider circuit snapshots onto Oracle-backed state.
 
-i4) [todo] After this phase, Supabase should no longer matter to normal runtime provider circuit read correctness.
+i4) [have] After this phase, Supabase no longer matters to normal runtime provider circuit read correctness.
+
+i5) [have] Landed in this wave:
+- `getCircuitRow(...)` now resolves through the Oracle-backed adapter when control-plane runtime is enabled
+- `assertProviderAvailable(...)` now enforces fail-fast from Oracle-backed circuit rows without requiring a Supabase client
+- `getProviderCircuitSnapshot(...)` now exposes Oracle-backed provider circuit rows to ops/queue-health
+- ordinary Oracle misses no longer trigger hidden Supabase rereads in the normal runtime path
+
+i6) [have] Primary code seams for Pass 2:
+- [server/services/providerCircuit.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/providerCircuit.ts)
+- [server/index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts)
+- [server/handlers/opsHandlers.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/handlers/opsHandlers.ts)
+
+i7) [have] Regression coverage now includes the Oracle-backed read path:
+- [src/test/providerCircuit.test.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/test/providerCircuit.test.ts)
+- [src/test/opsHandlers.test.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/test/opsHandlers.test.ts)
 
 ## Phase 3: Short Burn-In / Canary
 

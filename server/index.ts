@@ -828,6 +828,12 @@ configureGenerationTraceOracleWriteAdapter(
 configureProviderCircuitOracleWriteAdapter(
   oracleControlPlaneConfig.enabled && oracleControlPlane
     ? {
+        async getRow(input) {
+          return getOracleProviderCircuitRow({
+            controlDb: oracleControlPlane,
+            providerKey: input.providerKey,
+          });
+        },
         async upsertRow(input) {
           return upsertOracleProviderCircuitRow({
             controlDb: oracleControlPlane,
