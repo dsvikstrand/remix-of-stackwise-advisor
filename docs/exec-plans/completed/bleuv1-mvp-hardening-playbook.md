@@ -3,7 +3,8 @@
 Status: `on-pause`
 
 Update note 2026-04-15:
-- Notifications ownership Pass 1 now lands notification writes and read-state mutations in Oracle-first control-plane state while keeping a Supabase compatibility shadow for inbox reads and push-dispatch enqueue during the active cutover.
+- Notifications ownership Pass 1 now lands notification writes and read-state mutations in Oracle-first control-plane state while keeping a Supabase compatibility shadow for inbox stability and push-dispatch enqueue during the active cutover.
+- Notifications ownership Pass 2 now moves inbox reads plus push-linked notification helper reads (`getNotificationById`, unread count) onto Oracle-backed `notification_state`, leaving Supabase `notifications` only as the temporary compatibility shadow for the trigger-driven push-enqueue path.
 
 Update note 2026-04-02:
 - Source-item ownership Pass 1 now removes Supabase `source_items` from Oracle restart/bootstrap input in `primary`: Oracle source-item truth stays in `source_item_ledger_state`, and Oracle product bootstrap mirrors recent source rows from that ledger instead of rereading Supabase source rows.

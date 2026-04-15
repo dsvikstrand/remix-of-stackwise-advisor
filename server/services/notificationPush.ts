@@ -106,9 +106,19 @@ type WebPushClient = {
   ) => Promise<unknown>;
 };
 
+type NotificationPushOracleReadAdapter = {
+  countUnreadNotificationsForUser: (input: {
+    userId: string;
+  }) => Promise<number>;
+  getNotificationById: (input: {
+    notificationId: string;
+  }) => Promise<NotificationPushSourceRow | null>;
+};
+
 const DEFAULT_RETRY_DELAYS_SECONDS = [30, 120, 600];
 
 const notificationWebPushClient = resolveWebPushClient(webpushImport);
+let notificationPushOracleReadAdapter: NotificationPushOracleReadAdapter | null = null;
 
 export function readNotificationPushConfigFromEnv(env: NodeJS.ProcessEnv): NotificationPushConfig {
   const enabled = parseRuntimeFlag(env.WEB_PUSH_ENABLED, false);
@@ -204,6 +214,12 @@ export function classifyNotificationPushError(error: unknown) {
 
 export function getNotificationPushRetryDelaySeconds(attemptCount: number) {
   return DEFAULT_RETRY_DELAYS_SECONDS[Math.max(0, attemptCount - 1)] ?? 900;
+}
+
+export function configureNotificationPushOracleReadAdapter(
+  adapter: NotificationPushOracleReadAdapter | null,
+) {
+  notificationPushOracleReadAdapter = adapter;
 }
 
 export async function upsertNotificationPushSubscription(
@@ -323,6 +339,11 @@ export async function countUnreadNotificationsForUser(
 ) {
   const userId = String(input.userId || '').trim();
   if (!userId) return 0;
+  if (notificationPushOracleReadAdapter) {
+    return notificationPushOracleReadAdapter.countUnreadNotificationsForUser({
+      userId,
+    });
+  }
   const { data, error } = await db
     .from('notifications')
     .select('id')
@@ -338,6 +359,11 @@ export async function getNotificationById(
 ) {
   const notificationId = String(input.notificationId || '').trim();
   if (!notificationId) return null;
+  if (notificationPushOracleReadAdapter) {
+    return notificationPushOracleReadAdapter.getNotificationById({
+      notificationId,
+    });
+  }
   const { data, error } = await db
     .from('notifications')
     .select('id, user_id, type, title, body, link_path, created_at')

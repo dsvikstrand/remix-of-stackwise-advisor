@@ -320,6 +320,7 @@ import {
   markNotificationRead,
 } from './services/notifications';
 import {
+  configureNotificationPushOracleReadAdapter,
   createNotificationPushSender,
   deactivateNotificationPushSubscription,
   listActiveNotificationPushSubscriptions,
@@ -346,6 +347,9 @@ import {
 } from './services/oracleGenerationTrace';
 import { upsertOracleProviderCircuitRow } from './services/oracleProviderCircuitState';
 import {
+  countUnreadOracleNotificationsForUser,
+  getOracleNotificationRowById,
+  listOracleNotificationsForUser,
   markAllOracleNotificationsRead,
   markOracleNotificationRead,
   upsertOracleNotificationRow,
@@ -855,6 +859,14 @@ configureProviderCircuitOracleWriteAdapter(
 configureNotificationOracleWriteAdapter(
   oracleControlPlaneConfig.enabled && oracleControlPlane
     ? {
+        async listNotificationsForUser(input) {
+          return listOracleNotificationsForUser({
+            controlDb: oracleControlPlane,
+            userId: input.userId,
+            limit: input.limit,
+            cursor: input.cursor,
+          });
+        },
         async upsertNotification(input) {
           return upsertOracleNotificationRow({
             controlDb: oracleControlPlane,
@@ -876,6 +888,35 @@ configureNotificationOracleWriteAdapter(
             userId: input.userId,
             readAt: input.readAt,
           });
+        },
+      }
+    : null,
+);
+
+configureNotificationPushOracleReadAdapter(
+  oracleControlPlaneConfig.enabled && oracleControlPlane
+    ? {
+        async countUnreadNotificationsForUser(input) {
+          return countUnreadOracleNotificationsForUser({
+            controlDb: oracleControlPlane,
+            userId: input.userId,
+          });
+        },
+        async getNotificationById(input) {
+          const row = await getOracleNotificationRowById({
+            controlDb: oracleControlPlane,
+            notificationId: input.notificationId,
+          });
+          if (!row) return null;
+          return {
+            id: row.id,
+            user_id: row.user_id,
+            type: row.type,
+            title: row.title,
+            body: row.body,
+            link_path: row.link_path,
+            created_at: row.created_at,
+          };
         },
       }
     : null,

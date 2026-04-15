@@ -106,6 +106,79 @@ export async function getOracleNotificationRowById(input: {
     : null;
 }
 
+export async function listOracleNotificationsForUser(input: {
+  controlDb: OracleControlPlaneDb;
+  userId: string;
+  limit: number;
+  cursor?: { createdAt: string; id: string } | null;
+}) {
+  const userId = normalizeRequiredString(input.userId);
+  if (!userId) return {
+    items: [] as OracleNotificationRow[],
+    unread_count: 0,
+    next_cursor: null as { createdAt: string; id: string } | null,
+  };
+
+  let query = input.controlDb.db
+    .selectFrom('notification_state')
+    .selectAll()
+    .where('user_id', '=', userId);
+
+  if (input.cursor) {
+    query = query.where((eb) => eb.or([
+      eb('created_at', '<', input.cursor.createdAt),
+      eb.and([
+        eb('created_at', '=', input.cursor.createdAt),
+        eb('id', '<', input.cursor.id),
+      ]),
+    ]));
+  }
+
+  const rows = await query
+    .orderBy('created_at', 'desc')
+    .orderBy('id', 'desc')
+    .limit(input.limit)
+    .execute();
+
+  const unreadRow = await input.controlDb.db
+    .selectFrom('notification_state')
+    .select((eb) => eb.fn.count<number>('id').as('count'))
+    .where('user_id', '=', userId)
+    .where('is_read', '=', 0)
+    .executeTakeFirst();
+
+  const items = rows.map((row) => mapNotificationRow(row as unknown as Record<string, unknown>));
+  const last = items.length === input.limit ? items[items.length - 1] : null;
+
+  return {
+    items,
+    unread_count: Number(unreadRow?.count || 0),
+    next_cursor: last
+      ? {
+          createdAt: last.created_at,
+          id: last.id,
+        }
+      : null,
+  };
+}
+
+export async function countUnreadOracleNotificationsForUser(input: {
+  controlDb: OracleControlPlaneDb;
+  userId: string;
+}) {
+  const userId = normalizeRequiredString(input.userId);
+  if (!userId) return 0;
+
+  const row = await input.controlDb.db
+    .selectFrom('notification_state')
+    .select((eb) => eb.fn.count<number>('id').as('count'))
+    .where('user_id', '=', userId)
+    .where('is_read', '=', 0)
+    .executeTakeFirst();
+
+  return Number(row?.count || 0);
+}
+
 export async function upsertOracleNotificationRow(input: {
   controlDb: OracleControlPlaneDb;
   row: Partial<OracleNotificationRow> & {

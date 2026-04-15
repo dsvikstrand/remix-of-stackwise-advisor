@@ -17,9 +17,9 @@ This is a full migration chapter, but it is still intentionally narrower and saf
 
 ## Explicit End State
 
-a1) [todo] Oracle becomes the sole normal operational `notifications` truth in runtime.
+a1) [have] Oracle is now the normal operational `notifications` truth for runtime reads and writes.
 
-a2) [todo] Normal runtime notification behavior no longer depends on Supabase for:
+a2) [have] Normal runtime notification behavior no longer depends on Supabase for:
 - notification row writes
 - notification inbox reads
 - unread/read state transitions
@@ -27,7 +27,7 @@ a2) [todo] Normal runtime notification behavior no longer depends on Supabase fo
 
 a3) [todo] Push-linked notification behavior remains correct through burn-in.
 
-a4) [todo] Supabase `notifications` stops doing normal runtime work; any residue is manual/historical only.
+a4) [todo] Supabase `notifications` still remains compatibility residue for push enqueue only in this chapter phase.
 
 ## Why This Plan Exists
 
@@ -97,7 +97,7 @@ d3) [todo] Focus on:
 
 ## Main Files / Surfaces
 
-e1) [todo] Primary likely backend seams:
+e1) [have] Primary backend seams:
 - [server/services/notifications.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/notifications.ts)
 - [server/routes/notifications.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/routes/notifications.ts)
 
@@ -116,7 +116,7 @@ e3) [have] Primary regression coverage targets:
 
 f1) [todo] Phase 0: One fast inventory and seam confirmation
 f2) [have] Phase 1: Oracle-owned notification writes with Supabase compatibility shadow
-f3) [todo] Phase 2: Oracle-only notification reads
+f3) [have] Phase 2: Oracle-only notification reads
 f4) [todo] Phase 3: Short burn-in / canary
 f5) [todo] Phase 4: Cleanup and closure
 
@@ -176,31 +176,60 @@ h4) [have] ID alignment is now explicit in app code.
 - notification IDs are generated before the dual write
 - Oracle and Supabase compatibility rows stay keyed to the same notification ID during the transition
 
-h5) [todo] Read-side ownership is still pending for Phase 2.
+h5) [have] Read-side ownership is complete for:
+- inbox list reads
+- unread count reads
+- push helper reads (`getNotificationById`, `countUnreadNotificationsForUser`)
+
+## Phase 2: Oracle-Only Notification Reads
+
+i1) [have] Notification inbox reads now resolve from Oracle-backed `notification_state`.
+
+i2) [have] Unread-count and mark-read/read-all follow-up reads now resolve from Oracle-backed state.
+
+i3) [have] Push-linked notification helper reads now resolve from Oracle-backed notification rows while push subscriptions and dispatch queue remain on Supabase for this chapter phase.
+
+i4) [have] Landed in this wave:
+- [server/services/oracleNotifications.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/oracleNotifications.ts)
+  - Oracle list/unread-count helpers for notification inbox reads
+- [server/services/notifications.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/notifications.ts)
+  - Oracle-backed inbox list path behind the existing service boundary
+- [server/services/notificationPush.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/notificationPush.ts)
+  - Oracle-backed `getNotificationById(...)`
+  - Oracle-backed `countUnreadNotificationsForUser(...)`
+- [server/index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts)
+  - runtime adapter wiring for notification read ownership
+
+i5) [have] Explicitly left out of this pass:
+- `notification_push_subscriptions`
+- `notification_push_dispatch_queue`
+- trigger-driven Supabase push enqueue replacement
+
+i6) [todo] Remaining chapter work is now burn-in plus final closure.
 
 ## Proof Gates
 
-h1) [todo] Required proof before declaring the cutover complete:
+j1) [todo] Required proof before declaring the cutover complete:
 - Oracle primary/runtime health green
 - inbox reads still correct
 - unread/read-all behavior still correct
 - push-linked notification behavior still correct
 
-h2) [todo] Required proof before closure:
+j2) [todo] Required proof before closure:
 - burn-in window accepted
 - no unresolved notification correctness regressions
 - Supabase `notifications` traffic materially reduced
 
 ## Rollback Rules
 
-i1) [todo] Prefer fix-forward over keeping long-lived dual notification runtime.
+k1) [todo] Prefer fix-forward over keeping long-lived dual notification runtime.
 
-i2) [todo] Any emergency rollback should be explicit and temporary, not a hidden permanent compatibility path.
+k2) [todo] Any emergency rollback should be explicit and temporary, not a hidden permanent compatibility path.
 
 ## Success Criteria
 
-j1) [todo] Oracle fully owns normal `notifications` operations in runtime.
+l1) [have] Oracle now owns normal `notifications` operations in runtime.
 
-j2) [todo] Supabase `notifications` no longer does normal runtime work.
+l2) [todo] Supabase `notifications` still carries temporary compatibility shadow work for push enqueue only.
 
-j3) [todo] Notification inbox, unread state, and push-linked behavior remain correct through burn-in.
+l3) [todo] Notification inbox, unread state, and push-linked behavior remain correct through burn-in.

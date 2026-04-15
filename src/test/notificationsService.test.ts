@@ -13,6 +13,7 @@ import {
 } from '../../server/services/notifications';
 import {
   getOracleNotificationRowById,
+  listOracleNotificationsForUser,
   upsertOracleNotificationRow,
   markOracleNotificationRead,
   markAllOracleNotificationsRead,
@@ -164,6 +165,12 @@ describe('notifications service', () => {
     }) as any;
 
     configureNotificationOracleWriteAdapter({
+      listNotificationsForUser: async (input) => listOracleNotificationsForUser({
+        controlDb,
+        userId: input.userId,
+        limit: input.limit,
+        cursor: input.cursor,
+      }),
       upsertNotification: async (input) => upsertOracleNotificationRow({
         controlDb,
         row: input.row,
@@ -196,6 +203,8 @@ describe('notifications service', () => {
       expect(db.state.notifications).toHaveLength(1);
       expect(db.state.notifications[0]?.id).toBe(created?.id);
 
+      db.state.notifications = [];
+
       const oracleRow = await getOracleNotificationRowById({
         controlDb,
         notificationId: String(created?.id || ''),
@@ -205,6 +214,14 @@ describe('notifications service', () => {
         user_id: 'user_1',
         type: 'generation_started',
       });
+
+      const page = await listNotificationsForUser(db, {
+        userId: 'user_1',
+        limit: 10,
+      });
+      expect(page.items).toHaveLength(1);
+      expect(page.unread_count).toBe(1);
+      expect(page.items[0]?.id).toBe(created?.id);
 
       const marked = await markNotificationRead(db, {
         userId: 'user_1',

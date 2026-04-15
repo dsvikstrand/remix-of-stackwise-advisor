@@ -1,8 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildNotificationPushPayload,
   classifyNotificationPushError,
+  configureNotificationPushOracleReadAdapter,
   createNotificationPushSender,
   deactivateNotificationPushSubscription,
   getNotificationPushRetryDelaySeconds,
@@ -12,7 +16,29 @@ import {
   upsertNotificationPushSubscription,
   type NotificationPushSubscriptionRow,
 } from "../../server/services/notificationPush";
+import { openOracleControlPlaneDb } from "../../server/services/oracleControlPlaneDb";
+import {
+  countUnreadOracleNotificationsForUser,
+  getOracleNotificationRowById,
+  upsertOracleNotificationRow,
+} from "../../server/services/oracleNotifications";
 import { createMockSupabase } from "./helpers/mockSupabase";
+
+const tempDirs: string[] = [];
+
+afterEach(() => {
+  configureNotificationPushOracleReadAdapter(null);
+  while (tempDirs.length > 0) {
+    const next = tempDirs.pop();
+    if (next) fs.rmSync(next, { recursive: true, force: true });
+  }
+});
+
+function createTempSqlitePath() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "oracle-notification-push-"));
+  tempDirs.push(dir);
+  return path.join(dir, "control-plane.sqlite");
+}
 
 function createSubscriptionRow(overrides: Partial<NotificationPushSubscriptionRow> = {}): NotificationPushSubscriptionRow {
   return {
@@ -307,6 +333,109 @@ describe("notificationPush service", () => {
       classifyNotificationPushError(Object.assign(new Error("gone"), { statusCode: 404 })),
     ).toMatchObject({ kind: "permanent", statusCode: 404 });
     expect(classifyNotificationPushError(new Error("temp"))).toMatchObject({ kind: "transient" });
+  });
+
+  it("reads notification payload and unread count from Oracle during quiet push dispatch", async () => {
+    const controlDb = openOracleControlPlaneDb({
+      sqlitePath: createTempSqlitePath(),
+    });
+    const db = createMockSupabase({
+      notifications: [],
+      notification_push_dispatch_queue: [
+        {
+          id: "dispatch_oracle_1",
+          notification_id: "notif_oracle_1",
+          user_id: "user_1",
+          status: "queued",
+          attempt_count: 0,
+          next_attempt_at: "2026-03-08T11:59:00.000Z",
+          last_error: null,
+          delivered_subscription_count: 0,
+          last_attempt_at: null,
+          sent_at: null,
+          created_at: "2026-03-08T11:58:00.000Z",
+          updated_at: "2026-03-08T11:58:00.000Z",
+        },
+      ],
+      notification_push_subscriptions: [createSubscriptionRow({ delivery_mode: "quiet_ios" })],
+    }) as any;
+
+    configureNotificationPushOracleReadAdapter({
+      countUnreadNotificationsForUser: async (input) => countUnreadOracleNotificationsForUser({
+        controlDb,
+        userId: input.userId,
+      }),
+      getNotificationById: async (input) => {
+        const row = await getOracleNotificationRowById({
+          controlDb,
+          notificationId: input.notificationId,
+        });
+        if (!row) return null;
+        return {
+          id: row.id,
+          user_id: row.user_id,
+          type: row.type,
+          title: row.title,
+          body: row.body,
+          link_path: row.link_path,
+          created_at: row.created_at,
+        };
+      },
+    });
+
+    try {
+      await upsertOracleNotificationRow({
+        controlDb,
+        row: {
+          id: "notif_oracle_1",
+          user_id: "user_1",
+          type: "generation_failed",
+          title: "Generation failed",
+          body: "Retry later.",
+          link_path: "/wall",
+          metadata: {},
+        },
+        nowIso: "2026-03-08T12:00:00.000Z",
+      });
+
+      await upsertOracleNotificationRow({
+        controlDb,
+        row: {
+          id: "notif_oracle_2",
+          user_id: "user_1",
+          type: "generation_succeeded",
+          title: "Generated",
+          body: "Ready.",
+          link_path: "/wall",
+          metadata: {},
+        },
+        nowIso: "2026-03-08T12:01:00.000Z",
+      });
+
+      const sendPushNotification = vi.fn(async () => undefined);
+
+      await processNotificationPushDispatchBatch(db, {
+        maxAttempts: 3,
+        processingStaleMs: 300_000,
+        batchSize: 10,
+        quietIosEnabled: true,
+        sendPushNotification,
+        now: () => new Date("2026-03-08T12:02:00.000Z"),
+      });
+
+      expect(sendPushNotification).toHaveBeenCalledTimes(1);
+      expect(sendPushNotification.mock.calls[0]?.[1]).toMatchObject({
+        notification_id: "notif_oracle_1",
+        delivery_mode: "quiet_ios",
+        unread_count: 2,
+      });
+      expect(db.state.notification_push_dispatch_queue[0]).toMatchObject({
+        status: "sent",
+        delivered_subscription_count: 1,
+      });
+    } finally {
+      await controlDb.close();
+    }
   });
 
   it("includes quiet delivery metadata and unread count for quiet iPhone subscriptions", async () => {

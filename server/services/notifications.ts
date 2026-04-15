@@ -80,6 +80,15 @@ type NotificationOracleWriteAdapter = {
     row: NotificationRow;
     nowIso?: string;
   }) => Promise<NotificationRow | null>;
+  listNotificationsForUser?: (input: {
+    userId: string;
+    limit: number;
+    cursor?: { createdAt: string; id: string } | null;
+  }) => Promise<{
+    items: NotificationRow[];
+    unread_count: number;
+    next_cursor: { createdAt: string; id: string } | null;
+  }>;
   markNotificationRead: (input: {
     userId: string;
     notificationId: string;
@@ -358,6 +367,21 @@ export async function listNotificationsForUser(
   if (!userId) throw new Error('NOTIFICATION_USER_REQUIRED');
   const limit = clampInt(Number(input.limit || 20), 1, 50);
   const cursor = decodeCursor(input.cursor);
+
+  if (notificationOracleWriteAdapter?.listNotificationsForUser) {
+    const oraclePage = await notificationOracleWriteAdapter.listNotificationsForUser({
+      userId,
+      limit,
+      cursor,
+    });
+    return {
+      items: oraclePage.items,
+      unread_count: oraclePage.unread_count,
+      next_cursor: oraclePage.next_cursor
+        ? encodeCursor(oraclePage.next_cursor.createdAt, oraclePage.next_cursor.id)
+        : null,
+    };
+  }
 
   let query = db
     .from('notifications')
