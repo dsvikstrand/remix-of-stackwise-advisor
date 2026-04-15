@@ -2,6 +2,9 @@
 
 Status: `on-pause`
 
+Update note 2026-04-15:
+- Notifications ownership Pass 1 now lands notification writes and read-state mutations in Oracle-first control-plane state while keeping a Supabase compatibility shadow for inbox reads and push-dispatch enqueue during the active cutover.
+
 Update note 2026-04-02:
 - Source-item ownership Pass 1 now removes Supabase `source_items` from Oracle restart/bootstrap input in `primary`: Oracle source-item truth stays in `source_item_ledger_state`, and Oracle product bootstrap mirrors recent source rows from that ledger instead of rereading Supabase source rows.
 - Source-item ownership Pass 2 now removes normal-runtime Supabase `source_items` writes in `primary`: shared source-item insert/upsert and metadata/view-count updates write Oracle source-item ledger + Oracle product-source mirror only.

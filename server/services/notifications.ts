@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 type DbClient = SupabaseClient<any, 'public', any>;
@@ -64,6 +65,7 @@ export type NotificationEvent =
     };
 
 type NotificationInsertInput = {
+  id?: string | null;
   userId: string;
   type: NotificationType;
   title: string;
@@ -71,6 +73,22 @@ type NotificationInsertInput = {
   linkPath?: string | null;
   metadata?: Record<string, unknown>;
   dedupeKey?: string | null;
+};
+
+type NotificationOracleWriteAdapter = {
+  upsertNotification: (input: {
+    row: NotificationRow;
+    nowIso?: string;
+  }) => Promise<NotificationRow | null>;
+  markNotificationRead: (input: {
+    userId: string;
+    notificationId: string;
+    readAt?: string;
+  }) => Promise<{ id: string; is_read: boolean; read_at: string | null } | null>;
+  markAllNotificationsRead: (input: {
+    userId: string;
+    readAt?: string;
+  }) => Promise<{ updated_count: number; read_at: string }>;
 };
 
 type NotificationEventBuilder<TEvent extends NotificationEvent> = (
@@ -83,6 +101,7 @@ const eventBuilders: {
   generation_started: buildGenerationStartedEvent,
   generation_terminal: buildGenerationTerminalEvent,
 };
+let notificationOracleWriteAdapter: NotificationOracleWriteAdapter | null = null;
 
 function clampInt(value: number, min: number, max: number) {
   if (!Number.isFinite(value)) return min;
@@ -115,30 +134,127 @@ function buildCursorFilter(cursor: { createdAt: string; id: string } | null) {
   return `created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`;
 }
 
+function buildNotificationRow(input: NotificationInsertInput, nowIso: string): NotificationRow {
+  return {
+    id: String(input.id || '').trim() || randomUUID(),
+    user_id: String(input.userId || '').trim(),
+    type: input.type,
+    title: String(input.title || '').trim() || 'Notification',
+    body: String(input.body || '').trim() || '',
+    link_path: String(input.linkPath || '').trim() || null,
+    metadata: input.metadata || {},
+    is_read: false,
+    read_at: null,
+    created_at: nowIso,
+    updated_at: nowIso,
+    dedupe_key: String(input.dedupeKey || '').trim() || null,
+  };
+}
+
+async function shadowUpsertNotificationRow(
+  db: DbClient,
+  row: NotificationRow,
+): Promise<NotificationRow | null> {
+  const { data, error } = await db
+    .from('notifications')
+    .upsert({
+      id: row.id,
+      user_id: row.user_id,
+      type: row.type,
+      title: row.title,
+      body: row.body,
+      link_path: row.link_path,
+      metadata: row.metadata,
+      is_read: row.is_read,
+      read_at: row.read_at,
+      dedupe_key: row.dedupe_key,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    }, { onConflict: 'user_id,dedupe_key', ignoreDuplicates: true })
+    .select('id, user_id, type, title, body, link_path, metadata, is_read, read_at, created_at, updated_at, dedupe_key')
+    .maybeSingle();
+  if (error) throw error;
+  return (data || null) as NotificationRow | null;
+}
+
+async function shadowMarkNotificationRead(
+  db: DbClient,
+  input: {
+    userId: string;
+    notificationId: string;
+    readAt: string;
+  },
+) {
+  const { data, error } = await db
+    .from('notifications')
+    .update({
+      is_read: true,
+      read_at: input.readAt,
+    })
+    .eq('id', input.notificationId)
+    .eq('user_id', input.userId)
+    .select('id, is_read, read_at')
+    .maybeSingle();
+  if (error) throw error;
+  return data
+    ? {
+        id: data.id as string,
+        is_read: Boolean(data.is_read),
+        read_at: (data.read_at as string | null) || input.readAt,
+      }
+    : null;
+}
+
+async function shadowMarkAllNotificationsRead(
+  db: DbClient,
+  input: {
+    userId: string;
+    readAt: string;
+  },
+) {
+  const { data, error } = await db
+    .from('notifications')
+    .update({
+      is_read: true,
+      read_at: input.readAt,
+    })
+    .eq('user_id', input.userId)
+    .eq('is_read', false)
+    .select('id');
+  if (error) throw error;
+
+  return {
+    updated_count: (data || []).length,
+    read_at: input.readAt,
+  };
+}
+
+export function configureNotificationOracleWriteAdapter(adapter: NotificationOracleWriteAdapter | null) {
+  notificationOracleWriteAdapter = adapter;
+}
+
 export async function createNotification(
   db: DbClient,
   input: NotificationInsertInput,
 ): Promise<NotificationRow | null> {
   const userId = String(input.userId || '').trim();
   if (!userId) throw new Error('NOTIFICATION_USER_REQUIRED');
+  const nowIso = new Date().toISOString();
+  const row = buildNotificationRow({
+    ...input,
+    userId,
+  }, nowIso);
 
-  const payload = {
-    user_id: userId,
-    type: input.type,
-    title: String(input.title || '').trim() || 'Notification',
-    body: String(input.body || '').trim() || '',
-    link_path: String(input.linkPath || '').trim() || null,
-    metadata: input.metadata || {},
-    dedupe_key: String(input.dedupeKey || '').trim() || null,
-  };
+  if (notificationOracleWriteAdapter) {
+    const oracleRow = await notificationOracleWriteAdapter.upsertNotification({
+      row,
+      nowIso,
+    });
+    await shadowUpsertNotificationRow(db, oracleRow || row);
+    return oracleRow || row;
+  }
 
-  const { data, error } = await db
-    .from('notifications')
-    .upsert(payload, { onConflict: 'user_id,dedupe_key', ignoreDuplicates: true })
-    .select('id, user_id, type, title, body, link_path, metadata, is_read, read_at, created_at, updated_at, dedupe_key')
-    .maybeSingle();
-  if (error) throw error;
-  return (data || null) as NotificationRow | null;
+  return shadowUpsertNotificationRow(db, row);
 }
 
 function buildGenerationStartedEvent(
@@ -287,25 +403,25 @@ export async function markNotificationRead(
   if (!userId || !notificationId) throw new Error('NOTIFICATION_MARK_READ_INVALID_INPUT');
 
   const readAt = new Date().toISOString();
-  const { data, error } = await db
-    .from('notifications')
-    .update({
-      is_read: true,
-      read_at: readAt,
-    })
-    .eq('id', notificationId)
-    .eq('user_id', userId)
-    .select('id, is_read, read_at')
-    .maybeSingle();
-  if (error) throw error;
+  if (notificationOracleWriteAdapter) {
+    const oracleResult = await notificationOracleWriteAdapter.markNotificationRead({
+      userId,
+      notificationId,
+      readAt,
+    });
+    const shadowResult = await shadowMarkNotificationRead(db, {
+      userId,
+      notificationId,
+      readAt,
+    });
+    return oracleResult || shadowResult;
+  }
 
-  return data
-    ? {
-        id: data.id as string,
-        is_read: Boolean(data.is_read),
-        read_at: (data.read_at as string | null) || readAt,
-      }
-    : null;
+  return shadowMarkNotificationRead(db, {
+    userId,
+    notificationId,
+    readAt,
+  });
 }
 
 export async function markAllNotificationsRead(
@@ -316,19 +432,15 @@ export async function markAllNotificationsRead(
   if (!userId) throw new Error('NOTIFICATION_USER_REQUIRED');
 
   const readAt = new Date().toISOString();
-  const { data, error } = await db
-    .from('notifications')
-    .update({
-      is_read: true,
-      read_at: readAt,
-    })
-    .eq('user_id', userId)
-    .eq('is_read', false)
-    .select('id');
-  if (error) throw error;
+  if (notificationOracleWriteAdapter) {
+    await notificationOracleWriteAdapter.markAllNotificationsRead({
+      userId,
+      readAt,
+    });
+  }
 
-  return {
-    updated_count: (data || []).length,
-    read_at: readAt,
-  };
+  return shadowMarkAllNotificationsRead(db, {
+    userId,
+    readAt,
+  });
 }

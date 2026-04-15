@@ -1,7 +1,39 @@
-import { describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 
-import { createNotificationFromEvent, listNotificationsForUser } from '../../server/services/notifications';
+import { openOracleControlPlaneDb } from '../../server/services/oracleControlPlaneDb';
+import {
+  configureNotificationOracleWriteAdapter,
+  createNotificationFromEvent,
+  listNotificationsForUser,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from '../../server/services/notifications';
+import {
+  getOracleNotificationRowById,
+  upsertOracleNotificationRow,
+  markOracleNotificationRead,
+  markAllOracleNotificationsRead,
+} from '../../server/services/oracleNotifications';
 import { createMockSupabase } from './helpers/mockSupabase';
+
+const tempDirs: string[] = [];
+
+afterEach(() => {
+  configureNotificationOracleWriteAdapter(null);
+  while (tempDirs.length > 0) {
+    const next = tempDirs.pop();
+    if (next) fs.rmSync(next, { recursive: true, force: true });
+  }
+});
+
+function createTempSqlitePath() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oracle-notifications-service-'));
+  tempDirs.push(dir);
+  return path.join(dir, 'control-plane.sqlite');
+}
 
 describe('notifications service', () => {
   it('creates separate generation_started notifications for different job ids', async () => {
@@ -121,5 +153,81 @@ describe('notifications service', () => {
         duration_seconds: 42,
       },
     });
+  });
+
+  it('writes notifications to Oracle while shadowing Supabase for current reads', async () => {
+    const controlDb = openOracleControlPlaneDb({
+      sqlitePath: createTempSqlitePath(),
+    });
+    const db = createMockSupabase({
+      notifications: [],
+    }) as any;
+
+    configureNotificationOracleWriteAdapter({
+      upsertNotification: async (input) => upsertOracleNotificationRow({
+        controlDb,
+        row: input.row,
+        nowIso: input.nowIso,
+      }),
+      markNotificationRead: async (input) => markOracleNotificationRead({
+        controlDb,
+        userId: input.userId,
+        notificationId: input.notificationId,
+        readAt: input.readAt,
+      }),
+      markAllNotificationsRead: async (input) => markAllOracleNotificationsRead({
+        controlDb,
+        userId: input.userId,
+        readAt: input.readAt,
+      }),
+    });
+
+    try {
+      const created = await createNotificationFromEvent(db, {
+        kind: 'generation_started',
+        userId: 'user_1',
+        jobId: 'job_oracle_1',
+        scope: 'search_video_generate',
+        queuedCount: 1,
+        itemTitle: 'Oracle first',
+      });
+
+      expect(created).toBeTruthy();
+      expect(db.state.notifications).toHaveLength(1);
+      expect(db.state.notifications[0]?.id).toBe(created?.id);
+
+      const oracleRow = await getOracleNotificationRowById({
+        controlDb,
+        notificationId: String(created?.id || ''),
+      });
+      expect(oracleRow).toMatchObject({
+        id: created?.id,
+        user_id: 'user_1',
+        type: 'generation_started',
+      });
+
+      const marked = await markNotificationRead(db, {
+        userId: 'user_1',
+        notificationId: String(created?.id || ''),
+      });
+
+      expect(marked).toMatchObject({
+        id: created?.id,
+        is_read: true,
+      });
+
+      const oracleAfterRead = await getOracleNotificationRowById({
+        controlDb,
+        notificationId: String(created?.id || ''),
+      });
+      expect(oracleAfterRead?.is_read).toBe(true);
+
+      const markAll = await markAllNotificationsRead(db, {
+        userId: 'user_1',
+      });
+      expect(markAll.updated_count).toBe(0);
+    } finally {
+      await controlDb.close();
+    }
   });
 });

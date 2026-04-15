@@ -8,6 +8,8 @@
 - Canonical feed model: `docs/app/mvp-feed-and-channel-model.md`.
 - Primary MVP journey: source input -> Home `For You` -> auto channel evaluation/publish.
 - Library/inventory routes are compatibility-only and not part of the core user journey.
+- Notifications ownership is in staged Oracle cutover:
+  - write-side notification state is now Oracle-first with Supabase compatibility shadowing while inbox reads and push enqueue remain on the existing path.
 
 ## Reference Status
 - Legacy ASS/agentic seeding material is archived for historical reference only:
@@ -138,6 +140,7 @@ a82) [have] Current PWA behavior is intentionally conservative: installability, 
 a83) [have] Installed-PWA web push is now implemented behind rollout flags and remains opt-in only from notification surfaces; the first eligible push types are `comment_reply`, `generation_succeeded`, and `generation_failed`.
 a84) [have] Installed-PWA push remains outside the normal live contract until backend runtime validation and device delivery proof are complete; Oracle control-plane recovery/inspection now uses the standardized OCI CLI workflow instead of repo-local note files.
 a85) [have] Wall/Explore/Channel/Search cards now prefer stored `blueprints.preview_summary` teaser text, preserving summary-like previews without loading canonical `sections_json` on list surfaces.
+a86) [have] Notifications ownership is now in staged Oracle cutover: write-side notification rows and read-state mutations land Oracle-first with Supabase compatibility shadowing, while inbox reads and push-dispatch enqueue stay on the current Supabase-backed path until the later read cutover.
 a86) [have] Blueprint YouTube refresh scheduling now batches pending-job detection by refresh kind/candidate set, and manual comments refresh no longer force-writes refresh state before reading an existing enabled row.
 a86a) [have] Blueprint YouTube comments refresh now skips the `blueprint_youtube_comments` rewrite when the normalized fetched snapshot is unchanged, reducing delete/reinsert churn without changing visible comment ordering or payload shape.
 a86aa) [have] The active comments cutover now keeps normal runtime blueprint YouTube comment refresh/write/read behavior on Oracle-backed comment state and a backend reader route; direct browser Supabase reads are no longer the intended steady-state path when the backend is configured.

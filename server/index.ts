@@ -313,6 +313,7 @@ import {
   type QueuePriorityTier,
 } from './services/queuePriority';
 import {
+  configureNotificationOracleWriteAdapter,
   createNotificationFromEvent,
   listNotificationsForUser,
   markAllNotificationsRead,
@@ -344,6 +345,11 @@ import {
   listOracleGenerationRunEvents,
 } from './services/oracleGenerationTrace';
 import { upsertOracleProviderCircuitRow } from './services/oracleProviderCircuitState';
+import {
+  markAllOracleNotificationsRead,
+  markOracleNotificationRead,
+  upsertOracleNotificationRow,
+} from './services/oracleNotifications';
 import {
   listOracleBlueprintYoutubeComments,
   replaceOracleBlueprintYoutubeCommentsSnapshot,
@@ -840,6 +846,35 @@ configureProviderCircuitOracleWriteAdapter(
             providerKey: input.providerKey,
             patch: input.patch,
             nowIso: input.nowIso,
+          });
+        },
+      }
+    : null,
+);
+
+configureNotificationOracleWriteAdapter(
+  oracleControlPlaneConfig.enabled && oracleControlPlane
+    ? {
+        async upsertNotification(input) {
+          return upsertOracleNotificationRow({
+            controlDb: oracleControlPlane,
+            row: input.row,
+            nowIso: input.nowIso,
+          });
+        },
+        async markNotificationRead(input) {
+          return markOracleNotificationRead({
+            controlDb: oracleControlPlane,
+            userId: input.userId,
+            notificationId: input.notificationId,
+            readAt: input.readAt,
+          });
+        },
+        async markAllNotificationsRead(input) {
+          return markAllOracleNotificationsRead({
+            controlDb: oracleControlPlane,
+            userId: input.userId,
+            readAt: input.readAt,
           });
         },
       }

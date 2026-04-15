@@ -138,6 +138,9 @@
   - User menu credit panel shows daily reset timing plus latest wallet ledger activity summary when available.
   - Header now includes an auth-only notifications bell inbox (reply + generation terminal notifications with read/read-all actions).
     - terminal unlock-generation failures now emit `generation_failed` from actual failed item counts, even when the underlying transcript/provider failure remains retryable.
+  - Notifications runtime ownership is now staged:
+    - write-side notification persistence and read-state mutations are Oracle-first through the control-plane store.
+    - current inbox reads and push-dispatch enqueue still depend on Supabase-backed `notifications` during the compatibility phase.
   - Installed-PWA push extension is now wired behind rollout gates:
     - explicit opt-in lives only in notification surfaces (`NotificationsBell`, `GenerationQueue`)
     - push enablement requires standalone mode, auth, browser push support, and feature/env flags

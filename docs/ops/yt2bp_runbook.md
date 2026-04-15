@@ -81,6 +81,10 @@
   - main runtime blueprint-tag reads now resolve through Oracle-backed rows for wall/channels/source-page/search-oriented surfaces instead of direct Supabase `blueprint_tags`.
   - coupled backend tag reads for auto-channel classification, channel feed/evaluate, and auto-banner now prefer Oracle rows and only fall back per-blueprint to Supabase for pre-cutover residue.
   - direct browser `blueprint_tags` readers/writers are still explicit cleanup residue and should be tracked separately from the main backend ownership path.
+- Current notifications cutover posture:
+  - notification writes and read-state mutations now land Oracle-first through control-plane `notification_state`.
+  - Supabase `notifications` remains the compatibility shadow during the active write-only phase because inbox reads and push-dispatch enqueue still depend on it.
+  - push dispatch is currently triggered by the existing Supabase `public.notifications` trigger, so do not remove the compatibility shadow until the explicit enqueue replacement lands.
 - Node runtime contract:
   - local repo baseline is Node `20.20.0` from `.nvmrc`
   - Oracle systemd is pinned to `/home/ubuntu/.nvm/versions/node/v20.20.0/bin/node`

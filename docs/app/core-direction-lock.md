@@ -11,6 +11,8 @@ Status: `canonical`
   - `docs/_archive/legacy-ass-agentic/design-docs/seed_ass_spec.md`
   - `docs/_archive/legacy-ass-agentic/schemas/ass_eval_config_schema.md`
 - Active product/runtime direction for `bleuV1` remains source-first YouTube-to-blueprint and is defined by this file plus canonical product/architecture docs.
+- Current notifications ownership posture:
+  - notification writes now land Oracle-first with a Supabase compatibility shadow so inbox reads and push enqueue remain stable during the active notifications cutover.
 
 ## One-line promise
 `bleuV1` gives you an automated feed of bite-sized blueprints from the media you follow, with automatic channel publishing for eligible items.

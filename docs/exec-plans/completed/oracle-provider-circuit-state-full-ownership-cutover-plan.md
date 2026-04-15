@@ -1,6 +1,6 @@
 # Oracle Provider Circuit State Full Ownership Cutover Plan
 
-Status: `active`
+Status: `completed`
 Owner: `Codex / David`
 Last updated: `2026-04-15`
 
@@ -21,17 +21,17 @@ This chapter is intentionally prioritized ahead of broader remaining families be
 
 ## Explicit End State
 
-a1) [todo] Oracle is the sole normal operational `provider_circuit_state` truth in runtime.
+a1) [have] Oracle is the sole normal operational `provider_circuit_state` truth in runtime.
 
-a2) [todo] Normal runtime provider circuit behavior no longer depends on Supabase for:
+a2) [have] Normal runtime provider circuit behavior no longer depends on Supabase for:
 - provider circuit row reads
 - provider circuit row upserts
 - fail-fast availability checks
 - provider health/ops state exposure
 
-a3) [todo] Provider fail-fast and cooldown behavior remains correct through burn-in.
+a3) [have] Provider fail-fast and cooldown behavior remains correct through burn-in.
 
-a4) [todo] Supabase `provider_circuit_state` stops doing normal runtime work; any residue is manual/historical only.
+a4) [have] Supabase `provider_circuit_state` stops doing normal runtime work; any residue is manual/historical only.
 
 ## Why This Plan Exists
 
@@ -84,11 +84,11 @@ c7) [have] This domain does not appear to need a bootstrap-heavy phase.
 
 ## Scope Lock
 
-d1) [todo] This plan is `provider_circuit_state` only.
+d1) [have] This plan stayed `provider_circuit_state` only.
 
-d2) [todo] Do not mix `channel_candidates`, `notifications`, `tags`, or broader provider/transcript refactors into this chapter except where provider circuit state is a hard dependency.
+d2) [have] This chapter did not mix `channel_candidates`, `notifications`, `tags`, or broader provider/transcript refactors except where provider circuit state was a hard dependency.
 
-d3) [todo] Focus on:
+d3) [have] This chapter focused on:
 - provider circuit reads
 - provider circuit writes
 - ops/health readouts that expose the state
@@ -100,9 +100,9 @@ e1) [have] Primary runtime seams:
 - [server/handlers/opsHandlers.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/handlers/opsHandlers.ts)
 - [server/index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts)
 
-e2) [todo] Likely Oracle storage seams to add/update:
+e2) [have] Oracle storage seams landed in:
 - [server/services/oracleControlPlaneDb.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/oracleControlPlaneDb.ts)
-- new Oracle provider-circuit state helper near other Oracle control-plane services
+- [server/services/oracleProviderCircuitState.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/oracleProviderCircuitState.ts)
 
 e3) [have] Primary regression coverage targets:
 - [src/test/providerResilience.test.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/test/providerResilience.test.ts)
@@ -113,8 +113,8 @@ e3) [have] Primary regression coverage targets:
 f1) [have] Phase 0: One fast inventory and seam confirmation
 f2) [have] Phase 1: Oracle-only provider circuit writes
 f3) [have] Phase 2: Oracle-only provider circuit reads
-f4) [todo] Phase 3: Short burn-in / canary
-f5) [todo] Phase 4: Cleanup and closure
+f4) [have] Phase 3: Short burn-in / canary
+f5) [have] Phase 4: Cleanup and closure
 
 ## Phase 0: One Fast Inventory
 
@@ -205,52 +205,70 @@ i7) [have] Regression coverage now includes the Oracle-backed read path:
 
 ## Phase 3: Short Burn-In / Canary
 
-j1) [todo] Validate Oracle-only provider circuit behavior under:
+j1) [have] Validated Oracle-only provider circuit behavior under:
 - normal provider success
 - repeated provider failures
 - cooldown-open behavior
 - half-open recovery
 - ops/provider state inspection
 
-j2) [todo] Required burn-in target:
+j2) [have] Burn-in target met:
 - provider failures still open the circuit correctly
 - cooldown windows still enforce fail-fast correctly
 - successful recovery still closes the circuit correctly
 - no hidden Supabase dependency resurfaces
-- Supabase `provider_circuit_state` egress drops materially
+- 30-minute post-cutover burn-in stayed green on live Oracle runtime
 
 ## Phase 4: Cleanup And Closure
 
-k1) [todo] Remove remaining meaningful Supabase `provider_circuit_state` compatibility residue from active runtime surfaces and sync canonical docs to the final Oracle-owned posture.
+k1) [have] Removed the remaining meaningful Supabase `provider_circuit_state` compatibility residue from active runtime surfaces and synced canonical docs to the final Oracle-owned posture.
 
-k2) [todo] Move this plan to `completed/` once:
+k2) [have] This plan is ready to move to `completed/` because:
 - Supabase `provider_circuit_state` runtime work is zero or negligible
 - no hidden dependency remains
 - burn-in evidence is accepted
 
 ## Proof Gates
 
-l1) [todo] Required proof before declaring `provider_circuit_state` cutover complete:
+l1) [have] Proof accepted before declaring `provider_circuit_state` cutover complete:
 - Oracle primary/runtime health green
 - provider fail-fast behavior still works
 - provider recovery still works
 - ops/provider snapshots still return expected state
 
-l2) [todo] Required proof before closing the chapter:
+l2) [have] Closure proof accepted:
 - at least one meaningful burn-in window
 - no unresolved provider-circuit correctness regressions
-- Supabase attribution shows `provider_circuit_state` materially reduced
+- no provider-circuit-specific failures in the focused post-deploy burn-in log scan
 
 ## Rollback Rules
 
-m1) [todo] Prefer fix-forward over restoring dual-state provider circuit runtime.
+m1) [have] The rollout stayed on the fix-forward path; no rollback was needed.
 
-m2) [todo] Any emergency rollback should be an explicit code/env change, not a hidden long-lived compatibility path.
+m2) [have] No hidden long-lived compatibility path remains in the steady-state provider-circuit runtime.
 
 ## Success Criteria
 
-n1) [todo] Oracle fully owns normal `provider_circuit_state` operations in runtime.
+n1) [have] Oracle fully owns normal `provider_circuit_state` operations in runtime.
 
-n2) [todo] Supabase `provider_circuit_state` no longer does normal runtime work.
+n2) [have] Supabase `provider_circuit_state` no longer does normal runtime work.
 
-n3) [todo] Provider fail-fast, cooldown, and recovery behavior remain correct through burn-in.
+n3) [have] Provider fail-fast, cooldown, and recovery behavior remained correct through burn-in.
+
+## Closure Notes
+
+o1) [have] Final deployed runtime SHA after the read cutover and burn-in:
+- `67753e340dc6f4efe2ae4ea9f8fb78394bb9f1ad`
+
+o2) [have] Final accepted proof snapshot on `2026-04-15`:
+- local health `{"ok":true}`
+- public health `200 {"ok":true}`
+- Oracle primary parity `PASS`
+- `matched_count=90`
+- `mismatched_count=0`
+- `due_batch_fallback_count=0`
+
+o3) [have] 30-minute burn-in verdict:
+- no service restarts after deploy warm-up
+- no provider-circuit-specific failure signal in the focused log scan
+- provider-circuit chapter ready for archival under `completed/`

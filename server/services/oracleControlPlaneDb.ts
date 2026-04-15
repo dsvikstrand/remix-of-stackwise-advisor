@@ -359,6 +359,21 @@ type ProviderCircuitStateTable = {
   updated_at: string;
 };
 
+type NotificationStateTable = {
+  id: string;
+  user_id: string;
+  type: string;
+  title: string;
+  body: string;
+  link_path: string | null;
+  metadata_json: string;
+  is_read: number;
+  read_at: string | null;
+  dedupe_key: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 type ProductFeedStateTable = {
   id: string;
   user_id: string;
@@ -391,6 +406,7 @@ export type OracleControlPlaneDatabase = {
   blueprint_youtube_comment_state: BlueprintYoutubeCommentStateTable;
   blueprint_tag_state: BlueprintTagStateTable;
   provider_circuit_state: ProviderCircuitStateTable;
+  notification_state: NotificationStateTable;
   product_subscription_state: ProductSubscriptionStateTable;
   product_source_item_state: ProductSourceItemStateTable;
   product_unlock_state: ProductUnlockStateTable;
@@ -846,6 +862,30 @@ CREATE INDEX IF NOT EXISTS idx_provider_circuit_state_state
 
 CREATE INDEX IF NOT EXISTS idx_provider_circuit_state_cooldown
   ON provider_circuit_state (cooldown_until, updated_at);
+
+CREATE TABLE IF NOT EXISTS notification_state (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  link_path TEXT,
+  metadata_json TEXT NOT NULL,
+  is_read INTEGER NOT NULL DEFAULT 0,
+  read_at TEXT,
+  dedupe_key TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_state_user_dedupe
+  ON notification_state (user_id, dedupe_key);
+
+CREATE INDEX IF NOT EXISTS idx_notification_state_user_created
+  ON notification_state (user_id, created_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS idx_notification_state_user_read_created
+  ON notification_state (user_id, is_read, created_at DESC, id DESC);
 
 CREATE TABLE IF NOT EXISTS product_subscription_state (
   id TEXT PRIMARY KEY,
