@@ -222,6 +222,9 @@
   - Durable generation trace writes are also slimmer:
     - generation run/event writes no longer request returned row payloads when callers do not consume them
     - event sequencing now reuses a per-run in-process cursor instead of re-reading the latest `seq` from Supabase before every event insert
+  - Provider circuit runtime now also has an Oracle-owned write path in `primary`:
+    - provider success/failure/open/close mutations persist to local `provider_circuit_state`
+    - provider-availability reads and ops queue-health snapshots remain on the existing reader path until the follow-up read cutover
   - Legacy generation compatibility endpoints (auth):
     - `GET /api/generation/tier-access`
     - `GET /api/blueprints/:id/variants`

@@ -158,6 +158,7 @@ a92a) [have] The default one-step YT2BP prompt contract is now `docs/golden_blue
 a92b) [have] Display/render surfaces now label that final section as `Caveats`, while the runtime/storage field remains `open_questions` and legacy `Open Questions` labels remain accepted as compatibility aliases.
 a92c) [have] In `llm_native` mode, YT2BP retries now stay focused on blocking structure/shape failures; `TAKEAWAYS_TOO_LONG` is still logged for telemetry but no longer triggers regeneration on its own.
 a92d) [have] Main backend blueprint-tag ownership now writes tag joins into Oracle `blueprint_tag_state` for blueprint creation and channel publish flows. Oracle bootstrap seeds existing joins into `blueprint_tag_state`, and current wall/channel/source-page/search-oriented runtime reads now resolve through Oracle-backed tag rows instead of direct Supabase `blueprint_tags`.
+a92e) [have] Provider-circuit-state Pass 1 now keeps normal runtime circuit writes on Oracle control-plane state in `primary`: provider success/failure/open/close mutations persist to local Oracle-backed `provider_circuit_state`, while provider-availability reads and `GET /api/ops/queue/health` snapshots remain on the existing reader path until the later cutover.
 
 ## Core Model
 b1) `Source Item`

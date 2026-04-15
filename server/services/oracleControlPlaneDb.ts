@@ -348,6 +348,17 @@ type BlueprintTagStateTable = {
   updated_at: string;
 };
 
+type ProviderCircuitStateTable = {
+  provider_key: string;
+  state: string;
+  opened_at: string | null;
+  cooldown_until: string | null;
+  failure_count: number;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 type ProductFeedStateTable = {
   id: string;
   user_id: string;
@@ -379,6 +390,7 @@ export type OracleControlPlaneDatabase = {
   generation_run_event_state: GenerationRunEventStateTable;
   blueprint_youtube_comment_state: BlueprintYoutubeCommentStateTable;
   blueprint_tag_state: BlueprintTagStateTable;
+  provider_circuit_state: ProviderCircuitStateTable;
   product_subscription_state: ProductSubscriptionStateTable;
   product_source_item_state: ProductSourceItemStateTable;
   product_unlock_state: ProductUnlockStateTable;
@@ -817,6 +829,23 @@ CREATE INDEX IF NOT EXISTS idx_blueprint_tag_state_blueprint_slug
 
 CREATE INDEX IF NOT EXISTS idx_blueprint_tag_state_slug
   ON blueprint_tag_state (tag_slug, updated_at);
+
+CREATE TABLE IF NOT EXISTS provider_circuit_state (
+  provider_key TEXT PRIMARY KEY,
+  state TEXT NOT NULL,
+  opened_at TEXT,
+  cooldown_until TEXT,
+  failure_count INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_provider_circuit_state_state
+  ON provider_circuit_state (state, updated_at);
+
+CREATE INDEX IF NOT EXISTS idx_provider_circuit_state_cooldown
+  ON provider_circuit_state (cooldown_until, updated_at);
 
 CREATE TABLE IF NOT EXISTS product_subscription_state (
   id TEXT PRIMARY KEY,

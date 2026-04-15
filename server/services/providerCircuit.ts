@@ -15,6 +15,14 @@ type ProviderCircuitRow = {
   updated_at: string;
 };
 
+type ProviderCircuitOracleWriteAdapter = {
+  upsertRow: (input: {
+    providerKey: string;
+    patch: Partial<ProviderCircuitRow>;
+    nowIso?: string;
+  }) => Promise<ProviderCircuitRow | null>;
+};
+
 const PROVIDER_CIRCUIT_FAILURE_THRESHOLD = clampInt(
   process.env.PROVIDER_CIRCUIT_FAILURE_THRESHOLD,
   5,
@@ -28,6 +36,7 @@ const PROVIDER_CIRCUIT_COOLDOWN_SECONDS = clampInt(
   3600,
 );
 const PROVIDER_FAIL_FAST_MODE = /^(1|true|on)$/i.test(String(process.env.PROVIDER_FAIL_FAST_MODE || 'false'));
+let providerCircuitOracleWriteAdapter: ProviderCircuitOracleWriteAdapter | null = null;
 
 function clampInt(raw: unknown, fallback: number, min: number, max: number) {
   const parsed = Number(raw);
@@ -57,8 +66,15 @@ async function upsertCircuitRow(
   providerKey: string,
   patch: Partial<ProviderCircuitRow>,
 ) {
-  if (!db) return null;
   const nowIso = new Date().toISOString();
+  if (providerCircuitOracleWriteAdapter) {
+    return providerCircuitOracleWriteAdapter.upsertRow({
+      providerKey,
+      patch,
+      nowIso,
+    });
+  }
+  if (!db) return null;
   const { data, error } = await db
     .from('provider_circuit_state')
     .upsert(
@@ -86,6 +102,10 @@ export class ProviderCircuitOpenError extends Error {
     super(message);
     this.code = 'PROVIDER_DEGRADED';
   }
+}
+
+export function configureProviderCircuitOracleWriteAdapter(adapter: ProviderCircuitOracleWriteAdapter | null) {
+  providerCircuitOracleWriteAdapter = adapter;
 }
 
 export function providerFailFastModeEnabled() {

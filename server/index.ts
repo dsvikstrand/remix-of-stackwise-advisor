@@ -283,7 +283,11 @@ import {
 } from './services/feedSuppression';
 import type { BlueprintSectionsV1 } from './services/blueprintSections';
 import { evaluateLlmNativeGate, normalizeSummaryVariantText } from './services/llmNativeQualityGate';
-import { ProviderCircuitOpenError, getProviderCircuitSnapshot } from './services/providerCircuit';
+import {
+  ProviderCircuitOpenError,
+  configureProviderCircuitOracleWriteAdapter,
+  getProviderCircuitSnapshot,
+} from './services/providerCircuit';
 import {
   getProviderRetryDefaults,
   resolveProviderRetryDefaultsForRequestClass,
@@ -339,6 +343,7 @@ import {
   clearOracleGenerationTraceSeqCursor,
   listOracleGenerationRunEvents,
 } from './services/oracleGenerationTrace';
+import { upsertOracleProviderCircuitRow } from './services/oracleProviderCircuitState';
 import {
   listOracleBlueprintYoutubeComments,
   replaceOracleBlueprintYoutubeCommentsSnapshot,
@@ -814,6 +819,21 @@ configureGenerationTraceOracleWriteAdapter(
             runId: input.runId,
             limit: input.limit,
             cursor: input.cursor,
+          });
+        },
+      }
+    : null,
+);
+
+configureProviderCircuitOracleWriteAdapter(
+  oracleControlPlaneConfig.enabled && oracleControlPlane
+    ? {
+        async upsertRow(input) {
+          return upsertOracleProviderCircuitRow({
+            controlDb: oracleControlPlane,
+            providerKey: input.providerKey,
+            patch: input.patch,
+            nowIso: input.nowIso,
           });
         },
       }

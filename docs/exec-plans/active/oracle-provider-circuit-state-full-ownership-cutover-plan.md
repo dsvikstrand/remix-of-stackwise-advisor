@@ -110,8 +110,8 @@ e3) [have] Primary regression coverage targets:
 
 ## 48h Cutover Shape
 
-f1) [todo] Phase 0: One fast inventory and seam confirmation
-f2) [todo] Phase 1: Oracle-only provider circuit writes
+f1) [have] Phase 0: One fast inventory and seam confirmation
+f2) [have] Phase 1: Oracle-only provider circuit writes
 f3) [todo] Phase 2: Oracle-only provider circuit reads
 f4) [todo] Phase 3: Short burn-in / canary
 f5) [todo] Phase 4: Cleanup and closure
@@ -156,11 +156,27 @@ g5) [have] Exact second implementation wave:
 
 ## Phase 1: Oracle-Only Provider Circuit Writes
 
-h1) [todo] Replace Supabase-backed `provider_circuit_state` upserts with Oracle-backed state writes.
+h1) [have] Replaced Supabase-backed `provider_circuit_state` upserts with Oracle-backed state writes.
 
-h2) [todo] Keep caller behavior stable while changing only the write owner.
+h2) [have] Kept caller behavior stable while changing only the write owner.
 
-h3) [todo] After this phase, Supabase should no longer matter to normal runtime provider circuit write correctness.
+h3) [have] After this phase, Supabase no longer matters to normal runtime provider circuit write correctness.
+
+h4) [have] Landed in this wave:
+- Oracle control-plane now has a dedicated `provider_circuit_state` table
+- write-side provider circuit transitions now persist to Oracle-backed state
+- caller behavior in [providerResilience.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/providerResilience.ts) stayed unchanged
+- read-side lookup and ops snapshots remain on Supabase for this pass only
+
+h5) [have] Primary code seams for Pass 1:
+- [server/services/oracleControlPlaneDb.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/oracleControlPlaneDb.ts)
+- [server/services/oracleProviderCircuitState.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/oracleProviderCircuitState.ts)
+- [server/services/providerCircuit.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/services/providerCircuit.ts)
+- [server/index.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/server/index.ts)
+
+h6) [have] Regression coverage added for Pass 1:
+- [src/test/oracleProviderCircuitState.test.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/test/oracleProviderCircuitState.test.ts)
+- [src/test/providerCircuit.test.ts](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/src/test/providerCircuit.test.ts)
 
 ## Phase 2: Oracle-Only Provider Circuit Reads
 
