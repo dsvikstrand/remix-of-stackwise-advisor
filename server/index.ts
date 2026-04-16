@@ -4658,6 +4658,7 @@ async function readSupabaseBlueprintTagRows(
   db: ReturnType<typeof createClient>,
   input: {
     blueprintIds: string[];
+    action?: string;
   },
 ) {
   const blueprintIds = [...new Set((input.blueprintIds || []).map((value) => String(value || '').trim()).filter(Boolean))];
@@ -4668,6 +4669,12 @@ async function readSupabaseBlueprintTagRows(
       tag_slug: string;
     }>;
   }
+
+  console.log('[blueprint_tags_remaining_read]', JSON.stringify({
+    action: String(input.action || 'read_supabase_blueprint_tag_rows'),
+    blueprint_id_count: blueprintIds.length,
+    oracle_control_plane_enabled: Boolean(oracleControlPlane),
+  }));
 
   const { data, error } = await db
     .from('blueprint_tags')
@@ -4717,7 +4724,10 @@ async function listBlueprintTagRowsOracleAware(
   }
 
   if (!oracleControlPlane) {
-    return readSupabaseBlueprintTagRows(db, { blueprintIds });
+    return readSupabaseBlueprintTagRows(db, {
+      blueprintIds,
+      action: 'list_blueprint_tag_rows_oracle_aware_fallback',
+    });
   }
 
   const oracleRows = await listOracleBlueprintTagRows({
@@ -4751,6 +4761,7 @@ async function listBlueprintTagSlugsOracleAware(
 
   const rows = await readSupabaseBlueprintTagRows(db, {
     blueprintIds: [blueprintId],
+    action: 'list_blueprint_tag_slugs_oracle_aware_fallback',
   });
   return Array.from(new Set(
     rows
@@ -4777,6 +4788,12 @@ async function listBlueprintTagRowsByFiltersOracleAware(
   }
 
   if (!oracleControlPlane) {
+    console.log('[blueprint_tags_remaining_read]', JSON.stringify({
+      action: 'list_blueprint_tag_rows_by_filters_oracle_aware_fallback',
+      tag_id_count: tagIds.length,
+      tag_slug_count: tagSlugs.length,
+      oracle_control_plane_enabled: Boolean(oracleControlPlane),
+    }));
     let resolvedTagIds = [...tagIds];
     if (tagSlugs.length > 0) {
       const { data: tagRows, error: tagError } = await db
