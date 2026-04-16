@@ -83,73 +83,23 @@ function toAiCreditsView(credits: CreditsResponse): AiCreditsView {
   };
 }
 
-function toFallbackCreditsFromWallet(wallet: {
-  balance: number;
-  capacity: number;
-  refill_rate_per_sec: number;
-  last_refill_at: string;
-}): CreditsResponse {
-  const nowMs = Date.now();
-  const nextReset = new Date();
-  nextReset.setUTCHours(24, 0, 0, 0);
-  const secondsToReset = Math.max(0, Math.ceil((nextReset.getTime() - nowMs) / 1000));
-
-  return {
-    remaining: wallet.balance,
-    limit: wallet.capacity,
-    resetAt: nextReset.toISOString(),
-    bypass: false,
-    balance: wallet.balance,
-    capacity: wallet.capacity,
-    daily_grant: wallet.capacity,
-    next_reset_at: nextReset.toISOString(),
-    seconds_to_reset: secondsToReset,
-    plan: null,
-    refill_rate_per_sec: wallet.refill_rate_per_sec,
-    seconds_to_full: 0,
-    generation_daily_limit: wallet.capacity,
-    generation_daily_effective_limit: wallet.capacity,
-    generation_daily_used: Math.max(0, Number((wallet.capacity - wallet.balance).toFixed(2))),
-    generation_daily_remaining: wallet.balance,
-    generation_daily_reset_at: nextReset.toISOString(),
-    generation_daily_bypass: false,
-    generation_plan: null,
-  };
-}
-
-async function fetchCreditsFromWalletFallback(): Promise<CreditsResponse> {
-  const { data: wallet, error } = await supabase
-    .from('user_credit_wallets')
-    .select('balance, capacity, refill_rate_per_sec, last_refill_at')
-    .maybeSingle();
-
-  if (error) {
-    throw new Error('Unable to load credits');
+export function getAiCreditsBackendUrl() {
+  const backendUrl = String(config.agenticBackendUrl || '').trim();
+  if (!backendUrl) {
+    throw new Error('CREDITS_UNAVAILABLE');
   }
-
-  if (!wallet) {
-    throw new Error('Unable to load credits');
-  }
-
-  return toFallbackCreditsFromWallet({
-    balance: Number(wallet.balance || 0),
-    capacity: Number(wallet.capacity || 0),
-    refill_rate_per_sec: Number(wallet.refill_rate_per_sec || 0),
-    last_refill_at: String(wallet.last_refill_at || new Date().toISOString()),
-  });
+  return backendUrl.replace(/\/$/, '');
 }
 
 async function fetchCredits(): Promise<CreditsResponse> {
-  if (!config.agenticBackendUrl) {
-    return fetchCreditsFromWalletFallback();
-  }
+  const backendUrl = getAiCreditsBackendUrl();
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;
   if (!token) {
     throw new Error('Not authenticated');
   }
 
-  const url = `${config.agenticBackendUrl!.replace(/\/$/, '')}/api/credits`;
+  const url = `${backendUrl}/api/credits`;
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), 8_000);
   try {
