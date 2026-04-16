@@ -8,6 +8,8 @@ type WalletRow = {
   capacity: string | number;
   refill_rate_per_sec: string | number;
   last_refill_at: string;
+  created_at?: string;
+  updated_at?: string;
 };
 
 type LedgerRow = {
@@ -183,10 +185,63 @@ export type CreditLedgerContext = {
   metadata?: Record<string, unknown>;
 };
 
+type CreditWalletOracleAdapter = {
+  getWalletRow(userId: string): Promise<WalletRow | null>;
+  listWalletRowsByUserIds(userIds: string[]): Promise<WalletRow[]>;
+  upsertWalletRow(row: WalletRow): Promise<WalletRow>;
+  compareAndSetWalletRow(input: {
+    userId: string;
+    expectedBalance: number;
+    expectedLastRefillAt: string;
+    nextRow: WalletRow;
+  }): Promise<WalletRow | null>;
+};
+
+let creditWalletOracleAdapter: CreditWalletOracleAdapter | null = null;
+
+export function configureCreditWalletOracleAdapter(adapter: CreditWalletOracleAdapter | null) {
+  creditWalletOracleAdapter = adapter;
+}
+
+async function getWalletRowFromSupabase(db: DbClient, userId: string) {
+  const { data, error } = await db
+    .from('user_credit_wallets')
+    .select('user_id, balance, capacity, refill_rate_per_sec, last_refill_at, created_at, updated_at')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data || null) as WalletRow | null;
+}
+
 async function ensureWalletRow(db: DbClient, userId: string) {
   const nowMs = Date.now();
   const { windowStartIso } = computeDailyWindow(nowMs);
   const entitlement = await resolveWalletEntitlement(db, userId);
+  const existingOracle = creditWalletOracleAdapter
+    ? await creditWalletOracleAdapter.getWalletRow(userId)
+    : null;
+  if (existingOracle) return existingOracle;
+
+  const existingSupabase = await getWalletRowFromSupabase(db, userId);
+  const seedRow: WalletRow = existingSupabase || {
+    user_id: userId,
+    balance: entitlement.dailyGrant || DEFAULT_INITIAL_BALANCE,
+    capacity: entitlement.dailyGrant || DEFAULT_CAPACITY,
+    refill_rate_per_sec: DEFAULT_REFILL_RATE_PER_SEC,
+    last_refill_at: windowStartIso,
+    created_at: windowStartIso,
+    updated_at: windowStartIso,
+  };
+
+  if (creditWalletOracleAdapter) {
+    await creditWalletOracleAdapter.upsertWalletRow({
+      ...seedRow,
+      created_at: seedRow.created_at || seedRow.last_refill_at || windowStartIso,
+      updated_at: seedRow.updated_at || seedRow.last_refill_at || windowStartIso,
+    });
+    return;
+  }
+
   const { error } = await db
     .from('user_credit_wallets')
     .upsert({
@@ -200,13 +255,11 @@ async function ensureWalletRow(db: DbClient, userId: string) {
 }
 
 async function getWalletRow(db: DbClient, userId: string) {
-  const { data, error } = await db
-    .from('user_credit_wallets')
-    .select('user_id, balance, capacity, refill_rate_per_sec, last_refill_at')
-    .eq('user_id', userId)
-    .maybeSingle();
-  if (error) throw error;
-  return (data || null) as WalletRow | null;
+  if (creditWalletOracleAdapter) {
+    const row = await creditWalletOracleAdapter.getWalletRow(userId);
+    if (row) return row;
+  }
+  return getWalletRowFromSupabase(db, userId);
 }
 
 async function updateWalletRefill(db: DbClient, input: {
@@ -217,6 +270,23 @@ async function updateWalletRefill(db: DbClient, input: {
   nextCapacity: number;
   nowIso: string;
 }) {
+  if (creditWalletOracleAdapter) {
+    return creditWalletOracleAdapter.compareAndSetWalletRow({
+      userId: input.userId,
+      expectedBalance: input.fromBalance,
+      expectedLastRefillAt: input.fromLastRefillAt,
+      nextRow: {
+        user_id: input.userId,
+        balance: round2(input.nextBalance),
+        capacity: round2(input.nextCapacity),
+        refill_rate_per_sec: DEFAULT_REFILL_RATE_PER_SEC,
+        last_refill_at: input.nowIso,
+        created_at: input.fromLastRefillAt,
+        updated_at: input.nowIso,
+      },
+    });
+  }
+
   const { data, error } = await db
     .from('user_credit_wallets')
     .update({
@@ -232,6 +302,64 @@ async function updateWalletRefill(db: DbClient, input: {
     .maybeSingle();
   if (error) throw error;
   return (data || null) as WalletRow | null;
+}
+
+async function updateWalletBalance(db: DbClient, input: {
+  userId: string;
+  fromBalance: number;
+  fromLastRefillAt: string;
+  nextBalance: number;
+  currentCapacity: number;
+  currentRefillRatePerSec: number;
+  nowIso: string;
+}) {
+  if (creditWalletOracleAdapter) {
+    return creditWalletOracleAdapter.compareAndSetWalletRow({
+      userId: input.userId,
+      expectedBalance: input.fromBalance,
+      expectedLastRefillAt: input.fromLastRefillAt,
+      nextRow: {
+        user_id: input.userId,
+        balance: round2(input.nextBalance),
+        capacity: round2(input.currentCapacity),
+        refill_rate_per_sec: round6(input.currentRefillRatePerSec),
+        last_refill_at: input.nowIso,
+        created_at: input.fromLastRefillAt,
+        updated_at: input.nowIso,
+      },
+    });
+  }
+
+  const { data, error } = await db
+    .from('user_credit_wallets')
+    .update({
+      balance: round2(input.nextBalance),
+      last_refill_at: input.nowIso,
+    })
+    .eq('user_id', input.userId)
+    .eq('balance', round2(input.fromBalance))
+    .eq('last_refill_at', input.fromLastRefillAt)
+    .select('user_id, balance, capacity, refill_rate_per_sec, last_refill_at, created_at, updated_at')
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data || null) as WalletRow | null;
+}
+
+async function listWalletRowsByUserIds(db: DbClient, userIds: string[]) {
+  const normalizedUserIds = Array.from(new Set(userIds.map((value) => String(value || '').trim()).filter(Boolean)));
+  if (normalizedUserIds.length === 0) return [] as WalletRow[];
+
+  if (creditWalletOracleAdapter) {
+    return creditWalletOracleAdapter.listWalletRowsByUserIds(normalizedUserIds);
+  }
+
+  const { data, error } = await db
+    .from('user_credit_wallets')
+    .select('user_id, balance, capacity, refill_rate_per_sec, last_refill_at, created_at, updated_at')
+    .in('user_id', normalizedUserIds);
+  if (error) throw error;
+  return (data || []) as WalletRow[];
 }
 
 function toSnapshot(row: WalletRow, entitlement: WalletEntitlement): CreditWalletSnapshot {
@@ -365,6 +493,19 @@ export async function getWallet(db: DbClient, userId: string): Promise<CreditWal
   return snapshot;
 }
 
+export async function listWalletBalancesByUserIds(db: DbClient, userIds: string[]) {
+  const rows = await listWalletRowsByUserIds(db, userIds);
+  return new Map(
+    rows
+      .map((row) => {
+        const userId = String(row.user_id || '').trim();
+        if (!userId) return null;
+        return [userId, round2(asNumber(row.balance))] as const;
+      })
+      .filter(Boolean) as Array<readonly [string, number]>,
+  );
+}
+
 export async function reserveCredits(db: DbClient, input: {
   userId: string;
   amount: number;
@@ -417,19 +558,15 @@ export async function reserveCredits(db: DbClient, input: {
 
     const nowIso = getNowIso();
     const nextBalance = round2(currentBalance - amount);
-    const { data: updatedWallet, error: updateError } = await db
-      .from('user_credit_wallets')
-      .update({
-        balance: nextBalance,
-        last_refill_at: nowIso,
-      })
-      .eq('user_id', userId)
-      .eq('balance', currentBalance)
-      .eq('last_refill_at', currentRow.last_refill_at)
-      .select('user_id, balance, capacity, refill_rate_per_sec, last_refill_at')
-      .maybeSingle();
-
-    if (updateError) throw updateError;
+    const updatedWallet = await updateWalletBalance(db, {
+      userId,
+      fromBalance: currentBalance,
+      fromLastRefillAt: currentRow.last_refill_at,
+      nextBalance,
+      currentCapacity: round2(asNumber(currentRow.capacity)),
+      currentRefillRatePerSec: round6(asNumber(currentRow.refill_rate_per_sec, DEFAULT_REFILL_RATE_PER_SEC)),
+      nowIso,
+    });
     if (!updatedWallet) continue;
 
     try {
@@ -452,14 +589,15 @@ export async function reserveCredits(db: DbClient, input: {
         bypass: false,
       };
     } catch (error) {
-      await db
-        .from('user_credit_wallets')
-        .update({
-          balance: round2(nextBalance + amount),
-          last_refill_at: nowIso,
-        })
-        .eq('user_id', userId)
-        .eq('balance', nextBalance);
+      await updateWalletBalance(db, {
+        userId,
+        fromBalance: nextBalance,
+        fromLastRefillAt: nowIso,
+        nextBalance: round2(nextBalance + amount),
+        currentCapacity: round2(asNumber(updatedWallet.capacity)),
+        currentRefillRatePerSec: round6(asNumber(updatedWallet.refill_rate_per_sec, DEFAULT_REFILL_RATE_PER_SEC)),
+        nowIso,
+      });
       throw error;
     }
   }
@@ -547,19 +685,15 @@ export async function refundReservation(db: DbClient, input: {
     const nowIso = getNowIso();
     const nextBalance = round2(Math.min(capacity, balance + amount));
 
-    const { data: updated, error: updateError } = await db
-      .from('user_credit_wallets')
-      .update({
-        balance: nextBalance,
-        last_refill_at: nowIso,
-      })
-      .eq('user_id', input.userId)
-      .eq('balance', balance)
-      .eq('last_refill_at', row.last_refill_at)
-      .select('user_id, balance, capacity, refill_rate_per_sec, last_refill_at')
-      .maybeSingle();
-
-    if (updateError) throw updateError;
+    const updated = await updateWalletBalance(db, {
+      userId: input.userId,
+      fromBalance: balance,
+      fromLastRefillAt: row.last_refill_at,
+      nextBalance,
+      currentCapacity: capacity,
+      currentRefillRatePerSec: round6(asNumber(row.refill_rate_per_sec, DEFAULT_REFILL_RATE_PER_SEC)),
+      nowIso,
+    });
     if (!updated) continue;
 
     const entitlement = await resolveWalletEntitlement(db, input.userId);

@@ -1,6 +1,37 @@
-import { describe, expect, it } from 'vitest';
-import { refundReservation, reserveCredits, settleReservation } from '../../server/services/creditWallet';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import {
+  configureCreditWalletOracleAdapter,
+  refundReservation,
+  reserveCredits,
+  settleReservation,
+} from '../../server/services/creditWallet';
+import { openOracleControlPlaneDb } from '../../server/services/oracleControlPlaneDb';
+import {
+  compareAndSetOracleCreditWalletRow,
+  getOracleCreditWalletRow,
+  listOracleCreditWalletRowsByUserIds,
+  upsertOracleCreditWalletRow,
+} from '../../server/services/oracleCreditWallet';
 import { createMockSupabase } from './helpers/mockSupabase';
+
+const tempDirs: string[] = [];
+
+afterEach(() => {
+  configureCreditWalletOracleAdapter(null);
+  while (tempDirs.length > 0) {
+    const next = tempDirs.pop();
+    if (next) fs.rmSync(next, { recursive: true, force: true });
+  }
+});
+
+function createTempSqlitePath() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'credit-wallet-adapter-'));
+  tempDirs.push(dir);
+  return path.join(dir, 'control-plane.sqlite');
+}
 
 describe('credit reservation lifecycle', () => {
   it('keeps hold/settle/refund idempotent by idempotency key', async () => {
@@ -188,5 +219,109 @@ describe('credit reservation lifecycle', () => {
     }
     expect(db.state.credit_ledger).toHaveLength(0);
     expect(Number(db.state.user_credit_wallets[0]?.balance || 0)).toBe(0);
+  });
+
+  it('moves wallet balance mutations to Oracle while keeping ledger idempotency on Supabase', async () => {
+    const nowIso = '2026-04-16T00:00:00.000Z';
+    const db = createMockSupabase({
+      user_credit_wallets: [
+        {
+          user_id: 'user_oracle',
+          balance: 3,
+          capacity: 3,
+          refill_rate_per_sec: 0,
+          last_refill_at: nowIso,
+          created_at: nowIso,
+          updated_at: nowIso,
+        },
+      ],
+      credit_ledger: [],
+    }) as any;
+
+    const controlDb = openOracleControlPlaneDb({
+      sqlitePath: createTempSqlitePath(),
+    });
+
+    configureCreditWalletOracleAdapter({
+      async getWalletRow(userId) {
+        return getOracleCreditWalletRow({ controlDb, userId });
+      },
+      async listWalletRowsByUserIds(userIds) {
+        return listOracleCreditWalletRowsByUserIds({ controlDb, userIds });
+      },
+      async upsertWalletRow(row) {
+        return upsertOracleCreditWalletRow({
+          controlDb,
+          row: {
+            user_id: String(row.user_id),
+            balance: Number(row.balance),
+            capacity: Number(row.capacity),
+            refill_rate_per_sec: Number(row.refill_rate_per_sec),
+            last_refill_at: String(row.last_refill_at),
+            created_at: String(row.created_at || row.last_refill_at),
+            updated_at: String(row.updated_at || row.last_refill_at),
+          },
+        });
+      },
+      async compareAndSetWalletRow(input) {
+        return compareAndSetOracleCreditWalletRow({
+          controlDb,
+          userId: input.userId,
+          expectedBalance: input.expectedBalance,
+          expectedLastRefillAt: input.expectedLastRefillAt,
+          nextRow: {
+            user_id: String(input.nextRow.user_id),
+            balance: Number(input.nextRow.balance),
+            capacity: Number(input.nextRow.capacity),
+            refill_rate_per_sec: Number(input.nextRow.refill_rate_per_sec),
+            last_refill_at: String(input.nextRow.last_refill_at),
+            created_at: String(input.nextRow.created_at || input.nextRow.last_refill_at),
+            updated_at: String(input.nextRow.updated_at || input.nextRow.last_refill_at),
+          },
+        });
+      },
+    });
+
+    try {
+      const hold = await reserveCredits(db, {
+        userId: 'user_oracle',
+        amount: 1,
+        idempotencyKey: 'oracle_hold_1',
+        reasonCode: 'UNLOCK_HOLD',
+      });
+      expect(hold.ok).toBe(true);
+
+      await settleReservation(db, {
+        userId: 'user_oracle',
+        amount: 1,
+        idempotencyKey: 'oracle_settle_1',
+        reasonCode: 'UNLOCK_SETTLE',
+      });
+
+      const rowAfterHold = await getOracleCreditWalletRow({
+        controlDb,
+        userId: 'user_oracle',
+      });
+      expect(rowAfterHold?.balance).toBe(2);
+      expect(Number(db.state.user_credit_wallets[0]?.balance || 0)).toBe(3);
+      expect(db.state.credit_ledger.map((row: any) => row.entry_type)).toEqual(['hold', 'settle']);
+
+      const refund = await refundReservation(db, {
+        userId: 'user_oracle',
+        amount: 1,
+        idempotencyKey: 'oracle_refund_1',
+        reasonCode: 'UNLOCK_REFUND',
+      });
+      expect(Number(refund.wallet.balance || 0)).toBe(3);
+
+      const rowAfterRefund = await getOracleCreditWalletRow({
+        controlDb,
+        userId: 'user_oracle',
+      });
+      expect(rowAfterRefund?.balance).toBe(3);
+      expect(db.state.credit_ledger.map((row: any) => row.entry_type)).toEqual(['hold', 'settle', 'refund']);
+    } finally {
+      await controlDb.close();
+    }
   });
 });

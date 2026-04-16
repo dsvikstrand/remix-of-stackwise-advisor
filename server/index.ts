@@ -263,7 +263,12 @@ import {
   reserveUnlock,
   type SourceItemUnlockRow,
 } from './services/sourceUnlocks';
-import { refundReservation, reserveCredits, settleReservation } from './services/creditWallet';
+import {
+  configureCreditWalletOracleAdapter,
+  refundReservation,
+  reserveCredits,
+  settleReservation,
+} from './services/creditWallet';
 import {
   releaseManualGeneration,
   settleManualGeneration,
@@ -354,6 +359,12 @@ import {
   markOracleNotificationRead,
   upsertOracleNotificationRow,
 } from './services/oracleNotifications';
+import {
+  compareAndSetOracleCreditWalletRow,
+  getOracleCreditWalletRow,
+  listOracleCreditWalletRowsByUserIds,
+  upsertOracleCreditWalletRow,
+} from './services/oracleCreditWallet';
 import {
   listOracleBlueprintYoutubeComments,
   replaceOracleBlueprintYoutubeCommentsSnapshot,
@@ -850,6 +861,56 @@ configureProviderCircuitOracleWriteAdapter(
             providerKey: input.providerKey,
             patch: input.patch,
             nowIso: input.nowIso,
+          });
+        },
+      }
+    : null,
+);
+
+configureCreditWalletOracleAdapter(
+  oracleControlPlaneConfig.enabled && oracleControlPlane
+    ? {
+        async getWalletRow(userId) {
+          return getOracleCreditWalletRow({
+            controlDb: oracleControlPlane,
+            userId,
+          });
+        },
+        async listWalletRowsByUserIds(userIds) {
+          return listOracleCreditWalletRowsByUserIds({
+            controlDb: oracleControlPlane,
+            userIds,
+          });
+        },
+        async upsertWalletRow(row) {
+          return upsertOracleCreditWalletRow({
+            controlDb: oracleControlPlane,
+            row: {
+              user_id: row.user_id,
+              balance: Number(row.balance || 0),
+              capacity: Number(row.capacity || 0),
+              refill_rate_per_sec: Number(row.refill_rate_per_sec || 0),
+              last_refill_at: row.last_refill_at,
+              created_at: row.created_at || row.last_refill_at,
+              updated_at: row.updated_at || row.last_refill_at,
+            },
+          });
+        },
+        async compareAndSetWalletRow(input) {
+          return compareAndSetOracleCreditWalletRow({
+            controlDb: oracleControlPlane,
+            userId: input.userId,
+            expectedBalance: Number(input.expectedBalance || 0),
+            expectedLastRefillAt: input.expectedLastRefillAt,
+            nextRow: {
+              user_id: input.nextRow.user_id,
+              balance: Number(input.nextRow.balance || 0),
+              capacity: Number(input.nextRow.capacity || 0),
+              refill_rate_per_sec: Number(input.nextRow.refill_rate_per_sec || 0),
+              last_refill_at: input.nextRow.last_refill_at,
+              created_at: input.nextRow.created_at || input.nextRow.last_refill_at,
+              updated_at: input.nextRow.updated_at || input.nextRow.last_refill_at,
+            },
           });
         },
       }

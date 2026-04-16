@@ -374,6 +374,16 @@ type NotificationStateTable = {
   updated_at: string;
 };
 
+type CreditWalletStateTable = {
+  user_id: string;
+  balance: number;
+  capacity: number;
+  refill_rate_per_sec: number;
+  last_refill_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
 type ProductFeedStateTable = {
   id: string;
   user_id: string;
@@ -407,6 +417,7 @@ export type OracleControlPlaneDatabase = {
   blueprint_tag_state: BlueprintTagStateTable;
   provider_circuit_state: ProviderCircuitStateTable;
   notification_state: NotificationStateTable;
+  credit_wallet_state: CreditWalletStateTable;
   product_subscription_state: ProductSubscriptionStateTable;
   product_source_item_state: ProductSourceItemStateTable;
   product_unlock_state: ProductUnlockStateTable;
@@ -886,6 +897,22 @@ CREATE INDEX IF NOT EXISTS idx_notification_state_user_created
 
 CREATE INDEX IF NOT EXISTS idx_notification_state_user_read_created
   ON notification_state (user_id, is_read, created_at DESC, id DESC);
+
+CREATE TABLE IF NOT EXISTS credit_wallet_state (
+  user_id TEXT PRIMARY KEY,
+  balance REAL NOT NULL,
+  capacity REAL NOT NULL,
+  refill_rate_per_sec REAL NOT NULL DEFAULT 0,
+  last_refill_at TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_credit_wallet_state_updated
+  ON credit_wallet_state (updated_at);
+
+CREATE INDEX IF NOT EXISTS idx_credit_wallet_state_last_refill
+  ON credit_wallet_state (last_refill_at, updated_at);
 
 CREATE TABLE IF NOT EXISTS product_subscription_state (
   id TEXT PRIMARY KEY,

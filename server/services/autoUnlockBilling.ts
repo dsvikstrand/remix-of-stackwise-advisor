@@ -1,4 +1,4 @@
-import { refundReservation, reserveCredits, settleReservation } from './creditWallet';
+import { listWalletBalancesByUserIds, refundReservation, reserveCredits, settleReservation } from './creditWallet';
 import { getBlueprintGenerationChargePolicy } from './generationChargePolicy';
 
 type DbClient = any;
@@ -224,17 +224,11 @@ export async function listAutoUnlockParticipants(db: DbClient, intentId: string)
 async function getFundingEligibilityForUsers(db: DbClient, userIds: string[]) {
   const normalizedUserIds = Array.from(new Set(userIds.map((value) => String(value || '').trim()).filter(Boolean)));
   if (normalizedUserIds.length === 0) return new Map<string, { balance: number; bypass: boolean }>();
-  const { data, error } = await db
-    .from('user_credit_wallets')
-    .select('user_id, balance')
-    .in('user_id', normalizedUserIds);
-  if (error) throw error;
   const result = new Map<string, { balance: number; bypass: boolean }>();
-  for (const row of data || []) {
-    const userId = String(row.user_id || '').trim();
-    if (!userId) continue;
+  const balances = await listWalletBalancesByUserIds(db, normalizedUserIds);
+  for (const [userId, balance] of balances.entries()) {
     result.set(userId, {
-      balance: round2(asNumber(row.balance)),
+      balance: round2(asNumber(balance)),
       bypass: false,
     });
   }
