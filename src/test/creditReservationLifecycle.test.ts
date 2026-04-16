@@ -15,6 +15,11 @@ import {
   listOracleCreditWalletRowsByUserIds,
   upsertOracleCreditWalletRow,
 } from '../../server/services/oracleCreditWallet';
+import {
+  getOracleCreditLedgerByIdempotencyKey,
+  insertOracleCreditLedgerEntry,
+  listOracleCreditLedgerRowsForUser,
+} from '../../server/services/oracleCreditLedger';
 import { createMockSupabase } from './helpers/mockSupabase';
 
 const tempDirs: string[] = [];
@@ -221,7 +226,7 @@ describe('credit reservation lifecycle', () => {
     expect(Number(db.state.user_credit_wallets[0]?.balance || 0)).toBe(0);
   });
 
-  it('moves wallet balance mutations to Oracle while keeping ledger idempotency on Supabase', async () => {
+  it('moves wallet balance and ledger idempotency to Oracle together', async () => {
     const nowIso = '2026-04-16T00:00:00.000Z';
     const db = createMockSupabase({
       user_credit_wallets: [
@@ -280,6 +285,28 @@ describe('credit reservation lifecycle', () => {
           },
         });
       },
+      async getLedgerByIdempotencyKey(idempotencyKey) {
+        return getOracleCreditLedgerByIdempotencyKey({
+          controlDb,
+          idempotencyKey,
+        });
+      },
+      async insertLedgerEntry(input) {
+        return insertOracleCreditLedgerEntry({
+          controlDb,
+          row: {
+            user_id: input.userId,
+            delta: input.delta,
+            entry_type: input.entryType,
+            reason_code: input.reasonCode,
+            source_item_id: input.context?.source_item_id || null,
+            source_page_id: input.context?.source_page_id || null,
+            unlock_id: input.context?.unlock_id || null,
+            idempotency_key: input.idempotencyKey,
+            metadata: input.context?.metadata || {},
+          },
+        });
+      },
     });
 
     try {
@@ -302,9 +329,14 @@ describe('credit reservation lifecycle', () => {
         controlDb,
         userId: 'user_oracle',
       });
+      const ledgerAfterHold = await listOracleCreditLedgerRowsForUser({
+        controlDb,
+        userId: 'user_oracle',
+      });
       expect(rowAfterHold?.balance).toBe(2);
       expect(Number(db.state.user_credit_wallets[0]?.balance || 0)).toBe(3);
-      expect(db.state.credit_ledger.map((row: any) => row.entry_type)).toEqual(['hold', 'settle']);
+      expect(db.state.credit_ledger).toHaveLength(0);
+      expect(ledgerAfterHold.map((row) => row.entry_type)).toEqual(['settle', 'hold']);
 
       const refund = await refundReservation(db, {
         userId: 'user_oracle',
@@ -318,8 +350,12 @@ describe('credit reservation lifecycle', () => {
         controlDb,
         userId: 'user_oracle',
       });
+      const ledgerAfterRefund = await listOracleCreditLedgerRowsForUser({
+        controlDb,
+        userId: 'user_oracle',
+      });
       expect(rowAfterRefund?.balance).toBe(3);
-      expect(db.state.credit_ledger.map((row: any) => row.entry_type)).toEqual(['hold', 'settle', 'refund']);
+      expect(ledgerAfterRefund.map((row) => row.entry_type)).toEqual(['refund', 'settle', 'hold']);
     } finally {
       await controlDb.close();
     }

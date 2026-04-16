@@ -138,6 +138,9 @@ async function resolveWalletEntitlement(db: DbClient, userId: string): Promise<W
 async function getLedgerByIdempotencyKey(db: DbClient, idempotencyKey: string) {
   const key = String(idempotencyKey || '').trim();
   if (!key) return null;
+  if (creditWalletOracleAdapter?.getLedgerByIdempotencyKey) {
+    return creditWalletOracleAdapter.getLedgerByIdempotencyKey(key);
+  }
   const { data, error } = await db
     .from('credit_ledger')
     .select('id, user_id, delta, entry_type, reason_code, source_item_id, source_page_id, unlock_id, idempotency_key, metadata, created_at')
@@ -195,6 +198,15 @@ type CreditWalletOracleAdapter = {
     expectedLastRefillAt: string;
     nextRow: WalletRow;
   }): Promise<WalletRow | null>;
+  getLedgerByIdempotencyKey?(idempotencyKey: string): Promise<LedgerRow | null>;
+  insertLedgerEntry?(input: {
+    userId: string;
+    delta: number;
+    entryType: LedgerRow['entry_type'];
+    reasonCode: string;
+    idempotencyKey: string;
+    context?: CreditLedgerContext;
+  }): Promise<LedgerRow>;
 };
 
 let creditWalletOracleAdapter: CreditWalletOracleAdapter | null = null;
@@ -460,6 +472,10 @@ async function insertLedgerEntry(db: DbClient, input: {
   idempotencyKey: string;
   context?: CreditLedgerContext;
 }) {
+  if (creditWalletOracleAdapter?.insertLedgerEntry) {
+    return creditWalletOracleAdapter.insertLedgerEntry(input);
+  }
+
   const { data, error } = await db
     .from('credit_ledger')
     .insert({

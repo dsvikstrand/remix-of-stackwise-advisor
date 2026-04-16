@@ -384,6 +384,20 @@ type CreditWalletStateTable = {
   updated_at: string;
 };
 
+type CreditLedgerStateTable = {
+  id: string;
+  user_id: string;
+  delta: number;
+  entry_type: string;
+  reason_code: string;
+  source_item_id: string | null;
+  source_page_id: string | null;
+  unlock_id: string | null;
+  idempotency_key: string;
+  metadata_json: string;
+  created_at: string;
+};
+
 type ProductFeedStateTable = {
   id: string;
   user_id: string;
@@ -418,6 +432,7 @@ export type OracleControlPlaneDatabase = {
   provider_circuit_state: ProviderCircuitStateTable;
   notification_state: NotificationStateTable;
   credit_wallet_state: CreditWalletStateTable;
+  credit_ledger_state: CreditLedgerStateTable;
   product_subscription_state: ProductSubscriptionStateTable;
   product_source_item_state: ProductSourceItemStateTable;
   product_unlock_state: ProductUnlockStateTable;
@@ -913,6 +928,29 @@ CREATE INDEX IF NOT EXISTS idx_credit_wallet_state_updated
 
 CREATE INDEX IF NOT EXISTS idx_credit_wallet_state_last_refill
   ON credit_wallet_state (last_refill_at, updated_at);
+
+CREATE TABLE IF NOT EXISTS credit_ledger_state (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  delta REAL NOT NULL,
+  entry_type TEXT NOT NULL,
+  reason_code TEXT NOT NULL,
+  source_item_id TEXT,
+  source_page_id TEXT,
+  unlock_id TEXT,
+  idempotency_key TEXT NOT NULL,
+  metadata_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_credit_ledger_state_idempotency
+  ON credit_ledger_state (idempotency_key);
+
+CREATE INDEX IF NOT EXISTS idx_credit_ledger_state_user_created
+  ON credit_ledger_state (user_id, created_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS idx_credit_ledger_state_unlock_created
+  ON credit_ledger_state (unlock_id, created_at DESC, id DESC);
 
 CREATE TABLE IF NOT EXISTS product_subscription_state (
   id TEXT PRIMARY KEY,

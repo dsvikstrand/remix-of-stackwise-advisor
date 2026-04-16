@@ -366,6 +366,10 @@ import {
   upsertOracleCreditWalletRow,
 } from './services/oracleCreditWallet';
 import {
+  getOracleCreditLedgerByIdempotencyKey,
+  insertOracleCreditLedgerEntry,
+} from './services/oracleCreditLedger';
+import {
   listOracleBlueprintYoutubeComments,
   replaceOracleBlueprintYoutubeCommentsSnapshot,
 } from './services/oracleBlueprintYoutubeCommentsState';
@@ -910,6 +914,28 @@ configureCreditWalletOracleAdapter(
               last_refill_at: input.nextRow.last_refill_at,
               created_at: input.nextRow.created_at || input.nextRow.last_refill_at,
               updated_at: input.nextRow.updated_at || input.nextRow.last_refill_at,
+            },
+          });
+        },
+        async getLedgerByIdempotencyKey(idempotencyKey) {
+          return getOracleCreditLedgerByIdempotencyKey({
+            controlDb: oracleControlPlane,
+            idempotencyKey,
+          });
+        },
+        async insertLedgerEntry(input) {
+          return insertOracleCreditLedgerEntry({
+            controlDb: oracleControlPlane,
+            row: {
+              user_id: input.userId,
+              delta: Number(input.delta || 0),
+              entry_type: input.entryType,
+              reason_code: input.reasonCode,
+              source_item_id: input.context?.source_item_id || null,
+              source_page_id: input.context?.source_page_id || null,
+              unlock_id: input.context?.unlock_id || null,
+              idempotency_key: input.idempotencyKey,
+              metadata: input.context?.metadata || {},
             },
           });
         },
