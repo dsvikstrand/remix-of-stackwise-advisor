@@ -425,7 +425,10 @@ Rules:
 - Choose exactly one channel slug from the allowed list provided by the user.
 - Do not invent new slugs.
 - Prefer the best semantic fit based on title, summary, and tags.
-- If context is weak or ambiguous, choose the provided fallback slug.
+- Treat "general" as a last resort, not a safe default.
+- If one or more specific channels are reasonably related, choose the best specific channel instead of "general".
+- A weak but still relevant fit is better than "general".
+- Only choose the provided fallback slug when none of the specific channels are meaningfully related to the blueprint.
 
 Response format:
 {
@@ -457,7 +460,11 @@ Fallback slug: ${input.fallbackSlug}
 Allowed channels:
 ${allowed}
 
-Choose exactly one channel slug from the allowed list and return valid JSON only.`;
+Choose exactly one channel slug from the allowed list and return valid JSON only.
+Use "general" only as a last fallback.
+If multiple specific channels could fit, pick the best one.
+If the fit is somewhat weak but still related, prefer that specific channel over "general".
+Only use "general" when the blueprint is truly broad or none of the specific channels are meaningfully related.`;
 }
 
 export function extractJson(text: string) {
