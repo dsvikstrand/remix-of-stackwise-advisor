@@ -177,6 +177,17 @@ export async function listOracleBlueprintTagRowsByTagSlugs(input: {
   return rows.map((row) => mapBlueprintTagRow(row as unknown as Record<string, unknown>));
 }
 
+export async function countOracleBlueprintTagRows(input: {
+  controlDb: OracleControlPlaneDb;
+}) {
+  const row = await input.controlDb.db
+    .selectFrom('blueprint_tag_state')
+    .select(({ fn }) => fn.count<number>('id').as('count'))
+    .executeTakeFirst();
+
+  return Number(row?.count || 0);
+}
+
 export async function syncOracleBlueprintTagRowsFromSupabase(input: {
   controlDb: OracleControlPlaneDb;
   db: {
@@ -188,18 +199,8 @@ export async function syncOracleBlueprintTagRowsFromSupabase(input: {
   const rows: Array<Record<string, unknown>> = [];
   let from = 0;
 
-  console.log('[blueprint_tags_supabase_read]', JSON.stringify({
-    action: 'sync_oracle_blueprint_tag_rows_from_supabase_start',
-    batch_size: batchSize,
-  }));
-
   while (true) {
     const to = from + batchSize - 1;
-    console.log('[blueprint_tags_supabase_read]', JSON.stringify({
-      action: 'sync_oracle_blueprint_tag_rows_from_supabase_batch',
-      from,
-      to,
-    }));
     const { data, error } = await input.db
       .from('blueprint_tags')
       .select('blueprint_id, tag_id, tags(slug)')
@@ -235,11 +236,6 @@ export async function syncOracleBlueprintTagRowsFromSupabase(input: {
     controlDb: input.controlDb,
     rows,
   });
-
-  console.log('[blueprint_tags_supabase_read]', JSON.stringify({
-    action: 'sync_oracle_blueprint_tag_rows_from_supabase_complete',
-    row_count: rows.length,
-  }));
 
   return {
     rowCount: rows.length,

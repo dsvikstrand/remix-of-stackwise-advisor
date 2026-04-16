@@ -374,6 +374,7 @@ import {
   replaceOracleBlueprintYoutubeCommentsSnapshot,
 } from './services/oracleBlueprintYoutubeCommentsState';
 import {
+  countOracleBlueprintTagRows,
   listOracleBlueprintTagRows,
   listOracleBlueprintTagRowsByTagIds,
   listOracleBlueprintTagRowsByTagSlugs,
@@ -4657,7 +4658,6 @@ async function readSupabaseBlueprintTagRows(
   db: ReturnType<typeof createClient>,
   input: {
     blueprintIds: string[];
-    action?: string;
   },
 ) {
   const blueprintIds = [...new Set((input.blueprintIds || []).map((value) => String(value || '').trim()).filter(Boolean))];
@@ -4668,11 +4668,6 @@ async function readSupabaseBlueprintTagRows(
       tag_slug: string;
     }>;
   }
-
-  console.log('[blueprint_tags_supabase_read]', JSON.stringify({
-    action: String(input.action || 'read_supabase_blueprint_tag_rows'),
-    blueprint_id_count: blueprintIds.length,
-  }));
 
   const { data, error } = await db
     .from('blueprint_tags')
@@ -4722,10 +4717,7 @@ async function listBlueprintTagRowsOracleAware(
   }
 
   if (!oracleControlPlane) {
-    return readSupabaseBlueprintTagRows(db, {
-      blueprintIds,
-      action: 'list_blueprint_tag_rows_oracle_aware_fallback',
-    });
+    return readSupabaseBlueprintTagRows(db, { blueprintIds });
   }
 
   const oracleRows = await listOracleBlueprintTagRows({
@@ -4785,11 +4777,6 @@ async function listBlueprintTagRowsByFiltersOracleAware(
   }
 
   if (!oracleControlPlane) {
-    console.log('[blueprint_tags_supabase_read]', JSON.stringify({
-      action: 'list_blueprint_tag_rows_by_filters_oracle_aware',
-      tag_id_count: tagIds.length,
-      tag_slug_count: tagSlugs.length,
-    }));
     let resolvedTagIds = [...tagIds];
     if (tagSlugs.length > 0) {
       const { data: tagRows, error: tagError } = await db
@@ -16228,12 +16215,17 @@ async function bootstrapOracleControlPlaneState() {
 
   let blueprintTagCount: number | null = null;
   if (oracleControlPlane) {
-    const blueprintTagBootstrap = await syncOracleBlueprintTagRowsFromSupabase({
+    blueprintTagCount = await countOracleBlueprintTagRows({
       controlDb: oracleControlPlane,
-      db,
-      batchSize: oracleControlPlaneConfig.bootstrapBatch,
     });
-    blueprintTagCount = blueprintTagBootstrap.rowCount;
+    if (blueprintTagCount === 0) {
+      const blueprintTagBootstrap = await syncOracleBlueprintTagRowsFromSupabase({
+        controlDb: oracleControlPlane,
+        db,
+        batchSize: oracleControlPlaneConfig.bootstrapBatch,
+      });
+      blueprintTagCount = blueprintTagBootstrap.rowCount;
+    }
   }
 
   let queueAdmissionActiveCount: number | null = null;
