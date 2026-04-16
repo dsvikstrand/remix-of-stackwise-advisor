@@ -35,6 +35,23 @@ function createResponse() {
 
 function buildFeedRouteDeps(db: any) {
   return {
+    listBlueprintTagRows: async ({ blueprintIds }: { blueprintIds: string[] }) => {
+      const allowed = new Set(blueprintIds.map((value) => String(value || '').trim()).filter(Boolean));
+      return (db.state.blueprint_tags || [])
+        .filter((row: any) => allowed.has(String(row.blueprint_id || '').trim()))
+        .map((row: any) => ({
+          blueprint_id: String(row.blueprint_id || '').trim(),
+          tag_id: String(row.tag_id || row.tags?.id || '').trim() || `tag:${String(row.tags?.slug || '').trim()}`,
+          tag_slug: String(row.tag_slug || row.tags?.slug || '').trim(),
+        }))
+        .filter((row: any) => row.blueprint_id && row.tag_slug);
+    },
+    listBlueprintTagSlugs: async ({ blueprintId }: { blueprintId: string }) => {
+      return (db.state.blueprint_tags || [])
+        .filter((row: any) => String(row.blueprint_id || '').trim() === String(blueprintId || '').trim())
+        .map((row: any) => String(row.tag_slug || row.tags?.slug || '').trim())
+        .filter(Boolean);
+    },
     getFeedItemById: async (innerDb: any, input: { feedItemId: string; userId?: string | null }) => {
       let query = innerDb
         .from('user_feed_items')
@@ -228,6 +245,7 @@ describe('channel feed route', () => {
       rejectLegacyManualFlowIfDisabled: () => false,
       getAuthedSupabaseClient: () => db,
       getServiceSupabaseClient: () => db,
+      ...buildFeedRouteDeps(db),
       getFeedItemById: async () => ({
         id: 'ufi_oracle',
         user_id: 'user_1',

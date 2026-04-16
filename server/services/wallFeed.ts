@@ -280,7 +280,7 @@ export async function listWallBlueprintFeed(input: {
   scope: WallFeedScope;
   sort: FeedSort;
   viewerUserId?: string | null;
-  listBlueprintTagRows?: (input: {
+  listBlueprintTagRows: (input: {
     blueprintIds: string[];
   }) => Promise<Array<{
     blueprint_id: string;
@@ -333,12 +333,10 @@ export async function listWallBlueprintFeed(input: {
 
   const blueprintIds = blueprints.map((row: any) => row.id);
   const [tagsRes, likesRes, feedItemsRes] = await Promise.all([
-    input.listBlueprintTagRows
-      ? Promise.resolve({
-        data: await input.listBlueprintTagRows({ blueprintIds }),
-        error: null,
-      })
-      : db.from('blueprint_tags').select('blueprint_id, tags(id, slug)').in('blueprint_id', blueprintIds),
+    Promise.resolve({
+      data: await input.listBlueprintTagRows({ blueprintIds }),
+      error: null,
+    }),
     viewerUserId
       ? db.from('blueprint_likes').select('blueprint_id').eq('user_id', viewerUserId).in('blueprint_id', blueprintIds)
       : Promise.resolve({ data: [] as { blueprint_id: string }[], error: null }),
@@ -358,18 +356,13 @@ export async function listWallBlueprintFeed(input: {
     throw tagsRes.error || likesRes.error || feedItemsRes.error;
   }
 
-  const blueprintTags = input.listBlueprintTagRows
-    ? collectJoinedTagRefs((tagsRes.data || []).map((row: any) => ({
-      blueprint_id: row.blueprint_id,
-      tags: [{ id: row.tag_id, slug: row.tag_slug }],
-    })) as Array<{
-      blueprint_id: string;
-      tags?: { id?: string; slug?: string } | Array<{ id?: string; slug?: string }> | null;
-    }>)
-    : collectJoinedTagRefs((tagsRes.data || []) as Array<{
-      blueprint_id: string;
-      tags?: { id?: string; slug?: string } | Array<{ id?: string; slug?: string }> | null;
-    }>);
+  const blueprintTags = collectJoinedTagRefs((tagsRes.data || []).map((row: any) => ({
+    blueprint_id: row.blueprint_id,
+    tags: [{ id: row.tag_id, slug: row.tag_slug }],
+  })) as Array<{
+    blueprint_id: string;
+    tags?: { id?: string; slug?: string } | Array<{ id?: string; slug?: string }> | null;
+  }>);
   const likedIds = new Set((likesRes.data || []).map((row: any) => row.blueprint_id));
 
   const feedItemMaps = await buildFeedItemMaps(db, (feedItemsRes.data || []) as Array<{
@@ -431,7 +424,7 @@ export async function listWallForYouFeed(input: {
   userId: string;
   normalizeTranscriptTruthStatus: (value: unknown) => string;
   limit?: number;
-  listBlueprintTagRows?: (input: {
+  listBlueprintTagRows: (input: {
     blueprintIds: string[];
   }) => Promise<Array<{
     blueprint_id: string;
@@ -507,11 +500,7 @@ export async function listWallForYouFeed(input: {
   }
 
   const { data: tagRows, error: tagRowsError } = blueprintIds.length
-    ? (
-      input.listBlueprintTagRows
-        ? { data: await input.listBlueprintTagRows({ blueprintIds }), error: null }
-        : await db.from('blueprint_tags').select('blueprint_id, tags(slug)').in('blueprint_id', blueprintIds)
-    )
+    ? { data: await input.listBlueprintTagRows({ blueprintIds }), error: null }
     : { data: [], error: null };
   if (tagRowsError) throw tagRowsError;
 
@@ -519,18 +508,13 @@ export async function listWallForYouFeed(input: {
     ? await db.from('blueprint_likes').select('blueprint_id').eq('user_id', userId).in('blueprint_id', blueprintIds)
     : { data: [], error: null };
   if (likedError) throw likedError;
-  const tagsByBlueprint = input.listBlueprintTagRows
-    ? collectJoinedTagSlugs((tagRows || []).map((row: any) => ({
-      blueprint_id: row.blueprint_id,
-      tags: [{ slug: row.tag_slug }],
-    })) as Array<{
-      blueprint_id: string;
-      tags?: { slug?: string } | Array<{ slug?: string }> | null;
-    }>)
-    : collectJoinedTagSlugs((tagRows || []) as Array<{
-      blueprint_id: string;
-      tags?: { slug?: string } | Array<{ slug?: string }> | null;
-    }>);
+  const tagsByBlueprint = collectJoinedTagSlugs((tagRows || []).map((row: any) => ({
+    blueprint_id: row.blueprint_id,
+    tags: [{ slug: row.tag_slug }],
+  })) as Array<{
+    blueprint_id: string;
+    tags?: { slug?: string } | Array<{ slug?: string }> | null;
+  }>);
 
   const sourceMap = new Map((sources || []).map((row: any) => [row.id, row]));
   const unlockMap = new Map((unlocks || []).map((row: any) => [row.source_item_id, row]));

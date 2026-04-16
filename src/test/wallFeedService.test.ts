@@ -2,6 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { listWallBlueprintFeed, listWallForYouFeed } from '../../server/services/wallFeed';
 import { createMockSupabase } from './helpers/mockSupabase';
 
+function listBlueprintTagRowsFromState(db: any, blueprintIds: string[]) {
+  const allowed = new Set(blueprintIds.map((value) => String(value || '').trim()).filter(Boolean));
+  return (db.state.blueprint_tags || [])
+    .filter((row: any) => allowed.has(String(row.blueprint_id || '').trim()))
+    .map((row: any) => ({
+      blueprint_id: String(row.blueprint_id || '').trim(),
+      tag_id: String(row.tag_id || row.tags?.id || '').trim() || `tag:${String(row.tags?.slug || '').trim()}`,
+      tag_slug: String(row.tag_slug || row.tags?.slug || '').trim(),
+    }))
+    .filter((row: any) => row.blueprint_id && row.tag_slug);
+}
+
 describe('wall feed service', () => {
   it('returns hydrated public wall cards with like state', async () => {
     const db = createMockSupabase({
@@ -90,6 +102,7 @@ describe('wall feed service', () => {
       scope: 'all',
       sort: 'latest',
       viewerUserId: 'viewer_1',
+      listBlueprintTagRows: ({ blueprintIds }) => Promise.resolve(listBlueprintTagRowsFromState(db, blueprintIds)),
     });
 
     expect(items).toHaveLength(2);
@@ -139,6 +152,7 @@ describe('wall feed service', () => {
       scope: 'all',
       sort: 'latest',
       viewerUserId: 'viewer_1',
+      listBlueprintTagRows: ({ blueprintIds }) => Promise.resolve(listBlueprintTagRowsFromState(db, blueprintIds)),
       readPublicFeedRows: async () => ([
         {
           id: 'ufi_1',
@@ -251,6 +265,7 @@ describe('wall feed service', () => {
       userId: 'viewer_1',
       normalizeTranscriptTruthStatus: () => 'ready',
       limit: 10,
+      listBlueprintTagRows: ({ blueprintIds }) => Promise.resolve(listBlueprintTagRowsFromState(db, blueprintIds)),
     });
 
     expect(items.map((item) => ({ kind: item.kind, id: item.feedItemId, createdAt: item.createdAt }))).toEqual([
@@ -349,6 +364,7 @@ describe('wall feed service', () => {
       userId: 'viewer_1',
       normalizeTranscriptTruthStatus: () => 'ready',
       limit: 10,
+      listBlueprintTagRows: ({ blueprintIds }) => Promise.resolve(listBlueprintTagRowsFromState(db, blueprintIds)),
     });
 
     expect(items.map((item) => item.feedItemId)).toEqual(['ufi_blueprint', 'ufi_locked']);
@@ -409,6 +425,7 @@ describe('wall feed service', () => {
       userId: 'viewer_1',
       normalizeTranscriptTruthStatus: () => 'ready',
       limit: 10,
+      listBlueprintTagRows: ({ blueprintIds }) => Promise.resolve(listBlueprintTagRowsFromState(db, blueprintIds)),
     });
 
     expect(items).toHaveLength(1);
@@ -505,6 +522,7 @@ describe('wall feed service', () => {
       scope: 'joined',
       sort: 'latest',
       viewerUserId: 'viewer_1',
+      listBlueprintTagRows: ({ blueprintIds }) => Promise.resolve(listBlueprintTagRowsFromState(db, blueprintIds)),
     });
     expect(joined.map((item) => item.id)).toEqual(['bp_1']);
 
@@ -513,6 +531,7 @@ describe('wall feed service', () => {
       scope: 'fitness-training',
       sort: 'latest',
       viewerUserId: 'viewer_1',
+      listBlueprintTagRows: ({ blueprintIds }) => Promise.resolve(listBlueprintTagRowsFromState(db, blueprintIds)),
     });
     expect(scoped.map((item) => item.id)).toEqual(['bp_1']);
 
@@ -521,6 +540,7 @@ describe('wall feed service', () => {
       scope: 'all',
       sort: 'latest',
       viewerUserId: 'viewer_1',
+      listBlueprintTagRows: ({ blueprintIds }) => Promise.resolve(listBlueprintTagRowsFromState(db, blueprintIds)),
     });
     expect(all.map((item) => item.id)).toEqual(['bp_1', 'bp_2']);
 
@@ -529,6 +549,7 @@ describe('wall feed service', () => {
       scope: 'your-channels',
       sort: 'latest',
       viewerUserId: 'viewer_1',
+      listBlueprintTagRows: ({ blueprintIds }) => Promise.resolve(listBlueprintTagRowsFromState(db, blueprintIds)),
     });
     expect(alias.map((item) => item.id)).toEqual(['bp_1']);
   });
@@ -573,6 +594,7 @@ describe('wall feed service', () => {
       scope: 'joined',
       sort: 'latest',
       viewerUserId: 'viewer_1',
+      listBlueprintTagRows: ({ blueprintIds }) => Promise.resolve(listBlueprintTagRowsFromState(db, blueprintIds)),
     });
 
     expect(joined).toEqual([]);
@@ -660,6 +682,7 @@ describe('wall feed service', () => {
       scope: 'joined',
       sort: 'latest',
       viewerUserId: 'viewer_1',
+      listBlueprintTagRows: ({ blueprintIds }) => Promise.resolve(listBlueprintTagRowsFromState(baseDb, blueprintIds)),
     });
     expect(joined.map((item) => item.id)).toEqual(['bp_1']);
 
@@ -668,6 +691,7 @@ describe('wall feed service', () => {
       scope: 'fitness-training',
       sort: 'latest',
       viewerUserId: 'viewer_1',
+      listBlueprintTagRows: ({ blueprintIds }) => Promise.resolve(listBlueprintTagRowsFromState(baseDb, blueprintIds)),
     });
     expect(scoped.map((item) => item.id)).toEqual(['bp_1']);
   });
@@ -711,6 +735,7 @@ describe('wall feed service', () => {
       scope: 'all',
       sort: 'trending',
       viewerUserId: null,
+      listBlueprintTagRows: ({ blueprintIds }) => Promise.resolve(listBlueprintTagRowsFromState(db, blueprintIds)),
     });
 
     expect(items.map((item) => item.id)).toEqual(['bp_high_recent', 'bp_low_recent']);
@@ -813,6 +838,7 @@ describe('wall feed service', () => {
       userId: 'viewer_1',
       normalizeTranscriptTruthStatus: () => '',
       limit: 2,
+      listBlueprintTagRows: ({ blueprintIds }) => Promise.resolve(listBlueprintTagRowsFromState(db, blueprintIds)),
     });
 
     expect(items).toHaveLength(2);
@@ -859,6 +885,7 @@ describe('wall feed service', () => {
       userId: 'viewer_1',
       normalizeTranscriptTruthStatus: () => '',
       limit: 1,
+      listBlueprintTagRows: ({ blueprintIds }) => Promise.resolve(listBlueprintTagRowsFromState(db, blueprintIds)),
     });
 
     expect(items).toHaveLength(1);
@@ -916,6 +943,7 @@ describe('wall feed service', () => {
       userId: 'viewer_1',
       normalizeTranscriptTruthStatus: () => '',
       limit: 10,
+      listBlueprintTagRows: ({ blueprintIds }) => Promise.resolve(listBlueprintTagRowsFromState(db, blueprintIds)),
     });
 
     expect(items).toHaveLength(0);
@@ -1011,6 +1039,7 @@ describe('wall feed service', () => {
       userId: 'viewer_1',
       normalizeTranscriptTruthStatus: () => '',
       limit: 10,
+      listBlueprintTagRows: ({ blueprintIds }) => Promise.resolve(listBlueprintTagRowsFromState(db, blueprintIds)),
     });
 
     expect(items).toHaveLength(1);

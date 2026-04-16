@@ -100,7 +100,7 @@ export type AutoChannelPipelineInput = {
   sourceTag: string;
   classifierMode: AutoChannelClassifierMode;
   resolver?: AutoChannelResolver;
-  listBlueprintTagSlugs?: (input: {
+  listBlueprintTagSlugs: (input: {
     blueprintId: string;
   }) => Promise<string[]>;
   attachBlueprintTag?: (input: {
@@ -165,28 +165,6 @@ async function ensureTagId(db: DbClient, userId: string, tagSlug: string): Promi
   return created.id;
 }
 
-async function getBlueprintTagSlugs(db: DbClient, blueprintId: string): Promise<string[]> {
-  const { data } = await db
-    .from('blueprint_tags')
-    .select('tags(slug)')
-    .eq('blueprint_id', blueprintId);
-
-  const tagSlugs: string[] = [];
-  for (const row of data || []) {
-    const tags = (row as { tags?: { slug?: string } | { slug?: string }[] | null }).tags;
-    if (Array.isArray(tags)) {
-      for (const tag of tags) {
-        const slug = String(tag?.slug || '').trim().toLowerCase();
-        if (slug) tagSlugs.push(slug);
-      }
-      continue;
-    }
-    const slug = String(tags?.slug || '').trim().toLowerCase();
-    if (slug) tagSlugs.push(slug);
-  }
-  return Array.from(new Set(tagSlugs));
-}
-
 export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): Promise<AutoChannelPipelineResult> {
   const resolver = input.resolver || new DeterministicAutoChannelResolver();
 
@@ -199,9 +177,7 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
     throw new Error(blueprintError?.message || 'Blueprint not found');
   }
 
-  const tagSlugs = input.listBlueprintTagSlugs
-    ? await input.listBlueprintTagSlugs({ blueprintId: input.blueprintId })
-    : await getBlueprintTagSlugs(input.db, input.blueprintId);
+  const tagSlugs = await input.listBlueprintTagSlugs({ blueprintId: input.blueprintId });
   const summary = getBlueprintSummaryText({
     sectionsJson: blueprint.sections_json,
     steps: blueprint.steps,

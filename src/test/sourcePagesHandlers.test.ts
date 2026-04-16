@@ -80,6 +80,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
       lastErrorCode: null,
       lastErrorMessage: null,
     })),
+    listBlueprintTagRows: vi.fn(async () => []),
     readPublicFeedRows: undefined,
     readSourceRows: undefined,
     sourceVideoListBurstLimiter: passThroughLimiter,
@@ -436,6 +437,19 @@ describe('source page handlers', () => {
 
     registerSourcePagesRouteHandlers(app as any, createDeps({
       getServiceSupabaseClient: () => serviceDb,
+      listBlueprintTagRows: vi.fn(async ({ blueprintIds }: { blueprintIds: string[] }) => {
+        const tagDefs = new Map(
+          (serviceDb.state.tags || []).map((row: any) => [String(row.id || '').trim(), String(row.slug || '').trim()]),
+        );
+        return (serviceDb.state.blueprint_tags || [])
+          .filter((row: any) => blueprintIds.includes(String(row.blueprint_id || '').trim()))
+          .map((row: any) => ({
+            blueprint_id: String(row.blueprint_id || '').trim(),
+            tag_id: String(row.tag_id || '').trim(),
+            tag_slug: tagDefs.get(String(row.tag_id || '').trim()) || '',
+          }))
+          .filter((row: any) => row.blueprint_id && row.tag_id && row.tag_slug);
+      }),
       readPublicFeedRows,
       readSourceRows,
     }));

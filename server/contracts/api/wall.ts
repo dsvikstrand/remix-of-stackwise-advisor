@@ -5,7 +5,7 @@ type DbClient = ReturnType<typeof createClient>;
 export type WallRouteDeps = {
   getServiceSupabaseClient: () => DbClient | null;
   normalizeTranscriptTruthStatus: (value: unknown) => string;
-  listBlueprintTagRows?: (input: {
+  listBlueprintTagRows: (input: {
     blueprintIds: string[];
   }) => Promise<Array<{
     blueprint_id: string;

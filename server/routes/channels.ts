@@ -129,39 +129,15 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
       const pageBlueprintIds = pagedBaseRows.map((row) => row.id);
       const tagsByBlueprintId = new Map<string, string[]>();
       if (pageBlueprintIds.length > 0) {
-        if (deps.listBlueprintTagRows) {
-          const tagRows = await deps.listBlueprintTagRows({ blueprintIds: pageBlueprintIds });
-          tagRows.forEach((row) => {
-            const blueprintId = String(row.blueprint_id || '').trim();
-            const tagSlug = String(row.tag_slug || '').trim();
-            if (!blueprintId || !tagSlug) return;
-            const list = tagsByBlueprintId.get(blueprintId) || [];
-            list.push(tagSlug);
-            tagsByBlueprintId.set(blueprintId, Array.from(new Set(list.filter(Boolean))));
-          });
-        } else {
-          const { data: tagRows, error: tagError } = await db
-            .from('blueprint_tags')
-            .select('blueprint_id, tags(slug)')
-            .in('blueprint_id', pageBlueprintIds);
-          if (tagError) throw tagError;
-
-          (tagRows || []).forEach((row: any) => {
-            const blueprintId = String(row.blueprint_id || '').trim();
-            if (!blueprintId) return;
-            const list = tagsByBlueprintId.get(blueprintId) || [];
-            if (Array.isArray(row.tags)) {
-              row.tags.forEach((tag: any) => {
-                if (tag && typeof tag === 'object' && 'slug' in tag) {
-                  list.push(String(tag.slug || ''));
-                }
-              });
-            } else if (row.tags && typeof row.tags === 'object' && 'slug' in row.tags) {
-              list.push(String((row.tags as { slug?: string }).slug || ''));
-            }
-            tagsByBlueprintId.set(blueprintId, Array.from(new Set(list.filter(Boolean))));
-          });
-        }
+        const tagRows = await deps.listBlueprintTagRows({ blueprintIds: pageBlueprintIds });
+        tagRows.forEach((row) => {
+          const blueprintId = String(row.blueprint_id || '').trim();
+          const tagSlug = String(row.tag_slug || '').trim();
+          if (!blueprintId || !tagSlug) return;
+          const list = tagsByBlueprintId.get(blueprintId) || [];
+          list.push(tagSlug);
+          tagsByBlueprintId.set(blueprintId, Array.from(new Set(list.filter(Boolean))));
+        });
       }
 
       const items = pagedBaseRows.map((row) => ({
@@ -339,17 +315,7 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
       .maybeSingle();
     if (blueprintError || !blueprint) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: blueprintError?.message || 'Blueprint missing', data: null });
 
-    const tagSlugs = deps.listBlueprintTagSlugs
-      ? await deps.listBlueprintTagSlugs({ blueprintId: blueprint.id })
-      : await (async () => {
-        const { data: tagRows } = await db
-          .from('blueprint_tags')
-          .select('tags(slug)')
-          .eq('blueprint_id', blueprint.id);
-        return (tagRows || [])
-          .map((row) => (row.tags as { slug?: string } | null)?.slug || '')
-          .filter(Boolean);
-      })();
+    const tagSlugs = await deps.listBlueprintTagSlugs({ blueprintId: blueprint.id });
 
     const stepCount = countBlueprintSections({
       sectionsJson: (blueprint as { sections_json?: unknown }).sections_json ?? null,

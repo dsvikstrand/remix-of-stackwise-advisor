@@ -62,7 +62,7 @@ export type SourcePagesRouteDeps = {
   youtubeDataApiKey: string;
   getUserSubscriptionStateForSourcePage: any;
   getBlueprintAvailabilityForVideo: any;
-  listBlueprintTagRows?: (input: {
+  listBlueprintTagRows: (input: {
     blueprintIds: string[];
   }) => Promise<Array<{
     blueprint_id: string;

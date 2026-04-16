@@ -1725,15 +1725,10 @@ app.get('/api/source-pages/:platform/:externalId/blueprints', async (req, res) =
       .from('blueprints')
       .select('id, title, llm_review, banner_url, sections_json, steps, is_public')
       .in('id', blueprintIds),
-    listBlueprintTagRows
-      ? Promise.resolve({
-        data: await listBlueprintTagRows({ blueprintIds }),
-        error: null,
-      })
-      : db
-        .from('blueprint_tags')
-        .select('blueprint_id, tag_id')
-        .in('blueprint_id', blueprintIds),
+    Promise.resolve({
+      data: await listBlueprintTagRows({ blueprintIds }),
+      error: null,
+    }),
   ]);
 
   if (blueprintRowsError || tagRowsError) {
