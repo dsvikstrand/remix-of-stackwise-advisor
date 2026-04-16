@@ -350,7 +350,10 @@ import {
   clearOracleGenerationTraceSeqCursor,
   listOracleGenerationRunEvents,
 } from './services/oracleGenerationTrace';
-import { upsertOracleProviderCircuitRow } from './services/oracleProviderCircuitState';
+import {
+  getOracleProviderCircuitRow,
+  upsertOracleProviderCircuitRow,
+} from './services/oracleProviderCircuitState';
 import {
   countUnreadOracleNotificationsForUser,
   getOracleNotificationRowById,
