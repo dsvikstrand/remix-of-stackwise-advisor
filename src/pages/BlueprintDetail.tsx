@@ -777,7 +777,9 @@ export default function BlueprintDetail() {
           <>
             <PageSection className="space-y-2">
               <div className="text-xs font-semibold text-muted-foreground">
-                {resolveChannelLabelForBlueprint(blueprint.tags.map((tag) => tag.slug))}
+                {blueprint.published_channel_slug
+                  ? `b/${blueprint.published_channel_slug}`
+                  : resolveChannelLabelForBlueprint(blueprint.tags.map((tag) => tag.slug))}
               </div>
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3 min-w-0">

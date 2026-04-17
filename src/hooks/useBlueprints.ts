@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { buildStoredPreviewSummary } from '@/lib/feedPreview';
+import { getPublishedBlueprintChannelSlug } from '@/lib/blueprintChannelsApi';
 import { normalizeTags } from '@/lib/tagging';
 import { collectBlueprintTagMap, listBlueprintTagRows } from '@/lib/blueprintTagsApi';
 import type { Json } from '@/integrations/supabase/types';
@@ -33,6 +34,7 @@ export interface BlueprintTag {
 
 export interface BlueprintDetail extends BlueprintRow {
   tags: BlueprintTag[];
+  published_channel_slug: string | null;
   user_liked: boolean;
   creator_profile: {
     display_name: string | null;
@@ -128,8 +130,9 @@ export function useBlueprint(blueprintId?: string) {
       if (error) throw error;
       if (!blueprint) return null;
 
-      const [tagRows, likeRes, profileRes] = await Promise.all([
+      const [tagRows, publishedChannelSlug, likeRes, profileRes] = await Promise.all([
         listBlueprintTagRows({ blueprintIds: [blueprintId] }),
+        getPublishedBlueprintChannelSlug(blueprintId).catch(() => null),
         user
           ? supabase.from('blueprint_likes').select('id').eq('blueprint_id', blueprintId).eq('user_id', user.id)
           : Promise.resolve({ data: [] as { id: string }[] }),
@@ -143,6 +146,7 @@ export function useBlueprint(blueprintId?: string) {
       return {
         ...(blueprint as BlueprintRow),
         tags: tagsData,
+        published_channel_slug: publishedChannelSlug,
         user_liked: userLiked,
         creator_profile: profileRes.data || null,
       } as BlueprintDetail;

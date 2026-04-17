@@ -7754,6 +7754,7 @@ app.use((req, res, next) => {
   const isPublicSourcePageRoute = req.method === 'GET' && /^\/api\/source-pages\/[^/]+\/[^/]+$/.test(req.path);
   const isPublicSourcePageBlueprintFeedRoute = req.method === 'GET' && /^\/api\/source-pages\/[^/]+\/[^/]+\/blueprints$/.test(req.path);
   const isPublicBlueprintTagsRoute = req.method === 'GET' && req.path === '/api/blueprint-tags';
+  const isPublicBlueprintChannelRoute = req.method === 'GET' && /^\/api\/blueprints\/[^/]+\/channel$/.test(req.path);
   const allowsAnonymous = req.path === '/api/youtube-to-blueprint'
     || req.path === '/api/youtube/connection/callback'
     || req.path === '/api/ingestion/jobs/trigger'
@@ -7768,6 +7769,7 @@ app.use((req, res, next) => {
     || isPublicSourcePageRoute
     || isPublicSourcePageBlueprintFeedRoute
     || isPublicBlueprintTagsRoute
+    || isPublicBlueprintChannelRoute
     || (debugEndpointsEnabled && isDebugResetTranscriptProxyRoute)
     || (debugEndpointsEnabled && isDebugSimulationRoute);
 
@@ -8411,6 +8413,48 @@ registerBlueprintTagReadRoutes(app, {
     tagIds,
     tagSlugs,
   }),
+});
+
+app.get('/api/blueprints/:id/channel', async (req, res) => {
+  const db = getServiceSupabaseClient();
+  if (!db) {
+    return res.status(500).json({
+      ok: false,
+      error_code: 'CONFIG_ERROR',
+      message: 'Service role client is not configured',
+      data: null,
+    });
+  }
+
+  const blueprintId = String(req.params.id || '').trim();
+  if (!blueprintId) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'INVALID_INPUT',
+      message: 'Blueprint id required.',
+      data: null,
+    });
+  }
+
+  try {
+    const publishedChannelByBlueprint = await fetchPublishedChannelSlugMapForBlueprints(db, [blueprintId]);
+    return res.json({
+      ok: true,
+      error_code: null,
+      message: 'blueprint channel',
+      data: {
+        blueprint_id: blueprintId,
+        published_channel_slug: publishedChannelByBlueprint.get(blueprintId) || null,
+      },
+    });
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error_code: 'READ_FAILED',
+      message: error instanceof Error ? error.message : 'Failed to load blueprint channel.',
+      data: null,
+    });
+  }
 });
 
 const blueprintVariantsService = createBlueprintVariantsService({
