@@ -277,8 +277,9 @@ export default function BlueprintDetail() {
   const curatedChannelTagSlugs = useMemo(() => new Set(getCatalogChannelTagSlugs().map(normalizeTag)), []);
   const displayTags = useMemo(() => {
     if (!blueprint?.tags?.length) return [];
-    // Keep channel tags out of the hashtag row to preserve the "channel != hashtag" mental model.
-    return blueprint.tags.filter((tag) => !curatedChannelTagSlugs.has(normalizeTag(tag.slug)));
+    // Prefer non-channel tags in the hashtag row, but do not hide tags entirely.
+    const filteredTags = blueprint.tags.filter((tag) => !curatedChannelTagSlugs.has(normalizeTag(tag.slug)));
+    return filteredTags.length > 0 ? filteredTags : blueprint.tags;
   }, [blueprint?.tags, curatedChannelTagSlugs]);
   useEffect(() => {
     if (!blueprint?.id) return;
