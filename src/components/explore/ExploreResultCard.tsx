@@ -4,7 +4,6 @@ import { UserMiniCard } from './UserMiniCard';
 import type { BlueprintResult, UserResult, SourceResult, ExploreResult } from '@/hooks/useExploreSearch';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { formatRelativeShort } from '@/lib/timeFormat';
-import { resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
 import { getCatalogChannelTagSlugs } from '@/lib/channelPostContext';
 import { normalizeTag } from '@/lib/tagging';
 import { buildSourcePagePath } from '@/lib/sourcePagesApi';
@@ -20,7 +19,6 @@ function BlueprintCard({
 }: {
   result: BlueprintResult;
 }) {
-  const channelLabel = resolveChannelLabelForBlueprint(result.tags);
   const channelTagSlugs = new Set(getCatalogChannelTagSlugs().map(normalizeTag));
   const displayTags = result.tags.filter((tag) => !channelTagSlugs.has(normalizeTag(tag)));
   const createdLabel = formatRelativeShort(result.createdAt);
@@ -46,8 +44,7 @@ function BlueprintCard({
             </>
           )}
           <div className="relative">
-            <div className="flex items-center justify-between gap-2 mb-1">
-              <p className="text-[11px] font-semibold tracking-wide text-foreground/75">{channelLabel}</p>
+            <div className="mb-1 flex items-center justify-end gap-2">
               <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
             </div>
             <h3 className="font-semibold text-base leading-tight line-clamp-2 mb-1">{result.title}</h3>

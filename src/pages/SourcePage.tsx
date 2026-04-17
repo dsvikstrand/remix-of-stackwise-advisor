@@ -28,7 +28,6 @@ import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
 import { getChannelIcon } from '@/lib/channelIcons';
 import { useSourceUnlockJobTracker } from '@/hooks/useSourceUnlockJobTracker';
 import { resolveEffectiveBanner } from '@/lib/bannerResolver';
-import { resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
 import { getLaunchErrorCopy } from '@/lib/launchErrorCopy';
 
 function getInitials(title: string, fallback: string) {
@@ -640,9 +639,8 @@ export default function SourcePage() {
                   {!sourceBlueprintsQuery.isLoading && !sourceBlueprintsQuery.error && sourceBlueprintItems.length > 0 ? (
                     <div className="space-y-3">
                       {sourceBlueprintItems.map((item) => {
-                        const fallbackChannelSlug = resolveChannelLabelForBlueprint(item.tags.map((tag) => tag.slug)).replace(/^b\//, '');
-                        const channelSlug = item.published_channel_slug || fallbackChannelSlug;
-                        const channelLabel = `b/${channelSlug}`;
+                        const channelSlug = item.published_channel_slug;
+                        const channelLabel = channelSlug ? `b/${channelSlug}` : null;
                         const channelConfig = CHANNELS_CATALOG.find((channel) => channel.slug === channelSlug);
                         const ChannelIcon = getChannelIcon(channelConfig?.icon || 'sparkles');
                         const createdLabel = formatRelativeShort(item.created_at);
@@ -672,10 +670,12 @@ export default function SourcePage() {
 
                               <div className="relative space-y-2">
                                 <div className="flex items-center justify-between gap-2">
-                                  <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-foreground/75">
-                                    <ChannelIcon className="h-3.5 w-3.5" />
-                                    {channelLabel}
-                                  </p>
+                                  {channelSlug && channelLabel ? (
+                                    <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-foreground/75">
+                                      <ChannelIcon className="h-3.5 w-3.5" />
+                                      {channelLabel}
+                                    </p>
+                                  ) : <span />}
                                   <span className="text-[11px] text-muted-foreground">{createdLabel}</span>
                                 </div>
 

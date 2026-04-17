@@ -10,7 +10,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { ArrowDown, Layers, Loader2, Tag } from 'lucide-react';
 import { formatRelativeShort } from '@/lib/timeFormat';
-import { resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
 import { WallBlueprintCard } from '@/components/wall/WallBlueprintCard';
 import { ForYouLockedSourceCard } from '@/components/wall/ForYouLockedSourceCard';
 import { useWallPageController } from '@/hooks/useWallPageController';
@@ -53,9 +52,6 @@ const MAX_PULL_REFRESH_PX = 88;
 type FeedSort = (typeof SORT_TABS)[number]['value'];
 
 function buildWallBlueprintCardProps(input: WallBlueprintCardInput) {
-  const fallbackChannelSlug = resolveChannelLabelForBlueprint(input.tags).replace(/^b\//, '');
-  const channelSlug = input.publishedChannelSlug || fallbackChannelSlug;
-
   return {
     blueprintId: input.id,
     to: `/blueprint/${input.id}`,
@@ -67,7 +63,7 @@ function buildWallBlueprintCardProps(input: WallBlueprintCardInput) {
     sourceThumbnailUrl: input.sourceThumbnailUrl,
     viewCount: input.viewCount,
     createdLabel: formatRelativeShort(input.createdAt),
-    channelSlug,
+    channelSlug: input.publishedChannelSlug,
     likesCount: input.likesCount,
     userLiked: input.userLiked,
     commentsCount: input.commentsCount,

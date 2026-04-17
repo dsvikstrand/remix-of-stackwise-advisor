@@ -27,7 +27,7 @@ type WallBlueprintCardProps = {
   bannerUrl?: string | null;
   sourceThumbnailUrl?: string | null;
   createdLabel: string;
-  channelSlug: string;
+  channelSlug: string | null;
   likesCount: number;
   userLiked: boolean;
   commentsCount: number;
@@ -75,7 +75,7 @@ export function WallBlueprintCard({
 }: WallBlueprintCardProps) {
   const navigate = useNavigate();
   const refreshMutation = useBlueprintYoutubeRefreshMutation(canRefresh ? blueprintId : undefined);
-  const channelLabel = `b/${channelSlug}`;
+  const channelLabel = channelSlug ? `b/${channelSlug}` : null;
   const channelConfig = CHANNELS_CATALOG.find((channel) => channel.slug === channelSlug);
   const ChannelIcon = getChannelIcon(channelConfig?.icon || 'sparkles');
   const sourceLabel = sourceName || 'Source';
@@ -197,16 +197,18 @@ export function WallBlueprintCard({
                 <Heart className={`h-4 w-4 ${userLiked ? 'fill-current' : ''}`} />
               </Button>
             </div>
-            <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-foreground/75 shrink-0">
-              <Link
-                to={`/b/${channelSlug}`}
-                onClick={(event) => event.stopPropagation()}
-                className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2 text-[11px] font-semibold tracking-wide ${channelColors.surfaceClassName} text-foreground/80 hover:text-foreground`}
-              >
-                <ChannelIcon className="h-3.5 w-3.5" />
-                {channelLabel}
-              </Link>
-            </div>
+            {channelSlug && channelLabel ? (
+              <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-foreground/75 shrink-0">
+                <Link
+                  to={`/b/${channelSlug}`}
+                  onClick={(event) => event.stopPropagation()}
+                  className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2 text-[11px] font-semibold tracking-wide ${channelColors.surfaceClassName} text-foreground/80 hover:text-foreground`}
+                >
+                  <ChannelIcon className="h-3.5 w-3.5" />
+                  {channelLabel}
+                </Link>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
