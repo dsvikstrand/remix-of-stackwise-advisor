@@ -5148,6 +5148,26 @@ async function writeSupabaseFeedItemShadow(
   return normalizeFeedItemRow(data as Record<string, unknown>);
 }
 
+async function restoreSupabaseFeedItemShadow(
+  db: ReturnType<typeof createClient>,
+  input: {
+    currentRow: FeedItemRow;
+    previousShadow: FeedItemRow | null;
+  },
+) {
+  if (input.previousShadow) {
+    await writeSupabaseFeedItemShadow(db, input.previousShadow);
+    return;
+  }
+
+  const { error } = await db
+    .from('user_feed_items')
+    .delete()
+    .eq('id', input.currentRow.id)
+    .eq('user_id', input.currentRow.user_id);
+  if (error) throw error;
+}
+
 async function persistFeedItemRowOracleAware(
   db: ReturnType<typeof createClient>,
   input: {
@@ -5164,6 +5184,17 @@ async function persistFeedItemRowOracleAware(
         })
       : null
   );
+  const previousSupabase = await readSupabaseFeedItemById(db, {
+    feedItemId: normalizedRow.id,
+    userId: normalizedRow.user_id,
+  }) || (
+    normalizedRow.source_item_id
+      ? await readSupabaseFeedItemByUserSourceItem(db, {
+          userId: normalizedRow.user_id,
+          sourceItemId: normalizedRow.source_item_id,
+        })
+      : null
+  );
 
   if (oracleFeedLedgerEnabled && oracleControlPlane) {
     await upsertOracleFeedLedgerRow({
@@ -5173,9 +5204,23 @@ async function persistFeedItemRowOracleAware(
   }
 
   try {
+    await writeSupabaseFeedItemShadow(db, normalizedRow);
     await upsertOracleProductFeedRowsFromKnownRows([normalizedRow], input.action);
     return normalizedRow;
   } catch (error) {
+    try {
+      await restoreSupabaseFeedItemShadow(db, {
+        currentRow: normalizedRow,
+        previousShadow: previousSupabase,
+      });
+    } catch (restoreError) {
+      console.warn('[oracle-control-plane] feed_shadow_restore_failed', JSON.stringify({
+        action: input.action,
+        feed_item_id: normalizedRow.id,
+        user_id: normalizedRow.user_id,
+        error: restoreError instanceof Error ? restoreError.message : String(restoreError),
+      }));
+    }
     if (oracleFeedLedgerEnabled && oracleControlPlane) {
       if (previousOracle) {
         await upsertOracleFeedLedgerRow({
@@ -9929,20 +9974,11 @@ async function insertFeedItem(db: ReturnType<typeof createClient>, input: {
   };
 
   if (oracleFeedLedgerPrimaryEnabled && oracleControlPlane) {
-    await upsertOracleFeedLedgerRow({
-      controlDb: oracleControlPlane,
+    const persistedRow = await persistFeedItemRowOracleAware(db, {
       row: feedRow,
+      action: 'insert_feed_item',
     });
-    try {
-      await upsertOracleProductFeedRowsFromKnownRows([feedRow], 'insert_feed_item');
-    } catch (error) {
-      await deleteOracleFeedLedgerRows({
-        controlDb: oracleControlPlane,
-        ids: [feedRow.id],
-      });
-      throw error;
-    }
-    return { id: feedRow.id };
+    return { id: persistedRow.id };
   }
 
   const { data, error } = await db
@@ -10020,12 +10056,11 @@ async function upsertFeedItemWithBlueprint(db: ReturnType<typeof createClient>, 
       created_at: createdAt,
       updated_at: nowIso,
     };
-    await upsertOracleFeedLedgerRow({
-      controlDb: oracleControlPlane,
+    const persistedRow = await persistFeedItemRowOracleAware(db, {
       row: nextRow,
+      action: 'upsert_feed_item_with_blueprint',
     });
-    await upsertOracleProductFeedRowsFromKnownRows([nextRow], 'upsert_feed_item_with_blueprint');
-    return { id: nextRow.id, user_id: nextRow.user_id };
+    return { id: persistedRow.id, user_id: persistedRow.user_id };
   }
 
   const current = await readSupabaseFeedItemByUserSourceItem(db, {
