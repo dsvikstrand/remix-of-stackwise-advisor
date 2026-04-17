@@ -4380,6 +4380,28 @@ async function writeSupabaseSourceItemShadow(
   return normalizeSourceItemRow(data as Record<string, unknown>);
 }
 
+async function restoreSupabaseSourceItemShadow(
+  db: ReturnType<typeof createClient>,
+  input: {
+    currentRow: SourceItemRow;
+    previousShadow: SourceItemRow | null;
+  },
+) {
+  if (input.previousShadow) {
+    await writeSupabaseSourceItemShadow(db, input.previousShadow, {
+      current: input.currentRow,
+      action: 'source_item_shadow_restore',
+    });
+    return;
+  }
+
+  const { error } = await db
+    .from('source_items')
+    .delete()
+    .eq('id', input.currentRow.id);
+  if (error) throw error;
+}
+
 async function getSourceItemByIdOracleFirst(
   db: ReturnType<typeof createClient>,
   input: { sourceItemId: string; action?: string },
@@ -4501,6 +4523,15 @@ async function persistSourceItemRowOracleAware(
     id: existing?.id || normalizedBase.id,
     created_at: existing?.created_at || normalizedBase.created_at,
   }, existing?.created_at || normalizedBase.created_at);
+  const previousSupabase = await readSupabaseSourceItemById(db, {
+    sourceItemId: normalizedRow.id,
+  }) || (
+    normalizedRow.canonical_key
+      ? await readSupabaseSourceItemByCanonicalKey(db, {
+          canonicalKey: normalizedRow.canonical_key,
+        })
+      : null
+  );
 
   if (oracleSourceItemLedgerEnabled && oracleControlPlane) {
     try {
@@ -4518,40 +4549,29 @@ async function persistSourceItemRowOracleAware(
     }
   }
 
-  if (!shouldWriteSupabaseSourceItemShadow({
-    primaryEnabled: oracleSourceItemLedgerPrimaryEnabled,
-  })) {
-    try {
-      await upsertOracleProductSourceItemsFromKnownRows([normalizedRow], input.action, {
-        strict: true,
-      });
-      return normalizedRow;
-    } catch (error) {
-      if (oracleSourceItemLedgerEnabled && oracleControlPlane) {
-        if (existingOracleById || existingOracleByCanonical) {
-          await upsertOracleSourceItemLedgerFromKnownRow(
-            existingOracleById || existingOracleByCanonical,
-            `${input.action}_rollback`,
-          );
-        } else {
-          await deleteOracleSourceItemLedgerRows({
-            controlDb: oracleControlPlane,
-            ids: [normalizedRow.id],
-          });
-        }
-      }
-      throw error;
-    }
-  }
-
   try {
     const shadowRow = await writeSupabaseSourceItemShadow(db, normalizedRow, {
-      current: existing || null,
+      current: previousSupabase || existing || null,
       action: input.action,
     });
-    await upsertOracleProductSourceItemsFromKnownRows([shadowRow], input.action);
+    await upsertOracleProductSourceItemsFromKnownRows([shadowRow], input.action, {
+      strict: true,
+    });
     return shadowRow;
   } catch (error) {
+    try {
+      await restoreSupabaseSourceItemShadow(db, {
+        currentRow: normalizedRow,
+        previousShadow: previousSupabase,
+      });
+    } catch (restoreError) {
+      console.warn('[oracle-control-plane] source_item_shadow_restore_failed', JSON.stringify({
+        action: input.action,
+        source_item_id: normalizedRow.id,
+        canonical_key: normalizedRow.canonical_key || null,
+        error: restoreError instanceof Error ? restoreError.message : String(restoreError),
+      }));
+    }
     if (oracleSourceItemLedgerEnabled && oracleControlPlane) {
       if (existing) {
         await upsertOracleSourceItemLedgerFromKnownRow(existing, `${input.action}_rollback`);
