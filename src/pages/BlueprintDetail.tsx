@@ -22,7 +22,6 @@ import { ArrowLeft, Heart, Maximize2, Minimize2, RefreshCw } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext';
 import { logMvpEvent } from '@/lib/logEvent';
 import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
-import { resolveChannelLabelForBlueprint } from '@/lib/channelMapping';
 import { getCatalogChannelTagSlugs } from '@/lib/channelPostContext';
 import { normalizeTag } from '@/lib/tagging';
 import { supabase } from '@/integrations/supabase/client';
@@ -776,11 +775,11 @@ export default function BlueprintDetail() {
         ) : blueprint ? (
           <>
             <PageSection className="space-y-2">
-              <div className="text-xs font-semibold text-muted-foreground">
-                {blueprint.published_channel_slug
-                  ? `b/${blueprint.published_channel_slug}`
-                  : resolveChannelLabelForBlueprint(blueprint.tags.map((tag) => tag.slug))}
-              </div>
+              {blueprint.published_channel_slug ? (
+                <div className="text-xs font-semibold text-muted-foreground">
+                  {`b/${blueprint.published_channel_slug}`}
+                </div>
+              ) : null}
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3 min-w-0">
                   <Button
