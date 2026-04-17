@@ -20,6 +20,13 @@ function getApiBase() {
   return `${agenticBackendUrl.replace(/\/$/, '')}/api`;
 }
 
+async function getOptionalAuthHeader() {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return {};
+  return { Authorization: `Bearer ${token}` };
+}
+
 async function fetchBlueprintTagRowsFromSupabase(input: {
   blueprintIds?: string[];
   tagIds?: string[];
@@ -95,8 +102,12 @@ export async function listBlueprintTagRows(input: {
   if (blueprintIds.length > 0) search.set('blueprint_ids', blueprintIds.join(','));
   if (tagIds.length > 0) search.set('tag_ids', tagIds.join(','));
   if (tagSlugs.length > 0) search.set('tag_slugs', tagSlugs.join(','));
+  const authHeader = await getOptionalAuthHeader();
   const response = await fetch(`${base}/blueprint-tags?${search.toString()}`, {
     method: 'GET',
+    headers: {
+      ...authHeader,
+    },
   });
   const json = (await response.json().catch(() => null)) as ApiEnvelope<{ items: BlueprintTagRow[] }> | null;
   if (!response.ok || !json?.ok || !json.data) {

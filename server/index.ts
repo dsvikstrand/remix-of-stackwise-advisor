@@ -7753,6 +7753,7 @@ app.use((req, res, next) => {
   const isPublicSourcePageSearchRoute = req.method === 'GET' && req.path === '/api/source-pages/search';
   const isPublicSourcePageRoute = req.method === 'GET' && /^\/api\/source-pages\/[^/]+\/[^/]+$/.test(req.path);
   const isPublicSourcePageBlueprintFeedRoute = req.method === 'GET' && /^\/api\/source-pages\/[^/]+\/[^/]+\/blueprints$/.test(req.path);
+  const isPublicBlueprintTagsRoute = req.method === 'GET' && req.path === '/api/blueprint-tags';
   const allowsAnonymous = req.path === '/api/youtube-to-blueprint'
     || req.path === '/api/youtube/connection/callback'
     || req.path === '/api/ingestion/jobs/trigger'
@@ -7766,6 +7767,7 @@ app.use((req, res, next) => {
     || isPublicSourcePageSearchRoute
     || isPublicSourcePageRoute
     || isPublicSourcePageBlueprintFeedRoute
+    || isPublicBlueprintTagsRoute
     || (debugEndpointsEnabled && isDebugResetTranscriptProxyRoute)
     || (debugEndpointsEnabled && isDebugSimulationRoute);
 
