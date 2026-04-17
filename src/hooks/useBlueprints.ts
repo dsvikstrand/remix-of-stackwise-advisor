@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { buildStoredPreviewSummary } from '@/lib/feedPreview';
 import { normalizeTags } from '@/lib/tagging';
+import { collectBlueprintTagMap, listBlueprintTagRows } from '@/lib/blueprintTagsApi';
 import type { Json } from '@/integrations/supabase/types';
 
 export interface BlueprintRow {
@@ -127,24 +128,21 @@ export function useBlueprint(blueprintId?: string) {
       if (error) throw error;
       if (!blueprint) return null;
 
-      const [tagRowsRes, likeRes, profileRes] = await Promise.all([
-        supabase.from('blueprint_tags').select('tag_id').eq('blueprint_id', blueprintId),
+      const [tagRows, likeRes, profileRes] = await Promise.all([
+        listBlueprintTagRows({ blueprintIds: [blueprintId] }),
         user
           ? supabase.from('blueprint_likes').select('id').eq('blueprint_id', blueprintId).eq('user_id', user.id)
           : Promise.resolve({ data: [] as { id: string }[] }),
         supabase.from('profiles').select('display_name, avatar_url').eq('user_id', blueprint.creator_user_id).maybeSingle(),
       ]);
 
-      const tagIds = (tagRowsRes.data || []).map((row) => row.tag_id);
-      const { data: tagsData } = tagIds.length > 0
-        ? await supabase.from('tags').select('id, slug').in('id', tagIds)
-        : { data: [] as BlueprintTag[] };
+      const tagsData = collectBlueprintTagMap(tagRows).get(blueprintId) || [];
 
       const userLiked = !!(likeRes.data && likeRes.data.length > 0);
 
       return {
         ...(blueprint as BlueprintRow),
-        tags: tagsData || [],
+        tags: tagsData,
         user_liked: userLiked,
         creator_profile: profileRes.data || null,
       } as BlueprintDetail;
