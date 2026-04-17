@@ -1,3 +1,4 @@
+import { config } from '@/config/runtime';
 import { supabase } from '@/integrations/supabase/client';
 
 export type BlueprintTagRow = {
@@ -14,8 +15,7 @@ type ApiEnvelope<T> = {
 };
 
 function getApiBase() {
-  const viteEnv = (import.meta as any)?.env || {};
-  const agenticBackendUrl = String(viteEnv.VITE_AGENTIC_BACKEND_URL || '').trim();
+  const agenticBackendUrl = String(config.agenticBackendUrl || '').trim();
   if (!agenticBackendUrl) return null;
   return `${agenticBackendUrl.replace(/\/$/, '')}/api`;
 }
