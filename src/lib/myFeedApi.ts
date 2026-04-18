@@ -1,120 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { config } from '@/config/runtime';
-import { buildYouTubeThumbnailUrl, extractYouTubeVideoId, toYouTubeIdentity } from '@/lib/sourceIdentity';
 import type { MyFeedItemView } from '@/lib/myFeedData';
-
-export async function ensureSourceItemForYouTube(input: {
-  videoUrl: string;
-  title: string;
-  sourceChannelId?: string | null;
-  sourceChannelTitle?: string | null;
-  sourceChannelUrl?: string | null;
-  metadata?: Record<string, unknown>;
-}) {
-  const videoId = extractYouTubeVideoId(input.videoUrl);
-  if (!videoId) throw new Error('Invalid YouTube URL.');
-
-  const identity = toYouTubeIdentity(videoId);
-  const { data: existingSource } = await supabase
-    .from('source_items')
-    .select('id, source_channel_id, source_channel_title, thumbnail_url, metadata')
-    .eq('canonical_key', identity.canonicalKey)
-    .maybeSingle();
-
-  const existingMetadata =
-    existingSource?.metadata
-    && typeof existingSource.metadata === 'object'
-    && existingSource.metadata !== null
-      ? (existingSource.metadata as Record<string, unknown>)
-      : {};
-  const effectiveSourceChannelId = input.sourceChannelId || existingSource?.source_channel_id || null;
-  const effectiveSourceChannelTitle = input.sourceChannelTitle || existingSource?.source_channel_title || null;
-  const effectiveThumbnailUrl = String(existingSource?.thumbnail_url || '').trim() || buildYouTubeThumbnailUrl(identity.sourceNativeId);
-  const metadata: Record<string, unknown> = {
-    ...existingMetadata,
-    ...(input.metadata || {}),
-  };
-  if (effectiveSourceChannelId) metadata.source_channel_id = effectiveSourceChannelId;
-  if (effectiveSourceChannelTitle) metadata.source_channel_title = effectiveSourceChannelTitle;
-  if (input.sourceChannelUrl) metadata.source_channel_url = input.sourceChannelUrl;
-
-  const { data, error } = await supabase
-    .from('source_items')
-    .upsert(
-      {
-        source_type: identity.sourceType,
-        source_native_id: identity.sourceNativeId,
-        canonical_key: identity.canonicalKey,
-        source_url: input.videoUrl,
-        title: input.title,
-        source_channel_id: effectiveSourceChannelId,
-        source_channel_title: effectiveSourceChannelTitle,
-        thumbnail_url: effectiveThumbnailUrl,
-        metadata,
-        ingest_status: 'ready',
-      },
-      { onConflict: 'canonical_key' },
-    )
-    .select('id, canonical_key, thumbnail_url')
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-export async function getExistingUserFeedItem(userId: string, sourceItemId: string) {
-  const apiBase = getApiBase();
-  if (apiBase) {
-    try {
-      const feed = await listMyFeedItems(userId);
-      const existing = feed.items.find((item) => item.source?.id === sourceItemId);
-      if (existing) {
-        return {
-          id: existing.id,
-          blueprint_id: existing.blueprint?.id || null,
-          state: existing.state,
-        };
-      }
-      return null;
-    } catch (error) {
-      if (!shouldFallbackToSupabase(error)) throw error;
-    }
-  }
-
-  const { data, error } = await supabase
-    .from('user_feed_items')
-    .select('id, blueprint_id, state')
-    .eq('user_id', userId)
-    .eq('source_item_id', sourceItemId)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data;
-}
-
-export async function upsertUserFeedItem(input: {
-  userId: string;
-  sourceItemId: string;
-  blueprintId: string;
-  state?: string;
-}) {
-  const { data, error } = await supabase
-    .from('user_feed_items')
-    .upsert(
-      {
-        user_id: input.userId,
-        source_item_id: input.sourceItemId,
-        blueprint_id: input.blueprintId,
-        state: input.state || 'my_feed_published',
-      },
-      { onConflict: 'user_id,source_item_id' },
-    )
-    .select('id, user_id, source_item_id, blueprint_id, state')
-    .single();
-
-  if (error) throw error;
-  return data;
-}
 
 type ApiEnvelope<T> = {
   ok: boolean;
@@ -271,6 +157,45 @@ export async function listMyFeedItems(userId: string): Promise<MyFeedListResult>
     }
     throw error;
   }
+}
+
+export async function saveGeneratedBlueprintToMyFeed(input: {
+  videoUrl: string;
+  title: string;
+  blueprintId: string;
+  sourceChannelId?: string | null;
+  sourceChannelTitle?: string | null;
+  sourceChannelUrl?: string | null;
+  metadata?: Record<string, unknown> | null;
+  state?: string;
+}) {
+  const response = await apiRequest<{
+    source_item: {
+      id: string;
+      canonical_key: string;
+      thumbnail_url: string | null;
+    };
+    feed_item: {
+      id: string;
+      blueprint_id: string | null;
+      state: string;
+    } | null;
+    existing: boolean;
+  }>('/my-feed/youtube-save', {
+    method: 'POST',
+    body: JSON.stringify({
+      video_url: input.videoUrl,
+      title: input.title,
+      blueprint_id: input.blueprintId,
+      source_channel_id: input.sourceChannelId || null,
+      source_channel_title: input.sourceChannelTitle || null,
+      source_channel_url: input.sourceChannelUrl || null,
+      metadata: input.metadata || {},
+      state: input.state || 'my_feed_published',
+    }),
+  });
+
+  return response.data;
 }
 
 export async function submitCandidateAndEvaluate(input: {

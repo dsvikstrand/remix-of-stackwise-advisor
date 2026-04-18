@@ -40,6 +40,29 @@ export type FeedRouteDeps = {
   autoChannelPipelineEnabled: boolean;
   getAuthedSupabaseClient: (authToken: string) => DbClient | null;
   getServiceSupabaseClient: () => DbClient | null;
+  saveGeneratedYouTubeBlueprintToFeed: (db: DbClient, input: {
+    userId: string;
+    videoUrl: string;
+    title: string;
+    blueprintId?: string | null;
+    sourceChannelId?: string | null;
+    sourceChannelTitle?: string | null;
+    sourceChannelUrl?: string | null;
+    metadata?: Record<string, unknown> | null;
+    state?: string | null;
+  }) => Promise<{
+    sourceItem: {
+      id: string;
+      canonical_key: string;
+      thumbnail_url: string | null;
+    };
+    feedItem: {
+      id: string;
+      blueprint_id: string | null;
+      state: string;
+    } | null;
+    existing: boolean;
+  }>;
   readChannelCandidateRows?: (input: {
     db: DbClient;
     feedItemIds: string[];

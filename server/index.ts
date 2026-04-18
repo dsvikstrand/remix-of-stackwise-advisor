@@ -435,6 +435,7 @@ import {
   shouldLookupSupabaseSourceItemCurrent,
   shouldWriteSupabaseSourceItemShadow,
 } from './services/sourceItemShadowPolicy';
+import { shouldWriteSupabaseFeedItemShadow } from './services/feedShadowPolicy';
 import {
   getQueueShadowActionClass,
   getQueueShadowChangedFields,
@@ -4535,15 +4536,20 @@ async function persistSourceItemRowOracleAware(
     id: existing?.id || normalizedBase.id,
     created_at: existing?.created_at || normalizedBase.created_at,
   }, existing?.created_at || normalizedBase.created_at);
-  const previousSupabase = await readSupabaseSourceItemById(db, {
-    sourceItemId: normalizedRow.id,
-  }) || (
-    normalizedRow.canonical_key
-      ? await readSupabaseSourceItemByCanonicalKey(db, {
-          canonicalKey: normalizedRow.canonical_key,
-        })
-      : null
-  );
+  const writeSupabaseShadow = shouldWriteSupabaseSourceItemShadow({
+    primaryEnabled: oracleSourceItemLedgerPrimaryEnabled,
+  });
+  const previousSupabase = writeSupabaseShadow
+    ? await readSupabaseSourceItemById(db, {
+        sourceItemId: normalizedRow.id,
+      }) || (
+        normalizedRow.canonical_key
+          ? await readSupabaseSourceItemByCanonicalKey(db, {
+              canonicalKey: normalizedRow.canonical_key,
+            })
+          : null
+      )
+    : null;
 
   if (oracleSourceItemLedgerEnabled && oracleControlPlane) {
     try {
@@ -4562,27 +4568,35 @@ async function persistSourceItemRowOracleAware(
   }
 
   try {
-    const shadowRow = await writeSupabaseSourceItemShadow(db, normalizedRow, {
-      current: previousSupabase || existing || null,
-      action: input.action,
-    });
-    await upsertOracleProductSourceItemsFromKnownRows([shadowRow], input.action, {
+    if (writeSupabaseShadow) {
+      const shadowRow = await writeSupabaseSourceItemShadow(db, normalizedRow, {
+        current: previousSupabase || existing || null,
+        action: input.action,
+      });
+      await upsertOracleProductSourceItemsFromKnownRows([shadowRow], input.action, {
+        strict: true,
+      });
+      return shadowRow;
+    }
+    await upsertOracleProductSourceItemsFromKnownRows([normalizedRow], input.action, {
       strict: true,
     });
-    return shadowRow;
+    return normalizedRow;
   } catch (error) {
-    try {
-      await restoreSupabaseSourceItemShadow(db, {
-        currentRow: normalizedRow,
-        previousShadow: previousSupabase,
-      });
-    } catch (restoreError) {
-      console.warn('[oracle-control-plane] source_item_shadow_restore_failed', JSON.stringify({
-        action: input.action,
-        source_item_id: normalizedRow.id,
-        canonical_key: normalizedRow.canonical_key || null,
-        error: restoreError instanceof Error ? restoreError.message : String(restoreError),
-      }));
+    if (writeSupabaseShadow) {
+      try {
+        await restoreSupabaseSourceItemShadow(db, {
+          currentRow: normalizedRow,
+          previousShadow: previousSupabase,
+        });
+      } catch (restoreError) {
+        console.warn('[oracle-control-plane] source_item_shadow_restore_failed', JSON.stringify({
+          action: input.action,
+          source_item_id: normalizedRow.id,
+          canonical_key: normalizedRow.canonical_key || null,
+          error: restoreError instanceof Error ? restoreError.message : String(restoreError),
+        }));
+      }
     }
     if (oracleSourceItemLedgerEnabled && oracleControlPlane) {
       if (existing) {
@@ -5208,6 +5222,9 @@ async function persistFeedItemRowOracleAware(
   },
 ) {
   const normalizedRow = normalizeFeedItemRow(input.row as unknown as Record<string, unknown>);
+  const writeSupabaseShadow = shouldWriteSupabaseFeedItemShadow({
+    primaryEnabled: oracleFeedLedgerPrimaryEnabled,
+  });
   const previousOracle = (
     oracleFeedLedgerEnabled && oracleControlPlane
       ? await getOracleFeedLedgerById({
@@ -5216,17 +5233,19 @@ async function persistFeedItemRowOracleAware(
         })
       : null
   );
-  const previousSupabase = await readSupabaseFeedItemById(db, {
-    feedItemId: normalizedRow.id,
-    userId: normalizedRow.user_id,
-  }) || (
-    normalizedRow.source_item_id
-      ? await readSupabaseFeedItemByUserSourceItem(db, {
-          userId: normalizedRow.user_id,
-          sourceItemId: normalizedRow.source_item_id,
-        })
-      : null
-  );
+  const previousSupabase = writeSupabaseShadow
+    ? await readSupabaseFeedItemById(db, {
+        feedItemId: normalizedRow.id,
+        userId: normalizedRow.user_id,
+      }) || (
+        normalizedRow.source_item_id
+          ? await readSupabaseFeedItemByUserSourceItem(db, {
+              userId: normalizedRow.user_id,
+              sourceItemId: normalizedRow.source_item_id,
+            })
+          : null
+      )
+    : null;
 
   if (oracleFeedLedgerEnabled && oracleControlPlane) {
     await upsertOracleFeedLedgerRow({
@@ -5236,22 +5255,26 @@ async function persistFeedItemRowOracleAware(
   }
 
   try {
-    await writeSupabaseFeedItemShadow(db, normalizedRow);
+    if (writeSupabaseShadow) {
+      await writeSupabaseFeedItemShadow(db, normalizedRow);
+    }
     await upsertOracleProductFeedRowsFromKnownRows([normalizedRow], input.action);
     return normalizedRow;
   } catch (error) {
-    try {
-      await restoreSupabaseFeedItemShadow(db, {
-        currentRow: normalizedRow,
-        previousShadow: previousSupabase,
-      });
-    } catch (restoreError) {
-      console.warn('[oracle-control-plane] feed_shadow_restore_failed', JSON.stringify({
-        action: input.action,
-        feed_item_id: normalizedRow.id,
-        user_id: normalizedRow.user_id,
-        error: restoreError instanceof Error ? restoreError.message : String(restoreError),
-      }));
+    if (writeSupabaseShadow) {
+      try {
+        await restoreSupabaseFeedItemShadow(db, {
+          currentRow: normalizedRow,
+          previousShadow: previousSupabase,
+        });
+      } catch (restoreError) {
+        console.warn('[oracle-control-plane] feed_shadow_restore_failed', JSON.stringify({
+          action: input.action,
+          feed_item_id: normalizedRow.id,
+          user_id: normalizedRow.user_id,
+          error: restoreError instanceof Error ? restoreError.message : String(restoreError),
+        }));
+      }
     }
     if (oracleFeedLedgerEnabled && oracleControlPlane) {
       if (previousOracle) {
@@ -9831,6 +9854,41 @@ function mapDraftStepsForBlueprint(steps: Array<{ name: string; notes: string }>
   });
 }
 
+function extractYouTubeVideoIdFromUrl(rawUrl: string) {
+  try {
+    const url = new URL(String(rawUrl || '').trim());
+    const host = url.hostname.replace(/^www\./, '');
+    const pathParts = url.pathname.replace(/^\/+/, '').split('/').filter(Boolean);
+
+    if (host === 'youtube.com' || host === 'm.youtube.com') {
+      let videoId = '';
+      if (url.pathname === '/watch') {
+        videoId = String(url.searchParams.get('v') || '').trim();
+      } else if (pathParts[0] === 'shorts' || pathParts[0] === 'live' || pathParts[0] === 'embed') {
+        videoId = String(pathParts[1] || '').trim();
+      } else {
+        return null;
+      }
+      return /^[a-zA-Z0-9_-]{8,15}$/.test(videoId) ? videoId : null;
+    }
+
+    if (host === 'youtu.be') {
+      const videoId = String(pathParts[0] || '').trim();
+      return /^[a-zA-Z0-9_-]{8,15}$/.test(videoId) ? videoId : null;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function buildYouTubeThumbnailUrlForVideo(videoId: string) {
+  const normalized = String(videoId || '').trim();
+  if (!/^[a-zA-Z0-9_-]{8,15}$/.test(normalized)) return null;
+  return `https://i.ytimg.com/vi/${normalized}/hqdefault.jpg`;
+}
+
 async function upsertSourceItemFromVideo(db: ReturnType<typeof createClient>, input: {
   video: YouTubeFeedVideo;
   channelId: string;
@@ -9872,6 +9930,62 @@ async function upsertSourceItemFromVideo(db: ReturnType<typeof createClient>, in
       updated_at: new Date().toISOString(),
     },
     action: 'upsert_source_item_from_video',
+  });
+}
+
+async function ensureSourceItemForYouTubeManualSave(db: ReturnType<typeof createClient>, input: {
+  videoUrl: string;
+  title: string;
+  sourceChannelId?: string | null;
+  sourceChannelTitle?: string | null;
+  sourceChannelUrl?: string | null;
+  metadata?: Record<string, unknown> | null;
+}) {
+  const videoId = extractYouTubeVideoIdFromUrl(input.videoUrl);
+  if (!videoId) {
+    throw new Error('Invalid YouTube URL.');
+  }
+
+  const canonicalKey = `youtube:${videoId}`;
+  const existing = (
+    await listProductSourceItemsOracleFirst(db, {
+      canonicalKeys: [canonicalKey],
+      action: 'ensure_source_item_for_youtube_manual_save_lookup_existing',
+    })
+  )[0] || null;
+  const existingMetadata = existing?.metadata && typeof existing.metadata === 'object' && !Array.isArray(existing.metadata)
+    ? existing.metadata
+    : {};
+  const effectiveSourceChannelId = String(input.sourceChannelId || existing?.source_channel_id || '').trim() || null;
+  const effectiveSourceChannelTitle = String(input.sourceChannelTitle || existing?.source_channel_title || '').trim() || null;
+  const effectiveThumbnailUrl = String(existing?.thumbnail_url || '').trim() || buildYouTubeThumbnailUrlForVideo(videoId);
+  const metadata: Record<string, unknown> = {
+    ...existingMetadata,
+    ...((input.metadata && typeof input.metadata === 'object' && !Array.isArray(input.metadata)) ? input.metadata : {}),
+  };
+  if (effectiveSourceChannelId) metadata.source_channel_id = effectiveSourceChannelId;
+  if (effectiveSourceChannelTitle) metadata.source_channel_title = effectiveSourceChannelTitle;
+  if (input.sourceChannelUrl) metadata.source_channel_url = input.sourceChannelUrl;
+
+  return persistSourceItemRowOracleAware(db, {
+    row: {
+      id: existing?.id || randomUUID(),
+      source_type: 'youtube',
+      source_native_id: videoId,
+      canonical_key: canonicalKey,
+      source_url: String(input.videoUrl || '').trim(),
+      title: String(input.title || '').trim(),
+      published_at: existing?.published_at || null,
+      ingest_status: 'ready',
+      source_channel_id: effectiveSourceChannelId,
+      source_channel_title: effectiveSourceChannelTitle,
+      source_page_id: existing?.source_page_id || null,
+      thumbnail_url: effectiveThumbnailUrl,
+      metadata,
+      created_at: existing?.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    action: 'ensure_source_item_for_youtube_manual_save',
   });
 }
 
@@ -10171,6 +10285,78 @@ async function upsertFeedItemWithBlueprint(db: ReturnType<typeof createClient>, 
     updated_at: nowIso,
   }], 'upsert_feed_item_with_blueprint');
   return data as { id: string; user_id: string };
+}
+
+async function saveGeneratedYouTubeBlueprintToFeed(db: ReturnType<typeof createClient>, input: {
+  userId: string;
+  videoUrl: string;
+  title: string;
+  blueprintId?: string | null;
+  sourceChannelId?: string | null;
+  sourceChannelTitle?: string | null;
+  sourceChannelUrl?: string | null;
+  metadata?: Record<string, unknown> | null;
+  state?: string | null;
+}) {
+  const sourceItem = await ensureSourceItemForYouTubeManualSave(db, {
+    videoUrl: input.videoUrl,
+    title: input.title,
+    sourceChannelId: input.sourceChannelId,
+    sourceChannelTitle: input.sourceChannelTitle,
+    sourceChannelUrl: input.sourceChannelUrl,
+    metadata: input.metadata || null,
+  });
+
+  const existing = await getExistingFeedItem(db, input.userId, sourceItem.id);
+  if (existing) {
+    return {
+      sourceItem: {
+        id: sourceItem.id,
+        canonical_key: sourceItem.canonical_key,
+        thumbnail_url: sourceItem.thumbnail_url,
+      },
+      feedItem: {
+        id: String(existing.id || '').trim(),
+        blueprint_id: String(existing.blueprint_id || '').trim() || null,
+        state: String(existing.state || '').trim() || 'my_feed_published',
+      },
+      existing: true,
+    };
+  }
+
+  const blueprintId = String(input.blueprintId || '').trim();
+  if (!blueprintId) {
+    return {
+      sourceItem: {
+        id: sourceItem.id,
+        canonical_key: sourceItem.canonical_key,
+        thumbnail_url: sourceItem.thumbnail_url,
+      },
+      feedItem: null,
+      existing: false,
+    };
+  }
+
+  const feedItem = await upsertFeedItemWithBlueprint(db, {
+    userId: input.userId,
+    sourceItemId: sourceItem.id,
+    blueprintId,
+    state: String(input.state || '').trim() || 'my_feed_published',
+  });
+
+  return {
+    sourceItem: {
+      id: sourceItem.id,
+      canonical_key: sourceItem.canonical_key,
+      thumbnail_url: sourceItem.thumbnail_url,
+    },
+      feedItem: {
+        id: String(feedItem.id || '').trim(),
+        blueprint_id: blueprintId,
+        state: String(input.state || '').trim() || 'my_feed_published',
+      },
+    existing: false,
+  };
 }
 
 async function attachBlueprintToSubscribedUsers(db: ReturnType<typeof createClient>, input: {
@@ -17223,6 +17409,7 @@ registerFeedRoutes(app, {
   autoChannelPipelineEnabled,
   getAuthedSupabaseClient,
   getServiceSupabaseClient,
+  saveGeneratedYouTubeBlueprintToFeed,
   readChannelCandidateRows: ({ db, feedItemIds, statuses }: any) => listChannelCandidateRowsOracleFirst(db, {
     feedItemIds,
     statuses,

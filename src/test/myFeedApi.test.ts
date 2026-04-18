@@ -150,7 +150,7 @@ describe('listMyFeedItems', () => {
   });
 });
 
-describe('getExistingUserFeedItem', () => {
+describe('saveGeneratedBlueprintToMyFeed', () => {
   beforeEach(() => {
     getSessionMock.mockReset();
     getSessionMock.mockResolvedValue({
@@ -170,7 +170,7 @@ describe('getExistingUserFeedItem', () => {
     window.localStorage.clear();
   });
 
-  it('uses the API-backed my-feed snapshot before falling back to Supabase', async () => {
+  it('uses the backend save endpoint instead of direct Supabase feed/source writes', async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -178,26 +178,49 @@ describe('getExistingUserFeedItem', () => {
       json: async () => ({
         ok: true,
         error_code: null,
-        message: 'ok',
+        message: 'saved',
         data: {
-          items: [
-            makeFeedItem({
-              id: 'ufi_existing',
-              blueprintId: 'bp_existing',
-              title: 'Existing blueprint',
-            }),
-          ],
+          source_item: {
+            id: 'si_saved',
+            canonical_key: 'youtube:abc12345678',
+            thumbnail_url: 'https://img.example.com/thumb.jpg',
+          },
+          feed_item: {
+            id: 'ufi_saved',
+            blueprint_id: 'bp_saved',
+            state: 'my_feed_published',
+          },
+          existing: false,
         },
       }),
     } as Response);
 
-    const { getExistingUserFeedItem } = await import('@/lib/myFeedApi');
+    const { saveGeneratedBlueprintToMyFeed } = await import('@/lib/myFeedApi');
 
-    await expect(getExistingUserFeedItem('user_1', 'si_1')).resolves.toEqual({
-      id: 'ufi_existing',
-      blueprint_id: 'bp_existing',
-      state: 'my_feed_published',
+    await expect(saveGeneratedBlueprintToMyFeed({
+      videoUrl: 'https://www.youtube.com/watch?v=abc12345678',
+      title: 'Saved blueprint',
+      blueprintId: 'bp_saved',
+      sourceChannelId: 'UC_saved',
+      sourceChannelTitle: 'Saved Creator',
+      sourceChannelUrl: 'https://youtube.com/@saved',
+      metadata: {
+        run_id: 'run_1',
+      },
+    })).resolves.toEqual({
+      source_item: {
+        id: 'si_saved',
+        canonical_key: 'youtube:abc12345678',
+        thumbnail_url: 'https://img.example.com/thumb.jpg',
+      },
+      feed_item: {
+        id: 'ufi_saved',
+        blueprint_id: 'bp_saved',
+        state: 'my_feed_published',
+      },
+      existing: false,
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.example.com/api/my-feed/youtube-save');
   });
 });

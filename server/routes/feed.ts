@@ -3,6 +3,80 @@ import type { FeedRouteDeps } from '../contracts/api/feed';
 import { listMyFeedItems } from '../services/myFeed';
 
 export function registerFeedRoutes(app: express.Express, deps: FeedRouteDeps) {
+  app.post('/api/my-feed/youtube-save', async (req, res) => {
+    const userId = String((res.locals.user as { id?: string } | undefined)?.id || '').trim();
+    if (!userId) {
+      return res.status(401).json({
+        ok: false,
+        error_code: 'AUTH_REQUIRED',
+        message: 'Unauthorized',
+        data: null,
+      });
+    }
+
+    const db = deps.getServiceSupabaseClient();
+    if (!db) {
+      return res.status(500).json({
+        ok: false,
+        error_code: 'CONFIG_ERROR',
+        message: 'Service role client is not configured',
+        data: null,
+      });
+    }
+
+    const body = (req.body && typeof req.body === 'object') ? req.body as Record<string, unknown> : {};
+    const videoUrl = String(body.video_url || '').trim();
+    const title = String(body.title || '').trim();
+    const blueprintId = String(body.blueprint_id || '').trim() || null;
+    const state = String(body.state || '').trim() || 'my_feed_published';
+    const sourceChannelId = String(body.source_channel_id || '').trim() || null;
+    const sourceChannelTitle = String(body.source_channel_title || '').trim() || null;
+    const sourceChannelUrl = String(body.source_channel_url || '').trim() || null;
+    const metadata = body.metadata && typeof body.metadata === 'object' && !Array.isArray(body.metadata)
+      ? body.metadata as Record<string, unknown>
+      : null;
+
+    if (!videoUrl || !title) {
+      return res.status(400).json({
+        ok: false,
+        error_code: 'VALIDATION_ERROR',
+        message: 'video_url and title are required.',
+        data: null,
+      });
+    }
+
+    try {
+      const result = await deps.saveGeneratedYouTubeBlueprintToFeed(db, {
+        userId,
+        videoUrl,
+        title,
+        blueprintId,
+        sourceChannelId,
+        sourceChannelTitle,
+        sourceChannelUrl,
+        metadata,
+        state,
+      });
+      return res.json({
+        ok: true,
+        error_code: null,
+        message: 'youtube blueprint saved to feed',
+        data: {
+          source_item: result.sourceItem,
+          feed_item: result.feedItem,
+          existing: result.existing,
+        },
+      });
+    } catch (error) {
+      return res.status(400).json({
+        ok: false,
+        error_code: 'WRITE_FAILED',
+        message: error instanceof Error ? error.message : 'Failed to save generated blueprint to feed',
+        data: null,
+      });
+    }
+  });
+
   app.get('/api/my-feed', async (_req, res) => {
     const userId = String((res.locals.user as { id?: string } | undefined)?.id || '').trim();
     if (!userId) {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { registerFeedRoutes } from '../../server/routes/feed';
 import { createMockSupabase } from './helpers/mockSupabase';
 
@@ -38,6 +38,22 @@ function createMockApp() {
 
 function buildFeedRouteDeps(db: any) {
   return {
+    saveGeneratedYouTubeBlueprintToFeed: async (_innerDb: any, input: {
+      blueprintId: string;
+      state?: string | null;
+    }) => ({
+      sourceItem: {
+        id: 'source_saved',
+        canonical_key: 'youtube:abc12345678',
+        thumbnail_url: 'https://img.example.com/saved.jpg',
+      },
+      feedItem: {
+        id: 'feed_saved',
+        blueprint_id: input.blueprintId,
+        state: input.state || 'my_feed_published',
+      },
+      existing: false,
+    }),
     getFeedItemById: async (innerDb: any, input: { feedItemId: string; userId?: string | null }) => {
       let query = innerDb
         .from('user_feed_items')
@@ -486,6 +502,77 @@ describe('my feed route', () => {
         source_item_id_by_blueprint_id: {
           bp_lookup: 'source_lookup',
         },
+      },
+    });
+  });
+
+  it('saves generated YouTube blueprints through the injected Oracle-aware server path', async () => {
+    const app = createMockApp();
+    const db = createMockSupabase({}) as any;
+    const saveGeneratedYouTubeBlueprintToFeed = vi.fn(async () => ({
+      sourceItem: {
+        id: 'source_saved',
+        canonical_key: 'youtube:abc12345678',
+        thumbnail_url: 'https://img.example.com/saved.jpg',
+      },
+      feedItem: {
+        id: 'feed_saved',
+        blueprint_id: 'bp_saved',
+        state: 'my_feed_published',
+      },
+      existing: false,
+    }));
+
+    registerFeedRoutes(app as any, {
+      autoChannelPipelineEnabled: true,
+      getAuthedSupabaseClient: () => db,
+      getServiceSupabaseClient: () => db,
+      ...buildFeedRouteDeps(db),
+      saveGeneratedYouTubeBlueprintToFeed,
+      createBlueprintFromVideo: async () => ({ blueprintId: 'bp_new', runId: null }),
+      runAutoChannelForFeedItem: async () => null,
+    });
+
+    const handler = app.handlers['POST /api/my-feed/youtube-save'];
+    const res = createResponse('user_1');
+    await handler({
+      body: {
+        video_url: 'https://www.youtube.com/watch?v=abc12345678',
+        title: 'Saved blueprint',
+        blueprint_id: 'bp_saved',
+        source_channel_id: 'UC_saved',
+        source_channel_title: 'Saved Creator',
+        source_channel_url: 'https://youtube.com/@saved',
+        metadata: {
+          run_id: 'run_1',
+        },
+        state: 'my_feed_published',
+      },
+    } as any, res as any);
+
+    expect(res.statusCode).toBe(200);
+    expect(saveGeneratedYouTubeBlueprintToFeed).toHaveBeenCalledWith(db, expect.objectContaining({
+      userId: 'user_1',
+      videoUrl: 'https://www.youtube.com/watch?v=abc12345678',
+      title: 'Saved blueprint',
+      blueprintId: 'bp_saved',
+      sourceChannelId: 'UC_saved',
+      sourceChannelTitle: 'Saved Creator',
+      sourceChannelUrl: 'https://youtube.com/@saved',
+      state: 'my_feed_published',
+    }));
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        source_item: {
+          id: 'source_saved',
+        },
+        feed_item: {
+          id: 'feed_saved',
+          blueprint_id: 'bp_saved',
+          state: 'my_feed_published',
+        },
+        existing: false,
       },
     });
   });

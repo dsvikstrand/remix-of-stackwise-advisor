@@ -13,7 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCreateBlueprint } from '@/hooks/useBlueprints';
 import { config, getFunctionUrl } from '@/config/runtime';
 import { logMvpEvent } from '@/lib/logEvent';
-import { autoPublishMyFeedItem, ensureSourceItemForYouTube, getExistingUserFeedItem, upsertUserFeedItem } from '@/lib/myFeedApi';
+import { autoPublishMyFeedItem, saveGeneratedBlueprintToMyFeed } from '@/lib/myFeedApi';
 import { apiFetch } from '@/lib/api';
 import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 import { BlueprintAnalysisView } from '@/components/blueprint/BlueprintAnalysisView';
@@ -621,26 +621,25 @@ export default function YouTubeToBlueprint() {
       const sourceChannelId = String(searchParams.get('channel_id') || '').trim() || null;
       const sourceChannelTitle = String(searchParams.get('channel_title') || searchParams.get('channel_name') || '').trim() || null;
       const sourceChannelUrl = String(searchParams.get('channel_url') || '').trim() || null;
-      const sourceItem = await ensureSourceItemForYouTube({
+      const metadata = {
+        run_id: result.run_id,
+        transcript_source: result.meta.transcript_source,
+        confidence: result.meta.confidence,
+        source_channel_url: sourceChannelUrl,
+      };
+      const initialSaveResult = await saveGeneratedBlueprintToMyFeed({
         videoUrl: videoUrl.trim(),
         title: result.draft.title,
         sourceChannelId,
         sourceChannelTitle,
         sourceChannelUrl,
-        metadata: {
-          run_id: result.run_id,
-          transcript_source: result.meta.transcript_source,
-          confidence: result.meta.confidence,
-          source_channel_url: sourceChannelUrl,
-        },
+        metadata,
+        state: 'my_feed_published',
       });
-
-      const existing = await getExistingUserFeedItem(user.id, sourceItem.id);
-      if (existing) {
+      if (initialSaveResult.existing) {
         navigate('/wall');
         return;
       }
-
       const created = await createBlueprint.mutateAsync({
         inventoryId: null,
         title: result.draft.title,
@@ -654,22 +653,27 @@ export default function YouTubeToBlueprint() {
         steps: toBlueprintStepsForSave(result.draft.steps),
         mixNotes: result.draft.notes,
         reviewPrompt: 'youtube_mvp',
-        bannerUrl: result.banner.url || sourceItem.thumbnail_url || null,
+        bannerUrl: result.banner.url || initialSaveResult.source_item.thumbnail_url || null,
         llmReview: result.review.summary,
         tags: result.draft.tags || [],
         isPublic: false,
       });
       setSavedBlueprintId(created.id);
-
-      const feedItem = await upsertUserFeedItem({
-        userId: user.id,
-        sourceItemId: sourceItem.id,
+      const saveResult = await saveGeneratedBlueprintToMyFeed({
+        videoUrl: videoUrl.trim(),
+        title: result.draft.title,
         blueprintId: created.id,
+        sourceChannelId,
+        sourceChannelTitle,
+        sourceChannelUrl,
+        metadata,
         state: 'my_feed_published',
       });
+      const sourceItem = saveResult.source_item;
+      const feedItem = saveResult.feed_item;
 
       let autoPublishResult: Awaited<ReturnType<typeof autoPublishMyFeedItem>> | null = null;
-      if (config.features.autoChannelPipelineV1 && feedItem?.id) {
+      if (!saveResult.existing && config.features.autoChannelPipelineV1 && feedItem?.id) {
         try {
           autoPublishResult = await autoPublishMyFeedItem({
             userFeedItemId: feedItem.id,
