@@ -9854,35 +9854,6 @@ function mapDraftStepsForBlueprint(steps: Array<{ name: string; notes: string }>
   });
 }
 
-function extractYouTubeVideoIdFromUrl(rawUrl: string) {
-  try {
-    const url = new URL(String(rawUrl || '').trim());
-    const host = url.hostname.replace(/^www\./, '');
-    const pathParts = url.pathname.replace(/^\/+/, '').split('/').filter(Boolean);
-
-    if (host === 'youtube.com' || host === 'm.youtube.com') {
-      let videoId = '';
-      if (url.pathname === '/watch') {
-        videoId = String(url.searchParams.get('v') || '').trim();
-      } else if (pathParts[0] === 'shorts' || pathParts[0] === 'live' || pathParts[0] === 'embed') {
-        videoId = String(pathParts[1] || '').trim();
-      } else {
-        return null;
-      }
-      return /^[a-zA-Z0-9_-]{8,15}$/.test(videoId) ? videoId : null;
-    }
-
-    if (host === 'youtu.be') {
-      const videoId = String(pathParts[0] || '').trim();
-      return /^[a-zA-Z0-9_-]{8,15}$/.test(videoId) ? videoId : null;
-    }
-
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 function buildYouTubeThumbnailUrlForVideo(videoId: string) {
   const normalized = String(videoId || '').trim();
   if (!/^[a-zA-Z0-9_-]{8,15}$/.test(normalized)) return null;
