@@ -326,6 +326,11 @@ export async function resolveProfileHistory(input: {
     db: DbClient;
     sourceIds: string[];
   }) => Promise<any[]>;
+  readChannelCandidateRows?: (args: {
+    db: DbClient;
+    feedItemIds: string[];
+    statuses?: string[];
+  }) => Promise<any[]>;
 }): Promise<ResolvedProfileHistory> {
   const limit = Math.max(1, Math.min(500, Number(input.limit || 120)));
   const feedRowsResult = input.readFeedRows
@@ -380,11 +385,16 @@ export async function resolveProfileHistory(input: {
           .in('id', sourceIds))
       : Promise.resolve({ data: [], error: null }),
     feedItemIds.length
-      ? input.db
-        .from('channel_candidates')
-        .select('id, user_feed_item_id, channel_slug, status, created_at')
-        .in('user_feed_item_id', feedItemIds)
-        .order('created_at', { ascending: false })
+      ? (input.readChannelCandidateRows
+        ? Promise.resolve({
+          data: input.readChannelCandidateRows({ db: input.db, feedItemIds }),
+          error: null,
+        }).then(async (result) => ({ data: await result.data, error: result.error }))
+        : input.db
+          .from('channel_candidates')
+          .select('id, user_feed_item_id, channel_slug, status, created_at')
+          .in('user_feed_item_id', feedItemIds)
+          .order('created_at', { ascending: false }))
       : Promise.resolve({ data: [], error: null }),
     sourceIds.length
       ? (input.readUnlockRows

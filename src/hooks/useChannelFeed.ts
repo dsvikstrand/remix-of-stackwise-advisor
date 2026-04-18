@@ -1,10 +1,5 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { collectBlueprintTagSlugMap, listBlueprintTagRows } from '@/lib/blueprintTagsApi';
 import { config } from '@/config/runtime';
-import { buildFeedSummary } from '@/lib/feedPreview';
-
-const CHANNEL_FEED_BLUEPRINT_SCAN_LIMIT = 96;
 
 export type ChannelFeedTab = 'top' | 'recent';
 
@@ -35,95 +30,6 @@ function getChannelFeedApiBase() {
   return `${config.agenticBackendUrl.replace(/\/$/, '')}/api`;
 }
 
-async function listChannelFeedFallback(input: {
-  channelSlug: string;
-  tab: ChannelFeedTab;
-  limit: number;
-  offset: number;
-}): Promise<ChannelFeedPage> {
-  const { channelSlug, tab, limit, offset } = input;
-  const { data: blueprints, error } = await supabase
-    .from('blueprints')
-    .select('id, title, preview_summary, likes_count, created_at')
-    .eq('is_public', true)
-    .order('created_at', { ascending: false })
-    .limit(CHANNEL_FEED_BLUEPRINT_SCAN_LIMIT);
-
-  if (error) throw error;
-  if (!blueprints || blueprints.length === 0) {
-    return { items: [], next_offset: null, total_count: 0 };
-  }
-
-  const blueprintIds = blueprints.map((row) => row.id);
-  const { data: feedItems, error: feedItemsError } = await supabase
-    .from('user_feed_items')
-    .select('id, blueprint_id')
-    .in('blueprint_id', blueprintIds);
-  if (feedItemsError) throw feedItemsError;
-
-  const blueprintIdByFeedItemId = new Map((feedItems || []).map((row) => [row.id, row.blueprint_id]));
-  const feedItemIds = (feedItems || []).map((row) => row.id);
-  const { data: candidateRows, error: candidateError } = feedItemIds.length > 0
-    ? await supabase
-        .from('channel_candidates')
-        .select('user_feed_item_id')
-        .eq('status', 'published')
-        .eq('channel_slug', channelSlug)
-        .in('user_feed_item_id', feedItemIds)
-    : { data: [], error: null };
-  if (candidateError) throw candidateError;
-
-  const matchingBlueprintIds = [...new Set(
-    (candidateRows || [])
-      .map((row) => blueprintIdByFeedItemId.get(row.user_feed_item_id))
-      .filter((value): value is string => Boolean(value)),
-  )];
-  if (matchingBlueprintIds.length === 0) {
-    return { items: [], next_offset: null, total_count: 0 };
-  }
-
-  const matchingBlueprintIdSet = new Set(matchingBlueprintIds);
-  const pageBaseRows = blueprints
-    .filter((row) => matchingBlueprintIdSet.has(row.id))
-    .map((row) => ({
-      id: row.id,
-      title: row.title,
-      previewSummary: buildFeedSummary({
-        primary: row.preview_summary,
-        fallback: 'Open blueprint to view full details.',
-        maxChars: 220,
-      }),
-      likesCount: Number(row.likes_count || 0),
-      createdAt: row.created_at,
-      primaryChannelSlug: channelSlug,
-    }));
-
-  if (tab === 'top') {
-    pageBaseRows.sort((a, b) => {
-      if (b.likesCount !== a.likesCount) return b.likesCount - a.likesCount;
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
-  } else {
-    pageBaseRows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }
-
-  const pagedBaseRows = pageBaseRows.slice(offset, offset + limit);
-  const pageBlueprintIds = pagedBaseRows.map((row) => row.id);
-  const tagRows = pageBlueprintIds.length > 0 ? await listBlueprintTagRows({ blueprintIds: pageBlueprintIds }) : [];
-  const tagsByBlueprintId = collectBlueprintTagSlugMap(tagRows);
-
-  const items = pagedBaseRows.map((row) => ({
-    ...row,
-    tags: tagsByBlueprintId.get(row.id) || [],
-  }));
-  const resolvedCount = offset + items.length;
-  return {
-    items,
-    next_offset: pageBaseRows.length > resolvedCount ? resolvedCount : null,
-    total_count: pageBaseRows.length,
-  };
-}
-
 async function fetchChannelFeedPage(input: {
   channelSlug: string;
   tab: ChannelFeedTab;
@@ -132,7 +38,7 @@ async function fetchChannelFeedPage(input: {
 }): Promise<ChannelFeedPage> {
   const base = getChannelFeedApiBase();
   if (!base) {
-    return listChannelFeedFallback(input);
+    throw new Error('Backend API is not configured.');
   }
 
   const search = new URLSearchParams({

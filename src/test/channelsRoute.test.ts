@@ -82,6 +82,111 @@ function buildFeedRouteDeps(db: any) {
       if (error) throw error;
       return data;
     },
+    listChannelCandidateRows: async (innerDb: any, input: {
+      feedItemIds?: string[];
+      candidateIds?: string[];
+      channelSlug?: string | null;
+      statuses?: string[];
+      limit?: number;
+    }) => {
+      let query = innerDb
+        .from('channel_candidates')
+        .select('id, user_feed_item_id, channel_slug, status, submitted_by_user_id, created_at, updated_at');
+      if (input.feedItemIds?.length) {
+        query = query.in('user_feed_item_id', input.feedItemIds);
+      }
+      if (input.candidateIds?.length) {
+        query = query.in('id', input.candidateIds);
+      }
+      if (input.channelSlug) {
+        query = query.eq('channel_slug', input.channelSlug);
+      }
+      if (input.statuses?.length === 1) {
+        query = query.eq('status', input.statuses[0]);
+      } else if (input.statuses?.length) {
+        query = query.in('status', input.statuses);
+      }
+      query = query.order('created_at', { ascending: false });
+      if (input.limit) {
+        query = query.limit(input.limit);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      return data || [];
+    },
+    getChannelCandidateById: async (innerDb: any, input: { candidateId: string }) => {
+      const { data, error } = await innerDb
+        .from('channel_candidates')
+        .select('id, user_feed_item_id, channel_slug, status, submitted_by_user_id, created_at, updated_at')
+        .eq('id', input.candidateId)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    upsertChannelCandidate: async (innerDb: any, input: {
+      row: {
+        id?: string;
+        user_feed_item_id: string;
+        channel_slug: string;
+        submitted_by_user_id: string;
+        status: string;
+      };
+    }) => {
+      const { data, error } = await innerDb
+        .from('channel_candidates')
+        .upsert(input.row, { onConflict: 'user_feed_item_id,channel_slug' })
+        .select('id, user_feed_item_id, channel_slug, status, submitted_by_user_id, created_at, updated_at')
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    updateChannelCandidateStatus: async (innerDb: any, input: {
+      candidateId: string;
+      status: string;
+    }) => {
+      const { data, error } = await innerDb
+        .from('channel_candidates')
+        .update({ status: input.status })
+        .eq('id', input.candidateId)
+        .select('id, user_feed_item_id, channel_slug, status, submitted_by_user_id, created_at, updated_at')
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    listChannelGateDecisions: async (innerDb: any, input: { candidateId: string }) => {
+      const { data, error } = await innerDb
+        .from('channel_gate_decisions')
+        .select('id, candidate_id, gate_id, outcome, reason_code, score, policy_version, method_version, created_at')
+        .eq('candidate_id', input.candidateId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    insertChannelGateDecisions: async (innerDb: any, input: {
+      candidateId: string;
+      decisions: Array<{
+        gate_id: string;
+        outcome: 'pass' | 'warn' | 'block';
+        reason_code: string;
+        score?: number | null;
+        method_version?: string;
+      }>;
+    }) => {
+      if (!input.decisions.length) return;
+      const payload = input.decisions.map((decision) => ({
+        candidate_id: input.candidateId,
+        gate_id: decision.gate_id,
+        outcome: decision.outcome,
+        reason_code: decision.reason_code,
+        score: decision.score ?? null,
+        policy_version: 'bleuv1-gate-policy-v1.0',
+        method_version: decision.method_version ?? 'gate-v1',
+      }));
+      const { error } = await innerDb
+        .from('channel_gate_decisions')
+        .insert(payload);
+      if (error) throw error;
+    },
   };
 }
 

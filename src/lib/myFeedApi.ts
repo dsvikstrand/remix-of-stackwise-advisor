@@ -1,8 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
 import { config } from '@/config/runtime';
-import { normalizeTag } from '@/lib/tagging';
-import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
-import { evaluateCandidateGates } from '@/lib/candidateGates';
 import { buildYouTubeThumbnailUrl, extractYouTubeVideoId, toYouTubeIdentity } from '@/lib/sourceIdentity';
 import type { MyFeedItemView } from '@/lib/myFeedData';
 
@@ -276,144 +273,6 @@ export async function listMyFeedItems(userId: string): Promise<MyFeedListResult>
   }
 }
 
-async function ensureTagBySlug(slug: string, userId: string) {
-  const normalized = normalizeTag(slug);
-  const { data: existing, error: existingError } = await supabase
-    .from('tags')
-    .select('id, slug')
-    .eq('slug', normalized)
-    .maybeSingle();
-
-  if (existingError) throw existingError;
-  if (existing) return existing;
-
-  const { data: created, error: createError } = await supabase
-    .from('tags')
-    .insert({ slug: normalized, created_by: userId })
-    .select('id, slug')
-    .single();
-
-  if (createError) throw createError;
-  return created;
-}
-
-async function submitCandidateAndEvaluateFallback(input: {
-  userId: string;
-  userFeedItemId: string;
-  blueprintId: string;
-  channelSlug: string;
-  title: string;
-  llmReview?: string | null;
-  stepCount: number;
-  tagSlugs: string[];
-}) {
-  const { data: candidate, error: candidateError } = await supabase
-    .from('channel_candidates')
-    .upsert(
-      {
-        user_feed_item_id: input.userFeedItemId,
-        channel_slug: input.channelSlug,
-        submitted_by_user_id: input.userId,
-        status: 'pending',
-      },
-      { onConflict: 'user_feed_item_id,channel_slug' },
-    )
-    .select('id, status, channel_slug, user_feed_item_id')
-    .single();
-
-  if (candidateError) throw candidateError;
-
-  await supabase
-    .from('user_feed_items')
-    .update({ blueprint_id: input.blueprintId, state: 'candidate_submitted', last_decision_code: null })
-    .eq('id', input.userFeedItemId)
-    .eq('user_id', input.userId);
-
-  const evaluation = evaluateCandidateGates({
-    title: input.title,
-    description: null,
-    llmReview: input.llmReview,
-    stepCount: input.stepCount,
-    tagSlugs: input.tagSlugs,
-    channelSlug: input.channelSlug,
-  });
-
-  const decisionsPayload = evaluation.decisions.map((d) => ({
-    candidate_id: candidate.id,
-    gate_id: d.gate_id,
-    outcome: d.outcome,
-    reason_code: d.reason_code,
-    score: d.score ?? null,
-    method_version: d.method_version ?? 'gate-v1',
-    policy_version: 'bleuv1-gate-policy-v1.0',
-  }));
-
-  const { error: decisionError } = await supabase
-    .from('channel_gate_decisions')
-    .insert(decisionsPayload);
-
-  if (decisionError) throw decisionError;
-
-  if (evaluation.aggregate === 'pass') {
-    const { error: passError } = await supabase
-      .from('channel_candidates')
-      .update({ status: 'passed' })
-      .eq('id', candidate.id);
-
-    if (passError) throw passError;
-
-    return {
-      candidateId: candidate.id,
-      status: 'passed' as const,
-      reasonCode: evaluation.primaryReason,
-    };
-  }
-
-  if (evaluation.aggregate === 'warn') {
-    const { error: warnError } = await supabase
-      .from('channel_candidates')
-      .update({ status: 'pending_manual_review' })
-      .eq('id', candidate.id);
-
-    if (warnError) throw warnError;
-
-    const { error: feedWarnError } = await supabase
-      .from('user_feed_items')
-      .update({ blueprint_id: input.blueprintId, state: 'candidate_pending_manual_review', last_decision_code: evaluation.primaryReason })
-      .eq('id', input.userFeedItemId)
-      .eq('user_id', input.userId);
-
-    if (feedWarnError) throw feedWarnError;
-
-    return {
-      candidateId: candidate.id,
-      status: 'pending_manual_review' as const,
-      reasonCode: evaluation.primaryReason,
-    };
-  }
-
-  const { error: failError } = await supabase
-    .from('channel_candidates')
-    .update({ status: 'rejected' })
-    .eq('id', candidate.id);
-
-  if (failError) throw failError;
-
-  const { error: feedFailError } = await supabase
-    .from('user_feed_items')
-    .update({ blueprint_id: input.blueprintId, state: 'channel_rejected', last_decision_code: evaluation.primaryReason })
-    .eq('id', input.userFeedItemId)
-    .eq('user_id', input.userId);
-
-  if (feedFailError) throw feedFailError;
-
-  return {
-    candidateId: candidate.id,
-    status: 'rejected' as const,
-    reasonCode: evaluation.primaryReason,
-  };
-}
-
 export async function submitCandidateAndEvaluate(input: {
   userId: string;
   userFeedItemId: string;
@@ -426,89 +285,44 @@ export async function submitCandidateAndEvaluate(input: {
 }) {
   const apiBase = getApiBase();
   if (!apiBase) {
-    return submitCandidateAndEvaluateFallback(input);
+    throw new Error('Backend API is not configured.');
   }
-  try {
-    const upsertResult = await apiRequest<{
-      id: string;
-      user_feed_item_id: string;
-      channel_slug: string;
-      status: string;
-    }>('/channel-candidates', {
-      method: 'POST',
-      body: JSON.stringify({
-        user_feed_item_id: input.userFeedItemId,
-        channel_slug: input.channelSlug,
-      }),
-    });
 
-    const candidateId = upsertResult.data.id;
+  const upsertResult = await apiRequest<{
+    id: string;
+    user_feed_item_id: string;
+    channel_slug: string;
+    status: string;
+  }>('/channel-candidates', {
+    method: 'POST',
+    body: JSON.stringify({
+      user_feed_item_id: input.userFeedItemId,
+      channel_slug: input.channelSlug,
+    }),
+  });
 
-    const evalResult = await apiRequest<{
-      candidate_id: string;
-      decision: 'pass' | 'warn' | 'block';
-      next_state: 'candidate_submitted' | 'candidate_pending_manual_review' | 'channel_rejected';
-      reason_code: string;
-    }>(`/channel-candidates/${candidateId}/evaluate`, {
-      method: 'POST',
-      body: JSON.stringify({}),
-    });
+  const candidateId = upsertResult.data.id;
 
-    const nextState = evalResult.data.next_state;
-    return {
-      candidateId,
-      status: nextState === 'candidate_pending_manual_review'
-        ? ('pending_manual_review' as const)
-        : nextState === 'channel_rejected'
-          ? ('rejected' as const)
-          : ('passed' as const),
-      reasonCode: evalResult.data.reason_code,
-    };
-  } catch (error) {
-    if (!shouldFallbackToSupabase(error)) throw error;
-    return submitCandidateAndEvaluateFallback(input);
-  }
-}
+  const evalResult = await apiRequest<{
+    candidate_id: string;
+    decision: 'pass' | 'warn' | 'block';
+    next_state: 'candidate_submitted' | 'candidate_pending_manual_review' | 'channel_rejected';
+    reason_code: string;
+  }>(`/channel-candidates/${candidateId}/evaluate`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
 
-async function publishCandidateFallback(input: {
-  userId: string;
-  candidateId: string;
-  userFeedItemId: string;
-  blueprintId: string;
-  channelSlug: string;
-}) {
-  const channel = CHANNELS_CATALOG.find((c) => c.slug === input.channelSlug);
-  const tagSlug = channel?.tagSlug || 'general';
-  const tag = await ensureTagBySlug(tagSlug, input.userId);
-
-  const { error: publicError } = await supabase
-    .from('blueprints')
-    .update({ is_public: true })
-    .eq('id', input.blueprintId)
-    .eq('creator_user_id', input.userId);
-
-  if (publicError) throw publicError;
-
-  const { error: tagError } = await supabase
-    .from('blueprint_tags')
-    .upsert({ blueprint_id: input.blueprintId, tag_id: tag.id }, { onConflict: 'blueprint_id,tag_id' });
-
-  if (tagError) throw tagError;
-
-  const { error: candidateError } = await supabase
-    .from('channel_candidates')
-    .update({ status: 'published' })
-    .eq('id', input.candidateId);
-
-  if (candidateError) throw candidateError;
-
-  const { error: feedError } = await supabase
-    .from('user_feed_items')
-    .update({ blueprint_id: input.blueprintId, state: 'channel_published', last_decision_code: 'ALL_GATES_PASS' })
-    .eq('id', input.userFeedItemId)
-    .eq('user_id', input.userId);
-
-  if (feedError) throw feedError;
+  const nextState = evalResult.data.next_state;
+  return {
+    candidateId,
+    status: nextState === 'candidate_pending_manual_review'
+      ? ('pending_manual_review' as const)
+      : nextState === 'channel_rejected'
+        ? ('rejected' as const)
+        : ('passed' as const),
+    reasonCode: evalResult.data.reason_code,
+  };
 }
 
 export async function publishCandidate(input: {
@@ -520,43 +334,15 @@ export async function publishCandidate(input: {
 }) {
   const apiBase = getApiBase();
   if (!apiBase) {
-    return publishCandidateFallback(input);
+    throw new Error('Backend API is not configured.');
   }
-  try {
-    await apiRequest<{ candidate_id: string; published: boolean; channel_slug: string }>(
-      `/channel-candidates/${input.candidateId}/publish`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ tag_slug: input.channelSlug }),
-      },
-    );
-  } catch (error) {
-    if (!shouldFallbackToSupabase(error)) throw error;
-    return publishCandidateFallback(input);
-  }
-}
-
-async function rejectCandidateFallback(input: {
-  userId: string;
-  candidateId: string;
-  userFeedItemId: string;
-  blueprintId: string;
-  reasonCode: string;
-}) {
-  const { error: candidateError } = await supabase
-    .from('channel_candidates')
-    .update({ status: 'rejected' })
-    .eq('id', input.candidateId);
-
-  if (candidateError) throw candidateError;
-
-  const { error: feedError } = await supabase
-    .from('user_feed_items')
-    .update({ blueprint_id: input.blueprintId, state: 'channel_rejected', last_decision_code: input.reasonCode })
-    .eq('id', input.userFeedItemId)
-    .eq('user_id', input.userId);
-
-  if (feedError) throw feedError;
+  await apiRequest<{ candidate_id: string; published: boolean; channel_slug: string }>(
+    `/channel-candidates/${input.candidateId}/publish`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ tag_slug: input.channelSlug }),
+    },
+  );
 }
 
 export async function rejectCandidate(input: {
@@ -568,20 +354,15 @@ export async function rejectCandidate(input: {
 }) {
   const apiBase = getApiBase();
   if (!apiBase) {
-    return rejectCandidateFallback(input);
+    throw new Error('Backend API is not configured.');
   }
-  try {
-    await apiRequest<{ candidate_id: string; reason_code: string }>(
-      `/channel-candidates/${input.candidateId}/reject`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ reason_code: input.reasonCode }),
-      },
-    );
-  } catch (error) {
-    if (!shouldFallbackToSupabase(error)) throw error;
-    return rejectCandidateFallback(input);
-  }
+  await apiRequest<{ candidate_id: string; reason_code: string }>(
+    `/channel-candidates/${input.candidateId}/reject`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ reason_code: input.reasonCode }),
+    },
+  );
 }
 
 export async function autoPublishMyFeedItem(input: {

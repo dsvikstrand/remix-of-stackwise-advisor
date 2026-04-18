@@ -45,4 +45,5 @@ export type ProfileRouteDeps = {
   readSourceRows?: any;
   readUnlockRows?: any;
   readVariantRows?: any;
+  readChannelCandidateRows?: any;
 };

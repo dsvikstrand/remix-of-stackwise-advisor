@@ -40,6 +40,17 @@ export type FeedRouteDeps = {
   autoChannelPipelineEnabled: boolean;
   getAuthedSupabaseClient: (authToken: string) => DbClient | null;
   getServiceSupabaseClient: () => DbClient | null;
+  readChannelCandidateRows?: (input: {
+    db: DbClient;
+    feedItemIds: string[];
+    statuses?: string[];
+  }) => Promise<Array<{
+    id: string;
+    user_feed_item_id: string;
+    channel_slug: string;
+    status: string;
+    created_at: string;
+  }>>;
   readSourceRows?: (input: {
     db: DbClient;
     sourceIds: string[];

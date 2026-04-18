@@ -76,6 +76,17 @@ export interface MyFeedItemView {
 export async function listMyFeedItemsFromDb(input: {
   db: DbClient;
   userId: string;
+  readChannelCandidateRows?: (input: {
+    db: DbClient;
+    feedItemIds: string[];
+    statuses?: string[];
+  }) => Promise<Array<{
+    id: string;
+    user_feed_item_id: string;
+    channel_slug: string;
+    status: string;
+    created_at: string;
+  }>>;
   readFeedRows?: (input: {
     db: DbClient;
     userId: string;
@@ -163,11 +174,16 @@ export async function listMyFeedItemsFromDb(input: {
         .select('id, creator_user_id, title, banner_url, llm_review, preview_summary, is_public')
         .in('id', blueprintIds)
       : Promise.resolve({ data: [], error: null }),
-    db
-      .from('channel_candidates')
-      .select('id, user_feed_item_id, channel_slug, status, created_at')
-      .in('user_feed_item_id', feedItemIds)
-      .order('created_at', { ascending: false }),
+    input.readChannelCandidateRows
+      ? Promise.resolve({
+        data: input.readChannelCandidateRows({ db, feedItemIds }),
+        error: null,
+      }).then(async (result) => ({ data: await result.data, error: result.error }))
+      : db
+        .from('channel_candidates')
+        .select('id, user_feed_item_id, channel_slug, status, created_at')
+        .in('user_feed_item_id', feedItemIds)
+        .order('created_at', { ascending: false }),
     sourceIds.length
       ? (input.readUnlockRows
         ? Promise.resolve({

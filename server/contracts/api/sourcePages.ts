@@ -71,6 +71,7 @@ export type SourcePagesRouteDeps = {
   }>>;
   readPublicFeedRows?: any;
   readSourceRows?: any;
+  readChannelCandidateRows?: any;
   sourceVideoListBurstLimiter: express.RequestHandler;
   sourceVideoListSustainedLimiter: express.RequestHandler;
   sourceVideoUnlockBurstLimiter: express.RequestHandler;

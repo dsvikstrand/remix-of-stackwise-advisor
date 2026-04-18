@@ -7,6 +7,17 @@ type DbClient = {
 export async function listMyFeedItems(input: {
   db: DbClient;
   userId: string;
+  readChannelCandidateRows?: (input: {
+    db: DbClient;
+    feedItemIds: string[];
+    statuses?: string[];
+  }) => Promise<Array<{
+    id: string;
+    user_feed_item_id: string;
+    channel_slug: string;
+    status: string;
+    created_at: string;
+  }>>;
   readFeedRows?: (input: {
     db: DbClient;
     userId: string;

@@ -56,6 +56,7 @@ export function registerSourcePagesRouteHandlers(app: express.Express, deps: Sou
     listBlueprintTagRows,
     readPublicFeedRows,
     readSourceRows,
+    readChannelCandidateRows,
     sourceVideoListBurstLimiter,
     sourceVideoListSustainedLimiter,
     sourceVideoUnlockBurstLimiter,
@@ -1790,12 +1791,23 @@ app.get('/api/source-pages/:platform/:externalId/blueprints', async (req, res) =
   );
 
   const { data: candidateRowsData, error: candidateRowsError } = publishedFeedItemIds.length
-    ? await db
-      .from('channel_candidates')
-      .select('user_feed_item_id, channel_slug, created_at')
-      .eq('status', 'published')
-      .in('user_feed_item_id', publishedFeedItemIds)
-      .order('created_at', { ascending: false })
+    ? (
+      readChannelCandidateRows
+        ? {
+          data: await readChannelCandidateRows({
+            db,
+            feedItemIds: publishedFeedItemIds,
+            statuses: ['published'],
+          }),
+          error: null,
+        }
+        : await db
+          .from('channel_candidates')
+          .select('user_feed_item_id, channel_slug, created_at')
+          .eq('status', 'published')
+          .in('user_feed_item_id', publishedFeedItemIds)
+          .order('created_at', { ascending: false })
+    )
     : { data: [], error: null };
   if (candidateRowsError) {
     return res.status(400).json({

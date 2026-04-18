@@ -398,6 +398,28 @@ type CreditLedgerStateTable = {
   created_at: string;
 };
 
+type ChannelCandidateStateTable = {
+  id: string;
+  user_feed_item_id: string;
+  channel_slug: string;
+  status: string;
+  submitted_by_user_id: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type ChannelGateDecisionStateTable = {
+  id: string;
+  candidate_id: string;
+  gate_id: string;
+  outcome: string;
+  reason_code: string;
+  score: number | null;
+  policy_version: string;
+  method_version: string | null;
+  created_at: string;
+};
+
 type ProductFeedStateTable = {
   id: string;
   user_id: string;
@@ -433,6 +455,8 @@ export type OracleControlPlaneDatabase = {
   notification_state: NotificationStateTable;
   credit_wallet_state: CreditWalletStateTable;
   credit_ledger_state: CreditLedgerStateTable;
+  channel_candidate_state: ChannelCandidateStateTable;
+  channel_gate_decision_state: ChannelGateDecisionStateTable;
   product_subscription_state: ProductSubscriptionStateTable;
   product_source_item_state: ProductSourceItemStateTable;
   product_unlock_state: ProductUnlockStateTable;
@@ -951,6 +975,40 @@ CREATE INDEX IF NOT EXISTS idx_credit_ledger_state_user_created
 
 CREATE INDEX IF NOT EXISTS idx_credit_ledger_state_unlock_created
   ON credit_ledger_state (unlock_id, created_at DESC, id DESC);
+
+CREATE TABLE IF NOT EXISTS channel_candidate_state (
+  id TEXT PRIMARY KEY,
+  user_feed_item_id TEXT NOT NULL,
+  channel_slug TEXT NOT NULL,
+  status TEXT NOT NULL,
+  submitted_by_user_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_channel_candidate_state_feed_channel
+  ON channel_candidate_state (user_feed_item_id, channel_slug);
+
+CREATE INDEX IF NOT EXISTS idx_channel_candidate_state_status_created
+  ON channel_candidate_state (status, created_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS idx_channel_candidate_state_feed_created
+  ON channel_candidate_state (user_feed_item_id, created_at DESC, id DESC);
+
+CREATE TABLE IF NOT EXISTS channel_gate_decision_state (
+  id TEXT PRIMARY KEY,
+  candidate_id TEXT NOT NULL,
+  gate_id TEXT NOT NULL,
+  outcome TEXT NOT NULL,
+  reason_code TEXT NOT NULL,
+  score REAL,
+  policy_version TEXT NOT NULL,
+  method_version TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_channel_gate_decision_state_candidate_created
+  ON channel_gate_decision_state (candidate_id, created_at DESC, id DESC);
 
 CREATE TABLE IF NOT EXISTS product_subscription_state (
   id TEXT PRIMARY KEY,

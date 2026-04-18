@@ -28,6 +28,13 @@ export function registerFeedRoutes(app: express.Express, deps: FeedRouteDeps) {
       const items = await listMyFeedItems({
         db,
         userId,
+        readChannelCandidateRows: deps.readChannelCandidateRows
+          ? ({ db: innerDb, feedItemIds, statuses }) => deps.readChannelCandidateRows!({
+              db: innerDb,
+              feedItemIds,
+              statuses,
+            })
+          : undefined,
         readFeedRows: deps.readFeedRows
           ? ({ db: innerDb, userId: innerUserId, limit, sourceItemIds, requireBlueprint }) => deps.readFeedRows!({
               db: innerDb,

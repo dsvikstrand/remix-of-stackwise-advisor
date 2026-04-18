@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { evaluateCandidateForChannel } from '../gates';
-import type { GateMode } from '../gates/types';
+import type { CandidateGateDecision, GateMode } from '../gates/types';
 import {
   getChannelResolutionMeta,
   type ChannelClassifierReason as DeterministicClassifierReason,
@@ -119,6 +119,60 @@ export type AutoChannelPipelineInput = {
     };
     action: string;
   }) => Promise<unknown>;
+  getChannelCandidateById?: (input: {
+    candidateId: string;
+  }) => Promise<{
+    id: string;
+    user_feed_item_id: string;
+    channel_slug: string;
+    status: string;
+    created_at?: string | null;
+    updated_at?: string | null;
+  } | null>;
+  getChannelCandidateByFeedChannel?: (input: {
+    userFeedItemId: string;
+    channelSlug: string;
+  }) => Promise<{
+    id: string;
+    user_feed_item_id: string;
+    channel_slug: string;
+    status: string;
+    created_at?: string | null;
+    updated_at?: string | null;
+  } | null>;
+  upsertChannelCandidate?: (input: {
+    row: {
+      id?: string;
+      user_feed_item_id: string;
+      channel_slug: string;
+      submitted_by_user_id: string;
+      status: string;
+      created_at?: string | null;
+      updated_at?: string | null;
+    };
+  }) => Promise<{
+    id: string;
+    user_feed_item_id: string;
+    channel_slug: string;
+    status: string;
+    created_at?: string | null;
+    updated_at?: string | null;
+  }>;
+  updateChannelCandidateStatus?: (input: {
+    candidateId: string;
+    status: string;
+  }) => Promise<{
+    id: string;
+    user_feed_item_id: string;
+    channel_slug: string;
+    status: string;
+    created_at?: string | null;
+    updated_at?: string | null;
+  } | null>;
+  insertChannelGateDecisions?: (input: {
+    candidateId: string;
+    decisions: CandidateGateDecision[];
+  }) => Promise<void>;
 };
 
 export type AutoChannelPipelineResult = {
@@ -218,12 +272,21 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
   }
   const channelSlug = String(resolution.channelSlug || input.defaultChannelSlug || 'general').trim().toLowerCase() || 'general';
 
-  const { data: existingCandidate } = await input.db
-    .from('channel_candidates')
-    .select('id, status')
-    .eq('user_feed_item_id', input.userFeedItemId)
-    .eq('channel_slug', channelSlug)
-    .maybeSingle();
+  const existingCandidate = input.getChannelCandidateByFeedChannel
+    ? await input.getChannelCandidateByFeedChannel({
+        userFeedItemId: input.userFeedItemId,
+        channelSlug,
+      })
+    : await input.db
+      .from('channel_candidates')
+      .select('id, user_feed_item_id, channel_slug, status, created_at, updated_at')
+      .eq('user_feed_item_id', input.userFeedItemId)
+      .eq('channel_slug', channelSlug)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (error) throw error;
+        return data;
+      });
 
   if (existingCandidate?.status === 'published') {
     return {
@@ -242,22 +305,35 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
     };
   }
 
-  const { data: candidate, error: candidateError } = await input.db
-    .from('channel_candidates')
-    .upsert(
-      {
-        user_feed_item_id: input.userFeedItemId,
-        channel_slug: channelSlug,
-        submitted_by_user_id: input.userId,
-        status: 'pending',
-      },
-      { onConflict: 'user_feed_item_id,channel_slug' },
-    )
-    .select('id, status')
-    .single();
-  if (candidateError || !candidate) {
-    throw new Error(candidateError?.message || 'Could not upsert channel candidate');
-  }
+  const candidate = input.upsertChannelCandidate
+    ? await input.upsertChannelCandidate({
+        row: {
+          id: existingCandidate?.id,
+          user_feed_item_id: input.userFeedItemId,
+          channel_slug: channelSlug,
+          submitted_by_user_id: input.userId,
+          status: existingCandidate?.status || 'pending',
+          created_at: existingCandidate?.created_at || null,
+          updated_at: existingCandidate?.updated_at || null,
+        },
+      })
+    : await input.db
+      .from('channel_candidates')
+      .upsert(
+        {
+          user_feed_item_id: input.userFeedItemId,
+          channel_slug: channelSlug,
+          submitted_by_user_id: input.userId,
+          status: 'pending',
+        },
+        { onConflict: 'user_feed_item_id,channel_slug' },
+      )
+      .select('id, user_feed_item_id, channel_slug, status, created_at, updated_at')
+      .single()
+      .then(({ data, error }) => {
+        if (error || !data) throw new Error(error?.message || 'Could not upsert channel candidate');
+        return data;
+      });
 
   const stepCount = countBlueprintSections({
     sectionsJson: blueprint.sections_json,
@@ -277,21 +353,28 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
     },
   );
 
-  const decisionsPayload = evaluation.decisions.map((decision) => ({
-    candidate_id: candidate.id,
-    gate_id: decision.gate_id,
-    outcome: decision.outcome,
-    reason_code: decision.reason_code,
-    score: decision.score ?? null,
-    policy_version: 'bleuv1-gate-policy-v1.0',
-    method_version: decision.method_version || 'gate-v1',
-  }));
+  if (input.insertChannelGateDecisions) {
+    await input.insertChannelGateDecisions({
+      candidateId: candidate.id,
+      decisions: evaluation.decisions,
+    });
+  } else {
+    const decisionsPayload = evaluation.decisions.map((decision) => ({
+      candidate_id: candidate.id,
+      gate_id: decision.gate_id,
+      outcome: decision.outcome,
+      reason_code: decision.reason_code,
+      score: decision.score ?? null,
+      policy_version: 'bleuv1-gate-policy-v1.0',
+      method_version: decision.method_version || 'gate-v1',
+    }));
 
-  const { error: decisionInsertError } = await input.db
-    .from('channel_gate_decisions')
-    .insert(decisionsPayload);
-  if (decisionInsertError) {
-    throw new Error(decisionInsertError.message);
+    const { error: decisionInsertError } = await input.db
+      .from('channel_gate_decisions')
+      .insert(decisionsPayload);
+    if (decisionInsertError) {
+      throw new Error(decisionInsertError.message);
+    }
   }
 
   if (evaluation.aggregate === 'pass') {
@@ -316,11 +399,19 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
       if (tagLinkError) throw new Error(tagLinkError.message);
     }
 
-    const { error: candidatePublishError } = await input.db
-      .from('channel_candidates')
-      .update({ status: 'published' })
-      .eq('id', candidate.id);
-    if (candidatePublishError) throw new Error(candidatePublishError.message);
+    if (input.updateChannelCandidateStatus) {
+      const publishedCandidate = await input.updateChannelCandidateStatus({
+        candidateId: candidate.id,
+        status: 'published',
+      });
+      if (!publishedCandidate) throw new Error('Could not publish channel candidate');
+    } else {
+      const { error: candidatePublishError } = await input.db
+        .from('channel_candidates')
+        .update({ status: 'published' })
+        .eq('id', candidate.id);
+      if (candidatePublishError) throw new Error(candidatePublishError.message);
+    }
 
     if (input.patchFeedItemById) {
       await input.patchFeedItemById({
@@ -359,11 +450,19 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
     };
   }
 
-  const { error: candidateRejectError } = await input.db
-    .from('channel_candidates')
-    .update({ status: 'rejected' })
-    .eq('id', candidate.id);
-  if (candidateRejectError) throw new Error(candidateRejectError.message);
+  if (input.updateChannelCandidateStatus) {
+    const rejectedCandidate = await input.updateChannelCandidateStatus({
+      candidateId: candidate.id,
+      status: 'rejected',
+    });
+    if (!rejectedCandidate) throw new Error('Could not reject channel candidate');
+  } else {
+    const { error: candidateRejectError } = await input.db
+      .from('channel_candidates')
+      .update({ status: 'rejected' })
+      .eq('id', candidate.id);
+    if (candidateRejectError) throw new Error(candidateRejectError.message);
+  }
 
   if (input.patchFeedItemById) {
     await input.patchFeedItemById({

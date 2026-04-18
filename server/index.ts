@@ -386,6 +386,18 @@ import {
   upsertOracleBlueprintTagRow,
 } from './services/oracleBlueprintTagState';
 import {
+  countOracleChannelCandidateStateRows,
+  getOracleChannelCandidateByFeedChannel,
+  getOracleChannelCandidateById,
+  insertOracleChannelGateDecisionRows,
+  listOracleChannelCandidateRows,
+  listOracleChannelGateDecisions,
+  mapChannelGateDecisionRowsFromEvaluation,
+  syncOracleChannelCandidateStateFromSupabase,
+  updateOracleChannelCandidateStatus,
+  upsertOracleChannelCandidateRow,
+} from './services/oracleChannelCandidateState';
+import {
   clampInt,
   getFailureTransition,
   normalizeAutoBannerMode,
@@ -8429,6 +8441,10 @@ registerProfileRoutes(app, {
     action: 'profile_history_read_source_rows',
   }),
   readUnlockRows: ({ db, sourceIds }: any) => getSourceItemUnlocksBySourceItemIdsOracleFirst(db, sourceIds),
+  readChannelCandidateRows: ({ db, feedItemIds, statuses }: any) => listChannelCandidateRowsOracleFirst(db, {
+    feedItemIds,
+    statuses,
+  }),
   readVariantRows: async ({ sourceIds }: any) => {
     const normalizedSourceIds = [...new Set(
       (Array.isArray(sourceIds) ? sourceIds : [])
@@ -8462,6 +8478,10 @@ registerWallRoutes(app, {
     limit,
     sourceItemIds,
     requireBlueprint,
+  }),
+  readChannelCandidateRows: ({ db, feedItemIds, statuses }: any) => listChannelCandidateRowsOracleFirst(db, {
+    feedItemIds,
+    statuses,
   }),
   readSourceRows: ({ db, sourceIds }: any) => listProductSourceItemsOracleFirst(db, {
     ids: sourceIds,
@@ -9640,6 +9660,20 @@ async function runAutoChannelForFeedItem(input: {
       tagId,
       tagSlug,
     }),
+    getChannelCandidateById: ({ candidateId }) => getChannelCandidateByIdOracleFirst(input.db, { candidateId }),
+    getChannelCandidateByFeedChannel: ({ userFeedItemId, channelSlug }) => getChannelCandidateByFeedChannelOracleFirst(input.db, {
+      userFeedItemId,
+      channelSlug,
+    }),
+    upsertChannelCandidate: ({ row }) => upsertChannelCandidateOracleFirst(input.db, { row }),
+    updateChannelCandidateStatus: ({ candidateId, status }) => updateChannelCandidateStatusOracleFirst(input.db, {
+      candidateId,
+      status,
+    }),
+    insertChannelGateDecisions: ({ candidateId, decisions }) => insertChannelGateDecisionRowsOracleFirst(input.db, {
+      candidateId,
+      decisions,
+    }),
     patchFeedItemById: async ({ db, feedItemId, userId, patch, action }) => {
       await patchFeedItemByIdOracleAware(db, {
         feedItemId,
@@ -10342,6 +10376,276 @@ async function enqueueAutoBannerJob(input: {
   return data;
 }
 
+type OracleFirstChannelCandidateRow = {
+  id: string;
+  user_feed_item_id: string;
+  channel_slug: string;
+  status: string;
+  submitted_by_user_id: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type OracleFirstChannelGateDecisionRow = {
+  id: string;
+  candidate_id: string;
+  gate_id: string;
+  outcome: string;
+  reason_code: string;
+  score: number | null;
+  policy_version: string;
+  method_version: string | null;
+  created_at: string;
+};
+
+async function listChannelCandidateRowsOracleFirst(
+  db: ReturnType<typeof createClient>,
+  input: {
+    feedItemIds?: string[];
+    candidateIds?: string[];
+    channelSlug?: string | null;
+    statuses?: string[];
+    limit?: number;
+  },
+) {
+  const feedItemIds = Array.from(new Set((input.feedItemIds || []).map((value) => String(value || '').trim()).filter(Boolean)));
+  const candidateIds = Array.from(new Set((input.candidateIds || []).map((value) => String(value || '').trim()).filter(Boolean)));
+  const statuses = Array.from(new Set((input.statuses || []).map((value) => String(value || '').trim().toLowerCase()).filter(Boolean)));
+  const channelSlug = String(input.channelSlug || '').trim().toLowerCase();
+
+  if (oracleControlPlane) {
+    return listOracleChannelCandidateRows({
+      controlDb: oracleControlPlane,
+      feedItemIds,
+      candidateIds,
+      channelSlug: channelSlug || null,
+      statuses,
+      limit: input.limit,
+    }) as Promise<OracleFirstChannelCandidateRow[]>;
+  }
+
+  let query = db
+    .from('channel_candidates')
+    .select('id, user_feed_item_id, channel_slug, status, submitted_by_user_id, created_at, updated_at');
+
+  if (feedItemIds.length > 0) {
+    query = query.in('user_feed_item_id', feedItemIds);
+  }
+  if (candidateIds.length > 0) {
+    query = query.in('id', candidateIds);
+  }
+  if (channelSlug) {
+    query = query.eq('channel_slug', channelSlug);
+  }
+  if (statuses.length === 1) {
+    query = query.eq('status', statuses[0]);
+  } else if (statuses.length > 1) {
+    query = query.in('status', statuses);
+  }
+  query = query.order('created_at', { ascending: false }).limit(Math.max(1, Math.floor(Number(input.limit || 5000))));
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []) as OracleFirstChannelCandidateRow[];
+}
+
+async function getChannelCandidateByIdOracleFirst(
+  db: ReturnType<typeof createClient>,
+  input: {
+    candidateId: string;
+  },
+) {
+  const candidateId = String(input.candidateId || '').trim();
+  if (!candidateId) return null;
+
+  if (oracleControlPlane) {
+    return getOracleChannelCandidateById({
+      controlDb: oracleControlPlane,
+      candidateId,
+    }) as Promise<OracleFirstChannelCandidateRow | null>;
+  }
+
+  const { data, error } = await db
+    .from('channel_candidates')
+    .select('id, user_feed_item_id, channel_slug, status, submitted_by_user_id, created_at, updated_at')
+    .eq('id', candidateId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data || null) as OracleFirstChannelCandidateRow | null;
+}
+
+async function getChannelCandidateByFeedChannelOracleFirst(
+  db: ReturnType<typeof createClient>,
+  input: {
+    userFeedItemId: string;
+    channelSlug: string;
+  },
+) {
+  const userFeedItemId = String(input.userFeedItemId || '').trim();
+  const channelSlug = String(input.channelSlug || '').trim().toLowerCase();
+  if (!userFeedItemId || !channelSlug) return null;
+
+  if (oracleControlPlane) {
+    return getOracleChannelCandidateByFeedChannel({
+      controlDb: oracleControlPlane,
+      userFeedItemId,
+      channelSlug,
+    }) as Promise<OracleFirstChannelCandidateRow | null>;
+  }
+
+  const { data, error } = await db
+    .from('channel_candidates')
+    .select('id, user_feed_item_id, channel_slug, status, submitted_by_user_id, created_at, updated_at')
+    .eq('user_feed_item_id', userFeedItemId)
+    .eq('channel_slug', channelSlug)
+    .maybeSingle();
+  if (error) throw error;
+  return (data || null) as OracleFirstChannelCandidateRow | null;
+}
+
+async function upsertChannelCandidateOracleFirst(
+  db: ReturnType<typeof createClient>,
+  input: {
+    row: Partial<OracleFirstChannelCandidateRow> & {
+      user_feed_item_id: string;
+      channel_slug: string;
+      submitted_by_user_id: string;
+      status?: string;
+    };
+  },
+) {
+  const row = {
+    ...input.row,
+    channel_slug: String(input.row.channel_slug || '').trim().toLowerCase(),
+    status: String(input.row.status || 'pending').trim().toLowerCase(),
+  };
+
+  if (oracleControlPlane) {
+    return upsertOracleChannelCandidateRow({
+      controlDb: oracleControlPlane,
+      row: {
+        id: row.id,
+        user_feed_item_id: row.user_feed_item_id,
+        channel_slug: row.channel_slug,
+        submitted_by_user_id: row.submitted_by_user_id,
+        status: row.status as any,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+      },
+    }) as Promise<OracleFirstChannelCandidateRow>;
+  }
+
+  const { data, error } = await db
+    .from('channel_candidates')
+    .upsert(
+      {
+        id: row.id,
+        user_feed_item_id: row.user_feed_item_id,
+        channel_slug: row.channel_slug,
+        submitted_by_user_id: row.submitted_by_user_id,
+        status: row.status,
+      },
+      { onConflict: 'user_feed_item_id,channel_slug' },
+    )
+    .select('id, user_feed_item_id, channel_slug, status, submitted_by_user_id, created_at, updated_at')
+    .single();
+  if (error) throw error;
+  return data as OracleFirstChannelCandidateRow;
+}
+
+async function updateChannelCandidateStatusOracleFirst(
+  db: ReturnType<typeof createClient>,
+  input: {
+    candidateId: string;
+    status: string;
+  },
+) {
+  const candidateId = String(input.candidateId || '').trim();
+  const status = String(input.status || '').trim().toLowerCase();
+  if (!candidateId || !status) return null;
+
+  if (oracleControlPlane) {
+    return updateOracleChannelCandidateStatus({
+      controlDb: oracleControlPlane,
+      candidateId,
+      status: status as any,
+    }) as Promise<OracleFirstChannelCandidateRow | null>;
+  }
+
+  const { data, error } = await db
+    .from('channel_candidates')
+    .update({ status })
+    .eq('id', candidateId)
+    .select('id, user_feed_item_id, channel_slug, status, submitted_by_user_id, created_at, updated_at')
+    .maybeSingle();
+  if (error) throw error;
+  return (data || null) as OracleFirstChannelCandidateRow | null;
+}
+
+async function listChannelGateDecisionRowsOracleFirst(
+  db: ReturnType<typeof createClient>,
+  input: {
+    candidateId: string;
+  },
+) {
+  const candidateId = String(input.candidateId || '').trim();
+  if (!candidateId) return [] as OracleFirstChannelGateDecisionRow[];
+
+  if (oracleControlPlane) {
+    return listOracleChannelGateDecisions({
+      controlDb: oracleControlPlane,
+      candidateId,
+    }) as Promise<OracleFirstChannelGateDecisionRow[]>;
+  }
+
+  const { data, error } = await db
+    .from('channel_gate_decisions')
+    .select('id, candidate_id, gate_id, outcome, reason_code, score, policy_version, method_version, created_at')
+    .eq('candidate_id', candidateId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []) as OracleFirstChannelGateDecisionRow[];
+}
+
+async function insertChannelGateDecisionRowsOracleFirst(
+  db: ReturnType<typeof createClient>,
+  input: {
+    candidateId: string;
+    decisions: Array<{
+      gate_id: string;
+      outcome: 'pass' | 'warn' | 'block';
+      reason_code: string;
+      score?: number | null;
+      policy_version?: string;
+      method_version?: string | null;
+    }>;
+  },
+) {
+  if (oracleControlPlane) {
+    await insertOracleChannelGateDecisionRows({
+      controlDb: oracleControlPlane,
+      rows: mapChannelGateDecisionRowsFromEvaluation({
+        candidateId: input.candidateId,
+        decisions: input.decisions as any,
+      }),
+    });
+    return;
+  }
+
+  const payload = (input.decisions || []).map((decision) => ({
+    candidate_id: input.candidateId,
+    gate_id: decision.gate_id,
+    outcome: decision.outcome,
+    reason_code: decision.reason_code,
+    score: decision.score ?? null,
+    policy_version: decision.policy_version || 'bleuv1-gate-policy-v1.0',
+    method_version: decision.method_version || 'gate-v1',
+  }));
+  if (payload.length === 0) return;
+  const { error } = await db.from('channel_gate_decisions').insert(payload);
+  if (error) throw error;
+}
+
 async function fetchPublishedChannelSlugMapForBlueprints(db: ReturnType<typeof createClient>, blueprintIds: string[]) {
   const map = new Map<string, string>();
   const uniqueBlueprintIds = Array.from(new Set(blueprintIds.filter(Boolean)));
@@ -10364,13 +10668,11 @@ async function fetchPublishedChannelSlugMapForBlueprints(db: ReturnType<typeof c
   }
   if (!feedIds.length) return map;
 
-  const { data: candidates, error: candidateError } = await db
-    .from('channel_candidates')
-    .select('user_feed_item_id, channel_slug, updated_at, created_at')
-    .eq('status', 'published')
-    .in('user_feed_item_id', feedIds)
-    .order('updated_at', { ascending: false });
-  if (candidateError) throw candidateError;
+  const candidates = await listChannelCandidateRowsOracleFirst(db, {
+    feedItemIds: feedIds,
+    statuses: ['published'],
+    limit: 5000,
+  });
 
   const newestByBlueprint = new Map<string, { channelSlug: string; ts: number }>();
   for (const candidate of candidates || []) {
@@ -16349,6 +16651,25 @@ async function bootstrapOracleControlPlaneState() {
     }
   }
 
+  let channelCandidateCount: number | null = null;
+  let channelGateDecisionCount: number | null = null;
+  if (oracleControlPlane) {
+    const channelCandidateBootstrapState = await countOracleChannelCandidateStateRows({
+      controlDb: oracleControlPlane,
+    });
+    channelCandidateCount = channelCandidateBootstrapState.candidateCount;
+    channelGateDecisionCount = channelCandidateBootstrapState.decisionCount;
+    if (channelCandidateCount === 0) {
+      const channelBootstrap = await syncOracleChannelCandidateStateFromSupabase({
+        controlDb: oracleControlPlane,
+        db,
+        batchSize: oracleControlPlaneConfig.bootstrapBatch,
+      });
+      channelCandidateCount = channelBootstrap.candidateCount;
+      channelGateDecisionCount = channelBootstrap.decisionCount;
+    }
+  }
+
   let queueAdmissionActiveCount: number | null = null;
   if (oracleControlPlaneConfig.queueAdmissionMirrorEnabled) {
     const queueAdmissionBootstrap = await syncOracleQueueAdmissionMirrorFromSupabase({
@@ -16411,6 +16732,8 @@ async function bootstrapOracleControlPlaneState() {
     generation_run_count: generationRunCount,
     generation_run_active_count: generationRunActiveCount,
     blueprint_tag_count: blueprintTagCount,
+    channel_candidate_count: channelCandidateCount,
+    channel_gate_decision_count: channelGateDecisionCount,
     queue_admission_active_count: queueAdmissionActiveCount,
     job_activity_count: jobActivityCount,
     job_activity_active_count: jobActivityActiveCount,
@@ -16732,6 +17055,10 @@ registerSourcePagesRoutes(app, {
     cursor,
     requireBlueprint,
   }),
+  readChannelCandidateRows: ({ db, feedItemIds, statuses }: any) => listChannelCandidateRowsOracleFirst(db, {
+    feedItemIds,
+    statuses,
+  }),
   readSourceRows: ({ db, sourceIds }: any) => listProductSourceItemsOracleFirst(db, {
     ids: sourceIds,
     action: 'source_page_blueprints_read_source_rows',
@@ -16896,6 +17223,10 @@ registerFeedRoutes(app, {
   autoChannelPipelineEnabled,
   getAuthedSupabaseClient,
   getServiceSupabaseClient,
+  readChannelCandidateRows: ({ db, feedItemIds, statuses }: any) => listChannelCandidateRowsOracleFirst(db, {
+    feedItemIds,
+    statuses,
+  }),
   readSourceRows: ({ db, sourceIds }: any) => listProductSourceItemsOracleFirst(db, {
     ids: sourceIds,
     action: 'feed_route_read_source_rows',
@@ -16941,6 +17272,18 @@ registerChannelCandidateRoutes(app, {
   },
   getFeedItemById: getFeedItemByIdOracleFirst,
   patchFeedItemById: patchFeedItemByIdOracleAware,
+  listChannelCandidateRows: (db, input) => listChannelCandidateRowsOracleFirst(db, input),
+  getChannelCandidateById: (db, { candidateId }) => getChannelCandidateByIdOracleFirst(db, { candidateId }),
+  upsertChannelCandidate: (db, { row }) => upsertChannelCandidateOracleFirst(db, { row }),
+  updateChannelCandidateStatus: (db, { candidateId, status }) => updateChannelCandidateStatusOracleFirst(db, {
+    candidateId,
+    status,
+  }),
+  listChannelGateDecisions: (db, { candidateId }) => listChannelGateDecisionRowsOracleFirst(db, { candidateId }),
+  insertChannelGateDecisions: (db, { candidateId, decisions }) => insertChannelGateDecisionRowsOracleFirst(db, {
+    candidateId,
+    decisions,
+  }),
   evaluateCandidateForChannel,
 });
 

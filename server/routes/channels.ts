@@ -43,14 +43,11 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
     const scanLimit = Math.max(limit * 3, Math.min(180, offset + limit * 4));
 
     try {
-      const { data: candidateRows, error: candidateError } = await db
-        .from('channel_candidates')
-        .select('user_feed_item_id, created_at')
-        .eq('status', 'published')
-        .eq('channel_slug', channelSlug)
-        .order('created_at', { ascending: false })
-        .limit(scanLimit);
-      if (candidateError) throw candidateError;
+      const candidateRows = await deps.listChannelCandidateRows(db, {
+        statuses: ['published'],
+        channelSlug,
+        limit: scanLimit,
+      });
       if (!candidateRows || candidateRows.length === 0) {
         return res.json({
           ok: true,
@@ -207,21 +204,19 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
       });
     }
 
-    const { data, error } = await db
-      .from('channel_candidates')
-      .upsert(
-        {
+    let data;
+    try {
+      data = await deps.upsertChannelCandidate(db, {
+        row: {
           user_feed_item_id: userFeedItemId,
           channel_slug: channelSlug,
           submitted_by_user_id: userId,
           status: 'pending',
         },
-        { onConflict: 'user_feed_item_id,channel_slug' },
-      )
-      .select('id, user_feed_item_id, channel_slug, status')
-      .single();
-
-    if (error) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: error.message, data: null });
+      });
+    } catch (error) {
+      return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: error instanceof Error ? error.message : 'Failed to upsert candidate', data: null });
+    }
 
     await deps.patchFeedItemById(db, {
       feedItemId: userFeedItemId,
@@ -253,20 +248,31 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
     if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
 
     const candidateId = req.params.id;
-    const { data: candidate, error: candidateError } = await db
-      .from('channel_candidates')
-      .select('id, user_feed_item_id, channel_slug, status, created_at, updated_at')
-      .eq('id', candidateId)
-      .maybeSingle();
-
-    if (candidateError) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: candidateError.message, data: null });
+    let candidate;
+    try {
+      candidate = await deps.getChannelCandidateById(db, { candidateId });
+    } catch (error) {
+      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error instanceof Error ? error.message : 'Failed to load candidate', data: null });
+    }
     if (!candidate) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Candidate not found', data: null });
 
-    const { data: decisions } = await db
-      .from('channel_gate_decisions')
-      .select('gate_id, outcome, reason_code, score, policy_version, method_version, created_at')
-      .eq('candidate_id', candidateId)
-      .order('created_at', { ascending: false });
+    let feedItem: Awaited<ReturnType<typeof deps.getFeedItemById>>;
+    try {
+      feedItem = await deps.getFeedItemById(db, {
+        feedItemId: candidate.user_feed_item_id,
+        userId,
+      });
+    } catch (error) {
+      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error instanceof Error ? error.message : 'Feed item missing', data: null });
+    }
+    if (!feedItem) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Candidate not found', data: null });
+
+    let decisions;
+    try {
+      decisions = await deps.listChannelGateDecisions(db, { candidateId });
+    } catch (error) {
+      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error instanceof Error ? error.message : 'Failed to load candidate decisions', data: null });
+    }
 
     return res.json({
       ok: true,
@@ -290,12 +296,12 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
     if (!db) return res.status(500).json({ ok: false, error_code: 'CONFIG_ERROR', message: 'Supabase not configured', data: null });
 
     const candidateId = req.params.id;
-    const { data: candidate, error: candidateError } = await db
-      .from('channel_candidates')
-      .select('id, user_feed_item_id, channel_slug, status')
-      .eq('id', candidateId)
-      .maybeSingle();
-    if (candidateError) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: candidateError.message, data: null });
+    let candidate;
+    try {
+      candidate = await deps.getChannelCandidateById(db, { candidateId });
+    } catch (error) {
+      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error instanceof Error ? error.message : 'Failed to load candidate', data: null });
+    }
     if (!candidate) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Candidate not found', data: null });
 
     let feedItem: Awaited<ReturnType<typeof deps.getFeedItemById>>;
@@ -329,20 +335,26 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
       stepCount,
     });
 
-    const decisionsPayload = evaluation.decisions.map((decision) => ({
-      candidate_id: candidate.id,
-      gate_id: decision.gate_id,
-      outcome: decision.outcome,
-      reason_code: decision.reason_code,
-      score: decision.score ?? null,
-      policy_version: 'bleuv1-gate-policy-v1.0',
-      method_version: decision.method_version || 'gate-v1',
-    }));
+    try {
+      await deps.insertChannelGateDecisions(db, {
+        candidateId: candidate.id,
+        decisions: evaluation.decisions,
+      });
+    } catch (error) {
+      return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: error instanceof Error ? error.message : 'Failed to write candidate decisions', data: null });
+    }
 
-    const { error: insertError } = await db.from('channel_gate_decisions').insert(decisionsPayload);
-    if (insertError) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: insertError.message, data: null });
-
-    await db.from('channel_candidates').update({ status: evaluation.candidateStatus }).eq('id', candidate.id);
+    try {
+      const updated = await deps.updateChannelCandidateStatus(db, {
+        candidateId: candidate.id,
+        status: evaluation.candidateStatus,
+      });
+      if (!updated) {
+        return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Candidate not found', data: null });
+      }
+    } catch (error) {
+      return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: error instanceof Error ? error.message : 'Failed to update candidate status', data: null });
+    }
     await deps.patchFeedItemById(db, {
       feedItemId: candidate.user_feed_item_id,
       current: feedItem,
@@ -405,12 +417,13 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
     const candidateId = req.params.id;
     const body = req.body as { tag_slug?: string };
 
-    const { data: candidate, error: candidateError } = await db
-      .from('channel_candidates')
-      .select('id, user_feed_item_id, channel_slug, status')
-      .eq('id', candidateId)
-      .maybeSingle();
-    if (candidateError || !candidate) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: candidateError?.message || 'Candidate not found', data: null });
+    let candidate;
+    try {
+      candidate = await deps.getChannelCandidateById(db, { candidateId });
+    } catch (error) {
+      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error instanceof Error ? error.message : 'Failed to load candidate', data: null });
+    }
+    if (!candidate) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Candidate not found', data: null });
 
     let feedItem: Awaited<ReturnType<typeof deps.getFeedItemById>>;
     try {
@@ -456,7 +469,17 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
       if (tagLinkError) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: tagLinkError.message, data: null });
     }
 
-    await db.from('channel_candidates').update({ status: 'published' }).eq('id', candidate.id);
+    try {
+      const updated = await deps.updateChannelCandidateStatus(db, {
+        candidateId: candidate.id,
+        status: 'published',
+      });
+      if (!updated) {
+        return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Candidate not found', data: null });
+      }
+    } catch (error) {
+      return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: error instanceof Error ? error.message : 'Failed to publish candidate', data: null });
+    }
     await deps.patchFeedItemById(db, {
       feedItemId: candidate.user_feed_item_id,
       current: feedItem,
@@ -502,12 +525,13 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
     const body = req.body as { reason_code?: string };
     const reasonCode = String(body.reason_code || 'MANUAL_REJECT').trim();
 
-    const { data: candidate, error: candidateError } = await db
-      .from('channel_candidates')
-      .select('id, user_feed_item_id, channel_slug')
-      .eq('id', candidateId)
-      .maybeSingle();
-    if (candidateError || !candidate) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: candidateError?.message || 'Candidate not found', data: null });
+    let candidate;
+    try {
+      candidate = await deps.getChannelCandidateById(db, { candidateId });
+    } catch (error) {
+      return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error instanceof Error ? error.message : 'Failed to load candidate', data: null });
+    }
+    if (!candidate) return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Candidate not found', data: null });
 
     let feedItem: Awaited<ReturnType<typeof deps.getFeedItemById>>;
     try {
@@ -518,7 +542,17 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
       return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error instanceof Error ? error.message : 'Feed item missing', data: null });
     }
 
-    await db.from('channel_candidates').update({ status: 'rejected' }).eq('id', candidate.id);
+    try {
+      const updated = await deps.updateChannelCandidateStatus(db, {
+        candidateId: candidate.id,
+        status: 'rejected',
+      });
+      if (!updated) {
+        return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Candidate not found', data: null });
+      }
+    } catch (error) {
+      return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: error instanceof Error ? error.message : 'Failed to reject candidate', data: null });
+    }
     await deps.patchFeedItemById(db, {
       feedItemId: candidate.user_feed_item_id,
       current: feedItem,
