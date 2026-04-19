@@ -69,6 +69,7 @@ export type SourcePagesRouteDeps = {
     tag_id: string;
     tag_slug: string;
   }>>;
+  readBlueprintRows?: any;
   readPublicFeedRows?: any;
   readSourceRows?: any;
   readChannelCandidateRows?: any;

@@ -111,6 +111,19 @@ export type BlueprintCreationDeps = {
     tagId: string;
     tagSlug: string;
   }) => Promise<void>;
+  upsertBlueprintReadState?: (input: {
+    blueprintId: string;
+    creatorUserId: string;
+    title: string;
+    sectionsJson: BlueprintSectionsV1;
+    mixNotes: string | null;
+    reviewPrompt: string | null;
+    bannerUrl: string | null;
+    llmReview: string | null;
+    previewSummary: string | null;
+    isPublic: boolean;
+    sourceBlueprintId?: string | null;
+  }) => Promise<void>;
   attachBlueprintToRun: (db: DbClient, input: { runId: string; blueprintId: string }) => Promise<void>;
   youtubeVideoIdRegex: RegExp;
   resolveGenerationModelProfile: (
@@ -324,6 +337,28 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
 
       const { data: blueprint, error: blueprintError } = blueprintInsert;
       if (blueprintError) throw blueprintError;
+
+      if (deps.upsertBlueprintReadState) {
+        await deps.upsertBlueprintReadState({
+          blueprintId: blueprint.id,
+          creatorUserId: input.userId,
+          title: result.draft.title,
+          sectionsJson,
+          mixNotes: result.draft.notes || null,
+          reviewPrompt: null,
+          bannerUrl: sourceThumbnailUrl,
+          llmReview: result.review.summary || null,
+          previewSummary: buildStoredPreviewSummary({
+            sectionsJson,
+            primary: result.review.summary || null,
+            secondary: result.draft.notes || null,
+            fallback: result.draft.title,
+            maxChars: 220,
+          }),
+          isPublic: false,
+          sourceBlueprintId: null,
+        });
+      }
 
       for (const tagSlug of draftTags) {
         if (!tagSlug) continue;

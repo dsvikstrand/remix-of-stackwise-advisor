@@ -331,6 +331,11 @@ export async function resolveProfileHistory(input: {
     feedItemIds: string[];
     statuses?: string[];
   }) => Promise<any[]>;
+  readBlueprintRows?: (args: {
+    db: DbClient;
+    blueprintIds: string[];
+    limit?: number;
+  }) => Promise<any[]>;
 }): Promise<ResolvedProfileHistory> {
   const limit = Math.max(1, Math.min(500, Number(input.limit || 120)));
   const feedRowsResult = input.readFeedRows
@@ -544,10 +549,14 @@ export async function resolveProfileHistory(input: {
   ));
 
   const { data: blueprintRowsData, error: blueprintError } = blueprintIds.length
-    ? await input.db
-      .from('blueprints')
-      .select('id, title, banner_url')
-      .in('id', blueprintIds)
+    ? (
+      input.readBlueprintRows
+        ? { data: await input.readBlueprintRows({ db: input.db, blueprintIds, limit: blueprintIds.length }), error: null }
+        : await input.db
+          .from('blueprints')
+          .select('id, title, banner_url')
+          .in('id', blueprintIds)
+    )
     : { data: [], error: null };
   if (blueprintError) throw blueprintError;
 

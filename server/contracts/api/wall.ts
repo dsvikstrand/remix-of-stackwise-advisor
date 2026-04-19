@@ -18,4 +18,6 @@ export type WallRouteDeps = {
   readUnlockRows?: any;
   readActiveSubscriptions?: any;
   readChannelCandidateRows?: any;
+  readBlueprintRows?: any;
+  readProfileRows?: any;
 };

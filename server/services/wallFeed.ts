@@ -311,6 +311,16 @@ export async function listWallBlueprintFeed(input: {
     feedItemIds: string[];
     statuses?: string[];
   }) => Promise<any[]>;
+  readBlueprintRows?: (args: {
+    db: DbClient;
+    blueprintIds: string[];
+    limit?: number;
+    isPublic?: boolean;
+  }) => Promise<any[]>;
+  readProfileRows?: (args: {
+    db: DbClient;
+    userIds: string[];
+  }) => Promise<any[]>;
 }) {
   const { db, sort, viewerUserId } = input;
   const scope = normalizeWallFeedScope(input.scope);
@@ -322,28 +332,54 @@ export async function listWallBlueprintFeed(input: {
   const isJoinedScope = scope === CANONICAL_JOINED_SCOPE && !!viewerUserId;
 
   const limit = isJoinedScope || isSpecificChannelScope ? 96 : 60;
-  let query = db
-    .from('blueprints')
-    .select('id, creator_user_id, title, preview_summary, banner_url, likes_count, created_at')
-    .eq('is_public', true)
-    .limit(limit);
+  const { data: blueprints, error } = input.readBlueprintRows
+    ? { data: await input.readBlueprintRows({ db, blueprintIds: [], limit, isPublic: true }), error: null }
+    : await (() => {
+      let query = db
+        .from('blueprints')
+        .select('id, creator_user_id, title, preview_summary, banner_url, likes_count, created_at')
+        .eq('is_public', true)
+        .limit(limit);
 
-  if (sort === 'trending') {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 3);
-    query = query
-      .gte('created_at', cutoff.toISOString())
-      .order('likes_count', { ascending: false })
-      .order('created_at', { ascending: false });
-  } else {
-    query = query.order('created_at', { ascending: false });
-  }
-
-  const { data: blueprints, error } = await query;
+      if (sort === 'trending') {
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - 3);
+        query = query
+          .gte('created_at', cutoff.toISOString())
+          .order('likes_count', { ascending: false })
+          .order('created_at', { ascending: false });
+      } else {
+        query = query.order('created_at', { ascending: false });
+      }
+      return query;
+    })();
   if (error) throw error;
   if (!blueprints || blueprints.length === 0) return [] as WallBlueprintFeedItem[];
 
-  const blueprintIds = blueprints.map((row: any) => row.id);
+  const resolvedBlueprints = [...blueprints];
+  if (sort === 'trending') {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 3);
+    const cutoffMs = cutoff.getTime();
+    resolvedBlueprints.splice(
+      0,
+      resolvedBlueprints.length,
+      ...resolvedBlueprints
+        .filter((row: any) => {
+          const createdAtMs = Date.parse(String(row.created_at || ''));
+          return Number.isFinite(createdAtMs) && createdAtMs >= cutoffMs;
+        })
+        .sort((left: any, right: any) => {
+          const likesDelta = Number(right.likes_count || 0) - Number(left.likes_count || 0);
+          if (likesDelta !== 0) return likesDelta;
+          return Date.parse(String(right.created_at || '')) - Date.parse(String(left.created_at || ''));
+        }),
+    );
+  } else {
+    resolvedBlueprints.sort((left: any, right: any) => Date.parse(String(right.created_at || '')) - Date.parse(String(left.created_at || '')));
+  }
+
+  const blueprintIds = resolvedBlueprints.map((row: any) => row.id);
   const [tagsRes, likesRes, feedItemsRes] = await Promise.all([
     Promise.resolve({
       data: await input.listBlueprintTagRows({ blueprintIds }),
@@ -400,14 +436,28 @@ export async function listWallBlueprintFeed(input: {
     }
   }
 
-  const hydrated = blueprints.map((blueprint: any) => ({
+  const creatorIds = [...new Set((resolvedBlueprints || []).map((blueprint: any) => String(blueprint.creator_user_id || '').trim()).filter(Boolean))];
+  const profileRowsResult = creatorIds.length > 0
+    ? (
+      input.readProfileRows
+        ? { data: await input.readProfileRows({ db, userIds: creatorIds }), error: null }
+        : await db.from('profiles').select('user_id, display_name, avatar_url').in('user_id', creatorIds)
+    )
+    : { data: [], error: null };
+  if ((profileRowsResult as any).error) throw (profileRowsResult as any).error;
+  const profileByUserId = new Map(
+    (((profileRowsResult as any).data || []) as Array<{ user_id: string; display_name: string | null; avatar_url: string | null }>)
+      .map((row) => [String(row.user_id || '').trim(), row]),
+  );
+
+  const hydrated = resolvedBlueprints.map((blueprint: any) => ({
     ...blueprint,
     preview_summary: buildFeedSummary({
       primary: blueprint.preview_summary,
       fallback: 'Open blueprint to view full details.',
       maxChars: 220,
     }),
-    profile: { display_name: null, avatar_url: null },
+    profile: profileByUserId.get(String(blueprint.creator_user_id || '').trim()) || { display_name: null, avatar_url: null },
     tags: blueprintTags.get(blueprint.id) || [],
     user_liked: likedIds.has(blueprint.id),
     published_channel_slug: feedItemMaps.publishedChannelByBlueprint.get(blueprint.id)?.slug || null,
@@ -465,6 +515,12 @@ export async function listWallForYouFeed(input: {
     db: DbClient;
     userId: string;
   }) => Promise<any[]>;
+  readBlueprintRows?: (args: {
+    db: DbClient;
+    blueprintIds: string[];
+    limit?: number;
+    isPublic?: boolean;
+  }) => Promise<any[]>;
 }) {
   const { db, userId, normalizeTranscriptTruthStatus, limit = 100 } = input;
   const fetchLimit = Math.min(Math.max(limit * 3, limit), 500);
@@ -500,7 +556,11 @@ export async function listWallForYouFeed(input: {
       ? Promise.resolve({ data: await input.readSourceRows({ db, sourceIds }), error: null })
       : db.from('source_items').select('id, source_channel_id, source_page_id, source_url, title, source_channel_title, thumbnail_url, metadata').in('id', sourceIds),
     blueprintIds.length
-      ? db.from('blueprints').select('id, creator_user_id, title, banner_url, preview_summary, is_public, likes_count').in('id', blueprintIds)
+      ? (
+        input.readBlueprintRows
+          ? Promise.resolve({ data: await input.readBlueprintRows({ db, blueprintIds, limit: blueprintIds.length }), error: null })
+          : db.from('blueprints').select('id, creator_user_id, title, banner_url, preview_summary, is_public, likes_count').in('id', blueprintIds)
+      )
       : Promise.resolve({ data: [], error: null }),
     input.readChannelCandidateRows
       ? Promise.resolve({

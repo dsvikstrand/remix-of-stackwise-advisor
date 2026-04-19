@@ -1,5 +1,7 @@
 import type express from 'express';
 import type {
+  ProfileActivityItem,
+  ProfileBlueprintListItem,
   ProfileReadRouteDeps,
   ProfileRouteReadItem,
   ProfileRouteUpdateInput,
@@ -126,5 +128,68 @@ export function registerProfileReadRoutes(app: express.Express, deps: ProfileRea
       const message = error instanceof Error ? error.message : 'Profile update failed';
       return res.status(400).json(withError('UPDATE_FAILED', message));
     }
+  });
+
+  app.get('/api/profile/:userId/blueprints', async (req, res) => {
+    const userId = normalizeRequiredString(req.params.userId);
+    if (!userId) {
+      return res.status(400).json(withError('INVALID_USER_ID', 'Missing profile user id'));
+    }
+
+    const viewerUserId = normalizeRequiredString((res.locals.user as { id?: string } | undefined)?.id) || null;
+    const profileResult = await readProfile({
+      userId,
+      viewerUserId,
+      deps,
+    });
+    if (profileResult.status !== 200) {
+      return res.status(profileResult.status).json(profileResult.body);
+    }
+
+    const limit = Math.max(1, Math.min(100, Math.floor(Number(req.query.limit || 12))));
+    const items = await deps.listProfileBlueprints({ userId, limit });
+    return res.status(200).json(withEnvelope<{ items: ProfileBlueprintListItem[] }>({ items }, 'profile blueprints'));
+  });
+
+  app.get('/api/profile/:userId/liked-blueprints', async (req, res) => {
+    const userId = normalizeRequiredString(req.params.userId);
+    if (!userId) {
+      return res.status(400).json(withError('INVALID_USER_ID', 'Missing profile user id'));
+    }
+
+    const viewerUserId = normalizeRequiredString((res.locals.user as { id?: string } | undefined)?.id) || null;
+    const profileResult = await readProfile({
+      userId,
+      viewerUserId,
+      deps,
+    });
+    if (profileResult.status !== 200) {
+      return res.status(profileResult.status).json(profileResult.body);
+    }
+
+    const limit = Math.max(1, Math.min(100, Math.floor(Number(req.query.limit || 12))));
+    const items = await deps.listProfileLikedBlueprints({ userId, limit });
+    return res.status(200).json(withEnvelope<{ items: ProfileBlueprintListItem[] }>({ items }, 'profile liked blueprints'));
+  });
+
+  app.get('/api/profile/:userId/activity', async (req, res) => {
+    const userId = normalizeRequiredString(req.params.userId);
+    if (!userId) {
+      return res.status(400).json(withError('INVALID_USER_ID', 'Missing profile user id'));
+    }
+
+    const viewerUserId = normalizeRequiredString((res.locals.user as { id?: string } | undefined)?.id) || null;
+    const profileResult = await readProfile({
+      userId,
+      viewerUserId,
+      deps,
+    });
+    if (profileResult.status !== 200) {
+      return res.status(profileResult.status).json(profileResult.body);
+    }
+
+    const limit = Math.max(1, Math.min(100, Math.floor(Number(req.query.limit || 12))));
+    const items = await deps.listProfileActivity({ userId, limit });
+    return res.status(200).json(withEnvelope<{ items: ProfileActivityItem[] }>({ items }, 'profile activity'));
   });
 }

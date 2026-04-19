@@ -35,6 +35,8 @@ export function registerWallRoutes(app: express.Express, deps: WallRouteDeps) {
         readPublicFeedRows: deps.readPublicFeedRows,
         readSourceRows: deps.readSourceRows,
         readChannelCandidateRows: deps.readChannelCandidateRows,
+        readBlueprintRows: deps.readBlueprintRows,
+        readProfileRows: deps.readProfileRows,
       });
       return res.json({
         ok: true,
@@ -86,6 +88,7 @@ export function registerWallRoutes(app: express.Express, deps: WallRouteDeps) {
         readUnlockRows: deps.readUnlockRows,
         readChannelCandidateRows: deps.readChannelCandidateRows,
         readActiveSubscriptions: deps.readActiveSubscriptions,
+        readBlueprintRows: deps.readBlueprintRows,
       });
       return res.json({
         ok: true,

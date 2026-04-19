@@ -101,6 +101,39 @@ export async function getOracleProfileRow(input: {
   return row ? mapOracleProfileRow(row as unknown as Record<string, unknown>) : null;
 }
 
+export async function listOracleProfileRows(input: {
+  controlDb: OracleControlPlaneDb;
+  userIds?: string[];
+  isPublic?: boolean | null;
+  limit?: number;
+}) {
+  const userIds = [...new Set((input.userIds || []).map((value) => normalizeRequiredString(value)).filter(Boolean))];
+  const limit = Math.max(1, Math.min(5000, Math.floor(Number(input.limit || 500))));
+
+  let query = input.controlDb.db
+    .selectFrom('profile_state')
+    .selectAll();
+
+  if (userIds.length > 0) {
+    query = query.where('user_id', 'in', userIds);
+  }
+  if (typeof input.isPublic === 'boolean') {
+    query = query.where('is_public', '=', input.isPublic ? 1 : 0);
+  }
+
+  const rows = await query
+    .orderBy('updated_at', 'desc')
+    .orderBy('user_id', 'asc')
+    .limit(limit)
+    .execute();
+
+  const mapped = rows.map((row) => mapOracleProfileRow(row as unknown as Record<string, unknown>));
+  if (userIds.length === 0) return mapped;
+
+  const order = new Map(userIds.map((id, index) => [id, index]));
+  return mapped.sort((left, right) => (order.get(left.user_id) ?? Number.MAX_SAFE_INTEGER) - (order.get(right.user_id) ?? Number.MAX_SAFE_INTEGER));
+}
+
 export async function upsertOracleProfileRow(input: {
   controlDb: OracleControlPlaneDb;
   row: Partial<OracleProfileRow> & {

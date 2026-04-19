@@ -54,6 +54,7 @@ export function registerSourcePagesRouteHandlers(app: express.Express, deps: Sou
     getUserSubscriptionStateForSourcePage,
     getBlueprintAvailabilityForVideo,
     listBlueprintTagRows,
+    readBlueprintRows,
     readPublicFeedRows,
     readSourceRows,
     readChannelCandidateRows,
@@ -1641,10 +1642,19 @@ app.get('/api/source-pages/:platform/:externalId/blueprints', async (req, res) =
           .from('source_items')
           .select('id, source_page_id, source_channel_id, source_url, thumbnail_url')
           .in('id', sourceItemIds),
-      db
-        .from('blueprints')
-        .select('id, is_public')
-        .in('id', chunkBlueprintIds),
+      readBlueprintRows
+        ? Promise.resolve({
+          data: await readBlueprintRows({
+            db,
+            blueprintIds: chunkBlueprintIds,
+            limit: chunkBlueprintIds.length,
+          }),
+          error: null,
+        })
+        : db
+          .from('blueprints')
+          .select('id, is_public')
+          .in('id', chunkBlueprintIds),
     ]);
 
     if (sourceRowsError || blueprintVisibilityError) {
@@ -1722,10 +1732,19 @@ app.get('/api/source-pages/:platform/:externalId/blueprints', async (req, res) =
 
   const blueprintIds = Array.from(new Set(selectedRows.map((row) => row.blueprintId)));
   const [{ data: blueprintRowsData, error: blueprintRowsError }, { data: tagRowsData, error: tagRowsError }] = await Promise.all([
-    db
-      .from('blueprints')
-      .select('id, title, llm_review, banner_url, sections_json, steps, is_public')
-      .in('id', blueprintIds),
+    readBlueprintRows
+      ? Promise.resolve({
+        data: await readBlueprintRows({
+          db,
+          blueprintIds,
+          limit: blueprintIds.length,
+        }),
+        error: null,
+      })
+      : db
+        .from('blueprints')
+        .select('id, title, llm_review, banner_url, sections_json, steps, is_public')
+        .in('id', blueprintIds),
     Promise.resolve({
       data: await listBlueprintTagRows({ blueprintIds }),
       error: null,

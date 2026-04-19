@@ -386,6 +386,7 @@ import {
 import {
   countOracleBlueprintRows,
   getOracleBlueprintRow,
+  listOracleBlueprintRows,
   syncOracleBlueprintRowFromSupabase,
   syncOracleBlueprintRowsFromSupabase,
   upsertOracleBlueprintRow,
@@ -414,6 +415,7 @@ import {
 import {
   countOracleProfileRows,
   getOracleProfileRow,
+  listOracleProfileRows,
   syncOracleProfileRowFromSupabase,
   syncOracleProfileRowsFromSupabase,
   upsertOracleProfileRow,
@@ -8500,6 +8502,7 @@ registerProfileRoutes(app, {
     feedItemIds,
     statuses,
   }),
+  readBlueprintRows: async ({ blueprintIds }: any) => ensureOracleBlueprintRowsByIds(blueprintIds || []),
   readVariantRows: async ({ sourceIds }: any) => {
     const normalizedSourceIds = [...new Set(
       (Array.isArray(sourceIds) ? sourceIds : [])
@@ -8576,6 +8579,9 @@ registerProfileReadRoutes(app, {
     });
     return mapProfileReadRouteRow(upserted);
   },
+  listProfileBlueprints: async ({ userId, limit }) => listProfileBlueprintListItems({ userId, limit }),
+  listProfileLikedBlueprints: async ({ userId, limit }) => listProfileLikedBlueprintListItems({ userId, limit }),
+  listProfileActivity: async ({ userId, limit }) => listProfileActivityItems({ userId, limit }),
 });
 
 registerWallRoutes(app, {
@@ -8599,6 +8605,29 @@ registerWallRoutes(app, {
     feedItemIds,
     statuses,
   }),
+  readBlueprintRows: async ({ blueprintIds, limit, isPublic }: any) => {
+    if (blueprintIds && blueprintIds.length > 0) {
+      return ensureOracleBlueprintRowsByIds(blueprintIds);
+    }
+    if (!oracleControlPlane) return [];
+    const rows = await listOracleBlueprintRows({
+      controlDb: oracleControlPlane,
+      isPublic: typeof isPublic === 'boolean' ? isPublic : true,
+      limit,
+    });
+    const creatorProfiles = await ensureOracleProfileReadStateByUserIds(rows.map((row) => row.creator_user_id));
+    const creatorProfileByUserId = new Map(creatorProfiles.map((row) => [row.user_id, row]));
+    return rows.map((row) => mapBlueprintReadRouteRow(row, (() => {
+      const creatorProfile = creatorProfileByUserId.get(row.creator_user_id);
+      return creatorProfile
+        ? {
+            display_name: creatorProfile.display_name,
+            avatar_url: creatorProfile.avatar_url,
+          }
+        : null;
+    })()));
+  },
+  readProfileRows: async ({ userIds }: any) => ensureOracleProfileReadStateByUserIds(userIds || []),
   readSourceRows: ({ db, sourceIds }: any) => listProductSourceItemsOracleFirst(db, {
     ids: sourceIds,
     action: 'wall_feed_read_source_rows',
@@ -9752,6 +9781,109 @@ async function ensureOracleProfileReadStateByUserId(userId: string) {
   return synced ? mapProfileReadRouteRow(synced) : null;
 }
 
+async function ensureOracleProfileReadStateByUserIds(userIds: string[]) {
+  const normalizedUserIds = [...new Set((userIds || []).map((value) => normalizeRouteString(value)).filter(Boolean))];
+  if (!oracleControlPlane || normalizedUserIds.length === 0) return [] as Array<ReturnType<typeof mapProfileReadRouteRow>>;
+
+  const existingRows = await listOracleProfileRows({
+    controlDb: oracleControlPlane,
+    userIds: normalizedUserIds,
+    limit: normalizedUserIds.length,
+  });
+  const byUserId = new Map(existingRows.map((row) => [row.user_id, row]));
+
+  const missingUserIds = normalizedUserIds.filter((userId) => !byUserId.has(userId));
+  if (missingUserIds.length > 0) {
+    const db = getServiceSupabaseClient();
+    if (db) {
+      for (const userId of missingUserIds) {
+        const synced = await syncOracleProfileRowFromSupabase({
+          controlDb: oracleControlPlane,
+          db,
+          userId,
+        });
+        if (synced) byUserId.set(userId, synced);
+      }
+    }
+  }
+
+  return normalizedUserIds
+    .map((userId) => byUserId.get(userId))
+    .filter(Boolean)
+    .map((row) => mapProfileReadRouteRow(row as Record<string, unknown>));
+}
+
+async function ensureOracleBlueprintRowsByIds(blueprintIds: string[]) {
+  const normalizedBlueprintIds = [...new Set((blueprintIds || []).map((value) => normalizeRouteString(value)).filter(Boolean))];
+  if (!oracleControlPlane || normalizedBlueprintIds.length === 0) return [] as Array<ReturnType<typeof mapBlueprintReadRouteRow>>;
+
+  const existingRows = await listOracleBlueprintRows({
+    controlDb: oracleControlPlane,
+    blueprintIds: normalizedBlueprintIds,
+    limit: normalizedBlueprintIds.length,
+  });
+  const byBlueprintId = new Map(existingRows.map((row) => [row.id, row]));
+
+  const missingBlueprintIds = normalizedBlueprintIds.filter((blueprintId) => !byBlueprintId.has(blueprintId));
+  if (missingBlueprintIds.length > 0) {
+    const db = getServiceSupabaseClient();
+    if (db) {
+      for (const blueprintId of missingBlueprintIds) {
+        const synced = await syncOracleBlueprintRowFromSupabase({
+          controlDb: oracleControlPlane,
+          db,
+          blueprintId,
+        });
+        if (synced) byBlueprintId.set(blueprintId, synced);
+      }
+    }
+  }
+
+  const rows = normalizedBlueprintIds
+    .map((blueprintId) => byBlueprintId.get(blueprintId))
+    .filter(Boolean);
+  const creatorProfiles = await ensureOracleProfileReadStateByUserIds(
+    rows.map((row) => String((row as { creator_user_id?: unknown }).creator_user_id || '')).filter(Boolean),
+  );
+  const creatorProfileByUserId = new Map(creatorProfiles.map((row) => [row.user_id, row]));
+
+  return rows.map((row) => {
+    const creatorUserId = normalizeRouteString((row as { creator_user_id?: unknown }).creator_user_id);
+    const creatorProfile = creatorProfileByUserId.get(creatorUserId);
+    return mapBlueprintReadRouteRow(row as Record<string, unknown>, creatorProfile
+      ? {
+          display_name: creatorProfile.display_name,
+          avatar_url: creatorProfile.avatar_url,
+        }
+      : null);
+  });
+}
+
+async function listOracleBlueprintRowsByCreatorUserId(input: {
+  creatorUserId: string;
+  isPublic?: boolean;
+  limit?: number;
+}) {
+  const creatorUserId = normalizeRouteString(input.creatorUserId);
+  if (!oracleControlPlane || !creatorUserId) return [] as Array<ReturnType<typeof mapBlueprintReadRouteRow>>;
+
+  const rows = await listOracleBlueprintRows({
+    controlDb: oracleControlPlane,
+    creatorUserId,
+    isPublic: input.isPublic,
+    limit: input.limit,
+  });
+  if (rows.length === 0) return [];
+
+  const creatorProfile = await ensureOracleProfileReadStateByUserId(creatorUserId);
+  return rows.map((row) => mapBlueprintReadRouteRow(row, creatorProfile
+    ? {
+        display_name: creatorProfile.display_name,
+        avatar_url: creatorProfile.avatar_url,
+      }
+    : null));
+}
+
 async function readSupabaseBlueprintRouteRowById(blueprintId: string) {
   const db = getServiceSupabaseClient();
   if (!db) return null;
@@ -9762,6 +9894,178 @@ async function readSupabaseBlueprintRouteRowById(blueprintId: string) {
     .maybeSingle();
   if (error) throw error;
   return data ? mapBlueprintReadRouteRow(data as Record<string, unknown>) : null;
+}
+
+async function buildSourceChannelByBlueprintId(blueprintIds: string[]) {
+  const db = getServiceSupabaseClient();
+  const normalizedBlueprintIds = [...new Set((blueprintIds || []).map((value) => normalizeRouteString(value)).filter(Boolean))];
+  const result = new Map<string, { title: string | null; avatar_url: string | null }>();
+  if (!db || normalizedBlueprintIds.length === 0) return result;
+
+  const feedRows = await listPublicProductFeedRowsOracleFirst(db, {
+    blueprintIds: normalizedBlueprintIds,
+    limit: 5000,
+  });
+  const sourceItemIdByBlueprintId = new Map<string, string>();
+  for (const row of feedRows) {
+    const blueprintId = normalizeRouteString((row as { blueprint_id?: unknown }).blueprint_id);
+    const sourceItemId = normalizeRouteString((row as { source_item_id?: unknown }).source_item_id);
+    if (!blueprintId || !sourceItemId || sourceItemIdByBlueprintId.has(blueprintId)) continue;
+    sourceItemIdByBlueprintId.set(blueprintId, sourceItemId);
+  }
+
+  const sourceRows = await listProductSourceItemsOracleFirst(db, {
+    ids: [...new Set(Array.from(sourceItemIdByBlueprintId.values()))],
+    action: 'profile_route_source_channel_lookup',
+  });
+  const sourceById = new Map(sourceRows.map((row: any) => [String(row.id || '').trim(), row]));
+
+  for (const [blueprintId, sourceItemId] of sourceItemIdByBlueprintId.entries()) {
+    const source = sourceById.get(sourceItemId);
+    const metadata = source && typeof source.metadata === 'object' && source.metadata !== null
+      ? source.metadata as Record<string, unknown>
+      : null;
+    const metadataTitle =
+      metadata && typeof metadata.source_channel_title === 'string'
+        ? String(metadata.source_channel_title || '').trim() || null
+        : (
+          metadata && typeof metadata.channel_title === 'string'
+            ? String(metadata.channel_title || '').trim() || null
+            : null
+        );
+    const metadataAvatar =
+      metadata && typeof metadata.source_channel_avatar_url === 'string'
+        ? String(metadata.source_channel_avatar_url || '').trim() || null
+        : (
+          metadata && typeof metadata.channel_avatar_url === 'string'
+            ? String(metadata.channel_avatar_url || '').trim() || null
+            : null
+        );
+    result.set(blueprintId, {
+      title: String(source?.source_channel_title || '').trim() || metadataTitle || null,
+      avatar_url: metadataAvatar || null,
+    });
+  }
+
+  return result;
+}
+
+async function listProfileBlueprintListItems(input: {
+  userId: string;
+  limit?: number;
+}) {
+  const blueprints = await listOracleBlueprintRowsByCreatorUserId({
+    creatorUserId: input.userId,
+    isPublic: true,
+    limit: input.limit,
+  });
+  const sourceChannelByBlueprintId = await buildSourceChannelByBlueprintId(blueprints.map((row) => row.id));
+  return blueprints.map((blueprint) => ({
+    id: blueprint.id,
+    title: blueprint.title,
+    creator_user_id: blueprint.creator_user_id,
+    likes_count: blueprint.likes_count,
+    created_at: blueprint.created_at,
+    creator_profile: blueprint.creator_profile,
+    source_channel: sourceChannelByBlueprintId.get(blueprint.id) || null,
+  }));
+}
+
+async function listProfileLikedBlueprintListItems(input: {
+  userId: string;
+  limit?: number;
+}) {
+  const db = getServiceSupabaseClient();
+  if (!db) throw new Error('Service role client is not configured');
+
+  const limit = Math.max(1, Math.min(100, Math.floor(Number(input.limit || 12))));
+  const { data: likes, error } = await db
+    .from('blueprint_likes')
+    .select('id, blueprint_id, created_at')
+    .eq('user_id', input.userId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  if (!likes?.length) return [];
+
+  const blueprintIds = likes.map((row) => normalizeRouteString(row.blueprint_id)).filter(Boolean);
+  const blueprints = await ensureOracleBlueprintRowsByIds(blueprintIds);
+  const publicBlueprints = blueprints.filter((row) => row.is_public);
+  const sourceChannelByBlueprintId = await buildSourceChannelByBlueprintId(publicBlueprints.map((row) => row.id));
+  const byId = new Map(publicBlueprints.map((row) => [row.id, row]));
+
+  return blueprintIds
+    .map((blueprintId) => {
+      const blueprint = byId.get(blueprintId);
+      if (!blueprint) return null;
+      const likeRow = likes.find((row) => normalizeRouteString(row.blueprint_id) === blueprintId) || null;
+      return {
+        id: blueprint.id,
+        title: blueprint.title,
+        creator_user_id: blueprint.creator_user_id,
+        likes_count: blueprint.likes_count,
+        created_at: blueprint.created_at,
+        liked_at: likeRow ? normalizeRouteString(likeRow.created_at) || likeRow.created_at || null : null,
+        creator_profile: blueprint.creator_profile,
+        source_channel: sourceChannelByBlueprintId.get(blueprint.id) || null,
+      };
+    })
+    .filter(Boolean);
+}
+
+async function listProfileActivityItems(input: {
+  userId: string;
+  limit?: number;
+}) {
+  const db = getServiceSupabaseClient();
+  if (!db) throw new Error('Service role client is not configured');
+
+  const limit = Math.max(1, Math.min(100, Math.floor(Number(input.limit || 12))));
+  const [createdBlueprints, profileLikedBlueprints, comments] = await Promise.all([
+    listProfileBlueprintListItems({ userId: input.userId, limit }),
+    listProfileLikedBlueprintListItems({ userId: input.userId, limit }),
+    oracleControlPlane
+      ? listOracleBlueprintCommentRowsByUser({
+          controlDb: oracleControlPlane,
+          userId: input.userId,
+          limit,
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const commentBlueprintIds = [...new Set(comments.map((row) => normalizeRouteString(row.blueprint_id)).filter(Boolean))];
+  const commentBlueprints = await ensureOracleBlueprintRowsByIds(commentBlueprintIds);
+  const commentTitleByBlueprintId = new Map(commentBlueprints.map((row) => [row.id, row.title]));
+
+  const items = [
+    ...createdBlueprints.map((bp) => ({
+      type: 'blueprint_created' as const,
+      id: bp.id,
+      title: `Created "${bp.title}"`,
+      created_at: bp.created_at,
+      target_id: bp.id,
+    })),
+    ...profileLikedBlueprints.map((bp) => ({
+      type: 'blueprint_liked' as const,
+      id: `liked:${bp.id}`,
+      title: `Liked "${bp.title}"`,
+      created_at: bp.liked_at || bp.created_at,
+      target_id: bp.id,
+    })),
+    ...comments
+      .filter((row) => commentTitleByBlueprintId.has(normalizeRouteString(row.blueprint_id)))
+      .map((row) => ({
+        type: 'comment' as const,
+        id: row.id,
+        title: `Commented on "${commentTitleByBlueprintId.get(normalizeRouteString(row.blueprint_id))}"`,
+        created_at: row.created_at,
+        target_id: normalizeRouteString(row.blueprint_id),
+      })),
+  ];
+
+  return items
+    .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at))
+    .slice(0, limit);
 }
 
 function isServiceRequestAuthorized(req: express.Request) {
@@ -11468,6 +11772,25 @@ const blueprintCreationService = createBlueprintCreationService({
   toTagSlug,
   ensureTagId,
   attachBlueprintTag: (db, input) => attachBlueprintTagOracleAware(db, input),
+  upsertBlueprintReadState: async (input) => {
+    if (!oracleControlPlane) return;
+    await upsertOracleBlueprintRow({
+      controlDb: oracleControlPlane,
+      row: {
+        id: input.blueprintId,
+        creator_user_id: input.creatorUserId,
+        title: input.title,
+        sections_json: input.sectionsJson,
+        mix_notes: input.mixNotes,
+        review_prompt: input.reviewPrompt,
+        banner_url: input.bannerUrl,
+        llm_review: input.llmReview,
+        preview_summary: input.previewSummary,
+        is_public: input.isPublic,
+        source_blueprint_id: input.sourceBlueprintId || null,
+      },
+    });
+  },
   attachBlueprintToRun,
   youtubeVideoIdRegex: /^[a-zA-Z0-9_-]{8,15}$/,
   resolveGenerationModelProfile,
@@ -17544,6 +17867,7 @@ registerSourcePagesRoutes(app, {
   getUserSubscriptionStateForSourcePage: getUserSubscriptionStateForSourcePageOracleFirst,
   getBlueprintAvailabilityForVideo: getBlueprintAvailabilityForVideoOracleFirst,
   listBlueprintTagRows: ({ blueprintIds }: any) => listBlueprintTagRowsOracleAware(getServiceSupabaseClient()!, { blueprintIds }),
+  readBlueprintRows: async ({ blueprintIds }: any) => ensureOracleBlueprintRowsByIds(blueprintIds || []),
   readPublicFeedRows: ({ db, blueprintIds, state, limit, cursor, requireBlueprint }: any) => listPublicProductFeedRowsOracleFirst(db, {
     blueprintIds,
     state,

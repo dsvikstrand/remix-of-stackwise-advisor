@@ -129,6 +129,44 @@ export async function getOracleBlueprintRow(input: {
   return row ? mapOracleBlueprintRow(row as unknown as Record<string, unknown>) : null;
 }
 
+export async function listOracleBlueprintRows(input: {
+  controlDb: OracleControlPlaneDb;
+  blueprintIds?: string[];
+  creatorUserId?: string | null;
+  isPublic?: boolean | null;
+  limit?: number;
+}) {
+  const blueprintIds = [...new Set((input.blueprintIds || []).map((value) => normalizeRequiredString(value)).filter(Boolean))];
+  const creatorUserId = normalizeRequiredString(input.creatorUserId);
+  const limit = Math.max(1, Math.min(5000, Math.floor(Number(input.limit || 500))));
+
+  let query = input.controlDb.db
+    .selectFrom('blueprint_state')
+    .selectAll();
+
+  if (blueprintIds.length > 0) {
+    query = query.where('id', 'in', blueprintIds);
+  }
+  if (creatorUserId) {
+    query = query.where('creator_user_id', '=', creatorUserId);
+  }
+  if (typeof input.isPublic === 'boolean') {
+    query = query.where('is_public', '=', input.isPublic ? 1 : 0);
+  }
+
+  const rows = await query
+    .orderBy('created_at', 'desc')
+    .orderBy('id', 'desc')
+    .limit(limit)
+    .execute();
+
+  const mapped = rows.map((row) => mapOracleBlueprintRow(row as unknown as Record<string, unknown>));
+  if (blueprintIds.length === 0) return mapped;
+
+  const order = new Map(blueprintIds.map((id, index) => [id, index]));
+  return mapped.sort((left, right) => (order.get(left.id) ?? Number.MAX_SAFE_INTEGER) - (order.get(right.id) ?? Number.MAX_SAFE_INTEGER));
+}
+
 export async function upsertOracleBlueprintRow(input: {
   controlDb: OracleControlPlaneDb;
   row: Partial<OracleBlueprintRow> & {
