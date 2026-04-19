@@ -26,6 +26,11 @@ function normalizeNonNegativeInt(value: unknown) {
   return Math.max(0, Math.floor(numeric));
 }
 
+function isMissingColumnError(error: unknown, column: string) {
+  const hay = `${(error as { message?: string } | null)?.message || ''}`.toLowerCase();
+  return hay.includes('does not exist') && hay.includes(column.toLowerCase());
+}
+
 function mapBlueprintCommentRow(
   row: Record<string, unknown>,
   fallbackIso?: string,
@@ -158,12 +163,25 @@ export async function syncOracleBlueprintCommentRowsFromSupabase(input: {
 
   while (true) {
     const to = from + batchSize - 1;
-    const { data, error } = await input.db
+    let { data, error } = await input.db
       .from('blueprint_comments')
       .select('id, blueprint_id, user_id, content, likes_count, created_at, updated_at')
       .order('created_at', { ascending: true })
       .order('id', { ascending: true })
       .range(from, to);
+    if (error && isMissingColumnError(error, 'likes_count')) {
+      const fallback = await input.db
+        .from('blueprint_comments')
+        .select('id, blueprint_id, user_id, content, created_at, updated_at')
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to);
+      data = (fallback.data || []).map((row: Record<string, unknown>) => ({
+        ...row,
+        likes_count: 0,
+      }));
+      error = fallback.error;
+    }
     if (error) throw error;
     if (!data?.length) break;
 
