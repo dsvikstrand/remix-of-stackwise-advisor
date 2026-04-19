@@ -432,6 +432,16 @@ type ProductFeedStateTable = {
   updated_at: string;
 };
 
+type BlueprintCommentStateTable = {
+  id: string;
+  blueprint_id: string;
+  user_id: string;
+  content: string;
+  likes_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
 export type OracleControlPlaneDatabase = {
   control_meta: ControlMetaTable;
   subscription_schedule_state: SubscriptionScheduleStateTable;
@@ -450,6 +460,7 @@ export type OracleControlPlaneDatabase = {
   generation_run_state: GenerationRunStateTable;
   generation_run_event_state: GenerationRunEventStateTable;
   blueprint_youtube_comment_state: BlueprintYoutubeCommentStateTable;
+  blueprint_comment_state: BlueprintCommentStateTable;
   blueprint_tag_state: BlueprintTagStateTable;
   provider_circuit_state: ProviderCircuitStateTable;
   notification_state: NotificationStateTable;
@@ -877,6 +888,25 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_blueprint_youtube_comment_unique
 
 CREATE INDEX IF NOT EXISTS idx_blueprint_youtube_comment_display
   ON blueprint_youtube_comment_state (blueprint_id, sort_mode, display_order, id);
+
+CREATE TABLE IF NOT EXISTS blueprint_comment_state (
+  id TEXT PRIMARY KEY,
+  blueprint_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  content TEXT NOT NULL,
+  likes_count INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_blueprint_comment_state_blueprint_created
+  ON blueprint_comment_state (blueprint_id, created_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS idx_blueprint_comment_state_blueprint_likes_created
+  ON blueprint_comment_state (blueprint_id, likes_count DESC, created_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS idx_blueprint_comment_state_user_created
+  ON blueprint_comment_state (user_id, created_at DESC, id DESC);
 
 CREATE TABLE IF NOT EXISTS blueprint_tag_state (
   id TEXT PRIMARY KEY,

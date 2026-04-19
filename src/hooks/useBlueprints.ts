@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { buildStoredPreviewSummary } from '@/lib/feedPreview';
 import { getPublishedBlueprintChannelSlug } from '@/lib/blueprintChannelsApi';
+import { createBlueprintComment, getBlueprintComments } from '@/lib/blueprintCommentsApi';
 import { normalizeTags } from '@/lib/tagging';
 import { collectBlueprintTagMap, listBlueprintTagRows } from '@/lib/blueprintTagsApi';
 import type { Json } from '@/integrations/supabase/types';
@@ -336,37 +337,14 @@ export function useBlueprintComments(blueprintId?: string, sortMode: 'top' | 'ne
         created_at: string;
         user_id: string;
         likes_count: number;
+        updated_at: string;
         profile: { display_name: string | null; avatar_url: string | null } | null;
       }>;
 
-      let query = supabase
-        .from('blueprint_comments')
-        .select('id, content, created_at, user_id, likes_count')
-        .eq('blueprint_id', blueprintId);
-
-      if (sortMode === 'top') {
-        query = query
-          .order('likes_count', { ascending: false })
-          .order('created_at', { ascending: false });
-      } else {
-        query = query.order('created_at', { ascending: false });
-      }
-
-      const { data: comments, error } = await query;
-
-      if (error) throw error;
-
-      const userIds = [...new Set((comments || []).map((row) => row.user_id))];
-      const { data: profiles } = userIds.length > 0
-        ? await supabase.from('profiles').select('user_id, display_name, avatar_url').in('user_id', userIds)
-        : { data: [] as { user_id: string; display_name: string | null; avatar_url: string | null }[] };
-
-      const profileMap = new Map((profiles || []).map((profile) => [profile.user_id, profile]));
-
-      return (comments || []).map((row) => ({
-        ...row,
-        profile: profileMap.get(row.user_id) || null,
-      }));
+      return getBlueprintComments({
+        blueprintId,
+        sortMode,
+      });
     },
   });
 }
@@ -378,13 +356,15 @@ export function useCreateBlueprintComment() {
   return useMutation({
     mutationFn: async ({ blueprintId, content }: { blueprintId: string; content: string }) => {
       if (!user) throw new Error('Must be logged in');
-      const { error } = await supabase
-        .from('blueprint_comments')
-        .insert({ blueprint_id: blueprintId, user_id: user.id, content });
-      if (error) throw error;
+      return createBlueprintComment({
+        blueprintId,
+        content,
+      });
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['blueprint-comments', variables.blueprintId] });
+      queryClient.invalidateQueries({ queryKey: ['user-comments'] });
+      queryClient.invalidateQueries({ queryKey: ['user-activity'] });
     },
   });
 }

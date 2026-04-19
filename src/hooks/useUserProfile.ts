@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { getProfileComments } from '@/lib/blueprintCommentsApi';
 import { lookupSourceItems } from '@/lib/sourceItemsApi';
 
 export interface PublicProfile {
@@ -169,36 +170,10 @@ export function useUserComments(userId: string | undefined, limit = 20) {
     refetchOnReconnect: false,
     queryFn: async () => {
       if (!userId) return [] as UserCommentItem[];
-
-      const { data: comments, error: commentsError } = await supabase
-        .from('blueprint_comments')
-        .select('id, blueprint_id, content, created_at')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(limit);
-      if (commentsError) throw commentsError;
-      if (!comments || comments.length === 0) return [] as UserCommentItem[];
-
-      const blueprintIds = Array.from(new Set(comments.map((row) => row.blueprint_id).filter(Boolean)));
-      const { data: blueprints, error: blueprintsError } = blueprintIds.length > 0
-        ? await supabase
-          .from('blueprints')
-          .select('id, title')
-          .in('id', blueprintIds)
-          .eq('is_public', true)
-        : { data: [] as Array<{ id: string; title: string }>, error: null };
-      if (blueprintsError) throw blueprintsError;
-
-      const titleMap = new Map((blueprints || []).map((row) => [row.id, row.title]));
-      return comments
-        .filter((row) => titleMap.has(row.blueprint_id))
-        .map((row) => ({
-          id: row.id,
-          blueprint_id: row.blueprint_id,
-          blueprint_title: titleMap.get(row.blueprint_id) || 'Blueprint',
-          content: row.content,
-          created_at: row.created_at,
-        })) as UserCommentItem[];
+      return getProfileComments({
+        userId,
+        limit,
+      });
     },
     enabled: !!userId,
   });
@@ -250,25 +225,10 @@ export function useUserActivity(userId: string | undefined, limit = 4) {
 
       const likedMap = new Map((likedBlueprints || []).map((bp) => [bp.id, bp.title]));
 
-      // Fetch recent comments
-      const { data: comments } = await supabase
-        .from('blueprint_comments')
-        .select('id, blueprint_id, created_at')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(limit);
-
-      // Get commented blueprint titles
-      const commentBlueprintIds = (comments || []).map((c) => c.blueprint_id);
-      const { data: commentedBlueprints } = commentBlueprintIds.length > 0
-        ? await supabase
-            .from('blueprints')
-            .select('id, title')
-            .in('id', commentBlueprintIds)
-            .eq('is_public', true)
-        : { data: [] };
-
-      const commentedMap = new Map((commentedBlueprints || []).map((bp) => [bp.id, bp.title]));
+      const comments = await getProfileComments({
+        userId,
+        limit,
+      });
 
       // Combine all activities
       const activities: ActivityItem[] = [
@@ -289,11 +249,10 @@ export function useUserActivity(userId: string | undefined, limit = 4) {
             target_id: like.blueprint_id,
           })),
         ...(comments || [])
-          .filter((c) => commentedMap.has(c.blueprint_id))
           .map((c) => ({
             type: 'comment' as const,
             id: c.id,
-            title: `Commented on "${commentedMap.get(c.blueprint_id)}"`,
+            title: `Commented on "${c.blueprint_title}"`,
             created_at: c.created_at,
             target_id: c.blueprint_id,
           })),

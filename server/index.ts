@@ -377,6 +377,13 @@ import {
   replaceOracleBlueprintYoutubeCommentsSnapshot,
 } from './services/oracleBlueprintYoutubeCommentsState';
 import {
+  countOracleBlueprintCommentRows,
+  insertOracleBlueprintCommentRow,
+  listOracleBlueprintCommentRows,
+  listOracleBlueprintCommentRowsByUser,
+  syncOracleBlueprintCommentRowsFromSupabase,
+} from './services/oracleBlueprintCommentState';
+import {
   countOracleBlueprintTagRows,
   listOracleBlueprintTagRows,
   listOracleBlueprintTagRowsByTagIds,
@@ -484,6 +491,7 @@ import { registerYouTubeRoutes } from './routes/youtube';
 import { registerSourceSubscriptionsRoutes } from './routes/sourceSubscriptions';
 import { registerSourcePagesRoutes } from './routes/sourcePages';
 import { registerWallRoutes } from './routes/wall';
+import { registerBlueprintCommentRoutes } from './routes/blueprintComments';
 import { registerBlueprintTagReadRoutes } from './routes/blueprintTags';
 
 const app = express();
@@ -7854,7 +7862,9 @@ app.use((req, res, next) => {
   const isPublicSourcePageRoute = req.method === 'GET' && /^\/api\/source-pages\/[^/]+\/[^/]+$/.test(req.path);
   const isPublicSourcePageBlueprintFeedRoute = req.method === 'GET' && /^\/api\/source-pages\/[^/]+\/[^/]+\/blueprints$/.test(req.path);
   const isPublicBlueprintTagsRoute = req.method === 'GET' && req.path === '/api/blueprint-tags';
+  const isPublicBlueprintCommentsRoute = req.method === 'GET' && /^\/api\/blueprints\/[^/]+\/comments$/.test(req.path);
   const isPublicBlueprintChannelRoute = req.method === 'GET' && /^\/api\/blueprints\/[^/]+\/channel$/.test(req.path);
+  const isPublicProfileCommentsRoute = req.method === 'GET' && /^\/api\/profile\/[^/]+\/comments$/.test(req.path);
   const allowsAnonymous = req.path === '/api/youtube-to-blueprint'
     || req.path === '/api/youtube/connection/callback'
     || req.path === '/api/ingestion/jobs/trigger'
@@ -7869,7 +7879,9 @@ app.use((req, res, next) => {
     || isPublicSourcePageRoute
     || isPublicSourcePageBlueprintFeedRoute
     || isPublicBlueprintTagsRoute
+    || isPublicBlueprintCommentsRoute
     || isPublicBlueprintChannelRoute
+    || isPublicProfileCommentsRoute
     || (debugEndpointsEnabled && isDebugResetTranscriptProxyRoute)
     || (debugEndpointsEnabled && isDebugSimulationRoute);
 
@@ -8512,6 +8524,44 @@ registerWallRoutes(app, {
   }),
   readUnlockRows: ({ db, sourceIds }: any) => getSourceItemUnlocksBySourceItemIdsOracleFirst(db, sourceIds),
   readActiveSubscriptions: ({ db, userId }: any) => listActiveSubscriptionsForUserOracleFirst(db, userId),
+});
+
+registerBlueprintCommentRoutes(app, {
+  getServiceSupabaseClient,
+  listBlueprintCommentRows: ({ blueprintId, sortMode, limit }) => {
+    if (!oracleControlPlane) {
+      throw new Error('Oracle control plane is not configured');
+    }
+    return listOracleBlueprintCommentRows({
+      controlDb: oracleControlPlane,
+      blueprintId,
+      sortMode,
+      limit,
+    });
+  },
+  createBlueprintCommentRow: ({ blueprintId, userId, content }) => {
+    if (!oracleControlPlane) {
+      throw new Error('Oracle control plane is not configured');
+    }
+    return insertOracleBlueprintCommentRow({
+      controlDb: oracleControlPlane,
+      row: {
+        blueprint_id: blueprintId,
+        user_id: userId,
+        content,
+      },
+    });
+  },
+  listUserBlueprintCommentRows: ({ userId, limit }) => {
+    if (!oracleControlPlane) {
+      throw new Error('Oracle control plane is not configured');
+    }
+    return listOracleBlueprintCommentRowsByUser({
+      controlDb: oracleControlPlane,
+      userId,
+      limit,
+    });
+  },
 });
 
 registerBlueprintTagReadRoutes(app, {
@@ -16808,6 +16858,21 @@ async function bootstrapOracleControlPlaneState() {
     }
   }
 
+  let blueprintCommentCount: number | null = null;
+  if (oracleControlPlane) {
+    blueprintCommentCount = await countOracleBlueprintCommentRows({
+      controlDb: oracleControlPlane,
+    });
+    if (blueprintCommentCount === 0) {
+      const blueprintCommentBootstrap = await syncOracleBlueprintCommentRowsFromSupabase({
+        controlDb: oracleControlPlane,
+        db,
+        batchSize: oracleControlPlaneConfig.bootstrapBatch,
+      });
+      blueprintCommentCount = blueprintCommentBootstrap.rowCount;
+    }
+  }
+
   let channelCandidateCount: number | null = null;
   let channelGateDecisionCount: number | null = null;
   if (oracleControlPlane) {
@@ -16889,6 +16954,7 @@ async function bootstrapOracleControlPlaneState() {
     generation_run_count: generationRunCount,
     generation_run_active_count: generationRunActiveCount,
     blueprint_tag_count: blueprintTagCount,
+    blueprint_comment_count: blueprintCommentCount,
     channel_candidate_count: channelCandidateCount,
     channel_gate_decision_count: channelGateDecisionCount,
     queue_admission_active_count: queueAdmissionActiveCount,
