@@ -11,7 +11,6 @@ import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { AppHeader } from '@/components/shared/AppHeader';
 import { AvatarUpload } from '@/components/profile/AvatarUpload';
-import { supabase } from '@/integrations/supabase/client';
 
 export default function Settings() {
   const { user, profile, isLoading, updateProfile } = useAuth();
@@ -27,23 +26,8 @@ export default function Settings() {
     setDisplayName(profile?.display_name || '');
     setAvatarUrl(profile?.avatar_url || '');
     setBio(profile?.bio || '');
+    setIsPublic(Boolean(profile?.is_public));
   }, [profile]);
-
-  // Fetch is_public separately since it's not in the current AuthContext Profile type
-  useEffect(() => {
-    async function fetchPrivacy() {
-      if (!user) return;
-      const { data } = await supabase
-        .from('profiles')
-        .select('is_public')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      if (data) {
-        setIsPublic(data.is_public);
-      }
-    }
-    fetchPrivacy();
-  }, [user]);
 
   if (isLoading) {
     return (
@@ -61,24 +45,23 @@ export default function Settings() {
     e.preventDefault();
     setSaving(true);
 
-    // Update profile via AuthContext
     const { error } = await updateProfile({
       display_name: displayName.trim() || null,
       avatar_url: avatarUrl.trim() || null,
       bio: bio.trim() || null,
+      is_public: isPublic,
     });
 
-    // Update is_public separately
-    const { error: privacyError } = await supabase
-      .from('profiles')
-      .update({ is_public: isPublic })
-      .eq('user_id', user.id);
-
-    if (error || privacyError) {
+    if (error) {
       toast({
         title: 'Update failed',
-        description: (error || privacyError)?.message || 'Please try again.',
+        description: error.message || 'Please try again.',
         variant: 'destructive',
+      });
+    } else {
+      toast({
+        title: 'Profile updated',
+        description: 'Your changes were saved.',
       });
     }
 

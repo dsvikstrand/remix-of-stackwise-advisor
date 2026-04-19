@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getProfileComments } from '@/lib/blueprintCommentsApi';
+import { getProfileByUserId } from '@/lib/profileApi';
 import { lookupSourceItems } from '@/lib/sourceItemsApi';
 
 export interface PublicProfile {
-  id: string;
+  id: string | null;
   user_id: string;
   display_name: string | null;
   avatar_url: string | null;
@@ -24,15 +25,7 @@ export function useUserProfile(userId: string | undefined) {
     refetchOnReconnect: false,
     queryFn: async () => {
       if (!userId) return null;
-
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, user_id, display_name, avatar_url, bio, is_public, follower_count, following_count, unlocked_blueprints_count, created_at')
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (error) throw error;
-      return data as PublicProfile | null;
+      return await getProfileByUserId(userId) as PublicProfile | null;
     },
     enabled: !!userId,
   });

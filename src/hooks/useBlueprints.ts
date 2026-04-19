@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { getBlueprintDetailById, syncBlueprintReadState } from '@/lib/blueprintReadApi';
 import { buildStoredPreviewSummary } from '@/lib/feedPreview';
 import { getPublishedBlueprintChannelSlug } from '@/lib/blueprintChannelsApi';
 import { createBlueprintComment, getBlueprintComments } from '@/lib/blueprintCommentsApi';
@@ -73,7 +74,6 @@ interface UpdateBlueprintInput {
 }
 
 const BLUEPRINT_FIELDS = 'id, inventory_id, creator_user_id, title, selected_items, steps, mix_notes, review_prompt, banner_url, llm_review, preview_summary, is_public, likes_count, source_blueprint_id, created_at, updated_at';
-const BLUEPRINT_DETAIL_FIELDS = 'id, inventory_id, creator_user_id, title, sections_json, mix_notes, review_prompt, banner_url, llm_review, preview_summary, is_public, likes_count, source_blueprint_id, created_at, updated_at';
 
 function isMissingColumnError(error: unknown, column: string) {
   const e = error as any;
@@ -122,22 +122,15 @@ export function useBlueprint(blueprintId?: string) {
     queryFn: async () => {
       if (!blueprintId) return null;
 
-      const { data: blueprint, error } = await supabase
-        .from('blueprints')
-        .select(BLUEPRINT_DETAIL_FIELDS)
-        .eq('id', blueprintId)
-        .maybeSingle();
-
-      if (error) throw error;
+      const blueprint = await getBlueprintDetailById(blueprintId);
       if (!blueprint) return null;
 
-      const [tagRows, publishedChannelSlug, likeRes, profileRes] = await Promise.all([
+      const [tagRows, publishedChannelSlug, likeRes] = await Promise.all([
         listBlueprintTagRows({ blueprintIds: [blueprintId] }),
         getPublishedBlueprintChannelSlug(blueprintId).catch(() => null),
         user
           ? supabase.from('blueprint_likes').select('id').eq('blueprint_id', blueprintId).eq('user_id', user.id)
           : Promise.resolve({ data: [] as { id: string }[] }),
-        supabase.from('profiles').select('display_name, avatar_url').eq('user_id', blueprint.creator_user_id).maybeSingle(),
       ]);
 
       const tagsData = collectBlueprintTagMap(tagRows).get(blueprintId) || [];
@@ -149,7 +142,7 @@ export function useBlueprint(blueprintId?: string) {
         tags: tagsData,
         published_channel_slug: publishedChannelSlug,
         user_liked: userLiked,
-        creator_profile: profileRes.data || null,
+        creator_profile: blueprint.creator_profile || null,
       } as BlueprintDetail;
     },
   });
@@ -209,6 +202,8 @@ export function useCreateBlueprint() {
         );
         if (tagError) throw tagError;
       }
+
+      await syncBlueprintReadState(blueprint.id);
 
       return blueprint as BlueprintRow;
     },
@@ -311,6 +306,8 @@ export function useUpdateBlueprint() {
         );
         if (tagError) throw tagError;
       }
+
+      await syncBlueprintReadState(input.blueprintId);
 
       return blueprint as BlueprintRow;
     },

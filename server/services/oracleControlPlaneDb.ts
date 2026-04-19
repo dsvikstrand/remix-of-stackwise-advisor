@@ -442,6 +442,38 @@ type BlueprintCommentStateTable = {
   updated_at: string;
 };
 
+type BlueprintStateTable = {
+  id: string;
+  inventory_id: string | null;
+  creator_user_id: string;
+  title: string;
+  sections_json: string | null;
+  mix_notes: string | null;
+  review_prompt: string | null;
+  banner_url: string | null;
+  llm_review: string | null;
+  preview_summary: string | null;
+  is_public: number;
+  likes_count: number;
+  source_blueprint_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type ProfileStateTable = {
+  user_id: string;
+  profile_id: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  is_public: number;
+  follower_count: number;
+  following_count: number;
+  unlocked_blueprints_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
 export type OracleControlPlaneDatabase = {
   control_meta: ControlMetaTable;
   subscription_schedule_state: SubscriptionScheduleStateTable;
@@ -461,7 +493,9 @@ export type OracleControlPlaneDatabase = {
   generation_run_event_state: GenerationRunEventStateTable;
   blueprint_youtube_comment_state: BlueprintYoutubeCommentStateTable;
   blueprint_comment_state: BlueprintCommentStateTable;
+  blueprint_state: BlueprintStateTable;
   blueprint_tag_state: BlueprintTagStateTable;
+  profile_state: ProfileStateTable;
   provider_circuit_state: ProviderCircuitStateTable;
   notification_state: NotificationStateTable;
   credit_wallet_state: CreditWalletStateTable;
@@ -907,6 +941,47 @@ CREATE INDEX IF NOT EXISTS idx_blueprint_comment_state_blueprint_likes_created
 
 CREATE INDEX IF NOT EXISTS idx_blueprint_comment_state_user_created
   ON blueprint_comment_state (user_id, created_at DESC, id DESC);
+
+CREATE TABLE IF NOT EXISTS blueprint_state (
+  id TEXT PRIMARY KEY,
+  inventory_id TEXT,
+  creator_user_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  sections_json TEXT,
+  mix_notes TEXT,
+  review_prompt TEXT,
+  banner_url TEXT,
+  llm_review TEXT,
+  preview_summary TEXT,
+  is_public INTEGER NOT NULL DEFAULT 0,
+  likes_count INTEGER NOT NULL DEFAULT 0,
+  source_blueprint_id TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_blueprint_state_creator_created
+  ON blueprint_state (creator_user_id, created_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS idx_blueprint_state_public_created
+  ON blueprint_state (is_public, created_at DESC, id DESC);
+
+CREATE TABLE IF NOT EXISTS profile_state (
+  user_id TEXT PRIMARY KEY,
+  profile_id TEXT,
+  display_name TEXT,
+  avatar_url TEXT,
+  bio TEXT,
+  is_public INTEGER NOT NULL DEFAULT 0,
+  follower_count INTEGER NOT NULL DEFAULT 0,
+  following_count INTEGER NOT NULL DEFAULT 0,
+  unlocked_blueprints_count INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_profile_state_public_updated
+  ON profile_state (is_public, updated_at DESC, user_id);
 
 CREATE TABLE IF NOT EXISTS blueprint_tag_state (
   id TEXT PRIMARY KEY,

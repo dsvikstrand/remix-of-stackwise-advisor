@@ -384,6 +384,13 @@ import {
   syncOracleBlueprintCommentRowsFromSupabase,
 } from './services/oracleBlueprintCommentState';
 import {
+  countOracleBlueprintRows,
+  getOracleBlueprintRow,
+  syncOracleBlueprintRowFromSupabase,
+  syncOracleBlueprintRowsFromSupabase,
+  upsertOracleBlueprintRow,
+} from './services/oracleBlueprintState';
+import {
   countOracleBlueprintTagRows,
   listOracleBlueprintTagRows,
   listOracleBlueprintTagRowsByTagIds,
@@ -404,6 +411,13 @@ import {
   updateOracleChannelCandidateStatus,
   upsertOracleChannelCandidateRow,
 } from './services/oracleChannelCandidateState';
+import {
+  countOracleProfileRows,
+  getOracleProfileRow,
+  syncOracleProfileRowFromSupabase,
+  syncOracleProfileRowsFromSupabase,
+  upsertOracleProfileRow,
+} from './services/oracleProfileState';
 import {
   clampInt,
   getFailureTransition,
@@ -482,6 +496,7 @@ import type {
 import { registerTracingRoutes } from './routes/tracing';
 import { registerNotificationRoutes } from './routes/notifications';
 import { registerProfileRoutes } from './routes/profile';
+import { registerProfileReadRoutes } from './routes/profileRead';
 import { registerFeedRoutes } from './routes/feed';
 import { registerChannelCandidateRoutes } from './routes/channels';
 import { registerIngestionUserRoutes } from './routes/ingestion';
@@ -492,6 +507,7 @@ import { registerSourceSubscriptionsRoutes } from './routes/sourceSubscriptions'
 import { registerSourcePagesRoutes } from './routes/sourcePages';
 import { registerWallRoutes } from './routes/wall';
 import { registerBlueprintCommentRoutes } from './routes/blueprintComments';
+import { registerBlueprintReadRoutes } from './routes/blueprintRead';
 import { registerBlueprintTagReadRoutes } from './routes/blueprintTags';
 
 const app = express();
@@ -7864,6 +7880,8 @@ app.use((req, res, next) => {
   const isPublicBlueprintTagsRoute = req.method === 'GET' && req.path === '/api/blueprint-tags';
   const isPublicBlueprintCommentsRoute = req.method === 'GET' && /^\/api\/blueprints\/[^/]+\/comments$/.test(req.path);
   const isPublicBlueprintChannelRoute = req.method === 'GET' && /^\/api\/blueprints\/[^/]+\/channel$/.test(req.path);
+  const isPublicBlueprintReadRoute = req.method === 'GET' && /^\/api\/blueprints\/[^/]+$/.test(req.path);
+  const isPublicProfileReadRoute = req.method === 'GET' && /^\/api\/profile\/[^/]+$/.test(req.path);
   const isPublicProfileCommentsRoute = req.method === 'GET' && /^\/api\/profile\/[^/]+\/comments$/.test(req.path);
   const allowsAnonymous = req.path === '/api/youtube-to-blueprint'
     || req.path === '/api/youtube/connection/callback'
@@ -7881,6 +7899,8 @@ app.use((req, res, next) => {
     || isPublicBlueprintTagsRoute
     || isPublicBlueprintCommentsRoute
     || isPublicBlueprintChannelRoute
+    || isPublicBlueprintReadRoute
+    || isPublicProfileReadRoute
     || isPublicProfileCommentsRoute
     || (debugEndpointsEnabled && isDebugResetTranscriptProxyRoute)
     || (debugEndpointsEnabled && isDebugSimulationRoute);
@@ -8497,6 +8517,67 @@ registerProfileRoutes(app, {
   },
 });
 
+registerProfileReadRoutes(app, {
+  getServiceSupabaseClient,
+  getProfileRow: async ({ userId }) => {
+    const profile = await ensureOracleProfileReadStateByUserId(userId);
+    return profile || null;
+  },
+  syncProfileRowFromSupabase: async ({ userId }) => {
+    if (!oracleControlPlane) {
+      throw new Error('Oracle control plane is not configured');
+    }
+    const db = getServiceSupabaseClient();
+    if (!db) {
+      throw new Error('Service role client is not configured');
+    }
+    const synced = await syncOracleProfileRowFromSupabase({
+      controlDb: oracleControlPlane,
+      db,
+      userId,
+    });
+    return synced ? mapProfileReadRouteRow(synced) : null;
+  },
+  updateOwnProfile: async ({ userId, updates }) => {
+    if (!oracleControlPlane) {
+      throw new Error('Oracle control plane is not configured');
+    }
+    const db = getServiceSupabaseClient();
+    if (!db) {
+      throw new Error('Service role client is not configured');
+    }
+
+    const patch: Record<string, unknown> = {};
+    if (Object.prototype.hasOwnProperty.call(updates, 'display_name')) {
+      patch.display_name = updates.display_name ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(updates, 'avatar_url')) {
+      patch.avatar_url = updates.avatar_url ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(updates, 'bio')) {
+      patch.bio = updates.bio ?? null;
+    }
+    if (typeof updates.is_public === 'boolean') {
+      patch.is_public = updates.is_public;
+    }
+
+    const { data, error } = await db
+      .from('profiles')
+      .update(patch)
+      .eq('user_id', userId)
+      .select('id, user_id, display_name, avatar_url, bio, is_public, follower_count, following_count, unlocked_blueprints_count, created_at, updated_at')
+      .maybeSingle();
+    if (error) throw error;
+    if (!data?.user_id) return null;
+
+    const upserted = await upsertOracleProfileRow({
+      controlDb: oracleControlPlane,
+      row: mapProfileReadRouteRow(data as Record<string, unknown>),
+    });
+    return mapProfileReadRouteRow(upserted);
+  },
+});
+
 registerWallRoutes(app, {
   getServiceSupabaseClient,
   normalizeTranscriptTruthStatus,
@@ -8561,6 +8642,73 @@ registerBlueprintCommentRoutes(app, {
       userId,
       limit,
     });
+  },
+});
+
+registerBlueprintReadRoutes(app, {
+  getServiceSupabaseClient,
+  getBlueprintRow: async ({ blueprintId }) => {
+    if (!oracleControlPlane) {
+      throw new Error('Oracle control plane is not configured');
+    }
+    let blueprint = await getOracleBlueprintRow({
+      controlDb: oracleControlPlane,
+      blueprintId,
+    });
+    if (!blueprint) return null;
+
+    const creatorProfile = await ensureOracleProfileReadStateByUserId(blueprint.creator_user_id);
+    return mapBlueprintReadRouteRow(blueprint, creatorProfile
+      ? {
+          display_name: creatorProfile.display_name,
+          avatar_url: creatorProfile.avatar_url,
+        }
+      : null);
+  },
+  syncBlueprintRowFromSupabase: async ({ blueprintId }) => {
+    if (!oracleControlPlane) {
+      throw new Error('Oracle control plane is not configured');
+    }
+    const db = getServiceSupabaseClient();
+    if (!db) {
+      throw new Error('Service role client is not configured');
+    }
+
+    const synced = await syncOracleBlueprintRowFromSupabase({
+      controlDb: oracleControlPlane,
+      db,
+      blueprintId,
+    });
+    if (!synced) return null;
+    const creatorProfile = await ensureOracleProfileReadStateByUserId(synced.creator_user_id);
+    return mapBlueprintReadRouteRow(synced, creatorProfile
+      ? {
+          display_name: creatorProfile.display_name,
+          avatar_url: creatorProfile.avatar_url,
+        }
+      : null);
+  },
+  syncBlueprintReadState: async ({ blueprintId, userId }) => {
+    if (!oracleControlPlane) {
+      throw new Error('Oracle control plane is not configured');
+    }
+    const row = await readSupabaseBlueprintRouteRowById(blueprintId);
+    if (!row) return null;
+    if (row.creator_user_id !== userId) {
+      throw new Error('Only the blueprint owner can sync blueprint state.');
+    }
+
+    const synced = await upsertOracleBlueprintRow({
+      controlDb: oracleControlPlane,
+      row,
+    });
+    const creatorProfile = await ensureOracleProfileReadStateByUserId(synced.creator_user_id);
+    return mapBlueprintReadRouteRow(synced, creatorProfile
+      ? {
+          display_name: creatorProfile.display_name,
+          avatar_url: creatorProfile.avatar_url,
+        }
+      : null);
   },
 });
 
@@ -9521,6 +9669,99 @@ function getServiceSupabaseClient() {
   const serviceRoleKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
   if (!serviceRoleKey) return null;
   return createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+}
+
+function normalizeRouteString(value: unknown) {
+  return String(value || '').trim();
+}
+
+function normalizeRouteNullableString(value: unknown) {
+  const normalized = normalizeRouteString(value);
+  return normalized || null;
+}
+
+function normalizeRouteBoolean(value: unknown) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  const normalized = normalizeRouteString(value).toLowerCase();
+  return normalized === 'true' || normalized === '1' || normalized === 't';
+}
+
+function normalizeRouteInt(value: unknown) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.floor(numeric) : 0;
+}
+
+function mapBlueprintReadRouteRow(row: Record<string, unknown>, creatorProfile?: {
+  display_name: string | null;
+  avatar_url: string | null;
+} | null) {
+  return {
+    id: normalizeRouteString(row.id),
+    inventory_id: normalizeRouteNullableString(row.inventory_id),
+    creator_user_id: normalizeRouteString(row.creator_user_id),
+    title: normalizeRouteString(row.title),
+    sections_json: (row.sections_json ?? null) as unknown,
+    mix_notes: normalizeRouteNullableString(row.mix_notes),
+    review_prompt: normalizeRouteNullableString(row.review_prompt),
+    banner_url: normalizeRouteNullableString(row.banner_url),
+    llm_review: normalizeRouteNullableString(row.llm_review),
+    preview_summary: normalizeRouteNullableString(row.preview_summary),
+    is_public: normalizeRouteBoolean(row.is_public),
+    likes_count: normalizeRouteInt(row.likes_count),
+    source_blueprint_id: normalizeRouteNullableString(row.source_blueprint_id),
+    created_at: normalizeRouteString(row.created_at),
+    updated_at: normalizeRouteString(row.updated_at),
+    creator_profile: creatorProfile || null,
+  };
+}
+
+function mapProfileReadRouteRow(row: Record<string, unknown>) {
+  return {
+    id: normalizeRouteNullableString(row.id ?? row.profile_id),
+    user_id: normalizeRouteString(row.user_id),
+    display_name: normalizeRouteNullableString(row.display_name),
+    avatar_url: normalizeRouteNullableString(row.avatar_url),
+    bio: normalizeRouteNullableString(row.bio),
+    is_public: normalizeRouteBoolean(row.is_public),
+    follower_count: normalizeRouteInt(row.follower_count),
+    following_count: normalizeRouteInt(row.following_count),
+    unlocked_blueprints_count: normalizeRouteInt(row.unlocked_blueprints_count),
+    created_at: normalizeRouteString(row.created_at),
+    updated_at: normalizeRouteString(row.updated_at),
+  };
+}
+
+async function ensureOracleProfileReadStateByUserId(userId: string) {
+  const normalizedUserId = normalizeRouteString(userId);
+  if (!oracleControlPlane || !normalizedUserId) return null;
+
+  const existing = await getOracleProfileRow({
+    controlDb: oracleControlPlane,
+    userId: normalizedUserId,
+  });
+  if (existing) return mapProfileReadRouteRow(existing);
+
+  const db = getServiceSupabaseClient();
+  if (!db) return null;
+  const synced = await syncOracleProfileRowFromSupabase({
+    controlDb: oracleControlPlane,
+    db,
+    userId: normalizedUserId,
+  });
+  return synced ? mapProfileReadRouteRow(synced) : null;
+}
+
+async function readSupabaseBlueprintRouteRowById(blueprintId: string) {
+  const db = getServiceSupabaseClient();
+  if (!db) return null;
+  const { data, error } = await db
+    .from('blueprints')
+    .select('id, inventory_id, creator_user_id, title, sections_json, mix_notes, review_prompt, banner_url, llm_review, preview_summary, is_public, likes_count, source_blueprint_id, created_at, updated_at')
+    .eq('id', blueprintId)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapBlueprintReadRouteRow(data as Record<string, unknown>) : null;
 }
 
 function isServiceRequestAuthorized(req: express.Request) {
@@ -16873,6 +17114,36 @@ async function bootstrapOracleControlPlaneState() {
     }
   }
 
+  let blueprintStateCount: number | null = null;
+  if (oracleControlPlane) {
+    blueprintStateCount = await countOracleBlueprintRows({
+      controlDb: oracleControlPlane,
+    });
+    if (blueprintStateCount === 0) {
+      const blueprintStateBootstrap = await syncOracleBlueprintRowsFromSupabase({
+        controlDb: oracleControlPlane,
+        db,
+        batchSize: oracleControlPlaneConfig.bootstrapBatch,
+      });
+      blueprintStateCount = blueprintStateBootstrap.rowCount;
+    }
+  }
+
+  let profileStateCount: number | null = null;
+  if (oracleControlPlane) {
+    profileStateCount = await countOracleProfileRows({
+      controlDb: oracleControlPlane,
+    });
+    if (profileStateCount === 0) {
+      const profileStateBootstrap = await syncOracleProfileRowsFromSupabase({
+        controlDb: oracleControlPlane,
+        db,
+        batchSize: oracleControlPlaneConfig.bootstrapBatch,
+      });
+      profileStateCount = profileStateBootstrap.rowCount;
+    }
+  }
+
   let channelCandidateCount: number | null = null;
   let channelGateDecisionCount: number | null = null;
   if (oracleControlPlane) {
@@ -16955,6 +17226,8 @@ async function bootstrapOracleControlPlaneState() {
     generation_run_active_count: generationRunActiveCount,
     blueprint_tag_count: blueprintTagCount,
     blueprint_comment_count: blueprintCommentCount,
+    blueprint_state_count: blueprintStateCount,
+    profile_state_count: profileStateCount,
     channel_candidate_count: channelCandidateCount,
     channel_gate_decision_count: channelGateDecisionCount,
     queue_admission_active_count: queueAdmissionActiveCount,
