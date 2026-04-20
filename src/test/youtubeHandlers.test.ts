@@ -185,6 +185,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
       queue_depth: 0,
     })),
     listBlueprintYouTubeComments: vi.fn(async () => []),
+    getBlueprintRow: vi.fn(async () => null),
     ...overrides,
   } as any;
 }
@@ -832,6 +833,10 @@ describe('youtube handlers', () => {
     registerYouTubeRouteHandlers(app as any, createDeps({
       getServiceSupabaseClient: () => serviceDb,
       requestManualBlueprintYouTubeCommentsRefresh,
+      getBlueprintRow: vi.fn(async () => ({
+        id: '00000000-0000-0000-0000-000000000999',
+        creator_user_id: '00000000-0000-0000-0000-000000000001',
+      })),
     }));
 
     const handler = app.handlers['POST /api/blueprints/:id/youtube-comments/refresh'];
@@ -878,6 +883,11 @@ describe('youtube handlers', () => {
     registerYouTubeRouteHandlers(app as any, createDeps({
       getServiceSupabaseClient: () => serviceDb,
       listBlueprintYouTubeComments,
+      getBlueprintRow: vi.fn(async () => ({
+        id: '00000000-0000-0000-0000-000000000999',
+        creator_user_id: '00000000-0000-0000-0000-000000000001',
+        is_public: true,
+      })),
     }));
 
     const handler = app.handlers['GET /api/blueprints/:id/youtube-comments'];
@@ -922,6 +932,11 @@ describe('youtube handlers', () => {
     registerYouTubeRouteHandlers(app as any, createDeps({
       getServiceSupabaseClient: () => serviceDb,
       listBlueprintYouTubeComments,
+      getBlueprintRow: vi.fn(async () => ({
+        id: '00000000-0000-0000-0000-000000000999',
+        creator_user_id: '00000000-0000-0000-0000-000000000777',
+        is_public: false,
+      })),
     }));
 
     const handler = app.handlers['GET /api/blueprints/:id/youtube-comments'];
@@ -958,6 +973,10 @@ describe('youtube handlers', () => {
     registerYouTubeRouteHandlers(app as any, createDeps({
       getServiceSupabaseClient: () => serviceDb,
       requestManualBlueprintYouTubeCommentsRefresh,
+      getBlueprintRow: vi.fn(async () => ({
+        id: '00000000-0000-0000-0000-000000000999',
+        creator_user_id: '00000000-0000-0000-0000-000000000001',
+      })),
     }));
 
     const handler = app.handlers['POST /api/blueprints/:id/youtube-comments/refresh'];
@@ -997,6 +1016,10 @@ describe('youtube handlers', () => {
     registerYouTubeRouteHandlers(app as any, createDeps({
       getServiceSupabaseClient: () => serviceDb,
       requestManualBlueprintYouTubeCommentsRefresh,
+      getBlueprintRow: vi.fn(async () => ({
+        id: '00000000-0000-0000-0000-000000000999',
+        creator_user_id: '00000000-0000-0000-0000-000000000001',
+      })),
     }));
 
     const handler = app.handlers['POST /api/blueprints/:id/youtube-comments/refresh'];
@@ -1036,6 +1059,10 @@ describe('youtube handlers', () => {
     registerYouTubeRouteHandlers(app as any, createDeps({
       getServiceSupabaseClient: () => serviceDb,
       requestManualBlueprintYouTubeCommentsRefresh,
+      getBlueprintRow: vi.fn(async () => ({
+        id: '00000000-0000-0000-0000-000000000999',
+        creator_user_id: '00000000-0000-0000-0000-000000000777',
+      })),
     }));
 
     const handler = app.handlers['POST /api/blueprints/:id/youtube-comments/refresh'];
