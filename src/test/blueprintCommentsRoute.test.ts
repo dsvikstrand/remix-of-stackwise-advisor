@@ -47,6 +47,17 @@ describe('blueprint comment routes', () => {
 
     registerBlueprintCommentRoutes(app as any, {
       getServiceSupabaseClient: () => db,
+      getBlueprintRow: async () => ({
+        id: 'bp_1',
+        creator_user_id: 'owner_1',
+        title: 'Blueprint One',
+        is_public: true,
+      }),
+      readBlueprintRows: async () => [{
+        id: 'bp_1',
+        title: 'Blueprint One',
+        is_public: true,
+      }],
       listBlueprintCommentRows: async () => [
         {
           id: 'comment_1',
@@ -104,6 +115,17 @@ describe('blueprint comment routes', () => {
 
     registerBlueprintCommentRoutes(app as any, {
       getServiceSupabaseClient: () => db,
+      getBlueprintRow: async () => ({
+        id: 'bp_1',
+        creator_user_id: 'owner_1',
+        title: 'Blueprint One',
+        is_public: true,
+      }),
+      readBlueprintRows: async () => [{
+        id: 'bp_1',
+        title: 'Blueprint One',
+        is_public: true,
+      }],
       listBlueprintCommentRows: async () => [],
       createBlueprintCommentRow: async ({ blueprintId, userId, content }) => ({
         id: 'comment_2',
@@ -154,6 +176,12 @@ describe('blueprint comment routes', () => {
 
     registerBlueprintCommentRoutes(app as any, {
       getServiceSupabaseClient: () => db,
+      getBlueprintRow: async () => null,
+      readBlueprintRows: async () => [{
+        id: 'bp_1',
+        title: 'Blueprint One',
+        is_public: true,
+      }],
       listBlueprintCommentRows: async () => [],
       createBlueprintCommentRow: async () => {
         throw new Error('not used');

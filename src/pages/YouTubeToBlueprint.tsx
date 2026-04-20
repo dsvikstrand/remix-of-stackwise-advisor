@@ -13,6 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCreateBlueprint } from '@/hooks/useBlueprints';
 import { config, getFunctionUrl } from '@/config/runtime';
 import { logMvpEvent } from '@/lib/logEvent';
+import { syncBlueprintReadState } from '@/lib/blueprintReadApi';
 import { autoPublishMyFeedItem, saveGeneratedBlueprintToMyFeed } from '@/lib/myFeedApi';
 import { apiFetch } from '@/lib/api';
 import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
@@ -375,6 +376,7 @@ export default function YouTubeToBlueprint() {
                 .update({ llm_review: summary })
                 .eq('id', persistedBlueprintId)
                 .eq('creator_user_id', user?.id || '');
+              await syncBlueprintReadState(persistedBlueprintId).catch(() => null);
             }
 
             await logMvpEvent({
@@ -452,6 +454,7 @@ export default function YouTubeToBlueprint() {
                 .update({ banner_url: bannerUrl })
                 .eq('id', persistedBlueprintId)
                 .eq('creator_user_id', user?.id || '');
+              await syncBlueprintReadState(persistedBlueprintId).catch(() => null);
             }
           } catch (error) {
             const message = error instanceof Error ? error.message : 'Could not generate banner.';

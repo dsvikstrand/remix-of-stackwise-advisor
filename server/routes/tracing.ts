@@ -121,14 +121,7 @@ export function registerTracingRoutes(app: express.Express, deps: TracingRouteDe
     }
 
     try {
-      const { data: blueprint, error: blueprintError } = await db
-        .from('blueprints')
-        .select('id, creator_user_id')
-        .eq('id', blueprintId)
-        .maybeSingle();
-      if (blueprintError) {
-        return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: blueprintError.message, data: null });
-      }
+      const blueprint = await deps.getBlueprintRow({ blueprintId });
       if (!blueprint) {
         return res.status(404).json({ ok: false, error_code: 'NOT_FOUND', message: 'Blueprint not found', data: null });
       }

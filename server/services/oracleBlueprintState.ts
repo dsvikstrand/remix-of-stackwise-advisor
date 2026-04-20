@@ -222,6 +222,40 @@ export async function upsertOracleBlueprintRow(input: {
   return nextRow;
 }
 
+export async function patchOracleBlueprintRow(input: {
+  controlDb: OracleControlPlaneDb;
+  blueprintId: string;
+  patch: Partial<Omit<OracleBlueprintRow, 'id' | 'creator_user_id' | 'title' | 'created_at'>>;
+  nowIso?: string;
+}) {
+  const existing = await getOracleBlueprintRow({
+    controlDb: input.controlDb,
+    blueprintId: input.blueprintId,
+  });
+  if (!existing) return null;
+
+  return upsertOracleBlueprintRow({
+    controlDb: input.controlDb,
+    row: {
+      id: existing.id,
+      creator_user_id: existing.creator_user_id,
+      title: existing.title,
+      inventory_id: existing.inventory_id,
+      sections_json: existing.sections_json,
+      mix_notes: existing.mix_notes,
+      review_prompt: existing.review_prompt,
+      banner_url: input.patch.banner_url ?? existing.banner_url,
+      llm_review: input.patch.llm_review ?? existing.llm_review,
+      preview_summary: input.patch.preview_summary ?? existing.preview_summary,
+      is_public: input.patch.is_public ?? existing.is_public,
+      likes_count: input.patch.likes_count ?? existing.likes_count,
+      source_blueprint_id: input.patch.source_blueprint_id ?? existing.source_blueprint_id,
+      updated_at: input.patch.updated_at ?? input.nowIso ?? normalizeRequiredIso(undefined),
+    },
+    nowIso: input.nowIso,
+  });
+}
+
 export async function syncOracleBlueprintRowFromSupabase(input: {
   controlDb: OracleControlPlaneDb;
   db: {

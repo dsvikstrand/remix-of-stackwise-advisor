@@ -30,6 +30,5 @@ export type BlueprintRouteDetail = {
 export type BlueprintReadRouteDeps = {
   getServiceSupabaseClient: () => DbClient | null;
   getBlueprintRow: (input: { blueprintId: string }) => Promise<BlueprintRouteDetail | null>;
-  syncBlueprintRowFromSupabase: (input: { blueprintId: string }) => Promise<BlueprintRouteDetail | null>;
   syncBlueprintReadState: (input: { blueprintId: string; userId: string }) => Promise<BlueprintRouteDetail | null>;
 };

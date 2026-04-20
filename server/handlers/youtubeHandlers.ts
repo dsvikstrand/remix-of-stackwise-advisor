@@ -128,6 +128,7 @@ export function registerYouTubeRouteHandlers(app: express.Express, deps: YouTube
     findVariantsByBlueprintId,
     requestManualBlueprintYouTubeCommentsRefresh,
     listBlueprintYouTubeComments,
+    getBlueprintRow,
   } = deps;
 app.post('/api/youtube-to-blueprint', yt2bpIpHourlyLimiter, yt2bpAnonLimiter, yt2bpAuthLimiter, async (req, res) => {
   if (!yt2bpEnabled) {
@@ -446,19 +447,7 @@ app.post('/api/blueprints/:id/youtube-comments/refresh', async (req, res) => {
   }
 
   try {
-    const { data: blueprint, error: blueprintError } = await db
-      .from('blueprints')
-      .select('id, creator_user_id')
-      .eq('id', blueprintId)
-      .maybeSingle();
-    if (blueprintError) {
-      return res.status(400).json({
-        ok: false,
-        error_code: 'READ_FAILED',
-        message: blueprintError.message,
-        data: null,
-      });
-    }
+    const blueprint = await getBlueprintRow({ blueprintId });
     if (!blueprint || String(blueprint.creator_user_id || '').trim() !== userId) {
       return res.status(404).json({
         ok: false,
@@ -534,19 +523,7 @@ app.get('/api/blueprints/:id/youtube-comments', async (req, res) => {
   }
 
   try {
-    const { data: blueprint, error: blueprintError } = await db
-      .from('blueprints')
-      .select('id, creator_user_id, is_public')
-      .eq('id', blueprintId)
-      .maybeSingle();
-    if (blueprintError) {
-      return res.status(400).json({
-        ok: false,
-        error_code: 'READ_FAILED',
-        message: blueprintError.message,
-        data: null,
-      });
-    }
+    const blueprint = await getBlueprintRow({ blueprintId });
 
     const isOwner = Boolean(
       blueprint

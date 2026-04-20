@@ -387,6 +387,7 @@ import {
   countOracleBlueprintRows,
   getOracleBlueprintRow,
   listOracleBlueprintRows,
+  patchOracleBlueprintRow,
   syncOracleBlueprintRowFromSupabase,
   syncOracleBlueprintRowsFromSupabase,
   upsertOracleBlueprintRow,
@@ -8638,6 +8639,8 @@ registerWallRoutes(app, {
 
 registerBlueprintCommentRoutes(app, {
   getServiceSupabaseClient,
+  getBlueprintRow: async ({ blueprintId }) => getOracleBlueprintRouteRowById(blueprintId),
+  readBlueprintRows: async ({ blueprintIds }) => ensureOracleBlueprintRowsByIds(blueprintIds || []),
   listBlueprintCommentRows: ({ blueprintId, sortMode, limit }) => {
     if (!oracleControlPlane) {
       throw new Error('Oracle control plane is not configured');
@@ -8676,47 +8679,7 @@ registerBlueprintCommentRoutes(app, {
 
 registerBlueprintReadRoutes(app, {
   getServiceSupabaseClient,
-  getBlueprintRow: async ({ blueprintId }) => {
-    if (!oracleControlPlane) {
-      throw new Error('Oracle control plane is not configured');
-    }
-    let blueprint = await getOracleBlueprintRow({
-      controlDb: oracleControlPlane,
-      blueprintId,
-    });
-    if (!blueprint) return null;
-
-    const creatorProfile = await ensureOracleProfileReadStateByUserId(blueprint.creator_user_id);
-    return mapBlueprintReadRouteRow(blueprint, creatorProfile
-      ? {
-          display_name: creatorProfile.display_name,
-          avatar_url: creatorProfile.avatar_url,
-        }
-      : null);
-  },
-  syncBlueprintRowFromSupabase: async ({ blueprintId }) => {
-    if (!oracleControlPlane) {
-      throw new Error('Oracle control plane is not configured');
-    }
-    const db = getServiceSupabaseClient();
-    if (!db) {
-      throw new Error('Service role client is not configured');
-    }
-
-    const synced = await syncOracleBlueprintRowFromSupabase({
-      controlDb: oracleControlPlane,
-      db,
-      blueprintId,
-    });
-    if (!synced) return null;
-    const creatorProfile = await ensureOracleProfileReadStateByUserId(synced.creator_user_id);
-    return mapBlueprintReadRouteRow(synced, creatorProfile
-      ? {
-          display_name: creatorProfile.display_name,
-          avatar_url: creatorProfile.avatar_url,
-        }
-      : null);
-  },
+  getBlueprintRow: async ({ blueprintId }) => getOracleBlueprintRouteRowById(blueprintId),
   syncBlueprintReadState: async ({ blueprintId, userId }) => {
     if (!oracleControlPlane) {
       throw new Error('Oracle control plane is not configured');
@@ -9511,6 +9474,7 @@ registerYouTubeRoutes(app, {
       sortMode,
     })
   ),
+  getBlueprintRow: async ({ blueprintId }) => getOracleBlueprintRouteRowById(blueprintId),
 });
 
 async function fetchYouTubeChannelAssetMap(input: {
@@ -9823,22 +9787,6 @@ async function ensureOracleBlueprintRowsByIds(blueprintIds: string[]) {
     limit: normalizedBlueprintIds.length,
   });
   const byBlueprintId = new Map(existingRows.map((row) => [row.id, row]));
-
-  const missingBlueprintIds = normalizedBlueprintIds.filter((blueprintId) => !byBlueprintId.has(blueprintId));
-  if (missingBlueprintIds.length > 0) {
-    const db = getServiceSupabaseClient();
-    if (db) {
-      for (const blueprintId of missingBlueprintIds) {
-        const synced = await syncOracleBlueprintRowFromSupabase({
-          controlDb: oracleControlPlane,
-          db,
-          blueprintId,
-        });
-        if (synced) byBlueprintId.set(blueprintId, synced);
-      }
-    }
-  }
-
   const rows = normalizedBlueprintIds
     .map((blueprintId) => byBlueprintId.get(blueprintId))
     .filter(Boolean);
@@ -9857,6 +9805,25 @@ async function ensureOracleBlueprintRowsByIds(blueprintIds: string[]) {
         }
       : null);
   });
+}
+
+async function getOracleBlueprintRouteRowById(blueprintId: string) {
+  const normalizedBlueprintId = normalizeRouteString(blueprintId);
+  if (!oracleControlPlane || !normalizedBlueprintId) return null;
+
+  const blueprint = await getOracleBlueprintRow({
+    controlDb: oracleControlPlane,
+    blueprintId: normalizedBlueprintId,
+  });
+  if (!blueprint) return null;
+
+  const creatorProfile = await ensureOracleProfileReadStateByUserId(blueprint.creator_user_id);
+  return mapBlueprintReadRouteRow(blueprint, creatorProfile
+    ? {
+        display_name: creatorProfile.display_name,
+        avatar_url: creatorProfile.avatar_url,
+      }
+    : null);
 }
 
 async function listOracleBlueprintRowsByCreatorUserId(input: {
@@ -10301,6 +10268,15 @@ async function runAutoChannelForFeedItem(input: {
       });
     },
   });
+  if (oracleControlPlane && result.decision === 'published') {
+    await patchOracleBlueprintRow({
+      controlDb: oracleControlPlane,
+      blueprintId: input.blueprintId,
+      patch: {
+        is_public: true,
+      },
+    });
+  }
   if (!oracleFeedLedgerPrimaryEnabled) {
     await syncOracleProductFeedRowsByIds(input.db, [input.userFeedItemId], 'run_auto_channel_for_feed_item');
   }
@@ -11529,7 +11505,19 @@ async function rebalanceGeneratedBannerCap(db: ReturnType<typeof createClient>) 
         banner_policy_updated_at: nowIso,
       })
       .eq('id', row.id);
-    if (!error) restoredToGenerated += 1;
+    if (!error) {
+      restoredToGenerated += 1;
+      if (oracleControlPlane) {
+        await patchOracleBlueprintRow({
+          controlDb: oracleControlPlane,
+          blueprintId: row.id,
+          patch: {
+            banner_url: row.banner_generated_url,
+            updated_at: nowIso,
+          },
+        });
+      }
+    }
   }
 
   let demotedToDefault = 0;
@@ -11560,6 +11548,16 @@ async function rebalanceGeneratedBannerCap(db: ReturnType<typeof createClient>) 
         })
         .eq('id', row.id);
       if (error) continue;
+      if (oracleControlPlane) {
+        await patchOracleBlueprintRow({
+          controlDb: oracleControlPlane,
+          blueprintId: row.id,
+          patch: {
+            banner_url: nextBanner,
+            updated_at: nowIso,
+          },
+        });
+      }
       if (fallback) demotedToDefault += 1;
       else demotedToNone += 1;
     }
@@ -11616,6 +11614,16 @@ async function processAutoBannerJob(db: ReturnType<typeof createClient>, job: Au
     })
     .eq('id', blueprint.id);
   if (bannerUpdateError) throw bannerUpdateError;
+  if (oracleControlPlane) {
+    await patchOracleBlueprintRow({
+      controlDb: oracleControlPlane,
+      blueprintId: blueprint.id,
+      patch: {
+        banner_url: bannerUrl,
+        updated_at: nowIso,
+      },
+    });
+  }
 
   const { error: jobUpdateError } = await db
     .from('auto_banner_jobs')

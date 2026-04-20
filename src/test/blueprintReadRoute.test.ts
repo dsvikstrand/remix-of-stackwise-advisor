@@ -59,7 +59,6 @@ describe('blueprint read route', () => {
           avatar_url: 'https://img/creator.png',
         },
       }),
-      syncBlueprintRowFromSupabase: async () => null,
       syncBlueprintReadState: async () => null,
     });
 
@@ -88,7 +87,6 @@ describe('blueprint read route', () => {
     registerBlueprintReadRoutes(app as any, {
       getServiceSupabaseClient: () => null,
       getBlueprintRow: async () => null,
-      syncBlueprintRowFromSupabase: async () => null,
       syncBlueprintReadState: async () => {
         throw new Error('Only the blueprint owner can sync blueprint state.');
       },

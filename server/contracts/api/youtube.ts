@@ -187,4 +187,9 @@ export type YouTubeRouteDeps = {
     published_at: string | null;
     like_count: number | null;
   }>>;
+  getBlueprintRow: (input: { blueprintId: string }) => Promise<{
+    id: string;
+    creator_user_id: string;
+    is_public: boolean;
+  } | null>;
 };

@@ -28,14 +28,9 @@ async function readBlueprintDetail(input: {
   viewerUserId: string | null;
   deps: BlueprintReadRouteDeps;
 }) {
-  let blueprint = await input.deps.getBlueprintRow({
+  const blueprint = await input.deps.getBlueprintRow({
     blueprintId: input.blueprintId,
   });
-  if (!blueprint) {
-    blueprint = await input.deps.syncBlueprintRowFromSupabase({
-      blueprintId: input.blueprintId,
-    });
-  }
   if (!blueprint) {
     return {
       status: 404,

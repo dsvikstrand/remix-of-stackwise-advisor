@@ -24,39 +24,9 @@ async function readBlueprintAccess(input: {
   viewerUserId: string | null;
   deps: BlueprintCommentsRouteDeps;
 }) {
-  const db = input.deps.getServiceSupabaseClient();
-  if (!db) {
-    return {
-      status: 500,
-      body: {
-        ok: false,
-        error_code: 'CONFIG_ERROR',
-        message: 'Service role client is not configured',
-        data: null,
-      },
-      blueprint: null,
-    } as const;
-  }
-
-  const { data: blueprint, error } = await db
-    .from('blueprints')
-    .select('id, creator_user_id, is_public')
-    .eq('id', input.blueprintId)
-    .maybeSingle();
-
-  if (error) {
-    return {
-      status: 400,
-      body: {
-        ok: false,
-        error_code: 'READ_FAILED',
-        message: error.message,
-        data: null,
-      },
-      blueprint: null,
-    } as const;
-  }
-
+  const blueprint = await input.deps.getBlueprintRow({
+    blueprintId: input.blueprintId,
+  });
   if (!blueprint?.id) {
     return {
       status: 404,
@@ -207,26 +177,13 @@ async function readProfileCommentsResponse(input: {
       .filter(Boolean),
   ));
 
-  const { data: blueprints, error: blueprintError } = blueprintIds.length > 0
-    ? await db
-      .from('blueprints')
-      .select('id, title')
-      .in('id', blueprintIds)
-      .eq('is_public', true)
-    : { data: [] as Array<{ id: string; title: string }>, error: null };
-  if (blueprintError) {
-    return {
-      status: 400,
-      body: {
-        ok: false,
-        error_code: 'READ_FAILED',
-        message: blueprintError.message,
-        data: null,
-      },
-    } as const;
-  }
+  const blueprints = blueprintIds.length > 0
+    ? await input.deps.readBlueprintRows({ blueprintIds })
+    : [];
 
-  const titleMap = new Map((blueprints || []).map((row) => [
+  const titleMap = new Map((blueprints || [])
+    .filter((row) => Boolean(row.is_public))
+    .map((row) => [
     normalizeRequiredString(row.id),
     normalizeRequiredString(row.title) || 'Blueprint',
   ]));

@@ -28,6 +28,17 @@ export type UserBlueprintCommentRouteItem = {
 
 export type BlueprintCommentsRouteDeps = {
   getServiceSupabaseClient: () => DbClient | null;
+  getBlueprintRow: (input: { blueprintId: string }) => Promise<{
+    id: string;
+    creator_user_id: string;
+    title: string;
+    is_public: boolean;
+  } | null>;
+  readBlueprintRows: (input: { blueprintIds: string[] }) => Promise<Array<{
+    id: string;
+    title: string;
+    is_public: boolean;
+  }>>;
   listBlueprintCommentRows: (input: {
     blueprintId: string;
     sortMode?: 'top' | 'new' | null;
