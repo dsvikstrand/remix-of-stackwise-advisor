@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { getBlueprintDetailById, syncBlueprintReadState } from '@/lib/blueprintReadApi';
+import { getBlueprintLikeState, setBlueprintLiked } from '@/lib/blueprintLikesApi';
 import { buildStoredPreviewSummary } from '@/lib/feedPreview';
 import { getPublishedBlueprintChannelSlug } from '@/lib/blueprintChannelsApi';
 import { createBlueprintComment, getBlueprintComments } from '@/lib/blueprintCommentsApi';
@@ -125,23 +126,20 @@ export function useBlueprint(blueprintId?: string) {
       const blueprint = await getBlueprintDetailById(blueprintId);
       if (!blueprint) return null;
 
-      const [tagRows, publishedChannelSlug, likeRes] = await Promise.all([
+      const [tagRows, publishedChannelSlug, likeState] = await Promise.all([
         listBlueprintTagRows({ blueprintIds: [blueprintId] }),
         getPublishedBlueprintChannelSlug(blueprintId).catch(() => null),
-        user
-          ? supabase.from('blueprint_likes').select('id').eq('blueprint_id', blueprintId).eq('user_id', user.id)
-          : Promise.resolve({ data: [] as { id: string }[] }),
+        getBlueprintLikeState(blueprintId),
       ]);
 
       const tagsData = collectBlueprintTagMap(tagRows).get(blueprintId) || [];
-
-      const userLiked = !!(likeRes.data && likeRes.data.length > 0);
 
       return {
         ...(blueprint as BlueprintRow),
         tags: tagsData,
         published_channel_slug: publishedChannelSlug,
-        user_liked: userLiked,
+        likes_count: likeState?.likes_count ?? Number(blueprint.likes_count || 0),
+        user_liked: Boolean(likeState?.user_liked),
         creator_profile: blueprint.creator_profile || null,
       } as BlueprintDetail;
     },
@@ -221,24 +219,16 @@ export function useToggleBlueprintLike() {
   return useMutation({
     mutationFn: async ({ blueprintId, liked }: { blueprintId: string; liked: boolean }) => {
       if (!user) throw new Error('Must be logged in');
-      if (liked) {
-        const { error } = await supabase
-          .from('blueprint_likes')
-          .delete()
-          .eq('blueprint_id', blueprintId)
-          .eq('user_id', user.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('blueprint_likes')
-          .insert({ blueprint_id: blueprintId, user_id: user.id });
-        if (error) throw error;
-      }
+      return setBlueprintLiked(blueprintId, !liked);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['blueprint'] });
       queryClient.invalidateQueries({ queryKey: ['blueprint-search'] });
       queryClient.invalidateQueries({ queryKey: ['suggested-blueprints'] });
+      queryClient.invalidateQueries({ queryKey: ['wall-feed'] });
+      queryClient.invalidateQueries({ queryKey: ['wall-for-you'] });
+      queryClient.invalidateQueries({ queryKey: ['user-liked-blueprints'] });
+      queryClient.invalidateQueries({ queryKey: ['user-activity'] });
     },
   });
 }

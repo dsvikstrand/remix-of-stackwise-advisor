@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { buildFeedSummary } from '@/lib/feedPreview';
+import { getBlueprintLikeStates } from '@/lib/blueprintLikesApi';
 import { collectBlueprintTagMap, listBlueprintTagRows } from '@/lib/blueprintTagsApi';
 import { normalizeTag } from '@/lib/tagging';
 
@@ -50,8 +51,8 @@ export async function hydrateBlueprints(rows: BlueprintRow[], userId?: string | 
   const [tagsRes, likesRes, inventoriesRes] = await Promise.all([
     listBlueprintTagRows({ blueprintIds }),
     userId
-      ? supabase.from('blueprint_likes').select('blueprint_id').eq('user_id', userId).in('blueprint_id', blueprintIds)
-      : Promise.resolve({ data: [] as { blueprint_id: string }[] }),
+      ? getBlueprintLikeStates(blueprintIds)
+      : Promise.resolve(new Map<string, boolean>()),
     inventoryIds.length > 0
       ? supabase.from('inventories').select('id, title').in('id', inventoryIds)
       : Promise.resolve({ data: [] as { id: string; title: string }[] }),
@@ -59,7 +60,6 @@ export async function hydrateBlueprints(rows: BlueprintRow[], userId?: string | 
 
   const blueprintTags = collectBlueprintTagMap(tagsRes || []);
 
-  const likedIds = new Set((likesRes.data || []).map((row) => row.blueprint_id));
   const inventoryMap = new Map((inventoriesRes.data || []).map((inv) => [inv.id, inv.title]));
 
   return rows.map((row) => {
@@ -67,7 +67,7 @@ export async function hydrateBlueprints(rows: BlueprintRow[], userId?: string | 
     return {
       ...row,
       tags: blueprintTags.get(row.id) || [],
-      user_liked: likedIds.has(row.id),
+      user_liked: Boolean(likesRes.get(row.id)),
       inventory_title: inventoryTitle,
       preview_summary: buildFeedSummary({
         primary: row.preview_summary,

@@ -287,6 +287,10 @@ export async function listWallBlueprintFeed(input: {
   scope: WallFeedScope;
   sort: FeedSort;
   viewerUserId?: string | null;
+  readLikedBlueprintIds?: (input: {
+    userId: string;
+    blueprintIds: string[];
+  }) => Promise<string[]>;
   listBlueprintTagRows: (input: {
     blueprintIds: string[];
   }) => Promise<Array<{
@@ -386,7 +390,17 @@ export async function listWallBlueprintFeed(input: {
       error: null,
     }),
     viewerUserId
-      ? db.from('blueprint_likes').select('blueprint_id').eq('user_id', viewerUserId).in('blueprint_id', blueprintIds)
+      ? (
+        input.readLikedBlueprintIds
+          ? Promise.resolve({
+              data: (await input.readLikedBlueprintIds({
+                userId: viewerUserId,
+                blueprintIds,
+              })).map((blueprintId) => ({ blueprint_id: blueprintId })),
+              error: null,
+            })
+          : db.from('blueprint_likes').select('blueprint_id').eq('user_id', viewerUserId).in('blueprint_id', blueprintIds)
+      )
       : Promise.resolve({ data: [] as { blueprint_id: string }[], error: null }),
     input.readPublicFeedRows
       ? Promise.resolve({
@@ -484,6 +498,10 @@ export async function listWallBlueprintFeed(input: {
 export async function listWallForYouFeed(input: {
   db: DbClient;
   userId: string;
+  readLikedBlueprintIds?: (input: {
+    userId: string;
+    blueprintIds: string[];
+  }) => Promise<string[]>;
   normalizeTranscriptTruthStatus: (value: unknown) => string;
   limit?: number;
   listBlueprintTagRows: (input: {
@@ -587,7 +605,17 @@ export async function listWallForYouFeed(input: {
   if (tagRowsError) throw tagRowsError;
 
   const { data: likedRows, error: likedError } = blueprintIds.length > 0
-    ? await db.from('blueprint_likes').select('blueprint_id').eq('user_id', userId).in('blueprint_id', blueprintIds)
+    ? (
+      input.readLikedBlueprintIds
+        ? {
+            data: (await input.readLikedBlueprintIds({
+              userId,
+              blueprintIds,
+            })).map((blueprintId) => ({ blueprint_id: blueprintId })),
+            error: null,
+          }
+        : await db.from('blueprint_likes').select('blueprint_id').eq('user_id', userId).in('blueprint_id', blueprintIds)
+    )
     : { data: [], error: null };
   if (likedError) throw likedError;
   const tagsByBlueprint = collectJoinedTagSlugs((tagRows || []).map((row: any) => ({

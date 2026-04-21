@@ -31,6 +31,7 @@ export function registerWallRoutes(app: express.Express, deps: WallRouteDeps) {
         scope: normalizeScope(req.query.scope),
         sort: normalizeSort(req.query.sort),
         viewerUserId,
+        readLikedBlueprintIds: deps.readLikedBlueprintIds,
         listBlueprintTagRows: deps.listBlueprintTagRows,
         readPublicFeedRows: deps.readPublicFeedRows,
         readSourceRows: deps.readSourceRows,
@@ -81,6 +82,7 @@ export function registerWallRoutes(app: express.Express, deps: WallRouteDeps) {
       const items = await listWallForYouFeed({
         db,
         userId,
+        readLikedBlueprintIds: deps.readLikedBlueprintIds,
         normalizeTranscriptTruthStatus: deps.normalizeTranscriptTruthStatus,
         listBlueprintTagRows: deps.listBlueprintTagRows,
         readFeedRows: deps.readFeedRows,

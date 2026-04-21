@@ -384,6 +384,16 @@ import {
   syncOracleBlueprintCommentRowsFromSupabase,
 } from './services/oracleBlueprintCommentState';
 import {
+  countOracleBlueprintLikeRows,
+  deleteOracleBlueprintLikeRow,
+  getOracleBlueprintLikeRow,
+  hasOracleBlueprintLikeBootstrapCompleted,
+  listOracleBlueprintLikeRows,
+  listOracleLikedBlueprintIdsByUser,
+  syncOracleBlueprintLikeRowsFromSupabase,
+  upsertOracleBlueprintLikeRow,
+} from './services/oracleBlueprintLikeState';
+import {
   countOracleBlueprintRows,
   getOracleBlueprintRow,
   listOracleBlueprintRows,
@@ -510,6 +520,7 @@ import { registerSourceSubscriptionsRoutes } from './routes/sourceSubscriptions'
 import { registerSourcePagesRoutes } from './routes/sourcePages';
 import { registerWallRoutes } from './routes/wall';
 import { registerBlueprintCommentRoutes } from './routes/blueprintComments';
+import { registerBlueprintLikeRoutes } from './routes/blueprintLikes';
 import { registerBlueprintReadRoutes } from './routes/blueprintRead';
 import { registerBlueprintTagReadRoutes } from './routes/blueprintTags';
 
@@ -8588,6 +8599,10 @@ registerProfileReadRoutes(app, {
 registerWallRoutes(app, {
   getServiceSupabaseClient,
   normalizeTranscriptTruthStatus,
+  readLikedBlueprintIds: async ({ userId, blueprintIds }: any) => listOracleLikedBlueprintIds({
+    userId,
+    blueprintIds,
+  }),
   listBlueprintTagRows: ({ blueprintIds }: any) => listBlueprintTagRowsOracleAware(getServiceSupabaseClient()!, { blueprintIds }),
   readPublicFeedRows: ({ db, blueprintIds, state, limit, cursor, requireBlueprint }: any) => listPublicProductFeedRowsOracleFirst(db, {
     blueprintIds,
@@ -8675,6 +8690,35 @@ registerBlueprintCommentRoutes(app, {
       limit,
     });
   },
+});
+
+registerBlueprintLikeRoutes(app, {
+  getBlueprintRow: async ({ blueprintId }) => getOracleBlueprintRouteRowById(blueprintId),
+  getBlueprintLikeState: async ({ blueprintId, userId }) => getOracleBlueprintLikeState({
+    blueprintId,
+    userId,
+  }),
+  setBlueprintLiked: async ({ blueprintId, userId, liked }) => setOracleBlueprintLikeState({
+    blueprintId,
+    userId,
+    liked,
+  }),
+  listBlueprintLikeStates: async ({ blueprintIds, userId }) => {
+    const likedIds = userId
+      ? new Set(await listOracleLikedBlueprintIds({
+          userId,
+          blueprintIds,
+        }))
+      : new Set<string>();
+    return blueprintIds.map((blueprintId) => ({
+      blueprint_id: blueprintId,
+      user_liked: likedIds.has(blueprintId),
+    }));
+  },
+  listLikedBlueprintIds: async ({ userId, limit }) => listOracleLikedBlueprintIds({
+    userId,
+    limit,
+  }),
 });
 
 registerBlueprintReadRoutes(app, {
@@ -9938,22 +9982,191 @@ async function listProfileBlueprintListItems(input: {
   }));
 }
 
+async function listOracleLikedBlueprintIds(input: {
+  userId: string;
+  blueprintIds?: string[];
+  limit?: number;
+}) {
+  const userId = normalizeRouteString(input.userId);
+  const blueprintIds = [...new Set((input.blueprintIds || []).map((value) => normalizeRouteString(value)).filter(Boolean))];
+  if (!oracleControlPlane || !userId) return [] as string[];
+
+  const rows = await listOracleBlueprintLikeRows({
+    controlDb: oracleControlPlane,
+    userId,
+    blueprintIds,
+    limit: blueprintIds.length > 0 ? blueprintIds.length : input.limit,
+  });
+
+  const ids = rows.map((row) => normalizeRouteString(row.blueprint_id)).filter(Boolean);
+  if (blueprintIds.length === 0) return ids;
+  const allowed = new Set(ids);
+  return blueprintIds.filter((blueprintId) => allowed.has(blueprintId));
+}
+
+async function getOracleBlueprintLikeState(input: {
+  blueprintId: string;
+  userId: string | null;
+}) {
+  const blueprintId = normalizeRouteString(input.blueprintId);
+  if (!oracleControlPlane || !blueprintId) return null;
+
+  const blueprint = await getOracleBlueprintRow({
+    controlDb: oracleControlPlane,
+    blueprintId,
+  });
+  if (!blueprint) return null;
+
+  const userId = normalizeRouteString(input.userId);
+  const likeRow = userId
+    ? await getOracleBlueprintLikeRow({
+        controlDb: oracleControlPlane,
+        blueprintId,
+        userId,
+      })
+    : null;
+
+  return {
+    blueprint_id: blueprint.id,
+    user_liked: Boolean(likeRow),
+    likes_count: Math.max(0, Math.floor(Number(blueprint.likes_count || 0))),
+  };
+}
+
+async function setOracleBlueprintLikeState(input: {
+  blueprintId: string;
+  userId: string;
+  liked: boolean;
+}) {
+  const blueprintId = normalizeRouteString(input.blueprintId);
+  const userId = normalizeRouteString(input.userId);
+  if (!oracleControlPlane || !blueprintId || !userId) return null;
+
+  const db = getServiceSupabaseClient();
+  if (!db) {
+    throw new Error('Service role client is not configured');
+  }
+
+  const blueprint = await getOracleBlueprintRow({
+    controlDb: oracleControlPlane,
+    blueprintId,
+  });
+  if (!blueprint) return null;
+
+  const existingLike = await getOracleBlueprintLikeRow({
+    controlDb: oracleControlPlane,
+    blueprintId,
+    userId,
+  });
+  const nextLiked = Boolean(input.liked);
+  const previousLiked = Boolean(existingLike);
+  const previousCount = Math.max(0, Math.floor(Number(blueprint.likes_count || 0)));
+  const nextCount = previousLiked === nextLiked
+    ? previousCount
+    : Math.max(0, previousCount + (nextLiked ? 1 : -1));
+
+  if (previousLiked === nextLiked) {
+    return {
+      blueprint_id: blueprintId,
+      user_liked: nextLiked,
+      likes_count: previousCount,
+    };
+  }
+
+  const nowIso = new Date().toISOString();
+  const rollbackOracleMutation = async () => {
+    if (nextLiked && !existingLike) {
+      await deleteOracleBlueprintLikeRow({
+        controlDb: oracleControlPlane,
+        blueprintId,
+        userId,
+      });
+    } else if (!nextLiked && existingLike) {
+      await upsertOracleBlueprintLikeRow({
+        controlDb: oracleControlPlane,
+        row: {
+          id: existingLike.id,
+          blueprint_id: existingLike.blueprint_id,
+          user_id: existingLike.user_id,
+          created_at: existingLike.created_at,
+          updated_at: existingLike.updated_at,
+        },
+      });
+    }
+
+    await upsertOracleBlueprintRow({
+      controlDb: oracleControlPlane,
+      row: {
+        ...blueprint,
+        likes_count: previousCount,
+        updated_at: blueprint.updated_at,
+      },
+    });
+  };
+
+  try {
+    if (nextLiked) {
+      await upsertOracleBlueprintLikeRow({
+        controlDb: oracleControlPlane,
+        row: {
+          blueprint_id: blueprintId,
+          user_id: userId,
+          created_at: existingLike?.created_at || nowIso,
+          updated_at: nowIso,
+        },
+      });
+    } else {
+      await deleteOracleBlueprintLikeRow({
+        controlDb: oracleControlPlane,
+        blueprintId,
+        userId,
+      });
+    }
+
+    await upsertOracleBlueprintRow({
+      controlDb: oracleControlPlane,
+      row: {
+        ...blueprint,
+        likes_count: nextCount,
+        updated_at: blueprint.updated_at,
+      },
+    });
+  } catch (error) {
+    await rollbackOracleMutation();
+    throw error;
+  }
+
+  const { error: shadowError } = await db
+    .from('blueprints')
+    .update({
+      likes_count: nextCount,
+    })
+    .eq('id', blueprintId);
+  if (shadowError) {
+    await rollbackOracleMutation();
+    throw shadowError;
+  }
+
+  return {
+    blueprint_id: blueprintId,
+    user_liked: nextLiked,
+    likes_count: nextCount,
+  };
+}
+
 async function listProfileLikedBlueprintListItems(input: {
   userId: string;
   limit?: number;
 }) {
-  const db = getServiceSupabaseClient();
-  if (!db) throw new Error('Service role client is not configured');
-
   const limit = Math.max(1, Math.min(100, Math.floor(Number(input.limit || 12))));
-  const { data: likes, error } = await db
-    .from('blueprint_likes')
-    .select('id, blueprint_id, created_at')
-    .eq('user_id', input.userId)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-  if (error) throw error;
-  if (!likes?.length) return [];
+  if (!oracleControlPlane) return [];
+
+  const likes = await listOracleBlueprintLikeRows({
+    controlDb: oracleControlPlane,
+    userId: input.userId,
+    limit,
+  });
+  if (!likes.length) return [];
 
   const blueprintIds = likes.map((row) => normalizeRouteString(row.blueprint_id)).filter(Boolean);
   const blueprints = await ensureOracleBlueprintRowsByIds(blueprintIds);
@@ -17445,6 +17658,24 @@ async function bootstrapOracleControlPlaneState() {
     }
   }
 
+  let blueprintLikeCount: number | null = null;
+  if (oracleControlPlane) {
+    blueprintLikeCount = await countOracleBlueprintLikeRows({
+      controlDb: oracleControlPlane,
+    });
+    const blueprintLikeBootstrapCompleted = await hasOracleBlueprintLikeBootstrapCompleted({
+      controlDb: oracleControlPlane,
+    });
+    if (blueprintLikeCount === 0 && !blueprintLikeBootstrapCompleted) {
+      const blueprintLikeBootstrap = await syncOracleBlueprintLikeRowsFromSupabase({
+        controlDb: oracleControlPlane,
+        db,
+        batchSize: oracleControlPlaneConfig.bootstrapBatch,
+      });
+      blueprintLikeCount = blueprintLikeBootstrap.rowCount;
+    }
+  }
+
   let blueprintStateCount: number | null = null;
   if (oracleControlPlane) {
     blueprintStateCount = await countOracleBlueprintRows({
@@ -17557,6 +17788,7 @@ async function bootstrapOracleControlPlaneState() {
     generation_run_active_count: generationRunActiveCount,
     blueprint_tag_count: blueprintTagCount,
     blueprint_comment_count: blueprintCommentCount,
+    blueprint_like_count: blueprintLikeCount,
     blueprint_state_count: blueprintStateCount,
     profile_state_count: profileStateCount,
     channel_candidate_count: channelCandidateCount,

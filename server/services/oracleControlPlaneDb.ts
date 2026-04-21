@@ -442,6 +442,14 @@ type BlueprintCommentStateTable = {
   updated_at: string;
 };
 
+type BlueprintLikeStateTable = {
+  id: string;
+  blueprint_id: string;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+};
+
 type BlueprintStateTable = {
   id: string;
   inventory_id: string | null;
@@ -493,6 +501,7 @@ export type OracleControlPlaneDatabase = {
   generation_run_event_state: GenerationRunEventStateTable;
   blueprint_youtube_comment_state: BlueprintYoutubeCommentStateTable;
   blueprint_comment_state: BlueprintCommentStateTable;
+  blueprint_like_state: BlueprintLikeStateTable;
   blueprint_state: BlueprintStateTable;
   blueprint_tag_state: BlueprintTagStateTable;
   profile_state: ProfileStateTable;
@@ -941,6 +950,23 @@ CREATE INDEX IF NOT EXISTS idx_blueprint_comment_state_blueprint_likes_created
 
 CREATE INDEX IF NOT EXISTS idx_blueprint_comment_state_user_created
   ON blueprint_comment_state (user_id, created_at DESC, id DESC);
+
+CREATE TABLE IF NOT EXISTS blueprint_like_state (
+  id TEXT PRIMARY KEY,
+  blueprint_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_blueprint_like_state_blueprint_user_unique
+  ON blueprint_like_state (blueprint_id, user_id);
+
+CREATE INDEX IF NOT EXISTS idx_blueprint_like_state_user_created
+  ON blueprint_like_state (user_id, created_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS idx_blueprint_like_state_blueprint_created
+  ON blueprint_like_state (blueprint_id, created_at DESC, id DESC);
 
 CREATE TABLE IF NOT EXISTS blueprint_state (
   id TEXT PRIMARY KEY,

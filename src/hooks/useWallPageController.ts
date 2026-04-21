@@ -1,7 +1,6 @@
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
 import { config } from '@/config/runtime';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -13,6 +12,7 @@ import { useSourceUnlockJobTracker } from '@/hooks/useSourceUnlockJobTracker';
 import { getLaunchErrorCopy } from '@/lib/launchErrorCopy';
 import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
 import { logOncePerSession, logP3Event } from '@/lib/telemetry';
+import { setBlueprintLiked } from '@/lib/blueprintLikesApi';
 import { normalizeTag } from '@/lib/tagging';
 import { extractYouTubeVideoId } from '@/lib/sourceIdentity';
 import { getWallFeed, getWallForYouFeed, type WallFeedItem, type WallForYouItem } from '@/lib/wallApi';
@@ -265,15 +265,15 @@ export function useWallPageController() {
   const likeMutation = useMutation({
     mutationFn: async ({ blueprintId, liked }: { blueprintId: string; liked: boolean }) => {
       if (!user) throw new Error('Must be logged in');
-
-      if (liked) {
-        await supabase.from('blueprint_likes').delete().eq('blueprint_id', blueprintId).eq('user_id', user.id);
-      } else {
-        await supabase.from('blueprint_likes').insert({ blueprint_id: blueprintId, user_id: user.id });
-      }
+      return setBlueprintLiked(blueprintId, !liked);
     },
     onSuccess: async (_result, variables) => {
       updateWallLikeCaches(variables.blueprintId, !variables.liked);
+      queryClient.invalidateQueries({ queryKey: ['blueprint', variables.blueprintId] });
+      queryClient.invalidateQueries({ queryKey: ['blueprint-search'] });
+      queryClient.invalidateQueries({ queryKey: ['suggested-blueprints'] });
+      queryClient.invalidateQueries({ queryKey: ['user-liked-blueprints'] });
+      queryClient.invalidateQueries({ queryKey: ['user-activity'] });
     },
     onError: () => {
       toast({
