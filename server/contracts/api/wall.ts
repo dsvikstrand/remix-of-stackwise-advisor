@@ -21,6 +21,10 @@ export type WallRouteDeps = {
   readSourceRows?: any;
   readUnlockRows?: any;
   readActiveSubscriptions?: any;
+  readFollowedTagSlugs?: (input: {
+    userId: string;
+    limit?: number;
+  }) => Promise<string[]>;
   readChannelCandidateRows?: any;
   readBlueprintRows?: any;
   readProfileRows?: any;

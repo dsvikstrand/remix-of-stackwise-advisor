@@ -412,6 +412,25 @@ import {
   upsertOracleBlueprintTagRow,
 } from './services/oracleBlueprintTagState';
 import {
+  countOracleTagRows,
+  getOracleTagRowById,
+  getOracleTagRowBySlug,
+  hasOracleTagBootstrapCompleted,
+  listOracleTagRows,
+  syncOracleTagRowsFromSupabase,
+  upsertOracleTagRow,
+} from './services/oracleTagState';
+import {
+  countOracleTagFollowRows,
+  deleteOracleTagFollowRow,
+  getOracleTagFollowRow,
+  hasOracleTagFollowBootstrapCompleted,
+  listOracleFollowedTagSlugs,
+  listOracleTagFollowRows,
+  syncOracleTagFollowRowsFromSupabase,
+  upsertOracleTagFollowRow,
+} from './services/oracleTagFollowState';
+import {
   countOracleChannelCandidateStateRows,
   getOracleChannelCandidateByFeedChannel,
   getOracleChannelCandidateById,
@@ -523,6 +542,7 @@ import { registerBlueprintCommentRoutes } from './routes/blueprintComments';
 import { registerBlueprintLikeRoutes } from './routes/blueprintLikes';
 import { registerBlueprintReadRoutes } from './routes/blueprintRead';
 import { registerBlueprintTagReadRoutes } from './routes/blueprintTags';
+import { registerTagRoutes } from './routes/tags';
 
 const app = express();
 const port = Number(process.env.PORT) || 8787;
@@ -4971,6 +4991,52 @@ async function attachBlueprintTagOracleAware(
   if (error) throw error;
 }
 
+async function syncOracleTagRowFromSupabaseBySlug(slug: string) {
+  const normalizedSlug = normalizeRouteString(slug).toLowerCase();
+  if (!oracleControlPlane || !normalizedSlug) return null;
+
+  const db = getServiceSupabaseClient();
+  if (!db) {
+    throw new Error('Service role client is not configured');
+  }
+
+  const { data, error } = await db
+    .from('tags')
+    .select('id, slug, follower_count, created_at')
+    .eq('slug', normalizedSlug)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  return upsertOracleTagRow({
+    controlDb: oracleControlPlane,
+    row: data as Record<string, unknown>,
+  });
+}
+
+async function syncOracleTagRowFromSupabaseById(tagId: string) {
+  const normalizedTagId = normalizeRouteString(tagId);
+  if (!oracleControlPlane || !normalizedTagId) return null;
+
+  const db = getServiceSupabaseClient();
+  if (!db) {
+    throw new Error('Service role client is not configured');
+  }
+
+  const { data, error } = await db
+    .from('tags')
+    .select('id, slug, follower_count, created_at')
+    .eq('id', normalizedTagId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  return upsertOracleTagRow({
+    controlDb: oracleControlPlane,
+    row: data as Record<string, unknown>,
+  });
+}
+
 type FeedItemRow = {
   id: string;
   user_id: string;
@@ -8644,6 +8710,14 @@ registerWallRoutes(app, {
     })()));
   },
   readProfileRows: async ({ userIds }: any) => ensureOracleProfileReadStateByUserIds(userIds || []),
+  readFollowedTagSlugs: async ({ userId }: any) => {
+    if (!oracleControlPlane) return [];
+    return listOracleFollowedTagSlugs({
+      controlDb: oracleControlPlane,
+      userId,
+      limit: 5000,
+    });
+  },
   readSourceRows: ({ db, sourceIds }: any) => listProductSourceItemsOracleFirst(db, {
     ids: sourceIds,
     action: 'wall_feed_read_source_rows',
@@ -8754,6 +8828,35 @@ registerBlueprintTagReadRoutes(app, {
   listBlueprintTagRowsByFilters: ({ tagIds, tagSlugs }) => listBlueprintTagRowsByFiltersOracleAware(getServiceSupabaseClient()!, {
     tagIds,
     tagSlugs,
+  }),
+});
+
+registerTagRoutes(app, {
+  listTags: ({ viewerUserId, limit }) => listOracleTagRouteItems({
+    viewerUserId,
+    limit,
+  }),
+  listTagsBySlugs: ({ slugs, viewerUserId }) => listOracleTagRouteItemsBySlugs({
+    slugs,
+    viewerUserId,
+  }),
+  listFollowedTags: ({ userId, limit }) => listOracleFollowedTagRouteItems({
+    userId,
+    limit,
+  }),
+  setTagFollowed: ({ tagId, userId, followed }) => setOracleTagFollowState({
+    tagId,
+    userId,
+    followed,
+  }),
+  clearTagFollows: ({ tagIds, userId }) => clearOracleTagFollowStates({
+    tagIds,
+    userId,
+  }),
+  createTag: ({ slug, userId, follow }) => createOracleTag({
+    slug,
+    userId,
+    follow,
   }),
 });
 
@@ -9980,6 +10083,281 @@ async function listProfileBlueprintListItems(input: {
     creator_profile: blueprint.creator_profile,
     source_channel: sourceChannelByBlueprintId.get(blueprint.id) || null,
   }));
+}
+
+async function listOracleTagRouteItems(input: {
+  viewerUserId: string | null;
+  limit?: number;
+}) {
+  if (!oracleControlPlane) return [] as Array<{
+    id: string;
+    slug: string;
+    follower_count: number;
+    created_at: string;
+    is_following?: boolean;
+  }>;
+
+  const rows = await listOracleTagRows({
+    controlDb: oracleControlPlane,
+    limit: input.limit,
+  });
+  const viewerUserId = normalizeRouteString(input.viewerUserId);
+  const followedIds = viewerUserId
+    ? new Set((await listOracleTagFollowRows({
+        controlDb: oracleControlPlane,
+        userId: viewerUserId,
+        limit: 5000,
+      })).map((row) => normalizeRouteString(row.tag_id)).filter(Boolean))
+    : new Set<string>();
+
+  return rows.map((row) => ({
+    id: row.id,
+    slug: row.slug,
+    follower_count: row.follower_count,
+    created_at: row.created_at,
+    is_following: viewerUserId ? followedIds.has(row.id) : undefined,
+  }));
+}
+
+async function listOracleTagRouteItemsBySlugs(input: {
+  slugs: string[];
+  viewerUserId: string | null;
+}) {
+  if (!oracleControlPlane) return [] as Array<{
+    id: string;
+    slug: string;
+    follower_count: number;
+    created_at: string;
+    is_following?: boolean;
+  }>;
+
+  const rows = await listOracleTagRows({
+    controlDb: oracleControlPlane,
+    slugs: input.slugs,
+    limit: input.slugs.length,
+  });
+  const viewerUserId = normalizeRouteString(input.viewerUserId);
+  const followedIds = viewerUserId
+    ? new Set((await listOracleTagFollowRows({
+        controlDb: oracleControlPlane,
+        userId: viewerUserId,
+        tagIds: rows.map((row) => row.id),
+        limit: rows.length || 5000,
+      })).map((row) => normalizeRouteString(row.tag_id)).filter(Boolean))
+    : new Set<string>();
+
+  return rows.map((row) => ({
+    id: row.id,
+    slug: row.slug,
+    follower_count: row.follower_count,
+    created_at: row.created_at,
+    is_following: viewerUserId ? followedIds.has(row.id) : undefined,
+  }));
+}
+
+async function listOracleFollowedTagRouteItems(input: {
+  userId: string;
+  limit?: number;
+}) {
+  if (!oracleControlPlane) return [] as Array<{
+    id: string;
+    slug: string;
+    created_at: string;
+  }>;
+
+  const rows = await listOracleTagFollowRows({
+    controlDb: oracleControlPlane,
+    userId: input.userId,
+    limit: input.limit,
+  });
+
+  return rows.map((row) => ({
+    id: row.tag_id,
+    slug: row.tag_slug,
+    created_at: row.created_at,
+  }));
+}
+
+async function createOracleTag(input: {
+  slug: string;
+  userId: string;
+  follow?: boolean;
+}) {
+  const slug = normalizeRouteString(input.slug).toLowerCase();
+  const userId = normalizeRouteString(input.userId);
+  if (!oracleControlPlane || !slug || !userId) return null;
+
+  const db = getServiceSupabaseClient();
+  if (!db) {
+    throw new Error('Service role client is not configured');
+  }
+
+  let supabaseTag = null as null | {
+    id: string;
+    slug: string;
+    follower_count: number | null;
+    created_at: string;
+  };
+
+  const { data: existing, error: existingError } = await db
+    .from('tags')
+    .select('id, slug, follower_count, created_at')
+    .eq('slug', slug)
+    .maybeSingle();
+  if (existingError) throw existingError;
+  if (existing) {
+    supabaseTag = existing;
+  } else {
+    const { data: created, error: createError } = await db
+      .from('tags')
+      .insert({
+        slug,
+        created_by: userId,
+      })
+      .select('id, slug, follower_count, created_at')
+      .single();
+    if (createError) throw createError;
+    supabaseTag = created;
+  }
+
+  const tag = await upsertOracleTagRow({
+    controlDb: oracleControlPlane,
+    row: supabaseTag as Record<string, unknown>,
+  });
+
+  if (input.follow !== false) {
+    return setOracleTagFollowState({
+      tagId: tag.id,
+      userId,
+      followed: true,
+    });
+  }
+
+  return {
+    id: tag.id,
+    slug: tag.slug,
+    follower_count: tag.follower_count,
+    created_at: tag.created_at,
+    is_following: false,
+  };
+}
+
+async function setOracleTagFollowState(input: {
+  tagId: string;
+  userId: string;
+  followed: boolean;
+}) {
+  const tagId = normalizeRouteString(input.tagId);
+  const userId = normalizeRouteString(input.userId);
+  if (!oracleControlPlane || !tagId || !userId) return null;
+
+  const db = getServiceSupabaseClient();
+  if (!db) {
+    throw new Error('Service role client is not configured');
+  }
+
+  const tag = await getOracleTagRowById({
+    controlDb: oracleControlPlane,
+    tagId,
+  }) || await syncOracleTagRowFromSupabaseById(tagId);
+  if (!tag) return null;
+
+  const existingFollow = await getOracleTagFollowRow({
+    controlDb: oracleControlPlane,
+    tagId,
+    userId,
+  });
+  const nextFollowed = Boolean(input.followed);
+  const previousFollowed = Boolean(existingFollow);
+
+  if (previousFollowed === nextFollowed) {
+    return {
+      id: tag.id,
+      slug: tag.slug,
+      follower_count: tag.follower_count,
+      created_at: tag.created_at,
+      is_following: nextFollowed,
+    };
+  }
+
+  if (nextFollowed) {
+    const { error } = await db
+      .from('tag_follows')
+      .upsert({
+        tag_id: tag.id,
+        user_id: userId,
+      }, {
+        onConflict: 'tag_id,user_id',
+      });
+    if (error) throw error;
+  } else {
+    const { error } = await db
+      .from('tag_follows')
+      .delete()
+      .eq('tag_id', tag.id)
+      .eq('user_id', userId);
+    if (error) throw error;
+  }
+
+  if (nextFollowed) {
+    await upsertOracleTagFollowRow({
+      controlDb: oracleControlPlane,
+      row: {
+        tag_id: tag.id,
+        tag_slug: tag.slug,
+        user_id: userId,
+      },
+    });
+  } else {
+    await deleteOracleTagFollowRow({
+      controlDb: oracleControlPlane,
+      tagId: tag.id,
+      userId,
+    });
+  }
+
+  const refreshedTag = await syncOracleTagRowFromSupabaseById(tag.id)
+    || await getOracleTagRowById({
+      controlDb: oracleControlPlane,
+      tagId: tag.id,
+    });
+  if (!refreshedTag) return null;
+
+  return {
+    id: refreshedTag.id,
+    slug: refreshedTag.slug,
+    follower_count: refreshedTag.follower_count,
+    created_at: refreshedTag.created_at,
+    is_following: nextFollowed,
+  };
+}
+
+async function clearOracleTagFollowStates(input: {
+  tagIds: string[];
+  userId: string;
+}) {
+  const tagIds = [...new Set((input.tagIds || []).map((value) => normalizeRouteString(value)).filter(Boolean))];
+  const userId = normalizeRouteString(input.userId);
+  if (!oracleControlPlane || !userId || tagIds.length === 0) {
+    return { removedCount: 0 };
+  }
+
+  let removedCount = 0;
+  for (const tagId of tagIds) {
+    const existing = await getOracleTagFollowRow({
+      controlDb: oracleControlPlane,
+      tagId,
+      userId,
+    });
+    await setOracleTagFollowState({
+      tagId,
+      userId,
+      followed: false,
+    });
+    if (existing) removedCount += 1;
+  }
+
+  return { removedCount };
 }
 
 async function listOracleLikedBlueprintIds(input: {
@@ -17651,6 +18029,42 @@ async function bootstrapOracleControlPlaneState() {
     }
   }
 
+  let tagCount: number | null = null;
+  if (oracleControlPlane) {
+    tagCount = await countOracleTagRows({
+      controlDb: oracleControlPlane,
+    });
+    const tagBootstrapCompleted = await hasOracleTagBootstrapCompleted({
+      controlDb: oracleControlPlane,
+    });
+    if (tagCount === 0 && !tagBootstrapCompleted) {
+      const tagBootstrap = await syncOracleTagRowsFromSupabase({
+        controlDb: oracleControlPlane,
+        db,
+        batchSize: oracleControlPlaneConfig.bootstrapBatch,
+      });
+      tagCount = tagBootstrap.rowCount;
+    }
+  }
+
+  let tagFollowCount: number | null = null;
+  if (oracleControlPlane) {
+    tagFollowCount = await countOracleTagFollowRows({
+      controlDb: oracleControlPlane,
+    });
+    const tagFollowBootstrapCompleted = await hasOracleTagFollowBootstrapCompleted({
+      controlDb: oracleControlPlane,
+    });
+    if (tagFollowCount === 0 && !tagFollowBootstrapCompleted) {
+      const tagFollowBootstrap = await syncOracleTagFollowRowsFromSupabase({
+        controlDb: oracleControlPlane,
+        db,
+        batchSize: oracleControlPlaneConfig.bootstrapBatch,
+      });
+      tagFollowCount = tagFollowBootstrap.rowCount;
+    }
+  }
+
   let blueprintCommentCount: number | null = null;
   if (oracleControlPlane) {
     blueprintCommentCount = await countOracleBlueprintCommentRows({
@@ -17795,6 +18209,8 @@ async function bootstrapOracleControlPlaneState() {
     generation_run_count: generationRunCount,
     generation_run_active_count: generationRunActiveCount,
     blueprint_tag_count: blueprintTagCount,
+    tag_count: tagCount,
+    tag_follow_count: tagFollowCount,
     blueprint_comment_count: blueprintCommentCount,
     blueprint_like_count: blueprintLikeCount,
     blueprint_state_count: blueprintStateCount,

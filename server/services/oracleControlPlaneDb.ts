@@ -348,6 +348,23 @@ type BlueprintTagStateTable = {
   updated_at: string;
 };
 
+type TagStateTable = {
+  id: string;
+  slug: string;
+  follower_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+type TagFollowStateTable = {
+  id: string;
+  tag_id: string;
+  tag_slug: string;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+};
+
 type ProviderCircuitStateTable = {
   provider_key: string;
   state: string;
@@ -504,6 +521,8 @@ export type OracleControlPlaneDatabase = {
   blueprint_like_state: BlueprintLikeStateTable;
   blueprint_state: BlueprintStateTable;
   blueprint_tag_state: BlueprintTagStateTable;
+  tag_state: TagStateTable;
+  tag_follow_state: TagFollowStateTable;
   profile_state: ProfileStateTable;
   provider_circuit_state: ProviderCircuitStateTable;
   notification_state: NotificationStateTable;
@@ -1026,6 +1045,41 @@ CREATE INDEX IF NOT EXISTS idx_blueprint_tag_state_blueprint_slug
 
 CREATE INDEX IF NOT EXISTS idx_blueprint_tag_state_slug
   ON blueprint_tag_state (tag_slug, updated_at);
+
+CREATE TABLE IF NOT EXISTS tag_state (
+  id TEXT PRIMARY KEY,
+  slug TEXT NOT NULL,
+  follower_count INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tag_state_slug_unique
+  ON tag_state (slug);
+
+CREATE INDEX IF NOT EXISTS idx_tag_state_follower_count
+  ON tag_state (follower_count DESC, slug ASC);
+
+CREATE TABLE IF NOT EXISTS tag_follow_state (
+  id TEXT PRIMARY KEY,
+  tag_id TEXT NOT NULL,
+  tag_slug TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tag_follow_state_tag_user_unique
+  ON tag_follow_state (tag_id, user_id);
+
+CREATE INDEX IF NOT EXISTS idx_tag_follow_state_user_created
+  ON tag_follow_state (user_id, created_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS idx_tag_follow_state_user_slug
+  ON tag_follow_state (user_id, tag_slug, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_tag_follow_state_tag_created
+  ON tag_follow_state (tag_id, created_at DESC, id DESC);
 
 CREATE TABLE IF NOT EXISTS provider_circuit_state (
   provider_key TEXT PRIMARY KEY,

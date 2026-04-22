@@ -34,6 +34,7 @@ export function registerWallRoutes(app: express.Express, deps: WallRouteDeps) {
         readLikedBlueprintIds: deps.readLikedBlueprintIds,
         listBlueprintTagRows: deps.listBlueprintTagRows,
         readPublicFeedRows: deps.readPublicFeedRows,
+        readFollowedTagSlugs: deps.readFollowedTagSlugs,
         readSourceRows: deps.readSourceRows,
         readChannelCandidateRows: deps.readChannelCandidateRows,
         readBlueprintRows: deps.readBlueprintRows,

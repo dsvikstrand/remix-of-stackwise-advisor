@@ -14,6 +14,20 @@ function listBlueprintTagRowsFromState(db: any, blueprintIds: string[]) {
     .filter((row: any) => row.blueprint_id && row.tag_slug);
 }
 
+function listFollowedTagSlugsFromState(db: any, userId: string) {
+  const followedTagIds = new Set(
+    (db.state.tag_follows || [])
+      .filter((row: any) => String(row.user_id || '').trim() === String(userId || '').trim())
+      .map((row: any) => String(row.tag_id || '').trim())
+      .filter(Boolean),
+  );
+
+  return (db.state.tags || [])
+    .filter((row: any) => followedTagIds.has(String(row.id || '').trim()))
+    .map((row: any) => String(row.slug || '').trim())
+    .filter(Boolean);
+}
+
 describe('wall feed service', () => {
   it('returns hydrated public wall cards with like state', async () => {
     const db = createMockSupabase({
@@ -523,6 +537,7 @@ describe('wall feed service', () => {
       sort: 'latest',
       viewerUserId: 'viewer_1',
       listBlueprintTagRows: ({ blueprintIds }) => Promise.resolve(listBlueprintTagRowsFromState(db, blueprintIds)),
+      readFollowedTagSlugs: ({ userId }) => Promise.resolve(listFollowedTagSlugsFromState(db, userId)),
     });
     expect(joined.map((item) => item.id)).toEqual(['bp_1']);
 
@@ -550,6 +565,7 @@ describe('wall feed service', () => {
       sort: 'latest',
       viewerUserId: 'viewer_1',
       listBlueprintTagRows: ({ blueprintIds }) => Promise.resolve(listBlueprintTagRowsFromState(db, blueprintIds)),
+      readFollowedTagSlugs: ({ userId }) => Promise.resolve(listFollowedTagSlugsFromState(db, userId)),
     });
     expect(alias.map((item) => item.id)).toEqual(['bp_1']);
   });
@@ -595,6 +611,7 @@ describe('wall feed service', () => {
       sort: 'latest',
       viewerUserId: 'viewer_1',
       listBlueprintTagRows: ({ blueprintIds }) => Promise.resolve(listBlueprintTagRowsFromState(db, blueprintIds)),
+      readFollowedTagSlugs: ({ userId }) => Promise.resolve(listFollowedTagSlugsFromState(db, userId)),
     });
 
     expect(joined).toEqual([]);
@@ -683,6 +700,7 @@ describe('wall feed service', () => {
       sort: 'latest',
       viewerUserId: 'viewer_1',
       listBlueprintTagRows: ({ blueprintIds }) => Promise.resolve(listBlueprintTagRowsFromState(baseDb, blueprintIds)),
+      readFollowedTagSlugs: ({ userId }) => Promise.resolve(listFollowedTagSlugsFromState(baseDb, userId)),
     });
     expect(joined.map((item) => item.id)).toEqual(['bp_1']);
 

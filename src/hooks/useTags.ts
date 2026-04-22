@@ -1,7 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { normalizeTag } from '@/lib/tagging';
+import {
+  createTag,
+  getTagsBySlugs,
+  listTags,
+  setTagFollowed,
+} from '@/lib/tagsApi';
 
 export interface TagRow {
   id: string;
@@ -18,13 +23,7 @@ export function useTagsBySlugs(slugs: string[]) {
     queryKey: ['tags-by-slugs', uniqueSlugs],
     enabled: uniqueSlugs.length > 0,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('tags')
-        .select('id, slug, follower_count, created_at')
-        .in('slug', uniqueSlugs);
-
-      if (error) throw error;
-      return (data || []) as TagRow[];
+      return await getTagsBySlugs(uniqueSlugs) as TagRow[];
     },
     staleTime: 30_000,
   });
@@ -37,51 +36,30 @@ export function useTagsDirectory() {
   const tagsQuery = useQuery({
     queryKey: ['tags-directory', user?.id],
     queryFn: async () => {
-      const { data: tagsData, error: tagsError } = await supabase
-        .from('tags')
-        .select('id, slug, follower_count, created_at')
-        .order('follower_count', { ascending: false })
-        .limit(200);
-
-      if (tagsError) throw tagsError;
-
-      if (!user) {
-        return (tagsData || []) as TagRow[];
-      }
-
-      const followsRes = await supabase.from('tag_follows').select('tag_id').eq('user_id', user.id);
-      const followed = new Set((followsRes.data || []).map((row) => row.tag_id));
-
-      return (tagsData || []).map((tag) => ({
-        ...tag,
-        is_following: followed.has(tag.id),
-      })) as TagRow[];
+      return await listTags(200) as TagRow[];
     },
   });
 
   const followMutation = useMutation({
     mutationFn: async (tagId: string) => {
       if (!user) throw new Error('Must be logged in');
-      const { error } = await supabase.from('tag_follows').insert({
-        tag_id: tagId,
-        user_id: user.id,
-      });
-      if (error) throw error;
+      return setTagFollowed(tagId, true);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tags-directory'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tags-directory'] });
+      queryClient.invalidateQueries({ queryKey: ['followed-tags'] });
+    },
   });
 
   const unfollowMutation = useMutation({
     mutationFn: async (tagId: string) => {
       if (!user) throw new Error('Must be logged in');
-      const { error } = await supabase
-        .from('tag_follows')
-        .delete()
-        .eq('tag_id', tagId)
-        .eq('user_id', user.id);
-      if (error) throw error;
+      return setTagFollowed(tagId, false);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tags-directory'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tags-directory'] });
+      queryClient.invalidateQueries({ queryKey: ['followed-tags'] });
+    },
   });
 
   const createTagMutation = useMutation({
@@ -89,29 +67,15 @@ export function useTagsDirectory() {
       if (!user) throw new Error('Must be logged in');
       const slug = normalizeTag(rawSlug);
       if (!slug) throw new Error('Invalid tag');
-
-      const { data: existing, error: existingError } = await supabase
-        .from('tags')
-        .select('id, slug, follower_count, created_at')
-        .eq('slug', slug)
-        .maybeSingle();
-
-      if (existingError) throw existingError;
-      if (existing) return existing as TagRow;
-
-      const { data, error } = await supabase
-        .from('tags')
-        .insert({ slug, created_by: user.id })
-        .select('id, slug, follower_count, created_at')
-        .single();
-
-      if (error) throw error;
-
-      await supabase.from('tag_follows').insert({ tag_id: data.id, user_id: user.id });
-
-      return data as TagRow;
+      return await createTag({
+        slug,
+        follow: true,
+      }) as TagRow;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tags-directory'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tags-directory'] });
+      queryClient.invalidateQueries({ queryKey: ['followed-tags'] });
+    },
   });
 
   return {
@@ -129,13 +93,8 @@ export function useTagSuggestions() {
   return useQuery({
     queryKey: ['tag-suggestions'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('tags')
-        .select('slug')
-        .order('follower_count', { ascending: false })
-        .limit(200);
-      if (error) throw error;
-      return (data || []).map((row) => row.slug);
+      const data = await listTags(200);
+      return data.map((row) => row.slug);
     },
   });
 }

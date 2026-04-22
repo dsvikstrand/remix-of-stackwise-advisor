@@ -8,6 +8,7 @@ import { getPublishedBlueprintChannelSlug } from '@/lib/blueprintChannelsApi';
 import { createBlueprintComment, getBlueprintComments } from '@/lib/blueprintCommentsApi';
 import { normalizeTags } from '@/lib/tagging';
 import { collectBlueprintTagMap, listBlueprintTagRows } from '@/lib/blueprintTagsApi';
+import { createTag, getTagsBySlugs } from '@/lib/tagsApi';
 import type { Json } from '@/integrations/supabase/types';
 
 export interface BlueprintRow {
@@ -86,26 +87,18 @@ async function ensureTags(slugs: string[], userId: string): Promise<BlueprintTag
   const normalized = normalizeTags(slugs);
   if (normalized.length === 0) return [];
 
-  const { data: existing, error: existingError } = await supabase
-    .from('tags')
-    .select('id, slug')
-    .in('slug', normalized);
-
-  if (existingError) throw existingError;
-
-  const existingTags = existing || [];
+  const existingTags = await getTagsBySlugs(normalized);
   const existingSlugs = new Set(existingTags.map((tag) => tag.slug));
   const missing = normalized.filter((slug) => !existingSlugs.has(slug));
 
   let created: BlueprintTag[] = [];
   if (missing.length > 0) {
-    const { data: createdData, error: createError } = await supabase
-      .from('tags')
-      .insert(missing.map((slug) => ({ slug, created_by: userId })))
-      .select('id, slug');
-
-    if (createError) throw createError;
-    created = createdData || [];
+    created = await Promise.all(
+      missing.map((slug) => createTag({
+        slug,
+        follow: false,
+      })),
+    );
   }
 
   return [...existingTags, ...created];

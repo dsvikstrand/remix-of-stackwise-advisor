@@ -1760,22 +1760,6 @@ app.get('/api/source-pages/:platform/:externalId/blueprints', async (req, res) =
     });
   }
 
-  const tagIds = Array.from(new Set((tagRowsData || []).map((row) => String(row.tag_id || '').trim()).filter(Boolean)));
-  const { data: tagDefsData, error: tagDefsError } = tagIds.length
-    ? await db
-      .from('tags')
-      .select('id, slug')
-      .in('id', tagIds)
-    : { data: [], error: null };
-  if (tagDefsError) {
-    return res.status(400).json({
-      ok: false,
-      error_code: 'READ_FAILED',
-      message: tagDefsError.message,
-      data: null,
-    });
-  }
-
   const allPublishedFeedRowsResult = readPublicFeedRows
     ? {
       data: await readPublicFeedRows({
@@ -1842,12 +1826,11 @@ app.get('/api/source-pages/:platform/:externalId/blueprints', async (req, res) =
       .filter((row) => Boolean(row.is_public))
       .map((row) => [String(row.id || '').trim(), row]),
   );
-  const tagDefMap = new Map((tagDefsData || []).map((row) => [String(row.id || '').trim(), String(row.slug || '').trim()]));
   const tagsByBlueprint = new Map<string, Array<{ id: string; slug: string }>>();
   for (const row of tagRowsData || []) {
     const blueprintId = String(row.blueprint_id || '').trim();
     const tagId = String(row.tag_id || '').trim();
-    const tagSlug = String((row as { tag_slug?: unknown }).tag_slug || '').trim() || tagDefMap.get(tagId);
+    const tagSlug = String((row as { tag_slug?: unknown }).tag_slug || '').trim();
     if (!blueprintId || !tagId || !tagSlug) continue;
     const list = tagsByBlueprint.get(blueprintId) || [];
     list.push({ id: tagId, slug: tagSlug });

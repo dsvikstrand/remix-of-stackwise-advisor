@@ -1,9 +1,14 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { normalizeTag } from '@/lib/tagging';
 import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
+import {
+  clearTagFollows,
+  getFollowedTags,
+  getTagsBySlugs,
+  setTagFollowed,
+} from '@/lib/tagsApi';
 
 interface FollowedTag {
   id: string;
@@ -29,19 +34,7 @@ export function useTagFollows() {
     enabled: !!user,
     queryFn: async () => {
       if (!user) return [] as FollowedTag[];
-      const { data, error } = await supabase
-        .from('tag_follows')
-        .select('tag_id, tags(slug)')
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-
-      return (data || [])
-        .map((row) => ({
-          id: row.tag_id,
-          slug: ((row.tags as { slug?: string } | null) || {}).slug || '',
-        }))
-        .filter((row) => row.slug);
+      return await getFollowedTags();
     },
   });
 
@@ -69,11 +62,7 @@ export function useTagFollows() {
   const followMutation = useMutation({
     mutationFn: async (tagId: string) => {
       if (!user) throw new Error('Must be logged in');
-      const { error } = await supabase.from('tag_follows').insert({
-        tag_id: tagId,
-        user_id: user.id,
-      });
-      if (error) throw error;
+      return setTagFollowed(tagId, true);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['followed-tags'] });
@@ -84,12 +73,7 @@ export function useTagFollows() {
   const unfollowMutation = useMutation({
     mutationFn: async (tagId: string) => {
       if (!user) throw new Error('Must be logged in');
-      const { error } = await supabase
-        .from('tag_follows')
-        .delete()
-        .eq('tag_id', tagId)
-        .eq('user_id', user.id);
-      if (error) throw error;
+      return setTagFollowed(tagId, false);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['followed-tags'] });
@@ -100,14 +84,8 @@ export function useTagFollows() {
   const resolveTagId = async (rawSlug: string) => {
     const normalized = normalizeTag(rawSlug.replace(/^#/, ''));
     if (!normalized) return null;
-    const { data, error } = await supabase
-      .from('tags')
-      .select('id')
-      .eq('slug', normalized)
-      .maybeSingle();
-
-    if (error) throw error;
-    return data?.id ?? null;
+    const tags = await getTagsBySlugs([normalized]);
+    return tags[0]?.id ?? null;
   };
 
   const resolveInputTagId = async (tag: ToggleTagInput) => {
@@ -199,13 +177,7 @@ export function useTagFollows() {
 
     if (nonCuratedTagIds.length === 0) return 0;
 
-    const { error } = await supabase
-      .from('tag_follows')
-      .delete()
-      .eq('user_id', user.id)
-      .in('tag_id', nonCuratedTagIds);
-
-    if (error) throw error;
+    await clearTagFollows(nonCuratedTagIds);
 
     await queryClient.invalidateQueries({ queryKey: ['followed-tags'] });
     await queryClient.invalidateQueries({ queryKey: ['tags-directory'] });

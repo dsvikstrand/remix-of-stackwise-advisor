@@ -306,6 +306,10 @@ export async function listWallBlueprintFeed(input: {
     cursor?: { createdAt?: string | null; feedItemId?: string | null } | null;
     requireBlueprint?: boolean;
   }) => Promise<any[]>;
+  readFollowedTagSlugs?: (input: {
+    userId: string;
+    limit?: number;
+  }) => Promise<string[]>;
   readSourceRows?: (args: {
     db: DbClient;
     sourceIds: string[];
@@ -436,18 +440,17 @@ export async function listWallBlueprintFeed(input: {
 
   let joinedChannelSlugs = new Set<string>();
   if (isJoinedScope && viewerUserId) {
-    const followsRes = await db.from('tag_follows').select('tag_id').eq('user_id', viewerUserId);
-    if (followsRes.error) throw followsRes.error;
-    const followedTagIds = [...new Set((followsRes.data || []).map((row: any) => String(row.tag_id || '').trim()).filter(Boolean))];
-    if (followedTagIds.length > 0) {
-      const followedTagsRes = await db.from('tags').select('id, slug').in('id', followedTagIds);
-      if (followedTagsRes.error) throw followedTagsRes.error;
-      joinedChannelSlugs = new Set(
-        (followedTagsRes.data || [])
-          .map((row: any) => CHANNEL_TAG_SLUG_TO_CHANNEL_SLUG.get(String(row.slug || '').trim()) || null)
-          .filter(Boolean),
-      );
-    }
+    const followedTagSlugs = input.readFollowedTagSlugs
+      ? await input.readFollowedTagSlugs({
+          userId: viewerUserId,
+          limit: 5000,
+        })
+      : [];
+    joinedChannelSlugs = new Set(
+      (followedTagSlugs || [])
+        .map((slug) => CHANNEL_TAG_SLUG_TO_CHANNEL_SLUG.get(String(slug || '').trim()) || null)
+        .filter(Boolean),
+    );
   }
 
   const creatorIds = [...new Set((resolvedBlueprints || []).map((blueprint: any) => String(blueprint.creator_user_id || '').trim()).filter(Boolean))];
