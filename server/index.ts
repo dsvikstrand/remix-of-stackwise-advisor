@@ -10882,8 +10882,14 @@ async function insertFeedItem(db: ReturnType<typeof createClient>, input: {
   sourceItemId: string;
   blueprintId: string | null;
   state: string;
+  wallCreatedAt?: string | null;
 }) {
   const nowIso = new Date().toISOString();
+  const createdAt = resolveFeedItemWallCreatedAt({
+    existingCreatedAt: null,
+    nextCreatedAt: input.wallCreatedAt || null,
+    nowIso,
+  });
   const feedRow = {
     id: randomUUID(),
     user_id: input.userId,
@@ -10892,7 +10898,7 @@ async function insertFeedItem(db: ReturnType<typeof createClient>, input: {
     state: input.state,
     last_decision_code: null,
     generated_at_on_wall: input.blueprintId ? nowIso : null,
-    created_at: nowIso,
+    created_at: createdAt,
     updated_at: nowIso,
   };
 
@@ -10928,7 +10934,7 @@ async function insertFeedItem(db: ReturnType<typeof createClient>, input: {
     state: input.state,
     last_decision_code: null,
     generated_at_on_wall: input.blueprintId ? nowIso : null,
-    created_at: nowIso,
+    created_at: createdAt,
     updated_at: nowIso,
   }], 'insert_feed_item');
   await upsertOracleProductFeedRowsFromKnownRows([{
@@ -10939,7 +10945,7 @@ async function insertFeedItem(db: ReturnType<typeof createClient>, input: {
     state: input.state,
     last_decision_code: null,
     generated_at_on_wall: input.blueprintId ? nowIso : null,
-    created_at: nowIso,
+    created_at: createdAt,
     updated_at: nowIso,
   }], 'insert_feed_item');
   return data;
@@ -10960,6 +10966,7 @@ async function upsertFeedItemWithBlueprint(db: ReturnType<typeof createClient>, 
     });
     const createdAt = resolveFeedItemWallCreatedAt({
       existingCreatedAt: current?.created_at || null,
+      nextCreatedAt: null,
       nowIso,
     });
     const generatedAtOnWall = resolveFeedItemGeneratedAtOnWall({
@@ -10992,6 +10999,7 @@ async function upsertFeedItemWithBlueprint(db: ReturnType<typeof createClient>, 
   });
   const createdAt = resolveFeedItemWallCreatedAt({
     existingCreatedAt: current?.created_at || null,
+    nextCreatedAt: null,
     nowIso,
   });
   const generatedAtOnWall = resolveFeedItemGeneratedAtOnWall({

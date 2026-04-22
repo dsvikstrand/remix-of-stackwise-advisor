@@ -16,8 +16,17 @@ describe('feed item wall policy', () => {
   it('uses now when the wall row is new', () => {
     expect(resolveFeedItemWallCreatedAt({
       existingCreatedAt: null,
+      nextCreatedAt: null,
       nowIso: '2026-04-06T12:00:00.000Z',
     })).toBe('2026-04-06T12:00:00.000Z');
+  });
+
+  it('accepts an explicit locked wall arrival timestamp for new rows', () => {
+    expect(resolveFeedItemWallCreatedAt({
+      existingCreatedAt: null,
+      nextCreatedAt: '2026-04-06T11:59:00.000Z',
+      nowIso: '2026-04-06T12:00:00.000Z',
+    })).toBe('2026-04-06T11:59:00.000Z');
   });
 
   it('stamps generated_at_on_wall on first locked to blueprint promotion', () => {

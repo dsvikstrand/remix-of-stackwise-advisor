@@ -61,6 +61,7 @@ export async function backfillSubscribedCreatorForSparseForYou(input: {
     sourceItemId: string;
     blueprintId: string | null;
     state: string;
+    wallCreatedAt?: string | null;
   }) => Promise<unknown>;
   upsertFeedItemWithBlueprint: (db: DbClient, input: {
     userId: string;
@@ -206,6 +207,7 @@ export async function backfillSubscribedCreatorForSparseForYou(input: {
       sourceItemId: row.sourceItemId,
       blueprintId: null,
       state: 'my_feed_unlockable',
+      wallCreatedAt: new Date().toISOString(),
     });
     insertedLockedCount += 1;
   }

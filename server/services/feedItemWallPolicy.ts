@@ -1,9 +1,12 @@
 export function resolveFeedItemWallCreatedAt(input: {
   existingCreatedAt?: string | null;
+  nextCreatedAt?: string | null;
   nowIso: string;
 }) {
   const existingCreatedAt = String(input.existingCreatedAt || '').trim();
   if (existingCreatedAt) return existingCreatedAt;
+  const nextCreatedAt = String(input.nextCreatedAt || '').trim();
+  if (nextCreatedAt) return nextCreatedAt;
   return input.nowIso;
 }
 

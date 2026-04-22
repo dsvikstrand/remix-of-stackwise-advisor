@@ -541,7 +541,7 @@ export async function listWallForYouFeed(input: {
   }) => Promise<any[]>;
 }) {
   const { db, userId, normalizeTranscriptTruthStatus, limit = 100 } = input;
-  const fetchLimit = Math.min(Math.max(limit * 3, limit), 500);
+  const fetchLimit = Math.min(Math.max(limit * 5, limit), 1000);
   const feedRows = input.readFeedRows
     ? { data: await input.readFeedRows({ db, userId, limit: fetchLimit }), error: null }
     : await db
@@ -569,7 +569,7 @@ export async function listWallForYouFeed(input: {
   const blueprintIds = [...new Set(filteredFeedRows.map((row: any) => row.blueprint_id).filter(Boolean))] as string[];
   const feedItemIds = filteredFeedRows.map((row: any) => row.id);
 
-  const [{ data: sources, error: sourcesError }, { data: blueprints, error: blueprintsError }, { data: candidates, error: candidatesError }, { data: unlocks, error: unlocksError }, { data: subscriptions, error: subscriptionsError }] = await Promise.all([
+  const [{ data: sources, error: sourcesError }, { data: blueprints, error: blueprintsError }, { data: candidates, error: candidatesError }, { data: unlocks, error: unlocksError }] = await Promise.all([
     input.readSourceRows
       ? Promise.resolve({ data: await input.readSourceRows({ db, sourceIds }), error: null })
       : db.from('source_items').select('id, source_channel_id, source_page_id, source_url, title, source_channel_title, thumbnail_url, metadata').in('id', sourceIds),
@@ -591,12 +591,9 @@ export async function listWallForYouFeed(input: {
         ? Promise.resolve({ data: await input.readUnlockRows({ db, sourceIds }), error: null })
         : db.from('source_item_unlocks').select('source_item_id, status, estimated_cost, reservation_expires_at, blueprint_id, last_error_code, transcript_status').in('source_item_id', sourceIds))
       : Promise.resolve({ data: [], error: null }),
-    input.readActiveSubscriptions
-      ? Promise.resolve({ data: await input.readActiveSubscriptions({ db, userId }), error: null })
-      : db.from('user_source_subscriptions').select('source_page_id, source_channel_id').eq('user_id', userId).eq('is_active', true),
   ]);
-  if (sourcesError || blueprintsError || candidatesError || unlocksError || subscriptionsError) {
-    throw sourcesError || blueprintsError || candidatesError || unlocksError || subscriptionsError;
+  if (sourcesError || blueprintsError || candidatesError || unlocksError) {
+    throw sourcesError || blueprintsError || candidatesError || unlocksError;
   }
 
   const { data: tagRows, error: tagRowsError } = blueprintIds.length
@@ -649,8 +646,6 @@ export async function listWallForYouFeed(input: {
       status: row.status,
     });
   });
-  const activeSourcePageIds = new Set((subscriptions || []).map((row: any) => String(row.source_page_id || '').trim()).filter(Boolean));
-  const activeSourceChannelIds = new Set((subscriptions || []).map((row: any) => String(row.source_channel_id || '').trim()).filter(Boolean));
   const likedIds = new Set((likedRows || []).map((row: any) => row.blueprint_id));
 
   const visibleFeedRows = filteredFeedRows.filter((row: any) => {
@@ -671,12 +666,6 @@ export async function listWallForYouFeed(input: {
     const sourceChannelAvatarUrl = getMetadataSourceChannelAvatarUrl(sourceMetadata) || null;
     const sourcePageId = String(source.source_page_id || '').trim() || null;
     const sourceChannelId = String(source.source_channel_id || '').trim() || null;
-    const isSubscribedSource =
-      (sourcePageId && activeSourcePageIds.has(sourcePageId))
-      || (sourceChannelId && activeSourceChannelIds.has(sourceChannelId));
-    const hasBlueprintForUserRow = Boolean(blueprint);
-    if (!isSubscribedSource && !hasBlueprintForUserRow) continue;
-
     if (blueprint) {
       items.push({
         kind: 'blueprint',

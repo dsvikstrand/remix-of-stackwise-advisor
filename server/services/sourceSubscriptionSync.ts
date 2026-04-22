@@ -328,6 +328,7 @@ export type SourceSubscriptionSyncDeps = {
       sourceItemId: string;
       blueprintId: string | null;
       state: 'my_feed_unlockable' | 'my_feed_generated' | 'subscription_notice';
+      wallCreatedAt?: string | null;
     },
   ) => Promise<{ id: string } | null>;
   upsertFeedItemWithBlueprint?: (
@@ -921,6 +922,7 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
           sourceItemId: source.id,
           blueprintId: null,
           state: 'my_feed_unlockable',
+          wallCreatedAt: insertedAtIso,
         });
         if (insertedItem) {
           inserted += 1;
@@ -1080,6 +1082,7 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
             sourceItemId: source.id,
             blueprintId: null,
             state: 'my_feed_unlockable',
+            wallCreatedAt: insertedAtIso,
           });
           if (insertedItem) {
             inserted += 1;

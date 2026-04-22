@@ -949,7 +949,7 @@ describe('wall feed service', () => {
     expect(items).toHaveLength(0);
   });
 
-  it('includes personally unlocked blueprint rows from non-subscribed sources but not future locked rows from that source', async () => {
+  it('keeps landed locked rows visible even after the source is no longer actively subscribed', async () => {
     const db = createMockSupabase({
       user_feed_items: [
         {
@@ -1042,12 +1042,19 @@ describe('wall feed service', () => {
       listBlueprintTagRows: ({ blueprintIds }) => Promise.resolve(listBlueprintTagRowsFromState(db, blueprintIds)),
     });
 
-    expect(items).toHaveLength(1);
+    expect(items).toHaveLength(2);
     expect(items[0]).toMatchObject({
       kind: 'blueprint',
       blueprintId: 'bp_manual',
       sourceItemId: 'source_manual_blueprint',
       sourceChannelTitle: 'Outside Channel',
+    });
+    expect(items[1]).toMatchObject({
+      kind: 'locked',
+      feedItemId: 'ufi_future_locked',
+      sourceItemId: 'source_future_locked',
+      title: 'Future Upload',
+      createdAt: '2026-03-06T09:00:00.000Z',
     });
   });
 });
