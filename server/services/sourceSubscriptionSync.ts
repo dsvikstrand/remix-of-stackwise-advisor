@@ -508,6 +508,8 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
     let attempts = 0;
     let attemptedChannelRecovery = false;
     let recoveredChannelChanged = false;
+    let confirmedChannelStillExists = false;
+    let confirmedChannelStillExistsVia: 'channel_url' | 'creator_name' | null = null;
     while (attempts < SUBSCRIPTION_FEED_FETCH_MAX_ATTEMPTS) {
       attempts += 1;
       try {
@@ -534,7 +536,7 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
             if (deps.resolveYouTubeChannel && subscription.source_channel_url) {
               try {
                 const urlResolved = await deps.resolveYouTubeChannel(subscription.source_channel_url);
-                if (urlResolved.channelId && urlResolved.channelId !== subscription.source_channel_id) {
+                if (urlResolved.channelId) {
                   resolved = urlResolved;
                   recoveredVia = 'channel_url';
                 }
@@ -560,7 +562,7 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
                 const titleResolved = await deps.resolveYouTubeChannelByCreatorName(
                   normalizeNullableText(subscription.source_channel_title)!,
                 );
-                if (titleResolved?.channelId && titleResolved.channelId !== subscription.source_channel_id) {
+                if (titleResolved?.channelId) {
                   resolved = titleResolved;
                   recoveredVia = 'creator_name';
                 }
@@ -596,6 +598,19 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
               }));
               continue;
             }
+            if (resolved?.channelId && resolved.channelId === subscription.source_channel_id) {
+              confirmedChannelStillExists = true;
+              confirmedChannelStillExistsVia = recoveredVia;
+              console.log('[subscription_channel_confirmed_existing]', JSON.stringify({
+                subscription_id: subscription.id,
+                user_id: subscription.user_id,
+                source_channel_id: subscription.source_channel_id,
+                source_channel_url: subscription.source_channel_url || null,
+                source_channel_title: subscription.source_channel_title || null,
+                confirmation_method: recoveredVia,
+                trigger: options.trigger,
+              }));
+            }
           } catch (recoveryError) {
             console.log('[subscription_channel_recovery_failed]', JSON.stringify({
               subscription_id: subscription.id,
@@ -609,7 +624,16 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
           }
         }
 
-        if (feedError.retryable && attempts < SUBSCRIPTION_FEED_FETCH_MAX_ATTEMPTS) {
+        const treatFeedNotFoundAsTransient =
+          feedError.kind === 'feed_not_found'
+          && confirmedChannelStillExists;
+        const effectiveRetryable = feedError.retryable || treatFeedNotFoundAsTransient;
+        const effectiveResultCode =
+          treatFeedNotFoundAsTransient || feedError.kind !== 'feed_not_found'
+            ? 'feed_transient_error'
+            : 'feed_not_found';
+
+        if (effectiveRetryable && attempts < SUBSCRIPTION_FEED_FETCH_MAX_ATTEMPTS) {
           console.log('[subscription_feed_fetch_retrying]', JSON.stringify({
             subscription_id: subscription.id,
             user_id: subscription.user_id,
@@ -618,6 +642,8 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
             attempt: attempts,
             max_attempts: SUBSCRIPTION_FEED_FETCH_MAX_ATTEMPTS,
             trigger: options.trigger,
+            confirmed_channel_still_exists: confirmedChannelStillExists,
+            confirmed_channel_still_exists_via: confirmedChannelStillExistsVia,
             error: feedError.message,
           }));
           await sleep(SUBSCRIPTION_FEED_FETCH_RETRY_BACKOFF_MS * attempts);
@@ -637,15 +663,17 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
             source_channel_title: subscription.source_channel_title || null,
             source_channel_url: subscription.source_channel_url || null,
             trigger: options.trigger,
-            failure_kind: feedError.kind,
+            failure_kind: effectiveResultCode,
             recovery_attempted: attemptedChannelRecovery,
             recovery_changed_channel: recoveredChannelChanged,
-            retryable: feedError.retryable,
+            confirmed_channel_still_exists: confirmedChannelStillExists,
+            confirmed_channel_still_exists_via: confirmedChannelStillExistsVia,
+            retryable: effectiveRetryable,
             error: feedError.message,
           }));
           return {
             kind: 'soft_failure',
-            resultCode: feedError.kind === 'feed_not_found' ? 'feed_not_found' : 'feed_transient_error',
+            resultCode: effectiveResultCode,
             errorMessage: feedError.message,
           };
         }
