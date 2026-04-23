@@ -12378,6 +12378,10 @@ const blueprintCreationService = createBlueprintCreationService({
   runYouTubePipeline: (pipelineInput: any) => runYouTubePipeline(pipelineInput),
   toTagSlug,
   ensureTagId,
+  getSourceItemById: (db, { sourceItemId }) => getSourceItemByIdOracleFirst(db, {
+    sourceItemId,
+    action: 'blueprint_creation_get_source_item_by_id',
+  }),
   attachBlueprintTag: (db, input) => attachBlueprintTagOracleAware(db, input),
   upsertBlueprintReadState: async (input) => {
     if (!oracleControlPlane) return;

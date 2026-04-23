@@ -7,6 +7,7 @@ function createDbMock(input?: {
 }) {
   let insertedBlueprintPayload: Record<string, unknown> | null = null;
   let blueprintInsertCount = 0;
+  let sourceItemSelectCount = 0;
 
   const db = {
     from(table: string) {
@@ -38,6 +39,7 @@ function createDbMock(input?: {
       if (table === 'source_items') {
         return {
           select() {
+            sourceItemSelectCount += 1;
             return {
               eq() {
                 return {
@@ -60,6 +62,7 @@ function createDbMock(input?: {
     db,
     getInsertedBlueprintPayload: () => insertedBlueprintPayload,
     getBlueprintInsertCount: () => blueprintInsertCount,
+    getSourceItemSelectCount: () => sourceItemSelectCount,
   };
 }
 
@@ -233,6 +236,78 @@ describe('blueprint creation canonical payload', () => {
     });
 
     expect(result.blueprintId).toBe('bp_123');
+  });
+
+  it('uses the injected source-item reader instead of direct source_items reads', async () => {
+    const { db, getSourceItemSelectCount, getInsertedBlueprintPayload } = createDbMock();
+    const getSourceItemById = vi.fn(async () => ({
+      thumbnail_url: 'https://cdn.example.com/source-thumb.jpg',
+      title: 'Oracle source title',
+    }));
+    const service = createBlueprintCreationService({
+      getServiceSupabaseClient: () => null,
+      safeGenerationTraceWrite: async () => undefined,
+      startGenerationRun: async () => undefined,
+      runYouTubePipeline: async ({ runId }) => ({
+        run_id: runId,
+        draft: {
+          title: 'Blueprint title',
+          description: 'A short summary for testing.',
+          steps: [
+            { name: 'Summary', notes: 'Step notes', timestamp: null },
+          ],
+          notes: null,
+          tags: [],
+          sectionsJson: {
+            schema_version: 'blueprint_sections_v1',
+            tags: [],
+            summary: { text: 'A short summary for testing.' },
+            takeaways: { bullets: ['One useful takeaway.'] },
+            storyline: { text: 'A short storyline block.' },
+            deep_dive: { bullets: ['A deep dive detail.'] },
+            practical_rules: { bullets: ['A practical rule.'] },
+            open_questions: { bullets: ['An open question.'] },
+          } satisfies BlueprintSectionsV1,
+          summaryVariants: {
+            default: 'Default summary',
+            eli5: 'ELI5 summary',
+          },
+          eli5Steps: [],
+        },
+        review: {
+          summary: null,
+        },
+        meta: null,
+      }),
+      toTagSlug: (value) => value,
+      ensureTagId: async () => 'tag_123',
+      getSourceItemById,
+      attachBlueprintToRun: async () => undefined,
+      youtubeVideoIdRegex: /^[a-zA-Z0-9_-]{11}$/,
+      resolveGenerationModelProfile: () => ({
+        model: 'o4-mini',
+        fallbackModel: 'o4-mini',
+        reasoningEffort: 'low' as const,
+      }),
+      claimVariantForGeneration: vi.fn(async () => ({ outcome: 'claimed', variant: null })),
+      markVariantReady: async () => undefined,
+      markVariantFailed: async () => undefined,
+    });
+
+    await service.createBlueprintFromVideo(db as never, {
+      userId: 'user_123',
+      videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      videoId: 'dQw4w9WgXcQ',
+      videoTitle: null,
+      sourceTag: 'manual_refresh_generate',
+      sourceItemId: 'source_123',
+    });
+
+    expect(getSourceItemById).toHaveBeenCalledWith(db, {
+      sourceItemId: 'source_123',
+    });
+    expect(getSourceItemSelectCount()).toBe(0);
+    expect(getInsertedBlueprintPayload()?.banner_url).toBe('https://cdn.example.com/source-thumb.jpg');
   });
 
   it('passes queue job ownership into variant claims when provided', async () => {

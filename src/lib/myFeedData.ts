@@ -164,10 +164,21 @@ export async function listMyFeedItemsFromDb(input: {
         data: input.readSourceRows({ db, sourceIds }),
         error: null,
       }).then(async (result) => ({ data: await result.data, error: result.error }))
-      : db
-        .from('source_items')
-        .select('id, source_channel_id, source_page_id, source_url, title, source_channel_title, thumbnail_url, metadata')
-        .in('id', sourceIds),
+      : (
+        typeof window !== 'undefined'
+          ? Promise.resolve().then(async () => {
+              const { lookupSourceItems } = await import('./sourceItemsApi');
+              const lookup = await lookupSourceItems({ sourceIds });
+              return {
+                data: lookup.items,
+                error: null,
+              };
+            })
+          : db
+            .from('source_items')
+            .select('id, source_channel_id, source_page_id, source_url, title, source_channel_title, thumbnail_url, metadata')
+            .in('id', sourceIds)
+      ),
     blueprintIds.length
       ? db
         .from('blueprints')

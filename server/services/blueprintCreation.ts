@@ -106,6 +106,12 @@ export type BlueprintCreationDeps = {
   }>;
   toTagSlug: (value: string) => string;
   ensureTagId: (db: DbClient, userId: string, tagSlug: string) => Promise<string>;
+  getSourceItemById?: (db: DbClient, input: {
+    sourceItemId: string;
+  }) => Promise<{
+    thumbnail_url?: string | null;
+    title?: string | null;
+  } | null>;
   attachBlueprintTag?: (db: DbClient, input: {
     blueprintId: string;
     tagId: string;
@@ -234,11 +240,18 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
     }
 
     if (normalizedSourceItemId) {
-      const { data: sourceRow } = await db
-        .from('source_items')
-        .select('thumbnail_url, title')
-        .eq('id', normalizedSourceItemId)
-        .maybeSingle();
+      const sourceRow = deps.getSourceItemById
+        ? await deps.getSourceItemById(db, {
+            sourceItemId: normalizedSourceItemId,
+          })
+        : await (async () => {
+          const { data } = await db
+            .from('source_items')
+            .select('thumbnail_url, title')
+            .eq('id', normalizedSourceItemId)
+            .maybeSingle();
+          return data;
+        })();
       sourceThumbnailUrl = String(sourceRow?.thumbnail_url || '').trim() || null;
       if (!resolvedVideoTitle) {
         resolvedVideoTitle = String(sourceRow?.title || '').trim() || null;
