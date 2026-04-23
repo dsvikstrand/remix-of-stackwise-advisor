@@ -84,6 +84,15 @@ function buildFeedRouteDeps(db: any) {
       if (error) throw error;
       return data;
     },
+    readSourceRows: async ({ db: innerDb, sourceIds }: { db: any; sourceIds: string[] }) => {
+      if (!sourceIds.length) return [];
+      const { data, error } = await innerDb
+        .from('source_items')
+        .select('id, source_channel_id, source_page_id, source_url, title, source_channel_title, thumbnail_url, metadata, source_native_id')
+        .in('id', sourceIds);
+      if (error) throw error;
+      return data || [];
+    },
   };
 }
 
@@ -470,9 +479,9 @@ describe('my feed route', () => {
       autoChannelPipelineEnabled: true,
       getAuthedSupabaseClient: () => db,
       getServiceSupabaseClient: () => db,
+      ...buildFeedRouteDeps(db),
       readPublicFeedRows,
       readSourceRows,
-      ...buildFeedRouteDeps(db),
       createBlueprintFromVideo: async () => ({ blueprintId: 'bp_new', runId: null }),
       runAutoChannelForFeedItem: async () => null,
     });

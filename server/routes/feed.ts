@@ -97,6 +97,14 @@ export function registerFeedRoutes(app: express.Express, deps: FeedRouteDeps) {
         data: null,
       });
     }
+    if (!deps.readSourceRows) {
+      return res.status(500).json({
+        ok: false,
+        error_code: 'CONFIG_ERROR',
+        message: 'Source-item reader is not configured',
+        data: null,
+      });
+    }
 
     try {
       const items = await listMyFeedItems({
@@ -118,12 +126,10 @@ export function registerFeedRoutes(app: express.Express, deps: FeedRouteDeps) {
               requireBlueprint,
             })
           : undefined,
-        readSourceRows: deps.readSourceRows
-          ? ({ db: innerDb, sourceIds }) => deps.readSourceRows!({
-              db: innerDb,
-              sourceIds,
-            })
-          : undefined,
+        readSourceRows: ({ db: innerDb, sourceIds }) => deps.readSourceRows!({
+          db: innerDb,
+          sourceIds,
+        }),
         readUnlockRows: deps.readUnlockRows
           ? ({ db: innerDb, sourceIds }) => deps.readUnlockRows!(innerDb, sourceIds)
           : undefined,
@@ -183,16 +189,22 @@ export function registerFeedRoutes(app: express.Express, deps: FeedRouteDeps) {
       return res.status(409).json({ ok: false, error_code: 'INVALID_STATE', message: 'Only pending items can be accepted', data: null });
     }
 
-    const sourceRowsResult = deps.readSourceRows
-      ? { data: await deps.readSourceRows({
-          db,
-          sourceIds: [String(feedItem.source_item_id || '').trim()],
-        }), error: null }
-      : await db
-        .from('source_items')
-        .select('id, source_url, source_native_id')
-        .eq('id', feedItem.source_item_id)
-        .maybeSingle();
+    if (!deps.readSourceRows) {
+      return res.status(500).json({
+        ok: false,
+        error_code: 'CONFIG_ERROR',
+        message: 'Source-item reader is not configured',
+        data: null,
+      });
+    }
+
+    const sourceRowsResult = {
+      data: await deps.readSourceRows({
+        db,
+        sourceIds: [String(feedItem.source_item_id || '').trim()],
+      }),
+      error: null,
+    };
     const sourceRow = Array.isArray((sourceRowsResult as any)?.data)
       ? (sourceRowsResult as any).data[0]
       : (sourceRowsResult as any)?.data || null;
@@ -483,13 +495,16 @@ export function registerFeedRoutes(app: express.Express, deps: FeedRouteDeps) {
         ...sourceIds,
         ...Array.from(sourceItemIdByBlueprintId.values()),
       ])];
+      if (!deps.readSourceRows) {
+        return res.status(500).json({
+          ok: false,
+          error_code: 'CONFIG_ERROR',
+          message: 'Source-item reader is not configured',
+          data: null,
+        });
+      }
       const items = effectiveSourceIds.length
-        ? (deps.readSourceRows
-          ? await deps.readSourceRows({ db, sourceIds: effectiveSourceIds })
-          : ((await db
-            .from('source_items')
-            .select('id, source_page_id, source_channel_id, source_url, title, source_channel_title, thumbnail_url, metadata, source_native_id')
-            .in('id', effectiveSourceIds)).data || []))
+        ? await deps.readSourceRows({ db, sourceIds: effectiveSourceIds })
         : [];
 
       return res.json({

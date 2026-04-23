@@ -195,6 +195,35 @@ describe('blueprint YouTube comments service', () => {
     expect(maybeSingle).toHaveBeenCalledTimes(1);
   });
 
+  it('storeSourceItemViewCount prefers the injected Oracle-aware writer when present', async () => {
+    const storeSourceItemViewCountOracleAware = vi.fn(async () => true);
+    const db = {
+      from() {
+        throw new Error('direct source_items fallback should not run');
+      },
+    };
+
+    const service = createBlueprintYouTubeCommentsService({
+      apiKey: 'youtube-key',
+      fetchImpl: vi.fn() as unknown as typeof fetch,
+      storeSourceItemViewCountOracleAware,
+    });
+
+    const stored = await service.storeSourceItemViewCount({
+      db,
+      sourceItemId: 'src_1',
+      viewCount: 12346,
+    });
+
+    expect(stored).toBe(true);
+    expect(storeSourceItemViewCountOracleAware).toHaveBeenCalledTimes(1);
+    expect(storeSourceItemViewCountOracleAware).toHaveBeenCalledWith({
+      db,
+      sourceItemId: 'src_1',
+      viewCount: 12346,
+    });
+  });
+
   it('storeBlueprintYouTubeComments skips delete/insert when the snapshot is unchanged', async () => {
     const existingRows = [
       {

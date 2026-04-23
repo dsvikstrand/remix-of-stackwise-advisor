@@ -699,6 +699,13 @@ export function createBlueprintYouTubeCommentsService(input: {
     sourceItemId: string;
     viewCount: number | null;
   }) {
+    if (storeSourceItemViewCountOracleAware) {
+      return storeSourceItemViewCountOracleAware({
+        db: args.db,
+        sourceItemId: args.sourceItemId,
+        viewCount: args.viewCount,
+      });
+    }
     const normalizedSourceItemId = String(args.sourceItemId || '').trim();
     if (!normalizedSourceItemId || args.viewCount == null) return false;
 
