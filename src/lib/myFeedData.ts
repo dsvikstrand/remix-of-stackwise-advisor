@@ -117,6 +117,18 @@ export async function listMyFeedItemsFromDb(input: {
     thumbnail_url?: string | null;
     metadata?: unknown;
   }>>;
+  lookupSourceRows?: (input: {
+    sourceIds: string[];
+  }) => Promise<Array<{
+    id: string;
+    source_channel_id?: string | null;
+    source_page_id?: string | null;
+    source_url?: string | null;
+    title?: string | null;
+    source_channel_title?: string | null;
+    thumbnail_url?: string | null;
+    metadata?: unknown;
+  }>>;
   readUnlockRows?: (input: {
     db: DbClient;
     sourceIds: string[];
@@ -164,21 +176,15 @@ export async function listMyFeedItemsFromDb(input: {
         data: input.readSourceRows({ db, sourceIds }),
         error: null,
       }).then(async (result) => ({ data: await result.data, error: result.error }))
-      : (
-        typeof window !== 'undefined'
-          ? Promise.resolve().then(async () => {
-              const { lookupSourceItems } = await import('./sourceItemsApi');
-              const lookup = await lookupSourceItems({ sourceIds });
-              return {
-                data: lookup.items,
-                error: null,
-              };
-            })
-          : db
-            .from('source_items')
-            .select('id, source_channel_id, source_page_id, source_url, title, source_channel_title, thumbnail_url, metadata')
-            .in('id', sourceIds)
-      ),
+      : input.lookupSourceRows
+        ? Promise.resolve({
+            data: input.lookupSourceRows({ sourceIds }),
+            error: null,
+          }).then(async (result) => ({ data: await result.data, error: result.error }))
+        : db
+          .from('source_items')
+          .select('id, source_channel_id, source_page_id, source_url, title, source_channel_title, thumbnail_url, metadata')
+          .in('id', sourceIds),
     blueprintIds.length
       ? db
         .from('blueprints')
