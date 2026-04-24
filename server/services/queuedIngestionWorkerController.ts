@@ -23,7 +23,10 @@ export type QueuedIngestionWorkerControllerDeps<DbClient> = {
   queuedWorkerId: string;
   workerLeaseMs: number;
   workerConcurrency?: number;
+  transcriptBoundSlotCapacity?: number;
   getActiveClaimedJobCount?: () => number;
+  getActiveTranscriptBoundJobCount?: () => number;
+  isTranscriptBoundScope?: (scope: string) => boolean;
   keepAliveEnabled: boolean;
   keepAliveDelayMs?: number;
   keepAliveIdleBaseDelayMs?: number;
@@ -193,6 +196,51 @@ export function createQueuedIngestionWorkerController<DbClient>(
     return Math.max(keepAliveDelayMs, baseDelay + jitter);
   }
 
+  function getWorkerConcurrency() {
+    return Math.max(1, Math.floor(Number(deps.workerConcurrency) || 1));
+  }
+
+  function getTranscriptBoundSlotCapacity() {
+    const workerConcurrency = getWorkerConcurrency();
+    return Math.max(
+      1,
+      Math.min(
+        workerConcurrency,
+        Math.floor(Number(deps.transcriptBoundSlotCapacity) || workerConcurrency),
+      ),
+    );
+  }
+
+  function getActiveClaimedJobCount() {
+    return Math.max(0, Math.floor(Number(deps.getActiveClaimedJobCount?.() || 0)));
+  }
+
+  function getActiveTranscriptBoundJobCount() {
+    return Math.max(0, Math.floor(Number(deps.getActiveTranscriptBoundJobCount?.() || 0)));
+  }
+
+  function resolvePlanEntryAvailableCapacity(planEntry: QueueSweepPlanEntry) {
+    const workerConcurrency = getWorkerConcurrency();
+    const transcriptBoundSlotCapacity = getTranscriptBoundSlotCapacity();
+    const activeClaimedJobCount = getActiveClaimedJobCount();
+    const activeTranscriptBoundJobCount = getActiveTranscriptBoundJobCount();
+    const availableGeneralCapacity = Math.max(0, workerConcurrency - activeClaimedJobCount);
+    const transcriptBoundPlanEntry = planEntry.scopes.some((scope) => deps.isTranscriptBoundScope?.(scope) === true);
+    const availableTranscriptBoundCapacity = Math.max(
+      0,
+      transcriptBoundSlotCapacity - activeTranscriptBoundJobCount,
+    );
+    return {
+      transcriptBoundPlanEntry,
+      transcriptBoundSlotCapacity,
+      availableGeneralCapacity,
+      availableTranscriptBoundCapacity,
+      availableCapacity: transcriptBoundPlanEntry
+        ? Math.min(availableGeneralCapacity, availableTranscriptBoundCapacity)
+        : availableGeneralCapacity,
+    };
+  }
+
   async function runQueuedIngestionProcessing() {
     if (queuedWorkerRunning) {
       queuedWorkerRequested = true;
@@ -239,18 +287,28 @@ export function createQueuedIngestionWorkerController<DbClient>(
         while (true) {
           let claimedAny = false;
           for (const planEntry of sweepPlan) {
+            const capacity = resolvePlanEntryAvailableCapacity(planEntry);
+            if (capacity.availableCapacity <= 0) {
+              console.log('[queued_processing_claim_blocked]', JSON.stringify({
+                scopes: planEntry.scopes,
+                transcript_bound: capacity.transcriptBoundPlanEntry,
+                available_general_capacity: capacity.availableGeneralCapacity,
+                available_transcript_bound_capacity: capacity.availableTranscriptBoundCapacity,
+              }));
+              continue;
+            }
             const nowIso = new Date().toISOString();
             const claimAttempt = await deps.shouldAttemptQueueClaim?.({
               tier: planEntry.tier,
               scopes: planEntry.scopes,
-              maxJobs: planEntry.maxJobs,
+              maxJobs: Math.min(planEntry.maxJobs, capacity.availableCapacity),
               nowIso,
             });
             if (claimAttempt && !claimAttempt.allowed) {
               await deps.recordQueueSweepResult?.({
                 tier: planEntry.tier,
                 scopes: planEntry.scopes,
-                maxJobs: planEntry.maxJobs,
+                maxJobs: Math.min(planEntry.maxJobs, capacity.availableCapacity),
                 claimedCount: 0,
                 nowIso,
               });
@@ -258,21 +316,21 @@ export function createQueuedIngestionWorkerController<DbClient>(
             }
             const claimed = await deps.claimQueuedIngestionJobs(db, {
               scopes: [...planEntry.scopes],
-              maxJobs: planEntry.maxJobs,
+              maxJobs: Math.min(planEntry.maxJobs, capacity.availableCapacity),
               workerId: deps.queuedWorkerId,
               leaseSeconds: Math.max(5, Math.ceil(deps.workerLeaseMs / 1000)),
             });
             await deps.recordQueueClaimResult?.({
               tier: planEntry.tier,
               scopes: planEntry.scopes,
-              maxJobs: planEntry.maxJobs,
+              maxJobs: Math.min(planEntry.maxJobs, capacity.availableCapacity),
               claimedCount: claimed.length,
               nowIso,
             });
             await deps.recordQueueSweepResult?.({
               tier: planEntry.tier,
               scopes: planEntry.scopes,
-              maxJobs: planEntry.maxJobs,
+              maxJobs: Math.min(planEntry.maxJobs, capacity.availableCapacity),
               claimedCount: claimed.length,
               nowIso,
             });
@@ -330,12 +388,12 @@ export function createQueuedIngestionWorkerController<DbClient>(
     const db = deps.getServiceSupabaseClient();
     if (!db) return;
 
-    const workerConcurrency = Math.max(1, Math.floor(Number(deps.workerConcurrency) || 1));
-    let availableCapacity = Math.max(
-      0,
-      workerConcurrency - Math.max(0, Math.floor(Number(deps.getActiveClaimedJobCount?.() || 0))),
-    );
-    if (availableCapacity <= 0) {
+    const transcriptBoundSlotCapacity = getTranscriptBoundSlotCapacity();
+    let availableGeneralCapacity = resolvePlanEntryAvailableCapacity({
+      scopes: [],
+      maxJobs: 0,
+    }).availableGeneralCapacity;
+    if (availableGeneralCapacity <= 0) {
       return;
     }
 
@@ -355,11 +413,25 @@ export function createQueuedIngestionWorkerController<DbClient>(
       console.log('[interactive_queue_refill_requested]', JSON.stringify({
         scopes: requestedScopes,
         reason: requestedReason,
-        available_capacity: availableCapacity,
+        available_general_capacity: availableGeneralCapacity,
+        transcript_bound_slot_capacity: transcriptBoundSlotCapacity,
+        active_transcript_bound_job_count: getActiveTranscriptBoundJobCount(),
       }));
 
       for (const planEntry of refillPlan) {
-        if (availableCapacity <= 0) break;
+        if (availableGeneralCapacity <= 0) break;
+        const capacity = resolvePlanEntryAvailableCapacity(planEntry);
+        const availableCapacity = Math.min(availableGeneralCapacity, capacity.availableCapacity);
+        if (availableCapacity <= 0) {
+          console.log('[interactive_queue_refill_blocked]', JSON.stringify({
+            scopes: planEntry.scopes,
+            reason: requestedReason,
+            transcript_bound: capacity.transcriptBoundPlanEntry,
+            available_general_capacity: availableGeneralCapacity,
+            available_transcript_bound_capacity: capacity.availableTranscriptBoundCapacity,
+          }));
+          continue;
+        }
         const claimed = await deps.claimQueuedIngestionJobs(db, {
           scopes: [...planEntry.scopes],
           maxJobs: Math.min(planEntry.maxJobs, availableCapacity),
@@ -371,9 +443,10 @@ export function createQueuedIngestionWorkerController<DbClient>(
         console.log('[interactive_queue_refill_claimed]', JSON.stringify({
           scopes: planEntry.scopes,
           reason: requestedReason,
+          transcript_bound: capacity.transcriptBoundPlanEntry,
           claimed_count: claimed.length,
         }));
-        availableCapacity = Math.max(0, availableCapacity - claimed.length);
+        availableGeneralCapacity = Math.max(0, availableGeneralCapacity - claimed.length);
         await deps.processClaimedIngestionJobs(db, claimed);
       }
     } finally {

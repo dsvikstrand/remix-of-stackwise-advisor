@@ -382,7 +382,7 @@ describe('queued ingestion worker controller', () => {
     expect(recordQueueClaimResult).toHaveBeenCalledWith(expect.objectContaining({
       tier: 'medium',
       scopes: ['source_auto_unlock_retry'],
-      maxJobs: 2,
+      maxJobs: 1,
       claimedCount: 0,
     }));
   });
@@ -447,6 +447,80 @@ describe('queued ingestion worker controller', () => {
     await vi.advanceTimersByTimeAsync(0);
   });
 
+  it('caps transcript-bound refills to transcript slot capacity even when worker concurrency is higher', async () => {
+    const db = { tag: 'db' };
+    const claimQueuedIngestionJobs = vi.fn()
+      .mockResolvedValueOnce([{ id: 'job_2' }])
+      .mockResolvedValueOnce([]);
+    const controller = createQueuedIngestionWorkerController({
+      getServiceSupabaseClient: () => db,
+      runUnlockSweeps: vi.fn(async () => undefined),
+      recoverStaleIngestionJobs: vi.fn(async () => []),
+      queuedIngestionScopes: ['source_item_unlock_generation'],
+      queuedWorkerId: 'worker_1',
+      workerLeaseMs: 90_000,
+      workerConcurrency: 5,
+      transcriptBoundSlotCapacity: 4,
+      getActiveClaimedJobCount: () => 3,
+      getActiveTranscriptBoundJobCount: () => 3,
+      isTranscriptBoundScope: (scope) => scope === 'source_item_unlock_generation',
+      keepAliveEnabled: false,
+      getQueueSweepPlan: () => [{ tier: 'high', scopes: ['source_item_unlock_generation'], maxJobs: 8 }],
+      claimQueuedIngestionJobs,
+      processClaimedIngestionJobs: vi.fn(async () => undefined),
+    });
+
+    controller.start(0);
+    await vi.advanceTimersByTimeAsync(0);
+    controller.requestRefill({
+      scopes: ['source_item_unlock_generation'],
+      reason: 'transcript_slot_alignment',
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(claimQueuedIngestionJobs).toHaveBeenNthCalledWith(2, db, expect.objectContaining({
+      scopes: ['source_item_unlock_generation'],
+      maxJobs: 1,
+    }));
+  });
+
+  it('does not block non-transcript refill work when transcript slots are full', async () => {
+    const db = { tag: 'db' };
+    const claimQueuedIngestionJobs = vi.fn()
+      .mockResolvedValueOnce([{ id: 'job_2' }])
+      .mockResolvedValueOnce([]);
+    const controller = createQueuedIngestionWorkerController({
+      getServiceSupabaseClient: () => db,
+      runUnlockSweeps: vi.fn(async () => undefined),
+      recoverStaleIngestionJobs: vi.fn(async () => []),
+      queuedIngestionScopes: ['blueprint_youtube_refresh'],
+      queuedWorkerId: 'worker_1',
+      workerLeaseMs: 90_000,
+      workerConcurrency: 5,
+      transcriptBoundSlotCapacity: 4,
+      getActiveClaimedJobCount: () => 3,
+      getActiveTranscriptBoundJobCount: () => 4,
+      isTranscriptBoundScope: (scope) => scope === 'source_item_unlock_generation',
+      keepAliveEnabled: false,
+      getQueueSweepPlan: () => [{ tier: 'low', scopes: ['blueprint_youtube_refresh'], maxJobs: 8 }],
+      claimQueuedIngestionJobs,
+      processClaimedIngestionJobs: vi.fn(async () => undefined),
+    });
+
+    controller.start(0);
+    await vi.advanceTimersByTimeAsync(0);
+    controller.requestRefill({
+      scopes: ['blueprint_youtube_refresh'],
+      reason: 'non_transcript_refill',
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(claimQueuedIngestionJobs).toHaveBeenNthCalledWith(2, db, expect.objectContaining({
+      scopes: ['blueprint_youtube_refresh'],
+      maxJobs: 2,
+    }));
+  });
+
   it('uses the Oracle-selected sweep plan when provided', async () => {
     const runUnlockSweeps = vi.fn(async () => undefined);
     const claimQueuedIngestionJobs = vi.fn(async () => []);
@@ -473,7 +547,7 @@ describe('queued ingestion worker controller', () => {
     expect(claimQueuedIngestionJobs).toHaveBeenCalledTimes(1);
     expect(claimQueuedIngestionJobs).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       scopes: ['manual_refresh_selection'],
-      maxJobs: 8,
+      maxJobs: 1,
     }));
   });
 

@@ -1262,6 +1262,7 @@ const effectiveTranscriptThrottleConcurrency = Math.max(
   1,
   Math.min(workerConcurrency, transcriptThrottleMaxConcurrency),
 );
+const effectiveQueuedTranscriptBoundSlotCapacity = effectiveTranscriptThrottleConcurrency;
 const youtubeOAuthConfig: YouTubeOAuthConfig = {
   clientId: googleOAuthClientId,
   clientSecret: googleOAuthClientSecret,
@@ -7650,6 +7651,15 @@ async function getQueueHealthSnapshotOracleFirst(input: {
 
 const queuedWorkerId = `ingestion-worker-${process.pid}`;
 let activeQueuedClaimedJobs = 0;
+let activeTranscriptBoundQueuedClaimedJobs = 0;
+
+function isTranscriptBoundQueuedScope(scope: string | null | undefined) {
+  const normalizedScope = String(scope || '').trim();
+  return normalizedScope === 'search_video_generate'
+    || normalizedScope === 'manual_refresh_selection'
+    || normalizedScope === 'source_item_unlock_generation'
+    || normalizedScope === 'all_active_subscriptions';
+}
 
 function normalizeGateMode(raw: unknown, fallback: GateMode): GateMode {
   const normalized = String(raw || '').trim().toLowerCase();
@@ -17443,21 +17453,38 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
 
 async function processClaimedIngestionJobs(db: ReturnType<typeof createClient>, jobs: IngestionJobRow[]) {
   const queue = jobs.slice();
-  const concurrency = Math.max(1, Math.min(workerConcurrency, queue.length));
+  const transcriptBoundBatch = queue.length > 0 && queue.every((job) => isTranscriptBoundQueuedScope(job.scope));
+  const concurrencyCap = transcriptBoundBatch
+    ? effectiveQueuedTranscriptBoundSlotCapacity
+    : workerConcurrency;
+  const concurrency = Math.max(1, Math.min(concurrencyCap, queue.length));
   const incrementActiveClaimedJobs = () => {
     activeQueuedClaimedJobs += 1;
   };
   const decrementActiveClaimedJobs = () => {
     activeQueuedClaimedJobs = Math.max(0, activeQueuedClaimedJobs - 1);
   };
+  const incrementActiveTranscriptBoundJobs = () => {
+    activeTranscriptBoundQueuedClaimedJobs += 1;
+  };
+  const decrementActiveTranscriptBoundJobs = () => {
+    activeTranscriptBoundQueuedClaimedJobs = Math.max(0, activeTranscriptBoundQueuedClaimedJobs - 1);
+  };
   const workers = Array.from({ length: concurrency }, () => (async () => {
     while (queue.length > 0) {
       const next = queue.shift();
       if (!next) return;
       incrementActiveClaimedJobs();
+      const transcriptBoundJob = isTranscriptBoundQueuedScope(next.scope);
+      if (transcriptBoundJob) {
+        incrementActiveTranscriptBoundJobs();
+      }
       try {
         await processClaimedIngestionJob(db, next);
       } finally {
+        if (transcriptBoundJob) {
+          decrementActiveTranscriptBoundJobs();
+        }
         decrementActiveClaimedJobs();
       }
     }
@@ -17473,7 +17500,10 @@ const queuedIngestionWorkerController = createQueuedIngestionWorkerController({
   queuedWorkerId,
   workerLeaseMs,
   workerConcurrency,
+  transcriptBoundSlotCapacity: effectiveQueuedTranscriptBoundSlotCapacity,
   getActiveClaimedJobCount: () => activeQueuedClaimedJobs,
+  getActiveTranscriptBoundJobCount: () => activeTranscriptBoundQueuedClaimedJobs,
+  isTranscriptBoundScope: isTranscriptBoundQueuedScope,
   keepAliveEnabled: runIngestionWorker,
   keepAliveDelayMs: workerKeepAliveDelayMs,
   keepAliveIdleBaseDelayMs: workerIdleBackoffBaseMs,
