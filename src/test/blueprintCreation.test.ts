@@ -67,6 +67,136 @@ function createDbMock(input?: {
 }
 
 describe('blueprint creation canonical payload', () => {
+  it('passes explicit background request class through to transcript-bound queued flows', async () => {
+    const { db } = createDbMock();
+    const runYouTubePipeline = vi.fn(async ({ runId, requestClass }) => ({
+      run_id: runId,
+      draft: {
+        title: `Blueprint title ${requestClass}`,
+        description: 'A short summary for testing.',
+        steps: [
+          { name: 'Summary', notes: 'Step notes', timestamp: null },
+        ],
+        notes: null,
+        tags: [],
+        sectionsJson: {
+          schema_version: 'blueprint_sections_v1',
+          tags: [],
+          summary: { text: 'A short summary for testing.' },
+          takeaways: { bullets: ['One useful takeaway.'] },
+          storyline: { text: 'A short storyline block.' },
+          deep_dive: { bullets: ['A deep dive detail.'] },
+          practical_rules: { bullets: ['A practical rule.'] },
+          open_questions: { bullets: ['An open question.'] },
+        } satisfies BlueprintSectionsV1,
+        summaryVariants: {
+          default: 'Default summary',
+          eli5: 'ELI5 summary',
+        },
+        eli5Steps: [],
+      },
+      review: {
+        summary: null,
+      },
+      meta: null,
+    }));
+    const service = createBlueprintCreationService({
+      getServiceSupabaseClient: () => null,
+      safeGenerationTraceWrite: async () => undefined,
+      startGenerationRun: async () => undefined,
+      runYouTubePipeline,
+      toTagSlug: (value) => value,
+      ensureTagId: async () => 'tag_123',
+      attachBlueprintToRun: async () => undefined,
+      youtubeVideoIdRegex: /^[a-zA-Z0-9_-]{11}$/,
+      resolveGenerationModelProfile: () => ({
+        model: 'o4-mini',
+        fallbackModel: 'o4-mini',
+        reasoningEffort: 'low' as const,
+      }),
+      claimVariantForGeneration: vi.fn(),
+      markVariantReady: async () => undefined,
+      markVariantFailed: async () => undefined,
+    });
+
+    await service.createBlueprintFromVideo(db as never, {
+      userId: 'user_123',
+      videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      videoId: 'dQw4w9WgXcQ',
+      sourceTag: 'source_unlock_generation',
+      requestClass: 'background',
+    });
+
+    expect(runYouTubePipeline).toHaveBeenCalledWith(expect.objectContaining({
+      requestClass: 'background',
+    }));
+  });
+
+  it('keeps explicit interactive request class for foreground flows', async () => {
+    const { db } = createDbMock();
+    const runYouTubePipeline = vi.fn(async ({ runId, requestClass }) => ({
+      run_id: runId,
+      draft: {
+        title: `Blueprint title ${requestClass}`,
+        description: 'A short summary for testing.',
+        steps: [
+          { name: 'Summary', notes: 'Step notes', timestamp: null },
+        ],
+        notes: null,
+        tags: [],
+        sectionsJson: {
+          schema_version: 'blueprint_sections_v1',
+          tags: [],
+          summary: { text: 'A short summary for testing.' },
+          takeaways: { bullets: ['One useful takeaway.'] },
+          storyline: { text: 'A short storyline block.' },
+          deep_dive: { bullets: ['A deep dive detail.'] },
+          practical_rules: { bullets: ['A practical rule.'] },
+          open_questions: { bullets: ['An open question.'] },
+        } satisfies BlueprintSectionsV1,
+        summaryVariants: {
+          default: 'Default summary',
+          eli5: 'ELI5 summary',
+        },
+        eli5Steps: [],
+      },
+      review: {
+        summary: null,
+      },
+      meta: null,
+    }));
+    const service = createBlueprintCreationService({
+      getServiceSupabaseClient: () => null,
+      safeGenerationTraceWrite: async () => undefined,
+      startGenerationRun: async () => undefined,
+      runYouTubePipeline,
+      toTagSlug: (value) => value,
+      ensureTagId: async () => 'tag_123',
+      attachBlueprintToRun: async () => undefined,
+      youtubeVideoIdRegex: /^[a-zA-Z0-9_-]{11}$/,
+      resolveGenerationModelProfile: () => ({
+        model: 'o4-mini',
+        fallbackModel: 'o4-mini',
+        reasoningEffort: 'low' as const,
+      }),
+      claimVariantForGeneration: vi.fn(),
+      markVariantReady: async () => undefined,
+      markVariantFailed: async () => undefined,
+    });
+
+    await service.createBlueprintFromVideo(db as never, {
+      userId: 'user_123',
+      videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      videoId: 'dQw4w9WgXcQ',
+      sourceTag: 'manual_refresh_generate',
+      requestClass: 'interactive',
+    });
+
+    expect(runYouTubePipeline).toHaveBeenCalledWith(expect.objectContaining({
+      requestClass: 'interactive',
+    }));
+  });
+
   it('writes schema content without legacy selected_items payload', async () => {
     const { db, getInsertedBlueprintPayload } = createDbMock();
     const enqueueBlueprintYouTubeEnrichment = vi.fn(async () => undefined);

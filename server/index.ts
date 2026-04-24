@@ -14697,7 +14697,7 @@ async function processSearchVideoGenerateJob(input: {
           subscriptionId: null,
           jobId: input.jobId,
           generationTier,
-          requestClass: 'interactive',
+          requestClass: 'background',
           onBeforeFirstModelDispatch: settleReservationOnce,
         });
       } catch (primaryError) {
@@ -15007,7 +15007,7 @@ async function processManualRefreshGenerateJob(input: {
           subscriptionId: subscription.id,
           jobId: input.jobId,
           generationTier,
-          requestClass: 'interactive',
+          requestClass: 'background',
           onBeforeFirstModelDispatch: settleReservationOnce,
         });
       } catch (primaryError) {
@@ -15263,7 +15263,7 @@ async function processSourcePageVideoLibraryJob(input: {
         sourceItemId: source.id,
         subscriptionId: null,
         jobId: input.jobId,
-        requestClass: 'interactive',
+        requestClass: 'background',
       });
 
       const insertedItem = await insertFeedItem(db, {
@@ -15611,7 +15611,7 @@ async function processSourceItemUnlockGenerationJob(input: {
           subscriptionId: null,
           jobId: input.jobId,
           generationTier: itemGenerationTier,
-          requestClass: 'interactive',
+          requestClass: 'background',
           onBeforeFirstModelDispatch: autoIntentId ? settleAutoIntentOnce : undefined,
         });
       } catch (primaryError) {

@@ -196,13 +196,7 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
     const normalizedSourceItemId = String(input.sourceItemId || '').trim();
     const generationTier: GenerationTier = 'tier';
     const generationModelProfile = deps.resolveGenerationModelProfile(generationTier);
-    const requestClass = (
-      input.requestClass === 'interactive'
-      || input.sourceTag === 'youtube_search_direct'
-      || input.sourceTag === 'manual_refresh_generate'
-      || input.sourceTag === 'source_page_video_library'
-      || input.sourceTag === 'source_unlock_generation'
-    ) ? 'interactive' : 'background';
+    const requestClass = input.requestClass === 'interactive' ? 'interactive' : 'background';
     let claimedVariant = false;
 
     if (normalizedSourceItemId) {
