@@ -104,6 +104,10 @@ const DEFERRED_WORKER_HEARTBEAT_SCOPES = new Set([
   'blueprint_youtube_refresh',
 ]);
 
+const MIN_WORKER_KEEPALIVE_DELAY_MS = 1_000;
+const IDLE_SPIN_WARNING_WINDOW_MS = 60_000;
+const IDLE_SPIN_WARNING_THRESHOLD = 120;
+
 export function resolveWorkerLeaseHeartbeatStartupDelayMs(input: {
   scope: string;
   workerLeaseMs: number;
@@ -159,6 +163,24 @@ function logMemoryCheckpoint(enabled: boolean, phase: string, extra?: Record<str
   }));
 }
 
+function getMemorySnapshot() {
+  const memory = process.memoryUsage();
+  return {
+    rss_mb: Math.round(memory.rss / 1024 / 1024),
+    heap_used_mb: Math.round(memory.heapUsed / 1024 / 1024),
+    heap_total_mb: Math.round(memory.heapTotal / 1024 / 1024),
+    external_mb: Math.round(memory.external / 1024 / 1024),
+    array_buffers_mb: Math.round(memory.arrayBuffers / 1024 / 1024),
+  };
+}
+
+function warnQueuedWorker(event: string, payload: Record<string, unknown>) {
+  console.warn(`[${event}]`, JSON.stringify({
+    ...payload,
+    ...getMemorySnapshot(),
+  }));
+}
+
 export function createQueuedIngestionWorkerController<DbClient>(
   deps: QueuedIngestionWorkerControllerDeps<DbClient>,
 ): QueuedIngestionWorkerController {
@@ -185,6 +207,8 @@ export function createQueuedIngestionWorkerController<DbClient>(
   let queuedWorkerRunning = false;
   let queuedWorkerRequested = false;
   let idlePollStreak = 0;
+  let idleSpinWarningWindowStartedAt = 0;
+  let idleSpinWarningCount = 0;
   let lastMaintenanceRunAt = 0;
   let refillTimer: ReturnType<typeof setTimeout> | null = null;
   let refillNextRunAt = 0;
@@ -239,6 +263,59 @@ export function createQueuedIngestionWorkerController<DbClient>(
 
   function getActiveTranscriptBoundJobCount() {
     return Math.max(0, Math.floor(Number(deps.getActiveTranscriptBoundJobCount?.() || 0)));
+  }
+
+  function normalizeKeepAliveDelayMs(delayMs: number, input: {
+    phase: 'busy' | 'idle';
+    lowPriorityOnly?: boolean;
+    overrideMs?: number | null;
+  }) {
+    if (Number.isFinite(delayMs) && delayMs >= MIN_WORKER_KEEPALIVE_DELAY_MS) {
+      return Math.floor(delayMs);
+    }
+
+    const fallbackMs = Math.max(MIN_WORKER_KEEPALIVE_DELAY_MS, keepAliveDelayMs);
+    warnQueuedWorker('queued_worker_idle_delay_guard', {
+      worker_id: deps.queuedWorkerId,
+      phase: input.phase,
+      requested_delay_ms: delayMs,
+      fallback_delay_ms: fallbackMs,
+      override_ms: input.overrideMs ?? null,
+      low_priority_only: Boolean(input.lowPriorityOnly),
+      idle_poll_streak: idlePollStreak,
+      unlock_sweeps_enabled: unlockSweepsEnabled,
+      stale_job_recovery_enabled: staleJobRecoveryEnabled,
+      queue_sweep_control_enabled: queueSweepControlEnabled,
+    });
+    return fallbackMs;
+  }
+
+  function recordIdlePollForSpinDetection(nextDelayMs: number, lowPriorityOnly: boolean) {
+    const nowMs = Date.now();
+    if (
+      idleSpinWarningWindowStartedAt <= 0
+      || nowMs - idleSpinWarningWindowStartedAt > IDLE_SPIN_WARNING_WINDOW_MS
+    ) {
+      idleSpinWarningWindowStartedAt = nowMs;
+      idleSpinWarningCount = 0;
+    }
+
+    idleSpinWarningCount += 1;
+    if (idleSpinWarningCount !== IDLE_SPIN_WARNING_THRESHOLD) {
+      return;
+    }
+
+    warnQueuedWorker('queued_worker_idle_spin_warning', {
+      worker_id: deps.queuedWorkerId,
+      window_ms: IDLE_SPIN_WARNING_WINDOW_MS,
+      idle_cycles_in_window: idleSpinWarningCount,
+      next_delay_ms: nextDelayMs,
+      low_priority_only: lowPriorityOnly,
+      idle_poll_streak: idlePollStreak,
+      unlock_sweeps_enabled: unlockSweepsEnabled,
+      stale_job_recovery_enabled: staleJobRecoveryEnabled,
+      queue_sweep_control_enabled: queueSweepControlEnabled,
+    });
   }
 
   function resolvePlanEntryAvailableCapacity(planEntry: QueueSweepPlanEntry) {
@@ -428,11 +505,14 @@ export function createQueuedIngestionWorkerController<DbClient>(
       queuedWorkerRunning = false;
       if (deps.keepAliveEnabled) {
         let nextDelayMs = keepAliveDelayMs;
+        let nextDelayOverrideMs: number | null | undefined = null;
         if (claimedWorkThisRun || queuedWorkerRequested) {
           idlePollStreak = 0;
+          idleSpinWarningWindowStartedAt = 0;
+          idleSpinWarningCount = 0;
         } else {
           nextDelayMs = computeIdleDelayMs({ lowPriorityOnly: lowPriorityOnlySweepPlan });
-          const nextDelayOverrideMs = queueSweepControlEnabled
+          nextDelayOverrideMs = queueSweepControlEnabled
             ? await deps.getKeepAliveDelayOverrideMs?.({
               baseIdleDelayMs: nextDelayMs,
               lowPriorityOnly: lowPriorityOnlySweepPlan,
@@ -446,7 +526,18 @@ export function createQueuedIngestionWorkerController<DbClient>(
             }
           }
           idlePollStreak += 1;
+          nextDelayMs = normalizeKeepAliveDelayMs(nextDelayMs, {
+            phase: 'idle',
+            lowPriorityOnly: lowPriorityOnlySweepPlan,
+            overrideMs: nextDelayOverrideMs,
+          });
+          recordIdlePollForSpinDetection(nextDelayMs, lowPriorityOnlySweepPlan);
         }
+        nextDelayMs = normalizeKeepAliveDelayMs(nextDelayMs, {
+          phase: claimedWorkThisRun || queuedWorkerRequested ? 'busy' : 'idle',
+          lowPriorityOnly: lowPriorityOnlySweepPlan,
+          overrideMs: nextDelayOverrideMs,
+        });
         logMemoryCheckpoint(memoryLoggingEnabled, 'cycle_complete', {
           worker_id: deps.queuedWorkerId,
           claimed_work: claimedWorkThisRun,

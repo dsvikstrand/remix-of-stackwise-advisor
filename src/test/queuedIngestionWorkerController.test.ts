@@ -614,6 +614,41 @@ describe('queued ingestion worker controller', () => {
     expect(runUnlockSweeps).toHaveBeenCalledTimes(2);
   });
 
+  it('clamps invalid idle keepalive delays and emits a guard warning', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const runUnlockSweeps = vi.fn(async () => undefined);
+    const controller = createQueuedIngestionWorkerController({
+      getServiceSupabaseClient: () => ({ tag: 'db' }),
+      runUnlockSweeps,
+      recoverStaleIngestionJobs: vi.fn(async () => []),
+      queuedIngestionScopes: ['search_video_generate'],
+      queuedWorkerId: 'worker_1',
+      workerLeaseMs: 90_000,
+      keepAliveEnabled: true,
+      keepAliveDelayMs: 0,
+      keepAliveIdleBaseDelayMs: 0,
+      keepAliveIdleMaxDelayMs: 0,
+      keepAliveIdleJitterRatio: 0,
+      getQueueSweepPlan: () => [{ tier: 'high', scopes: ['search_video_generate'], maxJobs: 1 }],
+      claimQueuedIngestionJobs: vi.fn(async () => []),
+      processClaimedIngestionJobs: vi.fn(async () => undefined),
+    });
+
+    controller.start(0);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[queued_worker_idle_delay_guard]',
+      expect.stringContaining('"fallback_delay_ms":1000'),
+    );
+
+    await vi.advanceTimersByTimeAsync(999);
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(2);
+  });
+
   it('can disable idle maintenance while preserving queue claims', async () => {
     const db = { tag: 'db' };
     const runUnlockSweeps = vi.fn(async () => undefined);

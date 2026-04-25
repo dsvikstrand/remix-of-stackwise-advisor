@@ -148,6 +148,26 @@ describe('oracle queue sweep scheduler', () => {
     }
   });
 
+  it('returns the minimum delay when a sweep state row is missing', async () => {
+    const controlDb = openOracleControlPlaneDb({
+      sqlitePath: createTempSqlitePath(),
+    });
+
+    try {
+      const nextDelayMs = await getOracleQueueSweepNextDelayMs({
+        controlDb,
+        basePlan: [{ tier: 'high' as const, scopes: ['source_item_unlock_generation'], maxJobs: 8 }],
+        fallbackMs: 600_000,
+        minDelayMs: 1_500,
+        nowIso: '2026-04-01T10:00:01.000Z',
+      });
+
+      expect(nextDelayMs).toBe(1_500);
+    } finally {
+      await controlDb.close();
+    }
+  });
+
   it('can expedite a blocked high-priority sweep for interactive work', async () => {
     const controlDb = openOracleControlPlaneDb({
       sqlitePath: createTempSqlitePath(),

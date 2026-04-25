@@ -321,17 +321,17 @@ export async function getOracleQueueSweepNextDelayMs(input: {
       .where('sweep_key', '=', sweepKey)
       .executeTakeFirst();
 
+    if (!row) {
+      soonestDelayMs = minDelayMs;
+      continue;
+    }
+
     const inflightUntilMs = parseDateMs(row.inflight_until);
     if (inflightUntilMs != null && inflightUntilMs > nowMs) {
       const inflightDelayMs = inflightUntilMs - nowMs;
       if (soonestDelayMs == null || inflightDelayMs < soonestDelayMs) {
         soonestDelayMs = inflightDelayMs;
       }
-      continue;
-    }
-
-    if (!row) {
-      soonestDelayMs = minDelayMs;
       continue;
     }
 
