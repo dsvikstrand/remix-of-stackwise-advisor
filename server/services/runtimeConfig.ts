@@ -12,6 +12,9 @@ export type WorkerRuntimeControls = {
   runOracleMirrorBootstrap: boolean;
   runYoutubeRefreshScheduler: boolean;
   runNotificationPushDispatcher: boolean;
+  runUnlockSweeps: boolean;
+  runStaleJobRecovery: boolean;
+  runQueueSweepControl: boolean;
   memoryLoggingEnabled: boolean;
 };
 
@@ -66,6 +69,15 @@ export function readWorkerRuntimeControls(
       : true,
     runNotificationPushDispatcher: workerOnly
       ? parseRuntimeFlag(env.WORKER_ENABLE_NOTIFICATION_PUSH_DISPATCHER, false)
+      : true,
+    runUnlockSweeps: workerOnly
+      ? parseRuntimeFlag(env.WORKER_ENABLE_UNLOCK_SWEEPS, false)
+      : true,
+    runStaleJobRecovery: workerOnly
+      ? parseRuntimeFlag(env.WORKER_ENABLE_STALE_JOB_RECOVERY, false)
+      : true,
+    runQueueSweepControl: workerOnly
+      ? parseRuntimeFlag(env.WORKER_ENABLE_QUEUE_SWEEP_CONTROL, false)
       : true,
     memoryLoggingEnabled: parseRuntimeFlag(env.WORKER_MEMORY_LOGGING_ENABLED, workerOnly),
   };

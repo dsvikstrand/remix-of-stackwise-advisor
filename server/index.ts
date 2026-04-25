@@ -17525,6 +17525,10 @@ const queuedIngestionWorkerController = createQueuedIngestionWorkerController({
   keepAliveIdleBaseDelayMs: workerIdleBackoffBaseMs,
   keepAliveIdleMaxDelayMs: workerIdleBackoffMaxMs,
   maintenanceMinIntervalMs: workerMaintenanceMinIntervalMs,
+  unlockSweepsEnabled: workerRuntimeControls.runUnlockSweeps,
+  staleJobRecoveryEnabled: workerRuntimeControls.runStaleJobRecovery,
+  queueSweepControlEnabled: workerRuntimeControls.runQueueSweepControl,
+  memoryLoggingEnabled: workerRuntimeControls.memoryLoggingEnabled,
   getQueueSweepPlan,
   selectQueueSweepPlan: oracleQueueSweepControlEnabled && oracleControlPlane
     ? async ({ basePlan, nowIso }) => selectDueOracleQueueSweeps({
@@ -19423,6 +19427,9 @@ logWorkerMemoryCheckpoint('startup_config_loaded', {
   mirror_bootstrap: workerRuntimeControls.runOracleMirrorBootstrap,
   youtube_refresh_scheduler: workerRuntimeControls.runYoutubeRefreshScheduler,
   notification_push_dispatcher: workerRuntimeControls.runNotificationPushDispatcher,
+  unlock_sweeps: workerRuntimeControls.runUnlockSweeps,
+  stale_job_recovery: workerRuntimeControls.runStaleJobRecovery,
+  queue_sweep_control: workerRuntimeControls.runQueueSweepControl,
 });
 if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
   console.log('[oracle-control-plane] enabled', JSON.stringify({

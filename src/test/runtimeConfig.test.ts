@@ -59,6 +59,9 @@ describe('runtime config service', () => {
       runOracleMirrorBootstrap: true,
       runYoutubeRefreshScheduler: true,
       runNotificationPushDispatcher: true,
+      runUnlockSweeps: true,
+      runStaleJobRecovery: true,
+      runQueueSweepControl: true,
       memoryLoggingEnabled: false,
     });
   });
@@ -70,6 +73,9 @@ describe('runtime config service', () => {
       runOracleMirrorBootstrap: false,
       runYoutubeRefreshScheduler: false,
       runNotificationPushDispatcher: false,
+      runUnlockSweeps: false,
+      runStaleJobRecovery: false,
+      runQueueSweepControl: false,
       memoryLoggingEnabled: true,
     });
   });
@@ -80,6 +86,9 @@ describe('runtime config service', () => {
       WORKER_ENABLE_ORACLE_MIRROR_BOOTSTRAP: '1',
       WORKER_ENABLE_YOUTUBE_REFRESH_SCHEDULER: 'on',
       WORKER_ENABLE_NOTIFICATION_PUSH_DISPATCHER: 'yes',
+      WORKER_ENABLE_UNLOCK_SWEEPS: 'true',
+      WORKER_ENABLE_STALE_JOB_RECOVERY: 'true',
+      WORKER_ENABLE_QUEUE_SWEEP_CONTROL: 'true',
       WORKER_MEMORY_LOGGING_ENABLED: 'false',
     }, 'worker_only')).toEqual({
       oracleBootstrapProfile: 'worker_critical',
@@ -87,6 +96,9 @@ describe('runtime config service', () => {
       runOracleMirrorBootstrap: true,
       runYoutubeRefreshScheduler: true,
       runNotificationPushDispatcher: true,
+      runUnlockSweeps: true,
+      runStaleJobRecovery: true,
+      runQueueSweepControl: true,
       memoryLoggingEnabled: false,
     });
   });

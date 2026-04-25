@@ -33,6 +33,10 @@ export type QueuedIngestionWorkerControllerDeps<DbClient> = {
   keepAliveIdleMaxDelayMs?: number;
   keepAliveIdleJitterRatio?: number;
   maintenanceMinIntervalMs?: number;
+  unlockSweepsEnabled?: boolean;
+  staleJobRecoveryEnabled?: boolean;
+  queueSweepControlEnabled?: boolean;
+  memoryLoggingEnabled?: boolean;
   getQueueSweepPlan: () => readonly QueueSweepPlanEntry[];
   selectQueueSweepPlan?: (input: {
     basePlan: readonly QueueSweepPlanEntry[];
@@ -141,6 +145,20 @@ function filterQueueSweepPlanByScopes(
   return basePlan.filter((entry) => entry.scopes.some((scope) => requestedScopes.has(scope)));
 }
 
+function logMemoryCheckpoint(enabled: boolean, phase: string, extra?: Record<string, unknown>) {
+  if (!enabled) return;
+  const memory = process.memoryUsage();
+  console.log('[queued_worker_memory_checkpoint]', JSON.stringify({
+    phase,
+    rss_mb: Math.round(memory.rss / 1024 / 1024),
+    heap_used_mb: Math.round(memory.heapUsed / 1024 / 1024),
+    heap_total_mb: Math.round(memory.heapTotal / 1024 / 1024),
+    external_mb: Math.round(memory.external / 1024 / 1024),
+    array_buffers_mb: Math.round(memory.arrayBuffers / 1024 / 1024),
+    ...extra,
+  }));
+}
+
 export function createQueuedIngestionWorkerController<DbClient>(
   deps: QueuedIngestionWorkerControllerDeps<DbClient>,
 ): QueuedIngestionWorkerController {
@@ -158,6 +176,10 @@ export function createQueuedIngestionWorkerController<DbClient>(
     Math.max(0, Number.isFinite(deps.keepAliveIdleJitterRatio) ? Number(deps.keepAliveIdleJitterRatio) : 0.2),
   );
   const maintenanceMinIntervalMs = Math.max(0, Math.floor(deps.maintenanceMinIntervalMs ?? 0));
+  const unlockSweepsEnabled = deps.unlockSweepsEnabled !== false;
+  const staleJobRecoveryEnabled = deps.staleJobRecoveryEnabled !== false;
+  const queueSweepControlEnabled = deps.queueSweepControlEnabled !== false;
+  const memoryLoggingEnabled = deps.memoryLoggingEnabled === true;
   let queuedWorkerTimer: ReturnType<typeof setTimeout> | null = null;
   let queuedWorkerNextRunAt = 0;
   let queuedWorkerRunning = false;
@@ -253,6 +275,12 @@ export function createQueuedIngestionWorkerController<DbClient>(
     let lowPriorityOnlySweepPlan = false;
     queuedWorkerRunning = true;
     try {
+      logMemoryCheckpoint(memoryLoggingEnabled, 'cycle_start', {
+        worker_id: deps.queuedWorkerId,
+        unlock_sweeps_enabled: unlockSweepsEnabled,
+        stale_job_recovery_enabled: staleJobRecoveryEnabled,
+        queue_sweep_control_enabled: queueSweepControlEnabled,
+      });
       do {
         queuedWorkerRequested = false;
         const nowMs = Date.now();
@@ -260,25 +288,60 @@ export function createQueuedIngestionWorkerController<DbClient>(
           || lastMaintenanceRunAt <= 0
           || nowMs - lastMaintenanceRunAt >= maintenanceMinIntervalMs;
         if (shouldRunMaintenance) {
+          logMemoryCheckpoint(memoryLoggingEnabled, 'maintenance_start', {
+            worker_id: deps.queuedWorkerId,
+          });
           lastMaintenanceRunAt = nowMs;
-          await deps.runUnlockSweeps(db, { mode: 'cron' });
-          for (const scope of deps.queuedIngestionScopes) {
-            const recoveredJobs = await deps.recoverStaleIngestionJobs(db, { scope });
-            if (recoveredJobs.length > 0) {
-              deps.onRecoveredJobs?.({
-                scope,
-                recoveredJobs,
-                workerId: deps.queuedWorkerId,
-              });
-            }
+          if (unlockSweepsEnabled) {
+            logMemoryCheckpoint(memoryLoggingEnabled, 'unlock_sweeps_start', {
+              worker_id: deps.queuedWorkerId,
+            });
+            await deps.runUnlockSweeps(db, { mode: 'cron' });
+            logMemoryCheckpoint(memoryLoggingEnabled, 'unlock_sweeps_complete', {
+              worker_id: deps.queuedWorkerId,
+            });
           }
+          if (staleJobRecoveryEnabled) {
+            logMemoryCheckpoint(memoryLoggingEnabled, 'stale_recovery_start', {
+              worker_id: deps.queuedWorkerId,
+              scope_count: deps.queuedIngestionScopes.length,
+            });
+            for (const scope of deps.queuedIngestionScopes) {
+              const recoveredJobs = await deps.recoverStaleIngestionJobs(db, { scope });
+              if (recoveredJobs.length > 0) {
+                deps.onRecoveredJobs?.({
+                  scope,
+                  recoveredJobs,
+                  workerId: deps.queuedWorkerId,
+                });
+              }
+            }
+            logMemoryCheckpoint(memoryLoggingEnabled, 'stale_recovery_complete', {
+              worker_id: deps.queuedWorkerId,
+              scope_count: deps.queuedIngestionScopes.length,
+            });
+          }
+          logMemoryCheckpoint(memoryLoggingEnabled, 'maintenance_complete', {
+            worker_id: deps.queuedWorkerId,
+          });
         }
 
         const baseSweepPlan = deps.getQueueSweepPlan();
-        const sweepPlan = await deps.selectQueueSweepPlan?.({
-          basePlan: baseSweepPlan,
-          nowIso: new Date().toISOString(),
-        }) ?? baseSweepPlan;
+        logMemoryCheckpoint(memoryLoggingEnabled, 'sweep_plan_select_start', {
+          worker_id: deps.queuedWorkerId,
+          base_plan_count: baseSweepPlan.length,
+          queue_sweep_control_enabled: queueSweepControlEnabled,
+        });
+        const sweepPlan = queueSweepControlEnabled
+          ? await deps.selectQueueSweepPlan?.({
+            basePlan: baseSweepPlan,
+            nowIso: new Date().toISOString(),
+          }) ?? baseSweepPlan
+          : baseSweepPlan;
+        logMemoryCheckpoint(memoryLoggingEnabled, 'sweep_plan_select_complete', {
+          worker_id: deps.queuedWorkerId,
+          sweep_plan_count: sweepPlan.length,
+        });
         lowPriorityOnlySweepPlan = sweepPlan.length > 0
           && sweepPlan.every((entry) => (
             entry.scopes.length > 0
@@ -286,6 +349,10 @@ export function createQueuedIngestionWorkerController<DbClient>(
           ));
         while (true) {
           let claimedAny = false;
+          logMemoryCheckpoint(memoryLoggingEnabled, 'claim_loop_start', {
+            worker_id: deps.queuedWorkerId,
+            sweep_plan_count: sweepPlan.length,
+          });
           for (const planEntry of sweepPlan) {
             const capacity = resolvePlanEntryAvailableCapacity(planEntry);
             if (capacity.availableCapacity <= 0) {
@@ -305,13 +372,15 @@ export function createQueuedIngestionWorkerController<DbClient>(
               nowIso,
             });
             if (claimAttempt && !claimAttempt.allowed) {
-              await deps.recordQueueSweepResult?.({
-                tier: planEntry.tier,
-                scopes: planEntry.scopes,
-                maxJobs: Math.min(planEntry.maxJobs, capacity.availableCapacity),
-                claimedCount: 0,
-                nowIso,
-              });
+              if (queueSweepControlEnabled) {
+                await deps.recordQueueSweepResult?.({
+                  tier: planEntry.tier,
+                  scopes: planEntry.scopes,
+                  maxJobs: Math.min(planEntry.maxJobs, capacity.availableCapacity),
+                  claimedCount: 0,
+                  nowIso,
+                });
+              }
               continue;
             }
             const claimed = await deps.claimQueuedIngestionJobs(db, {
@@ -327,18 +396,24 @@ export function createQueuedIngestionWorkerController<DbClient>(
               claimedCount: claimed.length,
               nowIso,
             });
-            await deps.recordQueueSweepResult?.({
-              tier: planEntry.tier,
-              scopes: planEntry.scopes,
-              maxJobs: Math.min(planEntry.maxJobs, capacity.availableCapacity),
-              claimedCount: claimed.length,
-              nowIso,
-            });
+            if (queueSweepControlEnabled) {
+              await deps.recordQueueSweepResult?.({
+                tier: planEntry.tier,
+                scopes: planEntry.scopes,
+                maxJobs: Math.min(planEntry.maxJobs, capacity.availableCapacity),
+                claimedCount: claimed.length,
+                nowIso,
+              });
+            }
             if (claimed.length === 0) continue;
             claimedAny = true;
             claimedWorkThisRun = true;
             await deps.processClaimedIngestionJobs(db, claimed);
           }
+          logMemoryCheckpoint(memoryLoggingEnabled, 'claim_loop_complete', {
+            worker_id: deps.queuedWorkerId,
+            claimed_any: claimedAny,
+          });
           if (!claimedAny) break;
         }
       } while (queuedWorkerRequested);
@@ -357,16 +432,25 @@ export function createQueuedIngestionWorkerController<DbClient>(
           idlePollStreak = 0;
         } else {
           nextDelayMs = computeIdleDelayMs({ lowPriorityOnly: lowPriorityOnlySweepPlan });
-          const nextDelayOverrideMs = await deps.getKeepAliveDelayOverrideMs?.({
-            baseIdleDelayMs: nextDelayMs,
-            lowPriorityOnly: lowPriorityOnlySweepPlan,
-            nowIso: new Date().toISOString(),
-          });
+          const nextDelayOverrideMs = queueSweepControlEnabled
+            ? await deps.getKeepAliveDelayOverrideMs?.({
+              baseIdleDelayMs: nextDelayMs,
+              lowPriorityOnly: lowPriorityOnlySweepPlan,
+              nowIso: new Date().toISOString(),
+            })
+            : null;
           if (Number.isFinite(nextDelayOverrideMs) && nextDelayOverrideMs != null) {
             nextDelayMs = Math.max(0, Math.floor(nextDelayOverrideMs));
           }
           idlePollStreak += 1;
         }
+        logMemoryCheckpoint(memoryLoggingEnabled, 'cycle_complete', {
+          worker_id: deps.queuedWorkerId,
+          claimed_work: claimedWorkThisRun,
+          queued_worker_requested: queuedWorkerRequested,
+          next_delay_ms: nextDelayMs,
+          idle_poll_streak: idlePollStreak,
+        });
         schedule(nextDelayMs);
       }
     }

@@ -581,4 +581,56 @@ describe('queued ingestion worker controller', () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(runUnlockSweeps).toHaveBeenCalledTimes(2);
   });
+
+  it('can disable idle maintenance while preserving queue claims', async () => {
+    const db = { tag: 'db' };
+    const runUnlockSweeps = vi.fn(async () => undefined);
+    const recoverStaleIngestionJobs = vi.fn(async () => []);
+    const selectQueueSweepPlan = vi.fn(async ({ basePlan }) => basePlan.slice(0, 1));
+    const recordQueueSweepResult = vi.fn(async () => undefined);
+    const getKeepAliveDelayOverrideMs = vi.fn(async () => 2_000);
+    const claimQueuedIngestionJobs = vi.fn()
+      .mockResolvedValueOnce([{ id: 'job_1' }])
+      .mockResolvedValueOnce([]);
+    const processClaimedIngestionJobs = vi.fn(async () => undefined);
+    const controller = createQueuedIngestionWorkerController({
+      getServiceSupabaseClient: () => db,
+      runUnlockSweeps,
+      recoverStaleIngestionJobs,
+      queuedIngestionScopes: ['search_video_generate'],
+      queuedWorkerId: 'worker_1',
+      workerLeaseMs: 90_000,
+      keepAliveEnabled: true,
+      keepAliveDelayMs: 1_500,
+      keepAliveIdleBaseDelayMs: 10_000,
+      keepAliveIdleMaxDelayMs: 60_000,
+      keepAliveIdleJitterRatio: 0,
+      unlockSweepsEnabled: false,
+      staleJobRecoveryEnabled: false,
+      queueSweepControlEnabled: false,
+      getQueueSweepPlan: () => [
+        { tier: 'high', scopes: ['search_video_generate'], maxJobs: 2 },
+        { tier: 'low', scopes: ['all_active_subscriptions'], maxJobs: 1 },
+      ],
+      selectQueueSweepPlan,
+      recordQueueSweepResult,
+      getKeepAliveDelayOverrideMs,
+      claimQueuedIngestionJobs,
+      processClaimedIngestionJobs,
+    });
+
+    controller.start(0);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(runUnlockSweeps).not.toHaveBeenCalled();
+    expect(recoverStaleIngestionJobs).not.toHaveBeenCalled();
+    expect(selectQueueSweepPlan).not.toHaveBeenCalled();
+    expect(recordQueueSweepResult).not.toHaveBeenCalled();
+    expect(getKeepAliveDelayOverrideMs).not.toHaveBeenCalled();
+    expect(processClaimedIngestionJobs).toHaveBeenCalledWith(db, [{ id: 'job_1' }]);
+    expect(claimQueuedIngestionJobs).toHaveBeenCalledWith(db, expect.objectContaining({
+      scopes: ['search_video_generate'],
+      maxJobs: 1,
+    }));
+  });
 });
