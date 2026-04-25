@@ -3,6 +3,7 @@ import {
   parseRuntimeFlag,
   readBackendRuntimeConfig,
   readWorkerRuntimeControls,
+  shouldRunOraclePrimarySubscriptionScheduler,
 } from '../../server/services/runtimeConfig';
 
 describe('runtime config service', () => {
@@ -101,5 +102,29 @@ describe('runtime config service', () => {
       runQueueSweepControl: true,
       memoryLoggingEnabled: false,
     });
+  });
+
+  it('runs the Oracle primary subscription scheduler in the web runtime owner', () => {
+    expect(shouldRunOraclePrimarySubscriptionScheduler({
+      oracleControlPlaneEnabled: true,
+      subscriptionSchedulerMode: 'primary',
+      runHttpServer: true,
+    })).toBe(true);
+  });
+
+  it('does not require the worker-only runtime to own Oracle primary subscription scheduling', () => {
+    expect(shouldRunOraclePrimarySubscriptionScheduler({
+      oracleControlPlaneEnabled: true,
+      subscriptionSchedulerMode: 'primary',
+      runHttpServer: false,
+    })).toBe(false);
+  });
+
+  it('does not run the Oracle primary subscription scheduler outside primary mode', () => {
+    expect(shouldRunOraclePrimarySubscriptionScheduler({
+      oracleControlPlaneEnabled: true,
+      subscriptionSchedulerMode: 'shadow',
+      runHttpServer: true,
+    })).toBe(false);
   });
 });

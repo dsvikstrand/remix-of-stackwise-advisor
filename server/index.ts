@@ -50,7 +50,12 @@ import {
   resolveWorkerLeaseHeartbeatStartupDelayMs,
   resolveWorkerLeaseHeartbeatMs,
 } from './services/queuedIngestionWorkerController';
-import { parseRuntimeFlag, readBackendRuntimeConfig, readWorkerRuntimeControls } from './services/runtimeConfig';
+import {
+  parseRuntimeFlag,
+  readBackendRuntimeConfig,
+  readWorkerRuntimeControls,
+  shouldRunOraclePrimarySubscriptionScheduler,
+} from './services/runtimeConfig';
 import { readOracleControlPlaneConfig } from './services/oracleControlPlaneConfig';
 import { openOracleControlPlaneDb } from './services/oracleControlPlaneDb';
 import { createOracleSubscriptionSchedulerController } from './services/oracleSubscriptionSchedulerController';
@@ -830,6 +835,11 @@ const oracleControlPlane = (() => {
     process.exit(1);
   }
 })();
+const runOraclePrimarySubscriptionScheduler = shouldRunOraclePrimarySubscriptionScheduler({
+  oracleControlPlaneEnabled: oracleControlPlaneConfig.enabled && Boolean(oracleControlPlane),
+  subscriptionSchedulerMode: oracleControlPlaneConfig.subscriptionSchedulerMode,
+  runHttpServer,
+});
 const oracleQueueClaimControlEnabled = (
   oracleControlPlaneConfig.enabled
   && oracleControlPlaneConfig.queueControlEnabled
@@ -17748,17 +17758,9 @@ function scheduleQueuedIngestionProcessing(input?: QueuedIngestionScheduleInput)
 
 async function runOraclePrimarySubscriptionSchedulerCycle() {
   if (
-    !oracleControlPlaneConfig.enabled
+    !runOraclePrimarySubscriptionScheduler
     || !oracleControlPlane
-    || oracleControlPlaneConfig.subscriptionSchedulerMode !== 'primary'
-    || !runIngestionWorker
   ) {
-    return;
-  }
-  if (!runHttpServer) {
-    console.warn('[oracle-control-plane] primary_scheduler_tick_skipped', JSON.stringify({
-      reason: 'http_server_disabled',
-    }));
     return;
   }
   if (!ingestionServiceToken) {
@@ -17793,12 +17795,7 @@ async function runOraclePrimarySubscriptionSchedulerCycle() {
 }
 
 const oracleSubscriptionSchedulerController = createOracleSubscriptionSchedulerController({
-  enabled: (
-    oracleControlPlaneConfig.enabled
-    && oracleControlPlaneConfig.subscriptionSchedulerMode === 'primary'
-    && runIngestionWorker
-    && runHttpServer
-  ),
+  enabled: runOraclePrimarySubscriptionScheduler,
   intervalMs: oracleControlPlaneConfig.schedulerTickMs,
   runCycle: runOraclePrimarySubscriptionSchedulerCycle,
 });
@@ -19487,6 +19484,24 @@ if (runHttpServer) {
   });
 }
 
+if (runOraclePrimarySubscriptionScheduler) {
+  oracleSubscriptionSchedulerController.start(3_000);
+  console.log('[oracle-control-plane] oracle_subscription_scheduler_started', JSON.stringify({
+    runtime_mode: runtimeMode,
+    owner: 'http_server',
+  }));
+} else if (
+  oracleControlPlaneConfig.enabled
+  && oracleControlPlaneConfig.subscriptionSchedulerMode === 'primary'
+  && runIngestionWorker
+  && !runHttpServer
+) {
+  console.log('[oracle-control-plane] oracle_subscription_scheduler_skipped', JSON.stringify({
+    runtime_mode: runtimeMode,
+    reason: 'http_server_owner_required',
+  }));
+}
+
 if (runIngestionWorker) {
   if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
     void bootstrapOracleControlPlaneState().catch((error) => {
@@ -19494,8 +19509,6 @@ if (runIngestionWorker) {
     });
   }
   logWorkerMemoryCheckpoint('worker_controllers_starting');
-  oracleSubscriptionSchedulerController.start(3_000);
-  logWorkerMemoryCheckpoint('oracle_subscription_scheduler_started');
   queuedIngestionWorkerController.start(1500);
   logWorkerMemoryCheckpoint('queued_ingestion_worker_started');
   if (youtubeRefreshEnabled && workerRuntimeControls.runYoutubeRefreshScheduler) {

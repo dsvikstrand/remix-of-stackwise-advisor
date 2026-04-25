@@ -18,6 +18,12 @@ export type WorkerRuntimeControls = {
   memoryLoggingEnabled: boolean;
 };
 
+export type OraclePrimarySubscriptionSchedulerRuntimeInput = {
+  oracleControlPlaneEnabled: boolean;
+  subscriptionSchedulerMode: string | undefined;
+  runHttpServer: boolean;
+};
+
 export function parseRuntimeFlag(raw: string | undefined, fallback: boolean) {
   const normalized = String(raw ?? (fallback ? 'true' : 'false')).trim().toLowerCase();
   if (normalized === '0' || normalized === 'false' || normalized === 'off' || normalized === 'no') {
@@ -81,4 +87,12 @@ export function readWorkerRuntimeControls(
       : true,
     memoryLoggingEnabled: parseRuntimeFlag(env.WORKER_MEMORY_LOGGING_ENABLED, workerOnly),
   };
+}
+
+export function shouldRunOraclePrimarySubscriptionScheduler(
+  input: OraclePrimarySubscriptionSchedulerRuntimeInput,
+) {
+  return Boolean(input.oracleControlPlaneEnabled)
+    && input.subscriptionSchedulerMode === 'primary'
+    && input.runHttpServer;
 }
