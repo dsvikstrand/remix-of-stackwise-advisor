@@ -12,6 +12,7 @@ import {
   finalizeOracleQueueJob,
   getOracleLatestQueueJobForScope,
   listOracleQueueLedgerJobs,
+  readOracleQueueLedgerBootstrapSummary,
   touchOracleQueueJobLease,
   upsertOracleQueueLedgerRow,
 } from '../../server/services/oracleQueueLedgerState';
@@ -289,6 +290,62 @@ describe('oracle queue ledger state', () => {
       });
       expect(runningRows).toHaveLength(1);
       expect(runningRows[0]?.id).toBe('job_user_running');
+    } finally {
+      await controlDb.close();
+    }
+  });
+
+  it('summarizes the local ledger without replacing Oracle-primary queue truth', async () => {
+    const controlDb = openOracleControlPlaneDb({
+      sqlitePath: createTempSqlitePath(),
+    });
+
+    try {
+      await upsertOracleQueueLedgerRow({
+        controlDb,
+        job: buildOracleQueueLedgerJobFromInsertValues({
+          nowIso: '2026-04-01T15:00:00.000Z',
+          values: {
+            id: 'oracle_terminal_job',
+            trigger: 'service_cron',
+            scope: 'all_active_subscriptions',
+            status: 'succeeded',
+            next_run_at: '2026-04-01T15:00:00.000Z',
+            finished_at: '2026-04-01T15:01:00.000Z',
+            created_at: '2026-04-01T15:00:00.000Z',
+            updated_at: '2026-04-01T15:01:00.000Z',
+          },
+        }),
+      });
+      await upsertOracleQueueLedgerRow({
+        controlDb,
+        job: buildOracleQueueLedgerJobFromInsertValues({
+          nowIso: '2026-04-01T15:02:00.000Z',
+          values: {
+            id: 'oracle_active_job',
+            trigger: 'user',
+            scope: 'source_item_unlock_generation',
+            status: 'queued',
+            next_run_at: '2026-04-01T15:02:00.000Z',
+            created_at: '2026-04-01T15:02:00.000Z',
+            updated_at: '2026-04-01T15:02:00.000Z',
+          },
+        }),
+      });
+
+      const summary = await readOracleQueueLedgerBootstrapSummary({ controlDb });
+
+      expect(summary).toEqual({
+        rowCount: 2,
+        activeCount: 1,
+      });
+
+      const terminal = await listOracleQueueLedgerJobs({
+        controlDb,
+        statuses: ['succeeded'],
+        limit: 10,
+      });
+      expect(terminal.map((row) => row.id)).toEqual(['oracle_terminal_job']);
     } finally {
       await controlDb.close();
     }

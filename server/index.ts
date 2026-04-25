@@ -99,6 +99,7 @@ import {
   getOracleLatestQueueJobForScope,
   listOracleQueueLedgerJobs,
   markOracleRunningJobsFailed,
+  readOracleQueueLedgerBootstrapSummary,
   syncOracleQueueLedgerFromSupabase,
   touchOracleQueueJobLease,
   upsertOracleQueueLedgerRow,
@@ -17968,11 +17969,15 @@ async function bootstrapOracleControlPlaneState() {
   let queueLedgerCount: number | null = null;
   let queueLedgerActiveCount: number | null = null;
   if (oracleQueueLedgerEnabled) {
-    const queueLedgerBootstrap = await syncOracleQueueLedgerFromSupabase({
-      controlDb: oracleControlPlane,
-      db,
-      recentLimit: oracleControlPlaneConfig.queueLedgerBootstrapLimit,
-    });
+    const queueLedgerBootstrap = oracleQueueLedgerMode === 'primary'
+      ? await readOracleQueueLedgerBootstrapSummary({
+        controlDb: oracleControlPlane,
+      })
+      : await syncOracleQueueLedgerFromSupabase({
+        controlDb: oracleControlPlane,
+        db,
+        recentLimit: oracleControlPlaneConfig.queueLedgerBootstrapLimit,
+      });
     queueLedgerCount = queueLedgerBootstrap.rowCount;
     queueLedgerActiveCount = queueLedgerBootstrap.activeCount;
   }

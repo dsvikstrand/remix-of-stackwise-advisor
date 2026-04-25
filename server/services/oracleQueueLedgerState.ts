@@ -325,6 +325,25 @@ export async function syncOracleQueueLedgerFromSupabase(input: {
   };
 }
 
+export async function readOracleQueueLedgerBootstrapSummary(input: {
+  controlDb: OracleControlPlaneDb;
+}) {
+  const [rowCount, activeCount] = await Promise.all([
+    countOracleQueueLedgerJobs({
+      controlDb: input.controlDb,
+    }),
+    countOracleQueueLedgerJobs({
+      controlDb: input.controlDb,
+      statuses: ['queued', 'running'],
+    }),
+  ]);
+
+  return {
+    rowCount,
+    activeCount,
+  };
+}
+
 export async function getOracleLatestQueueJobForScope(input: {
   controlDb: OracleControlPlaneDb;
   scope: string;
