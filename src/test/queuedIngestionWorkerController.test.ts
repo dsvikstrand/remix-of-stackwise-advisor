@@ -582,6 +582,38 @@ describe('queued ingestion worker controller', () => {
     expect(runUnlockSweeps).toHaveBeenCalledTimes(2);
   });
 
+  it('ignores zero-delay Oracle keepalive overrides while idle', async () => {
+    const runUnlockSweeps = vi.fn(async () => undefined);
+    const controller = createQueuedIngestionWorkerController({
+      getServiceSupabaseClient: () => ({ tag: 'db' }),
+      runUnlockSweeps,
+      recoverStaleIngestionJobs: vi.fn(async () => []),
+      queuedIngestionScopes: ['all_active_subscriptions'],
+      queuedWorkerId: 'worker_1',
+      workerLeaseMs: 90_000,
+      keepAliveEnabled: true,
+      keepAliveDelayMs: 1_500,
+      keepAliveIdleBaseDelayMs: 10_000,
+      keepAliveIdleMaxDelayMs: 60_000,
+      keepAliveIdleJitterRatio: 0,
+      queueSweepControlEnabled: true,
+      getQueueSweepPlan: () => [{ tier: 'low', scopes: ['all_active_subscriptions'], maxJobs: 1 }],
+      getKeepAliveDelayOverrideMs: vi.fn(async () => 0),
+      claimQueuedIngestionJobs: vi.fn(async () => []),
+      processClaimedIngestionJobs: vi.fn(async () => undefined),
+    });
+
+    controller.start(0);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(runUnlockSweeps).toHaveBeenCalledTimes(2);
+  });
+
   it('can disable idle maintenance while preserving queue claims', async () => {
     const db = { tag: 'db' };
     const runUnlockSweeps = vi.fn(async () => undefined);

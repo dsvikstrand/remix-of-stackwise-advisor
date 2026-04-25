@@ -120,6 +120,34 @@ describe('oracle queue sweep scheduler', () => {
     }
   });
 
+  it('waits for inflight sweep control instead of returning a zero-delay idle override', async () => {
+    const controlDb = openOracleControlPlaneDb({
+      sqlitePath: createTempSqlitePath(),
+    });
+
+    try {
+      const basePlan = [{ tier: 'high' as const, scopes: ['source_item_unlock_generation'], maxJobs: 8 }];
+      await selectDueOracleQueueSweeps({
+        controlDb,
+        config: baseConfig,
+        basePlan,
+        nowIso: '2026-04-01T10:00:00.000Z',
+      });
+
+      const nextDelayMs = await getOracleQueueSweepNextDelayMs({
+        controlDb,
+        basePlan,
+        fallbackMs: 600_000,
+        minDelayMs: 1_500,
+        nowIso: '2026-04-01T10:00:01.000Z',
+      });
+
+      expect(nextDelayMs).toBe(4_000);
+    } finally {
+      await controlDb.close();
+    }
+  });
+
   it('can expedite a blocked high-priority sweep for interactive work', async () => {
     const controlDb = openOracleControlPlaneDb({
       sqlitePath: createTempSqlitePath(),

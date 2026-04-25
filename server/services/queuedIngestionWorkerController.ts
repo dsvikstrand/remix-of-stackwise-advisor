@@ -440,7 +440,10 @@ export function createQueuedIngestionWorkerController<DbClient>(
             })
             : null;
           if (Number.isFinite(nextDelayOverrideMs) && nextDelayOverrideMs != null) {
-            nextDelayMs = Math.max(0, Math.floor(nextDelayOverrideMs));
+            const normalizedOverrideMs = Math.floor(nextDelayOverrideMs);
+            if (normalizedOverrideMs > 0) {
+              nextDelayMs = normalizedOverrideMs;
+            }
           }
           idlePollStreak += 1;
         }
