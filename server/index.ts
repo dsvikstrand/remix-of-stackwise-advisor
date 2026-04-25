@@ -50,7 +50,7 @@ import {
   resolveWorkerLeaseHeartbeatStartupDelayMs,
   resolveWorkerLeaseHeartbeatMs,
 } from './services/queuedIngestionWorkerController';
-import { parseRuntimeFlag, readBackendRuntimeConfig } from './services/runtimeConfig';
+import { parseRuntimeFlag, readBackendRuntimeConfig, readWorkerRuntimeControls } from './services/runtimeConfig';
 import { readOracleControlPlaneConfig } from './services/oracleControlPlaneConfig';
 import { openOracleControlPlaneDb } from './services/oracleControlPlaneDb';
 import { createOracleSubscriptionSchedulerController } from './services/oracleSubscriptionSchedulerController';
@@ -803,7 +803,22 @@ const runtimeConfig = (() => {
   }
 })();
 const { runHttpServer, runIngestionWorker, runtimeMode } = runtimeConfig;
+const workerRuntimeControls = readWorkerRuntimeControls(process.env, runtimeMode);
 const oracleControlPlaneConfig = readOracleControlPlaneConfig(process.env);
+function logWorkerMemoryCheckpoint(phase: string, extra?: Record<string, unknown>) {
+  if (!runIngestionWorker || !workerRuntimeControls.memoryLoggingEnabled) return;
+  const memory = process.memoryUsage();
+  console.log('[worker_memory_checkpoint]', JSON.stringify({
+    phase,
+    runtime_mode: runtimeMode,
+    rss_mb: Math.round(memory.rss / 1024 / 1024),
+    heap_used_mb: Math.round(memory.heapUsed / 1024 / 1024),
+    heap_total_mb: Math.round(memory.heapTotal / 1024 / 1024),
+    external_mb: Math.round(memory.external / 1024 / 1024),
+    array_buffers_mb: Math.round(memory.arrayBuffers / 1024 / 1024),
+    ...extra,
+  }));
+}
 const oracleControlPlane = (() => {
   if (!oracleControlPlaneConfig.enabled) return null;
   try {
@@ -17930,6 +17945,13 @@ async function bootstrapOracleControlPlaneState() {
   if (!oracleControlPlaneConfig.enabled || !oracleControlPlane || !runIngestionWorker) {
     return;
   }
+  const runReadPlaneBootstrap = workerRuntimeControls.runOracleReadPlaneBootstrap;
+  const runMirrorBootstrap = workerRuntimeControls.runOracleMirrorBootstrap;
+  logWorkerMemoryCheckpoint('oracle_bootstrap_start', {
+    oracle_bootstrap_profile: workerRuntimeControls.oracleBootstrapProfile,
+    read_plane_bootstrap: runReadPlaneBootstrap,
+    mirror_bootstrap: runMirrorBootstrap,
+  });
   const db = getServiceSupabaseClient();
   if (!db) {
     console.warn('[oracle-control-plane] bootstrap skipped: service role client not configured');
@@ -17959,11 +17981,17 @@ async function bootstrapOracleControlPlaneState() {
     from += data.length;
     if (data.length < oracleControlPlaneConfig.bootstrapBatch) break;
   }
+  logWorkerMemoryCheckpoint('oracle_bootstrap_subscriptions_loaded', {
+    subscription_count: subscriptions.length,
+  });
 
   const bootstrapResult = await bootstrapOracleSubscriptionSchedulerState({
     controlDb: oracleControlPlane,
     subscriptions,
     scope: 'all_active_subscriptions',
+  });
+  logWorkerMemoryCheckpoint('oracle_bootstrap_scheduler_state_complete', {
+    subscription_count: bootstrapResult.activeCount,
   });
 
   let queueLedgerCount: number | null = null;
@@ -17984,7 +18012,7 @@ async function bootstrapOracleControlPlaneState() {
 
   let subscriptionLedgerCount: number | null = null;
   let subscriptionLedgerActiveCount: number | null = null;
-  if (oracleSubscriptionLedgerEnabled) {
+  if (oracleSubscriptionLedgerEnabled && runReadPlaneBootstrap) {
     const subscriptionLedgerBootstrap = await syncOracleSubscriptionLedgerFromSupabase({
       controlDb: oracleControlPlane,
       db,
@@ -18014,7 +18042,7 @@ async function bootstrapOracleControlPlaneState() {
 
   let feedLedgerCount: number | null = null;
   let feedLedgerActiveCount: number | null = null;
-  if (oracleFeedLedgerEnabled) {
+  if (oracleFeedLedgerEnabled && runReadPlaneBootstrap) {
     const [feedLedgerCountRow, feedLedgerActiveCountRow] = await Promise.all([
       oracleControlPlane.db
         .selectFrom('feed_ledger_state')
@@ -18031,7 +18059,7 @@ async function bootstrapOracleControlPlaneState() {
   }
 
   let sourceItemLedgerCount: number | null = null;
-  if (oracleSourceItemLedgerEnabled) {
+  if (oracleSourceItemLedgerEnabled && runReadPlaneBootstrap) {
     const sourceItemLedgerCountRow = await oracleControlPlane.db
       .selectFrom('source_item_ledger_state')
       .select(({ fn }) => fn.count<number>('id').as('count'))
@@ -18054,7 +18082,7 @@ async function bootstrapOracleControlPlaneState() {
   }
 
   let blueprintTagCount: number | null = null;
-  if (oracleControlPlane) {
+  if (oracleControlPlane && runReadPlaneBootstrap) {
     blueprintTagCount = await countOracleBlueprintTagRows({
       controlDb: oracleControlPlane,
     });
@@ -18069,7 +18097,7 @@ async function bootstrapOracleControlPlaneState() {
   }
 
   let tagCount: number | null = null;
-  if (oracleControlPlane) {
+  if (oracleControlPlane && runReadPlaneBootstrap) {
     tagCount = await countOracleTagRows({
       controlDb: oracleControlPlane,
     });
@@ -18087,7 +18115,7 @@ async function bootstrapOracleControlPlaneState() {
   }
 
   let tagFollowCount: number | null = null;
-  if (oracleControlPlane) {
+  if (oracleControlPlane && runReadPlaneBootstrap) {
     tagFollowCount = await countOracleTagFollowRows({
       controlDb: oracleControlPlane,
     });
@@ -18105,7 +18133,7 @@ async function bootstrapOracleControlPlaneState() {
   }
 
   let blueprintCommentCount: number | null = null;
-  if (oracleControlPlane) {
+  if (oracleControlPlane && runReadPlaneBootstrap) {
     blueprintCommentCount = await countOracleBlueprintCommentRows({
       controlDb: oracleControlPlane,
     });
@@ -18120,7 +18148,7 @@ async function bootstrapOracleControlPlaneState() {
   }
 
   let blueprintLikeCount: number | null = null;
-  if (oracleControlPlane) {
+  if (oracleControlPlane && runReadPlaneBootstrap) {
     blueprintLikeCount = await countOracleBlueprintLikeRows({
       controlDb: oracleControlPlane,
     });
@@ -18138,7 +18166,7 @@ async function bootstrapOracleControlPlaneState() {
   }
 
   let blueprintStateCount: number | null = null;
-  if (oracleControlPlane) {
+  if (oracleControlPlane && runReadPlaneBootstrap) {
     blueprintStateCount = await countOracleBlueprintRows({
       controlDb: oracleControlPlane,
     });
@@ -18153,7 +18181,7 @@ async function bootstrapOracleControlPlaneState() {
   }
 
   let profileStateCount: number | null = null;
-  if (oracleControlPlane) {
+  if (oracleControlPlane && runReadPlaneBootstrap) {
     profileStateCount = await countOracleProfileRows({
       controlDb: oracleControlPlane,
     });
@@ -18169,7 +18197,7 @@ async function bootstrapOracleControlPlaneState() {
 
   let channelCandidateCount: number | null = null;
   let channelGateDecisionCount: number | null = null;
-  if (oracleControlPlane) {
+  if (oracleControlPlane && runReadPlaneBootstrap) {
     const channelCandidateBootstrapState = await countOracleChannelCandidateStateRows({
       controlDb: oracleControlPlane,
     });
@@ -18187,7 +18215,7 @@ async function bootstrapOracleControlPlaneState() {
   }
 
   let queueAdmissionActiveCount: number | null = null;
-  if (oracleControlPlaneConfig.queueAdmissionMirrorEnabled) {
+  if (oracleControlPlaneConfig.queueAdmissionMirrorEnabled && runMirrorBootstrap) {
     const queueAdmissionBootstrap = await syncOracleQueueAdmissionMirrorFromSupabase({
       controlDb: oracleControlPlane,
       db,
@@ -18197,7 +18225,7 @@ async function bootstrapOracleControlPlaneState() {
 
   let jobActivityCount: number | null = null;
   let jobActivityActiveCount: number | null = null;
-  if (oracleControlPlaneConfig.jobActivityMirrorEnabled) {
+  if (oracleControlPlaneConfig.jobActivityMirrorEnabled && runMirrorBootstrap) {
     const jobActivityBootstrap = await syncOracleJobActivityMirrorFromSupabase({
       controlDb: oracleControlPlane,
       db,
@@ -18211,7 +18239,7 @@ async function bootstrapOracleControlPlaneState() {
   let productSourceItemCount: number | null = null;
   let productUnlockCount: number | null = null;
   let productFeedCount: number | null = null;
-  if (oracleProductMirrorEnabled) {
+  if (oracleProductMirrorEnabled && runMirrorBootstrap) {
     const productBootstrap = await syncOracleProductStateFromSupabase({
       controlDb: oracleControlPlane,
       db,
@@ -18224,6 +18252,10 @@ async function bootstrapOracleControlPlaneState() {
   }
 
   console.log('[oracle-control-plane] bootstrap complete', JSON.stringify({
+    runtime_mode: runtimeMode,
+    bootstrap_profile: workerRuntimeControls.oracleBootstrapProfile,
+    read_plane_bootstrap: runReadPlaneBootstrap,
+    mirror_bootstrap: runMirrorBootstrap,
     scheduler_mode: oracleControlPlaneConfig.subscriptionSchedulerMode,
     queue_ledger_mode: oracleQueueLedgerMode,
     queue_oracle_only_enabled: oracleQueueOracleOnlyEnabled,
@@ -18273,6 +18305,11 @@ async function bootstrapOracleControlPlaneState() {
     job_activity_bootstrap_limit: oracleControlPlaneConfig.jobActivityBootstrapLimit,
     product_bootstrap_limit: oracleControlPlaneConfig.productBootstrapLimit,
   }));
+  logWorkerMemoryCheckpoint('oracle_bootstrap_complete', {
+    subscription_count: bootstrapResult.activeCount,
+    read_plane_bootstrap: runReadPlaneBootstrap,
+    mirror_bootstrap: runMirrorBootstrap,
+  });
 }
 
 async function runYouTubeRefreshSchedulerCycle() {
@@ -19380,6 +19417,13 @@ async function uploadBannerToSupabase(imageBase64: string, contentType: string, 
 }
 
 console.log(`[agentic-backend] runtime_mode=${runtimeMode}`);
+logWorkerMemoryCheckpoint('startup_config_loaded', {
+  oracle_bootstrap_profile: workerRuntimeControls.oracleBootstrapProfile,
+  read_plane_bootstrap: workerRuntimeControls.runOracleReadPlaneBootstrap,
+  mirror_bootstrap: workerRuntimeControls.runOracleMirrorBootstrap,
+  youtube_refresh_scheduler: workerRuntimeControls.runYoutubeRefreshScheduler,
+  notification_push_dispatcher: workerRuntimeControls.runNotificationPushDispatcher,
+});
 if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
   console.log('[oracle-control-plane] enabled', JSON.stringify({
     scheduler_mode: oracleControlPlaneConfig.subscriptionSchedulerMode,
@@ -19442,12 +19486,28 @@ if (runIngestionWorker) {
       console.error('[oracle-control-plane] bootstrap failed', error);
     });
   }
+  logWorkerMemoryCheckpoint('worker_controllers_starting');
   oracleSubscriptionSchedulerController.start(3_000);
+  logWorkerMemoryCheckpoint('oracle_subscription_scheduler_started');
   queuedIngestionWorkerController.start(1500);
-  if (youtubeRefreshEnabled) {
+  logWorkerMemoryCheckpoint('queued_ingestion_worker_started');
+  if (youtubeRefreshEnabled && workerRuntimeControls.runYoutubeRefreshScheduler) {
     youtubeRefreshSchedulerController.start(1500);
+    logWorkerMemoryCheckpoint('youtube_refresh_scheduler_started');
+  } else if (youtubeRefreshEnabled) {
+    console.log('[youtube_refresh_scheduler_skipped]', JSON.stringify({
+      reason: 'RUNTIME_MODE_DISABLED',
+      runtime_mode: runtimeMode,
+    }));
   }
-  if (notificationPushEnabled) {
+  if (notificationPushEnabled && workerRuntimeControls.runNotificationPushDispatcher) {
     notificationPushDispatcherController.start(notificationPushDispatchIntervalMs);
+    logWorkerMemoryCheckpoint('notification_push_dispatcher_started');
+  } else if (notificationPushEnabled) {
+    console.log('[notification_push_dispatcher_skipped]', JSON.stringify({
+      reason: 'RUNTIME_MODE_DISABLED',
+      runtime_mode: runtimeMode,
+    }));
   }
+  logWorkerMemoryCheckpoint('worker_startup_complete');
 }

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { parseRuntimeFlag, readBackendRuntimeConfig } from '../../server/services/runtimeConfig';
+import {
+  parseRuntimeFlag,
+  readBackendRuntimeConfig,
+  readWorkerRuntimeControls,
+} from '../../server/services/runtimeConfig';
 
 describe('runtime config service', () => {
   it('parses common runtime flag values', () => {
@@ -46,5 +50,44 @@ describe('runtime config service', () => {
       RUN_HTTP_SERVER: 'false',
       RUN_INGESTION_WORKER: 'false',
     })).toThrow('INVALID_BACKEND_RUNTIME_MODE');
+  });
+
+  it('keeps full bootstrap and auxiliary schedulers in combined mode', () => {
+    expect(readWorkerRuntimeControls({}, 'combined')).toEqual({
+      oracleBootstrapProfile: 'full',
+      runOracleReadPlaneBootstrap: true,
+      runOracleMirrorBootstrap: true,
+      runYoutubeRefreshScheduler: true,
+      runNotificationPushDispatcher: true,
+      memoryLoggingEnabled: false,
+    });
+  });
+
+  it('defaults worker_only to worker-critical bootstrap without auxiliary schedulers', () => {
+    expect(readWorkerRuntimeControls({}, 'worker_only')).toEqual({
+      oracleBootstrapProfile: 'worker_critical',
+      runOracleReadPlaneBootstrap: false,
+      runOracleMirrorBootstrap: false,
+      runYoutubeRefreshScheduler: false,
+      runNotificationPushDispatcher: false,
+      memoryLoggingEnabled: true,
+    });
+  });
+
+  it('allows explicit worker-only diagnostic opt-ins', () => {
+    expect(readWorkerRuntimeControls({
+      WORKER_ENABLE_ORACLE_READ_PLANE_BOOTSTRAP: 'true',
+      WORKER_ENABLE_ORACLE_MIRROR_BOOTSTRAP: '1',
+      WORKER_ENABLE_YOUTUBE_REFRESH_SCHEDULER: 'on',
+      WORKER_ENABLE_NOTIFICATION_PUSH_DISPATCHER: 'yes',
+      WORKER_MEMORY_LOGGING_ENABLED: 'false',
+    }, 'worker_only')).toEqual({
+      oracleBootstrapProfile: 'worker_critical',
+      runOracleReadPlaneBootstrap: true,
+      runOracleMirrorBootstrap: true,
+      runYoutubeRefreshScheduler: true,
+      runNotificationPushDispatcher: true,
+      memoryLoggingEnabled: false,
+    });
   });
 });
