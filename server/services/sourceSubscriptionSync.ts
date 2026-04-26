@@ -121,10 +121,15 @@ const SUBSCRIPTION_SYNC_WRITE_HEARTBEAT_MS = SUBSCRIPTION_SYNC_WRITE_HEARTBEAT_M
 const SUBSCRIPTION_SYNC_ERROR_WRITE_HEARTBEAT_MS = SUBSCRIPTION_SYNC_ERROR_WRITE_HEARTBEAT_MINUTES * 60_000;
 const SUBSCRIPTION_FEED_FETCH_MAX_ATTEMPTS = 2;
 const SUBSCRIPTION_FEED_FETCH_RETRY_BACKOFF_MS = 750;
+const YOUTUBE_FEED_NOT_FOUND_ERROR_PREFIX = 'FEED_FETCH_FAILED:404';
 
 function normalizeNullableText(value: unknown) {
   const normalized = String(value ?? '').trim();
   return normalized || null;
+}
+
+function isFeedNotFoundErrorMessage(value: unknown) {
+  return normalizeNullableText(value)?.startsWith(YOUTUBE_FEED_NOT_FOUND_ERROR_PREFIX) ?? false;
 }
 
 function parseDateMs(value: string | null | undefined) {
@@ -624,9 +629,15 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
           }
         }
 
+        const previousFeedNotFoundError = isFeedNotFoundErrorMessage(subscription.last_sync_error);
+        const repeatedConfirmedFeedNotFound =
+          feedError.kind === 'feed_not_found'
+          && confirmedChannelStillExists
+          && previousFeedNotFoundError;
         const treatFeedNotFoundAsTransient =
           feedError.kind === 'feed_not_found'
-          && confirmedChannelStillExists;
+          && confirmedChannelStillExists
+          && !previousFeedNotFoundError;
         const effectiveRetryable = feedError.retryable || treatFeedNotFoundAsTransient;
         const effectiveResultCode =
           treatFeedNotFoundAsTransient || feedError.kind !== 'feed_not_found'
@@ -644,6 +655,8 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
             trigger: options.trigger,
             confirmed_channel_still_exists: confirmedChannelStillExists,
             confirmed_channel_still_exists_via: confirmedChannelStillExistsVia,
+            previous_feed_not_found_error: previousFeedNotFoundError,
+            repeated_confirmed_feed_not_found: repeatedConfirmedFeedNotFound,
             error: feedError.message,
           }));
           await sleep(SUBSCRIPTION_FEED_FETCH_RETRY_BACKOFF_MS * attempts);
@@ -668,6 +681,8 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
             recovery_changed_channel: recoveredChannelChanged,
             confirmed_channel_still_exists: confirmedChannelStillExists,
             confirmed_channel_still_exists_via: confirmedChannelStillExistsVia,
+            previous_feed_not_found_error: previousFeedNotFoundError,
+            repeated_confirmed_feed_not_found: repeatedConfirmedFeedNotFound,
             retryable: effectiveRetryable,
             error: feedError.message,
           }));

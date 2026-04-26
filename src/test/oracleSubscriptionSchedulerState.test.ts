@@ -437,6 +437,47 @@ describe('oracle subscription scheduler bootstrap', () => {
         last_result_code: 'feed_not_found',
         consecutive_error_count: 3,
       });
+
+      await recordOracleSubscriptionSyncOutcome({
+        controlDb,
+        subscriptionId: 'sub_1',
+        nowIso: '2026-03-31T19:45:00.000Z',
+        resultCode: 'feed_not_found',
+        activeRevisitMs: 15 * 60_000,
+        normalRevisitMs: 30 * 60_000,
+        quietRevisitMs: 90 * 60_000,
+        errorRetryMs: 15 * 60_000,
+        errorMessage: 'FEED_FETCH_FAILED:404',
+      });
+      await recordOracleSubscriptionSyncOutcome({
+        controlDb,
+        subscriptionId: 'sub_1',
+        nowIso: '2026-04-01T01:45:00.000Z',
+        resultCode: 'feed_not_found',
+        activeRevisitMs: 15 * 60_000,
+        normalRevisitMs: 30 * 60_000,
+        quietRevisitMs: 90 * 60_000,
+        errorRetryMs: 15 * 60_000,
+        errorMessage: 'FEED_FETCH_FAILED:404',
+      });
+
+      const afterQuarantineCandidate = await controlDb.db
+        .selectFrom('subscription_schedule_state')
+        .select(['next_due_at', 'last_result_code', 'consecutive_error_count', 'scheduler_notes_json'])
+        .where('subscription_id', '=', 'sub_1')
+        .executeTakeFirstOrThrow();
+      const schedulerNotes = JSON.parse(String(afterQuarantineCandidate.scheduler_notes_json || '{}'));
+
+      expect(afterQuarantineCandidate.next_due_at).toBe('2026-04-02T01:45:00.000Z');
+      expect(afterQuarantineCandidate.last_result_code).toBe('feed_not_found');
+      expect(afterQuarantineCandidate.consecutive_error_count).toBe(5);
+      expect(schedulerNotes).toMatchObject({
+        source_health_state: 'feed_not_found_quarantine_candidate',
+        source_health_error_class: 'youtube_feed_404',
+        quarantine_candidate: true,
+        consecutive_error_count: 5,
+        next_due_at: '2026-04-02T01:45:00.000Z',
+      });
     } finally {
       await controlDb.close();
     }

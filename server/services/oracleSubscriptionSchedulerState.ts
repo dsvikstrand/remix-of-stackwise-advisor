@@ -91,7 +91,7 @@ function resolveFeedNotFoundRevisitMs(baseMs: number, consecutiveFeedNotFoundCou
   const count = Math.max(1, Math.floor(Number(consecutiveFeedNotFoundCount) || 1));
   let multiplier = 1;
   if (count >= 5) {
-    multiplier = 8;
+    multiplier = 16;
   } else if (count >= 3) {
     multiplier = 4;
   } else if (count >= 2) {
@@ -99,6 +99,44 @@ function resolveFeedNotFoundRevisitMs(baseMs: number, consecutiveFeedNotFoundCou
   }
   const maxMs = Math.max(base, FEED_NOT_FOUND_BACKOFF_MAX_MS);
   return Math.min(base * multiplier, maxMs);
+}
+
+function resolveSubscriptionSourceHealth(input: {
+  resultCode: OracleSubscriptionSyncResultCode;
+  consecutiveErrorCount: number;
+  errorMessage?: string | null;
+}) {
+  const errorMessage = String(input.errorMessage || '').trim() || null;
+  if (input.resultCode === 'feed_not_found') {
+    return {
+      state: input.consecutiveErrorCount >= 5
+        ? 'feed_not_found_quarantine_candidate'
+        : input.consecutiveErrorCount >= 2
+          ? 'feed_not_found_degraded'
+          : 'feed_not_found_observed',
+      quarantineCandidate: input.consecutiveErrorCount >= 5,
+      errorClass: errorMessage?.startsWith('FEED_FETCH_FAILED:404') ? 'youtube_feed_404' : 'feed_not_found',
+    };
+  }
+  if (input.resultCode === 'feed_transient_error') {
+    return {
+      state: 'feed_transient_error',
+      quarantineCandidate: false,
+      errorClass: errorMessage?.startsWith('FEED_FETCH_FAILED:500') ? 'youtube_feed_5xx' : 'feed_transient_error',
+    };
+  }
+  if (input.resultCode === 'error') {
+    return {
+      state: 'sync_error',
+      quarantineCandidate: false,
+      errorClass: 'sync_error',
+    };
+  }
+  return {
+    state: 'healthy',
+    quarantineCandidate: false,
+    errorClass: null,
+  };
 }
 
 export function resolveOracleNextDueAtFromOutcome(input: {
@@ -504,6 +542,11 @@ export async function recordOracleSubscriptionSyncOutcome(input: {
     quietRevisitMs: input.quietRevisitMs,
     errorRetryMs: input.errorRetryMs,
   });
+  const sourceHealth = resolveSubscriptionSourceHealth({
+    resultCode: input.resultCode,
+    consecutiveErrorCount,
+    errorMessage: input.errorMessage,
+  });
 
   await input.controlDb.db
     .updateTable('subscription_schedule_state')
@@ -521,6 +564,11 @@ export async function recordOracleSubscriptionSyncOutcome(input: {
         skipped: normalizeInt(input.skipped),
         trigger: String(input.trigger || '').trim() || null,
         error_message: input.errorMessage ? String(input.errorMessage).slice(0, 500) : null,
+        source_health_state: sourceHealth.state,
+        source_health_error_class: sourceHealth.errorClass,
+        quarantine_candidate: sourceHealth.quarantineCandidate,
+        consecutive_error_count: consecutiveErrorCount,
+        next_due_at: nextDueAt,
       }),
       updated_at: nowIso,
     })
