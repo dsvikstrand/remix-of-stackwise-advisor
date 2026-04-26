@@ -48,6 +48,15 @@ export type DebugSimulateSchema = {
 
 export type TranscriptProxyDebugMode = 'disabled' | 'explicit';
 
+export type QueuedIngestionScheduleInput =
+  | number
+  | {
+    delayMs?: number;
+    scopes?: readonly string[];
+    expedite?: boolean;
+    reason?: string;
+  };
+
 export type OpsRouteDeps = {
   isServiceRequestAuthorized: (req: express.Request) => boolean;
   getServiceSupabaseClient: () => DbClient | null;
@@ -94,7 +103,7 @@ export type OpsRouteDeps = {
   countQueueDepth: (db: DbClient, input: { includeRunning?: boolean; userId?: string; statuses?: string[]; scope?: string; scopes?: string[] }) => Promise<number>;
   countQueueWorkItems: (db: DbClient, input: { includeRunning?: boolean; userId?: string; statuses?: string[]; scope?: string; scopes?: string[] }) => Promise<number>;
   createUnlockTraceId: () => string;
-  scheduleQueuedIngestionProcessing: () => void;
+  scheduleQueuedIngestionProcessing: (input?: QueuedIngestionScheduleInput) => void;
   enqueueIngestionJob: any;
   finalizeIngestionJob: any;
   queueDepthHardLimit: number;

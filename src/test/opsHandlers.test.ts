@@ -1214,7 +1214,11 @@ describe('ingestion trigger handler', () => {
       },
     });
     expect(inserts).toHaveLength(1);
-    expect(scheduleQueuedIngestionProcessing).toHaveBeenCalledTimes(1);
+    expect(scheduleQueuedIngestionProcessing).toHaveBeenCalledWith({
+      scopes: ['all_active_subscriptions'],
+      expedite: true,
+      reason: 'all_active_subscriptions_enqueued',
+    });
     expect(observeOracleAllActiveSubscriptionsTrigger).toHaveBeenCalledWith({
       actualDecisionCode: 'actual_enqueued',
       oracleDecisionCode: 'shadow_enqueue',
@@ -1286,7 +1290,11 @@ describe('ingestion trigger handler', () => {
         },
       });
       expect(db.inserts).toHaveLength(1);
-      expect(scheduleQueuedIngestionProcessing).toHaveBeenCalledTimes(1);
+      expect(scheduleQueuedIngestionProcessing).toHaveBeenCalledWith({
+        scopes: ['all_active_subscriptions'],
+        expedite: true,
+        reason: 'all_active_subscriptions_enqueued',
+      });
       expect(observeOracleAllActiveSubscriptionsTrigger).toHaveBeenCalledWith({
         actualDecisionCode: 'actual_enqueued',
         queueDepth: 1,

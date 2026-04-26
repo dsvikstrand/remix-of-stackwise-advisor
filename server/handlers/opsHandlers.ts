@@ -317,7 +317,11 @@ export async function handleIngestionJobsTrigger(req: express.Request, res: expr
     nextDueAt: oraclePrimaryDecision?.nextDueAt,
     enqueuedJobId: job.id,
   });
-  deps.scheduleQueuedIngestionProcessing();
+  deps.scheduleQueuedIngestionProcessing({
+    scopes: ['all_active_subscriptions'],
+    expedite: true,
+    reason: 'all_active_subscriptions_enqueued',
+  });
   return res.status(202).json({
     ok: true,
     error_code: null,

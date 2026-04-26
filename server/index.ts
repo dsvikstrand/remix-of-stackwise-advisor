@@ -17139,7 +17139,7 @@ async function processAllActiveSubscriptionsJob(input: {
       }
     }
 
-    const shouldFailBatch = failures.length > 0 || (softFailureCount > 0 && completedSubscriptionCount === 0);
+    const shouldFailBatch = failures.length > 0;
     await finalizeIngestionJobWithMirror(db, {
       jobId: input.jobId,
       status: shouldFailBatch ? 'failed' : 'succeeded',
@@ -17186,13 +17186,12 @@ async function processAllActiveSubscriptionsJob(input: {
   }
 
   if (oracleControlPlaneConfig.enabled && oracleControlPlane) {
-    const shouldFailBatch = failures.length > 0 || (softFailureCount > 0 && completedSubscriptionCount === 0);
     await markOracleAllActiveSubscriptionsRunFinished({
       controlDb: oracleControlPlane,
       processed,
       inserted,
       skipped,
-      failureCount: shouldFailBatch ? Math.max(failures.length, softFailureCount) : 0,
+      failureCount: failures.length,
       softFailureCount,
     });
   }
@@ -17782,6 +17781,20 @@ async function runOraclePrimarySubscriptionSchedulerCycle() {
 
     if (!response.ok) {
       const body = await response.text().catch(() => '');
+      let payload: any = null;
+      try {
+        payload = body ? JSON.parse(body) : null;
+      } catch {
+        payload = null;
+      }
+      if (response.status === 409 && payload?.error_code === 'JOB_ALREADY_RUNNING') {
+        console.log('[oracle-control-plane] primary_scheduler_existing_job', JSON.stringify({
+          status: response.status,
+          job_id: payload?.data?.job_id || null,
+          job_status: payload?.data?.status || null,
+        }));
+        return;
+      }
       console.warn('[oracle-control-plane] primary_scheduler_tick_failed', JSON.stringify({
         status: response.status,
         body: body.slice(0, 500),
