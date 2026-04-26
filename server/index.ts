@@ -17683,6 +17683,16 @@ function normalizeQueuedIngestionScheduleInput(input?: QueuedIngestionScheduleIn
 function scheduleQueuedIngestionProcessing(input?: QueuedIngestionScheduleInput) {
   const normalized = normalizeQueuedIngestionScheduleInput(input);
   const runSchedule = () => {
+    if (!runIngestionWorker) {
+      if (normalized.scopes.length > 0 || normalized.reason) {
+        console.log('[queued_ingestion_local_schedule_skipped]', JSON.stringify({
+          scopes: normalized.scopes,
+          reason: normalized.reason,
+          runtime_mode: runtimeMode,
+        }));
+      }
+      return;
+    }
     const shouldRequestInteractiveRefill = (
       normalized.delayMs === 0
       && normalized.scopes.length > 0
