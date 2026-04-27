@@ -238,6 +238,21 @@ describe('youtubeBlueprintPipeline transcript pruning', () => {
         maxAttempts: 1,
         timeoutMs: 2000,
       });
+      expect(typeof generationCall?.timeoutErrorFactory).toBe('function');
+      const timeoutError = generationCall?.timeoutErrorFactory?.(60000) as Error & {
+        code?: string;
+        provider?: string;
+        providerKey?: string;
+        timeoutMs?: number;
+      };
+      expect(timeoutError).toMatchObject({
+        name: 'LlmProviderTimeoutError',
+        message: 'Provider operation timeout (60000ms)',
+        code: 'TIMEOUT',
+        provider: 'generation_provider',
+        providerKey: 'llm_generate_blueprint',
+        timeoutMs: 60000,
+      });
     } finally {
       if (originalInteractiveLlmAttempts == null) delete process.env.INTERACTIVE_LLM_MAX_ATTEMPTS;
       else process.env.INTERACTIVE_LLM_MAX_ATTEMPTS = originalInteractiveLlmAttempts;

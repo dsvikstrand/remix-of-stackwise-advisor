@@ -16863,6 +16863,7 @@ function getErrorRetryAfterSeconds(error: unknown) {
 
 function classifyRetryableGenerationProviderFailure(error: unknown) {
   const provider = String((error as { provider?: unknown } | null)?.provider || '').trim().toLowerCase();
+  const providerKey = String((error as { providerKey?: unknown } | null)?.providerKey || '').trim().toLowerCase();
   const status = getErrorHttpStatus(error);
   const code = String((error as { code?: unknown } | null)?.code || '').trim().toLowerCase();
   const message = error instanceof Error ? String(error.message || '').trim() : String(error || '').trim();
@@ -16870,6 +16871,8 @@ function classifyRetryableGenerationProviderFailure(error: unknown) {
   const looksLikeOpenAiGeneration =
     provider === 'openai_api'
     || provider === 'openai'
+    || provider === 'generation_provider'
+    || providerKey.startsWith('llm_')
     || normalizedMessage.includes("we're currently processing too many requests")
     || normalizedMessage.includes('openai generation request failed');
 

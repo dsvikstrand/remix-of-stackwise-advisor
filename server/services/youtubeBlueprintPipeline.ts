@@ -101,6 +101,21 @@ function normalizeRawGenerationOutput(raw: unknown, maxChars = 16000) {
   };
 }
 
+function createLlmProviderTimeoutError(providerKey: string, timeoutMs: number) {
+  const error = new Error(`Provider operation timeout (${timeoutMs}ms)`) as Error & {
+    code: 'TIMEOUT';
+    provider: 'generation_provider';
+    providerKey: string;
+    timeoutMs: number;
+  };
+  error.name = 'LlmProviderTimeoutError';
+  error.code = 'TIMEOUT';
+  error.provider = 'generation_provider';
+  error.providerKey = providerKey;
+  error.timeoutMs = timeoutMs;
+  return error;
+}
+
 export function clampTakeawaysNotesToWordBudget(input: {
   notes: string;
   maxWords?: number;
@@ -346,6 +361,9 @@ async function runYouTubePipeline(input: {
           timeoutMs: inputTimed.timeoutMs,
           baseDelayMs: inputTimed.baseDelayMs,
           jitterMs: inputTimed.jitterMs,
+          timeoutErrorFactory: inputTimed.providerKey.startsWith('llm_')
+            ? (timeoutMs) => createLlmProviderTimeoutError(inputTimed.providerKey, timeoutMs)
+            : undefined,
         },
         async () => inputTimed.task(),
       );
