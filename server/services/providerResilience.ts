@@ -37,6 +37,23 @@ export type ProviderRetryDefaults = {
 };
 
 function defaultIsRetryable(error: unknown) {
+  const status = Number((error as { status?: unknown })?.status || (error as { response?: { status?: unknown } } | null)?.response?.status || 0);
+  if (status === 429 || status === 408 || status === 502 || status === 503 || status === 504) {
+    return true;
+  }
+
+  const code = String((error as { code?: unknown })?.code || '').trim().toLowerCase();
+  if (
+    code === 'rate_limited'
+    || code === 'rate_limit_exceeded'
+    || code === 'too_many_requests'
+    || code === 'timeout'
+    || code === 'server_error'
+    || code === 'service_unavailable'
+  ) {
+    return true;
+  }
+
   if (error instanceof CodexExecError) {
     return error.code === 'RATE_LIMITED' || error.code === 'TIMEOUT' || error.code === 'PROCESS_FAIL';
   }
@@ -46,6 +63,10 @@ function defaultIsRetryable(error: unknown) {
   if (error instanceof Error) {
     const message = error.message.toLowerCase();
     if (message.includes('rate limit')) return true;
+    if (message.includes('too many requests')) return true;
+    if (message.includes('try again later')) return true;
+    if (message.includes('capacity')) return true;
+    if (message.includes('overloaded')) return true;
     if (message.includes('timeout')) return true;
     if (message.includes('temporarily')) return true;
     if (message.includes('fetch failed')) return true;

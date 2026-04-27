@@ -72,6 +72,33 @@ const ChannelLabelValidator = z.object({
 type GenerationReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
 type GenerationServiceTier = 'auto' | 'default' | 'flex' | 'priority';
 
+export class OpenAIGenerationProviderError extends Error {
+  provider = 'openai_api';
+  status: number | null;
+  code: string | null;
+  retryAfterSeconds: number | null;
+  cause: unknown;
+
+  constructor(input: {
+    message: string;
+    status?: number | null;
+    code?: string | null;
+    retryAfterSeconds?: number | null;
+    cause?: unknown;
+  }) {
+    super(input.message);
+    this.name = 'OpenAIGenerationProviderError';
+    this.status = Number.isFinite(Number(input.status)) && Number(input.status) > 0
+      ? Number(input.status)
+      : null;
+    this.code = input.code ? String(input.code) : null;
+    this.retryAfterSeconds = Number.isFinite(Number(input.retryAfterSeconds)) && Number(input.retryAfterSeconds) > 0
+      ? Math.ceil(Number(input.retryAfterSeconds))
+      : null;
+    this.cause = input.cause;
+  }
+}
+
 function normalizeGenerationReasoningEffort(raw: string | undefined | null): GenerationReasoningEffort {
   const normalized = String(raw || '').trim().toLowerCase();
   if (normalized === 'none') return 'none';
@@ -89,6 +116,65 @@ function normalizeGenerationServiceTier(raw: string | undefined | null): Generat
   if (normalized === 'flex') return 'flex';
   if (normalized === 'priority') return 'priority';
   return null;
+}
+
+function getHeaderValue(headers: unknown, name: string) {
+  if (!headers) return null;
+  const normalizedName = name.toLowerCase();
+  if (typeof (headers as { get?: unknown }).get === 'function') {
+    const value = (headers as { get: (key: string) => unknown }).get(name);
+    return value == null ? null : String(value);
+  }
+  if (typeof headers === 'object') {
+    const record = headers as Record<string, unknown>;
+    for (const [key, value] of Object.entries(record)) {
+      if (key.toLowerCase() === normalizedName) {
+        return value == null ? null : String(value);
+      }
+    }
+  }
+  return null;
+}
+
+function parseRetryAfterSeconds(raw: unknown) {
+  const value = String(raw || '').trim();
+  if (!value) return null;
+  const numeric = Number(value);
+  if (Number.isFinite(numeric) && numeric > 0) {
+    return Math.ceil(numeric);
+  }
+  const parsedDate = Date.parse(value);
+  if (Number.isFinite(parsedDate)) {
+    return Math.max(1, Math.ceil((parsedDate - Date.now()) / 1000));
+  }
+  return null;
+}
+
+function normalizeOpenAIGenerationError(error: unknown) {
+  const status = Number(
+    (error as { status?: unknown })?.status
+    || (error as { response?: { status?: unknown } } | null)?.response?.status
+    || 0,
+  );
+  const code = String(
+    (error as { code?: unknown })?.code
+    || (error as { error?: { code?: unknown; type?: unknown } } | null)?.error?.code
+    || (error as { error?: { type?: unknown } } | null)?.error?.type
+    || '',
+  ).trim() || null;
+  const message = String((error as { message?: unknown })?.message || '').trim()
+    || (status ? `OpenAI generation request failed with HTTP ${status}.` : 'OpenAI generation request failed.');
+  const headers = (error as { headers?: unknown })?.headers
+    || (error as { response?: { headers?: unknown } } | null)?.response?.headers
+    || null;
+  const retryAfterSeconds = parseRetryAfterSeconds(getHeaderValue(headers, 'retry-after'));
+  return new OpenAIGenerationProviderError({
+    message,
+    status: Number.isFinite(status) && status > 0 ? status : null,
+    code,
+    retryAfterSeconds,
+    cause: error,
+  });
 }
 
 function isModelCompatibilityError(error: unknown) {
@@ -251,13 +337,39 @@ export function createOpenAIClient(): LLMClient {
           status: Number((error as { status?: unknown })?.status || 0) || null,
           message: String((error as { message?: unknown })?.message || '').slice(0, 240) || null,
         });
-        throw error;
+        throw normalizeOpenAIGenerationError(error);
       }
 
       console.warn(
         `[llm] ${input.operation} primary model ${generationModel} failed; retrying fallback ${generationFallbackModel}`,
       );
-      const response = await runOnce(generationFallbackModel, false);
+      let response: Awaited<ReturnType<typeof runOnce>>;
+      try {
+        response = await runOnce(generationFallbackModel, false);
+      } catch (fallbackError) {
+        logGenerationModelEvent('request_failed', {
+          provider: 'openai_api',
+          operation: input.operation,
+          model_used: generationFallbackModel,
+          fallback_used: true,
+          fallback_model: generationFallbackModel,
+          reasoning_effort: null,
+          status: Number((fallbackError as { status?: unknown })?.status || 0) || null,
+          message: String((fallbackError as { message?: unknown })?.message || '').slice(0, 240) || null,
+        });
+        emitModelEvent({
+          event: 'request_failed',
+          provider: 'openai_api',
+          operation: input.operation,
+          model_used: generationFallbackModel,
+          fallback_used: true,
+          fallback_model: generationFallbackModel,
+          reasoning_effort: null,
+          status: Number((fallbackError as { status?: unknown })?.status || 0) || null,
+          message: String((fallbackError as { message?: unknown })?.message || '').slice(0, 240) || null,
+        });
+        throw normalizeOpenAIGenerationError(fallbackError);
+      }
       logGenerationModelEvent('fallback_success', {
         provider: 'openai_api',
         operation: input.operation,

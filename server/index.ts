@@ -15848,6 +15848,30 @@ async function processSourceItemUnlockGenerationJob(input: {
         continue;
       }
       const message = describeUnknownOracleControlPlaneError(error);
+      const retryableGenerationFailure = classifyRetryableGenerationProviderFailure(error);
+      if (retryableGenerationFailure) {
+        logUnlockEvent(
+          'unlock_item_generation_retry_scheduled',
+          {
+            trace_id: input.traceId,
+            job_id: input.jobId,
+            unlock_id: item.unlock_id,
+            source_item_id: item.source_item_id,
+            video_id: item.video_id,
+          },
+          {
+            error_code: retryableGenerationFailure.errorCode,
+            error: retryableGenerationFailure.message.slice(0, 220),
+            retry_delay_seconds: retryableGenerationFailure.retryAfterSeconds,
+          },
+        );
+        throw new PipelineError(
+          retryableGenerationFailure.errorCode,
+          retryableGenerationFailure.message,
+          { retryAfterSeconds: retryableGenerationFailure.retryAfterSeconds },
+        );
+      }
+
       const rawErrorCode = String(error instanceof PipelineError
         ? error.errorCode
         : getSupabaseErrorCode(error) || 'UNLOCK_GENERATION_FAILED').trim().toUpperCase();
@@ -16017,15 +16041,6 @@ async function processSourceItemUnlockGenerationJob(input: {
             },
           );
         }
-        logUnlockEvent(
-          'auto_transcript_retry_exhausted',
-          { trace_id: input.traceId, job_id: input.jobId, source_item_id: item.source_item_id, unlock_id: item.unlock_id, video_id: item.video_id },
-          {
-            transcript_attempt_count: transcriptAttempts,
-            forced_terminal: false,
-            exhausted_reason: 'MAX_TRANSCRIPT_ATTEMPTS_TRANSIENT',
-          },
-        );
       }
 
       if (
@@ -16832,6 +16847,82 @@ function getRetryDelayForErrorCode(errorCode: string) {
   }
 }
 
+function getErrorHttpStatus(error: unknown) {
+  const raw = Number(
+    (error as { status?: unknown } | null)?.status
+    || (error as { response?: { status?: unknown } } | null)?.response?.status
+    || 0,
+  );
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : null;
+}
+
+function getErrorRetryAfterSeconds(error: unknown) {
+  const raw = Number((error as { retryAfterSeconds?: unknown } | null)?.retryAfterSeconds || 0);
+  return Number.isFinite(raw) && raw > 0 ? Math.ceil(raw) : null;
+}
+
+function classifyRetryableGenerationProviderFailure(error: unknown) {
+  const provider = String((error as { provider?: unknown } | null)?.provider || '').trim().toLowerCase();
+  const status = getErrorHttpStatus(error);
+  const code = String((error as { code?: unknown } | null)?.code || '').trim().toLowerCase();
+  const message = error instanceof Error ? String(error.message || '').trim() : String(error || '').trim();
+  const normalizedMessage = message.toLowerCase();
+  const looksLikeOpenAiGeneration =
+    provider === 'openai_api'
+    || provider === 'openai'
+    || normalizedMessage.includes("we're currently processing too many requests")
+    || normalizedMessage.includes('openai generation request failed');
+
+  if (!looksLikeOpenAiGeneration) return null;
+
+  if (
+    status === 429
+    || code === 'rate_limit_exceeded'
+    || code === 'rate_limited'
+    || code === 'too_many_requests'
+    || normalizedMessage.includes('too many requests')
+    || normalizedMessage.includes('rate limit')
+  ) {
+    return {
+      errorCode: 'RATE_LIMITED' as const,
+      message: message || 'Generation provider is rate-limited. Please retry shortly.',
+      retryAfterSeconds: getErrorRetryAfterSeconds(error) || getRetryDelayForErrorCode('RATE_LIMITED'),
+    };
+  }
+
+  if (
+    status === 408
+    || code === 'timeout'
+    || normalizedMessage.includes('timeout')
+    || normalizedMessage.includes('timed out')
+  ) {
+    return {
+      errorCode: 'TIMEOUT' as const,
+      message: message || 'Generation provider timed out. Please retry shortly.',
+      retryAfterSeconds: getErrorRetryAfterSeconds(error) || getRetryDelayForErrorCode('TIMEOUT'),
+    };
+  }
+
+  if (
+    status === 502
+    || status === 503
+    || status === 504
+    || code === 'service_unavailable'
+    || code === 'server_error'
+    || normalizedMessage.includes('capacity')
+    || normalizedMessage.includes('overloaded')
+    || normalizedMessage.includes('try again later')
+  ) {
+    return {
+      errorCode: 'PROVIDER_DEGRADED' as const,
+      message: message || 'Generation provider is temporarily degraded. Please retry shortly.',
+      retryAfterSeconds: getErrorRetryAfterSeconds(error) || getRetryDelayForErrorCode('PROVIDER_DEGRADED'),
+    };
+  }
+
+  return null;
+}
+
 function classifyQueuedJobError(error: unknown) {
   if (error instanceof AutoUnlockRetryableError) {
     return {
@@ -16883,7 +16974,7 @@ function classifyQueuedJobError(error: unknown) {
     return {
       errorCode: error.errorCode,
       message: error.message,
-      retryDelaySeconds: getRetryDelayForErrorCode(error.errorCode),
+      retryDelaySeconds: error.retryAfterSeconds || getRetryDelayForErrorCode(error.errorCode),
     };
   }
   if (String((error as { code?: string } | null)?.code || '').trim().toUpperCase() === 'DAILY_GENERATION_CAP_REACHED') {
@@ -17447,7 +17538,7 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
   } catch (error) {
     const classified = classifyQueuedJobError(error);
     const nextRetryDelay = Math.max(0, Math.floor(Number(classified.retryDelaySeconds) || 0));
-    await failClaimedIngestionJobWithMirror(db, {
+    const failedJob = await failClaimedIngestionJobWithMirror(db, {
       job,
       errorCode: classified.errorCode,
       errorMessage: classified.message,
@@ -17466,7 +17557,10 @@ async function processClaimedIngestionJob(db: ReturnType<typeof createClient>, j
       retry_delay_seconds: nextRetryDelay,
     });
 
-    if (scope === 'source_item_unlock_generation' && nextRetryDelay === 0) {
+    if (
+      scope === 'source_item_unlock_generation'
+      && (nextRetryDelay === 0 || failedJob?.status === 'failed')
+    ) {
       await runUnlockSweeps(db, { mode: 'cron', force: true, traceId });
     }
   } finally {
@@ -18951,6 +19045,14 @@ function mapPipelineError(error: unknown): PipelineErrorShape | null {
             : null)
         : undefined,
       video_id: typeof details.video_id === 'string' ? details.video_id : undefined,
+    };
+  }
+  const retryableGenerationFailure = classifyRetryableGenerationProviderFailure(error);
+  if (retryableGenerationFailure) {
+    return {
+      error_code: retryableGenerationFailure.errorCode,
+      message: retryableGenerationFailure.message,
+      retry_after_seconds: retryableGenerationFailure.retryAfterSeconds,
     };
   }
   const providerCode = String((error as { code?: string } | null)?.code || '').trim();

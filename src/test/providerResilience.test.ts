@@ -65,6 +65,56 @@ describe('providerResilience', () => {
     expect(attempts).toBe(2);
   });
 
+  it('retries OpenAI-style 429 capacity errors by status', async () => {
+    let attempts = 0;
+
+    const result = await runWithProviderRetry(
+      {
+        providerKey: 'test_openai_429_retry',
+        timeoutMs: 5_000,
+        maxAttempts: 3,
+        baseDelayMs: 1,
+        jitterMs: 0,
+      },
+      async () => {
+        attempts += 1;
+        if (attempts < 2) {
+          const error = new Error("429 We're currently processing too many requests — please try again later.") as Error & { status?: number };
+          error.status = 429;
+          throw error;
+        }
+        return 'ok';
+      },
+    );
+
+    expect(result).toBe('ok');
+    expect(attempts).toBe(2);
+  });
+
+  it('retries capacity errors that only expose too-many-requests copy', async () => {
+    let attempts = 0;
+
+    const result = await runWithProviderRetry(
+      {
+        providerKey: 'test_openai_copy_retry',
+        timeoutMs: 5_000,
+        maxAttempts: 3,
+        baseDelayMs: 1,
+        jitterMs: 0,
+      },
+      async () => {
+        attempts += 1;
+        if (attempts < 2) {
+          throw new Error("We're currently processing too many requests — please try again later.");
+        }
+        return 'ok';
+      },
+    );
+
+    expect(result).toBe('ok');
+    expect(attempts).toBe(2);
+  });
+
   it('does not retry non-retryable generic errors', async () => {
     let attempts = 0;
 

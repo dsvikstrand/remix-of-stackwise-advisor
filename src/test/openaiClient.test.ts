@@ -87,6 +87,39 @@ describe('openai client generation service tier', () => {
     expect(responseCreateMock).toHaveBeenCalledTimes(1);
     expect(responseCreateMock.mock.calls[0]?.[0]).not.toHaveProperty('service_tier');
   });
+
+  it('throws normalized provider metadata for OpenAI generation 429s', async () => {
+    process.env.OPENAI_API_KEY = 'test-key';
+    process.env.OPENAI_GENERATION_MODEL = 'gpt-5.4-mini';
+    process.env.OPENAI_GENERATION_FALLBACK_MODEL = 'gpt-5.4-mini';
+    delete process.env.OPENAI_GENERATION_SERVICE_TIER;
+
+    const rawError = new Error("429 We're currently processing too many requests — please try again later.") as Error & {
+      status?: number;
+      code?: string;
+      headers?: { get: (name: string) => string | null };
+    };
+    rawError.status = 429;
+    rawError.code = 'rate_limit_exceeded';
+    rawError.headers = {
+      get: (name: string) => name.toLowerCase() === 'retry-after' ? '30' : null,
+    };
+    responseCreateMock.mockRejectedValueOnce(rawError);
+
+    const { createOpenAIClient } = await import('../../server/llm/openaiClient');
+    const client = createOpenAIClient();
+
+    await expect(client.generateYouTubeBlueprint({
+      videoUrl: 'https://youtube.com/watch?v=abc12345678',
+      transcript: 'A sufficiently long transcript for testing valid blueprint generation.',
+    })).rejects.toMatchObject({
+      name: 'OpenAIGenerationProviderError',
+      provider: 'openai_api',
+      status: 429,
+      code: 'rate_limit_exceeded',
+      retryAfterSeconds: 30,
+    });
+  });
 });
 
 describe('openai client blueprint repair ladder', () => {
