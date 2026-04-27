@@ -759,7 +759,7 @@ describe('source subscription sync service', () => {
     }
   });
 
-  it('returns a soft feed-not-found result for service cron instead of throwing', async () => {
+  it('returns a soft transient result for a first feed 404 instead of poisoning source health', async () => {
     const db = createMockSupabase({
       user_source_subscriptions: [{
         id: 'sub_1',
@@ -776,10 +776,11 @@ describe('source subscription sync service', () => {
       user_feed_items: [],
     }) as any;
 
-    const service = createSourceSubscriptionSyncService({
-      fetchYouTubeFeed: vi.fn(async () => {
+    const fetchYouTubeFeed = vi.fn(async () => {
         throw new Error('FEED_FETCH_FAILED:404');
-      }),
+    });
+    const service = createSourceSubscriptionSyncService({
+      fetchYouTubeFeed,
       isNewerThanCheckpoint: vi.fn(() => false),
       ingestionMaxPerSubscription: 20,
       youtubeDataApiKey: '',
@@ -821,8 +822,9 @@ describe('source subscription sync service', () => {
       { trigger: 'service_cron' },
     );
 
+    expect(fetchYouTubeFeed).toHaveBeenCalledTimes(2);
     expect(result).toMatchObject({
-      resultCode: 'feed_not_found',
+      resultCode: 'feed_transient_error',
       errorMessage: 'FEED_FETCH_FAILED:404',
     });
     expect(db.state.user_source_subscriptions[0]).toMatchObject({
@@ -1028,7 +1030,7 @@ describe('source subscription sync service', () => {
     });
   });
 
-  it('promotes a repeated recovered-but-unchanged channel 404 into feed-not-found backoff', async () => {
+  it('keeps a repeated recovered-but-unchanged channel 404 transient when the channel still exists', async () => {
     const db = createMockSupabase({
       user_source_subscriptions: [{
         id: 'sub_1',
@@ -1108,8 +1110,89 @@ describe('source subscription sync service', () => {
       { trigger: 'service_cron' },
     );
 
-    expect(fetchYouTubeFeed).toHaveBeenCalledTimes(1);
+    expect(fetchYouTubeFeed).toHaveBeenCalledTimes(2);
     expect(resolveYouTubeChannel).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      resultCode: 'feed_transient_error',
+      errorMessage: 'FEED_FETCH_FAILED:404',
+    });
+  });
+
+  it('promotes only repeated unconfirmed feed 404s into feed-not-found backoff', async () => {
+    const db = createMockSupabase({
+      user_source_subscriptions: [{
+        id: 'sub_1',
+        user_id: 'user_1',
+        source_type: 'youtube',
+        source_channel_id: 'channel_missing',
+        source_channel_url: 'https://youtube.com/channel/channel_missing',
+        source_channel_title: 'Missing Channel',
+        source_page_id: 'page_1',
+        auto_unlock_enabled: true,
+        is_active: true,
+        last_polled_at: '2026-03-19T11:00:00.000Z',
+        last_seen_published_at: '2026-03-19T10:00:00.000Z',
+        last_seen_video_id: 'video_old',
+        last_sync_error: 'FEED_FETCH_FAILED:404',
+        created_at: '2026-03-19T09:00:00.000Z',
+        updated_at: '2026-03-19T09:00:00.000Z',
+      }],
+      user_feed_items: [],
+    }) as any;
+
+    const fetchYouTubeFeed = vi.fn(async () => {
+      throw new Error('FEED_FETCH_FAILED:404');
+    });
+
+    const service = createSourceSubscriptionSyncService({
+      fetchYouTubeFeed,
+      isNewerThanCheckpoint: vi.fn(() => false),
+      ingestionMaxPerSubscription: 20,
+      youtubeDataApiKey: '',
+      generationDurationCapEnabled: false,
+      generationMaxVideoSeconds: 2700,
+      generationBlockUnknownDuration: true,
+      generationDurationLookupTimeoutMs: 8000,
+      fetchYouTubeDurationMap: vi.fn(async () => new Map()),
+      fetchYouTubeVideoStates: vi.fn(async () => new Map()),
+      upsertSourceItemFromVideo: vi.fn(),
+      getExistingFeedItem: vi.fn(),
+      ensureSourceItemUnlock: vi.fn(),
+      computeUnlockCost: vi.fn(() => 1),
+      attemptAutoUnlockForSourceItem: vi.fn(),
+      getServiceSupabaseClient: () => null,
+      enqueueSourceAutoUnlockRetryJob: vi.fn(),
+      getSourceItemUnlockBySourceItemId: vi.fn(),
+      getTranscriptCooldownState: vi.fn(() => ({ active: false })),
+      isConfirmedNoTranscriptUnlock: vi.fn(() => false),
+      suppressUnlockableFeedRowsForSourceItem: vi.fn(),
+      insertFeedItem: vi.fn(),
+    } as any);
+
+    const result = await service.syncSingleSubscription(
+      db,
+      {
+        id: 'sub_1',
+        user_id: 'user_1',
+        mode: 'auto',
+        source_type: 'youtube',
+        source_channel_id: 'channel_missing',
+        source_channel_url: 'https://youtube.com/channel/channel_missing',
+        source_channel_title: 'Missing Channel',
+        source_page_id: 'page_1',
+        auto_unlock_enabled: true,
+        is_active: true,
+        last_polled_at: '2026-03-19T11:00:00.000Z',
+        last_seen_published_at: '2026-03-19T10:00:00.000Z',
+        last_seen_video_id: 'video_old',
+        last_sync_error: 'FEED_FETCH_FAILED:404',
+        created_at: '2026-03-19T09:00:00.000Z',
+        updated_at: '2026-03-19T09:00:00.000Z',
+      },
+      { trigger: 'service_cron' },
+    );
+
+    expect(fetchYouTubeFeed).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({
       resultCode: 'feed_not_found',
       errorMessage: 'FEED_FETCH_FAILED:404',

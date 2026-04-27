@@ -478,6 +478,38 @@ describe('oracle subscription scheduler bootstrap', () => {
         consecutive_error_count: 5,
         next_due_at: '2026-04-02T01:45:00.000Z',
       });
+
+      await recordOracleSubscriptionSyncOutcome({
+        controlDb,
+        subscriptionId: 'sub_1',
+        nowIso: '2026-04-01T02:00:00.000Z',
+        resultCode: 'checked_no_insert',
+        activeRevisitMs: 15 * 60_000,
+        normalRevisitMs: 30 * 60_000,
+        quietRevisitMs: 90 * 60_000,
+        errorRetryMs: 15 * 60_000,
+        errorMessage: null,
+      });
+
+      const afterRecovery = await controlDb.db
+        .selectFrom('subscription_schedule_state')
+        .select(['next_due_at', 'last_completed_at', 'last_result_code', 'consecutive_error_count', 'scheduler_notes_json'])
+        .where('subscription_id', '=', 'sub_1')
+        .executeTakeFirstOrThrow();
+      const recoveryNotes = JSON.parse(String(afterRecovery.scheduler_notes_json || '{}'));
+
+      expect(afterRecovery).toMatchObject({
+        next_due_at: '2026-04-01T02:30:00.000Z',
+        last_completed_at: '2026-04-01T02:00:00.000Z',
+        last_result_code: 'checked_no_insert',
+        consecutive_error_count: 0,
+      });
+      expect(recoveryNotes).toMatchObject({
+        source_health_state: 'healthy',
+        source_health_error_class: null,
+        quarantine_candidate: false,
+        consecutive_error_count: 0,
+      });
     } finally {
       await controlDb.close();
     }

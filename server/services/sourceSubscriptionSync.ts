@@ -132,6 +132,39 @@ function isFeedNotFoundErrorMessage(value: unknown) {
   return normalizeNullableText(value)?.startsWith(YOUTUBE_FEED_NOT_FOUND_ERROR_PREFIX) ?? false;
 }
 
+function resolveFeedFetchSoftFailurePolicy(input: {
+  feedErrorKind: string;
+  feedErrorRetryable: boolean;
+  previousFeedNotFoundError: boolean;
+  confirmedChannelStillExists: boolean;
+}): {
+  resultCode: Extract<SyncSubscriptionResult['resultCode'], 'feed_transient_error' | 'feed_not_found'>;
+  retryable: boolean;
+} {
+  if (input.feedErrorKind !== 'feed_not_found') {
+    return {
+      resultCode: 'feed_transient_error',
+      retryable: input.feedErrorRetryable,
+    };
+  }
+
+  // YouTube RSS 404s are not durable proof that a channel is gone. Treat the
+  // first 404, and any 404 for a channel we can still resolve, as transient.
+  const shouldTreatFeedNotFoundAsTransient =
+    !input.previousFeedNotFoundError
+    || input.confirmedChannelStillExists;
+
+  return shouldTreatFeedNotFoundAsTransient
+    ? {
+      resultCode: 'feed_transient_error',
+      retryable: true,
+    }
+    : {
+      resultCode: 'feed_not_found',
+      retryable: input.feedErrorRetryable,
+    };
+}
+
 function parseDateMs(value: string | null | undefined) {
   if (!value) return null;
   const parsed = Date.parse(value);
@@ -630,21 +663,18 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
         }
 
         const previousFeedNotFoundError = isFeedNotFoundErrorMessage(subscription.last_sync_error);
+        const failurePolicy = resolveFeedFetchSoftFailurePolicy({
+          feedErrorKind: feedError.kind,
+          feedErrorRetryable: feedError.retryable,
+          previousFeedNotFoundError,
+          confirmedChannelStillExists,
+        });
         const repeatedConfirmedFeedNotFound =
           feedError.kind === 'feed_not_found'
           && confirmedChannelStillExists
           && previousFeedNotFoundError;
-        const treatFeedNotFoundAsTransient =
-          feedError.kind === 'feed_not_found'
-          && confirmedChannelStillExists
-          && !previousFeedNotFoundError;
-        const effectiveRetryable = feedError.retryable || treatFeedNotFoundAsTransient;
-        const effectiveResultCode =
-          treatFeedNotFoundAsTransient || feedError.kind !== 'feed_not_found'
-            ? 'feed_transient_error'
-            : 'feed_not_found';
 
-        if (effectiveRetryable && attempts < SUBSCRIPTION_FEED_FETCH_MAX_ATTEMPTS) {
+        if (failurePolicy.retryable && attempts < SUBSCRIPTION_FEED_FETCH_MAX_ATTEMPTS) {
           console.log('[subscription_feed_fetch_retrying]', JSON.stringify({
             subscription_id: subscription.id,
             user_id: subscription.user_id,
@@ -657,6 +687,7 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
             confirmed_channel_still_exists_via: confirmedChannelStillExistsVia,
             previous_feed_not_found_error: previousFeedNotFoundError,
             repeated_confirmed_feed_not_found: repeatedConfirmedFeedNotFound,
+            effective_failure_kind: failurePolicy.resultCode,
             error: feedError.message,
           }));
           await sleep(SUBSCRIPTION_FEED_FETCH_RETRY_BACKOFF_MS * attempts);
@@ -676,19 +707,19 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
             source_channel_title: subscription.source_channel_title || null,
             source_channel_url: subscription.source_channel_url || null,
             trigger: options.trigger,
-            failure_kind: effectiveResultCode,
+            failure_kind: failurePolicy.resultCode,
             recovery_attempted: attemptedChannelRecovery,
             recovery_changed_channel: recoveredChannelChanged,
             confirmed_channel_still_exists: confirmedChannelStillExists,
             confirmed_channel_still_exists_via: confirmedChannelStillExistsVia,
             previous_feed_not_found_error: previousFeedNotFoundError,
             repeated_confirmed_feed_not_found: repeatedConfirmedFeedNotFound,
-            retryable: effectiveRetryable,
+            retryable: failurePolicy.retryable,
             error: feedError.message,
           }));
           return {
             kind: 'soft_failure',
-            resultCode: effectiveResultCode,
+            resultCode: failurePolicy.resultCode,
             errorMessage: feedError.message,
           };
         }
