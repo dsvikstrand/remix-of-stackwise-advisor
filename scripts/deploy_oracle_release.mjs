@@ -80,6 +80,42 @@ require_contains() {
   fi
 }
 
+wait_for_backend_health() {
+  local previous_sha="$1"
+  local response=""
+  for attempt in $(seq 1 30); do
+    response="$(curl -fsS http://127.0.0.1:8787/api/health 2>/dev/null || true)"
+    if grep -Fq '"ok":true' <<<"$response"; then
+      log "backend health passed on attempt \${attempt}"
+      return 0
+    fi
+    sleep 1
+  done
+  if [ -n "$response" ]; then
+    printf '%s\n' "$response" >&2
+  fi
+  rollback_hint "$previous_sha"
+  fail "backend health check did not return ok=true within 30s"
+}
+
+wait_for_queue_health() {
+  local previous_sha="$1"
+  local response=""
+  for attempt in $(seq 1 30); do
+    response="$(curl -fsS -H "x-service-token: \${INGESTION_SERVICE_TOKEN}" http://127.0.0.1:8787/api/ops/queue/health 2>/dev/null || true)"
+    if grep -Fq '"ok":true' <<<"$response"; then
+      log "queue health passed on attempt \${attempt}"
+      return 0
+    fi
+    sleep 1
+  done
+  if [ -n "$response" ]; then
+    printf '%s\n' "$response" >&2
+  fi
+  rollback_hint "$previous_sha"
+  fail "queue health check did not return ok=true within 30s"
+}
+
 rollback_hint() {
   local previous_sha="$1"
   cat <<ROLLBACK
@@ -212,24 +248,14 @@ if ! systemctl is-active --quiet "$worker_service"; then
   fail "\${worker_service} is not active after restart"
 fi
 
-health_body="$(curl -fsS http://127.0.0.1:8787/api/health)"
-if ! grep -Fq '"ok":true' <<<"$health_body"; then
-  printf '%s\n' "$health_body" >&2
-  rollback_hint "$previous_sha"
-  fail "backend health check did not return ok=true"
-fi
+wait_for_backend_health "$previous_sha"
 
 set -a
 # shellcheck disable=SC1090
 . "$env_file"
 set +a
 test -n "\${INGESTION_SERVICE_TOKEN:-}" || fail "INGESTION_SERVICE_TOKEN missing from \${env_file}"
-queue_body="$(curl -fsS -H "x-service-token: \${INGESTION_SERVICE_TOKEN}" http://127.0.0.1:8787/api/ops/queue/health)"
-if ! grep -Fq '"ok":true' <<<"$queue_body"; then
-  printf '%s\n' "$queue_body" >&2
-  rollback_hint "$previous_sha"
-  fail "queue health check did not return ok=true"
-fi
+wait_for_queue_health "$previous_sha"
 
 deployed_sha="$(git rev-parse HEAD)"
 if [ "$deployed_sha" != "$target_sha" ]; then
