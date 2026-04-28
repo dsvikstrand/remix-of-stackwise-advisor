@@ -32,6 +32,8 @@
     "ops:oracle-source-item-parity": "./scripts/with-node20.sh node scripts/oracle_source_item_parity_check.mjs",
     "ops:oracle-generation-state-parity": "./scripts/with-node20.sh node scripts/oracle_generation_state_parity_check.mjs",
     "ops:supabase-rest-attribution": "./scripts/with-node20.sh node scripts/supabase_rest_attribution_report.mjs",
+    "deploy:oracle": "./scripts/with-node20.sh node scripts/deploy_oracle_release.mjs",
+    "deploy:oracle:dry-run": "./scripts/with-node20.sh node scripts/deploy_oracle_release.mjs --dry-run",
     "release:metadata": "./scripts/with-node20.sh node scripts/write_release_metadata.mjs",
     "verify:release-artifact": "./scripts/with-node20.sh node scripts/verify_release_artifact.mjs",
     "metrics:yt2bp": "./scripts/with-node20.sh node scripts/yt2bp_metrics_from_logs.mjs",

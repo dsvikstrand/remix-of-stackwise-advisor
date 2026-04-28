@@ -49,7 +49,7 @@
 ## Purpose and ownership
 - Service: YouTube to Blueprint (`/api/youtube-to-blueprint`)
 - Runtime host: Oracle (`oracle-free`)
-- Service unit: `agentic-backend.service`
+- Service units: `agentic-backend.service` for HTTP and `agentic-worker.service` for ingestion/background work
 - Primary owner: app backend maintainers
 - Oracle CLI/control-plane access: `docs/ops/oracle-cli-access.md`
 - Launch gate source of truth: `docs/ops/mvp-launch-readiness-checklist.md` (P0/P1 owner/date/status/evidence board).
@@ -57,9 +57,11 @@
   - backend OpenAI SDK usage is lazy-loaded at call time; avoid reintroducing top-level `import OpenAI from "openai"` in backend startup files because Oracle `tsx` can stall before the HTTP listener binds.
 
 ## Current Production Contract
-- One backend service: `agentic-backend.service`
-- Runtime mode: single-service `combined`
-- Keep-alive background work switch: `RUN_INGESTION_WORKER=true`
+- Split production services:
+  - `agentic-backend.service`: `RUN_HTTP_SERVER=true`, `RUN_INGESTION_WORKER=false`
+  - `agentic-worker.service`: `RUN_HTTP_SERVER=false`, `RUN_INGESTION_WORKER=true`
+- Both services execute the compiled artifact:
+  - `/home/ubuntu/remix-of-stackwise-advisor/dist/server/index.mjs`
 - Live backend config source: `/etc/agentic-backend.env`
 - Current queue cutover posture:
   - `ORACLE_QUEUE_LEDGER_MODE=primary` is expected for the active Oracle-owned queue runtime.
@@ -89,14 +91,14 @@
   - local repo baseline is Node `20.20.0` from `.nvmrc`
   - Oracle systemd is pinned to `/home/ubuntu/.nvm/versions/node/v20.20.0/bin/node`
   - do not rely on bare `node` in local shells or one-shot Oracle SSH commands unless you have explicitly switched to Node 20
-- Release order: deploy backend for one explicit SHA, run smoke checks, then manually publish the frontend for that same SHA
+- Release order: deploy backend/worker for one explicit SHA with `npm run deploy:oracle -- --sha <sha>`, run smoke checks, then manually publish the frontend for that same SHA.
 - Frontend PWA contract: normal frontend releases now default to `pwa_runtime_v1=true` and `pwa_install_cta_v1=true` unless explicitly overridden for rollback
 - Installed-PWA push remains rollout-gated:
   - frontend flag `pwa_push_v1`
   - backend flag `WEB_PUSH_ENABLED`
   - required backend envs: `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`, `WEB_PUSH_SUBJECT`
 - Preferred non-store install path: `https://bleup.app` as an installable online-first PWA (same backend/auth model as the browser app)
-- `agentic-worker.service` is deferred and should remain disabled in the current MVP production contract
+- `agentic-worker.service` is active production runtime. Do not infer worker health from `/api/ops/queue/health.data.local_worker_running` on the web service alone; validate the worker with `systemctl is-active agentic-worker.service`.
 - Local/dev-only transcript fallback:
   - `youtube_timedtext` is the current default behind `TRANSCRIPT_PROVIDER=youtube_timedtext`.
   - `videotranscriber_temp` is the built-in second fallback provider when YouTube captions are unavailable.
@@ -342,15 +344,15 @@ curl -sS "https://api.bleup.app/api/notifications?limit=5" \
 ## Service lifecycle
 - Status:
 ```bash
-ssh oracle-free 'sudo systemctl status --no-pager agentic-backend.service'
+ssh oracle-free 'sudo systemctl status --no-pager agentic-backend.service agentic-worker.service'
 ```
 - Restart:
 ```bash
-ssh oracle-free 'sudo systemctl restart agentic-backend.service'
+ssh oracle-free 'sudo systemctl restart agentic-backend.service && sudo systemctl restart agentic-worker.service'
 ```
 - Tail logs:
 ```bash
-ssh oracle-free 'sudo journalctl -u agentic-backend.service -n 200 --no-pager'
+ssh oracle-free 'sudo journalctl -u agentic-backend.service -u agentic-worker.service -n 200 --no-pager'
 ```
 - Canonical runtime config:
 ```bash
@@ -359,11 +361,10 @@ ssh oracle-free 'sudo ls -l /etc/agentic-backend.env'
 - Runtime source-of-truth rule:
   - live backend app config comes from `/etc/agentic-backend.env`
   - repo-root `.env` / `.env.production` are local/dev-only and must not be used for Oracle production boot
-  - the only expected remaining backend systemd drop-in is the Node path helper
 - Current service topology rule:
-  - `agentic-backend.service` is the only production backend service
-  - `agentic-worker.service` should remain disabled in the MVP runtime
-  - `agentic-backend.service` is already pinned to Node `20.20.0` through explicit `ExecStart` and PATH drop-in; keep that invariant
+  - `agentic-backend.service` serves HTTP only
+  - `agentic-worker.service` owns ingestion/background loops only
+  - both units must be pinned to Node `20.20.0` and `dist/server/index.mjs`; keep that invariant
 
 ## Release contract (backend first)
 - Release rule:
@@ -377,9 +378,13 @@ ssh oracle-free 'sudo ls -l /etc/agentic-backend.env'
 ```bash
 export RELEASE_SHA="$(git rev-parse HEAD)"
 ```
+- Backend deploy dry-run:
+```bash
+npm run deploy:oracle:dry-run -- --sha "$RELEASE_SHA"
+```
 - Backend deploy to the expected SHA:
 ```bash
-ssh oracle-free "cd /home/ubuntu/remix-of-stackwise-advisor && git fetch origin main && git checkout main && git pull --ff-only origin main && test \"\$(git rev-parse HEAD)\" = \"$RELEASE_SHA\" && sudo systemctl restart agentic-backend.service"
+npm run deploy:oracle -- --sha "$RELEASE_SHA"
 ```
 - Backend smoke on Oracle:
 ```bash
@@ -766,20 +771,18 @@ Safe defaults:
 
 ## Runtime verification
 - Current MVP production runtime:
-  - `RUN_HTTP_SERVER=true`
-  - `RUN_INGESTION_WORKER=true`
-  - both values live in `/etc/agentic-backend.env`
-  - `agentic-worker.service` remains disabled
+  - backend service: `RUN_HTTP_SERVER=true`, `RUN_INGESTION_WORKER=false`
+  - worker service: `RUN_HTTP_SERVER=false`, `RUN_INGESTION_WORKER=true`
+  - shared runtime config lives in `/etc/agentic-backend.env`
 - Verify the live contract:
 ```bash
-ssh oracle-free 'sudo systemctl is-active agentic-backend.service'
-ssh oracle-free 'sudo systemctl is-enabled agentic-worker.service || true'
+ssh oracle-free 'sudo systemctl is-active agentic-backend.service agentic-worker.service'
 ssh oracle-free 'curl -sS http://127.0.0.1:8787/api/health'
 ssh oracle-free 'set -a; . /etc/agentic-backend.env; set +a; curl -sS http://127.0.0.1:8787/api/ops/queue/health -H "x-service-token: $INGESTION_SERVICE_TOKEN"'
 ```
-- Deferred scale note:
-  - dedicated split web/worker topology is intentionally out of the current runbook
-  - if it is ever reintroduced, do it in a separate explicit scale plan rather than by following historical docs
+- Split-worker note:
+  - `/api/ops/queue/health` is served by the web process and may report `local_worker_running=false` / `runtime_mode=web_only` when no jobs are currently running there.
+  - Treat systemd `agentic-worker.service` plus recent worker logs as the service-topology truth for the dedicated worker.
 
 ## Failure playbooks
 
@@ -933,7 +936,7 @@ Incident profile (temporary):
 
 After env change:
 ```bash
-ssh oracle-free 'sudo systemctl restart agentic-backend.service'
+ssh oracle-free 'sudo systemctl restart agentic-backend.service && sudo systemctl restart agentic-worker.service'
 ```
 
 ## Post-deploy confidence checks

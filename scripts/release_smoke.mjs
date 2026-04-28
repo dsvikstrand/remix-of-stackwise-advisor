@@ -117,11 +117,11 @@ async function checkQueueHealth(apiBaseUrl, serviceToken) {
     });
     const body = await readJsonResponse(response);
     const runtimeMode = body && typeof body === 'object' ? body?.data?.runtime_mode : null;
-    const pass = response.status === 200 && body && typeof body === 'object' && body.ok === true && runtimeMode === 'combined';
+    const pass = response.status === 200 && body && typeof body === 'object' && body.ok === true;
     return {
       name: 'queue_health_runtime_mode',
       pass,
-      reason: pass ? 'ok' : `expected queue health ok=true and runtime_mode=combined, got status=${response.status}`,
+      reason: pass ? `ok (${runtimeMode || 'unknown'} runtime)` : `expected queue health ok=true, got status=${response.status}`,
       details: {
         status: response.status,
         body,

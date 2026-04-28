@@ -172,11 +172,11 @@ n5) [have] Verify locally:
 
 ## Oracle Deploy Contract
 
-g1) [todo] Add `deploy:oracle` as the single operator entrypoint for backend deploys.
+g1) [have] Add `deploy:oracle` as the single operator entrypoint for backend deploys.
 
-g2) [todo] Require an exact release SHA or default to the current local `HEAD` with explicit logging.
+g2) [have] Require an exact release SHA or default to the current local `HEAD` with explicit logging.
 
-g3) [todo] On Oracle, perform:
+g3) [have] On Oracle, perform:
 - SSH connectivity check
 - repo status check
 - `git fetch`
@@ -186,61 +186,61 @@ g3) [todo] On Oracle, perform:
 - `npm run build:release`
 - `npm run verify:release-artifact`
 
-g4) [todo] Before restart, capture rollback metadata:
+g4) [have] Before restart, capture rollback metadata:
 - previous SHA
 - previous artifact presence
 - previous service active states
 
-g5) [todo] Restart only after artifact verification passes.
+g5) [have] Restart only after artifact verification passes.
 
-g6) [todo] Restart services in a controlled order:
+g6) [have] Restart services in a controlled order:
 - backend
 - worker
 
-g7) [todo] Run post-restart checks:
+g7) [have] Run post-restart checks:
 - `systemctl is-active agentic-backend.service agentic-worker.service`
 - `curl http://127.0.0.1:8787/api/health`
 - queue health with `x-service-token: $INGESTION_SERVICE_TOKEN`
 
 g8) [todo] If post-restart checks fail, attempt rollback to previous SHA and restart services again.
 
-g9) [todo] If rollback also fails, print explicit manual recovery commands and stop with a non-zero exit.
+g9) [have] If rollback also fails, print explicit manual recovery commands and stop with a non-zero exit.
 
 ## Service Topology Verification
 
-h1) [todo] Verify that production services point at the artifact built by the release path.
+h1) [have] Verify that production services point at the artifact built by the release path.
 
-h2) [todo] Verify that both service units use Node `20.20.0`.
+h2) [have] Verify that both service units use Node `20.20.0`.
 
-h3) [todo] Verify that runtime config comes from `/etc/agentic-backend.env`, not repo-root `.env`.
+h3) [have] Verify that runtime config comes from `/etc/agentic-backend.env`, not repo-root `.env`.
 
-h4) [todo] Verify backend and worker split flags:
+h4) [have] Verify backend and worker split flags:
 - backend should serve HTTP
 - worker should own ingestion worker loops
 
-h5) [todo] Avoid treating `/api/ops/queue/health` `worker_running:false` from the web runtime as a service-down signal when systemd and fresh worker logs prove the split worker is active.
+h5) [have] Avoid treating `/api/ops/queue/health` `worker_running:false` from the web runtime as a service-down signal when systemd and fresh worker logs prove the split worker is active.
 
 ## CI Gate
 
-i1) [todo] Update CI to run:
+i1) [have] Update CI to run:
 - `npm run typecheck`
 - focused tests already expected by CI
 - `npm run build:release`
 - `npm run verify:release-artifact`
 
-i2) [todo] Ensure CI fails if `dist/server/index.mjs` is missing after build.
+i2) [have] Ensure CI fails if `dist/server/index.mjs` is missing after build.
 
 i3) [todo] Keep CI release checks deterministic and fast enough to avoid slowing normal iteration excessively.
 
 ## Docs And Governance
 
-j1) [todo] Update ops runbook deploy instructions so operators stop using ad-hoc `git pull && systemctl restart`.
+j1) [have] Update ops runbook deploy instructions so operators stop using ad-hoc `git pull && systemctl restart`.
 
-j2) [todo] Remove or correct stale single-service/deferred-worker language where it conflicts with live production.
+j2) [have] Remove or correct stale single-service/deferred-worker language where it conflicts with live production.
 
-j3) [todo] Document the new release command, smoke checks, rollback behavior, and known failure signatures.
+j3) [have] Document the new release command, smoke checks, rollback behavior, and known failure signatures.
 
-j4) [todo] Add a short post-deploy checklist:
+j4) [have] Add a short post-deploy checklist:
 - health green
 - queue health green
 - recent logs clean

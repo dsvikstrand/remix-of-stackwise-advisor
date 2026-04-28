@@ -195,13 +195,13 @@
       - `server/index.ts` has `0` direct `app.*` route registrations and now acts as composition/bootstrap only
       - route/domain contracts are centralized under `server/contracts/api/*` as canonical typing surfaces
       - extracted route-heavy logic is split into `server/handlers/*` (active domains) and orchestration services under `server/services/*`
-    - Oracle MVP production runtime is single-service combined mode:
-      - `agentic-backend.service` owns both HTTP serving and background queue/scheduler work
-      - `RUN_INGESTION_WORKER=true` is the background-work keep-alive switch in combined mode
+    - Oracle production runtime is split-service mode:
+      - `agentic-backend.service` serves HTTP only with `RUN_HTTP_SERVER=true` and `RUN_INGESTION_WORKER=false`
+      - `agentic-worker.service` owns ingestion/background work with `RUN_HTTP_SERVER=false` and `RUN_INGESTION_WORKER=true`
+      - both services run Node `20.20.0` against `dist/server/index.mjs`
       - live app config is sourced from `/etc/agentic-backend.env`; backend startup must not depend on repo-root `.env` files on Oracle
       - repo-root `.env` is a local/dev fallback only for non-systemd runs, and backend bootstrap no longer reads `.env.production`
       - Shared Webshare transcript proxying for opted-in providers (currently local/dev `videotranscriber_temp`) is explicit-endpoint-only (`WEBSHARE_PROXY_URL` or `WEBSHARE_PROXY_HOST` / `PORT` / `USERNAME` / `PASSWORD`); selector-by-index modes are no longer part of active runtime
-      - `agentic-worker.service` remains a deferred scale path, not the current production contract
     - `/api/youtube-to-blueprint` generation pipeline.
   - shared YouTube live-call budgeting now uses atomic DB-backed quota consumption (`consume_youtube_quota_budget`) so search/channel-search admission is strict when the schema is present and fail-open only for missing-schema environments.
   - subscription ingestion APIs:

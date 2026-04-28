@@ -216,6 +216,9 @@ n4) [todo] Queue health:
 - `curl -sS https://api.bleup.app/api/ops/queue/health -H "x-service-token: $INGESTION_SERVICE_TOKEN"`
 n4a) [todo] Release smoke:
 - `npm run smoke:release -- --api-base-url https://api.bleup.app --frontend-base-url https://bleup.app --release-sha "$RELEASE_SHA"`
+n4b) [todo] Oracle backend deploy:
+- `npm run deploy:oracle:dry-run -- --sha "$RELEASE_SHA"`
+- `npm run deploy:oracle -- --sha "$RELEASE_SHA"`
 n5) [todo] Tests:
 - `npm run test`
 n6) [todo] Build:

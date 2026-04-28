@@ -15,10 +15,10 @@ A React + Supabase app for turning media into bite-sized blueprints and discussi
 - Agentic orchestration docs are retained as reference and are not the active delivery path.
 
 ## Current Production Runtime
-- Oracle MVP production runs as one backend service: `agentic-backend.service`.
-- Runtime mode is single-service `combined` (`RUN_HTTP_SERVER=true`, `RUN_INGESTION_WORKER=true`).
+- Oracle production runs split systemd services: `agentic-backend.service` serves HTTP, and `agentic-worker.service` owns ingestion/background work.
+- Both services run Node `20.20.0` against the compiled release artifact at `dist/server/index.mjs`.
 - Live backend config comes from `/etc/agentic-backend.env`.
-- Releases are backend-first: deploy Oracle backend for one explicit SHA, smoke-check it, then manually publish the frontend for that same SHA.
+- Releases are backend-first: deploy Oracle backend for one explicit SHA with `npm run deploy:oracle -- --sha <sha>`, smoke-check it, then manually publish the frontend for that same SHA.
 
 ## Current Runtime Surfaces
 - Home: `/`
@@ -53,6 +53,8 @@ npm run dev
 ```bash
 npm run typecheck
 npm run build
+npm run build:release
+npm run deploy:oracle:dry-run -- --sha "$(git rev-parse HEAD)"
 npm run test
 npm run docs:refresh-check -- --json
 npm run docs:link-check
