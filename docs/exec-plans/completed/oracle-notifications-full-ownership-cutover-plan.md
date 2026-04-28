@@ -1,6 +1,6 @@
 # Oracle Notifications Full Ownership Cutover Plan
 
-Status: `active`
+Status: `completed`
 Owner: `Codex / David`
 Last updated: `2026-04-15`
 
@@ -25,9 +25,9 @@ a2) [have] Normal runtime notification behavior no longer depends on Supabase fo
 - unread/read state transitions
 - read-all behavior
 
-a3) [todo] Push-linked notification behavior remains correct through burn-in.
+a3) [have] Push-linked notification behavior remained correct through the accepted burn-in inspection.
 
-a4) [todo] Supabase `notifications` still remains compatibility residue for push enqueue only in this chapter phase.
+a4) [have] Supabase `notifications` remains compatibility residue for push enqueue only in this chapter phase.
 
 ## Why This Plan Exists
 
@@ -85,11 +85,11 @@ c5) [have] The browser-side notification inbox dependency is already clean:
 
 ## Scope Lock
 
-d1) [todo] This plan is `notifications` only.
+d1) [have] This plan remained `notifications` only.
 
-d2) [todo] Do not mix `channel_candidates`, `tags`, or broader push-system redesign into this chapter except where notification ownership requires it.
+d2) [have] `channel_candidates`, `tags`, and broader push-system redesign were kept out of this chapter except where notification ownership required push compatibility.
 
-d3) [todo] Focus on:
+d3) [have] Focus stayed on:
 - notification writes
 - notification reads
 - unread/read-all state
@@ -117,8 +117,8 @@ e3) [have] Primary regression coverage targets:
 f1) [todo] Phase 0: One fast inventory and seam confirmation
 f2) [have] Phase 1: Oracle-owned notification writes with Supabase compatibility shadow
 f3) [have] Phase 2: Oracle-only notification reads
-f4) [todo] Phase 3: Short burn-in / canary
-f5) [todo] Phase 4: Cleanup and closure
+f4) [have] Phase 3: Short burn-in / canary
+f5) [have] Phase 4: Cleanup and closure
 
 ## Phase 0: One Fast Inventory
 
@@ -205,31 +205,61 @@ i5) [have] Explicitly left out of this pass:
 - `notification_push_dispatch_queue`
 - trigger-driven Supabase push enqueue replacement
 
-i6) [todo] Remaining chapter work is now burn-in plus final closure.
+i6) [have] Burn-in and closure are now complete.
+
+## Phase 3: Short Burn-In / Canary
+
+j1) [have] Post-cutover inspection was accepted on `2026-04-15`.
+
+j2) [have] Burn-in evidence stayed clean:
+- live backend SHA remained `a6900835c64051c5428f16c36a1cb91247606780`
+- local and public health stayed green
+- Oracle primary parity stayed `PASS`
+- `matched_count=90`
+- `mismatched_count=0`
+- `due_batch_fallback_count=0`
+
+j3) [have] Focused backend log inspection over the notification cutover window did not surface:
+- notification correctness regressions
+- push-dispatch failure signals
+- generic `ERROR|Error|Unhandled|panic|fatal` hits tied to the chapter
+
+## Phase 4: Cleanup And Closure
+
+k1) [have] The chapter end state is accepted:
+- Oracle owns normal runtime notification reads and writes
+- inbox reads and unread/read-all behavior stayed correct through inspection
+- push-linked notification behavior stayed correct through burn-in
+
+k2) [have] The remaining Supabase role is explicitly narrowed:
+- compatibility residue for trigger-driven push enqueue only
+- not part of ordinary runtime notification reads/writes
+
+k3) [have] This chapter is ready to move to `completed/` and remain as reference for later push-system work.
 
 ## Proof Gates
 
-j1) [todo] Required proof before declaring the cutover complete:
+l1) [have] Required proof before declaring the cutover complete:
 - Oracle primary/runtime health green
 - inbox reads still correct
 - unread/read-all behavior still correct
 - push-linked notification behavior still correct
 
-j2) [todo] Required proof before closure:
+l2) [have] Required proof before closure:
 - burn-in window accepted
 - no unresolved notification correctness regressions
 - Supabase `notifications` traffic materially reduced
 
 ## Rollback Rules
 
-k1) [todo] Prefer fix-forward over keeping long-lived dual notification runtime.
+m1) [have] Fix-forward remained preferred over keeping long-lived dual notification runtime.
 
-k2) [todo] Any emergency rollback should be explicit and temporary, not a hidden permanent compatibility path.
+m2) [have] No rollback was needed. Any future emergency rollback still must remain explicit and temporary, not a hidden permanent compatibility path.
 
 ## Success Criteria
 
-l1) [have] Oracle now owns normal `notifications` operations in runtime.
+n1) [have] Oracle now owns normal `notifications` operations in runtime.
 
-l2) [todo] Supabase `notifications` still carries temporary compatibility shadow work for push enqueue only.
+n2) [have] Supabase `notifications` now carries only the temporary compatibility shadow work for push enqueue.
 
-l3) [todo] Notification inbox, unread state, and push-linked behavior remain correct through burn-in.
+n3) [have] Notification inbox, unread state, and push-linked behavior remained correct through burn-in.
