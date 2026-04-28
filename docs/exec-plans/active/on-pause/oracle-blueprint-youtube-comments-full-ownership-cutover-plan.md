@@ -232,7 +232,7 @@ p1) [have] Generation trace remains the current active ownership chapter:
 - [oracle-generation-trace-full-ownership-cutover-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/active/oracle-generation-trace-full-ownership-cutover-plan.md)
 
 p2) [have] The broader Oracle-ownership context remains paused:
-- [oracle-deeper-ownership-and-supabase-reduction-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/active/on-pause/oracle-deeper-ownership-and-supabase-reduction-plan.md)
+- [oracle-deeper-ownership-and-supabase-reduction-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/deserted/oracle-deeper-ownership-and-supabase-reduction-plan.md)
 
 p3) [have] Feed, source-items, and generation-state ownership chapters are now completed reference context:
 - [oracle-feed-full-ownership-cutover-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/completed/oracle-feed-full-ownership-cutover-plan.md)

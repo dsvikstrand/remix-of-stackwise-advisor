@@ -38,7 +38,7 @@ a4) [have] Unlock correctness, retry behavior, and user-visible unlock states re
 ## Why This Plan Exists
 
 b1) [have] The broader Oracle-ownership chapter is paused at:
-- [oracle-deeper-ownership-and-supabase-reduction-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/active/on-pause/oracle-deeper-ownership-and-supabase-reduction-plan.md)
+- [oracle-deeper-ownership-and-supabase-reduction-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/deserted/oracle-deeper-ownership-and-supabase-reduction-plan.md)
 
 b2) [have] The queue full-ownership chapter is also now completed context:
 - [oracle-queue-full-ownership-cutover-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/completed/oracle-queue-full-ownership-cutover-plan.md)
@@ -236,7 +236,7 @@ o4) [have] Unlock behavior remained correct and observable through burn-in.
 ## Relationship To Paused Chapters
 
 p1) [have] The broader Oracle-ownership chapter remains paused as context:
-- [oracle-deeper-ownership-and-supabase-reduction-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/active/on-pause/oracle-deeper-ownership-and-supabase-reduction-plan.md)
+- [oracle-deeper-ownership-and-supabase-reduction-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/deserted/oracle-deeper-ownership-and-supabase-reduction-plan.md)
 
 p2) [have] The queue full-ownership chapter also remains completed context:
 - [oracle-queue-full-ownership-cutover-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/completed/oracle-queue-full-ownership-cutover-plan.md)

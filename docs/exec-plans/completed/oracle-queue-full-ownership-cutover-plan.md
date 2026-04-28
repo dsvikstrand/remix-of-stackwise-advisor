@@ -35,7 +35,7 @@ a4) [have] The temporary rollback lever has now been removed from normal runtime
 ## Why This Plan Exists
 
 b1) [have] The broader Oracle-ownership chapter has been paused at:
-- [oracle-deeper-ownership-and-supabase-reduction-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/active/on-pause/oracle-deeper-ownership-and-supabase-reduction-plan.md)
+- [oracle-deeper-ownership-and-supabase-reduction-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/deserted/oracle-deeper-ownership-and-supabase-reduction-plan.md)
 
 b2) [have] That broader chapter established the direction, but it did not make the queue destination explicit enough.
 
@@ -194,7 +194,7 @@ o4) [have] The first backend domain with full Oracle ownership is complete now t
 ## Relationship To Paused Chapter
 
 p1) [have] The broader Oracle-ownership chapter is paused as context:
-- [oracle-deeper-ownership-and-supabase-reduction-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/active/on-pause/oracle-deeper-ownership-and-supabase-reduction-plan.md)
+- [oracle-deeper-ownership-and-supabase-reduction-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/deserted/oracle-deeper-ownership-and-supabase-reduction-plan.md)
 
 p2) [have] This queue plan is the sharper child chapter for one explicit destination:
 - full Oracle queue ownership

@@ -316,6 +316,6 @@ p2) [have] Blueprint YouTube comments remain the queued next ownership chapter c
 - [oracle-blueprint-youtube-comments-full-ownership-cutover-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/active/on-pause/oracle-blueprint-youtube-comments-full-ownership-cutover-plan.md)
 
 p3) [have] The broader Oracle-ownership context remains paused:
-- [oracle-deeper-ownership-and-supabase-reduction-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/active/on-pause/oracle-deeper-ownership-and-supabase-reduction-plan.md)
+- [oracle-deeper-ownership-and-supabase-reduction-plan.md](/mnt/c/Users/Dell/Documents/VSC/App/bleu/bleu/docs/exec-plans/deserted/oracle-deeper-ownership-and-supabase-reduction-plan.md)
 
 p4) [have] This plan is the next strong egress-reduction candidate after the current active root because the latest sampled 24h Supabase attribution now materially leads with `blueprint_tags`.

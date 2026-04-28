@@ -1,5 +1,9 @@
 # YouTube Subscription Source Health + Quarantine Plan
 
+Status: `paused`
+Owner: `Codex / David`
+Last updated: `2026-04-26`
+
 ## Status
 a1) [have] Queue ownership, scheduler enqueue, and worker-claim behavior are now stable after `fbfe00b4` and `c28b85e3`.
 a2) [have] Oracle scheduler state already distinguishes `feed_transient_error` from `feed_not_found` and applies stronger backoff to persistent not-found feeds.
