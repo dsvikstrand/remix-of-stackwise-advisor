@@ -26,7 +26,7 @@ This folder is the source of truth for product, architecture, planning, and oper
 ## Primary Planning Surfaces
 - Launch gate board: `docs/ops/mvp-launch-readiness-checklist.md`
 - Active proof/deferred tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
-- Current root implementation program: none. Use `docs/exec-plans/index.md` for the authoritative registry.
+- Current root implementation program: `docs/exec-plans/active/oracle-release-deploy-hardening-plan.md`
 - Plan authoring governance: `docs/exec-plans/plan-authoring-guidelines.md`
 - Latest completed implementation programs:
   - `docs/exec-plans/completed/transcript-provider-launch-plan.md`
@@ -86,6 +86,7 @@ This folder is the source of truth for product, architecture, planning, and oper
 - `docs/architecture.md` system topology and invariants
 - `docs/design-docs/` technical design + diagrams
 - `docs/exec-plans/active/` one current implementation plan only
+- `docs/exec-plans/active/on-pause/` paused candidate plans that are credible next work only
 - `docs/exec-plans/active/tail/` proof/deferred carry-forward docs
 - `docs/exec-plans/deserted/` abandoned/superseded plans kept for history only
 - `docs/exec-plans/completed/` closed plans, archived reference plans, and closure notes

@@ -28,8 +28,11 @@ jobs:
       - name: Tests
         run: npm run test
 
-      - name: Build
-        run: npm run build
+      - name: Release Build
+        run: npm run build:release
+
+      - name: Verify Release Artifact
+        run: npm run verify:release-artifact
 
       - name: Docs Refresh Check
         run: npm run docs:refresh-check -- --json
