@@ -258,26 +258,40 @@ k1) [have] Local proof:
 - `npm run docs:link-check`
 - `npm run docs:refresh-check -- --json`
 
-k2) [todo] CI proof:
+k2) [have] CI proof:
 - GitHub Actions passes with release artifact verification enabled
 
-k3) [todo] Oracle dry-run proof:
+k3) [have] Oracle dry-run proof:
 - deploy script can inspect topology and validate commands without restarting services
 
-k4) [todo] Oracle deploy proof:
+k4) [have] Oracle deploy proof:
 - deploy to exact SHA
 - artifact exists after build
 - backend and worker restart cleanly
 - `/api/health` returns ok
 - queue health returns ok
 
-k5) [todo] Rollback proof:
+k5) [have] Rollback proof:
 - at minimum, validate rollback metadata is captured and commands are generated
 - if safe to simulate, run a non-destructive rollback dry-run
 
 k6) [todo] Docs proof:
 - `npm run docs:refresh-check -- --json`
 - `npm run docs:link-check`
+
+## Round 2 Proof Notes
+
+o1) [have] Commit `8d95e034` added the Oracle release deploy gate and passed CI Gate run `25043304160`.
+
+o2) [have] Commit `16754322` added retrying post-restart health checks and passed CI Gate run `25043593626`.
+
+o3) [have] `npm run deploy:oracle:dry-run -- --sha 8d95e0348f674cf4cb02bb9d33fca633a90fdf5a` validated Oracle topology, sudo restart access, Node `20.20.0`, clean tracked worktree, and target SHA availability without restart.
+
+o4) [have] `npm run deploy:oracle -- --sha 167543226ab3a5f406eaa68cf581034694b1d938` deployed the exact SHA on Oracle, wrote `.deploy/last-deploy.json`, built and verified the release artifact, restarted `agentic-backend.service` then `agentic-worker.service`, and passed post-restart backend + queue health.
+
+o5) [have] Oracle post-deploy smoke passed on `167543226ab3a5f406eaa68cf581034694b1d938`:
+- `systemctl is-active agentic-backend.service agentic-worker.service => active / active`
+- `npm run smoke:release -- --api-base-url http://127.0.0.1:8787 --service-token <redacted> => PASS`
 
 ## Closure Condition
 
