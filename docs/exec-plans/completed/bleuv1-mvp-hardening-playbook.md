@@ -163,6 +163,7 @@ c6a) [have] Unlock-generation terminal failures now also surface through the sam
 c6b) [have] Rapid multi-job enqueue no longer coalesces `generation_started` across different jobs in the same scope window; start notifications align with terminal per-job semantics again.
 c6c) [have] Rapid interactive generation bursts now also request in-flight queue refill, reducing the wait for later manual jobs when worker concurrency is still available.
 c6d) [have] Generation-state dual hardening now preserves Oracle variant ids on future Supabase shadow rows and narrows parity failure policy to meaningful execution-state drift instead of backend-local UUID or sub-second timestamp noise.
+c6e) [have] Auto-unlock retry policy now treats `NO_ELIGIBLE_USERS` as terminal/no-op: locked cards remain manual-unlockable, but the background queue no longer requeues work when no auto-enabled eligible user exists. Credit, queue, and transcript transient blockers still use bounded retry.
 
 ### P2 - Maintainability and Scale-readiness
 d1) [todo] Split `server/index.ts` into route modules (`source pages`, `subscriptions`, `unlock/credits`, `ingestion jobs`).

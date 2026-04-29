@@ -128,6 +128,11 @@ describe('source subscription sync service', () => {
     const countActiveSubscribersForSourcePage = vi.fn(async () => 99);
     const ensureSourceItemUnlock = vi.fn(async () => ({ status: 'available' }));
     const insertFeedItem = vi.fn(async () => ({ id: 'ufi_1' }));
+    const enqueueSourceAutoUnlockRetryJob = vi.fn(async () => ({
+      enqueued: true,
+      job_id: 'retry_1',
+      next_run_at: '2026-03-19T10:01:00.000Z',
+    }));
 
     const service = createSourceSubscriptionSyncService({
       fetchYouTubeFeed: vi.fn(async () => ({
@@ -163,12 +168,8 @@ describe('source subscription sync service', () => {
         queued: false,
         reason: 'NO_ELIGIBLE_USERS',
       })),
-      getServiceSupabaseClient: () => null,
-      enqueueSourceAutoUnlockRetryJob: vi.fn(async () => ({
-        enqueued: false,
-        job_id: null,
-        next_run_at: null,
-      })),
+      getServiceSupabaseClient: () => db,
+      enqueueSourceAutoUnlockRetryJob,
       getSourceItemUnlockBySourceItemId: vi.fn(async () => null),
       getTranscriptCooldownState: vi.fn(() => ({ active: false })),
       isConfirmedNoTranscriptUnlock: vi.fn(() => false),
@@ -204,12 +205,103 @@ describe('source subscription sync service', () => {
       sourceItemId: 'source_1',
       state: 'my_feed_unlockable',
     }));
+    expect(enqueueSourceAutoUnlockRetryJob).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       processed: 1,
       inserted: 1,
       skipped: 0,
       newestVideoId: 'video_new',
     });
+  });
+
+  it('keeps auto-unlock retry scheduling for credit-refill candidates', async () => {
+    const db = createMockSupabase({
+      user_source_subscriptions: [{
+        id: 'sub_1',
+        user_id: 'user_1',
+        source_channel_id: 'channel_1',
+        source_page_id: 'page_1',
+        last_seen_published_at: '2026-03-18T10:00:00.000Z',
+        last_seen_video_id: 'video_old',
+        last_sync_error: null,
+      }],
+      user_feed_items: [],
+    }) as any;
+
+    const enqueueSourceAutoUnlockRetryJob = vi.fn(async () => ({
+      enqueued: true,
+      job_id: 'retry_1',
+      next_run_at: '2026-03-19T10:01:00.000Z',
+    }));
+
+    const service = createSourceSubscriptionSyncService({
+      fetchYouTubeFeed: vi.fn(async () => ({
+        channelTitle: 'Channel 1',
+        videos: [{
+          videoId: 'video_new',
+          url: 'https://youtube.com/watch?v=video_new',
+          title: 'Video New',
+          publishedAt: '2026-03-19T10:00:00.000Z',
+          thumbnailUrl: null,
+          durationSeconds: 120,
+        }],
+      })),
+      isNewerThanCheckpoint: vi.fn(() => true),
+      ingestionMaxPerSubscription: 20,
+      youtubeDataApiKey: '',
+      generationDurationCapEnabled: false,
+      generationMaxVideoSeconds: 2700,
+      generationBlockUnknownDuration: true,
+      generationDurationLookupTimeoutMs: 8000,
+      fetchYouTubeDurationMap: vi.fn(async () => new Map()),
+      fetchYouTubeVideoStates: vi.fn(async () => new Map()),
+      upsertSourceItemFromVideo: vi.fn(async () => ({
+        id: 'source_1',
+        source_page_id: 'page_1',
+        source_channel_id: 'channel_1',
+        source_channel_title: 'Channel 1',
+      })),
+      getExistingFeedItem: vi.fn(async () => null),
+      ensureSourceItemUnlock: vi.fn(async () => ({ status: 'available' })),
+      computeUnlockCost: vi.fn(() => 1),
+      attemptAutoUnlockForSourceItem: vi.fn(async () => ({
+        queued: false,
+        reason: 'NO_ELIGIBLE_CREDITS',
+      })),
+      getServiceSupabaseClient: () => db,
+      enqueueSourceAutoUnlockRetryJob,
+      getSourceItemUnlockBySourceItemId: vi.fn(async () => null),
+      getTranscriptCooldownState: vi.fn(() => ({ active: false })),
+      isConfirmedNoTranscriptUnlock: vi.fn(() => false),
+      suppressUnlockableFeedRowsForSourceItem: vi.fn(async () => undefined),
+      insertFeedItem: vi.fn(async () => ({ id: 'ufi_1' })),
+      resolveVariantOrReady: vi.fn(async () => ({
+        state: 'needs_generation',
+      })),
+    } as any);
+
+    await service.syncSingleSubscription(
+      db,
+      {
+        id: 'sub_1',
+        user_id: 'user_1',
+        mode: 'auto',
+        source_channel_id: 'channel_1',
+        source_page_id: 'page_1',
+        auto_unlock_enabled: true,
+        last_seen_published_at: '2026-03-18T10:00:00.000Z',
+        last_seen_video_id: 'video_old',
+      },
+      { trigger: 'service_cron' },
+    );
+
+    expect(enqueueSourceAutoUnlockRetryJob).toHaveBeenCalledWith(db, expect.objectContaining({
+      source_item_id: 'source_1',
+      source_page_id: 'page_1',
+      source_channel_id: 'channel_1',
+      video_id: 'video_new',
+      trigger: 'service_cron',
+    }));
   });
 
   it('inserts the unlockable feed row before auto-unlock work runs', async () => {

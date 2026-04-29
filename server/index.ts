@@ -16336,11 +16336,11 @@ async function processSourceTranscriptRevalidateJob(input: {
 
 class AutoUnlockRetryableError extends Error {
   code: 'AUTO_UNLOCK_RETRYABLE';
-  errorCode: 'NO_ELIGIBLE_USERS' | 'NO_ELIGIBLE_CREDITS' | 'QUEUE_BACKPRESSURE' | 'QUEUE_INTAKE_DISABLED' | 'TRANSCRIPT_UNAVAILABLE';
+  errorCode: 'NO_ELIGIBLE_CREDITS' | 'QUEUE_BACKPRESSURE' | 'QUEUE_INTAKE_DISABLED' | 'TRANSCRIPT_UNAVAILABLE';
   retryDelaySeconds: number;
 
   constructor(input: {
-    errorCode: 'NO_ELIGIBLE_USERS' | 'NO_ELIGIBLE_CREDITS' | 'QUEUE_BACKPRESSURE' | 'QUEUE_INTAKE_DISABLED' | 'TRANSCRIPT_UNAVAILABLE';
+    errorCode: 'NO_ELIGIBLE_CREDITS' | 'QUEUE_BACKPRESSURE' | 'QUEUE_INTAKE_DISABLED' | 'TRANSCRIPT_UNAVAILABLE';
     message: string;
     retryDelaySeconds: number;
   }) {
@@ -16524,7 +16524,27 @@ async function processSourceAutoUnlockRetryJob(input: {
         retryDelaySeconds: cooldownDelaySeconds,
       });
     }
-    if (attempt.reason === 'NO_ELIGIBLE_USERS' || attempt.reason === 'NO_ELIGIBLE_CREDITS') {
+    if (attempt.reason === 'NO_ELIGIBLE_USERS') {
+      await finalizeIngestionJobWithMirror(db, {
+        jobId: input.jobId,
+        status: 'succeeded',
+        processedCount: 1,
+        insertedCount: 0,
+        skippedCount: 1,
+        action: 'source_auto_unlock_retry_no_eligible_users',
+      });
+
+      logUnlockEvent(
+        'subscription_auto_unlock_retry_terminal',
+        { trace_id: input.traceId, job_id: input.jobId, source_item_id: sourceItemId },
+        {
+          queued: false,
+          reason: attempt.reason,
+        },
+      );
+      return;
+    }
+    if (attempt.reason === 'NO_ELIGIBLE_CREDITS') {
       throw new AutoUnlockRetryableError({
         errorCode: attempt.reason,
         message: `Auto-unlock retry pending: ${attempt.reason}.`,

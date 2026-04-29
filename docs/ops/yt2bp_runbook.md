@@ -255,8 +255,9 @@
   - runtime policy is funded-subscriber shared-cost auto generation: one `1.00` credit event per source video, split across the funded auto-enabled subscriber snapshot for that release.
   - funded subset selection uses deterministic fixed-point recomputation at reservation time; remainder cents go to the lowest stable user ids.
   - admin entitlement users participate as bypass-funded users and should not be excluded solely due to wallet balance.
-  - if eligible users fail credit reserve, backend enqueues bounded `source_auto_unlock_retry` jobs so unlock can complete after credit refill.
-  - if no eligible/funded users can reserve credits, item remains `my_feed_unlockable` for manual unlock.
+  - if auto-enabled eligible users exist but fail credit reserve, backend enqueues bounded `source_auto_unlock_retry` jobs so unlock can complete after credit refill.
+  - if no auto-enabled eligible users exist, the item remains `my_feed_unlockable` for manual unlock and no retry job is queued.
+  - if no funded users can reserve credits, item remains `my_feed_unlockable` and bounded retry remains active because a credit refill can change the outcome.
 
 ## Health checks
 - Local service health:

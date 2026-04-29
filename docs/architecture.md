@@ -381,6 +381,7 @@
      - admin entitlement users are treated as bypass-funded participants during reservation
      - all participant holds settle at first OpenAI dispatch and release on pre-generation failure
    - if auto-attempt fails due temporary credit availability, backend enqueues bounded retry jobs (`source_auto_unlock_retry`) before falling back to manual unlock-only state.
+   - if auto-attempt finds no auto-enabled eligible users, the locked feed row remains manual-unlockable and the retry path terminates without requeueing because there is no subscriber snapshot that a retry can advance.
    - unlock cards can be activated by one user; successful generation fans out shared blueprint linkage to subscribed users for that source item.
    - a manually unlocked blueprint from a non-subscribed source may still appear in that user’s `For You`; future videos from that source do not enter `For You` automatically unless the user later subscribes.
    - manual source-page generation uses reserve -> settle/release billing at `1.00` credit per new blueprint intent.

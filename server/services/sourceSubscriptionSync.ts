@@ -1037,8 +1037,7 @@ export function createSourceSubscriptionSyncService(deps: SourceSubscriptionSync
           if (
             !autoAttempt.queued
             && (
-              autoAttempt.reason === 'NO_ELIGIBLE_USERS'
-              || autoAttempt.reason === 'NO_ELIGIBLE_CREDITS'
+              autoAttempt.reason === 'NO_ELIGIBLE_CREDITS'
               || autoAttempt.reason === 'TRANSCRIPT_COOLDOWN'
               || autoAttempt.reason === 'QUEUE_BACKPRESSURE'
               || autoAttempt.reason === 'QUEUE_DISABLED'
