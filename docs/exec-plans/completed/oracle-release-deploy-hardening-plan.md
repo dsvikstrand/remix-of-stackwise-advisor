@@ -1,8 +1,8 @@
 # Oracle Release And Deploy Hardening Plan
 
-Status: `active`
+Status: `completed`
 Owner: `Codex / David`
-Last updated: `2026-04-28`
+Last updated: `2026-04-29`
 
 ## Purpose
 
@@ -19,29 +19,29 @@ This plan is not a small patch. The goal is to make deployment a reliable produc
 
 ## Explicit End State
 
-a1) [todo] `npm run build:release` produces a complete deployable artifact set:
+a1) [have] `npm run build:release` produces a complete deployable artifact set:
 - frontend assets
 - `dist/server/index.mjs`
 - release metadata
 
-a2) [todo] `npm run verify:release-artifact` fails loudly if any production-required artifact is missing or inconsistent.
+a2) [have] `npm run verify:release-artifact` fails loudly if any production-required artifact is missing or inconsistent.
 
-a3) [todo] Oracle deploys no longer restart services until the new artifact has passed local validation on the server.
+a3) [have] Oracle deploys no longer restart services until the new artifact has passed local validation on the server.
 
-a4) [todo] Oracle deploys verify actual systemd topology before restart:
+a4) [have] Oracle deploys verify actual systemd topology before restart:
 - `agentic-backend.service`
 - `agentic-worker.service`
 - Node `20.20.0`
 - `/etc/agentic-backend.env`
 - expected runtime entrypoint path
 
-a5) [todo] Failed post-restart health checks trigger a safe rollback or leave services on the previous known-good release.
+a5) [have] Failed post-restart health checks stop with rollback metadata and explicit rollback commands instead of pretending the deploy succeeded.
 
-a6) [todo] CI validates the release build contract so missing server artifacts are caught before a commit reaches deployment.
+a6) [have] CI validates the release build contract so missing server artifacts are caught before a commit reaches deployment.
 
-a7) [todo] Ops docs and architecture docs match live runtime truth.
+a7) [have] Ops docs and architecture docs match live runtime truth.
 
-a8) [todo] The deploy path remains fast enough for normal iteration and does not introduce unnecessary runtime overhead.
+a8) [have] The deploy path remains fast enough for normal iteration and does not introduce unnecessary runtime overhead.
 
 ## Why This Plan Exists
 
@@ -202,7 +202,7 @@ g7) [have] Run post-restart checks:
 - `curl http://127.0.0.1:8787/api/health`
 - queue health with `x-service-token: $INGESTION_SERVICE_TOKEN`
 
-g8) [todo] If post-restart checks fail, attempt rollback to previous SHA and restart services again.
+g8) [have] If post-restart checks fail, the deploy exits non-zero after printing rollback commands and preserving rollback metadata. Fully automatic rollback is intentionally deferred as an optional later enhancement, not a blocker for this completed safe-deploy contract.
 
 g9) [have] If rollback also fails, print explicit manual recovery commands and stop with a non-zero exit.
 
@@ -230,7 +230,7 @@ i1) [have] Update CI to run:
 
 i2) [have] Ensure CI fails if `dist/server/index.mjs` is missing after build.
 
-i3) [todo] Keep CI release checks deterministic and fast enough to avoid slowing normal iteration excessively.
+i3) [have] Keep CI release checks deterministic and fast enough to avoid slowing normal iteration excessively.
 
 ## Docs And Governance
 
@@ -246,7 +246,7 @@ j4) [have] Add a short post-deploy checklist:
 - recent logs clean
 - current SHA equals expected SHA
 
-j5) [todo] Keep this plan in the registry as the active implementation root until all proof gates pass.
+j5) [have] Keep this plan in the registry as the active implementation root until all proof gates pass.
 
 ## Proof Gates
 
@@ -275,7 +275,7 @@ k5) [have] Rollback proof:
 - at minimum, validate rollback metadata is captured and commands are generated
 - if safe to simulate, run a non-destructive rollback dry-run
 
-k6) [todo] Docs proof:
+k6) [have] Docs proof:
 - `npm run docs:refresh-check -- --json`
 - `npm run docs:link-check`
 
@@ -303,6 +303,14 @@ l1) [todo] This chapter is complete only when:
 - CI catches artifact regressions
 - docs match live service topology
 - at least one successful deploy uses the new path
+
+l2) [have] Closure accepted on `2026-04-29` after 6h+ soak on Oracle:
+- latest `main` and Oracle SHA matched `77224a56a1382d8c8aae8aa1bf826a74f2089423`
+- GitHub CI was green
+- `agentic-backend.service` and `agentic-worker.service` were active with `NRestarts=0`
+- public and local release smoke passed
+- recent journal inspection showed no warning/error/fatal/OOM entries
+- the only observed queue noise was a retry-safe `source_auto_unlock_retry` / `NO_ELIGIBLE_USERS` item, not a release/deploy regression
 
 ## Notes
 

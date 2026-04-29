@@ -18,7 +18,7 @@ a6) [have] Durable post-launch debt board: `docs/exec-plans/tech-debt-tracker.md
 
 ## Active
 
-b1) [have] Current implementation root: `docs/exec-plans/active/oracle-release-deploy-hardening-plan.md`
+b1) [have] Current implementation root: none
 
 b2) [have] Current proof/deferred tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
 
@@ -74,65 +74,67 @@ d16) [have] `docs/exec-plans/completed/supabase-egress-reduction-plan.md`
 
 ## Completed Product / Launch / Platform Plans
 
-e1) [have] `docs/exec-plans/completed/transcript-provider-launch-plan.md`
+e1) [have] `docs/exec-plans/completed/oracle-release-deploy-hardening-plan.md`
 
-e2) [have] `docs/exec-plans/completed/transcript-provider-robustness-plan.md`
+e2) [have] `docs/exec-plans/completed/transcript-provider-launch-plan.md`
 
-e3) [have] `docs/exec-plans/completed/blueprint-contract-cutover-plan.md`
+e3) [have] `docs/exec-plans/completed/transcript-provider-robustness-plan.md`
 
-e4) [have] `docs/exec-plans/completed/blueprint-prompt-v5-caveats-plan.md`
+e4) [have] `docs/exec-plans/completed/blueprint-contract-cutover-plan.md`
 
-e5) [have] `docs/exec-plans/completed/tanstack-query-tuning-plan.md`
+e5) [have] `docs/exec-plans/completed/blueprint-prompt-v5-caveats-plan.md`
 
-e6) [have] `docs/exec-plans/completed/pre-launch-ui-ux-plan.md`
+e6) [have] `docs/exec-plans/completed/tanstack-query-tuning-plan.md`
 
-e7) [have] `docs/exec-plans/completed/mvp-launch-hardening-phases.md`
+e7) [have] `docs/exec-plans/completed/pre-launch-ui-ux-plan.md`
 
-e8) [have] `docs/exec-plans/completed/mvp-readiness-review-followup.md`
+e8) [have] `docs/exec-plans/completed/mvp-launch-hardening-phases.md`
 
-e9) [have] `docs/exec-plans/completed/mvp-runtime-simplification-plan.md`
+e9) [have] `docs/exec-plans/completed/mvp-readiness-review-followup.md`
 
-e10) [have] `docs/exec-plans/completed/bleup-pwa-program.md`
+e10) [have] `docs/exec-plans/completed/mvp-runtime-simplification-plan.md`
 
-e11) [have] `docs/exec-plans/completed/bleup-pwa-phase5-deferred-tracks.md`
+e11) [have] `docs/exec-plans/completed/bleup-pwa-program.md`
 
-e12) [have] `docs/exec-plans/completed/bleuv1-manual-iteration-scheme.md`
+e12) [have] `docs/exec-plans/completed/bleup-pwa-phase5-deferred-tracks.md`
 
-e13) [have] `docs/exec-plans/completed/bleuv1-mvp-hardening-playbook.md`
+e13) [have] `docs/exec-plans/completed/bleuv1-manual-iteration-scheme.md`
 
-e14) [have] `docs/exec-plans/completed/bleuv1-source-first-program.md`
+e14) [have] `docs/exec-plans/completed/bleuv1-mvp-hardening-playbook.md`
 
-e15) [have] `docs/exec-plans/completed/bleuv1-refactor-a3-parity-checklist.md`
+e15) [have] `docs/exec-plans/completed/bleuv1-source-first-program.md`
 
-e16) [have] `docs/exec-plans/completed/bleuv1-refactor-a3-route-map-baseline.md`
+e16) [have] `docs/exec-plans/completed/bleuv1-refactor-a3-parity-checklist.md`
 
-e17) [have] `docs/exec-plans/completed/bleuv1-refactor-a3-route-map-current.md`
+e17) [have] `docs/exec-plans/completed/bleuv1-refactor-a3-route-map-baseline.md`
 
-e18) [have] `docs/exec-plans/completed/bleuv1-refactor-a3-response-shape-baseline.md`
+e18) [have] `docs/exec-plans/completed/bleuv1-refactor-a3-route-map-current.md`
 
-e19) [have] `docs/exec-plans/completed/channels-first-ux-program.md`
+e19) [have] `docs/exec-plans/completed/bleuv1-refactor-a3-response-shape-baseline.md`
 
-e20) [have] `docs/exec-plans/completed/project-bleuv1-mvp-foundation.md`
+e20) [have] `docs/exec-plans/completed/channels-first-ux-program.md`
 
-e21) [have] `docs/exec-plans/completed/project-1-ia-and-lingo.md`
+e21) [have] `docs/exec-plans/completed/project-bleuv1-mvp-foundation.md`
 
-e22) [have] `docs/exec-plans/completed/project-2-feed-density.md`
+e22) [have] `docs/exec-plans/completed/project-1-ia-and-lingo.md`
 
-e23) [have] `docs/exec-plans/completed/project-3-channel-following.md`
+e23) [have] `docs/exec-plans/completed/project-2-feed-density.md`
 
-e24) [have] `docs/exec-plans/completed/project-4-blueprint-detail-priority.md`
+e24) [have] `docs/exec-plans/completed/project-3-channel-following.md`
 
-e25) [have] `docs/exec-plans/completed/project-5-metrics-validation.md`
+e25) [have] `docs/exec-plans/completed/project-4-blueprint-detail-priority.md`
 
-e26) [have] `docs/exec-plans/completed/backend-aggregation-plan.md`
+e26) [have] `docs/exec-plans/completed/project-5-metrics-validation.md`
 
-e27) [have] `docs/exec-plans/completed/backend-write-policy-plan.md`
+e27) [have] `docs/exec-plans/completed/backend-aggregation-plan.md`
 
-e28) [have] `docs/exec-plans/completed/docs-consolidation-audit-2026-02-14.md`
+e28) [have] `docs/exec-plans/completed/backend-write-policy-plan.md`
 
-e29) [have] `docs/exec-plans/completed/supabase-migration-closure-2026-02-13.md`
+e29) [have] `docs/exec-plans/completed/docs-consolidation-audit-2026-02-14.md`
 
-e30) [have] `docs/exec-plans/completed/post-d3d0239-debloat-plan.md`
+e30) [have] `docs/exec-plans/completed/supabase-migration-closure-2026-02-13.md`
+
+e31) [have] `docs/exec-plans/completed/post-d3d0239-debloat-plan.md`
 
 ## Deserted / Superseded
 
