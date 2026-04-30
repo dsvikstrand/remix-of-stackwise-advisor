@@ -44,6 +44,7 @@ a4c) [have] Launch hardening now includes explicit credit-backend fail-safe sema
 a4d) [have] Runtime hotfix applied: source-page search no longer crashes backend when opportunistic asset-sweep wiring is present in route deps.
 a4e) [have] Shared auto-unlock schema is now applied on the linked Supabase project (`qgqqavaogicecvhopgan`, migration watermark `20260306113000`).
 a4f) [have] Queue admission now uses weighted work-item limits in addition to row depth, and ops queue health reports both row counts and work-item backlog.
+a4f1) [have] Ops queue health now also clarifies worker semantics: `worker_running` remains a fresh running-job activity signal, while additive activity/liveness-source fields prevent idle split-worker queues from being misread as stopped worker services.
 a4g) [have] Credit refresh is now lazy by default: the header user menu fetches credits only while open, and Search relies on one-shot reads plus explicit invalidation after billable actions.
 a4h) [have] Oracle runtime hardening now also depends on lazy backend OpenAI loading; startup-critical modules should not use top-level `openai` ESM imports.
 a4h) [have] Backend maintainability pass extracted shared generation preflight helpers and expanded regression coverage around source-page policy, shared auto billing, and quota degraded paths.

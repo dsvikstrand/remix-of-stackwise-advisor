@@ -783,6 +783,9 @@ ssh oracle-free 'set -a; . /etc/agentic-backend.env; set +a; curl -sS http://127
 ```
 - Split-worker note:
   - `/api/ops/queue/health` is served by the web process and may report `local_worker_running=false` / `runtime_mode=web_only` when no jobs are currently running there.
+  - `worker_running` means fresh running-job activity exists (`worker_running_semantics=fresh_running_job_activity`), not that `agentic-worker.service` is alive.
+  - Use `worker_activity_state` / `worker_activity_reason` to classify queue activity: `idle/no_running_jobs` is healthy when queue depth and stale leases are zero.
+  - In split-worker production, `worker_service_liveness_source=external_split_worker_service`; systemd is the liveness source.
   - Treat systemd `agentic-worker.service` plus recent worker logs as the service-topology truth for the dedicated worker.
 
 ## Failure playbooks

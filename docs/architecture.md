@@ -263,6 +263,8 @@
       - current Oracle cron cadence is every `3m`.
     - `GET /api/ingestion/jobs/latest` (service auth, latest job snapshot)
     - `GET /api/ops/queue/health` (service auth, queue depth + work-item backlog + stale lease/provider circuit snapshot)
+      - legacy `worker_running` reports fresh running-job activity, not split-worker service liveness
+      - additive `worker_activity_state`, `worker_activity_reason`, `worker_running_semantics`, and `worker_service_liveness_source` clarify idle vs active queue state for operators
     - credit path fail-safe:
       - credit backend outages return explicit `CREDITS_UNAVAILABLE` (`503`) for credit-dependent actions.
       - `/api/credits` exposes additive backend-health fields (`credits_backend_mode`, `credits_backend_ok`, `credits_backend_error`).

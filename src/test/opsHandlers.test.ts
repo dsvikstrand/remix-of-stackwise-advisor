@@ -472,6 +472,10 @@ describe('queue health handler', () => {
       data: {
         snapshot_at: string;
         worker_running: boolean;
+        worker_activity_state: string;
+        worker_activity_reason: string;
+        worker_running_semantics: string;
+        worker_service_liveness_source: string;
         local_worker_running: boolean;
         runtime_mode: string;
         oldest_queued_created_at: string | null;
@@ -494,6 +498,10 @@ describe('queue health handler', () => {
     expect(payload.ok).toBe(true);
     expect(payload.data.snapshot_at).toMatch(/T/);
     expect(payload.data.worker_running).toBe(true);
+    expect(payload.data.worker_activity_state).toBe('active');
+    expect(payload.data.worker_activity_reason).toBe('fresh_running_job_lease');
+    expect(payload.data.worker_running_semantics).toBe('fresh_running_job_activity');
+    expect(payload.data.worker_service_liveness_source).toBe('local_runtime_flag');
     expect(payload.data.local_worker_running).toBe(true);
     expect(payload.data.runtime_mode).toBe('combined');
     expect(payload.data.queue_work_items).toBe(4);
@@ -550,6 +558,9 @@ describe('queue health handler', () => {
       ok: true,
       data: {
         worker_running: false,
+        worker_activity_state: 'idle',
+        worker_activity_reason: 'no_running_jobs',
+        worker_running_semantics: 'fresh_running_job_activity',
         oldest_queued_created_at: null,
         oldest_queued_age_ms: null,
         oldest_running_started_at: null,
@@ -614,6 +625,9 @@ describe('queue health handler', () => {
       ok: true,
       data: {
         worker_running: true,
+        worker_activity_state: 'active',
+        worker_activity_reason: 'fresh_running_job_lease',
+        worker_running_semantics: 'fresh_running_job_activity',
         queue_depth: 4,
         running_depth: 2,
         queue_work_items: 9,
@@ -661,6 +675,10 @@ describe('queue health handler', () => {
       ok: true,
       data: {
         worker_running: true,
+        worker_activity_state: 'active',
+        worker_activity_reason: 'fresh_running_job_lease',
+        worker_running_semantics: 'fresh_running_job_activity',
+        worker_service_liveness_source: 'external_split_worker_service',
         local_worker_running: false,
         runtime_mode: 'web_only',
         running_depth: 1,
@@ -687,8 +705,60 @@ describe('queue health handler', () => {
       ok: true,
       data: {
         worker_running: false,
+        worker_activity_state: 'idle',
+        worker_activity_reason: 'no_running_jobs',
+        worker_running_semantics: 'fresh_running_job_activity',
+        worker_service_liveness_source: 'external_split_worker_service',
         local_worker_running: true,
         runtime_mode: 'web_only',
+      },
+    });
+  });
+
+  it('classifies running jobs without fresh leases separately from idle queues', async () => {
+    const req = {} as never;
+    const res = createMockResponse();
+    const now = Date.now();
+
+    await handleQueueHealth(req, res as never, createBaseDeps({
+      getServiceSupabaseClient: () => createQueueHealthDb({
+        rows: [
+          {
+            scope: 'search_video_generate',
+            status: 'running',
+            payload: { items: [{}] },
+            started_at: new Date(now - 120_000).toISOString(),
+            lease_expires_at: new Date(now - 30_000).toISOString(),
+            last_heartbeat_at: new Date(now - 120_000).toISOString(),
+          },
+        ],
+      }),
+      countQueueDepth: async (_db, input) => (
+        Array.isArray(input.statuses) && input.statuses.includes('running')
+          ? 1
+          : 0
+      ),
+      countQueueWorkItems: async (_db, input) => (
+        Array.isArray(input.statuses) && input.statuses[0] === 'running' ? 1 : 0
+      ),
+      queuedIngestionScopes: ['search_video_generate'],
+      isQueuedIngestionScope: (scope) => scope === 'search_video_generate',
+      getQueuedWorkerRunning: () => false,
+      runtimeMode: 'web_only',
+      getProviderCircuitSnapshot: async () => ({ state: 'closed' }),
+    }));
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        worker_running: false,
+        worker_activity_state: 'idle',
+        worker_activity_reason: 'running_jobs_without_fresh_lease',
+        worker_running_semantics: 'fresh_running_job_activity',
+        worker_service_liveness_source: 'external_split_worker_service',
+        running_depth: 1,
+        running_work_items: 1,
       },
     });
   });

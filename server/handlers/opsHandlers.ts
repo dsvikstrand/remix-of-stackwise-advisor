@@ -25,6 +25,29 @@ function getRecentAllActiveSubscriptionsTrigger(input: {
   };
 }
 
+function resolveWorkerActivityMetadata(input: {
+  workerRunning: boolean;
+  runningDepth: number;
+  runtimeMode: string;
+}) {
+  const workerActivityState = input.workerRunning ? 'active' : 'idle';
+  const workerActivityReason = input.workerRunning
+    ? 'fresh_running_job_lease'
+    : input.runningDepth > 0
+      ? 'running_jobs_without_fresh_lease'
+      : 'no_running_jobs';
+  const workerServiceLivenessSource = input.runtimeMode === 'web_only'
+    ? 'external_split_worker_service'
+    : 'local_runtime_flag';
+
+  return {
+    worker_activity_state: workerActivityState,
+    worker_activity_reason: workerActivityReason,
+    worker_running_semantics: 'fresh_running_job_activity',
+    worker_service_liveness_source: workerServiceLivenessSource,
+  };
+}
+
 export async function handleIngestionJobsTrigger(req: express.Request, res: express.Response, deps: OpsRouteDeps) {
   if (!deps.isServiceRequestAuthorized(req)) {
     return res.status(401).json({ ok: false, error_code: 'SERVICE_AUTH_REQUIRED', message: 'Missing or invalid service token', data: null });
@@ -569,6 +592,11 @@ export async function handleQueueHealth(req: express.Request, res: express.Respo
   for (const providerKey of providerKeys) {
     providerCircuitState[providerKey] = await deps.getProviderCircuitSnapshot(db, providerKey);
   }
+  const workerActivity = resolveWorkerActivityMetadata({
+    workerRunning,
+    runningDepth,
+    runtimeMode: deps.runtimeMode,
+  });
 
   return res.json({
     ok: true,
@@ -577,6 +605,7 @@ export async function handleQueueHealth(req: express.Request, res: express.Respo
     data: {
       worker_id: deps.queuedWorkerId,
       worker_running: workerRunning,
+      ...workerActivity,
       local_worker_running: localWorkerRunning,
       runtime_mode: deps.runtimeMode,
       snapshot_at: nowIso,
