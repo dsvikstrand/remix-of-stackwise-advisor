@@ -27,6 +27,12 @@ Provider implementations must throw `TranscriptProviderError` with one of:
 
 Unknown errors are normalized by orchestration to `TRANSCRIPT_FETCH_FAIL`.
 
+Provider orchestration may classify known absence states as expected misses for
+fallback and health-noise control. Current runtime treats `youtube_timedtext`
+`NO_CAPTIONS` and `TRANSCRIPT_EMPTY` as neutral fallback events, while rate
+limits, timeouts, fetch failures, access failures, and provider/network failures
+remain circuit-relevant.
+
 ## Registration Steps
 
 1. Implement provider module under `server/transcript/providers/`.

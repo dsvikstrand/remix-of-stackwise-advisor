@@ -178,6 +178,12 @@ function shouldRetryTranscriptProviderAttempt(provider: TranscriptProvider, erro
   return isRetryableTranscriptProviderErrorCode(code);
 }
 
+function isExpectedTranscriptProviderMiss(provider: TranscriptProvider, error: unknown) {
+  if (provider !== 'youtube_timedtext') return false;
+  const code = normalizeTranscriptProviderErrorCode(error);
+  return code === 'NO_CAPTIONS' || code === 'TRANSCRIPT_EMPTY';
+}
+
 function shouldStartTranscriptProviderCooldown(provider: TranscriptProvider, error: unknown) {
   if (provider !== 'youtube_timedtext') return false;
   if (normalizeTranscriptProviderErrorCode(error) !== 'RATE_LIMITED') return false;
@@ -267,6 +273,7 @@ export function createTranscriptService(partialDeps: Partial<TranscriptServiceDe
         baseDelayMs: TRANSCRIPT_RETRY_BASE_DELAY_MS,
         jitterMs: TRANSCRIPT_RETRY_JITTER_MS,
         isRetryable: (error) => shouldRetryTranscriptProviderAttempt(provider, error),
+        isExpectedProviderMiss: (error) => isExpectedTranscriptProviderMiss(provider, error),
         timeoutErrorFactory: () => new TranscriptProviderError('TIMEOUT', 'Transcript request timed out.'),
       },
       async () => providerAdapter.getTranscript(videoId),

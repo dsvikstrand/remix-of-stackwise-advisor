@@ -99,11 +99,12 @@
   - required backend envs: `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`, `WEB_PUSH_SUBJECT`
 - Preferred non-store install path: `https://bleup.app` as an installable online-first PWA (same backend/auth model as the browser app)
 - `agentic-worker.service` is active production runtime. Do not infer worker health from `/api/ops/queue/health.data.local_worker_running` on the web service alone; validate the worker with `systemctl is-active agentic-worker.service`.
-- Local/dev-only transcript fallback:
+- Transcript fallback chain:
   - `youtube_timedtext` is the current default behind `TRANSCRIPT_PROVIDER=youtube_timedtext`.
   - `videotranscriber_temp` is the built-in second fallback provider when YouTube captions are unavailable.
   - `transcriptapi` is the built-in third fallback provider in lean text-only mode (`format=text`, `include_timestamp=false`) when `TRANSCRIPTAPI_APIKEY` is configured.
-  - it is not part of Oracle runtime truth and should not be enabled in `/etc/agentic-backend.env`.
+  - native-caption misses from `youtube_timedtext` (`NO_CAPTIONS`, `TRANSCRIPT_EMPTY`) are expected-miss fallback events and should not be interpreted as provider-circuit failures.
+  - real timedtext trouble (`RATE_LIMITED`, `TIMEOUT`, `TRANSCRIPT_FETCH_FAIL`, `ACCESS_DENIED`, network/provider errors) remains circuit-relevant.
   - provider-local envs: `VIDEOTRANSCRIBER_TEMP_TIMEOUT_MS`, `VIDEOTRANSCRIBER_TEMP_FORCE_NEW_SESSION`, `TRANSCRIPTAPI_APIKEY`
   - `videotranscriber_temp` now does one bounded local key/session renew attempt on early service failures (`runtime_config`, `url_info`, `start`) before returning the failure to the outer fallback chain.
 

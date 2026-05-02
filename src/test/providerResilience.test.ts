@@ -10,6 +10,41 @@ const originalInteractiveTranscriptTimeoutMs = process.env.INTERACTIVE_TRANSCRIP
 const originalInteractiveLlmAttempts = process.env.INTERACTIVE_LLM_MAX_ATTEMPTS;
 const originalInteractiveLlmTimeoutMs = process.env.INTERACTIVE_LLM_TIMEOUT_MS;
 
+function createProviderCircuitDb() {
+  const upserts: any[] = [];
+  const db = {
+    from: () => ({
+      select() {
+        return this;
+      },
+      eq() {
+        return this;
+      },
+      maybeSingle: async () => ({ data: null, error: null }),
+      upsert(row: any) {
+        upserts.push(row);
+        const mutation = {
+          select() {
+            return mutation;
+          },
+          single: async () => ({
+            data: {
+              ...row,
+              created_at: row.updated_at,
+            },
+            error: null,
+          }),
+        };
+        return mutation;
+      },
+    }),
+  };
+  return {
+    db,
+    upserts,
+  };
+}
+
 afterEach(() => {
   if (originalInteractiveTranscriptAttempts == null) delete process.env.INTERACTIVE_TRANSCRIPT_MAX_ATTEMPTS;
   else process.env.INTERACTIVE_TRANSCRIPT_MAX_ATTEMPTS = originalInteractiveTranscriptAttempts;
@@ -157,6 +192,70 @@ describe('providerResilience', () => {
     ).rejects.toMatchObject({ code: 'VIDEO_UNAVAILABLE' });
 
     expect(attempts).toBe(1);
+  });
+
+  it('does not record expected provider misses as circuit failures', async () => {
+    const { db, upserts } = createProviderCircuitDb();
+    let attempts = 0;
+
+    await expect(
+      runWithProviderRetry(
+        {
+          providerKey: 'transcript:youtube_timedtext',
+          db,
+          timeoutMs: 5_000,
+          maxAttempts: 3,
+          baseDelayMs: 1,
+          jitterMs: 0,
+          isRetryable: () => true,
+          isExpectedProviderMiss: (error) => (
+            error instanceof TranscriptProviderError
+            && (error.code === 'NO_CAPTIONS' || error.code === 'TRANSCRIPT_EMPTY')
+          ),
+        },
+        async () => {
+          attempts += 1;
+          throw new TranscriptProviderError('TRANSCRIPT_EMPTY', 'Transcript unavailable for this video.');
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'TRANSCRIPT_EMPTY' });
+
+    expect(attempts).toBe(1);
+    expect(upserts).toHaveLength(0);
+  });
+
+  it('still records real provider failures as circuit failures', async () => {
+    const { db, upserts } = createProviderCircuitDb();
+    let attempts = 0;
+
+    await expect(
+      runWithProviderRetry(
+        {
+          providerKey: 'transcript:youtube_timedtext',
+          db,
+          timeoutMs: 5_000,
+          maxAttempts: 1,
+          baseDelayMs: 1,
+          jitterMs: 0,
+          isExpectedProviderMiss: (error) => (
+            error instanceof TranscriptProviderError
+            && (error.code === 'NO_CAPTIONS' || error.code === 'TRANSCRIPT_EMPTY')
+          ),
+        },
+        async () => {
+          attempts += 1;
+          throw new TranscriptProviderError('TRANSCRIPT_FETCH_FAIL', 'Could not fetch transcript metadata.');
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'TRANSCRIPT_FETCH_FAIL' });
+
+    expect(attempts).toBe(1);
+    expect(upserts).toHaveLength(1);
+    expect(upserts[0]).toMatchObject({
+      provider_key: 'transcript:youtube_timedtext',
+      failure_count: 1,
+      last_error: 'Could not fetch transcript metadata.',
+    });
   });
 
   it('retries temp-provider upstream-unavailable transcript errors', async () => {

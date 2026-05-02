@@ -348,6 +348,7 @@
     - current default is `youtube_timedtext`.
     - `videotranscriber_temp` remains the built-in second fallback provider behind the same seam when YouTube captions are unavailable.
     - `transcriptapi` is the built-in third fallback provider in lean text-only mode (`format=text`, `include_timestamp=false`) when `TRANSCRIPTAPI_APIKEY` is configured.
+    - `youtube_timedtext` native-caption absence is treated as an expected miss, not a provider-circuit failure; only real timedtext trouble such as rate limits, timeouts, fetch failures, or access denial contributes to provider degradation state.
     - `videotranscriber_temp` wraps the browser-facing `videotranscriber.ai` flow and uses local-only timeout/session env controls.
     - `videotranscriber_temp` now also performs one bounded local key/session renew attempt on early service failures (`runtime_config`, `url_info`, `start`) before the outer provider fallback flow continues.
     - this preserves the temporary provider path while adding a low-risk API-backed fallback before any provider-order promotion.

@@ -160,6 +160,7 @@
 - 2026-03-08 note: installed-PWA push delivery (`notification_push_subscriptions`, `notification_push_dispatch_queue`, `/api/notifications/push-subscriptions*`) is additive notification-channel infrastructure and does not alter the YT2BP endpoint envelope.
 - 2026-03-09 note: installed-PWA push runtime remains rollout-gated until backend startup validation and device delivery proof are complete; Oracle control-plane recovery for that rollout is documented separately in `docs/ops/oracle-cli-access.md`.
 - 2026-03-14 note: the current default is `TRANSCRIPT_PROVIDER=youtube_timedtext`; if YouTube captions are unavailable, the same seam falls through first to `videotranscriber_temp`, then to `transcriptapi` in lean text-only mode (`format=text`, `include_timestamp=false`) when `TRANSCRIPTAPI_APIKEY` is configured. This is additive and does not change the production endpoint envelope.
+- 2026-05-02 note: `youtube_timedtext` expected native-caption misses (`NO_CAPTIONS`, `TRANSCRIPT_EMPTY`) are neutral fallback events and do not increment provider-circuit failure counts; real timedtext failures remain circuit-relevant. This is additive backend health semantics and does not change the YT2BP endpoint envelope.
 - 2026-03-24 note: `videotranscriber_temp` now performs one bounded local key/session renew attempt on early service failures (`runtime_config`, `url_info`, `start`) before the outer transcript fallback policy continues. This is additive and does not alter the YT2BP endpoint envelope.
 - 2026-03-19 note: subscription sync persistence now throttles no-op success/error writes to `user_source_subscriptions` behind a `15m` backend heartbeat to reduce Supabase churn; this is additive backend behavior outside the YT2BP request/response envelope.
 - 2026-04-01 note: Oracle job-activity mirror reads now also cover retry/refresh pending-job dedupe, unlock-reliability job lookups, and ops/latest ingestion-status reads under `ORACLE_JOB_ACTIVITY_*`; durable queued/running rows, claims, and retries still remain in Supabase. This is additive backend behavior outside the YT2BP request/response envelope.
@@ -265,6 +266,7 @@
 - `YT2BP_ENABLED`
 - `YT2BP_QUALITY_ENABLED`
 - `TRANSCRIPT_PROVIDER` (current default `youtube_timedtext`; built-in fallback chain `videotranscriber_temp` then `transcriptapi` when available)
+- `youtube_timedtext` provider-circuit semantics: `NO_CAPTIONS` and `TRANSCRIPT_EMPTY` are expected misses for fallback/noise control; `RATE_LIMITED`, `TIMEOUT`, `TRANSCRIPT_FETCH_FAIL`, access failures, and provider/network failures remain degradation signals.
 - `TRANSCRIPTAPI_APIKEY` (enables the `transcriptapi` third-fallback adapter)
 - `TRANSCRIPT_USE_WEBSHARE_PROXY`, `WEBSHARE_PROXY_URL`, `WEBSHARE_PROXY_HOST`, `WEBSHARE_PROXY_PORT`, `WEBSHARE_PROXY_USERNAME`, `WEBSHARE_PROXY_PASSWORD` (shared transport config for opted-in transcript providers)
 - `VIDEOTRANSCRIBER_TEMP_TIMEOUT_MS` (local/dev-only, default `180000`, bounded provider-local timeout)

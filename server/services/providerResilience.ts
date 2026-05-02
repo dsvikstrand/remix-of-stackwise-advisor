@@ -26,6 +26,7 @@ export type ProviderRetryOptions = {
   baseDelayMs?: number;
   jitterMs?: number;
   isRetryable?: (error: unknown) => boolean;
+  isExpectedProviderMiss?: (error: unknown) => boolean;
   timeoutErrorFactory?: (timeoutMs: number) => unknown;
 };
 
@@ -113,6 +114,7 @@ export async function runWithProviderRetry<T>(
   const baseDelayMs = clampInt(options.baseDelayMs, 250, 50, 10_000);
   const jitterMs = clampInt(options.jitterMs, 200, 0, 5000);
   const isRetryable = options.isRetryable || defaultIsRetryable;
+  const isExpectedProviderMiss = options.isExpectedProviderMiss || (() => false);
 
   await assertProviderAvailable(options.db || null, options.providerKey);
 
@@ -125,9 +127,12 @@ export async function runWithProviderRetry<T>(
     } catch (error) {
       lastError = error;
       const message = error instanceof Error ? error.message : String(error);
-      await recordProviderFailure(options.db || null, options.providerKey, message);
+      const expectedProviderMiss = isExpectedProviderMiss(error);
+      if (!expectedProviderMiss) {
+        await recordProviderFailure(options.db || null, options.providerKey, message);
+      }
 
-      const shouldRetry = attempt < maxAttempts && isRetryable(error);
+      const shouldRetry = !expectedProviderMiss && attempt < maxAttempts && isRetryable(error);
       if (!shouldRetry) break;
 
       const backoff = baseDelayMs * attempt;
