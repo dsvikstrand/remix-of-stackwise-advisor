@@ -172,6 +172,65 @@ describe('oracle product state', () => {
     }
   });
 
+  it('orders mirrored feed wall activity by generated time for blueprints and landed time for locked rows', async () => {
+    const controlDb = openOracleControlPlaneDb({
+      sqlitePath: createTempSqlitePath(),
+    });
+
+    try {
+      await upsertOracleProductFeedRows({
+        controlDb,
+        rows: [
+          {
+            id: 'generated_older_wall_time',
+            user_id: 'user_1',
+            source_item_id: 'source_generated_old',
+            blueprint_id: 'bp_old',
+            state: 'my_feed_published',
+            generated_at_on_wall: '2026-04-02T09:00:00.000Z',
+            created_at: '2026-04-02T08:00:00.000Z',
+            updated_at: '2026-04-02T09:00:00.000Z',
+          },
+          {
+            id: 'locked_recent',
+            user_id: 'user_1',
+            source_item_id: 'source_locked_recent',
+            blueprint_id: null,
+            state: 'my_feed_unlockable',
+            generated_at_on_wall: null,
+            created_at: '2026-04-02T10:00:00.000Z',
+            updated_at: '2026-04-02T10:00:00.000Z',
+          },
+          {
+            id: 'generated_newest_wall_time',
+            user_id: 'user_1',
+            source_item_id: 'source_generated_new',
+            blueprint_id: 'bp_new',
+            state: 'my_feed_published',
+            generated_at_on_wall: '2026-04-02T11:00:00.000Z',
+            created_at: '2026-04-02T07:00:00.000Z',
+            updated_at: '2026-04-02T11:00:00.000Z',
+          },
+        ],
+      });
+
+      const rows = await listOracleProductFeedRows({
+        controlDb,
+        userId: 'user_1',
+        limit: 3,
+        orderByWallActivity: true,
+      });
+
+      expect(rows.map((row) => row.id)).toEqual([
+        'generated_newest_wall_time',
+        'locked_recent',
+        'generated_older_wall_time',
+      ]);
+    } finally {
+      await controlDb.close();
+    }
+  });
+
   it('bootstraps mirrored product state from Oracle source/unlock/feed ledgers instead of Supabase shadows', async () => {
     const controlDb = openOracleControlPlaneDb({
       sqlitePath: createTempSqlitePath(),

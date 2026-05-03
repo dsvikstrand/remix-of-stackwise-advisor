@@ -337,6 +337,7 @@
     - Blueprint tags are now also staged on Oracle-owned backend state for the main runtime path: creation/publish writes stay on `blueprint_tag_state`, bootstrap mirrors existing joins into Oracle, and wall/channel/source-page/search-oriented runtime reads now resolve through Oracle-backed tag rows rather than direct Supabase `blueprint_tags`.
     - frontend list/detail query tuning now complements the backend egress work by keeping non-live query surfaces on explicit conservative stale windows instead of implicit focus churn.
     - source unlock trust-restore reads are also thinner now: `GET /api/ingestion/jobs/latest-mine` only reads the latest `2` rows for the requested scope, and Home `For You` no longer forces an extra tracker resume call on mount when the cached state is still fresh.
+    - Oracle feed/product readers order Home `For You` candidate windows by effective wall timestamp (`COALESCE(generated_at_on_wall, created_at)`) before applying limits, preserving locked-card visibility for users with many generated cards.
     - provider retry/circuit controls are env-driven (transcript + LLM bounded retries, fail-fast circuit open mode).
   - onboarding extension: `user_youtube_onboarding` for new-user optional setup state.
   - Eval assets:

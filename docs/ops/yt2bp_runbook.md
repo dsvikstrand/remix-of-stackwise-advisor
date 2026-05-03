@@ -232,6 +232,9 @@
   - Provider circuit runtime is now Oracle-owned in `primary`:
     - provider success/failure/open/close mutations persist to local `provider_circuit_state`
     - provider-availability reads and ops queue-health snapshots now resolve from that Oracle-backed state as the normal path
+  - Home `For You` feed-window ordering:
+    - Oracle feed-ledger/product-feed reads should order by `COALESCE(generated_at_on_wall, created_at)` before limiting rows
+    - if locked cards appear to vanish while `feed_ledger_state` still contains them, inspect for a generated-heavy pre-limit window before treating it as data loss
   - Legacy generation compatibility endpoints (auth):
     - `GET /api/generation/tier-access`
     - `GET /api/blueprints/:id/variants`

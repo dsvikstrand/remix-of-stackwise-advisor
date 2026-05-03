@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { sql } from 'kysely';
 import type { OracleControlPlaneDb } from './oracleControlPlaneDb';
 
 type DbClient = SupabaseClient<any, 'public', any>;
@@ -262,7 +263,7 @@ export async function listOracleFeedLedgerRows(input: {
 
   if (input.orderByWallActivity) {
     query = query
-      .orderBy('generated_at_on_wall', 'desc')
+      .orderBy(sql<string>`COALESCE(generated_at_on_wall, created_at)`, 'desc')
       .orderBy('created_at', 'desc')
       .orderBy('id', 'desc');
   } else {

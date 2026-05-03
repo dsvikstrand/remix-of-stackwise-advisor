@@ -93,6 +93,65 @@ describe('oracle feed ledger state', () => {
     }
   });
 
+  it('orders wall activity by generated time for blueprints and landed time for locked rows', async () => {
+    const controlDb = openOracleControlPlaneDb({
+      sqlitePath: createTempSqlitePath(),
+    });
+
+    try {
+      await upsertOracleFeedLedgerRows({
+        controlDb,
+        rows: [
+          {
+            id: 'generated_older_wall_time',
+            user_id: 'user_1',
+            source_item_id: 'source_generated_old',
+            blueprint_id: 'bp_old',
+            state: 'my_feed_published',
+            generated_at_on_wall: '2026-04-02T09:00:00.000Z',
+            created_at: '2026-04-02T08:00:00.000Z',
+            updated_at: '2026-04-02T09:00:00.000Z',
+          },
+          {
+            id: 'locked_recent',
+            user_id: 'user_1',
+            source_item_id: 'source_locked_recent',
+            blueprint_id: null,
+            state: 'my_feed_unlockable',
+            generated_at_on_wall: null,
+            created_at: '2026-04-02T10:00:00.000Z',
+            updated_at: '2026-04-02T10:00:00.000Z',
+          },
+          {
+            id: 'generated_newest_wall_time',
+            user_id: 'user_1',
+            source_item_id: 'source_generated_new',
+            blueprint_id: 'bp_new',
+            state: 'my_feed_published',
+            generated_at_on_wall: '2026-04-02T11:00:00.000Z',
+            created_at: '2026-04-02T07:00:00.000Z',
+            updated_at: '2026-04-02T11:00:00.000Z',
+          },
+        ],
+      });
+
+      const rows = await listOracleFeedLedgerRows({
+        controlDb,
+        userId: 'user_1',
+        limit: 3,
+        orderByWallActivity: true,
+      });
+
+      expect(rows.map((row) => row.id)).toEqual([
+        'generated_newest_wall_time',
+        'locked_recent',
+        'generated_older_wall_time',
+      ]);
+    } finally {
+      await controlDb.close();
+    }
+  });
+
   it('bootstraps the durable feed ledger from Supabase rows across multiple pages', async () => {
     const controlDb = openOracleControlPlaneDb({
       sqlitePath: createTempSqlitePath(),
