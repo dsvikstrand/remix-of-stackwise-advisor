@@ -680,4 +680,83 @@ describe('blueprint creation canonical payload', () => {
     });
     expect(getInsertedBlueprintPayload()?.steps).toBeUndefined();
   });
+
+  it('logs structured YouTube refresh registration errors', async () => {
+    const { db } = createDbMock();
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const service = createBlueprintCreationService({
+      getServiceSupabaseClient: () => null,
+      safeGenerationTraceWrite: async () => undefined,
+      startGenerationRun: async () => undefined,
+      runYouTubePipeline: async ({ runId }) => ({
+        run_id: runId,
+        draft: {
+          title: 'Blueprint title',
+          description: 'A short summary for testing.',
+          steps: [
+            { name: 'Summary', notes: 'Step notes', timestamp: null },
+          ],
+          notes: null,
+          tags: [],
+          sectionsJson: {
+            schema_version: 'blueprint_sections_v1',
+            tags: [],
+            summary: { text: 'A short summary for testing.' },
+            takeaways: { bullets: ['One useful takeaway.'] },
+            storyline: { text: 'A short storyline block.' },
+            deep_dive: { bullets: ['A deep dive detail.'] },
+            practical_rules: { bullets: ['A practical rule.'] },
+            open_questions: { bullets: ['An open question.'] },
+          } satisfies BlueprintSectionsV1,
+          summaryVariants: {
+            default: 'Default summary',
+            eli5: 'ELI5 summary',
+          },
+          eli5Steps: [],
+        },
+        review: {
+          summary: null,
+        },
+        meta: null,
+      }),
+      toTagSlug: (value) => value,
+      ensureTagId: async () => 'tag_123',
+      attachBlueprintToRun: async () => undefined,
+      youtubeVideoIdRegex: /^[a-zA-Z0-9_-]{11}$/,
+      resolveGenerationModelProfile: () => ({
+        model: 'o4-mini',
+        fallbackModel: 'o4-mini',
+        reasoningEffort: 'low' as const,
+      }),
+      claimVariantForGeneration: vi.fn(),
+      markVariantReady: async () => undefined,
+      markVariantFailed: async () => undefined,
+      registerBlueprintYouTubeRefreshState: async () => {
+        throw {
+          code: '23503',
+          message: 'insert or update violates foreign key constraint',
+          details: 'Key (source_item_id) is not present in table "source_items".',
+        };
+      },
+    });
+
+    await service.createBlueprintFromVideo(db as never, {
+      userId: 'user_123',
+      videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      videoId: 'dQw4w9WgXcQ',
+      sourceTag: 'manual_refresh_generate',
+    });
+
+    const refreshLog = consoleSpy.mock.calls.find(([message]) => (
+      message === '[blueprint_youtube_refresh_register_failed]'
+    ));
+    consoleSpy.mockRestore();
+    expect(refreshLog).toBeTruthy();
+    const payload = JSON.parse(String(refreshLog?.[1] || '{}'));
+    expect(payload.error).toMatchObject({
+      code: '23503',
+      message: 'insert or update violates foreign key constraint',
+      details: 'Key (source_item_id) is not present in table "source_items".',
+    });
+  });
 });

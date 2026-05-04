@@ -12,6 +12,20 @@ function isMissingColumnError(error: unknown, column: string) {
   return hay.includes('does not exist') && hay.includes(column.toLowerCase());
 }
 
+function formatLoggableError(error: unknown) {
+  const e = error as { code?: unknown; message?: unknown; details?: unknown; hint?: unknown } | null;
+  const payload = {
+    message: error instanceof Error ? error.message : String(e?.message || error),
+  } as Record<string, unknown>;
+  const code = String(e?.code || '').trim();
+  const details = String(e?.details || '').trim();
+  const hint = String(e?.hint || '').trim();
+  if (code) payload.code = code;
+  if (details) payload.details = details;
+  if (hint) payload.hint = hint;
+  return payload;
+}
+
 type CreateBlueprintFromVideoInput = {
   userId: string;
   videoUrl: string;
@@ -331,7 +345,7 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
         }),
       };
 
-      let blueprintInsert = await insertBlueprint({
+      const blueprintInsert = await insertBlueprint({
         ...baseInsertPayload,
         sections_json: sectionsJson,
       });
@@ -418,7 +432,7 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
           console.log('[blueprint_youtube_comments_enqueue_failed]', JSON.stringify({
             blueprint_id: blueprint.id,
             run_id: result.run_id,
-            error: youtubeCommentsError instanceof Error ? youtubeCommentsError.message : String(youtubeCommentsError),
+            error: formatLoggableError(youtubeCommentsError),
           }));
         }
       }
@@ -436,7 +450,7 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
           console.log('[blueprint_youtube_refresh_register_failed]', JSON.stringify({
             blueprint_id: blueprint.id,
             run_id: result.run_id,
-            error: refreshRegisterError instanceof Error ? refreshRegisterError.message : String(refreshRegisterError),
+            error: formatLoggableError(refreshRegisterError),
           }));
         }
       }

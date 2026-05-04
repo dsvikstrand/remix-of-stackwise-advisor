@@ -4556,6 +4556,35 @@ async function getSourceItemByIdOracleFirst(
   return readSupabaseFallback('supabase_only');
 }
 
+async function ensureSupabaseSourceItemShadowForLegacyFk(
+  db: ReturnType<typeof createClient>,
+  input: { sourceItemId: string; action: string },
+) {
+  const sourceItemId = String(input.sourceItemId || '').trim();
+  const action = String(input.action || 'source_item_legacy_fk_shadow').trim() || 'source_item_legacy_fk_shadow';
+  if (!sourceItemId) return null;
+
+  const existingSupabase = await readSupabaseSourceItemById(db, { sourceItemId });
+  if (existingSupabase) return existingSupabase;
+
+  const sourceItem = await getSourceItemByIdOracleFirst(db, {
+    sourceItemId,
+    action: `${action}_lookup`,
+  });
+  if (!sourceItem) return null;
+
+  const shadowRow = await writeSupabaseSourceItemShadow(db, sourceItem, {
+    current: null,
+    action,
+  });
+  console.log('[oracle-control-plane] source_item_legacy_fk_shadow_ensured', JSON.stringify({
+    action,
+    source_item_id: shadowRow.id,
+    canonical_key: shadowRow.canonical_key || null,
+  }));
+  return shadowRow;
+}
+
 async function persistSourceItemRowOracleAware(
   db: ReturnType<typeof createClient>,
   input: {
@@ -12445,7 +12474,16 @@ const blueprintCreationService = createBlueprintCreationService({
   markVariantReady,
   markVariantFailed,
   enqueueBlueprintYouTubeEnrichment: enqueueBlueprintYouTubeEnrichmentJob,
-  registerBlueprintYouTubeRefreshState: blueprintYouTubeCommentsService.registerRefreshStateForBlueprint,
+  registerBlueprintYouTubeRefreshState: async (input) => {
+    const explicitSourceItemId = String(input.explicitSourceItemId || '').trim();
+    if (explicitSourceItemId) {
+      await ensureSupabaseSourceItemShadowForLegacyFk(input.db, {
+        sourceItemId: explicitSourceItemId,
+        action: 'blueprint_youtube_refresh_state_legacy_fk_shadow',
+      });
+    }
+    await blueprintYouTubeCommentsService.registerRefreshStateForBlueprint(input);
+  },
 });
 const { createBlueprintFromVideo } = blueprintCreationService;
 
@@ -13488,6 +13526,14 @@ async function attemptAutoUnlockForSourceItem(input: {
   });
   if (eligibleUsers.length === 0) {
     return { queued: false as const, reason: 'NO_ELIGIBLE_USERS' as const };
+  }
+
+  const legacyFkShadow = await ensureSupabaseSourceItemShadowForLegacyFk(db, {
+    sourceItemId,
+    action: 'subscription_auto_unlock_intent_legacy_fk_shadow',
+  });
+  if (!legacyFkShadow) {
+    return { queued: false as const, reason: 'INVALID_SOURCE' as const };
   }
 
   const reservation = await reserveAutoUnlockIntent(db, {
