@@ -3118,6 +3118,40 @@ async function writeSupabaseSourceItemUnlockShadow(
   return normalizeSourceItemUnlockRow(data as Record<string, unknown>);
 }
 
+async function ensureSupabaseSourceItemUnlockShadowForLegacyFk(
+  db: ReturnType<typeof createClient>,
+  input: { unlock: SourceItemUnlockRow; action: string },
+) {
+  const unlock = normalizeSourceItemUnlockRow(input.unlock as unknown as Record<string, unknown>);
+  const action = String(input.action || 'source_item_unlock_legacy_fk_shadow').trim() || 'source_item_unlock_legacy_fk_shadow';
+  if (!unlock.id || !unlock.source_item_id) return null;
+
+  const existingSupabase = await readSupabaseSourceItemUnlockById(db, unlock.id);
+  if (existingSupabase) return existingSupabase;
+
+  const existingBySourceItem = await readSupabaseSourceItemUnlockBySourceItemId(db, unlock.source_item_id);
+  if (existingBySourceItem) {
+    if (existingBySourceItem.id !== unlock.id) {
+      throw new Error(`UNLOCK_SHADOW_ID_MISMATCH:${existingBySourceItem.id}:${unlock.id}`);
+    }
+    return existingBySourceItem;
+  }
+
+  const shadowRow = await writeSupabaseSourceItemUnlockShadow(
+    db,
+    normalizeSupabaseUnlockShadowRow({
+      row: unlock,
+      oracleQueuePrimaryEnabled: oracleQueueLedgerPrimaryEnabled,
+    }),
+  );
+  console.log('[oracle-control-plane] source_item_unlock_legacy_fk_shadow_ensured', JSON.stringify({
+    action,
+    unlock_id: shadowRow.id,
+    source_item_id: shadowRow.source_item_id,
+  }));
+  return shadowRow;
+}
+
 async function persistSourceItemUnlockRowOracleAware(
   db: ReturnType<typeof createClient>,
   input: {
@@ -13533,6 +13567,14 @@ async function attemptAutoUnlockForSourceItem(input: {
     action: 'subscription_auto_unlock_intent_legacy_fk_shadow',
   });
   if (!legacyFkShadow) {
+    return { queued: false as const, reason: 'INVALID_SOURCE' as const };
+  }
+
+  const legacyUnlockFkShadow = await ensureSupabaseSourceItemUnlockShadowForLegacyFk(db, {
+    unlock: input.unlock,
+    action: 'subscription_auto_unlock_intent_unlock_legacy_fk_shadow',
+  });
+  if (!legacyUnlockFkShadow) {
     return { queued: false as const, reason: 'INVALID_SOURCE' as const };
   }
 
