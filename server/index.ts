@@ -1961,6 +1961,56 @@ async function enqueueIngestionJobWithMirror(
   return result;
 }
 
+async function ensureSupabaseIngestionJobShadowForLegacyFk(
+  db: ReturnType<typeof createClient>,
+  input: {
+    jobId?: string | null;
+    action: string;
+  },
+) {
+  const jobId = String(input.jobId || '').trim();
+  if (!jobId) return false;
+
+  if (!oracleQueueLedgerPrimaryEnabled || !oracleControlPlane) {
+    return true;
+  }
+
+  try {
+    const [job] = await listOracleQueueLedgerJobs({
+      controlDb: oracleControlPlane,
+      jobIds: [jobId],
+      limit: 1,
+    });
+    if (!job?.id) {
+      console.warn('[oracle-control-plane] ingestion_job_legacy_fk_shadow_missing', JSON.stringify({
+        action: input.action,
+        job_id: jobId,
+      }));
+      return false;
+    }
+
+    const { error } = await db
+      .from('ingestion_jobs')
+      .upsert(mapQueueShadowInsertValues(job), { onConflict: 'id' });
+    if (error) throw error;
+
+    console.log('[oracle-control-plane] ingestion_job_legacy_fk_shadow_ensured', JSON.stringify({
+      action: input.action,
+      job_id: jobId,
+      scope: job.scope,
+      status: job.status,
+    }));
+    return true;
+  } catch (error) {
+    console.warn('[oracle-control-plane] ingestion_job_legacy_fk_shadow_failed', JSON.stringify({
+      action: input.action,
+      job_id: jobId,
+      error: describeUnknownOracleControlPlaneError(error),
+    }));
+    return false;
+  }
+}
+
 async function markRunningIngestionJobsFailedWithMirror(
   db: ReturnType<typeof createClient>,
   input: {
@@ -13746,12 +13796,31 @@ async function attemptAutoUnlockForSourceItem(input: {
     return { queued: false as const, reason: 'UNLOCK_NOT_AVAILABLE' as const };
   }
 
-  await db
-    .from('source_auto_unlock_intents')
-    .update({
+  const jobShadowEnsured = await ensureSupabaseIngestionJobShadowForLegacyFk(db, {
+    jobId: job.id,
+    action: 'subscription_auto_unlock_intent_job_legacy_fk_shadow',
+  });
+  if (jobShadowEnsured) {
+    const { error: intentJobError } = await db
+      .from('source_auto_unlock_intents')
+      .update({
+        job_id: job.id,
+      })
+      .eq('id', autoIntent.id);
+    if (intentJobError) {
+      console.warn('[subscription_auto_unlock_intent_job_update_failed]', JSON.stringify({
+        intent_id: autoIntent.id,
+        job_id: job.id,
+        error: describeUnknownOracleControlPlaneError(intentJobError),
+      }));
+    }
+  } else {
+    console.warn('[subscription_auto_unlock_intent_job_update_skipped]', JSON.stringify({
+      intent_id: autoIntent.id,
       job_id: job.id,
-    })
-    .eq('id', autoIntent.id);
+      reason: 'legacy_fk_shadow_unavailable',
+    }));
+  }
 
   scheduleQueuedIngestionProcessing();
   return {
@@ -15534,11 +15603,24 @@ async function processSourceItemUnlockGenerationJob(input: {
     const autoIntentId = String(item.auto_intent_id || '').trim() || null;
     let autoIntentSettled = false;
     let autoIntentReleased = false;
+    let autoIntentJobShadowState: 'unknown' | 'ensured' | 'unavailable' = 'unknown';
+    const resolveAutoIntentJobIdForLegacyFk = async (action: string) => {
+      if (!autoIntentId) return null;
+      if (autoIntentJobShadowState === 'ensured') return input.jobId;
+      if (autoIntentJobShadowState === 'unavailable') return null;
+      const ensured = await ensureSupabaseIngestionJobShadowForLegacyFk(db, {
+        jobId: input.jobId,
+        action,
+      });
+      autoIntentJobShadowState = ensured ? 'ensured' : 'unavailable';
+      return ensured ? input.jobId : null;
+    };
     const settleAutoIntentOnce = async () => {
       if (!autoIntentId || autoIntentSettled || autoIntentReleased) return;
+      const intentJobId = await resolveAutoIntentJobIdForLegacyFk('auto_unlock_intent_settle_job_legacy_fk_shadow');
       const settled = await settleAutoUnlockIntent(db, {
         intentId: autoIntentId,
-        jobId: input.jobId,
+        jobId: intentJobId,
         traceId: input.traceId,
       });
       if (settled.intent?.status === 'settled' || settled.intent?.status === 'ready') {
@@ -15552,11 +15634,12 @@ async function processSourceItemUnlockGenerationJob(input: {
       lastErrorMessage?: string | null;
     }) => {
       if (!autoIntentId || autoIntentSettled || autoIntentReleased) return;
+      const intentJobId = await resolveAutoIntentJobIdForLegacyFk('auto_unlock_intent_release_job_legacy_fk_shadow');
       const released = await releaseAutoUnlockIntent(db, {
         intentId: autoIntentId,
         reasonCode: releaseInput.reasonCode,
         blueprintId: releaseInput.blueprintId || null,
-        jobId: input.jobId,
+        jobId: intentJobId,
         traceId: input.traceId,
         lastErrorCode: releaseInput.lastErrorCode || null,
         lastErrorMessage: releaseInput.lastErrorMessage || null,
@@ -15825,10 +15908,11 @@ async function processSourceItemUnlockGenerationJob(input: {
           await settleAutoIntentOnce();
         }
         if (!autoIntentReleased) {
+          const intentJobId = await resolveAutoIntentJobIdForLegacyFk('auto_unlock_intent_ready_job_legacy_fk_shadow');
           await markAutoUnlockIntentReady(db, {
             intentId: autoIntentId,
             blueprintId: generated.blueprintId,
-            jobId: input.jobId,
+            jobId: intentJobId,
           });
         }
       }
