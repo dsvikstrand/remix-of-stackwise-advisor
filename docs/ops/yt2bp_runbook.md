@@ -83,6 +83,9 @@
   - main runtime blueprint-tag reads now resolve through Oracle-backed rows for wall/channels/source-page/search-oriented surfaces instead of direct Supabase `blueprint_tags`.
   - coupled backend tag reads for auto-channel classification, channel feed/evaluate, and auto-banner now prefer Oracle rows and only fall back per-blueprint to Supabase for pre-cutover residue.
   - direct browser `blueprint_tags` readers/writers are still explicit cleanup residue and should be tracked separately from the main backend ownership path.
+- Current blueprint-likes cutover posture:
+  - wall and Home `For You` liked-state enrichment now requires the backend Oracle-backed like-state reader/API.
+  - normal runtime feed hydration should not read Supabase `blueprint_likes`; the remaining Supabase table access is bootstrap/break-glass compatibility under Oracle like-state maintenance.
 - Current notifications cutover posture:
   - notification reads, writes, and read-state mutations now land Oracle-first through control-plane `notification_state`.
   - Supabase `notifications` remains the compatibility shadow only for the current push-dispatch enqueue path.

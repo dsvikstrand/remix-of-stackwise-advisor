@@ -252,6 +252,56 @@ g4) [todo] Close the final `source_items` ownership tail if runtime audit finds 
 
 g5) [todo] Re-check whether paused plans should remain paused, be merged into this program, or move to completed/deserted after current-code inspection.
 
+## Blueprint Likes Round 1 Implementation Plan
+
+p1) [have] Current code is more advanced than the paused `oracle-blueprint-likes-full-ownership-plan.md` assumes:
+- Oracle state already exists in `blueprint_like_state`
+- backend like routes already exist under `/api/blueprints/:id/like-state`, `/api/blueprints/:id/like`, `/api/blueprint-likes/state`, and `/api/me/blueprint-likes`
+- frontend detail/wall/profile like mutations and liked-list reads already use backend APIs
+- the remaining normal-runtime `blueprint_likes` table references are concentrated in `server/services/wallFeed.ts`
+
+p2) [have] The remaining direct `blueprint_likes` runtime reads are:
+- `server/services/wallFeed.ts` public wall enrichment fallback for viewer liked state
+- `server/services/wallFeed.ts` For You enrichment fallback for viewer liked state
+
+p3) [have] The remaining `blueprint_likes` non-runtime reference is:
+- `server/services/oracleBlueprintLikeState.ts` bootstrap from Supabase into Oracle state
+
+p4) [have] Round 1 target:
+- make wall feed like-state hydration require the injected Oracle-backed `readLikedBlueprintIds` dependency
+- remove direct Supabase `blueprint_likes` fallback reads from `server/services/wallFeed.ts`
+- keep Supabase `blueprint_likes` only as bootstrap/break-glass residue in Oracle state bootstrap
+- update tests so wall feed service tests provide the Oracle-like dependency explicitly instead of relying on mock Supabase `blueprint_likes`
+
+p5) [have] Files changed:
+- `server/services/wallFeed.ts`
+- `src/test/wallFeedService.test.ts`
+- `server/contracts/api/wall.ts`
+- `docs/exec-plans/active/oracle-supabase-ownership-closure-program.md`
+
+p6) [have] Implementation steps:
+- make `readLikedBlueprintIds` mandatory in wall feed input contracts for authenticated like-state hydration
+- replace fallback branches with injected dependency use
+- add a safe unauthenticated branch that returns no liked ids without touching Supabase
+- update wall feed tests with a local `readLikedBlueprintIdsFromState(...)` helper where liked state is expected
+- add or adjust a regression test that fails if wall feed touches `blueprint_likes` without the dependency
+
+p7) [have] Verification:
+- `npm run typecheck`
+- `npm test -- --run src/test/wallFeedService.test.ts src/test/blueprintLikesRoute.test.ts src/test/oracleBlueprintLikeState.test.ts`
+- `npm run build`
+- `rg -n "from\\('blueprint_likes'\\)|from\\(\"blueprint_likes\"\\)" server src --glob '*.ts' --glob '*.tsx'`
+
+p8) [have] Expected post-Round 1 grep result:
+- only Oracle bootstrap/test fixtures should mention `blueprint_likes`
+- no normal wall/profile/detail runtime path should read `blueprint_likes` from Supabase
+
+p9) [todo] Deployment/soak proof after implementation:
+- deploy to Oracle
+- confirm wall and For You still show correct liked state
+- confirm like/unlike still updates counts and invalidates profile liked-blueprints
+- confirm Supabase attribution does not show normal-runtime `blueprint_likes` reads after soak
+
 ## Session 3: Legacy FK And Compatibility-Shadow Contraction
 
 h1) [todo] Identify every legacy FK path that still forces Oracle-owned runtime to satisfy Supabase constraints.

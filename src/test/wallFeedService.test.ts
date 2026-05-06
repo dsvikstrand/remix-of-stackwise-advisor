@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { listWallBlueprintFeed, listWallForYouFeed } from '../../server/services/wallFeed';
+import {
+  listWallBlueprintFeed as listWallBlueprintFeedBase,
+  listWallForYouFeed as listWallForYouFeedBase,
+} from '../../server/services/wallFeed';
 import { createMockSupabase } from './helpers/mockSupabase';
 
 function listBlueprintTagRowsFromState(db: any, blueprintIds: string[]) {
@@ -26,6 +29,32 @@ function listFollowedTagSlugsFromState(db: any, userId: string) {
     .filter((row: any) => followedTagIds.has(String(row.id || '').trim()))
     .map((row: any) => String(row.slug || '').trim())
     .filter(Boolean);
+}
+
+function listLikedBlueprintIdsFromState(db: any, userId: string, blueprintIds: string[]) {
+  const allowed = new Set(blueprintIds.map((value) => String(value || '').trim()).filter(Boolean));
+  return (db.state?.blueprint_likes || [])
+    .filter((row: any) => String(row.user_id || '').trim() === String(userId || '').trim())
+    .map((row: any) => String(row.blueprint_id || '').trim())
+    .filter((blueprintId: string) => blueprintId && allowed.has(blueprintId));
+}
+
+function listWallBlueprintFeed(input: any) {
+  return listWallBlueprintFeedBase({
+    readLikedBlueprintIds: ({ userId, blueprintIds }) => Promise.resolve(
+      listLikedBlueprintIdsFromState(input.db, userId, blueprintIds),
+    ),
+    ...input,
+  });
+}
+
+function listWallForYouFeed(input: any) {
+  return listWallForYouFeedBase({
+    readLikedBlueprintIds: ({ userId, blueprintIds }) => Promise.resolve(
+      listLikedBlueprintIdsFromState(input.db, userId, blueprintIds),
+    ),
+    ...input,
+  });
 }
 
 describe('wall feed service', () => {
@@ -128,6 +157,74 @@ describe('wall feed service', () => {
       source_channel_title: 'Channel 1',
       source_channel_avatar_url: 'https://avatar/1.jpg',
       source_view_count: 1200,
+    });
+  });
+
+  it('uses the injected liked-state reader instead of reading Supabase blueprint_likes', async () => {
+    const baseDb = createMockSupabase({
+      blueprints: [
+        {
+          id: 'bp_1',
+          creator_user_id: 'creator_1',
+          title: 'Blueprint One',
+          sections_json: null,
+          steps: null,
+          llm_review: 'Review 1',
+          mix_notes: null,
+          banner_url: null,
+          likes_count: 4,
+          created_at: '2026-03-06T10:00:00.000Z',
+          is_public: true,
+        },
+      ],
+      blueprint_tags: [
+        { blueprint_id: 'bp_1', tags: { id: 'tag_fit', slug: 'fitness-training' } },
+      ],
+      blueprint_likes: [
+        { blueprint_id: 'bp_1', user_id: 'viewer_1' },
+      ],
+      profiles: [
+        { user_id: 'creator_1', display_name: 'Creator 1', avatar_url: null },
+      ],
+      user_feed_items: [
+        { id: 'ufi_1', blueprint_id: 'bp_1', source_item_id: 'source_1', created_at: '2026-03-06T10:01:00.000Z' },
+      ],
+      source_items: [
+        {
+          id: 'source_1',
+          source_page_id: 'page_1',
+          source_channel_id: 'channel_1',
+          source_channel_title: 'Channel 1',
+          thumbnail_url: null,
+          metadata: null,
+        },
+      ],
+      channel_candidates: [
+        { user_feed_item_id: 'ufi_1', channel_slug: 'fitness-training', status: 'published', created_at: '2026-03-06T10:02:00.000Z' },
+      ],
+    }) as any;
+    const db = {
+      state: baseDb.state,
+      from(table: string) {
+        if (table === 'blueprint_likes') {
+          throw new Error('blueprint_likes should not be read from Supabase');
+        }
+        return baseDb.from(table);
+      },
+    } as any;
+
+    const items = await listWallBlueprintFeed({
+      db,
+      scope: 'all',
+      sort: 'latest',
+      viewerUserId: 'viewer_1',
+      listBlueprintTagRows: ({ blueprintIds }) => Promise.resolve(listBlueprintTagRowsFromState(baseDb, blueprintIds)),
+    });
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      id: 'bp_1',
+      user_liked: true,
     });
   });
 
