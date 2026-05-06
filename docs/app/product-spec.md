@@ -135,6 +135,7 @@ a77a) [have] Queue depth/work-item helper reads now honor explicit `scope`/`scop
 a78) [have] `/subscriptions` now composes its OAuth/import/refresh orchestration through a dedicated frontend controller hook instead of keeping that state/query/mutation model inline in the page component.
 a79) [have] `/wall` now consumes backend-shaped feed endpoints for both public lanes and `For You`, and its scope/query/mutation orchestration is composed through a dedicated frontend controller hook rather than browser-side multi-table hydration.
 a79a) [have] `For You` wall timestamps/order now follow first wall arrival rather than later enrichment: when an existing locked row upgrades into a generated blueprint, the feed row keeps its original `created_at` instead of being republished to the top.
+a79b) [have] Signed-in logo clicks now act as a Home reset on `/wall`: the current Wall query/filter state is cleared, the user's default lane resolves again, and the page scrolls back to the top.
 a80) [have] Bleup is now installable as an online-first PWA at `https://bleup.app`, and this is the preferred non-store app distribution path for the current MVP.
 a81) [have] PWA mode uses the same frontend, backend, and Supabase auth/session model as browser mode; it is not a separate app product.
 a82) [have] Current PWA behavior is intentionally conservative: installability, standalone launch, offline fallback, update prompting, and mobile install CTA surfaces are in scope, while authenticated feed/subscription/generation data remains network-only.

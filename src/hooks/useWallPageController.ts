@@ -109,6 +109,10 @@ export function useWallPageController() {
   const activeLane = optimisticLane ?? resolvedLane;
 
   const updateSearchParams = (updates: { scope?: string; sort?: FeedSort }) => {
+    if (!updates.scope && !updates.sort) {
+      setSearchParams(new URLSearchParams(), { replace: true });
+      return;
+    }
     const next = new URLSearchParams(searchParams);
     if (updates.scope) next.set('scope', updates.scope);
     if (updates.sort) next.set('sort', updates.sort);

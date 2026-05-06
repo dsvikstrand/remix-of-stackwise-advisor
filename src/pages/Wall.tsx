@@ -22,6 +22,7 @@ import {
   getHomeOnboardingDismissedKey,
   HOME_ONBOARDING_REOPEN_EVENT,
 } from '@/lib/homeOnboarding';
+import { WALL_HOME_REQUEST_EVENT } from '@/lib/wallHomeNavigation';
 
 type WallBlueprintCardInput = {
   id: string;
@@ -144,6 +145,21 @@ export default function Wall() {
     window.addEventListener(HOME_ONBOARDING_REOPEN_EVENT, handleReopen);
     return () => window.removeEventListener(HOME_ONBOARDING_REOPEN_EVENT, handleReopen);
   }, [user?.id]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const handleWallHomeRequest = () => {
+      setSelectedTagSlug(null);
+      updateSearchParams({});
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    };
+
+    window.addEventListener(WALL_HOME_REQUEST_EVENT, handleWallHomeRequest);
+    return () => window.removeEventListener(WALL_HOME_REQUEST_EVENT, handleWallHomeRequest);
+  }, [setSelectedTagSlug, updateSearchParams]);
 
   const canUsePullToRefresh = useMemo(() => {
     if (typeof window === 'undefined') return false;

@@ -75,6 +75,7 @@
   - Auth-only lookup UI in `src/pages/Search.tsx` for finding one specific YouTube video, then generating only when the app finds a confident match.
   - Live feed/community surfaces in `src/pages/Wall.tsx`, `src/pages/Channels.tsx`, `src/pages/ChannelPage.tsx`.
     - `Wall` now loads backend-hydrated feed responses for both public lanes and `For You` instead of reconstructing feed rows through browser-side Supabase fan-out.
+    - signed-in Bleup logo clicks on `/wall` now reset Home to the user's default lane and scroll to the top instead of becoming a same-route no-op.
     - card teaser copy now prefers stored `blueprints.preview_summary`, so list surfaces keep summary-like snippets without reloading canonical `sections_json`.
     - TanStack Query freshness is now explicit by surface class:
       - live/semi-live hooks declare their own polling/stale rules locally.

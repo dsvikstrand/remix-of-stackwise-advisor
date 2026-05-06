@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { BookOpen } from 'lucide-react';
 import { AppNavigation } from '@/components/shared/AppNavigation';
 import { NotificationsBell } from '@/components/shared/NotificationsBell';
@@ -12,6 +12,7 @@ import {
   consumeHomeOnboardingDialogOpenRequest,
   HOME_ONBOARDING_DIALOG_REOPEN_EVENT,
 } from '@/lib/homeOnboarding';
+import { requestWallHomeReset } from '@/lib/wallHomeNavigation';
 
 interface AppHeaderProps {
   actions?: ReactNode;
@@ -20,12 +21,14 @@ interface AppHeaderProps {
 
 export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
   const { user } = useAuth();
+  const location = useLocation();
   const [showHelp, setShowHelp] = useState(false);
   const [showOnboardingDialog, setShowOnboardingDialog] = useState(false);
   const [hideFloatingNav, setHideFloatingNav] = useState(false);
 
   const navMode = user ? 'all' : 'public';
   const brandTarget = user ? '/wall' : '/';
+  const isOnWall = location.pathname === '/wall';
 
   useEffect(() => {
     if (!showFloatingNav) return;
@@ -76,7 +79,15 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
       <header className="sticky top-0 z-50 border-b border-border/40 bg-background pt-[var(--bleup-app-safe-top)]">
         <div className="grid w-full grid-cols-[auto,1fr,auto] items-center gap-3 py-3 pl-[calc(0.75rem+var(--bleup-app-safe-left))] pr-[calc(0.75rem+var(--bleup-app-safe-right))] sm:pl-[calc(1rem+var(--bleup-app-safe-left))] sm:pr-[calc(1rem+var(--bleup-app-safe-right))]">
           <div className="flex items-center gap-3 min-w-0">
-            <Link to={brandTarget} className="flex items-center gap-2">
+            <Link
+              to={brandTarget}
+              className="flex items-center gap-2"
+              onClick={(event) => {
+                if (!user || !isOnWall) return;
+                event.preventDefault();
+                requestWallHomeReset();
+              }}
+            >
               <div className="w-9 h-9 rounded-xl border border-primary/25 bg-gradient-to-br from-primary/90 to-primary/60 flex items-center justify-center">
                 <BookOpen className="h-4 w-4 text-primary-foreground" />
               </div>
