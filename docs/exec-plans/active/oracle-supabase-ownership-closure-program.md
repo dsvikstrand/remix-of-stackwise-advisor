@@ -296,9 +296,16 @@ p8) [have] Expected post-Round 1 grep result:
 - only Oracle bootstrap/test fixtures should mention `blueprint_likes`
 - no normal wall/profile/detail runtime path should read `blueprint_likes` from Supabase
 
-p9) [todo] Deployment/soak proof after implementation:
-- deploy to Oracle
-- confirm wall and For You still show correct liked state
+p9) [have] Deployment proof:
+- deployed commit `d86d46f141a8434e66b99ebe8a952ba8e6444dd1` to Oracle on `2026-05-06`
+- release artifact verification passed during deploy
+- backend health passed after restart
+- queue health passed after restart with `queue_depth=0`, `running_depth=0`, and `stale_leases=0`
+- release smoke passed locally on Oracle
+- deployed source grep still shows only `server/services/oracleBlueprintLikeState.ts` reading Supabase `blueprint_likes`
+
+p10) [todo] Soak proof:
+- confirm wall and For You still show correct liked state during normal use
 - confirm like/unlike still updates counts and invalidates profile liked-blueprints
 - confirm Supabase attribution does not show normal-runtime `blueprint_likes` reads after soak
 
