@@ -18,7 +18,7 @@ a6) [have] Durable post-launch debt board: `docs/exec-plans/tech-debt-tracker.md
 
 ## Active
 
-b1) [have] Current implementation root: none
+b1) [have] Current implementation root: `docs/exec-plans/active/oracle-supabase-ownership-closure-program.md`
 
 b2) [have] Current proof/deferred tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
 
