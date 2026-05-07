@@ -8989,6 +8989,10 @@ registerTagRoutes(app, {
     slugs,
     viewerUserId,
   }),
+  listTagsByIds: ({ tagIds, viewerUserId }) => listOracleTagRouteItemsByIds({
+    tagIds,
+    viewerUserId,
+  }),
   listFollowedTags: ({ userId, limit }) => listOracleFollowedTagRouteItems({
     userId,
     limit,
@@ -10284,6 +10288,45 @@ async function listOracleTagRouteItemsBySlugs(input: {
     controlDb: oracleControlPlane,
     slugs: input.slugs,
     limit: input.slugs.length,
+  });
+  const viewerUserId = normalizeRouteString(input.viewerUserId);
+  const followedIds = viewerUserId
+    ? new Set((await listOracleTagFollowRows({
+        controlDb: oracleControlPlane,
+        userId: viewerUserId,
+        tagIds: rows.map((row) => row.id),
+        limit: rows.length || 5000,
+      })).map((row) => normalizeRouteString(row.tag_id)).filter(Boolean))
+    : new Set<string>();
+
+  return rows.map((row) => ({
+    id: row.id,
+    slug: row.slug,
+    follower_count: row.follower_count,
+    created_at: row.created_at,
+    is_following: viewerUserId ? followedIds.has(row.id) : undefined,
+  }));
+}
+
+async function listOracleTagRouteItemsByIds(input: {
+  tagIds: string[];
+  viewerUserId: string | null;
+}) {
+  if (!oracleControlPlane) return [] as Array<{
+    id: string;
+    slug: string;
+    follower_count: number;
+    created_at: string;
+    is_following?: boolean;
+  }>;
+
+  const tagIds = [...new Set((input.tagIds || []).map((value) => normalizeRouteString(value)).filter(Boolean))];
+  if (tagIds.length === 0) return [];
+
+  const rows = await listOracleTagRows({
+    controlDb: oracleControlPlane,
+    ids: tagIds,
+    limit: tagIds.length,
   });
   const viewerUserId = normalizeRouteString(input.viewerUserId);
   const followedIds = viewerUserId
@@ -19119,6 +19162,11 @@ registerFeedRoutes(app, {
     requireBlueprint,
   }),
   readUnlockRows: (db, sourceIds) => getSourceItemUnlocksBySourceItemIdsOracleFirst(db, sourceIds),
+  readBlueprintTagRows: ({ blueprintIds }) => {
+    const db = getServiceSupabaseClient();
+    if (!db) return Promise.resolve([]);
+    return listBlueprintTagRowsOracleAware(db, { blueprintIds });
+  },
   getFeedItemById: getFeedItemByIdOracleFirst,
   patchFeedItemById: patchFeedItemByIdOracleAware,
   createBlueprintFromVideo,

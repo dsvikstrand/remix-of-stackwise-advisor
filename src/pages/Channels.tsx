@@ -12,6 +12,7 @@ import { useTagsBySlugs } from '@/hooks/useTags';
 import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
 import { getChannelIcon } from '@/lib/channelIcons';
 import { resolvePrimaryChannelFromTags } from '@/lib/channelMapping';
+import { collectBlueprintTagSlugMap, listBlueprintTagRows } from '@/lib/blueprintTagsApi';
 import { supabase } from '@/integrations/supabase/client';
 import { bucketJoinError, logOncePerSession, logP3Event } from '@/lib/telemetry';
 import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
@@ -132,21 +133,8 @@ export default function Channels() {
 
       const blueprintIds = blueprints.map((row) => row.id);
 
-      const { data: tagRows, error: tagsError } = await supabase
-        .from('blueprint_tags')
-        .select('blueprint_id, tags(slug)')
-        .in('blueprint_id', blueprintIds);
-
-      if (tagsError) throw tagsError;
-
-      const tagsByBlueprintId = new Map<string, string[]>();
-      (tagRows || []).forEach((row) => {
-        const list = tagsByBlueprintId.get(row.blueprint_id) || [];
-        if (row.tags && typeof row.tags === 'object' && 'slug' in row.tags) {
-          list.push((row.tags as { slug: string }).slug);
-        }
-        tagsByBlueprintId.set(row.blueprint_id, list);
-      });
+      const tagRows = await listBlueprintTagRows({ blueprintIds });
+      const tagsByBlueprintId = collectBlueprintTagSlugMap(tagRows);
 
       const output: Record<string, { id: string; title: string }[]> = {};
 

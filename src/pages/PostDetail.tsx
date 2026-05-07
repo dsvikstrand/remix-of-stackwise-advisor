@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useBookmarks } from '@/hooks/useBookmarks';
 import { CommentsThread } from '@/components/wall/CommentsThread';
 import { PageDivider, PageMain, PageRoot } from '@/components/layout/Page';
+import { getTagsByIds } from '@/lib/tagsApi';
 
 interface WallPostDetail {
   id: string;
@@ -104,9 +105,9 @@ export default function PostDetail() {
 
       const recipeTags = recipeTagsRes.data || [];
       const tagIds = [...new Set(recipeTags.map((row) => row.tag_id))];
-      const { data: tagsRes } = tagIds.length > 0
-        ? await supabase.from('tags').select('id, slug').in('id', tagIds)
-        : { data: [] as { id: string; slug: string }[] };
+      const tags = tagIds.length > 0
+        ? await getTagsByIds(tagIds)
+        : [];
 
       return {
         ...postData,
@@ -119,7 +120,7 @@ export default function PostDetail() {
           visibility: 'public',
         },
         profile: profileRes.data || { display_name: null, avatar_url: null },
-        tags: tagsRes || [],
+        tags,
         user_liked: (likesRes.data || []).length > 0,
         user_bookmarked: bookmarkSet.has(postData.id),
       } as WallPostDetail;

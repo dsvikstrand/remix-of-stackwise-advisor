@@ -5,6 +5,7 @@ import { buildFeedSummary } from '@/lib/feedPreview';
 import { getBlueprintLikeStates } from '@/lib/blueprintLikesApi';
 import { collectBlueprintTagMap, listBlueprintTagRows } from '@/lib/blueprintTagsApi';
 import { normalizeTag } from '@/lib/tagging';
+import { getTagsBySlugs } from '@/lib/tagsApi';
 
 export interface BlueprintRow {
   id: string;
@@ -114,7 +115,7 @@ export function useBlueprintSearch(search: string, sort: BlueprintSort) {
       const matched: BlueprintRow[] = [];
 
       if (tagSlug) {
-        const { data: tagData } = await supabase.from('tags').select('id').eq('slug', tagSlug).maybeSingle();
+        const [tagData] = await getTagsBySlugs([tagSlug]);
         if (tagData?.id) {
           const blueprintTagRows = await listBlueprintTagRows({ tagIds: [tagData.id] });
           const blueprintIds = blueprintTagRows.map((row) => row.blueprint_id);

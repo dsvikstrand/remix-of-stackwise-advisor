@@ -1298,6 +1298,10 @@ Expected structured server log markers:
 - `[subscription_skip_upcoming_premiere]` (pre-release YouTube premiere filtered during sync)
 - `[subscription_auto_unlock_not_queued]` with `reason=PERMANENT_NO_TRANSCRIPT` (non-retryable no-transcript auto-unlock skip)
 
+Tag ownership triage note:
+- Current runtime tag reads should arrive through backend APIs and Oracle-aware readers (`/api/tags*`, `/api/blueprint-tags`, `/api/my-feed` injected blueprint-tag hydration).
+- Direct Supabase `tags`, `blueprint_tags`, or `tag_follows` traffic from browser-authenticated actors is not expected for normal tag reads; investigate it as ownership regression unless it maps to a known blueprint create/update write-shadow path.
+
 Useful `mvp_events.event_name` chain for YT2BP split flow:
 - `source_pull_requested`
 - `source_pull_succeeded`

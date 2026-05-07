@@ -21,6 +21,10 @@ export type TagsRouteDeps = {
     slugs: string[];
     viewerUserId: string | null;
   }) => Promise<TagRouteItem[]>;
+  listTagsByIds: (input: {
+    tagIds: string[];
+    viewerUserId: string | null;
+  }) => Promise<TagRouteItem[]>;
   listFollowedTags: (input: {
     userId: string;
     limit?: number;

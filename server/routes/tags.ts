@@ -71,6 +71,23 @@ export function registerTagRoutes(app: express.Express, deps: TagsRouteDeps) {
     }
   });
 
+  app.get('/api/tags/by-id', async (req, res) => {
+    try {
+      const tagIds = [...new Set(parseCsvList(req.query.ids).map((value) => normalizeRequiredString(value)).filter(Boolean))];
+      if (tagIds.length === 0) {
+        return res.status(400).json(withError('INVALID_INPUT', 'Provide ids.'));
+      }
+      const viewerUserId = normalizeRequiredString((res.locals.user as { id?: string } | undefined)?.id) || null;
+      const items = await deps.listTagsByIds({
+        tagIds,
+        viewerUserId,
+      });
+      return res.status(200).json(withEnvelope({ items }, 'tags by id'));
+    } catch (error) {
+      return res.status(400).json(withError('READ_FAILED', error instanceof Error ? error.message : 'Failed to load tags by id'));
+    }
+  });
+
   app.get('/api/tags/follows', async (req, res) => {
     const userId = normalizeRequiredString((res.locals.user as { id?: string } | undefined)?.id);
     if (!userId) {

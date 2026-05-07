@@ -57,6 +57,14 @@ export async function listMyFeedItems(input: {
     last_error_code: string | null;
     transcript_status: string | null;
   }>>;
+  readBlueprintTagRows: (input: {
+    db: DbClient;
+    blueprintIds: string[];
+  }) => Promise<Array<{
+    blueprint_id: string;
+    tag_id: string;
+    tag_slug: string;
+  }>>;
 }) {
   return listMyFeedItemsFromDb(input);
 }

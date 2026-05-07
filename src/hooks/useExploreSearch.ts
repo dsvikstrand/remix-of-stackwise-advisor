@@ -4,6 +4,7 @@ import { collectBlueprintTagSlugMap, listBlueprintTagRows } from '@/lib/blueprin
 import { buildFeedSummary } from '@/lib/feedPreview';
 import { normalizeTag } from '@/lib/tagging';
 import { searchSourcePages } from '@/lib/sourcePagesApi';
+import { listTags } from '@/lib/tagsApi';
 
 export type ExploreFilter = 'all' | 'blueprints' | 'users' | 'sources';
 
@@ -52,15 +53,12 @@ async function searchBlueprints(query: string, isTagSearch: boolean): Promise<Bl
   const normalizedQuery = normalizeTag(query.replace(/^#/, ''));
   
   if (isTagSearch && normalizedQuery) {
-    // Search by tag slug
-    const { data: tagMatches } = await supabase
-      .from('tags')
-      .select('id')
-      .ilike('slug', `%${normalizedQuery}%`);
+    // Search by tag slug through the backend owner.
+    const tagMatches = (await listTags(5000))
+      .filter((tag) => tag.slug.includes(normalizedQuery));
+    if (tagMatches.length === 0) return [];
 
-    if (!tagMatches || tagMatches.length === 0) return [];
-
-    const tagIds = tagMatches.map(t => t.id);
+    const tagIds = tagMatches.map((tag) => tag.id);
 
     const blueprintTags = await listBlueprintTagRows({ tagIds });
     if (blueprintTags.length === 0) return [];
@@ -222,14 +220,7 @@ export function useTrendingTags() {
   return useQuery({
     queryKey: ['trending-tags'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('tags')
-        .select('id, slug, follower_count')
-        .order('follower_count', { ascending: false })
-        .limit(6);
-
-      if (error) throw error;
-      return data || [];
+      return listTags(6);
     },
     staleTime: 120_000,
     refetchOnWindowFocus: false,

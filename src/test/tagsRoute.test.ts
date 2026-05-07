@@ -51,6 +51,7 @@ describe('tag routes', () => {
         },
       ],
       listTagsBySlugs: async () => [],
+      listTagsByIds: async () => [],
       listFollowedTags: async () => [],
       setTagFollowed: async () => null,
       clearTagFollows: async () => ({ removedCount: 0 }),
@@ -91,6 +92,7 @@ describe('tag routes', () => {
     registerTagRoutes(app as any, {
       listTags: async () => [],
       listTagsBySlugs: async () => [],
+      listTagsByIds: async () => [],
       listFollowedTags: async () => [],
       setTagFollowed: async () => null,
       clearTagFollows: async () => ({ removedCount: 0 }),
@@ -134,6 +136,7 @@ describe('tag routes', () => {
     registerTagRoutes(app as any, {
       listTags: async () => [],
       listTagsBySlugs: async () => [],
+      listTagsByIds: async () => [],
       listFollowedTags: async () => [
         {
           id: 'tag_1',
@@ -180,5 +183,46 @@ describe('tag routes', () => {
     expect(followRes.statusCode).toBe(200);
     expect(unfollowRes.statusCode).toBe(200);
     expect(clearRes.statusCode).toBe(200);
+  });
+
+  it('returns tag rows by ids without requiring browser table access', async () => {
+    const app = createMockApp();
+    const listTagsByIds = vi.fn(async ({ tagIds }) => tagIds.map((tagId: string) => ({
+      id: tagId,
+      slug: tagId === 'tag_1' ? 'fitness' : 'nutrition',
+      follower_count: 3,
+      created_at: '2026-04-22T08:00:00.000Z',
+      is_following: false,
+    })));
+
+    registerTagRoutes(app as any, {
+      listTags: async () => [],
+      listTagsBySlugs: async () => [],
+      listTagsByIds,
+      listFollowedTags: async () => [],
+      setTagFollowed: async () => null,
+      clearTagFollows: async () => ({ removedCount: 0 }),
+      createTag: async () => null,
+    });
+
+    const res = createResponse('viewer_1');
+    await app.handlers['GET /api/tags/by-id']({
+      query: { ids: 'tag_1,tag_2,tag_1' },
+    } as any, res as any);
+
+    expect(listTagsByIds).toHaveBeenCalledWith({
+      tagIds: ['tag_1', 'tag_2'],
+      viewerUserId: 'viewer_1',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        items: [
+          { id: 'tag_1', slug: 'fitness' },
+          { id: 'tag_2', slug: 'nutrition' },
+        ],
+      },
+    });
   });
 });

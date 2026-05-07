@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { collectBlueprintTagSlugMap, listBlueprintTagRows } from '@/lib/blueprintTagsApi';
+import { listTags } from '@/lib/tagsApi';
 
 export interface CommunityStats {
   totalBlueprints: number;
@@ -11,16 +13,16 @@ export function useCommunityStats() {
   return useQuery({
     queryKey: ['community-stats'],
     queryFn: async (): Promise<CommunityStats> => {
-      const [blueprintsRes, sourcesRes, tagsRes] = await Promise.all([
+      const [blueprintsRes, sourcesRes, tags] = await Promise.all([
         supabase.from('blueprints').select('id', { count: 'exact', head: true }).eq('is_public', true),
         supabase.from('source_pages').select('id', { count: 'exact', head: true }),
-        supabase.from('tags').select('id', { count: 'exact', head: true }),
+        listTags(5000),
       ]);
 
       return {
         totalBlueprints: blueprintsRes.count ?? 0,
         totalSources: sourcesRes.count ?? 0,
-        activeTags: tagsRes.count ?? 0,
+        activeTags: tags.length,
       };
     },
     staleTime: 60_000, // 1 minute
@@ -61,26 +63,9 @@ export function useTopBlueprints(limit = 4) {
 
       const profileMap = new Map((profiles || []).map((p) => [p.user_id, p]));
 
-      // Fetch tags for each blueprint
       const blueprintIds = blueprints.map((b) => b.id);
-      const { data: tagLinks } = await supabase
-        .from('blueprint_tags')
-        .select('blueprint_id, tag_id')
-        .in('blueprint_id', blueprintIds);
-
-      const tagIds = [...new Set((tagLinks || []).map((t) => t.tag_id))];
-      const { data: tags } = tagIds.length > 0
-        ? await supabase.from('tags').select('id, slug').in('id', tagIds)
-        : { data: [] as { id: string; slug: string }[] };
-
-      const tagMap = new Map((tags || []).map((t) => [t.id, t.slug]));
-      const blueprintTagMap = new Map<string, string[]>();
-      (tagLinks || []).forEach((link) => {
-        const arr = blueprintTagMap.get(link.blueprint_id) || [];
-        const slug = tagMap.get(link.tag_id);
-        if (slug) arr.push(slug);
-        blueprintTagMap.set(link.blueprint_id, arr);
-      });
+      const tagRows = await listBlueprintTagRows({ blueprintIds });
+      const blueprintTagMap = collectBlueprintTagSlugMap(tagRows);
 
       return blueprints.map((b) => ({
         id: b.id,
@@ -99,14 +84,7 @@ export function useFeaturedTags(limit = 8) {
   return useQuery({
     queryKey: ['featured-tags', limit],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('tags')
-        .select('id, slug, follower_count')
-        .order('follower_count', { ascending: false })
-        .limit(limit);
-
-      if (error) throw error;
-      return data || [];
+      return listTags(limit);
     },
     staleTime: 60_000,
   });

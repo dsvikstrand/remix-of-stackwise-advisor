@@ -133,6 +133,10 @@ export function registerFeedRoutes(app: express.Express, deps: FeedRouteDeps) {
         readUnlockRows: deps.readUnlockRows
           ? ({ db: innerDb, sourceIds }) => deps.readUnlockRows!(innerDb, sourceIds)
           : undefined,
+        readBlueprintTagRows: ({ db: innerDb, blueprintIds }) => deps.readBlueprintTagRows({
+          db: innerDb,
+          blueprintIds,
+        }),
       });
       return res.json({
         ok: true,

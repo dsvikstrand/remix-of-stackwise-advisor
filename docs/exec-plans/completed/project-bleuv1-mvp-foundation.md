@@ -332,3 +332,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 2. Manual generation billing now uses reserve -> settle/release semantics with duplicate/no-charge short-circuiting and affordable-prefix queueing for Search/manual refresh.
 3. Queue admission now counts real work size (`queue_work_items`) for interactive multi-item jobs instead of relying on job rows alone.
 4. Credit refresh is now lazy/on-demand instead of background polling from always-mounted header UI.
+
+## Post-Completion Ownership Note (2026-05-07)
+1. Current product tag reads are now backend-owned: tag directory, followed tags, tag lookup, blueprint-tag joins, Channels previews, Explore/Search suggestions, and legacy post-detail tag resolution use Oracle-aware backend APIs.
+2. Direct browser reads from Supabase `tags`, `blueprint_tags`, and `tag_follows` are no longer part of the current runtime foundation; any remaining Supabase tag-table access belongs to bootstrap, compatibility fallback, or write-shadow cleanup tracked by the active Oracle/Supabase ownership closure program.

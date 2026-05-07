@@ -93,6 +93,25 @@ function buildFeedRouteDeps(db: any) {
       if (error) throw error;
       return data || [];
     },
+    readBlueprintTagRows: async ({ db: innerDb, blueprintIds }: { db: any; blueprintIds: string[] }) => {
+      if (!blueprintIds.length) return [];
+      const { data, error } = await innerDb
+        .from('blueprint_tags')
+        .select('blueprint_id, tag_id, tags(slug)')
+        .in('blueprint_id', blueprintIds);
+      if (error) throw error;
+      return (data || []).flatMap((row: any) => {
+        const joined = row.tags;
+        const candidates = Array.isArray(joined) ? joined : joined ? [joined] : [];
+        return candidates
+          .map((candidate: any) => ({
+            blueprint_id: String(row.blueprint_id || ''),
+            tag_id: String(row.tag_id || candidate?.id || ''),
+            tag_slug: String(candidate?.slug || ''),
+          }))
+          .filter((candidate: any) => candidate.blueprint_id && candidate.tag_slug);
+      });
+    },
   };
 }
 

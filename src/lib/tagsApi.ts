@@ -89,6 +89,31 @@ export async function getTagsBySlugs(slugs: string[]) {
   return json.data.items || [];
 }
 
+export async function getTagsByIds(tagIds: string[]) {
+  const normalizedTagIds = [...new Set(
+    (tagIds || [])
+      .map((value) => String(value || '').trim())
+      .filter(Boolean),
+  )];
+  if (normalizedTagIds.length === 0) return [] as TagApiItem[];
+
+  const base = getApiBase();
+  if (!base) throw new Error('Backend API is not configured.');
+
+  const authHeader = await getOptionalAuthHeader();
+  const response = await fetch(`${base}/tags/by-id?ids=${encodeURIComponent(normalizedTagIds.join(','))}`, {
+    method: 'GET',
+    headers: {
+      ...authHeader,
+    },
+  });
+  const json = await parseEnvelope<{ items: TagApiItem[] }>(response);
+  if (!response.ok || !json?.ok || !json.data) {
+    throw new Error(json?.message || `Tag by id request failed (${response.status})`);
+  }
+  return json.data.items || [];
+}
+
 export async function getFollowedTags(limit = 500) {
   const base = getApiBase();
   if (!base) throw new Error('Backend API is not configured.');

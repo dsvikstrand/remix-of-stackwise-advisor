@@ -27,63 +27,6 @@ async function getOptionalAuthHeader() {
   return { Authorization: `Bearer ${token}` };
 }
 
-async function fetchBlueprintTagRowsFromSupabase(input: {
-  blueprintIds?: string[];
-  tagIds?: string[];
-  tagSlugs?: string[];
-}) {
-  const blueprintIds = [...new Set((input.blueprintIds || []).map((value) => String(value || '').trim()).filter(Boolean))];
-  let tagIds = [...new Set((input.tagIds || []).map((value) => String(value || '').trim()).filter(Boolean))];
-  const tagSlugs = [...new Set((input.tagSlugs || []).map((value) => String(value || '').trim().toLowerCase()).filter(Boolean))];
-
-  if (blueprintIds.length === 0 && tagIds.length === 0 && tagSlugs.length === 0) {
-    return [] as BlueprintTagRow[];
-  }
-
-  if (tagSlugs.length > 0) {
-    const { data: tags, error: tagError } = await supabase
-      .from('tags')
-      .select('id')
-      .in('slug', tagSlugs);
-    if (tagError) throw tagError;
-    tagIds = Array.from(new Set([
-      ...tagIds,
-      ...(tags || []).map((row) => String(row.id || '').trim()).filter(Boolean),
-    ]));
-  }
-
-  let query = supabase
-    .from('blueprint_tags')
-    .select('blueprint_id, tag_id, tags(slug)');
-  if (blueprintIds.length > 0) {
-    query = query.in('blueprint_id', blueprintIds);
-  }
-  if (tagIds.length > 0) {
-    query = query.in('tag_id', tagIds);
-  }
-
-  const { data, error } = await query;
-  if (error) throw error;
-
-  const rows: BlueprintTagRow[] = [];
-  for (const row of data || []) {
-    const blueprintId = String((row as any).blueprint_id || '').trim();
-    const tagId = String((row as any).tag_id || '').trim();
-    const joined = (row as any).tags;
-    const tagCandidates = Array.isArray(joined) ? joined : joined ? [joined] : [];
-    for (const candidate of tagCandidates) {
-      const tagSlug = String(candidate?.slug || '').trim().toLowerCase();
-      if (!blueprintId || !tagId || !tagSlug) continue;
-      rows.push({
-        blueprint_id: blueprintId,
-        tag_id: tagId,
-        tag_slug: tagSlug,
-      });
-    }
-  }
-  return rows;
-}
-
 export async function listBlueprintTagRows(input: {
   blueprintIds?: string[];
   tagIds?: string[];
@@ -95,7 +38,7 @@ export async function listBlueprintTagRows(input: {
   const base = getApiBase();
 
   if (!base) {
-    return fetchBlueprintTagRowsFromSupabase({ blueprintIds, tagIds, tagSlugs });
+    throw new Error('Backend API is not configured.');
   }
 
   const search = new URLSearchParams();

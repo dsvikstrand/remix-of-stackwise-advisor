@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { listBlueprintTagRows } from '@/lib/blueprintTagsApi';
+import { getFollowedTags, listTags } from '@/lib/tagsApi';
 
 export interface SuggestedTag {
   id: string;
@@ -21,14 +21,8 @@ export function useSuggestedTags(limit = 12) {
   return useQuery({
     queryKey: ['suggested-tags', user?.id, limit],
     queryFn: async (): Promise<SuggestedTag[]> => {
-      // Get all tags sorted by popularity
-      const { data: allTags, error: tagsError } = await supabase
-        .from('tags')
-        .select('id, slug, follower_count')
-        .order('follower_count', { ascending: false })
-        .limit(100);
-
-      if (tagsError) throw tagsError;
+      // Get all tags sorted by popularity through the backend owner.
+      const allTags = await listTags(100);
       if (!allTags || allTags.length === 0) return [];
 
       if (!user) {
@@ -39,13 +33,9 @@ export function useSuggestedTags(limit = 12) {
         }));
       }
 
-      // Get user's followed tags
-      const { data: follows } = await supabase
-        .from('tag_follows')
-        .select('tag_id')
-        .eq('user_id', user.id);
-
-      const followedIds = new Set((follows || []).map((f) => f.tag_id));
+      // Get user's followed tags through the backend owner.
+      const follows = await getFollowedTags(500);
+      const followedIds = new Set((follows || []).map((f) => f.id));
 
       // If user follows no tags, return popular ones they don't follow
       if (followedIds.size === 0) {

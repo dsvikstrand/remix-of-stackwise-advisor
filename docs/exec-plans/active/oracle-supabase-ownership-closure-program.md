@@ -309,6 +309,94 @@ p10) [todo] Soak proof:
 - confirm like/unlike still updates counts and invalidates profile liked-blueprints
 - confirm Supabase attribution does not show normal-runtime `blueprint_likes` reads after soak
 
+## Tags, Blueprint Tags, And Tag Follows Round 1 Implementation Plan
+
+q1) [have] Current code already has the main Oracle ownership primitives:
+- `tag_state` via `server/services/oracleTagState.ts`
+- `blueprint_tag_state` via `server/services/oracleBlueprintTagState.ts`
+- `tag_follow_state` via `server/services/oracleTagFollowState.ts`
+- backend API routes under `/api/tags`, `/api/tags/by-slug`, `/api/tags/follows`, and `/api/blueprint-tags`
+
+q2) [have] Current backend wall/channel/source-page tag reads already have Oracle-aware helpers when the Oracle control plane is available.
+
+q3) [have] Round 1 removed normal browser read residue from the targeted tag surfaces:
+- `src/lib/blueprintTagsApi.ts` no longer falls back to browser Supabase for `tags` or `blueprint_tags`
+- `src/hooks/usePopularBlueprintTags.ts`, `src/hooks/useSuggestedTags.ts`, `src/hooks/useBlueprintSearch.ts`, `src/hooks/useExploreSearch.ts`, and `src/hooks/useCommunityStats.ts` now use backend tag/blueprint-tag APIs for tag reads
+- `src/pages/Channels.tsx` now hydrates channel preview tags through `/api/blueprint-tags`
+- `src/pages/PostDetail.tsx` now resolves tag IDs through `/api/tags/by-id`
+- `src/lib/myFeedData.ts` now requires an injected backend blueprint-tag reader instead of directly querying `blueprint_tags`
+
+q4) [todo] Round 2 residue still exists in backend and write surfaces:
+- backend tag and blueprint-tag compatibility helpers in `server/index.ts`
+- backend manual channel publishing tag attachment in `server/routes/channels.ts`
+- frontend blueprint create/update writes in `src/hooks/useBlueprints.ts`
+- backend auto-channel and blueprint-creation tag/blueprint-tag write shadows
+- Oracle bootstrap readers in `server/services/oracleTagState.ts`, `server/services/oracleTagFollowState.ts`, and `server/services/oracleBlueprintTagState.ts`
+
+q5) [have] Round 1 target:
+- cut browser direct Supabase reads for tag directory, followed tags, and blueprint-tag joins where backend APIs already exist
+- keep normal product reads behind backend Oracle-aware APIs
+- preserve current user-facing behavior for wall, channels, post detail, tag browsing, suggested tags, and popular tags
+- leave write-shadow contraction for Round 2 unless the implementation review finds a small, low-risk write path that can be safely moved with tests
+
+q6) [have] Implementation files:
+- `server/contracts/api/feed.ts`
+- `server/contracts/api/tags.ts`
+- `server/index.ts`
+- `server/routes/feed.ts`
+- `server/routes/tags.ts`
+- `server/services/myFeed.ts`
+- `src/lib/tagsApi.ts`
+- `src/lib/blueprintTagsApi.ts`
+- `src/hooks/usePopularBlueprintTags.ts`
+- `src/hooks/useSuggestedTags.ts`
+- `src/hooks/useBlueprintSearch.ts`
+- `src/hooks/useExploreSearch.ts`
+- `src/hooks/useCommunityStats.ts`
+- `src/pages/PostDetail.tsx`
+- `src/pages/Channels.tsx`
+- `src/lib/myFeedData.ts`
+- `src/test/tagsRoute.test.ts`
+- `src/test/feedRoute.test.ts`
+
+q7) [have] Implementation steps:
+- inventory each frontend tag/blueprint-tag caller and its exact payload, auth, cache, and loading/error expectations
+- replace direct browser Supabase reads with `tagsApi` and `blueprintTagsApi` calls to backend routes
+- make the API helpers expose the shapes required by existing hooks/pages rather than duplicating route parsing inside components
+- keep follow/unfollow mutations routed through backend APIs and verify Oracle follower-count behavior is still correct
+- tighten or document backend fallbacks so any remaining Supabase `tags`, `blueprint_tags`, or `tag_follows` access is bootstrap, compatibility shadow, or a named Round 2 residue
+- add regression coverage or grep proof showing frontend product-table access was removed from the Round 1 target surface
+
+q8) [have] Round 1 out of scope:
+- deleting Supabase tables or migrations
+- removing Oracle bootstrap reads from Supabase
+- removing all Supabase shadow writes for `tags`, `blueprint_tags`, or `tag_follows`
+- fully rewriting manual channel publish tag attachment
+- broad legacy routine/social cleanup
+
+q9) [have] Verification:
+- `npm run typecheck`
+- `npm test -- --run src/test/tagsRoute.test.ts src/test/blueprintTagsRoute.test.ts src/test/oracleTagState.test.ts src/test/oracleTagFollowState.test.ts src/test/oracleBlueprintTagState.test.ts src/test/feedRoute.test.ts`
+- `npm run build`
+- `rg -n "from\\('tags'\\)|from\\(\"tags\"\\)|from\\('blueprint_tags'\\)|from\\(\"blueprint_tags\"\\)|from\\('tag_follows'\\)|from\\(\"tag_follows\"\\)" src server --glob '*.ts' --glob '*.tsx'`
+
+q10) [have] Post-Round 1 grep result:
+- no normal frontend browser reads remain for `tags`, `blueprint_tags`, or `tag_follows`
+- remaining `src` matches are `src/hooks/useBlueprints.ts` blueprint-tag write/update paths and `src/test/feedRoute.test.ts` test fixture access
+- remaining backend matches are bootstrap, compatibility fallback, retained write-shadow paths, and documented Round 2 residues
+
+q11) [todo] Deployment and soak proof:
+- deploy backend/frontend if runtime files change
+- smoke `/api/tags`, `/api/tags/by-slug`, `/api/tags/follows`, and `/api/blueprint-tags`
+- verify wall, channels, post detail, followed tags, suggested tags, and popular tags still render correctly
+- inspect queue/health to ensure no unrelated runtime regression
+- after soak, confirm Supabase attribution for `tags`, `blueprint_tags`, and `tag_follows` drops or is explainable by retained backend compatibility paths
+
+q12) [todo] Round 2 candidate after successful soak:
+- move backend tag creation, follow/unfollow, blueprint-tag attachment, and manual channel publish tag writes to strict Oracle ownership
+- contract Supabase shadow writes behind explicit bootstrap/break-glass flags if they must remain temporarily
+- add ownership guardrails so direct browser Supabase product-table reads cannot be reintroduced
+
 ## Session 3: Legacy FK And Compatibility-Shadow Contraction
 
 h1) [todo] Identify every legacy FK path that still forces Oracle-owned runtime to satisfy Supabase constraints.

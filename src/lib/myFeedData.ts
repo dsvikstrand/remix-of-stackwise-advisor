@@ -141,6 +141,14 @@ export async function listMyFeedItemsFromDb(input: {
     last_error_code: string | null;
     transcript_status: string | null;
   }>>;
+  readBlueprintTagRows: (input: {
+    db: DbClient;
+    blueprintIds: string[];
+  }) => Promise<Array<{
+    blueprint_id: string;
+    tag_id: string;
+    tag_slug: string;
+  }>>;
 }): Promise<MyFeedItemView[]> {
   const { db, userId } = input;
 
@@ -214,16 +222,10 @@ export async function listMyFeedItemsFromDb(input: {
       : Promise.resolve({ data: [], error: null }),
   ]);
 
-  const { data: tagRows } = blueprintIds.length
-    ? await db
-      .from('blueprint_tags')
-      .select('blueprint_id, tags(slug)')
-      .in('blueprint_id', blueprintIds)
-    : { data: [] as Array<{ blueprint_id: string; tags?: { slug?: string } | Array<{ slug?: string }> | null }> };
-  const tagsByBlueprint = collectJoinedTagSlugs((tagRows || []) as Array<{
-    blueprint_id: string;
-    tags?: { slug?: string } | Array<{ slug?: string }> | null;
-  }>);
+  const tagRows = blueprintIds.length
+    ? await input.readBlueprintTagRows({ db, blueprintIds })
+    : [];
+  const tagsByBlueprint = collectBlueprintTagSlugs(tagRows || []);
 
   const sourceMap = new Map((sources || []).map((row: any) => [row.id, row]));
   const unlockMap = new Map((unlocks || []).map((row: any) => [row.source_item_id, row]));
@@ -354,21 +356,15 @@ export async function listMyFeedItemsFromDb(input: {
     } satisfies MyFeedItemView;
   });
 }
-function collectJoinedTagSlugs(
-  rows: Array<{ blueprint_id: string; tags?: { slug?: string } | Array<{ slug?: string }> | null }>,
-) {
+function collectBlueprintTagSlugs(rows: Array<{ blueprint_id: string; tag_slug?: string | null }>) {
   const tagsByBlueprint = new Map<string, string[]>();
   for (const row of rows) {
     const blueprintId = String(row.blueprint_id || '').trim();
     if (!blueprintId) continue;
     const existing = tagsByBlueprint.get(blueprintId) || [];
-    const joined = row.tags;
-    const tagCandidates = Array.isArray(joined) ? joined : joined ? [joined] : [];
-    for (const candidate of tagCandidates) {
-      const slug = String(candidate?.slug || '').trim();
-      if (!slug || existing.includes(slug)) continue;
-      existing.push(slug);
-    }
+    const slug = String(row.tag_slug || '').trim();
+    if (!slug || existing.includes(slug)) continue;
+    existing.push(slug);
     tagsByBlueprint.set(blueprintId, existing);
   }
   return tagsByBlueprint;

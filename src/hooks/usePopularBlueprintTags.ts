@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { listTags } from '@/lib/tagsApi';
 
 export interface PopularBlueprintTag {
   id: string;
@@ -11,16 +11,8 @@ export function usePopularBlueprintTags(limit = 10) {
   return useQuery({
     queryKey: ['popular-blueprint-tags', limit],
     queryFn: async () => {
-      const { data: tags, error: tagError } = await supabase
-        .from('tags')
-        .select('id, slug, follower_count')
-        .order('follower_count', { ascending: false })
-        .order('slug', { ascending: true })
-        .limit(limit);
-
-      if (tagError) throw tagError;
-
-      return (tags || []).map((tag) => ({
+      const tags = await listTags(limit);
+      return tags.map((tag) => ({
         id: tag.id,
         slug: tag.slug,
         count: Number(tag.follower_count || 0),
