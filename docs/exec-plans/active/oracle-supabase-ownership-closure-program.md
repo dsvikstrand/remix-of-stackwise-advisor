@@ -326,11 +326,9 @@ q3) [have] Round 1 removed normal browser read residue from the targeted tag sur
 - `src/pages/PostDetail.tsx` now resolves tag IDs through `/api/tags/by-id`
 - `src/lib/myFeedData.ts` now requires an injected backend blueprint-tag reader instead of directly querying `blueprint_tags`
 
-q4) [todo] Round 2 residue still exists in backend and write surfaces:
-- backend tag and blueprint-tag compatibility helpers in `server/index.ts`
-- backend manual channel publishing tag attachment in `server/routes/channels.ts`
+q4) [todo] Remaining tag-family residue after Round 2 is narrower:
+- backend tag and blueprint-tag compatibility fallbacks in `server/index.ts`, `server/routes/channels.ts`, `server/services/autoChannelPipeline.ts`, and `server/services/blueprintCreation.ts` that only run when Oracle-aware dependencies are unavailable
 - frontend blueprint create/update writes in `src/hooks/useBlueprints.ts`
-- backend auto-channel and blueprint-creation tag/blueprint-tag write shadows
 - Oracle bootstrap readers in `server/services/oracleTagState.ts`, `server/services/oracleTagFollowState.ts`, and `server/services/oracleBlueprintTagState.ts`
 
 q5) [have] Round 1 target:
@@ -392,10 +390,28 @@ q11) [todo] Deployment and soak proof:
 - inspect queue/health to ensure no unrelated runtime regression
 - after soak, confirm Supabase attribution for `tags`, `blueprint_tags`, and `tag_follows` drops or is explainable by retained backend compatibility paths
 
-q12) [todo] Round 2 candidate after successful soak:
+q12) [have] Round 2 selected scope:
 - move backend tag creation, follow/unfollow, blueprint-tag attachment, and manual channel publish tag writes to strict Oracle ownership
 - contract Supabase shadow writes behind explicit bootstrap/break-glass flags if they must remain temporarily
 - add ownership guardrails so direct browser Supabase product-table reads cannot be reintroduced
+
+q13) [have] Round 2 backend write-ownership pass moved the main backend tag write paths to Oracle primary:
+- `/api/tags` tag creation now mints/loads tag IDs from Oracle `tag_state` instead of Supabase `tags`
+- `/api/tags/:tagId/follow` and unfollow now update Oracle `tag_follow_state` and Oracle follower counts without Supabase `tag_follows`
+- blueprint creation uses the shared Oracle-aware `ensureTagId` before writing Oracle `blueprint_tag_state`
+- auto-channel publishing injects the shared Oracle-aware `ensureTagId` before writing Oracle `blueprint_tag_state`
+- manual channel candidate publish injects the shared Oracle-aware `ensureTagId` before writing Oracle `blueprint_tag_state`
+- Oracle tag upsert now tolerates concurrent slug creation by reloading the winning slug row
+
+q14) [have] Round 2 verification:
+- `npm run typecheck`
+- `npm test -- --run src/test/oracleTagState.test.ts src/test/oracleTagFollowState.test.ts src/test/tagsRoute.test.ts src/test/channelsRoute.test.ts src/test/blueprintCreation.test.ts src/test/feedRoute.test.ts`
+
+q15) [todo] Remaining follow-up after Round 2:
+- deploy backend/frontend and inspect runtime health
+- after soak, confirm Supabase attribution no longer shows meaningful normal-runtime `tags` or `tag_follows` writes
+- decide whether to migrate `src/hooks/useBlueprints.ts` browser blueprint create/update tagging to backend ownership or retire that legacy surface
+- convert retained no-Oracle fallback branches into explicit break-glass paths if the app no longer needs non-Oracle runtime support
 
 ## Session 3: Legacy FK And Compatibility-Shadow Contraction
 

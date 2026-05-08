@@ -103,6 +103,11 @@ export type AutoChannelPipelineInput = {
   listBlueprintTagSlugs: (input: {
     blueprintId: string;
   }) => Promise<string[]>;
+  ensureTagId?: (input: {
+    db: DbClient;
+    userId: string;
+    tagSlug: string;
+  }) => Promise<string>;
   attachBlueprintTag?: (input: {
     blueprintId: string;
     tagId: string;
@@ -378,7 +383,13 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
   }
 
   if (evaluation.aggregate === 'pass') {
-    const tagId = await ensureTagId(input.db, input.userId, channelSlug);
+    const tagId = input.ensureTagId
+      ? await input.ensureTagId({
+          db: input.db,
+          userId: input.userId,
+          tagSlug: channelSlug,
+        })
+      : await ensureTagId(input.db, input.userId, channelSlug);
 
     const { error: publicError } = await input.db
       .from('blueprints')

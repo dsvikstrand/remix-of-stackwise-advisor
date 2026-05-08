@@ -443,18 +443,27 @@ export function registerChannelCandidateRoutes(app: express.Express, deps: Chann
 
     const tagSlug = String(body.tag_slug || candidate.channel_slug || 'general').trim().toLowerCase();
     let tagId: string | null = null;
-    const { data: existingTag } = await db.from('tags').select('id').eq('slug', tagSlug).maybeSingle();
-    if (existingTag?.id) {
-      tagId = existingTag.id;
-    } else {
-      const { data: createdTag, error: tagCreateError } = await db
-        .from('tags')
-        .insert({ slug: tagSlug, created_by: userId })
-        .select('id')
-        .single();
-      if (tagCreateError) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: tagCreateError.message, data: null });
-      tagId = createdTag.id;
+    try {
+      if (deps.ensureTagId) {
+        tagId = await deps.ensureTagId({ db, userId, tagSlug });
+      } else {
+        const { data: existingTag } = await db.from('tags').select('id').eq('slug', tagSlug).maybeSingle();
+        if (existingTag?.id) {
+          tagId = existingTag.id;
+        } else {
+          const { data: createdTag, error: tagCreateError } = await db
+            .from('tags')
+            .insert({ slug: tagSlug, created_by: userId })
+            .select('id')
+            .single();
+          if (tagCreateError) throw tagCreateError;
+          tagId = createdTag.id;
+        }
+      }
+    } catch (error) {
+      return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: error instanceof Error ? error.message : 'Could not create tag', data: null });
     }
+    if (!tagId) return res.status(400).json({ ok: false, error_code: 'WRITE_FAILED', message: 'Could not create tag', data: null });
 
     if (deps.attachBlueprintTag) {
       await deps.attachBlueprintTag({

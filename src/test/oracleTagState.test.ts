@@ -78,6 +78,40 @@ describe('oracle tag state', () => {
     }
   });
 
+  it('creates Oracle-owned tag ids by slug without Supabase ids', async () => {
+    const controlDb = openOracleControlPlaneDb({
+      sqlitePath: createTempSqlitePath(),
+    });
+
+    try {
+      const created = await upsertOracleTagRow({
+        controlDb,
+        row: {
+          slug: 'creator-economy',
+        },
+      });
+      const reloaded = await upsertOracleTagRow({
+        controlDb,
+        row: {
+          slug: 'creator-economy',
+        },
+      });
+
+      expect(created.id).toBeTruthy();
+      expect(reloaded.id).toBe(created.id);
+      expect(await countOracleTagRows({ controlDb })).toBe(1);
+      expect(await getOracleTagRowBySlug({
+        controlDb,
+        slug: 'creator-economy',
+      })).toMatchObject({
+        id: created.id,
+        slug: 'creator-economy',
+      });
+    } finally {
+      await controlDb.close();
+    }
+  });
+
   it('syncs tag rows from Supabase', async () => {
     const controlDb = openOracleControlPlaneDb({
       sqlitePath: createTempSqlitePath(),

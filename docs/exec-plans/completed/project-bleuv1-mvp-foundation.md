@@ -336,3 +336,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 ## Post-Completion Ownership Note (2026-05-07)
 1. Current product tag reads are now backend-owned: tag directory, followed tags, tag lookup, blueprint-tag joins, Channels previews, Explore/Search suggestions, and legacy post-detail tag resolution use Oracle-aware backend APIs.
 2. Direct browser reads from Supabase `tags`, `blueprint_tags`, and `tag_follows` are no longer part of the current runtime foundation; any remaining Supabase tag-table access belongs to bootstrap, compatibility fallback, or write-shadow cleanup tracked by the active Oracle/Supabase ownership closure program.
+
+## Post-Completion Ownership Note (2026-05-08)
+1. Backend tag writes are now Oracle-owned for normal runtime: tag creation mints/loads IDs from `tag_state`, tag follow/unfollow updates `tag_follow_state`, and backend blueprint creation / auto-channel / manual channel publish attach Oracle `blueprint_tag_state` rows through the shared Oracle-aware tag-id helper.
+2. Supabase tag-family access should now be interpreted as bootstrap, compatibility fallback, or legacy browser-create residue unless a future attribution run proves a normal backend runtime leak.

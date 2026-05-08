@@ -24,6 +24,11 @@ export type ChannelsRouteDeps = {
     tagId: string;
     tagSlug: string;
   }) => Promise<void>;
+  ensureTagId?: (input: {
+    db: DbClient;
+    userId: string;
+    tagSlug: string;
+  }) => Promise<string>;
   getFeedItemById: (db: DbClient, input: {
     feedItemId: string;
     userId?: string | null;

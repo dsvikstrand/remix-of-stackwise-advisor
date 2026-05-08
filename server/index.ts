@@ -5131,52 +5131,6 @@ async function attachBlueprintTagOracleAware(
   if (error) throw error;
 }
 
-async function syncOracleTagRowFromSupabaseBySlug(slug: string) {
-  const normalizedSlug = normalizeRouteString(slug).toLowerCase();
-  if (!oracleControlPlane || !normalizedSlug) return null;
-
-  const db = getServiceSupabaseClient();
-  if (!db) {
-    throw new Error('Service role client is not configured');
-  }
-
-  const { data, error } = await db
-    .from('tags')
-    .select('id, slug, follower_count, created_at')
-    .eq('slug', normalizedSlug)
-    .maybeSingle();
-  if (error) throw error;
-  if (!data) return null;
-
-  return upsertOracleTagRow({
-    controlDb: oracleControlPlane,
-    row: data as Record<string, unknown>,
-  });
-}
-
-async function syncOracleTagRowFromSupabaseById(tagId: string) {
-  const normalizedTagId = normalizeRouteString(tagId);
-  if (!oracleControlPlane || !normalizedTagId) return null;
-
-  const db = getServiceSupabaseClient();
-  if (!db) {
-    throw new Error('Service role client is not configured');
-  }
-
-  const { data, error } = await db
-    .from('tags')
-    .select('id, slug, follower_count, created_at')
-    .eq('id', normalizedTagId)
-    .maybeSingle();
-  if (error) throw error;
-  if (!data) return null;
-
-  return upsertOracleTagRow({
-    controlDb: oracleControlPlane,
-    row: data as Record<string, unknown>,
-  });
-}
-
 type FeedItemRow = {
   id: string;
   user_id: string;
@@ -10325,7 +10279,7 @@ async function listOracleTagRouteItemsByIds(input: {
 
   const rows = await listOracleTagRows({
     controlDb: oracleControlPlane,
-    ids: tagIds,
+    tagIds,
     limit: tagIds.length,
   });
   const viewerUserId = normalizeRouteString(input.viewerUserId);
@@ -10375,46 +10329,13 @@ async function createOracleTag(input: {
   userId: string;
   follow?: boolean;
 }) {
-  const slug = normalizeRouteString(input.slug).toLowerCase();
+  const slug = toTagSlug(input.slug);
   const userId = normalizeRouteString(input.userId);
   if (!oracleControlPlane || !slug || !userId) return null;
 
-  const db = getServiceSupabaseClient();
-  if (!db) {
-    throw new Error('Service role client is not configured');
-  }
-
-  let supabaseTag = null as null | {
-    id: string;
-    slug: string;
-    follower_count: number | null;
-    created_at: string;
-  };
-
-  const { data: existing, error: existingError } = await db
-    .from('tags')
-    .select('id, slug, follower_count, created_at')
-    .eq('slug', slug)
-    .maybeSingle();
-  if (existingError) throw existingError;
-  if (existing) {
-    supabaseTag = existing;
-  } else {
-    const { data: created, error: createError } = await db
-      .from('tags')
-      .insert({
-        slug,
-        created_by: userId,
-      })
-      .select('id, slug, follower_count, created_at')
-      .single();
-    if (createError) throw createError;
-    supabaseTag = created;
-  }
-
   const tag = await upsertOracleTagRow({
     controlDb: oracleControlPlane,
-    row: supabaseTag as Record<string, unknown>,
+    row: { slug },
   });
 
   if (input.follow !== false) {
@@ -10443,15 +10364,10 @@ async function setOracleTagFollowState(input: {
   const userId = normalizeRouteString(input.userId);
   if (!oracleControlPlane || !tagId || !userId) return null;
 
-  const db = getServiceSupabaseClient();
-  if (!db) {
-    throw new Error('Service role client is not configured');
-  }
-
   const tag = await getOracleTagRowById({
     controlDb: oracleControlPlane,
     tagId,
-  }) || await syncOracleTagRowFromSupabaseById(tagId);
+  });
   if (!tag) return null;
 
   const existingFollow = await getOracleTagFollowRow({
@@ -10473,25 +10389,6 @@ async function setOracleTagFollowState(input: {
   }
 
   if (nextFollowed) {
-    const { error } = await db
-      .from('tag_follows')
-      .upsert({
-        tag_id: tag.id,
-        user_id: userId,
-      }, {
-        onConflict: 'tag_id,user_id',
-      });
-    if (error) throw error;
-  } else {
-    const { error } = await db
-      .from('tag_follows')
-      .delete()
-      .eq('tag_id', tag.id)
-      .eq('user_id', userId);
-    if (error) throw error;
-  }
-
-  if (nextFollowed) {
     await upsertOracleTagFollowRow({
       controlDb: oracleControlPlane,
       row: {
@@ -10508,11 +10405,10 @@ async function setOracleTagFollowState(input: {
     });
   }
 
-  const refreshedTag = await syncOracleTagRowFromSupabaseById(tag.id)
-    || await getOracleTagRowById({
-      controlDb: oracleControlPlane,
-      tagId: tag.id,
-    });
+  const refreshedTag = await getOracleTagRowById({
+    controlDb: oracleControlPlane,
+    tagId: tag.id,
+  });
   if (!refreshedTag) return null;
 
   return {
@@ -11023,6 +10919,7 @@ async function runAutoChannelForFeedItem(input: {
     gateMode: autoChannelGateMode,
     sourceTag: input.sourceTag,
     listBlueprintTagSlugs: ({ blueprintId }) => listBlueprintTagSlugsOracleAware(input.db, { blueprintId }),
+    ensureTagId: ({ db, userId, tagSlug }) => ensureTagId(db, userId, tagSlug),
     attachBlueprintTag: ({ blueprintId, tagId, tagSlug }) => attachBlueprintTagOracleAware(input.db, {
       blueprintId,
       tagId,
@@ -11095,6 +10992,14 @@ function toTagSlug(raw: string) {
 async function ensureTagId(db: ReturnType<typeof createClient>, userId: string, tagSlug: string): Promise<string> {
   const slug = toTagSlug(tagSlug);
   if (!slug) throw new Error('INVALID_TAG');
+
+  if (oracleControlPlane) {
+    const tag = await upsertOracleTagRow({
+      controlDb: oracleControlPlane,
+      row: { slug },
+    });
+    return tag.id;
+  }
 
   const { data: existing } = await db.from('tags').select('id').eq('slug', slug).maybeSingle();
   if (existing?.id) return existing.id;
@@ -19192,6 +19097,7 @@ registerChannelCandidateRoutes(app, {
     if (!db) return Promise.resolve();
     return attachBlueprintTagOracleAware(db, { blueprintId, tagId, tagSlug });
   },
+  ensureTagId: ({ db, userId, tagSlug }) => ensureTagId(db, userId, tagSlug),
   getFeedItemById: getFeedItemByIdOracleFirst,
   patchFeedItemById: patchFeedItemByIdOracleAware,
   listChannelCandidateRows: (db, input) => listChannelCandidateRowsOracleFirst(db, input),

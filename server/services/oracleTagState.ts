@@ -193,15 +193,24 @@ export async function upsertOracleTagRow(input: {
     updated_at: input.row.updated_at || nowIso,
   }, nowIso);
 
-  await input.controlDb.db
-    .insertInto('tag_state')
-    .values(nextRow)
-    .onConflict((oc) => oc.column('id').doUpdateSet({
+  try {
+    await input.controlDb.db
+      .insertInto('tag_state')
+      .values(nextRow)
+      .onConflict((oc) => oc.column('id').doUpdateSet({
+        slug: nextRow.slug,
+        follower_count: nextRow.follower_count,
+        updated_at: nextRow.updated_at,
+      }))
+      .execute();
+  } catch (error) {
+    const reloaded = await getOracleTagRowBySlug({
+      controlDb: input.controlDb,
       slug: nextRow.slug,
-      follower_count: nextRow.follower_count,
-      updated_at: nextRow.updated_at,
-    }))
-    .execute();
+    });
+    if (reloaded) return reloaded;
+    throw error;
+  }
 
   if (existingBySlug && existingBySlug.id !== nextRow.id) {
     await input.controlDb.db
