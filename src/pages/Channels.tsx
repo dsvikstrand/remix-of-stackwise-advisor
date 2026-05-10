@@ -13,7 +13,7 @@ import { CHANNELS_CATALOG } from '@/lib/channelsCatalog';
 import { getChannelIcon } from '@/lib/channelIcons';
 import { resolvePrimaryChannelFromTags } from '@/lib/channelMapping';
 import { collectBlueprintTagSlugMap, listBlueprintTagRows } from '@/lib/blueprintTagsApi';
-import { supabase } from '@/integrations/supabase/client';
+import { listBlueprintsViaApi } from '@/lib/blueprintReadApi';
 import { bucketJoinError, logOncePerSession, logP3Event } from '@/lib/telemetry';
 import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 
@@ -121,15 +121,12 @@ export default function Channels() {
     enabled: suggestedChannels.length > 0,
     staleTime: 30_000,
     queryFn: async () => {
-      const { data: blueprints, error } = await supabase
-        .from('blueprints')
-        .select('id, title, created_at')
-        .eq('is_public', true)
-        .order('created_at', { ascending: false })
-        .limit(300);
-
-      if (error) throw error;
-      if (!blueprints || blueprints.length === 0) return {} as Record<string, { id: string; title: string }[]>;
+      const blueprints = (await listBlueprintsViaApi({
+        visibility: 'public',
+        sort: 'latest',
+        limit: 300,
+      })).items;
+      if (blueprints.length === 0) return {} as Record<string, { id: string; title: string }[]>;
 
       const blueprintIds = blueprints.map((row) => row.id);
 

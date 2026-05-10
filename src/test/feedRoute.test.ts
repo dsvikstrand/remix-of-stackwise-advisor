@@ -112,6 +112,15 @@ function buildFeedRouteDeps(db: any) {
           .filter((candidate: any) => candidate.blueprint_id && candidate.tag_slug);
       });
     },
+    readBlueprintRows: async ({ db: innerDb, blueprintIds }: { db: any; blueprintIds: string[] }) => {
+      if (!blueprintIds.length) return [];
+      const { data, error } = await innerDb
+        .from('blueprints')
+        .select('id, creator_user_id, title, banner_url, llm_review, preview_summary, is_public')
+        .in('id', blueprintIds);
+      if (error) throw error;
+      return data || [];
+    },
   };
 }
 

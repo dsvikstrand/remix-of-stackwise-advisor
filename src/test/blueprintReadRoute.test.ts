@@ -37,6 +37,66 @@ function createResponse(viewerUserId?: string) {
 }
 
 describe('blueprint read route', () => {
+  it('lists public blueprints through the backend read owner', async () => {
+    const app = createMockApp();
+    const listBlueprintRows = vi.fn(async ({ titleQuery, sort, visibility, includeTotal }) => ({
+      items: [{
+        id: 'bp_list_1',
+        inventory_id: null,
+        creator_user_id: 'creator_1',
+        title: `Result ${titleQuery}`,
+        sections_json: null,
+        mix_notes: null,
+        review_prompt: null,
+        banner_url: null,
+        llm_review: null,
+        preview_summary: null,
+        is_public: true,
+        likes_count: 5,
+        source_blueprint_id: null,
+        created_at: '2026-04-19T11:00:00.000Z',
+        updated_at: '2026-04-19T11:00:00.000Z',
+        creator_profile: null,
+      }],
+      total_count: includeTotal ? 12 : null,
+    }));
+
+    registerBlueprintReadRoutes(app as any, {
+      getServiceSupabaseClient: () => null,
+      getBlueprintRow: async () => null,
+      listBlueprintRows,
+      syncBlueprintReadState: async () => null,
+    });
+
+    const handler = app.handlers['GET /api/blueprints'];
+    const res = createResponse();
+    await handler({
+      query: {
+        q: 'health',
+        sort: 'popular',
+        visibility: 'public',
+        include_total: 'true',
+      },
+    } as any, res as any);
+
+    expect(listBlueprintRows).toHaveBeenCalledWith(expect.objectContaining({
+      titleQuery: 'health',
+      sort: 'popular',
+      visibility: 'public',
+      includeTotal: true,
+    }));
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        total_count: 12,
+        items: [{
+          id: 'bp_list_1',
+        }],
+      },
+    });
+  });
+
   it('creates a blueprint through the backend write owner', async () => {
     const app = createMockApp();
     const createBlueprintRow = vi.fn(async ({ title, userId, tags }) => ({

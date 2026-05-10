@@ -135,6 +135,18 @@ export type FeedRouteDeps = {
     last_error_code: string | null;
     transcript_status: string | null;
   }>>;
+  readBlueprintRows: (input: {
+    db: DbClient;
+    blueprintIds: string[];
+  }) => Promise<Array<{
+    id: string;
+    creator_user_id: string | null;
+    title: string;
+    banner_url: string | null;
+    llm_review: string | null;
+    preview_summary: string | null;
+    is_public: boolean;
+  }>>;
   readBlueprintTagRows: (input: {
     db: DbClient;
     blueprintIds: string[];

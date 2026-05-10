@@ -443,6 +443,43 @@ r5) [todo] Remaining Round 1 proof:
 - smoke release, queue health, and YouTube save path
 - after soak, confirm no `blueprint_tags` browser/runtime egress reappears
 
+## Frontend Product-Data Isolation Round 2 Implementation Plan
+
+s1) [have] Round 2 selected the remaining frontend `blueprints` read residue because browser product-table access was still present after create/update write isolation:
+- blueprint search and suggested blueprints
+- Explore blueprint search
+- community stats and top-blueprints previews
+- Channels suggested previews
+- landing proof/sample previews
+- My Feed submission dialog section lookup
+
+s2) [have] Round 2 implementation added a backend-owned list/search route:
+- `GET /api/blueprints` lists Oracle-backed blueprint rows with optional `ids`, `q`, `visibility`, `sort`, `limit`, `require_sections`, `require_banner`, and `include_total`
+- Oracle `blueprint_state` handles normal runtime list/count reads
+- Supabase fallback remains server-side only for non-Oracle/dev compatibility
+- My Feed now requires an injected backend blueprint reader instead of falling back to `blueprints` inside shared feed hydration
+
+s3) [have] Round 2 frontend cleanup:
+- `src/hooks/useBlueprintSearch.ts` uses backend list/search for public-or-owner blueprint search
+- `src/hooks/useSuggestedBlueprints.ts` uses backend list/search for recommendation candidates and popular fallback
+- `src/hooks/useExploreSearch.ts` uses backend list/search for title and tag-derived blueprint results
+- `src/hooks/useCommunityStats.ts` uses backend list/count for public blueprint totals and top blueprints
+- `src/pages/Channels.tsx` uses backend list/search for suggested channel preview candidates
+- landing proof/sample components use backend list/search
+- `src/components/feed/MyFeedTimeline.tsx` uses backend blueprint detail for submission-dialog section counts
+
+s4) [have] Round 2 verification so far:
+- `npm run typecheck`
+- `npm test -- --run src/test/blueprintReadRoute.test.ts src/test/feedRoute.test.ts src/test/oracleBlueprintState.test.ts src/test/blueprintTagsRoute.test.ts src/test/tagsRoute.test.ts`
+- targeted frontend grep shows no `src` browser runtime `from('blueprints')` matches; only test fixture access remains
+
+s5) [todo] Remaining Round 2 proof:
+- `npm run build`
+- docs freshness/link checks
+- deploy backend/frontend
+- smoke release, queue health, and public `/api/blueprints` list route
+- after soak, confirm browser-runtime Supabase attribution no longer shows `blueprints` reads from these surfaces
+
 ## Session 3: Legacy FK And Compatibility-Shadow Contraction
 
 h1) [todo] Identify every legacy FK path that still forces Oracle-owned runtime to satisfy Supabase constraints.

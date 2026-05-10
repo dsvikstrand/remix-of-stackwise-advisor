@@ -141,6 +141,18 @@ export async function listMyFeedItemsFromDb(input: {
     last_error_code: string | null;
     transcript_status: string | null;
   }>>;
+  readBlueprintRows: (input: {
+    db: DbClient;
+    blueprintIds: string[];
+  }) => Promise<Array<{
+    id: string;
+    creator_user_id: string | null;
+    title: string;
+    banner_url: string | null;
+    llm_review: string | null;
+    preview_summary: string | null;
+    is_public: boolean;
+  }>>;
   readBlueprintTagRows: (input: {
     db: DbClient;
     blueprintIds: string[];
@@ -194,10 +206,10 @@ export async function listMyFeedItemsFromDb(input: {
           .select('id, source_channel_id, source_page_id, source_url, title, source_channel_title, thumbnail_url, metadata')
           .in('id', sourceIds),
     blueprintIds.length
-      ? db
-        .from('blueprints')
-        .select('id, creator_user_id, title, banner_url, llm_review, preview_summary, is_public')
-        .in('id', blueprintIds)
+      ? Promise.resolve({
+          data: input.readBlueprintRows({ db, blueprintIds }),
+          error: null,
+        }).then(async (result) => ({ data: await result.data, error: result.error }))
       : Promise.resolve({ data: [], error: null }),
     input.readChannelCandidateRows
       ? Promise.resolve({

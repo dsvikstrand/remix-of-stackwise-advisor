@@ -6,6 +6,7 @@ import { getBlueprintLikeStates } from '@/lib/blueprintLikesApi';
 import { collectBlueprintTagMap, listBlueprintTagRows } from '@/lib/blueprintTagsApi';
 import { normalizeTag } from '@/lib/tagging';
 import { getTagsBySlugs } from '@/lib/tagsApi';
+import { listBlueprintsViaApi } from '@/lib/blueprintReadApi';
 
 export interface BlueprintRow {
   id: string;
@@ -35,13 +36,6 @@ export type BlueprintSort = 'popular' | 'latest';
 
 export const BLUEPRINT_FIELDS = 'id, inventory_id, creator_user_id, title, banner_url, preview_summary, is_public, likes_count, created_at, updated_at';
 const DEFAULT_BLUEPRINT_LIST_LIMIT = 24;
-
-function applyVisibilityFilter(query: any, userId?: string | null) {
-  if (userId) {
-    return query.or(`is_public.eq.true,creator_user_id.eq.${userId}`);
-  }
-  return query.eq('is_public', true);
-}
 
 export async function hydrateBlueprints(rows: BlueprintRow[], userId?: string | null) {
   if (rows.length === 0) return [] as BlueprintListItem[];
@@ -91,23 +85,15 @@ export function useBlueprintSearch(search: string, sort: BlueprintSort) {
     queryFn: async () => {
       const trimmed = search.trim();
       let blueprints: BlueprintRow[] = [];
-
-      const orderBy = sort === 'latest'
-        ? { column: 'created_at', ascending: false }
-        : { column: 'likes_count', ascending: false };
+      const apiSort = sort === 'latest' ? 'latest' : 'popular';
 
       if (!trimmed) {
-        let query = supabase
-          .from('blueprints')
-          .select(BLUEPRINT_FIELDS)
-          .order(orderBy.column, { ascending: orderBy.ascending })
-          .limit(DEFAULT_BLUEPRINT_LIST_LIMIT);
-
-        query = applyVisibilityFilter(query, user?.id);
-
-        const { data, error } = await query;
-        if (error) throw error;
-        blueprints = data || [];
+        const result = await listBlueprintsViaApi({
+          visibility: 'public_or_owner',
+          sort: apiSort,
+          limit: DEFAULT_BLUEPRINT_LIST_LIMIT,
+        });
+        blueprints = result.items;
         return hydrateBlueprints(blueprints, user?.id);
       }
 
@@ -120,32 +106,24 @@ export function useBlueprintSearch(search: string, sort: BlueprintSort) {
           const blueprintTagRows = await listBlueprintTagRows({ tagIds: [tagData.id] });
           const blueprintIds = blueprintTagRows.map((row) => row.blueprint_id);
           if (blueprintIds.length > 0) {
-            let tagQuery = supabase
-              .from('blueprints')
-              .select(BLUEPRINT_FIELDS)
-              .in('id', blueprintIds)
-              .order(orderBy.column, { ascending: orderBy.ascending })
-              .limit(DEFAULT_BLUEPRINT_LIST_LIMIT);
-
-            tagQuery = applyVisibilityFilter(tagQuery, user?.id);
-
-            const { data } = await tagQuery;
-            matched.push(...(data || []));
+            const result = await listBlueprintsViaApi({
+              ids: blueprintIds,
+              visibility: 'public_or_owner',
+              sort: apiSort,
+              limit: DEFAULT_BLUEPRINT_LIST_LIMIT,
+            });
+            matched.push(...result.items);
           }
         }
       }
 
-      let titleQuery = supabase
-        .from('blueprints')
-        .select(BLUEPRINT_FIELDS)
-        .ilike('title', `%${trimmed}%`)
-        .order(orderBy.column, { ascending: orderBy.ascending })
-        .limit(DEFAULT_BLUEPRINT_LIST_LIMIT);
-
-      titleQuery = applyVisibilityFilter(titleQuery, user?.id);
-
-      const { data: titleMatches } = await titleQuery;
-      if (titleMatches) matched.push(...titleMatches);
+      const titleMatches = await listBlueprintsViaApi({
+        q: trimmed,
+        visibility: 'public_or_owner',
+        sort: apiSort,
+        limit: DEFAULT_BLUEPRINT_LIST_LIMIT,
+      });
+      matched.push(...titleMatches.items);
 
       const deduped = Array.from(new Map(matched.map((row) => [row.id, row])).values())
         .slice(0, DEFAULT_BLUEPRINT_LIST_LIMIT);

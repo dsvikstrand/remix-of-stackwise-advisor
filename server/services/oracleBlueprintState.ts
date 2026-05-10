@@ -1,4 +1,5 @@
 import type { Json } from '../../src/integrations/supabase/types';
+import { sql } from 'kysely';
 import type { OracleControlPlaneDb } from './oracleControlPlaneDb';
 import { normalizeIsoOrNull, normalizeRequiredIso, normalizeStringOrNull } from './oracleValueNormalization';
 
@@ -104,11 +105,48 @@ function chunkArray<T>(items: T[], chunkSize: number) {
 
 export async function countOracleBlueprintRows(input: {
   controlDb: OracleControlPlaneDb;
+  blueprintIds?: string[];
+  creatorUserId?: string | null;
+  isPublic?: boolean | null;
+  publicOrCreatorUserId?: string | null;
+  titleQuery?: string | null;
+  requireSectionsJson?: boolean;
+  requireBannerUrl?: boolean;
 }) {
-  const row = await input.controlDb.db
+  const blueprintIds = [...new Set((input.blueprintIds || []).map((value) => normalizeRequiredString(value)).filter(Boolean))];
+  const creatorUserId = normalizeRequiredString(input.creatorUserId);
+  const publicOrCreatorUserId = normalizeRequiredString(input.publicOrCreatorUserId);
+  const titleQuery = normalizeRequiredString(input.titleQuery).toLowerCase();
+
+  let query = input.controlDb.db
     .selectFrom('blueprint_state')
-    .select(({ fn }) => fn.count<number>('id').as('count'))
-    .executeTakeFirst();
+    .select(({ fn }) => fn.count<number>('id').as('count'));
+
+  if (blueprintIds.length > 0) {
+    query = query.where('id', 'in', blueprintIds);
+  }
+  if (creatorUserId) {
+    query = query.where('creator_user_id', '=', creatorUserId);
+  }
+  if (publicOrCreatorUserId) {
+    query = query.where((eb) => eb.or([
+      eb('is_public', '=', 1),
+      eb('creator_user_id', '=', publicOrCreatorUserId),
+    ]));
+  } else if (typeof input.isPublic === 'boolean') {
+    query = query.where('is_public', '=', input.isPublic ? 1 : 0);
+  }
+  if (titleQuery) {
+    query = query.where(sql<string>`lower(title)`, 'like', `%${titleQuery}%`);
+  }
+  if (input.requireSectionsJson) {
+    query = query.where('sections_json', 'is not', null);
+  }
+  if (input.requireBannerUrl) {
+    query = query.where('banner_url', 'is not', null);
+  }
+
+  const row = await query.executeTakeFirst();
 
   return Number(row?.count || 0);
 }
@@ -134,11 +172,19 @@ export async function listOracleBlueprintRows(input: {
   blueprintIds?: string[];
   creatorUserId?: string | null;
   isPublic?: boolean | null;
+  publicOrCreatorUserId?: string | null;
+  titleQuery?: string | null;
+  requireSectionsJson?: boolean;
+  requireBannerUrl?: boolean;
+  sort?: 'latest' | 'popular';
   limit?: number;
 }) {
   const blueprintIds = [...new Set((input.blueprintIds || []).map((value) => normalizeRequiredString(value)).filter(Boolean))];
   const creatorUserId = normalizeRequiredString(input.creatorUserId);
+  const publicOrCreatorUserId = normalizeRequiredString(input.publicOrCreatorUserId);
+  const titleQuery = normalizeRequiredString(input.titleQuery).toLowerCase();
   const limit = Math.max(1, Math.min(5000, Math.floor(Number(input.limit || 500))));
+  const sort = input.sort === 'popular' ? 'popular' : 'latest';
 
   let query = input.controlDb.db
     .selectFrom('blueprint_state')
@@ -150,18 +196,41 @@ export async function listOracleBlueprintRows(input: {
   if (creatorUserId) {
     query = query.where('creator_user_id', '=', creatorUserId);
   }
-  if (typeof input.isPublic === 'boolean') {
+  if (publicOrCreatorUserId) {
+    query = query.where((eb) => eb.or([
+      eb('is_public', '=', 1),
+      eb('creator_user_id', '=', publicOrCreatorUserId),
+    ]));
+  } else if (typeof input.isPublic === 'boolean') {
     query = query.where('is_public', '=', input.isPublic ? 1 : 0);
+  }
+  if (titleQuery) {
+    query = query.where(sql<string>`lower(title)`, 'like', `%${titleQuery}%`);
+  }
+  if (input.requireSectionsJson) {
+    query = query.where('sections_json', 'is not', null);
+  }
+  if (input.requireBannerUrl) {
+    query = query.where('banner_url', 'is not', null);
+  }
+
+  if (sort === 'popular') {
+    query = query
+      .orderBy('likes_count', 'desc')
+      .orderBy('created_at', 'desc')
+      .orderBy('id', 'desc');
+  } else {
+    query = query
+      .orderBy('created_at', 'desc')
+      .orderBy('id', 'desc');
   }
 
   const rows = await query
-    .orderBy('created_at', 'desc')
-    .orderBy('id', 'desc')
     .limit(limit)
     .execute();
 
   const mapped = rows.map((row) => mapOracleBlueprintRow(row as unknown as Record<string, unknown>));
-  if (blueprintIds.length === 0) return mapped;
+  if (blueprintIds.length === 0 || input.sort) return mapped;
 
   const order = new Map(blueprintIds.map((id, index) => [id, index]));
   return mapped.sort((left, right) => (order.get(left.id) ?? Number.MAX_SAFE_INTEGER) - (order.get(right.id) ?? Number.MAX_SAFE_INTEGER));

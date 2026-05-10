@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { listBlueprintTagRows } from '@/lib/blueprintTagsApi';
 import { getMyLikedBlueprintIds } from '@/lib/blueprintLikesApi';
 import { useAuth } from '@/contexts/AuthContext';
-import { BLUEPRINT_FIELDS, hydrateBlueprints, type BlueprintListItem, type BlueprintRow } from './useBlueprintSearch';
+import { listBlueprintsViaApi } from '@/lib/blueprintReadApi';
+import { hydrateBlueprints, type BlueprintListItem, type BlueprintRow } from './useBlueprintSearch';
 
 
 export function useSuggestedBlueprints(limit = 6) {
@@ -33,28 +33,25 @@ export function useSuggestedBlueprints(limit = 6) {
         const filteredIds = candidateIds.filter((id) => !excludeIds.has(id));
 
         if (filteredIds.length > 0) {
-          const { data } = await supabase
-            .from('blueprints')
-            .select(BLUEPRINT_FIELDS)
-            .in('id', filteredIds)
-            .eq('is_public', true)
-            .order('likes_count', { ascending: false })
-            .limit(limit);
-
-          blueprints = data || [];
+          const result = await listBlueprintsViaApi({
+            ids: filteredIds,
+            visibility: 'public',
+            sort: 'popular',
+            limit,
+          });
+          blueprints = result.items;
         }
       }
 
       if (blueprints.length < limit) {
         const existingIds = blueprints.map((bp) => bp.id);
-        const { data: popular } = await supabase
-          .from('blueprints')
-          .select(BLUEPRINT_FIELDS)
-          .eq('is_public', true)
-          .order('likes_count', { ascending: false })
-          .limit(limit * 2);
+        const popular = await listBlueprintsViaApi({
+          visibility: 'public',
+          sort: 'popular',
+          limit: limit * 2,
+        });
 
-        const additional = (popular || [])
+        const additional = popular.items
           .filter((bp) => !existingIds.includes(bp.id))
           .slice(0, limit - blueprints.length);
 

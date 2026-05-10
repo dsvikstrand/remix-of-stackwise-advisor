@@ -28,6 +28,27 @@ function normalizeBoolean(value: unknown, fallback = false) {
   return fallback;
 }
 
+function normalizeCsv(value: unknown, maxItems = 500) {
+  if (Array.isArray(value)) {
+    return value
+      .flatMap((entry) => String(entry || '').split(','))
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .slice(0, maxItems);
+  }
+  return String(value || '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .slice(0, maxItems);
+}
+
+function normalizeLimit(value: unknown, fallback = 24, max = 500) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(1, Math.min(max, Math.floor(numeric)));
+}
+
 function withEnvelope<T>(data: T, message: string) {
   return {
     ok: true,
@@ -115,6 +136,37 @@ export function registerBlueprintReadRoutes(app: express.Express, deps: Blueprin
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Blueprint create failed';
       return res.status(400).json(withError('WRITE_FAILED', message));
+    }
+  });
+
+  app.get('/api/blueprints', async (req, res) => {
+    if (!deps.listBlueprintRows) {
+      return res.status(500).json(withError('CONFIG_ERROR', 'Blueprint list route is not configured'));
+    }
+
+    const viewerUserId = normalizeRequiredString((res.locals.user as { id?: string } | undefined)?.id) || null;
+    const visibilityRaw = normalizeRequiredString(req.query.visibility).toLowerCase();
+    const visibility = visibilityRaw === 'public_or_owner' ? 'public_or_owner' : 'public';
+    const sortRaw = normalizeRequiredString(req.query.sort).toLowerCase();
+    const sort = sortRaw === 'popular' ? 'popular' : 'latest';
+
+    try {
+      const result = await deps.listBlueprintRows({
+        viewerUserId,
+        blueprintIds: normalizeCsv(req.query.ids),
+        titleQuery: normalizeNullableString(req.query.q),
+        visibility,
+        sort,
+        limit: normalizeLimit(req.query.limit, 24, 500),
+        requireSectionsJson: normalizeBoolean(req.query.require_sections, false),
+        requireBannerUrl: normalizeBoolean(req.query.require_banner, false),
+        includeTotal: normalizeBoolean(req.query.include_total, false),
+      });
+
+      return res.status(200).json(withEnvelope(result, 'blueprint list'));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Blueprint list failed';
+      return res.status(400).json(withError('READ_FAILED', message));
     }
   });
 

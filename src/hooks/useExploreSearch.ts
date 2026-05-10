@@ -5,6 +5,7 @@ import { buildFeedSummary } from '@/lib/feedPreview';
 import { normalizeTag } from '@/lib/tagging';
 import { searchSourcePages } from '@/lib/sourcePagesApi';
 import { listTags } from '@/lib/tagsApi';
+import { listBlueprintsViaApi } from '@/lib/blueprintReadApi';
 
 export type ExploreFilter = 'all' | 'blueprints' | 'users' | 'sources';
 
@@ -65,15 +66,13 @@ async function searchBlueprints(query: string, isTagSearch: boolean): Promise<Bl
 
     const blueprintIds = [...new Set(blueprintTags.map((bt) => bt.blueprint_id))];
 
-    const { data: blueprints, error } = await supabase
-      .from('blueprints')
-      .select('id, title, preview_summary, banner_url, likes_count, creator_user_id, created_at')
-      .eq('is_public', true)
-      .in('id', blueprintIds)
-      .order('likes_count', { ascending: false })
-      .limit(20);
-
-    if (error || !blueprints) return [];
+    const blueprints = (await listBlueprintsViaApi({
+      ids: blueprintIds,
+      visibility: 'public',
+      sort: 'popular',
+      limit: 20,
+    })).items;
+    if (blueprints.length === 0) return [];
 
     // Fetch tags for each blueprint
     const allTags = await listBlueprintTagRows({ blueprintIds });
@@ -97,15 +96,13 @@ async function searchBlueprints(query: string, isTagSearch: boolean): Promise<Bl
   }
 
   // Search by title
-  const { data: blueprints, error } = await supabase
-    .from('blueprints')
-    .select('id, title, preview_summary, banner_url, likes_count, creator_user_id, created_at')
-    .eq('is_public', true)
-    .ilike('title', `%${query}%`)
-    .order('likes_count', { ascending: false })
-    .limit(20);
-
-  if (error || !blueprints) return [];
+  const blueprints = (await listBlueprintsViaApi({
+    q: query,
+    visibility: 'public',
+    sort: 'popular',
+    limit: 20,
+  })).items;
+  if (blueprints.length === 0) return [];
 
   // Fetch tags
   const blueprintIds = blueprints.map(b => b.id);

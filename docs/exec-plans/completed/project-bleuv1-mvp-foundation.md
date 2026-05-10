@@ -344,3 +344,4 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 ## Post-Completion Ownership Note (2026-05-10)
 1. Backend `/api/blueprints*` routes now own current blueprint create/update/save persistence for the product.
 2. Browser-authenticated Supabase `blueprints` / `blueprint_tags` writes are no longer expected on active save paths; Supabase compatibility rows are maintained server-side while Oracle blueprint/tag state carries the ownership migration forward.
+3. Browser blueprint list/search/count reads now use backend `/api/blueprints` or blueprint detail routes backed by Oracle `blueprint_state`; direct browser Supabase `blueprints` reads are no longer part of active product surfaces.

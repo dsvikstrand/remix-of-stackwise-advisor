@@ -50,6 +50,22 @@ export type BlueprintWriteApiInput = {
   sourceBlueprintId?: string | null;
 };
 
+export type BlueprintListApiInput = {
+  ids?: string[];
+  q?: string | null;
+  visibility?: 'public' | 'public_or_owner';
+  sort?: 'latest' | 'popular';
+  limit?: number;
+  requireSectionsJson?: boolean;
+  requireBannerUrl?: boolean;
+  includeTotal?: boolean;
+};
+
+export type BlueprintListApiResult = {
+  items: BlueprintReadApiItem[];
+  total_count?: number | null;
+};
+
 function getApiBase() {
   if (!config.agenticBackendUrl) return null;
   return `${config.agenticBackendUrl.replace(/\/$/, '')}/api`;
@@ -91,6 +107,38 @@ export async function getBlueprintDetailById(blueprintId: string) {
     throw new Error(json?.message || `Blueprint detail request failed (${response.status})`);
   }
   return json.data;
+}
+
+export async function listBlueprintsViaApi(input: BlueprintListApiInput = {}): Promise<BlueprintListApiResult> {
+  const base = getApiBase();
+  if (!base) throw new Error('Backend API is not configured.');
+
+  const search = new URLSearchParams();
+  const ids = [...new Set((input.ids || []).map((id) => String(id || '').trim()).filter(Boolean))];
+  if (ids.length > 0) search.set('ids', ids.join(','));
+  if (input.q && String(input.q).trim()) search.set('q', String(input.q).trim());
+  if (input.visibility) search.set('visibility', input.visibility);
+  if (input.sort) search.set('sort', input.sort);
+  if (input.limit) search.set('limit', String(input.limit));
+  if (input.requireSectionsJson) search.set('require_sections', 'true');
+  if (input.requireBannerUrl) search.set('require_banner', 'true');
+  if (input.includeTotal) search.set('include_total', 'true');
+
+  const authHeader = await getOptionalAuthHeader();
+  const response = await fetch(`${base}/blueprints?${search.toString()}`, {
+    method: 'GET',
+    headers: {
+      ...authHeader,
+    },
+  });
+  const json = (await response.json().catch(() => null)) as ApiEnvelope<BlueprintListApiResult> | null;
+  if (!response.ok || !json?.ok || !json.data) {
+    throw new Error(json?.message || `Blueprint list request failed (${response.status})`);
+  }
+  return {
+    items: Array.isArray(json.data.items) ? json.data.items : [],
+    total_count: json.data.total_count ?? null,
+  };
 }
 
 export async function syncBlueprintReadState(blueprintId: string) {

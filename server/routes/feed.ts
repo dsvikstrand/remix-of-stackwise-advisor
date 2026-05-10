@@ -105,6 +105,14 @@ export function registerFeedRoutes(app: express.Express, deps: FeedRouteDeps) {
         data: null,
       });
     }
+    if (!deps.readBlueprintRows) {
+      return res.status(500).json({
+        ok: false,
+        error_code: 'CONFIG_ERROR',
+        message: 'Blueprint reader is not configured',
+        data: null,
+      });
+    }
 
     try {
       const items = await listMyFeedItems({
@@ -133,6 +141,10 @@ export function registerFeedRoutes(app: express.Express, deps: FeedRouteDeps) {
         readUnlockRows: deps.readUnlockRows
           ? ({ db: innerDb, sourceIds }) => deps.readUnlockRows!(innerDb, sourceIds)
           : undefined,
+        readBlueprintRows: ({ db: innerDb, blueprintIds }) => deps.readBlueprintRows({
+          db: innerDb,
+          blueprintIds,
+        }),
         readBlueprintTagRows: ({ db: innerDb, blueprintIds }) => deps.readBlueprintTagRows({
           db: innerDb,
           blueprintIds,

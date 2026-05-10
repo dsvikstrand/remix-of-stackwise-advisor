@@ -36,7 +36,6 @@ import { logMvpEvent } from '@/lib/logEvent';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { config } from '@/config/runtime';
 import type { MyFeedItemView } from '@/hooks/useMyFeed';
-import { supabase } from '@/integrations/supabase/client';
 import { OneRowTagChips } from '@/components/shared/OneRowTagChips';
 import { useSourceUnlockJobTracker } from '@/hooks/useSourceUnlockJobTracker';
 import { UnlockActivityCard } from '@/components/shared/UnlockActivityCard';
@@ -44,6 +43,7 @@ import { resolveEffectiveBanner } from '@/lib/bannerResolver';
 import { getLaunchErrorCopy } from '@/lib/launchErrorCopy';
 import { countBlueprintSectionsV1 } from '@/lib/blueprintSections';
 import { useAiCredits } from '@/hooks/useAiCredits';
+import { getBlueprintDetailById } from '@/lib/blueprintReadApi';
 
 const CHANNEL_OPTIONS = CHANNELS_CATALOG.filter((channel) => channel.status === 'active' && channel.isJoinEnabled);
 const CHANNEL_NAME_BY_SLUG = new Map(CHANNELS_CATALOG.map((channel) => [channel.slug, channel.name]));
@@ -119,13 +119,8 @@ export function MyFeedTimeline({
     queryFn: async () => {
       const blueprintId = submissionDialogItem?.blueprint?.id;
       if (!blueprintId) return null;
-      const { data, error } = await supabase
-        .from('blueprints')
-        .select('sections_json')
-        .eq('id', blueprintId)
-        .maybeSingle();
-      if (error) throw error;
-      return data?.sections_json ?? null;
+      const blueprint = await getBlueprintDetailById(blueprintId);
+      return blueprint?.sections_json ?? null;
     },
   });
   const submissionDialogStepCount = useMemo(

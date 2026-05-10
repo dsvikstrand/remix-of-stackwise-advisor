@@ -1307,6 +1307,10 @@ Blueprint write ownership triage note:
 - Current browser save/update flows should call backend `/api/blueprints*` routes, not Supabase `blueprints` or `blueprint_tags` directly.
 - Expected post-generation save chain is backend blueprint create/patch, then `/api/my-feed/youtube-save`, then optional channel publish. Browser-authenticated Supabase writes to blueprint tables should be treated as legacy residue or regression.
 
+Blueprint read ownership triage note:
+- Current browser blueprint list/search/count surfaces should call backend `/api/blueprints` or blueprint detail routes, not Supabase `blueprints` directly.
+- Search, Explore, suggested blueprints, community stats, Channels previews, landing samples, and My Feed section-count lookups are expected to resolve through backend Oracle-aware blueprint readers.
+
 Useful `mvp_events.event_name` chain for YT2BP split flow:
 - `source_pull_requested`
 - `source_pull_succeeded`

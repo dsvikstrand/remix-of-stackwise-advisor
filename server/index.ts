@@ -8064,6 +8064,7 @@ app.use((req, res, next) => {
   const isPublicBlueprintTagsRoute = req.method === 'GET' && req.path === '/api/blueprint-tags';
   const isPublicBlueprintCommentsRoute = req.method === 'GET' && /^\/api\/blueprints\/[^/]+\/comments$/.test(req.path);
   const isPublicBlueprintChannelRoute = req.method === 'GET' && /^\/api\/blueprints\/[^/]+\/channel$/.test(req.path);
+  const isPublicBlueprintListRoute = req.method === 'GET' && req.path === '/api/blueprints';
   const isPublicBlueprintReadRoute = req.method === 'GET' && /^\/api\/blueprints\/[^/]+$/.test(req.path);
   const isPublicProfileReadRoute = req.method === 'GET' && /^\/api\/profile\/[^/]+$/.test(req.path);
   const isPublicProfileCommentsRoute = req.method === 'GET' && /^\/api\/profile\/[^/]+\/comments$/.test(req.path);
@@ -8083,6 +8084,7 @@ app.use((req, res, next) => {
     || isPublicBlueprintTagsRoute
     || isPublicBlueprintCommentsRoute
     || isPublicBlueprintChannelRoute
+    || isPublicBlueprintListRoute
     || isPublicBlueprintReadRoute
     || isPublicProfileReadRoute
     || isPublicProfileCommentsRoute
@@ -8902,6 +8904,7 @@ registerBlueprintLikeRoutes(app, {
 registerBlueprintReadRoutes(app, {
   getServiceSupabaseClient,
   getBlueprintRow: async ({ blueprintId }) => getOracleBlueprintRouteRowById(blueprintId),
+  listBlueprintRows: listBlueprintRouteRows,
   createBlueprintRow: createBlueprintRouteRow,
   updateBlueprintRow: updateBlueprintRouteRow,
   patchBlueprintFields: patchBlueprintRouteFields,
@@ -10108,7 +10111,108 @@ async function listOracleBlueprintRowsByCreatorUserId(input: {
         display_name: creatorProfile.display_name,
         avatar_url: creatorProfile.avatar_url,
       }
-    : null));
+      : null));
+}
+
+async function listBlueprintRouteRows(input: {
+  viewerUserId: string | null;
+  blueprintIds?: string[];
+  titleQuery?: string | null;
+  visibility?: 'public' | 'public_or_owner';
+  sort?: 'latest' | 'popular';
+  limit?: number;
+  requireSectionsJson?: boolean;
+  requireBannerUrl?: boolean;
+  includeTotal?: boolean;
+}) {
+  const blueprintIds = [...new Set((input.blueprintIds || []).map((value) => normalizeRouteString(value)).filter(Boolean))];
+  const viewerUserId = normalizeRouteString(input.viewerUserId);
+  const titleQuery = normalizeRouteString(input.titleQuery);
+  const limit = Math.max(1, Math.min(500, Math.floor(Number(input.limit || 24))));
+  const sort = input.sort === 'popular' ? 'popular' : 'latest';
+  const publicOrCreatorUserId = input.visibility === 'public_or_owner' && viewerUserId ? viewerUserId : null;
+
+  if (oracleControlPlane) {
+    const [rows, totalCount] = await Promise.all([
+      listOracleBlueprintRows({
+        controlDb: oracleControlPlane,
+        blueprintIds,
+        titleQuery,
+        publicOrCreatorUserId,
+        isPublic: publicOrCreatorUserId ? null : true,
+        requireSectionsJson: input.requireSectionsJson,
+        requireBannerUrl: input.requireBannerUrl,
+        sort,
+        limit,
+      }),
+      input.includeTotal
+        ? countOracleBlueprintRows({
+            controlDb: oracleControlPlane,
+            blueprintIds,
+            titleQuery,
+            publicOrCreatorUserId,
+            isPublic: publicOrCreatorUserId ? null : true,
+            requireSectionsJson: input.requireSectionsJson,
+            requireBannerUrl: input.requireBannerUrl,
+          })
+        : Promise.resolve(null),
+    ]);
+
+    const creatorProfiles = await ensureOracleProfileReadStateByUserIds(rows.map((row) => row.creator_user_id));
+    const creatorProfileByUserId = new Map(creatorProfiles.map((row) => [row.user_id, row]));
+    return {
+      items: rows.map((row) => {
+        const creatorProfile = creatorProfileByUserId.get(row.creator_user_id);
+        return mapBlueprintReadRouteRow(row, creatorProfile
+          ? {
+              display_name: creatorProfile.display_name,
+              avatar_url: creatorProfile.avatar_url,
+            }
+          : null);
+      }),
+      total_count: totalCount,
+    };
+  }
+
+  const db = getServiceSupabaseClient();
+  if (!db) throw new Error('Service role client is not configured');
+
+  let query = db
+    .from('blueprints')
+    .select(BLUEPRINT_WRITE_SELECT, input.includeTotal ? { count: 'exact' } : undefined)
+    .limit(limit);
+
+  if (blueprintIds.length > 0) {
+    query = query.in('id', blueprintIds);
+  }
+  if (titleQuery) {
+    query = query.ilike('title', `%${titleQuery}%`);
+  }
+  if (publicOrCreatorUserId) {
+    query = query.or(`is_public.eq.true,creator_user_id.eq.${publicOrCreatorUserId}`);
+  } else {
+    query = query.eq('is_public', true);
+  }
+  if (input.requireSectionsJson) {
+    query = query.not('sections_json', 'is', null);
+  }
+  if (input.requireBannerUrl) {
+    query = query.not('banner_url', 'is', null);
+  }
+  if (sort === 'popular') {
+    query = query
+      .order('likes_count', { ascending: false })
+      .order('created_at', { ascending: false });
+  } else {
+    query = query.order('created_at', { ascending: false });
+  }
+
+  const { data, error, count } = await query;
+  if (error) throw error;
+  return {
+    items: (data || []).map((row: Record<string, unknown>) => mapBlueprintReadRouteRow(row)),
+    total_count: input.includeTotal ? count ?? 0 : null,
+  };
 }
 
 async function readSupabaseBlueprintRouteRowById(blueprintId: string) {
@@ -19342,6 +19446,18 @@ registerFeedRoutes(app, {
     requireBlueprint,
   }),
   readUnlockRows: (db, sourceIds) => getSourceItemUnlocksBySourceItemIdsOracleFirst(db, sourceIds),
+  readBlueprintRows: async ({ blueprintIds }) => {
+    const blueprints = await ensureOracleBlueprintRowsByIds(blueprintIds || []);
+    return blueprints.map((row) => ({
+      id: row.id,
+      creator_user_id: row.creator_user_id,
+      title: row.title,
+      banner_url: row.banner_url,
+      llm_review: row.llm_review,
+      preview_summary: row.preview_summary,
+      is_public: row.is_public,
+    }));
+  },
   readBlueprintTagRows: ({ blueprintIds }) => {
     const db = getServiceSupabaseClient();
     if (!db) return Promise.resolve([]);

@@ -51,6 +51,20 @@ export type BlueprintWriteInput = {
 export type BlueprintReadRouteDeps = {
   getServiceSupabaseClient: () => DbClient | null;
   getBlueprintRow: (input: { blueprintId: string }) => Promise<BlueprintRouteDetail | null>;
+  listBlueprintRows?: (input: {
+    viewerUserId: string | null;
+    blueprintIds?: string[];
+    titleQuery?: string | null;
+    visibility?: 'public' | 'public_or_owner';
+    sort?: 'latest' | 'popular';
+    limit?: number;
+    requireSectionsJson?: boolean;
+    requireBannerUrl?: boolean;
+    includeTotal?: boolean;
+  }) => Promise<{
+    items: BlueprintRouteDetail[];
+    total_count?: number | null;
+  }>;
   syncBlueprintReadState: (input: { blueprintId: string; userId: string }) => Promise<BlueprintRouteDetail | null>;
   createBlueprintRow?: (input: BlueprintWriteInput) => Promise<BlueprintRouteDetail>;
   updateBlueprintRow?: (input: BlueprintWriteInput & { blueprintId: string }) => Promise<BlueprintRouteDetail | null>;

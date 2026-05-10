@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, BookOpenText, PlaySquare, Search, Sparkles, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { supabase } from '@/integrations/supabase/client';
+import { listBlueprintsViaApi } from '@/lib/blueprintReadApi';
 import { LANDING_BLUEPRINT_PREVIEWS, LANDING_HOW_IT_WORKS, LANDING_VALUE_POINTS } from '@/lib/landingStory';
 import { buildLandingPreviewFromBlueprint, pickStableItems } from '@/lib/landingPreview';
 
@@ -27,17 +27,13 @@ export function LandingProofSections({ isSignedIn, onFinalCtaClick }: LandingPro
     staleTime: 5 * 60_000,
     refetchOnWindowFocus: false,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('blueprints')
-        .select('id, title, banner_url, preview_summary, sections_json')
-        .eq('is_public', true)
-        .not('sections_json', 'is', null)
-        .not('banner_url', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(18);
-
-      if (error) throw error;
-      return data || [];
+      return (await listBlueprintsViaApi({
+        visibility: 'public',
+        sort: 'latest',
+        limit: 18,
+        requireSectionsJson: true,
+        requireBannerUrl: true,
+      })).items;
     },
   });
   const fallbackPreviews = useMemo(() => {

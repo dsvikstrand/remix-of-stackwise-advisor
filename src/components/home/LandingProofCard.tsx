@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { listBlueprintTagRows } from '@/lib/blueprintTagsApi';
-import { supabase } from '@/integrations/supabase/client';
+import { listBlueprintsViaApi } from '@/lib/blueprintReadApi';
 import { FALLBACK_PROOF_BLUEPRINT } from '@/lib/landingFallbacks';
 
 interface LandingProofCardProps {
@@ -43,26 +43,14 @@ export function LandingProofCard({ onOpenExample }: LandingProofCardProps) {
     queryKey: ['landing-proof-blueprint'],
     staleTime: 60_000,
     queryFn: async (): Promise<ProofBlueprint | null> => {
-      const { data: blueprint, error } = await supabase
-        .from('blueprints')
-        .select('id, title, banner_url, llm_review, creator_user_id, likes_count')
-        .eq('is_public', true)
-        .order('likes_count', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (error) throw error;
+      const blueprint = (await listBlueprintsViaApi({
+        visibility: 'public',
+        sort: 'popular',
+        limit: 1,
+      })).items[0] || null;
       if (!blueprint) return null;
 
-      const [{ data: tagsRows }, { data: profile }] = await Promise.all([
-        Promise.resolve(listBlueprintTagRows({ blueprintIds: [blueprint.id] })),
-        supabase
-          .from('profiles')
-          .select('display_name')
-          .eq('user_id', blueprint.creator_user_id)
-          .maybeSingle(),
-      ]);
+      const tagsRows = await listBlueprintTagRows({ blueprintIds: [blueprint.id] });
 
       const tags = (tagsRows || [])
         .map((row: any) => row.tag_slug)
@@ -75,7 +63,7 @@ export function LandingProofCard({ onOpenExample }: LandingProofCardProps) {
         banner_url: blueprint.banner_url,
         llm_review: blueprint.llm_review,
         creator_user_id: blueprint.creator_user_id,
-        creator_name: profile?.display_name || null,
+        creator_name: blueprint.creator_profile?.display_name || null,
         tags,
       };
     },
