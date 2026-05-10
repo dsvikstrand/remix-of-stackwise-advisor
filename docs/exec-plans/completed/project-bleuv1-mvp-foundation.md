@@ -340,3 +340,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 ## Post-Completion Ownership Note (2026-05-08)
 1. Backend tag writes are now Oracle-owned for normal runtime: tag creation mints/loads IDs from `tag_state`, tag follow/unfollow updates `tag_follow_state`, and backend blueprint creation / auto-channel / manual channel publish attach Oracle `blueprint_tag_state` rows through the shared Oracle-aware tag-id helper.
 2. Supabase tag-family access should now be interpreted as bootstrap, compatibility fallback, or legacy browser-create residue unless a future attribution run proves a normal backend runtime leak.
+
+## Post-Completion Ownership Note (2026-05-10)
+1. Backend `/api/blueprints*` routes now own current blueprint create/update/save persistence for the product.
+2. Browser-authenticated Supabase `blueprints` / `blueprint_tags` writes are no longer expected on active save paths; Supabase compatibility rows are maintained server-side while Oracle blueprint/tag state carries the ownership migration forward.

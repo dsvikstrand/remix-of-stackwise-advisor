@@ -254,3 +254,8 @@ j5) [have] Endpoint kill switch added:
 j6) [have] Search integration added without contract break:
 - `/search` delegates execution to `/youtube` for generation progress UX.
 - YT2BP endpoint envelope and URL-input contract remain unchanged.
+
+## Ownership Note (2026-05-10)
+k1) [have] Post-generation blueprint persistence is now backend-owned for current product flows.
+k2) [have] Browser save/update paths call `/api/blueprints*`; the backend keeps required Supabase compatibility rows server-side and updates Oracle `blueprint_state` / `blueprint_tag_state`.
+k3) [have] Direct browser writes to Supabase `blueprints` or `blueprint_tags` are no longer expected for the active YT2BP save path.

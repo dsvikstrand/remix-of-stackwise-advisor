@@ -328,6 +328,7 @@
 - Subscription `auto_unlock_enabled` toggle and shared-cost auto-unlock intent billing/retry behavior for new-upload shared unlock are intentionally outside this endpoint contract; current retry policy does not requeue `NO_ELIGIBLE_USERS`, but still retries transient credit, transcript, and queue blockers.
 - Unlock reliability sweep behavior and unlock trace correlation (`trace_id`) are intentionally outside this endpoint contract.
 - Subscription pre-release premiere filtering/checkpoint hold behavior is intentionally outside this endpoint contract.
+- Backend-owned blueprint save/update routes (`/api/blueprints*`) and their Oracle `blueprint_state` / `blueprint_tag_state` ownership behavior are intentionally outside this endpoint contract. The v0 endpoint still produces the draft; persistence happens after generation.
 
 ## Retry and timeout policy (v0)
 - Endpoint timeout target: env-controlled via `YT2BP_CORE_TIMEOUT_MS` (default `120s`).
@@ -346,3 +347,6 @@
 ## Related Endpoint Addendum (2026-03-05)
 - This contract still excludes comments-refresh control endpoints.
 - Manual YouTube source-comment refresh is handled by `POST /api/blueprints/:id/youtube-comments/refresh`; it is owner-only and guarded by cooldown/backpressure controls.
+
+## Related Endpoint Addendum (2026-05-10)
+- Current post-generation persistence uses backend `/api/blueprints*` routes. Browser-authenticated Supabase writes to `blueprints` / `blueprint_tags` are not part of the active YT2BP contract.

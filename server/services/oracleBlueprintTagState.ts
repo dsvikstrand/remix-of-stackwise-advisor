@@ -101,6 +101,30 @@ export async function upsertOracleBlueprintTagRow(input: {
   return row || null;
 }
 
+export async function replaceOracleBlueprintTagRowsForBlueprint(input: {
+  controlDb: OracleControlPlaneDb;
+  blueprintId: string;
+  rows: Array<Record<string, unknown>>;
+  nowIso?: string;
+}) {
+  const blueprintId = normalizeRequiredString(input.blueprintId);
+  if (!blueprintId) return [] as OracleBlueprintTagRow[];
+
+  await input.controlDb.db
+    .deleteFrom('blueprint_tag_state')
+    .where('blueprint_id', '=', blueprintId)
+    .execute();
+
+  return upsertOracleBlueprintTagRows({
+    controlDb: input.controlDb,
+    rows: input.rows.map((row) => ({
+      ...row,
+      blueprint_id: blueprintId,
+    })),
+    nowIso: input.nowIso,
+  });
+}
+
 export async function listOracleBlueprintTagRows(input: {
   controlDb: OracleControlPlaneDb;
   blueprintIds: string[];

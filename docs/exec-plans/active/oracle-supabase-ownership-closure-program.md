@@ -413,6 +413,36 @@ q15) [todo] Remaining follow-up after Round 2:
 - decide whether to migrate `src/hooks/useBlueprints.ts` browser blueprint create/update tagging to backend ownership or retire that legacy surface
 - convert retained no-Oracle fallback branches into explicit break-glass paths if the app no longer needs non-Oracle runtime support
 
+## Frontend Product-Data Isolation Round 1 Implementation Plan
+
+r1) [have] Round 1 selected the active YouTube save/manual blueprint write surface because it was still doing browser-side product writes after the tag ownership passes:
+- `src/hooks/useBlueprints.ts` inserted/updated `blueprints` directly
+- `src/hooks/useBlueprints.ts` inserted/deleted `blueprint_tags` directly
+- `src/pages/YouTubeToBlueprint.tsx` patched saved blueprint review/banner fields directly
+
+r2) [have] Round 1 implementation moved those writes behind backend owner routes:
+- `POST /api/blueprints` creates the Supabase compatibility row server-side, upserts Oracle `blueprint_state`, and attaches tags through Oracle `blueprint_tag_state`
+- `PATCH /api/blueprints/:blueprintId` updates owner-owned blueprint fields server-side and replaces blueprint-tag joins through Oracle ownership
+- `PATCH /api/blueprints/:blueprintId/fields` handles narrow post-save review/banner patches server-side
+- `src/hooks/useBlueprints.ts` no longer writes `blueprints` or `blueprint_tags` from the browser
+- `src/pages/YouTubeToBlueprint.tsx` no longer patches `blueprints` from the browser
+
+r3) [have] Compatibility posture:
+- Supabase `blueprints` writes remain server-side for current FK/compatibility needs
+- normal blueprint-tag attachment is Oracle-owned when the Oracle control plane is enabled
+- any no-Oracle fallback remains an explicit backend fallback, not browser dual-runtime behavior
+
+r4) [have] Verification:
+- `npm run typecheck`
+- `npm test -- --run src/test/blueprintReadRoute.test.ts src/test/blueprintTagsRoute.test.ts src/test/tagsRoute.test.ts src/test/oracleBlueprintTagState.test.ts src/test/oracleTagState.test.ts`
+- targeted grep proof shows the active `useBlueprints` and `YouTubeToBlueprint` write paths no longer call browser Supabase `blueprints` or `blueprint_tags`
+
+r5) [todo] Remaining Round 1 proof:
+- `npm run build`
+- deploy backend/frontend
+- smoke release, queue health, and YouTube save path
+- after soak, confirm no `blueprint_tags` browser/runtime egress reappears
+
 ## Session 3: Legacy FK And Compatibility-Shadow Contraction
 
 h1) [todo] Identify every legacy FK path that still forces Oracle-owned runtime to satisfy Supabase constraints.

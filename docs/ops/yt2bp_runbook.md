@@ -1301,7 +1301,11 @@ Expected structured server log markers:
 
 Tag ownership triage note:
 - Current runtime tag reads should arrive through backend APIs and Oracle-aware readers (`/api/tags*`, `/api/blueprint-tags`, `/api/my-feed` injected blueprint-tag hydration).
-- Direct Supabase `tags`, `blueprint_tags`, or `tag_follows` traffic from browser-authenticated actors is not expected for normal tag reads; investigate it as ownership regression unless it maps to a known blueprint create/update write-shadow path.
+- Direct Supabase `tags`, `blueprint_tags`, or `tag_follows` traffic from browser-authenticated actors is not expected for normal tag reads; investigate it as ownership regression unless it maps to explicit bootstrap/compatibility fallback.
+
+Blueprint write ownership triage note:
+- Current browser save/update flows should call backend `/api/blueprints*` routes, not Supabase `blueprints` or `blueprint_tags` directly.
+- Expected post-generation save chain is backend blueprint create/patch, then `/api/my-feed/youtube-save`, then optional channel publish. Browser-authenticated Supabase writes to blueprint tables should be treated as legacy residue or regression.
 
 Useful `mvp_events.event_name` chain for YT2BP split flow:
 - `source_pull_requested`

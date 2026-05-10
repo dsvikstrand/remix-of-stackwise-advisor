@@ -13,6 +13,8 @@ export type BlueprintRouteDetail = {
   inventory_id: string | null;
   creator_user_id: string;
   title: string;
+  selected_items?: Json | null;
+  steps?: Json | null;
   sections_json: Json | null;
   mix_notes: string | null;
   review_prompt: string | null;
@@ -27,8 +29,36 @@ export type BlueprintRouteDetail = {
   creator_profile: BlueprintRouteCreatorProfile;
 };
 
+export type BlueprintWriteInput = {
+  userId: string;
+  blueprintId?: string;
+  inventoryId: string | null;
+  title: string;
+  selectedItems: Json | null;
+  steps: Json | null;
+  sectionsJson?: Json | null;
+  mixNotes: string | null;
+  reviewPrompt: string | null;
+  bannerUrl: string | null;
+  llmReview: string | null;
+  previewSummary: string | null;
+  generationControls?: Json | null;
+  tags: string[];
+  isPublic: boolean;
+  sourceBlueprintId?: string | null;
+};
+
 export type BlueprintReadRouteDeps = {
   getServiceSupabaseClient: () => DbClient | null;
   getBlueprintRow: (input: { blueprintId: string }) => Promise<BlueprintRouteDetail | null>;
   syncBlueprintReadState: (input: { blueprintId: string; userId: string }) => Promise<BlueprintRouteDetail | null>;
+  createBlueprintRow?: (input: BlueprintWriteInput) => Promise<BlueprintRouteDetail>;
+  updateBlueprintRow?: (input: BlueprintWriteInput & { blueprintId: string }) => Promise<BlueprintRouteDetail | null>;
+  patchBlueprintFields?: (input: {
+    blueprintId: string;
+    userId: string;
+    llmReview?: string | null;
+    bannerUrl?: string | null;
+    previewSummary?: string | null;
+  }) => Promise<BlueprintRouteDetail | null>;
 };

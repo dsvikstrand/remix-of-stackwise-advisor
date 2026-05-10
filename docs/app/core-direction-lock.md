@@ -13,6 +13,8 @@ Status: `canonical`
 - Active product/runtime direction for `bleuV1` remains source-first YouTube-to-blueprint and is defined by this file plus canonical product/architecture docs.
 - Current notifications ownership posture:
   - notification reads and writes now land Oracle-first, while Supabase `notifications` remains a compatibility shadow only for the current push-enqueue path during burn-in.
+- Current blueprint-write ownership posture:
+  - browser create/update/save flows call backend `/api/blueprints*` routes; the backend maintains any required Supabase compatibility row server-side and updates Oracle `blueprint_state` / `blueprint_tag_state` as the normal runtime owner.
 
 ## One-line promise
 `bleuV1` gives you an automated feed of bite-sized blueprints from the media you follow, with automatic channel publishing for eligible items.
@@ -80,6 +82,7 @@ Status: `canonical`
 38ac. Mixed Home `For You` ordering must follow one effective wall-display timestamp across card kinds: locked/unlockable rows sort by `created_at`, while generated rows sort by `generated_at_on_wall || created_at`; generated rows must not stay above newer locked rows merely because they are generated.
 38ae. Oracle feed/product readers that pre-limit Home `For You` rows must order by the same effective wall-display timestamp (`COALESCE(generated_at_on_wall, created_at)`) before applying the limit, otherwise generated-heavy users can lose older locked cards from the fetched window even though the rows still exist.
 38af. The signed-in Bleup logo is a Home reset affordance: when already on `/wall`, clicking it clears Wall query state so the user's default lane resolves again and scrolls the current Wall page back to the top.
+38ag. Browser blueprint create/update/save paths must not write directly to Supabase `blueprints` or `blueprint_tags`; active product saves go through backend `/api/blueprints*`, which owns Oracle blueprint/tag state and any temporary Supabase compatibility shadow.
 38a. In subscription-ledger `primary`, sync/checkpoint/error-only subscription churn may stay Oracle-local when only operational fields (`last_polled_at`, `last_seen_*`, `last_sync_error`) changed; Supabase compatibility writes are still required for identity, activation, and other user-facing subscription state changes.
 38b. Blueprint YouTube comments refresh must not rewrite `blueprint_youtube_comments` when the normalized fetched snapshot is unchanged; unchanged refreshes should skip the delete/reinsert cycle and remain observable through explicit refresh decision logs.
 38ba. Oracle-backed blueprint YouTube comments now follow the same single-owner direction as other migrated runtime domains: refresh/delete-reseed writes and backend comment reads should resolve through Oracle comment state, while direct Supabase `blueprint_youtube_comments` access remains compatibility-only when the backend/control-plane path is unavailable.

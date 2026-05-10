@@ -1,14 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { getBlueprintDetailById, syncBlueprintReadState } from '@/lib/blueprintReadApi';
+import { createBlueprintViaApi, getBlueprintDetailById, updateBlueprintViaApi } from '@/lib/blueprintReadApi';
 import { getBlueprintLikeState, setBlueprintLiked } from '@/lib/blueprintLikesApi';
 import { buildStoredPreviewSummary } from '@/lib/feedPreview';
 import { getPublishedBlueprintChannelSlug } from '@/lib/blueprintChannelsApi';
 import { createBlueprintComment, getBlueprintComments } from '@/lib/blueprintCommentsApi';
-import { normalizeTags } from '@/lib/tagging';
 import { collectBlueprintTagMap, listBlueprintTagRows } from '@/lib/blueprintTagsApi';
-import { createTag, getTagsBySlugs } from '@/lib/tagsApi';
 import type { Json } from '@/integrations/supabase/types';
 
 export interface BlueprintRow {
@@ -75,35 +72,6 @@ interface UpdateBlueprintInput {
   isPublic: boolean;
 }
 
-const BLUEPRINT_FIELDS = 'id, inventory_id, creator_user_id, title, selected_items, steps, mix_notes, review_prompt, banner_url, llm_review, preview_summary, is_public, likes_count, source_blueprint_id, created_at, updated_at';
-
-function isMissingColumnError(error: unknown, column: string) {
-  const e = error as any;
-  const hay = `${e?.message || ''} ${e?.details || ''} ${e?.hint || ''}`.toLowerCase();
-  return hay.includes('does not exist') && hay.includes(column.toLowerCase());
-}
-
-async function ensureTags(slugs: string[], userId: string): Promise<BlueprintTag[]> {
-  const normalized = normalizeTags(slugs);
-  if (normalized.length === 0) return [];
-
-  const existingTags = await getTagsBySlugs(normalized);
-  const existingSlugs = new Set(existingTags.map((tag) => tag.slug));
-  const missing = normalized.filter((slug) => !existingSlugs.has(slug));
-
-  let created: BlueprintTag[] = [];
-  if (missing.length > 0) {
-    created = await Promise.all(
-      missing.map((slug) => createTag({
-        slug,
-        follow: false,
-      })),
-    );
-  }
-
-  return [...existingTags, ...created];
-}
-
 export function useBlueprint(blueprintId?: string) {
   const { user } = useAuth();
 
@@ -147,54 +115,28 @@ export function useCreateBlueprint() {
     mutationFn: async (input: CreateBlueprintInput) => {
       if (!user) throw new Error('Must be logged in');
 
-      const basePayload = {
-        inventory_id: input.inventoryId,
-        creator_user_id: user.id,
-        title: input.title,
-        selected_items: input.selectedItems,
-        steps: input.steps,
-        mix_notes: input.mixNotes,
-        review_prompt: input.reviewPrompt,
-        banner_url: input.bannerUrl,
-        llm_review: input.llmReview,
-        preview_summary: buildStoredPreviewSummary({
+      const previewSummary = buildStoredPreviewSummary({
           primary: input.llmReview,
           secondary: input.mixNotes,
           fallback: input.title,
           maxChars: 220,
-        }),
-        is_public: input.isPublic,
-        source_blueprint_id: input.sourceBlueprintId || null,
-      };
+        });
 
-      const tryInsert = (payload: any) =>
-        supabase.from('blueprints').insert(payload).select(BLUEPRINT_FIELDS).single();
-
-      let insertRes = await tryInsert({
-        ...basePayload,
-        ...(input.generationControls ? { generation_controls: input.generationControls } : {}),
+      const blueprint = await createBlueprintViaApi({
+        inventoryId: input.inventoryId,
+        title: input.title,
+        selectedItems: input.selectedItems,
+        steps: input.steps,
+        mixNotes: input.mixNotes,
+        reviewPrompt: input.reviewPrompt,
+        bannerUrl: input.bannerUrl,
+        llmReview: input.llmReview,
+        previewSummary,
+        generationControls: input.generationControls,
+        tags: input.tags,
+        isPublic: input.isPublic,
+        sourceBlueprintId: input.sourceBlueprintId || null,
       });
-
-      if (insertRes.error && input.generationControls && isMissingColumnError(insertRes.error, 'generation_controls')) {
-        insertRes = await tryInsert(basePayload);
-      }
-
-      const { data: blueprint, error } = insertRes;
-
-      if (error) throw error;
-
-      const tags = await ensureTags(input.tags, user.id);
-      if (tags.length > 0) {
-        const { error: tagError } = await supabase.from('blueprint_tags').insert(
-          tags.map((tag) => ({
-            blueprint_id: blueprint.id,
-            tag_id: tag.id,
-          }))
-        );
-        if (tagError) throw tagError;
-      }
-
-      await syncBlueprintReadState(blueprint.id);
 
       return blueprint as BlueprintRow;
     },
@@ -234,63 +176,27 @@ export function useUpdateBlueprint() {
     mutationFn: async (input: UpdateBlueprintInput) => {
       if (!user) throw new Error('Must be logged in');
 
-      const basePatch = {
-        title: input.title,
-        selected_items: input.selectedItems,
-        steps: input.steps,
-        mix_notes: input.mixNotes,
-        review_prompt: input.reviewPrompt,
-        banner_url: input.bannerUrl,
-        llm_review: input.llmReview,
-        preview_summary: buildStoredPreviewSummary({
+      const previewSummary = buildStoredPreviewSummary({
           primary: input.llmReview,
           secondary: input.mixNotes,
           fallback: input.title,
           maxChars: 220,
-        }),
-        is_public: input.isPublic,
-      };
+        });
 
-      const tryUpdate = (patch: any) =>
-        supabase
-          .from('blueprints')
-          .update(patch)
-          .eq('id', input.blueprintId)
-          .eq('creator_user_id', user.id)
-          .select(BLUEPRINT_FIELDS)
-          .single();
-
-      let updateRes = await tryUpdate({
-        ...basePatch,
-        ...(input.generationControls ? { generation_controls: input.generationControls } : {}),
+      const blueprint = await updateBlueprintViaApi(input.blueprintId, {
+        inventoryId: null,
+        title: input.title,
+        selectedItems: input.selectedItems,
+        steps: input.steps,
+        mixNotes: input.mixNotes,
+        reviewPrompt: input.reviewPrompt,
+        bannerUrl: input.bannerUrl,
+        llmReview: input.llmReview,
+        previewSummary,
+        generationControls: input.generationControls,
+        tags: input.tags,
+        isPublic: input.isPublic,
       });
-
-      if (updateRes.error && input.generationControls && isMissingColumnError(updateRes.error, 'generation_controls')) {
-        updateRes = await tryUpdate(basePatch);
-      }
-
-      const { data: blueprint, error } = updateRes;
-
-      if (error) throw error;
-
-      const tags = await ensureTags(input.tags, user.id);
-      const { error: clearError } = await supabase
-        .from('blueprint_tags')
-        .delete()
-        .eq('blueprint_id', input.blueprintId);
-      if (clearError) throw clearError;
-
-      if (tags.length > 0) {
-        const { error: tagError } = await supabase.from('blueprint_tags').insert(
-          tags.map((tag) => ({
-            blueprint_id: input.blueprintId,
-            tag_id: tag.id,
-          }))
-        );
-        if (tagError) throw tagError;
-      }
-
-      await syncBlueprintReadState(input.blueprintId);
 
       return blueprint as BlueprintRow;
     },

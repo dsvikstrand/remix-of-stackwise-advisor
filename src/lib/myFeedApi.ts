@@ -162,7 +162,7 @@ export async function listMyFeedItems(userId: string): Promise<MyFeedListResult>
 export async function saveGeneratedBlueprintToMyFeed(input: {
   videoUrl: string;
   title: string;
-  blueprintId: string;
+  blueprintId?: string | null;
   sourceChannelId?: string | null;
   sourceChannelTitle?: string | null;
   sourceChannelUrl?: string | null;

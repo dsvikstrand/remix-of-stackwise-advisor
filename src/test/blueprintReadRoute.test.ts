@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { registerBlueprintReadRoutes } from '../../server/routes/blueprintRead';
 
 function createMockApp() {
@@ -11,6 +11,10 @@ function createMockApp() {
     },
     post(path: string, ...args: Array<(req: unknown, res: unknown) => Promise<unknown>>) {
       handlers[`POST ${path}`] = args[args.length - 1];
+      return this;
+    },
+    patch(path: string, ...args: Array<(req: unknown, res: unknown) => Promise<unknown>>) {
+      handlers[`PATCH ${path}`] = args[args.length - 1];
       return this;
     },
   };
@@ -33,6 +37,120 @@ function createResponse(viewerUserId?: string) {
 }
 
 describe('blueprint read route', () => {
+  it('creates a blueprint through the backend write owner', async () => {
+    const app = createMockApp();
+    const createBlueprintRow = vi.fn(async ({ title, userId, tags }) => ({
+      id: 'bp_created',
+      inventory_id: null,
+      creator_user_id: userId,
+      title,
+      selected_items: null,
+      steps: null,
+      sections_json: null,
+      mix_notes: null,
+      review_prompt: null,
+      banner_url: null,
+      llm_review: null,
+      preview_summary: null,
+      is_public: false,
+      likes_count: 0,
+      source_blueprint_id: null,
+      created_at: '2026-04-19T11:00:00.000Z',
+      updated_at: '2026-04-19T11:00:00.000Z',
+      creator_profile: null,
+      tags,
+    }));
+
+    registerBlueprintReadRoutes(app as any, {
+      getServiceSupabaseClient: () => null,
+      getBlueprintRow: async () => null,
+      syncBlueprintReadState: async () => null,
+      createBlueprintRow,
+    });
+
+    const handler = app.handlers['POST /api/blueprints'];
+    const res = createResponse('creator_1');
+    await handler({
+      body: {
+        title: 'New Blueprint',
+        tags: ['Health', 'health', 'AI'],
+        is_public: false,
+      },
+    } as any, res as any);
+
+    expect(createBlueprintRow).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'creator_1',
+      title: 'New Blueprint',
+      tags: ['health', 'ai'],
+    }));
+    expect(res.statusCode).toBe(201);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        id: 'bp_created',
+        title: 'New Blueprint',
+      },
+    });
+  });
+
+  it('updates a blueprint through the backend write owner', async () => {
+    const app = createMockApp();
+    const updateBlueprintRow = vi.fn(async ({ blueprintId, title, userId, tags }) => ({
+      id: blueprintId,
+      inventory_id: null,
+      creator_user_id: userId,
+      title,
+      selected_items: null,
+      steps: null,
+      sections_json: null,
+      mix_notes: null,
+      review_prompt: null,
+      banner_url: null,
+      llm_review: null,
+      preview_summary: null,
+      is_public: true,
+      likes_count: 0,
+      source_blueprint_id: null,
+      created_at: '2026-04-19T11:00:00.000Z',
+      updated_at: '2026-04-19T11:05:00.000Z',
+      creator_profile: null,
+      tags,
+    }));
+
+    registerBlueprintReadRoutes(app as any, {
+      getServiceSupabaseClient: () => null,
+      getBlueprintRow: async () => null,
+      syncBlueprintReadState: async () => null,
+      updateBlueprintRow,
+    });
+
+    const handler = app.handlers['PATCH /api/blueprints/:blueprintId'];
+    const res = createResponse('creator_1');
+    await handler({
+      params: { blueprintId: 'bp_1' },
+      body: {
+        title: 'Updated Blueprint',
+        tags: ['stocks'],
+        is_public: true,
+      },
+    } as any, res as any);
+
+    expect(updateBlueprintRow).toHaveBeenCalledWith(expect.objectContaining({
+      blueprintId: 'bp_1',
+      userId: 'creator_1',
+      title: 'Updated Blueprint',
+      tags: ['stocks'],
+    }));
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        id: 'bp_1',
+        title: 'Updated Blueprint',
+      },
+    });
+  });
+
   it('returns a public blueprint detail payload', async () => {
     const app = createMockApp();
 

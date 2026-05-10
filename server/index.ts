@@ -414,6 +414,7 @@ import {
   listOracleBlueprintTagRowsByTagIds,
   listOracleBlueprintTagRowsByTagSlugs,
   listOracleBlueprintTagSlugs,
+  replaceOracleBlueprintTagRowsForBlueprint,
   syncOracleBlueprintTagRowsFromSupabase,
   upsertOracleBlueprintTagRow,
 } from './services/oracleBlueprintTagState';
@@ -8901,6 +8902,9 @@ registerBlueprintLikeRoutes(app, {
 registerBlueprintReadRoutes(app, {
   getServiceSupabaseClient,
   getBlueprintRow: async ({ blueprintId }) => getOracleBlueprintRouteRowById(blueprintId),
+  createBlueprintRow: createBlueprintRouteRow,
+  updateBlueprintRow: updateBlueprintRouteRow,
+  patchBlueprintFields: patchBlueprintRouteFields,
   syncBlueprintReadState: async ({ blueprintId, userId }) => {
     if (!oracleControlPlane) {
       throw new Error('Oracle control plane is not configured');
@@ -9948,6 +9952,8 @@ function mapBlueprintReadRouteRow(row: Record<string, unknown>, creatorProfile?:
     inventory_id: normalizeRouteNullableString(row.inventory_id),
     creator_user_id: normalizeRouteString(row.creator_user_id),
     title: normalizeRouteString(row.title),
+    selected_items: (row.selected_items ?? null) as unknown,
+    steps: (row.steps ?? null) as unknown,
     sections_json: (row.sections_json ?? null) as unknown,
     mix_notes: normalizeRouteNullableString(row.mix_notes),
     review_prompt: normalizeRouteNullableString(row.review_prompt),
@@ -10110,11 +10116,280 @@ async function readSupabaseBlueprintRouteRowById(blueprintId: string) {
   if (!db) return null;
   const { data, error } = await db
     .from('blueprints')
-    .select('id, inventory_id, creator_user_id, title, sections_json, mix_notes, review_prompt, banner_url, llm_review, preview_summary, is_public, likes_count, source_blueprint_id, created_at, updated_at')
+    .select('id, inventory_id, creator_user_id, title, selected_items, steps, sections_json, mix_notes, review_prompt, banner_url, llm_review, preview_summary, is_public, likes_count, source_blueprint_id, created_at, updated_at')
     .eq('id', blueprintId)
     .maybeSingle();
   if (error) throw error;
   return data ? mapBlueprintReadRouteRow(data as Record<string, unknown>) : null;
+}
+
+const BLUEPRINT_WRITE_SELECT = [
+  'id',
+  'inventory_id',
+  'creator_user_id',
+  'title',
+  'selected_items',
+  'steps',
+  'sections_json',
+  'mix_notes',
+  'review_prompt',
+  'banner_url',
+  'llm_review',
+  'preview_summary',
+  'is_public',
+  'likes_count',
+  'source_blueprint_id',
+  'created_at',
+  'updated_at',
+].join(', ');
+
+function isRouteMissingColumnError(error: unknown, column: string) {
+  const e = error as { message?: unknown; details?: unknown; hint?: unknown } | null;
+  const hay = `${e?.message || ''} ${e?.details || ''} ${e?.hint || ''}`.toLowerCase();
+  return hay.includes('does not exist') && hay.includes(column.toLowerCase());
+}
+
+async function attachBlueprintTagsForWrite(input: {
+  db: ReturnType<typeof createClient>;
+  userId: string;
+  blueprintId: string;
+  tagSlugs: string[];
+  replace: boolean;
+}) {
+  const tagSlugs = [...new Set(
+    (input.tagSlugs || [])
+      .map((value) => toTagSlug(String(value || '')))
+      .filter(Boolean),
+  )].slice(0, 12);
+
+  if (oracleControlPlane && input.replace) {
+    await replaceOracleBlueprintTagRowsForBlueprint({
+      controlDb: oracleControlPlane,
+      blueprintId: input.blueprintId,
+      rows: [],
+    });
+  } else if (!oracleControlPlane && input.replace) {
+    const { error } = await input.db
+      .from('blueprint_tags')
+      .delete()
+      .eq('blueprint_id', input.blueprintId);
+    if (error) throw error;
+  }
+
+  for (const tagSlug of tagSlugs) {
+    const tagId = await ensureTagId(input.db, input.userId, tagSlug);
+    await attachBlueprintTagOracleAware(input.db, {
+      blueprintId: input.blueprintId,
+      tagId,
+      tagSlug,
+    });
+  }
+}
+
+async function upsertBlueprintRouteStateFromWriteRow(row: Record<string, unknown>) {
+  if (!oracleControlPlane) return;
+  await upsertOracleBlueprintRow({
+    controlDb: oracleControlPlane,
+    row: {
+      id: normalizeRouteString(row.id),
+      inventory_id: normalizeRouteNullableString(row.inventory_id),
+      creator_user_id: normalizeRouteString(row.creator_user_id),
+      title: normalizeRouteString(row.title),
+      sections_json: (row.sections_json ?? null) as never,
+      mix_notes: normalizeRouteNullableString(row.mix_notes),
+      review_prompt: normalizeRouteNullableString(row.review_prompt),
+      banner_url: normalizeRouteNullableString(row.banner_url),
+      llm_review: normalizeRouteNullableString(row.llm_review),
+      preview_summary: normalizeRouteNullableString(row.preview_summary),
+      is_public: normalizeRouteBoolean(row.is_public),
+      likes_count: normalizeRouteInt(row.likes_count),
+      source_blueprint_id: normalizeRouteNullableString(row.source_blueprint_id),
+      created_at: normalizeRouteString(row.created_at),
+      updated_at: normalizeRouteString(row.updated_at),
+    },
+  });
+}
+
+async function createBlueprintRouteRow(input: {
+  userId: string;
+  inventoryId: string | null;
+  title: string;
+  selectedItems: unknown;
+  steps: unknown;
+  sectionsJson?: unknown;
+  mixNotes: string | null;
+  reviewPrompt: string | null;
+  bannerUrl: string | null;
+  llmReview: string | null;
+  previewSummary: string | null;
+  generationControls?: unknown;
+  tags: string[];
+  isPublic: boolean;
+  sourceBlueprintId?: string | null;
+}) {
+  const db = getServiceSupabaseClient();
+  if (!db) throw new Error('Service role client is not configured');
+
+  const basePayload = {
+    inventory_id: input.inventoryId,
+    creator_user_id: input.userId,
+    title: input.title,
+    selected_items: input.selectedItems ?? null,
+    steps: input.steps ?? null,
+    sections_json: input.sectionsJson ?? null,
+    mix_notes: input.mixNotes,
+    review_prompt: input.reviewPrompt,
+    banner_url: input.bannerUrl,
+    llm_review: input.llmReview,
+    preview_summary: input.previewSummary,
+    is_public: input.isPublic,
+    source_blueprint_id: input.sourceBlueprintId || null,
+  };
+
+  const insertBlueprint = (payload: Record<string, unknown>) => db
+    .from('blueprints')
+    .insert(payload)
+    .select(BLUEPRINT_WRITE_SELECT)
+    .single();
+
+  let insertResult = await insertBlueprint({
+    ...basePayload,
+    ...(input.generationControls ? { generation_controls: input.generationControls } : {}),
+  });
+  if (insertResult.error && input.generationControls && isRouteMissingColumnError(insertResult.error, 'generation_controls')) {
+    insertResult = await insertBlueprint(basePayload);
+  }
+
+  if (insertResult.error) throw insertResult.error;
+  const row = insertResult.data as Record<string, unknown>;
+  if (!row?.id) throw new Error('Blueprint create did not return an id');
+
+  await upsertBlueprintRouteStateFromWriteRow(row);
+  await attachBlueprintTagsForWrite({
+    db,
+    userId: input.userId,
+    blueprintId: normalizeRouteString(row.id),
+    tagSlugs: input.tags,
+    replace: false,
+  });
+
+  const creatorProfile = await ensureOracleProfileReadStateByUserId(input.userId);
+  return mapBlueprintReadRouteRow(row, creatorProfile
+    ? {
+        display_name: creatorProfile.display_name,
+        avatar_url: creatorProfile.avatar_url,
+      }
+    : null);
+}
+
+async function updateBlueprintRouteRow(input: {
+  blueprintId: string;
+  userId: string;
+  inventoryId: string | null;
+  title: string;
+  selectedItems: unknown;
+  steps: unknown;
+  sectionsJson?: unknown;
+  mixNotes: string | null;
+  reviewPrompt: string | null;
+  bannerUrl: string | null;
+  llmReview: string | null;
+  previewSummary: string | null;
+  generationControls?: unknown;
+  tags: string[];
+  isPublic: boolean;
+  sourceBlueprintId?: string | null;
+}) {
+  const db = getServiceSupabaseClient();
+  if (!db) throw new Error('Service role client is not configured');
+
+  const basePatch = {
+    title: input.title,
+    selected_items: input.selectedItems ?? null,
+    steps: input.steps ?? null,
+    sections_json: input.sectionsJson ?? null,
+    mix_notes: input.mixNotes,
+    review_prompt: input.reviewPrompt,
+    banner_url: input.bannerUrl,
+    llm_review: input.llmReview,
+    preview_summary: input.previewSummary,
+    is_public: input.isPublic,
+  };
+
+  const updateBlueprint = (patch: Record<string, unknown>) => db
+    .from('blueprints')
+    .update(patch)
+    .eq('id', input.blueprintId)
+    .eq('creator_user_id', input.userId)
+    .select(BLUEPRINT_WRITE_SELECT)
+    .maybeSingle();
+
+  let updateResult = await updateBlueprint({
+    ...basePatch,
+    ...(input.generationControls ? { generation_controls: input.generationControls } : {}),
+  });
+  if (updateResult.error && input.generationControls && isRouteMissingColumnError(updateResult.error, 'generation_controls')) {
+    updateResult = await updateBlueprint(basePatch);
+  }
+
+  if (updateResult.error) throw updateResult.error;
+  if (!updateResult.data) return null;
+
+  const row = updateResult.data as Record<string, unknown>;
+  await upsertBlueprintRouteStateFromWriteRow(row);
+  await attachBlueprintTagsForWrite({
+    db,
+    userId: input.userId,
+    blueprintId: input.blueprintId,
+    tagSlugs: input.tags,
+    replace: true,
+  });
+
+  const creatorProfile = await ensureOracleProfileReadStateByUserId(input.userId);
+  return mapBlueprintReadRouteRow(row, creatorProfile
+    ? {
+        display_name: creatorProfile.display_name,
+        avatar_url: creatorProfile.avatar_url,
+      }
+    : null);
+}
+
+async function patchBlueprintRouteFields(input: {
+  blueprintId: string;
+  userId: string;
+  llmReview?: string | null;
+  bannerUrl?: string | null;
+  previewSummary?: string | null;
+}) {
+  const db = getServiceSupabaseClient();
+  if (!db) throw new Error('Service role client is not configured');
+
+  const patch: Record<string, unknown> = {};
+  if (Object.prototype.hasOwnProperty.call(input, 'llmReview')) patch.llm_review = input.llmReview ?? null;
+  if (Object.prototype.hasOwnProperty.call(input, 'bannerUrl')) patch.banner_url = input.bannerUrl ?? null;
+  if (Object.prototype.hasOwnProperty.call(input, 'previewSummary')) patch.preview_summary = input.previewSummary ?? null;
+  if (Object.keys(patch).length === 0) throw new Error('No supported fields provided.');
+
+  const { data, error } = await db
+    .from('blueprints')
+    .update(patch)
+    .eq('id', input.blueprintId)
+    .eq('creator_user_id', input.userId)
+    .select(BLUEPRINT_WRITE_SELECT)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  const row = data as Record<string, unknown>;
+  await upsertBlueprintRouteStateFromWriteRow(row);
+
+  const creatorProfile = await ensureOracleProfileReadStateByUserId(input.userId);
+  return mapBlueprintReadRouteRow(row, creatorProfile
+    ? {
+        display_name: creatorProfile.display_name,
+        avatar_url: creatorProfile.avatar_url,
+      }
+    : null);
 }
 
 async function buildSourceChannelByBlueprintId(blueprintIds: string[]) {

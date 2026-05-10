@@ -13,12 +13,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCreateBlueprint } from '@/hooks/useBlueprints';
 import { config, getFunctionUrl } from '@/config/runtime';
 import { logMvpEvent } from '@/lib/logEvent';
-import { syncBlueprintReadState } from '@/lib/blueprintReadApi';
+import { patchBlueprintFieldsViaApi } from '@/lib/blueprintReadApi';
 import { autoPublishMyFeedItem, saveGeneratedBlueprintToMyFeed } from '@/lib/myFeedApi';
 import { apiFetch } from '@/lib/api';
 import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 import { BlueprintAnalysisView } from '@/components/blueprint/BlueprintAnalysisView';
-import { supabase } from '@/integrations/supabase/client';
 
 const YOUTUBE_ENDPOINT = getFunctionUrl('youtube-to-blueprint');
 const GENERIC_FAILURE_TEXT = 'Could not complete the blueprint. Please test another video.';
@@ -371,12 +370,9 @@ export default function YouTubeToBlueprint() {
             );
             const persistedBlueprintId = savedBlueprintIdRef.current;
             if (persistedBlueprintId && summary) {
-              await supabase
-                .from('blueprints')
-                .update({ llm_review: summary })
-                .eq('id', persistedBlueprintId)
-                .eq('creator_user_id', user?.id || '');
-              await syncBlueprintReadState(persistedBlueprintId).catch(() => null);
+              await patchBlueprintFieldsViaApi(persistedBlueprintId, {
+                llmReview: summary,
+              }).catch(() => null);
             }
 
             await logMvpEvent({
@@ -449,12 +445,9 @@ export default function YouTubeToBlueprint() {
             );
             const persistedBlueprintId = savedBlueprintIdRef.current;
             if (persistedBlueprintId && bannerUrl) {
-              await supabase
-                .from('blueprints')
-                .update({ banner_url: bannerUrl })
-                .eq('id', persistedBlueprintId)
-                .eq('creator_user_id', user?.id || '');
-              await syncBlueprintReadState(persistedBlueprintId).catch(() => null);
+              await patchBlueprintFieldsViaApi(persistedBlueprintId, {
+                bannerUrl,
+              }).catch(() => null);
             }
           } catch (error) {
             const message = error instanceof Error ? error.message : 'Could not generate banner.';
