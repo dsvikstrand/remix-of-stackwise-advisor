@@ -351,3 +351,4 @@
 ## Related Endpoint Addendum (2026-05-10)
 - Current post-generation persistence uses backend `/api/blueprints*` routes. Browser-authenticated Supabase writes to `blueprints` / `blueprint_tags` are not part of the active YT2BP contract.
 - Current browser blueprint list/search/count surfaces use backend `/api/blueprints` or blueprint detail routes backed by Oracle `blueprint_state`; direct browser Supabase reads from `blueprints` are not part of the active product-data contract.
+- Generated-blueprint tag attachment now requires backend Oracle-aware tag owner dependencies in normal runtime; Supabase `tags` / `blueprint_tags` fallback is explicit break-glass only and outside the active endpoint contract.

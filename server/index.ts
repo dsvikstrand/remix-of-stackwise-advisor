@@ -811,6 +811,11 @@ const runtimeConfig = (() => {
 const { runHttpServer, runIngestionWorker, runtimeMode } = runtimeConfig;
 const workerRuntimeControls = readWorkerRuntimeControls(process.env, runtimeMode);
 const oracleControlPlaneConfig = readOracleControlPlaneConfig(process.env);
+const tagFamilySupabaseBreakGlassEnabled = parseRuntimeFlag(
+  process.env.ORACLE_TAG_FAMILY_SUPABASE_BREAK_GLASS_ENABLED
+    || process.env.TAG_FAMILY_SUPABASE_BREAK_GLASS_ENABLED,
+  false,
+);
 function logWorkerMemoryCheckpoint(phase: string, extra?: Record<string, unknown>) {
   if (!runIngestionWorker || !workerRuntimeControls.memoryLoggingEnabled) return;
   const memory = process.memoryUsage();
@@ -4918,6 +4923,14 @@ async function readSupabaseBlueprintTagRows(
     }>;
   }
 
+  assertTagFamilySupabaseBreakGlass({
+    action: input.action || 'read_supabase_blueprint_tag_rows',
+    table: 'blueprint_tags',
+    counts: {
+      blueprint_id_count: blueprintIds.length,
+    },
+  });
+
   console.log('[blueprint_tags_remaining_read]', JSON.stringify({
     action: String(input.action || 'read_supabase_blueprint_tag_rows'),
     blueprint_id_count: blueprintIds.length,
@@ -4954,6 +4967,24 @@ async function readSupabaseBlueprintTagRows(
   }
 
   return rows;
+}
+
+function assertTagFamilySupabaseBreakGlass(input: {
+  action: string;
+  table: 'tags' | 'blueprint_tags' | 'tag_follows';
+  counts?: Record<string, number>;
+}) {
+  const action = String(input.action || 'tag_family_supabase_break_glass').trim();
+  if (!tagFamilySupabaseBreakGlassEnabled) {
+    throw new Error(`TAG_FAMILY_SUPABASE_BREAK_GLASS_DISABLED:${action}`);
+  }
+
+  console.warn('[tag_family_supabase_break_glass]', JSON.stringify({
+    action,
+    table: input.table,
+    oracle_control_plane_enabled: Boolean(oracleControlPlane),
+    ...input.counts,
+  }));
 }
 
 async function listBlueprintTagRowsOracleAware(
@@ -5036,6 +5067,14 @@ async function listBlueprintTagRowsByFiltersOracleAware(
   }
 
   if (!oracleControlPlane) {
+    assertTagFamilySupabaseBreakGlass({
+      action: 'list_blueprint_tag_rows_by_filters_oracle_aware_fallback',
+      table: 'blueprint_tags',
+      counts: {
+        tag_id_count: tagIds.length,
+        tag_slug_count: tagSlugs.length,
+      },
+    });
     console.log('[blueprint_tags_remaining_read]', JSON.stringify({
       action: 'list_blueprint_tag_rows_by_filters_oracle_aware_fallback',
       tag_id_count: tagIds.length,
@@ -5125,6 +5164,14 @@ async function attachBlueprintTagOracleAware(
     });
     return;
   }
+
+  assertTagFamilySupabaseBreakGlass({
+    action: 'attach_blueprint_tag_oracle_aware_fallback',
+    table: 'blueprint_tags',
+    counts: {
+      blueprint_id_count: 1,
+    },
+  });
 
   const { error } = await db
     .from('blueprint_tags')
@@ -10273,6 +10320,13 @@ async function attachBlueprintTagsForWrite(input: {
       rows: [],
     });
   } else if (!oracleControlPlane && input.replace) {
+    assertTagFamilySupabaseBreakGlass({
+      action: 'replace_blueprint_tags_for_write_fallback',
+      table: 'blueprint_tags',
+      counts: {
+        blueprint_id_count: 1,
+      },
+    });
     const { error } = await input.db
       .from('blueprint_tags')
       .delete()
@@ -11379,6 +11433,14 @@ async function ensureTagId(db: ReturnType<typeof createClient>, userId: string, 
     });
     return tag.id;
   }
+
+  assertTagFamilySupabaseBreakGlass({
+    action: 'ensure_tag_id_fallback',
+    table: 'tags',
+    counts: {
+      tag_slug_count: 1,
+    },
+  });
 
   const { data: existing } = await db.from('tags').select('id').eq('slug', slug).maybeSingle();
   if (existing?.id) return existing.id;

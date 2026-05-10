@@ -1311,6 +1311,11 @@ Blueprint read ownership triage note:
 - Current browser blueprint list/search/count surfaces should call backend `/api/blueprints` or blueprint detail routes, not Supabase `blueprints` directly.
 - Search, Explore, suggested blueprints, community stats, Channels previews, landing samples, and My Feed section-count lookups are expected to resolve through backend Oracle-aware blueprint readers.
 
+Tag-family break-glass note:
+- Normal runtime should not need Supabase `tags` / `blueprint_tags` fallback when Oracle control-plane tag state is enabled.
+- If a non-Oracle emergency fallback is intentionally needed, set `ORACLE_TAG_FAMILY_SUPABASE_BREAK_GLASS_ENABLED=true` temporarily and watch for `[tag_family_supabase_break_glass]` logs.
+- Any such fallback should be treated as incident evidence, not a steady-state ownership model.
+
 Useful `mvp_events.event_name` chain for YT2BP split flow:
 - `source_pull_requested`
 - `source_pull_succeeded`

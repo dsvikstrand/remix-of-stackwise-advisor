@@ -391,9 +391,7 @@ export function createBlueprintCreationService(deps: BlueprintCreationDeps) {
             tagSlug,
           });
         } else {
-          await db
-            .from('blueprint_tags')
-            .upsert({ blueprint_id: blueprint.id, tag_id: tagId }, { onConflict: 'blueprint_id,tag_id' });
+          throw new Error('Blueprint-tag owner dependency is not configured.');
         }
       }
 

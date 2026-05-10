@@ -500,6 +500,7 @@ Current production behavior note:
     - transcript-retrying and confirmed no-speech rows are suppressed from unlockable feed-card rendering, while Source Page Video Library remains available for manual retry.
   - Blueprint create/update/save browser flows now resolve through backend `/api/blueprints*` routes. The backend owns Oracle `blueprint_state` / `blueprint_tag_state` writes and keeps Supabase `blueprints` compatibility rows server-side only while remaining foreign-key/read compatibility still needs them.
   - Blueprint list/search/count browser reads now resolve through backend `/api/blueprints` and Oracle `blueprint_state`; direct browser reads from Supabase `blueprints` are not part of the normal product-data path.
+  - Tag-family fallback is no longer silent: backend tag-id creation and blueprint-tag attachment require Oracle-aware owners in normal runtime, while Supabase fallback is guarded by explicit break-glass env and emits `[tag_family_supabase_break_glass]`.
 
 ## 7) Extension Model
 - New adapters:

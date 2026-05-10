@@ -52,6 +52,15 @@ function buildFeedRouteDeps(db: any) {
         .map((row: any) => String(row.tag_slug || row.tags?.slug || '').trim())
         .filter(Boolean);
     },
+    ensureTagId: async (_input: { db: any; userId: string; tagSlug: string }) => `tag:${_input.tagSlug}`,
+    attachBlueprintTag: async (input: { blueprintId: string; tagId: string; tagSlug: string }) => {
+      db.state.blueprint_tags = db.state.blueprint_tags || [];
+      db.state.blueprint_tags.push({
+        blueprint_id: input.blueprintId,
+        tag_id: input.tagId,
+        tag_slug: input.tagSlug,
+      });
+    },
     getFeedItemById: async (innerDb: any, input: { feedItemId: string; userId?: string | null }) => {
       let query = innerDb
         .from('user_feed_items')

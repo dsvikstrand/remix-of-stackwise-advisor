@@ -103,12 +103,12 @@ export type AutoChannelPipelineInput = {
   listBlueprintTagSlugs: (input: {
     blueprintId: string;
   }) => Promise<string[]>;
-  ensureTagId?: (input: {
+  ensureTagId: (input: {
     db: DbClient;
     userId: string;
     tagSlug: string;
   }) => Promise<string>;
-  attachBlueprintTag?: (input: {
+  attachBlueprintTag: (input: {
     blueprintId: string;
     tagId: string;
     tagSlug: string;
@@ -202,26 +202,6 @@ function toTagSlug(raw: string) {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 64);
-}
-
-async function ensureTagId(db: DbClient, userId: string, tagSlug: string): Promise<string> {
-  const slug = toTagSlug(tagSlug);
-  if (!slug) throw new Error('INVALID_TAG');
-
-  const { data: existing } = await db.from('tags').select('id').eq('slug', slug).maybeSingle();
-  if (existing?.id) return existing.id;
-
-  const { data: created, error } = await db
-    .from('tags')
-    .insert({ slug, created_by: userId })
-    .select('id')
-    .single();
-  if (error) {
-    const { data: retry } = await db.from('tags').select('id').eq('slug', slug).maybeSingle();
-    if (retry?.id) return retry.id;
-    throw error;
-  }
-  return created.id;
 }
 
 export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): Promise<AutoChannelPipelineResult> {
@@ -383,13 +363,11 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
   }
 
   if (evaluation.aggregate === 'pass') {
-    const tagId = input.ensureTagId
-      ? await input.ensureTagId({
-          db: input.db,
-          userId: input.userId,
-          tagSlug: channelSlug,
-        })
-      : await ensureTagId(input.db, input.userId, channelSlug);
+    const tagId = await input.ensureTagId({
+      db: input.db,
+      userId: input.userId,
+      tagSlug: channelSlug,
+    });
 
     const { error: publicError } = await input.db
       .from('blueprints')
@@ -397,18 +375,11 @@ export async function runAutoChannelPipeline(input: AutoChannelPipelineInput): P
       .eq('id', input.blueprintId);
     if (publicError) throw new Error(publicError.message);
 
-    if (input.attachBlueprintTag) {
-      await input.attachBlueprintTag({
-        blueprintId: input.blueprintId,
-        tagId,
-        tagSlug: channelSlug,
-      });
-    } else {
-      const { error: tagLinkError } = await input.db
-        .from('blueprint_tags')
-        .upsert({ blueprint_id: input.blueprintId, tag_id: tagId }, { onConflict: 'blueprint_id,tag_id' });
-      if (tagLinkError) throw new Error(tagLinkError.message);
-    }
+    await input.attachBlueprintTag({
+      blueprintId: input.blueprintId,
+      tagId,
+      tagSlug: channelSlug,
+    });
 
     if (input.updateChannelCandidateStatus) {
       const publishedCandidate = await input.updateChannelCandidateStatus({

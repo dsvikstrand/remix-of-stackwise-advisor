@@ -413,6 +413,25 @@ q15) [todo] Remaining follow-up after Round 2:
 - decide whether to migrate `src/hooks/useBlueprints.ts` browser blueprint create/update tagging to backend ownership or retire that legacy surface
 - convert retained no-Oracle fallback branches into explicit break-glass paths if the app no longer needs non-Oracle runtime support
 
+q16) [have] Round 3 tightened backend tag-family fallbacks into explicit ownership boundaries:
+- `server/services/autoChannelPipeline.ts` now requires injected tag-id and blueprint-tag attach owners instead of falling back to direct Supabase `tags` / `blueprint_tags`
+- `server/services/blueprintCreation.ts` now fails clearly if a blueprint-tag owner dependency is missing for generated draft tags instead of silently upserting `blueprint_tags`
+- `server/routes/channels.ts` now requires injected tag-id and blueprint-tag owner dependencies for manual candidate publish instead of direct Supabase fallback writes
+- remaining server-local Supabase tag-family fallback helpers are gated behind `ORACLE_TAG_FAMILY_SUPABASE_BREAK_GLASS_ENABLED` / `TAG_FAMILY_SUPABASE_BREAK_GLASS_ENABLED`
+
+q17) [have] Round 3 compatibility posture:
+- Oracle bootstrap services may still read Supabase `tags` and `blueprint_tags` for migration/bootstrap
+- normal runtime with Oracle enabled continues to use `tag_state` and `blueprint_tag_state`
+- if Oracle is unavailable, fallback now fails closed unless the explicit break-glass flag is enabled and logs `[tag_family_supabase_break_glass]`
+
+q18) [todo] Round 3 proof:
+- `npm run typecheck`
+- focused tag/channel/blueprint creation tests
+- `npm run build`
+- docs checks
+- deploy backend/frontend
+- after soak, confirm no unexpected `[tag_family_supabase_break_glass]` logs
+
 ## Frontend Product-Data Isolation Round 1 Implementation Plan
 
 r1) [have] Round 1 selected the active YouTube save/manual blueprint write surface because it was still doing browser-side product writes after the tag ownership passes:

@@ -19,12 +19,12 @@ export type ChannelsRouteDeps = {
   listBlueprintTagSlugs: (input: {
     blueprintId: string;
   }) => Promise<string[]>;
-  attachBlueprintTag?: (input: {
+  attachBlueprintTag: (input: {
     blueprintId: string;
     tagId: string;
     tagSlug: string;
   }) => Promise<void>;
-  ensureTagId?: (input: {
+  ensureTagId: (input: {
     db: DbClient;
     userId: string;
     tagSlug: string;
