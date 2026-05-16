@@ -11729,6 +11729,34 @@ async function getExistingFeedItem(db: ReturnType<typeof createClient>, userId: 
         source_item_id: sourceItemId,
         error: error instanceof Error ? error.message : String(error),
       }));
+      if (oracleFeedLedgerPrimaryEnabled) {
+        if (oracleProductMirrorEnabled) {
+          try {
+            const mirrored = await listOracleProductFeedRows({
+              controlDb: oracleControlPlane,
+              userId,
+              sourceItemIds: [sourceItemId],
+              limit: 1,
+            });
+            const row = mirrored[0];
+            if (row) {
+              return {
+                id: row.id,
+                state: row.state,
+                blueprint_id: row.blueprint_id,
+              };
+            }
+          } catch (mirrorError) {
+            console.warn('[oracle-control-plane] product_mirror_failed', JSON.stringify({
+              action: 'get_existing_feed_item_after_ledger_failure',
+              user_id: userId,
+              source_item_id: sourceItemId,
+              error: mirrorError instanceof Error ? mirrorError.message : String(mirrorError),
+            }));
+          }
+        }
+        throw error;
+      }
     }
   }
 
@@ -11756,6 +11784,10 @@ async function getExistingFeedItem(db: ReturnType<typeof createClient>, userId: 
         error: error instanceof Error ? error.message : String(error),
       }));
     }
+    return null;
+  }
+
+  if (oracleFeedLedgerPrimaryEnabled && oracleControlPlane) {
     return null;
   }
 

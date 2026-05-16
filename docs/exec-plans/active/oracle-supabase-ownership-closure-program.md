@@ -511,6 +511,12 @@ h4) [todo] Add logs or metrics for any compatibility write that remains after co
 
 h5) [todo] Add targeted tests for each removed FK/shadow seam so the app does not regress into generic pre-dispatch failures.
 
+h6) [have] Feed-row existence checks now follow Oracle-primary ownership:
+- `getExistingFeedItem()` treats an Oracle feed-ledger row as the normal source of truth
+- in feed-ledger `primary`, an empty Oracle feed-ledger result is authoritative and returns `null` instead of rereading Supabase `user_feed_items`
+- product feed mirror remains only an Oracle-local secondary lookup, not a prerequisite for suppressing Supabase fallback
+- Supabase `user_feed_items` fallback remains available only outside feed-ledger `primary`
+
 ## Session 4: Frontend Product-Data Isolation
 
 i1) [todo] Replace direct browser Supabase reads for Oracle-owned product domains with backend Oracle-aware APIs.
