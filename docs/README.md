@@ -23,6 +23,10 @@ This folder is the source of truth for product, architecture, planning, and oper
 4. `docs/ops/mvp-launch-readiness-checklist.md`
 5. `docs/exec-plans/index.md`
 
+## New Session Onboarding
+- Current Codex-session onboarding pack: `docs/BLEUP/README.md`
+- Fast one-file brief for a fresh session: `docs/BLEUP/context/new-session-brief.md`
+
 ## Primary Planning Surfaces
 - Launch gate board: `docs/ops/mvp-launch-readiness-checklist.md`
 - Active proof/deferred tail: `docs/exec-plans/active/tail/mvp-launch-proof-tail.md`
