@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { Megaphone, MessageSquareText } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { ExternalLink, Megaphone, MessageSquareText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -18,13 +19,17 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useAiCredits } from '@/hooks/useAiCredits';
 import { useToast } from '@/hooks/use-toast';
+import { listMyFeedItems } from '@/lib/myFeedApi';
+import type { MyFeedItemView } from '@/lib/myFeedData';
 
 type OutreachCandidate = {
   id: string;
+  blueprintId: string;
+  sourceUrl: string;
   title: string;
   sourceName: string;
   createdLabel: string;
-  status: 'ready' | 'not_started' | 'drafted';
+  status: 'ready';
 };
 
 type AdminOutreachDraftsSheetProps = {
@@ -32,39 +37,69 @@ type AdminOutreachDraftsSheetProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-const MOCK_OUTREACH_CANDIDATES: OutreachCandidate[] = [
-  {
-    id: 'toy-candidate-1',
-    title: 'Beta-Alanine: What It Does and Why the Tingles Do Not Mean It Is Working',
-    sourceName: 'MTS Nutrition',
-    createdLabel: 'Today',
-    status: 'ready',
-  },
-  {
-    id: 'toy-candidate-2',
-    title: 'How Zone 2 Training Changes Endurance and Recovery',
-    sourceName: 'Health creator',
-    createdLabel: 'Yesterday',
-    status: 'not_started',
-  },
-  {
-    id: 'toy-candidate-3',
-    title: 'A Practical Guide to Building a Morning Learning Routine',
-    sourceName: 'Productivity creator',
-    createdLabel: '2d ago',
-    status: 'drafted',
-  },
-];
-
 function getStatusView(status: OutreachCandidate['status']) {
   switch (status) {
-    case 'drafted':
-      return { label: 'Drafted', variant: 'secondary' as const };
     case 'ready':
       return { label: 'Ready', variant: 'default' as const };
     default:
       return { label: 'New', variant: 'outline' as const };
   }
+}
+
+function formatRelativeDate(value: string | null | undefined) {
+  if (!value) return 'Unknown time';
+  const date = new Date(value);
+  const timestamp = date.getTime();
+  if (!Number.isFinite(timestamp)) return 'Unknown time';
+
+  const diffMs = Date.now() - timestamp;
+  const minuteMs = 60_000;
+  const hourMs = 60 * minuteMs;
+  const dayMs = 24 * hourMs;
+
+  if (diffMs < minuteMs) return 'Just now';
+  if (diffMs < hourMs) {
+    const minutes = Math.max(1, Math.floor(diffMs / minuteMs));
+    return `${minutes}m ago`;
+  }
+  if (diffMs < dayMs) {
+    const hours = Math.max(1, Math.floor(diffMs / hourMs));
+    return `${hours}h ago`;
+  }
+  if (diffMs < 7 * dayMs) {
+    const days = Math.max(1, Math.floor(diffMs / dayMs));
+    return `${days}d ago`;
+  }
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function toOutreachCandidate(item: MyFeedItemView): OutreachCandidate | null {
+  const blueprintId = String(item.blueprint?.id || '').trim();
+  const sourceUrl = String(item.source?.sourceUrl || '').trim();
+  if (!blueprintId || !sourceUrl) return null;
+
+  return {
+    id: item.id,
+    blueprintId,
+    sourceUrl,
+    title: item.blueprint?.title || item.source?.title || 'Untitled blueprint',
+    sourceName: item.source?.sourceChannelTitle || 'YouTube',
+    createdLabel: formatRelativeDate(item.createdAt),
+    status: 'ready',
+  };
+}
+
+function buildOutreachCandidates(items: MyFeedItemView[]) {
+  const seenBlueprintIds = new Set<string>();
+  return items
+    .map(toOutreachCandidate)
+    .filter((candidate): candidate is OutreachCandidate => Boolean(candidate))
+    .filter((candidate) => {
+      if (seenBlueprintIds.has(candidate.blueprintId)) return false;
+      seenBlueprintIds.add(candidate.blueprintId);
+      return true;
+    })
+    .slice(0, 50);
 }
 
 export function AdminOutreachDraftsButton() {
@@ -104,7 +139,23 @@ export function AdminOutreachDraftsButton() {
 }
 
 export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDraftsSheetProps) {
+  const { user } = useAuth();
   const { toast } = useToast();
+  const candidatesQuery = useQuery({
+    queryKey: ['admin-outreach-drafts-candidates', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [] as OutreachCandidate[];
+      const result = await listMyFeedItems(user.id);
+      return buildOutreachCandidates(result.items);
+    },
+    enabled: Boolean(open && user?.id),
+    staleTime: 60_000,
+  });
+
+  const candidates = useMemo(
+    () => candidatesQuery.data || [],
+    [candidatesQuery.data],
+  );
 
   const handleCreateDraft = (candidate: OutreachCandidate) => {
     toast({
@@ -114,10 +165,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
   };
 
   const handleOpenBlueprint = (candidate: OutreachCandidate) => {
-    toast({
-      title: 'Blueprint link not connected yet',
-      description: candidate.title,
-    });
+    window.open(`/blueprint/${encodeURIComponent(candidate.blueprintId)}`, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -131,8 +179,21 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto">
-          <div className="divide-y divide-border/40">
-            {MOCK_OUTREACH_CANDIDATES.map((candidate) => {
+          {candidatesQuery.isLoading ? (
+            <div className="px-4 py-6 text-sm text-muted-foreground">
+              Loading latest generated blueprints...
+            </div>
+          ) : candidatesQuery.isError ? (
+            <div className="px-4 py-6 text-sm text-destructive">
+              Could not load outreach candidates. Please try again.
+            </div>
+          ) : candidates.length === 0 ? (
+            <div className="px-4 py-6 text-sm text-muted-foreground">
+              No generated YouTube blueprints with source videos were found for this account yet.
+            </div>
+          ) : (
+            <div className="divide-y divide-border/40">
+              {candidates.map((candidate) => {
               const statusView = getStatusView(candidate.status);
               return (
                 <div key={candidate.id} className="px-4 py-3">
@@ -170,11 +231,24 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                     >
                       Open blueprint
                     </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 gap-1.5"
+                      asChild
+                    >
+                      <a href={candidate.sourceUrl} target="_blank" rel="noreferrer">
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        Video
+                      </a>
+                    </Button>
                   </div>
                 </div>
               );
-            })}
-          </div>
+              })}
+            </div>
+          )}
         </div>
       </SheetContent>
     </Sheet>
