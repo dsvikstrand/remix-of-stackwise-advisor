@@ -27,6 +27,11 @@ type OutreachCandidate = {
   status: 'ready' | 'not_started' | 'drafted';
 };
 
+type AdminOutreachDraftsSheetProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+};
+
 const MOCK_OUTREACH_CANDIDATES: OutreachCandidate[] = [
   {
     id: 'toy-candidate-1',
@@ -64,7 +69,6 @@ function getStatusView(status: OutreachCandidate['status']) {
 
 export function AdminOutreachDraftsButton() {
   const { user } = useAuth();
-  const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const creditsQuery = useAiCredits({
     enabled: Boolean(user),
@@ -73,6 +77,34 @@ export function AdminOutreachDraftsButton() {
   const isAdmin = creditsQuery.data?.plan === 'admin';
 
   if (!user || !isAdmin) return null;
+
+  return (
+    <>
+      <TooltipProvider delayDuration={150}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="relative h-9 w-9 rounded-full text-primary"
+              aria-label="Outreach drafts"
+              title="Outreach drafts"
+              onClick={() => setOpen(true)}
+            >
+              <Megaphone className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Outreach drafts</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      <AdminOutreachDraftsSheet open={open} onOpenChange={setOpen} />
+    </>
+  );
+}
+
+export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDraftsSheetProps) {
+  const { toast } = useToast();
 
   const handleCreateDraft = (candidate: OutreachCandidate) => {
     toast({
@@ -89,25 +121,7 @@ export function AdminOutreachDraftsButton() {
   };
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <TooltipProvider delayDuration={150}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="relative h-9 w-9 rounded-full"
-              aria-label="Outreach drafts"
-              onClick={() => setOpen(true)}
-            >
-              <Megaphone className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Outreach drafts</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-
+    <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="flex w-full flex-col p-0 sm:max-w-lg">
         <SheetHeader className="border-b border-border/40 px-4 py-4 text-left">
           <SheetTitle>Outreach Drafts</SheetTitle>

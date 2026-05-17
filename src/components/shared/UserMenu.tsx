@@ -12,9 +12,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, LogOut, Settings, LifeBuoy, HelpCircle, Moon, Sun, Compass, Sparkles } from 'lucide-react';
+import { User, LogOut, Settings, LifeBuoy, HelpCircle, Moon, Sun, Compass, Sparkles, Megaphone } from 'lucide-react';
 import { useAiCredits } from '@/hooks/useAiCredits';
 import { requestHomeOnboardingDialogOpen } from '@/lib/homeOnboarding';
+import { AdminOutreachDraftsSheet } from '@/components/shared/AdminOutreachDraftsButton';
 
 interface UserMenuProps {
   onOpenHelp?: () => void;
@@ -26,6 +27,7 @@ export function UserMenu({ onOpenHelp }: UserMenuProps) {
   const { user, profile, signOut, isLoading } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [outreachDraftsOpen, setOutreachDraftsOpen] = useState(false);
   const creditsQuery = useAiCredits({
     enabled: Boolean(user && menuOpen),
     refetchIntervalMs: false,
@@ -79,6 +81,7 @@ export function UserMenu({ onOpenHelp }: UserMenuProps) {
   const displayName = profile?.display_name || user.email?.split('@')[0] || 'User';
   const initials = displayName.slice(0, 2).toUpperCase();
   const credits = creditsQuery.data;
+  const isAdmin = credits?.plan === 'admin';
   const creditsPercent = credits?.bypass
     ? 100
     : credits
@@ -100,123 +103,148 @@ export function UserMenu({ onOpenHelp }: UserMenuProps) {
     requestHomeOnboardingDialogOpen();
   };
 
+  const handleOpenOutreachDrafts = () => {
+    setMenuOpen(false);
+    setOutreachDraftsOpen(true);
+  };
+
   return (
-    <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-9 w-9 rounded-full">
-          <Avatar className="h-9 w-9">
-            <AvatarImage src={profile?.avatar_url || undefined} alt={displayName} />
-            <AvatarFallback className="bg-primary/10 text-primary">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56" align="end" forceMount>
-        <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{displayName}</p>
-            <p className="text-xs leading-none text-muted-foreground">
-              {user.email}
-            </p>
-            <div className="pt-1 flex items-center gap-2">
-              <span className="text-[11px] leading-none text-muted-foreground">Plan</span>
-              <Badge variant={planBadgeVariant} className="h-5 px-2 text-[10px] uppercase tracking-wide">
-                {planLabel}
-              </Badge>
+    <>
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" className="relative h-9 w-9 rounded-full">
+            <Avatar className="h-9 w-9">
+              <AvatarImage src={profile?.avatar_url || undefined} alt={displayName} />
+              <AvatarFallback className="bg-primary/10 text-primary">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-56" align="end" forceMount>
+          <DropdownMenuLabel className="font-normal">
+            <div className="flex flex-col space-y-1">
+              <p className="text-sm font-medium leading-none">{displayName}</p>
+              <p className="text-xs leading-none text-muted-foreground">
+                {user.email}
+              </p>
+              <div className="pt-1 flex items-center gap-2">
+                <span className="text-[11px] leading-none text-muted-foreground">Plan</span>
+                <Badge variant={planBadgeVariant} className="h-5 px-2 text-[10px] uppercase tracking-wide">
+                  {planLabel}
+                </Badge>
+              </div>
             </div>
-          </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <div className="px-3 py-2">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>AI credits</span>
-            <span>
-              {credits
-                ? credits.bypass
-                  ? 'Unlimited'
-                  : `${credits.displayBalance.toFixed(1)}/${credits.displayCapacity.toFixed(1)}`
-                : '—'}
-            </span>
-          </div>
-          <div className="mt-2 h-2 w-full rounded-full bg-muted">
-            <div
-              className="h-2 rounded-full bg-primary transition-all"
-              style={{ width: `${creditsPercent}%` }}
-            />
-          </div>
-          <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-            <span>Plan</span>
-            <span>{planLabel}</span>
-          </div>
-          {hasDailyCredits ? (
-            <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
-              <span>Used today</span>
-              <span>{dailyCreditsUsed.toFixed(2)}/{dailyCreditsGrant.toFixed(2)}</span>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <div className="px-3 py-2">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>AI credits</span>
+              <span>
+                {credits
+                  ? credits.bypass
+                    ? 'Unlimited'
+                    : `${credits.displayBalance.toFixed(1)}/${credits.displayCapacity.toFixed(1)}`
+                  : '—'}
+              </span>
             </div>
+            <div className="mt-2 h-2 w-full rounded-full bg-muted">
+              <div
+                className="h-2 rounded-full bg-primary transition-all"
+                style={{ width: `${creditsPercent}%` }}
+              />
+            </div>
+            <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+              <span>Plan</span>
+              <span>{planLabel}</span>
+            </div>
+            {hasDailyCredits ? (
+              <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+                <span>Used today</span>
+                <span>{dailyCreditsUsed.toFixed(2)}/{dailyCreditsGrant.toFixed(2)}</span>
+              </div>
+            ) : null}
+            {credits && !credits.bypass ? (
+              <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+                <span>Reset</span>
+                <span>{credits.nextRefillLabel}</span>
+              </div>
+            ) : null}
+          </div>
+          <DropdownMenuSeparator />
+          {isAdmin ? (
+            <>
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onClick={handleOpenOutreachDrafts}
+              >
+                <Megaphone className="mr-2 h-4 w-4" />
+                Outreach drafts
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
           ) : null}
-          {credits && !credits.bypass ? (
-            <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
-              <span>Reset</span>
-              <span>{credits.nextRefillLabel}</span>
-            </div>
-          ) : null}
-        </div>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link to={`/u/${user.id}`} className="flex items-center cursor-pointer">
-            <User className="mr-2 h-4 w-4" />
-            My Profile
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link to="/explore" className="flex items-center cursor-pointer">
-            <Compass className="mr-2 h-4 w-4" />
-            Explore
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link to="/settings" className="flex items-center cursor-pointer">
-            <Settings className="mr-2 h-4 w-4" />
-            Settings
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          className="cursor-pointer"
-          onClick={handleThemeToggle}
-        >
-          {theme === 'dark' ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
-          Toggle theme
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          className="cursor-pointer"
-          onClick={() => onOpenHelp?.()}
-        >
-          <HelpCircle className="mr-2 h-4 w-4" />
-          Help
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          className="cursor-pointer"
-          onClick={handleOpenOnboarding}
-        >
-          <Sparkles className="mr-2 h-4 w-4" />
-          Show onboarding
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <a href="mailto:hi@bleup.app" className="flex items-center cursor-pointer">
-            <LifeBuoy className="mr-2 h-4 w-4" />
-            Support
-          </a>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onClick={() => signOut()}
-          className="text-destructive focus:text-destructive cursor-pointer"
-        >
-          <LogOut className="mr-2 h-4 w-4" />
-          Sign Out
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          <DropdownMenuItem asChild>
+            <Link to={`/u/${user.id}`} className="flex items-center cursor-pointer">
+              <User className="mr-2 h-4 w-4" />
+              My Profile
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link to="/explore" className="flex items-center cursor-pointer">
+              <Compass className="mr-2 h-4 w-4" />
+              Explore
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link to="/settings" className="flex items-center cursor-pointer">
+              <Settings className="mr-2 h-4 w-4" />
+              Settings
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="cursor-pointer"
+            onClick={handleThemeToggle}
+          >
+            {theme === 'dark' ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
+            Toggle theme
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="cursor-pointer"
+            onClick={() => onOpenHelp?.()}
+          >
+            <HelpCircle className="mr-2 h-4 w-4" />
+            Help
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="cursor-pointer"
+            onClick={handleOpenOnboarding}
+          >
+            <Sparkles className="mr-2 h-4 w-4" />
+            Show onboarding
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <a href="mailto:hi@bleup.app" className="flex items-center cursor-pointer">
+              <LifeBuoy className="mr-2 h-4 w-4" />
+              Support
+            </a>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => signOut()}
+            className="text-destructive focus:text-destructive cursor-pointer"
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            Sign Out
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {isAdmin ? (
+        <AdminOutreachDraftsSheet
+          open={outreachDraftsOpen}
+          onOpenChange={setOutreachDraftsOpen}
+        />
+      ) : null}
+    </>
   );
 }
