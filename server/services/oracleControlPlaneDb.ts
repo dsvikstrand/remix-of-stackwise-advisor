@@ -339,6 +339,30 @@ type BlueprintYoutubeCommentStateTable = {
   updated_at: string;
 };
 
+type OutreachDraftStateTable = {
+  id: string;
+  draft_group_id: string;
+  admin_user_id: string;
+  blueprint_id: string;
+  source_item_id: string;
+  youtube_video_id: string;
+  video_url: string;
+  source_channel_id: string | null;
+  source_channel_title: string | null;
+  option_index: number;
+  opener_text: string;
+  tail_variant_id: string;
+  tail_text: string;
+  final_text: string;
+  status: string;
+  model: string;
+  reasoning_effort: string;
+  prompt_version: string;
+  validation_json: string;
+  created_at: string;
+  updated_at: string;
+};
+
 type BlueprintTagStateTable = {
   id: string;
   blueprint_id: string;
@@ -517,6 +541,7 @@ export type OracleControlPlaneDatabase = {
   generation_run_state: GenerationRunStateTable;
   generation_run_event_state: GenerationRunEventStateTable;
   blueprint_youtube_comment_state: BlueprintYoutubeCommentStateTable;
+  outreach_draft_state: OutreachDraftStateTable;
   blueprint_comment_state: BlueprintCommentStateTable;
   blueprint_like_state: BlueprintLikeStateTable;
   blueprint_state: BlueprintStateTable;
@@ -950,6 +975,39 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_blueprint_youtube_comment_unique
 
 CREATE INDEX IF NOT EXISTS idx_blueprint_youtube_comment_display
   ON blueprint_youtube_comment_state (blueprint_id, sort_mode, display_order, id);
+
+CREATE TABLE IF NOT EXISTS outreach_draft_state (
+  id TEXT PRIMARY KEY,
+  draft_group_id TEXT NOT NULL,
+  admin_user_id TEXT NOT NULL,
+  blueprint_id TEXT NOT NULL,
+  source_item_id TEXT NOT NULL,
+  youtube_video_id TEXT NOT NULL,
+  video_url TEXT NOT NULL,
+  source_channel_id TEXT,
+  source_channel_title TEXT,
+  option_index INTEGER NOT NULL,
+  opener_text TEXT NOT NULL,
+  tail_variant_id TEXT NOT NULL,
+  tail_text TEXT NOT NULL,
+  final_text TEXT NOT NULL,
+  status TEXT NOT NULL,
+  model TEXT NOT NULL,
+  reasoning_effort TEXT NOT NULL,
+  prompt_version TEXT NOT NULL,
+  validation_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_outreach_draft_admin_created
+  ON outreach_draft_state (admin_user_id, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_outreach_draft_video
+  ON outreach_draft_state (youtube_video_id, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_outreach_draft_channel
+  ON outreach_draft_state (source_channel_id, created_at);
 
 CREATE TABLE IF NOT EXISTS blueprint_comment_state (
   id TEXT PRIMARY KEY,

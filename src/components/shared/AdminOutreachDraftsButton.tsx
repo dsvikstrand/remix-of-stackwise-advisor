@@ -1,8 +1,15 @@
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { ExternalLink, Megaphone, MessageSquareText } from 'lucide-react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { Copy, ExternalLink, Megaphone, MessageSquareText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Sheet,
   SheetContent,
@@ -16,9 +23,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAiCredits } from '@/hooks/useAiCredits';
 import { useToast } from '@/hooks/use-toast';
+import { generateOutreachDrafts, type OutreachDraftGenerationResult } from '@/lib/adminOutreachApi';
 import { listMyFeedItems } from '@/lib/myFeedApi';
 import type { MyFeedItemView } from '@/lib/myFeedData';
 
@@ -141,6 +150,9 @@ export function AdminOutreachDraftsButton() {
 export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDraftsSheetProps) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [draftResult, setDraftResult] = useState<OutreachDraftGenerationResult | null>(null);
+  const [draftDialogOpen, setDraftDialogOpen] = useState(false);
+  const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
   const candidatesQuery = useQuery({
     queryKey: ['admin-outreach-drafts-candidates', user?.id],
     queryFn: async () => {
@@ -156,101 +168,184 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
     () => candidatesQuery.data || [],
     [candidatesQuery.data],
   );
+  const draftMutation = useMutation({
+    mutationFn: async (candidate: OutreachCandidate) => {
+      return generateOutreachDrafts({ blueprintId: candidate.blueprintId });
+    },
+    onSuccess: (result) => {
+      setDraftResult(result);
+      setDraftEdits(Object.fromEntries(
+        result.options.map((option) => [option.id, option.finalText]),
+      ));
+      setDraftDialogOpen(true);
+    },
+    onError: (error) => {
+      toast({
+        title: 'Could not create outreach drafts',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    },
+  });
 
   const handleCreateDraft = (candidate: OutreachCandidate) => {
-    toast({
-      title: 'Draft flow not connected yet',
-      description: candidate.title,
-    });
+    draftMutation.mutate(candidate);
   };
 
   const handleOpenBlueprint = (candidate: OutreachCandidate) => {
     window.open(`/blueprint/${encodeURIComponent(candidate.blueprintId)}`, '_blank', 'noopener,noreferrer');
   };
 
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="flex w-full flex-col p-0 sm:max-w-lg">
-        <SheetHeader className="border-b border-border/40 px-4 py-4 text-left">
-          <SheetTitle>Outreach Drafts</SheetTitle>
-          <SheetDescription>
-            Latest unlocked YouTube blueprints queued for manual outreach review.
-          </SheetDescription>
-        </SheetHeader>
+  const handleCopyDraft = async (optionId: string) => {
+    const text = draftEdits[optionId] || '';
+    if (!text.trim()) return;
+    await navigator.clipboard.writeText(text);
+    toast({
+      title: 'Draft copied',
+      description: 'Paste it into YouTube after your manual review.',
+    });
+  };
 
-        <div className="flex-1 overflow-y-auto">
-          {candidatesQuery.isLoading ? (
-            <div className="px-4 py-6 text-sm text-muted-foreground">
-              Loading latest generated blueprints...
-            </div>
-          ) : candidatesQuery.isError ? (
-            <div className="px-4 py-6 text-sm text-destructive">
-              Could not load outreach candidates. Please try again.
-            </div>
-          ) : candidates.length === 0 ? (
-            <div className="px-4 py-6 text-sm text-muted-foreground">
-              No generated YouTube blueprints with source videos were found for this account yet.
-            </div>
-          ) : (
-            <div className="divide-y divide-border/40">
-              {candidates.map((candidate) => {
-              const statusView = getStatusView(candidate.status);
-              return (
-                <div key={candidate.id} className="px-4 py-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 space-y-1">
-                      <p className="line-clamp-2 text-sm font-medium leading-snug">
-                        {candidate.title}
-                      </p>
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                        <span>{candidate.sourceName}</span>
-                        <span>{candidate.createdLabel}</span>
-                        <Badge variant={statusView.variant} className="h-5 px-2 text-[10px]">
-                          {statusView.label}
-                        </Badge>
+  return (
+    <>
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent side="right" className="flex w-full flex-col p-0 sm:max-w-lg">
+          <SheetHeader className="border-b border-border/40 px-4 py-4 text-left">
+            <SheetTitle>Outreach Drafts</SheetTitle>
+            <SheetDescription>
+              Latest unlocked YouTube blueprints queued for manual outreach review.
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="flex-1 overflow-y-auto">
+            {candidatesQuery.isLoading ? (
+              <div className="px-4 py-6 text-sm text-muted-foreground">
+                Loading latest generated blueprints...
+              </div>
+            ) : candidatesQuery.isError ? (
+              <div className="px-4 py-6 text-sm text-destructive">
+                Could not load outreach candidates. Please try again.
+              </div>
+            ) : candidates.length === 0 ? (
+              <div className="px-4 py-6 text-sm text-muted-foreground">
+                No generated YouTube blueprints with source videos were found for this account yet.
+              </div>
+            ) : (
+              <div className="divide-y divide-border/40">
+                {candidates.map((candidate) => {
+                const statusView = getStatusView(candidate.status);
+                const createPending = draftMutation.isPending && draftMutation.variables?.id === candidate.id;
+                return (
+                  <div key={candidate.id} className="px-4 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 space-y-1">
+                        <p className="line-clamp-2 text-sm font-medium leading-snug">
+                          {candidate.title}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <span>{candidate.sourceName}</span>
+                          <span>{candidate.createdLabel}</span>
+                          <Badge variant={statusView.variant} className="h-5 px-2 text-[10px]">
+                            {statusView.label}
+                          </Badge>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-8 gap-1.5"
+                        disabled={createPending}
+                        onClick={() => handleCreateDraft(candidate)}
+                      >
+                        <MessageSquareText className="h-3.5 w-3.5" />
+                        {createPending ? 'Creating...' : 'Create draft'}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-8"
+                        onClick={() => handleOpenBlueprint(candidate)}
+                      >
+                        Open blueprint
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 gap-1.5"
+                        asChild
+                      >
+                        <a href={candidate.sourceUrl} target="_blank" rel="noreferrer">
+                          <ExternalLink className="h-3.5 w-3.5" />
+                          Video
+                        </a>
+                      </Button>
+                    </div>
+                  </div>
+                );
+                })}
+              </div>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <Dialog open={draftDialogOpen} onOpenChange={setDraftDialogOpen}>
+        <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Review Outreach Drafts</DialogTitle>
+            <DialogDescription>
+              Copy-only for now. Review and edit before posting manually on YouTube.
+            </DialogDescription>
+          </DialogHeader>
+          {draftResult ? (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-border/50 bg-muted/30 p-3 text-xs text-muted-foreground">
+                <div>Model: {draftResult.model} · reasoning: {draftResult.reasoningEffort}</div>
+                <div>Creator cap: 1 per {draftResult.limits.channelWindowDays} days · daily cap: {draftResult.limits.dailyCap}</div>
+              </div>
+              {draftResult.options.map((option) => (
+                <div key={option.id} className="space-y-2 rounded-lg border border-border/50 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm font-medium">Draft {option.optionIndex}</div>
+                    <Badge variant="outline" className="text-[10px]">
+                      {option.tailVariantId}
+                    </Badge>
+                  </div>
+                  <Textarea
+                    value={draftEdits[option.id] || option.finalText}
+                    rows={8}
+                    onChange={(event) => {
+                      setDraftEdits((current) => ({
+                        ...current,
+                        [option.id]: event.target.value,
+                      }));
+                    }}
+                  />
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs text-muted-foreground">
+                      No direct app link. Includes transparent builder disclosure.
+                    </p>
                     <Button
                       type="button"
                       size="sm"
-                      className="h-8 gap-1.5"
-                      onClick={() => handleCreateDraft(candidate)}
+                      className="gap-1.5"
+                      onClick={() => handleCopyDraft(option.id)}
                     >
-                      <MessageSquareText className="h-3.5 w-3.5" />
-                      Create draft
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-8"
-                      onClick={() => handleOpenBlueprint(candidate)}
-                    >
-                      Open blueprint
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 gap-1.5"
-                      asChild
-                    >
-                      <a href={candidate.sourceUrl} target="_blank" rel="noreferrer">
-                        <ExternalLink className="h-3.5 w-3.5" />
-                        Video
-                      </a>
+                      <Copy className="h-3.5 w-3.5" />
+                      Copy
                     </Button>
                   </div>
                 </div>
-              );
-              })}
+              ))}
             </div>
-          )}
-        </div>
-      </SheetContent>
-    </Sheet>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

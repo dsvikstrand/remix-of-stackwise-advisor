@@ -1,0 +1,104 @@
+import { describe, expect, it, vi } from 'vitest';
+import {
+  generateOutreachDrafts,
+  OutreachDraftError,
+  type OutreachDraftContext,
+  type OutreachDraftStateStore,
+} from '../../server/services/outreachDrafts';
+
+const context: OutreachDraftContext = {
+  blueprintId: 'bp_1',
+  sourceItemId: 'source_1',
+  youtubeVideoId: 'abc123xyz89',
+  videoUrl: 'https://www.youtube.com/watch?v=abc123xyz89',
+  videoTitle: 'How to learn faster',
+  sourceChannelId: 'UC_test',
+  sourceChannelTitle: 'Learning Creator',
+  blueprintTitle: 'How to learn faster',
+  blueprintSummary: 'The video explains retrieval practice and focused review.',
+  blueprintReview: 'Use retrieval practice before rereading notes.',
+  blueprintSectionsJson: {
+    takeaways: { bullets: ['Retrieval practice beats passive review.', 'Short sessions are easier to repeat.'] },
+  },
+  tags: ['learning'],
+};
+
+function createStore(overrides?: Partial<OutreachDraftStateStore>): OutreachDraftStateStore {
+  return {
+    listRecentDrafts: vi.fn(async () => []),
+    insertDraftOptions: vi.fn(async ({ rows }) => rows.map((row) => ({ id: row.id }))),
+    ...overrides,
+  };
+}
+
+describe('outreach draft generation service', () => {
+  it('generates three validated copy-only drafts and stores them', async () => {
+    let seq = 0;
+    const store = createStore();
+    const result = await generateOutreachDrafts({
+      adminUserId: 'admin_1',
+      blueprintId: 'bp_1',
+      now: new Date('2026-05-17T08:00:00.000Z'),
+      randomUUID: () => `id_${++seq}`,
+      resolveContext: async () => context,
+      stateStore: store,
+      llm: {
+        generateVideoOpeners: vi.fn(async () => ({
+          model: 'gpt-5.5-mini',
+          reasoningEffort: 'medium',
+          rawText: JSON.stringify({
+            openers: [
+              'The useful part for me was the distinction between retrieval practice and just rereading notes.',
+              'I liked how this framed learning as something you can make repeatable with short review loops.',
+              'The takeaway that stood out was making recall active instead of waiting until you feel ready.',
+            ],
+          }),
+          openers: [],
+        })),
+      },
+    });
+
+    expect(result.options).toHaveLength(3);
+    expect(result.options[0].finalText).toContain('BLEUP');
+    expect(result.options[0].finalText).toContain('I’m building');
+    expect(store.insertDraftOptions).toHaveBeenCalledWith(expect.objectContaining({
+      rows: expect.arrayContaining([
+        expect.objectContaining({
+          draft_group_id: 'id_1',
+          blueprint_id: 'bp_1',
+          youtube_video_id: 'abc123xyz89',
+          status: 'drafted',
+        }),
+      ]),
+    }));
+  });
+
+  it('blocks duplicate drafts for the same video', async () => {
+    await expect(generateOutreachDrafts({
+      adminUserId: 'admin_1',
+      blueprintId: 'bp_1',
+      now: new Date('2026-05-17T08:00:00.000Z'),
+      randomUUID: () => 'id_1',
+      resolveContext: async () => context,
+      stateStore: createStore({
+        listRecentDrafts: vi.fn(async () => [{
+          id: 'draft_1',
+          draft_group_id: 'group_1',
+          admin_user_id: 'admin_1',
+          blueprint_id: 'bp_old',
+          source_item_id: 'source_1',
+          youtube_video_id: 'abc123xyz89',
+          source_channel_id: 'UC_test',
+          final_text: 'Old draft',
+          created_at: '2026-05-17T07:00:00.000Z',
+        }]),
+      }),
+      llm: {
+        generateVideoOpeners: vi.fn(),
+      },
+    })).rejects.toMatchObject({
+      errorCode: 'VIDEO_ALREADY_DRAFTED',
+      status: 409,
+    } satisfies Partial<OutreachDraftError>);
+  });
+});

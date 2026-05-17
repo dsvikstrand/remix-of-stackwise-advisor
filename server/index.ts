@@ -550,6 +550,10 @@ import { registerBlueprintLikeRoutes } from './routes/blueprintLikes';
 import { registerBlueprintReadRoutes } from './routes/blueprintRead';
 import { registerBlueprintTagReadRoutes } from './routes/blueprintTags';
 import { registerTagRoutes } from './routes/tags';
+import { registerAdminOutreachRoutes } from './routes/adminOutreach';
+import { generateOutreachDrafts, type OutreachDraftContext } from './services/outreachDrafts';
+import { createOutreachOpenAIClient } from './services/outreachOpenAI';
+import { createOracleOutreachDraftStateStore } from './services/oracleOutreachDraftState';
 
 const app = express();
 const port = Number(process.env.PORT) || 8787;
@@ -9021,6 +9025,25 @@ registerTagRoutes(app, {
   }),
 });
 
+registerAdminOutreachRoutes(app, {
+  getCredits,
+  generateOutreachDrafts: async ({ adminUserId, blueprintId }) => {
+    if (!oracleControlPlane) {
+      throw new Error('Oracle control plane is not configured');
+    }
+    return generateOutreachDrafts({
+      adminUserId,
+      blueprintId,
+      randomUUID,
+      resolveContext: resolveOutreachDraftContext,
+      stateStore: createOracleOutreachDraftStateStore({
+        controlDb: oracleControlPlane,
+      }),
+      llm: createOutreachOpenAIClient(),
+    });
+  },
+});
+
 app.get('/api/blueprints/:id/channel', async (req, res) => {
   const db = getServiceSupabaseClient();
   if (!db) {
@@ -10602,6 +10625,94 @@ async function buildSourceChannelByBlueprintId(blueprintIds: string[]) {
   }
 
   return result;
+}
+
+function parseOutreachTagsFromSections(sectionsJson: unknown) {
+  if (!sectionsJson || typeof sectionsJson !== 'object') return [] as string[];
+  const rawTags = (sectionsJson as { tags?: unknown }).tags;
+  if (!Array.isArray(rawTags)) return [];
+  return rawTags
+    .map((tag) => normalizeRouteString(tag).toLowerCase())
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+function parseOutreachSourceMetadata(row: Record<string, unknown> | null | undefined) {
+  const metadata = row?.metadata && typeof row.metadata === 'object' && row.metadata !== null
+    ? row.metadata as Record<string, unknown>
+    : (
+      row?.metadata_json && typeof row.metadata_json === 'string'
+        ? (() => {
+            try {
+              const parsed = JSON.parse(String(row.metadata_json || ''));
+              return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : null;
+            } catch {
+              return null;
+            }
+          })()
+        : null
+    );
+  return metadata;
+}
+
+async function resolveOutreachDraftContext(input: {
+  adminUserId: string;
+  blueprintId: string;
+}): Promise<OutreachDraftContext | null> {
+  const db = getServiceSupabaseClient();
+  const adminUserId = normalizeRouteString(input.adminUserId);
+  const blueprintId = normalizeRouteString(input.blueprintId);
+  if (!db || !adminUserId || !blueprintId) return null;
+
+  const blueprint = await getOracleBlueprintRouteRowById(blueprintId);
+  if (!blueprint) return null;
+
+  let feedRows = await listProductFeedRowsForUserOracleFirst(db, {
+    userId: adminUserId,
+    limit: 5000,
+    requireBlueprint: true,
+  });
+  let feedRow = feedRows.find((row: Record<string, unknown>) => normalizeRouteString(row.blueprint_id) === blueprintId) as Record<string, unknown> | undefined;
+  if (!feedRow) {
+    feedRows = await listPublicProductFeedRowsOracleFirst(db, {
+      blueprintIds: [blueprintId],
+      limit: 10,
+      requireBlueprint: true,
+    });
+    feedRow = feedRows.find((row: Record<string, unknown>) => normalizeRouteString(row.blueprint_id) === blueprintId) as Record<string, unknown> | undefined;
+  }
+  const sourceItemId = normalizeRouteString(feedRow?.source_item_id);
+  if (!sourceItemId) return null;
+
+  const sourceRows = await listProductSourceItemsOracleFirst(db, {
+    ids: [sourceItemId],
+    action: 'admin_outreach_context',
+  });
+  const source = sourceRows[0] as Record<string, unknown> | undefined;
+  if (!source) return null;
+
+  const sourceUrl = normalizeRouteString(source.source_url);
+  const metadata = parseOutreachSourceMetadata(source);
+  const videoId = normalizeRouteString(source.source_native_id) || normalizeRouteString(metadata?.video_id) || normalizeRouteString(metadata?.youtube_video_id) || normalizeRouteString(extractYouTubeVideoIdFromUrl(sourceUrl));
+  if (!sourceUrl || !videoId) return null;
+
+  const metadataChannelTitle =
+    normalizeRouteString(metadata?.source_channel_title)
+    || normalizeRouteString(metadata?.channel_title);
+  return {
+    blueprintId: blueprint.id,
+    sourceItemId,
+    youtubeVideoId: videoId,
+    videoUrl: sourceUrl,
+    videoTitle: normalizeRouteString(source.title) || blueprint.title,
+    sourceChannelId: normalizeRouteString(source.source_channel_id) || null,
+    sourceChannelTitle: normalizeRouteString(source.source_channel_title) || metadataChannelTitle || null,
+    blueprintTitle: blueprint.title,
+    blueprintSummary: normalizeRouteNullableString(blueprint.preview_summary),
+    blueprintReview: normalizeRouteNullableString(blueprint.llm_review),
+    blueprintSectionsJson: blueprint.sections_json || null,
+    tags: parseOutreachTagsFromSections(blueprint.sections_json),
+  };
 }
 
 async function listProfileBlueprintListItems(input: {

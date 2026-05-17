@@ -1,0 +1,73 @@
+import { config } from '@/config/runtime';
+import { supabase } from '@/integrations/supabase/client';
+
+type ApiEnvelope<T> = {
+  ok: boolean;
+  error_code: string | null;
+  message: string;
+  data: T;
+};
+
+export type OutreachDraftOption = {
+  id: string;
+  optionIndex: number;
+  openerText: string;
+  tailVariantId: string;
+  tailText: string;
+  finalText: string;
+};
+
+export type OutreachDraftGenerationResult = {
+  draftGroupId: string;
+  blueprintId: string;
+  sourceItemId: string;
+  youtubeVideoId: string;
+  videoUrl: string;
+  sourceChannelId: string | null;
+  sourceChannelTitle: string | null;
+  model: string;
+  reasoningEffort: string;
+  promptVersion: string;
+  options: OutreachDraftOption[];
+  limits: {
+    dailyCap: number;
+    channelWindowDays: number;
+    videoAlreadyDrafted: boolean;
+  };
+};
+
+function getApiBase() {
+  if (!config.agenticBackendUrl) return null;
+  return `${config.agenticBackendUrl.replace(/\/$/, '')}/api`;
+}
+
+async function getRequiredAuthHeader() {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new Error('Sign in required.');
+  return { Authorization: `Bearer ${token}` };
+}
+
+export async function generateOutreachDrafts(input: {
+  blueprintId: string;
+}) {
+  const base = getApiBase();
+  if (!base) throw new Error('Backend API is not configured.');
+
+  const authHeader = await getRequiredAuthHeader();
+  const response = await fetch(`${base}/admin/outreach-drafts/generate`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeader,
+    },
+    body: JSON.stringify({
+      blueprint_id: input.blueprintId,
+    }),
+  });
+  const json = (await response.json().catch(() => null)) as ApiEnvelope<OutreachDraftGenerationResult> | null;
+  if (!response.ok || !json?.ok || !json.data) {
+    throw new Error(json?.message || `Outreach draft request failed (${response.status})`);
+  }
+  return json.data;
+}
