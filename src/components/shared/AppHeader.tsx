@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { BookOpen } from 'lucide-react';
 import { AppNavigation } from '@/components/shared/AppNavigation';
 import { NotificationsBell } from '@/components/shared/NotificationsBell';
+import { AdminOutreachDraftsButton } from '@/components/shared/AdminOutreachDraftsButton';
 import { BlueprintFreeBadge } from '@/components/shared/BlueprintFreeBadge';
 import { UserMenu } from '@/components/shared/UserMenu';
 import { useAuth } from '@/contexts/AuthContext';
@@ -100,6 +101,7 @@ export function AppHeader({ actions, showFloatingNav = true }: AppHeaderProps) {
           <div className="flex items-center gap-2 justify-end">
             {actions}
             {user ? <BlueprintFreeBadge enabled /> : null}
+            {user ? <AdminOutreachDraftsButton /> : null}
             {user ? <NotificationsBell /> : null}
             <UserMenu onOpenHelp={() => setShowHelp(true)} />
           </div>
