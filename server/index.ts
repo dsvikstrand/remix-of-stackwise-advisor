@@ -551,9 +551,15 @@ import { registerBlueprintReadRoutes } from './routes/blueprintRead';
 import { registerBlueprintTagReadRoutes } from './routes/blueprintTags';
 import { registerTagRoutes } from './routes/tags';
 import { registerAdminOutreachRoutes } from './routes/adminOutreach';
-import { generateOutreachDrafts, type OutreachDraftContext } from './services/outreachDrafts';
+import { generateOutreachDrafts, OutreachDraftError, type OutreachDraftContext } from './services/outreachDrafts';
 import { createOutreachOpenAIClient } from './services/outreachOpenAI';
+import { postOutreachDraft } from './services/outreachPosting';
 import { createOracleOutreachDraftStateStore } from './services/oracleOutreachDraftState';
+import {
+  hasYouTubeCommentPostScope,
+  postYouTubeTopLevelComment,
+  YOUTUBE_COMMENT_POST_SCOPE,
+} from './services/youtubeCommentPosting';
 
 const app = express();
 const port = Number(process.env.PORT) || 8787;
@@ -9040,6 +9046,65 @@ registerAdminOutreachRoutes(app, {
         controlDb: oracleControlPlane,
       }),
       llm: createOutreachOpenAIClient(),
+    });
+  },
+  postOutreachDraft: async ({ adminUserId, draftId, finalText }) => {
+    if (!oracleControlPlane) {
+      throw new Error('Oracle control plane is not configured');
+    }
+    const db = getServiceSupabaseClient();
+    if (!db) {
+      throw new OutreachDraftError(500, 'CONFIG_ERROR', 'Service role client is not configured.');
+    }
+    const configCheck = ensureYouTubeOAuthConfig();
+    if (!configCheck.ok) {
+      throw new OutreachDraftError(configCheck.status, configCheck.error_code, configCheck.message);
+    }
+    if (!youtubeOAuthConfig.scopes.some((scope) => scope === YOUTUBE_COMMENT_POST_SCOPE || scope === 'https://www.googleapis.com/auth/youtube')) {
+      throw new OutreachDraftError(503, 'YT_COMMENT_SCOPE_NOT_CONFIGURED', 'YouTube OAuth comment scope is not configured.');
+    }
+
+    const { data: connection, error: connectionError } = await db
+      .from('user_youtube_connections')
+      .select('id, user_id, google_sub, youtube_channel_id, youtube_channel_title, youtube_channel_url, youtube_channel_avatar_url, access_token_encrypted, refresh_token_encrypted, token_expires_at, scope, is_active, last_import_at, last_error')
+      .eq('user_id', adminUserId)
+      .eq('is_active', true)
+      .maybeSingle();
+    if (connectionError) {
+      throw new OutreachDraftError(400, 'READ_FAILED', connectionError.message);
+    }
+    if (!connection) {
+      throw new OutreachDraftError(404, 'YT_CONNECTION_NOT_FOUND', 'Connect YouTube before posting.');
+    }
+
+    let usable: Awaited<ReturnType<typeof getUsableYouTubeAccessToken>>;
+    try {
+      usable = await getUsableYouTubeAccessToken({
+        db,
+        connection: connection as UserYouTubeConnectionRow,
+      });
+    } catch (error) {
+      const mapped = mapYouTubeOAuthError(error);
+      throw new OutreachDraftError(mapped.status, mapped.error_code, mapped.message);
+    }
+    if (!hasYouTubeCommentPostScope(usable.connection.scope)) {
+      throw new OutreachDraftError(401, 'YT_REAUTH_REQUIRED', 'Reconnect YouTube with comment permission before posting.');
+    }
+
+    return postOutreachDraft({
+      adminUserId,
+      draftId,
+      finalText,
+      stateStore: createOracleOutreachDraftStateStore({
+        controlDb: oracleControlPlane,
+      }),
+      youtubeClient: {
+        postTopLevelComment: ({ videoId, text }) => postYouTubeTopLevelComment({
+          accessToken: usable.accessToken,
+          videoId,
+          text,
+        }),
+      },
     });
   },
 });

@@ -1,6 +1,7 @@
 import type express from 'express';
 import type { OutreachDraftGenerationResult } from '../services/outreachDrafts';
 import { OutreachDraftError } from '../services/outreachDrafts';
+import type { OutreachPostResult } from '../services/outreachPosting';
 
 type AdminOutreachDeps = {
   getCredits: (userId: string) => Promise<unknown>;
@@ -8,6 +9,11 @@ type AdminOutreachDeps = {
     adminUserId: string;
     blueprintId: string;
   }) => Promise<OutreachDraftGenerationResult>;
+  postOutreachDraft: (input: {
+    adminUserId: string;
+    draftId: string;
+    finalText: string | null;
+  }) => Promise<OutreachPostResult>;
 };
 
 function withEnvelope<T>(data: T, message: string) {
@@ -81,6 +87,52 @@ export function registerAdminOutreachRoutes(app: express.Express, deps: AdminOut
       return res.status(500).json(withError(
         'OUTREACH_DRAFT_FAILED',
         error instanceof Error ? error.message : 'Could not generate outreach drafts.',
+      ));
+    }
+  });
+
+  app.post('/api/admin/outreach-drafts/:draftId/post', async (req, res) => {
+    const userId = normalizeString((res.locals.user as { id?: string } | undefined)?.id);
+    if (!userId) {
+      return res.status(401).json(withError('AUTH_REQUIRED', 'Sign in required.'));
+    }
+
+    let isAdmin = false;
+    try {
+      isAdmin = await requireAdmin({ userId, deps });
+    } catch (error) {
+      return res.status(503).json(withError(
+        'ADMIN_CHECK_UNAVAILABLE',
+        error instanceof Error ? error.message : 'Could not verify admin entitlement.',
+      ));
+    }
+    if (!isAdmin) {
+      return res.status(403).json(withError('ADMIN_REQUIRED', 'Admin access required.'));
+    }
+
+    const draftId = normalizeString(req.params?.draftId);
+    if (!draftId) {
+      return res.status(400).json(withError('INVALID_DRAFT_ID', 'Missing outreach draft id.'));
+    }
+    const body = req.body && typeof req.body === 'object'
+      ? req.body as Record<string, unknown>
+      : {};
+    const finalText = normalizeString(body.final_text) || null;
+
+    try {
+      const result = await deps.postOutreachDraft({
+        adminUserId: userId,
+        draftId,
+        finalText,
+      });
+      return res.status(201).json(withEnvelope(result, 'outreach comment posted'));
+    } catch (error) {
+      if (error instanceof OutreachDraftError) {
+        return res.status(error.status).json(withError(error.errorCode, error.message));
+      }
+      return res.status(500).json(withError(
+        'OUTREACH_POST_FAILED',
+        error instanceof Error ? error.message : 'Could not post outreach comment.',
       ));
     }
   });

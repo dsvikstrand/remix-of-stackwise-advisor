@@ -35,6 +35,7 @@ describe('admin outreach route', () => {
     registerAdminOutreachRoutes(app as any, {
       getCredits: vi.fn(async () => ({ plan: 'free' })),
       generateOutreachDrafts,
+      postOutreachDraft: vi.fn(),
     });
 
     const res = createResponse('user_1');
@@ -69,6 +70,7 @@ describe('admin outreach route', () => {
     registerAdminOutreachRoutes(app as any, {
       getCredits: vi.fn(async () => ({ plan: 'admin' })),
       generateOutreachDrafts,
+      postOutreachDraft: vi.fn(),
     });
 
     const res = createResponse('admin_1');
@@ -87,5 +89,64 @@ describe('admin outreach route', () => {
         draftGroupId: 'group_1',
       },
     });
+  });
+
+  it('posts outreach drafts for admin users', async () => {
+    const app = createMockApp();
+    const postOutreachDraft = vi.fn(async () => ({
+      draftId: 'draft_1',
+      draftGroupId: 'group_1',
+      blueprintId: 'bp_1',
+      sourceItemId: 'source_1',
+      youtubeVideoId: 'abc123xyz89',
+      videoUrl: 'https://www.youtube.com/watch?v=abc123xyz89',
+      youtubeCommentId: 'comment_1',
+      finalText: 'I’m building BLEUP and this is useful.',
+      status: 'posted' as const,
+      postedAt: '2026-05-18T08:00:00.000Z',
+    }));
+    registerAdminOutreachRoutes(app as any, {
+      getCredits: vi.fn(async () => ({ plan: 'admin' })),
+      generateOutreachDrafts: vi.fn(),
+      postOutreachDraft,
+    });
+
+    const res = createResponse('admin_1');
+    await app.handlers['POST /api/admin/outreach-drafts/:draftId/post']({
+      params: { draftId: 'draft_1' },
+      body: { final_text: 'I’m building BLEUP and this is useful.' },
+    } as any, res as any);
+
+    expect(postOutreachDraft).toHaveBeenCalledWith({
+      adminUserId: 'admin_1',
+      draftId: 'draft_1',
+      finalText: 'I’m building BLEUP and this is useful.',
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        youtubeCommentId: 'comment_1',
+      },
+    });
+  });
+
+  it('requires admin entitlement before posting outreach drafts', async () => {
+    const app = createMockApp();
+    const postOutreachDraft = vi.fn();
+    registerAdminOutreachRoutes(app as any, {
+      getCredits: vi.fn(async () => ({ plan: 'free' })),
+      generateOutreachDrafts: vi.fn(),
+      postOutreachDraft,
+    });
+
+    const res = createResponse('user_1');
+    await app.handlers['POST /api/admin/outreach-drafts/:draftId/post']({
+      params: { draftId: 'draft_1' },
+      body: { final_text: 'I’m building BLEUP and this is useful.' },
+    } as any, res as any);
+
+    expect(res.statusCode).toBe(403);
+    expect(postOutreachDraft).not.toHaveBeenCalled();
   });
 });

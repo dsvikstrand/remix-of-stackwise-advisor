@@ -36,6 +36,19 @@ export type OutreachDraftGenerationResult = {
   };
 };
 
+export type OutreachPostResult = {
+  draftId: string;
+  draftGroupId: string;
+  blueprintId: string;
+  sourceItemId: string;
+  youtubeVideoId: string;
+  videoUrl: string;
+  youtubeCommentId: string;
+  finalText: string;
+  status: 'posted';
+  postedAt: string;
+};
+
 function getApiBase() {
   if (!config.agenticBackendUrl) return null;
   return `${config.agenticBackendUrl.replace(/\/$/, '')}/api`;
@@ -68,6 +81,31 @@ export async function generateOutreachDrafts(input: {
   const json = (await response.json().catch(() => null)) as ApiEnvelope<OutreachDraftGenerationResult> | null;
   if (!response.ok || !json?.ok || !json.data) {
     throw new Error(json?.message || `Outreach draft request failed (${response.status})`);
+  }
+  return json.data;
+}
+
+export async function postOutreachDraft(input: {
+  draftId: string;
+  finalText: string;
+}) {
+  const base = getApiBase();
+  if (!base) throw new Error('Backend API is not configured.');
+
+  const authHeader = await getRequiredAuthHeader();
+  const response = await fetch(`${base}/admin/outreach-drafts/${encodeURIComponent(input.draftId)}/post`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeader,
+    },
+    body: JSON.stringify({
+      final_text: input.finalText,
+    }),
+  });
+  const json = (await response.json().catch(() => null)) as ApiEnvelope<OutreachPostResult> | null;
+  if (!response.ok || !json?.ok || !json.data) {
+    throw new Error(json?.message || `Outreach post request failed (${response.status})`);
   }
   return json.data;
 }

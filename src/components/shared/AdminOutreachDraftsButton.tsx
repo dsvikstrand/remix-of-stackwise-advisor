@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Copy, ExternalLink, Megaphone, MessageSquareText } from 'lucide-react';
+import { Copy, ExternalLink, Megaphone, MessageSquareText, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -27,7 +27,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAiCredits } from '@/hooks/useAiCredits';
 import { useToast } from '@/hooks/use-toast';
-import { generateOutreachDrafts, type OutreachDraftGenerationResult } from '@/lib/adminOutreachApi';
+import {
+  generateOutreachDrafts,
+  postOutreachDraft,
+  type OutreachDraftGenerationResult,
+} from '@/lib/adminOutreachApi';
 import { listMyFeedItems } from '@/lib/myFeedApi';
 import type { MyFeedItemView } from '@/lib/myFeedData';
 
@@ -153,6 +157,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
   const [draftResult, setDraftResult] = useState<OutreachDraftGenerationResult | null>(null);
   const [draftDialogOpen, setDraftDialogOpen] = useState(false);
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
+  const [postedDraftIds, setPostedDraftIds] = useState<Set<string>>(() => new Set());
   const candidatesQuery = useQuery({
     queryKey: ['admin-outreach-drafts-candidates', user?.id],
     queryFn: async () => {
@@ -187,6 +192,29 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
       });
     },
   });
+  const postMutation = useMutation({
+    mutationFn: async (input: { optionId: string; finalText: string }) => {
+      return postOutreachDraft({
+        draftId: input.optionId,
+        finalText: input.finalText,
+      });
+    },
+    onSuccess: (result) => {
+      setPostedDraftIds((current) => new Set(current).add(result.draftId));
+      toast({
+        title: 'Comment posted',
+        description: `YouTube comment id: ${result.youtubeCommentId}`,
+      });
+      void candidatesQuery.refetch();
+    },
+    onError: (error) => {
+      toast({
+        title: 'Could not post outreach comment',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    },
+  });
 
   const handleCreateDraft = (candidate: OutreachCandidate) => {
     draftMutation.mutate(candidate);
@@ -204,6 +232,16 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
       title: 'Draft copied',
       description: 'Paste it into YouTube after your manual review.',
     });
+  };
+
+  const handlePostDraft = (optionId: string) => {
+    const finalText = draftEdits[optionId] || '';
+    if (!finalText.trim()) return;
+    const confirmed = window.confirm(
+      'Post this edited outreach comment to YouTube now? This is a real public comment from the connected admin YouTube account.',
+    );
+    if (!confirmed) return;
+    postMutation.mutate({ optionId, finalText });
   };
 
   return (
@@ -299,7 +337,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
           <DialogHeader>
             <DialogTitle>Review Outreach Drafts</DialogTitle>
             <DialogDescription>
-              Copy-only for now. Review and edit before posting manually on YouTube.
+              Review and edit before posting. Posting creates a real public YouTube comment from the connected admin account.
             </DialogDescription>
           </DialogHeader>
           {draftResult ? (
@@ -330,15 +368,32 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                     <p className="text-xs text-muted-foreground">
                       No direct app link. Includes transparent builder disclosure.
                     </p>
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="gap-1.5"
-                      onClick={() => handleCopyDraft(option.id)}
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                      Copy
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5"
+                        onClick={() => handleCopyDraft(option.id)}
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                        Copy
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="gap-1.5"
+                        disabled={postMutation.isPending || postedDraftIds.has(option.id)}
+                        onClick={() => handlePostDraft(option.id)}
+                      >
+                        <Send className="h-3.5 w-3.5" />
+                        {postedDraftIds.has(option.id)
+                          ? 'Posted'
+                          : postMutation.isPending && postMutation.variables?.optionId === option.id
+                            ? 'Posting...'
+                            : 'Post to YouTube'}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))}

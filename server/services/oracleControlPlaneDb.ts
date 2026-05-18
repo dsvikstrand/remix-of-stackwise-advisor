@@ -359,6 +359,10 @@ type OutreachDraftStateTable = {
   reasoning_effort: string;
   prompt_version: string;
   validation_json: string;
+  youtube_comment_id: string | null;
+  posted_at: string | null;
+  post_error_code: string | null;
+  post_error_message: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -996,6 +1000,10 @@ CREATE TABLE IF NOT EXISTS outreach_draft_state (
   reasoning_effort TEXT NOT NULL,
   prompt_version TEXT NOT NULL,
   validation_json TEXT NOT NULL,
+  youtube_comment_id TEXT,
+  posted_at TEXT,
+  post_error_code TEXT,
+  post_error_message TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -1008,6 +1016,9 @@ CREATE INDEX IF NOT EXISTS idx_outreach_draft_video
 
 CREATE INDEX IF NOT EXISTS idx_outreach_draft_channel
   ON outreach_draft_state (source_channel_id, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_outreach_draft_status_created
+  ON outreach_draft_state (status, created_at);
 
 CREATE TABLE IF NOT EXISTS blueprint_comment_state (
   id TEXT PRIMARY KEY,
@@ -1393,6 +1404,30 @@ export function openOracleControlPlaneDb(input: {
     tableName: 'product_feed_state',
     columnName: 'generated_at_on_wall',
     columnSql: 'generated_at_on_wall TEXT',
+  });
+  ensureSqliteColumn({
+    sqlite,
+    tableName: 'outreach_draft_state',
+    columnName: 'youtube_comment_id',
+    columnSql: 'youtube_comment_id TEXT',
+  });
+  ensureSqliteColumn({
+    sqlite,
+    tableName: 'outreach_draft_state',
+    columnName: 'posted_at',
+    columnSql: 'posted_at TEXT',
+  });
+  ensureSqliteColumn({
+    sqlite,
+    tableName: 'outreach_draft_state',
+    columnName: 'post_error_code',
+    columnSql: 'post_error_code TEXT',
+  });
+  ensureSqliteColumn({
+    sqlite,
+    tableName: 'outreach_draft_state',
+    columnName: 'post_error_message',
+    columnSql: 'post_error_message TEXT',
   });
 
   const db = new Kysely<OracleControlPlaneDatabase>({

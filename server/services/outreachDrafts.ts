@@ -64,7 +64,26 @@ export type OutreachDraftHistoryRow = {
   youtube_video_id: string;
   source_channel_id: string | null;
   final_text: string;
+  status?: string | null;
+  youtube_comment_id?: string | null;
+  posted_at?: string | null;
   created_at: string;
+};
+
+export type OutreachDraftStoredRow = OutreachDraftHistoryRow & {
+  video_url: string;
+  source_channel_title: string | null;
+  option_index: number;
+  opener_text: string;
+  tail_variant_id: string;
+  tail_text: string;
+  model: string;
+  reasoning_effort: string;
+  prompt_version: string;
+  validation_json: string;
+  updated_at: string;
+  post_error_code: string | null;
+  post_error_message: string | null;
 };
 
 export type OutreachDraftStateStore = {
@@ -73,6 +92,9 @@ export type OutreachDraftStateStore = {
     sinceIso?: string | null;
     limit?: number;
   }) => Promise<OutreachDraftHistoryRow[]>;
+  getDraftOption: (input: {
+    draftId: string;
+  }) => Promise<OutreachDraftStoredRow | null>;
   insertDraftOptions: (input: {
     rows: Array<{
       id: string;
@@ -98,6 +120,28 @@ export type OutreachDraftStateStore = {
       updated_at: string;
     }>;
   }) => Promise<Array<{ id: string }>>;
+  markDraftPosting: (input: {
+    draftId: string;
+    adminUserId: string;
+    finalText: string;
+    updatedAt: string;
+  }) => Promise<boolean>;
+  markDraftPosted: (input: {
+    draftId: string;
+    adminUserId: string;
+    finalText: string;
+    youtubeCommentId: string;
+    postedAt: string;
+    updatedAt: string;
+  }) => Promise<boolean>;
+  markDraftPostFailed: (input: {
+    draftId: string;
+    adminUserId: string;
+    finalText: string;
+    errorCode: string;
+    errorMessage: string;
+    updatedAt: string;
+  }) => Promise<boolean>;
 };
 
 export class OutreachDraftError extends Error {
@@ -255,6 +299,25 @@ function validateFinalDraft(input: {
   return {
     ok: issues.length === 0,
     issues,
+  };
+}
+
+export function validateOutreachPostText(finalText: string) {
+  const text = String(finalText || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  const issues: string[] = [];
+  if (text.length < 40) issues.push('final_too_short');
+  if (text.length > MAX_FINAL_COMMENT_CHARS) issues.push('final_too_long');
+  if (!/\bBLEUP\b/i.test(text)) issues.push('missing_bleup');
+  if (!/\bI[’']?m building\b/i.test(text)) issues.push('missing_builder_disclosure');
+  if (/https?:\/\//i.test(text)) issues.push('direct_link_not_allowed');
+  return {
+    ok: issues.length === 0,
+    issues,
+    text,
   };
 }
 

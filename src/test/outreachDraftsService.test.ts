@@ -26,7 +26,11 @@ const context: OutreachDraftContext = {
 function createStore(overrides?: Partial<OutreachDraftStateStore>): OutreachDraftStateStore {
   return {
     listRecentDrafts: vi.fn(async () => []),
+    getDraftOption: vi.fn(async () => null),
     insertDraftOptions: vi.fn(async ({ rows }) => rows.map((row) => ({ id: row.id }))),
+    markDraftPosting: vi.fn(async () => true),
+    markDraftPosted: vi.fn(async () => true),
+    markDraftPostFailed: vi.fn(async () => true),
     ...overrides,
   };
 }
