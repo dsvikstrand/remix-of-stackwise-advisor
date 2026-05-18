@@ -27,6 +27,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAiCredits } from '@/hooks/useAiCredits';
 import { useToast } from '@/hooks/use-toast';
+import { ApiRequestError } from '@/lib/subscriptionsApi';
 import {
   generateOutreachDrafts,
   postOutreachDraft,
@@ -34,6 +35,10 @@ import {
 } from '@/lib/adminOutreachApi';
 import { listMyFeedItems } from '@/lib/myFeedApi';
 import type { MyFeedItemView } from '@/lib/myFeedData';
+import {
+  getYouTubeConnectionStatus,
+  startYouTubeConnection,
+} from '@/lib/youtubeConnectionApi';
 
 type OutreachCandidate = {
   id: string;
@@ -115,6 +120,24 @@ function buildOutreachCandidates(items: MyFeedItemView[]) {
     .slice(0, 50);
 }
 
+function getYouTubeConnectionErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof ApiRequestError) {
+    switch (error.errorCode) {
+      case 'YT_OAUTH_NOT_CONFIGURED':
+        return 'YouTube connect is not configured yet.';
+      case 'YT_REAUTH_REQUIRED':
+        return 'YouTube authorization expired. Reconnect required.';
+      case 'YT_RETURN_TO_INVALID':
+        return 'Invalid return URL. Refresh this page and retry.';
+      case 'RATE_LIMITED':
+        return error.message || 'Please wait a moment before trying again.';
+      default:
+        return error.message || fallback;
+    }
+  }
+  return error instanceof Error ? error.message : fallback;
+}
+
 export function AdminOutreachDraftsButton() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
@@ -158,6 +181,12 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
   const [draftDialogOpen, setDraftDialogOpen] = useState(false);
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
   const [postedDraftIds, setPostedDraftIds] = useState<Set<string>>(() => new Set());
+  const youtubeConnectionQuery = useQuery({
+    queryKey: ['admin-outreach-youtube-connection-status', user?.id],
+    queryFn: getYouTubeConnectionStatus,
+    enabled: Boolean(open && user?.id),
+    retry: false,
+  });
   const candidatesQuery = useQuery({
     queryKey: ['admin-outreach-drafts-candidates', user?.id],
     queryFn: async () => {
@@ -188,6 +217,21 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
       toast({
         title: 'Could not create outreach drafts',
         description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    },
+  });
+  const startYouTubeConnectMutation = useMutation({
+    mutationFn: async () => {
+      return startYouTubeConnection({ returnTo: window.location.href });
+    },
+    onSuccess: (payload) => {
+      window.location.assign(payload.auth_url);
+    },
+    onError: (error) => {
+      toast({
+        title: 'Could not start YouTube connect',
+        description: getYouTubeConnectionErrorMessage(error, 'Please try again.'),
         variant: 'destructive',
       });
     },
@@ -256,6 +300,55 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
           </SheetHeader>
 
           <div className="flex-1 overflow-y-auto">
+            <div className="border-b border-border/40 px-4 py-4">
+              <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium">YouTube posting account</p>
+                      {youtubeConnectionQuery.data?.connected ? (
+                        <Badge variant="default" className="h-5 px-2 text-[10px]">
+                          Connected
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="h-5 px-2 text-[10px]">
+                          Not connected
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {youtubeConnectionQuery.isLoading
+                        ? 'Checking connection...'
+                        : youtubeConnectionQuery.isError
+                          ? getYouTubeConnectionErrorMessage(youtubeConnectionQuery.error, 'Could not load connection status.')
+                          : youtubeConnectionQuery.data?.connected
+                            ? `Posting will use ${youtubeConnectionQuery.data.channel_title || 'the connected YouTube account'}. Reconnect if YouTube asks for comment permission.`
+                            : 'Connect the admin YouTube account before posting outreach comments.'}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={youtubeConnectionQuery.data?.connected ? 'outline' : 'default'}
+                    className="h-8 gap-1.5"
+                    disabled={startYouTubeConnectMutation.isPending}
+                    onClick={() => startYouTubeConnectMutation.mutate()}
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    {startYouTubeConnectMutation.isPending
+                      ? 'Opening Google...'
+                      : youtubeConnectionQuery.data?.connected
+                        ? 'Reconnect posting account'
+                        : 'Connect posting account'}
+                  </Button>
+                  {youtubeConnectionQuery.data?.needs_reauth ? (
+                    <span className="text-xs text-destructive">Reconnect required.</span>
+                  ) : null}
+                </div>
+              </div>
+            </div>
             {candidatesQuery.isLoading ? (
               <div className="px-4 py-6 text-sm text-muted-foreground">
                 Loading latest generated blueprints...
