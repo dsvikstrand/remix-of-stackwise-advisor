@@ -252,12 +252,12 @@ export default function Wall() {
         onTouchEnd={handleFeedTouchEnd}
         onTouchCancel={handleFeedTouchEnd}
       >
-        <section className="mb-6 px-3 sm:px-4 hidden sm:block">
+        <section className="mb-4 px-3 sm:mb-6 sm:px-4">
           <div className="flex flex-col gap-2">
             <p className="text-sm font-semibold text-primary uppercase tracking-wide">Home</p>
             <h1 className="text-2xl font-semibold">Your Blueprint streams:</h1>
             <p className="text-sm text-muted-foreground">
-              Bleup turns YouTube videos into Blueprints. &apos;For You&apos; shows content from creators you subscribe to. &apos;Channels&apos; shows blueprints from the channels you follow. &apos;All&apos; shows every public blueprint on Bleup.
+              Bleup turns YouTube videos into actionable Blueprints: key ideas, steps, and takeaways you can use. &apos;For You&apos; shows content from creators you subscribe to. &apos;Joined&apos; shows blueprints from the channels you follow. &apos;All&apos; shows every public blueprint on Bleup.
             </p>
           </div>
         </section>
@@ -356,7 +356,7 @@ export default function Wall() {
               {activeLane === 'for-you'
                 ? 'For You shows blueprints from creators you subscribe to.'
                 : activeLane === 'joined'
-                  ? 'Channels shows blueprints posted into the channels you follow.'
+                  ? 'Joined shows blueprints posted into the channels you follow.'
                   : 'All shows every public blueprint on Bleup.'}
             </p>
           </div>
@@ -378,7 +378,7 @@ export default function Wall() {
                 <div>
                   <p className="text-sm font-semibold">Join channels to shape this lane</p>
                   <p className="text-xs text-muted-foreground">
-                    Channels only shows published blueprints posted into the channels you follow.
+                    Joined only shows published blueprints posted into the channels you follow.
                   </p>
                 </div>
                 <Button asChild size="sm">

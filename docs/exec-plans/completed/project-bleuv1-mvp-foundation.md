@@ -141,12 +141,12 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Harden Search-generated source channel-title persistence + metadata fallback so legacy `My Feed` subtitle rows consistently show channel name.
 - Keep imported blueprint detail attribution source-first (show source channel when present, hide default edit CTA in MVP UI).
 - Profile privacy default migration: new profiles default to public (`profiles.is_public=true`), existing profiles unchanged.
-- Main nav IA is simplified to `Home / Channels / Explore`, with search/create moved to the header `Create` action.
+- Main nav IA is simplified to `Home / Channels / Subscriptions / Add`, where `Add` is the manual YouTube-to-blueprint generation entrypoint.
 - Home feed semantics are now locked to `For You / Joined / All`:
   - `For You` is source-driven and may contain locked items.
   - `Joined` is a strict filter of published blueprints from Bleu channels the user has joined.
   - `All` is the global published-blueprint aggregation.
-- Core high-traffic copy is harmonized to current source-first behavior (`Home`, `Create`, auto-channel publish) and legacy manual-post phrasing is removed.
+- Core high-traffic copy is harmonized to current source-first behavior (`Home`, `Add`, auto-channel publish) and legacy manual-post phrasing is removed.
 - Landing cold-user pass adds value-first hero positioning, proof/use-case blocks, and curated fallback content so front-door sections never render empty.
 - Frontend bootstrap now guards missing Supabase env with explicit configuration UX instead of a blank page.
 - Card/list teaser copy now belongs on stored `blueprints.preview_summary`; Wall/Explore/Channel/Search should treat canonical `sections_json` as detail-view content, while legacy `My Feed` compatibility support remains additive only.
@@ -229,7 +229,7 @@ Deliver the remaining `bleuV1` MVP through a manual iterative build loop with cl
 - Current runtime note: later unlock-ownership closure also removed the remaining meaningful active-runtime product/browser reads of `source_item_unlocks`, so Blueprint Detail source attribution, liked-blueprint profile linkage, and the browser-side legacy `My Feed` fallback no longer depend on direct Supabase unlock-row queries.
 - Step 21 source-page generation endpoint shifted to `POST /videos/unlock`; the earlier `/videos/generate` compatibility alias mentioned here was later retired, while subscription new uploads moved to `my_feed_unlockable` cards instead of immediate generation.
 - Step 21 follow-up removes strict unlock cooldown in favor of soft request caps (`8/10s` burst + `120/10m` sustained) and immediate credit cache refresh after unlock actions.
-- Step 22 Home scope split repurposes `/wall` `For You` to subscribed-source mixed stream (locked + unlocked) and adds `Your channels` as the unchanged followed-channel ranked lane.
+- Step 22 Home scope split repurposes `/wall` `For You` to subscribed-source mixed stream (locked + unlocked) and adds `Joined` as the followed-channel ranked lane.
 - Step 23 trust pass adds shared unlock activity cards (Home/Source Page/legacy `My Feed` compatibility), reload-resume unlock tracking, user-menu credit refill/ledger transparency, and a dismissible Home scope helper strip.
 - Step 24 backend hardening adds unlock reliability sweeps (expired/stale/orphan recovery), additive unlock `trace_id` response contract, and service-level idempotency/race tests.
 - Step 24 scale follow-up shifts unlock/manual/service generation to enqueue-only worker execution with DB claim+lease heartbeat semantics, queue backpressure controls, provider retry/circuit guards, and service queue health endpoint (`GET /api/ops/queue/health`).

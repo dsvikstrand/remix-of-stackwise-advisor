@@ -51,6 +51,7 @@ export function ForYouLockedSourceCard({
     .map((part) => part[0]?.toUpperCase() || '')
     .join('') || 'S';
   const unlockCostLabel = `${unlockCostFormatter.format(unlockCost)} ${unlockCost === 1 ? 'credit' : 'credits'}`;
+  const unlockPriceLabel = isGenerationFree ? 'Free today' : unlockCostLabel;
 
   const handleCardActivate = () => {
     if (isUnlocking || !canUnlock) return;
@@ -105,10 +106,10 @@ export function ForYouLockedSourceCard({
                 variant="secondary"
                 className="h-6 rounded-full border border-primary/20 bg-primary/10 px-2.5 text-[11px] font-medium text-primary"
               >
-                {isUnlocking ? 'Unlocking...' : 'Unlock available'}
+                {isUnlocking ? 'Opening...' : 'View full blueprint'}
               </Badge>
               <span className="inline-flex h-6 items-center rounded-full border border-border/60 bg-muted/40 px-2.5 text-[11px] text-muted-foreground">
-                {isGenerationFree ? 'Free right now' : `◉ ${unlockCostFormatter.format(unlockCost)}`}
+                {unlockPriceLabel}
               </span>
             </div>
           </div>
@@ -119,17 +120,17 @@ export function ForYouLockedSourceCard({
       <AlertDialog open={showUnlockConfirm && canUnlock} onOpenChange={setShowUnlockConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Unlock this blueprint?</AlertDialogTitle>
+            <AlertDialogTitle>View full blueprint?</AlertDialogTitle>
             <AlertDialogDescription>
               {isGenerationFree
-                ? 'This will unlock and generate it for free right now.'
-                : `This will spend ${unlockCostLabel} to unlock and generate it.`}
+                ? 'This will unlock and generate the full blueprint for free today. Continue?'
+                : `This will use ${unlockCostLabel} to unlock and generate the full blueprint. Continue?`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isUnlocking}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmUnlock} disabled={isUnlocking}>
-              {isUnlocking ? 'Unlocking...' : 'Confirm unlock'}
+              {isUnlocking ? 'Opening...' : 'Continue'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

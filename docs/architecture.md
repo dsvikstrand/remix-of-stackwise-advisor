@@ -82,7 +82,7 @@
       - static-ish list/detail reads (`Wall`, `Search`, `Explore`, channel feed, blueprint detail/comments, profile tabs) use conservative stale windows and disable focus-triggered refetch by default.
     - `Wall` feed contract is:
       - `For You`: the only lane that may contain locked items; built from subscribed-source content plus personally unlocked blueprints.
-      - `Joined`: generated/published blueprints filtered by joined Bleu channels.
+      - `Joined`: generated/published blueprints filtered by joined Bleu channels; this is the visible Home tab label for the joined-channel lane.
       - `All`: generated/published blueprints across all Bleu channels.
     - `Wall` route/scope/query/mutation orchestration now lives in a dedicated frontend controller hook, keeping the page file render-focused.
   - Legacy compatibility surface in `src/pages/MyFeed.tsx` remains code-present, but `/my-feed` now redirects to `/wall`.

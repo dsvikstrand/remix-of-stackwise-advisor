@@ -181,7 +181,7 @@ d5) [todo] Add runtime health dashboard script for unlock throughput, failure ra
 ## Blind Spots To Fix
 e1) [todo] Async unlock feedback can still feel uncertain if job visibility is delayed or too hidden.
 e2) [todo] Credits can appear "stuck" if debit/refill updates are not immediate and explicit.
-e3) [todo] Scope language on Home (`For You` vs `Joined`) can still be misread without concise helper copy.
+e3) [have] Scope language on Home now uses concise helper copy and the visible `Joined` label for the joined-channel lane.
 e4) [todo] Source/channel naming overlap can confuse non-technical users without consistent glossary phrasing.
 e5) [todo] Legacy copy traces (`inventory/libraries`) should be removed from high-traffic screens to avoid identity drift.
 
@@ -204,7 +204,7 @@ h2) [todo] Unlock from Home `For You` mirrors Source Page behavior and card pari
 h3) [todo] Credit display updates immediately after reserve/settle/refund events.
 h4) [todo] OAuth connect/import callback on mobile returns user to intended flow reliably.
 h5) [todo] New users can understand first action without internal jargon.
-h6) [todo] `For You` and `Your channels` behavior matches their labels.
+h6) [todo] `For You` and `Joined` behavior matches their labels.
 h7) [todo] Source search in Explore returns valid Source Pages and routes correctly.
 
 ## Decision Log (Lock)

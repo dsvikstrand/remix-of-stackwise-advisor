@@ -177,7 +177,7 @@ export default function ChannelPage() {
       ? 'Leaving...'
       : state === 'joined'
         ? 'Joined'
-        : 'Join';
+        : 'Join channel';
 
   const {
     posts,

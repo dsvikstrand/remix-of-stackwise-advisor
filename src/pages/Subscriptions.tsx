@@ -390,7 +390,7 @@ export default function Subscriptions() {
                             </div>
                             <div className="flex flex-col items-end gap-2">
                               <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <span>{Boolean(subscription.auto_unlock_enabled) ? 'Auto generate' : 'Manual only'}</span>
+                                <span>{Boolean(subscription.auto_unlock_enabled) ? 'Auto generate' : 'Manual generation'}</span>
                                 <Switch
                                   checked={Boolean(subscription.auto_unlock_enabled)}
                                   onCheckedChange={(checked) => handleAutoUnlockToggle(subscription, checked)}

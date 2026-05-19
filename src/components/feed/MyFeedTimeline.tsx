@@ -714,7 +714,7 @@ export function MyFeedTimeline({
                     {item.state === 'channel_published' ? (
                       `Published to ${getChannelDisplayName(item.candidate?.channelSlug || null)}`
                     ) : item.state === 'my_feed_unlockable' ? (
-                      isUnlocking ? 'Unlocking...' : 'Unlock available'
+                      isUnlocking ? 'Opening...' : 'View full blueprint'
                     ) : autoChannelPipelineEnabled || !canMutate ? (
                       item.state === 'my_feed_generating' || item.state === 'candidate_submitted'
                         ? 'Publishing...'

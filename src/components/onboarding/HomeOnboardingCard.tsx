@@ -12,7 +12,7 @@ interface HomeOnboardingCardProps {
 const STEPS = [
   {
     title: 'Home is where things land, the main flow of the app.',
-    description: '\'For You\' shows your YouTube subscriptions content. \'Channels\' shows blueprints from the channels you follow. \'All\' shows every public blueprint.',
+    description: '\'For You\' shows your YouTube subscriptions content. \'Joined\' shows blueprints from the channels you follow. \'All\' shows every public blueprint.',
     icon: Home,
   },
   {
@@ -22,12 +22,12 @@ const STEPS = [
   },
   {
     title: 'Channels organize discovery',
-    description: 'Channels group blueprints by topic, so your \'Channels\' feed stays focused on the subjects you want to explore.',
+    description: 'Channels group blueprints by topic, so your \'Joined\' feed stays focused on the subjects you want to explore.',
     icon: Sparkles,
   },
   {
     title: 'Add is for manual generation',
-    description: 'Use Add when you want to turn a specific video into a blueprint right away.',
+    description: 'Use Add when you want to generate a blueprint from a specific YouTube video right away.',
     icon: SquarePlus,
   },
 ];
@@ -43,6 +43,9 @@ export function HomeOnboardingCard({ onDismiss, className }: HomeOnboardingCardP
               <h2 className="text-base font-semibold">A quick guide to how Bleup works</h2>
               <p className="text-sm text-muted-foreground">
                 Learn the difference between creators, channels, and your three Home streams before you dive in.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Bleup turns YouTube videos into actionable Blueprints: key ideas, steps, and takeaways you can use.
               </p>
             </div>
           </div>

@@ -12,8 +12,8 @@ interface HelpOverlayProps {
 const FLOW_STEPS = [
   { label: 'Follow creators in Subscriptions', hint: 'Subscriptions follow creators you trust and shape For You in Home.' },
   { label: 'Join topics in Channels', hint: 'Channels follow topics you care about and shape Joined.' },
-  { label: 'Check Home for ready and locked items', hint: 'Manual only subscriptions can send new videos into For You as locked items before you choose to generate them.' },
-  { label: 'Use Add to generate on purpose', hint: 'Paste a video, use a video id, or search when you want a blueprint right away.' },
+  { label: 'Check Home for ready and locked items', hint: 'Manual generation subscriptions can send new videos into For You as locked items before you choose to generate them.' },
+  { label: 'Use Add to generate on purpose', hint: 'Paste a YouTube video, use a video id, or search when you want a blueprint right away.' },
 ];
 
 const FEATURE_CARDS = [
@@ -25,7 +25,7 @@ const FEATURE_CARDS = [
       'Follows creators, not topics',
       'Shapes For You',
       'Auto generate can spend credits automatically',
-      'Manual only sends new videos into For You first',
+      'Manual generation sends new videos into For You first',
       'Locked For You items cost 1 credit to generate',
     ],
   },
@@ -48,9 +48,9 @@ const FEATURE_CARDS = [
   },
   {
     title: 'Add',
-    description: 'Add is where you generate a blueprint on purpose.',
+    description: 'Add is where you generate a blueprint from a YouTube video on purpose.',
     icon: SquarePlus,
-    bullets: ['Paste a YouTube link or video id', 'Search for a specific video', 'Turn useful content into a blueprint right away'],
+    bullets: ['Paste a YouTube link or video id', 'Search for a specific video', 'Turn useful video content into a blueprint right away'],
   },
 ];
 
@@ -87,11 +87,12 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                   <CardContent className="p-6 space-y-2">
                     <p className="text-sm font-semibold">Let’s get oriented</p>
                   <p className="text-sm text-muted-foreground leading-relaxed">
-                      Bleup helps you turn useful creator content into blueprints you can actually use.
+                      Bleup turns YouTube videos into actionable blueprints: key ideas, steps,
+                      and takeaways you can actually use.
                       Subscriptions follow creators you trust. Channels follow topics you care about.
                       Home then brings those together through three streams: For You from your subscriptions,
                       Joined from the channels you follow, and All for every public blueprint on Bleup.
-                      Credits are used when Bleup generates a blueprint. If a subscription is Manual only,
+                      Credits are used when Bleup generates a blueprint. If a subscription is Manual generation,
                       new videos can land in For You as locked items and cost 1 credit when you choose to turn one into a blueprint.
                     </p>
                   </CardContent>
@@ -152,7 +153,7 @@ export function HelpOverlay({ open, onOpenChange }: HelpOverlayProps) {
                     <div>
                       <p className="text-sm font-semibold">Tip for first‑time users</p>
                       <p className="text-xs text-muted-foreground">
-                        Start by subscribing to one creator or joining one channel, then generate one blueprint from Add or open one from Home. If a creator is set to Manual only, look for locked items in For You.
+                        Start by subscribing to one creator or joining one channel, then generate one blueprint from Add or open one from Home. If a creator is set to Manual generation, look for locked items in For You.
                       </p>
                     </div>
                     <Button

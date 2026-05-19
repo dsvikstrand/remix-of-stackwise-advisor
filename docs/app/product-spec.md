@@ -462,7 +462,7 @@ si61) transcript truth model distinguishes temporary transcript failures from co
 si62) `NO_TRANSCRIPT_PERMANENT` is now set only after bounded confirmation retries, and confirmed no-speech rows are hidden from unlockable feed/video-library surfaces.
 si63) auto subscription transcript failures now use silent bounded retries with explicit retry-after ladder; feed-card rows are suppressed during retry/permanent states instead of shown as unlockable locks.
 si63a) terminal `source_item_unlock_generation` failures now still emit `generation_failed` notifications from actual failed item counts, so `Recent Results` reflects incomplete generations even when transcript/provider retry policy remains active.
-si63b) short-transcript failures (`TRANSCRIPT_INSUFFICIENT_CONTEXT`) now also participate in blueprint-unavailable cooldown for requeue attempts, and wall/profile locked-card readers should suppress those rows during the cooldown instead of bouncing back to `Unlock available`.
+si63b) short-transcript failures (`TRANSCRIPT_INSUFFICIENT_CONTEXT`) now also participate in blueprint-unavailable cooldown for requeue attempts, and wall/profile locked-card readers should suppress those rows during the cooldown instead of bouncing back to `View full blueprint`.
 si64) transcript speech-guidance warning copy is scoped to explicit Source Page Video Library `+Add` requests; Wall and legacy `My Feed` compatibility unlock actions use generic retry-safe messaging.
 si65) auth endpoint: `GET /api/notifications?limit=<1..50>&cursor=<opaque?>` returns inbox rows with `unread_count` and `next_cursor`.
 si66) auth endpoint: `POST /api/notifications/:id/read` marks one notification read.

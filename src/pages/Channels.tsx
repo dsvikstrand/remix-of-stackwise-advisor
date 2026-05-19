@@ -302,7 +302,7 @@ export default function Channels() {
       return (
         <div className="flex flex-col items-end gap-1">
           <Button size="sm" variant="outline" disabled className="h-8 px-2 text-xs">
-            Join
+            Join channel
           </Button>
           <span className="text-[11px] text-muted-foreground">Channel activation pending</span>
         </div>
@@ -318,7 +318,7 @@ export default function Channels() {
         ? 'Leaving...'
         : state === 'joined'
           ? 'Joined'
-          : 'Join';
+          : 'Join channel';
 
     return (
       <Button
@@ -370,7 +370,7 @@ export default function Channels() {
           <p className="text-sm font-semibold text-primary uppercase tracking-wide">Channels</p>
           <h1 className="text-2xl font-semibold tracking-tight">Follow topics and shape Channels</h1>
           <p className="text-sm text-muted-foreground">
-            Channels are the topics you care about. The Home &apos;Channels&apos; feed displays blueprints exclusively from the channels you follow.
+            Channels are the topics you care about. The Home &apos;Joined&apos; feed displays blueprints exclusively from the channels you follow.
           </p>
         </PageSection>
 

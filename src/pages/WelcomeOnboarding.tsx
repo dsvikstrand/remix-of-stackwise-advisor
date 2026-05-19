@@ -118,7 +118,7 @@ function OnboardingChannelPicker({
                       onClick={() => handleToggle(tagId!, channel.tagSlug, isJoined)}
                     >
                       {isPending && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-                      {state === 'joining' ? 'Joining...' : state === 'leaving' ? 'Leaving...' : isJoined ? 'Joined' : 'Join'}
+                      {state === 'joining' ? 'Joining...' : state === 'leaving' ? 'Leaving...' : isJoined ? 'Joined' : 'Join channel'}
                     </Button>
                   )}
                 </div>

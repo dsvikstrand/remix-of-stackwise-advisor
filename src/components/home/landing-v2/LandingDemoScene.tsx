@@ -109,7 +109,7 @@ function LanesScene({ onOpenDemo }: { onOpenDemo: (variant: LandingDemoVariant) 
       <div className="space-y-4 bg-gradient-to-b from-background to-accent/20 p-4">
         <div className="flex gap-2">
           <Badge className="bg-primary text-primary-foreground">For You</Badge>
-          <Badge variant="outline">Channels</Badge>
+          <Badge variant="outline">Joined</Badge>
           <Badge variant="outline">All</Badge>
         </div>
         <div className="grid gap-3 md:grid-cols-2">
@@ -119,7 +119,7 @@ function LanesScene({ onOpenDemo }: { onOpenDemo: (variant: LandingDemoVariant) 
               <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
                 <div className="flex items-center gap-2 text-sm font-semibold">
                   <Lock className="h-4 w-4 text-primary" />
-                  Unlock available
+                  View full blueprint
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">New video from a creator you follow.</p>
               </div>
