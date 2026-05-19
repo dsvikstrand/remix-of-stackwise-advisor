@@ -1,5 +1,5 @@
 export const PWA_INSTALL_CTA_DISMISS_KEY = "bleup:pwa-install-cta:dismissed-at";
-export const PWA_INSTALL_CTA_COOLDOWN_MS = 14 * 24 * 60 * 60 * 1000;
+export const PWA_INSTALL_CTA_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 export type InstallCtaKind = "ios" | "chromium" | "android-manual" | null;
 
