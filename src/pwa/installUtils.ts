@@ -1,7 +1,7 @@
 export const PWA_INSTALL_CTA_DISMISS_KEY = "bleup:pwa-install-cta:dismissed-at";
 export const PWA_INSTALL_CTA_COOLDOWN_MS = 14 * 24 * 60 * 60 * 1000;
 
-export type InstallCtaKind = "ios" | "chromium" | null;
+export type InstallCtaKind = "ios" | "chromium" | "android-manual" | null;
 
 type DetectInstallPlatformOptions = {
   userAgent: string;
@@ -59,12 +59,11 @@ export function getInstallCtaKind(options: DetectInstallPlatformOptions): Instal
   }
 
   if (
-    options.hasBeforeInstallPrompt &&
     isLikelyAndroidChromium({
       userAgent: options.userAgent,
     })
   ) {
-    return "chromium";
+    return options.hasBeforeInstallPrompt ? "chromium" : "android-manual";
   }
 
   return null;

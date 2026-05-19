@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/drawer";
 import { useBleupPwa } from "@/components/pwa/BleupPwaRuntime";
 import { cn } from "@/lib/utils";
+import type { InstallCtaKind } from "@/pwa/installUtils";
 
 type PwaInstallCtaProps = {
   className?: string;
@@ -46,10 +47,13 @@ export function PwaInstallCta({
     return null;
   }
 
-  const title = installCtaKind === "ios" ? "Add Bleup to Home Screen" : "Install Bleup";
-  const description =
-    installCtaKind === "ios"
-      ? "Open Bleup from your iPhone home screen for faster return access."
+  const isIosInstall = installCtaKind === "ios";
+  const isAndroidManualInstall = installCtaKind === "android-manual";
+  const title = isIosInstall ? "Add Bleup to Home Screen" : "Install Bleup";
+  const description = isIosInstall
+    ? "Open Bleup from your iPhone home screen for faster return access."
+    : isAndroidManualInstall
+      ? "Add Bleup from your Android browser menu to launch it like an app."
       : "Install Bleup to launch it like an app and get back faster.";
 
   return (
@@ -88,8 +92,8 @@ export function PwaInstallCta({
           </CardHeader>
           <CardContent className={cn("pt-0", compact ? "flex flex-col gap-2 sm:flex-row" : "flex flex-wrap gap-2")}>
             <Button type="button" size={compact ? "sm" : "default"} onClick={openDrawer} className="gap-2">
-              {installCtaKind === "ios" ? <Share2 className="h-4 w-4" /> : <Download className="h-4 w-4" />}
-              {installCtaKind === "ios" ? "Add to Home Screen" : "Install Bleup"}
+              {isIosInstall ? <Share2 className="h-4 w-4" /> : <Download className="h-4 w-4" />}
+              {isIosInstall ? "Add to Home Screen" : "Install Bleup"}
             </Button>
             {!compact ? (
               <Button type="button" variant="outline" size="default" onClick={dismiss}>
@@ -112,16 +116,17 @@ function PwaInstallDrawerBridge({
   openInstallExperience,
 }: {
   children: (openDrawer: () => void) => React.ReactNode;
-  installCtaKind: "ios" | "chromium";
+  installCtaKind: Exclude<InstallCtaKind, null>;
   title: string;
   description: string;
   dismissInstallCta: () => void;
   openInstallExperience: () => Promise<void>;
 }) {
   const [open, setOpen] = React.useState(false);
+  const isManualInstall = installCtaKind === "ios" || installCtaKind === "android-manual";
 
   async function handlePrimaryAction() {
-    if (installCtaKind === "ios") {
+    if (isManualInstall) {
       setOpen(true);
       return;
     }
@@ -131,7 +136,7 @@ function PwaInstallDrawerBridge({
   return (
     <>
       {children(handlePrimaryAction)}
-      {installCtaKind === "ios" ? (
+      {isManualInstall ? (
         <Drawer open={open} onOpenChange={setOpen}>
           <DrawerContent className="pb-[calc(1rem+var(--bleup-app-safe-bottom))]">
             <DrawerHeader>
@@ -139,28 +144,28 @@ function PwaInstallDrawerBridge({
               <DrawerDescription>{description}</DrawerDescription>
             </DrawerHeader>
             <div className="space-y-3 px-4 pb-2 text-sm text-muted-foreground">
-              <div className="flex items-start gap-3">
-                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                  1
-                </span>
-                <p className="leading-6">
-                  Tap the <span className="font-medium text-foreground">Share</span> button in Safari.
-                </p>
-              </div>
-              <div className="flex items-start gap-3">
-                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                  2
-                </span>
-                <p className="leading-6">
-                  Choose <span className="font-medium text-foreground">Add to Home Screen</span>.
-                </p>
-              </div>
-              <div className="flex items-start gap-3">
-                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                  3
-                </span>
-                <p className="leading-6">Confirm to install Bleup and launch it like an app.</p>
-              </div>
+              {installCtaKind === "ios" ? (
+                <>
+                  <InstallStep number={1}>
+                    Tap the <span className="font-medium text-foreground">Share</span> button in Safari.
+                  </InstallStep>
+                  <InstallStep number={2}>
+                    Choose <span className="font-medium text-foreground">Add to Home Screen</span>.
+                  </InstallStep>
+                  <InstallStep number={3}>Confirm to install Bleup and launch it like an app.</InstallStep>
+                </>
+              ) : (
+                <>
+                  <InstallStep number={1}>
+                    Tap the <span className="font-medium text-foreground">Chrome menu</span> button.
+                  </InstallStep>
+                  <InstallStep number={2}>
+                    Choose <span className="font-medium text-foreground">Install app</span> or{" "}
+                    <span className="font-medium text-foreground">Add to Home screen</span>.
+                  </InstallStep>
+                  <InstallStep number={3}>Confirm to install Bleup and launch it like an app.</InstallStep>
+                </>
+              )}
             </div>
             <DrawerFooter>
               <Button type="button" className="gap-2" onClick={() => setOpen(false)}>
@@ -182,5 +187,16 @@ function PwaInstallDrawerBridge({
         </Drawer>
       ) : null}
     </>
+  );
+}
+
+function InstallStep({ children, number }: { children: React.ReactNode; number: number }) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+        {number}
+      </span>
+      <p className="leading-6">{children}</p>
+    </div>
   );
 }

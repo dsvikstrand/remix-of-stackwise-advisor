@@ -41,7 +41,7 @@ describe("pwaInstallUtils", () => {
     ).toBeNull();
   });
 
-  it("requires a deferred prompt for Chromium CTA visibility", () => {
+  it("falls back to manual Android install instructions when no deferred prompt exists", () => {
     expect(
       getInstallCtaKind({
         userAgent:
@@ -51,7 +51,7 @@ describe("pwaInstallUtils", () => {
         isStandalone: false,
         hasBeforeInstallPrompt: false,
       }),
-    ).toBeNull();
+    ).toBe("android-manual");
 
     expect(
       getInstallCtaKind({
@@ -63,6 +63,19 @@ describe("pwaInstallUtils", () => {
         hasBeforeInstallPrompt: true,
       }),
     ).toBe("chromium");
+  });
+
+  it("does not show a manual Android CTA for unsupported browsers", () => {
+    expect(
+      getInstallCtaKind({
+        userAgent:
+          "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Mobile Safari/537.36 DuckDuckGo/5 Safari/537.36",
+        platform: "Linux armv9l",
+        maxTouchPoints: 5,
+        isStandalone: false,
+        hasBeforeInstallPrompt: false,
+      }),
+    ).toBeNull();
   });
 
   it("applies the dismissal cooldown window", () => {
@@ -110,6 +123,16 @@ describe("pwaInstallUtils", () => {
       shouldShowInstallCta({
         flagEnabled: true,
         installCtaKind: "chromium",
+        isStandalone: false,
+        dismissedAt: null,
+        now,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldShowInstallCta({
+        flagEnabled: true,
+        installCtaKind: "android-manual",
         isStandalone: false,
         dismissedAt: null,
         now,
