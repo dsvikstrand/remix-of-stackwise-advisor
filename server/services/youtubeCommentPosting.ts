@@ -16,29 +16,52 @@ function normalizeString(value: unknown) {
   return String(value || '').trim();
 }
 
-function extractApiErrorReason(payload: unknown) {
+function extractApiError(payload: unknown) {
   const error = payload && typeof payload === 'object'
     ? (payload as { error?: { errors?: Array<{ reason?: unknown }>; message?: unknown } }).error
     : null;
   const reason = Array.isArray(error?.errors)
     ? normalizeString(error.errors[0]?.reason)
     : '';
-  return reason || normalizeString(error?.message);
+  const message = normalizeString(error?.message);
+  return {
+    reason,
+    message,
+    summary: reason || message,
+  };
 }
 
 function mapYouTubeCommentPostFailure(status: number, payload: unknown) {
-  const reason = extractApiErrorReason(payload);
+  const providerError = extractApiError(payload);
+  const reason = providerError.reason;
+  const providerMessage = providerError.message;
+  const summary = providerError.summary;
   if (status === 401) {
     return new YouTubeCommentPostError('YT_REAUTH_REQUIRED', 'YouTube authorization expired. Reconnect required.', 401);
   }
   if (status === 403) {
-    const scopeRelated = /insufficient|permission|forbidden|scope/i.test(reason);
+    const disabledOrRestrictedComments = /commentsdisabled|mfkwrite|ineligibleaccount|comment.*disabled|made for kids|made-for-kids|disabled comments/i.test(`${reason} ${providerMessage}`);
+    if (disabledOrRestrictedComments) {
+      return new YouTubeCommentPostError(
+        'YT_COMMENTS_DISABLED',
+        'This video does not allow comments through YouTube. Pick another video with comments enabled.',
+        409,
+      );
+    }
+    const scopeRelated = /insufficient|permission|forbidden|scope/i.test(`${reason} ${providerMessage}`);
     return new YouTubeCommentPostError(
       scopeRelated ? 'YT_COMMENT_SCOPE_REQUIRED' : 'YT_COMMENT_POST_FORBIDDEN',
       scopeRelated
         ? 'Reconnect YouTube with comment permission before posting.'
-        : (reason || 'YouTube rejected the comment post.'),
+        : (summary || 'YouTube rejected the comment post.'),
       403,
+    );
+  }
+  if (status === 400 && /commenttexttoolong|invalidcommentthreadmetadata|processingfailure/i.test(`${reason} ${providerMessage}`)) {
+    return new YouTubeCommentPostError(
+      'YT_COMMENT_REJECTED',
+      summary || 'YouTube rejected this comment. Edit the text and try again.',
+      400,
     );
   }
   if (status === 429) {
@@ -49,7 +72,7 @@ function mapYouTubeCommentPostFailure(status: number, payload: unknown) {
   }
   return new YouTubeCommentPostError(
     'YT_COMMENT_POST_FAILED',
-    reason || `YouTube comment post failed (${status}).`,
+    summary || `YouTube comment post failed (${status}).`,
     502,
   );
 }
