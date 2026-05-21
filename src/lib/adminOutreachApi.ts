@@ -45,8 +45,13 @@ export type OutreachPostResult = {
   videoUrl: string;
   youtubeCommentId: string;
   finalText: string;
-  status: 'posted';
+  status: 'posted' | 'posted_unverified';
   postedAt: string;
+  verification?: {
+    visible: boolean;
+    errorCode: string | null;
+    errorMessage: string | null;
+  };
 };
 
 function getApiBase() {

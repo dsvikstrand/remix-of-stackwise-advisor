@@ -104,6 +104,11 @@ describe('admin outreach route', () => {
       finalText: 'BLEUP is useful. Please visit my channel for more info and free early access.',
       status: 'posted' as const,
       postedAt: '2026-05-18T08:00:00.000Z',
+      verification: {
+        visible: true,
+        errorCode: null,
+        errorMessage: null,
+      },
     }));
     registerAdminOutreachRoutes(app as any, {
       getCredits: vi.fn(async () => ({ plan: 'admin' })),

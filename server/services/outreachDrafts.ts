@@ -131,6 +131,9 @@ export type OutreachDraftStateStore = {
     adminUserId: string;
     finalText: string;
     youtubeCommentId: string;
+    status?: 'posted' | 'posted_unverified';
+    errorCode?: string | null;
+    errorMessage?: string | null;
     postedAt: string;
     updatedAt: string;
   }) => Promise<boolean>;

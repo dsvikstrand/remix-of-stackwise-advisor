@@ -245,9 +245,14 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
     },
     onSuccess: (result) => {
       setPostedDraftIds((current) => new Set(current).add(result.draftId));
+      const visible = result.status === 'posted' && result.verification?.visible !== false;
       toast({
-        title: 'Comment posted',
-        description: `YouTube comment id: ${result.youtubeCommentId}`,
+        title: visible ? 'Comment posted' : 'Comment submitted, visibility not confirmed',
+        description: visible
+          ? `YouTube comment id: ${result.youtubeCommentId}`
+          : result.verification?.errorMessage
+            || 'YouTube accepted the comment, but it is not publicly visible yet. It may be held for review or filtered by YouTube.',
+        variant: visible ? 'default' : 'destructive',
       });
       void candidatesQuery.refetch();
     },

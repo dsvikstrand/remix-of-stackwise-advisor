@@ -51,6 +51,7 @@ function createStore(overrides?: Partial<OutreachDraftStateStore>): OutreachDraf
 function createYoutubeClient(overrides?: Partial<OutreachPostYouTubeClient>): OutreachPostYouTubeClient {
   return {
     postTopLevelComment: vi.fn(async () => ({ youtubeCommentId: 'comment_1' })),
+    verifyTopLevelCommentVisible: vi.fn(async () => ({ visible: true })),
     ...overrides,
   };
 }
@@ -79,10 +80,49 @@ describe('outreach posting service', () => {
     expect(store.markDraftPosted).toHaveBeenCalledWith(expect.objectContaining({
       draftId: 'draft_1',
       youtubeCommentId: 'comment_1',
+      status: 'posted',
+      errorCode: null,
+      errorMessage: null,
     }));
     expect(result).toMatchObject({
       status: 'posted',
       youtubeCommentId: 'comment_1',
+      verification: {
+        visible: true,
+        errorCode: null,
+        errorMessage: null,
+      },
+    });
+  });
+
+  it('stores accepted comments as unverified when YouTube does not return them on read-back', async () => {
+    const store = createStore();
+    const youtubeClient = createYoutubeClient({
+      verifyTopLevelCommentVisible: vi.fn(async () => ({ visible: false })),
+    });
+
+    const result = await postOutreachDraft({
+      adminUserId: 'admin_1',
+      draftId: 'draft_1',
+      now: new Date('2026-05-18T08:00:00.000Z'),
+      stateStore: store,
+      youtubeClient,
+    });
+
+    expect(store.markDraftPosted).toHaveBeenCalledWith(expect.objectContaining({
+      draftId: 'draft_1',
+      youtubeCommentId: 'comment_1',
+      status: 'posted_unverified',
+      errorCode: 'YT_COMMENT_NOT_VISIBLE_AFTER_POST',
+    }));
+    expect(store.markDraftPostFailed).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      status: 'posted_unverified',
+      youtubeCommentId: 'comment_1',
+      verification: {
+        visible: false,
+        errorCode: 'YT_COMMENT_NOT_VISIBLE_AFTER_POST',
+      },
     });
   });
 

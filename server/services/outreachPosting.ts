@@ -17,8 +17,13 @@ export type OutreachPostResult = {
   videoUrl: string;
   youtubeCommentId: string;
   finalText: string;
-  status: 'posted';
+  status: 'posted' | 'posted_unverified';
   postedAt: string;
+  verification: {
+    visible: boolean;
+    errorCode: string | null;
+    errorMessage: string | null;
+  };
 };
 
 export type OutreachPostYouTubeClient = {
@@ -27,6 +32,11 @@ export type OutreachPostYouTubeClient = {
     text: string;
   }) => Promise<{
     youtubeCommentId: string;
+  }>;
+  verifyTopLevelCommentVisible?: (input: {
+    youtubeCommentId: string;
+  }) => Promise<{
+    visible: boolean;
   }>;
 };
 
@@ -154,11 +164,41 @@ export async function postOutreachDraft(input: {
     });
     providerAcceptedPost = true;
     const postedAt = new Date().toISOString();
+    let verification = {
+      visible: true,
+      errorCode: null as string | null,
+      errorMessage: null as string | null,
+    };
+    if (input.youtubeClient.verifyTopLevelCommentVisible) {
+      try {
+        const verified = await input.youtubeClient.verifyTopLevelCommentVisible({
+          youtubeCommentId: posted.youtubeCommentId,
+        });
+        if (!verified.visible) {
+          verification = {
+            visible: false,
+            errorCode: 'YT_COMMENT_NOT_VISIBLE_AFTER_POST',
+            errorMessage: 'YouTube accepted the comment but it is not publicly visible yet.',
+          };
+        }
+      } catch (error) {
+        const mapped = mapPostProviderError(error);
+        verification = {
+          visible: false,
+          errorCode: mapped.code,
+          errorMessage: mapped.message,
+        };
+      }
+    }
+    const postStatus = verification.visible ? 'posted' : 'posted_unverified';
     const stored = await input.stateStore.markDraftPosted({
       draftId,
       adminUserId,
       finalText,
       youtubeCommentId: posted.youtubeCommentId,
+      status: postStatus,
+      errorCode: verification.errorCode,
+      errorMessage: verification.errorMessage,
       postedAt,
       updatedAt: postedAt,
     });
@@ -174,8 +214,9 @@ export async function postOutreachDraft(input: {
       videoUrl: draft.video_url,
       youtubeCommentId: posted.youtubeCommentId,
       finalText,
-      status: 'posted',
+      status: postStatus,
       postedAt,
+      verification,
     } satisfies OutreachPostResult;
   } catch (error) {
     const mapped = error instanceof OutreachDraftError

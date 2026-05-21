@@ -84,16 +84,26 @@ export function createOracleOutreachDraftStateStore(input: {
       return Number(result.numUpdatedRows || 0) > 0;
     },
 
-    async markDraftPosted({ draftId, adminUserId, finalText, youtubeCommentId, postedAt, updatedAt }) {
+    async markDraftPosted({
+      draftId,
+      adminUserId,
+      finalText,
+      youtubeCommentId,
+      status,
+      errorCode,
+      errorMessage,
+      postedAt,
+      updatedAt,
+    }) {
       const result = await input.controlDb.db
         .updateTable('outreach_draft_state')
         .set({
           final_text: finalText,
-          status: 'posted',
+          status: status || 'posted',
           youtube_comment_id: youtubeCommentId,
           posted_at: postedAt,
-          post_error_code: null,
-          post_error_message: null,
+          post_error_code: errorCode ? errorCode.slice(0, 80) : null,
+          post_error_message: errorMessage ? errorMessage.slice(0, 500) : null,
           updated_at: updatedAt,
         })
         .where('id', '=', normalizeString(draftId))

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   postYouTubeTopLevelComment,
+  verifyYouTubeTopLevelCommentVisible,
 } from '../../server/services/youtubeCommentPosting';
 
 describe('YouTube comment posting adapter', () => {
@@ -44,6 +45,34 @@ describe('YouTube comment posting adapter', () => {
     })).rejects.toMatchObject({
       code: 'YT_COMMENTS_DISABLED',
       status: 409,
+    });
+  });
+
+  it('verifies a returned top-level comment id by read-back', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      items: [{ id: 'comment_1' }],
+    }), { status: 200 })) as unknown as typeof fetch;
+
+    await expect(verifyYouTubeTopLevelCommentVisible({
+      accessToken: 'token',
+      youtubeCommentId: 'comment_1',
+      fetchImpl,
+    })).resolves.toEqual({
+      visible: true,
+    });
+  });
+
+  it('returns not visible when read-back succeeds but YouTube omits the id', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      items: [],
+    }), { status: 200 })) as unknown as typeof fetch;
+
+    await expect(verifyYouTubeTopLevelCommentVisible({
+      accessToken: 'token',
+      youtubeCommentId: 'comment_1',
+      fetchImpl,
+    })).resolves.toEqual({
+      visible: false,
     });
   });
 });

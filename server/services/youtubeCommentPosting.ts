@@ -143,3 +143,57 @@ export async function postYouTubeTopLevelComment(input: {
     youtubeCommentId,
   };
 }
+
+export async function verifyYouTubeTopLevelCommentVisible(input: {
+  accessToken: string;
+  youtubeCommentId: string;
+  attempts?: number;
+  delayMs?: number;
+  fetchImpl?: typeof fetch;
+}) {
+  const accessToken = normalizeString(input.accessToken);
+  const youtubeCommentId = normalizeString(input.youtubeCommentId);
+  if (!accessToken) {
+    throw new YouTubeCommentPostError('YT_REAUTH_REQUIRED', 'Missing YouTube access token.', 401);
+  }
+  if (!youtubeCommentId) {
+    throw new YouTubeCommentPostError('INVALID_COMMENT_ID', 'Missing YouTube comment id.', 400);
+  }
+
+  const fetchImpl = input.fetchImpl || fetch;
+  const attempts = Math.max(1, Math.min(5, Math.floor(Number(input.attempts || 1))));
+  const delayMs = Math.max(0, Math.min(5000, Math.floor(Number(input.delayMs || 0))));
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const url = new URL('https://www.googleapis.com/youtube/v3/commentThreads');
+    url.searchParams.set('part', 'snippet');
+    url.searchParams.set('id', youtubeCommentId);
+
+    const response = await fetchImpl(url.toString(), {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json',
+        'User-Agent': 'bleuv1-youtube-outreach/1.0 (+https://api.bleup.app)',
+      },
+    });
+    const payload = await response.json().catch(() => null) as {
+      items?: Array<{ id?: unknown }>;
+    } | null;
+
+    if (!response.ok) {
+      throw mapYouTubeCommentPostFailure(response.status, payload);
+    }
+
+    const visible = Array.isArray(payload?.items)
+      && payload.items.some((item) => normalizeString(item?.id) === youtubeCommentId);
+    if (visible || attempt === attempts || delayMs === 0) {
+      return {
+        visible,
+      };
+    }
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  return {
+    visible: false,
+  };
+}

@@ -558,6 +558,7 @@ import { createOracleOutreachDraftStateStore } from './services/oracleOutreachDr
 import {
   hasYouTubeCommentPostScope,
   postYouTubeTopLevelComment,
+  verifyYouTubeTopLevelCommentVisible,
   YOUTUBE_COMMENT_POST_SCOPE,
 } from './services/youtubeCommentPosting';
 
@@ -9103,6 +9104,12 @@ registerAdminOutreachRoutes(app, {
           accessToken: usable.accessToken,
           videoId,
           text,
+        }),
+        verifyTopLevelCommentVisible: ({ youtubeCommentId }) => verifyYouTubeTopLevelCommentVisible({
+          accessToken: usable.accessToken,
+          youtubeCommentId,
+          attempts: 3,
+          delayMs: 1000,
         }),
       },
     });
