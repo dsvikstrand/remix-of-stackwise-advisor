@@ -166,28 +166,28 @@ const MAX_FINAL_COMMENT_CHARS = 1200;
 
 export const OUTREACH_TAIL_VARIANTS = [
   {
-    id: 'learning-blueprints-v1',
-    text: 'I’m building a free app called BLEUP that turns videos like this into organized learning blueprints. I tested it with this topic, and it helped me keep the main ideas and follow-up steps in one place. I have a short demo on my channel if that sounds useful.',
+    id: 'personal-learning-feed-v1',
+    text: 'Videos like this are why YouTube is such a good place to learn, but also why it can be hard to keep up with everything.\n\nImagine having a personal learning feed that follows the creators and topics you care about. If that sounds useful, you might want to check out BLEUP.\n\nBLEUP turns new videos into quick, skimmable blueprints with the main ideas and useful takeaways.\n\nPlease visit my channel for more info and free early access.',
   },
   {
-    id: 'keep-up-v1',
-    text: 'I’m building BLEUP because I follow a lot of educational creators and wanted a faster way to keep up. It turns useful videos into compact blueprints with the main ideas and next steps. I have a short demo on my channel if that sounds useful.',
+    id: 'keep-up-with-youtube-v1',
+    text: 'This is the kind of video that makes YouTube great for learning, but also shows how hard it can be to stay on top of all the good content.\n\nBLEUP is built for that problem. It lets you follow the creators and topics you care about, then turns new videos into quick, skimmable blueprints, like a personal learning feed.\n\nIf you use YouTube to learn and want a faster way to keep up, please visit my channel for more info and free early access.',
   },
   {
-    id: 'structured-notes-v1',
-    text: 'I tested this in BLEUP, a free app I’m building for turning useful YouTube videos into structured notes and follow-up steps. It made this easier to revisit without rewatching the whole video. I have a short demo on my channel if you’re curious.',
+    id: 'knowledge-side-youtube-v1',
+    text: 'YouTube has so much useful knowledge, but keeping up with every good video can be difficult.\n\nThat is why BLEUP exists. It helps turn YouTube into a personal learning feed by following the creators and topics you care about, then turning new videos into skimmable blueprints.\n\nEach blueprint gives you the main ideas and useful takeaways, so you can understand the value faster.\n\nPlease visit my channel for more info and free early access.',
   },
   {
-    id: 'community-feed-v1',
-    text: 'I’m building BLEUP as a community feed for useful YouTube learning videos, where each video becomes a compact blueprint. This one worked well as a test because the ideas are worth saving. I have a short demo on my channel if that sounds useful.',
+    id: 'lost-in-feed-v1',
+    text: 'Videos like this are valuable, but it is easy for good content to get lost in the YouTube feed.\n\nBLEUP helps you keep up by following the creators and topics you care about and turning new videos into quick, skimmable blueprints with the main ideas and useful takeaways.\n\nIf that sounds helpful, please visit my channel for more info and free early access.',
   },
   {
-    id: 'creator-value-v1',
-    text: 'I like tools that help more people get value from long creator videos, so I’m building BLEUP around videos like this. It turns the main ideas into a compact learning blueprint. I have a short demo on my channel if that sounds useful.',
+    id: 'too-many-good-videos-v1',
+    text: 'If you use YouTube to learn, you probably know the problem: too many good videos, not enough time to watch them all.\n\nThat is why BLEUP exists. It helps by creating a personal learning feed from the creators and topics you care about, then turning new videos into skimmable blueprints with the main ideas and useful takeaways.\n\nPlease visit my channel for more info and free early access.',
   },
   {
-    id: 'follow-up-steps-v1',
-    text: 'I’m building BLEUP to help turn educational videos into clear takeaways and follow-up steps. I tested it with this topic, and it helped me separate the important points from the extra context. I have a short demo on my channel if that sounds useful.',
+    id: 'faster-way-to-learn-v1',
+    text: 'This is exactly why YouTube is such a powerful learning platform, but also why it can feel overwhelming.\n\nBLEUP helps make it easier to keep up. It follows the creators and topics you care about and turns new videos into quick, skimmable blueprints with the main ideas and useful takeaways.\n\nIf you want a faster way to learn from YouTube, please visit my channel for more info and free early access.',
   },
 ] as const;
 
@@ -292,7 +292,8 @@ function validateFinalDraft(input: {
   if (input.opener.length > MAX_OPENER_CHARS) issues.push('opener_too_long');
   if (input.finalText.length > MAX_FINAL_COMMENT_CHARS) issues.push('final_too_long');
   if (!/\bBLEUP\b/i.test(input.finalText)) issues.push('missing_bleup');
-  if (!/\bI[’']?m building\b/i.test(input.finalText)) issues.push('missing_builder_disclosure');
+  if (!/\bchannel\b/i.test(input.finalText)) issues.push('missing_channel_pointer');
+  if (!/\bfree early access\b/i.test(input.finalText)) issues.push('missing_free_early_access');
   if (/https?:\/\//i.test(input.finalText)) issues.push('direct_link_not_allowed');
   const tooSimilar = input.recentFinalTexts.some((recent) => similarityScore(input.finalText, recent) >= 0.82);
   if (tooSimilar) issues.push('too_similar_to_recent');
@@ -312,7 +313,8 @@ export function validateOutreachPostText(finalText: string) {
   if (text.length < 40) issues.push('final_too_short');
   if (text.length > MAX_FINAL_COMMENT_CHARS) issues.push('final_too_long');
   if (!/\bBLEUP\b/i.test(text)) issues.push('missing_bleup');
-  if (!/\bI[’']?m building\b/i.test(text)) issues.push('missing_builder_disclosure');
+  if (!/\bchannel\b/i.test(text)) issues.push('missing_channel_pointer');
+  if (!/\bfree early access\b/i.test(text)) issues.push('missing_free_early_access');
   if (/https?:\/\//i.test(text)) issues.push('direct_link_not_allowed');
   return {
     ok: issues.length === 0,

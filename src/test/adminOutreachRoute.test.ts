@@ -101,7 +101,7 @@ describe('admin outreach route', () => {
       youtubeVideoId: 'abc123xyz89',
       videoUrl: 'https://www.youtube.com/watch?v=abc123xyz89',
       youtubeCommentId: 'comment_1',
-      finalText: 'I’m building BLEUP and this is useful.',
+      finalText: 'BLEUP is useful. Please visit my channel for more info and free early access.',
       status: 'posted' as const,
       postedAt: '2026-05-18T08:00:00.000Z',
     }));
@@ -114,13 +114,13 @@ describe('admin outreach route', () => {
     const res = createResponse('admin_1');
     await app.handlers['POST /api/admin/outreach-drafts/:draftId/post']({
       params: { draftId: 'draft_1' },
-      body: { final_text: 'I’m building BLEUP and this is useful.' },
+      body: { final_text: 'BLEUP is useful. Please visit my channel for more info and free early access.' },
     } as any, res as any);
 
     expect(postOutreachDraft).toHaveBeenCalledWith({
       adminUserId: 'admin_1',
       draftId: 'draft_1',
-      finalText: 'I’m building BLEUP and this is useful.',
+      finalText: 'BLEUP is useful. Please visit my channel for more info and free early access.',
     });
     expect(res.statusCode).toBe(201);
     expect(res.body).toMatchObject({
@@ -143,7 +143,7 @@ describe('admin outreach route', () => {
     const res = createResponse('user_1');
     await app.handlers['POST /api/admin/outreach-drafts/:draftId/post']({
       params: { draftId: 'draft_1' },
-      body: { final_text: 'I’m building BLEUP and this is useful.' },
+      body: { final_text: 'BLEUP is useful. Please visit my channel for more info and free early access.' },
     } as any, res as any);
 
     expect(res.statusCode).toBe(403);

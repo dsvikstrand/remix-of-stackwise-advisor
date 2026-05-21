@@ -64,7 +64,8 @@ describe('outreach draft generation service', () => {
 
     expect(result.options).toHaveLength(3);
     expect(result.options[0].finalText).toContain('BLEUP');
-    expect(result.options[0].finalText).toContain('I’m building');
+    expect(result.options[0].finalText).toContain('personal learning feed');
+    expect(result.options[0].finalText).toContain('free early access');
     expect(store.insertDraftOptions).toHaveBeenCalledWith(expect.objectContaining({
       rows: expect.arrayContaining([
         expect.objectContaining({
