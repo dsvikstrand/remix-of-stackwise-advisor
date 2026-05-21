@@ -247,7 +247,7 @@ export default function WelcomeOnboarding() {
             <p className="text-sm font-semibold text-primary uppercase tracking-wide">Welcome</p>
             <h1 className="text-2xl font-semibold">Set up your starting feed</h1>
             <p className="text-sm text-muted-foreground">
-              Add creators if you want to personalize faster, then join at least one Bleu channel to continue.
+              Add creators to personalize your For You feed, then join at least one Bleup channel to unlock broader topic discovery.
             </p>
           </div>
         </PageSection>
@@ -256,7 +256,9 @@ export default function WelcomeOnboarding() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Step 1: Add YouTube creators (optional)</CardTitle>
             <CardDescription>
-              Optional. Search creators first, or import your YouTube subscriptions by handle.
+              Following creators helps Bleup build your personal learning feed. New videos from creators you follow can
+              appear in For You as blueprint cards, so you can quickly scan the main ideas, useful takeaways, and decide
+              what is worth watching in full. Search creators manually or import your YouTube subscriptions by handle.
             </CardDescription>
           </CardHeader>
           <CardContent>
