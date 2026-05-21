@@ -45,7 +45,7 @@ describe("pushNotificationUtils", () => {
         },
       },
     });
-    expect(result.options.icon).toBe("https://bleup.app/app/pwa-192x192.png");
+    expect(result.options.icon).toBe("https://bleup.app/app/pwa-192x192-20260521.png");
     expect(result.options.badge).toBe(result.options.icon);
   });
 

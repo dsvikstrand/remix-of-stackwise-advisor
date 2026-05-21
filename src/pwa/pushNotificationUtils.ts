@@ -35,7 +35,7 @@ export function buildPushNotificationDisplay(basePath: string, origin: string, p
   const title = String(payload.title || "").trim() || "Bleup update";
   const body = String(payload.body || "").trim() || "Open Bleup to view the latest update.";
   const url = buildPushNotificationTarget(basePath, origin, payload.link_path);
-  const icon = new URL(joinBasePath(basePath, "pwa-192x192.png"), origin).toString();
+  const icon = new URL(joinBasePath(basePath, "pwa-192x192-20260521.png"), origin).toString();
   return {
     title,
     options: {
