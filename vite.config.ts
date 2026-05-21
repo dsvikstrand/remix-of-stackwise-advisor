@@ -36,6 +36,12 @@ export default defineConfig(({ mode }) => {
           background_color: "#faf8f5",
           icons: [
             {
+              src: "pwa-192x192.png",
+              sizes: "192x192",
+              type: "image/png",
+              purpose: "any",
+            },
+            {
               src: "pwa-512x512.png",
               sizes: "512x512",
               type: "image/png",
@@ -51,7 +57,7 @@ export default defineConfig(({ mode }) => {
         },
         injectManifest: {
           globPatterns: ["**/*.{js,css,html,ico,png,svg,webmanifest,woff2}"],
-          globIgnores: ["**/index.html", "**/release.json", "**/branding/**"],
+          globIgnores: ["**/index.html", "**/release.json", "**/branding/**", "**/bleup_logo_final.png"],
         },
         devOptions: {
           enabled: false,
