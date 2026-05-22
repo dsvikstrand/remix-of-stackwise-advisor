@@ -25,6 +25,7 @@ export type OutreachDraftGenerationResult = {
   videoUrl: string;
   sourceChannelId: string | null;
   sourceChannelTitle: string | null;
+  sourceChannelSubscriberCount: number | null;
   model: string;
   reasoningEffort: string;
   promptVersion: string;

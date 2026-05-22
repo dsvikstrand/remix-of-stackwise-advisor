@@ -63,6 +63,7 @@ describe('outreach draft generation service', () => {
     });
 
     expect(result.options).toHaveLength(3);
+    expect(result.sourceChannelSubscriberCount).toBeNull();
     expect(result.options[0].finalText).toContain('BLEUP');
     expect(result.options[0].finalText).toContain('personal learning feed');
     expect(result.options[0].finalText).toContain('free early access');
@@ -76,6 +77,49 @@ describe('outreach draft generation service', () => {
         }),
       ]),
     }));
+  });
+
+  it('blocks draft generation below the configured creator subscriber threshold', async () => {
+    await expect(generateOutreachDrafts({
+      adminUserId: 'admin_1',
+      blueprintId: 'bp_1',
+      now: new Date('2026-05-17T08:00:00.000Z'),
+      randomUUID: () => 'id_1',
+      resolveContext: async () => context,
+      resolveChannelStats: vi.fn(async () => ({
+        subscriberCount: 9999,
+      })),
+      minCreatorSubscribers: 10000,
+      stateStore: createStore(),
+      llm: {
+        generateVideoOpeners: vi.fn(),
+      },
+    })).rejects.toMatchObject({
+      errorCode: 'OUTREACH_CREATOR_SUBSCRIBERS_TOO_LOW',
+      status: 409,
+    } satisfies Partial<OutreachDraftError>);
+  });
+
+  it('blocks draft generation when subscriber count is unavailable by default', async () => {
+    await expect(generateOutreachDrafts({
+      adminUserId: 'admin_1',
+      blueprintId: 'bp_1',
+      now: new Date('2026-05-17T08:00:00.000Z'),
+      randomUUID: () => 'id_1',
+      resolveContext: async () => context,
+      resolveChannelStats: vi.fn(async () => ({
+        subscriberCount: null,
+        hiddenSubscriberCount: true,
+      })),
+      minCreatorSubscribers: 10000,
+      stateStore: createStore(),
+      llm: {
+        generateVideoOpeners: vi.fn(),
+      },
+    })).rejects.toMatchObject({
+      errorCode: 'OUTREACH_CHANNEL_STATS_UNAVAILABLE',
+      status: 409,
+    } satisfies Partial<OutreachDraftError>);
   });
 
   it('blocks duplicate drafts for the same video', async () => {

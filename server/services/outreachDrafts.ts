@@ -8,6 +8,7 @@ export type OutreachDraftContext = {
   videoTitle: string;
   sourceChannelId: string | null;
   sourceChannelTitle: string | null;
+  sourceChannelSubscriberCount?: number | null;
   blueprintTitle: string;
   blueprintSummary: string | null;
   blueprintReview: string | null;
@@ -32,6 +33,7 @@ export type OutreachDraftGenerationResult = {
   videoUrl: string;
   sourceChannelId: string | null;
   sourceChannelTitle: string | null;
+  sourceChannelSubscriberCount: number | null;
   model: string;
   reasoningEffort: string;
   promptVersion: string;
@@ -54,6 +56,13 @@ export type OutreachDraftLLM = {
     openers: string[];
   }>;
 };
+
+export type OutreachChannelStatsResolver = (input: {
+  sourceChannelId: string;
+}) => Promise<{
+  subscriberCount: number | null;
+  hiddenSubscriberCount?: boolean | null;
+}>;
 
 export type OutreachDraftHistoryRow = {
   id: string;
@@ -210,6 +219,12 @@ function addDays(date: Date, days: number) {
   return next;
 }
 
+function normalizeSubscriberCount(value: unknown) {
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= 0 ? Math.floor(numeric) : null;
+}
+
 function extractKeywords(value: string) {
   return new Set(
     normalizeText(value)
@@ -332,6 +347,9 @@ export async function generateOutreachDrafts(input: {
   now?: Date;
   randomUUID: () => string;
   resolveContext: (input: { adminUserId: string; blueprintId: string }) => Promise<OutreachDraftContext | null>;
+  resolveChannelStats?: OutreachChannelStatsResolver;
+  minCreatorSubscribers?: number;
+  blockUnknownSubscriberCount?: boolean;
   stateStore: OutreachDraftStateStore;
   llm: OutreachDraftLLM;
 }) {
@@ -345,6 +363,36 @@ export async function generateOutreachDrafts(input: {
   const context = await input.resolveContext({ adminUserId, blueprintId });
   if (!context) {
     throw new OutreachDraftError(404, 'CONTEXT_NOT_FOUND', 'Could not resolve generated blueprint source context.');
+  }
+  const minCreatorSubscribers = Math.max(0, Math.floor(Number(input.minCreatorSubscribers || 0)));
+  const blockUnknownSubscriberCount = input.blockUnknownSubscriberCount !== false;
+  let sourceChannelSubscriberCount = normalizeSubscriberCount(context.sourceChannelSubscriberCount);
+  if (minCreatorSubscribers > 0) {
+    if (!context.sourceChannelId) {
+      throw new OutreachDraftError(
+        409,
+        'OUTREACH_CHANNEL_STATS_UNAVAILABLE',
+        'Skipped outreach: this video has no creator channel id, so subscriber count could not be checked.',
+      );
+    }
+    if (sourceChannelSubscriberCount === null && input.resolveChannelStats) {
+      const stats = await input.resolveChannelStats({ sourceChannelId: context.sourceChannelId });
+      sourceChannelSubscriberCount = normalizeSubscriberCount(stats.subscriberCount);
+    }
+    if (sourceChannelSubscriberCount === null && blockUnknownSubscriberCount) {
+      throw new OutreachDraftError(
+        409,
+        'OUTREACH_CHANNEL_STATS_UNAVAILABLE',
+        'Skipped outreach: creator subscriber count is unavailable, so this needs manual review before posting.',
+      );
+    }
+    if (sourceChannelSubscriberCount !== null && sourceChannelSubscriberCount < minCreatorSubscribers) {
+      throw new OutreachDraftError(
+        409,
+        'OUTREACH_CREATOR_SUBSCRIBERS_TOO_LOW',
+        `Skipped outreach: creator has ${sourceChannelSubscriberCount.toLocaleString('en-US')} subscribers, below the ${minCreatorSubscribers.toLocaleString('en-US')} subscriber threshold.`,
+      );
+    }
   }
 
   const sinceDayIso = addDays(now, -1).toISOString();
@@ -445,6 +493,7 @@ export async function generateOutreachDrafts(input: {
     videoUrl: context.videoUrl,
     sourceChannelId: context.sourceChannelId,
     sourceChannelTitle: context.sourceChannelTitle,
+    sourceChannelSubscriberCount,
     model: llmResult.model,
     reasoningEffort: llmResult.reasoningEffort,
     promptVersion: OUTREACH_DRAFT_PROMPT_VERSION,

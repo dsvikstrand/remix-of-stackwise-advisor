@@ -554,6 +554,7 @@ import { registerAdminOutreachRoutes } from './routes/adminOutreach';
 import { generateOutreachDrafts, OutreachDraftError, type OutreachDraftContext } from './services/outreachDrafts';
 import { createOutreachOpenAIClient } from './services/outreachOpenAI';
 import { postOutreachDraft } from './services/outreachPosting';
+import { getCachedOutreachChannelStats } from './services/outreachChannelStats';
 import { createOracleOutreachDraftStateStore } from './services/oracleOutreachDraftState';
 import {
   hasYouTubeCommentPostScope,
@@ -648,6 +649,9 @@ const searchApiMax = clampInt(process.env.SEARCH_API_MAX, 180, 20, 5_000);
 const youtubeSearchCacheEnabled = parseRuntimeFlag(process.env.YOUTUBE_SEARCH_CACHE_ENABLED, true);
 const youtubeSearchCacheTtlSeconds = clampInt(process.env.YOUTUBE_SEARCH_CACHE_TTL_SECONDS, 600, 10, 24 * 3600);
 const youtubeChannelSearchCacheTtlSeconds = clampInt(process.env.YOUTUBE_CHANNEL_SEARCH_CACHE_TTL_SECONDS, 900, 10, 24 * 3600);
+const outreachMinCreatorSubscribers = clampInt(process.env.OUTREACH_MIN_CREATOR_SUBSCRIBERS, 10_000, 0, 100_000_000);
+const outreachChannelStatsCacheTtlMs = clampInt(process.env.OUTREACH_CHANNEL_STATS_CACHE_TTL_SECONDS, 7 * 24 * 3600, 60, 30 * 24 * 3600) * 1000;
+const outreachBlockUnknownSubscriberCount = parseRuntimeFlag(process.env.OUTREACH_BLOCK_UNKNOWN_SUBSCRIBER_COUNT, true);
 const youtubeSearchStaleMaxSeconds = clampInt(process.env.YOUTUBE_SEARCH_STALE_MAX_SECONDS, 86_400, 0, 7 * 24 * 3600);
 const youtubeSearchDegradeEnabled = parseRuntimeFlag(process.env.YOUTUBE_SEARCH_DEGRADE_ENABLED, true);
 const youtubeGlobalLiveCallsPerMinute = clampInt(process.env.YOUTUBE_GLOBAL_LIVE_CALLS_PER_MIN, 60, 1, 20_000);
@@ -9043,6 +9047,26 @@ registerAdminOutreachRoutes(app, {
       blueprintId,
       randomUUID,
       resolveContext: resolveOutreachDraftContext,
+      resolveChannelStats: async ({ sourceChannelId }) => {
+        if (!oracleControlPlane) {
+          return {
+            subscriberCount: null,
+            hiddenSubscriberCount: false,
+          };
+        }
+        const stats = await getCachedOutreachChannelStats({
+          controlDb: oracleControlPlane,
+          apiKey: youtubeDataApiKey,
+          sourceChannelId,
+          ttlMs: outreachChannelStatsCacheTtlMs,
+        });
+        return {
+          subscriberCount: stats.subscriberCount,
+          hiddenSubscriberCount: stats.hiddenSubscriberCount,
+        };
+      },
+      minCreatorSubscribers: outreachMinCreatorSubscribers,
+      blockUnknownSubscriberCount: outreachBlockUnknownSubscriberCount,
       stateStore: createOracleOutreachDraftStateStore({
         controlDb: oracleControlPlane,
       }),
@@ -10727,6 +10751,21 @@ function parseOutreachSourceMetadata(row: Record<string, unknown> | null | undef
   return metadata;
 }
 
+function parseOutreachSubscriberCount(metadata: Record<string, unknown> | null) {
+  if (!metadata) return null;
+  const candidates = [
+    metadata.source_channel_subscriber_count,
+    metadata.channel_subscriber_count,
+    metadata.subscriber_count,
+    metadata.subscriberCount,
+  ];
+  for (const candidate of candidates) {
+    const numeric = Number(candidate);
+    if (Number.isFinite(numeric) && numeric >= 0) return Math.floor(numeric);
+  }
+  return null;
+}
+
 async function resolveOutreachDraftContext(input: {
   adminUserId: string;
   blueprintId: string;
@@ -10779,6 +10818,7 @@ async function resolveOutreachDraftContext(input: {
     videoTitle: normalizeRouteString(source.title) || blueprint.title,
     sourceChannelId: normalizeRouteString(source.source_channel_id) || null,
     sourceChannelTitle: normalizeRouteString(source.source_channel_title) || metadataChannelTitle || null,
+    sourceChannelSubscriberCount: parseOutreachSubscriberCount(metadata),
     blueprintTitle: blueprint.title,
     blueprintSummary: normalizeRouteNullableString(blueprint.preview_summary),
     blueprintReview: normalizeRouteNullableString(blueprint.llm_review),

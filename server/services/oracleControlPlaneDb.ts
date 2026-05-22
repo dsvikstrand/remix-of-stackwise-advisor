@@ -367,6 +367,17 @@ type OutreachDraftStateTable = {
   updated_at: string;
 };
 
+type OutreachChannelStatsCacheTable = {
+  source_channel_id: string;
+  channel_title: string | null;
+  subscriber_count: number | null;
+  hidden_subscriber_count: number;
+  fetched_at: string;
+  error_code: string | null;
+  error_message: string | null;
+  updated_at: string;
+};
+
 type BlueprintTagStateTable = {
   id: string;
   blueprint_id: string;
@@ -546,6 +557,7 @@ export type OracleControlPlaneDatabase = {
   generation_run_event_state: GenerationRunEventStateTable;
   blueprint_youtube_comment_state: BlueprintYoutubeCommentStateTable;
   outreach_draft_state: OutreachDraftStateTable;
+  outreach_channel_stats_cache: OutreachChannelStatsCacheTable;
   blueprint_comment_state: BlueprintCommentStateTable;
   blueprint_like_state: BlueprintLikeStateTable;
   blueprint_state: BlueprintStateTable;
@@ -1019,6 +1031,20 @@ CREATE INDEX IF NOT EXISTS idx_outreach_draft_channel
 
 CREATE INDEX IF NOT EXISTS idx_outreach_draft_status_created
   ON outreach_draft_state (status, created_at);
+
+CREATE TABLE IF NOT EXISTS outreach_channel_stats_cache (
+  source_channel_id TEXT PRIMARY KEY,
+  channel_title TEXT,
+  subscriber_count INTEGER,
+  hidden_subscriber_count INTEGER NOT NULL DEFAULT 0,
+  fetched_at TEXT NOT NULL,
+  error_code TEXT,
+  error_message TEXT,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_outreach_channel_stats_fetched
+  ON outreach_channel_stats_cache (fetched_at);
 
 CREATE TABLE IF NOT EXISTS blueprint_comment_state (
   id TEXT PRIMARY KEY,

@@ -443,6 +443,11 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
               <div className="rounded-lg border border-border/50 bg-muted/30 p-3 text-xs text-muted-foreground">
                 <div>Model: {draftResult.model} · reasoning: {draftResult.reasoningEffort}</div>
                 <div>Creator cap: 1 per {draftResult.limits.channelWindowDays} days · daily cap: {draftResult.limits.dailyCap}</div>
+                <div>
+                  Creator subscribers: {typeof draftResult.sourceChannelSubscriberCount === 'number'
+                    ? draftResult.sourceChannelSubscriberCount.toLocaleString()
+                    : 'unavailable'}
+                </div>
               </div>
               {draftResult.options.map((option) => (
                 <div key={option.id} className="space-y-2 rounded-lg border border-border/50 p-3">

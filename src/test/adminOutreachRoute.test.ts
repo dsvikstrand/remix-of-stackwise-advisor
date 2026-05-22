@@ -57,6 +57,7 @@ describe('admin outreach route', () => {
       videoUrl: 'https://www.youtube.com/watch?v=abc123xyz89',
       sourceChannelId: 'UC_test',
       sourceChannelTitle: 'Creator',
+      sourceChannelSubscriberCount: 12345,
       model: 'gpt-5.5-mini',
       reasoningEffort: 'medium',
       promptVersion: 'outreach_draft_openers_v1',
