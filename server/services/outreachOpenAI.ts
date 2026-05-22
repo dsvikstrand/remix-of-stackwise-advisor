@@ -6,6 +6,7 @@ const OUTREACH_SYSTEM_PROMPT = [
   'Only write the video-specific opener. Do not mention BLEUP, apps, channels, demos, links, promotion, or the founder.',
   'The opener must be useful even if no promotion is added after it.',
   'Be specific to the video. Avoid generic praise. Avoid hype. Avoid medical/financial claims beyond the video context.',
+  'Create three intentionally different comment styles in the exact requested order.',
   'Return strict JSON: {"openers":["...", "...", "..."]}.',
 ].join('\n');
 
@@ -23,16 +24,19 @@ function buildPrompt(input: {
 }) {
   const context = input.context;
   return [
-    `Create ${input.count} distinct YouTube comment opener options.`,
+    `Create exactly ${input.count} distinct YouTube comment opener options in this order:`,
+    '1. Short insight: one sentence, useful and specific.',
+    '2. Light/funny: one sentence, lightly funny, with at most one emoji.',
+    '3. Thoughtful: 2-3 short lines, more insightful and reflective.',
     '',
     'Rules:',
-    '- Write 1 short paragraph per opener.',
     '- Mention one concrete distinction, idea, example, or takeaway from the video.',
     '- Sound like a real viewer who learned something, not an ad.',
     '- Do not include a URL.',
     '- Do not mention BLEUP or any app.',
     '- Do not ask for likes/subscribes.',
     '- Keep each opener under 420 characters.',
+    '- For option 3, use newline breaks between the 2-3 short lines inside the JSON string.',
     '',
     'Video/blueprint context:',
     JSON.stringify({

@@ -11,6 +11,8 @@ type ApiEnvelope<T> = {
 export type OutreachDraftOption = {
   id: string;
   optionIndex: number;
+  roleId: string;
+  roleLabel: string;
   openerText: string;
   tailVariantId: string;
   tailText: string;

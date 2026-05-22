@@ -491,9 +491,9 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
               {draftResult.options.map((option) => (
                 <div key={option.id} className="space-y-2 rounded-lg border border-border/50 p-3">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="text-sm font-medium">Comment suggestion {option.optionIndex}</div>
+                    <div className="text-sm font-medium">{option.roleLabel || `Comment suggestion ${option.optionIndex}`}</div>
                     <Badge variant="outline" className="text-[10px]">
-                      Regular first
+                      Suggestion {option.optionIndex}
                     </Badge>
                   </div>
                   <Textarea

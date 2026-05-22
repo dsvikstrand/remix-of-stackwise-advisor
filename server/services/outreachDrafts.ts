@@ -19,6 +19,8 @@ export type OutreachDraftContext = {
 export type OutreachDraftOption = {
   id?: string;
   optionIndex: number;
+  roleId: string;
+  roleLabel: string;
   openerText: string;
   tailVariantId: string;
   tailText: string;
@@ -213,9 +215,34 @@ const OpenersSchema = z.object({
   openers: z.array(z.string().min(20).max(MAX_OPENER_CHARS)).min(1).max(5),
 });
 
+export const OUTREACH_COMMENT_ROLES = [
+  {
+    id: 'short_insight',
+    label: 'Short insight',
+  },
+  {
+    id: 'light_funny',
+    label: 'Light/funny',
+  },
+  {
+    id: 'thoughtful',
+    label: 'Thoughtful',
+  },
+] as const;
+
 function normalizeText(value: unknown) {
   return String(value || '')
     .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeCommentText(value: unknown) {
+  return String(value || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n[ \t]+/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{4,}/g, '\n\n\n')
     .trim();
 }
 
@@ -266,7 +293,7 @@ function parseOpeners(rawText: string | null, fallbackOpeners: string[]) {
       const parsed = JSON.parse(String(candidate));
       const validated = OpenersSchema.safeParse(parsed);
       if (validated.success) {
-        return validated.data.openers.map(normalizeText).filter(Boolean);
+        return validated.data.openers.map(normalizeCommentText).filter(Boolean);
       }
     } catch {
       // Continue to fallback parsing.
@@ -274,7 +301,7 @@ function parseOpeners(rawText: string | null, fallbackOpeners: string[]) {
   }
 
   const validated = OpenersSchema.safeParse({ openers: fallbackOpeners });
-  return validated.success ? validated.data.openers.map(normalizeText).filter(Boolean) : [];
+  return validated.success ? validated.data.openers.map(normalizeCommentText).filter(Boolean) : [];
 }
 
 function compactBlueprintContext(context: OutreachDraftContext) {
@@ -430,7 +457,7 @@ export async function generateOutreachDrafts(input: {
     count: OUTREACH_DRAFT_OPTION_COUNT,
   });
   const rawOpeners = parseOpeners(llmResult.rawText, llmResult.openers);
-  const uniqueOpeners = Array.from(new Set(rawOpeners.map(normalizeText).filter(Boolean))).slice(0, OUTREACH_DRAFT_OPTION_COUNT);
+  const uniqueOpeners = Array.from(new Set(rawOpeners.map(normalizeCommentText).filter(Boolean))).slice(0, OUTREACH_DRAFT_OPTION_COUNT);
   if (uniqueOpeners.length < OUTREACH_DRAFT_OPTION_COUNT) {
     throw new OutreachDraftError(502, 'LLM_INVALID_OUTPUT', 'Outreach draft generation returned too few usable openers.');
   }
@@ -439,6 +466,7 @@ export async function generateOutreachDrafts(input: {
   const draftGroupId = input.randomUUID();
   const options = uniqueOpeners.map((openerText, index) => {
     const tail = selectTailVariant({ blueprintId, optionIndex: index });
+    const role = OUTREACH_COMMENT_ROLES[index] || OUTREACH_COMMENT_ROLES[0];
     const finalText = openerText;
     const validation = validateFinalDraft({
       opener: openerText,
@@ -451,6 +479,8 @@ export async function generateOutreachDrafts(input: {
     return {
       id: input.randomUUID(),
       optionIndex: index + 1,
+      roleId: role.id,
+      roleLabel: role.label,
       openerText,
       tailVariantId: tail.id,
       tailText: tail.text,

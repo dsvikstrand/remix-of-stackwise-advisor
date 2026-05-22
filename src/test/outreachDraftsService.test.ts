@@ -54,8 +54,8 @@ describe('outreach draft generation service', () => {
           rawText: JSON.stringify({
             openers: [
               'The useful part for me was the distinction between retrieval practice and just rereading notes.',
-              'I liked how this framed learning as something you can make repeatable with short review loops.',
-              'The takeaway that stood out was making recall active instead of waiting until you feel ready.',
+              'Finally, a video that makes review loops sound less like homework and more like a cheat code 🙂',
+              'The takeaway that stood out was making recall active instead of waiting until you feel ready.\n\nThat makes learning feel more like a repeatable system than a motivation problem.',
             ],
           }),
           openers: [],
@@ -64,9 +64,16 @@ describe('outreach draft generation service', () => {
     });
 
     expect(result.options).toHaveLength(3);
+    expect(result.options.map((option) => option.roleLabel)).toEqual([
+      'Short insight',
+      'Light/funny',
+      'Thoughtful',
+    ]);
     expect(result.promoVariants.length).toBeGreaterThanOrEqual(3);
     expect(result.sourceChannelSubscriberCount).toBeNull();
     expect(result.options[0].finalText).toBe('The useful part for me was the distinction between retrieval practice and just rereading notes.');
+    expect(result.options[1].finalText).toContain('🙂');
+    expect(result.options[2].finalText).toContain('\n\n');
     expect(result.options[0].finalText).not.toContain('BLEUP');
     expect(result.promoVariants[0].text).toContain('BLEUP');
     expect(result.promoVariants[0].text).toContain('personal learning feed');
