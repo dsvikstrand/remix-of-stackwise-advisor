@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   generateOutreachDrafts,
   OutreachDraftError,
+  validateOutreachPostText,
   type OutreachDraftContext,
   type OutreachDraftStateStore,
 } from '../../server/services/outreachDrafts';
@@ -63,10 +64,12 @@ describe('outreach draft generation service', () => {
     });
 
     expect(result.options).toHaveLength(3);
+    expect(result.promoVariants.length).toBeGreaterThanOrEqual(3);
     expect(result.sourceChannelSubscriberCount).toBeNull();
-    expect(result.options[0].finalText).toContain('BLEUP');
-    expect(result.options[0].finalText).toContain('personal learning feed');
-    expect(result.options[0].finalText).toContain('free early access');
+    expect(result.options[0].finalText).toBe('The useful part for me was the distinction between retrieval practice and just rereading notes.');
+    expect(result.options[0].finalText).not.toContain('BLEUP');
+    expect(result.promoVariants[0].text).toContain('BLEUP');
+    expect(result.promoVariants[0].text).toContain('personal learning feed');
     expect(store.insertDraftOptions).toHaveBeenCalledWith(expect.objectContaining({
       rows: expect.arrayContaining([
         expect.objectContaining({
@@ -77,6 +80,23 @@ describe('outreach draft generation service', () => {
         }),
       ]),
     }));
+  });
+
+  it('allows posting regular-only warm-up comments', () => {
+    expect(validateOutreachPostText(
+      'The useful part for me was the distinction between retrieval practice and just rereading notes.',
+    )).toMatchObject({
+      ok: true,
+    });
+  });
+
+  it('still blocks direct links in edited outreach comments', () => {
+    expect(validateOutreachPostText(
+      'The useful part was clear. Visit https://bleup.app for more info.',
+    )).toMatchObject({
+      ok: false,
+      issues: ['direct_link_not_allowed'],
+    });
   });
 
   it('blocks draft generation below the configured creator subscriber threshold', async () => {

@@ -62,6 +62,7 @@ describe('admin outreach route', () => {
       reasoningEffort: 'medium',
       promptVersion: 'outreach_draft_openers_v1',
       options: [],
+      promoVariants: [],
       limits: {
         dailyCap: 5,
         channelWindowDays: 7,

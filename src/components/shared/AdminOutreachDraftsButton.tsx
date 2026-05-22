@@ -32,6 +32,7 @@ import {
   generateOutreachDrafts,
   postOutreachDraft,
   type OutreachDraftGenerationResult,
+  type OutreachPromoVariant,
 } from '@/lib/adminOutreachApi';
 import { listMyFeedItems } from '@/lib/myFeedApi';
 import type { MyFeedItemView } from '@/lib/myFeedData';
@@ -118,6 +119,24 @@ function buildOutreachCandidates(items: MyFeedItemView[]) {
       return true;
     })
     .slice(0, 50);
+}
+
+function appendPromoText(commentText: string, promoText: string) {
+  const comment = String(commentText || '').trim();
+  const promo = String(promoText || '').trim();
+  if (!comment) return promo;
+  if (!promo) return comment;
+  return `${comment}\n\n${promo}`;
+}
+
+function removeKnownPromoText(commentText: string, promoVariants: OutreachPromoVariant[]) {
+  const text = String(commentText || '').trim();
+  for (const promo of promoVariants) {
+    const promoText = String(promo.text || '').trim();
+    if (!promoText || !text.endsWith(promoText)) continue;
+    return text.slice(0, text.length - promoText.length).trim();
+  }
+  return text;
 }
 
 function getYouTubeConnectionErrorMessage(error: unknown, fallback: string) {
@@ -283,6 +302,26 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
     });
   };
 
+  const handleAddPromo = (optionId: string, promo: OutreachPromoVariant) => {
+    if (!draftResult) return;
+    setDraftEdits((current) => {
+      const currentText = current[optionId] || '';
+      const baseText = removeKnownPromoText(currentText, draftResult.promoVariants);
+      return {
+        ...current,
+        [optionId]: appendPromoText(baseText, promo.text),
+      };
+    });
+  };
+
+  const handleRemovePromo = (optionId: string) => {
+    if (!draftResult) return;
+    setDraftEdits((current) => ({
+      ...current,
+      [optionId]: removeKnownPromoText(current[optionId] || '', draftResult.promoVariants),
+    }));
+  };
+
   const handlePostDraft = (optionId: string) => {
     const finalText = draftEdits[optionId] || '';
     if (!finalText.trim()) return;
@@ -435,7 +474,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
           <DialogHeader>
             <DialogTitle>Review Outreach Drafts</DialogTitle>
             <DialogDescription>
-              Review and edit before posting. Posting creates a real public YouTube comment from the connected admin account.
+              Start with a regular video comment. Add a stored BLEUP promo only when the thread is worth it.
             </DialogDescription>
           </DialogHeader>
           {draftResult ? (
@@ -452,9 +491,9 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
               {draftResult.options.map((option) => (
                 <div key={option.id} className="space-y-2 rounded-lg border border-border/50 p-3">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="text-sm font-medium">Draft {option.optionIndex}</div>
+                    <div className="text-sm font-medium">Comment suggestion {option.optionIndex}</div>
                     <Badge variant="outline" className="text-[10px]">
-                      {option.tailVariantId}
+                      Regular first
                     </Badge>
                   </div>
                   <Textarea
@@ -469,9 +508,30 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                   />
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-xs text-muted-foreground">
-                      No direct app link. Includes transparent builder disclosure.
+                      Regular comment by default. Add promo only when useful.
                     </p>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      {draftResult.promoVariants.slice(0, 3).map((promo, index) => (
+                        <Button
+                          key={promo.id}
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5"
+                          onClick={() => handleAddPromo(option.id, promo)}
+                        >
+                          Add promo {index + 1}
+                        </Button>
+                      ))}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="gap-1.5"
+                        onClick={() => handleRemovePromo(option.id)}
+                      >
+                        Remove promo
+                      </Button>
                       <Button
                         type="button"
                         size="sm"

@@ -17,6 +17,11 @@ export type OutreachDraftOption = {
   finalText: string;
 };
 
+export type OutreachPromoVariant = {
+  id: string;
+  text: string;
+};
+
 export type OutreachDraftGenerationResult = {
   draftGroupId: string;
   blueprintId: string;
@@ -30,6 +35,7 @@ export type OutreachDraftGenerationResult = {
   reasoningEffort: string;
   promptVersion: string;
   options: OutreachDraftOption[];
+  promoVariants: OutreachPromoVariant[];
   limits: {
     dailyCap: number;
     channelWindowDays: number;

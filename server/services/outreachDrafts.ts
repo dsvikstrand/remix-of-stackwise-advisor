@@ -25,6 +25,11 @@ export type OutreachDraftOption = {
   finalText: string;
 };
 
+export type OutreachPromoVariant = {
+  id: string;
+  text: string;
+};
+
 export type OutreachDraftGenerationResult = {
   draftGroupId: string;
   blueprintId: string;
@@ -38,6 +43,7 @@ export type OutreachDraftGenerationResult = {
   reasoningEffort: string;
   promptVersion: string;
   options: OutreachDraftOption[];
+  promoVariants: OutreachPromoVariant[];
   limits: {
     dailyCap: number;
     channelWindowDays: number;
@@ -309,9 +315,6 @@ function validateFinalDraft(input: {
   if (input.opener.length < 20) issues.push('opener_too_short');
   if (input.opener.length > MAX_OPENER_CHARS) issues.push('opener_too_long');
   if (input.finalText.length > MAX_FINAL_COMMENT_CHARS) issues.push('final_too_long');
-  if (!/\bBLEUP\b/i.test(input.finalText)) issues.push('missing_bleup');
-  if (!/\bchannel\b/i.test(input.finalText)) issues.push('missing_channel_pointer');
-  if (!/\bfree early access\b/i.test(input.finalText)) issues.push('missing_free_early_access');
   if (/https?:\/\//i.test(input.finalText)) issues.push('direct_link_not_allowed');
   const tooSimilar = input.recentFinalTexts.some((recent) => similarityScore(input.finalText, recent) >= 0.82);
   if (tooSimilar) issues.push('too_similar_to_recent');
@@ -330,9 +333,6 @@ export function validateOutreachPostText(finalText: string) {
   const issues: string[] = [];
   if (text.length < 40) issues.push('final_too_short');
   if (text.length > MAX_FINAL_COMMENT_CHARS) issues.push('final_too_long');
-  if (!/\bBLEUP\b/i.test(text)) issues.push('missing_bleup');
-  if (!/\bchannel\b/i.test(text)) issues.push('missing_channel_pointer');
-  if (!/\bfree early access\b/i.test(text)) issues.push('missing_free_early_access');
   if (/https?:\/\//i.test(text)) issues.push('direct_link_not_allowed');
   return {
     ok: issues.length === 0,
@@ -439,7 +439,7 @@ export async function generateOutreachDrafts(input: {
   const draftGroupId = input.randomUUID();
   const options = uniqueOpeners.map((openerText, index) => {
     const tail = selectTailVariant({ blueprintId, optionIndex: index });
-    const finalText = `${openerText}\n\n${tail.text}`.trim();
+    const finalText = openerText;
     const validation = validateFinalDraft({
       opener: openerText,
       finalText,
@@ -500,6 +500,10 @@ export async function generateOutreachDrafts(input: {
     options: options.map((option, index) => ({
       ...option,
       id: insertedIds[index] || option.id,
+    })),
+    promoVariants: OUTREACH_TAIL_VARIANTS.map((variant) => ({
+      id: variant.id,
+      text: variant.text,
     })),
     limits: {
       dailyCap: OUTREACH_DRAFT_DAILY_CAP,
