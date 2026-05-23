@@ -81,6 +81,7 @@ describe('outreach draft generation service', () => {
     expect(result.promoVariants.every((promo) => !promo.text.includes('\n'))).toBe(true);
     expect(result.promoVariants.every((promo) => !promo.text.toLowerCase().includes('free early access'))).toBe(true);
     expect(result.promoVariants.every((promo) => validateOutreachPostText(promo.text).ok)).toBe(true);
+    expect(result.limits.channelWindowCap).toBe(3);
     expect(store.insertDraftOptions).toHaveBeenCalledWith(expect.objectContaining({
       rows: expect.arrayContaining([
         expect.objectContaining({
@@ -179,6 +180,91 @@ describe('outreach draft generation service', () => {
     })).rejects.toMatchObject({
       errorCode: 'VIDEO_ALREADY_DRAFTED',
       status: 409,
+    } satisfies Partial<OutreachDraftError>);
+  });
+
+  it('allows up to three draft groups per creator window before blocking', async () => {
+    let seq = 0;
+    const store = createStore({
+      listRecentDrafts: vi.fn(async () => [
+        {
+          id: 'draft_old_1',
+          draft_group_id: 'group_old_1',
+          admin_user_id: 'admin_1',
+          blueprint_id: 'bp_old_1',
+          source_item_id: 'source_old_1',
+          youtube_video_id: 'old_video_1',
+          source_channel_id: 'UC_test',
+          final_text: 'Older creator draft one',
+          created_at: '2026-05-16T07:00:00.000Z',
+        },
+        {
+          id: 'draft_old_2',
+          draft_group_id: 'group_old_2',
+          admin_user_id: 'admin_1',
+          blueprint_id: 'bp_old_2',
+          source_item_id: 'source_old_2',
+          youtube_video_id: 'old_video_2',
+          source_channel_id: 'UC_test',
+          final_text: 'Older creator draft two',
+          created_at: '2026-05-16T08:00:00.000Z',
+        },
+      ]),
+    });
+
+    const result = await generateOutreachDrafts({
+      adminUserId: 'admin_1',
+      blueprintId: 'bp_1',
+      now: new Date('2026-05-17T08:00:00.000Z'),
+      randomUUID: () => `id_${++seq}`,
+      resolveContext: async () => context,
+      stateStore: store,
+      llm: {
+        generateVideoOpeners: vi.fn(async () => ({
+          model: 'gpt-5.5-mini',
+          reasoningEffort: 'medium',
+          rawText: JSON.stringify({
+            openers: [
+              'The clearest point was that useful learning needs active recall, not just passive review.',
+              'This made spaced repetition feel less mysterious and more like a simple habit loop 🙂',
+              'The most practical takeaway is to make recall small enough that you can repeat it often.\n\nThat is the part that makes the system sustainable.',
+            ],
+          }),
+          openers: [],
+        })),
+      },
+    });
+
+    expect(result.options).toHaveLength(3);
+    expect(result.limits.channelWindowCap).toBe(3);
+  });
+
+  it('blocks draft generation at three draft groups for the same creator window', async () => {
+    await expect(generateOutreachDrafts({
+      adminUserId: 'admin_1',
+      blueprintId: 'bp_1',
+      now: new Date('2026-05-17T08:00:00.000Z'),
+      randomUUID: () => 'id_1',
+      resolveContext: async () => context,
+      stateStore: createStore({
+        listRecentDrafts: vi.fn(async () => [1, 2, 3].map((index) => ({
+          id: `draft_old_${index}`,
+          draft_group_id: `group_old_${index}`,
+          admin_user_id: 'admin_1',
+          blueprint_id: `bp_old_${index}`,
+          source_item_id: `source_old_${index}`,
+          youtube_video_id: `old_video_${index}`,
+          source_channel_id: 'UC_test',
+          final_text: `Older creator draft ${index}`,
+          created_at: '2026-05-16T07:00:00.000Z',
+        }))),
+      }),
+      llm: {
+        generateVideoOpeners: vi.fn(),
+      },
+    })).rejects.toMatchObject({
+      errorCode: 'CHANNEL_WINDOW_CAP_REACHED',
+      status: 429,
     } satisfies Partial<OutreachDraftError>);
   });
 });

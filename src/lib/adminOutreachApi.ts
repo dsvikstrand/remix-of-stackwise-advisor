@@ -41,6 +41,7 @@ export type OutreachDraftGenerationResult = {
   limits: {
     dailyCap: number;
     channelWindowDays: number;
+    channelWindowCap: number;
     videoAlreadyDrafted: boolean;
   };
 };

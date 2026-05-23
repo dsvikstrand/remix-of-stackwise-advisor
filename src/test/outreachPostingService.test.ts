@@ -154,6 +154,65 @@ describe('outreach posting service', () => {
     });
   });
 
+  it('allows posting the third creator comment inside the weekly window', async () => {
+    const store = createStore({
+      listRecentDrafts: vi.fn(async () => [1, 2].map((index) => ({
+        id: `posted_${index}`,
+        draft_group_id: `group_old_${index}`,
+        admin_user_id: 'admin_1',
+        blueprint_id: `bp_old_${index}`,
+        source_item_id: `source_old_${index}`,
+        youtube_video_id: `old_video_${index}`,
+        source_channel_id: 'UC_test',
+        final_text: `Old posted comment ${index}`,
+        status: 'posted',
+        youtube_comment_id: `comment_old_${index}`,
+        posted_at: `2026-05-1${index}T07:00:00.000Z`,
+        created_at: `2026-05-1${index}T07:00:00.000Z`,
+      }))),
+    });
+    const youtubeClient = createYoutubeClient();
+
+    const result = await postOutreachDraft({
+      adminUserId: 'admin_1',
+      draftId: 'draft_1',
+      now: new Date('2026-05-18T08:00:00.000Z'),
+      stateStore: store,
+      youtubeClient,
+    });
+
+    expect(result.status).toBe('posted');
+    expect(youtubeClient.postTopLevelComment).toHaveBeenCalledOnce();
+  });
+
+  it('blocks posting after three creator comments inside the weekly window', async () => {
+    await expect(postOutreachDraft({
+      adminUserId: 'admin_1',
+      draftId: 'draft_1',
+      now: new Date('2026-05-18T08:00:00.000Z'),
+      stateStore: createStore({
+        listRecentDrafts: vi.fn(async () => [1, 2, 3].map((index) => ({
+          id: `posted_${index}`,
+          draft_group_id: `group_old_${index}`,
+          admin_user_id: 'admin_1',
+          blueprint_id: `bp_old_${index}`,
+          source_item_id: `source_old_${index}`,
+          youtube_video_id: `old_video_${index}`,
+          source_channel_id: 'UC_test',
+          final_text: `Old posted comment ${index}`,
+          status: 'posted',
+          youtube_comment_id: `comment_old_${index}`,
+          posted_at: `2026-05-1${index}T07:00:00.000Z`,
+          created_at: `2026-05-1${index}T07:00:00.000Z`,
+        }))),
+      }),
+      youtubeClient: createYoutubeClient(),
+    })).rejects.toMatchObject({
+      errorCode: 'CHANNEL_POST_WINDOW_CAP_REACHED',
+      status: 429,
+    });
+  });
+
   it('marks the draft failed when YouTube posting fails', async () => {
     const store = createStore();
     await expect(postOutreachDraft({

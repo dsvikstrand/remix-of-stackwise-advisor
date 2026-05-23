@@ -1,4 +1,5 @@
 import {
+  OUTREACH_DRAFT_CHANNEL_WINDOW_CAP,
   OUTREACH_DRAFT_CHANNEL_WINDOW_DAYS,
   OUTREACH_DRAFT_DAILY_CAP,
   OutreachDraftError,
@@ -140,10 +141,17 @@ export async function postOutreachDraft(input: {
     throw new OutreachDraftError(409, 'VIDEO_ALREADY_POSTED', 'This video already has a posted BLEUP outreach comment.');
   }
 
-  const channelAlreadyPosted = Boolean(draft.source_channel_id)
-    && postedRows.some((row) => row.source_channel_id === draft.source_channel_id);
-  if (channelAlreadyPosted) {
-    throw new OutreachDraftError(429, 'CHANNEL_POST_WINDOW_CAP_REACHED', `This creator already has a posted outreach comment in the last ${OUTREACH_DRAFT_CHANNEL_WINDOW_DAYS} days.`);
+  const channelPostedGroups = new Set(
+    postedRows
+      .filter((row) => Boolean(draft.source_channel_id) && row.source_channel_id === draft.source_channel_id)
+      .map((row) => row.draft_group_id),
+  );
+  if (channelPostedGroups.size >= OUTREACH_DRAFT_CHANNEL_WINDOW_CAP) {
+    throw new OutreachDraftError(
+      429,
+      'CHANNEL_POST_WINDOW_CAP_REACHED',
+      `This creator already has ${OUTREACH_DRAFT_CHANNEL_WINDOW_CAP} posted outreach comments in the last ${OUTREACH_DRAFT_CHANNEL_WINDOW_DAYS} days.`,
+    );
   }
 
   const claimed = await input.stateStore.markDraftPosting({

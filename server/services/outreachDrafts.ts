@@ -49,6 +49,7 @@ export type OutreachDraftGenerationResult = {
   limits: {
     dailyCap: number;
     channelWindowDays: number;
+    channelWindowCap: number;
     videoAlreadyDrafted: boolean;
   };
 };
@@ -179,6 +180,7 @@ export class OutreachDraftError extends Error {
 export const OUTREACH_DRAFT_PROMPT_VERSION = 'outreach_draft_openers_v1';
 export const OUTREACH_DRAFT_DAILY_CAP = 5;
 export const OUTREACH_DRAFT_CHANNEL_WINDOW_DAYS = 7;
+export const OUTREACH_DRAFT_CHANNEL_WINDOW_CAP = 3;
 export const OUTREACH_DRAFT_OPTION_COUNT = 3;
 
 const MAX_OPENER_CHARS = 420;
@@ -451,10 +453,17 @@ export async function generateOutreachDrafts(input: {
     throw new OutreachDraftError(409, 'VIDEO_ALREADY_DRAFTED', 'This video already has an outreach draft.');
   }
 
-  const channelAlreadyDrafted = Boolean(context.sourceChannelId)
-    && recentRows.some((row) => row.source_channel_id === context.sourceChannelId);
-  if (channelAlreadyDrafted) {
-    throw new OutreachDraftError(429, 'CHANNEL_WINDOW_CAP_REACHED', `This creator already has an outreach draft in the last ${OUTREACH_DRAFT_CHANNEL_WINDOW_DAYS} days.`);
+  const channelDraftGroups = new Set(
+    recentRows
+      .filter((row) => Boolean(context.sourceChannelId) && row.source_channel_id === context.sourceChannelId)
+      .map((row) => row.draft_group_id),
+  );
+  if (channelDraftGroups.size >= OUTREACH_DRAFT_CHANNEL_WINDOW_CAP) {
+    throw new OutreachDraftError(
+      429,
+      'CHANNEL_WINDOW_CAP_REACHED',
+      `This creator already has ${OUTREACH_DRAFT_CHANNEL_WINDOW_CAP} outreach drafts in the last ${OUTREACH_DRAFT_CHANNEL_WINDOW_DAYS} days.`,
+    );
   }
 
   const llmResult = await input.llm.generateVideoOpeners({
@@ -546,6 +555,7 @@ export async function generateOutreachDrafts(input: {
     limits: {
       dailyCap: OUTREACH_DRAFT_DAILY_CAP,
       channelWindowDays: OUTREACH_DRAFT_CHANNEL_WINDOW_DAYS,
+      channelWindowCap: OUTREACH_DRAFT_CHANNEL_WINDOW_CAP,
       videoAlreadyDrafted: false,
     },
   } satisfies OutreachDraftGenerationResult;

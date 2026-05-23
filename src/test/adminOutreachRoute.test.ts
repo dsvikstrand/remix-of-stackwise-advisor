@@ -66,6 +66,7 @@ describe('admin outreach route', () => {
       limits: {
         dailyCap: 5,
         channelWindowDays: 7,
+        channelWindowCap: 3,
         videoAlreadyDrafted: false,
       },
     }));
