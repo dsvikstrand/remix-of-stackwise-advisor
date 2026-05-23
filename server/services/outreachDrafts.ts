@@ -178,7 +178,7 @@ export class OutreachDraftError extends Error {
 }
 
 export const OUTREACH_DRAFT_PROMPT_VERSION = 'outreach_draft_openers_v1';
-export const OUTREACH_DRAFT_DAILY_CAP = 5;
+export const OUTREACH_DRAFT_DAILY_CAP = 0;
 export const OUTREACH_DRAFT_CHANNEL_WINDOW_DAYS = 7;
 export const OUTREACH_DRAFT_CHANNEL_WINDOW_CAP = 3;
 export const OUTREACH_DRAFT_OPTION_COUNT = 3;
@@ -444,7 +444,7 @@ export async function generateOutreachDrafts(input: {
       .filter((row) => row.created_at >= sinceDayIso)
       .map((row) => row.draft_group_id),
   );
-  if (dailyGroups.size >= OUTREACH_DRAFT_DAILY_CAP) {
+  if (OUTREACH_DRAFT_DAILY_CAP > 0 && dailyGroups.size >= OUTREACH_DRAFT_DAILY_CAP) {
     throw new OutreachDraftError(429, 'DAILY_CAP_REACHED', `Outreach draft cap reached (${OUTREACH_DRAFT_DAILY_CAP}/day).`);
   }
 

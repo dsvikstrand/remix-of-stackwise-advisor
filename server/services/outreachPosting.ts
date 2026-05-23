@@ -132,7 +132,7 @@ export async function postOutreachDraft(input: {
       .filter((row) => (row.posted_at || row.created_at) >= sinceDayIso)
       .map((row) => row.draft_group_id),
   );
-  if (postedGroupsToday.size >= OUTREACH_DRAFT_DAILY_CAP) {
+  if (OUTREACH_DRAFT_DAILY_CAP > 0 && postedGroupsToday.size >= OUTREACH_DRAFT_DAILY_CAP) {
     throw new OutreachDraftError(429, 'DAILY_POST_CAP_REACHED', `Outreach post cap reached (${OUTREACH_DRAFT_DAILY_CAP}/day).`);
   }
 
