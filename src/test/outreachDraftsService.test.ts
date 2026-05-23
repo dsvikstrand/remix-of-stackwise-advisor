@@ -77,6 +77,9 @@ describe('outreach draft generation service', () => {
     expect(result.options[0].finalText).not.toContain('BLEUP');
     expect(result.promoVariants[0].text).toContain('BLEUP');
     expect(result.promoVariants[0].text).toContain('personal learning feed');
+    expect(result.promoVariants.every((promo) => !promo.text.includes('\n'))).toBe(true);
+    expect(result.promoVariants.every((promo) => !promo.text.toLowerCase().includes('free early access'))).toBe(true);
+    expect(result.promoVariants.every((promo) => validateOutreachPostText(promo.text).ok)).toBe(true);
     expect(store.insertDraftOptions).toHaveBeenCalledWith(expect.objectContaining({
       rows: expect.arrayContaining([
         expect.objectContaining({

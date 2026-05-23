@@ -24,6 +24,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAiCredits } from '@/hooks/useAiCredits';
 import { useToast } from '@/hooks/use-toast';
@@ -139,6 +140,26 @@ function removeKnownPromoText(commentText: string, promoVariants: OutreachPromoV
   return text;
 }
 
+function getPromoVariantLabel(promo: OutreachPromoVariant, index: number) {
+  const fallback = `Promo ${index + 1}`;
+  switch (promo.id) {
+    case 'too-many-videos-v2':
+      return 'Too many videos';
+    case 'keep-up-without-watching-all-v2':
+      return 'Keep up';
+    case 'watch-later-growing-v2':
+      return 'Watch Later';
+    case 'learning-from-youtube-v2':
+      return 'Faster learning';
+    case 'creators-you-follow-v2':
+      return 'Follow creators';
+    case 'drowning-in-content-v2':
+      return 'Less overload';
+    default:
+      return fallback;
+  }
+}
+
 function getYouTubeConnectionErrorMessage(error: unknown, fallback: string) {
   if (error instanceof ApiRequestError) {
     switch (error.errorCode) {
@@ -199,6 +220,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
   const [draftResult, setDraftResult] = useState<OutreachDraftGenerationResult | null>(null);
   const [draftDialogOpen, setDraftDialogOpen] = useState(false);
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
+  const [selectedPromoIds, setSelectedPromoIds] = useState<Record<string, string>>({});
   const [postedDraftIds, setPostedDraftIds] = useState<Set<string>>(() => new Set());
   const youtubeConnectionQuery = useQuery({
     queryKey: ['admin-outreach-youtube-connection-status', user?.id],
@@ -229,6 +251,9 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
       setDraftResult(result);
       setDraftEdits(Object.fromEntries(
         result.options.map((option) => [option.id, option.finalText]),
+      ));
+      setSelectedPromoIds(Object.fromEntries(
+        result.options.map((option) => [option.id, 'none']),
       ));
       setDraftDialogOpen(true);
     },
@@ -302,24 +327,21 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
     });
   };
 
-  const handleAddPromo = (optionId: string, promo: OutreachPromoVariant) => {
+  const handleSelectPromo = (optionId: string, promoId: string) => {
     if (!draftResult) return;
+    const selectedPromo = draftResult.promoVariants.find((promo) => promo.id === promoId) || null;
+    setSelectedPromoIds((current) => ({
+      ...current,
+      [optionId]: selectedPromo?.id || 'none',
+    }));
     setDraftEdits((current) => {
       const currentText = current[optionId] || '';
       const baseText = removeKnownPromoText(currentText, draftResult.promoVariants);
       return {
         ...current,
-        [optionId]: appendPromoText(baseText, promo.text),
+        [optionId]: selectedPromo ? appendPromoText(baseText, selectedPromo.text) : baseText,
       };
     });
-  };
-
-  const handleRemovePromo = (optionId: string) => {
-    if (!draftResult) return;
-    setDraftEdits((current) => ({
-      ...current,
-      [optionId]: removeKnownPromoText(current[optionId] || '', draftResult.promoVariants),
-    }));
   };
 
   const handlePostDraft = (optionId: string) => {
@@ -508,30 +530,25 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                   />
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-xs text-muted-foreground">
-                      Regular comment by default. Add promo only when useful.
+                      Regular comment by default. Select a short promo only when useful.
                     </p>
                     <div className="flex flex-wrap items-center justify-end gap-2">
-                      {draftResult.promoVariants.slice(0, 3).map((promo, index) => (
-                        <Button
-                          key={promo.id}
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="gap-1.5"
-                          onClick={() => handleAddPromo(option.id, promo)}
-                        >
-                          Add promo {index + 1}
-                        </Button>
-                      ))}
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="gap-1.5"
-                        onClick={() => handleRemovePromo(option.id)}
+                      <Select
+                        value={selectedPromoIds[option.id] || 'none'}
+                        onValueChange={(value) => handleSelectPromo(option.id, value)}
                       >
-                        Remove promo
-                      </Button>
+                        <SelectTrigger className="h-8 w-[180px] text-xs">
+                          <SelectValue placeholder="Promo: None" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Promo: None</SelectItem>
+                          {draftResult.promoVariants.map((promo, index) => (
+                            <SelectItem key={promo.id} value={promo.id}>
+                              {getPromoVariantLabel(promo, index)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <Button
                         type="button"
                         size="sm"

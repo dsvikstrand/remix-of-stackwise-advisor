@@ -186,28 +186,28 @@ const MAX_FINAL_COMMENT_CHARS = 1200;
 
 export const OUTREACH_TAIL_VARIANTS = [
   {
-    id: 'personal-learning-feed-v1',
-    text: 'Videos like this are why YouTube is such a good place to learn, but also why it can be hard to keep up with everything.\n\nImagine having a personal learning feed that follows the creators and topics you care about. If that sounds useful, you might want to check out BLEUP.\n\nBLEUP turns new videos into quick, skimmable blueprints with the main ideas and useful takeaways.\n\nPlease visit my channel for more info and free early access.',
+    id: 'too-many-videos-v2',
+    text: 'Too many useful videos, not enough time? BLEUP turns YouTube into a personal learning feed. Visit my channel to learn more.',
   },
   {
-    id: 'keep-up-with-youtube-v1',
-    text: 'This is the kind of video that makes YouTube great for learning, but also shows how hard it can be to stay on top of all the good content.\n\nBLEUP is built for that problem. It lets you follow the creators and topics you care about, then turns new videos into quick, skimmable blueprints, like a personal learning feed.\n\nIf you use YouTube to learn and want a faster way to keep up, please visit my channel for more info and free early access.',
+    id: 'keep-up-without-watching-all-v2',
+    text: 'Want to keep up with YouTube without watching everything? BLEUP helps turn new videos into quick learning blueprints. Visit my channel for more info.',
   },
   {
-    id: 'knowledge-side-youtube-v1',
-    text: 'YouTube has so much useful knowledge, but keeping up with every good video can be difficult.\n\nThat is why BLEUP exists. It helps turn YouTube into a personal learning feed by following the creators and topics you care about, then turning new videos into skimmable blueprints.\n\nEach blueprint gives you the main ideas and useful takeaways, so you can understand the value faster.\n\nPlease visit my channel for more info and free early access.',
+    id: 'watch-later-growing-v2',
+    text: 'If your Watch Later list keeps growing, BLEUP helps you find the useful takeaways faster. Visit my channel to see how it works.',
   },
   {
-    id: 'lost-in-feed-v1',
-    text: 'Videos like this are valuable, but it is easy for good content to get lost in the YouTube feed.\n\nBLEUP helps you keep up by following the creators and topics you care about and turning new videos into quick, skimmable blueprints with the main ideas and useful takeaways.\n\nIf that sounds helpful, please visit my channel for more info and free early access.',
+    id: 'learning-from-youtube-v2',
+    text: 'Learning from YouTube is great, but keeping up is hard. BLEUP gives you a faster way to follow useful videos. Visit my channel to learn more.',
   },
   {
-    id: 'too-many-good-videos-v1',
-    text: 'If you use YouTube to learn, you probably know the problem: too many good videos, not enough time to watch them all.\n\nThat is why BLEUP exists. It helps by creating a personal learning feed from the creators and topics you care about, then turning new videos into skimmable blueprints with the main ideas and useful takeaways.\n\nPlease visit my channel for more info and free early access.',
+    id: 'creators-you-follow-v2',
+    text: 'Want a quicker way to learn from the creators you follow? BLEUP turns new videos into skimmable blueprints. Visit my channel for more info.',
   },
   {
-    id: 'faster-way-to-learn-v1',
-    text: 'This is exactly why YouTube is such a powerful learning platform, but also why it can feel overwhelming.\n\nBLEUP helps make it easier to keep up. It follows the creators and topics you care about and turns new videos into quick, skimmable blueprints with the main ideas and useful takeaways.\n\nIf you want a faster way to learn from YouTube, please visit my channel for more info and free early access.',
+    id: 'drowning-in-content-v2',
+    text: 'If you use YouTube to learn, BLEUP helps you keep up without drowning in content. Visit my channel to see how it works.',
   },
 ] as const;
 
