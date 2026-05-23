@@ -24,7 +24,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAiCredits } from '@/hooks/useAiCredits';
 import { useToast } from '@/hooks/use-toast';
@@ -133,18 +132,22 @@ function appendPromoText(commentText: string, promoText: string) {
 function getPromoVariantLabel(promo: OutreachPromoVariant, index: number) {
   const fallback = `Promo ${index + 1}`;
   switch (promo.id) {
-    case 'too-many-videos-v2':
-      return 'Too many videos';
-    case 'keep-up-without-watching-all-v2':
-      return 'Keep up';
-    case 'watch-later-growing-v2':
-      return 'Watch Later';
-    case 'learning-from-youtube-v2':
-      return 'Faster learning';
-    case 'creators-you-follow-v2':
-      return 'Follow creators';
-    case 'drowning-in-content-v2':
-      return 'Less overload';
+    case 'organize-learning-content-v3':
+      return 'Organize learning';
+    case 'revisit-key-ideas-v3':
+      return 'Revisit ideas';
+    case 'cleaner-learning-feed-v3':
+      return 'Cleaner feed';
+    case 'original-video-links-v3':
+      return 'Original videos';
+    case 'track-creators-topics-v3':
+      return 'Creators/topics';
+    case 'revisit-good-ideas-v3':
+      return 'Good ideas';
+    case 'full-context-v3':
+      return 'Full context';
+    case 'remember-source-v3':
+      return 'Remember source';
     default:
       return fallback;
   }
@@ -548,30 +551,64 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                 </div>
               ))}
               <div className="space-y-2 rounded-lg border border-dashed border-border/70 bg-muted/20 p-3">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="space-y-1">
-                    <div className="text-sm font-medium">Optional promo add-on</div>
-                    <p className="text-xs text-muted-foreground">
-                      Default is comment-only. If selected, this one-liner is appended when you copy or post.
-                    </p>
-                  </div>
-                  <Select value={selectedPromoId} onValueChange={setSelectedPromoId}>
-                    <SelectTrigger className="h-8 w-full text-xs sm:w-[220px]">
-                      <SelectValue placeholder="Promo: None" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Promo: None</SelectItem>
-                      {draftResult.promoVariants.map((promo, index) => (
-                        <SelectItem key={promo.id} value={promo.id}>
-                          {getPromoVariantLabel(promo, index)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="space-y-1">
+                  <div className="text-sm font-medium">Optional promo add-on</div>
+                  <p className="text-xs text-muted-foreground">
+                    Default is comment-only. Select one one-liner below to append it when you copy or post.
+                  </p>
+                </div>
+                <div className="grid gap-2">
+                  <button
+                    type="button"
+                    aria-pressed={selectedPromoId === 'none'}
+                    className={`rounded-md border p-2 text-left text-xs transition ${
+                      selectedPromoId === 'none'
+                        ? 'border-primary bg-primary/10 text-foreground'
+                        : 'border-border/60 bg-background/70 text-muted-foreground hover:border-primary/50 hover:text-foreground'
+                    }`}
+                    onClick={() => setSelectedPromoId('none')}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-medium">None</span>
+                      {selectedPromoId === 'none' ? (
+                        <Badge variant="default" className="h-5 px-2 text-[10px]">Selected</Badge>
+                      ) : null}
+                    </div>
+                    <div className="mt-1">Post or copy the selected comment without a promo.</div>
+                  </button>
+                  {draftResult.promoVariants.map((promo, index) => {
+                    const selected = selectedPromoId === promo.id;
+                    return (
+                      <button
+                        key={promo.id}
+                        type="button"
+                        aria-pressed={selected}
+                        className={`rounded-md border p-2 text-left text-xs transition ${
+                          selected
+                            ? 'border-primary bg-primary/10 text-foreground'
+                            : 'border-border/60 bg-background/70 text-muted-foreground hover:border-primary/50 hover:text-foreground'
+                        }`}
+                        onClick={() => setSelectedPromoId(promo.id)}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-medium">{getPromoVariantLabel(promo, index)}</span>
+                          {selected ? (
+                            <Badge variant="default" className="h-5 px-2 text-[10px]">Selected</Badge>
+                          ) : null}
+                        </div>
+                        <div className="mt-1 leading-relaxed">{promo.text}</div>
+                      </button>
+                    );
+                  })}
                 </div>
                 {getSelectedPromoText() ? (
-                  <div className="rounded-md bg-background/70 p-2 text-xs text-muted-foreground">
-                    {getSelectedPromoText()}
+                  <div className="space-y-1">
+                    <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Selected add-on preview
+                    </div>
+                    <div className="rounded-md bg-background/70 p-2 text-xs text-muted-foreground">
+                      {getSelectedPromoText()}
+                    </div>
                   </div>
                 ) : null}
               </div>
