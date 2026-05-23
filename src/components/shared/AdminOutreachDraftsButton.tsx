@@ -130,16 +130,6 @@ function appendPromoText(commentText: string, promoText: string) {
   return `${comment}\n\n${promo}`;
 }
 
-function removeKnownPromoText(commentText: string, promoVariants: OutreachPromoVariant[]) {
-  const text = String(commentText || '').trim();
-  for (const promo of promoVariants) {
-    const promoText = String(promo.text || '').trim();
-    if (!promoText || !text.endsWith(promoText)) continue;
-    return text.slice(0, text.length - promoText.length).trim();
-  }
-  return text;
-}
-
 function getPromoVariantLabel(promo: OutreachPromoVariant, index: number) {
   const fallback = `Promo ${index + 1}`;
   switch (promo.id) {
@@ -220,7 +210,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
   const [draftResult, setDraftResult] = useState<OutreachDraftGenerationResult | null>(null);
   const [draftDialogOpen, setDraftDialogOpen] = useState(false);
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
-  const [selectedPromoIds, setSelectedPromoIds] = useState<Record<string, string>>({});
+  const [selectedPromoId, setSelectedPromoId] = useState('none');
   const [postedDraftIds, setPostedDraftIds] = useState<Set<string>>(() => new Set());
   const youtubeConnectionQuery = useQuery({
     queryKey: ['admin-outreach-youtube-connection-status', user?.id],
@@ -252,9 +242,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
       setDraftEdits(Object.fromEntries(
         result.options.map((option) => [option.id, option.finalText]),
       ));
-      setSelectedPromoIds(Object.fromEntries(
-        result.options.map((option) => [option.id, 'none']),
-      ));
+      setSelectedPromoId('none');
       setDraftDialogOpen(true);
     },
     onError: (error) => {
@@ -317,38 +305,36 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
     window.open(`/blueprint/${encodeURIComponent(candidate.blueprintId)}`, '_blank', 'noopener,noreferrer');
   };
 
+  const getSelectedPromoText = () => {
+    if (!draftResult || selectedPromoId === 'none') return '';
+    return draftResult.promoVariants.find((promo) => promo.id === selectedPromoId)?.text || '';
+  };
+
+  const buildFinalDraftText = (optionId: string) => {
+    const commentText = draftEdits[optionId] || '';
+    return appendPromoText(commentText, getSelectedPromoText());
+  };
+
   const handleCopyDraft = async (optionId: string) => {
-    const text = draftEdits[optionId] || '';
+    const text = buildFinalDraftText(optionId);
     if (!text.trim()) return;
     await navigator.clipboard.writeText(text);
     toast({
       title: 'Draft copied',
-      description: 'Paste it into YouTube after your manual review.',
-    });
-  };
-
-  const handleSelectPromo = (optionId: string, promoId: string) => {
-    if (!draftResult) return;
-    const selectedPromo = draftResult.promoVariants.find((promo) => promo.id === promoId) || null;
-    setSelectedPromoIds((current) => ({
-      ...current,
-      [optionId]: selectedPromo?.id || 'none',
-    }));
-    setDraftEdits((current) => {
-      const currentText = current[optionId] || '';
-      const baseText = removeKnownPromoText(currentText, draftResult.promoVariants);
-      return {
-        ...current,
-        [optionId]: selectedPromo ? appendPromoText(baseText, selectedPromo.text) : baseText,
-      };
+      description: getSelectedPromoText()
+        ? 'Copied with the selected promo appended.'
+        : 'Copied as a regular comment.',
     });
   };
 
   const handlePostDraft = (optionId: string) => {
-    const finalText = draftEdits[optionId] || '';
+    const promoText = getSelectedPromoText();
+    const finalText = appendPromoText(draftEdits[optionId] || '', promoText);
     if (!finalText.trim()) return;
     const confirmed = window.confirm(
-      'Post this edited outreach comment to YouTube now? This is a real public comment from the connected admin YouTube account.',
+      promoText
+        ? 'Post this edited outreach comment with the selected promo appended? This is a real public comment from the connected admin YouTube account.'
+        : 'Post this edited outreach comment to YouTube now? This is a real public comment from the connected admin YouTube account.',
     );
     if (!confirmed) return;
     postMutation.mutate({ optionId, finalText });
@@ -530,25 +516,9 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                   />
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-xs text-muted-foreground">
-                      Regular comment by default. Select a short promo only when useful.
+                      Edit the regular comment only. The promo selector below is appended when copying or posting.
                     </p>
                     <div className="flex flex-wrap items-center justify-end gap-2">
-                      <Select
-                        value={selectedPromoIds[option.id] || 'none'}
-                        onValueChange={(value) => handleSelectPromo(option.id, value)}
-                      >
-                        <SelectTrigger className="h-8 w-[180px] text-xs">
-                          <SelectValue placeholder="Promo: None" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Promo: None</SelectItem>
-                          {draftResult.promoVariants.map((promo, index) => (
-                            <SelectItem key={promo.id} value={promo.id}>
-                              {getPromoVariantLabel(promo, index)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
                       <Button
                         type="button"
                         size="sm"
@@ -577,6 +547,34 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                   </div>
                 </div>
               ))}
+              <div className="space-y-2 rounded-lg border border-dashed border-border/70 bg-muted/20 p-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="space-y-1">
+                    <div className="text-sm font-medium">Optional promo add-on</div>
+                    <p className="text-xs text-muted-foreground">
+                      Default is comment-only. If selected, this one-liner is appended when you copy or post.
+                    </p>
+                  </div>
+                  <Select value={selectedPromoId} onValueChange={setSelectedPromoId}>
+                    <SelectTrigger className="h-8 w-full text-xs sm:w-[220px]">
+                      <SelectValue placeholder="Promo: None" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Promo: None</SelectItem>
+                      {draftResult.promoVariants.map((promo, index) => (
+                        <SelectItem key={promo.id} value={promo.id}>
+                          {getPromoVariantLabel(promo, index)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {getSelectedPromoText() ? (
+                  <div className="rounded-md bg-background/70 p-2 text-xs text-muted-foreground">
+                    {getSelectedPromoText()}
+                  </div>
+                ) : null}
+              </div>
             </div>
           ) : null}
         </DialogContent>
