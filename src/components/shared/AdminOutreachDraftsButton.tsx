@@ -31,6 +31,7 @@ import { ApiRequestError } from '@/lib/subscriptionsApi';
 import {
   generateOutreachDrafts,
   postOutreachDraft,
+  refreshOutreachCandidateStats,
   type OutreachDraftGenerationResult,
   type OutreachPromoVariant,
 } from '@/lib/adminOutreachApi';
@@ -44,10 +45,13 @@ import {
 type OutreachCandidate = {
   id: string;
   blueprintId: string;
+  sourceItemId: string;
   sourceUrl: string;
   title: string;
   sourceName: string;
   createdLabel: string;
+  viewCount: number | null;
+  commentCount: number | null;
   status: 'ready';
 };
 
@@ -92,18 +96,30 @@ function formatRelativeDate(value: string | null | undefined) {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+function formatCompactCount(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(Number(value))) return null;
+  return new Intl.NumberFormat(undefined, {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(Number(value));
+}
+
 function toOutreachCandidate(item: MyFeedItemView): OutreachCandidate | null {
   const blueprintId = String(item.blueprint?.id || '').trim();
+  const sourceItemId = String(item.source?.id || '').trim();
   const sourceUrl = String(item.source?.sourceUrl || '').trim();
-  if (!blueprintId || !sourceUrl) return null;
+  if (!blueprintId || !sourceItemId || !sourceUrl) return null;
 
   return {
     id: item.id,
     blueprintId,
+    sourceItemId,
     sourceUrl,
     title: item.blueprint?.title || item.source?.title || 'Untitled blueprint',
     sourceName: item.source?.sourceChannelTitle || 'YouTube',
     createdLabel: formatRelativeDate(item.createdAt),
+    viewCount: item.source?.viewCount ?? null,
+    commentCount: item.source?.commentCount ?? null,
     status: 'ready',
   };
 }
@@ -214,6 +230,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
   const [draftDialogOpen, setDraftDialogOpen] = useState(false);
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
   const [selectedPromoId, setSelectedPromoId] = useState('none');
+  const [statsFetchLimit, setStatsFetchLimit] = useState(10);
   const [postedDraftIds, setPostedDraftIds] = useState<Set<string>>(() => new Set());
   const youtubeConnectionQuery = useQuery({
     queryKey: ['admin-outreach-youtube-connection-status', user?.id],
@@ -267,6 +284,32 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
       toast({
         title: 'Could not start YouTube connect',
         description: getYouTubeConnectionErrorMessage(error, 'Please try again.'),
+        variant: 'destructive',
+      });
+    },
+  });
+  const refreshStatsMutation = useMutation({
+    mutationFn: async (limit: number) => {
+      const sourceItemIds = candidates
+        .slice(0, Math.max(1, Math.min(50, Math.floor(Number(limit) || 10))))
+        .map((candidate) => candidate.sourceItemId)
+        .filter(Boolean);
+      if (sourceItemIds.length === 0) {
+        throw new Error('No outreach candidates available.');
+      }
+      return refreshOutreachCandidateStats({ sourceItemIds });
+    },
+    onSuccess: (result) => {
+      toast({
+        title: 'Comment stats refreshed',
+        description: `Fetched ${result.requested} videos using about ${result.quotaUnitsEstimated} YouTube quota unit${result.quotaUnitsEstimated === 1 ? '' : 's'}.`,
+      });
+      void candidatesQuery.refetch();
+    },
+    onError: (error) => {
+      toast({
+        title: 'Could not fetch comment stats',
+        description: error instanceof Error ? error.message : 'Please try again.',
         variant: 'destructive',
       });
     },
@@ -417,10 +460,46 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                 No generated YouTube blueprints with source videos were found for this account yet.
               </div>
             ) : (
-              <div className="divide-y divide-border/40">
-                {candidates.map((candidate) => {
+              <div>
+                <div className="border-b border-border/40 px-4 py-3">
+                  <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">Video stats</p>
+                      <p className="text-xs text-muted-foreground">
+                        Manually fetch views and total comments for the latest generated candidates.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                        value={statsFetchLimit}
+                        onChange={(event) => setStatsFetchLimit(Number(event.target.value))}
+                        disabled={refreshStatsMutation.isPending}
+                        aria-label="Number of latest candidates to fetch stats for"
+                      >
+                        <option value={10}>Latest 10</option>
+                        <option value={25}>Latest 25</option>
+                        <option value={50}>Latest 50</option>
+                      </select>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-8"
+                        disabled={refreshStatsMutation.isPending}
+                        onClick={() => refreshStatsMutation.mutate(statsFetchLimit)}
+                      >
+                        {refreshStatsMutation.isPending ? 'Fetching...' : 'Fetch stats'}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                <div className="divide-y divide-border/40">
+                  {candidates.map((candidate) => {
                 const statusView = getStatusView(candidate.status);
                 const createPending = draftMutation.isPending && draftMutation.variables?.id === candidate.id;
+                const viewCountLabel = formatCompactCount(candidate.viewCount);
+                const commentCountLabel = formatCompactCount(candidate.commentCount);
                 return (
                   <div key={candidate.id} className="px-4 py-3">
                     <div className="flex items-start justify-between gap-3">
@@ -431,6 +510,8 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                           <span>{candidate.sourceName}</span>
                           <span>{candidate.createdLabel}</span>
+                          {viewCountLabel ? <span>{viewCountLabel} views</span> : null}
+                          {commentCountLabel ? <span>{commentCountLabel} comments</span> : null}
                           <Badge variant={statusView.variant} className="h-5 px-2 text-[10px]">
                             {statusView.label}
                           </Badge>
@@ -473,7 +554,8 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                     </div>
                   </div>
                 );
-                })}
+                  })}
+                </div>
               </div>
             )}
           </div>

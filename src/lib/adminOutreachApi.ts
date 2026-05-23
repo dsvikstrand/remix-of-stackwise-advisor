@@ -64,6 +64,21 @@ export type OutreachPostResult = {
   };
 };
 
+export type OutreachCandidateStatsRefreshResult = {
+  requested: number;
+  refreshed: number;
+  skipped: number;
+  quotaUnitsEstimated: number;
+  items: Array<{
+    sourceItemId: string;
+    videoId: string | null;
+    viewCount: number | null;
+    commentCount: number | null;
+    status: 'refreshed' | 'skipped' | 'failed';
+    errorMessage: string | null;
+  }>;
+};
+
 function getApiBase() {
   if (!config.agenticBackendUrl) return null;
   return `${config.agenticBackendUrl.replace(/\/$/, '')}/api`;
@@ -121,6 +136,30 @@ export async function postOutreachDraft(input: {
   const json = (await response.json().catch(() => null)) as ApiEnvelope<OutreachPostResult> | null;
   if (!response.ok || !json?.ok || !json.data) {
     throw new Error(json?.message || `Outreach post request failed (${response.status})`);
+  }
+  return json.data;
+}
+
+export async function refreshOutreachCandidateStats(input: {
+  sourceItemIds: string[];
+}) {
+  const base = getApiBase();
+  if (!base) throw new Error('Backend API is not configured.');
+
+  const authHeader = await getRequiredAuthHeader();
+  const response = await fetch(`${base}/admin/outreach-drafts/candidate-stats/refresh`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeader,
+    },
+    body: JSON.stringify({
+      source_item_ids: input.sourceItemIds,
+    }),
+  });
+  const json = (await response.json().catch(() => null)) as ApiEnvelope<OutreachCandidateStatsRefreshResult> | null;
+  if (!response.ok || !json?.ok || !json.data) {
+    throw new Error(json?.message || `Outreach stats refresh failed (${response.status})`);
   }
   return json.data;
 }

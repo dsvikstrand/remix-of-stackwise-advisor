@@ -24,6 +24,18 @@ function parseSourceViewCount(metadata: Record<string, unknown> | null) {
   return null;
 }
 
+function parseSourceCommentCount(metadata: Record<string, unknown> | null) {
+  if (!metadata) return null;
+  const candidates = [metadata.comment_count, metadata.commentCount];
+  for (const candidate of candidates) {
+    const numeric = Number(candidate);
+    if (Number.isFinite(numeric) && numeric >= 0) {
+      return Math.floor(numeric);
+    }
+  }
+  return null;
+}
+
 function isTranscriptUnavailableForDisplayErrorCode(code: string | null | undefined) {
   const normalized = String(code || '').trim().toUpperCase();
   return normalized === 'NO_TRANSCRIPT_PERMANENT'
@@ -51,6 +63,7 @@ export interface MyFeedItemView {
     thumbnailUrl: string | null;
     channelBannerUrl: string | null;
     viewCount: number | null;
+    commentCount: number | null;
     unlockStatus: 'available' | 'reserved' | 'processing' | 'ready' | null;
     unlockCost: number | null;
     unlockInProgress: boolean;
@@ -322,6 +335,7 @@ export async function listMyFeedItemsFromDb(input: {
                 ? String((source.metadata as Record<string, unknown>).channel_banner_url || '') || null
                 : null,
             viewCount: parseSourceViewCount(sourceMetadata),
+            commentCount: parseSourceCommentCount(sourceMetadata),
             unlockStatus: (() => {
               const effectiveStatus = getEffectiveUnlockDisplayStatus({
                 status: (sourceUnlock as UnlockRowLike | null)?.status || null,

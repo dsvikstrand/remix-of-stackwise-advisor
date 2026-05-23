@@ -4873,6 +4873,62 @@ async function storeSourceItemViewCountOracleAware(
   return true;
 }
 
+function normalizeYouTubeStatsInteger(value: unknown) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= 0 ? Math.floor(numeric) : null;
+}
+
+async function storeSourceItemVideoStatsOracleAware(
+  db: ReturnType<typeof createClient>,
+  input: {
+    sourceItemId: string;
+    viewCount: number | null;
+    commentCount: number | null;
+  },
+) {
+  const sourceItemId = String(input.sourceItemId || '').trim();
+  if (!sourceItemId) return false;
+  if (input.viewCount == null && input.commentCount == null) return false;
+
+  const current = await getSourceItemByIdOracleFirst(db, {
+    sourceItemId,
+    action: 'store_source_item_video_stats_current',
+  });
+  if (!current) return false;
+
+  const currentMetadata = current.metadata && typeof current.metadata === 'object' && !Array.isArray(current.metadata)
+    ? current.metadata
+    : {};
+  const currentViewCount = normalizeYouTubeStatsInteger(currentMetadata.view_count);
+  const currentCommentCount = normalizeYouTubeStatsInteger(currentMetadata.comment_count);
+  if (currentViewCount === input.viewCount && currentCommentCount === input.commentCount) {
+    return false;
+  }
+
+  const fetchedAt = new Date().toISOString();
+  const nextRow = normalizeSourceItemRow({
+    ...current,
+    metadata: {
+      ...currentMetadata,
+      ...(input.viewCount == null ? {} : {
+        view_count: input.viewCount,
+        view_count_fetched_at: fetchedAt,
+      }),
+      ...(input.commentCount == null ? {} : {
+        comment_count: input.commentCount,
+        comment_count_fetched_at: fetchedAt,
+      }),
+    },
+    updated_at: fetchedAt,
+  }, current.created_at);
+
+  await persistSourceItemRowOracleAware(db, {
+    row: nextRow,
+    action: 'store_source_item_video_stats',
+  });
+  return true;
+}
+
 async function storeBlueprintYouTubeCommentsOracleAware(
   _db: ReturnType<typeof createClient>,
   input: {
@@ -9038,6 +9094,12 @@ registerTagRoutes(app, {
 
 registerAdminOutreachRoutes(app, {
   getCredits,
+  refreshCandidateStats: async ({ adminUserId, sourceItemIds }) => {
+    return refreshOutreachCandidateSourceStats({
+      adminUserId,
+      sourceItemIds,
+    });
+  },
   generateOutreachDrafts: async ({ adminUserId, blueprintId }) => {
     if (!oracleControlPlane) {
       throw new Error('Oracle control plane is not configured');
@@ -10764,6 +10826,168 @@ function parseOutreachSubscriberCount(metadata: Record<string, unknown> | null) 
     if (Number.isFinite(numeric) && numeric >= 0) return Math.floor(numeric);
   }
   return null;
+}
+
+function parseOutreachVideoIdFromSourceRow(source: SourceItemRow) {
+  const metadata = source.metadata && typeof source.metadata === 'object' && !Array.isArray(source.metadata)
+    ? source.metadata
+    : {};
+  return normalizeRouteString(source.source_native_id)
+    || normalizeRouteString(metadata.video_id)
+    || normalizeRouteString(metadata.youtube_video_id)
+    || normalizeRouteString(extractYouTubeVideoIdFromUrl(source.source_url || ''));
+}
+
+function parseYouTubeVideoStatsPayload(payload: unknown) {
+  const items = payload && typeof payload === 'object' && !Array.isArray(payload)
+    && Array.isArray((payload as { items?: unknown }).items)
+    ? (payload as { items: unknown[] }).items
+    : [];
+  const statsByVideoId = new Map<string, { viewCount: number | null; commentCount: number | null }>();
+  for (const item of items) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const record = item as Record<string, unknown>;
+    const videoId = normalizeRouteString(record.id);
+    const statistics = record.statistics && typeof record.statistics === 'object' && !Array.isArray(record.statistics)
+      ? record.statistics as Record<string, unknown>
+      : null;
+    if (!videoId || !statistics) continue;
+    statsByVideoId.set(videoId, {
+      viewCount: normalizeYouTubeStatsInteger(statistics.viewCount),
+      commentCount: normalizeYouTubeStatsInteger(statistics.commentCount),
+    });
+  }
+  return statsByVideoId;
+}
+
+async function refreshOutreachCandidateSourceStats(input: {
+  adminUserId: string;
+  sourceItemIds: string[];
+}) {
+  void input.adminUserId;
+  const db = getServiceSupabaseClient();
+  if (!db) {
+    throw new OutreachDraftError(500, 'CONFIG_ERROR', 'Service role client is not configured.');
+  }
+  if (!youtubeDataApiKey) {
+    throw new OutreachDraftError(500, 'YOUTUBE_API_KEY_MISSING', 'YouTube Data API key is not configured.');
+  }
+
+  const sourceItemIds = [...new Set(
+    (input.sourceItemIds || [])
+      .map((value) => String(value || '').trim())
+      .filter(Boolean),
+  )].slice(0, 50);
+  if (sourceItemIds.length === 0) {
+    throw new OutreachDraftError(400, 'INVALID_SOURCE_ITEM_IDS', 'Select at least one source item.');
+  }
+
+  const sourceRows = await listProductSourceItemsOracleFirst(db, {
+    ids: sourceItemIds,
+    action: 'outreach_candidate_stats_source_rows',
+  });
+  const sourceById = new Map(sourceRows.map((source) => [source.id, source]));
+  const itemRefs = sourceItemIds.map((sourceItemId) => {
+    const source = sourceById.get(sourceItemId) || null;
+    return {
+      sourceItemId,
+      source,
+      videoId: source ? parseOutreachVideoIdFromSourceRow(source) : null,
+    };
+  });
+  const videoIds = [...new Set(itemRefs.map((item) => item.videoId).filter(Boolean))] as string[];
+  const baseItems = itemRefs.map((item) => ({
+    sourceItemId: item.sourceItemId,
+    videoId: item.videoId,
+    viewCount: null as number | null,
+    commentCount: null as number | null,
+    status: item.source && item.videoId ? 'skipped' as const : 'failed' as const,
+    errorMessage: item.source
+      ? (item.videoId ? null : 'Could not resolve YouTube video id.')
+      : 'Source item was not found.',
+  }));
+
+  if (videoIds.length === 0) {
+    return {
+      requested: sourceItemIds.length,
+      refreshed: 0,
+      skipped: 0,
+      quotaUnitsEstimated: 0,
+      items: baseItems,
+    };
+  }
+
+  const statsByVideoId = new Map<string, { viewCount: number | null; commentCount: number | null }>();
+  for (let index = 0; index < videoIds.length; index += 50) {
+    const chunk = videoIds.slice(index, index + 50);
+    const url = new URL('https://www.googleapis.com/youtube/v3/videos');
+    url.searchParams.set('part', 'statistics');
+    url.searchParams.set('id', chunk.join(','));
+    url.searchParams.set('maxResults', String(chunk.length));
+    url.searchParams.set('key', youtubeDataApiKey);
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      const message = payload && typeof payload === 'object'
+        ? JSON.stringify(payload).slice(0, 500)
+        : `HTTP ${response.status}`;
+      throw new OutreachDraftError(502, 'YOUTUBE_STATS_FETCH_FAILED', `Could not fetch YouTube video stats: ${message}`);
+    }
+    for (const [videoId, stats] of parseYouTubeVideoStatsPayload(payload)) {
+      statsByVideoId.set(videoId, stats);
+    }
+  }
+
+  let refreshed = 0;
+  let skipped = 0;
+  const items = [];
+  for (const item of itemRefs) {
+    if (!item.source || !item.videoId) {
+      const failed = baseItems.find((base) => base.sourceItemId === item.sourceItemId)!;
+      items.push(failed);
+      continue;
+    }
+    const stats = statsByVideoId.get(item.videoId) || null;
+    if (!stats) {
+      items.push({
+        sourceItemId: item.sourceItemId,
+        videoId: item.videoId,
+        viewCount: null,
+        commentCount: null,
+        status: 'failed' as const,
+        errorMessage: 'YouTube did not return statistics for this video.',
+      });
+      continue;
+    }
+    const stored = await storeSourceItemVideoStatsOracleAware(db, {
+      sourceItemId: item.sourceItemId,
+      viewCount: stats.viewCount,
+      commentCount: stats.commentCount,
+    });
+    if (stored) refreshed += 1;
+    else skipped += 1;
+    items.push({
+      sourceItemId: item.sourceItemId,
+      videoId: item.videoId,
+      viewCount: stats.viewCount,
+      commentCount: stats.commentCount,
+      status: stored ? 'refreshed' as const : 'skipped' as const,
+      errorMessage: null,
+    });
+  }
+
+  return {
+    requested: sourceItemIds.length,
+    refreshed,
+    skipped,
+    quotaUnitsEstimated: Math.ceil(videoIds.length / 50),
+    items,
+  };
 }
 
 async function resolveOutreachDraftContext(input: {
