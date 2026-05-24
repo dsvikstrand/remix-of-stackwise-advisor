@@ -52,6 +52,7 @@ type OutreachCandidate = {
   createdLabel: string;
   viewCount: number | null;
   commentCount: number | null;
+  durationSeconds: number | null;
   status: 'ready';
 };
 
@@ -104,6 +105,18 @@ function formatCompactCount(value: number | null | undefined) {
   }).format(Number(value));
 }
 
+function formatVideoDuration(seconds: number | null | undefined) {
+  if (seconds == null || !Number.isFinite(Number(seconds))) return null;
+  const totalSeconds = Math.max(0, Math.floor(Number(seconds)));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const remainingSeconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
+  }
+  return `${minutes}:${String(remainingSeconds).padStart(2, '0')}`;
+}
+
 function toOutreachCandidate(item: MyFeedItemView): OutreachCandidate | null {
   const blueprintId = String(item.blueprint?.id || '').trim();
   const sourceItemId = String(item.source?.id || '').trim();
@@ -120,6 +133,7 @@ function toOutreachCandidate(item: MyFeedItemView): OutreachCandidate | null {
     createdLabel: formatRelativeDate(item.createdAt),
     viewCount: item.source?.viewCount ?? null,
     commentCount: item.source?.commentCount ?? null,
+    durationSeconds: item.source?.durationSeconds ?? null,
     status: 'ready',
   };
 }
@@ -466,7 +480,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                     <div className="space-y-1">
                       <p className="text-sm font-medium">Video stats</p>
                       <p className="text-xs text-muted-foreground">
-                        Manually fetch views and total comments for the latest generated candidates.
+                        Manually fetch views, total comments, and video length for the latest generated candidates.
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -489,7 +503,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                         disabled={refreshStatsMutation.isPending}
                         onClick={() => refreshStatsMutation.mutate(statsFetchLimit)}
                       >
-                        {refreshStatsMutation.isPending ? 'Fetching...' : 'Fetch stats'}
+                        {refreshStatsMutation.isPending ? 'Fetching...' : 'Fetch video stats'}
                       </Button>
                     </div>
                   </div>
@@ -500,6 +514,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                 const createPending = draftMutation.isPending && draftMutation.variables?.id === candidate.id;
                 const viewCountLabel = formatCompactCount(candidate.viewCount);
                 const commentCountLabel = formatCompactCount(candidate.commentCount);
+                const durationLabel = formatVideoDuration(candidate.durationSeconds);
                 return (
                   <div key={candidate.id} className="px-4 py-3">
                     <div className="flex items-start justify-between gap-3">
@@ -510,6 +525,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                           <span>{candidate.sourceName}</span>
                           <span>{candidate.createdLabel}</span>
+                          {durationLabel ? <span>{durationLabel}</span> : null}
                           {viewCountLabel ? <span>{viewCountLabel} views</span> : null}
                           {commentCountLabel ? <span>{commentCountLabel} comments</span> : null}
                           <Badge variant={statusView.variant} className="h-5 px-2 text-[10px]">

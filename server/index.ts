@@ -220,6 +220,7 @@ import {
 } from './services/webshareProxy';
 import {
   fetchYouTubeDurationMap,
+  parseYouTubeIsoDurationToSeconds,
   YouTubeDurationLookupError,
 } from './services/youtubeDuration';
 import {
@@ -4884,11 +4885,12 @@ async function storeSourceItemVideoStatsOracleAware(
     sourceItemId: string;
     viewCount: number | null;
     commentCount: number | null;
+    durationSeconds: number | null;
   },
 ) {
   const sourceItemId = String(input.sourceItemId || '').trim();
   if (!sourceItemId) return false;
-  if (input.viewCount == null && input.commentCount == null) return false;
+  if (input.viewCount == null && input.commentCount == null && input.durationSeconds == null) return false;
 
   const current = await getSourceItemByIdOracleFirst(db, {
     sourceItemId,
@@ -4901,7 +4903,12 @@ async function storeSourceItemVideoStatsOracleAware(
     : {};
   const currentViewCount = normalizeYouTubeStatsInteger(currentMetadata.view_count);
   const currentCommentCount = normalizeYouTubeStatsInteger(currentMetadata.comment_count);
-  if (currentViewCount === input.viewCount && currentCommentCount === input.commentCount) {
+  const currentDurationSeconds = toDurationSeconds(currentMetadata.duration_seconds);
+  if (
+    currentViewCount === input.viewCount
+    && currentCommentCount === input.commentCount
+    && currentDurationSeconds === input.durationSeconds
+  ) {
     return false;
   }
 
@@ -4917,6 +4924,10 @@ async function storeSourceItemVideoStatsOracleAware(
       ...(input.commentCount == null ? {} : {
         comment_count: input.commentCount,
         comment_count_fetched_at: fetchedAt,
+      }),
+      ...(input.durationSeconds == null ? {} : {
+        duration_seconds: input.durationSeconds,
+        duration_seconds_fetched_at: fetchedAt,
       }),
     },
     updated_at: fetchedAt,
@@ -10843,7 +10854,11 @@ function parseYouTubeVideoStatsPayload(payload: unknown) {
     && Array.isArray((payload as { items?: unknown }).items)
     ? (payload as { items: unknown[] }).items
     : [];
-  const statsByVideoId = new Map<string, { viewCount: number | null; commentCount: number | null }>();
+  const statsByVideoId = new Map<string, {
+    viewCount: number | null;
+    commentCount: number | null;
+    durationSeconds: number | null;
+  }>();
   for (const item of items) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
     const record = item as Record<string, unknown>;
@@ -10851,10 +10866,16 @@ function parseYouTubeVideoStatsPayload(payload: unknown) {
     const statistics = record.statistics && typeof record.statistics === 'object' && !Array.isArray(record.statistics)
       ? record.statistics as Record<string, unknown>
       : null;
-    if (!videoId || !statistics) continue;
+    const contentDetails = record.contentDetails && typeof record.contentDetails === 'object' && !Array.isArray(record.contentDetails)
+      ? record.contentDetails as Record<string, unknown>
+      : null;
+    if (!videoId || (!statistics && !contentDetails)) continue;
     statsByVideoId.set(videoId, {
-      viewCount: normalizeYouTubeStatsInteger(statistics.viewCount),
-      commentCount: normalizeYouTubeStatsInteger(statistics.commentCount),
+      viewCount: normalizeYouTubeStatsInteger(statistics?.viewCount),
+      commentCount: normalizeYouTubeStatsInteger(statistics?.commentCount),
+      durationSeconds: parseYouTubeIsoDurationToSeconds(
+        typeof contentDetails?.duration === 'string' ? contentDetails.duration : undefined,
+      ),
     });
   }
   return statsByVideoId;
@@ -10901,6 +10922,7 @@ async function refreshOutreachCandidateSourceStats(input: {
     videoId: item.videoId,
     viewCount: null as number | null,
     commentCount: null as number | null,
+    durationSeconds: null as number | null,
     status: item.source && item.videoId ? 'skipped' as const : 'failed' as const,
     errorMessage: item.source
       ? (item.videoId ? null : 'Could not resolve YouTube video id.')
@@ -10917,11 +10939,15 @@ async function refreshOutreachCandidateSourceStats(input: {
     };
   }
 
-  const statsByVideoId = new Map<string, { viewCount: number | null; commentCount: number | null }>();
+  const statsByVideoId = new Map<string, {
+    viewCount: number | null;
+    commentCount: number | null;
+    durationSeconds: number | null;
+  }>();
   for (let index = 0; index < videoIds.length; index += 50) {
     const chunk = videoIds.slice(index, index + 50);
     const url = new URL('https://www.googleapis.com/youtube/v3/videos');
-    url.searchParams.set('part', 'statistics');
+    url.searchParams.set('part', 'statistics,contentDetails');
     url.searchParams.set('id', chunk.join(','));
     url.searchParams.set('maxResults', String(chunk.length));
     url.searchParams.set('key', youtubeDataApiKey);
@@ -10959,6 +10985,7 @@ async function refreshOutreachCandidateSourceStats(input: {
         videoId: item.videoId,
         viewCount: null,
         commentCount: null,
+        durationSeconds: null,
         status: 'failed' as const,
         errorMessage: 'YouTube did not return statistics for this video.',
       });
@@ -10968,6 +10995,7 @@ async function refreshOutreachCandidateSourceStats(input: {
       sourceItemId: item.sourceItemId,
       viewCount: stats.viewCount,
       commentCount: stats.commentCount,
+      durationSeconds: stats.durationSeconds,
     });
     if (stored) refreshed += 1;
     else skipped += 1;
@@ -10976,6 +11004,7 @@ async function refreshOutreachCandidateSourceStats(input: {
       videoId: item.videoId,
       viewCount: stats.viewCount,
       commentCount: stats.commentCount,
+      durationSeconds: stats.durationSeconds,
       status: stored ? 'refreshed' as const : 'skipped' as const,
       errorMessage: null,
     });

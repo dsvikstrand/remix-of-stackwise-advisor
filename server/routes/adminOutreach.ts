@@ -13,6 +13,7 @@ type OutreachCandidateStatsRefreshResult = {
     videoId: string | null;
     viewCount: number | null;
     commentCount: number | null;
+    durationSeconds: number | null;
     status: 'refreshed' | 'skipped' | 'failed';
     errorMessage: string | null;
   }>;
