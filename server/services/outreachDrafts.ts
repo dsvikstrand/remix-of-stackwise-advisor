@@ -467,14 +467,18 @@ export async function generateOutreachDrafts(input: {
 
   const channelDraftGroups = new Set(
     recentRows
-      .filter((row) => Boolean(context.sourceChannelId) && row.source_channel_id === context.sourceChannelId)
+      .filter((row) => (
+        Boolean(context.sourceChannelId)
+        && row.source_channel_id === context.sourceChannelId
+        && isPostedOutreachRow(row)
+      ))
       .map((row) => row.draft_group_id),
   );
   if (channelDraftGroups.size >= OUTREACH_DRAFT_CHANNEL_WINDOW_CAP) {
     throw new OutreachDraftError(
       429,
       'CHANNEL_WINDOW_CAP_REACHED',
-      `This creator already has ${OUTREACH_DRAFT_CHANNEL_WINDOW_CAP} outreach drafts in the last ${OUTREACH_DRAFT_CHANNEL_WINDOW_DAYS} days.`,
+      `This creator already has ${OUTREACH_DRAFT_CHANNEL_WINDOW_CAP} posted outreach comments in the last ${OUTREACH_DRAFT_CHANNEL_WINDOW_DAYS} days.`,
     );
   }
 

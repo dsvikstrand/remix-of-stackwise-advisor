@@ -287,7 +287,7 @@ describe('outreach draft generation service', () => {
     } satisfies Partial<OutreachDraftError>);
   });
 
-  it('allows up to three draft groups per creator window before blocking', async () => {
+  it('allows generated-only draft groups for the same creator window', async () => {
     let seq = 0;
     const store = createStore({
       listRecentDrafts: vi.fn(async () => [
@@ -343,7 +343,7 @@ describe('outreach draft generation service', () => {
     expect(result.limits.channelWindowCap).toBe(3);
   });
 
-  it('blocks draft generation at three draft groups for the same creator window', async () => {
+  it('blocks draft generation at three posted comments for the same creator window', async () => {
     await expect(generateOutreachDrafts({
       adminUserId: 'admin_1',
       blueprintId: 'bp_1',
@@ -360,6 +360,9 @@ describe('outreach draft generation service', () => {
           youtube_video_id: `old_video_${index}`,
           source_channel_id: 'UC_test',
           final_text: `Older creator draft ${index}`,
+          status: 'posted',
+          youtube_comment_id: `comment_${index}`,
+          posted_at: `2026-05-1${index}T07:05:00.000Z`,
           created_at: '2026-05-16T07:00:00.000Z',
         }))),
       }),
@@ -369,6 +372,7 @@ describe('outreach draft generation service', () => {
     })).rejects.toMatchObject({
       errorCode: 'CHANNEL_WINDOW_CAP_REACHED',
       status: 429,
+      message: 'This creator already has 3 posted outreach comments in the last 7 days.',
     } satisfies Partial<OutreachDraftError>);
   });
 });
