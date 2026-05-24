@@ -250,6 +250,18 @@ function addDays(date: Date, days: number) {
   return next;
 }
 
+function isPostedOutreachRow(row: {
+  status?: string | null;
+  youtube_comment_id?: string | null;
+  posted_at?: string | null;
+}) {
+  const status = normalizeText(row.status).toLowerCase();
+  return status === 'posted'
+    || status === 'posted_unverified'
+    || Boolean(normalizeText(row.youtube_comment_id))
+    || Boolean(normalizeText(row.posted_at));
+}
+
 function normalizeSubscriberCount(value: unknown) {
   if (value === null || value === undefined || value === '') return null;
   const numeric = Number(value);
@@ -436,9 +448,11 @@ export async function generateOutreachDrafts(input: {
     throw new OutreachDraftError(429, 'DAILY_CAP_REACHED', `Outreach draft cap reached (${OUTREACH_DRAFT_DAILY_CAP}/day).`);
   }
 
-  const videoAlreadyDrafted = recentRows.some((row) => row.youtube_video_id === context.youtubeVideoId);
-  if (videoAlreadyDrafted) {
-    throw new OutreachDraftError(409, 'VIDEO_ALREADY_DRAFTED', 'This video already has an outreach draft.');
+  const videoAlreadyPosted = recentRows.some(
+    (row) => row.youtube_video_id === context.youtubeVideoId && isPostedOutreachRow(row),
+  );
+  if (videoAlreadyPosted) {
+    throw new OutreachDraftError(409, 'VIDEO_ALREADY_DRAFTED', 'This video already has a posted outreach comment.');
   }
 
   const channelDraftGroups = new Set(

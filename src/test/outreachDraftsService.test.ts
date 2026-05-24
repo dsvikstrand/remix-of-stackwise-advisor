@@ -155,7 +155,50 @@ describe('outreach draft generation service', () => {
     } satisfies Partial<OutreachDraftError>);
   });
 
-  it('blocks duplicate drafts for the same video', async () => {
+  it('allows regenerating drafts for the same video until one is posted', async () => {
+    let seq = 0;
+    const store = createStore({
+      listRecentDrafts: vi.fn(async () => [{
+        id: 'draft_1',
+        draft_group_id: 'group_1',
+        admin_user_id: 'admin_1',
+        blueprint_id: 'bp_old',
+        source_item_id: 'source_1',
+        youtube_video_id: 'abc123xyz89',
+        source_channel_id: 'UC_other',
+        final_text: 'Old draft',
+        status: 'drafted',
+        created_at: '2026-05-17T07:00:00.000Z',
+      }]),
+    });
+
+    const result = await generateOutreachDrafts({
+      adminUserId: 'admin_1',
+      blueprintId: 'bp_1',
+      now: new Date('2026-05-17T08:00:00.000Z'),
+      randomUUID: () => `id_${++seq}`,
+      resolveContext: async () => context,
+      stateStore: store,
+      llm: {
+        generateVideoOpeners: vi.fn(async () => ({
+          model: 'gpt-5.5-mini',
+          reasoningEffort: 'medium',
+          rawText: JSON.stringify({
+            openers: [
+              'The useful point was making learning more active instead of just rereading notes.',
+              'This makes review feel a lot less mysterious and a lot more repeatable 🙂',
+              'The practical part is turning recall into something small enough to repeat.\n\nThat is what makes the method easier to stick with.',
+            ],
+          }),
+          openers: [],
+        })),
+      },
+    });
+
+    expect(result.options).toHaveLength(3);
+  });
+
+  it('blocks duplicate drafts for the same video after one is posted', async () => {
     await expect(generateOutreachDrafts({
       adminUserId: 'admin_1',
       blueprintId: 'bp_1',
@@ -172,6 +215,9 @@ describe('outreach draft generation service', () => {
           youtube_video_id: 'abc123xyz89',
           source_channel_id: 'UC_test',
           final_text: 'Old draft',
+          status: 'posted',
+          youtube_comment_id: 'comment_1',
+          posted_at: '2026-05-17T07:05:00.000Z',
           created_at: '2026-05-17T07:00:00.000Z',
         }]),
       }),
