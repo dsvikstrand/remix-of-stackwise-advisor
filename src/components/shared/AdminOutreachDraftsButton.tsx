@@ -243,6 +243,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
   const [draftResult, setDraftResult] = useState<OutreachDraftGenerationResult | null>(null);
   const [draftDialogOpen, setDraftDialogOpen] = useState(false);
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
+  const [selectedDraftOptionId, setSelectedDraftOptionId] = useState<string | null>(null);
   const [selectedPromoId, setSelectedPromoId] = useState('none');
   const [statsFetchLimit, setStatsFetchLimit] = useState(10);
   const [postedDraftIds, setPostedDraftIds] = useState<Set<string>>(() => new Set());
@@ -276,6 +277,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
       setDraftEdits(Object.fromEntries(
         result.options.map((option) => [option.id, option.finalText]),
       ));
+      setSelectedDraftOptionId(result.options[0]?.id || null);
       setSelectedPromoId('none');
       setDraftDialogOpen(true);
     },
@@ -371,9 +373,13 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
   };
 
   const buildFinalDraftText = (optionId: string) => {
-    const commentText = draftEdits[optionId] || '';
+    const option = draftResult?.options.find((draftOption) => draftOption.id === optionId);
+    const commentText = draftEdits[optionId] ?? option?.finalText ?? '';
     return appendPromoText(commentText, getSelectedPromoText());
   };
+
+  const selectedDraftOption = draftResult?.options.find((option) => option.id === selectedDraftOptionId) || null;
+  const selectedDraftFinalText = selectedDraftOption ? buildFinalDraftText(selectedDraftOption.id) : '';
 
   const handleCopyDraft = async (optionId: string) => {
     const text = buildFinalDraftText(optionId);
@@ -387,9 +393,10 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
     });
   };
 
-  const handlePostDraft = (optionId: string) => {
+  const handlePostSelectedDraft = () => {
+    if (!selectedDraftOption) return;
     const promoText = getSelectedPromoText();
-    const finalText = appendPromoText(draftEdits[optionId] || '', promoText);
+    const finalText = selectedDraftFinalText;
     if (!finalText.trim()) return;
     const confirmed = window.confirm(
       promoText
@@ -397,7 +404,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
         : 'Post this edited outreach comment to YouTube now? This is a real public comment from the connected admin YouTube account.',
     );
     if (!confirmed) return;
-    postMutation.mutate({ optionId, finalText });
+    postMutation.mutate({ optionId: selectedDraftOption.id, finalText });
   };
 
   return (
@@ -599,16 +606,31 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                     : 'unavailable'}
                 </div>
               </div>
-              {draftResult.options.map((option) => (
-                <div key={option.id} className="space-y-2 rounded-lg border border-border/50 p-3">
+              {draftResult.options.map((option) => {
+                const selected = selectedDraftOptionId === option.id;
+                const posted = postedDraftIds.has(option.id);
+                return (
+                <div
+                  key={option.id}
+                  className={`space-y-2 rounded-lg border p-3 transition ${
+                    selected ? 'border-primary bg-primary/5' : 'border-border/50'
+                  }`}
+                >
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-sm font-medium">{option.roleLabel || `Comment suggestion ${option.optionIndex}`}</div>
-                    <Badge variant="outline" className="text-[10px]">
-                      Suggestion {option.optionIndex}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={selected ? 'default' : 'outline'} className="text-[10px]">
+                        {selected ? 'Selected' : `Suggestion ${option.optionIndex}`}
+                      </Badge>
+                      {posted ? (
+                        <Badge variant="secondary" className="text-[10px]">
+                          Posted
+                        </Badge>
+                      ) : null}
+                    </div>
                   </div>
                   <Textarea
-                    value={draftEdits[option.id] || option.finalText}
+                    value={draftEdits[option.id] ?? option.finalText}
                     rows={8}
                     onChange={(event) => {
                       setDraftEdits((current) => ({
@@ -635,21 +657,17 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                       <Button
                         type="button"
                         size="sm"
-                        className="gap-1.5"
-                        disabled={postMutation.isPending || postedDraftIds.has(option.id)}
-                        onClick={() => handlePostDraft(option.id)}
+                        variant={selected ? 'default' : 'outline'}
+                        disabled={posted}
+                        onClick={() => setSelectedDraftOptionId(option.id)}
                       >
-                        <Send className="h-3.5 w-3.5" />
-                        {postedDraftIds.has(option.id)
-                          ? 'Posted'
-                          : postMutation.isPending && postMutation.variables?.optionId === option.id
-                            ? 'Posting...'
-                            : 'Post to YouTube'}
+                        {selected ? 'Selected' : 'Select draft'}
                       </Button>
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
               <div className="space-y-2 rounded-lg border border-dashed border-border/70 bg-muted/20 p-3">
                 <div className="space-y-1">
                   <div className="text-sm font-medium">Optional promo add-on</div>
@@ -711,6 +729,45 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                     </div>
                   </div>
                 ) : null}
+                {selectedDraftOption ? (
+                  <div className="space-y-2 border-t border-border/50 pt-3">
+                    <div className="space-y-1">
+                      <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Final post preview
+                      </div>
+                      <div className="whitespace-pre-wrap rounded-md bg-background/70 p-2 text-xs text-foreground">
+                        {selectedDraftFinalText}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-xs text-muted-foreground">
+                        Posts the selected suggestion with the selected promo setting.
+                      </p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="gap-1.5"
+                        disabled={
+                          postMutation.isPending
+                          || !selectedDraftFinalText.trim()
+                          || postedDraftIds.has(selectedDraftOption.id)
+                        }
+                        onClick={handlePostSelectedDraft}
+                      >
+                        <Send className="h-3.5 w-3.5" />
+                        {postedDraftIds.has(selectedDraftOption.id)
+                          ? 'Posted'
+                          : postMutation.isPending && postMutation.variables?.optionId === selectedDraftOption.id
+                            ? 'Posting...'
+                            : 'Post selected draft'}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-md bg-background/70 p-2 text-xs text-muted-foreground">
+                    Select one comment suggestion before posting.
+                  </div>
+                )}
               </div>
             </div>
           ) : null}
