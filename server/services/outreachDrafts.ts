@@ -188,36 +188,24 @@ const MAX_FINAL_COMMENT_CHARS = 1200;
 
 export const OUTREACH_TAIL_VARIANTS = [
   {
-    id: 'organize-learning-content-v3',
-    text: 'YouTube has a lot of great learning content, but good videos are easy to lose track of. BLEUP helps organize the creators, topics, and takeaways you care about into a personal learning feed. Visit my channel to learn more.',
+    id: 'keep-up-short-v4',
+    text: 'P.S. Use YouTube to learn? I share ideas for keeping up.',
   },
   {
-    id: 'revisit-key-ideas-v3',
-    text: 'If you use YouTube to learn, BLEUP helps you keep track of useful videos, revisit key ideas, and find creators worth following. Visit my channel to see how it works.',
+    id: 'watch-later-short-v4',
+    text: 'P.S. Watch Later always growing? My profile may help.',
   },
   {
-    id: 'cleaner-learning-feed-v3',
-    text: 'BLEUP helps turn scattered YouTube learning into a cleaner personal feed, so useful videos and takeaways are easier to find again. Visit my channel for more info.',
+    id: 'revisit-takeaways-short-v4',
+    text: 'P.S. Learning from YouTube? I’m working on easier ways to revisit takeaways.',
   },
   {
-    id: 'original-video-links-v3',
-    text: 'So many useful YouTube videos get lost in the feed. BLEUP helps save the important ideas, organize them by creator/topic, and link back to the original videos. Visit my channel to learn more.',
+    id: 'profile-keep-up-short-v4',
+    text: 'P.S. Use YouTube for learning? More on keeping up in my profile.',
   },
   {
-    id: 'track-creators-topics-v3',
-    text: 'BLEUP is for people who learn from YouTube and want a better way to keep track of useful creators, topics, and video takeaways. Visit my channel to see how it works.',
-  },
-  {
-    id: 'revisit-good-ideas-v3',
-    text: 'If your YouTube feed is full of useful videos, BLEUP helps turn that into a personal learning feed where good ideas are easier to revisit. Visit my channel for more info.',
-  },
-  {
-    id: 'full-context-v3',
-    text: 'BLEUP helps viewers follow the creators and topics they care about, collect useful video takeaways, and come back to the original videos when they want the full context. Visit my channel to learn more.',
-  },
-  {
-    id: 'remember-source-v3',
-    text: 'YouTube is great for learning, but it is easy to forget where the best ideas came from. BLEUP helps organize useful videos and takeaways into a personal learning feed. Visit my channel for more info.',
+    id: 'miss-good-videos-short-v4',
+    text: 'P.S. Missing good videos in your feed? I’m sharing ways to make that easier.',
   },
 ] as const;
 
