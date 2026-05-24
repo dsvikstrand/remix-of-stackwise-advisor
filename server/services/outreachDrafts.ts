@@ -184,6 +184,7 @@ export const OUTREACH_DRAFT_CHANNEL_WINDOW_CAP = 3;
 export const OUTREACH_DRAFT_OPTION_COUNT = 3;
 
 const MAX_OPENER_CHARS = 420;
+const MAX_SHORT_OPENER_CHARS = 140;
 const MAX_FINAL_COMMENT_CHARS = 1200;
 
 export const OUTREACH_TAIL_VARIANTS = [
@@ -237,7 +238,9 @@ function normalizeText(value: unknown) {
 function normalizeCommentText(value: unknown) {
   return String(value || '')
     .replace(/\r\n/g, '\n')
+    .replace(/[—–]/g, ',')
     .replace(/[ \t]+/g, ' ')
+    .replace(/ ?, ?/g, ', ')
     .replace(/\n[ \t]+/g, '\n')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{4,}/g, '\n\n\n')
@@ -347,10 +350,17 @@ function validateFinalDraft(input: {
   opener: string;
   finalText: string;
   recentFinalTexts: string[];
+  roleId: string;
 }) {
   const issues: string[] = [];
   if (input.opener.length < 20) issues.push('opener_too_short');
   if (input.opener.length > MAX_OPENER_CHARS) issues.push('opener_too_long');
+  if (
+    (input.roleId === 'short_insight' || input.roleId === 'light_funny')
+    && input.opener.length > MAX_SHORT_OPENER_CHARS
+  ) {
+    issues.push('opener_too_long_for_role');
+  }
   if (input.finalText.length > MAX_FINAL_COMMENT_CHARS) issues.push('final_too_long');
   if (/https?:\/\//i.test(input.finalText)) issues.push('direct_link_not_allowed');
   const tooSimilar = input.recentFinalTexts.some((recent) => similarityScore(input.finalText, recent) >= 0.82);
@@ -491,6 +501,7 @@ export async function generateOutreachDrafts(input: {
       opener: openerText,
       finalText,
       recentFinalTexts,
+      roleId: role.id,
     });
     if (!validation.ok) {
       throw new OutreachDraftError(422, 'DRAFT_VALIDATION_FAILED', `Generated draft failed validation: ${validation.issues.join(', ')}`);

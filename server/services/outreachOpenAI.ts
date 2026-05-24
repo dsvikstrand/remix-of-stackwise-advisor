@@ -27,8 +27,8 @@ function buildPrompt(input: {
   const context = input.context;
   return [
     `Create exactly ${input.count} distinct YouTube comment opener options in this order:`,
-    '1. Short insight: one sentence, useful and specific.',
-    '2. Light/funny: one sentence, warm and lightly funny, with at most one emoji. Humor must be positive and creator-aligned.',
+    '1. Short insight: one sentence, useful and specific, ideally under 110 characters.',
+    '2. Light/funny: one sentence, warm and lightly funny, ideally under 120 characters, with at most one emoji. Humor must be positive and creator-aligned.',
     '3. Thoughtful: 2-3 short lines, more insightful and reflective.',
     '',
     'Rules:',
@@ -39,7 +39,8 @@ function buildPrompt(input: {
     '- Do not include a URL.',
     '- Do not mention BLEUP or any app.',
     '- Do not ask for likes/subscribes.',
-    '- Keep each opener under 420 characters.',
+    '- Keep option 1 and option 2 compact. They should read like one quick YouTube comment line.',
+    '- Keep option 3 under 420 characters.',
     '- For option 3, use newline breaks between the 2-3 short lines inside the JSON string.',
     '',
     'Video/blueprint context:',

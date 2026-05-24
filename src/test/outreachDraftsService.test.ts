@@ -103,6 +103,63 @@ describe('outreach draft generation service', () => {
     });
   });
 
+  it('normalizes dash punctuation in generated drafts', async () => {
+    let seq = 0;
+    const result = await generateOutreachDrafts({
+      adminUserId: 'admin_1',
+      blueprintId: 'bp_1',
+      now: new Date('2026-05-17T08:00:00.000Z'),
+      randomUUID: () => `id_${++seq}`,
+      resolveContext: async () => context,
+      stateStore: createStore(),
+      llm: {
+        generateVideoOpeners: vi.fn(async () => ({
+          model: 'gpt-5.5-mini',
+          reasoningEffort: 'medium',
+          rawText: JSON.stringify({
+            openers: [
+              'The cottage cheese point is practical — slower protein makes bedtime easier.',
+              'Greek yogurt for cultures, cottage cheese for staying full — simple enough 🙂',
+              'The useful distinction is choosing the snack based on what you need.\n\nCottage cheese helps with fullness, while Greek yogurt brings the live cultures.',
+            ],
+          }),
+          openers: [],
+        })),
+      },
+    });
+
+    expect(result.options[0].finalText).toBe('The cottage cheese point is practical, slower protein makes bedtime easier.');
+    expect(result.options[1].finalText).toBe('Greek yogurt for cultures, cottage cheese for staying full, simple enough 🙂');
+  });
+
+  it('rejects overlong short opener roles', async () => {
+    await expect(generateOutreachDrafts({
+      adminUserId: 'admin_1',
+      blueprintId: 'bp_1',
+      now: new Date('2026-05-17T08:00:00.000Z'),
+      randomUUID: () => 'id_1',
+      resolveContext: async () => context,
+      stateStore: createStore(),
+      llm: {
+        generateVideoOpeners: vi.fn(async () => ({
+          model: 'gpt-5.5-mini',
+          reasoningEffort: 'medium',
+          rawText: JSON.stringify({
+            openers: [
+              'The cottage cheese versus Greek yogurt distinction makes the bedtime snack choice really practical because it explains fullness, live cultures, gut support, and how each one fits a different goal.',
+              'Greek yogurt for cultures, cottage cheese for staying full, simple enough 🙂',
+              'The useful distinction is choosing the snack based on what you need.\n\nCottage cheese helps with fullness, while Greek yogurt brings the live cultures.',
+            ],
+          }),
+          openers: [],
+        })),
+      },
+    })).rejects.toMatchObject({
+      errorCode: 'DRAFT_VALIDATION_FAILED',
+      status: 422,
+    } satisfies Partial<OutreachDraftError>);
+  });
+
   it('still blocks direct links in edited outreach comments', () => {
     expect(validateOutreachPostText(
       'The useful part was clear. Visit https://bleup.app for more info.',
