@@ -162,22 +162,18 @@ function appendPromoText(commentText: string, promoText: string) {
 function getPromoVariantLabel(promo: OutreachPromoVariant, index: number) {
   const fallback = `Promo ${index + 1}`;
   switch (promo.id) {
-    case 'organize-learning-content-v3':
-      return 'Organize learning';
-    case 'revisit-key-ideas-v3':
-      return 'Revisit ideas';
-    case 'cleaner-learning-feed-v3':
-      return 'Cleaner feed';
-    case 'original-video-links-v3':
-      return 'Original videos';
-    case 'track-creators-topics-v3':
-      return 'Creators/topics';
-    case 'revisit-good-ideas-v3':
-      return 'Good ideas';
-    case 'full-context-v3':
-      return 'Full context';
-    case 'remember-source-v3':
-      return 'Remember source';
+    case 'keep-up-short-v4':
+      return 'Keep up';
+    case 'watch-later-short-v4':
+      return 'Watch Later';
+    case 'revisit-takeaways-short-v4':
+      return 'Useful takeaways';
+    case 'profile-keep-up-short-v4':
+      return 'Stay up to date';
+    case 'miss-good-videos-short-v4':
+      return 'Good videos';
+    case 'simple-youtube-learning-short-v4':
+      return 'Simple way';
     default:
       return fallback;
   }

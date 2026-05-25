@@ -8,7 +8,7 @@ const OUTREACH_SYSTEM_PROMPT = [
   'Be specific to the video. Avoid generic praise. Avoid hype. Avoid medical/financial claims beyond the video context.',
   'Always sound friendly, useful, and encouraging toward the creator.',
   'Never use sarcasm, dunking, mockery, gotcha framing, or jokes that imply the creator/video is obvious, silly, wrong, or being corrected.',
-  'Create three intentionally different comment styles in the exact requested order.',
+  'Create three distinct neutral short insight comments in the exact requested order.',
   'Return strict JSON: {"openers":["...", "...", "..."]}.',
 ].join('\n');
 
@@ -27,21 +27,20 @@ function buildPrompt(input: {
   const context = input.context;
   return [
     `Create exactly ${input.count} distinct YouTube comment opener options in this order:`,
-    '1. Short insight: one sentence, useful and specific, ideally under 110 characters.',
-    '2. Light/funny: one sentence, warm and lightly funny, ideally under 120 characters, with at most one emoji. Humor must be positive and creator-aligned.',
-    '3. Thoughtful: 2-3 short lines, more insightful and reflective.',
+    '1. Short insight: one sentence, neutral, useful, and specific, ideally under 110 characters.',
+    '2. Short insight: one sentence, neutral, useful, and specific, ideally under 110 characters.',
+    '3. Short insight: one sentence, neutral, useful, and specific, ideally under 110 characters.',
     '',
     'Rules:',
     '- Mention one concrete distinction, idea, example, or takeaway from the video.',
     '- Sound like a supportive real viewer who learned something, not an ad.',
     '- Be friendly and encouraging to the creator.',
     '- Do not sound sarcastic, dismissive, superior, or like you are correcting the creator.',
+    '- Do not use jokes, emojis, hype, or overly clever phrasing.',
     '- Do not include a URL.',
     '- Do not mention BLEUP or any app.',
     '- Do not ask for likes/subscribes.',
-    '- Keep option 1 and option 2 compact. They should read like one quick YouTube comment line.',
-    '- Keep option 3 under 420 characters.',
-    '- For option 3, use newline breaks between the 2-3 short lines inside the JSON string.',
+    '- Keep all three options compact. Each should read like one quick YouTube comment line.',
     '',
     'Video/blueprint context:',
     JSON.stringify({

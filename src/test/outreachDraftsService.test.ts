@@ -54,8 +54,8 @@ describe('outreach draft generation service', () => {
           rawText: JSON.stringify({
             openers: [
               'The useful part for me was the distinction between retrieval practice and just rereading notes.',
-              'Finally, a video that makes review loops sound less like homework and more like a cheat code 🙂',
-              'The takeaway that stood out was making recall active instead of waiting until you feel ready.\n\nThat makes learning feel more like a repeatable system than a motivation problem.',
+              'The active recall point makes the review process much easier to understand.',
+              'The short-session framing makes the learning habit feel more repeatable.',
             ],
           }),
           openers: [],
@@ -66,17 +66,18 @@ describe('outreach draft generation service', () => {
     expect(result.options).toHaveLength(3);
     expect(result.options.map((option) => option.roleLabel)).toEqual([
       'Short insight',
-      'Light/funny',
-      'Thoughtful',
+      'Short insight',
+      'Short insight',
     ]);
     expect(result.promoVariants.length).toBeGreaterThanOrEqual(3);
     expect(result.sourceChannelSubscriberCount).toBeNull();
     expect(result.options[0].finalText).toBe('The useful part for me was the distinction between retrieval practice and just rereading notes.');
-    expect(result.options[1].finalText).toContain('🙂');
-    expect(result.options[2].finalText).toContain('\n\n');
+    expect(result.options[1].finalText).toBe('The active recall point makes the review process much easier to understand.');
+    expect(result.options[2].finalText).toBe('The short-session framing makes the learning habit feel more repeatable.');
     expect(result.options[0].finalText).not.toContain('BLEUP');
     expect(result.promoVariants[0].text).toContain('P.S.');
     expect(result.promoVariants[0].text).toContain('YouTube');
+    expect(result.promoVariants).toHaveLength(6);
     expect(result.promoVariants.some((promo) => promo.text.includes('profile'))).toBe(true);
     expect(result.promoVariants.every((promo) => !promo.text.includes('BLEUP'))).toBe(true);
     expect(result.promoVariants.every((promo) => !promo.text.includes('\n'))).toBe(true);
@@ -120,7 +121,7 @@ describe('outreach draft generation service', () => {
             openers: [
               'The cottage cheese point is practical — slower protein makes bedtime easier.',
               'Greek yogurt for cultures, cottage cheese for staying full — simple enough 🙂',
-              'The useful distinction is choosing the snack based on what you need.\n\nCottage cheese helps with fullness, while Greek yogurt brings the live cultures.',
+              'The snack choice is clearer when fullness and live cultures are separated.',
             ],
           }),
           openers: [],
@@ -130,6 +131,7 @@ describe('outreach draft generation service', () => {
 
     expect(result.options[0].finalText).toBe('The cottage cheese point is practical, slower protein makes bedtime easier.');
     expect(result.options[1].finalText).toBe('Greek yogurt for cultures, cottage cheese for staying full, simple enough 🙂');
+    expect(result.options[2].finalText).toBe('The snack choice is clearer when fullness and live cultures are separated.');
   });
 
   it('rejects overlong short opener roles', async () => {
@@ -148,7 +150,7 @@ describe('outreach draft generation service', () => {
             openers: [
               'The cottage cheese versus Greek yogurt distinction makes the bedtime snack choice really practical because it explains fullness, live cultures, gut support, and how each one fits a different goal.',
               'Greek yogurt for cultures, cottage cheese for staying full, simple enough 🙂',
-              'The useful distinction is choosing the snack based on what you need.\n\nCottage cheese helps with fullness, while Greek yogurt brings the live cultures.',
+              'The snack choice is clearer when fullness and live cultures are separated.',
             ],
           }),
           openers: [],
@@ -243,8 +245,8 @@ describe('outreach draft generation service', () => {
           rawText: JSON.stringify({
             openers: [
               'The useful point was making learning more active instead of just rereading notes.',
-              'This makes review feel a lot less mysterious and a lot more repeatable 🙂',
-              'The practical part is turning recall into something small enough to repeat.\n\nThat is what makes the method easier to stick with.',
+              'The review loop is clearer when recall comes before rereading.',
+              'The small-session point makes the routine easier to repeat.',
             ],
           }),
           openers: [],
@@ -330,8 +332,8 @@ describe('outreach draft generation service', () => {
           rawText: JSON.stringify({
             openers: [
               'The clearest point was that useful learning needs active recall, not just passive review.',
-              'This made spaced repetition feel less mysterious and more like a simple habit loop 🙂',
-              'The most practical takeaway is to make recall small enough that you can repeat it often.\n\nThat is the part that makes the system sustainable.',
+              'The spacing idea is easier to use when it is framed as a habit loop.',
+              'Small recall sessions make the system easier to repeat consistently.',
             ],
           }),
           openers: [],

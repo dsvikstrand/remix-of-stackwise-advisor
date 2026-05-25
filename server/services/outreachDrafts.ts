@@ -190,23 +190,27 @@ const MAX_FINAL_COMMENT_CHARS = 1200;
 export const OUTREACH_TAIL_VARIANTS = [
   {
     id: 'keep-up-short-v4',
-    text: 'P.S. Use YouTube to learn? I share ideas for keeping up.',
+    text: 'P.S. Use YouTube to learn? I share ideas for keeping up with it all.',
   },
   {
     id: 'watch-later-short-v4',
-    text: 'P.S. Watch Later always growing? My profile may help.',
+    text: 'P.S. Watch Later always growing? My profile can help you keep up.',
   },
   {
     id: 'revisit-takeaways-short-v4',
-    text: 'P.S. Learning from YouTube? I’m working on easier ways to revisit takeaways.',
+    text: 'P.S. Learning from YouTube? My profile can help you keep track of useful takeaways.',
   },
   {
     id: 'profile-keep-up-short-v4',
-    text: 'P.S. Use YouTube for learning? More on keeping up in my profile.',
+    text: 'P.S. Use YouTube for learning? I share ideas for staying up to date.',
   },
   {
     id: 'miss-good-videos-short-v4',
-    text: 'P.S. Missing good videos in your feed? I’m sharing ways to make that easier.',
+    text: 'P.S. Too many good videos in your feed? I can help you keep up with it all.',
+  },
+  {
+    id: 'simple-youtube-learning-short-v4',
+    text: 'P.S. Need a simple way to keep up with YouTube learning? There’s more in my profile.',
   },
 ] as const;
 
@@ -216,16 +220,16 @@ const OpenersSchema = z.object({
 
 export const OUTREACH_COMMENT_ROLES = [
   {
-    id: 'short_insight',
+    id: 'short_insight_1',
     label: 'Short insight',
   },
   {
-    id: 'light_funny',
-    label: 'Light/funny',
+    id: 'short_insight_2',
+    label: 'Short insight',
   },
   {
-    id: 'thoughtful',
-    label: 'Thoughtful',
+    id: 'short_insight_3',
+    label: 'Short insight',
   },
 ] as const;
 
@@ -355,10 +359,7 @@ function validateFinalDraft(input: {
   const issues: string[] = [];
   if (input.opener.length < 20) issues.push('opener_too_short');
   if (input.opener.length > MAX_OPENER_CHARS) issues.push('opener_too_long');
-  if (
-    (input.roleId === 'short_insight' || input.roleId === 'light_funny')
-    && input.opener.length > MAX_SHORT_OPENER_CHARS
-  ) {
+  if (input.roleId.startsWith('short_insight') && input.opener.length > MAX_SHORT_OPENER_CHARS) {
     issues.push('opener_too_long_for_role');
   }
   if (input.finalText.length > MAX_FINAL_COMMENT_CHARS) issues.push('final_too_long');
