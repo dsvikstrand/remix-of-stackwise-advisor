@@ -18,8 +18,9 @@ import {
   useBlueprintYoutubeComments,
 } from '@/hooks/useBlueprintYoutubeComments';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Heart, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Download, Heart, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAiCredits } from '@/hooks/useAiCredits';
 import { logMvpEvent } from '@/lib/logEvent';
 import { PageDivider, PageMain, PageRoot, PageSection } from '@/components/layout/Page';
 import { getCatalogChannelTagSlugs } from '@/lib/channelPostContext';
@@ -234,6 +235,84 @@ function splitEmbeddedGoldenSections(step: RenderStep): RenderStep[] {
   return sections;
 }
 
+function cleanExportText(value: unknown) {
+  return decodeHtmlEntities(String(value || ''))
+    .replace(/\r\n/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function buildDownloadFileName(title: string) {
+  const slug = decodeHtmlEntities(title || 'blueprint')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80)
+    || 'blueprint';
+  return `${slug}.txt`;
+}
+
+function appendPlainTextSection(lines: string[], step: RenderStep) {
+  const displayTitle = sectionDisplayTitle(step.title);
+  const parsedDescription = parseDescriptionBlocks(step.description);
+  const items = step.items.map(formatStepItem).filter(Boolean);
+  if (!parsedDescription.text && parsedDescription.bullets.length === 0 && items.length === 0) return;
+
+  lines.push(displayTitle);
+  lines.push('');
+  if (parsedDescription.text) {
+    lines.push(parsedDescription.text);
+    lines.push('');
+  }
+  [...parsedDescription.bullets, ...items].forEach((item) => {
+    lines.push(`- ${item}`);
+  });
+  lines.push('');
+}
+
+function buildBlueprintPlainText(input: {
+  title: string;
+  sourceTitle: string | null;
+  sourceUrl: string | null;
+  createdAt: string | null;
+  tags: string[];
+  sections: RenderStep[];
+  previewSummary: string | null;
+  llmReview: string | null;
+  mixNotes: string | null;
+}) {
+  const lines: string[] = [];
+  const title = cleanExportText(input.title) || 'Blueprint';
+  lines.push(title);
+  lines.push('');
+  if (input.sourceTitle) lines.push(`Source: ${cleanExportText(input.sourceTitle)}`);
+  if (input.sourceUrl) lines.push(`Source URL: ${cleanExportText(input.sourceUrl)}`);
+  if (input.createdAt) lines.push(`Created: ${new Date(input.createdAt).toISOString()}`);
+  if (input.tags.length > 0) lines.push(`Tags: ${input.tags.map(cleanExportText).filter(Boolean).join(', ')}`);
+  if (lines.length > 2) lines.push('');
+
+  input.sections.forEach((step) => appendPlainTextSection(lines, step));
+
+  if (input.sections.length === 0) {
+    const fallbackSections = [
+      { title: 'Summary', text: input.previewSummary },
+      { title: 'Review', text: input.llmReview },
+      { title: 'Notes', text: input.mixNotes },
+    ];
+    fallbackSections.forEach((section) => {
+      const text = cleanExportText(section.text);
+      if (!text) return;
+      lines.push(section.title);
+      lines.push('');
+      lines.push(text);
+      lines.push('');
+    });
+  }
+
+  return `${lines.join('\n').replace(/\n{3,}/g, '\n\n').trim()}\n`;
+}
+
 export default function BlueprintDetail() {
   const navigate = useNavigate();
   const { blueprintId } = useParams();
@@ -247,6 +326,7 @@ export default function BlueprintDetail() {
   const toggleLike = useToggleBlueprintLike();
   const { toast } = useToast();
   const { user } = useAuth();
+  const creditsQuery = useAiCredits({ enabled: Boolean(user?.id) });
   const canRefreshYouTubeComments = Boolean(user?.id && blueprint?.creator_user_id === user.id);
   const [comment, setComment] = useState('');
   const youtubeCommentsRefresh = useBlueprintYoutubeRefreshMutation(canRefreshYouTubeComments ? blueprintId : undefined);
@@ -501,6 +581,39 @@ export default function BlueprintDetail() {
         };
       return rank(a) - rank(b);
     });
+  const exportSections = useMemo(
+    () => goldenSections
+      .flatMap((step) => splitEmbeddedGoldenSections(step))
+      .filter((step) => {
+        const parsedDescription = parseDescriptionBlocks(step.description);
+        return Boolean(parsedDescription.text || parsedDescription.bullets.length > 0 || step.items.length > 0);
+      }),
+    [goldenSections],
+  );
+  const isAdmin = String(creditsQuery.data?.plan || '').toLowerCase() === 'admin';
+  const handleDownloadPlainText = () => {
+    if (!blueprint || !isAdmin) return;
+    const text = buildBlueprintPlainText({
+      title: blueprint.title,
+      sourceTitle: sourceChannel?.title || null,
+      sourceUrl: sourceChannel?.url || null,
+      createdAt: blueprint.created_at,
+      tags: displayTags.map((tag) => tag.slug),
+      sections: exportSections,
+      previewSummary: blueprint.preview_summary || null,
+      llmReview: blueprint.llm_review || null,
+      mixNotes: blueprint.mix_notes || null,
+    });
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = buildDownloadFileName(blueprint.title);
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
   const renderGoldenGroup = (group: RenderStep[]) => {
     if (group.length === 0) return null;
     return (
@@ -864,6 +977,19 @@ export default function BlueprintDetail() {
                       title={youtubeCommentsRefresh.isPending ? 'Refreshing YouTube data' : 'Refresh YouTube data'}
                     >
                       <RefreshCw className={`h-4 w-4 ${youtubeCommentsRefresh.isPending ? 'animate-spin' : ''}`} />
+                    </Button>
+                  ) : null}
+                  {isAdmin ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground"
+                      onClick={handleDownloadPlainText}
+                      aria-label="Download blueprint as text"
+                      title="Download blueprint as text"
+                    >
+                      <Download className="h-4 w-4" />
                     </Button>
                   ) : null}
                   <Button
