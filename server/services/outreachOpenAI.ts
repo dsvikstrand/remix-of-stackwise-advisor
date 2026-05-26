@@ -8,6 +8,7 @@ const OUTREACH_SYSTEM_PROMPT = [
   'Be specific to the video. Avoid generic praise. Avoid hype. Avoid medical/financial claims beyond the video context.',
   'Always sound friendly, useful, and encouraging toward the creator.',
   'Never use sarcasm, dunking, mockery, gotcha framing, or jokes that imply the creator/video is obvious, silly, wrong, or being corrected.',
+  'Prefer simple, easy-win observations over deep analysis. The comment should feel useful at a glance.',
   'Create three distinct neutral short insight comments in the exact requested order.',
   'Return strict JSON: {"openers":["...", "...", "..."]}.',
 ].join('\n');
@@ -33,6 +34,8 @@ function buildPrompt(input: {
     '',
     'Rules:',
     '- Mention one concrete distinction, idea, example, or takeaway from the video.',
+    '- Focus on a simple practical win, easy takeaway, or clear framing from the video.',
+    '- Do not go deep, over-explain, or sound analytical. Avoid multi-part breakdowns.',
     '- Sound like a supportive real viewer who learned something, not an ad.',
     '- Be friendly and encouraging to the creator.',
     '- Do not sound sarcastic, dismissive, superior, or like you are correcting the creator.',
