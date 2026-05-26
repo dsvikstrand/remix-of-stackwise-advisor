@@ -10881,6 +10881,56 @@ function parseYouTubeVideoStatsPayload(payload: unknown) {
   return statsByVideoId;
 }
 
+function isPostedOutreachHistoryRow(row: {
+  status?: string | null;
+  youtube_comment_id?: string | null;
+  posted_at?: string | null;
+}) {
+  const status = normalizeRouteString(row.status).toLowerCase();
+  return status === 'posted'
+    || status === 'posted_unverified'
+    || Boolean(normalizeRouteString(row.youtube_comment_id))
+    || Boolean(normalizeRouteString(row.posted_at));
+}
+
+async function countPostedOutreachCommentsByChannelLast10Days(input: {
+  adminUserId: string;
+  sourceChannelIds: string[];
+}) {
+  const sourceChannelIds = [...new Set(
+    input.sourceChannelIds.map((value) => normalizeRouteString(value)).filter(Boolean),
+  )];
+  if (!oracleControlPlane || sourceChannelIds.length === 0) return new Map<string, number>();
+
+  const since = new Date();
+  since.setUTCDate(since.getUTCDate() - 10);
+  const recentRows = await createOracleOutreachDraftStateStore({
+    controlDb: oracleControlPlane,
+  }).listRecentDrafts({
+    adminUserId: input.adminUserId,
+    sinceIso: since.toISOString(),
+    limit: 1000,
+  });
+
+  const relevantChannelIds = new Set(sourceChannelIds);
+  const postedDraftGroupsByChannel = new Map<string, Set<string>>();
+  for (const row of recentRows) {
+    const sourceChannelId = normalizeRouteString(row.source_channel_id);
+    if (!sourceChannelId || !relevantChannelIds.has(sourceChannelId)) continue;
+    if (!isPostedOutreachHistoryRow(row)) continue;
+    const draftGroups = postedDraftGroupsByChannel.get(sourceChannelId) || new Set<string>();
+    draftGroups.add(normalizeRouteString(row.draft_group_id) || row.id);
+    postedDraftGroupsByChannel.set(sourceChannelId, draftGroups);
+  }
+
+  return new Map(
+    [...postedDraftGroupsByChannel].map(([sourceChannelId, draftGroups]) => [
+      sourceChannelId,
+      draftGroups.size,
+    ]),
+  );
+}
+
 async function refreshOutreachCandidateSourceStats(input: {
   adminUserId: string;
   sourceItemIds: string[];
@@ -10913,15 +10963,24 @@ async function refreshOutreachCandidateSourceStats(input: {
     return {
       sourceItemId,
       source,
+      sourceChannelId: normalizeRouteString(source?.source_channel_id) || null,
       videoId: source ? parseOutreachVideoIdFromSourceRow(source) : null,
     };
   });
   const videoIds = [...new Set(itemRefs.map((item) => item.videoId).filter(Boolean))] as string[];
+  const postedCountsByChannel = await countPostedOutreachCommentsByChannelLast10Days({
+    adminUserId: input.adminUserId,
+    sourceChannelIds: itemRefs.map((item) => item.sourceChannelId).filter(Boolean) as string[],
+  });
   const baseItems = itemRefs.map((item) => ({
     sourceItemId: item.sourceItemId,
+    sourceChannelId: item.sourceChannelId,
     videoId: item.videoId,
     viewCount: null as number | null,
     commentCount: null as number | null,
+    postedCommentsLast10Days: item.sourceChannelId
+      ? postedCountsByChannel.get(item.sourceChannelId) ?? 0
+      : null,
     durationSeconds: null as number | null,
     status: item.source && item.videoId ? 'skipped' as const : 'failed' as const,
     errorMessage: item.source
@@ -10982,9 +11041,13 @@ async function refreshOutreachCandidateSourceStats(input: {
     if (!stats) {
       items.push({
         sourceItemId: item.sourceItemId,
+        sourceChannelId: item.sourceChannelId,
         videoId: item.videoId,
         viewCount: null,
         commentCount: null,
+        postedCommentsLast10Days: item.sourceChannelId
+          ? postedCountsByChannel.get(item.sourceChannelId) ?? 0
+          : null,
         durationSeconds: null,
         status: 'failed' as const,
         errorMessage: 'YouTube did not return statistics for this video.',
@@ -11001,9 +11064,13 @@ async function refreshOutreachCandidateSourceStats(input: {
     else skipped += 1;
     items.push({
       sourceItemId: item.sourceItemId,
+      sourceChannelId: item.sourceChannelId,
       videoId: item.videoId,
       viewCount: stats.viewCount,
       commentCount: stats.commentCount,
+      postedCommentsLast10Days: item.sourceChannelId
+        ? postedCountsByChannel.get(item.sourceChannelId) ?? 0
+        : null,
       durationSeconds: stats.durationSeconds,
       status: stored ? 'refreshed' as const : 'skipped' as const,
       errorMessage: null,

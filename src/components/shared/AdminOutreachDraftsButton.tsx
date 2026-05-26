@@ -32,6 +32,7 @@ import {
   generateOutreachDrafts,
   postOutreachDraft,
   refreshOutreachCandidateStats,
+  type OutreachCandidateStatsRefreshResult,
   type OutreachDraftGenerationResult,
   type OutreachPromoVariant,
 } from '@/lib/adminOutreachApi';
@@ -52,9 +53,12 @@ type OutreachCandidate = {
   createdLabel: string;
   viewCount: number | null;
   commentCount: number | null;
+  postedCommentsLast10Days: number | null;
   durationSeconds: number | null;
-  status: 'ready';
+  status: 'ready' | 'posted';
 };
+
+type CandidateStatsItem = OutreachCandidateStatsRefreshResult['items'][number];
 
 type AdminOutreachDraftsSheetProps = {
   open: boolean;
@@ -65,6 +69,8 @@ function getStatusView(status: OutreachCandidate['status']) {
   switch (status) {
     case 'ready':
       return { label: 'Ready', variant: 'default' as const };
+    case 'posted':
+      return { label: 'Posted', variant: 'secondary' as const };
     default:
       return { label: 'New', variant: 'outline' as const };
   }
@@ -133,6 +139,7 @@ function toOutreachCandidate(item: MyFeedItemView): OutreachCandidate | null {
     createdLabel: formatRelativeDate(item.createdAt),
     viewCount: item.source?.viewCount ?? null,
     commentCount: item.source?.commentCount ?? null,
+    postedCommentsLast10Days: null,
     durationSeconds: item.source?.durationSeconds ?? null,
     status: 'ready',
   };
@@ -243,6 +250,8 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
   const [selectedPromoId, setSelectedPromoId] = useState('none');
   const [statsFetchLimit, setStatsFetchLimit] = useState(10);
   const [postedDraftIds, setPostedDraftIds] = useState<Set<string>>(() => new Set());
+  const [postedBlueprintIds, setPostedBlueprintIds] = useState<Set<string>>(() => new Set());
+  const [candidateStatsBySourceItemId, setCandidateStatsBySourceItemId] = useState<Record<string, CandidateStatsItem>>({});
   const youtubeConnectionQuery = useQuery({
     queryKey: ['admin-outreach-youtube-connection-status', user?.id],
     queryFn: getYouTubeConnectionStatus,
@@ -261,8 +270,19 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
   });
 
   const candidates = useMemo(
-    () => candidatesQuery.data || [],
-    [candidatesQuery.data],
+    () => (candidatesQuery.data || []).map((candidate) => {
+      const stats = candidateStatsBySourceItemId[candidate.sourceItemId];
+      const posted = postedBlueprintIds.has(candidate.blueprintId);
+      return {
+        ...candidate,
+        viewCount: stats?.viewCount ?? candidate.viewCount,
+        commentCount: stats?.commentCount ?? candidate.commentCount,
+        postedCommentsLast10Days: stats?.postedCommentsLast10Days ?? candidate.postedCommentsLast10Days,
+        durationSeconds: stats?.durationSeconds ?? candidate.durationSeconds,
+        status: posted ? 'posted' as const : candidate.status,
+      };
+    }),
+    [candidateStatsBySourceItemId, candidatesQuery.data, postedBlueprintIds],
   );
   const draftMutation = useMutation({
     mutationFn: async (candidate: OutreachCandidate) => {
@@ -312,6 +332,13 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
       return refreshOutreachCandidateStats({ sourceItemIds });
     },
     onSuccess: (result) => {
+      setCandidateStatsBySourceItemId((current) => {
+        const next = { ...current };
+        for (const item of result.items) {
+          next[item.sourceItemId] = item;
+        }
+        return next;
+      });
       toast({
         title: 'Comment stats refreshed',
         description: `Fetched ${result.requested} videos using about ${result.quotaUnitsEstimated} YouTube quota unit${result.quotaUnitsEstimated === 1 ? '' : 's'}.`,
@@ -335,6 +362,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
     },
     onSuccess: (result) => {
       setPostedDraftIds((current) => new Set(current).add(result.draftId));
+      setPostedBlueprintIds((current) => new Set(current).add(result.blueprintId));
       const visible = result.status === 'posted' && result.verification?.visible !== false;
       toast({
         title: visible ? 'Comment posted' : 'Comment submitted, visibility not confirmed',
@@ -517,6 +545,9 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                 const createPending = draftMutation.isPending && draftMutation.variables?.id === candidate.id;
                 const viewCountLabel = formatCompactCount(candidate.viewCount);
                 const commentCountLabel = formatCompactCount(candidate.commentCount);
+                const postedCommentsLabel = typeof candidate.postedCommentsLast10Days === 'number'
+                  ? candidate.postedCommentsLast10Days.toLocaleString()
+                  : null;
                 const durationLabel = formatVideoDuration(candidate.durationSeconds);
                 return (
                   <div key={candidate.id} className="px-4 py-3">
@@ -531,6 +562,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                           {durationLabel ? <span>{durationLabel}</span> : null}
                           {viewCountLabel ? <span>{viewCountLabel} views</span> : null}
                           {commentCountLabel ? <span>{commentCountLabel} comments</span> : null}
+                          {postedCommentsLabel ? <span>{postedCommentsLabel} posted / 10d</span> : null}
                           <Badge variant={statusView.variant} className="h-5 px-2 text-[10px]">
                             {statusView.label}
                           </Badge>
@@ -543,11 +575,11 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                         type="button"
                         size="sm"
                         className="h-8 gap-1.5"
-                        disabled={createPending}
+                        disabled={createPending || candidate.status === 'posted'}
                         onClick={() => handleCreateDraft(candidate)}
                       >
                         <MessageSquareText className="h-3.5 w-3.5" />
-                        {createPending ? 'Creating...' : 'Create draft'}
+                        {candidate.status === 'posted' ? 'Posted' : createPending ? 'Creating...' : 'Create draft'}
                       </Button>
                       <Button
                         type="button"

@@ -71,9 +71,11 @@ export type OutreachCandidateStatsRefreshResult = {
   quotaUnitsEstimated: number;
   items: Array<{
     sourceItemId: string;
+    sourceChannelId: string | null;
     videoId: string | null;
     viewCount: number | null;
     commentCount: number | null;
+    postedCommentsLast10Days: number | null;
     durationSeconds: number | null;
     status: 'refreshed' | 'skipped' | 'failed';
     errorMessage: string | null;
