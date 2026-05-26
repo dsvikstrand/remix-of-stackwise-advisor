@@ -54,6 +54,14 @@ function normalizeProviderErrorStatus(status: number) {
   return { code: 'YT_TOKEN_EXCHANGE_FAILED', status: 502 };
 }
 
+function isRevokedOrExpiredRefreshTokenError(error: unknown, description: unknown) {
+  const text = `${String(error || '')} ${String(description || '')}`.toLowerCase();
+  return text.includes('invalid_grant')
+    || text.includes('expired or revoked')
+    || text.includes('token has been expired')
+    || text.includes('token has been revoked');
+}
+
 export function isYouTubeOAuthConfigured(config: YouTubeOAuthConfig) {
   return Boolean(
     String(config.clientId || '').trim()
@@ -97,6 +105,13 @@ async function tokenRequest(
   } | null;
 
   if (!response.ok || !json?.access_token) {
+    if (isRevokedOrExpiredRefreshTokenError(json?.error, json?.error_description)) {
+      throw new YouTubeOAuthError(
+        'YT_REAUTH_REQUIRED',
+        'YouTube authorization expired or was revoked. Reconnect YouTube before posting.',
+        401,
+      );
+    }
     const normalized = normalizeProviderErrorStatus(response.status);
     throw new YouTubeOAuthError(
       normalized.code,

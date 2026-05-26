@@ -11836,7 +11836,22 @@ async function getUsableYouTubeAccessToken(input: {
     throw new YouTubeOAuthError('YT_REAUTH_REQUIRED', 'YouTube authorization expired. Reconnect required.', 401);
   }
 
-  const refreshed = await refreshYouTubeAccessToken(youtubeOAuthConfig, refreshToken);
+  let refreshed: Awaited<ReturnType<typeof refreshYouTubeAccessToken>>;
+  try {
+    refreshed = await refreshYouTubeAccessToken(youtubeOAuthConfig, refreshToken);
+  } catch (error) {
+    if (error instanceof YouTubeOAuthError && error.code === 'YT_REAUTH_REQUIRED') {
+      await db
+        .from('user_youtube_connections')
+        .update({
+          token_expires_at: new Date(0).toISOString(),
+          last_error: `${error.code}: ${error.message}`.slice(0, 500),
+        })
+        .eq('id', connection.id)
+        .then(() => undefined, () => undefined);
+    }
+    throw error;
+  }
   const nextAccessTokenEncrypted = encryptToken(refreshed.accessToken, tokenEncryptionKey);
   const nextRefreshToken = refreshed.refreshToken || refreshToken;
   const nextRefreshTokenEncrypted = encryptToken(nextRefreshToken, tokenEncryptionKey);

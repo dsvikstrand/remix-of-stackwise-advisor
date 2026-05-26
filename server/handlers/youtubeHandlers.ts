@@ -1593,7 +1593,7 @@ app.get('/api/youtube/connection/status', async (_req, res) => {
 
   const { data, error } = await db
     .from('user_youtube_connections')
-    .select('id, user_id, youtube_channel_title, youtube_channel_url, youtube_channel_avatar_url, refresh_token_encrypted, token_expires_at, last_import_at, is_active')
+    .select('id, user_id, youtube_channel_title, youtube_channel_url, youtube_channel_avatar_url, refresh_token_encrypted, token_expires_at, last_import_at, last_error, is_active')
     .eq('user_id', userId)
     .maybeSingle();
   if (error) return res.status(400).json({ ok: false, error_code: 'READ_FAILED', message: error.message, data: null });
@@ -1616,7 +1616,11 @@ app.get('/api/youtube/connection/status', async (_req, res) => {
 
   const expiresAtMs = data.token_expires_at ? Date.parse(data.token_expires_at) : null;
   const hasRefreshToken = Boolean(String(data.refresh_token_encrypted || '').trim());
-  const needsReauth = Boolean(expiresAtMs && expiresAtMs <= Date.now() + 60_000 && !hasRefreshToken);
+  const lastError = String(data.last_error || '').trim();
+  const needsReauth = Boolean(
+    (expiresAtMs && expiresAtMs <= Date.now() + 60_000 && !hasRefreshToken)
+    || lastError.includes('YT_REAUTH_REQUIRED')
+  );
 
   return res.json({
     ok: true,

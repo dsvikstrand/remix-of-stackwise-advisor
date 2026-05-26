@@ -375,6 +375,9 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
       void candidatesQuery.refetch();
     },
     onError: (error) => {
+      if (error instanceof ApiRequestError && error.errorCode === 'YT_REAUTH_REQUIRED') {
+        void youtubeConnectionQuery.refetch();
+      }
       toast({
         title: 'Could not post outreach comment',
         description: error instanceof Error ? error.message : 'Please try again.',
@@ -404,6 +407,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
 
   const selectedDraftOption = draftResult?.options.find((option) => option.id === selectedDraftOptionId) || null;
   const selectedDraftFinalText = selectedDraftOption ? buildFinalDraftText(selectedDraftOption.id) : '';
+  const youtubeNeedsReconnect = Boolean(youtubeConnectionQuery.data?.needs_reauth);
 
   const handleCopyDraft = async (optionId: string) => {
     const text = buildFinalDraftText(optionId);
@@ -449,7 +453,11 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                   <div className="min-w-0 space-y-1">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium">YouTube posting account</p>
-                      {youtubeConnectionQuery.data?.connected ? (
+                      {youtubeNeedsReconnect ? (
+                        <Badge variant="destructive" className="h-5 px-2 text-[10px]">
+                          Reconnect required
+                        </Badge>
+                      ) : youtubeConnectionQuery.data?.connected ? (
                         <Badge variant="default" className="h-5 px-2 text-[10px]">
                           Connected
                         </Badge>
@@ -465,7 +473,9 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                         : youtubeConnectionQuery.isError
                           ? getYouTubeConnectionErrorMessage(youtubeConnectionQuery.error, 'Could not load connection status.')
                           : youtubeConnectionQuery.data?.connected
-                            ? `Posting will use ${youtubeConnectionQuery.data.channel_title || 'the connected YouTube account'}. Reconnect if YouTube asks for comment permission.`
+                            ? youtubeNeedsReconnect
+                              ? 'YouTube authorization expired or was revoked. Reconnect the posting account before posting comments.'
+                              : `Posting will use ${youtubeConnectionQuery.data.channel_title || 'the connected YouTube account'}. Reconnect if YouTube asks for comment permission.`
                             : 'Connect the admin YouTube account before posting outreach comments.'}
                     </p>
                   </div>
@@ -474,7 +484,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                   <Button
                     type="button"
                     size="sm"
-                    variant={youtubeConnectionQuery.data?.connected ? 'outline' : 'default'}
+                    variant={youtubeConnectionQuery.data?.connected && !youtubeNeedsReconnect ? 'outline' : 'default'}
                     className="h-8 gap-1.5"
                     disabled={startYouTubeConnectMutation.isPending}
                     onClick={() => startYouTubeConnectMutation.mutate()}
@@ -482,7 +492,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                     <ExternalLink className="h-3.5 w-3.5" />
                     {startYouTubeConnectMutation.isPending
                       ? 'Opening Google...'
-                      : youtubeConnectionQuery.data?.connected
+                      : youtubeConnectionQuery.data?.connected || youtubeNeedsReconnect
                         ? 'Reconnect posting account'
                         : 'Connect posting account'}
                   </Button>
@@ -779,12 +789,15 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                           postMutation.isPending
                           || !selectedDraftFinalText.trim()
                           || postedDraftIds.has(selectedDraftOption.id)
+                          || youtubeNeedsReconnect
                         }
                         onClick={handlePostSelectedDraft}
                       >
                         <Send className="h-3.5 w-3.5" />
                         {postedDraftIds.has(selectedDraftOption.id)
                           ? 'Posted'
+                          : youtubeNeedsReconnect
+                            ? 'Reconnect required'
                           : postMutation.isPending && postMutation.variables?.optionId === selectedDraftOption.id
                             ? 'Posting...'
                             : 'Post selected draft'}
