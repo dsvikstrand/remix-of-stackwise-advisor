@@ -23,6 +23,12 @@ export type YouTubeOAuthAccountProfile = {
   youtubeChannelAvatarUrl: string | null;
 };
 
+export type YouTubeOAuthUserInfo = {
+  email: string | null;
+  emailVerified: boolean | null;
+  googleSub: string | null;
+};
+
 export class YouTubeOAuthError extends Error {
   code: string;
   status: number;
@@ -225,6 +231,45 @@ export async function fetchYouTubeOAuthAccountProfile(accessToken: string): Prom
     youtubeChannelTitle: channelTitle,
     youtubeChannelUrl: channelId ? `https://www.youtube.com/channel/${channelId}` : null,
     youtubeChannelAvatarUrl: channelAvatarUrl,
+  };
+}
+
+export async function fetchYouTubeOAuthUserInfo(accessToken: string): Promise<YouTubeOAuthUserInfo> {
+  const token = String(accessToken || '').trim();
+  if (!token) {
+    throw new YouTubeOAuthError('YT_REAUTH_REQUIRED', 'Missing access token.', 401);
+  }
+
+  const response = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/json',
+      'User-Agent': 'bleuv1-youtube-oauth/1.0 (+https://api.bleup.app)',
+    },
+  });
+  const json = await response.json().catch(() => null) as {
+    sub?: unknown;
+    email?: unknown;
+    email_verified?: unknown;
+    error?: { message?: unknown };
+  } | null;
+
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new YouTubeOAuthError('YT_REAUTH_REQUIRED', 'YouTube authorization expired. Reconnect required.', 401);
+    }
+    const normalized = normalizeProviderErrorStatus(response.status);
+    throw new YouTubeOAuthError(
+      normalized.code,
+      String(json?.error?.message || '').trim() || 'Could not fetch connected Google account.',
+      normalized.status,
+    );
+  }
+
+  return {
+    email: String(json?.email || '').trim().toLowerCase() || null,
+    emailVerified: typeof json?.email_verified === 'boolean' ? json.email_verified : null,
+    googleSub: String(json?.sub || '').trim() || null,
   };
 }
 

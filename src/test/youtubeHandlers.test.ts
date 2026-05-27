@@ -18,6 +18,11 @@ function createMockResponse() {
       this.body = payload;
       return this;
     },
+    redirect(location: string) {
+      this.statusCode = 302;
+      this.body = { redirect: location };
+      return this;
+    },
   };
   return response;
 }
@@ -154,6 +159,8 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     appendReturnToQuery: (url: string) => url,
     exchangeYouTubeOAuthCode: vi.fn(async () => ({})),
     fetchYouTubeOAuthAccountProfile: vi.fn(async () => ({})),
+    fetchYouTubeOAuthUserInfo: vi.fn(async () => ({ email: 'hi@bleup.app', emailVerified: true, googleSub: 'google_sub_1' })),
+    youtubePostingAllowedEmails: ['hi@bleup.app'],
     encryptToken: (value: string) => value,
     mapYouTubeOAuthError: () => null,
     getUsableYouTubeAccessToken: vi.fn(async () => null),
@@ -195,6 +202,124 @@ function enqueueIntoMockDb(db: any, values: any) {
 }
 
 describe('youtube handlers', () => {
+  it('rejects YouTube connection callbacks from non-allowed posting emails', async () => {
+    const serviceDb = createMockSupabase({
+      youtube_oauth_states: [{
+        id: 'state_1',
+        user_id: '00000000-0000-0000-0000-000000000001',
+        state_hash: 'hash',
+        return_to: 'https://bleup.app/subscriptions',
+        expires_at: new Date(Date.now() + 60_000).toISOString(),
+        consumed_at: null,
+      }],
+      user_youtube_connections: [],
+    });
+    const exchangeYouTubeOAuthCode = vi.fn(async () => ({
+      accessToken: 'access_token',
+      refreshToken: 'refresh_token',
+      expiresIn: 3600,
+      scope: 'https://www.googleapis.com/auth/youtube.force-ssl',
+      googleSub: 'google_sub_1',
+    }));
+    const fetchYouTubeOAuthUserInfo = vi.fn(async () => ({
+      email: 'wrong@example.com',
+      emailVerified: true,
+      googleSub: 'google_sub_1',
+    }));
+    const fetchYouTubeOAuthAccountProfile = vi.fn(async () => ({
+      youtubeChannelId: 'UC_bleup',
+      youtubeChannelTitle: 'Bleup',
+      youtubeChannelUrl: 'https://www.youtube.com/channel/UC_bleup',
+      youtubeChannelAvatarUrl: null,
+      googleSub: null,
+    }));
+    const app = createMockApp();
+    registerYouTubeRouteHandlers(app as any, createDeps({
+      ensureYouTubeOAuthConfig: () => ({ ok: true }),
+      getServiceSupabaseClient: () => serviceDb,
+      youtubeOAuthConfig: {},
+      appendReturnToQuery: (url: string, params: Record<string, string>) => `${url}?yt_connect=${params.yt_connect}&yt_code=${params.yt_code}`,
+      exchangeYouTubeOAuthCode,
+      fetchYouTubeOAuthUserInfo,
+      fetchYouTubeOAuthAccountProfile,
+      youtubePostingAllowedEmails: ['hi@bleup.app'],
+    }));
+
+    const handler = app.handlers['GET /api/youtube/connection/callback'];
+    const req = { query: { state: 'state', code: 'code' } } as any;
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(302);
+    expect(res.body).toEqual({
+      redirect: 'https://bleup.app/subscriptions?yt_connect=error&yt_code=YT_POSTING_EMAIL_NOT_ALLOWED',
+    });
+    expect(fetchYouTubeOAuthAccountProfile).not.toHaveBeenCalled();
+    expect(serviceDb.state.user_youtube_connections).toMatchObject([{
+      user_id: '00000000-0000-0000-0000-000000000001',
+      is_active: false,
+    }]);
+  });
+
+  it('accepts YouTube connection callbacks from allowed posting emails', async () => {
+    const serviceDb = createMockSupabase({
+      youtube_oauth_states: [{
+        id: 'state_1',
+        user_id: '00000000-0000-0000-0000-000000000001',
+        state_hash: 'hash',
+        return_to: 'https://bleup.app/subscriptions',
+        expires_at: new Date(Date.now() + 60_000).toISOString(),
+        consumed_at: null,
+      }],
+      user_youtube_connections: [],
+    });
+    const app = createMockApp();
+    registerYouTubeRouteHandlers(app as any, createDeps({
+      ensureYouTubeOAuthConfig: () => ({ ok: true }),
+      getServiceSupabaseClient: () => serviceDb,
+      youtubeOAuthConfig: {},
+      appendReturnToQuery: (url: string, params: Record<string, string>) => `${url}?yt_connect=${params.yt_connect}`,
+      exchangeYouTubeOAuthCode: vi.fn(async () => ({
+        accessToken: 'access_token',
+        refreshToken: 'refresh_token',
+        expiresIn: 3600,
+        scope: 'https://www.googleapis.com/auth/youtube.force-ssl',
+        googleSub: 'google_sub_1',
+      })),
+      fetchYouTubeOAuthUserInfo: vi.fn(async () => ({
+        email: 'hi@bleup.app',
+        emailVerified: true,
+        googleSub: 'google_sub_1',
+      })),
+      fetchYouTubeOAuthAccountProfile: vi.fn(async () => ({
+        youtubeChannelId: 'UC_bleup',
+        youtubeChannelTitle: 'Bleup',
+        youtubeChannelUrl: 'https://www.youtube.com/channel/UC_bleup',
+        youtubeChannelAvatarUrl: null,
+        googleSub: null,
+      })),
+      youtubePostingAllowedEmails: ['hi@bleup.app'],
+    }));
+
+    const handler = app.handlers['GET /api/youtube/connection/callback'];
+    const req = { query: { state: 'state', code: 'code' } } as any;
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(302);
+    expect(res.body).toEqual({ redirect: 'https://bleup.app/subscriptions?yt_connect=success' });
+    expect(serviceDb.state.user_youtube_connections).toMatchObject([{
+      user_id: '00000000-0000-0000-0000-000000000001',
+      google_sub: 'google_sub_1',
+      youtube_channel_id: 'UC_bleup',
+      youtube_channel_title: 'Bleup',
+      is_active: true,
+      last_error: null,
+    }]);
+  });
+
   it('treats /api/youtube-search as single-video lookup and clears pagination', async () => {
     const app = createMockApp();
     const searchYouTubeVideos = vi.fn(async () => ({

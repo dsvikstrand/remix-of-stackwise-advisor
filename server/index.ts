@@ -239,6 +239,7 @@ import {
   buildYouTubeOAuthUrl,
   exchangeYouTubeOAuthCode,
   fetchYouTubeOAuthAccountProfile,
+  fetchYouTubeOAuthUserInfo,
   isYouTubeOAuthConfigured,
   refreshYouTubeAccessToken,
   revokeYouTubeToken,
@@ -1264,6 +1265,10 @@ const youtubeOAuthRedirectUri = String(process.env.YOUTUBE_OAUTH_REDIRECT_URI ||
 const youtubeOAuthScopes = String(process.env.YOUTUBE_OAUTH_SCOPES || 'https://www.googleapis.com/auth/youtube.readonly')
   .split(/[,\s]+/)
   .map((scope) => scope.trim())
+  .filter(Boolean);
+const youtubePostingAllowedEmails = String(process.env.YOUTUBE_POSTING_ALLOWED_EMAILS || 'hi@bleup.app')
+  .split(/[,\s]+/)
+  .map((email) => email.trim().toLowerCase())
   .filter(Boolean);
 const tokenEncryptionKey = String(process.env.TOKEN_ENCRYPTION_KEY || '').trim();
 const youtubeImportMaxChannels = clampInt(process.env.YOUTUBE_IMPORT_MAX_CHANNELS, 2000, 50, 10_000);
@@ -9946,6 +9951,8 @@ registerYouTubeRoutes(app, {
   appendReturnToQuery,
   exchangeYouTubeOAuthCode,
   fetchYouTubeOAuthAccountProfile,
+  fetchYouTubeOAuthUserInfo,
+  youtubePostingAllowedEmails,
   encryptToken,
   mapYouTubeOAuthError,
   getUsableYouTubeAccessToken,

@@ -107,6 +107,8 @@ export function registerYouTubeRouteHandlers(app: express.Express, deps: YouTube
     appendReturnToQuery,
     exchangeYouTubeOAuthCode,
     fetchYouTubeOAuthAccountProfile,
+    fetchYouTubeOAuthUserInfo,
+    youtubePostingAllowedEmails,
     encryptToken,
     mapYouTubeOAuthError,
     getUsableYouTubeAccessToken,
@@ -1766,6 +1768,18 @@ app.get('/api/youtube/connection/callback', async (req, res) => {
 
   try {
     const tokenSet = await exchangeYouTubeOAuthCode(youtubeOAuthConfig, code);
+    const userInfo = await fetchYouTubeOAuthUserInfo(tokenSet.accessToken);
+    const connectedEmail = String(userInfo.email || '').trim().toLowerCase();
+    const allowedEmails = new Set(
+      (youtubePostingAllowedEmails || [])
+        .map((email: string) => String(email || '').trim().toLowerCase())
+        .filter(Boolean),
+    );
+    if (allowedEmails.size > 0 && (!connectedEmail || !allowedEmails.has(connectedEmail))) {
+      throw new Error(
+        `YT_POSTING_EMAIL_NOT_ALLOWED: Use ${Array.from(allowedEmails).join(', ')} to connect the YouTube posting account.`,
+      );
+    }
     const profile = await fetchYouTubeOAuthAccountProfile(tokenSet.accessToken);
     const accessTokenEncrypted = encryptToken(tokenSet.accessToken, tokenEncryptionKey);
     const refreshTokenEncrypted = tokenSet.refreshToken
@@ -1777,7 +1791,7 @@ app.get('/api/youtube/connection/callback', async (req, res) => {
       .from('user_youtube_connections')
       .upsert({
         user_id: oauthState.user_id,
-        google_sub: tokenSet.googleSub || profile.googleSub || null,
+        google_sub: tokenSet.googleSub || userInfo.googleSub || profile.googleSub || null,
         youtube_channel_id: profile.youtubeChannelId,
         youtube_channel_title: profile.youtubeChannelTitle,
         youtube_channel_url: profile.youtubeChannelUrl,
@@ -1795,7 +1809,14 @@ app.get('/api/youtube/connection/callback', async (req, res) => {
 
     return redirectWith({ yt_connect: 'success' });
   } catch (error) {
-    const mapped = mapYouTubeOAuthError(error);
+    const rawMessage = error instanceof Error ? error.message : '';
+    const mapped = rawMessage.startsWith('YT_POSTING_EMAIL_NOT_ALLOWED:')
+      ? {
+          status: 403,
+          error_code: 'YT_POSTING_EMAIL_NOT_ALLOWED',
+          message: rawMessage.replace(/^YT_POSTING_EMAIL_NOT_ALLOWED:\s*/, '') || 'This Google account is not allowed for YouTube posting.',
+        }
+      : mapYouTubeOAuthError(error);
     await db
       .from('user_youtube_connections')
       .upsert({

@@ -140,6 +140,8 @@ export type YouTubeRouteDeps = {
   appendReturnToQuery: any;
   exchangeYouTubeOAuthCode: any;
   fetchYouTubeOAuthAccountProfile: any;
+  fetchYouTubeOAuthUserInfo: any;
+  youtubePostingAllowedEmails: string[];
   encryptToken: any;
   mapYouTubeOAuthError: any;
   getUsableYouTubeAccessToken: any;
