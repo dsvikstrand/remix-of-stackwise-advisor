@@ -58,6 +58,7 @@ export type OutreachDraftLLM = {
   generateVideoOpeners: (input: {
     context: OutreachDraftContext;
     count: number;
+    requiredPrefixes?: string[];
   }) => Promise<{
     model: string;
     reasoningEffort: string;
@@ -186,6 +187,15 @@ export const OUTREACH_DRAFT_OPTION_COUNT = 3;
 const MAX_OPENER_CHARS = 420;
 const MAX_SHORT_OPENER_CHARS = 140;
 const MAX_FINAL_COMMENT_CHARS = 1200;
+
+export const OUTREACH_CREATOR_PRAISE_PREFIXES = [
+  'Great video',
+  'Really helpful breakdown',
+  'Good stuff as usual',
+  'This was useful',
+  'Clear explanation',
+  'I liked how you framed',
+] as const;
 
 export const OUTREACH_TAIL_VARIANTS = [
   {
@@ -336,18 +346,51 @@ function compactBlueprintContext(context: OutreachDraftContext) {
   };
 }
 
+function stableHash(value: string) {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = ((hash << 5) - hash) + value.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
 function selectTailVariant(input: {
   blueprintId: string;
   optionIndex: number;
 }) {
   const seed = `${input.blueprintId}:${input.optionIndex}`;
-  let hash = 0;
-  for (let i = 0; i < seed.length; i += 1) {
-    hash = ((hash << 5) - hash) + seed.charCodeAt(i);
-    hash |= 0;
-  }
-  const index = Math.abs(hash) % OUTREACH_TAIL_VARIANTS.length;
+  const index = stableHash(seed) % OUTREACH_TAIL_VARIANTS.length;
   return OUTREACH_TAIL_VARIANTS[index];
+}
+
+function selectCreatorPraisePrefixes(input: {
+  blueprintId: string;
+  count: number;
+}) {
+  const seed = `${OUTREACH_DRAFT_PROMPT_VERSION}:${input.blueprintId}`;
+  const startIndex = stableHash(seed) % OUTREACH_CREATOR_PRAISE_PREFIXES.length;
+  return Array.from({ length: input.count }, (_, index) => (
+    OUTREACH_CREATOR_PRAISE_PREFIXES[(startIndex + index) % OUTREACH_CREATOR_PRAISE_PREFIXES.length]
+  ));
+}
+
+function lowercaseFirst(value: string) {
+  if (!value) return value;
+  return value.charAt(0).toLowerCase() + value.slice(1);
+}
+
+function ensureCreatorPraisePrefix(openerText: string, prefix: string) {
+  const opener = normalizeCommentText(openerText);
+  const normalizedPrefix = normalizeCommentText(prefix).replace(/[.!:,]+$/g, '').trim();
+  if (!opener || !normalizedPrefix) return opener;
+  if (opener.toLowerCase().startsWith(normalizedPrefix.toLowerCase())) {
+    return opener;
+  }
+  if (/^i liked how you framed$/i.test(normalizedPrefix)) {
+    return `${normalizedPrefix} ${lowercaseFirst(opener)}`;
+  }
+  return `${normalizedPrefix}, ${lowercaseFirst(opener)}`;
 }
 
 function validateFinalDraft(input: {
@@ -483,15 +526,23 @@ export async function generateOutreachDrafts(input: {
     );
   }
 
+  const requiredPrefixes = selectCreatorPraisePrefixes({
+    blueprintId,
+    count: OUTREACH_DRAFT_OPTION_COUNT,
+  });
   const llmResult = await input.llm.generateVideoOpeners({
     context: {
       ...context,
       blueprintSectionsJson: compactBlueprintContext(context),
     },
     count: OUTREACH_DRAFT_OPTION_COUNT,
+    requiredPrefixes,
   });
   const rawOpeners = parseOpeners(llmResult.rawText, llmResult.openers);
-  const uniqueOpeners = Array.from(new Set(rawOpeners.map(normalizeCommentText).filter(Boolean))).slice(0, OUTREACH_DRAFT_OPTION_COUNT);
+  const normalizedOpeners = rawOpeners
+    .map((opener, index) => ensureCreatorPraisePrefix(opener, requiredPrefixes[index] || requiredPrefixes[0] || ''))
+    .filter(Boolean);
+  const uniqueOpeners = Array.from(new Set(normalizedOpeners)).slice(0, OUTREACH_DRAFT_OPTION_COUNT);
   if (uniqueOpeners.length < OUTREACH_DRAFT_OPTION_COUNT) {
     throw new OutreachDraftError(502, 'LLM_INVALID_OUTPUT', 'Outreach draft generation returned too few usable openers.');
   }

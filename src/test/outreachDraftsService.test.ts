@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  OUTREACH_CREATOR_PRAISE_PREFIXES,
   generateOutreachDrafts,
   OutreachDraftError,
   validateOutreachPostText,
@@ -40,6 +41,18 @@ describe('outreach draft generation service', () => {
   it('generates three validated copy-only drafts and stores them', async () => {
     let seq = 0;
     const store = createStore();
+    const generateVideoOpeners = vi.fn(async () => ({
+      model: 'gpt-5.5-mini',
+      reasoningEffort: 'medium',
+      rawText: JSON.stringify({
+        openers: [
+          'The useful part for me was the distinction between retrieval practice and just rereading notes.',
+          'The active recall point makes the review process much easier to understand.',
+          'The short-session framing makes the learning habit feel more repeatable.',
+        ],
+      }),
+      openers: [],
+    }));
     const result = await generateOutreachDrafts({
       adminUserId: 'admin_1',
       blueprintId: 'bp_1',
@@ -48,18 +61,7 @@ describe('outreach draft generation service', () => {
       resolveContext: async () => context,
       stateStore: store,
       llm: {
-        generateVideoOpeners: vi.fn(async () => ({
-          model: 'gpt-5.5-mini',
-          reasoningEffort: 'medium',
-          rawText: JSON.stringify({
-            openers: [
-              'The useful part for me was the distinction between retrieval practice and just rereading notes.',
-              'The active recall point makes the review process much easier to understand.',
-              'The short-session framing makes the learning habit feel more repeatable.',
-            ],
-          }),
-          openers: [],
-        })),
+        generateVideoOpeners,
       },
     });
 
@@ -71,9 +73,18 @@ describe('outreach draft generation service', () => {
     ]);
     expect(result.promoVariants.length).toBeGreaterThanOrEqual(3);
     expect(result.sourceChannelSubscriberCount).toBeNull();
-    expect(result.options[0].finalText).toBe('The useful part for me was the distinction between retrieval practice and just rereading notes.');
-    expect(result.options[1].finalText).toBe('The active recall point makes the review process much easier to understand.');
-    expect(result.options[2].finalText).toBe('The short-session framing makes the learning habit feel more repeatable.');
+    expect(generateVideoOpeners).toHaveBeenCalledWith(expect.objectContaining({
+      count: 3,
+      requiredPrefixes: expect.arrayContaining([
+        expect.stringMatching(/^(Great video|Really helpful breakdown|Good stuff as usual|This was useful|Clear explanation|I liked how you framed)$/),
+      ]),
+    }));
+    expect(result.options.every((option) => (
+      OUTREACH_CREATOR_PRAISE_PREFIXES.some((prefix) => option.finalText.startsWith(prefix))
+    ))).toBe(true);
+    expect(result.options[0].finalText).toBe('Great video, the useful part for me was the distinction between retrieval practice and just rereading notes.');
+    expect(result.options[1].finalText).toBe('Really helpful breakdown, the active recall point makes the review process much easier to understand.');
+    expect(result.options[2].finalText).toBe('Good stuff as usual, the short-session framing makes the learning habit feel more repeatable.');
     expect(result.options[0].finalText).not.toContain('BLEUP');
     expect(result.promoVariants[0].text).toContain('P.S.');
     expect(result.promoVariants[0].text).toContain('YouTube');
@@ -129,9 +140,9 @@ describe('outreach draft generation service', () => {
       },
     });
 
-    expect(result.options[0].finalText).toBe('The cottage cheese point is practical, slower protein makes bedtime easier.');
-    expect(result.options[1].finalText).toBe('Greek yogurt for cultures, cottage cheese for staying full, simple enough 🙂');
-    expect(result.options[2].finalText).toBe('The snack choice is clearer when fullness and live cultures are separated.');
+    expect(result.options[0].finalText).toBe('Great video, the cottage cheese point is practical, slower protein makes bedtime easier.');
+    expect(result.options[1].finalText).toBe('Really helpful breakdown, greek yogurt for cultures, cottage cheese for staying full, simple enough 🙂');
+    expect(result.options[2].finalText).toBe('Good stuff as usual, the snack choice is clearer when fullness and live cultures are separated.');
   });
 
   it('rejects overlong short opener roles', async () => {

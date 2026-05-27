@@ -24,15 +24,27 @@ function normalizeReasoningEffort(value: unknown) {
 function buildPrompt(input: {
   context: OutreachDraftContext;
   count: number;
+  requiredPrefixes?: string[];
 }) {
   const context = input.context;
+  const requiredPrefixes = (input.requiredPrefixes || []).slice(0, input.count);
+  const prefixLines = requiredPrefixes.length > 0
+    ? [
+      '',
+      'Required starts:',
+      ...requiredPrefixes.map((prefix, index) => `${index + 1}. Start exactly with: "${prefix}"`),
+    ]
+    : [];
   return [
     `Create exactly ${input.count} distinct YouTube comment opener options in this order:`,
-    '1. Short insight: one sentence, neutral, useful, and specific, ideally under 110 characters.',
-    '2. Short insight: one sentence, neutral, useful, and specific, ideally under 110 characters.',
-    '3. Short insight: one sentence, neutral, useful, and specific, ideally under 110 characters.',
+    '1. Short insight: assigned friendly start plus one simple, specific takeaway, ideally under 110 characters.',
+    '2. Short insight: assigned friendly start plus one simple, specific takeaway, ideally under 110 characters.',
+    '3. Short insight: assigned friendly start plus one simple, specific takeaway, ideally under 110 characters.',
+    ...prefixLines,
     '',
     'Rules:',
+    '- Use the assigned start for each option exactly. Do not choose your own praise phrase.',
+    '- After the assigned start, add one compact useful takeaway from the video.',
     '- Mention one concrete distinction, idea, example, or takeaway from the video.',
     '- Focus on a simple practical win, easy takeaway, or clear framing from the video.',
     '- Do not go deep, over-explain, or sound analytical. Avoid multi-part breakdowns.',
