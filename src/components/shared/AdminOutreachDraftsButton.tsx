@@ -55,7 +55,7 @@ type OutreachCandidate = {
   createdLabel: string;
   viewCount: number | null;
   commentCount: number | null;
-  postedCommentsLast10Days: number | null;
+  postedCommentsLast7Days: number | null;
   durationSeconds: number | null;
   verification?: PostedCommentVerificationItem;
   status: 'ready' | 'posted';
@@ -148,7 +148,7 @@ function toOutreachCandidate(item: MyFeedItemView): OutreachCandidate | null {
     createdLabel: formatRelativeDate(item.createdAt),
     viewCount: item.source?.viewCount ?? null,
     commentCount: item.source?.commentCount ?? null,
-    postedCommentsLast10Days: null,
+    postedCommentsLast7Days: null,
     durationSeconds: item.source?.durationSeconds ?? null,
     status: 'ready',
   };
@@ -178,18 +178,18 @@ function appendPromoText(commentText: string, promoText: string) {
 function getPromoVariantLabel(promo: OutreachPromoVariant, index: number) {
   const fallback = `Promo ${index + 1}`;
   switch (promo.id) {
-    case 'keep-up-short-v4':
-      return 'Keep up';
-    case 'watch-later-short-v4':
+    case 'watch-later-profile-v5':
       return 'Watch Later';
-    case 'revisit-takeaways-short-v4':
+    case 'tracking-takeaways-v5':
       return 'Useful takeaways';
-    case 'profile-keep-up-short-v4':
-      return 'Stay up to date';
-    case 'miss-good-videos-short-v4':
-      return 'Good videos';
-    case 'simple-youtube-learning-short-v4':
-      return 'Simple way';
+    case 'profile-might-like-v5':
+      return 'Profile';
+    case 'useful-videos-time-v5':
+      return 'Useful videos';
+    case 'useful-overwhelming-v5':
+      return 'Overwhelming feed';
+    case 'track-useful-parts-v5':
+      return 'Useful parts';
     default:
       return fallback;
   }
@@ -290,7 +290,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
         ...candidate,
         viewCount: stats?.viewCount ?? candidate.viewCount,
         commentCount: stats?.commentCount ?? candidate.commentCount,
-        postedCommentsLast10Days: stats?.postedCommentsLast10Days ?? candidate.postedCommentsLast10Days,
+        postedCommentsLast7Days: stats?.postedCommentsLast7Days ?? candidate.postedCommentsLast7Days,
         durationSeconds: stats?.durationSeconds ?? candidate.durationSeconds,
         verification,
         status: posted ? 'posted' as const : candidate.status,
@@ -655,8 +655,8 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                 const createPending = draftMutation.isPending && draftMutation.variables?.id === candidate.id;
                 const viewCountLabel = formatCompactCount(candidate.viewCount);
                 const commentCountLabel = formatCompactCount(candidate.commentCount);
-                const postedCommentsLabel = typeof candidate.postedCommentsLast10Days === 'number'
-                  ? candidate.postedCommentsLast10Days.toLocaleString()
+                const postedCommentsLabel = typeof candidate.postedCommentsLast7Days === 'number'
+                  ? candidate.postedCommentsLast7Days.toLocaleString()
                   : null;
                 const durationLabel = formatVideoDuration(candidate.durationSeconds);
                 const visibility = candidate.verification;
@@ -673,7 +673,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                           {durationLabel ? <span>{durationLabel}</span> : null}
                           {viewCountLabel ? <span>{viewCountLabel} views</span> : null}
                           {commentCountLabel ? <span>{commentCountLabel} comments</span> : null}
-                          {postedCommentsLabel ? <span>{postedCommentsLabel} posted / 10d</span> : null}
+                          {postedCommentsLabel ? <span>{postedCommentsLabel} posted / 7d</span> : null}
                           {visibility ? (
                             <span>
                               {visibility.status === 'visible'

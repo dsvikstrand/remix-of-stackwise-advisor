@@ -75,7 +75,7 @@ export type OutreachCandidateStatsRefreshResult = {
     videoId: string | null;
     viewCount: number | null;
     commentCount: number | null;
-    postedCommentsLast10Days: number | null;
+    postedCommentsLast7Days: number | null;
     durationSeconds: number | null;
     status: 'refreshed' | 'skipped' | 'failed';
     errorMessage: string | null;

@@ -10957,7 +10957,7 @@ function isPostedOutreachHistoryRow(row: {
     || Boolean(normalizeRouteString(row.posted_at));
 }
 
-async function countPostedOutreachCommentsByChannelLast10Days(input: {
+async function countPostedOutreachCommentsByChannelLast7Days(input: {
   adminUserId: string;
   sourceChannelIds: string[];
 }) {
@@ -10967,7 +10967,7 @@ async function countPostedOutreachCommentsByChannelLast10Days(input: {
   if (!oracleControlPlane || sourceChannelIds.length === 0) return new Map<string, number>();
 
   const since = new Date();
-  since.setUTCDate(since.getUTCDate() - 10);
+  since.setUTCDate(since.getUTCDate() - 7);
   const recentRows = await createOracleOutreachDraftStateStore({
     controlDb: oracleControlPlane,
   }).listRecentDrafts({
@@ -11032,7 +11032,7 @@ async function refreshOutreachCandidateSourceStats(input: {
     };
   });
   const videoIds = [...new Set(itemRefs.map((item) => item.videoId).filter(Boolean))] as string[];
-  const postedCountsByChannel = await countPostedOutreachCommentsByChannelLast10Days({
+  const postedCountsByChannel = await countPostedOutreachCommentsByChannelLast7Days({
     adminUserId: input.adminUserId,
     sourceChannelIds: itemRefs.map((item) => item.sourceChannelId).filter(Boolean) as string[],
   });
@@ -11042,7 +11042,7 @@ async function refreshOutreachCandidateSourceStats(input: {
     videoId: item.videoId,
     viewCount: null as number | null,
     commentCount: null as number | null,
-    postedCommentsLast10Days: item.sourceChannelId
+    postedCommentsLast7Days: item.sourceChannelId
       ? postedCountsByChannel.get(item.sourceChannelId) ?? 0
       : null,
     durationSeconds: null as number | null,
@@ -11109,7 +11109,7 @@ async function refreshOutreachCandidateSourceStats(input: {
         videoId: item.videoId,
         viewCount: null,
         commentCount: null,
-        postedCommentsLast10Days: item.sourceChannelId
+        postedCommentsLast7Days: item.sourceChannelId
           ? postedCountsByChannel.get(item.sourceChannelId) ?? 0
           : null,
         durationSeconds: null,
@@ -11132,7 +11132,7 @@ async function refreshOutreachCandidateSourceStats(input: {
       videoId: item.videoId,
       viewCount: stats.viewCount,
       commentCount: stats.commentCount,
-      postedCommentsLast10Days: item.sourceChannelId
+      postedCommentsLast7Days: item.sourceChannelId
         ? postedCountsByChannel.get(item.sourceChannelId) ?? 0
         : null,
       durationSeconds: stats.durationSeconds,

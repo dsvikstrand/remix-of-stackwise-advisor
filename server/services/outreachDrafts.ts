@@ -218,28 +218,28 @@ export const OUTREACH_CREATOR_PRAISE_PREFIXES = [
 
 export const OUTREACH_TAIL_VARIANTS = [
   {
-    id: 'keep-up-short-v4',
-    text: 'P.S. Use YouTube to learn? I share ideas for keeping up with it all.',
+    id: 'watch-later-profile-v5',
+    text: 'P.S. Is your Watch Later always growing? My profile has something that might help.',
   },
   {
-    id: 'watch-later-short-v4',
-    text: 'P.S. Watch Later always growing? My profile can help you keep up.',
+    id: 'tracking-takeaways-v5',
+    text: 'P.S. Learning from YouTube? My profile has something for tracking useful takeaways.',
   },
   {
-    id: 'revisit-takeaways-short-v4',
-    text: 'P.S. Learning from YouTube? My profile can help you keep track of useful takeaways.',
+    id: 'profile-might-like-v5',
+    text: 'P.S. If YouTube is part of how you learn, there’s something in my profile you might like.',
   },
   {
-    id: 'profile-keep-up-short-v4',
-    text: 'P.S. Use YouTube for learning? I share ideas for staying up to date.',
+    id: 'useful-videos-time-v5',
+    text: 'P.S. Too many useful videos, not enough time? I’m building around that exact problem.',
   },
   {
-    id: 'miss-good-videos-short-v4',
-    text: 'P.S. Too many good videos in your feed? I can help you keep up with it all.',
+    id: 'useful-overwhelming-v5',
+    text: 'P.S. If your YouTube feed is useful but overwhelming, I’m building something for you.',
   },
   {
-    id: 'simple-youtube-learning-short-v4',
-    text: 'P.S. Need a simple way to keep up with YouTube learning? There’s more in my profile.',
+    id: 'track-useful-parts-v5',
+    text: 'P.S. If you learn a lot from YouTube, I’m building something to help keep track of the useful parts.',
   },
 ] as const;
 
