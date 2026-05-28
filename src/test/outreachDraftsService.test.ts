@@ -90,9 +90,9 @@ describe('outreach draft generation service', () => {
     expect(result.options[0].finalText).not.toContain('BLEUP');
     expect(result.promoVariants[0].text).toContain('P.S.');
     expect(result.promoVariants).toHaveLength(6);
-    expect(result.promoVariants.some((promo) => promo.text.includes('profile'))).toBe(true);
     expect(result.promoVariants.some((promo) => promo.text.includes('YouTube'))).toBe(true);
     expect(result.promoVariants.every((promo) => !promo.text.includes('BLEUP'))).toBe(true);
+    expect(result.promoVariants.every((promo) => !promo.text.toLowerCase().includes('profile'))).toBe(true);
     expect(result.promoVariants.every((promo) => !promo.text.includes('\n'))).toBe(true);
     expect(result.promoVariants.every((promo) => !promo.text.toLowerCase().includes('free early access'))).toBe(true);
     expect(result.promoVariants.every((promo) => validateOutreachPostText(promo.text).ok)).toBe(true);

@@ -220,28 +220,28 @@ export const OUTREACH_CREATOR_PRAISE_PREFIXES = [
 
 export const OUTREACH_TAIL_VARIANTS = [
   {
-    id: 'watch-later-profile-v5',
-    text: 'P.S. Is your Watch Later always growing? My profile has something that might help.',
+    id: 'share-keep-up-v6',
+    text: 'P.S. Use YouTube to learn? I share ideas for keeping up with it all.',
   },
   {
-    id: 'tracking-takeaways-v5',
-    text: 'P.S. Learning from YouTube? My profile has something for tracking useful takeaways.',
+    id: 'share-takeaways-v6',
+    text: 'P.S. Learning from YouTube? I share ways to keep track of useful takeaways.',
   },
   {
-    id: 'profile-might-like-v5',
-    text: 'P.S. If YouTube is part of how you learn, there’s something in my profile you might like.',
+    id: 'watch-later-revisit-v6',
+    text: 'P.S. Watch Later always growing? I help make useful videos easier to revisit.',
   },
   {
-    id: 'useful-videos-time-v5',
-    text: 'P.S. Too many useful videos, not enough time? I’m building around that exact problem.',
+    id: 'useful-videos-keep-up-v6',
+    text: 'P.S. Too many useful videos, not enough time? I can help make it easier to keep up.',
   },
   {
-    id: 'useful-overwhelming-v5',
-    text: 'P.S. If your YouTube feed is useful but overwhelming, I’m building something for you.',
+    id: 'useful-takeaways-revisit-v6',
+    text: 'P.S. Use YouTube to learn? I can help keep useful takeaways easier to revisit.',
   },
   {
-    id: 'track-useful-parts-v5',
-    text: 'P.S. If you learn a lot from YouTube, I’m building something to help keep track of the useful parts.',
+    id: 'good-videos-keep-up-v6',
+    text: 'P.S. Too many good videos in your feed? I can help make it easier to keep up.',
   },
 ] as const;
 
