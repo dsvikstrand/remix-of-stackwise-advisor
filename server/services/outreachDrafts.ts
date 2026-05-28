@@ -212,7 +212,6 @@ const MAX_FINAL_COMMENT_CHARS = 1200;
 export const OUTREACH_CREATOR_PRAISE_PREFIXES = [
   'Great video',
   'Really helpful breakdown',
-  'Good stuff as usual',
   'This was useful',
   'Clear explanation',
   'I liked how you framed',

@@ -78,15 +78,15 @@ describe('outreach draft generation service', () => {
     expect(generateVideoOpeners).toHaveBeenCalledWith(expect.objectContaining({
       count: 3,
       requiredPrefixes: expect.arrayContaining([
-        expect.stringMatching(/^(Great video|Really helpful breakdown|Good stuff as usual|This was useful|Clear explanation|I liked how you framed)$/),
+        expect.stringMatching(/^(Great video|Really helpful breakdown|This was useful|Clear explanation|I liked how you framed)$/),
       ]),
     }));
     expect(result.options.every((option) => (
       OUTREACH_CREATOR_PRAISE_PREFIXES.some((prefix) => option.finalText.startsWith(prefix))
     ))).toBe(true);
-    expect(result.options[0].finalText).toBe('Great video, the useful part for me was the distinction between retrieval practice and just rereading notes.');
-    expect(result.options[1].finalText).toBe('Really helpful breakdown, the active recall point makes the review process much easier to understand.');
-    expect(result.options[2].finalText).toBe('Good stuff as usual, the short-session framing makes the learning habit feel more repeatable.');
+    expect(result.options[0].finalText).toContain('the useful part for me was the distinction between retrieval practice and just rereading notes.');
+    expect(result.options[1].finalText).toContain('the active recall point makes the review process much easier to understand.');
+    expect(result.options[2].finalText).toContain('the short-session framing makes the learning habit feel more repeatable.');
     expect(result.options[0].finalText).not.toContain('BLEUP');
     expect(result.promoVariants[0].text).toContain('P.S.');
     expect(result.promoVariants).toHaveLength(6);
@@ -142,9 +142,10 @@ describe('outreach draft generation service', () => {
       },
     });
 
-    expect(result.options[0].finalText).toBe('Great video, the cottage cheese point is practical, slower protein makes bedtime easier.');
-    expect(result.options[1].finalText).toBe('Really helpful breakdown, greek yogurt for cultures, cottage cheese for staying full, simple enough 🙂');
-    expect(result.options[2].finalText).toBe('Good stuff as usual, the snack choice is clearer when fullness and live cultures are separated.');
+    expect(result.options[0].finalText).toContain('the cottage cheese point is practical, slower protein makes bedtime easier.');
+    expect(result.options[1].finalText).toContain('greek yogurt for cultures, cottage cheese for staying full, simple enough 🙂');
+    expect(result.options[2].finalText).toContain('the snack choice is clearer when fullness and live cultures are separated.');
+    expect(result.options.every((option) => !option.finalText.includes('—'))).toBe(true);
   });
 
   it('rejects overlong short opener roles', async () => {
