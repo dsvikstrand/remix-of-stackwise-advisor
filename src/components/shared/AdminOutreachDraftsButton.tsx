@@ -454,6 +454,8 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
   const selectedDraftOption = draftResult?.options.find((option) => option.id === selectedDraftOptionId) || null;
   const selectedDraftFinalText = selectedDraftOption ? buildFinalDraftText(selectedDraftOption.id) : '';
   const youtubeNeedsReconnect = Boolean(youtubeConnectionQuery.data?.needs_reauth);
+  const verificationNeedsReview = (verificationResult?.items || [])
+    .filter((item) => item.status === 'not_visible' || item.status === 'verify_failed');
 
   const handleCopyDraft = async (optionId: string) => {
     const text = buildFinalDraftText(optionId);
@@ -632,18 +634,85 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                         </div>
                       </div>
                       {verificationResult ? (
-                        <div className="mt-2 rounded-md bg-background/70 p-2 text-xs text-muted-foreground">
-                          <span className="font-medium text-foreground">
-                            {formatPercent(verificationResult.upRate)} up-rate
-                          </span>
-                          {' · '}
-                          {verificationResult.visible}/{verificationResult.visible + verificationResult.notVisible} visible
-                          {' · '}
-                          {verificationResult.notVisible} not visible
-                          {' · '}
-                          {verificationResult.verifyFailed} verify failed
-                          {' · '}
-                          checked {verificationResult.checked}/{verificationResult.availablePostedComments} available
+                        <div className="mt-2 space-y-2">
+                          <div className="rounded-md bg-background/70 p-2 text-xs text-muted-foreground">
+                            <span className="font-medium text-foreground">
+                              {formatPercent(verificationResult.upRate)} up-rate
+                            </span>
+                            {' · '}
+                            {verificationResult.visible}/{verificationResult.visible + verificationResult.notVisible} visible
+                            {' · '}
+                            {verificationResult.notVisible} not visible
+                            {' · '}
+                            {verificationResult.verifyFailed} verify failed
+                            {' · '}
+                            checked {verificationResult.checked}/{verificationResult.availablePostedComments} available
+                          </div>
+                          {verificationNeedsReview.length > 0 ? (
+                            <div className="space-y-2 rounded-md border border-border/60 bg-background/70 p-2">
+                              <div className="text-xs font-medium text-foreground">
+                                Needs review
+                              </div>
+                              <div className="space-y-2">
+                                {verificationNeedsReview.map((item) => (
+                                  <div
+                                    key={item.draftId}
+                                    className="rounded-md border border-border/50 bg-muted/20 p-2 text-xs"
+                                  >
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <div className="min-w-0">
+                                        <div className="font-medium text-foreground">
+                                          {item.sourceChannelTitle || 'YouTube video'}
+                                        </div>
+                                        <div className="text-muted-foreground">
+                                          {item.postedAt ? `Posted ${formatRelativeDate(item.postedAt)}` : 'Posted time unknown'}
+                                        </div>
+                                      </div>
+                                      <Badge
+                                        variant={item.status === 'not_visible' ? 'destructive' : 'outline'}
+                                        className="h-5 px-2 text-[10px]"
+                                      >
+                                        {item.status === 'not_visible' ? 'Not visible' : 'Verify failed'}
+                                      </Badge>
+                                    </div>
+                                    {item.errorMessage ? (
+                                      <div className="mt-2 rounded bg-background/80 p-2 text-muted-foreground">
+                                        {item.errorMessage}
+                                      </div>
+                                    ) : null}
+                                    <div className="mt-2 whitespace-pre-wrap rounded bg-background/80 p-2 text-foreground">
+                                      {item.finalText}
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                                      {item.videoUrl ? (
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-7 gap-1.5 px-2 text-xs"
+                                          asChild
+                                        >
+                                          <a href={item.videoUrl} target="_blank" rel="noreferrer">
+                                            <ExternalLink className="h-3 w-3" />
+                                            Open video
+                                          </a>
+                                        </Button>
+                                      ) : null}
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 px-2 text-xs"
+                                        onClick={() => window.open(`/blueprint/${encodeURIComponent(item.blueprintId)}`, '_blank', 'noopener,noreferrer')}
+                                      >
+                                        Open blueprint
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
                         </div>
                       ) : null}
                     </div>

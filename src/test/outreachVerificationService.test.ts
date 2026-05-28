@@ -25,7 +25,9 @@ function postedRow(input: { id: string; commentId: string }) {
     blueprint_id: `bp_${input.id}`,
     source_item_id: `source_${input.id}`,
     youtube_video_id: `video_${input.id}`,
+    video_url: `https://www.youtube.com/watch?v=video_${input.id}`,
     source_channel_id: 'UC_test',
+    source_channel_title: 'Test Creator',
     final_text: 'Helpful comment',
     status: 'posted',
     youtube_comment_id: input.commentId,
@@ -73,6 +75,11 @@ describe('outreach posted comment verification service', () => {
       verifyFailed: 1,
       upRate: 0.5,
       quotaUnitsEstimated: 3,
+    });
+    expect(result.items[1]).toMatchObject({
+      videoUrl: 'https://www.youtube.com/watch?v=video_2',
+      sourceChannelTitle: 'Test Creator',
+      finalText: 'Helpful comment',
     });
     expect(store.markDraftVisibilityChecked).toHaveBeenCalledWith(expect.objectContaining({
       draftId: '1',

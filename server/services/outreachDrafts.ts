@@ -81,7 +81,9 @@ export type OutreachDraftHistoryRow = {
   blueprint_id: string;
   source_item_id: string;
   youtube_video_id: string;
+  video_url?: string | null;
   source_channel_id: string | null;
+  source_channel_title?: string | null;
   final_text: string;
   status?: string | null;
   youtube_comment_id?: string | null;

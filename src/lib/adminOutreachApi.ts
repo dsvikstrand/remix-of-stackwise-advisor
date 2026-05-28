@@ -97,7 +97,10 @@ export type OutreachPostedCommentVerificationResult = {
     blueprintId: string;
     sourceItemId: string;
     youtubeVideoId: string;
+    videoUrl: string | null;
+    sourceChannelTitle: string | null;
     youtubeCommentId: string;
+    finalText: string;
     postedAt: string | null;
     status: 'visible' | 'not_visible' | 'verify_failed';
     visible: boolean | null;

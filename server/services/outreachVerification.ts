@@ -22,7 +22,10 @@ export type OutreachPostedCommentVerificationResult = {
     blueprintId: string;
     sourceItemId: string;
     youtubeVideoId: string;
+    videoUrl: string | null;
+    sourceChannelTitle: string | null;
     youtubeCommentId: string;
+    finalText: string;
     postedAt: string | null;
     status: OutreachCommentVisibilityStatus;
     visible: boolean | null;
@@ -78,7 +81,10 @@ function toVerificationItem(input: {
     blueprintId: input.row.blueprint_id,
     sourceItemId: input.row.source_item_id,
     youtubeVideoId: input.row.youtube_video_id,
+    videoUrl: normalizeString(input.row.video_url) || null,
+    sourceChannelTitle: normalizeString(input.row.source_channel_title) || null,
     youtubeCommentId: normalizeString(input.row.youtube_comment_id),
+    finalText: input.row.final_text,
     postedAt: input.row.posted_at || null,
     status: input.status,
     visible: input.visible,
