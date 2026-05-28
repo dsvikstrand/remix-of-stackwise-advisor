@@ -39,11 +39,13 @@ const draftRow: OutreachDraftStoredRow = {
 function createStore(overrides?: Partial<OutreachDraftStateStore>): OutreachDraftStateStore {
   return {
     listRecentDrafts: vi.fn(async () => []),
+    listPostedDrafts: vi.fn(async () => []),
     getDraftOption: vi.fn(async () => draftRow),
     insertDraftOptions: vi.fn(async () => []),
     markDraftPosting: vi.fn(async () => true),
     markDraftPosted: vi.fn(async () => true),
     markDraftPostFailed: vi.fn(async () => true),
+    markDraftVisibilityChecked: vi.fn(async () => true),
     ...overrides,
   };
 }

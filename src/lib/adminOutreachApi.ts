@@ -82,6 +82,31 @@ export type OutreachCandidateStatsRefreshResult = {
   }>;
 };
 
+export type OutreachPostedCommentVerificationResult = {
+  requestedLimit: number;
+  availablePostedComments: number;
+  checked: number;
+  visible: number;
+  notVisible: number;
+  verifyFailed: number;
+  upRate: number | null;
+  quotaUnitsEstimated: number;
+  items: Array<{
+    draftId: string;
+    draftGroupId: string;
+    blueprintId: string;
+    sourceItemId: string;
+    youtubeVideoId: string;
+    youtubeCommentId: string;
+    postedAt: string | null;
+    status: 'visible' | 'not_visible' | 'verify_failed';
+    visible: boolean | null;
+    errorCode: string | null;
+    errorMessage: string | null;
+    checkedAt: string;
+  }>;
+};
+
 function getApiBase() {
   if (!config.agenticBackendUrl) return null;
   return `${config.agenticBackendUrl.replace(/\/$/, '')}/api`;
@@ -163,6 +188,30 @@ export async function refreshOutreachCandidateStats(input: {
   const json = (await response.json().catch(() => null)) as ApiEnvelope<OutreachCandidateStatsRefreshResult> | null;
   if (!response.ok || !json?.ok || !json.data) {
     throw new Error(json?.message || `Outreach stats refresh failed (${response.status})`);
+  }
+  return json.data;
+}
+
+export async function verifyPostedOutreachComments(input: {
+  limit: number;
+}) {
+  const base = getApiBase();
+  if (!base) throw new Error('Backend API is not configured.');
+
+  const authHeader = await getRequiredAuthHeader();
+  const response = await fetch(`${base}/admin/outreach-drafts/posted-comments/verify`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeader,
+    },
+    body: JSON.stringify({
+      limit: input.limit,
+    }),
+  });
+  const json = (await response.json().catch(() => null)) as ApiEnvelope<OutreachPostedCommentVerificationResult> | null;
+  if (!response.ok || !json?.ok || !json.data) {
+    throw new Error(json?.message || `Outreach comment verification failed (${response.status})`);
   }
   return json.data;
 }

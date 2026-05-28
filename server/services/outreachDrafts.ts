@@ -86,6 +86,12 @@ export type OutreachDraftHistoryRow = {
   status?: string | null;
   youtube_comment_id?: string | null;
   posted_at?: string | null;
+  last_visibility_checked_at?: string | null;
+  last_visibility_status?: string | null;
+  last_visibility_error_code?: string | null;
+  last_visibility_error_message?: string | null;
+  visibility_check_count?: number | null;
+  last_visible_at?: string | null;
   created_at: string;
 };
 
@@ -110,6 +116,10 @@ export type OutreachDraftStateStore = {
     adminUserId?: string | null;
     sinceIso?: string | null;
     limit?: number;
+  }) => Promise<OutreachDraftHistoryRow[]>;
+  listPostedDrafts: (input: {
+    adminUserId: string;
+    limit: number;
   }) => Promise<OutreachDraftHistoryRow[]>;
   getDraftOption: (input: {
     draftId: string;
@@ -163,6 +173,15 @@ export type OutreachDraftStateStore = {
     errorCode: string;
     errorMessage: string;
     updatedAt: string;
+  }) => Promise<boolean>;
+  markDraftVisibilityChecked: (input: {
+    draftId: string;
+    adminUserId: string;
+    status: 'visible' | 'not_visible' | 'verify_failed';
+    errorCode: string | null;
+    errorMessage: string | null;
+    checkedAt: string;
+    visibleAt: string | null;
   }) => Promise<boolean>;
 };
 

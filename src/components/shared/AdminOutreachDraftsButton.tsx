@@ -32,8 +32,10 @@ import {
   generateOutreachDrafts,
   postOutreachDraft,
   refreshOutreachCandidateStats,
+  verifyPostedOutreachComments,
   type OutreachCandidateStatsRefreshResult,
   type OutreachDraftGenerationResult,
+  type OutreachPostedCommentVerificationResult,
   type OutreachPromoVariant,
 } from '@/lib/adminOutreachApi';
 import { listMyFeedItems } from '@/lib/myFeedApi';
@@ -55,10 +57,12 @@ type OutreachCandidate = {
   commentCount: number | null;
   postedCommentsLast10Days: number | null;
   durationSeconds: number | null;
+  verification?: PostedCommentVerificationItem;
   status: 'ready' | 'posted';
 };
 
 type CandidateStatsItem = OutreachCandidateStatsRefreshResult['items'][number];
+type PostedCommentVerificationItem = OutreachPostedCommentVerificationResult['items'][number];
 
 type AdminOutreachDraftsSheetProps = {
   open: boolean;
@@ -109,6 +113,11 @@ function formatCompactCount(value: number | null | undefined) {
     notation: 'compact',
     maximumFractionDigits: 1,
   }).format(Number(value));
+}
+
+function formatPercent(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(Number(value))) return 'n/a';
+  return `${Math.round(Number(value) * 100)}%`;
 }
 
 function formatVideoDuration(seconds: number | null | undefined) {
@@ -249,6 +258,9 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
   const [selectedDraftOptionId, setSelectedDraftOptionId] = useState<string | null>(null);
   const [selectedPromoId, setSelectedPromoId] = useState('none');
   const [statsFetchLimit, setStatsFetchLimit] = useState(10);
+  const [verifyFetchLimit, setVerifyFetchLimit] = useState(10);
+  const [verificationResult, setVerificationResult] = useState<OutreachPostedCommentVerificationResult | null>(null);
+  const [verificationByBlueprintId, setVerificationByBlueprintId] = useState<Record<string, PostedCommentVerificationItem>>({});
   const [postedDraftIds, setPostedDraftIds] = useState<Set<string>>(() => new Set());
   const [postedBlueprintIds, setPostedBlueprintIds] = useState<Set<string>>(() => new Set());
   const [candidateStatsBySourceItemId, setCandidateStatsBySourceItemId] = useState<Record<string, CandidateStatsItem>>({});
@@ -272,6 +284,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
   const candidates = useMemo(
     () => (candidatesQuery.data || []).map((candidate) => {
       const stats = candidateStatsBySourceItemId[candidate.sourceItemId];
+      const verification = verificationByBlueprintId[candidate.blueprintId];
       const posted = postedBlueprintIds.has(candidate.blueprintId);
       return {
         ...candidate,
@@ -279,10 +292,11 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
         commentCount: stats?.commentCount ?? candidate.commentCount,
         postedCommentsLast10Days: stats?.postedCommentsLast10Days ?? candidate.postedCommentsLast10Days,
         durationSeconds: stats?.durationSeconds ?? candidate.durationSeconds,
+        verification,
         status: posted ? 'posted' as const : candidate.status,
       };
     }),
-    [candidateStatsBySourceItemId, candidatesQuery.data, postedBlueprintIds],
+    [candidateStatsBySourceItemId, candidatesQuery.data, postedBlueprintIds, verificationByBlueprintId],
   );
   const draftMutation = useMutation({
     mutationFn: async (candidate: OutreachCandidate) => {
@@ -348,6 +362,38 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
     onError: (error) => {
       toast({
         title: 'Could not fetch comment stats',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    },
+  });
+  const verifyCommentsMutation = useMutation({
+    mutationFn: async (limit: number) => {
+      return verifyPostedOutreachComments({ limit });
+    },
+    onSuccess: (result) => {
+      setVerificationResult(result);
+      setVerificationByBlueprintId((current) => {
+        const next = { ...current };
+        for (const item of result.items) {
+          next[item.blueprintId] = item;
+        }
+        return next;
+      });
+      const rateDenominator = result.visible + result.notVisible;
+      toast({
+        title: 'Posted comments verified',
+        description: rateDenominator > 0
+          ? `${result.visible}/${rateDenominator} visible (${formatPercent(result.upRate)} up-rate). ${result.verifyFailed} verify failed.`
+          : `Checked ${result.checked} comments. ${result.verifyFailed} verification request${result.verifyFailed === 1 ? '' : 's'} failed.`,
+      });
+    },
+    onError: (error) => {
+      if (error instanceof ApiRequestError && error.errorCode === 'YT_REAUTH_REQUIRED') {
+        void youtubeConnectionQuery.refetch();
+      }
+      toast({
+        title: 'Could not verify posted comments',
         description: error instanceof Error ? error.message : 'Please try again.',
         variant: 'destructive',
       });
@@ -517,7 +563,8 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
             ) : (
               <div>
                 <div className="border-b border-border/40 px-4 py-3">
-                  <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-col gap-3 rounded-lg border border-border/60 bg-muted/20 p-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div className="space-y-1">
                       <p className="text-sm font-medium">Video stats</p>
                       <p className="text-xs text-muted-foreground">
@@ -547,6 +594,59 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                         {refreshStatsMutation.isPending ? 'Fetching...' : 'Fetch video stats'}
                       </Button>
                     </div>
+                    </div>
+                    <div className="border-t border-border/50 pt-3">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium">Posted comment visibility</p>
+                          <p className="text-xs text-muted-foreground">
+                            Verify the latest posted comments and calculate up-rate from visible comments only.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <select
+                            className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                            value={verifyFetchLimit}
+                            onChange={(event) => setVerifyFetchLimit(Number(event.target.value))}
+                            disabled={verifyCommentsMutation.isPending || youtubeNeedsReconnect}
+                            aria-label="Number of latest posted comments to verify"
+                          >
+                            <option value={10}>Latest 10</option>
+                            <option value={25}>Latest 25</option>
+                            <option value={50}>Latest 50</option>
+                          </select>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-8"
+                            disabled={verifyCommentsMutation.isPending || youtubeNeedsReconnect}
+                            onClick={() => verifyCommentsMutation.mutate(verifyFetchLimit)}
+                          >
+                            {verifyCommentsMutation.isPending
+                              ? 'Verifying...'
+                              : youtubeNeedsReconnect
+                                ? 'Reconnect required'
+                                : 'Verify comments'}
+                          </Button>
+                        </div>
+                      </div>
+                      {verificationResult ? (
+                        <div className="mt-2 rounded-md bg-background/70 p-2 text-xs text-muted-foreground">
+                          <span className="font-medium text-foreground">
+                            {formatPercent(verificationResult.upRate)} up-rate
+                          </span>
+                          {' · '}
+                          {verificationResult.visible}/{verificationResult.visible + verificationResult.notVisible} visible
+                          {' · '}
+                          {verificationResult.notVisible} not visible
+                          {' · '}
+                          {verificationResult.verifyFailed} verify failed
+                          {' · '}
+                          checked {verificationResult.checked}/{verificationResult.availablePostedComments} available
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
                 <div className="divide-y divide-border/40">
@@ -559,6 +659,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                   ? candidate.postedCommentsLast10Days.toLocaleString()
                   : null;
                 const durationLabel = formatVideoDuration(candidate.durationSeconds);
+                const visibility = candidate.verification;
                 return (
                   <div key={candidate.id} className="px-4 py-3">
                     <div className="flex items-start justify-between gap-3">
@@ -573,6 +674,15 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                           {viewCountLabel ? <span>{viewCountLabel} views</span> : null}
                           {commentCountLabel ? <span>{commentCountLabel} comments</span> : null}
                           {postedCommentsLabel ? <span>{postedCommentsLabel} posted / 10d</span> : null}
+                          {visibility ? (
+                            <span>
+                              {visibility.status === 'visible'
+                                ? 'Verified visible'
+                                : visibility.status === 'not_visible'
+                                  ? 'Not visible'
+                                  : 'Verify failed'}
+                            </span>
+                          ) : null}
                           <Badge variant={statusView.variant} className="h-5 px-2 text-[10px]">
                             {statusView.label}
                           </Badge>

@@ -2,6 +2,7 @@ import type express from 'express';
 import type { OutreachDraftGenerationResult } from '../services/outreachDrafts';
 import { OutreachDraftError } from '../services/outreachDrafts';
 import type { OutreachPostResult } from '../services/outreachPosting';
+import type { OutreachPostedCommentVerificationResult } from '../services/outreachVerification';
 
 type OutreachCandidateStatsRefreshResult = {
   requested: number;
@@ -36,6 +37,10 @@ type AdminOutreachDeps = {
     adminUserId: string;
     sourceItemIds: string[];
   }) => Promise<OutreachCandidateStatsRefreshResult>;
+  verifyPostedComments?: (input: {
+    adminUserId: string;
+    limit: number;
+  }) => Promise<OutreachPostedCommentVerificationResult>;
 };
 
 function withEnvelope<T>(data: T, message: string) {
@@ -161,6 +166,51 @@ export function registerAdminOutreachRoutes(app: express.Express, deps: AdminOut
       return res.status(500).json(withError(
         'OUTREACH_DRAFT_FAILED',
         error instanceof Error ? error.message : 'Could not generate outreach drafts.',
+      ));
+    }
+  });
+
+  app.post('/api/admin/outreach-drafts/posted-comments/verify', async (req, res) => {
+    const userId = normalizeString((res.locals.user as { id?: string } | undefined)?.id);
+    if (!userId) {
+      return res.status(401).json(withError('AUTH_REQUIRED', 'Sign in required.'));
+    }
+
+    let isAdmin = false;
+    try {
+      isAdmin = await requireAdmin({ userId, deps });
+    } catch (error) {
+      return res.status(503).json(withError(
+        'ADMIN_CHECK_UNAVAILABLE',
+        error instanceof Error ? error.message : 'Could not verify admin entitlement.',
+      ));
+    }
+    if (!isAdmin) {
+      return res.status(403).json(withError('ADMIN_REQUIRED', 'Admin access required.'));
+    }
+    if (!deps.verifyPostedComments) {
+      return res.status(500).json(withError('CONFIG_ERROR', 'Outreach comment verification is not configured.'));
+    }
+
+    const body = req.body && typeof req.body === 'object'
+      ? req.body as Record<string, unknown>
+      : {};
+    const rawLimit = Math.floor(Number(body.limit || 10));
+    const limit = rawLimit <= 10 ? 10 : rawLimit <= 25 ? 25 : 50;
+
+    try {
+      const result = await deps.verifyPostedComments({
+        adminUserId: userId,
+        limit,
+      });
+      return res.json(withEnvelope(result, 'outreach posted comments verified'));
+    } catch (error) {
+      if (error instanceof OutreachDraftError) {
+        return res.status(error.status).json(withError(error.errorCode, error.message));
+      }
+      return res.status(500).json(withError(
+        'OUTREACH_COMMENT_VERIFY_FAILED',
+        error instanceof Error ? error.message : 'Could not verify posted outreach comments.',
       ));
     }
   });

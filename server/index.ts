@@ -556,6 +556,7 @@ import { registerAdminOutreachRoutes } from './routes/adminOutreach';
 import { generateOutreachDrafts, OutreachDraftError, type OutreachDraftContext } from './services/outreachDrafts';
 import { createOutreachOpenAIClient } from './services/outreachOpenAI';
 import { postOutreachDraft } from './services/outreachPosting';
+import { verifyPostedOutreachComments } from './services/outreachVerification';
 import { getCachedOutreachChannelStats } from './services/outreachChannelStats';
 import { createOracleOutreachDraftStateStore } from './services/oracleOutreachDraftState';
 import {
@@ -9212,6 +9213,62 @@ registerAdminOutreachRoutes(app, {
           youtubeCommentId,
           attempts: 3,
           delayMs: 1000,
+        }),
+      },
+    });
+  },
+  verifyPostedComments: async ({ adminUserId, limit }) => {
+    if (!oracleControlPlane) {
+      throw new Error('Oracle control plane is not configured');
+    }
+    const db = getServiceSupabaseClient();
+    if (!db) {
+      throw new OutreachDraftError(500, 'CONFIG_ERROR', 'Service role client is not configured.');
+    }
+    const configCheck = ensureYouTubeOAuthConfig();
+    if (!configCheck.ok) {
+      throw new OutreachDraftError(configCheck.status, configCheck.error_code, configCheck.message);
+    }
+
+    const { data: connection, error: connectionError } = await db
+      .from('user_youtube_connections')
+      .select('id, user_id, google_sub, youtube_channel_id, youtube_channel_title, youtube_channel_url, youtube_channel_avatar_url, access_token_encrypted, refresh_token_encrypted, token_expires_at, scope, is_active, last_import_at, last_error')
+      .eq('user_id', adminUserId)
+      .eq('is_active', true)
+      .maybeSingle();
+    if (connectionError) {
+      throw new OutreachDraftError(400, 'READ_FAILED', connectionError.message);
+    }
+    if (!connection) {
+      throw new OutreachDraftError(404, 'YT_CONNECTION_NOT_FOUND', 'Connect YouTube before verifying posted comments.');
+    }
+
+    let usable: Awaited<ReturnType<typeof getUsableYouTubeAccessToken>>;
+    try {
+      usable = await getUsableYouTubeAccessToken({
+        db,
+        connection: connection as UserYouTubeConnectionRow,
+      });
+    } catch (error) {
+      const mapped = mapYouTubeOAuthError(error);
+      throw new OutreachDraftError(mapped.status, mapped.error_code, mapped.message);
+    }
+    if (!hasYouTubeCommentPostScope(usable.connection.scope)) {
+      throw new OutreachDraftError(401, 'YT_REAUTH_REQUIRED', 'Reconnect YouTube with comment permission before verifying comments.');
+    }
+
+    return verifyPostedOutreachComments({
+      adminUserId,
+      limit,
+      stateStore: createOracleOutreachDraftStateStore({
+        controlDb: oracleControlPlane,
+      }),
+      youtubeClient: {
+        verifyTopLevelCommentVisible: ({ youtubeCommentId }) => verifyYouTubeTopLevelCommentVisible({
+          accessToken: usable.accessToken,
+          youtubeCommentId,
+          attempts: 1,
+          delayMs: 0,
         }),
       },
     });

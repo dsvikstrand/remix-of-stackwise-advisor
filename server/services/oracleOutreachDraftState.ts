@@ -24,6 +24,12 @@ export function createOracleOutreachDraftStateStore(input: {
           'status',
           'youtube_comment_id',
           'posted_at',
+          'last_visibility_checked_at',
+          'last_visibility_status',
+          'last_visibility_error_code',
+          'last_visibility_error_message',
+          'visibility_check_count',
+          'last_visible_at',
           'created_at',
         ])
         .orderBy('created_at', 'desc')
@@ -39,6 +45,38 @@ export function createOracleOutreachDraftStateStore(input: {
       }
 
       return await query.execute();
+    },
+
+    async listPostedDrafts({ adminUserId, limit }) {
+      return await input.controlDb.db
+        .selectFrom('outreach_draft_state')
+        .select([
+          'id',
+          'draft_group_id',
+          'admin_user_id',
+          'blueprint_id',
+          'source_item_id',
+          'youtube_video_id',
+          'source_channel_id',
+          'final_text',
+          'status',
+          'youtube_comment_id',
+          'posted_at',
+          'last_visibility_checked_at',
+          'last_visibility_status',
+          'last_visibility_error_code',
+          'last_visibility_error_message',
+          'visibility_check_count',
+          'last_visible_at',
+          'created_at',
+        ])
+        .where('admin_user_id', '=', normalizeString(adminUserId))
+        .where('youtube_comment_id', 'is not', null)
+        .where('status', 'in', ['posted', 'posted_unverified'])
+        .orderBy('posted_at', 'desc')
+        .orderBy('created_at', 'desc')
+        .limit(Math.max(1, Math.min(50, Math.floor(Number(limit || 10)))))
+        .execute();
     },
 
     async getDraftOption({ draftId }) {
@@ -62,6 +100,12 @@ export function createOracleOutreachDraftStateStore(input: {
           posted_at: null,
           post_error_code: null,
           post_error_message: null,
+          last_visibility_checked_at: null,
+          last_visibility_status: null,
+          last_visibility_error_code: null,
+          last_visibility_error_message: null,
+          visibility_check_count: 0,
+          last_visible_at: null,
         })))
         .execute();
       return rows.map((row) => ({ id: row.id }));
@@ -122,6 +166,32 @@ export function createOracleOutreachDraftStateStore(input: {
           post_error_message: errorMessage.slice(0, 500),
           updated_at: updatedAt,
         })
+        .where('id', '=', normalizeString(draftId))
+        .where('admin_user_id', '=', normalizeString(adminUserId))
+        .executeTakeFirst();
+      return Number(result.numUpdatedRows || 0) > 0;
+    },
+
+    async markDraftVisibilityChecked({
+      draftId,
+      adminUserId,
+      status,
+      errorCode,
+      errorMessage,
+      checkedAt,
+      visibleAt,
+    }) {
+      const result = await input.controlDb.db
+        .updateTable('outreach_draft_state')
+        .set(({ eb }) => ({
+          last_visibility_checked_at: checkedAt,
+          last_visibility_status: status,
+          last_visibility_error_code: errorCode ? errorCode.slice(0, 80) : null,
+          last_visibility_error_message: errorMessage ? errorMessage.slice(0, 500) : null,
+          visibility_check_count: eb('visibility_check_count', '+', 1),
+          last_visible_at: visibleAt,
+          updated_at: checkedAt,
+        }))
         .where('id', '=', normalizeString(draftId))
         .where('admin_user_id', '=', normalizeString(adminUserId))
         .executeTakeFirst();

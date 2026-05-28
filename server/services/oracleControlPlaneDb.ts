@@ -363,6 +363,12 @@ type OutreachDraftStateTable = {
   posted_at: string | null;
   post_error_code: string | null;
   post_error_message: string | null;
+  last_visibility_checked_at: string | null;
+  last_visibility_status: string | null;
+  last_visibility_error_code: string | null;
+  last_visibility_error_message: string | null;
+  visibility_check_count: number | null;
+  last_visible_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -1016,6 +1022,12 @@ CREATE TABLE IF NOT EXISTS outreach_draft_state (
   posted_at TEXT,
   post_error_code TEXT,
   post_error_message TEXT,
+  last_visibility_checked_at TEXT,
+  last_visibility_status TEXT,
+  last_visibility_error_code TEXT,
+  last_visibility_error_message TEXT,
+  visibility_check_count INTEGER NOT NULL DEFAULT 0,
+  last_visible_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -1454,6 +1466,42 @@ export function openOracleControlPlaneDb(input: {
     tableName: 'outreach_draft_state',
     columnName: 'post_error_message',
     columnSql: 'post_error_message TEXT',
+  });
+  ensureSqliteColumn({
+    sqlite,
+    tableName: 'outreach_draft_state',
+    columnName: 'last_visibility_checked_at',
+    columnSql: 'last_visibility_checked_at TEXT',
+  });
+  ensureSqliteColumn({
+    sqlite,
+    tableName: 'outreach_draft_state',
+    columnName: 'last_visibility_status',
+    columnSql: 'last_visibility_status TEXT',
+  });
+  ensureSqliteColumn({
+    sqlite,
+    tableName: 'outreach_draft_state',
+    columnName: 'last_visibility_error_code',
+    columnSql: 'last_visibility_error_code TEXT',
+  });
+  ensureSqliteColumn({
+    sqlite,
+    tableName: 'outreach_draft_state',
+    columnName: 'last_visibility_error_message',
+    columnSql: 'last_visibility_error_message TEXT',
+  });
+  ensureSqliteColumn({
+    sqlite,
+    tableName: 'outreach_draft_state',
+    columnName: 'visibility_check_count',
+    columnSql: 'visibility_check_count INTEGER NOT NULL DEFAULT 0',
+  });
+  ensureSqliteColumn({
+    sqlite,
+    tableName: 'outreach_draft_state',
+    columnName: 'last_visible_at',
+    columnSql: 'last_visible_at TEXT',
   });
 
   const db = new Kysely<OracleControlPlaneDatabase>({

@@ -157,4 +157,43 @@ describe('admin outreach route', () => {
     expect(res.statusCode).toBe(403);
     expect(postOutreachDraft).not.toHaveBeenCalled();
   });
+
+  it('verifies posted outreach comments for admin users', async () => {
+    const app = createMockApp();
+    const verifyPostedComments = vi.fn(async () => ({
+      requestedLimit: 25,
+      availablePostedComments: 3,
+      checked: 3,
+      visible: 2,
+      notVisible: 1,
+      verifyFailed: 0,
+      upRate: 2 / 3,
+      quotaUnitsEstimated: 3,
+      items: [],
+    }));
+    registerAdminOutreachRoutes(app as any, {
+      getCredits: vi.fn(async () => ({ plan: 'admin' })),
+      generateOutreachDrafts: vi.fn(),
+      postOutreachDraft: vi.fn(),
+      verifyPostedComments,
+    });
+
+    const res = createResponse('admin_1');
+    await app.handlers['POST /api/admin/outreach-drafts/posted-comments/verify']({
+      body: { limit: 25 },
+    } as any, res as any);
+
+    expect(verifyPostedComments).toHaveBeenCalledWith({
+      adminUserId: 'admin_1',
+      limit: 25,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        visible: 2,
+        notVisible: 1,
+      },
+    });
+  });
 });
