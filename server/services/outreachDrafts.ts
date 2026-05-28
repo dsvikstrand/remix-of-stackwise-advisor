@@ -210,11 +210,11 @@ const MAX_SHORT_OPENER_CHARS = 140;
 const MAX_FINAL_COMMENT_CHARS = 1200;
 
 export const OUTREACH_CREATOR_PRAISE_PREFIXES = [
-  'Great video',
-  'Really helpful breakdown',
-  'This was useful',
-  'Clear explanation',
-  'I liked how you framed',
+  'Really helpful breakdown of',
+  'Great video, the reminder that',
+  'Clear explanation of',
+  'This was useful, especially the point about',
+  'I liked the simple point about',
 ] as const;
 
 export const OUTREACH_TAIL_VARIANTS = [
@@ -407,10 +407,7 @@ function ensureCreatorPraisePrefix(openerText: string, prefix: string) {
   if (opener.toLowerCase().startsWith(normalizedPrefix.toLowerCase())) {
     return opener;
   }
-  if (/^i liked how you framed$/i.test(normalizedPrefix)) {
-    return `${normalizedPrefix} ${lowercaseFirst(opener)}`;
-  }
-  return `${normalizedPrefix}, ${lowercaseFirst(opener)}`;
+  return `${normalizedPrefix} ${lowercaseFirst(opener)}`;
 }
 
 function validateFinalDraft(input: {

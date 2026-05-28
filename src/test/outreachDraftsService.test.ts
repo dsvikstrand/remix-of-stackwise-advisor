@@ -78,7 +78,7 @@ describe('outreach draft generation service', () => {
     expect(generateVideoOpeners).toHaveBeenCalledWith(expect.objectContaining({
       count: 3,
       requiredPrefixes: expect.arrayContaining([
-        expect.stringMatching(/^(Great video|Really helpful breakdown|This was useful|Clear explanation|I liked how you framed)$/),
+        expect.stringMatching(/^(Really helpful breakdown of|Great video, the reminder that|Clear explanation of|This was useful, especially the point about|I liked the simple point about)$/),
       ]),
     }));
     expect(result.options.every((option) => (
