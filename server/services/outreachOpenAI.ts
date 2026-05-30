@@ -14,6 +14,9 @@ const OUTREACH_SYSTEM_PROMPT = [
   '',
   'Style:',
   'Keep it plain, friendly, and easy to read at a glance. The comment should feel like a real viewer leaving a kind note after learning something useful.',
+  '',
+  'Length:',
+  'Keep the comment short, ideally under 110 characters. Never exceed 130 characters.',
 ].join('\n');
 
 type OutreachServiceTier = 'auto' | 'default' | 'flex' | 'priority';
