@@ -203,18 +203,19 @@ export const OUTREACH_DRAFT_PROMPT_VERSION = 'outreach_draft_openers_v1';
 export const OUTREACH_DRAFT_DAILY_CAP = 0;
 export const OUTREACH_DRAFT_CHANNEL_WINDOW_DAYS = 7;
 export const OUTREACH_DRAFT_CHANNEL_WINDOW_CAP = 3;
-export const OUTREACH_DRAFT_OPTION_COUNT = 3;
+export const OUTREACH_DRAFT_OPTION_COUNT = 1;
+const OUTREACH_DRAFT_PREFIX_CHOICE_COUNT = 3;
 
 const MAX_OPENER_CHARS = 420;
 const MAX_SHORT_OPENER_CHARS = 140;
 const MAX_FINAL_COMMENT_CHARS = 1200;
 
 export const OUTREACH_CREATOR_PRAISE_PREFIXES = [
-  'Really helpful breakdown of',
-  'Great video, the reminder that',
-  'Clear explanation of',
-  'This was useful, especially the point about',
-  'I liked the simple point about',
+  'Great video, I liked the reminder that',
+  'Really helpful, the simple point about',
+  'This was useful, especially the reminder that',
+  'Clear and helpful, I liked how you explained',
+  'Nice breakdown, the part about',
 ] as const;
 
 export const OUTREACH_TAIL_VARIANTS = [
@@ -246,6 +247,10 @@ export const OUTREACH_TAIL_VARIANTS = [
 
 const OpenersSchema = z.object({
   openers: z.array(z.string().min(20).max(MAX_OPENER_CHARS)).min(1).max(5),
+});
+
+const CommentSchema = z.object({
+  comment: z.string().min(20).max(MAX_OPENER_CHARS),
 });
 
 export const OUTREACH_COMMENT_ROLES = [
@@ -338,6 +343,10 @@ function parseOpeners(rawText: string | null, fallbackOpeners: string[]) {
   for (const candidate of candidates) {
     try {
       const parsed = JSON.parse(String(candidate));
+      const commentValidated = CommentSchema.safeParse(parsed);
+      if (commentValidated.success) {
+        return [normalizeCommentText(commentValidated.data.comment)].filter(Boolean);
+      }
       const validated = OpenersSchema.safeParse(parsed);
       if (validated.success) {
         return validated.data.openers.map(normalizeCommentText).filter(Boolean);
@@ -351,18 +360,58 @@ function parseOpeners(rawText: string | null, fallbackOpeners: string[]) {
   return validated.success ? validated.data.openers.map(normalizeCommentText).filter(Boolean) : [];
 }
 
+function normalizeTakeawayBullet(value: unknown) {
+  return normalizeText(value)
+    .replace(/^[-*•\d.)\s]+/, '')
+    .slice(0, 120)
+    .trim();
+}
+
+function readRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function extractArrayBullets(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (typeof item === 'string') return item;
+      const record = readRecord(item);
+      return record
+        ? record.text || record.title || record.summary || record.body || ''
+        : '';
+    })
+    .map(normalizeTakeawayBullet)
+    .filter((item) => item.length >= 12);
+}
+
+function extractTakeawayBullets(sectionsJson: unknown) {
+  const root = readRecord(sectionsJson);
+  if (!root) return [];
+  const candidates: unknown[] = [
+    readRecord(root.takeaways)?.bullets,
+    root.takeaways,
+    readRecord(root.key_takeaways)?.bullets,
+    root.key_takeaways,
+    readRecord(root.keyTakeaways)?.bullets,
+    root.keyTakeaways,
+  ];
+  for (const candidate of candidates) {
+    const bullets = extractArrayBullets(candidate);
+    if (bullets.length > 0) {
+      return Array.from(new Set(bullets)).slice(0, 5);
+    }
+  }
+  return [];
+}
+
 function compactBlueprintContext(context: OutreachDraftContext) {
-  const sections = context.blueprintSectionsJson && typeof context.blueprintSectionsJson === 'object'
-    ? JSON.stringify(context.blueprintSectionsJson).slice(0, 1800)
-    : '';
   return {
     videoTitle: context.videoTitle,
-    creator: context.sourceChannelTitle,
-    blueprintTitle: context.blueprintTitle,
-    summary: context.blueprintSummary,
-    review: context.blueprintReview,
-    tags: context.tags.slice(0, 8),
-    sections,
+    sourceChannelTitle: context.sourceChannelTitle,
+    takeaways: extractTakeawayBullets(context.blueprintSectionsJson),
   };
 }
 
@@ -400,14 +449,17 @@ function lowercaseFirst(value: string) {
   return value.charAt(0).toLowerCase() + value.slice(1);
 }
 
-function ensureCreatorPraisePrefix(openerText: string, prefix: string) {
+function ensureCreatorPraisePrefix(openerText: string, prefixes: string[]) {
   const opener = normalizeCommentText(openerText);
-  const normalizedPrefix = normalizeCommentText(prefix).replace(/[.!:,]+$/g, '').trim();
-  if (!opener || !normalizedPrefix) return opener;
-  if (opener.toLowerCase().startsWith(normalizedPrefix.toLowerCase())) {
+  const normalizedPrefixes = prefixes
+    .map((prefix) => normalizeCommentText(prefix).replace(/[.!:,]+$/g, '').trim())
+    .filter(Boolean);
+  const fallbackPrefix = normalizedPrefixes[0] || '';
+  if (!opener || !fallbackPrefix) return opener;
+  if (normalizedPrefixes.some((prefix) => opener.toLowerCase().startsWith(prefix.toLowerCase()))) {
     return opener;
   }
-  return `${normalizedPrefix} ${lowercaseFirst(opener)}`;
+  return `${fallbackPrefix} ${lowercaseFirst(opener)}`;
 }
 
 function validateFinalDraft(input: {
@@ -545,19 +597,26 @@ export async function generateOutreachDrafts(input: {
 
   const requiredPrefixes = selectCreatorPraisePrefixes({
     blueprintId,
-    count: OUTREACH_DRAFT_OPTION_COUNT,
+    count: OUTREACH_DRAFT_PREFIX_CHOICE_COUNT,
   });
+  const compactContext = compactBlueprintContext(context);
   const llmResult = await input.llm.generateVideoOpeners({
     context: {
       ...context,
-      blueprintSectionsJson: compactBlueprintContext(context),
+      videoTitle: compactContext.videoTitle,
+      sourceChannelTitle: compactContext.sourceChannelTitle,
+      blueprintTitle: '',
+      blueprintSummary: null,
+      blueprintReview: null,
+      tags: [],
+      blueprintSectionsJson: { takeaways: compactContext.takeaways },
     },
     count: OUTREACH_DRAFT_OPTION_COUNT,
     requiredPrefixes,
   });
   const rawOpeners = parseOpeners(llmResult.rawText, llmResult.openers);
   const normalizedOpeners = rawOpeners
-    .map((opener, index) => ensureCreatorPraisePrefix(opener, requiredPrefixes[index] || requiredPrefixes[0] || ''))
+    .map((opener) => ensureCreatorPraisePrefix(opener, requiredPrefixes))
     .filter(Boolean);
   const uniqueOpeners = Array.from(new Set(normalizedOpeners)).slice(0, OUTREACH_DRAFT_OPTION_COUNT);
   if (uniqueOpeners.length < OUTREACH_DRAFT_OPTION_COUNT) {

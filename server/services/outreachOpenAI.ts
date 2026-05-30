@@ -2,20 +2,21 @@ import { getOpenAIConstructor } from '../llm/openaiRuntime';
 import type { OutreachDraftContext, OutreachDraftLLM } from './outreachDrafts';
 
 const OUTREACH_SYSTEM_PROMPT = [
-  'You write YouTube comment openers for a normal supportive viewer doing transparent, low-volume outreach.',
-  'Only write the video-specific opener. Do not mention BLEUP, apps, channels, demos, links, promotion, or the founder.',
-  'The opener must be useful even if no promotion is added after it.',
-  'Write like a typical YouTube viewer leaving a friendly, useful comment, not like a subject-matter expert, researcher, critic, or reviewer.',
-  'Assume the audience is broad: beginners, older viewers, younger viewers, professionals, and casual learners should understand the comment quickly.',
-  'Point out one simple, concrete takeaway from the video that a regular person could recognize as useful.',
-  'Be specific to the video. Avoid generic praise. Avoid hype. Avoid medical/financial claims beyond the video context.',
-  'Always sound friendly, useful, and encouraging toward the creator.',
-  'Never use sarcasm, dunking, mockery, gotcha framing, or jokes that imply the creator/video is obvious, silly, wrong, or being corrected.',
-  'Prefer everyday wording and simple, easy-win observations over deep analysis. The comment should feel useful at a glance.',
-  'Avoid sounding like you are analyzing the argument, judging evidence, or summarizing the video academically.',
-  'Create three distinct neutral short insight comments in the exact requested order.',
-  'Return strict JSON: {"openers":["...", "...", "..."]}.',
+  'You are writing one friendly YouTube comment.',
+  'Persona:',
+  'Sound like a normal viewer who uses YouTube to learn useful things. Be warm, relaxed, supportive, and easy to relate to.',
+  '',
+  'Audience:',
+  'The comment is for the creator and regular viewers reading the comments. Write so casual viewers can understand it quickly without background knowledge.',
+  '',
+  'Task:',
+  'Use the video title and takeaways to write one short comment. Pick one simple useful idea and react to it naturally. Value for readers is key here: the comment should point to something helpful, but keep it light, simple, and easy to understand.',
+  '',
+  'Style:',
+  'Keep it plain, friendly, and easy to read at a glance. The comment should feel like a real viewer leaving a kind note after learning something useful.',
 ].join('\n');
+
+type OutreachServiceTier = 'auto' | 'default' | 'flex' | 'priority';
 
 function normalizeReasoningEffort(value: unknown) {
   const normalized = String(value || '').trim().toLowerCase();
@@ -25,54 +26,53 @@ function normalizeReasoningEffort(value: unknown) {
   return 'medium';
 }
 
+function normalizeServiceTier(value: unknown): OutreachServiceTier | null {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'auto') return 'auto';
+  if (normalized === 'default') return 'default';
+  if (normalized === 'flex') return 'flex';
+  if (normalized === 'priority') return 'priority';
+  return null;
+}
+
+function extractTakeaways(context: OutreachDraftContext) {
+  const raw = context.blueprintSectionsJson && typeof context.blueprintSectionsJson === 'object'
+    ? (context.blueprintSectionsJson as { takeaways?: unknown }).takeaways
+    : null;
+  return Array.isArray(raw)
+    ? raw.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 5)
+    : [];
+}
+
 function buildPrompt(input: {
   context: OutreachDraftContext;
   count: number;
   requiredPrefixes?: string[];
 }) {
   const context = input.context;
-  const requiredPrefixes = (input.requiredPrefixes || []).slice(0, input.count);
+  const requiredPrefixes = (input.requiredPrefixes || []).slice(0, 3);
   const prefixLines = requiredPrefixes.length > 0
     ? [
       '',
-      'Required sentence starts:',
-      ...requiredPrefixes.map((prefix, index) => `${index + 1}. Complete this exact sentence start naturally: "${prefix}"`),
+      'Sentence start:',
+      'Start your comment with one of these sentence starts exactly:',
+      ...requiredPrefixes.map((prefix, index) => `${index + 1}. ${prefix}`),
+      '',
+      'Please select the one that fits your comment best.',
     ]
     : [];
   return [
-    `Create exactly ${input.count} distinct YouTube comment opener options in this order:`,
-    '1. Short insight: assigned sentence start plus one simple, specific takeaway, ideally under 120 characters.',
-    '2. Short insight: assigned sentence start plus one simple, specific takeaway, ideally under 120 characters.',
-    '3. Short insight: assigned sentence start plus one simple, specific takeaway, ideally under 120 characters.',
+    'Create exactly one YouTube comment.',
     ...prefixLines,
     '',
-    'Rules:',
-    '- Use the assigned sentence start for each option exactly, then complete it as one natural sentence.',
-    '- Do not make the start feel bolted on. The whole comment should read as one normal YouTube comment.',
-    '- After the assigned start, add one compact useful takeaway from the video.',
-    '- Mention one concrete distinction, idea, example, or takeaway from the video.',
-    '- Focus on a simple practical win, easy takeaway, or clear reminder from the video.',
-    '- Do not go deep, over-explain, or sound analytical. Avoid multi-part breakdowns.',
-    '- Sound like a supportive real viewer who learned something, not an ad.',
-    '- Use everyday wording that many people can relate to quickly.',
-    '- Be friendly and encouraging to the creator.',
-    '- Do not sound sarcastic, dismissive, superior, or like you are correcting the creator.',
-    '- Do not use jokes, emojis, hype, or overly clever phrasing.',
-    '- Do not include a URL.',
-    '- Do not mention BLEUP or any app.',
-    '- Do not ask for likes/subscribes.',
-    '- Keep all three options compact. Each should read like one quick YouTube comment line.',
+    'Never add: URLs. app or promo mention. like/subscribe requests. Return strict JSON: {"comment":"..."}.',
     '',
-    'Video/blueprint context:',
+    'Video context:',
     JSON.stringify({
       video_title: context.videoTitle,
       creator: context.sourceChannelTitle,
-      blueprint_title: context.blueprintTitle,
-      summary: context.blueprintSummary,
-      review: context.blueprintReview,
-      tags: context.tags,
-      sections: context.blueprintSectionsJson,
-    }, null, 2).slice(0, 5000),
+      takeaways: extractTakeaways(context),
+    }, null, 2).slice(0, 1600),
   ].join('\n');
 }
 
@@ -81,8 +81,9 @@ export function createOutreachOpenAIClient(): OutreachDraftLLM {
   if (!apiKey) {
     throw new Error('OPENAI_API_KEY is not set');
   }
-  const model = String(process.env.OPENAI_OUTREACH_MODEL || 'gpt-5.5-mini').trim() || 'gpt-5.5-mini';
-  const reasoningEffort = normalizeReasoningEffort(process.env.OPENAI_OUTREACH_REASONING_EFFORT || 'medium');
+  const model = String(process.env.OPENAI_OUTREACH_MODEL || 'gpt-5.4').trim() || 'gpt-5.4';
+  const reasoningEffort = normalizeReasoningEffort(process.env.OPENAI_OUTREACH_REASONING_EFFORT || 'low');
+  const serviceTier = normalizeServiceTier(process.env.OPENAI_OUTREACH_SERVICE_TIER || 'flex');
   const OpenAI = getOpenAIConstructor();
   const client = new OpenAI({ apiKey });
 
@@ -93,6 +94,7 @@ export function createOutreachOpenAIClient(): OutreachDraftLLM {
         instructions: string;
         input: string;
         reasoning?: { effort: 'low' | 'medium' | 'high' | 'xhigh' };
+        service_tier?: OutreachServiceTier;
       } = {
         model,
         instructions: OUTREACH_SYSTEM_PROMPT,
@@ -102,6 +104,9 @@ export function createOutreachOpenAIClient(): OutreachDraftLLM {
         payload.reasoning = {
           effort: reasoningEffort as 'low' | 'medium' | 'high' | 'xhigh',
         };
+      }
+      if (serviceTier) {
+        payload.service_tier = serviceTier;
       }
       const response = await client.responses.create(payload);
       const rawText = response.output_text?.trim() || null;

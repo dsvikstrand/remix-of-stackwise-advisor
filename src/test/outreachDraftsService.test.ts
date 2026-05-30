@@ -40,18 +40,14 @@ function createStore(overrides?: Partial<OutreachDraftStateStore>): OutreachDraf
 }
 
 describe('outreach draft generation service', () => {
-  it('generates three validated copy-only drafts and stores them', async () => {
+  it('generates one validated copy-only draft from compact context and stores it', async () => {
     let seq = 0;
     const store = createStore();
     const generateVideoOpeners = vi.fn(async () => ({
-      model: 'gpt-5.5-mini',
-      reasoningEffort: 'medium',
+      model: 'gpt-5.4',
+      reasoningEffort: 'low',
       rawText: JSON.stringify({
-        openers: [
-          'The useful part for me was the distinction between retrieval practice and just rereading notes.',
-          'The active recall point makes the review process much easier to understand.',
-          'The short-session framing makes the learning habit feel more repeatable.',
-        ],
+        comment: 'Retrieval practice makes review feel easier.',
       }),
       openers: [],
     }));
@@ -67,26 +63,35 @@ describe('outreach draft generation service', () => {
       },
     });
 
-    expect(result.options).toHaveLength(3);
+    expect(result.options).toHaveLength(1);
     expect(result.options.map((option) => option.roleLabel)).toEqual([
-      'Short insight',
-      'Short insight',
       'Short insight',
     ]);
     expect(result.promoVariants.length).toBeGreaterThanOrEqual(3);
     expect(result.sourceChannelSubscriberCount).toBeNull();
-    expect(generateVideoOpeners).toHaveBeenCalledWith(expect.objectContaining({
-      count: 3,
+    const llmCall = generateVideoOpeners.mock.calls[0]?.[0];
+    expect(llmCall).toEqual(expect.objectContaining({
+      count: 1,
       requiredPrefixes: expect.arrayContaining([
-        expect.stringMatching(/^(Really helpful breakdown of|Great video, the reminder that|Clear explanation of|This was useful, especially the point about|I liked the simple point about)$/),
+        expect.stringMatching(/^(Great video, I liked the reminder that|Really helpful, the simple point about|This was useful, especially the reminder that|Clear and helpful, I liked how you explained|Nice breakdown, the part about)$/),
       ]),
+    }));
+    expect(llmCall.requiredPrefixes).toHaveLength(3);
+    expect(new Set(llmCall.requiredPrefixes).size).toBe(3);
+    expect(llmCall.context).toEqual(expect.objectContaining({
+      videoTitle: 'How to learn faster',
+      sourceChannelTitle: 'Learning Creator',
+      blueprintSummary: null,
+      blueprintReview: null,
+      tags: [],
+      blueprintSectionsJson: {
+        takeaways: ['Retrieval practice beats passive review.', 'Short sessions are easier to repeat.'],
+      },
     }));
     expect(result.options.every((option) => (
       OUTREACH_CREATOR_PRAISE_PREFIXES.some((prefix) => option.finalText.startsWith(prefix))
     ))).toBe(true);
-    expect(result.options[0].finalText).toContain('the useful part for me was the distinction between retrieval practice and just rereading notes.');
-    expect(result.options[1].finalText).toContain('the active recall point makes the review process much easier to understand.');
-    expect(result.options[2].finalText).toContain('the short-session framing makes the learning habit feel more repeatable.');
+    expect(result.options[0].finalText).toContain('retrieval practice makes review feel easier.');
     expect(result.options[0].finalText).not.toContain('BLEUP');
     expect(result.promoVariants[0].text).toContain('P.S.');
     expect(result.promoVariants).toHaveLength(6);
@@ -131,11 +136,7 @@ describe('outreach draft generation service', () => {
           model: 'gpt-5.5-mini',
           reasoningEffort: 'medium',
           rawText: JSON.stringify({
-            openers: [
-              'The cottage cheese point is practical — slower protein makes bedtime easier.',
-              'Greek yogurt for cultures, cottage cheese for staying full — simple enough 🙂',
-              'The snack choice is clearer when fullness and live cultures are separated.',
-            ],
+            comment: 'The cottage cheese point is practical — slower protein makes bedtime easier.',
           }),
           openers: [],
         })),
@@ -143,8 +144,6 @@ describe('outreach draft generation service', () => {
     });
 
     expect(result.options[0].finalText).toContain('the cottage cheese point is practical, slower protein makes bedtime easier.');
-    expect(result.options[1].finalText).toContain('greek yogurt for cultures, cottage cheese for staying full, simple enough 🙂');
-    expect(result.options[2].finalText).toContain('the snack choice is clearer when fullness and live cultures are separated.');
     expect(result.options.every((option) => !option.finalText.includes('—'))).toBe(true);
   });
 
@@ -161,11 +160,7 @@ describe('outreach draft generation service', () => {
           model: 'gpt-5.5-mini',
           reasoningEffort: 'medium',
           rawText: JSON.stringify({
-            openers: [
-              'The cottage cheese versus Greek yogurt distinction makes the bedtime snack choice really practical because it explains fullness, live cultures, gut support, and how each one fits a different goal.',
-              'Greek yogurt for cultures, cottage cheese for staying full, simple enough 🙂',
-              'The snack choice is clearer when fullness and live cultures are separated.',
-            ],
+            comment: 'The cottage cheese versus Greek yogurt distinction makes the bedtime snack choice really practical because it explains fullness, live cultures, gut support, and how each one fits a different goal.',
           }),
           openers: [],
         })),
@@ -257,18 +252,14 @@ describe('outreach draft generation service', () => {
           model: 'gpt-5.5-mini',
           reasoningEffort: 'medium',
           rawText: JSON.stringify({
-            openers: [
-              'The useful point was making learning more active instead of just rereading notes.',
-              'The review loop is clearer when recall comes before rereading.',
-              'The small-session point makes the routine easier to repeat.',
-            ],
+            comment: 'The useful point was making learning more active instead of just rereading notes.',
           }),
           openers: [],
         })),
       },
     });
 
-    expect(result.options).toHaveLength(3);
+    expect(result.options).toHaveLength(1);
   });
 
   it('blocks duplicate drafts for the same video after one is posted', async () => {
@@ -344,18 +335,14 @@ describe('outreach draft generation service', () => {
           model: 'gpt-5.5-mini',
           reasoningEffort: 'medium',
           rawText: JSON.stringify({
-            openers: [
-              'The clearest point was that useful learning needs active recall, not just passive review.',
-              'The spacing idea is easier to use when it is framed as a habit loop.',
-              'Small recall sessions make the system easier to repeat consistently.',
-            ],
+            comment: 'The clearest point was that useful learning needs active recall, not just passive review.',
           }),
           openers: [],
         })),
       },
     });
 
-    expect(result.options).toHaveLength(3);
+    expect(result.options).toHaveLength(1);
     expect(result.limits.channelWindowCap).toBe(3);
   });
 
