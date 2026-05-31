@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   OUTREACH_CREATOR_PRAISE_PREFIXES,
+  OUTREACH_PROMO_FINISHERS,
+  OUTREACH_PROMO_QUESTIONS,
   generateOutreachDrafts,
   OutreachDraftError,
   validateOutreachPostText,
@@ -95,6 +97,11 @@ describe('outreach draft generation service', () => {
     expect(result.options[0].finalText).not.toContain('BLEUP');
     expect(result.promoVariants[0].text).toContain('P.S.');
     expect(result.promoVariants).toHaveLength(6);
+    expect(new Set(result.promoVariants.map((promo) => promo.id)).size).toBe(6);
+    expect(result.promoVariants.every((promo) => (
+      OUTREACH_PROMO_QUESTIONS.some((question) => promo.text.includes(question))
+      && OUTREACH_PROMO_FINISHERS.some((finisher) => promo.text.includes(finisher))
+    ))).toBe(true);
     expect(result.promoVariants.some((promo) => promo.text.includes('YouTube'))).toBe(true);
     expect(result.promoVariants.every((promo) => !promo.text.includes('BLEUP'))).toBe(true);
     expect(result.promoVariants.every((promo) => !promo.text.toLowerCase().includes('profile'))).toBe(true);

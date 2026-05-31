@@ -36,7 +36,6 @@ import {
   type OutreachCandidateStatsRefreshResult,
   type OutreachDraftGenerationResult,
   type OutreachPostedCommentVerificationResult,
-  type OutreachPromoVariant,
 } from '@/lib/adminOutreachApi';
 import { listMyFeedItems } from '@/lib/myFeedApi';
 import type { MyFeedItemView } from '@/lib/myFeedData';
@@ -175,26 +174,6 @@ function appendPromoText(commentText: string, promoText: string) {
   return `${comment}\n\n${promo}`;
 }
 
-function getPromoVariantLabel(promo: OutreachPromoVariant, index: number) {
-  const fallback = `Promo ${index + 1}`;
-  switch (promo.id) {
-    case 'share-keep-up-v6':
-      return 'Keep up';
-    case 'share-takeaways-v6':
-      return 'Useful takeaways';
-    case 'watch-later-revisit-v6':
-      return 'Watch Later';
-    case 'useful-videos-keep-up-v6':
-      return 'Useful videos';
-    case 'useful-takeaways-revisit-v6':
-      return 'Revisit takeaways';
-    case 'good-videos-keep-up-v6':
-      return 'Good videos';
-    default:
-      return fallback;
-  }
-}
-
 function getYouTubeConnectionErrorMessage(error: unknown, fallback: string) {
   if (error instanceof ApiRequestError) {
     switch (error.errorCode) {
@@ -257,6 +236,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
   const [selectedDraftOptionId, setSelectedDraftOptionId] = useState<string | null>(null);
   const [selectedPromoId, setSelectedPromoId] = useState('none');
+  const [suggestedPromoIndex, setSuggestedPromoIndex] = useState(0);
   const [statsFetchLimit, setStatsFetchLimit] = useState(10);
   const [verifyFetchLimit, setVerifyFetchLimit] = useState(10);
   const [verificationResult, setVerificationResult] = useState<OutreachPostedCommentVerificationResult | null>(null);
@@ -309,6 +289,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
       ));
       setSelectedDraftOptionId(result.options[0]?.id || null);
       setSelectedPromoId('none');
+      setSuggestedPromoIndex(0);
       setDraftDialogOpen(true);
     },
     onError: (error) => {
@@ -444,6 +425,20 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
   const getSelectedPromoText = () => {
     if (!draftResult || selectedPromoId === 'none') return '';
     return draftResult.promoVariants.find((promo) => promo.id === selectedPromoId)?.text || '';
+  };
+
+  const currentSuggestedPromo = draftResult?.promoVariants.length
+    ? draftResult.promoVariants[suggestedPromoIndex % draftResult.promoVariants.length]
+    : null;
+
+  const handleResamplePromo = () => {
+    if (!draftResult?.promoVariants.length) return;
+    const nextIndex = (suggestedPromoIndex + 1) % draftResult.promoVariants.length;
+    const nextPromo = draftResult.promoVariants[nextIndex];
+    setSuggestedPromoIndex(nextIndex);
+    if (selectedPromoId !== 'none') {
+      setSelectedPromoId(nextPromo?.id || 'none');
+    }
   };
 
   const buildFinalDraftText = (optionId: string) => {
@@ -890,7 +885,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                 <div className="space-y-1">
                   <div className="text-sm font-medium">Optional promo add-on</div>
                   <p className="text-xs text-muted-foreground">
-                    Default is comment-only. Select one one-liner below to append it when you copy or post.
+                    Default is comment-only. Use the sampled one-liner only when the thread is worth it.
                   </p>
                 </div>
                 <div className="grid gap-2">
@@ -912,30 +907,41 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                     </div>
                     <div className="mt-1">Post or copy the selected comment without a promo.</div>
                   </button>
-                  {draftResult.promoVariants.map((promo, index) => {
-                    const selected = selectedPromoId === promo.id;
-                    return (
-                      <button
-                        key={promo.id}
-                        type="button"
-                        aria-pressed={selected}
-                        className={`rounded-md border p-2 text-left text-xs transition ${
-                          selected
-                            ? 'border-primary bg-primary/10 text-foreground'
-                            : 'border-border/60 bg-background/70 text-muted-foreground hover:border-primary/50 hover:text-foreground'
-                        }`}
-                        onClick={() => setSelectedPromoId(promo.id)}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="font-medium">{getPromoVariantLabel(promo, index)}</span>
-                          {selected ? (
-                            <Badge variant="default" className="h-5 px-2 text-[10px]">Selected</Badge>
-                          ) : null}
-                        </div>
-                        <div className="mt-1 leading-relaxed">{promo.text}</div>
-                      </button>
-                    );
-                  })}
+                  {currentSuggestedPromo ? (
+                    <div
+                      className={`rounded-md border p-2 text-xs transition ${
+                        selectedPromoId === currentSuggestedPromo.id
+                          ? 'border-primary bg-primary/10 text-foreground'
+                          : 'border-border/60 bg-background/70 text-muted-foreground'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-medium">Sampled promo</span>
+                        {selectedPromoId === currentSuggestedPromo.id ? (
+                          <Badge variant="default" className="h-5 px-2 text-[10px]">Selected</Badge>
+                        ) : null}
+                      </div>
+                      <div className="mt-1 leading-relaxed">{currentSuggestedPromo.text}</div>
+                      <div className="mt-2 flex flex-wrap justify-end gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={handleResamplePromo}
+                        >
+                          Resample promo
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={selectedPromoId === currentSuggestedPromo.id ? 'default' : 'outline'}
+                          onClick={() => setSelectedPromoId(currentSuggestedPromo.id)}
+                        >
+                          {selectedPromoId === currentSuggestedPromo.id ? 'Using promo' : 'Use promo'}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
                 {getSelectedPromoText() ? (
                   <div className="space-y-1">

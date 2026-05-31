@@ -218,31 +218,20 @@ export const OUTREACH_CREATOR_PRAISE_PREFIXES = [
   'Nice breakdown, the part about',
 ] as const;
 
-export const OUTREACH_TAIL_VARIANTS = [
-  {
-    id: 'share-keep-up-v6',
-    text: 'P.S. Use YouTube to learn? I share ideas for keeping up with it all.',
-  },
-  {
-    id: 'share-takeaways-v6',
-    text: 'P.S. Learning from YouTube? I share ways to keep track of useful takeaways.',
-  },
-  {
-    id: 'watch-later-revisit-v6',
-    text: 'P.S. Watch Later always growing? I help make useful videos easier to revisit.',
-  },
-  {
-    id: 'useful-videos-keep-up-v6',
-    text: 'P.S. Too many useful videos, not enough time? I can help make it easier to keep up.',
-  },
-  {
-    id: 'useful-takeaways-revisit-v6',
-    text: 'P.S. Use YouTube to learn? I can help keep useful takeaways easier to revisit.',
-  },
-  {
-    id: 'good-videos-keep-up-v6',
-    text: 'P.S. Too many good videos in your feed? I can help make it easier to keep up.',
-  },
+export const OUTREACH_PROMO_QUESTIONS = [
+  'Use YouTube to learn?',
+  'Learning from YouTube?',
+  'Watch Later always growing?',
+  'Too many useful videos, not enough time?',
+  'Too many good videos in your feed?',
+] as const;
+
+export const OUTREACH_PROMO_FINISHERS = [
+  'I share practical ways to keep up with it all.',
+  'I share ways to keep track of useful takeaways.',
+  'I help make useful videos easier to revisit.',
+  'I help make it easier to keep up.',
+  'I can help keep useful takeaways easier to revisit.',
 ] as const;
 
 const OpenersSchema = z.object({
@@ -428,9 +417,25 @@ function selectTailVariant(input: {
   blueprintId: string;
   optionIndex: number;
 }) {
-  const seed = `${input.blueprintId}:${input.optionIndex}`;
-  const index = stableHash(seed) % OUTREACH_TAIL_VARIANTS.length;
-  return OUTREACH_TAIL_VARIANTS[index];
+  return buildPromoVariants({ blueprintId: input.blueprintId, count: 1, salt: `tail:${input.optionIndex}` })[0];
+}
+
+function buildPromoVariants(input: {
+  blueprintId: string;
+  count: number;
+  salt?: string;
+}): OutreachPromoVariant[] {
+  const combinations = OUTREACH_PROMO_QUESTIONS.flatMap((question, questionIndex) => (
+    OUTREACH_PROMO_FINISHERS.map((finisher, finisherIndex) => ({
+      id: `promo-q${questionIndex + 1}-f${finisherIndex + 1}`,
+      text: `P.S. ${question} ${finisher}`,
+    }))
+  ));
+  const start = stableHash(`${input.blueprintId}:${input.salt || 'promo'}`) % combinations.length;
+  const step = 7; // Coprime with 25 combinations, so resamples spread across both banks.
+  return Array.from({ length: Math.min(input.count, combinations.length) }, (_, index) => (
+    combinations[(start + (index * step)) % combinations.length]
+  ));
 }
 
 function selectCreatorPraisePrefixes(input: {
@@ -693,10 +698,7 @@ export async function generateOutreachDrafts(input: {
       ...option,
       id: insertedIds[index] || option.id,
     })),
-    promoVariants: OUTREACH_TAIL_VARIANTS.map((variant) => ({
-      id: variant.id,
-      text: variant.text,
-    })),
+    promoVariants: buildPromoVariants({ blueprintId: context.blueprintId, count: 6 }),
     limits: {
       dailyCap: OUTREACH_DRAFT_DAILY_CAP,
       channelWindowDays: OUTREACH_DRAFT_CHANNEL_WINDOW_DAYS,
