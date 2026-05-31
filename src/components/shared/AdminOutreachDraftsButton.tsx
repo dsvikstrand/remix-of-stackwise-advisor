@@ -409,6 +409,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
     onSuccess: (result) => {
       setPostedDraftIds((current) => new Set(current).add(result.draftId));
       setPostedBlueprintIds((current) => new Set(current).add(result.blueprintId));
+      setDraftDialogOpen(false);
       const visible = result.status === 'posted' && result.verification?.visible !== false;
       toast({
         title: visible ? 'Comment posted' : 'Comment submitted, visibility not confirmed',

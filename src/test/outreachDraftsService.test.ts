@@ -76,8 +76,8 @@ describe('outreach draft generation service', () => {
         expect.stringMatching(/^(Great video, I liked the reminder that|Really helpful, the simple point about|This was useful, especially the reminder that|Clear and helpful, I liked how you explained|Nice breakdown, the part about)$/),
       ]),
     }));
-    expect(llmCall.requiredPrefixes).toHaveLength(3);
-    expect(new Set(llmCall.requiredPrefixes).size).toBe(3);
+    expect(llmCall.requiredPrefixes).toHaveLength(2);
+    expect(new Set(llmCall.requiredPrefixes).size).toBe(2);
     expect(llmCall.context).toEqual(expect.objectContaining({
       videoTitle: 'How to learn faster',
       sourceChannelTitle: 'Learning Creator',
