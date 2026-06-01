@@ -229,8 +229,7 @@ export const OUTREACH_PROMO_QUESTIONS = [
 export const OUTREACH_PROMO_FINISHERS = [
   'I share practical ways to keep up with it all.',
   'I share ways to keep track of useful takeaways.',
-  'I help make useful videos easier to revisit.',
-  'I help make it easier to keep up.',
+  'I can help make it simpler to keep up.',
   'I can help keep useful takeaways easier to revisit.',
 ] as const;
 
