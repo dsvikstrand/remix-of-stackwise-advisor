@@ -3,7 +3,6 @@ import {
   OUTREACH_CREATOR_PRAISE_PREFIXES,
   OUTREACH_PROMO_FINISHERS,
   OUTREACH_PROMO_QUESTIONS,
-  OUTREACH_PROMO_SUFFIXES,
   generateOutreachDrafts,
   OutreachDraftError,
   validateOutreachPostText,
@@ -100,11 +99,7 @@ describe('outreach draft generation service', () => {
     expect(result.promoVariants).toHaveLength(6);
     expect(new Set(result.promoVariants.map((promo) => promo.id)).size).toBe(6);
     const allowedPromoTexts = new Set(OUTREACH_PROMO_QUESTIONS.flatMap((question) => (
-      OUTREACH_PROMO_FINISHERS.flatMap((finisher) => (
-        OUTREACH_PROMO_SUFFIXES.map((suffix) => (
-          `P.S. ${question} ${finisher} ${suffix}`.replace(/\s+/g, ' ').trim()
-        ))
-      ))
+      OUTREACH_PROMO_FINISHERS.map((finisher) => `P.S. ${question} ${finisher}`)
     )));
     expect(result.promoVariants.every((promo) => (
       OUTREACH_PROMO_QUESTIONS.some((question) => promo.text.includes(question))
@@ -112,7 +107,7 @@ describe('outreach draft generation service', () => {
     ))).toBe(true);
     expect(result.promoVariants.every((promo) => allowedPromoTexts.has(promo.text))).toBe(true);
     expect(result.promoVariants.some((promo) => promo.text.includes('YouTube'))).toBe(true);
-    expect(OUTREACH_PROMO_SUFFIXES).toContain('More on my channel.');
+    expect(result.promoVariants.every((promo) => !promo.text.includes('More on my channel'))).toBe(true);
     expect(result.promoVariants.every((promo) => !promo.text.includes('BLEUP'))).toBe(true);
     expect(result.promoVariants.every((promo) => !promo.text.toLowerCase().includes('profile'))).toBe(true);
     expect(result.promoVariants.every((promo) => !promo.text.includes('\n'))).toBe(true);

@@ -69,6 +69,8 @@ type AdminOutreachDraftsSheetProps = {
   onOpenChange: (open: boolean) => void;
 };
 
+const OUTREACH_PROMO_CHANNEL_SUFFIX = 'More on my channel.';
+
 function getStatusView(status: OutreachCandidate['status']) {
   switch (status) {
     case 'ready':
@@ -237,6 +239,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
   const [selectedDraftOptionId, setSelectedDraftOptionId] = useState<string | null>(null);
   const [selectedPromoId, setSelectedPromoId] = useState('none');
+  const [selectedPromoSuffix, setSelectedPromoSuffix] = useState<'none' | 'channel'>('none');
   const [suggestedPromoIndex, setSuggestedPromoIndex] = useState(0);
   const [statsFetchLimit, setStatsFetchLimit] = useState(10);
   const [verifyFetchLimit, setVerifyFetchLimit] = useState(10);
@@ -315,6 +318,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
       ));
       setSelectedDraftOptionId(result.options[0]?.id || null);
       setSelectedPromoId('none');
+      setSelectedPromoSuffix('none');
       setSuggestedPromoIndex(0);
       setDraftDialogOpen(true);
     },
@@ -455,6 +459,13 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
     return draftResult.promoVariants.find((promo) => promo.id === selectedPromoId)?.text || '';
   };
 
+  const getSelectedPromoAddOnText = () => {
+    const promoText = getSelectedPromoText();
+    if (!promoText) return '';
+    const suffixText = selectedPromoSuffix === 'channel' ? OUTREACH_PROMO_CHANNEL_SUFFIX : '';
+    return [promoText, suffixText].filter(Boolean).join(' ');
+  };
+
   const currentSuggestedPromo = draftResult?.promoVariants.length
     ? draftResult.promoVariants[suggestedPromoIndex % draftResult.promoVariants.length]
     : null;
@@ -472,7 +483,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
   const buildFinalDraftText = (optionId: string) => {
     const option = draftResult?.options.find((draftOption) => draftOption.id === optionId);
     const commentText = draftEdits[optionId] ?? option?.finalText ?? '';
-    return appendPromoText(commentText, getSelectedPromoText());
+    return appendPromoText(commentText, getSelectedPromoAddOnText());
   };
 
   const selectedDraftOption = draftResult?.options.find((option) => option.id === selectedDraftOptionId) || null;
@@ -487,7 +498,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
     await navigator.clipboard.writeText(text);
     toast({
       title: 'Draft copied',
-      description: getSelectedPromoText()
+      description: getSelectedPromoAddOnText()
         ? 'Copied with the selected promo appended.'
         : 'Copied as a regular comment.',
     });
@@ -495,7 +506,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
 
   const handlePostSelectedDraft = () => {
     if (!selectedDraftOption) return;
-    const promoText = getSelectedPromoText();
+    const promoText = getSelectedPromoAddOnText();
     const finalText = selectedDraftFinalText;
     if (!finalText.trim()) return;
     const confirmed = window.confirm(
@@ -968,16 +979,60 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                           {selectedPromoId === currentSuggestedPromo.id ? 'Using promo' : 'Use promo'}
                         </Button>
                       </div>
+                      {selectedPromoId === currentSuggestedPromo.id ? (
+                        <div className="mt-3 space-y-2 border-t border-border/50 pt-3">
+                          <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                            Optional suffix
+                          </div>
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <button
+                              type="button"
+                              aria-pressed={selectedPromoSuffix === 'none'}
+                              className={`rounded-md border p-2 text-left transition ${
+                                selectedPromoSuffix === 'none'
+                                  ? 'border-primary bg-primary/10 text-foreground'
+                                  : 'border-border/60 bg-background/70 text-muted-foreground hover:border-primary/50 hover:text-foreground'
+                              }`}
+                              onClick={() => setSelectedPromoSuffix('none')}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-medium">No suffix</span>
+                                {selectedPromoSuffix === 'none' ? (
+                                  <Badge variant="default" className="h-5 px-2 text-[10px]">Selected</Badge>
+                                ) : null}
+                              </div>
+                            </button>
+                            <button
+                              type="button"
+                              aria-pressed={selectedPromoSuffix === 'channel'}
+                              className={`rounded-md border p-2 text-left transition ${
+                                selectedPromoSuffix === 'channel'
+                                  ? 'border-primary bg-primary/10 text-foreground'
+                                  : 'border-border/60 bg-background/70 text-muted-foreground hover:border-primary/50 hover:text-foreground'
+                              }`}
+                              onClick={() => setSelectedPromoSuffix('channel')}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-medium">Add channel suffix</span>
+                                {selectedPromoSuffix === 'channel' ? (
+                                  <Badge variant="default" className="h-5 px-2 text-[10px]">Selected</Badge>
+                                ) : null}
+                              </div>
+                              <div className="mt-1">{OUTREACH_PROMO_CHANNEL_SUFFIX}</div>
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
-                {getSelectedPromoText() ? (
+                {getSelectedPromoAddOnText() ? (
                   <div className="space-y-1">
                     <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                       Selected add-on preview
                     </div>
                     <div className="rounded-md bg-background/70 p-2 text-xs text-muted-foreground">
-                      {getSelectedPromoText()}
+                      {getSelectedPromoAddOnText()}
                     </div>
                   </div>
                 ) : null}

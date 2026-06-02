@@ -233,12 +233,6 @@ export const OUTREACH_PROMO_FINISHERS = [
   'I can help with practical ways to keep up.',
 ] as const;
 
-export const OUTREACH_PROMO_SUFFIXES = [
-  '',
-  '',
-  'More on my channel.',
-] as const;
-
 const OpenersSchema = z.object({
   openers: z.array(z.string().min(20).max(MAX_OPENER_CHARS)).min(1).max(5),
 });
@@ -431,12 +425,10 @@ function buildPromoVariants(input: {
   salt?: string;
 }): OutreachPromoVariant[] {
   const combinations = OUTREACH_PROMO_QUESTIONS.flatMap((question, questionIndex) => (
-    OUTREACH_PROMO_FINISHERS.flatMap((finisher, finisherIndex) => (
-      OUTREACH_PROMO_SUFFIXES.map((suffix, suffixIndex) => ({
-        id: `promo-q${questionIndex + 1}-f${finisherIndex + 1}-s${suffixIndex + 1}`,
-        text: normalizeText(`P.S. ${question} ${finisher} ${suffix}`),
-      }))
-    ))
+    OUTREACH_PROMO_FINISHERS.map((finisher, finisherIndex) => ({
+      id: `promo-q${questionIndex + 1}-f${finisherIndex + 1}`,
+      text: `P.S. ${question} ${finisher}`,
+    }))
   ));
   const start = stableHash(`${input.blueprintId}:${input.salt || 'promo'}`) % combinations.length;
   const step = 7; // Coprime with the current combination count, so resamples spread across banks.
