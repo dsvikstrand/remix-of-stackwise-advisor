@@ -221,16 +221,22 @@ export const OUTREACH_CREATOR_PRAISE_PREFIXES = [
 export const OUTREACH_PROMO_QUESTIONS = [
   'Use YouTube to learn?',
   'Learning from YouTube?',
-  'Watch Later always growing?',
   'Too many useful videos, not enough time?',
-  'Too many good videos in your feed?',
+  'Too many useful videos in your feed?',
 ] as const;
 
 export const OUTREACH_PROMO_FINISHERS = [
   'I share practical ways to keep up with it all.',
   'I share ways to keep track of useful takeaways.',
-  'I can help make it simpler to keep up.',
+  'I can help make keeping up more practical.',
   'I can help keep useful takeaways easier to revisit.',
+  'I can help with practical ways to keep up.',
+] as const;
+
+export const OUTREACH_PROMO_SUFFIXES = [
+  '',
+  '',
+  'More on my channel.',
 ] as const;
 
 const OpenersSchema = z.object({
@@ -425,13 +431,15 @@ function buildPromoVariants(input: {
   salt?: string;
 }): OutreachPromoVariant[] {
   const combinations = OUTREACH_PROMO_QUESTIONS.flatMap((question, questionIndex) => (
-    OUTREACH_PROMO_FINISHERS.map((finisher, finisherIndex) => ({
-      id: `promo-q${questionIndex + 1}-f${finisherIndex + 1}`,
-      text: `P.S. ${question} ${finisher}`,
-    }))
+    OUTREACH_PROMO_FINISHERS.flatMap((finisher, finisherIndex) => (
+      OUTREACH_PROMO_SUFFIXES.map((suffix, suffixIndex) => ({
+        id: `promo-q${questionIndex + 1}-f${finisherIndex + 1}-s${suffixIndex + 1}`,
+        text: normalizeText(`P.S. ${question} ${finisher} ${suffix}`),
+      }))
+    ))
   ));
   const start = stableHash(`${input.blueprintId}:${input.salt || 'promo'}`) % combinations.length;
-  const step = 7; // Coprime with 25 combinations, so resamples spread across both banks.
+  const step = 7; // Coprime with the current combination count, so resamples spread across banks.
   return Array.from({ length: Math.min(input.count, combinations.length) }, (_, index) => (
     combinations[(start + (index * step)) % combinations.length]
   ));
