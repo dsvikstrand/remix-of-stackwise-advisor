@@ -64,6 +64,22 @@ export type OutreachPostResult = {
   };
 };
 
+export type PostedOutreachDraftsResult = {
+  items: Array<{
+    draftId: string;
+    draftGroupId: string;
+    blueprintId: string;
+    sourceItemId: string;
+    youtubeVideoId: string;
+    videoUrl: string | null;
+    sourceChannelTitle: string | null;
+    youtubeCommentId: string | null;
+    finalText: string;
+    status: string | null;
+    postedAt: string | null;
+  }>;
+};
+
 export type OutreachCandidateStatsRefreshResult = {
   requested: number;
   refreshed: number;
@@ -167,6 +183,28 @@ export async function postOutreachDraft(input: {
   const json = (await response.json().catch(() => null)) as ApiEnvelope<OutreachPostResult> | null;
   if (!response.ok || !json?.ok || !json.data) {
     throw new Error(json?.message || `Outreach post request failed (${response.status})`);
+  }
+  return json.data;
+}
+
+export async function getPostedOutreachDrafts(input: {
+  limit?: number;
+} = {}) {
+  const base = getApiBase();
+  if (!base) throw new Error('Backend API is not configured.');
+
+  const authHeader = await getRequiredAuthHeader();
+  const params = new URLSearchParams({
+    limit: String(Math.max(1, Math.min(50, Math.floor(Number(input.limit || 50))))),
+  });
+  const response = await fetch(`${base}/admin/outreach-drafts/posted?${params.toString()}`, {
+    headers: {
+      ...authHeader,
+    },
+  });
+  const json = (await response.json().catch(() => null)) as ApiEnvelope<PostedOutreachDraftsResult> | null;
+  if (!response.ok || !json?.ok || !json.data) {
+    throw new Error(json?.message || `Posted outreach drafts request failed (${response.status})`);
   }
   return json.data;
 }

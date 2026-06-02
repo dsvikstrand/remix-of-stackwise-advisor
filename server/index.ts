@@ -9111,6 +9111,17 @@ registerTagRoutes(app, {
 
 registerAdminOutreachRoutes(app, {
   getCredits,
+  listPostedDrafts: async ({ adminUserId, limit }) => {
+    if (!oracleControlPlane) {
+      throw new Error('Oracle control plane is not configured');
+    }
+    return createOracleOutreachDraftStateStore({
+      controlDb: oracleControlPlane,
+    }).listPostedDrafts({
+      adminUserId,
+      limit,
+    });
+  },
   refreshCandidateStats: async ({ adminUserId, sourceItemIds }) => {
     return refreshOutreachCandidateSourceStats({
       adminUserId,

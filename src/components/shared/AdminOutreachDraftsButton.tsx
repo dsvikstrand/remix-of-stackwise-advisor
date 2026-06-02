@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Copy, ExternalLink, Megaphone, MessageSquareText, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -30,6 +30,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ApiRequestError } from '@/lib/subscriptionsApi';
 import {
   generateOutreachDrafts,
+  getPostedOutreachDrafts,
   postOutreachDraft,
   refreshOutreachCandidateStats,
   verifyPostedOutreachComments,
@@ -260,6 +261,31 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
     enabled: Boolean(open && user?.id),
     staleTime: 60_000,
   });
+  const postedOutreachQuery = useQuery({
+    queryKey: ['admin-outreach-posted-drafts', user?.id],
+    queryFn: async () => getPostedOutreachDrafts({ limit: 50 }),
+    enabled: Boolean(open && user?.id),
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    const items = postedOutreachQuery.data?.items || [];
+    if (items.length === 0) return;
+    setPostedDraftIds((current) => {
+      const next = new Set(current);
+      for (const item of items) {
+        if (item.draftId) next.add(item.draftId);
+      }
+      return next;
+    });
+    setPostedBlueprintIds((current) => {
+      const next = new Set(current);
+      for (const item of items) {
+        if (item.blueprintId) next.add(item.blueprintId);
+      }
+      return next;
+    });
+  }, [postedOutreachQuery.data]);
 
   const candidates = useMemo(
     () => (candidatesQuery.data || []).map((candidate) => {
@@ -339,6 +365,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
         description: `Fetched ${result.requested} videos using about ${result.quotaUnitsEstimated} YouTube quota unit${result.quotaUnitsEstimated === 1 ? '' : 's'}.`,
       });
       void candidatesQuery.refetch();
+      void postedOutreachQuery.refetch();
     },
     onError: (error) => {
       toast({
@@ -401,6 +428,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
         variant: visible ? 'default' : 'destructive',
       });
       void candidatesQuery.refetch();
+      void postedOutreachQuery.refetch();
     },
     onError: (error) => {
       if (error instanceof ApiRequestError && error.errorCode === 'YT_REAUTH_REQUIRED') {
