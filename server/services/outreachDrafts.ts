@@ -204,7 +204,7 @@ export const OUTREACH_DRAFT_DAILY_CAP = 0;
 export const OUTREACH_DRAFT_CHANNEL_WINDOW_DAYS = 7;
 export const OUTREACH_DRAFT_CHANNEL_WINDOW_CAP = 3;
 export const OUTREACH_DRAFT_OPTION_COUNT = 1;
-const OUTREACH_DRAFT_PREFIX_CHOICE_COUNT = 2;
+const OUTREACH_DRAFT_PREFIX_CHOICE_COUNT = 3;
 
 const MAX_OPENER_CHARS = 420;
 const MAX_SHORT_OPENER_CHARS = 140;
@@ -216,6 +216,16 @@ export const OUTREACH_CREATOR_PRAISE_PREFIXES = [
   'This was useful, especially the reminder that',
   'Clear and helpful, I liked how you explained',
   'Nice breakdown, the part about',
+  'Helpful video, I liked the point that',
+  'Really useful explanation, especially the idea that',
+  'Good reminder, the part about',
+  'This made the point about',
+  'I liked how you kept the focus on',
+  'Helpful takeaway, especially the point that',
+  'This was clear, the reminder about',
+  'Useful breakdown, especially how you explained',
+  'Good explanation, I liked the simple takeaway that',
+  'This was helpful, especially the part about',
 ] as const;
 
 export const OUTREACH_PROMO_QUESTIONS = [

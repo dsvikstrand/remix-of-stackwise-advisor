@@ -75,11 +75,11 @@ describe('outreach draft generation service', () => {
     expect(llmCall).toEqual(expect.objectContaining({
       count: 1,
       requiredPrefixes: expect.arrayContaining([
-        expect.stringMatching(/^(Great video, I liked the reminder that|Really helpful, the simple point about|This was useful, especially the reminder that|Clear and helpful, I liked how you explained|Nice breakdown, the part about)$/),
+        expect.stringMatching(/^(Great video, I liked the reminder that|Really helpful, the simple point about|This was useful, especially the reminder that|Clear and helpful, I liked how you explained|Nice breakdown, the part about|Helpful video, I liked the point that|Really useful explanation, especially the idea that|Good reminder, the part about|This made the point about|I liked how you kept the focus on|Helpful takeaway, especially the point that|This was clear, the reminder about|Useful breakdown, especially how you explained|Good explanation, I liked the simple takeaway that|This was helpful, especially the part about)$/),
       ]),
     }));
-    expect(llmCall.requiredPrefixes).toHaveLength(2);
-    expect(new Set(llmCall.requiredPrefixes).size).toBe(2);
+    expect(llmCall.requiredPrefixes).toHaveLength(3);
+    expect(new Set(llmCall.requiredPrefixes).size).toBe(3);
     expect(llmCall.context).toEqual(expect.objectContaining({
       videoTitle: 'How to learn faster',
       sourceChannelTitle: 'Learning Creator',

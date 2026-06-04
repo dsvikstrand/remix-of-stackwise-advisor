@@ -317,8 +317,8 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
         result.options.map((option) => [option.id, option.finalText]),
       ));
       setSelectedDraftOptionId(result.options[0]?.id || null);
-      setSelectedPromoId('none');
-      setSelectedPromoSuffix('none');
+      setSelectedPromoId(result.promoVariants[0]?.id || 'none');
+      setSelectedPromoSuffix(result.promoVariants[0]?.id ? 'channel' : 'none');
       setSuggestedPromoIndex(0);
       setDraftDialogOpen(true);
     },
