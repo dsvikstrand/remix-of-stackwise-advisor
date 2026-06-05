@@ -88,6 +88,7 @@ export type OutreachDraftHistoryRow = {
   status?: string | null;
   youtube_comment_id?: string | null;
   posted_at?: string | null;
+  comment_deleted_at?: string | null;
   last_visibility_checked_at?: string | null;
   last_visibility_status?: string | null;
   last_visibility_error_code?: string | null;
@@ -122,6 +123,7 @@ export type OutreachDraftStateStore = {
   listPostedDrafts: (input: {
     adminUserId: string;
     limit: number;
+    includeDeleted?: boolean;
   }) => Promise<OutreachDraftHistoryRow[]>;
   getDraftOption: (input: {
     draftId: string;
@@ -174,6 +176,14 @@ export type OutreachDraftStateStore = {
     finalText: string;
     errorCode: string;
     errorMessage: string;
+    updatedAt: string;
+  }) => Promise<boolean>;
+  markDraftCommentDeleted: (input: {
+    draftId: string;
+    adminUserId: string;
+    deletedAt: string;
+    errorCode?: string | null;
+    errorMessage?: string | null;
     updatedAt: string;
   }) => Promise<boolean>;
   markDraftVisibilityChecked: (input: {
@@ -296,6 +306,7 @@ function isPostedOutreachRow(row: {
   posted_at?: string | null;
 }) {
   const status = normalizeText(row.status).toLowerCase();
+  if (status === 'comment_deleted') return false;
   return status === 'posted'
     || status === 'posted_unverified'
     || Boolean(normalizeText(row.youtube_comment_id))

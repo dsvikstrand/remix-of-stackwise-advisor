@@ -361,6 +361,7 @@ type OutreachDraftStateTable = {
   validation_json: string;
   youtube_comment_id: string | null;
   posted_at: string | null;
+  comment_deleted_at: string | null;
   post_error_code: string | null;
   post_error_message: string | null;
   last_visibility_checked_at: string | null;
@@ -1051,6 +1052,7 @@ CREATE TABLE IF NOT EXISTS outreach_draft_state (
   validation_json TEXT NOT NULL,
   youtube_comment_id TEXT,
   posted_at TEXT,
+  comment_deleted_at TEXT,
   post_error_code TEXT,
   post_error_message TEXT,
   last_visibility_checked_at TEXT,
@@ -1524,6 +1526,12 @@ export function openOracleControlPlaneDb(input: {
     tableName: 'outreach_draft_state',
     columnName: 'posted_at',
     columnSql: 'posted_at TEXT',
+  });
+  ensureSqliteColumn({
+    sqlite,
+    tableName: 'outreach_draft_state',
+    columnName: 'comment_deleted_at',
+    columnSql: 'comment_deleted_at TEXT',
   });
   ensureSqliteColumn({
     sqlite,

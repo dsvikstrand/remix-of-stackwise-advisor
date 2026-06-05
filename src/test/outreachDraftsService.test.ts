@@ -36,6 +36,7 @@ function createStore(overrides?: Partial<OutreachDraftStateStore>): OutreachDraf
     markDraftPosting: vi.fn(async () => true),
     markDraftPosted: vi.fn(async () => true),
     markDraftPostFailed: vi.fn(async () => true),
+    markDraftCommentDeleted: vi.fn(async () => true),
     markDraftVisibilityChecked: vi.fn(async () => true),
     ...overrides,
   };

@@ -13,6 +13,10 @@ function createMockApp() {
       handlers[`POST ${path}`] = args[args.length - 1];
       return this;
     },
+    delete(path: string, ...args: Array<(req: unknown, res: unknown) => Promise<unknown>>) {
+      handlers[`DELETE ${path}`] = args[args.length - 1];
+      return this;
+    },
   };
 }
 
@@ -65,6 +69,7 @@ describe('admin outreach route', () => {
 
     expect(listPostedDrafts).toHaveBeenCalledWith({
       adminUserId: 'admin_1',
+      includeDeleted: true,
       limit: 25,
     });
     expect(res.statusCode).toBe(200);
@@ -226,6 +231,46 @@ describe('admin outreach route', () => {
 
     expect(res.statusCode).toBe(403);
     expect(postOutreachDraft).not.toHaveBeenCalled();
+  });
+
+  it('removes posted outreach comments for admin users', async () => {
+    const app = createMockApp();
+    const deleteOutreachComment = vi.fn(async () => ({
+      draftId: 'draft_1',
+      draftGroupId: 'group_1',
+      blueprintId: 'bp_1',
+      sourceItemId: 'source_1',
+      youtubeVideoId: 'abc123xyz89',
+      videoUrl: 'https://www.youtube.com/watch?v=abc123xyz89',
+      youtubeCommentId: 'comment_1',
+      finalText: 'Posted comment',
+      status: 'comment_deleted' as const,
+      deletedAt: '2026-05-18T08:30:00.000Z',
+    }));
+    registerAdminOutreachRoutes(app as any, {
+      getCredits: vi.fn(async () => ({ plan: 'admin' })),
+      generateOutreachDrafts: vi.fn(),
+      postOutreachDraft: vi.fn(),
+      deleteOutreachComment,
+    });
+
+    const res = createResponse('admin_1');
+    await app.handlers['DELETE /api/admin/outreach-drafts/:draftId/comment']({
+      params: { draftId: 'draft_1' },
+    } as any, res as any);
+
+    expect(deleteOutreachComment).toHaveBeenCalledWith({
+      adminUserId: 'admin_1',
+      draftId: 'draft_1',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      data: {
+        status: 'comment_deleted',
+        youtubeCommentId: 'comment_1',
+      },
+    });
   });
 
   it('verifies posted outreach comments for admin users', async () => {

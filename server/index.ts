@@ -556,12 +556,14 @@ import { registerAdminOutreachRoutes } from './routes/adminOutreach';
 import { generateOutreachDrafts, OutreachDraftError, type OutreachDraftContext } from './services/outreachDrafts';
 import { createOutreachOpenAIClient } from './services/outreachOpenAI';
 import { postOutreachDraft } from './services/outreachPosting';
+import { deleteOutreachDraftComment } from './services/outreachCommentDeletion';
 import { verifyPostedOutreachComments } from './services/outreachVerification';
 import { getCachedOutreachChannelStats } from './services/outreachChannelStats';
 import { createOracleOutreachDraftStateStore } from './services/oracleOutreachDraftState';
 import { runOutreachAutoPostCycle, type OutreachAutoCandidate } from './services/outreachAutoPost';
 import {
   hasYouTubeCommentPostScope,
+  deleteYouTubeTopLevelComment,
   postYouTubeTopLevelComment,
   verifyYouTubeTopLevelCommentVisible,
   YOUTUBE_COMMENT_POST_SCOPE,
@@ -9160,6 +9162,12 @@ registerAdminOutreachRoutes(app, {
       finalText,
     });
   },
+  deleteOutreachComment: async ({ adminUserId, draftId }) => {
+    return deleteAdminOutreachComment({
+      adminUserId,
+      draftId,
+    });
+  },
   verifyPostedComments: async ({ adminUserId, limit }) => {
     if (!oracleControlPlane) {
       throw new Error('Oracle control plane is not configured');
@@ -11229,14 +11237,7 @@ async function generateAdminOutreachDraftsForBlueprint(input: {
   });
 }
 
-async function postAdminOutreachDraft(input: {
-  adminUserId: string;
-  draftId: string;
-  finalText: string;
-}) {
-  if (!oracleControlPlane) {
-    throw new Error('Oracle control plane is not configured');
-  }
+async function getAdminYouTubeCommentAccessToken(adminUserId: string) {
   const db = getServiceSupabaseClient();
   if (!db) {
     throw new OutreachDraftError(500, 'CONFIG_ERROR', 'Service role client is not configured.');
@@ -11252,7 +11253,7 @@ async function postAdminOutreachDraft(input: {
   const { data: connection, error: connectionError } = await db
     .from('user_youtube_connections')
     .select('id, user_id, google_sub, youtube_channel_id, youtube_channel_title, youtube_channel_url, youtube_channel_avatar_url, access_token_encrypted, refresh_token_encrypted, token_expires_at, scope, is_active, last_import_at, last_error')
-    .eq('user_id', input.adminUserId)
+    .eq('user_id', adminUserId)
     .eq('is_active', true)
     .maybeSingle();
   if (connectionError) {
@@ -11275,6 +11276,18 @@ async function postAdminOutreachDraft(input: {
   if (!hasYouTubeCommentPostScope(usable.connection.scope)) {
     throw new OutreachDraftError(401, 'YT_REAUTH_REQUIRED', 'Reconnect YouTube with comment permission before posting.');
   }
+  return usable.accessToken;
+}
+
+async function postAdminOutreachDraft(input: {
+  adminUserId: string;
+  draftId: string;
+  finalText: string;
+}) {
+  if (!oracleControlPlane) {
+    throw new Error('Oracle control plane is not configured');
+  }
+  const accessToken = await getAdminYouTubeCommentAccessToken(input.adminUserId);
 
   return postOutreachDraft({
     adminUserId: input.adminUserId,
@@ -11285,15 +11298,38 @@ async function postAdminOutreachDraft(input: {
     }),
     youtubeClient: {
       postTopLevelComment: ({ videoId, text }) => postYouTubeTopLevelComment({
-        accessToken: usable.accessToken,
+        accessToken,
         videoId,
         text,
       }),
       verifyTopLevelCommentVisible: ({ youtubeCommentId }) => verifyYouTubeTopLevelCommentVisible({
-        accessToken: usable.accessToken,
+        accessToken,
         youtubeCommentId,
         attempts: 3,
         delayMs: 1000,
+      }),
+    },
+  });
+}
+
+async function deleteAdminOutreachComment(input: {
+  adminUserId: string;
+  draftId: string;
+}) {
+  if (!oracleControlPlane) {
+    throw new Error('Oracle control plane is not configured');
+  }
+  const accessToken = await getAdminYouTubeCommentAccessToken(input.adminUserId);
+  return deleteOutreachDraftComment({
+    adminUserId: input.adminUserId,
+    draftId: input.draftId,
+    stateStore: createOracleOutreachDraftStateStore({
+      controlDb: oracleControlPlane,
+    }),
+    youtubeClient: {
+      deleteComment: ({ youtubeCommentId }) => deleteYouTubeTopLevelComment({
+        accessToken,
+        youtubeCommentId,
       }),
     },
   });

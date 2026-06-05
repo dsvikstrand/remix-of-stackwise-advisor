@@ -52,7 +52,10 @@ function addDays(date: Date, days: number) {
 }
 
 function isPosted(row: { status?: string | null; youtube_comment_id?: string | null; posted_at?: string | null }) {
-  return normalizeString(row.status).toLowerCase() === 'posted'
+  const status = normalizeString(row.status).toLowerCase();
+  if (status === 'comment_deleted') return false;
+  return status === 'posted'
+    || status === 'posted_unverified'
     || Boolean(normalizeString(row.youtube_comment_id))
     || Boolean(normalizeString(row.posted_at));
 }

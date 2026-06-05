@@ -2,6 +2,7 @@ import type express from 'express';
 import type { OutreachDraftGenerationResult, OutreachDraftHistoryRow } from '../services/outreachDrafts';
 import { OutreachDraftError } from '../services/outreachDrafts';
 import type { OutreachPostResult } from '../services/outreachPosting';
+import type { OutreachCommentDeleteResult } from '../services/outreachCommentDeletion';
 import type { OutreachPostedCommentVerificationResult } from '../services/outreachVerification';
 
 type OutreachCandidateStatsRefreshResult = {
@@ -33,6 +34,10 @@ type AdminOutreachDeps = {
     draftId: string;
     finalText: string | null;
   }) => Promise<OutreachPostResult>;
+  deleteOutreachComment?: (input: {
+    adminUserId: string;
+    draftId: string;
+  }) => Promise<OutreachCommentDeleteResult>;
   listPostedDrafts?: (input: {
     adminUserId: string;
     limit: number;
@@ -107,6 +112,7 @@ export function registerAdminOutreachRoutes(app: express.Express, deps: AdminOut
       const rows = await deps.listPostedDrafts({
         adminUserId: userId,
         limit,
+        includeDeleted: true,
       });
       return res.json(withEnvelope({
         items: rows.map((row) => ({
@@ -121,6 +127,7 @@ export function registerAdminOutreachRoutes(app: express.Express, deps: AdminOut
           finalText: row.final_text,
           status: row.status || null,
           postedAt: row.posted_at || null,
+          commentDeletedAt: row.comment_deleted_at || null,
         })),
       }, 'posted outreach drafts listed'));
     } catch (error) {
@@ -317,6 +324,50 @@ export function registerAdminOutreachRoutes(app: express.Express, deps: AdminOut
       return res.status(500).json(withError(
         'OUTREACH_POST_FAILED',
         error instanceof Error ? error.message : 'Could not post outreach comment.',
+      ));
+    }
+  });
+
+  app.delete('/api/admin/outreach-drafts/:draftId/comment', async (req, res) => {
+    const userId = normalizeString((res.locals.user as { id?: string } | undefined)?.id);
+    if (!userId) {
+      return res.status(401).json(withError('AUTH_REQUIRED', 'Sign in required.'));
+    }
+
+    let isAdmin = false;
+    try {
+      isAdmin = await requireAdmin({ userId, deps });
+    } catch (error) {
+      return res.status(503).json(withError(
+        'ADMIN_CHECK_UNAVAILABLE',
+        error instanceof Error ? error.message : 'Could not verify admin entitlement.',
+      ));
+    }
+    if (!isAdmin) {
+      return res.status(403).json(withError('ADMIN_REQUIRED', 'Admin access required.'));
+    }
+    if (!deps.deleteOutreachComment) {
+      return res.status(500).json(withError('CONFIG_ERROR', 'Outreach comment removal is not configured.'));
+    }
+
+    const draftId = normalizeString(req.params?.draftId);
+    if (!draftId) {
+      return res.status(400).json(withError('INVALID_DRAFT_ID', 'Missing outreach draft id.'));
+    }
+
+    try {
+      const result = await deps.deleteOutreachComment({
+        adminUserId: userId,
+        draftId,
+      });
+      return res.json(withEnvelope(result, 'outreach comment removed'));
+    } catch (error) {
+      if (error instanceof OutreachDraftError) {
+        return res.status(error.status).json(withError(error.errorCode, error.message));
+      }
+      return res.status(500).json(withError(
+        'OUTREACH_COMMENT_REMOVE_FAILED',
+        error instanceof Error ? error.message : 'Could not remove outreach comment.',
       ));
     }
   });

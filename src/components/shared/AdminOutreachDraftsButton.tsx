@@ -29,12 +29,14 @@ import { useAiCredits } from '@/hooks/useAiCredits';
 import { useToast } from '@/hooks/use-toast';
 import { ApiRequestError } from '@/lib/subscriptionsApi';
 import {
+  deleteOutreachComment,
   generateOutreachDrafts,
   getPostedOutreachDrafts,
   postOutreachDraft,
   refreshOutreachCandidateStats,
   verifyPostedOutreachComments,
   type OutreachCandidateStatsRefreshResult,
+  type OutreachCommentDeleteResult,
   type OutreachDraftGenerationResult,
   type OutreachPostedCommentVerificationResult,
   type PostedOutreachDraftsResult,
@@ -60,12 +62,15 @@ type OutreachCandidate = {
   durationSeconds: number | null;
   verification?: PostedCommentVerificationItem;
   postedComment?: PostedOutreachDraft | null;
-  status: 'ready' | 'posted';
+  status: 'ready' | 'posted' | 'removed';
 };
 
 type CandidateStatsItem = OutreachCandidateStatsRefreshResult['items'][number];
 type PostedCommentVerificationItem = OutreachPostedCommentVerificationResult['items'][number];
 type PostedOutreachDraft = PostedOutreachDraftsResult['items'][number];
+type RemovedOutreachComment = OutreachCommentDeleteResult & {
+  commentDeletedAt: string;
+};
 
 type AdminOutreachDraftsSheetProps = {
   open: boolean;
@@ -80,6 +85,8 @@ function getStatusView(status: OutreachCandidate['status']) {
       return { label: 'Ready', variant: 'default' as const };
     case 'posted':
       return { label: 'Posted', variant: 'secondary' as const };
+    case 'removed':
+      return { label: 'Removed', variant: 'outline' as const };
     default:
       return { label: 'New', variant: 'outline' as const };
   }
@@ -326,6 +333,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
       const verification = verificationByBlueprintId[candidate.blueprintId];
       const postedComment = postedByBlueprintId[candidate.blueprintId] || null;
       const posted = Boolean(postedComment) || postedBlueprintIds.has(candidate.blueprintId);
+      const removed = postedComment?.status === 'comment_deleted' || Boolean(postedComment?.commentDeletedAt);
       return {
         ...candidate,
         viewCount: stats?.viewCount ?? candidate.viewCount,
@@ -334,7 +342,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
         durationSeconds: stats?.durationSeconds ?? candidate.durationSeconds,
         verification,
         postedComment,
-        status: posted ? 'posted' as const : candidate.status,
+        status: removed ? 'removed' as const : posted ? 'posted' as const : candidate.status,
       };
     }),
     [candidateStatsBySourceItemId, candidatesQuery.data, postedBlueprintIds, postedByBlueprintId, verificationByBlueprintId],
@@ -477,6 +485,35 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
       });
     },
   });
+  const deleteCommentMutation = useMutation({
+    mutationFn: async (input: { draftId: string }) => deleteOutreachComment(input),
+    onSuccess: (result) => {
+      setSelectedPostedComment((current) => {
+        if (!current || current.draftId !== result.draftId) return current;
+        return {
+          ...current,
+          status: result.status,
+          commentDeletedAt: result.deletedAt,
+        };
+      });
+      toast({
+        title: 'Comment removed',
+        description: 'The YouTube comment was removed and kept in outreach history.',
+      });
+      void candidatesQuery.refetch();
+      void postedOutreachQuery.refetch();
+    },
+    onError: (error) => {
+      if (error instanceof ApiRequestError && error.errorCode === 'YT_REAUTH_REQUIRED') {
+        void youtubeConnectionQuery.refetch();
+      }
+      toast({
+        title: 'Could not remove comment',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    },
+  });
 
   const handleCreateDraft = (candidate: OutreachCandidate) => {
     draftMutation.mutate(candidate);
@@ -526,6 +563,9 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
       youtubeCommentId: selectedPostedComment.youtubeCommentId,
     })
     : null;
+  const selectedPostedCommentRemoved = selectedPostedComment
+    ? selectedPostedComment.status === 'comment_deleted' || Boolean(selectedPostedComment.commentDeletedAt)
+    : false;
   const youtubeNeedsReconnect = Boolean(youtubeConnectionQuery.data?.needs_reauth);
   const verificationNeedsReview = (verificationResult?.items || [])
     .filter((item) => item.status === 'not_visible' || item.status === 'verify_failed');
@@ -554,6 +594,18 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
     );
     if (!confirmed) return;
     postMutation.mutate({ optionId: selectedDraftOption.id, finalText });
+  };
+
+  const handleRemoveSelectedPostedComment = () => {
+    if (!selectedPostedComment) return;
+    const alreadyRemoved = selectedPostedComment.status === 'comment_deleted'
+      || Boolean(selectedPostedComment.commentDeletedAt);
+    if (alreadyRemoved) return;
+    const confirmed = window.confirm(
+      'Remove this YouTube comment now? This deletes the public comment from YouTube, but keeps it in BLEUP outreach history.',
+    );
+    if (!confirmed) return;
+    deleteCommentMutation.mutate({ draftId: selectedPostedComment.draftId });
   };
 
   return (
@@ -802,6 +854,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                   : null;
                 const durationLabel = formatVideoDuration(candidate.durationSeconds);
                 const visibility = candidate.verification;
+                const hasOutreachHistory = candidate.status === 'posted' || candidate.status === 'removed';
                 return (
                   <div key={candidate.id} className="px-4 py-3">
                     <div className="flex items-start justify-between gap-3">
@@ -837,11 +890,11 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                         type="button"
                         size="sm"
                         className="h-8 gap-1.5"
-                        disabled={createPending || candidate.status === 'posted'}
+                        disabled={createPending || hasOutreachHistory}
                         onClick={() => handleCreateDraft(candidate)}
                       >
                         <MessageSquareText className="h-3.5 w-3.5" />
-                        {candidate.status === 'posted' ? 'Posted' : createPending ? 'Creating...' : 'Create draft'}
+                        {candidate.status === 'removed' ? 'Removed' : candidate.status === 'posted' ? 'Posted' : createPending ? 'Creating...' : 'Create draft'}
                       </Button>
                       {candidate.postedComment ? (
                         <Button
@@ -852,7 +905,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                           onClick={() => setSelectedPostedComment(candidate.postedComment || null)}
                         >
                           <Eye className="h-3.5 w-3.5" />
-                          View comment
+                          {candidate.status === 'removed' ? 'View removed' : 'View comment'}
                         </Button>
                       ) : null}
                       <Button
@@ -909,11 +962,16 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                 <div>
                   Posted: {selectedPostedComment.postedAt ? formatRelativeDate(selectedPostedComment.postedAt) : 'Unknown time'}
                 </div>
+                {selectedPostedComment.commentDeletedAt ? (
+                  <div>
+                    Removed: {formatRelativeDate(selectedPostedComment.commentDeletedAt)}
+                  </div>
+                ) : null}
                 <div className="break-all">
                   YouTube comment id: {selectedPostedComment.youtubeCommentId || 'Unavailable'}
                 </div>
                 <div>
-                  Status: {selectedPostedComment.status || 'posted'}
+                  Status: {selectedPostedCommentRemoved ? 'removed' : selectedPostedComment.status || 'posted'}
                 </div>
               </div>
               <div className="space-y-2">
@@ -947,6 +1005,19 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                     onClick={() => window.open(`/blueprint/${encodeURIComponent(selectedPostedComment.blueprintId)}`, '_blank', 'noopener,noreferrer')}
                   >
                     Open blueprint
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="destructive"
+                    disabled={selectedPostedCommentRemoved || deleteCommentMutation.isPending}
+                    onClick={handleRemoveSelectedPostedComment}
+                  >
+                    {selectedPostedCommentRemoved
+                      ? 'Removed'
+                      : deleteCommentMutation.isPending && deleteCommentMutation.variables?.draftId === selectedPostedComment.draftId
+                        ? 'Removing...'
+                        : 'Remove comment'}
                   </Button>
                 </div>
                 <Button

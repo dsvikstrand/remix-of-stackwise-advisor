@@ -136,6 +136,7 @@ function isPosted(row: {
   posted_at?: string | null;
 }) {
   const status = normalizeString(row.status).toLowerCase();
+  if (status === 'comment_deleted') return false;
   return status === 'posted'
     || status === 'posted_unverified'
     || Boolean(normalizeString(row.youtube_comment_id))

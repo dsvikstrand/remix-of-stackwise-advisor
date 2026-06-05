@@ -26,6 +26,7 @@ export function createOracleOutreachDraftStateStore(input: {
           'status',
           'youtube_comment_id',
           'posted_at',
+          'comment_deleted_at',
           'last_visibility_checked_at',
           'last_visibility_status',
           'last_visibility_error_code',
@@ -49,8 +50,8 @@ export function createOracleOutreachDraftStateStore(input: {
       return await query.execute();
     },
 
-    async listPostedDrafts({ adminUserId, limit }) {
-      return await input.controlDb.db
+    async listPostedDrafts({ adminUserId, limit, includeDeleted }) {
+      let query = input.controlDb.db
         .selectFrom('outreach_draft_state')
         .select([
           'id',
@@ -66,6 +67,7 @@ export function createOracleOutreachDraftStateStore(input: {
           'status',
           'youtube_comment_id',
           'posted_at',
+          'comment_deleted_at',
           'last_visibility_checked_at',
           'last_visibility_status',
           'last_visibility_error_code',
@@ -76,11 +78,11 @@ export function createOracleOutreachDraftStateStore(input: {
         ])
         .where('admin_user_id', '=', normalizeString(adminUserId))
         .where('youtube_comment_id', 'is not', null)
-        .where('status', 'in', ['posted', 'posted_unverified'])
+        .where('status', 'in', includeDeleted ? ['posted', 'posted_unverified', 'comment_deleted'] : ['posted', 'posted_unverified'])
         .orderBy('posted_at', 'desc')
         .orderBy('created_at', 'desc')
-        .limit(Math.max(1, Math.min(50, Math.floor(Number(limit || 10)))))
-        .execute();
+        .limit(Math.max(1, Math.min(50, Math.floor(Number(limit || 10)))));
+      return await query.execute();
     },
 
     async getDraftOption({ draftId }) {
@@ -102,6 +104,7 @@ export function createOracleOutreachDraftStateStore(input: {
           ...row,
           youtube_comment_id: null,
           posted_at: null,
+          comment_deleted_at: null,
           post_error_code: null,
           post_error_message: null,
           last_visibility_checked_at: null,
@@ -172,6 +175,28 @@ export function createOracleOutreachDraftStateStore(input: {
         })
         .where('id', '=', normalizeString(draftId))
         .where('admin_user_id', '=', normalizeString(adminUserId))
+        .executeTakeFirst();
+      return Number(result.numUpdatedRows || 0) > 0;
+    },
+
+    async markDraftCommentDeleted({ draftId, adminUserId, deletedAt, errorCode, errorMessage, updatedAt }) {
+      const result = await input.controlDb.db
+        .updateTable('outreach_draft_state')
+        .set({
+          status: 'comment_deleted',
+          comment_deleted_at: deletedAt,
+          post_error_code: errorCode ? errorCode.slice(0, 80) : null,
+          post_error_message: errorMessage ? errorMessage.slice(0, 500) : null,
+          last_visibility_checked_at: deletedAt,
+          last_visibility_status: 'not_visible',
+          last_visibility_error_code: 'YT_COMMENT_DELETED_BY_ADMIN',
+          last_visibility_error_message: 'Comment was removed by admin.',
+          updated_at: updatedAt,
+        })
+        .where('id', '=', normalizeString(draftId))
+        .where('admin_user_id', '=', normalizeString(adminUserId))
+        .where('youtube_comment_id', 'is not', null)
+        .where('status', 'in', ['posted', 'posted_unverified'])
         .executeTakeFirst();
       return Number(result.numUpdatedRows || 0) > 0;
     },

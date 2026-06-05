@@ -77,6 +77,40 @@ function mapYouTubeCommentPostFailure(status: number, payload: unknown) {
   );
 }
 
+function mapYouTubeCommentDeleteFailure(status: number, payload: unknown) {
+  const providerError = extractApiError(payload);
+  const reason = providerError.reason;
+  const providerMessage = providerError.message;
+  const summary = providerError.summary;
+  if (status === 401) {
+    return new YouTubeCommentPostError('YT_REAUTH_REQUIRED', 'YouTube authorization expired. Reconnect required.', 401);
+  }
+  if (status === 404) {
+    return new YouTubeCommentPostError('YT_COMMENT_NOT_FOUND', 'YouTube could not find this comment. It may already be removed.', 404);
+  }
+  if (status === 403) {
+    const scopeRelated = /insufficient|permission|forbidden|scope/i.test(`${reason} ${providerMessage}`);
+    return new YouTubeCommentPostError(
+      scopeRelated ? 'YT_COMMENT_SCOPE_REQUIRED' : 'YT_COMMENT_DELETE_FORBIDDEN',
+      scopeRelated
+        ? 'Reconnect YouTube with comment permission before removing comments.'
+        : (summary || 'YouTube rejected the comment removal.'),
+      403,
+    );
+  }
+  if (status === 429) {
+    return new YouTubeCommentPostError('YT_PROVIDER_RATE_LIMITED', 'YouTube comment API is rate limited. Try again later.', 429);
+  }
+  if (status >= 500) {
+    return new YouTubeCommentPostError('YT_PROVIDER_FAIL', 'YouTube comment API failed. Try again later.', 502);
+  }
+  return new YouTubeCommentPostError(
+    'YT_COMMENT_DELETE_FAILED',
+    summary || `YouTube comment removal failed (${status}).`,
+    502,
+  );
+}
+
 export function hasYouTubeCommentPostScope(scope: unknown) {
   const scopes = normalizeString(scope)
     .split(/[,\s]+/)
@@ -84,6 +118,42 @@ export function hasYouTubeCommentPostScope(scope: unknown) {
     .filter(Boolean);
   return scopes.includes(YOUTUBE_COMMENT_POST_SCOPE)
     || scopes.includes('https://www.googleapis.com/auth/youtube');
+}
+
+export async function deleteYouTubeTopLevelComment(input: {
+  accessToken: string;
+  youtubeCommentId: string;
+  fetchImpl?: typeof fetch;
+}) {
+  const accessToken = normalizeString(input.accessToken);
+  const youtubeCommentId = normalizeString(input.youtubeCommentId);
+  if (!accessToken) {
+    throw new YouTubeCommentPostError('YT_REAUTH_REQUIRED', 'Missing YouTube access token.', 401);
+  }
+  if (!youtubeCommentId) {
+    throw new YouTubeCommentPostError('INVALID_COMMENT_ID', 'Missing YouTube comment id.', 400);
+  }
+
+  const fetchImpl = input.fetchImpl || fetch;
+  const url = new URL('https://www.googleapis.com/youtube/v3/comments');
+  url.searchParams.set('id', youtubeCommentId);
+
+  const response = await fetchImpl(url.toString(), {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+      'User-Agent': 'bleuv1-youtube-outreach/1.0 (+https://api.bleup.app)',
+    },
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw mapYouTubeCommentDeleteFailure(response.status, payload);
+  }
+
+  return {
+    youtubeCommentId,
+  };
 }
 
 export async function postYouTubeTopLevelComment(input: {
