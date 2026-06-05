@@ -559,6 +559,7 @@ import { postOutreachDraft } from './services/outreachPosting';
 import { verifyPostedOutreachComments } from './services/outreachVerification';
 import { getCachedOutreachChannelStats } from './services/outreachChannelStats';
 import { createOracleOutreachDraftStateStore } from './services/oracleOutreachDraftState';
+import { runOutreachAutoPostCycle, type OutreachAutoCandidate } from './services/outreachAutoPost';
 import {
   hasYouTubeCommentPostScope,
   postYouTubeTopLevelComment,
@@ -655,6 +656,24 @@ const youtubeChannelSearchCacheTtlSeconds = clampInt(process.env.YOUTUBE_CHANNEL
 const outreachMinCreatorSubscribers = clampInt(process.env.OUTREACH_MIN_CREATOR_SUBSCRIBERS, 10_000, 0, 100_000_000);
 const outreachChannelStatsCacheTtlMs = clampInt(process.env.OUTREACH_CHANNEL_STATS_CACHE_TTL_SECONDS, 7 * 24 * 3600, 60, 30 * 24 * 3600) * 1000;
 const outreachBlockUnknownSubscriberCount = parseRuntimeFlag(process.env.OUTREACH_BLOCK_UNKNOWN_SUBSCRIBER_COUNT, true);
+const outreachAutoPostEnabled = parseRuntimeFlag(process.env.OUTREACH_AUTO_POST_ENABLED, false);
+const outreachAutoAdminUserId = normalizeRouteString(process.env.OUTREACH_AUTO_ADMIN_USER_ID);
+const outreachAutoActivatedAtIso = normalizeIsoOrNull(process.env.OUTREACH_AUTO_POST_ACTIVATED_AT);
+const outreachAutoMonitorLimit = clampInt(process.env.OUTREACH_AUTO_MONITOR_LIMIT, 50, 1, 200);
+const outreachAutoScanIntervalMs = clampInt(process.env.OUTREACH_AUTO_SCAN_INTERVAL_SECONDS, 3600, 60, 24 * 3600) * 1000;
+const outreachAutoSchedulerTickMs = clampInt(process.env.OUTREACH_AUTO_SCHEDULER_TICK_SECONDS, 300, 30, 3600) * 1000;
+const outreachAutoMinViews = clampInt(process.env.OUTREACH_AUTO_MIN_VIEWS, 500, 0, 1_000_000_000);
+const outreachAutoMinComments = clampInt(process.env.OUTREACH_AUTO_MIN_COMMENTS, 2, 0, 1_000_000);
+const outreachAutoMinDurationSeconds = clampInt(process.env.OUTREACH_AUTO_MIN_DURATION_SECONDS, 30, 0, 24 * 3600);
+const outreachAutoDelayMinMs = clampInt(process.env.OUTREACH_AUTO_DELAY_MIN_MINUTES, 3, 0, 24 * 60) * 60_000;
+const outreachAutoDelayMaxMs = clampInt(process.env.OUTREACH_AUTO_DELAY_MAX_MINUTES, 60, 1, 24 * 60) * 60_000;
+const outreachAutoDailyCap = clampInt(process.env.OUTREACH_AUTO_DAILY_CAP, 10, 0, 1000);
+const outreachAutoCreatorMinSpacingMs = clampInt(process.env.OUTREACH_AUTO_CREATOR_MIN_SPACING_HOURS, 24, 0, 24 * 30) * 60 * 60_000;
+const outreachAutoCreatorWindowCap = clampInt(process.env.OUTREACH_AUTO_CREATOR_WINDOW_CAP, 3, 1, 100);
+const outreachAutoCreatorWindowDays = clampInt(process.env.OUTREACH_AUTO_CREATOR_WINDOW_DAYS, 7, 1, 365);
+const outreachAutoVisibilityHealthMinChecked = clampInt(process.env.OUTREACH_AUTO_VISIBILITY_HEALTH_MIN_CHECKED, 10, 0, 50);
+const outreachAutoVisibilityHealthMinRate = Math.max(0, Math.min(1, Number(process.env.OUTREACH_AUTO_VISIBILITY_HEALTH_MIN_RATE || 0.9)));
+const outreachAutoVisibilityHealthMaxNotVisibleStreak = clampInt(process.env.OUTREACH_AUTO_VISIBILITY_HEALTH_MAX_NOT_VISIBLE_STREAK, 2, 1, 20);
 const youtubeSearchStaleMaxSeconds = clampInt(process.env.YOUTUBE_SEARCH_STALE_MAX_SECONDS, 86_400, 0, 7 * 24 * 3600);
 const youtubeSearchDegradeEnabled = parseRuntimeFlag(process.env.YOUTUBE_SEARCH_DEGRADE_ENABLED, true);
 const youtubeGlobalLiveCallsPerMinute = clampInt(process.env.YOUTUBE_GLOBAL_LIVE_CALLS_PER_MIN, 60, 1, 20_000);
@@ -9129,103 +9148,16 @@ registerAdminOutreachRoutes(app, {
     });
   },
   generateOutreachDrafts: async ({ adminUserId, blueprintId }) => {
-    if (!oracleControlPlane) {
-      throw new Error('Oracle control plane is not configured');
-    }
-    return generateOutreachDrafts({
+    return generateAdminOutreachDraftsForBlueprint({
       adminUserId,
       blueprintId,
-      randomUUID,
-      resolveContext: resolveOutreachDraftContext,
-      resolveChannelStats: async ({ sourceChannelId }) => {
-        if (!oracleControlPlane) {
-          return {
-            subscriberCount: null,
-            hiddenSubscriberCount: false,
-          };
-        }
-        const stats = await getCachedOutreachChannelStats({
-          controlDb: oracleControlPlane,
-          apiKey: youtubeDataApiKey,
-          sourceChannelId,
-          ttlMs: outreachChannelStatsCacheTtlMs,
-        });
-        return {
-          subscriberCount: stats.subscriberCount,
-          hiddenSubscriberCount: stats.hiddenSubscriberCount,
-        };
-      },
-      minCreatorSubscribers: outreachMinCreatorSubscribers,
-      blockUnknownSubscriberCount: outreachBlockUnknownSubscriberCount,
-      stateStore: createOracleOutreachDraftStateStore({
-        controlDb: oracleControlPlane,
-      }),
-      llm: createOutreachOpenAIClient(),
     });
   },
   postOutreachDraft: async ({ adminUserId, draftId, finalText }) => {
-    if (!oracleControlPlane) {
-      throw new Error('Oracle control plane is not configured');
-    }
-    const db = getServiceSupabaseClient();
-    if (!db) {
-      throw new OutreachDraftError(500, 'CONFIG_ERROR', 'Service role client is not configured.');
-    }
-    const configCheck = ensureYouTubeOAuthConfig();
-    if (!configCheck.ok) {
-      throw new OutreachDraftError(configCheck.status, configCheck.error_code, configCheck.message);
-    }
-    if (!youtubeOAuthConfig.scopes.some((scope) => scope === YOUTUBE_COMMENT_POST_SCOPE || scope === 'https://www.googleapis.com/auth/youtube')) {
-      throw new OutreachDraftError(503, 'YT_COMMENT_SCOPE_NOT_CONFIGURED', 'YouTube OAuth comment scope is not configured.');
-    }
-
-    const { data: connection, error: connectionError } = await db
-      .from('user_youtube_connections')
-      .select('id, user_id, google_sub, youtube_channel_id, youtube_channel_title, youtube_channel_url, youtube_channel_avatar_url, access_token_encrypted, refresh_token_encrypted, token_expires_at, scope, is_active, last_import_at, last_error')
-      .eq('user_id', adminUserId)
-      .eq('is_active', true)
-      .maybeSingle();
-    if (connectionError) {
-      throw new OutreachDraftError(400, 'READ_FAILED', connectionError.message);
-    }
-    if (!connection) {
-      throw new OutreachDraftError(404, 'YT_CONNECTION_NOT_FOUND', 'Connect YouTube before posting.');
-    }
-
-    let usable: Awaited<ReturnType<typeof getUsableYouTubeAccessToken>>;
-    try {
-      usable = await getUsableYouTubeAccessToken({
-        db,
-        connection: connection as UserYouTubeConnectionRow,
-      });
-    } catch (error) {
-      const mapped = mapYouTubeOAuthError(error);
-      throw new OutreachDraftError(mapped.status, mapped.error_code, mapped.message);
-    }
-    if (!hasYouTubeCommentPostScope(usable.connection.scope)) {
-      throw new OutreachDraftError(401, 'YT_REAUTH_REQUIRED', 'Reconnect YouTube with comment permission before posting.');
-    }
-
-    return postOutreachDraft({
+    return postAdminOutreachDraft({
       adminUserId,
       draftId,
       finalText,
-      stateStore: createOracleOutreachDraftStateStore({
-        controlDb: oracleControlPlane,
-      }),
-      youtubeClient: {
-        postTopLevelComment: ({ videoId, text }) => postYouTubeTopLevelComment({
-          accessToken: usable.accessToken,
-          videoId,
-          text,
-        }),
-        verifyTopLevelCommentVisible: ({ youtubeCommentId }) => verifyYouTubeTopLevelCommentVisible({
-          accessToken: usable.accessToken,
-          youtubeCommentId,
-          attempts: 3,
-          delayMs: 1000,
-        }),
-      },
     });
   },
   verifyPostedComments: async ({ adminUserId, limit }) => {
@@ -11220,6 +11152,151 @@ async function resolveOutreachDraftContext(input: {
     blueprintSectionsJson: blueprint.sections_json || null,
     tags: parseOutreachTagsFromSections(blueprint.sections_json),
   };
+}
+
+async function listOutreachAutoPostCandidates(input: {
+  adminUserId: string;
+  activatedAtIso: string;
+  limit: number;
+}): Promise<OutreachAutoCandidate[]> {
+  const db = getServiceSupabaseClient();
+  const adminUserId = normalizeRouteString(input.adminUserId);
+  const activatedAtIso = normalizeIsoOrNull(input.activatedAtIso);
+  if (!db || !adminUserId || !activatedAtIso) return [];
+
+  const rows = await listProductFeedRowsForUserOracleFirst(db, {
+    userId: adminUserId,
+    limit: 5000,
+    requireBlueprint: true,
+  });
+  const candidates: OutreachAutoCandidate[] = [];
+  const seenBlueprintIds = new Set<string>();
+  for (const row of rows) {
+    const blueprintId = normalizeRouteString((row as FeedItemRow).blueprint_id);
+    const sourceItemId = normalizeRouteString((row as FeedItemRow).source_item_id);
+    const generatedAtIso = normalizeIsoOrNull((row as FeedItemRow).generated_at_on_wall)
+      || normalizeIsoOrNull((row as FeedItemRow).created_at);
+    if (!blueprintId || !sourceItemId || !generatedAtIso) continue;
+    if (generatedAtIso < activatedAtIso) continue;
+    if (seenBlueprintIds.has(blueprintId)) continue;
+    seenBlueprintIds.add(blueprintId);
+    candidates.push({
+      blueprintId,
+      sourceItemId,
+      generatedAtIso,
+    });
+    if (candidates.length >= input.limit) break;
+  }
+  return candidates;
+}
+
+async function generateAdminOutreachDraftsForBlueprint(input: {
+  adminUserId: string;
+  blueprintId: string;
+}) {
+  if (!oracleControlPlane) {
+    throw new Error('Oracle control plane is not configured');
+  }
+  return generateOutreachDrafts({
+    adminUserId: input.adminUserId,
+    blueprintId: input.blueprintId,
+    randomUUID,
+    resolveContext: resolveOutreachDraftContext,
+    resolveChannelStats: async ({ sourceChannelId }) => {
+      if (!oracleControlPlane) {
+        return {
+          subscriberCount: null,
+          hiddenSubscriberCount: false,
+        };
+      }
+      const stats = await getCachedOutreachChannelStats({
+        controlDb: oracleControlPlane,
+        apiKey: youtubeDataApiKey,
+        sourceChannelId,
+        ttlMs: outreachChannelStatsCacheTtlMs,
+      });
+      return {
+        subscriberCount: stats.subscriberCount,
+        hiddenSubscriberCount: stats.hiddenSubscriberCount,
+      };
+    },
+    minCreatorSubscribers: outreachMinCreatorSubscribers,
+    blockUnknownSubscriberCount: outreachBlockUnknownSubscriberCount,
+    stateStore: createOracleOutreachDraftStateStore({
+      controlDb: oracleControlPlane,
+    }),
+    llm: createOutreachOpenAIClient(),
+  });
+}
+
+async function postAdminOutreachDraft(input: {
+  adminUserId: string;
+  draftId: string;
+  finalText: string;
+}) {
+  if (!oracleControlPlane) {
+    throw new Error('Oracle control plane is not configured');
+  }
+  const db = getServiceSupabaseClient();
+  if (!db) {
+    throw new OutreachDraftError(500, 'CONFIG_ERROR', 'Service role client is not configured.');
+  }
+  const configCheck = ensureYouTubeOAuthConfig();
+  if (!configCheck.ok) {
+    throw new OutreachDraftError(configCheck.status, configCheck.error_code, configCheck.message);
+  }
+  if (!youtubeOAuthConfig.scopes.some((scope) => scope === YOUTUBE_COMMENT_POST_SCOPE || scope === 'https://www.googleapis.com/auth/youtube')) {
+    throw new OutreachDraftError(503, 'YT_COMMENT_SCOPE_NOT_CONFIGURED', 'YouTube OAuth comment scope is not configured.');
+  }
+
+  const { data: connection, error: connectionError } = await db
+    .from('user_youtube_connections')
+    .select('id, user_id, google_sub, youtube_channel_id, youtube_channel_title, youtube_channel_url, youtube_channel_avatar_url, access_token_encrypted, refresh_token_encrypted, token_expires_at, scope, is_active, last_import_at, last_error')
+    .eq('user_id', input.adminUserId)
+    .eq('is_active', true)
+    .maybeSingle();
+  if (connectionError) {
+    throw new OutreachDraftError(400, 'READ_FAILED', connectionError.message);
+  }
+  if (!connection) {
+    throw new OutreachDraftError(404, 'YT_CONNECTION_NOT_FOUND', 'Connect YouTube before posting.');
+  }
+
+  let usable: Awaited<ReturnType<typeof getUsableYouTubeAccessToken>>;
+  try {
+    usable = await getUsableYouTubeAccessToken({
+      db,
+      connection: connection as UserYouTubeConnectionRow,
+    });
+  } catch (error) {
+    const mapped = mapYouTubeOAuthError(error);
+    throw new OutreachDraftError(mapped.status, mapped.error_code, mapped.message);
+  }
+  if (!hasYouTubeCommentPostScope(usable.connection.scope)) {
+    throw new OutreachDraftError(401, 'YT_REAUTH_REQUIRED', 'Reconnect YouTube with comment permission before posting.');
+  }
+
+  return postOutreachDraft({
+    adminUserId: input.adminUserId,
+    draftId: input.draftId,
+    finalText: input.finalText,
+    stateStore: createOracleOutreachDraftStateStore({
+      controlDb: oracleControlPlane,
+    }),
+    youtubeClient: {
+      postTopLevelComment: ({ videoId, text }) => postYouTubeTopLevelComment({
+        accessToken: usable.accessToken,
+        videoId,
+        text,
+      }),
+      verifyTopLevelCommentVisible: ({ youtubeCommentId }) => verifyYouTubeTopLevelCommentVisible({
+        accessToken: usable.accessToken,
+        youtubeCommentId,
+        attempts: 3,
+        delayMs: 1000,
+      }),
+    },
+  });
 }
 
 async function listProfileBlueprintListItems(input: {
@@ -19166,6 +19243,79 @@ const oracleSubscriptionSchedulerController = createOracleSubscriptionSchedulerC
   runCycle: runOraclePrimarySubscriptionSchedulerCycle,
 });
 
+const outreachAutoPostConfig = {
+  enabled: outreachAutoPostEnabled,
+  adminUserId: outreachAutoAdminUserId,
+  activatedAtIso: outreachAutoActivatedAtIso,
+  monitorLimit: outreachAutoMonitorLimit,
+  scanIntervalMs: outreachAutoScanIntervalMs,
+  minViews: outreachAutoMinViews,
+  minComments: outreachAutoMinComments,
+  minDurationSeconds: outreachAutoMinDurationSeconds,
+  delayMinMs: Math.min(outreachAutoDelayMinMs, outreachAutoDelayMaxMs),
+  delayMaxMs: Math.max(outreachAutoDelayMinMs, outreachAutoDelayMaxMs),
+  dailyCap: outreachAutoDailyCap,
+  creatorMinSpacingMs: outreachAutoCreatorMinSpacingMs,
+  creatorWindowCap: outreachAutoCreatorWindowCap,
+  creatorWindowDays: outreachAutoCreatorWindowDays,
+  visibilityHealthMinChecked: outreachAutoVisibilityHealthMinChecked,
+  visibilityHealthMinRate: outreachAutoVisibilityHealthMinRate,
+  visibilityHealthMaxNotVisibleStreak: outreachAutoVisibilityHealthMaxNotVisibleStreak,
+};
+
+let outreachAutoPostTimer: ReturnType<typeof setTimeout> | null = null;
+let outreachAutoPostCycleRunning = false;
+
+function scheduleOutreachAutoPostCycle(delayMs = outreachAutoSchedulerTickMs) {
+  if (outreachAutoPostTimer) return;
+  outreachAutoPostTimer = setTimeout(() => {
+    outreachAutoPostTimer = null;
+    void runOutreachAutoPostSchedulerCycle().finally(() => {
+      scheduleOutreachAutoPostCycle(outreachAutoSchedulerTickMs);
+    });
+  }, Math.max(1_000, delayMs));
+  outreachAutoPostTimer.unref?.();
+}
+
+async function runOutreachAutoPostSchedulerCycle() {
+  if (!outreachAutoPostEnabled) return;
+  if (!oracleControlPlane) {
+    console.warn('[outreach_auto_post_skipped]', JSON.stringify({ reason: 'oracle_control_plane_missing' }));
+    return;
+  }
+  if (outreachAutoPostCycleRunning) {
+    console.warn('[outreach_auto_post_skipped]', JSON.stringify({ reason: 'cycle_running' }));
+    return;
+  }
+  outreachAutoPostCycleRunning = true;
+  try {
+    await runOutreachAutoPostCycle({
+      controlDb: oracleControlPlane,
+      config: outreachAutoPostConfig,
+      randomUUID,
+      listCandidates: listOutreachAutoPostCandidates,
+      refreshStats: async ({ adminUserId, sourceItemIds }) => refreshOutreachCandidateSourceStats({
+        adminUserId,
+        sourceItemIds,
+      }),
+      generateDraft: generateAdminOutreachDraftsForBlueprint,
+      postDraft: postAdminOutreachDraft,
+      stateStore: createOracleOutreachDraftStateStore({
+        controlDb: oracleControlPlane,
+      }),
+      log: (event, payload) => {
+        console.log(`[${event}]`, JSON.stringify(payload));
+      },
+    });
+  } catch (error) {
+    console.warn('[outreach_auto_post_cycle_failed]', JSON.stringify({
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  } finally {
+    outreachAutoPostCycleRunning = false;
+  }
+}
+
 function mapActualAllActiveSubscriptionsDecisionToShadowCode(
   actualDecisionCode:
     | 'actual_existing_job'
@@ -20918,6 +21068,15 @@ if (runIngestionWorker) {
   } else if (notificationPushEnabled) {
     console.log('[notification_push_dispatcher_skipped]', JSON.stringify({
       reason: 'RUNTIME_MODE_DISABLED',
+      runtime_mode: runtimeMode,
+    }));
+  }
+  if (outreachAutoPostEnabled && oracleControlPlane) {
+    scheduleOutreachAutoPostCycle(10_000);
+    logWorkerMemoryCheckpoint('outreach_auto_post_scheduler_started');
+  } else if (outreachAutoPostEnabled) {
+    console.log('[outreach_auto_post_scheduler_skipped]', JSON.stringify({
+      reason: 'ORACLE_CONTROL_PLANE_MISSING',
       runtime_mode: runtimeMode,
     }));
   }

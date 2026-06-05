@@ -384,6 +384,36 @@ type OutreachChannelStatsCacheTable = {
   updated_at: string;
 };
 
+type OutreachAutoPostStateTable = {
+  id: string;
+  admin_user_id: string;
+  blueprint_id: string;
+  source_item_id: string;
+  youtube_video_id: string | null;
+  video_url: string | null;
+  source_channel_id: string | null;
+  source_channel_title: string | null;
+  status: string;
+  eligible_after: string | null;
+  draft_id: string | null;
+  draft_group_id: string | null;
+  final_text: string | null;
+  youtube_comment_id: string | null;
+  view_count: number | null;
+  comment_count: number | null;
+  duration_seconds: number | null;
+  decision_code: string | null;
+  decision_message: string | null;
+  decision_json: string | null;
+  activation_started_at: string;
+  first_seen_at: string;
+  last_scanned_at: string | null;
+  posted_at: string | null;
+  skipped_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 type BlueprintTagStateTable = {
   id: string;
   blueprint_id: string;
@@ -564,6 +594,7 @@ export type OracleControlPlaneDatabase = {
   blueprint_youtube_comment_state: BlueprintYoutubeCommentStateTable;
   outreach_draft_state: OutreachDraftStateTable;
   outreach_channel_stats_cache: OutreachChannelStatsCacheTable;
+  outreach_auto_post_state: OutreachAutoPostStateTable;
   blueprint_comment_state: BlueprintCommentStateTable;
   blueprint_like_state: BlueprintLikeStateTable;
   blueprint_state: BlueprintStateTable;
@@ -1057,6 +1088,45 @@ CREATE TABLE IF NOT EXISTS outreach_channel_stats_cache (
 
 CREATE INDEX IF NOT EXISTS idx_outreach_channel_stats_fetched
   ON outreach_channel_stats_cache (fetched_at);
+
+CREATE TABLE IF NOT EXISTS outreach_auto_post_state (
+  id TEXT PRIMARY KEY,
+  admin_user_id TEXT NOT NULL,
+  blueprint_id TEXT NOT NULL,
+  source_item_id TEXT NOT NULL,
+  youtube_video_id TEXT,
+  video_url TEXT,
+  source_channel_id TEXT,
+  source_channel_title TEXT,
+  status TEXT NOT NULL,
+  eligible_after TEXT,
+  draft_id TEXT,
+  draft_group_id TEXT,
+  final_text TEXT,
+  youtube_comment_id TEXT,
+  view_count INTEGER,
+  comment_count INTEGER,
+  duration_seconds INTEGER,
+  decision_code TEXT,
+  decision_message TEXT,
+  decision_json TEXT,
+  activation_started_at TEXT NOT NULL,
+  first_seen_at TEXT NOT NULL,
+  last_scanned_at TEXT,
+  posted_at TEXT,
+  skipped_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_outreach_auto_post_admin_blueprint
+  ON outreach_auto_post_state (admin_user_id, blueprint_id);
+
+CREATE INDEX IF NOT EXISTS idx_outreach_auto_post_status_ready
+  ON outreach_auto_post_state (status, eligible_after);
+
+CREATE INDEX IF NOT EXISTS idx_outreach_auto_post_admin_created
+  ON outreach_auto_post_state (admin_user_id, created_at);
 
 CREATE TABLE IF NOT EXISTS blueprint_comment_state (
   id TEXT PRIMARY KEY,
