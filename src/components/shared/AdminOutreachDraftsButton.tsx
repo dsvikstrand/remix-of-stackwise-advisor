@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Copy, ExternalLink, Megaphone, MessageSquareText, Send } from 'lucide-react';
+import { Copy, ExternalLink, Eye, Megaphone, MessageSquareText, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -37,6 +37,7 @@ import {
   type OutreachCandidateStatsRefreshResult,
   type OutreachDraftGenerationResult,
   type OutreachPostedCommentVerificationResult,
+  type PostedOutreachDraftsResult,
 } from '@/lib/adminOutreachApi';
 import { listMyFeedItems } from '@/lib/myFeedApi';
 import type { MyFeedItemView } from '@/lib/myFeedData';
@@ -58,11 +59,13 @@ type OutreachCandidate = {
   postedCommentsLast7Days: number | null;
   durationSeconds: number | null;
   verification?: PostedCommentVerificationItem;
+  postedComment?: PostedOutreachDraft | null;
   status: 'ready' | 'posted';
 };
 
 type CandidateStatsItem = OutreachCandidateStatsRefreshResult['items'][number];
 type PostedCommentVerificationItem = OutreachPostedCommentVerificationResult['items'][number];
+type PostedOutreachDraft = PostedOutreachDraftsResult['items'][number];
 
 type AdminOutreachDraftsSheetProps = {
   open: boolean;
@@ -177,6 +180,23 @@ function appendPromoText(commentText: string, promoText: string) {
   return `${comment}\n\n${promo}`;
 }
 
+function buildYouTubeCommentUrl(input: {
+  videoUrl: string | null | undefined;
+  youtubeCommentId: string | null | undefined;
+}) {
+  const rawVideoUrl = String(input.videoUrl || '').trim();
+  const commentId = String(input.youtubeCommentId || '').trim();
+  if (!rawVideoUrl || !commentId) return null;
+  try {
+    const url = new URL(rawVideoUrl);
+    url.searchParams.set('lc', commentId);
+    return url.toString();
+  } catch {
+    const separator = rawVideoUrl.includes('?') ? '&' : '?';
+    return `${rawVideoUrl}${separator}lc=${encodeURIComponent(commentId)}`;
+  }
+}
+
 function getYouTubeConnectionErrorMessage(error: unknown, fallback: string) {
   if (error instanceof ApiRequestError) {
     switch (error.errorCode) {
@@ -245,6 +265,7 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
   const [verifyFetchLimit, setVerifyFetchLimit] = useState(10);
   const [verificationResult, setVerificationResult] = useState<OutreachPostedCommentVerificationResult | null>(null);
   const [verificationByBlueprintId, setVerificationByBlueprintId] = useState<Record<string, PostedCommentVerificationItem>>({});
+  const [selectedPostedComment, setSelectedPostedComment] = useState<PostedOutreachDraft | null>(null);
   const [postedDraftIds, setPostedDraftIds] = useState<Set<string>>(() => new Set());
   const [postedBlueprintIds, setPostedBlueprintIds] = useState<Set<string>>(() => new Set());
   const [candidateStatsBySourceItemId, setCandidateStatsBySourceItemId] = useState<Record<string, CandidateStatsItem>>({});
@@ -290,11 +311,21 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
     });
   }, [postedOutreachQuery.data]);
 
+  const postedByBlueprintId = useMemo(() => {
+    const next: Record<string, PostedOutreachDraft> = {};
+    for (const item of postedOutreachQuery.data?.items || []) {
+      if (!item.blueprintId || next[item.blueprintId]) continue;
+      next[item.blueprintId] = item;
+    }
+    return next;
+  }, [postedOutreachQuery.data]);
+
   const candidates = useMemo(
     () => (candidatesQuery.data || []).map((candidate) => {
       const stats = candidateStatsBySourceItemId[candidate.sourceItemId];
       const verification = verificationByBlueprintId[candidate.blueprintId];
-      const posted = postedBlueprintIds.has(candidate.blueprintId);
+      const postedComment = postedByBlueprintId[candidate.blueprintId] || null;
+      const posted = Boolean(postedComment) || postedBlueprintIds.has(candidate.blueprintId);
       return {
         ...candidate,
         viewCount: stats?.viewCount ?? candidate.viewCount,
@@ -302,10 +333,11 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
         postedCommentsLast7Days: stats?.postedCommentsLast7Days ?? candidate.postedCommentsLast7Days,
         durationSeconds: stats?.durationSeconds ?? candidate.durationSeconds,
         verification,
+        postedComment,
         status: posted ? 'posted' as const : candidate.status,
       };
     }),
-    [candidateStatsBySourceItemId, candidatesQuery.data, postedBlueprintIds, verificationByBlueprintId],
+    [candidateStatsBySourceItemId, candidatesQuery.data, postedBlueprintIds, postedByBlueprintId, verificationByBlueprintId],
   );
   const draftMutation = useMutation({
     mutationFn: async (candidate: OutreachCandidate) => {
@@ -488,6 +520,12 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
 
   const selectedDraftOption = draftResult?.options.find((option) => option.id === selectedDraftOptionId) || null;
   const selectedDraftFinalText = selectedDraftOption ? buildFinalDraftText(selectedDraftOption.id) : '';
+  const selectedPostedCommentUrl = selectedPostedComment
+    ? buildYouTubeCommentUrl({
+      videoUrl: selectedPostedComment.videoUrl,
+      youtubeCommentId: selectedPostedComment.youtubeCommentId,
+    })
+    : null;
   const youtubeNeedsReconnect = Boolean(youtubeConnectionQuery.data?.needs_reauth);
   const verificationNeedsReview = (verificationResult?.items || [])
     .filter((item) => item.status === 'not_visible' || item.status === 'verify_failed');
@@ -805,6 +843,18 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
                         <MessageSquareText className="h-3.5 w-3.5" />
                         {candidate.status === 'posted' ? 'Posted' : createPending ? 'Creating...' : 'Create draft'}
                       </Button>
+                      {candidate.postedComment ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-8 gap-1.5"
+                          onClick={() => setSelectedPostedComment(candidate.postedComment || null)}
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          View comment
+                        </Button>
+                      ) : null}
                       <Button
                         type="button"
                         size="sm"
@@ -836,6 +886,90 @@ export function AdminOutreachDraftsSheet({ open, onOpenChange }: AdminOutreachDr
           </div>
         </SheetContent>
       </Sheet>
+
+      <Dialog
+        open={Boolean(selectedPostedComment)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setSelectedPostedComment(null);
+        }}
+      >
+        <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Posted outreach comment</DialogTitle>
+            <DialogDescription>
+              Inspect the exact comment that was posted from the connected YouTube account.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedPostedComment ? (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-border/50 bg-muted/30 p-3 text-xs text-muted-foreground">
+                <div>
+                  Creator: {selectedPostedComment.sourceChannelTitle || 'YouTube video'}
+                </div>
+                <div>
+                  Posted: {selectedPostedComment.postedAt ? formatRelativeDate(selectedPostedComment.postedAt) : 'Unknown time'}
+                </div>
+                <div className="break-all">
+                  YouTube comment id: {selectedPostedComment.youtubeCommentId || 'Unavailable'}
+                </div>
+                <div>
+                  Status: {selectedPostedComment.status || 'posted'}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Comment text</div>
+                <div className="whitespace-pre-wrap rounded-lg border border-border/50 bg-background p-3 text-sm leading-relaxed">
+                  {selectedPostedComment.finalText}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  {selectedPostedCommentUrl ? (
+                    <Button type="button" size="sm" className="gap-1.5" asChild>
+                      <a href={selectedPostedCommentUrl} target="_blank" rel="noreferrer">
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        Open comment
+                      </a>
+                    </Button>
+                  ) : null}
+                  {selectedPostedComment.videoUrl ? (
+                    <Button type="button" size="sm" variant="outline" className="gap-1.5" asChild>
+                      <a href={selectedPostedComment.videoUrl} target="_blank" rel="noreferrer">
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        Open video
+                      </a>
+                    </Button>
+                  ) : null}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => window.open(`/blueprint/${encodeURIComponent(selectedPostedComment.blueprintId)}`, '_blank', 'noopener,noreferrer')}
+                  >
+                    Open blueprint
+                  </Button>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="gap-1.5"
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(selectedPostedComment.finalText);
+                    toast({
+                      title: 'Comment copied',
+                      description: 'Posted outreach comment copied to clipboard.',
+                    });
+                  }}
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  Copy text
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={draftDialogOpen} onOpenChange={setDraftDialogOpen}>
         <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-3xl">
