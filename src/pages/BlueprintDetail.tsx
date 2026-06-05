@@ -253,6 +253,118 @@ function buildDownloadFileName(title: string) {
   return `${slug}.txt`;
 }
 
+type StoredDirectoryHandle = {
+  getFileHandle: (name: string, options?: { create?: boolean }) => Promise<{
+    createWritable: () => Promise<{
+      write: (data: string | Blob | BufferSource) => Promise<void>;
+      close: () => Promise<void>;
+    }>;
+  }>;
+  queryPermission?: (descriptor?: { mode?: 'read' | 'readwrite' }) => Promise<PermissionState>;
+  requestPermission?: (descriptor?: { mode?: 'read' | 'readwrite' }) => Promise<PermissionState>;
+};
+
+const blueprintDirectoryHandleDbName = 'bleup-admin-blueprint-downloads';
+const blueprintDirectoryHandleStoreName = 'directory_handles';
+const capcutIncomingDirectoryHandleKey = 'capcut_endpoint_json_incoming';
+
+function triggerBrowserTextDownload(input: { text: string; fileName: string }) {
+  const blob = new Blob([input.text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = input.fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+function openBlueprintDirectoryHandleDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(blueprintDirectoryHandleDbName, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(blueprintDirectoryHandleStoreName)) {
+        db.createObjectStore(blueprintDirectoryHandleStoreName);
+      }
+    };
+    request.onerror = () => reject(request.error || new Error('Could not open download folder store.'));
+    request.onsuccess = () => resolve(request.result);
+  });
+}
+
+async function readStoredDirectoryHandle() {
+  const db = await openBlueprintDirectoryHandleDb();
+  try {
+    return await new Promise<StoredDirectoryHandle | null>((resolve, reject) => {
+      const transaction = db.transaction(blueprintDirectoryHandleStoreName, 'readonly');
+      const store = transaction.objectStore(blueprintDirectoryHandleStoreName);
+      const request = store.get(capcutIncomingDirectoryHandleKey);
+      request.onerror = () => reject(request.error || new Error('Could not read download folder.'));
+      request.onsuccess = () => resolve((request.result as StoredDirectoryHandle | undefined) || null);
+    });
+  } finally {
+    db.close();
+  }
+}
+
+async function storeDirectoryHandle(handle: StoredDirectoryHandle) {
+  const db = await openBlueprintDirectoryHandleDb();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(blueprintDirectoryHandleStoreName, 'readwrite');
+      const store = transaction.objectStore(blueprintDirectoryHandleStoreName);
+      const request = store.put(handle, capcutIncomingDirectoryHandleKey);
+      request.onerror = () => reject(request.error || new Error('Could not remember download folder.'));
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error || new Error('Could not remember download folder.'));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+async function hasDirectoryWritePermission(handle: StoredDirectoryHandle) {
+  if (typeof handle.queryPermission !== 'function') return true;
+  const current = await handle.queryPermission({ mode: 'readwrite' });
+  if (current === 'granted') return true;
+  if (typeof handle.requestPermission !== 'function') return false;
+  return (await handle.requestPermission({ mode: 'readwrite' })) === 'granted';
+}
+
+async function saveTextToCapcutIncomingFolder(input: { text: string; fileName: string }) {
+  const picker = (window as Window & {
+    showDirectoryPicker?: (options?: {
+      id?: string;
+      mode?: 'read' | 'readwrite';
+      startIn?: string;
+    }) => Promise<StoredDirectoryHandle>;
+  }).showDirectoryPicker;
+  if (!window.isSecureContext || typeof picker !== 'function') {
+    return { saved: false, reason: 'unsupported' as const };
+  }
+
+  let handle = await readStoredDirectoryHandle().catch(() => null);
+  if (!handle || !(await hasDirectoryWritePermission(handle).catch(() => false))) {
+    handle = await picker({
+      id: 'bleup-capcut-incoming',
+      mode: 'readwrite',
+      startIn: 'documents',
+    });
+    await storeDirectoryHandle(handle).catch(() => undefined);
+  }
+
+  const fileHandle = await handle.getFileHandle(input.fileName, { create: true });
+  const writable = await fileHandle.createWritable();
+  try {
+    await writable.write(input.text);
+  } finally {
+    await writable.close();
+  }
+  return { saved: true, reason: 'folder' as const };
+}
+
 function appendPlainTextSection(lines: string[], step: RenderStep) {
   const displayTitle = sectionDisplayTitle(step.title);
   const parsedDescription = parseDescriptionBlocks(step.description);
@@ -591,8 +703,9 @@ export default function BlueprintDetail() {
     [goldenSections],
   );
   const isAdmin = String(creditsQuery.data?.plan || '').toLowerCase() === 'admin';
-  const handleDownloadPlainText = () => {
+  const handleDownloadPlainText = async () => {
     if (!blueprint || !isAdmin) return;
+    const fileName = buildDownloadFileName(blueprint.title);
     const text = buildBlueprintPlainText({
       title: blueprint.title,
       sourceTitle: sourceChannel?.title || null,
@@ -604,15 +717,29 @@ export default function BlueprintDetail() {
       llmReview: blueprint.llm_review || null,
       mixNotes: blueprint.mix_notes || null,
     });
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = buildDownloadFileName(blueprint.title);
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
+    try {
+      const result = await saveTextToCapcutIncomingFolder({ text, fileName });
+      if (result.saved) {
+        toast({
+          title: 'Blueprint saved',
+          description: 'Saved as text in the selected CapCut incoming folder.',
+        });
+        return;
+      }
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === 'AbortError')) {
+        toast({
+          title: 'Folder save failed',
+          description: error instanceof Error ? error.message : 'Using browser download instead.',
+          variant: 'destructive',
+        });
+      }
+    }
+    triggerBrowserTextDownload({ text, fileName });
+    toast({
+      title: 'Blueprint downloaded',
+      description: 'Choose the CapCut incoming folder when prompted next time to save there directly.',
+    });
   };
   const renderGoldenGroup = (group: RenderStep[]) => {
     if (group.length === 0) return null;
