@@ -66,6 +66,14 @@ export type BlueprintListApiResult = {
   total_count?: number | null;
 };
 
+export type BlueprintTextExportResult = {
+  blueprintId: string;
+  fileName: string;
+  exportDir: string;
+  filePath: string;
+  writtenAt: string;
+};
+
 function getApiBase() {
   if (!config.agenticBackendUrl) return null;
   return `${config.agenticBackendUrl.replace(/\/$/, '')}/api`;
@@ -158,6 +166,36 @@ export async function syncBlueprintReadState(blueprintId: string) {
   const json = (await response.json().catch(() => null)) as ApiEnvelope<BlueprintReadApiItem> | null;
   if (!response.ok || !json?.ok || !json.data) {
     throw new Error(json?.message || `Blueprint sync request failed (${response.status})`);
+  }
+  return json.data;
+}
+
+export async function sendBlueprintTextExportToOracle(input: {
+  blueprintId: string;
+  fileName: string;
+  text: string;
+}) {
+  const normalizedBlueprintId = String(input.blueprintId || '').trim();
+  if (!normalizedBlueprintId) throw new Error('Blueprint id is required.');
+
+  const base = getApiBase();
+  if (!base) throw new Error('Backend API is not configured.');
+
+  const authHeader = await getRequiredAuthHeader();
+  const response = await fetch(`${base}/admin/blueprints/${encodeURIComponent(normalizedBlueprintId)}/text-export`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeader,
+    },
+    body: JSON.stringify({
+      file_name: input.fileName,
+      text: input.text,
+    }),
+  });
+  const json = (await response.json().catch(() => null)) as ApiEnvelope<BlueprintTextExportResult> | null;
+  if (!response.ok || !json?.ok || !json.data) {
+    throw new Error(json?.message || `Blueprint text export failed (${response.status})`);
   }
   return json.data;
 }

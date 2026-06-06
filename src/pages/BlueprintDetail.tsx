@@ -18,7 +18,7 @@ import {
   useBlueprintYoutubeComments,
 } from '@/hooks/useBlueprintYoutubeComments';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Download, Heart, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Download, Heart, Maximize2, Minimize2, RefreshCw, UploadCloud } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAiCredits } from '@/hooks/useAiCredits';
 import { logMvpEvent } from '@/lib/logEvent';
@@ -31,6 +31,7 @@ import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities';
 import { splitSummaryIntoSlides } from '@/lib/summarySlides';
 import { buildSourcePagePath } from '@/lib/sourcePagesApi';
 import { lookupSourceItems } from '@/lib/sourceItemsApi';
+import { sendBlueprintTextExportToOracle } from '@/lib/blueprintReadApi';
 import {
   buildRenderBlocksFromBlueprintSections,
   parseBlueprintSectionsV1,
@@ -447,6 +448,7 @@ export default function BlueprintDetail() {
   const [interactiveSectionsExpanded, setInteractiveSectionsExpanded] = useState(false);
   const [takeawaysExpanded, setTakeawaysExpanded] = useState(false);
   const [activeInteractiveTab, setActiveInteractiveTab] = useState('');
+  const [isSendingTextExport, setIsSendingTextExport] = useState(false);
   const location = useLocation();
   const loggedBlueprintId = useRef<string | null>(null);
   const goldenSectionsSchema = useMemo(
@@ -703,8 +705,8 @@ export default function BlueprintDetail() {
     [goldenSections],
   );
   const isAdmin = String(creditsQuery.data?.plan || '').toLowerCase() === 'admin';
-  const handleDownloadPlainText = async () => {
-    if (!blueprint || !isAdmin) return;
+  const buildBlueprintTextExport = () => {
+    if (!blueprint) return null;
     const fileName = buildDownloadFileName(blueprint.title);
     const text = buildBlueprintPlainText({
       title: blueprint.title,
@@ -717,6 +719,13 @@ export default function BlueprintDetail() {
       llmReview: blueprint.llm_review || null,
       mixNotes: blueprint.mix_notes || null,
     });
+    return { fileName, text };
+  };
+  const handleDownloadPlainText = async () => {
+    if (!blueprint || !isAdmin) return;
+    const exportPayload = buildBlueprintTextExport();
+    if (!exportPayload) return;
+    const { fileName, text } = exportPayload;
     try {
       const result = await saveTextToCapcutIncomingFolder({ text, fileName });
       if (result.saved) {
@@ -740,6 +749,31 @@ export default function BlueprintDetail() {
       title: 'Blueprint downloaded',
       description: 'Choose the CapCut incoming folder when prompted next time to save there directly.',
     });
+  };
+  const handleSendPlainTextToOracle = async () => {
+    if (!blueprint || !isAdmin || isSendingTextExport) return;
+    const exportPayload = buildBlueprintTextExport();
+    if (!exportPayload) return;
+    setIsSendingTextExport(true);
+    try {
+      const result = await sendBlueprintTextExportToOracle({
+        blueprintId: blueprint.id,
+        fileName: exportPayload.fileName,
+        text: exportPayload.text,
+      });
+      toast({
+        title: 'Sent to Oracle',
+        description: `Saved as ${result.fileName}`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Oracle export failed',
+        description: error instanceof Error ? error.message : 'Could not send blueprint text to Oracle.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSendingTextExport(false);
+    }
   };
   const renderGoldenGroup = (group: RenderStep[]) => {
     if (group.length === 0) return null;
@@ -1107,17 +1141,31 @@ export default function BlueprintDetail() {
                     </Button>
                   ) : null}
                   {isAdmin ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="text-muted-foreground"
-                      onClick={handleDownloadPlainText}
-                      aria-label="Download blueprint as text"
-                      title="Download blueprint as text"
-                    >
-                      <Download className="h-4 w-4" />
-                    </Button>
+                    <>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-muted-foreground"
+                        onClick={handleDownloadPlainText}
+                        aria-label="Download blueprint as text"
+                        title="Download blueprint as text"
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-muted-foreground"
+                        onClick={handleSendPlainTextToOracle}
+                        disabled={isSendingTextExport}
+                        aria-label={isSendingTextExport ? 'Sending blueprint text to Oracle' : 'Send blueprint text to Oracle'}
+                        title={isSendingTextExport ? 'Sending blueprint text to Oracle' : 'Send blueprint text to Oracle'}
+                      >
+                        <UploadCloud className={`h-4 w-4 ${isSendingTextExport ? 'animate-pulse' : ''}`} />
+                      </Button>
+                    </>
                   ) : null}
                   <Button
                     variant="ghost"

@@ -553,6 +553,7 @@ import { registerBlueprintReadRoutes } from './routes/blueprintRead';
 import { registerBlueprintTagReadRoutes } from './routes/blueprintTags';
 import { registerTagRoutes } from './routes/tags';
 import { registerAdminOutreachRoutes } from './routes/adminOutreach';
+import { registerAdminBlueprintExportRoutes } from './routes/adminBlueprintExport';
 import { generateOutreachDrafts, OutreachDraftError, type OutreachDraftContext } from './services/outreachDrafts';
 import { createOutreachOpenAIClient } from './services/outreachOpenAI';
 import { postOutreachDraft } from './services/outreachPosting';
@@ -9086,6 +9087,11 @@ registerBlueprintReadRoutes(app, {
         }
       : null);
   },
+});
+
+registerAdminBlueprintExportRoutes(app, {
+  getCredits,
+  exportDir: process.env.BLUEPRINT_TEXT_EXPORT_DIR || null,
 });
 
 registerBlueprintTagReadRoutes(app, {
