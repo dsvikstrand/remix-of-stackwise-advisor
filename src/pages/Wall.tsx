@@ -46,6 +46,11 @@ const SORT_TABS = [
   { value: 'trending', label: 'Trending' },
 ] as const;
 
+const FOR_YOU_VIEW_TABS = [
+  { value: 'mixed', label: 'Mixed' },
+  { value: 'generated', label: 'Generated' },
+] as const;
+
 const WALL_PWA_INSTALL_DISMISS_KEY = 'bleup:pwa-install-cta:wall-dismissed';
 const PULL_REFRESH_THRESHOLD_PX = 64;
 const MAX_PULL_REFRESH_PX = 88;
@@ -79,6 +84,7 @@ export default function Wall() {
     activeLane,
     effectiveScope,
     feedSort,
+    forYouView,
     isForYouScope,
     isJoinedScope,
     isForYouLoading,
@@ -92,7 +98,7 @@ export default function Wall() {
     scopeLaneButtons,
     popularTags,
     visiblePosts,
-    forYouStream,
+    visibleForYouStream,
     unlockMutation,
     isCurrentFeedRefreshing,
     refreshCurrentFeed,
@@ -335,26 +341,52 @@ export default function Wall() {
                   </ToggleGroupItem>
                 ))}
               </ToggleGroup>
-              <Select
-                value={feedSort}
-                onValueChange={(value) => updateSearchParams({ sort: value as FeedSort })}
-                disabled={isForYouScope}
-              >
-                <SelectTrigger className="h-9 w-auto min-w-0 shrink-0 border-input px-2.5 outline-none ring-0 transition-none [-webkit-tap-highlight-color:transparent] focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:ring-0 data-[state=open]:ring-offset-0 [&>svg]:hidden">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SORT_TABS.map((tab) => (
-                    <SelectItem key={tab.value} value={tab.value}>
+              {isForYouScope ? (
+                <ToggleGroup
+                  type="single"
+                  value={forYouView}
+                  onValueChange={(value) => {
+                    if (value === 'mixed' || value === 'generated') {
+                      updateSearchParams({ view: value });
+                    }
+                  }}
+                  variant="outline"
+                  size="sm"
+                  className="inline-flex max-w-full min-w-0 shrink-0 justify-start rounded-full border border-input bg-background p-1"
+                  aria-label="For You view"
+                >
+                  {FOR_YOU_VIEW_TABS.map((tab) => (
+                    <ToggleGroupItem
+                      key={tab.value}
+                      value={tab.value}
+                      className="rounded-full px-2.5 text-xs sm:px-4"
+                      aria-label={tab.label}
+                    >
                       {tab.label}
-                    </SelectItem>
+                    </ToggleGroupItem>
                   ))}
-                </SelectContent>
-              </Select>
+                </ToggleGroup>
+              ) : (
+                <Select
+                  value={feedSort}
+                  onValueChange={(value) => updateSearchParams({ sort: value as FeedSort })}
+                >
+                  <SelectTrigger className="h-9 w-auto min-w-0 shrink-0 border-input px-2.5 outline-none ring-0 transition-none [-webkit-tap-highlight-color:transparent] focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:ring-0 data-[state=open]:ring-offset-0 [&>svg]:hidden">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SORT_TABS.map((tab) => (
+                      <SelectItem key={tab.value} value={tab.value}>
+                        {tab.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
               {activeLane === 'for-you'
-                ? 'For You shows blueprints from creators you subscribe to.'
+                ? 'For You shows videos from creators you subscribe to. Mixed includes available videos and generated blueprints; Generated shows generated blueprints only.'
                 : activeLane === 'joined'
                   ? 'Joined shows blueprints posted into the channels you follow.'
                   : 'All shows every public blueprint on Bleup.'}
@@ -418,9 +450,9 @@ export default function Wall() {
                     Could not load For You right now. Please refresh and try again.
                   </CardContent>
                 </Card>
-              ) : forYouStream.length > 0 ? (
+              ) : visibleForYouStream.length > 0 ? (
                 <div className="divide-y divide-border/40">
-                  {forYouStream.map((item) => {
+                  {visibleForYouStream.map((item) => {
                     if (item.kind === 'locked') {
                       return (
                         <ForYouLockedSourceCard
@@ -474,9 +506,13 @@ export default function Wall() {
                         <Tag className="h-8 w-8 text-muted-foreground" />
                       </div>
                       <div>
-                        <h3 className="font-semibold">No source items yet</h3>
+                        <h3 className="font-semibold">
+                          {forYouView === 'generated' ? 'No generated blueprints yet' : 'No source items yet'}
+                        </h3>
                         <p className="text-sm text-muted-foreground mt-1">
-                          Subscribe to a source to unlock videos here.
+                          {forYouView === 'generated'
+                            ? 'Switch to Mixed to see available videos from your subscriptions.'
+                            : 'Subscribe to a source to unlock videos here.'}
                         </p>
                       </div>
                       <div className="flex gap-2">

@@ -26,6 +26,7 @@ const SORT_TABS = [
 ] as const;
 
 type FeedSort = (typeof SORT_TABS)[number]['value'];
+type ForYouView = 'mixed' | 'generated';
 
 const SCOPE_FOR_YOU = 'for-you';
 const SCOPE_JOINED = 'joined';
@@ -76,6 +77,7 @@ export function useWallPageController() {
   const scopeParam = (searchParams.get('scope') || '').trim();
   const normalizedScopeParam = scopeParam === SCOPE_JOINED_ALIAS ? SCOPE_JOINED : scopeParam;
   const sortParam = (searchParams.get('sort') || '').trim();
+  const viewParam = (searchParams.get('view') || '').trim();
   const sourceSubscriptionsQuery = useQuery({
     queryKey: ['source-subscriptions', user?.id],
     enabled: Boolean(user) && subscriptionsEnabled,
@@ -95,12 +97,14 @@ export function useWallPageController() {
       : SCOPE_FOR_YOU;
   const feedScope = scopeValues.has(normalizedScopeParam) ? normalizedScopeParam : defaultScope;
   const requestedSort: FeedSort = sortParam === 'trending' ? 'trending' : 'latest';
+  const requestedForYouView: ForYouView = viewParam === 'generated' ? 'generated' : 'mixed';
 
   const isPersonalScope = feedScope === SCOPE_FOR_YOU || feedScope === SCOPE_JOINED;
   const effectiveScope = !user && isPersonalScope ? SCOPE_ALL : feedScope;
   const isForYouScope = effectiveScope === SCOPE_FOR_YOU && !!user;
   const isJoinedScope = effectiveScope === SCOPE_JOINED && !!user;
   const feedSort: FeedSort = isForYouScope ? 'latest' : requestedSort;
+  const forYouView: ForYouView = isForYouScope ? requestedForYouView : 'mixed';
   const resolvedLane = isForYouScope
     ? SCOPE_FOR_YOU
     : isJoinedScope
@@ -108,14 +112,15 @@ export function useWallPageController() {
       : SCOPE_ALL;
   const activeLane = optimisticLane ?? resolvedLane;
 
-  const updateSearchParams = (updates: { scope?: string; sort?: FeedSort }) => {
-    if (!updates.scope && !updates.sort) {
+  const updateSearchParams = (updates: { scope?: string; sort?: FeedSort; view?: ForYouView }) => {
+    if (!updates.scope && !updates.sort && !updates.view) {
       setSearchParams(new URLSearchParams(), { replace: true });
       return;
     }
     const next = new URLSearchParams(searchParams);
     if (updates.scope) next.set('scope', updates.scope);
     if (updates.sort) next.set('sort', updates.sort);
+    if (updates.view) next.set('view', updates.view);
     setSearchParams(next, { replace: true });
   };
 
@@ -236,6 +241,14 @@ export function useWallPageController() {
           : item
       )) as WallForYouItem[],
     [forYouQuery.data, optimisticUnlockingSourceItemIds],
+  );
+  const visibleForYouStream = useMemo(
+    () => (
+      forYouView === 'generated'
+        ? forYouStream.filter((item) => item.kind === 'blueprint')
+        : forYouStream
+    ),
+    [forYouStream, forYouView],
   );
 
   const updateWallLikeCaches = (blueprintId: string, nextLiked: boolean) => {
@@ -460,6 +473,7 @@ export function useWallPageController() {
     activeLane,
     effectiveScope,
     feedSort,
+    forYouView,
     isForYouScope,
     isJoinedScope,
     isForYouLoading,
@@ -474,7 +488,7 @@ export function useWallPageController() {
     scopeLaneButtons,
     popularTags,
     visiblePosts,
-    forYouStream,
+    visibleForYouStream,
     unlockMutation,
     wallFeedQuery,
     forYouQuery,
