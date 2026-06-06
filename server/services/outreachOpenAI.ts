@@ -11,6 +11,7 @@ const OUTREACH_SYSTEM_PROMPT = [
   '',
   'Task:',
   'Use the video title and takeaways to write one short comment. Pick one simple useful idea and react to it naturally. Value for readers is key here: the comment should point to something helpful, but keep it light, simple, and easy to understand.',
+  'Make the comment useful to someone reading before watching the video, so the takeaway stands on its own in simple language.',
   '',
   'Style:',
   'Keep it plain, friendly, and easy to read at a glance. The comment should feel like a real viewer leaving a kind note after learning something useful.',
