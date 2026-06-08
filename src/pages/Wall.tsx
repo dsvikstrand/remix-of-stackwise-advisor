@@ -8,7 +8,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { ArrowDown, Layers, Loader2, Tag } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ArrowDown, HelpCircle, Layers, Loader2, Tag } from 'lucide-react';
 import { formatRelativeShort } from '@/lib/timeFormat';
 import { WallBlueprintCard } from '@/components/wall/WallBlueprintCard';
 import { ForYouLockedSourceCard } from '@/components/wall/ForYouLockedSourceCard';
@@ -56,6 +57,7 @@ const PULL_REFRESH_THRESHOLD_PX = 64;
 const MAX_PULL_REFRESH_PX = 88;
 
 type FeedSort = (typeof SORT_TABS)[number]['value'];
+type ForYouView = (typeof FOR_YOU_VIEW_TABS)[number]['value'];
 
 function buildWallBlueprintCardProps(input: WallBlueprintCardInput) {
   return {
@@ -178,6 +180,11 @@ export default function Wall() {
     : pullDistance >= PULL_REFRESH_THRESHOLD_PX
       ? 'Release to refresh'
       : 'Pull to refresh';
+  const activeLaneHelpText = activeLane === 'for-you'
+    ? 'For You shows videos from creators you subscribe to. Mixed includes available videos and generated blueprints; Generated shows generated blueprints only.'
+    : activeLane === 'joined'
+      ? 'Joined shows blueprints posted into the channels you follow.'
+      : 'All shows every public blueprint on Bleup.';
 
   const resetPullToRefresh = () => {
     pullStartYRef.current = null;
@@ -341,56 +348,64 @@ export default function Wall() {
                   </ToggleGroupItem>
                 ))}
               </ToggleGroup>
-              {isForYouScope ? (
-                <ToggleGroup
-                  type="single"
-                  value={forYouView}
-                  onValueChange={(value) => {
-                    if (value === 'mixed' || value === 'generated') {
-                      updateSearchParams({ view: value });
-                    }
-                  }}
-                  variant="outline"
-                  size="sm"
-                  className="inline-flex max-w-full min-w-0 shrink-0 justify-start rounded-full border border-input bg-background p-1"
-                  aria-label="For You view"
-                >
-                  {FOR_YOU_VIEW_TABS.map((tab) => (
-                    <ToggleGroupItem
-                      key={tab.value}
-                      value={tab.value}
-                      className="rounded-full px-2.5 text-xs sm:px-4"
-                      aria-label={tab.label}
+              <div className="flex shrink-0 items-center gap-1.5">
+                {isForYouScope ? (
+                  <Select
+                    value={forYouView}
+                    onValueChange={(value) => updateSearchParams({ view: value as ForYouView })}
+                  >
+                    <SelectTrigger
+                      className="h-9 w-auto min-w-0 shrink-0 border-input px-2.5 outline-none ring-0 transition-none [-webkit-tap-highlight-color:transparent] focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:ring-0 data-[state=open]:ring-offset-0 [&>svg]:hidden"
+                      aria-label="For You view"
                     >
-                      {tab.label}
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
-              ) : (
-                <Select
-                  value={feedSort}
-                  onValueChange={(value) => updateSearchParams({ sort: value as FeedSort })}
-                >
-                  <SelectTrigger className="h-9 w-auto min-w-0 shrink-0 border-input px-2.5 outline-none ring-0 transition-none [-webkit-tap-highlight-color:transparent] focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:ring-0 data-[state=open]:ring-offset-0 [&>svg]:hidden">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SORT_TABS.map((tab) => (
-                      <SelectItem key={tab.value} value={tab.value}>
-                        {tab.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FOR_YOU_VIEW_TABS.map((tab) => (
+                        <SelectItem key={tab.value} value={tab.value}>
+                          {tab.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Select
+                    value={feedSort}
+                    onValueChange={(value) => updateSearchParams({ sort: value as FeedSort })}
+                  >
+                    <SelectTrigger
+                      className="h-9 w-auto min-w-0 shrink-0 border-input px-2.5 outline-none ring-0 transition-none [-webkit-tap-highlight-color:transparent] focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:ring-0 data-[state=open]:ring-offset-0 [&>svg]:hidden"
+                      aria-label="Feed sort"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SORT_TABS.map((tab) => (
+                        <SelectItem key={tab.value} value={tab.value}>
+                          {tab.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
+                      aria-label={`${activeLane === 'for-you' ? 'For You' : activeLane === 'joined' ? 'Joined' : 'All'} feed help`}
+                    >
+                      <HelpCircle className="h-4 w-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-72 text-sm leading-snug text-muted-foreground">
+                    {activeLaneHelpText}
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">
-              {activeLane === 'for-you'
-                ? 'For You shows videos from creators you subscribe to. Mixed includes available videos and generated blueprints; Generated shows generated blueprints only.'
-                : activeLane === 'joined'
-                  ? 'Joined shows blueprints posted into the channels you follow.'
-                  : 'All shows every public blueprint on Bleup.'}
-            </p>
           </div>
 
           <div className="mt-0">
