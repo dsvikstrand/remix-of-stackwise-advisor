@@ -7,6 +7,11 @@ type ApiEnvelope<T> = {
   data: T;
 };
 
+export type WallFeedPage<T> = {
+  items: T[];
+  next_cursor: string | null;
+};
+
 export class WallApiError extends Error {
   status: number;
   errorCode: string | null;
@@ -121,16 +126,28 @@ async function requestWallApi<T>(path: string, options?: { auth?: 'optional' | '
   return json.data;
 }
 
-export async function getWallFeed(input: { scope: string; sort: 'latest' | 'trending' }) {
+export async function getWallFeed(input: { scope: string; sort: 'latest' | 'trending'; cursor?: string | null; limit?: number }) {
   const search = new URLSearchParams({
     scope: input.scope,
     sort: input.sort,
   });
-  const data = await requestWallApi<{ items: WallFeedItem[] }>(`/wall/feed?${search.toString()}`, { auth: 'optional' });
-  return data.items;
+  if (input.cursor) search.set('cursor', input.cursor);
+  if (input.limit) search.set('limit', String(input.limit));
+  const data = await requestWallApi<WallFeedPage<WallFeedItem>>(`/wall/feed?${search.toString()}`, { auth: 'optional' });
+  return {
+    items: data.items || [],
+    next_cursor: data.next_cursor || null,
+  };
 }
 
-export async function getWallForYouFeed() {
-  const data = await requestWallApi<{ items: WallForYouItem[] }>('/wall/for-you', { auth: 'required' });
-  return data.items;
+export async function getWallForYouFeed(input?: { cursor?: string | null; limit?: number }) {
+  const search = new URLSearchParams();
+  if (input?.cursor) search.set('cursor', input.cursor);
+  if (input?.limit) search.set('limit', String(input.limit));
+  const query = search.toString();
+  const data = await requestWallApi<WallFeedPage<WallForYouItem>>(`/wall/for-you${query ? `?${query}` : ''}`, { auth: 'required' });
+  return {
+    items: data.items || [],
+    next_cursor: data.next_cursor || null,
+  };
 }

@@ -72,6 +72,16 @@ export type WallForYouItem =
       commentsCount: number;
     };
 
+export type WallCursor = {
+  createdAt: string;
+  id: string;
+};
+
+export type WallPage<T> = {
+  items: T[];
+  nextCursor: WallCursor | null;
+};
+
 const JOINED_SCOPE_ALIAS = 'your-channels';
 const CANONICAL_JOINED_SCOPE = 'joined';
 const CHANNEL_TAG_SLUG_TO_CHANNEL_SLUG = new Map(
@@ -290,6 +300,8 @@ export async function listWallBlueprintFeed(input: {
   db: DbClient;
   scope: WallFeedScope;
   sort: FeedSort;
+  limit?: number;
+  cursor?: WallCursor | null;
   viewerUserId?: string | null;
   readLikedBlueprintIds: ReadLikedBlueprintIds;
   listBlueprintTagRows: (input: {
@@ -340,15 +352,16 @@ export async function listWallBlueprintFeed(input: {
   const isSpecificChannelScope = !!scopedChannel;
   const isJoinedScope = scope === CANONICAL_JOINED_SCOPE && !!viewerUserId;
 
-  const limit = isJoinedScope || isSpecificChannelScope ? 96 : 60;
+  const limit = Math.max(1, Math.min(500, Math.floor(Number(input.limit || (isJoinedScope || isSpecificChannelScope ? 192 : 120)))));
+  const readLimit = input.cursor ? 5000 : limit + 1;
   const { data: blueprints, error } = input.readBlueprintRows
-    ? { data: await input.readBlueprintRows({ db, blueprintIds: [], limit, isPublic: true }), error: null }
+    ? { data: await input.readBlueprintRows({ db, blueprintIds: [], limit: readLimit, isPublic: true, cursor: input.cursor || null }), error: null }
     : await (() => {
       let query = db
         .from('blueprints')
         .select('id, creator_user_id, title, preview_summary, banner_url, likes_count, created_at')
         .eq('is_public', true)
-        .limit(limit);
+        .limit(readLimit);
 
       if (sort === 'trending') {
         const cutoff = new Date();
@@ -363,7 +376,7 @@ export async function listWallBlueprintFeed(input: {
       return query;
     })();
   if (error) throw error;
-  if (!blueprints || blueprints.length === 0) return [] as WallBlueprintFeedItem[];
+  if (!blueprints || blueprints.length === 0) return { items: [], nextCursor: null } satisfies WallPage<WallBlueprintFeedItem>;
 
   const resolvedBlueprints = [...blueprints];
   if (sort === 'trending') {
@@ -484,15 +497,17 @@ export async function listWallBlueprintFeed(input: {
   const publishedOnly = hydrated.filter((post) => Boolean(String(post.published_channel_slug || '').trim()));
 
   if (isSpecificChannelScope && scopedChannel) {
-    return publishedOnly.filter((post) => post.published_channel_slug === scopedChannel.slug);
+    const filtered = publishedOnly.filter((post) => post.published_channel_slug === scopedChannel.slug);
+    return pageWallBlueprintItems(filtered, limit, input.cursor);
   }
 
   if (isJoinedScope) {
-    if (joinedChannelSlugs.size === 0) return [] as WallBlueprintFeedItem[];
-    return publishedOnly.filter((post) => joinedChannelSlugs.has(String(post.published_channel_slug || '').trim()));
+    if (joinedChannelSlugs.size === 0) return { items: [], nextCursor: null } satisfies WallPage<WallBlueprintFeedItem>;
+    const filtered = publishedOnly.filter((post) => joinedChannelSlugs.has(String(post.published_channel_slug || '').trim()));
+    return pageWallBlueprintItems(filtered, limit, input.cursor);
   }
 
-  return publishedOnly;
+  return pageWallBlueprintItems(publishedOnly, limit, input.cursor);
 }
 
 export async function listWallForYouFeed(input: {
@@ -501,6 +516,7 @@ export async function listWallForYouFeed(input: {
   readLikedBlueprintIds: ReadLikedBlueprintIds;
   normalizeTranscriptTruthStatus: (value: unknown) => string;
   limit?: number;
+  cursor?: WallCursor | null;
   listBlueprintTagRows: (input: {
     blueprintIds: string[];
   }) => Promise<Array<{
@@ -538,7 +554,8 @@ export async function listWallForYouFeed(input: {
   }) => Promise<any[]>;
 }) {
   const { db, userId, normalizeTranscriptTruthStatus, limit = 100 } = input;
-  const fetchLimit = Math.min(Math.max(limit * 5, limit), 1000);
+  const normalizedLimit = Math.max(1, Math.min(500, Math.floor(Number(limit || 200))));
+  const fetchLimit = input.cursor ? 5000 : Math.min(Math.max((normalizedLimit + 1) * 5, normalizedLimit + 1), 1000);
   const feedRows = input.readFeedRows
     ? { data: await input.readFeedRows({ db, userId, limit: fetchLimit }), error: null }
     : await db
@@ -553,14 +570,14 @@ export async function listWallForYouFeed(input: {
     : feedRows;
   const feedError = (feedRows as any)?.error || null;
   if (feedError) throw feedError;
-  if (!resolvedFeedRows || resolvedFeedRows.length === 0) return [] as WallForYouItem[];
+  if (!resolvedFeedRows || resolvedFeedRows.length === 0) return { items: [], nextCursor: null } satisfies WallPage<WallForYouItem>;
 
   const filteredFeedRows = resolvedFeedRows.filter((row: any) => {
     const isLegacyPendingWithoutBlueprint =
       !row.blueprint_id && (row.state === 'my_feed_pending_accept' || row.state === 'my_feed_skipped');
     return !isLegacyPendingWithoutBlueprint;
   });
-  if (filteredFeedRows.length === 0) return [] as WallForYouItem[];
+  if (filteredFeedRows.length === 0) return { items: [], nextCursor: null } satisfies WallPage<WallForYouItem>;
 
   const sourceIds = [...new Set(filteredFeedRows.map((row: any) => row.source_item_id).filter(Boolean))] as string[];
   const blueprintIds = [...new Set(filteredFeedRows.map((row: any) => row.blueprint_id).filter(Boolean))] as string[];
@@ -720,5 +737,47 @@ export async function listWallForYouFeed(input: {
     return String(right.feedItemId).localeCompare(String(left.feedItemId));
   });
 
-  return items.slice(0, limit);
+  return pageWallForYouItems(items, normalizedLimit, input.cursor);
+}
+
+function isAfterWallCursor(item: { created_at?: string; id?: string }, cursor: WallCursor | null | undefined) {
+  if (!cursor) return true;
+  const itemMs = Date.parse(String(item.created_at || ''));
+  const cursorMs = Date.parse(String(cursor.createdAt || ''));
+  if (!Number.isFinite(itemMs) || !Number.isFinite(cursorMs)) return true;
+  if (itemMs < cursorMs) return true;
+  if (itemMs > cursorMs) return false;
+  return String(item.id || '') < String(cursor.id || '');
+}
+
+function pageWallBlueprintItems(items: WallBlueprintFeedItem[], limit: number, cursor: WallCursor | null | undefined) {
+  const filtered = items.filter((item) => isAfterWallCursor({ created_at: item.created_at, id: item.id }, cursor));
+  const pageItems = filtered.slice(0, limit);
+  const hasMore = filtered.length > limit;
+  const last = hasMore ? pageItems[pageItems.length - 1] : null;
+  return {
+    items: pageItems,
+    nextCursor: last ? { createdAt: last.created_at, id: last.id } : null,
+  } satisfies WallPage<WallBlueprintFeedItem>;
+}
+
+function isAfterForYouCursor(item: WallForYouItem, cursor: WallCursor | null | undefined) {
+  if (!cursor) return true;
+  const itemMs = Date.parse(String(item.createdAt || ''));
+  const cursorMs = Date.parse(String(cursor.createdAt || ''));
+  if (!Number.isFinite(itemMs) || !Number.isFinite(cursorMs)) return true;
+  if (itemMs < cursorMs) return true;
+  if (itemMs > cursorMs) return false;
+  return String(item.feedItemId || '') < String(cursor.id || '');
+}
+
+function pageWallForYouItems(items: WallForYouItem[], limit: number, cursor: WallCursor | null | undefined) {
+  const filtered = items.filter((item) => isAfterForYouCursor(item, cursor));
+  const pageItems = filtered.slice(0, limit);
+  const hasMore = filtered.length > limit;
+  const last = hasMore ? pageItems[pageItems.length - 1] : null;
+  return {
+    items: pageItems,
+    nextCursor: last ? { createdAt: last.createdAt, id: last.feedItemId } : null,
+  } satisfies WallPage<WallForYouItem>;
 }

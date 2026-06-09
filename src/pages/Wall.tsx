@@ -103,7 +103,10 @@ export default function Wall() {
     visibleForYouStream,
     unlockMutation,
     isCurrentFeedRefreshing,
+    hasMoreCurrentFeed,
+    isCurrentFeedLoadingMore,
     refreshCurrentFeed,
+    loadMoreCurrentFeed,
     handleScopeSelect,
     updateSearchParams,
     setSelectedTagSlug,
@@ -668,6 +671,22 @@ export default function Wall() {
               </Card>
             )}
           </div>
+          {hasMoreCurrentFeed ? (
+            <div className="px-3 pb-2 pt-1 sm:px-4">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => {
+                  void loadMoreCurrentFeed();
+                }}
+                disabled={isCurrentFeedLoadingMore}
+              >
+                {isCurrentFeedLoadingMore ? 'Loading...' : 'Load more'}
+              </Button>
+            </div>
+          ) : null}
         </div>
 
         <AppFooter />

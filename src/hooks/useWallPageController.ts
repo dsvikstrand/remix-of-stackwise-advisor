@@ -1,5 +1,5 @@
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { config } from '@/config/runtime';
 import { useAuth } from '@/contexts/AuthContext';
@@ -211,28 +211,35 @@ export function useWallPageController() {
     });
   };
 
-  const wallFeedQuery = useQuery({
+  const wallFeedQuery = useInfiniteQuery({
     queryKey: ['wall-feed', effectiveScope, feedSort, user?.id || 'anon'],
     enabled: !isForYouScope,
     staleTime: 60_000,
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
-    queryFn: async () => getWallFeed({ scope: effectiveScope, sort: feedSort }),
+    initialPageParam: null as string | null,
+    queryFn: async ({ pageParam }) => getWallFeed({ scope: effectiveScope, sort: feedSort, cursor: pageParam }),
+    getNextPageParam: (lastPage) => lastPage.next_cursor || undefined,
   });
 
-  const forYouQuery = useQuery({
+  const forYouQuery = useInfiniteQuery({
     queryKey: ['wall-for-you', user?.id || 'anon'],
     enabled: isForYouScope && !!user,
     staleTime: 60_000,
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
-    queryFn: async () => getWallForYouFeed(),
+    initialPageParam: null as string | null,
+    queryFn: async ({ pageParam }) => getWallForYouFeed({ cursor: pageParam }),
+    getNextPageParam: (lastPage) => lastPage.next_cursor || undefined,
   });
 
-  const posts = wallFeedQuery.data || [];
+  const posts = useMemo(
+    () => wallFeedQuery.data?.pages.flatMap((page) => page.items) || [],
+    [wallFeedQuery.data],
+  );
   const forYouStream = useMemo(
     () =>
-      (forYouQuery.data || []).map((item) => (
+      (forYouQuery.data?.pages.flatMap((page) => page.items) || []).map((item) => (
         item.kind === 'locked'
           ? {
               ...item,
@@ -253,8 +260,12 @@ export function useWallPageController() {
 
   const updateWallLikeCaches = (blueprintId: string, nextLiked: boolean) => {
     queryClient.setQueriesData({ queryKey: ['wall-feed'] }, (current: unknown) => {
-      if (!Array.isArray(current)) return current;
-      return current.map((item) => {
+      if (!current || typeof current !== 'object' || !Array.isArray((current as any).pages)) return current;
+      return {
+        ...(current as any),
+        pages: (current as any).pages.map((page: any) => ({
+          ...page,
+          items: Array.isArray(page.items) ? page.items.map((item: unknown) => {
         const post = item as WallFeedItem;
         if (post.id !== blueprintId) return post;
         return {
@@ -262,12 +273,18 @@ export function useWallPageController() {
           user_liked: nextLiked,
           likes_count: Math.max(0, Number(post.likes_count || 0) + (nextLiked ? 1 : -1)),
         } satisfies WallFeedItem;
-      });
+          }) : page.items,
+        })),
+      };
     });
 
     queryClient.setQueriesData({ queryKey: ['wall-for-you'] }, (current: unknown) => {
-      if (!Array.isArray(current)) return current;
-      return current.map((item) => {
+      if (!current || typeof current !== 'object' || !Array.isArray((current as any).pages)) return current;
+      return {
+        ...(current as any),
+        pages: (current as any).pages.map((page: any) => ({
+          ...page,
+          items: Array.isArray(page.items) ? page.items.map((item: unknown) => {
         const row = item as WallForYouItem;
         if (row.kind !== 'blueprint' || row.blueprintId !== blueprintId) return row;
         return {
@@ -275,7 +292,9 @@ export function useWallPageController() {
           userLiked: nextLiked,
           likesCount: Math.max(0, Number(row.likesCount || 0) + (nextLiked ? 1 : -1)),
         } satisfies ForYouBlueprintItem;
-      });
+          }) : page.items,
+        })),
+      };
     });
   };
 
@@ -466,6 +485,14 @@ export function useWallPageController() {
     return wallFeedQuery.refetch();
   };
   const isCurrentFeedRefreshing = isForYouScope ? forYouQuery.isFetching : wallFeedQuery.isFetching;
+  const hasMoreCurrentFeed = isForYouScope ? Boolean(forYouQuery.hasNextPage) : Boolean(wallFeedQuery.hasNextPage);
+  const isCurrentFeedLoadingMore = isForYouScope ? forYouQuery.isFetchingNextPage : wallFeedQuery.isFetchingNextPage;
+  const loadMoreCurrentFeed = async () => {
+    if (isForYouScope) {
+      return forYouQuery.fetchNextPage();
+    }
+    return wallFeedQuery.fetchNextPage();
+  };
 
   return {
     user,
@@ -493,7 +520,10 @@ export function useWallPageController() {
     wallFeedQuery,
     forYouQuery,
     isCurrentFeedRefreshing,
+    hasMoreCurrentFeed,
+    isCurrentFeedLoadingMore,
     refreshCurrentFeed,
+    loadMoreCurrentFeed,
     handleScopeSelect,
     updateSearchParams,
     setScopeSelectOpen,

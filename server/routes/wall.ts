@@ -12,6 +12,47 @@ function normalizeSort(value: unknown): 'latest' | 'trending' {
   return String(value || '').trim().toLowerCase() === 'trending' ? 'trending' : 'latest';
 }
 
+function normalizeLimit(value: unknown, fallback: number, max: number) {
+  const parsed = Math.floor(Number(value));
+  const limit = Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  return Math.max(1, Math.min(max, limit));
+}
+
+function normalizeCursor(value: unknown) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8')) as {
+      createdAt?: unknown;
+      id?: unknown;
+      feedItemId?: unknown;
+    };
+    const createdAt = String(parsed.createdAt || '').trim();
+    const id = String(parsed.id || parsed.feedItemId || '').trim();
+    if (!createdAt || !id || !Number.isFinite(Date.parse(createdAt))) return null;
+    return { createdAt, id };
+  } catch {
+    return null;
+  }
+}
+
+function encodeCursor(input: { createdAt?: string | null; id?: string | null } | null | undefined) {
+  const createdAt = String(input?.createdAt || '').trim();
+  const id = String(input?.id || '').trim();
+  if (!createdAt || !id || !Number.isFinite(Date.parse(createdAt))) return null;
+  return Buffer.from(JSON.stringify({ createdAt, id }), 'utf8').toString('base64url');
+}
+
+async function isAdminUser(userId: string | null, deps: WallRouteDeps) {
+  if (!userId || !deps.getCredits) return false;
+  try {
+    const credits = await deps.getCredits(userId) as { plan?: unknown } | null;
+    return String(credits?.plan || '').trim().toLowerCase() === 'admin';
+  } catch {
+    return false;
+  }
+}
+
 export function registerWallRoutes(app: express.Express, deps: WallRouteDeps) {
   app.get('/api/wall/feed', async (req, res) => {
     const db = deps.getServiceSupabaseClient();
@@ -26,10 +67,15 @@ export function registerWallRoutes(app: express.Express, deps: WallRouteDeps) {
 
     try {
       const viewerUserId = String((res.locals.user as { id?: string } | undefined)?.id || '').trim() || null;
-      const items = await listWallBlueprintFeed({
+      const admin = await isAdminUser(viewerUserId, deps);
+      const limit = normalizeLimit(req.query.limit, 120, admin ? 200 : 120);
+      const cursor = admin ? normalizeCursor(req.query.cursor) : null;
+      const page = await listWallBlueprintFeed({
         db,
         scope: normalizeScope(req.query.scope),
         sort: normalizeSort(req.query.sort),
+        limit,
+        cursor,
         viewerUserId,
         readLikedBlueprintIds: deps.readLikedBlueprintIds,
         listBlueprintTagRows: deps.listBlueprintTagRows,
@@ -45,7 +91,8 @@ export function registerWallRoutes(app: express.Express, deps: WallRouteDeps) {
         error_code: null,
         message: 'wall feed',
         data: {
-          items,
+          items: page.items,
+          next_cursor: admin ? encodeCursor(page.nextCursor) : null,
         },
       });
     } catch (error) {
@@ -80,9 +127,14 @@ export function registerWallRoutes(app: express.Express, deps: WallRouteDeps) {
     }
 
     try {
-      const items = await listWallForYouFeed({
+      const admin = await isAdminUser(userId, deps);
+      const limit = normalizeLimit(req.query.limit, 200, admin ? 200 : 200);
+      const cursor = admin ? normalizeCursor(req.query.cursor) : null;
+      const page = await listWallForYouFeed({
         db,
         userId,
+        limit,
+        cursor,
         readLikedBlueprintIds: deps.readLikedBlueprintIds,
         normalizeTranscriptTruthStatus: deps.normalizeTranscriptTruthStatus,
         listBlueprintTagRows: deps.listBlueprintTagRows,
@@ -98,7 +150,8 @@ export function registerWallRoutes(app: express.Express, deps: WallRouteDeps) {
         error_code: null,
         message: 'wall for you',
         data: {
-          items,
+          items: page.items,
+          next_cursor: admin ? encodeCursor(page.nextCursor) : null,
         },
       });
     } catch (error) {

@@ -8928,6 +8928,7 @@ registerProfileReadRoutes(app, {
 registerWallRoutes(app, {
   getServiceSupabaseClient,
   normalizeTranscriptTruthStatus,
+  getCredits,
   readLikedBlueprintIds: async ({ userId, blueprintIds }: any) => listOracleLikedBlueprintIds({
     userId,
     blueprintIds,
@@ -8950,7 +8951,7 @@ registerWallRoutes(app, {
     feedItemIds,
     statuses,
   }),
-  readBlueprintRows: async ({ blueprintIds, limit, isPublic }: any) => {
+  readBlueprintRows: async ({ blueprintIds, limit, isPublic, cursor }: any) => {
     if (blueprintIds && blueprintIds.length > 0) {
       return ensureOracleBlueprintRowsByIds(blueprintIds);
     }
@@ -8959,6 +8960,7 @@ registerWallRoutes(app, {
       controlDb: oracleControlPlane,
       isPublic: typeof isPublic === 'boolean' ? isPublic : true,
       limit,
+      cursor,
     });
     const creatorProfiles = await ensureOracleProfileReadStateByUserIds(rows.map((row) => row.creator_user_id));
     const creatorProfileByUserId = new Map(creatorProfiles.map((row) => [row.user_id, row]));

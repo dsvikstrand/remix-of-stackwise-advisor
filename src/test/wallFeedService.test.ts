@@ -45,7 +45,7 @@ function listWallBlueprintFeed(input: any) {
       listLikedBlueprintIdsFromState(input.db, userId, blueprintIds),
     ),
     ...input,
-  });
+  }).then((page) => page.items);
 }
 
 function listWallForYouFeed(input: any) {
@@ -54,7 +54,7 @@ function listWallForYouFeed(input: any) {
       listLikedBlueprintIdsFromState(input.db, userId, blueprintIds),
     ),
     ...input,
-  });
+  }).then((page) => page.items);
 }
 
 describe('wall feed service', () => {

@@ -178,6 +178,7 @@ export async function listOracleBlueprintRows(input: {
   requireBannerUrl?: boolean;
   sort?: 'latest' | 'popular';
   limit?: number;
+  cursor?: { createdAt?: string | null; id?: string | null } | null;
 }) {
   const blueprintIds = [...new Set((input.blueprintIds || []).map((value) => normalizeRequiredString(value)).filter(Boolean))];
   const creatorUserId = normalizeRequiredString(input.creatorUserId);
@@ -185,6 +186,12 @@ export async function listOracleBlueprintRows(input: {
   const titleQuery = normalizeRequiredString(input.titleQuery).toLowerCase();
   const limit = Math.max(1, Math.min(5000, Math.floor(Number(input.limit || 500))));
   const sort = input.sort === 'popular' ? 'popular' : 'latest';
+  const cursorCreatedAt = normalizeRequiredString(input.cursor?.createdAt);
+  const cursorId = normalizeRequiredString(input.cursor?.id);
+  const hasLatestCursor = sort === 'latest'
+    && cursorCreatedAt
+    && cursorId
+    && Number.isFinite(Date.parse(cursorCreatedAt));
 
   let query = input.controlDb.db
     .selectFrom('blueprint_state')
@@ -212,6 +219,15 @@ export async function listOracleBlueprintRows(input: {
   }
   if (input.requireBannerUrl) {
     query = query.where('banner_url', 'is not', null);
+  }
+  if (hasLatestCursor) {
+    query = query.where((eb) => eb.or([
+      eb('created_at', '<', new Date(Date.parse(cursorCreatedAt)).toISOString()),
+      eb.and([
+        eb('created_at', '=', new Date(Date.parse(cursorCreatedAt)).toISOString()),
+        eb('id', '<', cursorId),
+      ]),
+    ]));
   }
 
   if (sort === 'popular') {

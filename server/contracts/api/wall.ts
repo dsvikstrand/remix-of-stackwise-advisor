@@ -28,4 +28,5 @@ export type WallRouteDeps = {
   readChannelCandidateRows?: any;
   readBlueprintRows?: any;
   readProfileRows?: any;
+  getCredits?: (userId: string) => Promise<unknown>;
 };
