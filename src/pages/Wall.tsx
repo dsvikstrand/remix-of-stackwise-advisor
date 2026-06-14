@@ -188,6 +188,7 @@ export default function Wall() {
     : activeLane === 'joined'
       ? 'Joined shows blueprints posted into the channels you follow.'
       : 'All shows every public blueprint on Bleup.';
+  const blueprintStreamsHelpText = "Bleup turns YouTube videos into actionable Blueprints: key ideas, steps, and takeaways you can use. 'For You' shows content from creators you subscribe to. 'Joined' shows blueprints from the channels you follow. 'All' shows every public blueprint on Bleup.";
 
   const resetPullToRefresh = () => {
     pullStartYRef.current = null;
@@ -271,10 +272,25 @@ export default function Wall() {
         <section className="mb-4 px-3 sm:mb-6 sm:px-4">
           <div className="flex flex-col gap-2">
             <p className="text-sm font-semibold text-primary uppercase tracking-wide">Home</p>
-            <h1 className="text-2xl font-semibold">Your Blueprint streams:</h1>
-            <p className="text-sm text-muted-foreground">
-              Bleup turns YouTube videos into actionable Blueprints: key ideas, steps, and takeaways you can use. &apos;For You&apos; shows content from creators you subscribe to. &apos;Joined&apos; shows blueprints from the channels you follow. &apos;All&apos; shows every public blueprint on Bleup.
-            </p>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-semibold">Your Blueprint streams</h1>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 rounded-full text-muted-foreground hover:text-foreground"
+                    aria-label="Blueprint streams help"
+                  >
+                    <HelpCircle className="h-4 w-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-72 text-sm leading-snug text-muted-foreground">
+                  {blueprintStreamsHelpText}
+                </PopoverContent>
+              </Popover>
+            </div>
           </div>
         </section>
 
